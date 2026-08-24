@@ -22,9 +22,9 @@ const config: Config = {
         },
       },
       fontFamily: {
-        display: ["Rajdhani", "Impact", "Arial Narrow", "sans-serif"],
-        sans: ["IBM Plex Sans", "Segoe UI", "sans-serif"],
-        mono: ["IBM Plex Mono", "ui-monospace", "monospace"],
+        display: ["var(--font-display)", "Rajdhani", "Impact", "Arial Narrow", "sans-serif"],
+        sans: ["var(--font-sans)", "IBM Plex Sans", "Segoe UI", "sans-serif"],
+        mono: ["var(--font-mono)", "IBM Plex Mono", "ui-monospace", "monospace"],
       },
       boxShadow: {
         plate: "0 18px 40px rgba(0, 0, 0, 0.45)",

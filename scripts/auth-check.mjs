@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 
 const PORT = Number(process.env.AUTH_CHECK_PORT || 3456);
@@ -27,7 +28,10 @@ function assert(condition, message) {
 async function waitForServer() {
   for (let i = 0; i < 60; i += 1) {
     try {
-      const response = await fetch(`${BASE}/login`, { redirect: "manual" });
+      const response = await fetch(`${BASE}/login`, {
+        redirect: "manual",
+        signal: AbortSignal.timeout(2000),
+      });
       if (response.ok || response.status === 307 || response.status === 308) return;
     } catch {
       // still booting
@@ -118,7 +122,8 @@ async function runChecks() {
 }
 
 async function main() {
-  const child = spawn("npx", ["next", "start", "--hostname", "127.0.0.1", "--port", String(PORT)], {
+  const nextBin = fileURLToPath(new URL("../node_modules/next/dist/bin/next", import.meta.url));
+  const child = spawn(process.execPath, [nextBin, "start", "--hostname", "127.0.0.1", "--port", String(PORT)], {
     env: {
       ...process.env,
       AUTH_COOKIE_SECURE: "false",
