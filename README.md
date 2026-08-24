@@ -53,3 +53,5 @@ npm run auth:check
 ## Deploy
 
 One Next.js app. Set the env vars on the host, use HTTPS, and set `AUTH_COOKIE_SECURE=true`. There is no Google sign-in yet.
+
+This commit exists only to trigger the first Vercel production deploy.
