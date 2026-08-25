@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
@@ -5,6 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 const PORT = Number(process.env.AUTH_CHECK_PORT || 3456);
 const BASE = `http://127.0.0.1:${PORT}`;
 const EMAIL = process.env.OWNER_EMAIL || "robertmhenderson582@gmail.com";
+const NOVUS_EMAIL = "robertmhenderson582+novus@gmail.com";
 const PASSWORD = process.env.OWNER_PASSWORD;
 const SECRET = process.env.AUTH_SECRET;
 
@@ -114,11 +116,98 @@ async function runChecks() {
   const foreign = await fetch(`${BASE}/api/desk/jobs`, { cache: "no-store" });
   assert(foreign.status === 401, "Anonymous callers cannot read desk jobs");
 
+  const novusBlocked = await fetch(`${BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: NOVUS_EMAIL,
+      password: "definitely-wrong-password",
+      acknowledged: true,
+    }),
+  });
+  const novusBlockedBody = await novusBlocked.json();
+  assert(novusBlocked.status === 401, `Novus without an issued password should be 401, got ${novusBlocked.status}`);
+  assert(typeof novusBlockedBody.error === "string", "Novus blocked login must return JSON error");
+  assert(!novusBlocked.headers.get("set-cookie")?.includes("hs_session="), "Novus blocked login must not set hs_session");
+
+  const seats = await fetch(`${BASE}/api/desk/seats`, { headers: { cookie }, cache: "no-store" });
+  const seatsBody = await seats.json();
+  assert(seats.status === 200, "Owner can list build seats");
+  assert(
+    (seatsBody.seats ?? []).some((row) => row.email === NOVUS_EMAIL && row.role === "operator" && row.name === "Novus"),
+    "Novus operator row must exist",
+  );
+  assert(
+    (seatsBody.seats ?? []).filter((row) => row.role === "owner").length === 1,
+    "Robert remains the only owner",
+  );
+
+  const roster = await fetch(`${BASE}/api/desk/roster`, { headers: { cookie }, cache: "no-store" });
+  const rosterBody = await roster.json();
+  assert(roster.status === 200, "Owner can read the visual roster");
+  assert(
+    !(rosterBody.roster ?? []).some((row) => String(row.email || "").toLowerCase() === NOVUS_EMAIL),
+    "Testers must never see Novus on the visual roster",
+  );
+
+  const issued = `check-${randomBytes(8).toString("hex")}-desk`;
+  const issue = await fetch(`${BASE}/api/desk/seats`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", cookie },
+    body: JSON.stringify({ email: NOVUS_EMAIL, password: issued }),
+  });
+  const issueBody = await issue.json();
+  assert(issue.status === 200, `Owner can issue Novus password, got ${issue.status}`);
+  assert(issueBody.ok === true, "Issue password must not send mail");
+
+  const novusLogin = await fetch(`${BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: NOVUS_EMAIL,
+      password: issued,
+      acknowledged: true,
+    }),
+  });
+  const novusLoginBody = await novusLogin.json();
+  const novusCookie = cookieHeader(novusLogin.headers.get("set-cookie"));
+  assert(novusLogin.status === 200, `Novus login after issue should be 200, got ${novusLogin.status}`);
+  assert(novusLoginBody.user?.role === "operator", "Novus must be operator, not owner");
+  assert(novusLoginBody.user?.name === "Novus", "Novus display name");
+  assert(novusLoginBody.user?.mustChangePassword === true, "Issued seat must change password before the desk");
+  assert(novusCookie.includes("hs_session="), "Novus login sets hs_session");
+
+  const novusSession = await fetch(`${BASE}/api/auth/session`, {
+    headers: { cookie: novusCookie },
+    cache: "no-store",
+  });
+  const novusSessionBody = await novusSession.json();
+  assert(novusSession.status === 200, "Novus get-session should be 200");
+  assert(novusSessionBody.user?.mustChangePassword === true, "Session must still carry mustChangePassword");
+
+  const changed = `next-${randomBytes(8).toString("hex")}-desk`;
+  const change = await fetch(`${BASE}/api/desk/password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", cookie: novusCookie },
+    body: JSON.stringify({ next: changed }),
+  });
+  const changeBody = await change.json();
+  assert(change.status === 200, "First-login password change should succeed");
+  assert(changeBody.user?.mustChangePassword === false, "Flag clears after the first change");
+
+  const afterChange = await fetch(`${BASE}/api/auth/session`, {
+    headers: { cookie: cookieHeader(change.headers.get("set-cookie")) || novusCookie },
+    cache: "no-store",
+  });
+  const afterChangeBody = await afterChange.json();
+  assert(afterChangeBody.user?.mustChangePassword === false, "Await session after password change");
+
   console.log("AUTH CHECK PASSED");
   console.log("- wrong password stays 401 with a visible error");
   console.log("- email sign-in sets a first-party HttpOnly SameSite=Lax cookie");
   console.log("- get-session returns the user after login and again on refresh");
   console.log("- desk jobs stay scoped to the signed-in owner");
+  console.log("- Novus is an operator seat; testers never see it; first login must change password");
 }
 
 async function main() {
