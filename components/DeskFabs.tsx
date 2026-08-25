@@ -20,6 +20,7 @@ type Draft = {
 };
 
 const EMPTY_DRAFT: Draft = { kind: "Broke", note: "", capture: null };
+const TICKET_TOAST_MS = 3500;
 
 function readDraft(): Draft {
   try {
@@ -76,6 +77,12 @@ export function DeskFabs() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [hiddenForShot, markupSrc, ticketOpen]);
+
+  useEffect(() => {
+    if (!note) return;
+    const id = window.setTimeout(() => setNote(null), TICKET_TOAST_MS);
+    return () => window.clearTimeout(id);
+  }, [note]);
 
   if (status !== "authenticated" || !user) return null;
   const email = user.email;
@@ -268,7 +275,7 @@ export function DeskFabs() {
               </button>
             </div>
           ) : null}
-          {note ? <p className="mt-2 text-xs text-[#5b6f73]">{note}</p> : null}
+          {note ? <p className="ticket-inline-note mt-2 text-xs text-[#5b6f73]">{note}</p> : null}
           {joseph ? (
             <p className="mt-2 text-xs text-[#5b6f73]">
               Submit emails robertmhenderson582@gmail.com. Mail is not sent from this trial.
@@ -321,7 +328,7 @@ export function DeskFabs() {
         className="ticket-fab"
         data-capture="ignore"
       >
-        {savedDraft ? "Draft" : "+ Ticket"}
+        Suggestion Box
       </button>
     </div>
     {markupSrc ? (

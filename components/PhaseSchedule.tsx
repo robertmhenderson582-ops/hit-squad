@@ -3,33 +3,15 @@
 import { GripToPan } from "@/components/GripToPan";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import {
+  otPicksForPhase,
   phaseOtPick,
   sundaysInRange,
   workedDays,
   type PhaseId,
   type PhaseOtPick,
-  type PhaseRow,
 } from "@/lib/phase-schedule";
 
 const HEADERS = ["PHASE", "ON", "START", "STOP", "DAYS / WK", "HRS / DAY", "Total days"];
-
-const PRE_PICKS: Array<{ id: PhaseOtPick; label: string }> = [
-  { id: "4x10-st", label: "4×10 — all 10 ST" },
-  { id: "4x10-ot8", label: "4×10 — OT after 8" },
-];
-
-const POST_PICKS: Array<{ id: PhaseOtPick; label: string }> = [
-  { id: "5x8-st", label: "5×8 — all straight time" },
-  { id: "5x8-ot8", label: "5×8 — OT after 8 hours" },
-  { id: "4x10-st", label: "4×10 — all 10 ST" },
-  { id: "4x10-ot8", label: "4×10 — OT after 8" },
-];
-
-function pickerFor(row: PhaseRow): Array<{ id: PhaseOtPick; label: string }> | null {
-  if (row.id === "pre") return PRE_PICKS;
-  if (row.id === "post") return POST_PICKS;
-  return null;
-}
 
 export function PhaseSchedule() {
   const pack = useEstimatePackage();
@@ -52,7 +34,7 @@ export function PhaseSchedule() {
             {pack.schedule.phases.map((row) => {
               const firstOn = pack.schedule.phases.find((item) => item.on)?.id;
               const startLocked = !row.on || row.id !== firstOn;
-              const picks = pickerFor(row);
+              const picks = otPicksForPhase(row.id);
               const currentPick = phaseOtPick(row);
               const sundays = row.daysPerWeek === 7 ? sundaysInRange(row.start, row.stop) : [];
               return (

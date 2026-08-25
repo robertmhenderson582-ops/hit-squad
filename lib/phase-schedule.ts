@@ -19,6 +19,19 @@ export const PHASE_TONES: Record<PhaseId, string> = {
 
 export type PhaseOtPick = "4x10-st" | "4x10-ot8" | "5x8-st" | "5x8-ot8";
 
+/** Pre-Turnaround and Post share this list. Do not shorten Pre. */
+export const PHASE_OT_PICKS: Array<{ id: PhaseOtPick; label: string }> = [
+  { id: "5x8-st", label: "5×8 — all straight time" },
+  { id: "5x8-ot8", label: "5×8 — OT after 8 hours" },
+  { id: "4x10-st", label: "4×10 — all 10 ST" },
+  { id: "4x10-ot8", label: "4×10 — OT after 8" },
+];
+
+export function otPicksForPhase(id: PhaseId) {
+  if (id === "pre" || id === "post") return PHASE_OT_PICKS;
+  return null;
+}
+
 export type PhaseRow = {
   id: PhaseId;
   name: string;

@@ -5,7 +5,9 @@ import {
   cascadePhases,
   defaultPhaseSchedule,
   mergeSchedule,
+  otPicksForPhase,
   patchPhase,
+  PHASE_OT_PICKS,
   setProjectStart,
   workedDays,
 } from "./phase-schedule.ts";
@@ -90,6 +92,26 @@ describe("phase schedule", () => {
     assert.equal(post.phases.find((row) => row.id === "post")?.daysPerWeek, 5);
     assert.equal(post.phases.find((row) => row.id === "post")?.hoursPerDay, 8);
     assert.equal(post.phases.find((row) => row.id === "post")?.otAfter8, false);
+    const preFive = applyOtPick(defaultPhaseSchedule(), "pre", "5x8-st");
+    assert.equal(preFive.phases.find((row) => row.id === "pre")?.daysPerWeek, 5);
+    assert.equal(preFive.phases.find((row) => row.id === "pre")?.hoursPerDay, 8);
+    assert.equal(preFive.phases.find((row) => row.id === "pre")?.otAfter8, false);
+    const preFiveOt = applyOtPick(preFive, "pre", "5x8-ot8");
+    assert.equal(preFiveOt.phases.find((row) => row.id === "pre")?.otAfter8, true);
+  });
+
+  it("Pre-Turnaround schedule picker matches Post", () => {
+    const pre = otPicksForPhase("pre");
+    const post = otPicksForPhase("post");
+    assert.ok(pre);
+    assert.ok(post);
+    assert.deepEqual(pre, post);
+    assert.deepEqual(
+      pre.map((item) => item.id),
+      ["5x8-st", "5x8-ot8", "4x10-st", "4x10-ot8"],
+    );
+    assert.equal(PHASE_OT_PICKS.length, 4);
+    assert.equal(otPicksForPhase("mech"), null);
   });
 
   it("merge persist never drops a locked phase", () => {
