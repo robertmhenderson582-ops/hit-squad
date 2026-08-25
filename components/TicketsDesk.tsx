@@ -7,6 +7,7 @@ import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { burnCaption } from "@/lib/capture";
 import { buildDeskChrome } from "@/lib/desk-role";
+import { mergeTickets, readTicketCache, ticketsForViewer, writeTicketCache } from "@/lib/ticket-cache";
 import { ticketCopyText, type DeskTicket } from "@/lib/tickets";
 
 export function TicketsDesk() {
@@ -18,11 +19,16 @@ export function TicketsDesk() {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<{ src: string; caption: string } | null>(null);
 
-  function load(list: DeskTicket[]) {
-    setTickets(list);
+  function applyList(list: DeskTicket[]) {
+    const mine = user?.email || "";
+    const visible = ticketsForViewer(list, mine, ownerChrome);
+    const next = ownerChrome || !mine ? visible : mergeTickets(visible, readTicketCache(mine).filter((row) => row.who === mine));
+    if (mine && !ownerChrome) writeTicketCache(mine, next);
+    setTickets(next);
   }
 
   useEffect(() => {
+    const mine = user?.email || "";
     fetch("/api/desk/tickets", { credentials: "include", cache: "no-store" })
       .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
       .then(({ ok, data }) => {
@@ -30,10 +36,14 @@ export function TicketsDesk() {
           setError(data.error || "Tickets could not load.");
           return;
         }
-        load(data.tickets ?? []);
+        const list = (data.tickets ?? []) as DeskTicket[];
+        const visible = ticketsForViewer(list, mine, ownerChrome);
+        const next = ownerChrome || !mine ? visible : mergeTickets(visible, readTicketCache(mine).filter((row) => row.who === mine));
+        if (mine && !ownerChrome) writeTicketCache(mine, next);
+        setTickets(next);
       })
       .catch(() => setError("Tickets could not load."));
-  }, []);
+  }, [ownerChrome, user?.email]);
 
   async function patch(id: string, body: { done?: boolean; notifyFix?: boolean | null }) {
     const response = await fetch("/api/desk/tickets", {
@@ -43,7 +53,7 @@ export function TicketsDesk() {
       body: JSON.stringify({ id, ...body }),
     });
     const data = await response.json();
-    if (response.ok) load(data.tickets ?? []);
+    if (response.ok) applyList(data.tickets ?? []);
   }
 
   async function remove(id: string, label: string) {
@@ -55,7 +65,7 @@ export function TicketsDesk() {
       body: JSON.stringify({ id }),
     });
     const data = await response.json();
-    if (response.ok) load(data.tickets ?? []);
+    if (response.ok) applyList(data.tickets ?? []);
   }
 
   async function removeDone() {
@@ -69,7 +79,7 @@ export function TicketsDesk() {
       body: JSON.stringify({ done: true }),
     });
     const data = await response.json();
-    if (response.ok) load(data.tickets ?? []);
+    if (response.ok) applyList(data.tickets ?? []);
   }
 
   async function copyShot(row: DeskTicket) {

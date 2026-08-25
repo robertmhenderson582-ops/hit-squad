@@ -1,20 +1,61 @@
-function stampFallback(): string {
-  const width = Math.min(window.innerWidth, 1280);
-  const height = Math.min(window.innerHeight, 720);
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return "";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = "#163038";
-  ctx.font = "20px sans-serif";
-  ctx.fillText(document.title, 28, 48);
-  ctx.font = "14px sans-serif";
-  ctx.fillStyle = "#5b6f73";
-  ctx.fillText(window.location.pathname, 28, 76);
-  ctx.fillText(new Date().toLocaleString(), 28, 98);
+function deskRoot(): HTMLElement {
+  return (
+    (document.querySelector(".paper-desk") as HTMLElement | null) ||
+    (document.querySelector(".industrial-root") as HTMLElement | null) ||
+    document.body
+  );
+}
+
+export function shouldIgnoreForCapture(el: Element) {
+  if (!(el instanceof HTMLElement)) return false;
+  if (el.dataset.capture === "ignore") return true;
+  return (
+    el.classList.contains("desk-fabs") ||
+    el.classList.contains("ticket-card") ||
+    el.classList.contains("ticket-scrim") ||
+    el.classList.contains("inbox-card") ||
+    el.classList.contains("inbox-toast") ||
+    el.classList.contains("fab-note")
+  );
+}
+
+function usableShot(dataUrl: string) {
+  return Boolean(dataUrl && dataUrl.startsWith("data:image/") && dataUrl.length > 2000);
+}
+
+async function modernShot(target: HTMLElement): Promise<string> {
+  const { domToJpeg } = await import("modern-screenshot");
+  const width = Math.min(window.innerWidth, 1600);
+  const height = Math.min(window.innerHeight, 1000);
+  return domToJpeg(target, {
+    quality: 0.82,
+    scale: 1,
+    width,
+    height,
+    backgroundColor: target.classList.contains("paper-desk") ? "#d5e4e2" : "#06161a",
+    filter: (el) => !(el instanceof Element) || !shouldIgnoreForCapture(el),
+  });
+}
+
+async function html2canvasShot(target: HTMLElement): Promise<string> {
+  const mod = await import("html2canvas");
+  const html2canvas = mod.default;
+  const width = Math.min(window.innerWidth, target.clientWidth || window.innerWidth, 1600);
+  const height = Math.min(window.innerHeight, target.clientHeight || window.innerHeight, 1000);
+  const canvas = await html2canvas(target, {
+    logging: false,
+    useCORS: true,
+    allowTaint: false,
+    backgroundColor: target.classList.contains("paper-desk") ? "#d5e4e2" : "#06161a",
+    scale: 1,
+    width,
+    height,
+    windowWidth: window.innerWidth,
+    windowHeight: window.innerHeight,
+    scrollX: 0,
+    scrollY: 0,
+    ignoreElements: (el) => shouldIgnoreForCapture(el),
+  });
   return canvas.toDataURL("image/jpeg", 0.82);
 }
 
@@ -45,42 +86,22 @@ export async function burnCaption(dataUrl: string, caption: string): Promise<str
 
 export async function shootViewport(): Promise<string> {
   if (typeof window === "undefined") return "";
-  await new Promise((resolve) => window.setTimeout(resolve, 120));
+  document.documentElement.classList.add("hs-capturing");
+  await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
+  await new Promise((resolve) => window.setTimeout(resolve, 180));
   try {
-    const width = Math.min(window.innerWidth, 1400);
-    const height = Math.min(window.innerHeight, 900);
-    const serialized = new XMLSerializer().serializeToString(document.body);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
-    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const image = new Image();
-      const fail = window.setTimeout(() => reject(new Error("timeout")), 2000);
-      image.onload = () => {
-        window.clearTimeout(fail);
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          reject(new Error("canvas"));
-          return;
-        }
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(image, 0, 0, width, height);
-        URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL("image/jpeg", 0.72));
-      };
-      image.onerror = () => {
-        window.clearTimeout(fail);
-        URL.revokeObjectURL(url);
-        reject(new Error("image"));
-      };
-      image.src = url;
-    });
-    return dataUrl;
+    const target = deskRoot();
+    try {
+      const shot = await modernShot(target);
+      if (usableShot(shot)) return shot;
+    } catch {
+      // try html2canvas
+    }
+    const shot = await html2canvasShot(target);
+    return usableShot(shot) ? shot : "";
   } catch {
-    return stampFallback();
+    return "";
+  } finally {
+    document.documentElement.classList.remove("hs-capturing");
   }
 }

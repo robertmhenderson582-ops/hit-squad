@@ -8,6 +8,7 @@ import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorksp
 import { LaborRollup } from "@/components/LaborRollup";
 import { ModuleTable } from "@/components/ModuleTable";
 import { JobSetupCard } from "@/components/JobSetupCard";
+import { PhaseSchedule } from "@/components/PhaseSchedule";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
@@ -69,28 +70,31 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       onStatus={setStatus}
     >
       {tab === "summary" ? (
-        <JobSetupCard
-          type={estimate.type}
-          client={alias(estimate.client)}
-          name={estimate.title}
-          otRule={boundOtLabel(site?.name ?? "", estimate.client, site?.code)}
-          author={estimate.estimator}
-          code={estimate.code}
-          window={estimate.window}
-        >
-          {status !== "Estimate" ? (
-            <>
-              <label className="mt-4 block">
-                <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">JOB / CR</span>
-                <input className="paper-field mt-2" />
-              </label>
-              <label className="mt-4 block">
-                <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">PO</span>
-                <input className="paper-field mt-2" />
-              </label>
-            </>
-          ) : null}
-        </JobSetupCard>
+        <div className="space-y-5">
+          <JobSetupCard
+            type={estimate.type}
+            client={alias(estimate.client)}
+            name={estimate.title}
+            otRule={boundOtLabel(site?.name ?? "", estimate.client, site?.code)}
+            author={estimate.estimator}
+            code={estimate.code}
+            window={estimate.window}
+          >
+            {status !== "Estimate" ? (
+              <>
+                <label className="mt-4 block">
+                  <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">JOB / CR</span>
+                  <input className="paper-field mt-2" />
+                </label>
+                <label className="mt-4 block">
+                  <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">PO</span>
+                  <input className="paper-field mt-2" />
+                </label>
+              </>
+            ) : null}
+          </JobSetupCard>
+          <PhaseSchedule />
+        </div>
       ) : null}
 
       {tab === "activities" ? (

@@ -13,6 +13,7 @@ import {
   type InboxPerson,
   type InboxThread,
 } from "@/lib/inbox";
+import { applyWhatsNew } from "@/lib/whats-new";
 import { useDisplay } from "@/components/DisplayProvider";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
@@ -53,7 +54,11 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   const desk = useOwnerDesk();
   const { prefs } = useDisplay();
   const ownerChrome = buildDeskChrome(user, desk?.viewAs);
-  const seat = ownerChrome ? "owner" : desk?.viewAs && desk.viewAs !== "owner" ? desk.viewAs : user?.id || "tester";
+  const seat = ownerChrome
+    ? user?.id || "owner"
+    : desk?.viewAs && desk.viewAs !== "owner"
+      ? desk.viewAs
+      : user?.id || user?.email || "tester";
 
   const [open, setOpen] = useState(false);
   const [composing, setComposing] = useState(false);
@@ -69,7 +74,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       setReady(false);
       return;
     }
-    setThreads(readThreads(seat, ownerChrome));
+    setThreads(applyWhatsNew(readThreads(seat, ownerChrome), seat, ownerChrome));
     setActiveId(null);
     setSelectedIds([]);
     setComposing(false);
@@ -94,12 +99,12 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    if (!ready || !ownerChrome) return;
-    if (sessionStorage.getItem("hs_inbox_announced")) return;
+    if (!ready) return;
+    if (sessionStorage.getItem(`hs_inbox_announced:${seat}`)) return;
     if (unread === 0) return;
-    sessionStorage.setItem("hs_inbox_announced", "1");
+    sessionStorage.setItem(`hs_inbox_announced:${seat}`, "1");
     announce("New inbox message");
-  }, [announce, ownerChrome, ready, unread]);
+  }, [announce, ready, seat, unread]);
 
   const persist = useCallback((next: InboxThread[] | ((current: InboxThread[]) => InboxThread[])) => {
     setThreads((current) => (typeof next === "function" ? next(current) : next));

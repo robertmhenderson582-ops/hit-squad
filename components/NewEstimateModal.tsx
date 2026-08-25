@@ -15,7 +15,7 @@ const SITES = [
   "Yates — Newnan, GA",
 ];
 const SIZES = [
-  { id: "outage", label: "Outage / T&M" },
+  { id: "outage", label: "Outage" },
   { id: "other", label: "Other client" },
   { id: "shop", label: "Shop / rig" },
 ] as const;

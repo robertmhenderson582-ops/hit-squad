@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { shootViewport } from "@/lib/capture";
-import { TICKET_DRAFT_KEY, TICKET_KINDS, type TicketKind } from "@/lib/tickets";
+import { mergeTickets, readTicketCache, writeTicketCache } from "@/lib/ticket-cache";
+import { TICKET_DRAFT_KEY, TICKET_KINDS, type DeskTicket, type TicketKind } from "@/lib/tickets";
 import { unlockInboxAudio } from "@/lib/chime";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { InboxPanel } from "@/components/InboxPanel";
@@ -55,6 +56,7 @@ export function DeskFabs() {
   }, [status]);
 
   if (status !== "authenticated" || !user) return null;
+  const email = user.email;
 
   function persist(next: Draft) {
     setDraft(next);
@@ -73,6 +75,9 @@ export function DeskFabs() {
       setNote(data.error || "Could not save ticket.");
       return;
     }
+    const filed = data.ticket as DeskTicket | undefined;
+    const serverList = (data.tickets ?? []) as DeskTicket[];
+    writeTicketCache(email, mergeTickets(serverList, filed ? [filed, ...readTicketCache(email)] : readTicketCache(email)));
     window.localStorage.removeItem(TICKET_DRAFT_KEY);
     setDraft(EMPTY_DRAFT);
     setSavedDraft(false);
@@ -84,14 +89,14 @@ export function DeskFabs() {
   async function capture() {
     setHiddenForShot(true);
     setTicketOpen(false);
-    await new Promise((resolve) => window.setTimeout(resolve, 80));
+    await new Promise((resolve) => window.setTimeout(resolve, 280));
     try {
       const shot = await Promise.race([
         shootViewport(),
-        new Promise<string>((resolve) => window.setTimeout(() => resolve(""), 2500)),
+        new Promise<string>((resolve) => window.setTimeout(() => resolve(""), 20000)),
       ]);
       if (shot) persist({ ...draft, capture: shot });
-      setNote(shot ? "Capture attached. Capture stays off Inbox." : "Capture finished. Ticket is back.");
+      setNote(shot ? "Capture attached. Capture stays off Inbox." : "Capture could not grab the desk. Try again.");
     } finally {
       setHiddenForShot(false);
       setTicketOpen(true);
@@ -114,7 +119,7 @@ export function DeskFabs() {
   const showTicket = ticketOpen && !hiddenForShot;
 
   return (
-    <div className="desk-fabs print-hide">
+    <div className={`desk-fabs print-hide ${hiddenForShot ? "pointer-events-none opacity-0" : ""}`} data-capture="ignore">
       {inbox.toast ? <div className="inbox-toast">{inbox.toast}</div> : null}
       {note && !showTicket ? <p className="fab-note">{note}</p> : null}
 

@@ -9,18 +9,22 @@
     "start": "next start --hostname 127.0.0.1 --port 3000",
     "lint": "next lint",
     "auth:check": "node --env-file=.env.local scripts/auth-check.mjs",
-    "test": "node --experimental-strip-types --test lib/hours-clock.test.ts lib/desk-role.test.ts"
+    "test": "node --experimental-strip-types --test lib/hours-clock.test.ts lib/desk-role.test.ts lib/tickets.test.ts lib/whats-new.test.ts lib/ticket-mail.test.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
+    "html2canvas": "^1.4.1",
     "jose": "^6.0.12",
+    "modern-screenshot": "^4.7.0",
     "next": "^15.5.2",
+    "nodemailer": "^7.0.13",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.17.2",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "autoprefixer": "^10.4.21",
