@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { AuthGate } from "@/components/AuthGate";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { LoginForm } from "@/components/LoginForm";
@@ -11,9 +12,12 @@ export default function LoginPage() {
         <FieldTrialBanner />
         <div className="login-og">
           {/* Exact original Hit Squad industrial night hero — do not substitute. */}
-          <img
+          <Image
             src="/brand-hero.jpg"
             alt="HIT SQUAD ESTIMATORS — ESTIMATE & COST"
+            width={1200}
+            height={630}
+            priority
             className="login-og-image"
           />
         </div>
