@@ -1,9 +1,14 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
 import { DeskChrome } from "@/components/DeskChrome";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { SettingsShell } from "@/components/SettingsShell";
 import { useSession } from "@/components/SessionProvider";
+import { VIEW_AS_HIDDEN_SETTINGS } from "@/lib/owner-desk";
+
+const HIDE_WHILE_VIEWING = new Set<string>(VIEW_AS_HIDDEN_SETTINGS);
 
 export function SettingsGate({
   ownerOnly,
@@ -13,7 +18,11 @@ export function SettingsGate({
   children: React.ReactNode;
 }) {
   const { user } = useSession();
-  const allowed = !ownerOnly || user?.role === "owner";
+  const pathname = usePathname();
+  const desk = useOwnerDesk();
+  const viewingAs = Boolean(desk?.viewAs && desk.viewAs !== "owner");
+  const hidden = viewingAs && HIDE_WHILE_VIEWING.has(pathname);
+  const allowed = (!ownerOnly || user?.role === "owner") && !hidden;
 
   return (
     <AuthGate require="authenticated">

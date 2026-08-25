@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { VIEW_AS_HIDDEN_SETTINGS } from "@/lib/owner-desk";
+
+const HIDE_WHILE_VIEWING = new Set<string>(VIEW_AS_HIDDEN_SETTINGS);
 
 const SECTIONS: { href: string; label: string; ownerOnly?: boolean; exact?: boolean }[] = [
   { href: "/settings", label: "Display", exact: true },
@@ -29,14 +33,20 @@ function active(pathname: string, href: string, exact?: boolean) {
 export function SettingsShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user } = useSession();
+  const desk = useOwnerDesk();
   const owner = user?.role === "owner";
+  const viewingAs = Boolean(desk?.viewAs && desk.viewAs !== "owner");
 
   return (
     <div className="mt-5 grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
       <aside className="plant-card h-fit px-3 py-4">
         <p className="px-2 text-xs tracking-[0.18em] text-[#5b6f73]">SETTINGS</p>
         <nav className="mt-3 flex flex-col gap-1">
-          {SECTIONS.filter((item) => !item.ownerOnly || owner).map((item) => {
+          {SECTIONS.filter((item) => {
+            if (item.ownerOnly && !owner) return false;
+            if (viewingAs && HIDE_WHILE_VIEWING.has(item.href)) return false;
+            return true;
+          }).map((item) => {
             const on = active(pathname, item.href, item.exact);
             return (
               <Link

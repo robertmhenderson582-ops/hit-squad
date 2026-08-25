@@ -1,125 +1,79 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { ModuleTable } from "@/components/ModuleTable";
-import { StatusStamp } from "@/components/StatusStamp";
-import { useDeskBoard } from "@/components/useDeskBoard";
-import type { ChangeOrderRecord } from "@/lib/types";
+import { useState } from "react";
+
+const SHELLS = ["Log", "Estimate", "SCR"] as const;
 
 export function ChangeOrderDesk() {
-  const { board, error } = useDeskBoard();
-  const [extra, setExtra] = useState<ChangeOrderRecord[]>([]);
-  const [title, setTitle] = useState("");
-  const [estimateCode, setEstimateCode] = useState("");
-  const [origin, setOrigin] = useState<ChangeOrderRecord["origin"]>("Ops");
-  const [laborDelta, setLaborDelta] = useState("");
-  const [materialDelta, setMaterialDelta] = useState("");
-  const [schedule, setSchedule] = useState("");
-  const rows = [...(board?.changeOrders ?? []), ...extra];
-
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const number = `SCR-${String(extra.length + 4).padStart(3, "0")}`;
-    setExtra((current) => [
-      ...current,
-      {
-        id: number,
-        ownerId: "owner-robert-henderson",
-        number,
-        estimateCode: estimateCode || "EST-2609-U3",
-        title,
-        origin,
-        status: "OPEN",
-        laborDelta: laborDelta || "$0",
-        materialDelta: materialDelta || "$0",
-        schedule: schedule || "None",
-        filed: "Today · this desk",
-      },
-    ]);
-    setTitle("");
-    setLaborDelta("");
-    setMaterialDelta("");
-    setSchedule("");
-  }
+  const [shell, setShell] = useState<(typeof SHELLS)[number]>("Log");
 
   return (
     <div className="mt-4 space-y-5">
-      <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
-        Change-order log and scope-change request. Filed tickets stay on this owner desk.
+      <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
+        Change-order chrome only. Empty log, estimate, and SCR shells. No FCR math and no mileage
+        dollars.
       </p>
-      {error ? <p className="text-amber-label">{error}</p> : null}
-      <ModuleTable
-        caption="CHANGE ORDER / SCR LOG"
-        headers={["NO.", "ESTIMATE", "SCOPE", "ORIGIN", "LABOR", "MATL", "SCHEDULE", "STATUS"]}
-      >
-        {rows.map((row) => (
-          <tr key={row.id} className="border-t border-steel-rim/20">
-            <td className="px-4 py-3 font-mono text-amber-label">{row.number}</td>
-            <td className="px-4 py-3 font-mono text-xs">{row.estimateCode}</td>
-            <td className="px-4 py-3">{row.title}</td>
-            <td className="px-4 py-3 font-mono text-xs">{row.origin}</td>
-            <td className="px-4 py-3 font-mono text-xs">{row.laborDelta}</td>
-            <td className="px-4 py-3 font-mono text-xs">{row.materialDelta}</td>
-            <td className="px-4 py-3 font-mono text-xs">{row.schedule}</td>
-            <td className="px-4 py-3">
-              <StatusStamp value={row.status} />
-            </td>
-          </tr>
+      <nav className="flex flex-wrap gap-2 text-sm">
+        {SHELLS.map((item) => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => setShell(item)}
+            className={`rounded px-3 py-1.5 ${shell === item ? "bg-steel text-white" : "border border-steel text-steel"}`}
+          >
+            {item}
+          </button>
         ))}
-      </ModuleTable>
+      </nav>
 
-      <form onSubmit={onSubmit} className="steel-plate paper-grain space-y-3 px-4 py-5">
-        <p className="font-mono text-[11px] tracking-[0.22em] text-amber-label">NEW SCOPE CHANGE REQUEST</p>
-        <label className="block">
-          <span className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">TITLE</span>
-          <input required value={title} onChange={(event) => setTitle(event.target.value)} className="steel-field mt-1 w-full px-3 py-2" />
-        </label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">ESTIMATE</span>
-            <select
-              value={estimateCode}
-              onChange={(event) => setEstimateCode(event.target.value)}
-              className="steel-field mt-1 w-full px-3 py-2"
-            >
-              <option value="">Select package</option>
-              {(board?.estimates ?? []).map((estimate) => (
-                <option key={estimate.id} value={estimate.code}>
-                  {estimate.code}
-                </option>
-              ))}
-            </select>
+      {shell === "Log" ? (
+        <section className="plant-card px-4 py-4">
+          <h2 className="font-display text-xl tracking-wide">Change-order log</h2>
+          <table className="mt-3 min-w-full text-left text-sm">
+            <thead className="font-mono text-[10px] tracking-[0.16em] text-[#5b6f73]">
+              <tr>
+                {["NO.", "ESTIMATE", "SCOPE", "ORIGIN", "STATUS"].map((header) => (
+                  <th key={header} className="px-2 py-2">
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-[#d5e0de]">
+                <td colSpan={5} className="px-2 py-5 text-sm text-[#5b6f73]">
+                  No change orders on this desk.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      ) : null}
+
+      {shell === "Estimate" ? (
+        <section className="plant-card px-4 py-5">
+          <h2 className="font-display text-xl tracking-wide">Estimate</h2>
+          <p className="mt-2 text-sm text-[#5b6f73]">
+            Empty shell. Pick a package when one is open. Nothing is filed here.
+          </p>
+        </section>
+      ) : null}
+
+      {shell === "SCR" ? (
+        <section className="plant-card space-y-3 px-4 py-5">
+          <h2 className="font-display text-xl tracking-wide">Scope change request</h2>
+          <p className="text-sm text-[#5b6f73]">Empty SCR chrome. Does not file dollars or wire a login.</p>
+          <label className="block text-sm">
+            Title
+            <input className="paper-field mt-1" />
           </label>
-          <label className="block">
-            <span className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">ORIGIN</span>
-            <select
-              value={origin}
-              onChange={(event) => setOrigin(event.target.value as ChangeOrderRecord["origin"])}
-              className="steel-field mt-1 w-full px-3 py-2"
-            >
-              <option>Ops</option>
-              <option>Engineering</option>
-              <option>HSE</option>
-              <option>Contractor</option>
-            </select>
+          <label className="block text-sm">
+            Note
+            <textarea rows={4} className="paper-field mt-1" />
           </label>
-          <label className="block">
-            <span className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">LABOR DELTA</span>
-            <input value={laborDelta} onChange={(event) => setLaborDelta(event.target.value)} className="steel-field mt-1 w-full px-3 py-2" />
-          </label>
-          <label className="block">
-            <span className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">MATERIAL DELTA</span>
-            <input value={materialDelta} onChange={(event) => setMaterialDelta(event.target.value)} className="steel-field mt-1 w-full px-3 py-2" />
-          </label>
-        </div>
-        <label className="block">
-          <span className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">SCHEDULE IMPACT</span>
-          <input value={schedule} onChange={(event) => setSchedule(event.target.value)} className="steel-field mt-1 w-full px-3 py-2" />
-        </label>
-        <button type="submit" className="bg-steel px-4 py-2 font-display tracking-[0.18em] text-paper-cream">
-          FILE SCR
-        </button>
-      </form>
+          <p className="text-xs text-[#5b6f73]">Chrome only — not a filed ticket.</p>
+        </section>
+      ) : null}
     </div>
   );
 }
