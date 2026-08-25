@@ -1,23 +1,20 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.6.2";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.6";
+export const DESK_VERSION = "1.7.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.7";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.6";
+export const DESK_THREAD_ID = "th-desk-v1.7";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.6",
-  "• Each Crew position has its own five phase cards you can collapse",
-  "• Each card has a Calendar Pattern (weekdays + which Sundays)",
+  "Hit Squad Project Controls V1.7",
+  "• Crew expand/collapse control is larger and easier to see",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.6",
-  "• Each Crew position owns its own Pre / Oil Out / Mechanical / Oil In / Post cards — adding a position does not share one global set",
-  "• Positions accordion: one open while working, collapsed on re-entry, add opens the new row, duplicate lands collapsed",
-  "• Each phase card has Calendar Pattern: start/end, headcount, hours/shift, Per-diem Headcount, weekday chips, Sunday date chips at the bottom",
-  "• The painted START/STOP calendar icon was dropped — native date fields stay as date fields",
+  "Hit Squad Project Controls V1.7",
+  "• Crew expand/collapse chevron is a 24px steel/teal control so it reads on the dark HUD",
+  "• Same larger control on Staff, General Foreman, Foreman, and Direct Craft position rows",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

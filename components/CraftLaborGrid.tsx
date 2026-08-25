@@ -266,9 +266,30 @@ function CraftAccordionRow({
               onClick={onToggle}
               title={open ? "Collapse" : "Expand"}
               aria-label={open ? "Collapse" : "Expand"}
+              aria-expanded={open}
               className="crew-chevron"
             >
-              <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+              <svg className="crew-chevron-icon" viewBox="0 0 24 24" aria-hidden="true">
+                {open ? (
+                  <path
+                    d="M6 9.5 12 15.5 18 9.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                ) : (
+                  <path
+                    d="M9.5 6 15.5 12 9.5 18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                )}
+              </svg>
               <span className="crew-chevron-label">{open ? "Collapse" : "Expand"}</span>
             </button>
             <div className="min-w-[14rem]">
