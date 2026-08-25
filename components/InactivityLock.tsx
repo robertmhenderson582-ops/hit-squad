@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useDisplay } from "@/components/DisplayProvider";
+import { PasswordField } from "@/components/PasswordField";
 import { useSession } from "@/components/SessionProvider";
 
 function effectiveLock(role: string | undefined, minutes: number) {
@@ -98,16 +99,14 @@ export function InactivityLock() {
             <h2 className="font-display text-2xl">Session locked — sign in again</h2>
             <p className="mt-2 text-sm opacity-80">Cookie stays. This overlay re-checks GET /api/auth/session.</p>
             <p className="mt-4 text-sm">{user?.email}</p>
-            <label className="mt-3 block">
-              <span className="text-xs tracking-[0.16em]">PASSWORD</span>
-              <input
-                type="password"
+            <div className="mt-3">
+              <PasswordField
+                label="PASSWORD"
                 autoComplete="current-password"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="paper-field mt-1"
+                onChange={setPassword}
               />
-            </label>
+            </div>
             {error ? <p className="mt-2 text-sm text-amber-flare">{error}</p> : null}
             <button type="submit" className="mt-4 rounded-lg bg-steel px-4 py-2 text-white">
               Unlock

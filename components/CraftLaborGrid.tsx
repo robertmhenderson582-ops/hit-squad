@@ -3,12 +3,14 @@
 import { useMemo, useState } from "react";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
 
-const POSITIONS = ["Boilermaker Journeyman", "Pipefitter Journeyman", "Ironworker", "Foreman"];
+const BILLED_AS = ["Boilermaker Journeyman", "Pipefitter Journeyman", "Ironworker", "Foreman"];
+const POSITIONS = ["Tool Room Attendant", "General Foreman", "Safety attendant", "Support"];
 const CHIPS = ["Add Job Set", "Shutdown", "Rear wall", "Superheater", "V bottom", "Hydro", "Demob"];
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 type CraftRow = {
   id: string;
+  billedAs: string;
   position: string;
   shift: string;
   mode: "Calendar" | "Manual";
@@ -28,7 +30,8 @@ type CraftRow = {
 
 const STARTER: CraftRow = {
   id: "cr-1",
-  position: "Boilermaker Journeyman",
+  billedAs: "Boilermaker Journeyman",
+  position: "Tool Room Attendant",
   shift: "Day",
   mode: "Calendar",
   st: 400,
@@ -40,15 +43,16 @@ const STARTER: CraftRow = {
   days: ["Mo", "Tu", "We", "Th", "Fr", "Sa"],
   start: "2026-08-21",
   end: "2026-09-03",
-  headcount: 4,
+  headcount: 1,
   shiftHours: 10,
-  pdPeople: 4,
+  pdPeople: 1,
 };
 
 export function CraftLaborGrid() {
   const confirmRemove = useConfirmRemove();
   const [rows, setRows] = useState<CraftRow[]>([STARTER]);
   const [chips, setChips] = useState<string[]>([]);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const totals = useMemo(() => {
     const hours = rows.reduce((sum, row) => sum + row.hours, 0);
@@ -56,11 +60,12 @@ export function CraftLaborGrid() {
   }, [rows]);
 
   function addPosition() {
+    const id = `cr-${Date.now()}`;
     setRows((current) => [
       ...current,
       {
         ...STARTER,
-        id: `cr-${Date.now()}`,
+        id,
         mode: "Manual",
         st: 0,
         ot: 0,
@@ -68,8 +73,11 @@ export function CraftLaborGrid() {
         pd: 0,
         hours: 0,
         cost: "$0",
+        headcount: 1,
+        pdPeople: 1,
       },
     ]);
+    setOpen((current) => ({ ...current, [id]: true }));
   }
 
   function toggleDay(id: string, day: string) {
@@ -115,7 +123,7 @@ export function CraftLaborGrid() {
         <table className="min-w-full text-left text-sm">
           <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
             <tr>
-              {["POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST", ""].map((header) => (
+              {["BILLED AS", "POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST", ""].map((header) => (
                 <th key={header || "x"} className="px-2 py-2">
                   {header}
                 </th>
@@ -125,6 +133,21 @@ export function CraftLaborGrid() {
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="border-t border-[#d5e0de] align-top">
+                <td className="px-2 py-2">
+                  <select
+                    value={row.billedAs}
+                    onChange={(event) =>
+                      setRows((current) =>
+                        current.map((item) => (item.id === row.id ? { ...item, billedAs: event.target.value } : item)),
+                      )
+                    }
+                    className="paper-field"
+                  >
+                    {BILLED_AS.map((item) => (
+                      <option key={item}>{item}</option>
+                    ))}
+                  </select>
+                </td>
                 <td className="px-2 py-2">
                   <select
                     value={row.position}
@@ -180,11 +203,12 @@ export function CraftLaborGrid() {
                   <button
                     type="button"
                     onClick={async () => {
-                      if (await confirmRemove(row.position)) {
+                      if (await confirmRemove(row.billedAs)) {
                         setRows((current) => current.filter((item) => item.id !== row.id));
                       }
                     }}
-                    aria-label="Remove row"
+                    aria-label="Remove estimate row"
+                    className="trash-btn"
                   >
                     ⌫
                   </button>
@@ -198,9 +222,18 @@ export function CraftLaborGrid() {
         .filter((row) => row.mode === "Calendar")
         .map((row) => (
           <div key={`${row.id}-cal`} className="mt-4 rounded-xl bg-[#f4f1e8] px-4 py-4">
-            <p className="inline-block rounded-full bg-[#eadfc8] px-3 py-1 text-xs font-semibold tracking-[0.14em] text-[#163038]">
-              CALENDAR PATTERN
-            </p>
+            <button
+              type="button"
+              onClick={() => setOpen((current) => ({ ...current, [row.id]: !current[row.id] }))}
+              className="flex w-full items-center justify-between text-left"
+            >
+              <p className="inline-block rounded-full bg-[#eadfc8] px-3 py-1 text-xs font-semibold tracking-[0.14em] text-[#163038]">
+                CALENDAR PATTERN · {row.billedAs}
+              </p>
+              <span className="text-sm text-[#5b6f73]">{open[row.id] ? "▾" : "▸ collapsed"}</span>
+            </button>
+            {open[row.id] ? (
+            <>
             <p className="mt-2 text-xs text-[#5b6f73]">Headcount × shift hours on each selected weekday in the range.</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-5">
               <label className="text-xs">
@@ -260,7 +293,7 @@ export function CraftLaborGrid() {
                 />
               </label>
               <label className="text-xs">
-                Per-diem people
+                Per-diem Headcount
                 <input
                   type="number"
                   value={row.pdPeople}
@@ -293,6 +326,8 @@ export function CraftLaborGrid() {
             <button type="button" className="mt-2 text-sm text-steel">
               + Add date range
             </button>
+            </>
+            ) : null}
           </div>
         ))}
     </section>

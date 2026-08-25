@@ -8,6 +8,7 @@ const SECTIONS: { href: string; label: string; ownerOnly?: boolean; exact?: bool
   { href: "/settings", label: "Display", exact: true },
   { href: "/settings/security", label: "Security" },
   { href: "/settings/copy", label: "Copy" },
+  { href: "/settings/talk", label: "How we talk" },
   { href: "/settings/users", label: "Manage users", ownerOnly: true },
   { href: "/settings/follow", label: "Follow", ownerOnly: true },
   { href: "/settings/activity", label: "Activity", ownerOnly: true },

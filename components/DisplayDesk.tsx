@@ -42,13 +42,12 @@ export function DisplayDesk() {
       </section>
 
       <section className="plant-card px-5 py-5">
-        <h2 className="text-xl font-semibold text-[#163038]">Easy Mode, type, and motion</h2>
+        <h2 className="text-xl font-semibold text-[#163038]">Type and motion</h2>
         <p className="mt-1 text-sm text-[#5b6f73]">
-          High contrast, type size, and Easy Mode still apply on top of Day/Night. Desk opens in
-          standard language; Easy is off the header.
+          High contrast and type size still apply on top of Day/Night. Easy Mode lives at the bottom
+          of Settings → Copy — not here, not on the header.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Toggle label="Easy Mode" on={prefs.easyMode} onChange={(on) => setPrefs({ easyMode: on })} />
           <label className="block text-sm">
             type size
             <select
