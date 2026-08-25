@@ -42,7 +42,7 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`rounded-lg px-3 py-2 text-sm ${on ? "bg-steel text-white" : "text-[#163038] hover:bg-[#e7eeec]"}`}
+                className={`settings-rail rounded-lg px-3 py-2 text-sm ${on ? "settings-rail-on" : ""}`}
               >
                 {item.label}
               </Link>

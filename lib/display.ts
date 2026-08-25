@@ -19,7 +19,7 @@ export type DisplayPrefs = {
 export const DISPLAY_KEY = "hs_display";
 
 export const DEFAULT_DISPLAY: DisplayPrefs = {
-  theme: "match",
+  theme: "night",
   easyMode: false,
   typeSize: "md",
   density: "comfortable",

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { DeskHero } from "@/components/DeskHero";
+import { useDisplay } from "@/components/DisplayProvider";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { SitesDesk } from "@/components/SitesDesk";
 import { StatusStamp } from "@/components/StatusStamp";
@@ -18,6 +19,8 @@ const TILES = [
 
 export function DeskHome() {
   const alias = useAlias();
+  const { resolvedTheme } = useDisplay();
+  const night = resolvedTheme === "night";
   const [desk, setDesk] = useState<DeskBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +54,7 @@ export function DeskHome() {
   return (
     <div className="space-y-6">
       <DeskHero />
-      <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
+      <p className={`max-w-3xl text-sm leading-6 ${night ? "text-paper-cream/80" : "text-[#5b6f73]"}`}>
         Owner blotter for {alias("Madison")} / {alias("P66")} outage, T&amp;M, cost, and HSE. Records stay with the
         signed-in desk. Field trial — not a release.
       </p>
@@ -60,23 +63,33 @@ export function DeskHome() {
           <Link
             key={tile.href}
             href={tile.href}
-            className="hud-tile block px-4 py-5"
+            className={night ? "hud-tile block px-4 py-5" : "plant-card block px-4 py-5"}
           >
-            <p className="font-mono text-[10px] tracking-[0.28em] text-steel-glow">{tile.note.toUpperCase()}</p>
-            <p className="mt-2 font-display text-3xl tracking-[0.16em] text-paper-cream">{tile.label.toUpperCase()}</p>
-            <p className="hud-readout mt-3 font-mono text-2xl text-amber-label">{counts[tile.key]}</p>
+            <p className={`font-mono text-[10px] tracking-[0.28em] ${night ? "text-steel-glow" : "text-steel"}`}>
+              {tile.note.toUpperCase()}
+            </p>
+            <p className={`mt-2 font-display text-3xl tracking-[0.16em] ${night ? "text-paper-cream" : "text-[#163038]"}`}>
+              {tile.label.toUpperCase()}
+            </p>
+            <p className={`hud-readout mt-3 font-mono text-2xl ${night ? "text-amber-label" : "text-steel"}`}>
+              {counts[tile.key]}
+            </p>
           </Link>
         ))}
       </div>
 
-      <section className="steel-plate paper-grain overflow-hidden">
-        <div className="border-b border-steel-rim/30 px-4 py-3 font-mono text-[11px] tracking-[0.22em] text-steel-glow">
+      <section className={`${night ? "steel-plate paper-grain" : "plant-card"} overflow-hidden`}>
+        <div
+          className={`border-b px-4 py-3 font-mono text-[11px] tracking-[0.22em] ${
+            night ? "border-steel-rim/30 text-steel-glow" : "border-[#d5e0de] text-steel"
+          }`}
+        >
           OPEN JOBS — THIS DESK ONLY
         </div>
         {error ? <p className="px-4 py-4 text-amber-label">{error}</p> : null}
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead className="font-mono text-[10px] tracking-[0.18em] text-paper-cream/60">
+            <thead className={`font-mono text-[10px] tracking-[0.18em] ${night ? "text-paper-cream/60" : "text-[#5b6f73]"}`}>
               <tr>
                 <th className="px-4 py-3">CODE</th>
                 <th className="px-4 py-3">JOB</th>
