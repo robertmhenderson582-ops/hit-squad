@@ -11,6 +11,7 @@ import { CreatedBy } from "@/components/CreatedBy";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
+import { boundOtLabel } from "@/lib/hours-clock";
 
 export function EstimateDetail({ estimateId }: { estimateId: string }) {
   const alias = useAlias();
@@ -112,7 +113,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
             <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">OVERTIME / RATE</span>
             <input
               readOnly
-              value={site?.name === "Wood River" ? "East Coast (PCA0001103)" : "Customer rule"}
+              value={boundOtLabel(site?.name ?? "", estimate.client, site?.code)}
               className="paper-field mt-2"
             />
           </label>

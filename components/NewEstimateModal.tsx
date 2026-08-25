@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAlias } from "@/components/OwnerDeskContext";
+import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
 
 const CLIENTS = ["Phillips 66", "Georgia Power", "Shop"];
 const SITES = [
@@ -35,8 +36,8 @@ export function NewEstimateModal({
   const [client, setClient] = useState(preset.client || (preset.size === "shop" ? "Shop" : "Phillips 66"));
   const [site, setSite] = useState(preset.site || "Wood River — Roxana, IL");
   const [name, setName] = useState(preset.size === "shop" ? "Shop / rig job" : "New T&M estimate");
-  const woodRiver = site.startsWith("Wood River");
-  const rule = woodRiver ? "East Coast (PCA0001103)" : "Customer rule";
+  const rule = boundOtLabel(site, client);
+  const eastCoast = siteClockFromText(site, client) === "east-coast";
 
   const clientLocked = knownPlant || size === "shop";
 
@@ -134,9 +135,10 @@ export function NewEstimateModal({
           <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">ESTIMATE NAME</span>
           <input value={name} onChange={(event) => setName(event.target.value)} className="paper-field mt-1" />
         </label>
-        {woodRiver && size !== "shop" ? (
+        {eastCoast && size !== "shop" ? (
           <p className="mt-3 text-xs text-[#5b6f73]">
-            {alias("Wood River")} uses East Coast (PCA0001103) — never PA or Mid-Atlantic.
+            East Coast (PCA0001103) — never PA or Mid-Atlantic. Catalog plants fill OT from the bound
+            contract; there is no picker.
           </p>
         ) : null}
         <div className="mt-5 flex justify-end gap-3">

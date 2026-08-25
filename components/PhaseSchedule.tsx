@@ -18,7 +18,7 @@ const STARTER: Phase[] = [
   {
     id: "pre",
     name: "Pre-Turnaround",
-    note: "4x10 or 5x8",
+    note: "4x10 or 5x8 · OT after 8 is optional on the crew (8 ST + 2 OT) or all 10 ST",
     on: true,
     start: "2026-08-21",
     stop: "2026-09-03",
@@ -58,7 +58,7 @@ const STARTER: Phase[] = [
   {
     id: "post",
     name: "Post",
-    note: "5x8 back-in",
+    note: "5x8 back-in · OT after 8 is optional on the crew, not the default",
     on: true,
     start: "2026-09-28",
     stop: "2026-10-05",

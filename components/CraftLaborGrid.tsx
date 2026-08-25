@@ -6,36 +6,63 @@ import { GripToPan } from "@/components/GripToPan";
 import {
   CRAFT_POSITIONS,
   CRAFT_SHIFTS,
+  LISTED_POSITIONS,
+  STAFF_POSITIONS,
   WEEKDAYS,
   blankCraftRow,
   blankRange,
   clampPerDiem,
   cloneCraftRow,
+  daysPerWeekFromMask,
+  maskForDaysPerWeek,
   perDiemCap,
   type CalendarRange,
   type CraftRow,
   type CraftShift,
 } from "@/lib/craft-labor";
+import {
+  clockNote,
+  computeRangeHours,
+  computeRowHours,
+  seatKind,
+  sumSplits,
+} from "@/lib/hours-clock";
+import { defaultLaborClass, type LaborClass } from "@/lib/labor-class";
 
 const CHIPS = ["Add Job Set", "Shutdown", "Rear wall", "Superheater", "V bottom", "Hydro", "Demob"];
 
 const HEADERS = ["POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST"];
+const CUSTOM = "__custom__";
 
 export function CraftLaborGrid({
   rows,
   onRows,
+  site = "",
+  client = "",
+  otAfter8 = false,
+  onOtAfter8,
 }: {
   rows: CraftRow[];
   onRows: (next: CraftRow[] | ((current: CraftRow[]) => CraftRow[])) => void;
+  site?: string;
+  client?: string;
+  otAfter8?: boolean;
+  onOtAfter8?: (next: boolean) => void;
 }) {
   const confirmRemove = useConfirmRemove();
   const [chips, setChips] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const totals = useMemo(() => {
-    const hours = rows.reduce((sum, row) => sum + row.hours, 0);
-    return `${hours.toLocaleString()} hrs · $0`;
-  }, [rows]);
+  const computed = useMemo(
+    () =>
+      rows.map((row) => {
+        const hours = computeRowHours(row, site, client, otAfter8);
+        return { ...row, ...hours, cost: "" };
+      }),
+    [rows, site, client, otAfter8],
+  );
+
+  const totals = useMemo(() => sumSplits(computed), [computed]);
 
   function patchRow(id: string, patch: Partial<CraftRow>) {
     onRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -86,12 +113,29 @@ export function CraftLaborGrid({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-2xl font-semibold text-[#163038]">Direct Craft</h2>
-          <p className="text-sm text-[#5b6f73]">{totals}</p>
+          <p className="text-sm text-[#5b6f73]">
+            {totals.hours.toLocaleString()} hrs · {totals.st.toLocaleString()} ST · {totals.ot.toLocaleString()} OT ·{" "}
+            {totals.dt.toLocaleString()} DT
+          </p>
         </div>
-        <button type="button" onClick={addPosition} className="rounded-lg bg-steel px-3 py-2 text-sm text-white">
-          + Add position
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-[#163038]">
+            <input
+              type="checkbox"
+              checked={otAfter8}
+              onChange={(event) => onOtAfter8?.(event.target.checked)}
+            />
+            OT after 8
+          </label>
+          <button type="button" onClick={addPosition} className="rounded-lg bg-steel px-3 py-2 text-sm text-white">
+            + Add position
+          </button>
+        </div>
       </div>
+      <p className="mt-2 text-xs text-[#5b6f73]">
+        Hours follow the position. OT after 8 is optional — weekly 40 still sits on top. Default is ST to 10
+        on East Coast / staff.
+      </p>
       <div className="mt-4 flex flex-wrap gap-2">
         {CHIPS.map((chip) => (
           <button
@@ -105,7 +149,7 @@ export function CraftLaborGrid({
         ))}
       </div>
       {chips.length ? (
-        <p className="mt-2 text-xs text-[#5b6f73]">Lines staged: {chips.join(" · ")}. Workbook math stays stubbed.</p>
+        <p className="mt-2 text-xs text-[#5b6f73]">Lines staged: {chips.join(" · ")}.</p>
       ) : null}
       <GripToPan className="mt-4">
         <table className="min-w-[960px] text-left text-sm">
@@ -120,26 +164,27 @@ export function CraftLaborGrid({
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
+            {computed.length === 0 ? (
               <tr className="border-t border-[#d5e0de]">
                 <td colSpan={10} className="px-2 py-6 text-sm text-[#5b6f73]">
                   No positions yet. Add a position to start — nothing is prefilled.
                 </td>
               </tr>
             ) : null}
-            {rows.map((row) => {
+            {computed.map((row) => {
               const open = openId === row.id;
               return (
                 <CraftAccordionRow
                   key={row.id}
                   row={row}
+                  site={site}
+                  client={client}
+                  otAfter8={otAfter8}
                   open={open}
                   onToggle={() => setOpenId(open ? null : row.id)}
                   onPatch={(patch) => patchRow(row.id, patch)}
                   onPatchRange={(rangeId, patch) => patchRange(row.id, rangeId, patch)}
-                  onAddRange={() =>
-                    patchRow(row.id, { ranges: [...row.ranges, blankRange()] })
-                  }
+                  onAddRange={() => patchRow(row.id, { ranges: [...row.ranges, blankRange()] })}
                   onRemoveRange={(rangeId) => {
                     if (row.ranges.length <= 1) return;
                     patchRow(row.id, { ranges: row.ranges.filter((range) => range.id !== rangeId) });
@@ -158,6 +203,9 @@ export function CraftLaborGrid({
 
 function CraftAccordionRow({
   row,
+  site,
+  client,
+  otAfter8,
   open,
   onToggle,
   onPatch,
@@ -168,6 +216,9 @@ function CraftAccordionRow({
   onRemove,
 }: {
   row: CraftRow;
+  site: string;
+  client: string;
+  otAfter8: boolean;
   open: boolean;
   onToggle: () => void;
   onPatch: (patch: Partial<CraftRow>) => void;
@@ -177,6 +228,19 @@ function CraftAccordionRow({
   onDuplicate: () => void;
   onRemove: () => void;
 }) {
+  const listed = (LISTED_POSITIONS as readonly string[]).includes(row.position);
+  const selectValue = listed ? row.position : row.position ? CUSTOM : "";
+  const naturalClass = defaultLaborClass(row.position);
+  const laborClass = row.laborClassOverride ?? naturalClass;
+  const starred = Boolean(row.laborClassOverride && row.laborClassOverride !== naturalClass);
+  const staff = seatKind(row.position) === "staff";
+  const clockChecked = staff ? row.clockOverride === "comp" : row.clockOverride === "staff";
+
+  function toggleClass() {
+    const next: LaborClass = laborClass === "Merit" ? "Union" : "Merit";
+    onPatch({ laborClassOverride: next === naturalClass ? null : next });
+  }
+
   return (
     <>
       <tr className="border-t border-[#d5e0de] align-top">
@@ -191,18 +255,52 @@ function CraftAccordionRow({
             >
               {open ? "▾" : "▸"}
             </button>
-            <select
-              value={row.position}
-              onChange={(event) => onPatch({ position: event.target.value })}
-              className="paper-field"
-            >
-              <option value="">Select position</option>
-              {CRAFT_POSITIONS.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
+            <div className="min-w-[14rem]">
+              <select
+                value={selectValue}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  onPatch({ position: value === CUSTOM ? "" : value });
+                }}
+                className="paper-field w-full"
+              >
+                <option value="">Select position</option>
+                <optgroup label="Supervision / staff">
+                  {STAFF_POSITIONS.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="GF / craft">
+                  {CRAFT_POSITIONS.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </optgroup>
+                <option value={CUSTOM}>Type a title…</option>
+              </select>
+              {!listed ? (
+                <input
+                  value={row.position}
+                  onChange={(event) => onPatch({ position: event.target.value })}
+                  placeholder="Position title"
+                  className="paper-field mt-1 w-full"
+                />
+              ) : null}
+              {row.position ? (
+                <button
+                  type="button"
+                  onClick={toggleClass}
+                  className="mt-1 text-xs font-semibold text-[#163038] underline-offset-2 hover:underline"
+                  title="Override Union / Merit. Does not change the OT clock."
+                >
+                  {laborClass}
+                  {starred ? "*" : ""}
+                </button>
+              ) : null}
+            </div>
           </div>
         </td>
         <td className="px-2 py-2">
@@ -232,7 +330,7 @@ function CraftAccordionRow({
         <td className="hud-readout px-2 py-2">{row.dt.toLocaleString()}</td>
         <td className="hud-readout px-2 py-2">{row.pd}</td>
         <td className="hud-readout px-2 py-2">{row.hours.toLocaleString()}</td>
-        <td className="hud-readout px-2 py-2 font-semibold">{row.cost}</td>
+        <td className="hud-readout px-2 py-2 font-semibold">{row.cost || null}</td>
         <td className="px-2 py-2">
           <div className="flex items-center gap-1">
             <button
@@ -256,8 +354,22 @@ function CraftAccordionRow({
             <p className="inline-block rounded-full bg-[#eadfc8] px-3 py-1 text-xs font-semibold tracking-[0.14em] text-[#163038]">
               CALENDAR PATTERN
             </p>
-            <p className="mt-2 text-xs text-[#5b6f73]">
-              Headcount × shift hours on each selected weekday in the range.
+            <p className="mt-2 text-xs text-[#163038]">{clockNote(row.position, site, client, row.clockOverride ?? "auto")}</p>
+            <label className="mt-2 flex items-center gap-2 text-sm text-[#163038]">
+              <input
+                type="checkbox"
+                checked={clockChecked}
+                onChange={(event) =>
+                  onPatch({
+                    clockOverride: event.target.checked ? (staff ? "comp" : "staff") : "auto",
+                  })
+                }
+              />
+              {staff ? "Use COMP clock" : "Use staff clock"}
+            </label>
+            <p className="mt-1 text-xs text-[#5b6f73]">
+              Uncheck returns to auto. Union/Merit is a label only — a union superintendent still uses the
+              staff split unless Use COMP clock is on.
             </p>
             <div className="mt-3 space-y-4">
               {row.ranges.map((range) => (
@@ -265,6 +377,11 @@ function CraftAccordionRow({
                   key={range.id}
                   range={range}
                   shift={row.shift}
+                  position={row.position}
+                  site={site}
+                  client={client}
+                  clockOverride={row.clockOverride}
+                  otAfter8={otAfter8}
                   canRemove={row.ranges.length > 1}
                   onPatch={(patch) => onPatchRange(range.id, patch)}
                   onRemove={() => onRemoveRange(range.id)}
@@ -284,18 +401,43 @@ function CraftAccordionRow({
 function CalendarRangeFields({
   range,
   shift,
+  position,
+  site,
+  client,
+  clockOverride,
+  otAfter8,
   canRemove,
   onPatch,
   onRemove,
 }: {
   range: CalendarRange;
   shift: CraftShift;
+  position: string;
+  site: string;
+  client: string;
+  clockOverride: CraftRow["clockOverride"];
+  otAfter8: boolean;
   canRemove: boolean;
   onPatch: (patch: Partial<CalendarRange>) => void;
   onRemove: () => void;
 }) {
   const twoCounts = shift === "Days & nights";
   const cap = perDiemCap(range, shift);
+  const split = computeRangeHours({
+    position,
+    site,
+    client,
+    start: range.start,
+    end: range.end,
+    hoursPerShift: range.hoursPerShift,
+    headcount: range.headcount,
+    nightHeadcount: range.nightHeadcount,
+    shift,
+    days: range.days,
+    perDiemPeople: range.perDiemPeople,
+    otAfter8: range.otAfter8 ?? otAfter8,
+    clockOverride,
+  });
 
   return (
     <div>
@@ -363,6 +505,19 @@ function CalendarRangeFields({
             className="paper-field mt-1 w-24"
           />
         </label>
+        <label className="text-xs">
+          Days / wk
+          <input
+            type="number"
+            min={0}
+            max={7}
+            value={daysPerWeekFromMask(range.days)}
+            onChange={(event) =>
+              onPatch({ days: maskForDaysPerWeek(Math.min(7, Math.max(0, Number(event.target.value) || 0))) })
+            }
+            className="paper-field mt-1 w-20"
+          />
+        </label>
         {canRemove ? (
           <button type="button" onClick={onRemove} className="text-sm text-[#5b6f73]">
             Remove range
@@ -384,7 +539,9 @@ function CalendarRangeFields({
             {day}
           </button>
         ))}
-        <p className="ml-auto text-xs text-[#5b6f73]">0 ST · 0 OT · 0 DT · 0 PD</p>
+        <p className="ml-auto text-xs text-[#5b6f73]">
+          {split.st} ST · {split.ot} OT · {split.dt} DT · {split.pd} PD · {split.workedDays} days
+        </p>
       </div>
     </div>
   );

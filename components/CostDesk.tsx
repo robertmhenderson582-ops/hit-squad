@@ -12,8 +12,8 @@ export function CostDesk() {
   return (
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Cost report: EST HOURS / HOURS EARNED / REMAINING, then Crew & man-hours. Workbook math stays
-        stubbed.
+        Cost report: EST HOURS / HOURS EARNED / REMAINING, then Crew & man-hours. Hours earned stays 0
+        until the job turns.
       </p>
       {error ? <p className="text-amber-flare">{error}</p> : null}
       <LaborRollup />

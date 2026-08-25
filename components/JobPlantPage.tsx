@@ -5,6 +5,7 @@ import { useEstimateModal } from "@/components/EstimateModalContext";
 import { ChangeOrderDesk } from "@/components/ChangeOrderDesk";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { VIEW_RESPONSIBILITIES, VISUAL_ROSTER } from "@/lib/owner-desk";
+import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
 
 const PLANTS: Record<string, { client: string; folder: string; name: string; city: string; plant: string; site: string }> = {
   "wood-river": {
@@ -107,10 +108,8 @@ export function JobPlantPage({ slug }: { slug: string }) {
             </article>
             <article className="plant-card px-5 py-5">
               <p className="text-xs tracking-[0.16em] text-[#5b6f73]">OT RULE</p>
-              <p className="mt-2 font-display text-2xl">
-                {plant.name === "Wood River" ? "East Coast" : "—"}
-              </p>
-              {plant.name === "Wood River" ? (
+              <p className="mt-2 font-display text-2xl">{boundOtLabel(plant.name, plant.folder)}</p>
+              {siteClockFromText(plant.name, plant.folder) === "east-coast" ? (
                 <p className="mt-1 text-xs text-[#5b6f73]">PCA0001103 — never PA or Mid-Atlantic</p>
               ) : null}
             </article>

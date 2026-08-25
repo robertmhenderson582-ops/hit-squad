@@ -1,4 +1,19 @@
+import type { ClockOverride } from "@/lib/hours-clock";
+import type { LaborClass } from "@/lib/labor-class";
+
+export const STAFF_POSITIONS = [
+  "Analyst Cost 01",
+  "Cost Analyst",
+  "Project Controls",
+  "Superintendent",
+  "Superintendent General PF 01",
+  "General Superintendent",
+  "Project Manager",
+] as const;
+
 export const CRAFT_POSITIONS = [
+  "General Foreman",
+  "Foreman",
   "Boilermaker Journeyman",
   "Boilermaker Helper",
   "Pipefitter Journeyman",
@@ -9,7 +24,10 @@ export const CRAFT_POSITIONS = [
   "Millwright",
   "Electrician",
   "Welder",
+  "Merit welder",
 ] as const;
+
+export const LISTED_POSITIONS = [...STAFF_POSITIONS, ...CRAFT_POSITIONS] as const;
 
 export const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 
@@ -26,6 +44,7 @@ export type CalendarRange = {
   hoursPerShift: number;
   perDiemPeople: number;
   days: boolean[];
+  otAfter8?: boolean;
 };
 
 export type CraftRow = {
@@ -38,8 +57,23 @@ export type CraftRow = {
   pd: number;
   hours: number;
   cost: string;
+  clockOverride: ClockOverride;
+  laborClassOverride: LaborClass | null;
   ranges: CalendarRange[];
 };
+
+export function maskForDaysPerWeek(n: number): boolean[] {
+  const count = Math.min(7, Math.max(0, Math.round(n)));
+  if (count === 7) return [true, true, true, true, true, true, true];
+  const next = [false, false, false, false, false, false, false];
+  const order = [1, 2, 3, 4, 5, 6, 0];
+  for (let i = 0; i < count; i += 1) next[order[i]] = true;
+  return next;
+}
+
+export function daysPerWeekFromMask(days: boolean[]): number {
+  return days.filter(Boolean).length;
+}
 
 function uid(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -68,7 +102,9 @@ export function blankCraftRow(): CraftRow {
     dt: 0,
     pd: 0,
     hours: 0,
-    cost: "$0",
+    cost: "",
+    clockOverride: "auto",
+    laborClassOverride: null,
     ranges: [blankRange()],
   };
 }
