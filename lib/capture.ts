@@ -55,7 +55,9 @@ export async function shootViewport(): Promise<string> {
     const url = URL.createObjectURL(blob);
     const dataUrl = await new Promise<string>((resolve, reject) => {
       const image = new Image();
+      const fail = window.setTimeout(() => reject(new Error("timeout")), 2000);
       image.onload = () => {
+        window.clearTimeout(fail);
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
@@ -71,6 +73,7 @@ export async function shootViewport(): Promise<string> {
         resolve(canvas.toDataURL("image/jpeg", 0.72));
       };
       image.onerror = () => {
+        window.clearTimeout(fail);
         URL.revokeObjectURL(url);
         reject(new Error("image"));
       };

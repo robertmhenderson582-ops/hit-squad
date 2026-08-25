@@ -83,11 +83,17 @@ export function DeskFabs() {
     setHiddenForShot(true);
     setTicketOpen(false);
     await new Promise((resolve) => window.setTimeout(resolve, 80));
-    const shot = await shootViewport();
-    persist({ ...draft, capture: shot });
-    setHiddenForShot(false);
-    setTicketOpen(true);
-    setNote("Capture attached. Capture stays off Inbox.");
+    try {
+      const shot = await Promise.race([
+        shootViewport(),
+        new Promise<string>((resolve) => window.setTimeout(() => resolve(""), 2500)),
+      ]);
+      if (shot) persist({ ...draft, capture: shot });
+      setNote(shot ? "Capture attached. Capture stays off Inbox." : "Capture finished. Ticket is back.");
+    } finally {
+      setHiddenForShot(false);
+      setTicketOpen(true);
+    }
   }
 
   function onDragStart(event: PointerEvent<HTMLDivElement>) {
@@ -184,7 +190,7 @@ export function DeskFabs() {
               }}
               className="rounded-lg border border-steel px-3 py-2 text-sm text-steel"
             >
-              {savedDraft || hasStoredDraft(draft) ? "Draft" : "Save for later"}
+              {savedDraft ? "Draft" : "Save for later"}
             </button>
             <button type="button" onClick={() => void submit()} className="rounded-lg bg-steel px-3 py-2 text-sm text-white">
               Submit
@@ -209,7 +215,7 @@ export function DeskFabs() {
         {inbox.unread > 0 ? <span className="inbox-count">{inbox.unread}</span> : null}
       </button>
       <button type="button" onClick={() => setTicketOpen((open) => !open)} className="ticket-fab">
-        {savedDraft || hasStoredDraft(draft) ? "Draft" : "+ Ticket"}
+        {savedDraft ? "Draft" : "+ Ticket"}
       </button>
     </div>
   );
