@@ -43,7 +43,7 @@ export function LoginForm() {
         <p className="mt-2 text-sm leading-6 text-paper-cream/90">
           Madison plant, commercial, and HSE information — and records from other clients and
           contractors — is plugged into this desk only so the trusted circle can estimate outage
-          and T&amp;M work. This is not Madison software. It is a private Hit Squad / Forgebook
+          and T&amp;M work. This is not Madison software. It is a private Hit Squad
           field trial. Do not share, copy, screenshot, or discuss this desk or its contents
           outside the people Robert has invited.
         </p>

@@ -34,9 +34,9 @@ export const metadata: Metadata = {
   description: "Private invite-only industrial outage / T&M estimating desk. Field trial — not a release.",
   robots: { index: false, follow: false },
   openGraph: {
-    title: "HIT SQUAD ESTIMATORS",
-    description: "Estimate & Cost · Field trial — not a release.",
-    images: [{ url: "/brand-hero.jpg", width: 1200, height: 630, alt: "HIT SQUAD ESTIMATORS — ESTIMATE & COST" }],
+    title: "HIT SQUAD PROJECT CONTROLS",
+    description: "Field trial — not a release.",
+    images: [{ url: "/brand-hero.jpg", width: 1536, height: 1024, alt: "HIT SQUAD PROJECT CONTROLS" }],
   },
 };
 
