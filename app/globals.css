@@ -172,15 +172,25 @@ textarea:focus {
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  min-height: 440px;
+  min-height: 460px;
   background:
-    radial-gradient(70% 55% at 50% 38%, rgba(6, 22, 26, 0.18) 0%, rgba(6, 22, 26, 0.42) 48%, rgba(6, 22, 26, 0.88) 100%),
-    url("/brand-hero.jpg") center 40% / cover no-repeat #06161a;
+    radial-gradient(55% 48% at 50% 36%, rgba(6, 22, 26, 0.08) 0%, rgba(6, 22, 26, 0.38) 52%, rgba(6, 22, 26, 0.9) 100%),
+    url("/brand-hero.jpg") center 38% / cover no-repeat #06161a;
 }
 
 .desk-hero::before,
 .desk-hero::after {
   content: none;
+}
+
+.hero-mark {
+  position: relative;
+  z-index: 2;
+  display: inline-block;
+}
+
+.hero-mark p {
+  text-shadow: 0 2px 18px rgba(6, 22, 26, 0.7);
 }
 
 .hud-mark {
