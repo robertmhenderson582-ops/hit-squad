@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { CRAFT_POSITIONS, SUPPORT_DUTIES } from "@/lib/craft-labor";
 
@@ -29,15 +30,21 @@ function CatalogPick({
   onChange: (value: string) => void;
 }) {
   const listed = (options as readonly string[]).includes(value);
-  const selectValue = listed ? value : value ? CUSTOM : "";
+  const [typing, setTyping] = useState(!listed && Boolean(value));
+  const selectValue = listed ? value : typing ? CUSTOM : "";
   return (
     <div className="min-w-[14rem] flex-1">
       <p className="text-xs">{label}</p>
       <select
         value={selectValue}
         onChange={(event) => {
-          const next = event.target.value === CUSTOM ? "" : event.target.value;
-          onChange(next);
+          if (event.target.value === CUSTOM) {
+            setTyping(true);
+            onChange("");
+            return;
+          }
+          setTyping(false);
+          onChange(event.target.value);
         }}
         className="paper-field mt-1 w-full"
         aria-label={label}
@@ -50,7 +57,7 @@ function CatalogPick({
         ))}
         <option value={CUSTOM}>Type a title…</option>
       </select>
-      {!listed ? (
+      {typing ? (
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
