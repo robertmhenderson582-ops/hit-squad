@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
+import { hasBuildDesk } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
 import { addActivity } from "@/lib/owner-desk";
 import { beatPresence, listSeats, markSignedOut, pingPresence, seatFor, takeArrivals } from "@/lib/presence";
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (user.role !== "owner") return NextResponse.json({ arrivals: [], seats: [] });
+  if (!hasBuildDesk(user)) return NextResponse.json({ arrivals: [], seats: [] });
   return NextResponse.json({
     arrivals: takeArrivals(user.email),
     seats: listSeats(user.email),

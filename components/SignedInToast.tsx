@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { hasBuildDesk } from "@/lib/desk-role";
 import { isDeskLocked } from "@/lib/desk-lock";
 
 type Arrival = { name: string; path: string };
@@ -38,7 +39,7 @@ export function SignedInToast() {
   }, [pathname, status, user]);
 
   useEffect(() => {
-    if (status !== "authenticated" || user?.role !== "owner") return;
+    if (status !== "authenticated" || !hasBuildDesk(user)) return;
     if (owner?.viewAs && owner.viewAs !== "owner") return;
     const tick = window.setInterval(() => {
       fetch("/api/desk/presence", { credentials: "include", cache: "no-store" })
@@ -50,7 +51,7 @@ export function SignedInToast() {
         .catch(() => undefined);
     }, 8000);
     return () => window.clearInterval(tick);
-  }, [owner?.viewAs, status, user?.role]);
+  }, [owner?.viewAs, status, user]);
 
   useEffect(() => {
     if (!arrival) return;

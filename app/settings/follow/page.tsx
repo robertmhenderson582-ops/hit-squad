@@ -5,7 +5,7 @@ import { SettingsGate } from "@/components/SettingsGate";
 
 export default function SettingsFollowPage() {
   return (
-    <SettingsGate ownerOnly>
+    <SettingsGate buildDesk>
       <FollowDesk />
     </SettingsGate>
   );

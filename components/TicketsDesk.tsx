@@ -6,13 +6,14 @@ import { PhotoViewer } from "@/components/PhotoViewer";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { burnCaption } from "@/lib/capture";
+import { buildDeskChrome } from "@/lib/desk-role";
 import { ticketCopyText, type DeskTicket } from "@/lib/tickets";
 
 export function TicketsDesk() {
   const { user } = useSession();
   const desk = useOwnerDesk();
   const confirmRemove = useConfirmRemove();
-  const ownerChrome = Boolean(user?.role === "owner" && (!desk?.viewAs || desk.viewAs === "owner"));
+  const ownerChrome = buildDeskChrome(user, desk?.viewAs);
   const [tickets, setTickets] = useState<DeskTicket[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<{ src: string; caption: string } | null>(null);

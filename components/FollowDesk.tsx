@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { NOVUS_EMAIL } from "@/lib/desk-role";
 import { VISUAL_ROSTER, type FollowSeat } from "@/lib/owner-desk";
 
 const PREVIEW = [
@@ -62,7 +63,9 @@ export function FollowDesk() {
   const subject = VISUAL_ROSTER.find((row) => row.id === desk.followSeat);
 
   const known = new Set(VISUAL_ROSTER.map((row) => row.email.toLowerCase()));
-  const extras = seats.filter((seat) => !known.has(seat.email.toLowerCase()));
+  const extras = seats.filter(
+    (seat) => !known.has(seat.email.toLowerCase()) && seat.email.toLowerCase() !== NOVUS_EMAIL,
+  );
   const people = [
     ...VISUAL_ROSTER.map((row) => {
       const ping = seats.find((seat) => seat.email.toLowerCase() === row.email.toLowerCase());

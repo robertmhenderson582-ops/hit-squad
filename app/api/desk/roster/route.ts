@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
+import { hasBuildDesk, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
 import { addRosterEntry, clearRoster, EMPTY_MODULES, listRoster, PERMISSIONS, removeRosterEntry } from "@/lib/roster";
 import type { RosterEntry, RosterPermission } from "@/lib/types";
@@ -9,19 +10,20 @@ export const dynamic = "force-dynamic";
 async function requireOwner(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return { user: null, response: NextResponse.json({ error: "Not signed in." }, { status: 401 }) };
-  if (user.role !== "owner") {
+  if (!isOwner(user)) {
     return { user: null, response: NextResponse.json({ error: "Owner desk only." }, { status: 403 }) };
   }
   return { user, response: null };
 }
 
 export async function GET(request: Request) {
-  const gate = await requireOwner(request);
-  if (gate.response) return gate.response;
+  const user = await readSession(cookieValue(request));
+  if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!hasBuildDesk(user)) return NextResponse.json({ error: "Build desk only." }, { status: 403 });
   return NextResponse.json({
     permissions: PERMISSIONS,
     roster: listRoster(),
-    note: "Roster is owner-visible only. It does not create a login session.",
+    note: "Visual tester roster only. It does not create a login session. Novus is never listed.",
   });
 }
 
@@ -59,6 +61,9 @@ export async function POST(request: Request) {
 
   if (!body.name || !body.email || !body.permission) {
     return NextResponse.json({ error: "Name, email, and permission are required." }, { status: 400 });
+  }
+  if (body.email.trim().toLowerCase() === NOVUS_EMAIL) {
+    return NextResponse.json({ error: "Novus is not a tester and stays off this roster." }, { status: 400 });
   }
 
   const entry = addRosterEntry({

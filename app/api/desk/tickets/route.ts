@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
+import { hasBuildDesk } from "@/lib/desk-role";
 import {
   addTicket,
   isTicketKind,
@@ -13,7 +14,7 @@ import {
 export const dynamic = "force-dynamic";
 
 function scoped(user: { role: string; email: string }) {
-  return user.role === "owner" ? listTickets() : listTickets(user.email);
+  return hasBuildDesk(user) ? listTickets() : listTickets(user.email);
 }
 
 export async function GET(request: Request) {
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (user.role !== "owner") {
+  if (!hasBuildDesk(user)) {
     return NextResponse.json({ error: "Testers cannot change tickets." }, { status: 403 });
   }
 
@@ -74,7 +75,7 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (user.role !== "owner") {
+  if (!hasBuildDesk(user)) {
     return NextResponse.json({ error: "Testers cannot delete tickets." }, { status: 403 });
   }
 

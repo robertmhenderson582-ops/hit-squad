@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
-import type { PublicUser } from "@/lib/types";
+import type { DeskRole, PublicUser } from "@/lib/types";
 
 export const SESSION_COOKIE = "hs_session";
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
@@ -8,7 +8,8 @@ type SessionClaims = {
   sub: string;
   email: string;
   name: string;
-  role: "owner";
+  role: DeskRole;
+  mustChangePassword?: boolean;
 };
 
 function secretKey() {
@@ -40,6 +41,7 @@ export async function signSession(user: PublicUser): Promise<string> {
     email: user.email,
     name: user.name,
     role: user.role,
+    mustChangePassword: Boolean(user.mustChangePassword),
   } satisfies Omit<SessionClaims, "sub">)
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
@@ -55,11 +57,13 @@ export async function readSession(token: string | undefined): Promise<PublicUser
     if (!payload.sub || typeof payload.email !== "string" || typeof payload.name !== "string") {
       return null;
     }
+    const role: DeskRole = payload.role === "operator" ? "operator" : "owner";
     return {
       id: payload.sub,
       email: payload.email,
       name: payload.name,
-      role: "owner",
+      role,
+      mustChangePassword: Boolean(payload.mustChangePassword),
     };
   } catch {
     return null;

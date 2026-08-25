@@ -5,7 +5,7 @@ import { VaultDesk } from "@/components/VaultDesk";
 
 export default function SettingsVaultPage() {
   return (
-    <SettingsGate ownerOnly>
+    <SettingsGate buildDesk>
       <VaultDesk />
     </SettingsGate>
   );

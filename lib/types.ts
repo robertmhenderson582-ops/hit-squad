@@ -1,8 +1,11 @@
+export type DeskRole = "owner" | "operator";
+
 export type PublicUser = {
   id: string;
   email: string;
   name: string;
-  role: "owner";
+  role: DeskRole;
+  mustChangePassword?: boolean;
 };
 
 export type JobRecord = {

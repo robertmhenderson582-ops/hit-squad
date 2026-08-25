@@ -4,23 +4,24 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { hasBuildDesk, isOwner } from "@/lib/desk-role";
 import { VIEW_AS_HIDDEN_SETTINGS } from "@/lib/owner-desk";
 
 const HIDE_WHILE_VIEWING = new Set<string>(VIEW_AS_HIDDEN_SETTINGS);
 
-const SECTIONS: { href: string; label: string; ownerOnly?: boolean; exact?: boolean }[] = [
+const SECTIONS: { href: string; label: string; ownerOnly?: boolean; buildDesk?: boolean; exact?: boolean }[] = [
   { href: "/settings", label: "Display", exact: true },
   { href: "/settings/security", label: "Security" },
   { href: "/settings/copy", label: "Copy" },
   { href: "/settings/talk", label: "How we talk" },
-  { href: "/settings/users", label: "Manage users", ownerOnly: true },
-  { href: "/settings/follow", label: "Follow", ownerOnly: true },
-  { href: "/settings/activity", label: "Activity", ownerOnly: true },
-  { href: "/settings/view-as", label: "View as", ownerOnly: true },
-  { href: "/settings/aliases", label: "Aliases", ownerOnly: true },
-  { href: "/settings/republish", label: "Heads up — republish", ownerOnly: true },
-  { href: "/settings/vault", label: "Data vault", ownerOnly: true },
-  { href: "/settings/branding", label: "Branding", ownerOnly: true },
+  { href: "/settings/users", label: "Manage users", buildDesk: true },
+  { href: "/settings/follow", label: "Follow", buildDesk: true },
+  { href: "/settings/activity", label: "Activity", buildDesk: true },
+  { href: "/settings/view-as", label: "View as", buildDesk: true },
+  { href: "/settings/aliases", label: "Aliases", buildDesk: true },
+  { href: "/settings/republish", label: "Heads up — republish", buildDesk: true },
+  { href: "/settings/vault", label: "Data vault", buildDesk: true },
+  { href: "/settings/branding", label: "Branding", buildDesk: true },
   { href: "/settings/checks", label: "Checks", ownerOnly: true },
   { href: "/settings/modules", label: "Future modules" },
 ];
@@ -34,7 +35,8 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user } = useSession();
   const desk = useOwnerDesk();
-  const owner = user?.role === "owner";
+  const owner = isOwner(user);
+  const buildDesk = hasBuildDesk(user);
   const viewingAs = Boolean(desk?.viewAs && desk.viewAs !== "owner");
 
   return (
@@ -44,6 +46,7 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
         <nav className="mt-3 flex flex-col gap-1">
           {SECTIONS.filter((item) => {
             if (item.ownerOnly && !owner) return false;
+            if (item.buildDesk && !buildDesk) return false;
             if (viewingAs && HIDE_WHILE_VIEWING.has(item.href)) return false;
             return true;
           }).map((item) => {

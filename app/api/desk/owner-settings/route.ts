@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
+import { hasBuildDesk } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
 import { clearRepublish, getOwnerSettings, setOwnerSettings, startRepublish, type RepublishWait } from "@/lib/owner-desk";
 
@@ -24,10 +25,10 @@ export async function POST(request: Request) {
     waitMinutes?: RepublishWait;
     note?: string;
   };
-  if (body.action === "republish" && user.role === "owner") {
+  if (body.action === "republish" && hasBuildDesk(user)) {
     return NextResponse.json(startRepublish(body.waitMinutes ?? 5, body.note || ""));
   }
-  if (body.action === "back" && user.role === "owner") {
+  if (body.action === "back" && hasBuildDesk(user)) {
     return NextResponse.json(clearRepublish());
   }
   return NextResponse.json(

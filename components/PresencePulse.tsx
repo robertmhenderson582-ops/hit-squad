@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { hasBuildDesk } from "@/lib/desk-role";
 
 type Seat = { name: string; path: string; lastAt: number; live: boolean };
 
@@ -22,7 +23,7 @@ export function PresencePulse() {
   const hidden = Boolean(desk?.viewAs && desk.viewAs !== "owner");
 
   useEffect(() => {
-    if (user?.role !== "owner" || hidden) return;
+    if (!hasBuildDesk(user) || hidden) return;
     function load() {
       fetch("/api/desk/presence", { credentials: "include", cache: "no-store" })
         .then((response) => response.json())
@@ -32,7 +33,7 @@ export function PresencePulse() {
     load();
     const id = window.setInterval(load, 20_000);
     return () => window.clearInterval(id);
-  }, [hidden, user?.role]);
+  }, [hidden, user]);
 
   useEffect(() => {
     if (seats.length < 2) return;
@@ -40,7 +41,7 @@ export function PresencePulse() {
     return () => window.clearInterval(id);
   }, [seats.length]);
 
-  if (user?.role !== "owner" || hidden) return null;
+  if (!hasBuildDesk(user) || hidden) return null;
   const row = seats[index % Math.max(seats.length, 1)];
   if (!row) return null;
 

@@ -5,7 +5,7 @@ import { SettingsGate } from "@/components/SettingsGate";
 
 export default function SettingsBrandingPage() {
   return (
-    <SettingsGate ownerOnly>
+    <SettingsGate buildDesk>
       <BrandingDesk />
     </SettingsGate>
   );

@@ -15,6 +15,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { noteSessionEnd } from "@/components/FeatureTrail";
 import { FUTURE_MODULES } from "@/components/FutureModulesDesk";
 import { useSession } from "@/components/SessionProvider";
+import { isOperator } from "@/lib/desk-role";
 
 const NAV: { href: string; label: string; modules?: boolean }[] = [
   { href: "/jobs", label: "Jobs" },
@@ -125,7 +126,7 @@ function ChromeInner({
               <ThemeFlip />
               <div className="text-right">
                 <p className={`font-mono text-[10px] tracking-[0.24em] ${paper ? "text-white/70" : "text-steel-glow"}`}>
-                  OWNER DESK
+                  {isOperator(user) ? "OPERATOR DESK" : "OWNER DESK"}
                 </p>
                 <p className={`font-display text-lg tracking-wide sm:text-xl ${paper ? "text-white" : "text-paper-cream"}`}>
                   {user?.name}

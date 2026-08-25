@@ -16,6 +16,7 @@ import {
 import { useDisplay } from "@/components/DisplayProvider";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { buildDeskChrome } from "@/lib/desk-role";
 
 type InboxState = {
   open: boolean;
@@ -51,7 +52,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   const { user, status } = useSession();
   const desk = useOwnerDesk();
   const { prefs } = useDisplay();
-  const ownerChrome = Boolean(user?.role === "owner" && (!desk?.viewAs || desk.viewAs === "owner"));
+  const ownerChrome = buildDeskChrome(user, desk?.viewAs);
   const seat = ownerChrome ? "owner" : desk?.viewAs && desk.viewAs !== "owner" ? desk.viewAs : user?.id || "tester";
 
   const [open, setOpen] = useState(false);

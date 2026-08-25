@@ -9,6 +9,7 @@ import { OwnerDeskProvider } from "@/components/OwnerDeskContext";
 import { SessionProvider } from "@/components/SessionProvider";
 import { FeatureTrail } from "@/components/FeatureTrail";
 import { SignedInToast } from "@/components/SignedInToast";
+import { MustChangePasswordGate } from "@/components/MustChangePasswordGate";
 import { TalkWalkProvider } from "@/components/TalkWalk";
 import "./globals.css";
 
@@ -51,11 +52,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <InboxProvider>
                 <ConfirmDialogProvider>
                   <TalkWalkProvider>
-                    {children}
-                    <FeatureTrail />
+                    <MustChangePasswordGate>
+                      {children}
+                      <FeatureTrail />
+                      <DeskFabs />
+                      <SignedInToast />
+                    </MustChangePasswordGate>
                     <InactivityLock />
-                    <DeskFabs />
-                    <SignedInToast />
                   </TalkWalkProvider>
                 </ConfirmDialogProvider>
               </InboxProvider>
