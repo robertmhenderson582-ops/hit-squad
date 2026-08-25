@@ -51,7 +51,7 @@ export function MustChangePasswordGate({ children }: { children: React.ReactNode
         <h1 className="mt-2 font-display text-3xl tracking-[0.08em] text-[#163038]">Set your password</h1>
         <p className="mt-3 text-sm leading-6 text-[#5b6f73]">
           This seat was created by the owner. Choose a password of 8+ characters before the desk
-          opens. This screen cannot be skipped.
+          opens. This screen cannot be skipped. Later this session is not an option.
         </p>
         <form onSubmit={onSubmit} className="mt-5 grid gap-3">
           <PasswordField label="New password" autoComplete="new-password" value={next} onChange={setNext} minLength={8} required />

@@ -87,7 +87,7 @@ export function InactivityLock() {
     }
   }
 
-  if (status !== "authenticated") return null;
+  if (status !== "authenticated" || user?.mustChangePassword) return null;
 
   return (
     <>

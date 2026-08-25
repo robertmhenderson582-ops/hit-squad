@@ -36,7 +36,8 @@ export function TalkWalkProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (status !== "authenticated" || !user) return;
-    if (hasBuildDesk(user) || user.mustChangePassword) {
+    if (user.mustChangePassword) return;
+    if (hasBuildDesk(user)) {
       const seen = readTalkWalk();
       if (!seen) writeTalkWalk({ version: TALK_WALK_VERSION, skipped: true });
       return;

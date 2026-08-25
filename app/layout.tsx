@@ -51,15 +51,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <OwnerDeskProvider>
               <InboxProvider>
                 <ConfirmDialogProvider>
-                  <TalkWalkProvider>
-                    <MustChangePasswordGate>
+                  <MustChangePasswordGate>
+                    <TalkWalkProvider>
                       {children}
                       <FeatureTrail />
+                      <InactivityLock />
                       <DeskFabs />
                       <SignedInToast />
-                    </MustChangePasswordGate>
-                    <InactivityLock />
-                  </TalkWalkProvider>
+                    </TalkWalkProvider>
+                  </MustChangePasswordGate>
                 </ConfirmDialogProvider>
               </InboxProvider>
             </OwnerDeskProvider>
