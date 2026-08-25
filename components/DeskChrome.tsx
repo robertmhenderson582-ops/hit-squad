@@ -128,12 +128,14 @@ function ChromeInner({
               <ThemeFlip />
               <div className="text-right">
                 <p className={`font-mono text-[10px] tracking-[0.24em] ${paper ? "text-white/70" : "text-steel-glow"}`}>
-                  {isOperator(user) ? "OPERATOR DESK" : isTester(user) ? "DESK" : "OWNER DESK"}
+                  {isTester(lens) ? "DESK" : isOperator(user) ? "OPERATOR DESK" : "OWNER DESK"}
                 </p>
                 <p className={`font-display text-lg tracking-wide sm:text-xl ${paper ? "text-white" : "text-paper-cream"}`}>
-                  {user?.name}
+                  {lens?.name || user?.name}
                 </p>
-                <p className={`font-mono text-[11px] ${paper ? "text-white/70" : "text-paper-cream/70"}`}>{user?.email}</p>
+                <p className={`font-mono text-[11px] ${paper ? "text-white/70" : "text-paper-cream/70"}`}>
+                  {lens?.email || user?.email}
+                </p>
                 <button
                   type="button"
                   onClick={() => {

@@ -60,3 +60,21 @@ test("View as lens matches the selected seat, not the signed-in owner", () => {
   assert.equal(pageAllowedForSeat(realMark, { buildDesk: true }), false);
   assert.equal(pageAllowedForSeat(realMark, { viewAs: true }), false);
 });
+
+test("every View-as seat matches that tester, including Settings flags", () => {
+  const owner = {
+    id: "owner-robert-henderson",
+    email: "robertmhenderson582@gmail.com",
+    name: "Robert Henderson",
+    role: "owner" as const,
+  };
+  for (const row of VISUAL_ROSTER) {
+    const lens = lensUser(owner, row.id);
+    assert.equal(lens?.email, row.email, row.id);
+    assert.equal(lens?.role, "tester", row.id);
+    assert.equal(pageAllowedForSeat(lens, { buildDesk: true }), false, row.id);
+    assert.equal(pageAllowedForSeat(lens, { ownerOnly: true }), false, row.id);
+    assert.equal(pageAllowedForSeat(lens, { viewAs: true }), row.email === JOSEPH_EMAIL, row.id);
+    assert.equal(pageAllowedForSeat(owner, { buildDesk: true }) && pageAllowedForSeat(lens, { buildDesk: true }), false, row.id);
+  }
+});
