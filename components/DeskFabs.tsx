@@ -56,6 +56,7 @@ export function DeskFabs() {
   }, [status]);
 
   if (status !== "authenticated" || !user) return null;
+  const email = user.email;
 
   function persist(next: Draft) {
     setDraft(next);
@@ -76,7 +77,7 @@ export function DeskFabs() {
     }
     const filed = data.ticket as DeskTicket | undefined;
     const serverList = (data.tickets ?? []) as DeskTicket[];
-    writeTicketCache(user.email, mergeTickets(serverList, filed ? [filed, ...readTicketCache(user.email)] : readTicketCache(user.email)));
+    writeTicketCache(email, mergeTickets(serverList, filed ? [filed, ...readTicketCache(email)] : readTicketCache(email)));
     window.localStorage.removeItem(TICKET_DRAFT_KEY);
     setDraft(EMPTY_DRAFT);
     setSavedDraft(false);

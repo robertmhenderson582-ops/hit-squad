@@ -19,7 +19,7 @@ export function TicketsDesk() {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<{ src: string; caption: string } | null>(null);
 
-  function load(list: DeskTicket[]) {
+  function applyList(list: DeskTicket[]) {
     const mine = user?.email || "";
     const visible = ticketsForViewer(list, mine, ownerChrome);
     const next = ownerChrome || !mine ? visible : mergeTickets(visible, readTicketCache(mine).filter((row) => row.who === mine));
@@ -28,6 +28,7 @@ export function TicketsDesk() {
   }
 
   useEffect(() => {
+    const mine = user?.email || "";
     fetch("/api/desk/tickets", { credentials: "include", cache: "no-store" })
       .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
       .then(({ ok, data }) => {
@@ -35,7 +36,11 @@ export function TicketsDesk() {
           setError(data.error || "Tickets could not load.");
           return;
         }
-        load(data.tickets ?? []);
+        const list = (data.tickets ?? []) as DeskTicket[];
+        const visible = ticketsForViewer(list, mine, ownerChrome);
+        const next = ownerChrome || !mine ? visible : mergeTickets(visible, readTicketCache(mine).filter((row) => row.who === mine));
+        if (mine && !ownerChrome) writeTicketCache(mine, next);
+        setTickets(next);
       })
       .catch(() => setError("Tickets could not load."));
   }, [ownerChrome, user?.email]);
@@ -48,7 +53,7 @@ export function TicketsDesk() {
       body: JSON.stringify({ id, ...body }),
     });
     const data = await response.json();
-    if (response.ok) load(data.tickets ?? []);
+    if (response.ok) applyList(data.tickets ?? []);
   }
 
   async function remove(id: string, label: string) {
@@ -60,7 +65,7 @@ export function TicketsDesk() {
       body: JSON.stringify({ id }),
     });
     const data = await response.json();
-    if (response.ok) load(data.tickets ?? []);
+    if (response.ok) applyList(data.tickets ?? []);
   }
 
   async function removeDone() {
@@ -74,7 +79,7 @@ export function TicketsDesk() {
       body: JSON.stringify({ done: true }),
     });
     const data = await response.json();
-    if (response.ok) load(data.tickets ?? []);
+    if (response.ok) applyList(data.tickets ?? []);
   }
 
   async function copyShot(row: DeskTicket) {
