@@ -41,13 +41,14 @@ body {
     url("/brand-hero.jpg") center top / cover no-repeat #06161a;
 }
 
-.login-hero {
-  min-height: 100vh;
-  position: relative;
-  overflow-x: hidden;
-  background:
-    linear-gradient(180deg, rgba(6, 22, 26, 0.28) 0%, rgba(6, 22, 26, 0.52) 42%, rgba(6, 22, 26, 0.78) 100%),
-    url("/brand-hero.jpg") center / cover no-repeat #06161a;
+.login-og {
+  background: #06161a;
+}
+
+.login-og-image {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .industrial-root::before {
