@@ -62,6 +62,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       name={estimate.title}
       total={estimate.total}
       packageId={estimate.id}
+      staffing={staffing}
     >
       {tab === "summary" ? (
         <section className="plant-card mx-auto max-w-3xl px-6 py-6">
@@ -173,16 +174,19 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
 
       {tab === "staffing" ? (
         <div className="space-y-3">
+          <h2 className="font-display text-2xl font-semibold text-[#163038]">Support</h2>
           <p className="text-sm text-[#5b6f73]">
-            Billed as is the craft rate. Position is the duty title. Example labels: billed as
-            Boilermaker Journeyman, position Tool Room Attendant. This split stays on Staffing — not
-            on Direct Craft.
+            <span className="font-semibold text-[#163038]">Billed as</span> is the craft rate (for
+            example Boilermaker Journeyman).{" "}
+            <span className="font-semibold text-[#163038]">Position</span> is the duty (for example
+            Tool Room Attendant). Print shows the duty and “billed as”. Look only — this split stays
+            on Support / Staffing, not on Direct Craft.
           </p>
           <ModuleTable caption="STAFFING" headers={["BILLED AS", "POSITION", "DAYS", "SHIFT", "HEADCOUNT"]}>
             {staffing.map((row) => (
               <tr key={row.id} className="border-t border-steel-rim/20">
-                <td className="px-4 py-3">{row.role}</td>
-                <td className="px-4 py-3 text-[#5b6f73]">—</td>
+                <td className="px-4 py-3">{row.billedAs}</td>
+                <td className="px-4 py-3">{row.position}</td>
                 <td className="px-4 py-3">{row.days}</td>
                 <td className="px-4 py-3 font-mono text-xs">{row.shift}</td>
                 <td className="px-4 py-3 font-mono">{row.headcount}</td>

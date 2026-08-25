@@ -11,12 +11,13 @@ import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { RfqPreview } from "@/components/RfqPreview";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
+import type { StaffingLine } from "@/lib/types";
 
 const TABS = [
   { id: "summary", label: "Job setup", icon: "📄" },
   { id: "activities", label: "Activities", icon: "∿" },
   { id: "crew", label: "Crew", icon: "⛑" },
-  { id: "staffing", label: "Staffing", icon: "▦" },
+  { id: "staffing", label: "Support", icon: "▦" },
   { id: "equipment", label: "Equipment", icon: "⛟" },
   { id: "costs", label: "Costs", icon: "▤" },
   { id: "change-orders", label: "Change orders", icon: "⚖" },
@@ -39,6 +40,7 @@ export function EstimateWorkspace({
   name,
   total,
   packageId,
+  staffing,
   children,
 }: {
   crumb: string;
@@ -48,6 +50,7 @@ export function EstimateWorkspace({
   name?: string;
   total?: string;
   packageId?: string;
+  staffing?: StaffingLine[];
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -65,6 +68,7 @@ export function EstimateWorkspace({
           client={client || crumb}
           name={name || crumb}
           total={total}
+          staffing={staffing}
           onClose={() => setRfq(false)}
         />
       ) : null}

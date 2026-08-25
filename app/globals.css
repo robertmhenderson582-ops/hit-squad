@@ -878,6 +878,61 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   color: #163038;
 }
 
+.grip-pan {
+  cursor: grab;
+  touch-action: pan-x;
+}
+
+.grip-pan.is-panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.phase-bar {
+  background: #3d4a50;
+  color: #efe6d4;
+}
+
+.phase-moss {
+  background: #e6eedc;
+}
+
+.phase-rust {
+  background: #f3ddd2;
+}
+
+.phase-steel {
+  background: #d5dde0;
+}
+
+.phase-amber {
+  background: #f3e4b8;
+}
+
+.phase-green {
+  background: #d4ead9;
+}
+
+.industrial-root .phase-moss {
+  background: rgba(90, 122, 74, 0.28);
+}
+
+.industrial-root .phase-rust {
+  background: rgba(139, 58, 31, 0.32);
+}
+
+.industrial-root .phase-steel {
+  background: rgba(74, 92, 102, 0.38);
+}
+
+.industrial-root .phase-amber {
+  background: rgba(196, 138, 26, 0.28);
+}
+
+.industrial-root .phase-green {
+  background: rgba(61, 107, 79, 0.3);
+}
+
 .rfq-scrim {
   position: fixed;
   inset: 0;

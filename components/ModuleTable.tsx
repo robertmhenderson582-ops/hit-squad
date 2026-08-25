@@ -1,3 +1,7 @@
+"use client";
+
+import { GripToPan } from "@/components/GripToPan";
+
 export function ModuleTable({
   headers,
   children,
@@ -14,7 +18,7 @@ export function ModuleTable({
           {caption}
         </div>
       ) : null}
-      <div className="overflow-x-auto">
+      <GripToPan>
         <table className="min-w-full text-left text-sm">
           <thead className="font-mono text-[10px] tracking-[0.16em] text-paper-cream/55">
             <tr>
@@ -27,7 +31,7 @@ export function ModuleTable({
           </thead>
           <tbody>{children}</tbody>
         </table>
-      </div>
+      </GripToPan>
     </section>
   );
 }

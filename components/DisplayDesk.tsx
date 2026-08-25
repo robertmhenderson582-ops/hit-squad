@@ -84,7 +84,7 @@ export function DisplayDesk() {
           onChange={(on) => setPrefs({ confirmDelete: on })}
         />
         <p className="mt-2 text-sm text-[#5b6f73]">
-          In-app dialog with job name, Cancel, Remove estimate — not a browser prompt. If this is
+          In-app dialog with the name, Cancel, Remove — not a browser prompt. If this is
           off, delete immediately.
         </p>
       </section>

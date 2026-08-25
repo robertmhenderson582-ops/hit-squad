@@ -56,7 +56,8 @@ export type EquipmentLine = {
 export type StaffingLine = {
   id: string;
   estimateId: string;
-  role: string;
+  billedAs: string;
+  position: string;
   days: string;
   shift: string;
   headcount: number;

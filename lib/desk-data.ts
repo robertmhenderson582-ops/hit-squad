@@ -282,9 +282,9 @@ const EQUIPMENT: EquipmentLine[] = [
 ];
 
 const STAFFING: StaffingLine[] = [
-  { id: "st-1", estimateId: "est-u3", role: "Superintendent", days: "Mon–Sat", shift: "Days", headcount: 1 },
-  { id: "st-2", estimateId: "est-u3", role: "Night captain", days: "Sun–Thu", shift: "Nights", headcount: 1 },
-  { id: "st-3", estimateId: "est-coker", role: "T&M lead", days: "Night window", shift: "Nights", headcount: 1 },
+  { id: "st-1", estimateId: "est-u3", billedAs: "Boilermaker Journeyman", position: "Superintendent", days: "Mon–Sat", shift: "Days", headcount: 1 },
+  { id: "st-2", estimateId: "est-u3", billedAs: "Pipefitter Journeyman", position: "Night captain", days: "Sun–Thu", shift: "Nights", headcount: 1 },
+  { id: "st-3", estimateId: "est-coker", billedAs: "Boilermaker Journeyman", position: "Tool Room Attendant", days: "Night window", shift: "Nights", headcount: 1 },
 ];
 
 const QUALITY: QualityRecord[] = [
