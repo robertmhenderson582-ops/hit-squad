@@ -7,6 +7,8 @@ import { InboxProvider } from "@/components/InboxProvider";
 import { InactivityLock } from "@/components/InactivityLock";
 import { OwnerDeskProvider } from "@/components/OwnerDeskContext";
 import { SessionProvider } from "@/components/SessionProvider";
+import { SignedInToast } from "@/components/SignedInToast";
+import { TalkWalkProvider } from "@/components/TalkWalk";
 import "./globals.css";
 
 const display = Rajdhani({
@@ -47,9 +49,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <OwnerDeskProvider>
               <InboxProvider>
                 <ConfirmDialogProvider>
-                  {children}
-                  <InactivityLock />
-                  <DeskFabs />
+                  <TalkWalkProvider>
+                    {children}
+                    <InactivityLock />
+                    <DeskFabs />
+                    <SignedInToast />
+                  </TalkWalkProvider>
                 </ConfirmDialogProvider>
               </InboxProvider>
             </OwnerDeskProvider>

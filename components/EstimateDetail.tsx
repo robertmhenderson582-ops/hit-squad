@@ -7,6 +7,7 @@ import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
 import { LaborRollup } from "@/components/LaborRollup";
 import { ModuleTable } from "@/components/ModuleTable";
+import { CreatedBy } from "@/components/CreatedBy";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
@@ -62,7 +63,10 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
     >
       {tab === "summary" ? (
         <section className="plant-card mx-auto max-w-3xl px-6 py-6">
-          <h1 className="text-3xl font-semibold text-[#163038]">Job setup</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-semibold text-[#163038]">Job setup</h1>
+            <CreatedBy author={estimate.estimator} />
+          </div>
           <div className="mt-5 flex flex-wrap gap-2">
             <span className="pill bg-steel text-white">Existing customer</span>
             <span className="pill border border-[#c5d4d4] bg-white">New / potential client</span>
@@ -130,10 +134,11 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       ) : null}
 
       {tab === "staffing" ? (
-        <ModuleTable caption="STAFFING" headers={["ROLE", "DAYS", "SHIFT", "HEADCOUNT"]}>
+        <ModuleTable caption="STAFFING" headers={["BILLED AS", "POSITION", "DAYS", "SHIFT", "HEADCOUNT"]}>
           {staffing.map((row) => (
             <tr key={row.id} className="border-t border-steel-rim/20">
               <td className="px-4 py-3">{row.role}</td>
+              <td className="px-4 py-3 text-[#5b6f73]">—</td>
               <td className="px-4 py-3">{row.days}</td>
               <td className="px-4 py-3 font-mono text-xs">{row.shift}</td>
               <td className="px-4 py-3 font-mono">{row.headcount}</td>

@@ -326,6 +326,94 @@ a.brand-static {
   color: #fff;
 }
 
+.lock-card .theme-flip {
+  background: #0f5f6d;
+  color: #fff;
+}
+
+.password-eye {
+  position: absolute;
+  right: 0.65rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: #5b6f73;
+}
+
+.password-eye-night {
+  color: #efe6d4;
+}
+
+.yours-pill {
+  display: inline-flex;
+  border-radius: 999px;
+  background: #1f7a3a;
+  color: #fff;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.prepared-by {
+  display: inline-flex;
+  border-radius: 999px;
+  background: #122226;
+  color: #efe6d4;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.75rem;
+}
+
+.trash-btn {
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  border-radius: 0.5rem;
+  background: #b74120;
+  color: #fff;
+  font-size: 1.15rem;
+}
+
+.talk-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(6, 22, 26, 0.45);
+}
+
+.talk-card {
+  width: min(28rem, 100%);
+  border-radius: 16px;
+  background: #fff;
+  color: #163038;
+  color-scheme: light;
+  padding: 1.5rem;
+}
+
+.signedin-pop {
+  position: fixed;
+  top: 4.5rem;
+  right: 1.15rem;
+  z-index: 45;
+  width: min(18rem, calc(100vw - 2rem));
+  border-radius: 12px;
+  background: #122226;
+  padding: 0.85rem 1rem;
+  animation: signedin-fade 5.6s ease forwards;
+}
+
+@keyframes signedin-fade {
+  0%,
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 .lock-warn {
   position: fixed;
   right: 1rem;

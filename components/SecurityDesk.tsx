@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import type { LockMinutes } from "@/lib/display";
 import { useDisplay } from "@/components/DisplayProvider";
+import { PasswordField } from "@/components/PasswordField";
 import { useSession } from "@/components/SessionProvider";
 
 const OPTIONS: { value: LockMinutes; label: string; ownerOnly?: boolean }[] = [
@@ -46,26 +47,19 @@ export function SecurityDesk() {
           password can change it.
         </p>
         <form onSubmit={onSubmit} className="mt-4 grid gap-3 sm:grid-cols-2">
-          <label>
-            Current password
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={current}
-              onChange={(event) => setCurrent(event.target.value)}
-              className="paper-field mt-1"
-            />
-          </label>
-          <label>
-            New password
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={next}
-              onChange={(event) => setNext(event.target.value)}
-              className="paper-field mt-1"
-            />
-          </label>
+          <PasswordField
+            label="Current password"
+            autoComplete="current-password"
+            value={current}
+            onChange={setCurrent}
+          />
+          <PasswordField
+            label="New password"
+            autoComplete="new-password"
+            value={next}
+            onChange={setNext}
+            minLength={8}
+          />
           <button type="submit" className="rounded-lg bg-steel px-4 py-2 text-white sm:col-span-2">
             Change password
           </button>

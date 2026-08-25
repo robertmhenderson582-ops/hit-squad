@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PasswordField } from "@/components/PasswordField";
 import { useSession } from "@/components/SessionProvider";
 
 export function LoginForm() {
@@ -73,17 +74,14 @@ export function LoginForm() {
             required
           />
         </label>
-        <label className="block">
-          <span className="font-mono text-[10px] tracking-[0.24em] text-steel-glow">PASSWORD</span>
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="mt-1 w-full border border-steel-rim/40 bg-ink/70 px-3 py-2 font-mono text-sm text-paper-cream"
-            required
-          />
-        </label>
+        <PasswordField
+          label="PASSWORD"
+          variant="night"
+          autoComplete="current-password"
+          value={password}
+          onChange={setPassword}
+          required
+        />
       </div>
 
       {visibleError ? (
