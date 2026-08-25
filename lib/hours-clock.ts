@@ -197,12 +197,48 @@ function ymd(date: Date) {
   return `${y}-${m}-${d}`;
 }
 
+function mergeDualCrew(day: RangeHours, night: RangeHours): RangeHours {
+  const totals = sumSplits([day, night]);
+  const byDate = new Map<string, RangeDay>();
+  for (const part of [...day.days, ...night.days]) {
+    const existing = byDate.get(part.date);
+    if (!existing) {
+      byDate.set(part.date, { ...part });
+      continue;
+    }
+    existing.st += part.st;
+    existing.ot += part.ot;
+    existing.dt += part.dt;
+  }
+  return {
+    ...totals,
+    workedDays: byDate.size,
+    days: [...byDate.values()].sort((left, right) => left.date.localeCompare(right.date)),
+  };
+}
+
 export function computeRangeHours(input: ComputeRangeInput): RangeHours {
+  if (input.shift === "Days & nights") {
+    return mergeDualCrew(
+      computeRangeHours({
+        ...input,
+        shift: "Days",
+        nightHeadcount: undefined,
+        nightPerDiemPeople: undefined,
+      }),
+      computeRangeHours({
+        ...input,
+        shift: "Nights",
+        headcount: input.nightHeadcount ?? 1,
+        perDiemPeople: input.nightPerDiemPeople ?? 0,
+        nightHeadcount: undefined,
+        nightPerDiemPeople: undefined,
+      }),
+    );
+  }
+
   const daysMask = input.days ?? [false, true, true, true, true, true, true];
-  const head =
-    input.shift === "Days & nights"
-      ? Math.max(1, input.headcount ?? 1) + Math.max(1, input.nightHeadcount ?? 1)
-      : Math.max(1, input.headcount ?? 1);
+  const head = Math.max(1, input.headcount ?? 1);
   const clock = runningClock(
     input.position,
     input.site ?? "",
@@ -244,8 +280,7 @@ export function computeRangeHours(input: ComputeRangeInput): RangeHours {
   const ot = raw.reduce((sum, day) => sum + day.ot, 0);
   const dt = raw.reduce((sum, day) => sum + day.dt, 0);
   const dayPd = Math.max(0, input.perDiemPeople ?? 0);
-  const nightPd = input.shift === "Days & nights" ? Math.max(0, input.nightPerDiemPeople ?? 0) : 0;
-  const pd = workedDays * (dayPd + nightPd);
+  const pd = workedDays * dayPd;
   return {
     st,
     ot,

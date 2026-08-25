@@ -1,22 +1,22 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.7.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.7";
+export const DESK_VERSION = "1.8.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.8";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.7";
+export const DESK_THREAD_ID = "th-desk-v1.8";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.7",
-  "• Crew collapse control is larger",
-  "• Phase START/STOP dates open a calendar",
+  "Hit Squad Project Controls V1.8",
+  "• Days & nights counts day and night people",
+  "• Calendar Pattern label is gone",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.7",
-  "• Crew expand/collapse chevron is a 24px steel/teal control so it reads on the dark HUD",
-  "• Same larger control on Staff, General Foreman, Foreman, and Direct Craft position rows",
-  "• Job setup phase START/STOP (and project start) show a steel/teal calendar icon that opens the date picker",
+  "Hit Squad Project Controls V1.8",
+  "• Days & nights bills day crew and night crew as two clocks — 1+1 at 8h Mo–Fr is 80 ST, not 40 ST / 40 OT",
+  "• Per-diem is days PD + nights PD; weekly 40 still applies to each crew",
+  "• The beige Calendar Pattern badge is off the phase card; weekday chips and dates stay",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

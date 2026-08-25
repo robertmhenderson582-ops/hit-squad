@@ -178,16 +178,13 @@ function CalendarPattern({
 
   return (
     <div className="calendar-pattern space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="inline-block rounded-full bg-[#eadfc8] px-3 py-1 text-xs font-semibold tracking-[0.14em] text-[#163038]">
-          CALENDAR PATTERN
-        </p>
-        {canRemove ? (
+      {canRemove ? (
+        <div className="flex justify-end">
           <button type="button" onClick={onRemove} className="text-xs text-[#5b6f73] underline">
             Remove range
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       <p className="text-xs text-[#163038]">Headcount × shift hours on each selected weekday in the range.</p>
       <div className="grid grid-cols-2 gap-2">
         <div className="text-xs">
@@ -195,7 +192,7 @@ function CalendarPattern({
           <DateField
             value={range.start}
             className="mt-1"
-            aria-label="Calendar pattern start"
+            aria-label="Start"
             onChange={(start) => onPatch({ start })}
           />
         </div>
@@ -204,7 +201,7 @@ function CalendarPattern({
           <DateField
             value={range.end}
             className="mt-1"
-            aria-label="Calendar pattern end"
+            aria-label="End"
             onChange={(end) => onPatch({ end: end < range.start ? range.start : end })}
           />
         </div>
