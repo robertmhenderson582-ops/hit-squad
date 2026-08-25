@@ -7,6 +7,7 @@ import { useDisplay } from "@/components/DisplayProvider";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { SitesDesk } from "@/components/SitesDesk";
 import { StatusStamp } from "@/components/StatusStamp";
+import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import type { DeskBoard } from "@/lib/types";
 
 // Home must stay these four tiles. Do not replace / with an Estimates-only blotter.
@@ -23,6 +24,7 @@ export function DeskHome() {
   const night = resolvedTheme === "night";
   const [desk, setDesk] = useState<DeskBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [closedPacks, setClosedPacks] = useState<ReturnType<typeof readClosed>>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,14 +40,18 @@ export function DeskHome() {
         return;
       }
       setDesk(data.desk as DeskBoard);
+      setClosedPacks(readClosed());
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
+  const openJobs = (desk?.jobs ?? []).filter((job) => job.status === "OPEN" && !jobLooksClosed(job, closedPacks));
+  const closedJobs = (desk?.jobs ?? []).filter((job) => jobLooksClosed(job, closedPacks));
+
   const counts = {
-    jobs: desk?.jobs.filter((job) => job.status === "OPEN").length ?? "—",
+    jobs: openJobs.length || "—",
     estimates: desk?.estimatesOpen ?? "—",
     cost: desk?.costTickets ?? "—",
     hse: desk?.hseOpen ?? "—",
@@ -101,7 +107,7 @@ export function DeskHome() {
               </tr>
             </thead>
             <tbody>
-              {(desk?.jobs ?? []).map((job) => (
+              {openJobs.map((job) => (
                 <tr key={job.id} className="border-t border-steel-rim/20">
                   <td className="hud-readout px-4 py-3 font-mono text-amber-label">{job.code}</td>
                   <td className="px-4 py-3">{alias(job.title)}</td>
@@ -118,6 +124,18 @@ export function DeskHome() {
           </table>
         </div>
       </section>
+      {closedJobs.length ? (
+        <details className={night ? "steel-plate paper-grain px-4 py-4" : "plant-card px-4 py-4"}>
+          <summary className="cursor-pointer font-display text-xl">Closed out</summary>
+          <ul className="mt-3 space-y-2 text-sm">
+            {closedJobs.map((job) => (
+              <li key={job.id}>
+                {job.code} · {alias(job.title)}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
       <SitesDesk />
     </div>
   );

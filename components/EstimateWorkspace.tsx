@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { BrandMark } from "@/components/BrandMark";
 import { DeskBanners } from "@/components/DeskBanners";
 import { useDisplay } from "@/components/DisplayProvider";
+import { ShareTurnover } from "@/components/ShareTurnover";
 import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { RfqPreview } from "@/components/RfqPreview";
+import { closePackage, isClosed } from "@/lib/desk-closeout";
 
 const TABS = [
   { id: "summary", label: "Job setup", icon: "📄" },
@@ -36,6 +38,7 @@ export function EstimateWorkspace({
   client,
   name,
   total,
+  packageId,
   children,
 }: {
   crumb: string;
@@ -44,12 +47,15 @@ export function EstimateWorkspace({
   client?: string;
   name?: string;
   total?: string;
+  packageId?: string;
   children: React.ReactNode;
 }) {
   const router = useRouter();
   const [rfq, setRfq] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
   const { resolvedTheme } = useDisplay();
   const paper = resolvedTheme === "day";
+  const closed = packageId ? isClosed(packageId) : false;
 
   return (
     <div className={paper ? "min-h-screen overflow-x-hidden bg-[#d8e4e2]" : "industrial-root"}>
@@ -78,18 +84,37 @@ export function EstimateWorkspace({
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <ThemeFlip />
+            <ShareTurnover title={name || crumb} />
             {ACTIONS.map((action) => (
               <button
                 key={action.id}
                 type="button"
                 onClick={() => {
                   if (action.id === "export") setRfq(true);
+                  if (action.id === "duplicate" && packageId) {
+                    const query = new URLSearchParams({
+                      client: client || "",
+                      name: `${name || crumb} copy`,
+                      size: "outage",
+                    });
+                    router.push(`/estimates/new?${query.toString()}`);
+                  }
                 }}
                 className="rounded border border-white/20 px-3 py-1.5 text-white/90"
               >
                 {action.label}
               </button>
             ))}
+            {packageId && !closed ? (
+              <button
+                type="button"
+                onClick={() => setConfirmClose(true)}
+                className="rounded border border-white/20 px-3 py-1.5 text-white/90"
+                title="Close out"
+              >
+                Close out
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => router.push("/estimates")}
@@ -121,6 +146,33 @@ export function EstimateWorkspace({
         <DeskBanners />
         {children}
       </div>
+      {confirmClose && packageId ? (
+        <div className="modal-scrim" role="dialog" aria-modal="true">
+          <div className="estimate-modal px-6 py-5">
+            <h2 className="font-display text-2xl text-[#163038]">Close out</h2>
+            <p className="mt-2 text-sm text-[#5b6f73]">
+              {name || crumb} leaves Home. Nothing is deleted. Closed out sits collapsed at the
+              bottom with Reopen / View. A copy starts open.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" onClick={() => setConfirmClose(false)} className="rounded-lg border border-steel px-4 py-2 text-steel">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  closePackage({ id: packageId, title: name || crumb, kind: "estimate" });
+                  setConfirmClose(false);
+                  router.push("/estimates");
+                }}
+                className="rounded-lg bg-steel px-4 py-2 text-white"
+              >
+                Close out
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

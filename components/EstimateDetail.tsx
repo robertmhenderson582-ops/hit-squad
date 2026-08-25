@@ -16,6 +16,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
   const alias = useAlias();
   const { board, error } = useDeskBoard();
   const [tab, setTab] = useState<EstimateTab>("summary");
+  const [status, setStatus] = useState<"Estimate" | "Submitted" | "Awarded">("Estimate");
   const estimate = board?.estimates.find((row) => row.id === estimateId);
   const site = board?.sites.find((row) => row.id === estimate?.siteId);
   const activities = useMemo(
@@ -60,6 +61,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       client={alias(estimate.client)}
       name={estimate.title}
       total={estimate.total}
+      packageId={estimate.id}
     >
       {tab === "summary" ? (
         <section className="plant-card mx-auto max-w-3xl px-6 py-6">
@@ -73,9 +75,16 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
           </div>
           <p className="mt-6 text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">STATUS</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <span className="pill bg-steel text-white">Estimate</span>
-            <span className="pill border border-[#c5d4d4] bg-white">Submitted</span>
-            <span className="pill border border-[#c5d4d4] bg-white">Awarded</span>
+            {(["Estimate", "Submitted", "Awarded"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setStatus(item)}
+                className={`pill ${status === item ? "bg-steel text-white" : "border border-[#c5d4d4] bg-white"}`}
+              >
+                {item}
+              </button>
+            ))}
           </div>
           <label className="mt-6 block">
             <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE TYPE</span>
@@ -89,6 +98,35 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
             <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE NAME</span>
             <input readOnly value={estimate.title} className="paper-field mt-2" />
           </label>
+          <label className="mt-4 block">
+            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">AFE / TA NAME</span>
+            <input className="paper-field mt-2" placeholder="AFE or TA name" />
+          </label>
+          <label className="mt-4 block">
+            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">AREA / UNIT</span>
+            <input className="paper-field mt-2" placeholder="CAT, Coker, FCC…" />
+            <p className="mt-1 text-xs text-[#5b6f73]">A unit, not the refinery title.</p>
+          </label>
+          <label className="mt-4 block">
+            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">OVERTIME / RATE</span>
+            <input
+              readOnly
+              value={site?.name === "Wood River" ? "East Coast (PCA0001103)" : "Customer rule"}
+              className="paper-field mt-2"
+            />
+          </label>
+          {status !== "Estimate" ? (
+            <>
+              <label className="mt-4 block">
+                <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">JOB / CR</span>
+                <input className="paper-field mt-2" />
+              </label>
+              <label className="mt-4 block">
+                <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">PO</span>
+                <input className="paper-field mt-2" />
+              </label>
+            </>
+          ) : null}
           <p className="mt-4 text-sm text-[#5b6f73]">
             {estimate.code} · {estimate.window} · Dollars stay on the rail.
           </p>

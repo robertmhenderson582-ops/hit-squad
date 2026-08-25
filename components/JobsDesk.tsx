@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
+import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import type { JobRecord } from "@/lib/types";
 
 export function JobsDesk() {
@@ -24,7 +25,7 @@ export function JobsDesk() {
         setError(data.error || "Jobs stayed on this desk.");
         return;
       }
-      setJobs((data.desk.jobs as JobRecord[]) ?? []);
+      setJobs(((data.desk.jobs as JobRecord[]) ?? []).filter((job) => !jobLooksClosed(job, readClosed())));
     })();
     return () => {
       cancelled = true;
@@ -34,8 +35,8 @@ export function JobsDesk() {
   return (
     <div className="mt-4 space-y-4">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Outage and T&amp;M jobs loaded for this owner. Open Wood River for Overview / Estimate /
-        Change-order / Photos.
+        Outage and T&amp;M jobs loaded for this owner. Open Wood River for Overview / Estimates /
+        Change orders / People.
       </p>
       {error ? <p className="text-amber-flare">{error}</p> : null}
       {jobs.map((job) => (

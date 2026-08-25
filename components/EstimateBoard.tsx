@@ -1,18 +1,25 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { CreatedBy } from "@/components/CreatedBy";
 import { ModuleTable } from "@/components/ModuleTable";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { useSession } from "@/components/SessionProvider";
+import { readClosed, reopenPackage } from "@/lib/desk-closeout";
 
 export function EstimateBoard() {
   const alias = useAlias();
   const { user } = useSession();
   const { board, error } = useDeskBoard();
-  const rows = board?.estimates ?? [];
+  const [closed, setClosed] = useState<{ id: string; title: string }[]>([]);
+  useEffect(() => {
+    setClosed(readClosed().filter((item) => item.kind === "estimate"));
+  }, []);
+  const rows = (board?.estimates ?? []).filter((row) => !closed.some((item) => item.id === row.id));
+  const closedRows = (board?.estimates ?? []).filter((row) => closed.some((item) => item.id === row.id));
   const groups = new Map<string, typeof rows>();
   for (const row of rows) {
     const who = row.estimator || user?.name || "Owner";
@@ -86,6 +93,35 @@ export function EstimateBoard() {
           </ModuleTable>
         </section>
       ))}
+      {closedRows.length ? (
+        <details className="plant-card px-5 py-4">
+          <summary className="cursor-pointer font-display text-xl">Closed out</summary>
+          <ul className="mt-3 space-y-2 text-sm">
+            {closedRows.map((row) => (
+              <li key={row.id} className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  {row.code} · {row.title}
+                </span>
+                <span className="flex gap-2">
+                  <Link href={`/estimates/${row.id}`} className="underline">
+                    View
+                  </Link>
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={() => {
+                      reopenPackage(row.id);
+                      setClosed(readClosed().filter((item) => item.kind === "estimate"));
+                    }}
+                  >
+                    Reopen
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }

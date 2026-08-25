@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAlias } from "@/components/OwnerDeskContext";
 
@@ -13,38 +13,43 @@ const SITES = [
   "Billings — Billings, MT",
   "Yates — Newnan, GA",
 ];
-const RULES = ["East Coast", "Illinois", "West Coast"];
-const RATES = [
-  "East Coast pack",
-  "Illinois FUI/SUI/WC pack",
-  "West Coast pack",
-];
+const SIZES = [
+  { id: "outage", label: "Outage / T&M" },
+  { id: "other", label: "Other client" },
+  { id: "shop", label: "Shop / rig" },
+] as const;
+
+export type EstimateSize = (typeof SIZES)[number]["id"];
 
 export function NewEstimateModal({
   preset,
   onClose,
 }: {
-  preset: { client?: string; site?: string };
+  preset: { client?: string; site?: string; size?: EstimateSize; knownPlant?: boolean };
   onClose: () => void;
 }) {
   const router = useRouter();
   const alias = useAlias();
-  const [kind, setKind] = useState<"known" | "prospect">("known");
-  const [client, setClient] = useState(preset.client || "Phillips 66");
+  const knownPlant = Boolean(preset.knownPlant && preset.client);
+  const [size, setSize] = useState<EstimateSize>(preset.size || (knownPlant ? "outage" : "outage"));
+  const [client, setClient] = useState(preset.client || (preset.size === "shop" ? "Shop" : "Phillips 66"));
   const [site, setSite] = useState(preset.site || "Wood River — Roxana, IL");
-  const [rule, setRule] = useState("East Coast");
-  const [name, setName] = useState("New T&M estimate");
-  const [rates, setRates] = useState(RATES[0]);
+  const [name, setName] = useState(preset.size === "shop" ? "Shop / rig job" : "New T&M estimate");
+  const woodRiver = site.startsWith("Wood River");
+  const rule = woodRiver ? "East Coast (PCA0001103)" : "Customer rule";
+
+  const clientLocked = knownPlant || size === "shop";
+
+  const sites = useMemo(() => (size === "shop" ? ["Shop"] : SITES), [size]);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const query = new URLSearchParams({
-      client,
-      site,
+      client: size === "shop" ? "Shop" : client,
+      site: size === "shop" ? "Shop" : site,
       rule,
       name,
-      rates,
-      kind,
+      size,
     });
     onClose();
     router.push(`/estimates/new?${query.toString()}`);
@@ -61,65 +66,77 @@ export function NewEstimateModal({
             ×
           </button>
         </div>
-        <div className="mt-4 grid grid-cols-2 overflow-hidden rounded-full bg-[#eadfc8]">
-          <button
-            type="button"
-            onClick={() => setKind("known")}
-            className={`py-2 text-sm ${kind === "known" ? "bg-steel text-white" : "text-[#163038]"}`}
-          >
-            Known customer
-          </button>
-          <button
-            type="button"
-            onClick={() => setKind("prospect")}
-            className={`py-2 text-sm ${kind === "prospect" ? "bg-steel text-white" : "text-[#163038]"}`}
-          >
-            New / prospect
-          </button>
+        <p className="mt-3 text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">START-JOB SIZE</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {SIZES.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setSize(item.id);
+                if (item.id === "shop") {
+                  setClient("Shop");
+                  setSite("Shop");
+                  setName("Shop / rig job");
+                } else if (item.id === "other" && !knownPlant) {
+                  setClient("Georgia Power");
+                }
+              }}
+              className={`rounded-full px-3 py-1.5 text-sm ${
+                size === item.id ? "bg-steel text-white" : "border border-steel text-steel"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
         <label className="mt-5 block">
           <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">CLIENT</span>
-          <select value={client} onChange={(event) => setClient(event.target.value)} className="paper-field mt-1">
-            {CLIENTS.map((item) => (
-              <option key={item} value={item}>
-                {alias(item)}
-              </option>
-            ))}
-          </select>
+          {clientLocked ? (
+            <input readOnly value={alias(size === "shop" ? "Shop" : client)} className="paper-field mt-1" />
+          ) : (
+            <select value={client} onChange={(event) => setClient(event.target.value)} className="paper-field mt-1">
+              {CLIENTS.map((item) => (
+                <option key={item} value={item}>
+                  {alias(item)}
+                </option>
+              ))}
+            </select>
+          )}
         </label>
+        {size !== "shop" ? (
+          <label className="mt-3 block">
+            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">SITE</span>
+            <select
+              value={site}
+              onChange={(event) => setSite(event.target.value)}
+              className="paper-field mt-1"
+              disabled={knownPlant}
+            >
+              {sites.map((item) => (
+                <option key={item} value={item}>
+                  {alias(item)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <p className="mt-3 text-sm text-[#5b6f73]">
+            Shop / rig opens a small sheet: labor, truck, rod, fuel, mileage, per diem. Tabs:
+            Summary / Job sheet / Rates / Print only. Chrome only — no rate math.
+          </p>
+        )}
         <label className="mt-3 block">
-          <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">SITE</span>
-          <select value={site} onChange={(event) => setSite(event.target.value)} className="paper-field mt-1">
-            {SITES.map((item) => (
-              <option key={item} value={item}>
-                {alias(item)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="mt-3 block">
-          <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">CUSTOMER RULE</span>
-          <select value={rule} onChange={(event) => setRule(event.target.value)} className="paper-field mt-1">
-            {RULES.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
+          <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">OVERTIME / RATE</span>
+          <input readOnly value={size === "shop" ? "Shop sheet" : rule} className="paper-field mt-1" />
         </label>
         <label className="mt-3 block">
           <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">ESTIMATE NAME</span>
           <input value={name} onChange={(event) => setName(event.target.value)} className="paper-field mt-1" />
         </label>
-        <label className="mt-3 block">
-          <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">LABOR RATES</span>
-          <select value={rates} onChange={(event) => setRates(event.target.value)} className="paper-field mt-1">
-            {RATES.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-        </label>
-        <p className="mt-3 text-xs text-[#5b6f73]">
-          New client? Build ST / OT / DT in Rate builder first, then attach the pack here.
-        </p>
+        {woodRiver && size !== "shop" ? (
+          <p className="mt-3 text-xs text-[#5b6f73]">Wood River uses East Coast (PCA0001103) — never PA or Mid-Atlantic.</p>
+        ) : null}
         <div className="mt-5 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="rounded-lg border border-steel px-4 py-2 text-steel">
             Cancel
