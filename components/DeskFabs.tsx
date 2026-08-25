@@ -143,7 +143,7 @@ export function DeskFabs() {
           <fieldset className="mt-3 space-y-2">
             <legend className="text-xs tracking-[0.14em] text-[#5b6f73]">KIND</legend>
             {TICKET_KINDS.map((kind) => (
-              <label key={kind} className="flex items-center gap-2 text-sm">
+              <label key={kind} className="flex items-center gap-2 text-sm font-medium text-[#163038]">
                 <input
                   type="radio"
                   name="ticket-kind"
