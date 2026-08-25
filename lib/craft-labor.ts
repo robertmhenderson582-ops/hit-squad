@@ -1,6 +1,12 @@
 import type { ClockOverride } from "./hours-clock";
 import type { LaborClass } from "./labor-class";
-import { PHASE_IDS, rangeSeedsFromPhases, type PhaseRow } from "./phase-schedule.ts";
+import {
+  PHASE_IDS,
+  phaseForRange,
+  rangeSeedsFromPhases,
+  type JobUnit,
+  type PhaseRow,
+} from "./phase-schedule.ts";
 
 export const STAFF_POSITIONS = [
   "Analyst Cost 01",
@@ -58,6 +64,7 @@ export type CalendarRange = {
   phaseId?: string;
   shift?: CraftShift;
   skipDates?: string[];
+  unitId?: string;
 };
 
 export type CraftRow = {
@@ -155,7 +162,7 @@ export function clampPerDiem(range: CalendarRange, _shift?: CraftShift): Calenda
   };
 }
 
-export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange): CalendarRange {
+export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange, unitId?: string): CalendarRange {
   const seed = rangeSeedsFromPhases([row])[0];
   return {
     id: prev?.id && prev.phaseId === seed.phaseId ? prev.id : uid("rg"),
@@ -171,31 +178,54 @@ export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange): CalendarRan
     otAfter8: seed.otAfter8,
     shift: prev?.shift ?? "Days",
     skipDates: prev?.skipDates ? [...prev.skipDates] : [...(seed.skipDates ?? [])],
+    unitId: unitId ?? prev?.unitId,
   };
 }
 
-export function extraRangeFromPhase(phase: PhaseRow, template?: CalendarRange): CalendarRange {
-  const base = rangeFromPhase(phase, template);
+export function extraRangeFromPhase(phase: PhaseRow, template?: CalendarRange, unitId?: string): CalendarRange {
+  const base = rangeFromPhase(phase, template, unitId);
   return {
     ...base,
     id: uid("rg"),
-    start: template?.start || phase.start,
-    end: template?.end || phase.stop,
+    start: unitId && unitId !== template?.unitId ? phase.start : template?.start || phase.start,
+    end: unitId && unitId !== template?.unitId ? phase.stop : template?.end || phase.stop,
     skipDates: template?.skipDates ? [...template.skipDates] : [...(base.skipDates ?? [])],
     days: template?.days ? [...template.days] : [...base.days],
+    unitId: unitId ?? template?.unitId ?? base.unitId,
   };
 }
 
-export function rangesFromPhases(phases: PhaseRow[], previous: CalendarRange[] = []): CalendarRange[] {
+export function nextUnitId(units: JobUnit[], existing: CalendarRange[] = []): string | undefined {
+  const used = new Set(existing.map((range) => range.unitId).filter(Boolean));
+  return units.find((unit) => !used.has(unit.id))?.id ?? units[1]?.id ?? units[0]?.id;
+}
+
+export function rangesFromPhases(
+  phases: PhaseRow[],
+  previous: CalendarRange[] = [],
+  units: JobUnit[] = [],
+  multiUnits = false,
+): CalendarRange[] {
   const extras = previous.filter((range) => !range.phaseId);
   const owned = PHASE_IDS.flatMap((id) => {
-    const phase = phases.find((item) => item.id === id);
-    if (!phase?.on) return [];
+    const jobPhase = phases.find((item) => item.id === id);
+    const unitOn = multiUnits && units.some((unit) => unit.phases.find((item) => item.id === id)?.on);
+    if (!jobPhase?.on && !unitOn) return [];
+    const fallback = jobPhase ?? units[0]?.phases.find((item) => item.id === id);
+    if (!fallback) return [];
     const prior = previous.filter((item) => item.phaseId === id);
-    if (prior.length === 0) return [rangeFromPhase(phase)];
+    const firstUnitId = multiUnits ? units[0]?.id : undefined;
+    if (prior.length === 0) return [rangeFromPhase(fallback, undefined, firstUnitId)];
     return prior.map((prev, index) => {
-      const next = rangeFromPhase(phase, prev);
-      if (index > 0) {
+      const source = phaseForRange(prev, phases, units, multiUnits) ?? fallback;
+      const next = rangeFromPhase(source, prev, multiUnits ? prev.unitId ?? firstUnitId : prev.unitId);
+      if (multiUnits && next.unitId) {
+        const tagged = units.find((unit) => unit.id === next.unitId)?.phases.find((item) => item.id === id);
+        if (tagged) {
+          next.start = tagged.start;
+          next.end = tagged.stop;
+        }
+      } else if (index > 0) {
         next.start = prev.start;
         next.end = prev.end;
       }
@@ -205,12 +235,17 @@ export function rangesFromPhases(phases: PhaseRow[], previous: CalendarRange[] =
   return [...owned, ...extras];
 }
 
-export function craftRowFromPhases(phases: PhaseRow[]): CraftRow {
+export function craftRowFromPhases(phases: PhaseRow[], units: JobUnit[] = [], multiUnits = false): CraftRow {
   const next = blankCraftRow();
-  const ranges = rangesFromPhases(phases);
+  const ranges = rangesFromPhases(phases, [], units, multiUnits);
   return { ...next, ranges: ranges.length ? ranges : next.ranges };
 }
 
-export function syncCraftRows(rows: CraftRow[], phases: PhaseRow[]): CraftRow[] {
-  return rows.map((row) => ({ ...row, ranges: rangesFromPhases(phases, row.ranges) }));
+export function syncCraftRows(
+  rows: CraftRow[],
+  phases: PhaseRow[],
+  units: JobUnit[] = [],
+  multiUnits = false,
+): CraftRow[] {
+  return rows.map((row) => ({ ...row, ranges: rangesFromPhases(phases, row.ranges, units, multiUnits) }));
 }

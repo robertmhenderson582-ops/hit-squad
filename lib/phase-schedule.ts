@@ -44,9 +44,17 @@ export type PhaseRow = {
   sundaysOff: string[];
 };
 
+export type JobUnit = {
+  id: string;
+  name: string;
+  phases: PhaseRow[];
+};
+
 export type PhaseScheduleState = {
   projectStart: string;
   phases: PhaseRow[];
+  multiUnits: boolean;
+  units: JobUnit[];
 };
 
 export const PHASE_STORE_PREFIX = "hs_phase_v1:";
@@ -188,7 +196,114 @@ export function defaultPhases(): PhaseRow[] {
 
 export function defaultPhaseSchedule(): PhaseScheduleState {
   const phases = defaultPhases();
-  return { projectStart: phases[0].start, phases };
+  return { projectStart: phases[0].start, phases, multiUnits: false, units: [] };
+}
+
+function unitUid() {
+  return `unit-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+export function clonePhases(phases: PhaseRow[]): PhaseRow[] {
+  return phases.map((row) => ({ ...row, sundaysOff: [...row.sundaysOff] }));
+}
+
+export function blankUnit(name: string, template: PhaseRow[] = defaultPhases()): JobUnit {
+  return {
+    id: unitUid(),
+    name: name.trim() || "Unit",
+    phases: clonePhases(template),
+  };
+}
+
+function mergeUnit(saved: Partial<JobUnit> | undefined, index: number): JobUnit {
+  const phases = mergeSchedule({
+    projectStart: "",
+    phases: Array.isArray(saved?.phases) ? saved.phases : [],
+    multiUnits: false,
+    units: [],
+  }).phases;
+  return {
+    id: typeof saved?.id === "string" && saved.id ? saved.id : `unit-${index + 1}`,
+    name: (saved?.name || `Unit ${index + 1}`).trim() || `Unit ${index + 1}`,
+    phases,
+  };
+}
+
+export function setMultiUnits(state: PhaseScheduleState, on: boolean): PhaseScheduleState {
+  if (on) {
+    const units = state.units.length > 0 ? state.units : [blankUnit("Unit 1", state.phases)];
+    return { ...state, multiUnits: true, units };
+  }
+  const first = state.units[0];
+  return {
+    ...state,
+    multiUnits: false,
+    phases: first ? cascadePhases(mergeSchedule({ ...state, phases: first.phases }).phases) : state.phases,
+  };
+}
+
+export function addUnit(state: PhaseScheduleState): PhaseScheduleState {
+  const template = state.units[state.units.length - 1]?.phases ?? state.phases;
+  return {
+    ...state,
+    multiUnits: true,
+    units: [...state.units, blankUnit(`Unit ${state.units.length + 1}`, template)],
+  };
+}
+
+export function removeUnit(state: PhaseScheduleState, id: string): PhaseScheduleState {
+  if (state.units.length <= 1) return state;
+  return { ...state, units: state.units.filter((unit) => unit.id !== id) };
+}
+
+export function renameUnit(state: PhaseScheduleState, id: string, name: string): PhaseScheduleState {
+  return {
+    ...state,
+    units: state.units.map((unit) => (unit.id === id ? { ...unit, name: name.trim() || unit.name } : unit)),
+  };
+}
+
+export function patchUnitPhase(
+  state: PhaseScheduleState,
+  unitId: string,
+  id: PhaseId,
+  patch: Partial<PhaseRow>,
+): PhaseScheduleState {
+  return {
+    ...state,
+    units: state.units.map((unit) => {
+      if (unit.id !== unitId) return unit;
+      return { ...unit, phases: patchPhase({ ...state, phases: unit.phases }, id, patch).phases };
+    }),
+  };
+}
+
+export function applyUnitOtPick(
+  state: PhaseScheduleState,
+  unitId: string,
+  id: PhaseId,
+  pick: PhaseOtPick,
+): PhaseScheduleState {
+  return {
+    ...state,
+    units: state.units.map((unit) => {
+      if (unit.id !== unitId) return unit;
+      return { ...unit, phases: applyOtPick({ ...state, phases: unit.phases }, id, pick).phases };
+    }),
+  };
+}
+
+export function phaseForRange(
+  range: { phaseId?: string; unitId?: string },
+  phases: PhaseRow[],
+  units: JobUnit[] = [],
+  multiUnits = false,
+): PhaseRow | undefined {
+  if (multiUnits && range.unitId) {
+    const unitPhase = units.find((unit) => unit.id === range.unitId)?.phases.find((row) => row.id === range.phaseId);
+    if (unitPhase) return unitPhase;
+  }
+  return phases.find((row) => row.id === range.phaseId);
 }
 
 export function mergeSchedule(saved: Partial<PhaseScheduleState> | null | undefined): PhaseScheduleState {
@@ -197,6 +312,8 @@ export function mergeSchedule(saved: Partial<PhaseScheduleState> | null | undefi
   const incoming = Array.isArray(saved.phases) ? saved.phases : [];
   return {
     projectStart: saved.projectStart || base.projectStart,
+    multiUnits: Boolean(saved.multiUnits),
+    units: Array.isArray(saved.units) ? saved.units.map((unit, index) => mergeUnit(unit, index)) : [],
     phases: base.phases.map((row) => {
       const hit = incoming.find((item) => item.id === row.id);
       if (!hit) return row;
@@ -243,7 +360,7 @@ export function setProjectStart(state: PhaseScheduleState, projectStart: string)
     const length = lengthOf(row);
     return { ...row, start, stop: addDays(start, length - 1) };
   });
-  return { projectStart: start, phases: cascadePhases(phases) };
+  return { ...state, projectStart: start, phases: cascadePhases(phases) };
 }
 
 export function patchPhase(state: PhaseScheduleState, id: PhaseId, patch: Partial<PhaseRow>): PhaseScheduleState {
@@ -258,6 +375,7 @@ export function patchPhase(state: PhaseScheduleState, id: PhaseId, patch: Partia
   const packed = cascadePhases(phases);
   const pre = packed.find((row) => row.id === "pre");
   return {
+    ...state,
     projectStart: id === "pre" && patch.start && pre ? pre.start : state.projectStart,
     phases: packed,
   };

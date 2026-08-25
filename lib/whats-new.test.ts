@@ -46,8 +46,11 @@ describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
+    assert.match(TESTER_WHATS_NEW, /Multiple units can be turned on in Job setup; off keeps one timeline/);
     assert.match(TESTER_WHATS_NEW, /The extra Support tab is gone; Support stays on Crew/);
-    assert.match(OWNER_WHATS_NEW, /The extra Support estimate tab is gone/);
+    assert.match(OWNER_WHATS_NEW, /Multiple units is a Job setup toggle, default off/);
+    assert.match(OWNER_WHATS_NEW, /Off keeps today’s single five-phase timeline/);
+    assert.match(OWNER_WHATS_NEW, /second unit is a second date range/);
     assert.match(OWNER_WHATS_NEW, /Support stays on Crew/);
     assert.equal(/password|auth|Novus|vault|Drive|\/tmp|SMTP|seat/i.test(TESTER_WHATS_NEW), false);
 
@@ -62,17 +65,17 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends the Support-tab note onto an existing Hit Squad desk thread", () => {
+  it("appends V1.12 onto an existing Hit Squad desk thread", () => {
     const prior = [
       {
-        id: "th-desk-v1.11",
+        id: "th-desk-v1.11.1",
         personId: DESK_PERSON_ID,
         name: "Hit Squad",
         company: "Project Controls",
         unread: 0,
         messages: [
           {
-            id: "im-desk-1.11.0",
+            id: "im-desk-1.11.1",
             from: "them" as const,
             author: "Desk",
             text: "Hit Squad Project Controls V1.11",
