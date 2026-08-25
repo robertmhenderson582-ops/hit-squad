@@ -5,6 +5,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { BrandMark } from "@/components/BrandMark";
 import { DeskBanners } from "@/components/DeskBanners";
+import { useDisplay } from "@/components/DisplayProvider";
+import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { RfqPreview } from "@/components/RfqPreview";
 
@@ -46,9 +48,11 @@ export function EstimateWorkspace({
 }) {
   const router = useRouter();
   const [rfq, setRfq] = useState(false);
+  const { resolvedTheme } = useDisplay();
+  const paper = resolvedTheme === "day";
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#d8e4e2]">
+    <div className={paper ? "min-h-screen overflow-x-hidden bg-[#d8e4e2]" : "industrial-root"}>
       <FieldTrialBanner />
       {rfq ? (
         <RfqPreview
@@ -58,16 +62,22 @@ export function EstimateWorkspace({
           onClose={() => setRfq(false)}
         />
       ) : null}
-      <header className="est-chrome">
+      <header className={paper ? "est-chrome" : "est-chrome hud-bezel"}>
         <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <Link href="/" className="brand-static flex items-center gap-2">
               <BrandMark className="h-7 w-7" />
-              <span className="font-display text-lg tracking-[0.16em] text-white">HIT SQUAD</span>
+              <span className="leading-none">
+                <span className="block font-display text-lg tracking-[0.16em] text-white">HIT SQUAD</span>
+                <span className="mt-0.5 block font-display text-[10px] tracking-[0.22em] text-white/75">
+                  PROJECT CONTROLS
+                </span>
+              </span>
             </Link>
             <p className="truncate text-sm text-white/70">{crumb}</p>
           </div>
-          <div className="flex flex-wrap gap-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <ThemeFlip />
             {ACTIONS.map((action) => (
               <button
                 key={action.id}

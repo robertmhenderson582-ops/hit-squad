@@ -5,8 +5,8 @@ import type { Density, ThemeChoice, TypeSize } from "@/lib/display";
 import { useDisplay } from "@/components/DisplayProvider";
 
 const THEMES: { value: ThemeChoice; title: string; copy: string }[] = [
-  { value: "day", title: "Day", copy: "paper desk (the current shop-light look)." },
-  { value: "night", title: "Night", copy: "lights-out trailer palette for late outage work." },
+  { value: "night", title: "Night", copy: "instrument-cluster HUD — hairline frames, teal and amber readouts. Default desk." },
+  { value: "day", title: "Day", copy: "paper-white shop-light desk. Prints and RFQ letters always use this." },
   { value: "match", title: "Match device", copy: "follows this computer’s dark/light setting." },
 ];
 
@@ -18,10 +18,10 @@ export function DisplayDesk() {
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Display</h2>
         <p className="mt-2 text-sm text-[#5b6f73]">
-          Night / Day mode. The sun/moon button in the header (and on the lock screen) flips Day ↔
-          Night without opening Settings. The choice stays on this device. It does not change price
-          math. Printed proposals and RFQ letters always come out in Day (paper white), even if the
-          desk is in Night.
+          Night is the instrument-cluster HUD. Day is paper white. The sun/moon button in the header
+          (and on the lock screen) flips Day ↔ Night without opening Settings. The choice stays on
+          this device. It does not change price math. Printed proposals and RFQ letters always come
+          out in Day (paper white), even if the desk is in Night.
         </p>
         <div className="mt-4 space-y-2">
           {THEMES.map((item) => (

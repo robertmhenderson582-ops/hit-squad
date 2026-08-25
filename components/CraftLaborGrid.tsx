@@ -172,12 +172,12 @@ export function CraftLaborGrid() {
                     <option>Manual</option>
                   </select>
                 </td>
-                <td className="px-2 py-2">{row.st.toLocaleString()}</td>
-                <td className="px-2 py-2">{row.ot.toLocaleString()}</td>
-                <td className="px-2 py-2">{row.dt.toLocaleString()}</td>
-                <td className="px-2 py-2">{row.pd}</td>
-                <td className="px-2 py-2">{row.hours.toLocaleString()}</td>
-                <td className="px-2 py-2 font-semibold">{row.cost}</td>
+                <td className="hud-readout px-2 py-2">{row.st.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-2">{row.ot.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-2">{row.dt.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-2">{row.pd}</td>
+                <td className="hud-readout px-2 py-2">{row.hours.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-2 font-semibold">{row.cost}</td>
                 <td className="px-2 py-2">
                   <button
                     type="button"
