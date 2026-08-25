@@ -31,7 +31,7 @@ export function EstimateWorkbook({
     <div className="space-y-5">
       <p className="text-sm text-[#5b6f73]">
         {alias(client || "Phillips 66")} · {alias(site || "Wood River — Roxana, IL")} · {name || "New T&M estimate"}.
-        Hours follow the position clock. Rate packs stay parked.
+        Hours follow the position clock.
       </p>
       <CraftLaborGrid
         rows={rows}

@@ -38,7 +38,7 @@ const STARTER: Phase[] = [
   {
     id: "mech",
     name: "Mechanical Window",
-    note: "6x10 boilermakers",
+    note: "6x10",
     on: true,
     start: "2026-09-07",
     stop: "2026-09-20",

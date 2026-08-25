@@ -29,8 +29,6 @@ import {
 } from "@/lib/hours-clock";
 import { defaultLaborClass, type LaborClass } from "@/lib/labor-class";
 
-const CHIPS = ["Add Job Set", "Shutdown", "Rear wall", "Superheater", "V bottom", "Hydro", "Demob"];
-
 const HEADERS = ["POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST"];
 const CUSTOM = "__custom__";
 
@@ -50,7 +48,6 @@ export function CraftLaborGrid({
   onOtAfter8?: (next: boolean) => void;
 }) {
   const confirmRemove = useConfirmRemove();
-  const [chips, setChips] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
 
   const computed = useMemo(
@@ -136,21 +133,6 @@ export function CraftLaborGrid({
         Hours follow the position. OT after 8 is optional — weekly 40 still sits on top. Default is ST to 10
         on East Coast / staff.
       </p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {CHIPS.map((chip) => (
-          <button
-            key={chip}
-            type="button"
-            onClick={() => setChips((current) => (current.includes(chip) ? current : [...current, chip]))}
-            className="line-chip"
-          >
-            {chip}
-          </button>
-        ))}
-      </div>
-      {chips.length ? (
-        <p className="mt-2 text-xs text-[#5b6f73]">Lines staged: {chips.join(" · ")}.</p>
-      ) : null}
       <GripToPan className="mt-4">
         <table className="min-w-[960px] text-left text-sm">
           <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">

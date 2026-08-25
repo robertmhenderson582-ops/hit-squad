@@ -581,6 +581,28 @@ html[data-motion="reduce"] .hud-scan {
   color: #efe6d4;
 }
 
+.est-total-card {
+  min-width: 8.5rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(6, 22, 26, 0.35);
+  text-align: right;
+}
+
+.est-total-card p:first-child {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.est-total-card p:last-child {
+  margin-top: 0.1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #fff;
+}
+
 .pill {
   border-radius: 999px;
   padding: 0.45rem 1rem;

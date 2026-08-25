@@ -7,17 +7,18 @@ import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
 import { LaborRollup } from "@/components/LaborRollup";
 import { ModuleTable } from "@/components/ModuleTable";
-import { CreatedBy } from "@/components/CreatedBy";
+import { JobSetupCard } from "@/components/JobSetupCard";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { boundOtLabel } from "@/lib/hours-clock";
+import type { EstimateStatus } from "@/components/EstimateWorkspace";
 
 export function EstimateDetail({ estimateId }: { estimateId: string }) {
   const alias = useAlias();
   const { board, error } = useDeskBoard();
   const [tab, setTab] = useState<EstimateTab>("summary");
-  const [status, setStatus] = useState<"Estimate" | "Submitted" | "Awarded">("Estimate");
+  const [status, setStatus] = useState<EstimateStatus>("Estimate");
   const estimate = board?.estimates.find((row) => row.id === estimateId);
   const site = board?.sites.find((row) => row.id === estimate?.siteId);
   const activities = useMemo(
@@ -64,59 +65,19 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       total={estimate.total}
       packageId={estimate.id}
       staffing={staffing}
+      status={status}
+      onStatus={setStatus}
     >
       {tab === "summary" ? (
-        <section className="plant-card mx-auto max-w-3xl px-6 py-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-semibold text-[#163038]">Job setup</h1>
-            <CreatedBy author={estimate.estimator} />
-          </div>
-          <div className="mt-5 flex flex-wrap gap-2">
-            <span className="pill bg-steel text-white">Existing customer</span>
-            <span className="pill border border-[#c5d4d4] bg-white">New / potential client</span>
-          </div>
-          <p className="mt-6 text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">STATUS</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {(["Estimate", "Submitted", "Awarded"] as const).map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setStatus(item)}
-                className={`pill ${status === item ? "bg-steel text-white" : "border border-[#c5d4d4] bg-white"}`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-          <label className="mt-6 block">
-            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE TYPE</span>
-            <input readOnly value={estimate.type} className="paper-field mt-2" />
-          </label>
-          <label className="mt-4 block">
-            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">CLIENT</span>
-            <input readOnly value={alias(estimate.client)} className="paper-field mt-2" />
-          </label>
-          <label className="mt-4 block">
-            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE NAME</span>
-            <input readOnly value={estimate.title} className="paper-field mt-2" />
-          </label>
-          <label className="mt-4 block">
-            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">AFE / TA NAME</span>
-            <input className="paper-field mt-2" placeholder="AFE or TA name" />
-          </label>
-          <label className="mt-4 block">
-            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">AREA / UNIT</span>
-            <input className="paper-field mt-2" placeholder="CAT, Coker, FCC…" />
-            <p className="mt-1 text-xs text-[#5b6f73]">A unit, not the refinery title.</p>
-          </label>
-          <label className="mt-4 block">
-            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">OVERTIME / RATE</span>
-            <input
-              readOnly
-              value={boundOtLabel(site?.name ?? "", estimate.client, site?.code)}
-              className="paper-field mt-2"
-            />
-          </label>
+        <JobSetupCard
+          type={estimate.type}
+          client={alias(estimate.client)}
+          name={estimate.title}
+          otRule={boundOtLabel(site?.name ?? "", estimate.client, site?.code)}
+          author={estimate.estimator}
+          code={estimate.code}
+          window={estimate.window}
+        >
           {status !== "Estimate" ? (
             <>
               <label className="mt-4 block">
@@ -129,27 +90,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
               </label>
             </>
           ) : null}
-          <p className="mt-4 text-sm text-[#5b6f73]">
-            {estimate.code} · {estimate.window} · Dollars stay on the rail.
-          </p>
-          <div className="mt-6">
-            <p className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">TRAVEL</p>
-            <table className="mt-2 min-w-full text-left text-sm">
-              <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
-                <tr>
-                  <th className="py-2">ITEM</th>
-                  <th className="py-2">Mileage Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-t border-[#d5e0de]">
-                  <td className="py-2">Craft travel</td>
-                  <td className="py-2">—</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
+        </JobSetupCard>
       ) : null}
 
       {tab === "activities" ? (

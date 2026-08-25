@@ -16,6 +16,8 @@ import { RfqPreview } from "@/components/RfqPreview";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
 import type { StaffingLine } from "@/lib/types";
 
+export type EstimateStatus = "Estimate" | "Submitted" | "Awarded";
+
 const TABS = [
   { id: "summary", label: "Job setup", icon: "📄" },
   { id: "activities", label: "Activities", icon: "∿" },
@@ -24,6 +26,8 @@ const TABS = [
   { id: "equipment", label: "Equipment", icon: "⛟" },
   { id: "costs", label: "Costs", icon: "▤" },
   { id: "change-orders", label: "Change orders", icon: "⚖" },
+  { id: "rates", label: "Rates", icon: "％" },
+  { id: "print", label: "Print", icon: "⎙" },
 ] as const;
 
 const ACTIONS = [
@@ -44,6 +48,9 @@ export function EstimateWorkspace({
   total,
   packageId,
   staffing,
+  status = "Estimate",
+  onStatus,
+  statusLocked = false,
   children,
 }: {
   crumb: string;
@@ -54,6 +61,9 @@ export function EstimateWorkspace({
   total?: string;
   packageId?: string;
   staffing?: StaffingLine[];
+  status?: EstimateStatus;
+  onStatus?: (next: EstimateStatus) => void;
+  statusLocked?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -91,6 +101,35 @@ export function EstimateWorkspace({
             <p className="truncate text-sm text-white/70">{crumb}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(["Estimate", "Submitted", "Awarded"] as const).map((item) => {
+                const locked = statusLocked && item !== "Estimate";
+                const active = status === item;
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    disabled={locked}
+                    title={locked ? "New sheet stays Estimate" : undefined}
+                    onClick={() => {
+                      if (locked) return;
+                      onStatus?.(item);
+                    }}
+                    className={`rounded-full px-3 py-1 text-xs ${
+                      active
+                        ? "bg-white text-[#0b3a43]"
+                        : "border border-white/25 text-white/80"
+                    } ${locked ? "cursor-not-allowed opacity-50" : ""}`}
+                  >
+                    {item}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="est-total-card">
+              <p>ESTIMATE TOTAL</p>
+              <p>{total && total !== "$0" ? total : "—"}</p>
+            </div>
             <InboxBadge />
             <ThemeFlip />
             <ShareTurnover title={name || crumb} />
@@ -159,7 +198,31 @@ export function EstimateWorkspace({
       </header>
       <div className="paper-desk min-h-[70vh] px-4 py-6">
         <DeskBanners />
-        {children}
+        {tab === "rates" ? (
+          <section className="plant-card px-5 py-5">
+            <h2 className="font-display text-2xl font-semibold text-[#163038]">Rates</h2>
+            <p className="mt-2 text-sm text-[#5b6f73]">
+              Rate packs and B-1 stay parked. This tab is chrome only — no invented totals.
+            </p>
+          </section>
+        ) : null}
+        {tab === "print" ? (
+          <section className="plant-card px-5 py-5">
+            <h2 className="font-display text-2xl font-semibold text-[#163038]">Print</h2>
+            <p className="mt-2 text-sm text-[#5b6f73]">Prints always come out Day / paper white.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setRfq(true);
+                noteFeatureTrail("export");
+              }}
+              className="mt-4 rounded-lg bg-steel px-4 py-2 text-white"
+            >
+              Print / RFQ
+            </button>
+          </section>
+        ) : null}
+        {tab === "rates" || tab === "print" ? null : children}
       </div>
       {confirmClose && packageId ? (
         <div className="modal-scrim" role="dialog" aria-modal="true">
