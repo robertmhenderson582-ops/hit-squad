@@ -35,8 +35,8 @@ export function JobsDesk() {
   return (
     <div className="mt-4 space-y-4">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Outage and T&amp;M jobs loaded for this owner. Open Wood River for Overview / Estimates /
-        Change orders / People.
+        Outage and T&amp;M jobs loaded for this owner. Open {alias("Wood River")} for Overview /
+        Estimates / Change orders / People.
       </p>
       {error ? <p className="text-amber-flare">{error}</p> : null}
       {jobs.map((job) => (
@@ -65,7 +65,7 @@ export function JobsDesk() {
           </dl>
           <div className="mt-4 flex flex-wrap gap-2 font-mono text-[10px] tracking-[0.16em]">
             <Link href="/jobs/wood-river" className="border border-steel px-3 py-2 text-steel">
-              WOOD RIVER
+              {alias("WOOD RIVER")}
             </Link>
             <Link href="/estimates" className="border border-steel px-3 py-2 text-steel">
               ESTIMATES

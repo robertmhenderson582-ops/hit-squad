@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { noteSessionEnd } from "@/components/FeatureTrail";
 import { useDisplay } from "@/components/DisplayProvider";
 import { PasswordField } from "@/components/PasswordField";
 import { useSession } from "@/components/SessionProvider";
+import { setDeskLocked } from "@/lib/desk-lock";
 
 function effectiveLock(role: string | undefined, minutes: number) {
   if (role !== "owner") {
@@ -43,7 +45,10 @@ export function InactivityLock() {
       const idle = Date.now() - lastActive.current;
       const lockAt = minutes * 60 * 1000;
       if (idle >= lockAt) {
-        setLocked(true);
+        setLocked((was) => {
+          if (!was) noteSessionEnd("idle");
+          return true;
+        });
         setWarn(false);
         refresh();
       } else if (idle >= lockAt - 60_000) {
@@ -57,6 +62,11 @@ export function InactivityLock() {
     };
   }, [bump, locked, minutes, refresh, status]);
 
+  useEffect(() => {
+    setDeskLocked(locked);
+    return () => setDeskLocked(false);
+  }, [locked]);
+
   async function unlock(event: FormEvent) {
     event.preventDefault();
     if (!user) return;
@@ -65,8 +75,14 @@ export function InactivityLock() {
       await signIn({ email: user.email, password, acknowledged: true });
       setPassword("");
       setLocked(false);
+      setDeskLocked(false);
       bump();
     } catch (err) {
+      fetch("/api/desk/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "failed", who: user.email }),
+      }).catch(() => undefined);
       setError(err instanceof Error ? err.message : "Lock stayed on.");
     }
   }
@@ -82,7 +98,14 @@ export function InactivityLock() {
             <button type="button" onClick={bump} className="rounded-lg bg-steel px-3 py-2 text-white">
               Stay signed in
             </button>
-            <button type="button" onClick={() => setLocked(true)} className="rounded-lg border border-steel px-3 py-2">
+            <button
+              type="button"
+              onClick={() => {
+                noteSessionEnd("idle");
+                setLocked(true);
+              }}
+              className="rounded-lg border border-steel px-3 py-2"
+            >
               Lock now
             </button>
           </div>

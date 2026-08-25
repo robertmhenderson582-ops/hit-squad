@@ -3,6 +3,8 @@
 import { playInboxChime } from "@/lib/chime";
 import type { Density, ThemeChoice, TypeSize } from "@/lib/display";
 import { useDisplay } from "@/components/DisplayProvider";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useSession } from "@/components/SessionProvider";
 
 const THEMES: { value: ThemeChoice; title: string; copy: string }[] = [
   { value: "night", title: "Night", copy: "instrument-cluster HUD — hairline frames, teal and amber readouts. Default desk." },
@@ -12,9 +14,25 @@ const THEMES: { value: ThemeChoice; title: string; copy: string }[] = [
 
 export function DisplayDesk() {
   const { prefs, setPrefs } = useDisplay();
+  const { user } = useSession();
+  const desk = useOwnerDesk();
 
   return (
     <div className="space-y-5">
+      {user?.role === "owner" && desk ? (
+        <section className="plant-card px-5 py-5">
+          <h2 className="text-2xl font-semibold text-[#163038]">Catalog aliases</h2>
+          <p className="mt-2 text-sm text-[#5b6f73]">
+            Off = real names on your blotter. On = tester view (Ironwood / Midwest / Piedmont).
+            Shop Madison, Nathan, and John stay on real names. Mark, Bill, Joseph, and Benny stay
+            aliased either way — Benny never sees real client or plant names. Rates, site ids, and
+            files stay real underneath.
+          </p>
+          <div className="mt-4">
+            <Toggle label="Tester-view aliases" on={desk.aliasesOn} onChange={desk.setAliasesOn} />
+          </div>
+        </section>
+      ) : null}
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Display</h2>
         <p className="mt-2 text-sm text-[#5b6f73]">

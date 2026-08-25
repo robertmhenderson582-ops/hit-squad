@@ -15,8 +15,9 @@ export function UsersAdmin() {
           <div>
             <h2 className="text-2xl font-semibold text-[#163038]">Aliases</h2>
             <p className="mt-1 text-sm text-[#5b6f73]">
-              Whole catalog, not only P66. Madison shop (Nathan / later John) still sees real names.
-              Benny never sees real client names when this is on.
+              Whole catalog, not only P66. Off = real names on the owner blotter. On = tester view.
+              Madison shop (Nathan / later John) still sees real names. Mark, Bill, Joseph, and Benny
+              stay aliased. Benny never sees real client or plant names.
             </p>
           </div>
           <button
@@ -50,8 +51,8 @@ export function UsersAdmin() {
           </table>
         </div>
         <p className="mt-3 text-xs text-[#5b6f73]">
-          Imports that still say Phillips 66 / P66 still match under Ironwood. Owner viewing normally
-          sees real names. Follow Benny with aliases on to check his lens.
+          Imports that still say Phillips 66 / P66 still match under Ironwood. Owner viewing with the
+          toggle off sees real names. Follow Benny to check his lens.
         </p>
       </section>
 

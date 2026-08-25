@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { fileToLead, leadToBytes, readBrief, writeBrief, type LeadFile } from "@/lib/lead-briefs";
 import { buildZip } from "@/lib/zip";
 
@@ -48,6 +49,7 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
     const next = await Promise.all(Array.from(list ?? []).map(fileToLead));
     setFiles(next);
     persist({ files: next });
+    if (next.length) noteFeatureTrail("import");
   }
 
   function submitBrief() {

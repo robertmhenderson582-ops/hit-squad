@@ -1,6 +1,7 @@
 "use client";
 
 import { ModuleTable } from "@/components/ModuleTable";
+import { useAlias } from "@/components/OwnerDeskContext";
 import { useDeskBoard } from "@/components/useDeskBoard";
 
 function pct(value: number) {
@@ -8,19 +9,20 @@ function pct(value: number) {
 }
 
 export function RateBuilder() {
+  const alias = useAlias();
   const { board, error } = useDeskBoard();
   const rows = board?.rates ?? [];
 
   return (
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
-        Illinois burden build-up for Madison / Wood River work: FICA, FUI, SUI, workers&apos; comp,
-        GL, and small tools rolled into the burdened craft rate. This is the IL rate builder — B-1
-        ingest is parked. Field-trial figures stay on this desk.
+        Illinois burden build-up for {alias("Madison")} / {alias("Wood River")} work: FICA, FUI, SUI,
+        workers&apos; comp, GL, and small tools rolled into the burdened craft rate. This is the IL
+        rate builder — B-1 ingest is parked. Field-trial figures stay on this desk.
       </p>
       {error ? <p className="text-amber-label">{error}</p> : null}
       <ModuleTable
-        caption="RATE BUILDER — IL / WOOD RIVER"
+        caption={alias("RATE BUILDER — IL / WOOD RIVER")}
         headers={["CRAFT", "ST", "BASE", "FICA", "FUI", "SUI", "W/C", "GL", "TOOLS", "BURDENED"]}
       >
         {rows.map((row) => (

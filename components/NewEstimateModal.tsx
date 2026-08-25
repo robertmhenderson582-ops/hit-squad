@@ -135,7 +135,9 @@ export function NewEstimateModal({
           <input value={name} onChange={(event) => setName(event.target.value)} className="paper-field mt-1" />
         </label>
         {woodRiver && size !== "shop" ? (
-          <p className="mt-3 text-xs text-[#5b6f73]">Wood River uses East Coast (PCA0001103) — never PA or Mid-Atlantic.</p>
+          <p className="mt-3 text-xs text-[#5b6f73]">
+            {alias("Wood River")} uses East Coast (PCA0001103) — never PA or Mid-Atlantic.
+          </p>
         ) : null}
         <div className="mt-5 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="rounded-lg border border-steel px-4 py-2 text-steel">

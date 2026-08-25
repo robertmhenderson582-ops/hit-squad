@@ -7,6 +7,7 @@ import { InboxProvider } from "@/components/InboxProvider";
 import { InactivityLock } from "@/components/InactivityLock";
 import { OwnerDeskProvider } from "@/components/OwnerDeskContext";
 import { SessionProvider } from "@/components/SessionProvider";
+import { FeatureTrail } from "@/components/FeatureTrail";
 import { SignedInToast } from "@/components/SignedInToast";
 import { TalkWalkProvider } from "@/components/TalkWalk";
 import "./globals.css";
@@ -51,6 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <ConfirmDialogProvider>
                   <TalkWalkProvider>
                     {children}
+                    <FeatureTrail />
                     <InactivityLock />
                     <DeskFabs />
                     <SignedInToast />

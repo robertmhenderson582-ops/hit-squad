@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { PresencePulse } from "@/components/PresencePulse";
 import { EMPTY_MODULES } from "@/lib/roster";
 import type { RosterEntry, RosterPermission } from "@/lib/types";
 
@@ -85,6 +86,7 @@ export function ManageUsersDesk() {
 
   return (
     <div className="space-y-5">
+      <PresencePulse />
       <Collapsible
         title="Fresh accounts"
         open={open.fresh}

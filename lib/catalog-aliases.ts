@@ -1,30 +1,41 @@
-export type AliasSeat = "owner" | "benny" | "nathan" | "other";
+export type AliasSeat = "owner" | "benny" | "nathan" | "john" | "other";
 
 export const ALIAS_CATALOG: { real: string; alias: string; note: string }[] = [
-  { real: "Phillips 66", alias: "Ironwood Refining", note: "P66 parent" },
+  { real: "Phillips 66", alias: "Ironwood Refining", note: "Parent" },
   { real: "P66", alias: "Ironwood", note: "Short mark" },
+  { real: "Kinder Morgan", alias: "Midcontinent Pipeline", note: "Pipeline parent" },
+  { real: "Wood River terminal", alias: "Midwest Terminal", note: "KM terminal" },
+  { real: "Wood River", alias: "Midwest", note: "Plant — titles like Midwest CAT 2" },
+  { real: "Bayway", alias: "East", note: "East plant" },
+  { real: "Rodeo", alias: "West", note: "West plant" },
+  { real: "Ferndale", alias: "Northwest", note: "Northwest plant" },
+  { real: "Billings", alias: "Rockies", note: "Rockies plant" },
   { real: "Georgia Power", alias: "Piedmont Power", note: "GPC parent" },
   { real: "Yates", alias: "Ridge Station", note: "GPC plant" },
-  { real: "Rodeo", alias: "Harbor Fuels", note: "West plant" },
-  { real: "Bayway", alias: "Pacific Fuels", note: "East plant" },
-  { real: "Linden", alias: "Bay Point", note: "Bayway city" },
-  { real: "Ferndale", alias: "Pacific Fuels North", note: "NW plant" },
-  { real: "Wood River", alias: "Midcontinent", note: "Madison plant — Nathan still sees real name" },
-  { real: "Billings", alias: "Midcontinent Pipeline", note: "Rockies plant" },
-  { real: "Madison", alias: "Shop North", note: "Shop label" },
+  { real: "Monroe Energy", alias: "Harbor Fuels", note: "Trainer parent" },
+  { real: "Trainer", alias: "Harbor Works", note: "Harbor plant" },
+  { real: "Chevron", alias: "Pacific Fuels", note: "Richmond parent" },
+  { real: "Richmond", alias: "Bay Point", note: "Pacific plant" },
+  { real: "Roxana", alias: "Midland", note: "Midwest city" },
+  { real: "Newnan", alias: "Piedmont", note: "Ridge Station city" },
+  { real: "Linden", alias: "Eastport", note: "East city" },
+  { real: "Marcus Hook", alias: "Harbor", note: "Harbor city" },
 ];
 
 const ORDERED = [...ALIAS_CATALOG].sort((a, b) => b.real.length - a.real.length);
 
 export function shouldApplyAliases(aliasesOn: boolean, seat: AliasSeat): boolean {
-  if (!aliasesOn) return false;
-  if (seat === "owner" || seat === "nathan") return false;
+  if (seat === "nathan" || seat === "john") return false;
+  if (seat === "owner") return aliasesOn;
   return true;
 }
 
 export function aliasText(value: string, aliasesOn: boolean, seat: AliasSeat): string {
   if (!shouldApplyAliases(aliasesOn, seat)) return value;
-  return ORDERED.reduce((next, row) => next.replace(new RegExp(row.real.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), row.alias), value);
+  return ORDERED.reduce(
+    (next, row) => next.replace(new RegExp(row.real.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), row.alias),
+    value,
+  );
 }
 
 export function aliasValue<T>(value: T, aliasesOn: boolean, seat: AliasSeat): T {

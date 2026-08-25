@@ -47,7 +47,7 @@ async function noteFeature(detail: string) {
 }
 
 export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
-  const [aliasesOn, setAliasesOnState] = useState(true);
+  const [aliasesOn, setAliasesOnState] = useState(false);
   const [followSeat, setFollowSeatState] = useState<FollowSeat>("owner");
   const [viewAs, setViewAsState] = useState<ViewAsSeat>("owner");
   const [viewResponsibility, setViewResponsibility] = useState<ViewResponsibility>("Estimator");
@@ -73,7 +73,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
   const setAliasesOn = useCallback((on: boolean) => {
     setAliasesOnState(on);
     saveSettings({ aliasesOn: on });
-    noteFeature(on ? "Aliases catalog on for testers" : "Aliases catalog off");
+    noteFeature(on ? "Aliases tester view on" : "Aliases real names");
   }, []);
 
   const setFollowSeat = useCallback((seat: FollowSeat) => {

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { shootViewport } from "@/lib/capture";
 import { TICKET_DRAFT_KEY, TICKET_KINDS, type TicketKind } from "@/lib/tickets";
 import { unlockInboxAudio } from "@/lib/chime";
+import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { InboxPanel } from "@/components/InboxPanel";
 import { useInbox } from "@/components/InboxProvider";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
@@ -77,6 +78,7 @@ export function DeskFabs() {
     setSavedDraft(false);
     setTicketOpen(false);
     setNote("Saved to Tickets. Not Inbox.");
+    noteFeatureTrail("ticket");
   }
 
   async function capture() {

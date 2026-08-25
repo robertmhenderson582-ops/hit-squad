@@ -92,7 +92,7 @@ export type OwnerSettings = {
 };
 
 const settings: OwnerSettings = {
-  aliasesOn: true,
+  aliasesOn: false,
   followSeat: "owner",
   viewAs: "owner",
   viewResponsibility: "Estimator",
@@ -107,19 +107,46 @@ const settings: OwnerSettings = {
   },
 };
 
+export type ActivityKind = "sign-in" | "failed" | "session" | "feature" | "error";
+
 export type ActivityRow = {
-  at: string;
-  kind: "sign-in" | "failed" | "feature";
+  id: string;
+  at: number;
+  kind: ActivityKind;
   who: string;
   detail: string;
 };
 
-const activity: ActivityRow[] = [
-  { at: "25 Aug 2026 · 00:12", kind: "sign-in", who: "Robert Henderson", detail: "Owner desk cookie read" },
-  { at: "25 Aug 2026 · 00:08", kind: "failed", who: "unknown", detail: "Wrong password · stayed on /login" },
-  { at: "25 Aug 2026 · 00:04", kind: "feature", who: "Robert Henderson", detail: "Opened Sites / Wood River" },
-  { at: "24 Aug 2026 · 23:51", kind: "feature", who: "Robert Henderson", detail: "Aliases catalog reviewed" },
-];
+const DAY_MS = 24 * 60 * 60 * 1000;
+const KEEP_MS = 30 * DAY_MS;
+
+const activity: ActivityRow[] = [];
+let seeded = false;
+
+function stampRow(kind: ActivityKind, who: string, detail: string, at = Date.now()): ActivityRow {
+  return { id: `act-${at}-${Math.random().toString(36).slice(2, 7)}`, at, kind, who, detail };
+}
+
+function pruneActivity() {
+  const cutoff = Date.now() - KEEP_MS;
+  for (let i = activity.length - 1; i >= 0; i -= 1) {
+    if (activity[i].at < cutoff) activity.splice(i, 1);
+  }
+}
+
+function seedOwnerDemo() {
+  if (seeded || activity.length > 0) return;
+  seeded = true;
+  const now = Date.now();
+  activity.push(
+    stampRow("sign-in", "Robert Henderson", "Owner desk · sign-in ok", now - 8 * 60 * 1000),
+    stampRow("failed", "unknown", "Sign-in failed · username only · password not stored", now - 12 * 60 * 1000),
+    stampRow("session", "Robert Henderson", "Home → Estimates → idle · 18 min", now - 20 * 60 * 1000),
+    stampRow("feature", "Robert Henderson", "Home", now - 6 * 60 * 1000),
+    stampRow("feature", "Robert Henderson", "Crew", now - 5 * 60 * 1000),
+    stampRow("error", "Robert Henderson", "Unhandled look chrome · no tester password", now - 40 * 60 * 1000),
+  );
+}
 
 function clearStaleRepublish() {
   if (settings.republish.buildStamp !== BUILD_STAMP) {
@@ -175,13 +202,34 @@ export function clearRepublish(): OwnerSettings {
 }
 
 export function listActivity(): ActivityRow[] {
-  return [...activity];
+  seedOwnerDemo();
+  pruneActivity();
+  return [...activity].sort((a, b) => b.at - a.at);
 }
 
-export function addActivity(row: Omit<ActivityRow, "at">): ActivityRow {
-  const entry = { ...row, at: new Date().toLocaleString("en-GB", { hour12: false }) };
+export function addActivity(row: Omit<ActivityRow, "id" | "at"> & { at?: number }): ActivityRow {
+  pruneActivity();
+  seeded = true;
+  const entry = stampRow(row.kind, row.who, row.detail, row.at);
   activity.unshift(entry);
   return entry;
+}
+
+export function removeActivity(id: string) {
+  const index = activity.findIndex((row) => row.id === id);
+  if (index >= 0) activity.splice(index, 1);
+}
+
+export function removeActivityOlderThan(days: number) {
+  const cutoff = Date.now() - days * DAY_MS;
+  for (let i = activity.length - 1; i >= 0; i -= 1) {
+    if (activity[i].at < cutoff) activity.splice(i, 1);
+  }
+}
+
+export function clearActivity() {
+  activity.splice(0, activity.length);
+  seeded = true;
 }
 
 export const VIEW_AS_HIDDEN_SETTINGS = [

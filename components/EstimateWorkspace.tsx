@@ -8,6 +8,7 @@ import { DeskBanners } from "@/components/DeskBanners";
 import { useDisplay } from "@/components/DisplayProvider";
 import { ShareTurnover } from "@/components/ShareTurnover";
 import { InboxBadge } from "@/components/InboxBadge";
+import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { RfqPreview } from "@/components/RfqPreview";
@@ -96,7 +97,10 @@ export function EstimateWorkspace({
                 key={action.id}
                 type="button"
                 onClick={() => {
-                  if (action.id === "export") setRfq(true);
+                  if (action.id === "export") {
+                    setRfq(true);
+                    noteFeatureTrail("export");
+                  }
                   if (action.id === "duplicate" && packageId) {
                     const query = new URLSearchParams({
                       client: client || "",
@@ -135,7 +139,10 @@ export function EstimateWorkspace({
             <button
               key={item.id}
               type="button"
-              onClick={() => onTab(item.id)}
+              onClick={() => {
+                onTab(item.id);
+                if (item.id === "crew") noteFeatureTrail("Crew");
+              }}
               className={`rounded-t px-3 py-2 text-sm ${
                 tab === item.id ? "bg-[#0f5f6d] text-white" : "text-white/75 hover:text-white"
               }`}

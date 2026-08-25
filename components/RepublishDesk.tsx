@@ -40,9 +40,9 @@ export function RepublishDesk() {
     <section className="plant-card px-5 py-5">
       <h2 className="text-2xl font-semibold text-[#163038]">Heads up — republish</h2>
       <p className="mt-2 text-sm text-[#5b6f73]">
-        Immediate locks testers; owner stays in. 5/10/15 sticky banner + countdown. At zero testers
-        see: Wait — we’re republishing. Don’t keep typing. Inbox notice to people signed in right
-        now, not the whole roster. New build must clear an old Wait state.
+        Look only. This does not take the live site down. Immediate / 5 / 10 / 15 puts a sticky
+        banner and countdown on testers. Immediate locks testers; owner stays in. Inbox notice goes
+        to people signed in right now, not the whole roster. A new build clears an old Wait.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
         {WAITS.map((item) => (
@@ -61,17 +61,28 @@ export function RepublishDesk() {
         <input value={note} onChange={(event) => setNote(event.target.value)} className="paper-field mt-1" />
       </label>
       <div className="mt-4 flex flex-wrap gap-2">
-        <button type="button" onClick={() => post({ action: "republish", waitMinutes: wait, note })} className="rounded-lg bg-steel px-4 py-2 text-white">
-          Heads up
+        <button
+          type="button"
+          onClick={() => post({ action: "republish", waitMinutes: wait, note })}
+          className="rounded-lg bg-steel px-4 py-2 text-white"
+        >
+          Give heads up
+        </button>
+        <button
+          type="button"
+          onClick={() => post({ action: "republish", waitMinutes: 0, note })}
+          className="rounded-lg border border-[#b74120] px-4 py-2 text-[#b74120]"
+        >
+          Shut down now
         </button>
         <button type="button" onClick={() => post({ action: "back" })} className="rounded-lg border border-steel px-4 py-2 text-steel">
-          We’re back
+          We&apos;re back
         </button>
       </div>
       {state?.active ? (
         <p className="mt-4 text-sm text-[#163038]">
           {state.waitMinutes === 0
-            ? "Immediate. Testers lock. Owner stays in."
+            ? "Immediate chrome. Testers lock. Owner stays in. The live site is still up."
             : `Banner up. Save. Comes down in ${state.waitMinutes} minutes.`}
           {state.note ? ` ${state.note}` : ""}
         </p>

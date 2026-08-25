@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CreatedBy } from "@/components/CreatedBy";
 import { ModuleTable } from "@/components/ModuleTable";
+import { PresencePulse } from "@/components/PresencePulse";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
@@ -30,6 +31,7 @@ export function EstimateBoard() {
 
   return (
     <div className="mt-4 space-y-5">
+      <PresencePulse />
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
         Working estimates for this owner desk only. {alias("Madison")} / {alias("P66")} plant figures stay on the signed-in
         blotter. Created by is chrome only — authors stay the signed-in owner for now.

@@ -28,8 +28,19 @@ export function LoginForm() {
     setSubmitting(true);
     try {
       await signIn({ email, password, acknowledged: true });
+      fetch("/api/desk/activity", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "sign-in", detail: "Sign-in ok" }),
+      }).catch(() => undefined);
       router.replace("/");
     } catch (err) {
+      fetch("/api/desk/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "failed", who: email }),
+      }).catch(() => undefined);
       setLocalError(err instanceof Error ? err.message : "Sign-in failed.");
     } finally {
       setSubmitting(false);

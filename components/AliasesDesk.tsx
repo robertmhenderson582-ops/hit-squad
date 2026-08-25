@@ -13,10 +13,11 @@ export function AliasesDesk() {
         <div>
           <h2 className="text-2xl font-semibold text-[#163038]">Aliases</h2>
           <p className="mt-2 text-sm text-[#5b6f73]">
-            Whole catalog toggle, not only P66. Ironwood Refining / Piedmont Power / Ridge Station /
-            Harbor Fuels / Pacific Fuels / Bay Point / Midcontinent Pipeline. Nathan Madison still
-            sees real Phillips 66 names. Benny never sees real client names when this is on.
-            Imports that still say Phillips 66 / P66 still match under the alias.
+            Whole catalog, not only P66. Off = real names on the owner blotter. On = tester view.
+            Ironwood Refining, Piedmont Power / Ridge Station, Harbor Fuels / Harbor Works, Pacific
+            Fuels / Bay Point, Midcontinent Pipeline / Midwest Terminal. Nathan / John / Madison shop
+            stay on real names. Mark, Bill, Joseph, and Benny stay aliased. Benny never sees real
+            client or plant names. Rates, site ids, and files stay real underneath.
           </p>
         </div>
         <button

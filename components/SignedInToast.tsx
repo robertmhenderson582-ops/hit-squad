@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { isDeskLocked } from "@/lib/desk-lock";
 
 type Arrival = { name: string; path: string };
 
@@ -22,12 +23,18 @@ export function SignedInToast() {
 
   useEffect(() => {
     if (status !== "authenticated" || !user) return;
-    fetch("/api/desk/presence", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: pathname }),
-    }).catch(() => undefined);
+    function beat() {
+      if (isDeskLocked()) return;
+      fetch("/api/desk/presence", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: pathname }),
+      }).catch(() => undefined);
+    }
+    beat();
+    const id = window.setInterval(beat, 20_000);
+    return () => window.clearInterval(id);
   }, [pathname, status, user]);
 
   useEffect(() => {

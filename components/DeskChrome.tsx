@@ -11,6 +11,7 @@ import { BrandMark } from "@/components/BrandMark";
 import { ThemeFlip } from "@/components/ThemeFlip";
 import { InboxBadge } from "@/components/InboxBadge";
 import { Wordmark } from "@/components/Wordmark";
+import { noteSessionEnd } from "@/components/FeatureTrail";
 import { useSession } from "@/components/SessionProvider";
 
 const NAV: { href: string; label: string }[] = [
@@ -114,7 +115,10 @@ function ChromeInner({
                 <p className={`font-mono text-[11px] ${paper ? "text-white/70" : "text-paper-cream/70"}`}>{user?.email}</p>
                 <button
                   type="button"
-                  onClick={() => signOut()}
+                  onClick={() => {
+                    noteSessionEnd("sign-out", pathname);
+                    void signOut();
+                  }}
                   className="mt-1 font-mono text-[10px] tracking-[0.2em] text-amber-label underline underline-offset-4"
                 >
                   SIGN OUT
