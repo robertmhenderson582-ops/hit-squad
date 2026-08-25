@@ -119,7 +119,12 @@ export function cloneCraftRow(row: CraftRow): CraftRow {
   return {
     ...row,
     id: uid("cr"),
-    ranges: row.ranges.map((range) => ({ ...range, id: uid("rg") })),
+    ranges: row.ranges.map((range) => ({
+      ...range,
+      id: uid("rg"),
+      days: [...range.days],
+      skipDates: range.skipDates ? [...range.skipDates] : [],
+    })),
   };
 }
 
@@ -161,15 +166,38 @@ export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange): CalendarRan
     days: seed.days,
     otAfter8: seed.otAfter8,
     shift: prev?.shift ?? "Days",
-    skipDates: seed.skipDates,
+    skipDates: prev?.skipDates ? [...prev.skipDates] : [...(seed.skipDates ?? [])],
+  };
+}
+
+export function extraRangeFromPhase(phase: PhaseRow, template?: CalendarRange): CalendarRange {
+  const base = rangeFromPhase(phase, template);
+  return {
+    ...base,
+    id: uid("rg"),
+    start: template?.start || phase.start,
+    end: template?.end || phase.stop,
+    skipDates: template?.skipDates ? [...template.skipDates] : [...(base.skipDates ?? [])],
+    days: template?.days ? [...template.days] : [...base.days],
   };
 }
 
 export function rangesFromPhases(phases: PhaseRow[], previous: CalendarRange[] = []): CalendarRange[] {
   const extras = previous.filter((range) => !range.phaseId);
-  const owned = PHASE_IDS.map((id) => phases.find((item) => item.id === id))
-    .filter((row): row is PhaseRow => Boolean(row?.on))
-    .map((row) => rangeFromPhase(row, previous.find((item) => item.phaseId === row.id)));
+  const owned = PHASE_IDS.flatMap((id) => {
+    const phase = phases.find((item) => item.id === id);
+    if (!phase?.on) return [];
+    const prior = previous.filter((item) => item.phaseId === id);
+    if (prior.length === 0) return [rangeFromPhase(phase)];
+    return prior.map((prev, index) => {
+      const next = rangeFromPhase(phase, prev);
+      if (index > 0) {
+        next.start = prev.start;
+        next.end = prev.end;
+      }
+      return next;
+    });
+  });
   return [...owned, ...extras];
 }
 

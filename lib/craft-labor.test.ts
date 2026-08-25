@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   cloneCraftRow,
   craftRowFromPhases,
+  extraRangeFromPhase,
   rangesFromPhases,
   syncCraftRows,
 } from "./craft-labor.ts";
@@ -53,6 +54,32 @@ describe("crew ranges are per position", () => {
     assert.equal(copy.id === row.id, false);
     assert.equal(copy.ranges[0].headcount, 6);
     assert.equal(copy.ranges[0].id === row.ranges[0].id, false);
+  });
+
+  it("keeps extra date ranges and Sunday skip chips on a position through sync", () => {
+    const phases = defaultPhases();
+    const oil = phases.find((row) => row.id === "oil-out");
+    assert.ok(oil);
+    const row = craftRowFromPhases(phases);
+    const extra = extraRangeFromPhase(oil, row.ranges.find((range) => range.phaseId === "oil-out"));
+    extra.skipDates = ["2026-09-06"];
+    extra.headcount = 2;
+    row.ranges.push(extra);
+    const next = syncCraftRows([row], phases)[0];
+    const oils = next.ranges.filter((range) => range.phaseId === "oil-out");
+    assert.equal(oils.length, 2);
+    assert.deepEqual(oils[1].skipDates, ["2026-09-06"]);
+    assert.equal(oils[1].headcount, 2);
+    assert.notEqual(oils[0].id, oils[1].id);
+  });
+
+  it("duplicate copies Sunday skips without sharing the array", () => {
+    const row = craftRowFromPhases(defaultPhases());
+    row.ranges[0].skipDates = ["2026-09-06"];
+    const copy = cloneCraftRow(row);
+    copy.ranges[0].skipDates?.push("2026-09-13");
+    assert.deepEqual(row.ranges[0].skipDates, ["2026-09-06"]);
+    assert.deepEqual(copy.ranges[0].skipDates, ["2026-09-06", "2026-09-13"]);
   });
 
   it("does not invent ranges for OFF phases so hours stay on worked windows", () => {

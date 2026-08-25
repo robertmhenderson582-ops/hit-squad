@@ -4,7 +4,9 @@ import { GripToPan } from "@/components/GripToPan";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import {
   CRAFT_SHIFTS,
+  WEEKDAYS,
   clampPerDiem,
+  extraRangeFromPhase,
   nightPerDiemCap,
   perDiemCap,
   type CalendarRange,
@@ -12,7 +14,7 @@ import {
   type CraftShift,
 } from "@/lib/craft-labor";
 import { computeRangeHours } from "@/lib/hours-clock";
-import { PHASE_IDS, PHASE_NAMES, PHASE_TONES, type PhaseId, type PhaseRow } from "@/lib/phase-schedule";
+import { PHASE_IDS, PHASE_NAMES, PHASE_TONES, sundaysInRange, type PhaseId, type PhaseRow } from "@/lib/phase-schedule";
 
 export function CrewPhaseCards({
   row,
@@ -20,12 +22,16 @@ export function CrewPhaseCards({
   client,
   otAfter8,
   onPatchRange,
+  onAddRange,
+  onRemoveRange,
 }: {
   row: CraftRow;
   site: string;
   client: string;
   otAfter8: boolean;
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
+  onAddRange: (range: CalendarRange) => void;
+  onRemoveRange: (rangeId: string) => void;
 }) {
   const pack = useEstimatePackage();
 
@@ -34,20 +40,20 @@ export function CrewPhaseCards({
       <div className="flex min-w-max gap-3 pb-1" data-crew-position={row.id}>
         {PHASE_IDS.map((id) => {
           const phase = pack.schedule.phases.find((item) => item.id === id);
-          const range = row.ranges.find((item) => item.phaseId === id);
+          const ranges = row.ranges.filter((item) => item.phaseId === id);
           if (!phase) return null;
           return (
             <PhaseWindowCard
               key={id}
               phase={phase}
-              range={range}
+              ranges={ranges}
               row={row}
               site={site}
               client={client}
               otAfter8={otAfter8}
-              onPatch={(patch) => {
-                if (range) onPatchRange(range.id, patch);
-              }}
+              onPatchRange={onPatchRange}
+              onAddRange={() => onAddRange(extraRangeFromPhase(phase, ranges[0]))}
+              onRemoveRange={onRemoveRange}
             />
           );
         })}
@@ -56,149 +62,278 @@ export function CrewPhaseCards({
   );
 }
 
+function shortDate(iso: string) {
+  const parts = iso.split("-");
+  return `${Number(parts[1])}/${Number(parts[2])}`;
+}
+
 function PhaseWindowCard({
   phase,
+  ranges,
+  row,
+  site,
+  client,
+  otAfter8,
+  onPatchRange,
+  onAddRange,
+  onRemoveRange,
+}: {
+  phase: PhaseRow;
+  ranges: CalendarRange[];
+  row: CraftRow;
+  site: string;
+  client: string;
+  otAfter8: boolean;
+  onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
+  onAddRange: () => void;
+  onRemoveRange: (rangeId: string) => void;
+}) {
+  const off = !phase.on || ranges.length === 0;
+
+  return (
+    <article className={`crew-phase-card ${off ? "is-off" : ""}`}>
+      <p className={`crew-phase-bar phase-name ${PHASE_TONES[phase.id as PhaseId]}`}>{PHASE_NAMES[phase.id]}</p>
+      <div className="space-y-3 px-3 py-3">
+        {off ? (
+          <p className="text-xs text-[#5b6f73]">Off — dates stay locked. Turn it on in Job setup.</p>
+        ) : (
+          <>
+            {ranges.map((range, index) => (
+              <CalendarPattern
+                key={range.id}
+                range={range}
+                row={row}
+                site={site}
+                client={client}
+                otAfter8={otAfter8}
+                canRemove={index > 0}
+                onPatch={(patch) => onPatchRange(range.id, patch)}
+                onRemove={() => onRemoveRange(range.id)}
+              />
+            ))}
+            <button type="button" onClick={onAddRange} className="text-sm text-steel underline underline-offset-2">
+              + Add date range
+            </button>
+          </>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function CalendarPattern({
   range,
   row,
   site,
   client,
   otAfter8,
+  canRemove,
   onPatch,
+  onRemove,
 }: {
-  phase: PhaseRow;
-  range?: CalendarRange;
+  range: CalendarRange;
   row: CraftRow;
   site: string;
   client: string;
   otAfter8: boolean;
+  canRemove: boolean;
   onPatch: (patch: Partial<CalendarRange>) => void;
+  onRemove: () => void;
 }) {
-  const off = !phase.on || !range;
-  const shift = range?.shift ?? row.shift;
+  const shift = range.shift ?? row.shift;
   const two = shift === "Days & nights";
-  const split = range
-    ? computeRangeHours({
-        position: row.position,
-        site,
-        client,
-        start: range.start,
-        end: range.end,
-        hoursPerShift: range.hoursPerShift,
-        headcount: range.headcount,
-        nightHeadcount: range.nightHeadcount,
-        shift,
-        days: range.days,
-        perDiemPeople: range.perDiemPeople,
-        nightPerDiemPeople: range.nightPerDiemPeople,
-        otAfter8: range.otAfter8 ?? otAfter8,
-        clockOverride: row.clockOverride,
-        skipDates: range.skipDates,
-      })
-    : null;
+  const sundays = range.days[0] ? sundaysInRange(range.start, range.end) : [];
+  const skipped = new Set(range.skipDates ?? []);
+  const split = computeRangeHours({
+    position: row.position,
+    site,
+    client,
+    start: range.start,
+    end: range.end,
+    hoursPerShift: range.hoursPerShift,
+    headcount: range.headcount,
+    nightHeadcount: range.nightHeadcount,
+    shift,
+    days: range.days,
+    perDiemPeople: range.perDiemPeople,
+    nightPerDiemPeople: range.nightPerDiemPeople,
+    otAfter8: range.otAfter8 ?? otAfter8,
+    clockOverride: row.clockOverride,
+    skipDates: range.skipDates,
+  });
+
+  function toggleDay(index: number) {
+    const days = [...range.days];
+    days[index] = !days[index];
+    onPatch({ days });
+  }
+
+  function toggleSunday(iso: string) {
+    const current = range.skipDates ?? [];
+    onPatch({
+      skipDates: current.includes(iso) ? current.filter((item) => item !== iso) : [...current, iso],
+    });
+  }
 
   return (
-    <article className={`crew-phase-card ${off ? "is-off" : ""}`}>
-      <p className={`crew-phase-bar phase-name ${PHASE_TONES[phase.id as PhaseId]}`}>{PHASE_NAMES[phase.id]}</p>
-      <div className="space-y-2 px-3 py-3">
-        <p className="font-mono text-[11px] text-[#5b6f73]">
-          {phase.start} → {phase.stop} · {phase.daysPerWeek} d/wk · {phase.hoursPerDay} h
+    <div className="calendar-pattern space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="inline-block rounded-full bg-[#eadfc8] px-3 py-1 text-xs font-semibold tracking-[0.14em] text-[#163038]">
+          CALENDAR PATTERN
         </p>
-        {off ? (
-          <p className="text-xs text-[#5b6f73]">Off — dates stay locked. Turn it on in Job setup.</p>
-        ) : (
-          <>
-            <label className="block text-xs">
-              Shift
-              <select
-                value={shift}
-                onChange={(event) =>
-                  onPatch(clampPerDiem({ ...range!, shift: event.target.value as CraftShift }, event.target.value as CraftShift))
-                }
-                className="paper-field mt-1"
-              >
-                {CRAFT_SHIFTS.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="text-xs">
-                {two ? "Days headcount" : "Headcount"}
-                <input
-                  type="number"
-                  min={1}
-                  value={range!.headcount}
-                  onChange={(event) =>
-                    onPatch(
-                      clampPerDiem({ ...range!, headcount: Math.max(1, Number(event.target.value) || 1) }, shift),
-                    )
-                  }
-                  className="paper-field mt-1"
-                />
-              </label>
-              {two ? (
-                <label className="text-xs">
-                  Nights headcount
-                  <input
-                    type="number"
-                    min={1}
-                    value={range!.nightHeadcount}
-                    onChange={(event) =>
-                      onPatch(
-                        clampPerDiem(
-                          { ...range!, nightHeadcount: Math.max(1, Number(event.target.value) || 1) },
-                          shift,
-                        ),
-                      )
-                    }
-                    className="paper-field mt-1"
-                  />
-                </label>
-              ) : null}
-              <label className="text-xs">
-                {two ? "Days per-diem" : "Per-diem Headcount"}
-                <input
-                  type="number"
-                  min={0}
-                  max={perDiemCap(range!)}
-                  value={range!.perDiemPeople}
-                  onChange={(event) =>
-                    onPatch({ perDiemPeople: Math.min(perDiemCap(range!), Math.max(0, Number(event.target.value) || 0)) })
-                  }
-                  className="paper-field mt-1"
-                />
-              </label>
-              {two ? (
-                <label className="text-xs">
-                  Nights per-diem
-                  <input
-                    type="number"
-                    min={0}
-                    max={nightPerDiemCap(range!)}
-                    value={range!.nightPerDiemPeople ?? 1}
-                    onChange={(event) =>
-                      onPatch({
-                        nightPerDiemPeople: Math.min(
-                          nightPerDiemCap(range!),
-                          Math.max(0, Number(event.target.value) || 0),
-                        ),
-                      })
-                    }
-                    className="paper-field mt-1"
-                  />
-                </label>
-              ) : null}
-            </div>
-            {split ? (
-              <p className="text-[11px] text-[#5b6f73]">
-                {split.st} ST · {split.ot} OT · {split.dt} DT · {split.pd} PD
-              </p>
-            ) : null}
-          </>
-        )}
+        {canRemove ? (
+          <button type="button" onClick={onRemove} className="text-xs text-[#5b6f73] underline">
+            Remove range
+          </button>
+        ) : null}
       </div>
-    </article>
+      <p className="text-xs text-[#163038]">Headcount × shift hours on each selected weekday in the range.</p>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="text-xs">
+          Start
+          <input
+            type="date"
+            value={range.start}
+            onChange={(event) => onPatch({ start: event.target.value })}
+            className="paper-field mt-1"
+          />
+        </label>
+        <label className="text-xs">
+          End
+          <input
+            type="date"
+            value={range.end}
+            onChange={(event) => onPatch({ end: event.target.value < range.start ? range.start : event.target.value })}
+            className="paper-field mt-1"
+          />
+        </label>
+        <label className="text-xs">
+          Shift
+          <select
+            value={shift}
+            onChange={(event) =>
+              onPatch(clampPerDiem({ ...range, shift: event.target.value as CraftShift }, event.target.value as CraftShift))
+            }
+            className="paper-field mt-1"
+          >
+            {CRAFT_SHIFTS.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs">
+          Hours / shift
+          <input
+            type="number"
+            min={0}
+            value={range.hoursPerShift}
+            onChange={(event) => onPatch({ hoursPerShift: Math.max(0, Number(event.target.value) || 0) })}
+            className="paper-field mt-1"
+          />
+        </label>
+        <label className="text-xs">
+          {two ? "Days headcount" : "Headcount"}
+          <input
+            type="number"
+            min={1}
+            value={range.headcount}
+            onChange={(event) =>
+              onPatch(clampPerDiem({ ...range, headcount: Math.max(1, Number(event.target.value) || 1) }, shift))
+            }
+            className="paper-field mt-1"
+          />
+        </label>
+        {two ? (
+          <label className="text-xs">
+            Nights headcount
+            <input
+              type="number"
+              min={1}
+              value={range.nightHeadcount}
+              onChange={(event) =>
+                onPatch(clampPerDiem({ ...range, nightHeadcount: Math.max(1, Number(event.target.value) || 1) }, shift))
+              }
+              className="paper-field mt-1"
+            />
+          </label>
+        ) : null}
+        <label className="text-xs">
+          {two ? "Days per-diem" : "Per-diem Headcount"}
+          <input
+            type="number"
+            min={0}
+            max={perDiemCap(range)}
+            value={range.perDiemPeople}
+            onChange={(event) =>
+              onPatch({ perDiemPeople: Math.min(perDiemCap(range), Math.max(0, Number(event.target.value) || 0)) })
+            }
+            className="paper-field mt-1"
+          />
+        </label>
+        {two ? (
+          <label className="text-xs">
+            Nights per-diem
+            <input
+              type="number"
+              min={0}
+              max={nightPerDiemCap(range)}
+              value={range.nightPerDiemPeople ?? 1}
+              onChange={(event) =>
+                onPatch({
+                  nightPerDiemPeople: Math.min(nightPerDiemCap(range), Math.max(0, Number(event.target.value) || 0)),
+                })
+              }
+              className="paper-field mt-1"
+            />
+          </label>
+        ) : null}
+      </div>
+      <p className="text-xs font-semibold tracking-[0.12em] text-[#5b6f73]">WORK DAYS</p>
+      <div className="flex flex-wrap gap-1">
+        {WEEKDAYS.map((label, index) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => toggleDay(index)}
+            className={`day-chip ${range.days[index] ? "day-chip-on" : ""}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {sundays.length ? (
+        <div>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold tracking-[0.12em] text-[#5b6f73]">SUNDAYS</p>
+            <button type="button" onClick={() => onPatch({ skipDates: [] })} className="text-xs text-steel underline">
+              All
+            </button>
+          </div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {sundays.map((iso) => {
+              const off = skipped.has(iso);
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  onClick={() => toggleSunday(iso)}
+                  className={`rounded-full px-2 py-0.5 text-xs ${
+                    off ? "border border-[#c5d4d4] text-[#5b6f73]" : "bg-steel text-white"
+                  }`}
+                >
+                  {shortDate(iso)}
+                  {off ? " off" : ""}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+      <p className="text-[11px] text-[#5b6f73]">
+        {split.st} ST · {split.ot} OT · {split.dt} DT · {split.pd} PD
+      </p>
+    </div>
   );
 }
