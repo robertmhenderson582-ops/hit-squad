@@ -24,7 +24,7 @@ const TABS = [
   { id: "crew", label: "Crew", icon: "⛑" },
   { id: "staffing", label: "Staffing", icon: "▦" },
   { id: "equipment", label: "Equipment", icon: "⛟" },
-  { id: "costs", label: "Costs", icon: "▤" },
+  { id: "costs", label: "Other Cost", icon: "▤" },
   { id: "change-orders", label: "Change orders", icon: "⚖" },
   { id: "rates", label: "Rates", icon: "％" },
 ] as const;

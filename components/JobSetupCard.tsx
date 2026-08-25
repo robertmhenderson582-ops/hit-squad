@@ -16,7 +16,6 @@ export function JobSetupCard({
   author,
   code,
   window,
-  mileageRate,
   existingClient = false,
   children,
 }: {
@@ -28,13 +27,12 @@ export function JobSetupCard({
   author?: string;
   code?: string;
   window?: string;
-  mileageRate?: string | null;
   existingClient?: boolean;
   children?: React.ReactNode;
 }) {
   const pack = useEstimatePackage();
   const [estimateType, setEstimateType] = useState<EstimateType>(displayEstimateType(type));
-  const travelOn = Boolean(mileageRate && mileageRate !== "—");
+  const travelOn = pack.jobMeta.mileageRate > 0 || pack.jobMeta.perDiemRate > 0;
 
   return (
     <section className="plant-card mx-auto max-w-3xl px-6 py-6">
@@ -115,8 +113,35 @@ export function JobSetupCard({
           {[code, window].filter(Boolean).join(" · ")} · Dollars stay on the rail.
         </p>
       ) : null}
+      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">PER DIEM $ / DAY</span>
+          <input
+            type="number"
+            min={0}
+            className="paper-field mt-2"
+            value={pack.jobMeta.perDiemRate || ""}
+            onChange={(event) =>
+              pack.setJobMeta((current) => ({ ...current, perDiemRate: Number(event.target.value) || 0 }))
+            }
+          />
+          <p className="mt-1 text-xs text-[#5b6f73]">Job rate already on this desk. Not a new COMP table.</p>
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">MILEAGE RATE</span>
+          <input
+            type="number"
+            min={0}
+            className="paper-field mt-2"
+            value={pack.jobMeta.mileageRate || ""}
+            onChange={(event) =>
+              pack.setJobMeta((current) => ({ ...current, mileageRate: Number(event.target.value) || 0 }))
+            }
+          />
+        </label>
+      </div>
       {travelOn ? (
-        <div className="mt-6">
+        <div className="mt-4">
           <p className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">TRAVEL</p>
           <table className="mt-2 min-w-full text-left text-sm">
             <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
@@ -128,7 +153,7 @@ export function JobSetupCard({
             <tbody>
               <tr className="border-t border-[#d5e0de]">
                 <td className="py-2">Craft travel</td>
-                <td className="py-2">{mileageRate}</td>
+                <td className="py-2">{pack.jobMeta.mileageRate || "—"}</td>
               </tr>
             </tbody>
           </table>

@@ -2,18 +2,17 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CrewManHours } from "@/components/CrewManHours";
 import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
-import { LaborRollup } from "@/components/LaborRollup";
-import { ModuleTable } from "@/components/ModuleTable";
+import { ChangeOrderPacket } from "@/components/ChangeOrderPacket";
+import { EquipmentDesk } from "@/components/EquipmentDesk";
+import { OtherCostDesk } from "@/components/OtherCostDesk";
 import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { EstimatePackageProvider } from "@/components/EstimatePackage";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
 import { useAlias } from "@/components/OwnerDeskContext";
-import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { boundOtLabel } from "@/lib/hours-clock";
 import type { EstimateStatus } from "@/components/EstimateWorkspace";
@@ -25,21 +24,9 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
   const [status, setStatus] = useState<EstimateStatus>("Estimate");
   const estimate = board?.estimates.find((row) => row.id === estimateId);
   const site = board?.sites.find((row) => row.id === estimate?.siteId);
-  const equipment = useMemo(
-    () => board?.equipment.filter((row) => row.estimateId === estimateId) ?? [],
-    [board, estimateId],
-  );
   const staffing = useMemo(
     () => board?.staffing.filter((row) => row.estimateId === estimateId) ?? [],
     [board, estimateId],
-  );
-  const changes = useMemo(
-    () => board?.changeOrders.filter((row) => row.estimateCode === estimate?.code) ?? [],
-    [board, estimate],
-  );
-  const cost = useMemo(
-    () => board?.cost.filter((row) => row.estimateCode === estimate?.code) ?? [],
-    [board, estimate],
   );
 
   if (error) return <p className="p-6 text-amber-flare">{error}</p>;
@@ -111,55 +98,11 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
         <StaffingPlanDesk client={estimate.client} site={site?.name} name={estimate.title} />
       ) : null}
 
-      {tab === "equipment" ? (
-        <ModuleTable caption="EQUIPMENT" headers={["ITEM", "QTY", "PERIOD", "RATE"]}>
-          {equipment.map((row) => (
-            <tr key={row.id} className="border-t border-steel-rim/20">
-              <td className="px-4 py-3">{row.name}</td>
-              <td className="px-4 py-3 font-mono">{row.qty}</td>
-              <td className="px-4 py-3">{row.period}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.rate}</td>
-            </tr>
-          ))}
-        </ModuleTable>
-      ) : null}
+      {tab === "equipment" ? <EquipmentDesk /> : null}
 
-      {tab === "costs" ? (
-        <div className="space-y-5">
-          <LaborRollup />
-          <CrewManHours />
-          <ModuleTable caption="COSTS" headers={["PERIOD", "BUDGET", "EARNED", "ACTUAL", "CPI", "SPI", "FORECAST"]}>
-            {cost.map((row) => (
-              <tr key={row.id} className="border-t border-steel-rim/20">
-                <td className="px-4 py-3 font-mono text-xs">{row.period}</td>
-                <td className="px-4 py-3 font-mono text-xs">{row.budget}</td>
-                <td className="px-4 py-3 font-mono text-xs">{row.earned}</td>
-                <td className="px-4 py-3 font-mono text-xs">{row.actual}</td>
-                <td className="px-4 py-3 font-mono text-xs">{row.cpi}</td>
-                <td className="px-4 py-3 font-mono text-xs">{row.spi}</td>
-                <td className="px-4 py-3 font-mono text-xs text-amber-label">{row.forecast}</td>
-              </tr>
-            ))}
-          </ModuleTable>
-        </div>
-      ) : null}
+      {tab === "costs" ? <OtherCostDesk client={estimate.client} site={site?.name} /> : null}
 
-      {tab === "change-orders" ? (
-        <ModuleTable caption="CHANGE ORDERS" headers={["NO.", "SCOPE", "ORIGIN", "LABOR", "MATL", "STATUS"]}>
-          {changes.map((row) => (
-            <tr key={row.id} className="border-t border-steel-rim/20">
-              <td className="px-4 py-3 font-mono text-amber-label">{row.number}</td>
-              <td className="px-4 py-3">{row.title}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.origin}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.laborDelta}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.materialDelta}</td>
-              <td className="px-4 py-3">
-                <StatusStamp value={row.status} />
-              </td>
-            </tr>
-          ))}
-        </ModuleTable>
-      ) : null}
+      {tab === "change-orders" ? <ChangeOrderPacket client={estimate.client} site={site?.name} /> : null}
     </EstimateWorkspace>
     </EstimatePackageProvider>
   );

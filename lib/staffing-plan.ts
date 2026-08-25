@@ -14,6 +14,8 @@ export const JOB_META_PREFIX = "hs_job_v1:";
 export type JobMeta = {
   afeName: string;
   area: string;
+  perDiemRate: number;
+  mileageRate: number;
 };
 
 export type StaffingCrewInput = {
@@ -57,7 +59,7 @@ export type StaffingExportMeta = {
 const WEEKDAY_MARK = ["S", "M", "T", "W", "T", "F", "S"] as const;
 
 export function emptyJobMeta(): JobMeta {
-  return { afeName: "", area: "" };
+  return { afeName: "", area: "", perDiemRate: 0, mileageRate: 0 };
 }
 
 export function readJobMeta(key: string): JobMeta {
@@ -69,6 +71,8 @@ export function readJobMeta(key: string): JobMeta {
     return {
       afeName: typeof parsed.afeName === "string" ? parsed.afeName : "",
       area: typeof parsed.area === "string" ? parsed.area : "",
+      perDiemRate: Number(parsed.perDiemRate) || 0,
+      mileageRate: Number(parsed.mileageRate) || 0,
     };
   } catch {
     return emptyJobMeta();
