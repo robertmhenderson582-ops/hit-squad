@@ -16,7 +16,7 @@ const TONE: Record<string, string> = {
 export function StatusStamp({ value }: { value: string }) {
   return (
     <span
-      className={`inline-block border px-2 py-0.5 font-mono text-[10px] tracking-[0.16em] ${TONE[value] ?? "border-steel-rim/40 text-paper-cream/80"}`}
+      className={`status-stamp inline-block border px-2 py-0.5 font-mono text-[10px] tracking-[0.16em] ${TONE[value] ?? "border-steel-rim/40 text-paper-cream/80"}`}
     >
       {value}
     </span>

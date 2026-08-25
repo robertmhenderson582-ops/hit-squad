@@ -230,52 +230,58 @@ textarea:focus {
 .hud-bezel {
   position: relative;
   box-shadow:
-    inset 0 0 0 1px rgba(62, 198, 212, 0.22),
-    inset 0 12px 28px rgba(0, 0, 0, 0.28);
+    inset 0 0 0 1px rgba(62, 198, 212, 0.28),
+    inset 0 14px 28px rgba(0, 0, 0, 0.32);
 }
 
-.hud-tile {
+.hud-tile,
+.hud-cluster {
+  --hud-bracket: #e38b2a;
+  --hud-line: rgba(62, 198, 212, 0.36);
   position: relative;
+  border-radius: 2px;
   background:
-    linear-gradient(180deg, rgba(12, 48, 54, 0.94), rgba(6, 22, 26, 0.96));
-  border: 1px solid rgba(62, 198, 212, 0.28);
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px 7px / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px 7px / 1px 12px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) 7px / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) 7px / 1px 12px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px calc(100% - 7px) / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px calc(100% - 7px) / 1px 12px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) calc(100% - 7px) / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) calc(100% - 7px) / 1px 12px no-repeat,
+    radial-gradient(circle at 11px 11px, #8aa4a8 0 1.1px, transparent 1.5px),
+    radial-gradient(circle at calc(100% - 11px) 11px, #8aa4a8 0 1.1px, transparent 1.5px),
+    linear-gradient(180deg, #0c3036 0%, #06161a 100%);
+  border: 1px solid var(--hud-line);
   box-shadow:
-    inset 0 0 0 1px rgba(6, 22, 26, 0.65),
-    0 16px 32px rgba(0, 0, 0, 0.35);
+    inset 0 0 0 1px rgba(6, 22, 26, 0.72),
+    inset 0 1px 0 rgba(62, 198, 212, 0.16),
+    inset 0 -22px 34px rgba(0, 0, 0, 0.34),
+    0 14px 28px rgba(0, 0, 0, 0.4);
 }
 
 .hud-tile::before,
 .hud-tile::after {
-  content: "";
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  pointer-events: none;
-  border: 1px solid rgba(240, 161, 58, 0.7);
-}
-
-.hud-tile::before {
-  top: 4px;
-  left: 4px;
-  border-right: 0;
-  border-bottom: 0;
-}
-
-.hud-tile::after {
-  right: 4px;
-  bottom: 4px;
-  border-left: 0;
-  border-top: 0;
+  content: none;
 }
 
 .hud-readout {
   font-variant-numeric: tabular-nums;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
 }
 
-.industrial-root .hud-readout,
-.industrial-root .text-amber-label.font-mono,
-.industrial-root td.hud-readout {
-  text-shadow: 0 0 10px rgba(240, 161, 58, 0.45);
+.desk-grid .hud-readout,
+.hours-tile .font-display,
+.hours-tile .hud-readout,
+.est-total-card p:last-child,
+.status-stamp {
+  text-shadow: 0 0 8px rgba(62, 198, 212, 0.38);
+}
+
+.desk-grid .hud-readout,
+.hours-tile .font-display,
+.status-stamp {
+  text-shadow: 0 0 8px rgba(227, 139, 42, 0.42);
 }
 
 .hud-rail {
@@ -409,33 +415,18 @@ textarea:focus {
   pointer-events: none;
 }
 
-html[data-motion="full"] .industrial-root::after {
+.industrial-root::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.07;
+  opacity: 0.045;
   background: repeating-linear-gradient(
     180deg,
     transparent 0,
     transparent 11px,
-    rgba(62, 198, 212, 0.18) 12px
+    rgba(62, 198, 212, 0.14) 12px
   );
-  animation: hud-scan 18s linear infinite;
-}
-
-@keyframes hud-scan {
-  from {
-    background-position: 0 0;
-  }
-  to {
-    background-position: 0 120px;
-  }
-}
-
-html[data-motion="reduce"] .industrial-root::after,
-html[data-motion="reduce"] .hud-scan {
-  animation: none !important;
 }
 
 .industrial-root .paper-desk {
@@ -472,40 +463,36 @@ html[data-motion="reduce"] .hud-scan {
   border-color: rgba(62, 198, 212, 0.22);
 }
 
-.industrial-root .plant-card {
+.industrial-root .plant-card,
+.industrial-root .steel-plate {
+  --hud-bracket: #e38b2a;
+  --hud-line: rgba(62, 198, 212, 0.34);
   position: relative;
-  background:
-    linear-gradient(180deg, rgba(12, 48, 54, 0.94), rgba(6, 22, 26, 0.96));
-  border: 1px solid rgba(62, 198, 212, 0.28);
   border-radius: 2px;
+  background:
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px 7px / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px 7px / 1px 12px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) 7px / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) 7px / 1px 12px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px calc(100% - 7px) / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px calc(100% - 7px) / 1px 12px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) calc(100% - 7px) / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) calc(100% - 7px) / 1px 12px no-repeat,
+    radial-gradient(circle at 11px 11px, #8aa4a8 0 1.1px, transparent 1.5px),
+    radial-gradient(circle at calc(100% - 11px) 11px, #8aa4a8 0 1.1px, transparent 1.5px),
+    linear-gradient(180deg, #0c3036 0%, #06161a 100%);
+  border: 1px solid var(--hud-line);
   box-shadow:
-    inset 0 0 0 1px rgba(6, 22, 26, 0.65),
-    0 16px 32px rgba(0, 0, 0, 0.35);
+    inset 0 0 0 1px rgba(6, 22, 26, 0.72),
+    inset 0 1px 0 rgba(62, 198, 212, 0.14),
+    inset 0 -22px 34px rgba(0, 0, 0, 0.34),
+    0 14px 28px rgba(0, 0, 0, 0.4);
   color: #efe6d4;
 }
 
 .industrial-root .plant-card::before,
 .industrial-root .plant-card::after {
-  content: "";
-  position: absolute;
-  width: 11px;
-  height: 11px;
-  pointer-events: none;
-  border: 1px solid rgba(240, 161, 58, 0.7);
-}
-
-.industrial-root .plant-card::before {
-  top: 4px;
-  left: 4px;
-  border-right: 0;
-  border-bottom: 0;
-}
-
-.industrial-root .plant-card::after {
-  right: 4px;
-  bottom: 4px;
-  border-left: 0;
-  border-top: 0;
+  content: none;
 }
 
 .industrial-root .paper-desk > p,
@@ -527,8 +514,17 @@ html[data-motion="reduce"] .hud-scan {
 }
 
 .industrial-root .hours-tile {
+  border-radius: 2px;
+  background:
+    linear-gradient(#e38b2a, #e38b2a) 7px 7px / 10px 1px no-repeat,
+    linear-gradient(#e38b2a, #e38b2a) 7px 7px / 1px 10px no-repeat,
+    linear-gradient(#e38b2a, #e38b2a) calc(100% - 7px) calc(100% - 7px) / 10px 1px no-repeat,
+    linear-gradient(#e38b2a, #e38b2a) calc(100% - 7px) calc(100% - 7px) / 1px 10px no-repeat,
+    radial-gradient(120% 80% at 50% 0%, rgba(62, 198, 212, 0.12), transparent 55%),
+    linear-gradient(180deg, #0c3036, #06161a);
   box-shadow:
-    inset 0 0 0 1px rgba(62, 198, 212, 0.22),
+    inset 0 0 0 1px rgba(62, 198, 212, 0.28),
+    inset 0 16px 24px rgba(0, 0, 0, 0.28),
     0 10px 24px rgba(0, 0, 0, 0.28);
 }
 
@@ -560,11 +556,31 @@ html[data-motion="reduce"] .hud-scan {
   color: #163038;
 }
 
-.plant-card {
-  background: #fff;
-  border: 1px solid rgba(15, 95, 109, 0.12);
-  border-radius: 12px;
-  box-shadow: 0 8px 20px rgba(15, 95, 109, 0.08);
+.plant-card,
+.paper-page .plant-card,
+.desk-day .plant-card,
+.paper-desk .plant-card {
+  --hud-bracket: #0f5f6d;
+  --hud-line: rgba(15, 95, 109, 0.34);
+  position: relative;
+  border-radius: 2px;
+  background:
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px 7px / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px 7px / 1px 12px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) 7px / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) 7px / 1px 12px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px calc(100% - 7px) / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px calc(100% - 7px) / 1px 12px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) calc(100% - 7px) / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) calc(100% - 7px) / 1px 12px no-repeat,
+    radial-gradient(circle at 11px 11px, #8aa4a8 0 1.1px, transparent 1.5px),
+    radial-gradient(circle at calc(100% - 11px) 11px, #8aa4a8 0 1.1px, transparent 1.5px),
+    linear-gradient(180deg, #fbf8f0 0%, #f1ece0 100%);
+  border: 1px solid var(--hud-line);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.7),
+    inset 0 12px 20px rgba(15, 95, 109, 0.05),
+    0 10px 22px rgba(15, 95, 109, 0.12);
 }
 
 .paper-field {
@@ -577,15 +593,24 @@ html[data-motion="reduce"] .hud-scan {
 }
 
 .est-chrome {
-  background: #0b3a43;
+  background:
+    linear-gradient(#e38b2a, #e38b2a) 10px 10px / 14px 1px no-repeat,
+    linear-gradient(#e38b2a, #e38b2a) 10px 10px / 1px 14px no-repeat,
+    linear-gradient(#e38b2a, #e38b2a) calc(100% - 10px) 10px / 14px 1px no-repeat,
+    linear-gradient(#e38b2a, #e38b2a) calc(100% - 10px) 10px / 1px 14px no-repeat,
+    linear-gradient(180deg, #0f5f6d 0%, #083943 100%);
   color: #efe6d4;
+  box-shadow:
+    inset 0 0 0 1px rgba(62, 198, 212, 0.28),
+    inset 0 -16px 28px rgba(6, 22, 26, 0.35);
 }
 
 .est-total-card {
   min-width: 8.5rem;
   padding: 0.4rem 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(6, 22, 26, 0.35);
+  border: 1px solid rgba(62, 198, 212, 0.35);
+  background: rgba(6, 22, 26, 0.55);
+  box-shadow: inset 0 10px 16px rgba(0, 0, 0, 0.28);
   text-align: right;
 }
 
@@ -620,8 +645,14 @@ html[data-motion="reduce"] .hud-scan {
 }
 
 .paper-header {
-  background: #0f5f6d;
+  background:
+    linear-gradient(#e38b2a, #e38b2a) 10px 10px / 12px 1px no-repeat,
+    linear-gradient(#e38b2a, #e38b2a) 10px 10px / 1px 12px no-repeat,
+    linear-gradient(#e38b2a, #e38b2a) calc(100% - 10px) 10px / 12px 1px no-repeat,
+    linear-gradient(#e38b2a, #e38b2a) calc(100% - 10px) 10px / 1px 12px no-repeat,
+    linear-gradient(180deg, #0f5f6d 0%, #083943 100%);
   color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(62, 198, 212, 0.22);
 }
 
 .paper-rail {
@@ -673,10 +704,16 @@ html[data-motion="reduce"] .hud-scan {
 }
 
 .hours-tile {
-  border-radius: 12px;
-  background: #122226;
+  border-radius: 2px;
+  background:
+    linear-gradient(#e38b2a, #e38b2a) 7px 7px / 10px 1px no-repeat,
+    linear-gradient(#e38b2a, #e38b2a) 7px 7px / 1px 10px no-repeat,
+    linear-gradient(#e38b2a, #e38b2a) calc(100% - 7px) calc(100% - 7px) / 10px 1px no-repeat,
+    linear-gradient(#e38b2a, #e38b2a) calc(100% - 7px) calc(100% - 7px) / 1px 10px no-repeat,
+    #122226;
   color: #efe6d4;
   padding: 1rem 1.1rem;
+  box-shadow: inset 0 0 0 1px rgba(62, 198, 212, 0.22);
 }
 
 .line-chip {
@@ -1207,11 +1244,14 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 }
 
 .crew-stack {
-  background: #eef3f2;
+  background: #e8ebe4;
+  box-shadow: inset 0 0 0 1px rgba(15, 95, 109, 0.12);
 }
 
 .crew-card {
-  background: #fff;
+  background: #fbf8f0;
+  border: 1px solid rgba(15, 95, 109, 0.22);
+  box-shadow: inset 0 8px 14px rgba(15, 95, 109, 0.04);
   color: #163038;
 }
 
@@ -1222,6 +1262,7 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 .industrial-root .crew-card {
   background: rgba(12, 48, 54, 0.94);
   border: 1px solid rgba(62, 198, 212, 0.22);
+  box-shadow: inset 0 12px 18px rgba(0, 0, 0, 0.22);
   color: #efe6d4;
 }
 
@@ -1269,5 +1310,18 @@ html[data-theme="night"] .rfq-sheet {
   .theme-flip,
   .inbox-toast {
     display: none !important;
+  }
+
+  .plant-card,
+  .hud-tile,
+  .hours-tile,
+  .steel-plate,
+  .est-chrome,
+  .est-total-card {
+    background: #fff !important;
+    box-shadow: none !important;
+    border-color: #c5d4d4 !important;
+    color: #163038 !important;
+    text-shadow: none !important;
   }
 }
