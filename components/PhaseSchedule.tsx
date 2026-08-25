@@ -1,5 +1,6 @@
 "use client";
 
+import { DateField } from "@/components/DateField";
 import { GripToPan } from "@/components/GripToPan";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import {
@@ -92,21 +93,19 @@ export function PhaseSchedule() {
                     />
                   </td>
                   <td className="whitespace-nowrap px-2 py-3 align-top">
-                    <input
-                      type="date"
+                    <DateField
                       value={row.start}
                       disabled={startLocked}
-                      onChange={(event) => pack.patch(row.id, { start: event.target.value })}
-                      className="paper-field"
+                      aria-label={`${row.name} start`}
+                      onChange={(start) => pack.patch(row.id, { start })}
                     />
                   </td>
                   <td className="whitespace-nowrap px-2 py-3 align-top">
-                    <input
-                      type="date"
+                    <DateField
                       value={row.stop}
                       disabled={!row.on}
-                      onChange={(event) => pack.patch(row.id, { stop: event.target.value })}
-                      className="paper-field"
+                      aria-label={`${row.name} stop`}
+                      onChange={(stop) => pack.patch(row.id, { stop })}
                     />
                   </td>
                   <td className="whitespace-nowrap px-2 py-3 align-top">
