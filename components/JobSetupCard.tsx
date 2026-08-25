@@ -10,6 +10,7 @@ export function JobSetupCard({
   author,
   code,
   window,
+  children,
 }: {
   type: string;
   client: string;
