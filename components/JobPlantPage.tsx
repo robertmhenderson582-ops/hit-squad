@@ -90,7 +90,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
             type="button"
             onClick={() => setTab(item)}
             className={`rounded-full px-4 py-2 text-sm ${
-              tab === item ? "bg-steel text-white" : "bg-[#dce6e4] text-[#163038]"
+              tab === item ? "bg-steel text-white" : "border border-steel text-steel"
             }`}
           >
             {item}
