@@ -26,7 +26,10 @@ export function CraftByPhase({ rows }: { rows: CraftRow[] }) {
             <tr className="phase-bar">
               <th className="whitespace-nowrap px-3 py-2 text-xs tracking-[0.12em]">CRAFT</th>
               {PHASES.map((phase) => (
-                <th key={phase.id} className="whitespace-nowrap px-3 py-2 text-xs tracking-[0.12em]">
+                <th
+                  key={phase.id}
+                  className={`whitespace-nowrap px-3 py-2 text-xs tracking-[0.12em] ${phase.tone}`}
+                >
                   {phase.name}
                 </th>
               ))}

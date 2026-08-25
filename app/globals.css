@@ -933,6 +933,25 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   background: rgba(61, 107, 79, 0.3);
 }
 
+.crew-stack {
+  background: #eef3f2;
+}
+
+.crew-card {
+  background: #fff;
+  color: #163038;
+}
+
+.industrial-root .crew-stack {
+  background: rgba(6, 22, 26, 0.55);
+}
+
+.industrial-root .crew-card {
+  background: rgba(12, 48, 54, 0.94);
+  border: 1px solid rgba(62, 198, 212, 0.22);
+  color: #efe6d4;
+}
+
 .rfq-scrim {
   position: fixed;
   inset: 0;

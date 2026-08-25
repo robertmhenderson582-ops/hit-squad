@@ -57,13 +57,13 @@ export function CrewManHours() {
           <p className="text-sm text-white/80">Estimate total {estimateTotal.toLocaleString()}</p>
         ) : null}
       </div>
-      <div className="space-y-2 bg-[#eef3f2] px-3 py-3">
+      <div className="crew-stack space-y-2 px-3 py-3">
         {LINES.map((line) => {
           const natural = defaultLaborClass(line.role);
           const current = overrides[line.role] ?? natural;
           const starred = current !== natural;
           return (
-            <article key={line.role} className="rounded-xl bg-white px-4 py-3">
+            <article key={line.role} className="crew-card rounded-xl px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="rounded-full border border-[#d5e0de] px-3 py-1 text-sm">{line.role}</p>
                 <p className="font-semibold text-[#163038]">
