@@ -1,0 +1,111 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+  applyOtPick,
+  cascadePhases,
+  defaultPhaseSchedule,
+  mergeSchedule,
+  patchPhase,
+  setProjectStart,
+  workedDays,
+} from "./phase-schedule.ts";
+
+describe("phase schedule", () => {
+  it("changing Pre stop slides Oil Out and keeps Oil Out length", () => {
+    const start = defaultPhaseSchedule();
+    const oil = start.phases.find((row) => row.id === "oil-out");
+    assert.ok(oil);
+    const length = 3;
+    const next = patchPhase(start, "pre", { stop: "2026-09-05" });
+    const pre = next.phases.find((row) => row.id === "pre");
+    const slid = next.phases.find((row) => row.id === "oil-out");
+    const mech = next.phases.find((row) => row.id === "mech");
+    assert.equal(pre?.stop, "2026-09-05");
+    assert.equal(slid?.start, "2026-09-06");
+    assert.equal(slid?.stop, "2026-09-08");
+    assert.equal(
+      Math.round(
+        (Date.parse(slid!.stop) - Date.parse(slid!.start)) / 86_400_000,
+      ) + 1,
+      length,
+    );
+    assert.equal(mech?.start, "2026-09-09");
+  });
+
+  it("turning Oil Out off slides Mechanical into the gap", () => {
+    const start = defaultPhaseSchedule();
+    const mechLength =
+      Math.round(
+        (Date.parse("2026-09-20") - Date.parse("2026-09-07")) / 86_400_000,
+      ) + 1;
+    const next = patchPhase(start, "oil-out", { on: false });
+    const oil = next.phases.find((row) => row.id === "oil-out");
+    const mech = next.phases.find((row) => row.id === "mech");
+    assert.equal(oil?.on, false);
+    assert.equal(oil?.start, "2026-09-04");
+    assert.equal(oil?.stop, "2026-09-06");
+    assert.equal(mech?.start, "2026-09-04");
+    assert.equal(mech?.stop, "2026-09-17");
+    assert.equal(
+      Math.round((Date.parse(mech!.stop) - Date.parse(mech!.start)) / 86_400_000) + 1,
+      mechLength,
+    );
+    const back = patchPhase(next, "oil-out", { on: true });
+    const restored = back.phases.find((row) => row.id === "oil-out");
+    assert.equal(restored?.start, "2026-09-04");
+    assert.equal(restored?.stop, "2026-09-06");
+    assert.equal(back.phases.find((row) => row.id === "mech")?.start, "2026-09-07");
+  });
+
+  it("Total days is worked days, not calendar span", () => {
+    const pre = defaultPhaseSchedule().phases.find((row) => row.id === "pre");
+    assert.ok(pre);
+    assert.equal(workedDays(pre), 8);
+    assert.equal(workedDays({ start: "2026-09-04", stop: "2026-09-06", daysPerWeek: 7, sundaysOff: [] }), 3);
+    assert.equal(workedDays({ start: "2026-09-04", stop: "2026-09-06", daysPerWeek: 7, sundaysOff: ["2026-09-06"] }), 2);
+    assert.equal(workedDays({ start: "2026-09-07", stop: "2026-09-13", daysPerWeek: 5, sundaysOff: [] }), 5);
+    assert.equal(workedDays({ start: "2026-09-07", stop: "2026-09-13", daysPerWeek: 6, sundaysOff: [] }), 6);
+    assert.equal(workedDays({ start: "2026-08-24", stop: "2026-08-27", daysPerWeek: 4, sundaysOff: [] }), 4);
+  });
+
+  it("project start drives Pre-TAR then the rest slide", () => {
+    const next = setProjectStart(defaultPhaseSchedule(), "2026-08-24");
+    const pre = next.phases.find((row) => row.id === "pre");
+    const oil = next.phases.find((row) => row.id === "oil-out");
+    assert.equal(next.projectStart, "2026-08-24");
+    assert.equal(pre?.start, "2026-08-24");
+    assert.equal(pre?.stop, "2026-09-06");
+    assert.equal(oil?.start, "2026-09-07");
+  });
+
+  it("4×10 picker fills days, hours, and OT split", () => {
+    const ot = applyOtPick(defaultPhaseSchedule(), "pre", "4x10-ot8");
+    const pre = ot.phases.find((row) => row.id === "pre");
+    assert.equal(pre?.daysPerWeek, 4);
+    assert.equal(pre?.hoursPerDay, 10);
+    assert.equal(pre?.otAfter8, true);
+    const st = applyOtPick(ot, "pre", "4x10-st");
+    assert.equal(st.phases.find((row) => row.id === "pre")?.otAfter8, false);
+    const post = applyOtPick(defaultPhaseSchedule(), "post", "5x8-st");
+    assert.equal(post.phases.find((row) => row.id === "post")?.daysPerWeek, 5);
+    assert.equal(post.phases.find((row) => row.id === "post")?.hoursPerDay, 8);
+    assert.equal(post.phases.find((row) => row.id === "post")?.otAfter8, false);
+  });
+
+  it("merge persist never drops a locked phase", () => {
+    const saved = mergeSchedule({
+      projectStart: "2026-08-21",
+      phases: [{ id: "pre", name: "Pre-Turnaround", on: true, start: "2026-08-21", stop: "2026-08-28", daysPerWeek: 4, hoursPerDay: 10, otAfter8: true, sundaysOff: [] }],
+    });
+    assert.equal(saved.phases.length, 5);
+    assert.deepEqual(
+      saved.phases.map((row) => row.id),
+      ["pre", "oil-out", "mech", "oil-in", "post"],
+    );
+    assert.equal(saved.phases[0].stop, "2026-08-28");
+    assert.equal(saved.phases[0].otAfter8, true);
+    assert.equal(saved.phases[1].name, "Oil Out");
+    const packed = cascadePhases(saved.phases);
+    assert.equal(packed[1].start, "2026-08-29");
+  });
+});

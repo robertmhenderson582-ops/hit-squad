@@ -101,7 +101,7 @@ function ChromeInner({
   });
 
   return (
-    <div className={paper ? "paper-page" : "industrial-root"}>
+    <div className={paper ? "paper-page" : "industrial-root"} data-capture-root>
       <FieldTrialBanner />
       <div className="relative z-10 mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
         <header className={paper ? "paper-header rounded-xl px-4 py-4 sm:px-5" : "hud-bezel steel-plate px-4 py-4 sm:px-5"}>

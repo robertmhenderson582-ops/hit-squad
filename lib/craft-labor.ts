@@ -1,5 +1,6 @@
-import type { ClockOverride } from "@/lib/hours-clock";
-import type { LaborClass } from "@/lib/labor-class";
+import type { ClockOverride } from "./hours-clock";
+import type { LaborClass } from "./labor-class";
+import { rangeSeedsFromPhases, type PhaseRow } from "./phase-schedule";
 
 export const STAFF_POSITIONS = [
   "Analyst Cost 01",
@@ -45,6 +46,9 @@ export type CalendarRange = {
   perDiemPeople: number;
   days: boolean[];
   otAfter8?: boolean;
+  phaseId?: string;
+  shift?: CraftShift;
+  skipDates?: string[];
 };
 
 export type CraftRow = {
@@ -130,4 +134,40 @@ export function clampPerDiem(range: CalendarRange, shift: CraftShift): CalendarR
 
 export function uniqueCraftNames(rows: CraftRow[]) {
   return [...new Set(rows.map((row) => row.position).filter(Boolean))];
+}
+
+export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange): CalendarRange {
+  const seed = rangeSeedsFromPhases([row])[0];
+  return {
+    id: prev?.id || seed.id,
+    phaseId: seed.phaseId,
+    start: seed.start,
+    end: seed.end,
+    headcount: prev?.headcount ?? 1,
+    nightHeadcount: prev?.nightHeadcount ?? 1,
+    hoursPerShift: seed.hoursPerShift,
+    perDiemPeople: prev?.perDiemPeople ?? 1,
+    days: seed.days,
+    otAfter8: seed.otAfter8,
+    shift: prev?.shift ?? "Days",
+    skipDates: seed.skipDates,
+  };
+}
+
+export function rangesFromPhases(phases: PhaseRow[], previous: CalendarRange[] = []): CalendarRange[] {
+  const extras = previous.filter((range) => !range.phaseId);
+  return [
+    ...phases.filter((row) => row.on).map((row) => rangeFromPhase(row, previous.find((item) => item.phaseId === row.id))),
+    ...extras,
+  ];
+}
+
+export function craftRowFromPhases(phases: PhaseRow[]): CraftRow {
+  const next = blankCraftRow();
+  const ranges = rangesFromPhases(phases);
+  return { ...next, ranges: ranges.length ? ranges : next.ranges };
+}
+
+export function syncCraftRows(rows: CraftRow[], phases: PhaseRow[]): CraftRow[] {
+  return rows.map((row) => ({ ...row, ranges: rangesFromPhases(phases, row.ranges) }));
 }

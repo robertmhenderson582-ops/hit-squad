@@ -22,18 +22,19 @@ const TABS = [
   { id: "summary", label: "Job setup", icon: "📄" },
   { id: "activities", label: "Activities", icon: "∿" },
   { id: "crew", label: "Crew", icon: "⛑" },
-  { id: "staffing", label: "Support", icon: "▦" },
+  { id: "staffing", label: "Staffing", icon: "▦" },
+  { id: "support", label: "Support", icon: "▣" },
   { id: "equipment", label: "Equipment", icon: "⛟" },
   { id: "costs", label: "Costs", icon: "▤" },
   { id: "change-orders", label: "Change orders", icon: "⚖" },
   { id: "rates", label: "Rates", icon: "％" },
-  { id: "print", label: "Print", icon: "⎙" },
 ] as const;
 
 const ACTIONS = [
   { id: "team", label: "Team" },
   { id: "undo", label: "Undo" },
   { id: "export", label: "Export" },
+  { id: "print", label: "Print" },
   { id: "duplicate", label: "Duplicate" },
 ] as const;
 
@@ -74,7 +75,7 @@ export function EstimateWorkspace({
   const closed = packageId ? isClosed(packageId) : false;
 
   return (
-    <div className={paper ? "desk-day min-h-screen overflow-x-hidden bg-[#d8e4e2]" : "industrial-root"}>
+    <div className={paper ? "desk-day min-h-screen overflow-x-hidden bg-[#d8e4e2]" : "industrial-root"} data-capture-root>
       <FieldTrialBanner />
       {rfq ? (
         <RfqPreview
@@ -142,6 +143,9 @@ export function EstimateWorkspace({
                     setRfq(true);
                     noteFeatureTrail("export");
                   }
+                  if (action.id === "print") {
+                    window.print();
+                  }
                   if (action.id === "duplicate" && packageId) {
                     const query = new URLSearchParams({
                       client: client || "",
@@ -183,6 +187,7 @@ export function EstimateWorkspace({
               onClick={() => {
                 onTab(item.id);
                 if (item.id === "crew") noteFeatureTrail("Crew");
+                if (item.id === "staffing") noteFeatureTrail("Staffing");
               }}
               className={`rounded-t px-3 py-2 text-sm ${
                 tab === item.id ? "bg-[#0f5f6d] text-white" : "text-white/75 hover:text-white"
@@ -206,23 +211,7 @@ export function EstimateWorkspace({
             </p>
           </section>
         ) : null}
-        {tab === "print" ? (
-          <section className="plant-card px-5 py-5">
-            <h2 className="font-display text-2xl font-semibold text-[#163038]">Print</h2>
-            <p className="mt-2 text-sm text-[#5b6f73]">Prints always come out Day / paper white.</p>
-            <button
-              type="button"
-              onClick={() => {
-                setRfq(true);
-                noteFeatureTrail("export");
-              }}
-              className="mt-4 rounded-lg bg-steel px-4 py-2 text-white"
-            >
-              Print / RFQ
-            </button>
-          </section>
-        ) : null}
-        {tab === "rates" || tab === "print" ? null : children}
+        {tab === "rates" ? null : children}
       </div>
       {confirmClose && packageId ? (
         <div className="modal-scrim" role="dialog" aria-modal="true">

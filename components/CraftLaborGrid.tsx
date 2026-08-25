@@ -28,6 +28,7 @@ import {
   sumSplits,
 } from "@/lib/hours-clock";
 import { defaultLaborClass, type LaborClass } from "@/lib/labor-class";
+import { PHASE_NAMES, type PhaseId } from "@/lib/phase-schedule";
 
 const HEADERS = ["POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST"];
 const CUSTOM = "__custom__";
@@ -42,6 +43,7 @@ export function CraftLaborGrid({
   title = "Direct Craft",
   note,
   positions,
+  newRow,
 }: {
   rows: CraftRow[];
   onRows: (next: CraftRow[] | ((current: CraftRow[]) => CraftRow[])) => void;
@@ -52,6 +54,7 @@ export function CraftLaborGrid({
   title?: string;
   note?: string;
   positions?: readonly string[];
+  newRow?: () => CraftRow;
 }) {
   const confirmRemove = useConfirmRemove();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -79,7 +82,8 @@ export function CraftLaborGrid({
           ...row,
           ranges: row.ranges.map((range) => {
             if (range.id !== rangeId) return range;
-            return clampPerDiem({ ...range, ...patch }, row.shift);
+            const next = { ...range, ...patch };
+            return clampPerDiem(next, next.shift ?? row.shift);
           }),
         };
       }),
@@ -87,7 +91,7 @@ export function CraftLaborGrid({
   }
 
   function addPosition() {
-    const next = blankCraftRow();
+    const next = newRow ? newRow() : blankCraftRow();
     onRows((current) => [...current, next]);
   }
 
@@ -174,7 +178,9 @@ export function CraftLaborGrid({
                   onToggle={() => setOpenId(open ? null : row.id)}
                   onPatch={(patch) => patchRow(row.id, patch)}
                   onPatchRange={(rangeId, patch) => patchRange(row.id, rangeId, patch)}
-                  onAddRange={() => patchRow(row.id, { ranges: [...row.ranges, blankRange()] })}
+                  onAddRange={() =>
+                    patchRow(row.id, { ranges: [...row.ranges, { ...blankRange(), shift: row.shift }] })
+                  }
                   onRemoveRange={(rangeId) => {
                     if (row.ranges.length <= 1) return;
                     patchRow(row.id, { ranges: row.ranges.filter((range) => range.id !== rangeId) });
@@ -425,8 +431,10 @@ function CalendarRangeFields({
   onPatch: (patch: Partial<CalendarRange>) => void;
   onRemove: () => void;
 }) {
-  const twoCounts = shift === "Days & nights";
-  const cap = perDiemCap(range, shift);
+  const rangeShift = range.shift ?? shift;
+  const twoCounts = rangeShift === "Days & nights";
+  const cap = perDiemCap(range, rangeShift);
+  const phaseName = range.phaseId && range.phaseId in PHASE_NAMES ? PHASE_NAMES[range.phaseId as PhaseId] : null;
   const split = computeRangeHours({
     position,
     site,
@@ -436,16 +444,34 @@ function CalendarRangeFields({
     hoursPerShift: range.hoursPerShift,
     headcount: range.headcount,
     nightHeadcount: range.nightHeadcount,
-    shift,
+    shift: rangeShift,
     days: range.days,
     perDiemPeople: range.perDiemPeople,
     otAfter8: range.otAfter8 ?? otAfter8,
     clockOverride,
+    skipDates: range.skipDates,
   });
 
   return (
     <div>
+      {phaseName ? (
+        <p className="mb-2 text-xs font-semibold tracking-[0.12em] text-[#5b6f73]">{phaseName}</p>
+      ) : null}
       <div className="flex flex-wrap items-end gap-3">
+        <label className="text-xs">
+          Shift
+          <select
+            value={rangeShift}
+            onChange={(event) => onPatch({ shift: event.target.value as CraftShift })}
+            className="paper-field mt-1"
+          >
+            {CRAFT_SHIFTS.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="text-xs">
           Start
           <input

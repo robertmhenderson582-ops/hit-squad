@@ -5,9 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { DeskChrome } from "@/components/DeskChrome";
 import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
+import { EstimatePackageProvider } from "@/components/EstimatePackage";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
 import { ModuleTable } from "@/components/ModuleTable";
+import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { ShopRigSheet } from "@/components/ShopRigSheet";
@@ -28,17 +30,19 @@ export function NewEstimateForm() {
     );
   }
 
-  return <NewEstimateDesk client={client} site={site} name={name} />;
+  return <NewEstimateDesk client={client} site={site} name={name} size={size} />;
 }
 
 function NewEstimateDesk({
   client,
   site,
   name,
+  size,
 }: {
   client: string;
   site: string;
   name: string;
+  size: string | null;
 }) {
   const alias = useAlias();
   const { user } = useSession();
@@ -46,7 +50,11 @@ function NewEstimateDesk({
   const plant = site.split("—")[0]?.trim() || site;
   const otRule = boundOtLabel(site, client);
 
+  const existingClient = size !== "other";
+  const estimateKey = `new:${client}:${site}:${name}`;
+
   return (
+    <EstimatePackageProvider estimateKey={estimateKey}>
     <EstimateWorkspace
       crumb={`${alias(plant)} / ${name}`}
       tab={tab}
@@ -64,6 +72,7 @@ function NewEstimateDesk({
             name={name}
             otRule={otRule}
             author={user?.name}
+            existingClient={existingClient}
           />
           <PhaseSchedule />
         </div>
@@ -74,13 +83,15 @@ function NewEstimateDesk({
         </ModuleTable>
       ) : null}
       {tab === "crew" ? <EstimateWorkbook client={client} site={site} name={name} /> : null}
-      {tab === "staffing" ? (
+      {tab === "staffing" ? <StaffingPlanDesk client={client} site={site} name={name} /> : null}
+      {tab === "support" ? (
         <div className="space-y-3">
           <h2 className="font-display text-2xl font-semibold text-[#163038]">Support</h2>
           <p className="text-sm text-[#5b6f73]">
-            Support / Staffing is the duty split. Direct Craft stays empty until you add a position.
+            Support is the duty split. Direct Craft stays empty until you add a position. The
+            Staffing tab is the generated P66 plan.
           </p>
-          <ModuleTable caption="STAFFING" headers={["BILLED AS", "POSITION", "DAYS", "SHIFT", "HEADCOUNT"]}>
+          <ModuleTable caption="SUPPORT" headers={["BILLED AS", "POSITION", "DAYS", "SHIFT", "HEADCOUNT"]}>
             {null}
           </ModuleTable>
         </div>
@@ -99,5 +110,6 @@ function NewEstimateDesk({
         </ModuleTable>
       ) : null}
     </EstimateWorkspace>
+    </EstimatePackageProvider>
   );
 }

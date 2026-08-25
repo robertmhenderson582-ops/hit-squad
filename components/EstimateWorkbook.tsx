@@ -1,14 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { CraftByPhase } from "@/components/CraftByPhase";
 import { CraftLaborGrid } from "@/components/CraftLaborGrid";
 import { LaborRollup } from "@/components/LaborRollup";
-import { SupportCrewCard, type SupportLine } from "@/components/SupportCrewCard";
+import { SupportCrewCard } from "@/components/SupportCrewCard";
+import { useEstimatePackage } from "@/components/EstimatePackage";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { CREW_LANES } from "@/lib/crew-lanes";
 import type { CraftRow } from "@/lib/craft-labor";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
+
+type CraftSetter = (next: CraftRow[] | ((current: CraftRow[]) => CraftRow[])) => void;
 
 export function EstimateWorkbook({
   client,
@@ -20,12 +23,8 @@ export function EstimateWorkbook({
   name?: string;
 }) {
   const alias = useAlias();
-  const [staff, setStaff] = useState<CraftRow[]>([]);
-  const [generalForeman, setGeneralForeman] = useState<CraftRow[]>([]);
-  const [foreman, setForeman] = useState<CraftRow[]>([]);
-  const [direct, setDirect] = useState<CraftRow[]>([]);
-  const [support, setSupport] = useState<SupportLine[]>([]);
-  const [otAfter8, setOtAfter8] = useState(false);
+  const pack = useEstimatePackage();
+  const { staff, generalForeman, foreman, direct, support, otAfter8 } = pack.crew;
   const craftRows = useMemo(
     () => [...staff, ...generalForeman, ...foreman, ...direct],
     [direct, foreman, generalForeman, staff],
@@ -39,17 +38,23 @@ export function EstimateWorkbook({
     <div className="space-y-5">
       <p className="text-sm text-[#5b6f73]">
         {alias(client || "Phillips 66")} · {alias(site || "Wood River — Roxana, IL")} · {name || "New T&M estimate"}.
-        Hours follow the position clock. Phases live on Job setup.
+        Hours follow the position clock. Calendars follow Phases & work schedule.
       </p>
       {CREW_LANES.filter((lane) => lane.id !== "support").map((lane) => {
-        const binding =
+        const key =
           lane.id === "staff"
-            ? { rows: staff, onRows: setStaff }
+            ? "staff"
             : lane.id === "general-foreman"
-              ? { rows: generalForeman, onRows: setGeneralForeman }
+              ? "generalForeman"
               : lane.id === "foreman"
-                ? { rows: foreman, onRows: setForeman }
-                : { rows: direct, onRows: setDirect };
+                ? "foreman"
+                : "direct";
+        const onRows: CraftSetter = (next) =>
+          pack.setCrew((current) => ({
+            ...current,
+            [key]: typeof next === "function" ? next(current[key]) : next,
+          }));
+        const binding = { rows: pack.crew[key], onRows };
         return (
           <CraftLaborGrid
             key={lane.id}
@@ -61,11 +66,20 @@ export function EstimateWorkbook({
             site={site}
             client={client}
             otAfter8={otAfter8}
-            onOtAfter8={lane.id === "direct" ? setOtAfter8 : undefined}
+            onOtAfter8={(next) => pack.setCrew((current) => ({ ...current, otAfter8: next }))}
+            newRow={pack.addCraftRow}
           />
         );
       })}
-      <SupportCrewCard rows={support} onRows={setSupport} />
+      <SupportCrewCard
+        rows={support}
+        onRows={(next) =>
+          pack.setCrew((current) => ({
+            ...current,
+            support: typeof next === "function" ? next(current.support) : next,
+          }))
+        }
+      />
       <CraftByPhase rows={direct} />
       <LaborRollup estHours={labor.hours} />
     </div>
