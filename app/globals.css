@@ -300,3 +300,75 @@ textarea:focus {
   border: 2px dashed rgba(15, 95, 109, 0.28);
   background: #f4f1e8;
 }
+
+.brand-static,
+.brand-static:hover,
+.brand-static:focus {
+  background: none;
+  filter: none;
+  opacity: 1;
+  text-decoration: none;
+  box-shadow: none;
+}
+
+.theme-flip {
+  height: 2.25rem;
+  width: 2.25rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.lock-warn {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 50;
+  max-width: 22rem;
+  border-radius: 12px;
+  background: #122226;
+  color: #efe6d4;
+  padding: 1rem;
+}
+
+.lock-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(6, 22, 26, 0.72);
+}
+
+.lock-card {
+  width: min(420px, 92vw);
+  border-radius: 16px;
+  background: #f4f1e8;
+  color: #163038;
+  padding: 1.5rem;
+}
+
+.republish-banner {
+  border-radius: 12px;
+  background: #eadfc8;
+  color: #163038;
+}
+
+html[data-type="sm"] { font-size: 15px; }
+html[data-type="lg"] { font-size: 18px; }
+html[data-density="compact"] .plant-card { padding: 0.75rem; }
+html[data-contrast="high"] { filter: contrast(1.12); }
+html[data-motion="reduce"] * { animation: none !important; transition: none !important; }
+html[data-targets="large"] button,
+html[data-targets="large"] a { min-height: 2.75rem; }
+html[data-easy="on"] { letter-spacing: 0.01em; }
+
+@media print {
+  html,
+  body,
+  .paper-page,
+  .industrial-root {
+    background: #fff !important;
+    color: #163038 !important;
+  }
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useConfirmRemove } from "@/components/ConfirmDialog";
 
 const POSITIONS = ["Boilermaker Journeyman", "Pipefitter Journeyman", "Ironworker", "Foreman"];
 const CHIPS = ["Add Job Set", "Shutdown", "Rear wall", "Superheater", "V bottom", "Hydro", "Demob"];
@@ -45,6 +46,7 @@ const STARTER: CraftRow = {
 };
 
 export function CraftLaborGrid() {
+  const confirmRemove = useConfirmRemove();
   const [rows, setRows] = useState<CraftRow[]>([STARTER]);
   const [chips, setChips] = useState<string[]>([]);
 
@@ -177,7 +179,11 @@ export function CraftLaborGrid() {
                 <td className="px-2 py-2">
                   <button
                     type="button"
-                    onClick={() => setRows((current) => current.filter((item) => item.id !== row.id))}
+                    onClick={async () => {
+                      if (await confirmRemove(row.position)) {
+                        setRows((current) => current.filter((item) => item.id !== row.id));
+                      }
+                    }}
                     aria-label="Remove row"
                   >
                     ⌫

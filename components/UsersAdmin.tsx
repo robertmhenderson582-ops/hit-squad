@@ -9,15 +9,7 @@ export function UsersAdmin() {
   if (!desk) return <p className="mt-4 text-[#5b6f73]">Owner desk only.</p>;
 
   return (
-    <div className="mt-5 space-y-5">
-      <section className="plant-card px-5 py-5">
-        <h2 className="text-2xl font-semibold text-[#163038]">Owner settings</h2>
-        <p className="mt-2 text-sm leading-6 text-[#163038]">
-          Sign-in, Users, Follow, and Activity stay yours. Joseph and testers never see this page.
-          Invites and claim passwords stay parked until the look matches.
-        </p>
-      </section>
-
+    <div className="space-y-5">
       <section className="plant-card px-5 py-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>

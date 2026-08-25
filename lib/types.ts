@@ -62,11 +62,14 @@ export type StaffingLine = {
   headcount: number;
 };
 
-export type RosterPermission =
-  | "Staff — estimates only"
-  | "Look & feel"
-  | "Cost / HSE"
-  | "Owner desk";
+export type RosterPermission = "Owner" | "Trusted" | "Look & feel" | "Staff";
+
+export type RosterModules = {
+  hse: boolean;
+  quality: boolean;
+  accounting: boolean;
+  payroll: boolean;
+};
 
 export type RosterEntry = {
   id: string;
@@ -76,6 +79,10 @@ export type RosterEntry = {
   permission: RosterPermission;
   expires: string;
   signIn: string;
+  modules: RosterModules;
+  estimate: boolean;
+  rateBuilder: boolean;
+  passwordSet: boolean;
 };
 
 export type EstimateRecord = {

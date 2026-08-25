@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useDisplay } from "@/components/DisplayProvider";
 import { EstimateModalProvider, useEstimateModal } from "@/components/EstimateModalContext";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { BrandMark } from "@/components/BrandMark";
@@ -20,13 +22,62 @@ const NAV: { href: string; label: string; ownerOnly?: boolean }[] = [
   { href: "/rates", label: "Rates" },
   { href: "/cost", label: "Cost / PPR" },
   { href: "/inbox", label: "Inbox", ownerOnly: true },
-  { href: "/activity", label: "Activity", ownerOnly: true },
-  { href: "/follow", label: "Follow", ownerOnly: true },
-  { href: "/users", label: "Users", ownerOnly: true },
+  { href: "/settings", label: "Settings" },
 ];
 
 function navActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function ThemeFlip() {
+  const { resolvedTheme, flipDayNight } = useDisplay();
+  return (
+    <button
+      type="button"
+      onClick={flipDayNight}
+      className="theme-flip"
+      aria-label={resolvedTheme === "day" ? "Night" : "Day"}
+      title={resolvedTheme === "day" ? "Night — lights-out trailer" : "Day — paper desk"}
+    >
+      {resolvedTheme === "day" ? "☾" : "☀"}
+    </button>
+  );
+}
+
+function RepublishBanner() {
+  const owner = useOwnerDesk();
+  const { user } = useSession();
+  const [now, setNow] = useState(Date.now());
+  const pub = owner?.republish;
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  if (!pub?.active) return null;
+  const remaining = pub.until ? Math.max(0, pub.until - now) : 0;
+  const testersWait = pub.waitMinutes === 0 || remaining === 0;
+  if (testersWait && user?.role !== "owner") {
+    return (
+      <div className="republish-banner mb-4 px-4 py-3">
+        Wait — we’re republishing. Don’t keep typing.
+      </div>
+    );
+  }
+  if (user?.role !== "owner") return null;
+  const mins = Math.floor(remaining / 60000);
+  const secs = Math.floor((remaining % 60000) / 1000);
+  return (
+    <div className="republish-banner mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+      <p>
+        {pub.waitMinutes === 0
+          ? "Immediate republish. Testers lock. Owner stays in."
+          : `Heads up — republish. Comes down in ${mins}:${String(secs).padStart(2, "0")}. Save.`}
+        {pub.note ? ` ${pub.note}` : ""}
+      </p>
+    </div>
+  );
 }
 
 function ChromeInner({
@@ -46,15 +97,16 @@ function ChromeInner({
   const { user, signOut } = useSession();
   const { openNewEstimate } = useEstimateModal();
   const owner = useOwnerDesk();
-  const paper = variant === "paper";
+  const { resolvedTheme } = useDisplay();
+  const paper = resolvedTheme === "day" || variant === "paper";
 
   return (
-    <div className={paper ? "paper-page" : "industrial-root"}>
+    <div className={paper && resolvedTheme === "day" ? "paper-page" : variant === "hero" && resolvedTheme === "night" ? "industrial-root" : "paper-page"}>
       <FieldTrialBanner />
       <div className={`relative z-10 mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6`}>
         <header className={paper ? "paper-header rounded-xl px-4 py-4 sm:px-5" : "steel-plate paper-grain px-4 py-4 sm:px-5"}>
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <Link href="/" className="min-w-0">
+            <Link href="/" className="brand-static min-w-0">
               {paper ? (
                 <span className="flex items-center gap-2">
                   <BrandMark variant="stacked" className="h-8 w-6" />
@@ -65,6 +117,7 @@ function ChromeInner({
               )}
             </Link>
             <div className="flex flex-wrap items-center gap-3">
+              <ThemeFlip />
               <button
                 type="button"
                 onClick={() => openNewEstimate()}
@@ -119,6 +172,7 @@ function ChromeInner({
         </header>
 
         <main className="mt-5">
+          <RepublishBanner />
           {owner && owner.followSeat !== "owner" ? (
             <div className="follow-banner mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
               <p className="text-sm">
@@ -132,7 +186,10 @@ function ChromeInner({
           ) : null}
           {owner && owner.viewAs === "joseph" ? (
             <div className="viewas-banner mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-              <p className="text-sm">View as Joseph — Look & feel / site. This is not Follow.</p>
+              <p className="text-sm">
+                View as {owner.viewResponsibility} · {owner.viewSite}. Settings / Users / Follow /
+                Activity stay. Republish heads-up stays.
+              </p>
               <button type="button" onClick={() => owner.setViewAs("owner")} className="text-sm underline">
                 Back to owner
               </button>
