@@ -1,34 +1,31 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.1";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.1";
+export const DESK_VERSION = "1.2";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.2";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.1";
+export const DESK_THREAD_ID = "th-desk-v1.2";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.1",
-  "• Capture screen now grabs the desk (popup hides first)",
-  "• Tickets stay after a republish",
-  "• Crew cards and Job setup phases match the desk",
-  "• Estimate type is T&M (Outage is the job, not the type)",
-  "• Empty travel row hidden until there is a mileage rate",
+  "Hit Squad Project Controls V1.2",
+  "• Tickets you file stay on the list after you submit and after an upgrade",
+  "• Ticket popup has a close X",
+  "• You can draw on a capture before submit",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.1",
-  "• Capture screen now grabs the desk (popup hides first)",
-  "• Tickets stay after a republish — file store + owner email copy, not a paid database",
+  "Hit Squad Project Controls V1.2",
+  "• Tickets you file stay on the list after submit and after an upgrade — this device keeps the list and merges any server copy",
+  "• Owner GET / PATCH / DELETE also merge; a shorter server list cannot wipe the desk",
+  "• Ticket popup has a close X; Escape and the dimmed page keep the draft",
+  "• Capture can be marked up (pen, undo, clear) before submit",
+  "• KIND chips stick; list Copy / Done / Notify / Delete apply here even if the server row is missing",
   "• Owner and Novus see every ticket; testers see only their own",
-  "• Joseph Submit still conceptually emails robertmhenderson582@gmail.com",
-  "• Crew is five cards; phases live on Job setup",
-  "• Estimate type is T&M / Lump sum / CR/FF / Hybrid — never Outage",
-  "• Empty travel row hidden until a mileage rate exists",
-  "• Inbox what’s-new is per seat. Tickets stay off Inbox.",
+  "• Tickets stay off Inbox",
 ].join("\n");
 
 const FORBIDDEN_TESTER =
-  /\b(password|passwords|auth|authentication|cookie|session secret|security|novus|vault|drive|other users?|other testers?|seats?|owner tools?|deploy internals?|anyone else.?s tickets)\b/i;
+  /\b(password|passwords|auth|authentication|cookie|session secret|security|novus|vault|drive|smtp|\/tmp|tmp file|other users?|other testers?|seats?|owner tools?|deploy internals?|anyone else.?s tickets)\b/i;
 
 export function whatsNewCopy(ownerChrome: boolean) {
   return ownerChrome ? OWNER_WHATS_NEW : TESTER_WHATS_NEW;
@@ -86,8 +83,20 @@ export function applyWhatsNew(
 ): InboxThread[] {
   if (!seat || hasSeenWhatsNew(seat)) return threads;
   markWhatsNewSeen(seat);
-  if (threads.some((thread) => thread.id === DESK_THREAD_ID || thread.personId === DESK_PERSON_ID)) {
-    return threads;
+  const text = whatsNewCopy(ownerChrome);
+  const messageId = `im-desk-${DESK_VERSION}`;
+  const existing = threads.find((thread) => thread.personId === DESK_PERSON_ID);
+  if (existing) {
+    if (existing.messages.some((message) => message.id === messageId)) return threads;
+    return threads.map((thread) =>
+      thread.personId === DESK_PERSON_ID
+        ? {
+            ...thread,
+            unread: thread.unread + 1,
+            messages: [...thread.messages, deskMessage(text)],
+          }
+        : thread,
+    );
   }
   return [deskWhatsNewThread(ownerChrome), ...threads];
 }

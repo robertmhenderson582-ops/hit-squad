@@ -30,6 +30,7 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   const body = (await request.json().catch(() => ({}))) as {
+    id?: string;
     kind?: string;
     note?: string;
     capture?: string | null;
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
 
   const ticket = addStoredTicket(
     makeTicket({
+      id: typeof body.id === "string" ? body.id : undefined,
       kind: body.kind,
       note: typeof body.note === "string" ? body.note : "",
       capture: typeof body.capture === "string" && body.capture.startsWith("data:") ? body.capture : null,
