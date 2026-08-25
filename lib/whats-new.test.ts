@@ -42,7 +42,9 @@ describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
+    assert.match(TESTER_WHATS_NEW, /Support Position opens like the other cards/);
     assert.match(TESTER_WHATS_NEW, /Craft by phase is gone/);
+    assert.match(OWNER_WHATS_NEW, /Support Position and Billed as use the same pickers/);
     assert.match(OWNER_WHATS_NEW, /cream Craft by phase card is removed/);
     assert.match(OWNER_WHATS_NEW, /five locked phase cards/);
     assert.equal(/password|auth|Novus|vault|Drive|\/tmp|SMTP|seat/i.test(TESTER_WHATS_NEW), false);

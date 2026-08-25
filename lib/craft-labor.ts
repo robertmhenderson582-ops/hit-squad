@@ -30,6 +30,14 @@ export const CRAFT_POSITIONS = [
 
 export const LISTED_POSITIONS = [...STAFF_POSITIONS, ...CRAFT_POSITIONS] as const;
 
+export const SUPPORT_DUTIES = [
+  "Tool Room Attendant",
+  "Fire Watch",
+  "Hole Watch",
+  "Safety Attendant",
+  "Material Handler",
+] as const;
+
 export const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 
 export const CRAFT_SHIFTS = ["Days", "Nights", "Days & nights"] as const;

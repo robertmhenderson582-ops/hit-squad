@@ -8,11 +8,14 @@ export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
   "Hit Squad Project Controls V1.9",
+  "• Support Position opens like the other cards; you can still name the duty",
   "• Craft by phase is gone",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
   "Hit Squad Project Controls V1.9",
+  "• Support Position and Billed as use the same pickers as the other Crew cards — duty can be typed if it is not in the list; Billed as is the craft rate",
+  "• Support no longer shows empty Position · billed as — rows; a row appears when you Add position",
   "• The cream Craft by phase card is removed — subtitle, CRAFT / five-phase header, and the empty Direct Craft row are gone",
   "• Each Crew position still has its own five locked phase cards; Days & nights still bills both crews",
 ].join("\n");

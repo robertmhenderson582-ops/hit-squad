@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
+import { CRAFT_POSITIONS, SUPPORT_DUTIES } from "@/lib/craft-labor";
 
 export type SupportLine = {
   id: string;
@@ -9,8 +9,58 @@ export type SupportLine = {
   billedAs: string;
 };
 
+const CUSTOM = "__custom__";
+
 function uid() {
   return `sup-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function CatalogPick({
+  label,
+  value,
+  options,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: readonly string[];
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  const listed = (options as readonly string[]).includes(value);
+  const selectValue = listed ? value : value ? CUSTOM : "";
+  return (
+    <div className="min-w-[14rem] flex-1">
+      <p className="text-xs">{label}</p>
+      <select
+        value={selectValue}
+        onChange={(event) => {
+          const next = event.target.value === CUSTOM ? "" : event.target.value;
+          onChange(next);
+        }}
+        className="paper-field mt-1 w-full"
+        aria-label={label}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+        <option value={CUSTOM}>Type a title…</option>
+      </select>
+      {!listed ? (
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className="paper-field mt-1 w-full"
+          aria-label={`${label} title`}
+        />
+      ) : null}
+    </div>
+  );
 }
 
 export function SupportCrewCard({
@@ -21,14 +71,13 @@ export function SupportCrewCard({
   onRows: (next: SupportLine[] | ((current: SupportLine[]) => SupportLine[])) => void;
 }) {
   const confirmRemove = useConfirmRemove();
-  const [draft, setDraft] = useState({ position: "", billedAs: "" });
 
   function addPosition() {
-    onRows((current) => [
-      ...current,
-      { id: uid(), position: draft.position.trim(), billedAs: draft.billedAs.trim() },
-    ]);
-    setDraft({ position: "", billedAs: "" });
+    onRows((current) => [...current, { id: uid(), position: "", billedAs: "" }]);
+  }
+
+  function patch(id: string, patch: Partial<SupportLine>) {
+    onRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }
 
   async function remove(row: SupportLine) {
@@ -56,36 +105,29 @@ export function SupportCrewCard({
           + Add position
         </button>
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="text-xs">
-          Position
-          <input
-            value={draft.position}
-            onChange={(event) => setDraft((current) => ({ ...current, position: event.target.value }))}
-            className="paper-field mt-1"
-            placeholder="Tool Room Attendant"
-          />
-        </label>
-        <label className="text-xs">
-          Billed as
-          <input
-            value={draft.billedAs}
-            onChange={(event) => setDraft((current) => ({ ...current, billedAs: event.target.value }))}
-            className="paper-field mt-1"
-            placeholder="Boilermaker Journeyman"
-          />
-        </label>
-      </div>
-      <div className="mt-4 space-y-2">
+      <div className="mt-4 space-y-3">
         {rows.length === 0 ? (
           <p className="text-sm text-[#5b6f73]">No support positions yet.</p>
         ) : (
           rows.map((row) => (
-            <article key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d5e0de] px-3 py-2">
-              <p className="text-sm text-[#163038]">
-                <span className="font-semibold">{row.position || "Position"}</span>
-                <span className="text-[#5b6f73]"> · billed as {row.billedAs || "—"}</span>
-              </p>
+            <article
+              key={row.id}
+              className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-[#d5e0de] px-3 py-3"
+            >
+              <CatalogPick
+                label="Position"
+                value={row.position}
+                options={SUPPORT_DUTIES}
+                placeholder="Select position"
+                onChange={(position) => patch(row.id, { position })}
+              />
+              <CatalogPick
+                label="Billed as"
+                value={row.billedAs}
+                options={CRAFT_POSITIONS}
+                placeholder="Select billed as"
+                onChange={(billedAs) => patch(row.id, { billedAs })}
+              />
               <button type="button" onClick={() => void remove(row)} className="text-sm text-[#b74120]">
                 Remove
               </button>
