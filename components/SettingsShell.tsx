@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useLensUser } from "@/components/OwnerDeskContext";
+import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useSession } from "@/components/SessionProvider";
 import { canUseViewAs, hasBuildDesk, isOwner } from "@/lib/desk-role";
 
 const SECTIONS: {
@@ -36,10 +37,13 @@ function active(pathname: string, href: string, exact?: boolean) {
 
 export function SettingsShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { user } = useSession();
   const lens = useLensUser();
-  const owner = isOwner(lens);
-  const buildDesk = hasBuildDesk(lens);
-  const viewAsOk = canUseViewAs(lens);
+  const desk = useOwnerDesk();
+  const waiting = Boolean(hasBuildDesk(user) && desk && !desk.lensReady);
+  const owner = isOwner(lens) && !waiting;
+  const buildDesk = hasBuildDesk(lens) && !waiting;
+  const viewAsOk = canUseViewAs(lens) && !waiting;
 
   return (
     <div className="mt-5 grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">

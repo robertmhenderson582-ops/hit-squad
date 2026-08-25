@@ -1,11 +1,13 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useSession } from "@/components/SessionProvider";
 import { aliasText, shouldApplyAliases } from "@/lib/catalog-aliases";
 import { canUseViewAs, hasBuildDesk, isTester, lensUser, testerFromViewAs, viewingAsOther } from "@/lib/desk-role";
 import {
   aliasLensFor,
+  isViewAsSeat,
+  preferredViewAs,
   type FollowSeat,
   type OwnerSettings,
   type RepublishState,
@@ -15,6 +17,26 @@ import {
 import { isJosephEmail, testerByEmail } from "@/lib/tester-seats";
 
 const JOSEPH_VIEW_KEY = "hs_joseph_view";
+const VIEW_AS_STORE = "hs_view_as";
+
+function readStoredViewAs(): ViewAsSeat | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const raw = window.sessionStorage.getItem(VIEW_AS_STORE);
+    return isViewAsSeat(raw) ? raw : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeStoredViewAs(seat: ViewAsSeat) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(VIEW_AS_STORE, seat);
+  } catch {
+    // keep the in-memory lens
+  }
+}
 
 type JosephView = {
   viewAs?: ViewAsSeat;
@@ -43,6 +65,7 @@ type OwnerDeskState = {
   viewResponsibility: ViewResponsibility;
   viewSite: string;
   republish: RepublishState | null;
+  lensReady: boolean;
   setAliasesOn: (on: boolean) => void;
   setFollowSeat: (seat: FollowSeat) => void;
   setViewAs: (seat: ViewAsSeat) => void;
@@ -80,12 +103,26 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
   const [viewResponsibility, setViewResponsibility] = useState<ViewResponsibility>("Estimator");
   const [viewSite, setViewSite] = useState("Wood River — Roxana, IL");
   const [republish, setRepublish] = useState<RepublishState | null>(null);
+  const [lensReady, setLensReady] = useState(!hasBuildDesk(user));
+
+  useLayoutEffect(() => {
+    if (tester || !hasBuildDesk(user)) {
+      setViewAsState("owner");
+      setLensReady(true);
+      return;
+    }
+    const stored = readStoredViewAs();
+    if (stored) setViewAsState(stored);
+    setLensReady(true);
+  }, [tester, user]);
 
   useEffect(() => {
     if (tester) {
       setAliasesOnState(tester.aliased);
       setFollowSeatState("owner");
       setViewAsState("owner");
+      writeStoredViewAs("owner");
+      setLensReady(true);
       if (isJosephEmail(user?.email)) {
         const saved = readJosephView();
         if (saved.viewResponsibility) setViewResponsibility(saved.viewResponsibility);
@@ -99,18 +136,25 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
         .catch(() => undefined);
       return;
     }
+    if (!hasBuildDesk(user)) {
+      setLensReady(true);
+      return;
+    }
     fetch("/api/desk/owner-settings", { credentials: "include", cache: "no-store" })
       .then((response) => response.json())
       .then((data) => {
         if (typeof data.aliasesOn === "boolean") setAliasesOnState(data.aliasesOn);
         if (data.followSeat) setFollowSeatState(data.followSeat);
-        if (data.viewAs) setViewAsState(data.viewAs);
+        const nextView = preferredViewAs(readStoredViewAs(), data.viewAs);
+        setViewAsState(nextView);
+        writeStoredViewAs(nextView);
         if (data.viewResponsibility) setViewResponsibility(data.viewResponsibility);
         if (data.viewSite) setViewSite(data.viewSite);
         if (data.republish) setRepublish(data.republish);
+        setLensReady(true);
       })
-      .catch(() => undefined);
-  }, [tester, user?.email]);
+      .catch(() => setLensReady(true));
+  }, [tester, user]);
 
   const viewedSeat = hasBuildDesk(user) && viewingAsOther(viewAs) ? testerFromViewAs(viewAs) : undefined;
   const aliasSeat = viewedSeat
@@ -151,6 +195,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     if (!hasBuildDesk(user)) return;
+    writeStoredViewAs(seat);
     saveSettings({ viewAs: seat });
     noteFeature(seat === "owner" ? "View as owner" : `View as ${seat}`);
   }, [user]);
@@ -178,6 +223,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       viewResponsibility,
       viewSite,
       republish,
+      lensReady,
       setAliasesOn,
       setFollowSeat,
       setViewAs,
@@ -185,7 +231,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       alias,
       applyingAliases,
     }),
-    [aliasesOn, followSeat, viewAs, viewResponsibility, viewSite, republish, setAliasesOn, setFollowSeat, setViewAs, setViewLens, alias, applyingAliases],
+    [aliasesOn, followSeat, viewAs, viewResponsibility, viewSite, republish, lensReady, setAliasesOn, setFollowSeat, setViewAs, setViewLens, alias, applyingAliases],
   );
 
   return <OwnerDeskContext.Provider value={value}>{children}</OwnerDeskContext.Provider>;

@@ -2,10 +2,10 @@
 
 import { AuthGate } from "@/components/AuthGate";
 import { DeskChrome } from "@/components/DeskChrome";
-import { useLensUser } from "@/components/OwnerDeskContext";
+import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { SettingsShell } from "@/components/SettingsShell";
 import { useSession } from "@/components/SessionProvider";
-import { pageAllowedForSeat } from "@/lib/desk-role";
+import { hasBuildDesk, pageAllowedForSeat } from "@/lib/desk-role";
 
 export function SettingsGate({
   ownerOnly,
@@ -20,10 +20,12 @@ export function SettingsGate({
 }) {
   const { user } = useSession();
   const lens = useLensUser();
+  const desk = useOwnerDesk();
   const flags = { ownerOnly, buildDesk, viewAs };
   const sessionOk = pageAllowedForSeat(user, flags);
   const lensOk = pageAllowedForSeat(lens, flags);
-  const allowed = sessionOk && lensOk;
+  const waiting = Boolean(hasBuildDesk(user) && desk && !desk.lensReady && (ownerOnly || buildDesk || viewAs));
+  const allowed = sessionOk && lensOk && !waiting;
 
   return (
     <AuthGate require="authenticated">

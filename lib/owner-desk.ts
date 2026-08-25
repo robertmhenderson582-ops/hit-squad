@@ -69,6 +69,12 @@ export function isViewAsSeat(value: unknown): value is ViewAsSeat {
   return isFollowSeat(value);
 }
 
+/** Client store wins so a serverless GET cannot reset the lens to owner. */
+export function preferredViewAs(stored: ViewAsSeat | undefined, server?: ViewAsSeat): ViewAsSeat {
+  if (stored) return stored;
+  return server && isViewAsSeat(server) ? server : "owner";
+}
+
 export function aliasLensFor(seat: FollowSeat): AliasSeat {
   if (seat === "owner") return "owner";
   if (seat === "nathan" || seat === "john" || seat === "wendell" || seat === "benny" || seat === "chance") {
