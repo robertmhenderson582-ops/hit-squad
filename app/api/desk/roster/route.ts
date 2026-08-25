@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
-import { addRosterEntry, clearRoster, listRoster, PERMISSIONS } from "@/lib/roster";
-import type { RosterPermission } from "@/lib/types";
+import { addRosterEntry, clearRoster, EMPTY_MODULES, listRoster, PERMISSIONS, removeRosterEntry } from "@/lib/roster";
+import type { RosterEntry, RosterPermission } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +36,11 @@ export async function POST(request: Request) {
     permission?: RosterPermission;
     expires?: string;
     reset?: boolean;
+    removeId?: string;
+    modules?: RosterEntry["modules"];
+    estimate?: boolean;
+    rateBuilder?: boolean;
+    passwordSet?: boolean;
   };
   try {
     body = await request.json();
@@ -45,6 +50,10 @@ export async function POST(request: Request) {
 
   if (body.reset) {
     clearRoster();
+    return NextResponse.json({ roster: listRoster() });
+  }
+  if (body.removeId) {
+    removeRosterEntry(body.removeId);
     return NextResponse.json({ roster: listRoster() });
   }
 
@@ -58,6 +67,10 @@ export async function POST(request: Request) {
     email: body.email,
     permission: body.permission,
     expires: body.expires || "",
+    modules: body.modules ?? EMPTY_MODULES,
+    estimate: body.estimate ?? true,
+    rateBuilder: body.rateBuilder ?? body.permission !== "Look & feel",
+    passwordSet: body.passwordSet ?? false,
   });
   return NextResponse.json({ entry, roster: listRoster() });
 }

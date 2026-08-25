@@ -1,22 +1,17 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
-import { DeskChrome } from "@/components/DeskChrome";
-import { UsersAdmin } from "@/components/UsersAdmin";
-import { useSession } from "@/components/SessionProvider";
 
-export default function UsersPage() {
-  const { user } = useSession();
-
+export default function UsersRedirectPage() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/settings/users");
+  }, [router]);
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="USERS">
-        {user?.role === "owner" ? (
-          <UsersAdmin />
-        ) : (
-          <p className="mt-4 text-[#5b6f73]">Owner desk only.</p>
-        )}
-      </DeskChrome>
+      <p className="p-6 text-sm text-[#5b6f73]">Opening Settings → Manage users…</p>
     </AuthGate>
   );
 }
