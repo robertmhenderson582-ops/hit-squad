@@ -58,7 +58,7 @@ Login uses the night-refinery brand hero with HIT SQUAD ESTIMATORS. After sign-i
 
 ## Rebuild list (do not regress)
 
-- Home (`/`) stays **four tiles**: Jobs / Estimates / Cost / HSE. Do not replace home with an Estimates-only blotter.
+- Home (`/`) stays **four tiles**: Jobs / Estimates / Cost / HSE, plus the night-refinery HIT SQUAD ESTIMATORS hero (New Phillips 66 estimate / Other client / Simple shop job) and Madison plant tiles. Do not replace home with an Estimates-only blotter.
 - Header may add Sites, Change orders, Rates (Illinois builder), Quality / ITP, Cost / PPR, New estimate.
 - Brand: HIT SQUAD over PROJECT CONTROLS, steel `#0f5f6d`, amber FIELD TRIAL — NOT A RELEASE, Madison confidentiality checkbox, original night-refinery hero.
 - Do not touch auth files (`/api/auth/*`, session cookie, AuthGate). No Google/X, no public Create account, no GET-submit login, no `sessionStorage` fake sessions.

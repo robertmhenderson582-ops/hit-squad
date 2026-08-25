@@ -1,15 +1,15 @@
 "use client";
 
+import { Suspense } from "react";
 import { AuthGate } from "@/components/AuthGate";
-import { DeskChrome } from "@/components/DeskChrome";
 import { NewEstimateForm } from "@/components/NewEstimateForm";
 
 export default function NewEstimatePage() {
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="NEW ESTIMATE">
+      <Suspense fallback={<p className="p-6 font-mono text-xs tracking-[0.2em] text-steel">OPENING PACKAGE</p>}>
         <NewEstimateForm />
-      </DeskChrome>
+      </Suspense>
     </AuthGate>
   );
 }

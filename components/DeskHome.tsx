@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { DeskHero } from "@/components/DeskHero";
+import { SitesDesk } from "@/components/SitesDesk";
 import { StatusStamp } from "@/components/StatusStamp";
 import type { DeskBoard } from "@/lib/types";
 
@@ -46,6 +48,7 @@ export function DeskHome() {
 
   return (
     <div className="mt-5 space-y-6">
+      <DeskHero />
       <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
         Owner blotter for Madison / P66 outage, T&amp;M, cost, and HSE. Records stay with the
         signed-in desk. Field trial — not a release.
@@ -100,6 +103,7 @@ export function DeskHome() {
           </table>
         </div>
       </section>
+      <SitesDesk />
     </div>
   );
 }

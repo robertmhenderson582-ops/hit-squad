@@ -2,33 +2,45 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
 import { ModuleTable } from "@/components/ModuleTable";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 
-const TABS = ["Setup", "Crew / staffing", "Activities / WBS"] as const;
-
 export function EstimateDetail({ estimateId }: { estimateId: string }) {
   const { board, error } = useDeskBoard();
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Setup");
+  const [tab, setTab] = useState<EstimateTab>("summary");
   const estimate = board?.estimates.find((row) => row.id === estimateId);
   const site = board?.sites.find((row) => row.id === estimate?.siteId);
-  const crews = useMemo(
-    () => board?.crews.filter((row) => row.estimateId === estimateId) ?? [],
-    [board, estimateId],
-  );
+  const crews = useMemo(() => board?.crews.filter((row) => row.estimateId === estimateId) ?? [], [board, estimateId]);
   const activities = useMemo(
     () => board?.activities.filter((row) => row.estimateId === estimateId) ?? [],
     [board, estimateId],
   );
+  const equipment = useMemo(
+    () => board?.equipment.filter((row) => row.estimateId === estimateId) ?? [],
+    [board, estimateId],
+  );
+  const staffing = useMemo(
+    () => board?.staffing.filter((row) => row.estimateId === estimateId) ?? [],
+    [board, estimateId],
+  );
+  const changes = useMemo(
+    () => board?.changeOrders.filter((row) => row.estimateCode === estimate?.code) ?? [],
+    [board, estimate],
+  );
+  const cost = useMemo(
+    () => board?.cost.filter((row) => row.estimateCode === estimate?.code) ?? [],
+    [board, estimate],
+  );
 
-  if (error) return <p className="mt-4 text-amber-label">{error}</p>;
-  if (!board) return <p className="mt-4 font-mono text-xs tracking-[0.2em] text-steel-glow">LOADING PACKAGE</p>;
+  if (error) return <p className="p-6 text-amber-flare">{error}</p>;
+  if (!board) return <p className="p-6 font-mono text-xs tracking-[0.2em] text-steel">LOADING PACKAGE</p>;
   if (!estimate) {
     return (
-      <p className="mt-4 text-paper-cream/80">
+      <p className="p-6">
         That package is not on this desk.{" "}
-        <Link href="/estimates" className="text-amber-label underline">
+        <Link href="/estimates" className="text-steel underline">
           Back to estimates
         </Link>
       </p>
@@ -36,94 +48,40 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
   }
 
   return (
-    <div className="mt-4 space-y-5">
-      <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
-        {estimate.code} · {estimate.client} · {estimate.unit}. Job setup, crew, and WBS stay with the
-        signed-in owner.
-      </p>
-      <div className="grid gap-3 sm:grid-cols-4">
-        <article className="steel-plate paper-grain px-4 py-3">
-          <p className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">LABOR</p>
-          <p className="font-mono text-lg text-amber-label">{estimate.labor}</p>
-        </article>
-        <article className="steel-plate paper-grain px-4 py-3">
-          <p className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">MATERIAL</p>
-          <p className="font-mono text-lg text-amber-label">{estimate.material}</p>
-        </article>
-        <article className="steel-plate paper-grain px-4 py-3">
-          <p className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">TOTAL</p>
-          <p className="font-mono text-lg text-amber-label">{estimate.total}</p>
-        </article>
-        <article className="steel-plate paper-grain px-4 py-3">
-          <p className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">STATUS</p>
-          <div className="mt-1">
-            <StatusStamp value={estimate.status} />
+    <EstimateWorkspace crumb={`${site?.name ?? estimate.unit} / ${estimate.title}`} tab={tab} onTab={setTab}>
+      {tab === "summary" ? (
+        <section className="plant-card mx-auto max-w-3xl px-6 py-6">
+          <h1 className="text-3xl font-semibold text-[#163038]">Project</h1>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <span className="pill bg-steel text-white">Existing customer</span>
+            <span className="pill border border-[#c5d4d4] bg-white">New / potential client</span>
           </div>
-        </article>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {TABS.map((item) => (
-          <button
-            key={item}
-            type="button"
-            onClick={() => setTab(item)}
-            className={`border px-3 py-2 font-mono text-[11px] tracking-[0.16em] ${
-              tab === item ? "border-amber-label text-amber-label" : "border-steel-rim/40 text-paper-cream/80"
-            }`}
-          >
-            {item.toUpperCase()}
-          </button>
-        ))}
-      </div>
-
-      {tab === "Setup" ? (
-        <section className="steel-plate paper-grain grid gap-4 px-4 py-4 sm:grid-cols-2">
-          <div>
-            <p className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">SITE / PLANT</p>
-            <p className="mt-1">{site?.name ?? "—"}</p>
-            <p className="font-mono text-xs text-paper-cream/70">{site?.plant}</p>
+          <p className="mt-6 text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">STATUS</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <span className="pill bg-steel text-white">Estimate</span>
+            <span className="pill border border-[#c5d4d4] bg-white">Submitted</span>
+            <span className="pill border border-[#c5d4d4] bg-white">Awarded</span>
           </div>
-          <div>
-            <p className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">CONTRACT</p>
-            <p className="mt-1">{estimate.type}</p>
-            <p className="font-mono text-xs text-paper-cream/70">{site?.contract}</p>
-          </div>
-          <div>
-            <p className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">WINDOW</p>
-            <p className="mt-1">{estimate.window}</p>
-          </div>
-          <div>
-            <p className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">GATE / ACCESS</p>
-            <p className="mt-1">{site?.gate ?? "—"}</p>
-          </div>
-          <div className="sm:col-span-2">
-            <p className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">UNITS ON SITE</p>
-            <p className="mt-1">{site?.units.join(" · ")}</p>
-          </div>
+          <label className="mt-6 block">
+            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE TYPE</span>
+            <input readOnly value={estimate.type} className="paper-field mt-2" />
+          </label>
+          <label className="mt-4 block">
+            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">CLIENT</span>
+            <input readOnly value={estimate.client} className="paper-field mt-2" />
+          </label>
+          <label className="mt-4 block">
+            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE NAME</span>
+            <input readOnly value={estimate.title} className="paper-field mt-2" />
+          </label>
+          <p className="mt-4 text-sm text-[#5b6f73]">
+            {estimate.code} · {estimate.window} · {estimate.total} · <StatusStamp value={estimate.status} />
+          </p>
         </section>
       ) : null}
 
-      {tab === "Crew / staffing" ? (
-        <ModuleTable
-          caption="CREW SHEET — BURDENED IL RATES"
-          headers={["CRAFT", "HEADCOUNT", "SHIFT", "HRS", "BASE", "BURDENED"]}
-        >
-          {crews.map((row) => (
-            <tr key={row.id} className="border-t border-steel-rim/20">
-              <td className="px-4 py-3">{row.craft}</td>
-              <td className="px-4 py-3 font-mono">{row.headcount}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.shift}</td>
-              <td className="px-4 py-3 font-mono">{row.hours}</td>
-              <td className="px-4 py-3 font-mono text-xs">${row.baseRate.toFixed(2)}</td>
-              <td className="px-4 py-3 font-mono text-xs text-amber-label">${row.burdenedRate.toFixed(2)}</td>
-            </tr>
-          ))}
-        </ModuleTable>
-      ) : null}
-
-      {tab === "Activities / WBS" ? (
-        <ModuleTable caption="WBS / ACTIVITIES" headers={["WBS", "ACTIVITY", "CRAFT", "MH", "DOLLARS", "STATUS"]}>
+      {tab === "activities" ? (
+        <ModuleTable caption="ACTIVITIES" headers={["WBS", "ACTIVITY", "CRAFT", "MH", "DOLLARS", "STATUS"]}>
           {activities.map((row) => (
             <tr key={row.id} className="border-t border-steel-rim/20">
               <td className="px-4 py-3 font-mono text-amber-label">{row.wbs}</td>
@@ -138,6 +96,80 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
           ))}
         </ModuleTable>
       ) : null}
-    </div>
+
+      {tab === "crew" ? (
+        <ModuleTable caption="CREW" headers={["CRAFT", "HEADCOUNT", "SHIFT", "HRS", "BASE", "BURDENED"]}>
+          {crews.map((row) => (
+            <tr key={row.id} className="border-t border-steel-rim/20">
+              <td className="px-4 py-3">{row.craft}</td>
+              <td className="px-4 py-3 font-mono">{row.headcount}</td>
+              <td className="px-4 py-3 font-mono text-xs">{row.shift}</td>
+              <td className="px-4 py-3 font-mono">{row.hours}</td>
+              <td className="px-4 py-3 font-mono text-xs">${row.baseRate.toFixed(2)}</td>
+              <td className="px-4 py-3 font-mono text-xs text-amber-label">${row.burdenedRate.toFixed(2)}</td>
+            </tr>
+          ))}
+        </ModuleTable>
+      ) : null}
+
+      {tab === "staffing" ? (
+        <ModuleTable caption="STAFFING" headers={["ROLE", "DAYS", "SHIFT", "HEADCOUNT"]}>
+          {staffing.map((row) => (
+            <tr key={row.id} className="border-t border-steel-rim/20">
+              <td className="px-4 py-3">{row.role}</td>
+              <td className="px-4 py-3">{row.days}</td>
+              <td className="px-4 py-3 font-mono text-xs">{row.shift}</td>
+              <td className="px-4 py-3 font-mono">{row.headcount}</td>
+            </tr>
+          ))}
+        </ModuleTable>
+      ) : null}
+
+      {tab === "equipment" ? (
+        <ModuleTable caption="EQUIPMENT" headers={["ITEM", "QTY", "PERIOD", "RATE"]}>
+          {equipment.map((row) => (
+            <tr key={row.id} className="border-t border-steel-rim/20">
+              <td className="px-4 py-3">{row.name}</td>
+              <td className="px-4 py-3 font-mono">{row.qty}</td>
+              <td className="px-4 py-3">{row.period}</td>
+              <td className="px-4 py-3 font-mono text-xs">{row.rate}</td>
+            </tr>
+          ))}
+        </ModuleTable>
+      ) : null}
+
+      {tab === "costs" ? (
+        <ModuleTable caption="COSTS" headers={["PERIOD", "BUDGET", "EARNED", "ACTUAL", "CPI", "SPI", "FORECAST"]}>
+          {cost.map((row) => (
+            <tr key={row.id} className="border-t border-steel-rim/20">
+              <td className="px-4 py-3 font-mono text-xs">{row.period}</td>
+              <td className="px-4 py-3 font-mono text-xs">{row.budget}</td>
+              <td className="px-4 py-3 font-mono text-xs">{row.earned}</td>
+              <td className="px-4 py-3 font-mono text-xs">{row.actual}</td>
+              <td className="px-4 py-3 font-mono text-xs">{row.cpi}</td>
+              <td className="px-4 py-3 font-mono text-xs">{row.spi}</td>
+              <td className="px-4 py-3 font-mono text-xs text-amber-label">{row.forecast}</td>
+            </tr>
+          ))}
+        </ModuleTable>
+      ) : null}
+
+      {tab === "change-orders" ? (
+        <ModuleTable caption="CHANGE ORDERS" headers={["NO.", "SCOPE", "ORIGIN", "LABOR", "MATL", "STATUS"]}>
+          {changes.map((row) => (
+            <tr key={row.id} className="border-t border-steel-rim/20">
+              <td className="px-4 py-3 font-mono text-amber-label">{row.number}</td>
+              <td className="px-4 py-3">{row.title}</td>
+              <td className="px-4 py-3 font-mono text-xs">{row.origin}</td>
+              <td className="px-4 py-3 font-mono text-xs">{row.laborDelta}</td>
+              <td className="px-4 py-3 font-mono text-xs">{row.materialDelta}</td>
+              <td className="px-4 py-3">
+                <StatusStamp value={row.status} />
+              </td>
+            </tr>
+          ))}
+        </ModuleTable>
+      ) : null}
+    </EstimateWorkspace>
   );
 }

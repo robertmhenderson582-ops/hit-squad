@@ -32,6 +32,9 @@ export type SiteRecord = {
   code: string;
   name: string;
   client: string;
+  family: "Georgia Power" | "Phillips 66";
+  city: string;
+  openJobs: number;
   plant: string;
   units: string[];
   state: string;
@@ -39,6 +42,40 @@ export type SiteRecord = {
   contract: string;
   gate: string;
   notes: string;
+};
+
+export type EquipmentLine = {
+  id: string;
+  estimateId: string;
+  name: string;
+  qty: number;
+  period: string;
+  rate: string;
+};
+
+export type StaffingLine = {
+  id: string;
+  estimateId: string;
+  role: string;
+  days: string;
+  shift: string;
+  headcount: number;
+};
+
+export type RosterPermission =
+  | "Staff — estimates only"
+  | "Look & feel"
+  | "Cost / HSE"
+  | "Owner desk";
+
+export type RosterEntry = {
+  id: string;
+  name: string;
+  username: string;
+  email: string;
+  permission: RosterPermission;
+  expires: string;
+  signIn: string;
 };
 
 export type EstimateRecord = {
@@ -152,6 +189,8 @@ export type ForgebookBoard = {
   estimates: EstimateRecord[];
   crews: CrewLine[];
   activities: ActivityLine[];
+  equipment: EquipmentLine[];
+  staffing: StaffingLine[];
   changeOrders: ChangeOrderRecord[];
   rates: RateLine[];
   hse: HseRecord[];

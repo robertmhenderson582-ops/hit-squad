@@ -151,3 +151,48 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 }
+
+.desk-hero {
+  position: relative;
+  overflow: hidden;
+  min-height: 280px;
+  background:
+    linear-gradient(180deg, rgba(6, 22, 26, 0.45) 0%, rgba(6, 22, 26, 0.62) 100%),
+    url("/brand-hero.jpg") center / cover no-repeat #06161a;
+}
+
+.paper-desk {
+  background-color: #d5e4e2;
+  background-image:
+    linear-gradient(rgba(15, 95, 109, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 95, 109, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  color: #163038;
+}
+
+.plant-card {
+  background: #fff;
+  border: 1px solid rgba(15, 95, 109, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(15, 95, 109, 0.08);
+}
+
+.paper-field {
+  width: 100%;
+  border: 1px solid #c5d4d4;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.65rem 0.75rem;
+  color: #163038;
+}
+
+.est-chrome {
+  background: #0b3a43;
+  color: #efe6d4;
+}
+
+.pill {
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  font-size: 0.9rem;
+}

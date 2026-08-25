@@ -6,7 +6,7 @@ import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { Wordmark } from "@/components/Wordmark";
 import { useSession } from "@/components/SessionProvider";
 
-const NAV = [
+const NAV: { href: string; label: string; ownerOnly?: boolean }[] = [
   { href: "/jobs", label: "Jobs" },
   { href: "/estimates", label: "Estimates" },
   { href: "/cost", label: "Cost / PPR" },
@@ -15,6 +15,7 @@ const NAV = [
   { href: "/change-orders", label: "Change orders" },
   { href: "/quality", label: "Quality / ITP" },
   { href: "/rates", label: "Rates" },
+  { href: "/users", label: "Users", ownerOnly: true },
 ];
 
 function navActive(pathname: string, href: string) {
@@ -64,7 +65,7 @@ export function DeskChrome({
             </div>
           </div>
           <nav className="mt-4 flex flex-wrap gap-2 font-mono text-[11px] tracking-[0.16em]">
-            {NAV.map((item) => {
+            {NAV.filter((item) => !item.ownerOnly || user?.role === "owner").map((item) => {
               const active = navActive(pathname, item.href);
               return (
                 <Link

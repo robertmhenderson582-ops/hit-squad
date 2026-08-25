@@ -1,0 +1,63 @@
+import { NextResponse } from "next/server";
+import { readSession } from "@/lib/auth";
+import { cookieValue } from "@/lib/http";
+import { addRosterEntry, clearRoster, listRoster, PERMISSIONS } from "@/lib/roster";
+import type { RosterPermission } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
+
+async function requireOwner(request: Request) {
+  const user = await readSession(cookieValue(request));
+  if (!user) return { user: null, response: NextResponse.json({ error: "Not signed in." }, { status: 401 }) };
+  if (user.role !== "owner") {
+    return { user: null, response: NextResponse.json({ error: "Owner desk only." }, { status: 403 }) };
+  }
+  return { user, response: null };
+}
+
+export async function GET(request: Request) {
+  const gate = await requireOwner(request);
+  if (gate.response) return gate.response;
+  return NextResponse.json({
+    permissions: PERMISSIONS,
+    roster: listRoster(),
+    note: "Roster is owner-visible only. It does not create a login session.",
+  });
+}
+
+export async function POST(request: Request) {
+  const gate = await requireOwner(request);
+  if (gate.response) return gate.response;
+
+  let body: {
+    name?: string;
+    username?: string;
+    email?: string;
+    permission?: RosterPermission;
+    expires?: string;
+    reset?: boolean;
+  };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Send JSON." }, { status: 400 });
+  }
+
+  if (body.reset) {
+    clearRoster();
+    return NextResponse.json({ roster: listRoster() });
+  }
+
+  if (!body.name || !body.email || !body.permission) {
+    return NextResponse.json({ error: "Name, email, and permission are required." }, { status: 400 });
+  }
+
+  const entry = addRosterEntry({
+    name: body.name,
+    username: body.username || body.email.split("@")[0],
+    email: body.email,
+    permission: body.permission,
+    expires: body.expires || "",
+  });
+  return NextResponse.json({ entry, roster: listRoster() });
+}

@@ -2,7 +2,6 @@
 
 import { useParams } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
-import { DeskChrome } from "@/components/DeskChrome";
 import { EstimateDetail } from "@/components/EstimateDetail";
 
 export default function EstimateDetailPage() {
@@ -11,9 +10,7 @@ export default function EstimateDetailPage() {
 
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="ESTIMATE PACKAGE">
-        <EstimateDetail estimateId={id} />
-      </DeskChrome>
+      <EstimateDetail estimateId={id} />
     </AuthGate>
   );
 }

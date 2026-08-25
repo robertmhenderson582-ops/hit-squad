@@ -1,99 +1,108 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import Link from "next/link";
+import { FormEvent, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
 import { useDeskBoard } from "@/components/useDeskBoard";
 
 export function NewEstimateForm() {
+  const params = useSearchParams();
   const { board } = useDeskBoard();
+  const preset = params.get("preset") || "p66";
+  const presetSite = params.get("site") || "";
+  const [tab, setTab] = useState<EstimateTab>("summary");
+  const [customer, setCustomer] = useState<"existing" | "new">("existing");
+  const [status, setStatus] = useState("Estimate");
+  const [type, setType] = useState(preset === "shop" ? "Lump sum" : "T&M");
+  const [client, setClient] = useState(
+    preset === "other" ? "" : preset === "shop" ? "Shop" : "Phillips 66",
+  );
+  const [name, setName] = useState(
+    preset === "p66" ? "New T&M estimate" : preset === "shop" ? "Simple shop job" : "New estimate",
+  );
+  const [siteId, setSiteId] = useState(presetSite);
   const [filed, setFiled] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [siteId, setSiteId] = useState("");
-  const [type, setType] = useState("Hybrid");
-  const [window, setWindow] = useState("");
-  const [notes, setNotes] = useState("");
+
+  const sites = useMemo(() => board?.sites ?? [], [board]);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const stamp = new Date();
-    const code = `EST-${stamp.getFullYear().toString().slice(2)}${String(stamp.getMonth() + 1).padStart(2, "0")}-${String(stamp.getDate()).padStart(2, "0")}`;
-    setFiled(code);
-  }
-
-  if (filed) {
-    return (
-      <section className="steel-plate paper-grain mt-5 px-4 py-5">
-        <p className="font-mono text-[10px] tracking-[0.22em] text-amber-label">FILED ON THIS DESK</p>
-        <p className="mt-2 font-display text-2xl">{filed}</p>
-        <p className="mt-2 text-sm text-paper-cream/80">
-          Draft package opened for {title || "untitled work"}. Field trial does not push this to a
-          client system. It stays on the owner blotter.
-        </p>
-        <Link href="/estimates" className="mt-4 inline-block text-amber-label underline underline-offset-4">
-          Return to estimates
-        </Link>
-      </section>
+    setFiled(
+      `EST-${stamp.getFullYear().toString().slice(2)}${String(stamp.getMonth() + 1).padStart(2, "0")}-${String(stamp.getDate()).padStart(2, "0")}`,
     );
   }
 
   return (
-    <form onSubmit={onSubmit} className="steel-plate paper-grain mt-5 space-y-4 px-4 py-5">
-      <p className="text-sm leading-6 text-paper-cream/80">
-        Open a working package. Site list is owner-scoped. Nothing leaves this desk.
-      </p>
-      <label className="block">
-        <span className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">PACKAGE TITLE</span>
-        <input
-          required
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          className="steel-field mt-1 w-full px-3 py-2"
-        />
-      </label>
-      <label className="block">
-        <span className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">SITE</span>
-        <select
-          required
-          value={siteId}
-          onChange={(event) => setSiteId(event.target.value)}
-          className="steel-field mt-1 w-full px-3 py-2"
-        >
-          <option value="">Select plant / pad</option>
-          {(board?.sites ?? []).map((site) => (
-            <option key={site.id} value={site.id}>
-              {site.code} — {site.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="block">
-        <span className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">CONTRACT TYPE</span>
-        <select value={type} onChange={(event) => setType(event.target.value)} className="steel-field mt-1 w-full px-3 py-2">
-          <option>Hybrid</option>
-          <option>T&M</option>
-          <option>Lump sum</option>
-        </select>
-      </label>
-      <label className="block">
-        <span className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">OUTAGE / T&M WINDOW</span>
-        <input
-          value={window}
-          onChange={(event) => setWindow(event.target.value)}
-          className="steel-field mt-1 w-full px-3 py-2"
-          placeholder="e.g. 12 Sep → 04 Oct 2026"
-        />
-      </label>
-      <label className="block">
-        <span className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">NOTES</span>
-        <textarea
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-          className="steel-field mt-1 min-h-24 w-full px-3 py-2"
-        />
-      </label>
-      <button type="submit" className="bg-amber-flare px-4 py-2 font-display tracking-[0.18em] text-ink">
-        OPEN PACKAGE
-      </button>
-    </form>
+    <EstimateWorkspace crumb={`${client || "Client"} / ${name}`} tab={tab} onTab={setTab}>
+      {tab !== "summary" ? (
+        <p className="text-[#5b6f73]">Open the package on Summary first. Other rails fill after the blotter has a file.</p>
+      ) : (
+        <form onSubmit={onSubmit} className="plant-card mx-auto max-w-3xl px-6 py-6">
+          <h1 className="text-3xl font-semibold text-[#163038]">Project</h1>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setCustomer("existing")}
+              className={`pill ${customer === "existing" ? "bg-steel text-white" : "border border-[#c5d4d4] bg-white"}`}
+            >
+              Existing customer
+            </button>
+            <button
+              type="button"
+              onClick={() => setCustomer("new")}
+              className={`pill ${customer === "new" ? "bg-steel text-white" : "border border-[#c5d4d4] bg-white"}`}
+            >
+              New / potential client
+            </button>
+          </div>
+          <p className="mt-6 text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">STATUS</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {["Estimate", "Submitted", "Awarded"].map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setStatus(item)}
+                className={`pill ${status === item ? "bg-steel text-white" : "border border-[#c5d4d4] bg-white"}`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          <label className="mt-6 block">
+            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE TYPE</span>
+            <input value={type} onChange={(event) => setType(event.target.value)} className="paper-field mt-2" />
+          </label>
+          <label className="mt-4 block">
+            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">CLIENT</span>
+            <input value={client} onChange={(event) => setClient(event.target.value)} className="paper-field mt-2" />
+          </label>
+          <label className="mt-4 block">
+            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE NAME</span>
+            <input value={name} onChange={(event) => setName(event.target.value)} className="paper-field mt-2" />
+          </label>
+          <label className="mt-4 block">
+            <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">SITE</span>
+            <select value={siteId} onChange={(event) => setSiteId(event.target.value)} className="paper-field mt-2">
+              <option value="">Select plant</option>
+              {sites.map((site) => (
+                <option key={site.id} value={site.id}>
+                  {site.family} — {site.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {filed ? (
+            <p className="mt-5 text-sm text-[#163038]">
+              Draft {filed} is on this desk only. It does not create a login or leave the owner blotter.
+            </p>
+          ) : (
+            <button type="submit" className="mt-6 rounded-lg bg-steel px-5 py-3 text-white">
+              Open package
+            </button>
+          )}
+        </form>
+      )}
+    </EstimateWorkspace>
   );
 }
