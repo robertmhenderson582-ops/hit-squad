@@ -82,11 +82,21 @@ export function JobSetupCard({
       </label>
       <label className="mt-4 block">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">AFE / TA NAME</span>
-        <input className="paper-field mt-2" placeholder="AFE or TA name" />
+        <input
+          className="paper-field mt-2"
+          placeholder="AFE or TA name"
+          value={pack.jobMeta.afeName}
+          onChange={(event) => pack.setJobMeta((current) => ({ ...current, afeName: event.target.value }))}
+        />
       </label>
       <label className="mt-4 block">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">AREA / UNIT</span>
-        <input className="paper-field mt-2" placeholder="CAT, Coker, FCC…" />
+        <input
+          className="paper-field mt-2"
+          placeholder="CAT, Coker, FCC…"
+          value={pack.jobMeta.area}
+          onChange={(event) => pack.setJobMeta((current) => ({ ...current, area: event.target.value }))}
+        />
         <p className="mt-1 text-xs text-[#5b6f73]">A unit, not the refinery title.</p>
       </label>
       <label className="mt-4 block">

@@ -1222,6 +1222,60 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   user-select: none;
 }
 
+.staffing-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: max-content;
+  font-size: 13px;
+  color: #163038;
+}
+
+.staffing-grid th,
+.staffing-grid td {
+  border: 1px solid #c5d4d4;
+  padding: 0.35rem 0.55rem;
+  white-space: nowrap;
+  background: #fff;
+}
+
+.staffing-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #0f5f6d;
+  color: #fff;
+  font-weight: 600;
+}
+
+.staffing-grid thead tr:nth-child(2) th {
+  top: 2.15rem;
+  z-index: 3;
+}
+
+.staffing-grid .staffing-sticky-left,
+.staffing-grid .staffing-sticky-code {
+  position: sticky;
+  z-index: 2;
+  background: #f4f7f6;
+}
+
+.staffing-grid .staffing-sticky-left {
+  left: 0;
+  min-width: 11.5rem;
+}
+
+.staffing-grid .staffing-sticky-code {
+  left: 11.5rem;
+  min-width: 4.5rem;
+}
+
+.staffing-grid thead .staffing-sticky-left,
+.staffing-grid thead .staffing-sticky-code {
+  z-index: 4;
+  background: #0f5f6d;
+  color: #fff;
+}
+
 .phase-bar {
   background: #3d4a50;
   color: #efe6d4;

@@ -43,6 +43,10 @@ describe("inbox what's-new", () => {
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
     assert.match(OWNER_WHATS_NEW, /cascades/);
+    assert.match(OWNER_WHATS_NEW, /50413486/);
+    assert.match(OWNER_WHATS_NEW, /blank, not zero/);
+    assert.match(TESTER_WHATS_NEW, /Staffing tab is back/);
+    assert.match(TESTER_WHATS_NEW, /Export P66 staffing plan/);
     assert.match(TESTER_WHATS_NEW, /Phases & work schedule now sets the job/);
     assert.match(TESTER_WHATS_NEW, /Crew picks up those windows/);
     assert.match(TESTER_WHATS_NEW, /Capture grabs the whole desk/);

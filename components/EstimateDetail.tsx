@@ -7,6 +7,7 @@ import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
 import { LaborRollup } from "@/components/LaborRollup";
 import { ModuleTable } from "@/components/ModuleTable";
+import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { EstimatePackageProvider } from "@/components/EstimatePackage";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
@@ -122,6 +123,10 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       ) : null}
 
       {tab === "staffing" ? (
+        <StaffingPlanDesk client={estimate.client} site={site?.name} name={estimate.title} />
+      ) : null}
+
+      {tab === "support" ? (
         <div className="space-y-3">
           <h2 className="font-display text-2xl font-semibold text-[#163038]">Support</h2>
           <p className="text-sm text-[#5b6f73]">
@@ -129,9 +134,9 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
             example Boilermaker Journeyman).{" "}
             <span className="font-semibold text-[#163038]">Position</span> is the duty (for example
             Tool Room Attendant). Print shows the duty and “billed as”. Look only — this split stays
-            on Support / Staffing, not on Direct Craft.
+            on Support, not on Direct Craft. The Staffing tab is the generated P66 plan.
           </p>
-          <ModuleTable caption="STAFFING" headers={["BILLED AS", "POSITION", "DAYS", "SHIFT", "HEADCOUNT"]}>
+          <ModuleTable caption="SUPPORT" headers={["BILLED AS", "POSITION", "DAYS", "SHIFT", "HEADCOUNT"]}>
             {staffing.map((row) => (
               <tr key={row.id} className="border-t border-steel-rim/20">
                 <td className="px-4 py-3">{row.billedAs}</td>

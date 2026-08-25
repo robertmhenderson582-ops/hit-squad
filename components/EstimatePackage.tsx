@@ -20,6 +20,7 @@ import {
   type PhaseRow,
   type PhaseScheduleState,
 } from "@/lib/phase-schedule";
+import { emptyJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
 import type { SupportLine } from "@/components/SupportCrewCard";
 
 type CrewState = {
@@ -35,10 +36,12 @@ type EstimatePackageApi = {
   estimateKey: string;
   schedule: PhaseScheduleState;
   crew: CrewState;
+  jobMeta: JobMeta;
   setProjectStartDate: (start: string) => void;
   patch: (id: PhaseId, next: Partial<PhaseRow>) => void;
   pickOt: (id: PhaseId, pick: PhaseOtPick) => void;
   setCrew: (next: CrewState | ((current: CrewState) => CrewState)) => void;
+  setJobMeta: (next: JobMeta | ((current: JobMeta) => JobMeta)) => void;
   addCraftRow: () => CraftRow;
 };
 
@@ -95,11 +98,13 @@ export function EstimatePackageProvider({
 }) {
   const [schedule, setSchedule] = useState<PhaseScheduleState>(() => readSchedule(estimateKey));
   const [crew, setCrewState] = useState<CrewState>(() => syncCrew(readCrew(estimateKey), readSchedule(estimateKey).phases));
+  const [jobMeta, setJobMetaState] = useState<JobMeta>(() => readJobMeta(estimateKey));
 
   useEffect(() => {
     const next = readSchedule(estimateKey);
     setSchedule(next);
     setCrewState(syncCrew(readCrew(estimateKey), next.phases));
+    setJobMetaState(readJobMeta(estimateKey));
   }, [estimateKey]);
 
   useEffect(() => {
@@ -110,11 +115,16 @@ export function EstimatePackageProvider({
     writeCrew(estimateKey, crew);
   }, [crew, estimateKey]);
 
+  useEffect(() => {
+    writeJobMeta(estimateKey, jobMeta);
+  }, [estimateKey, jobMeta]);
+
   const api = useMemo<EstimatePackageApi>(
     () => ({
       estimateKey,
       schedule,
       crew,
+      jobMeta,
       setProjectStartDate(start) {
         setSchedule((current) => {
           const next = setProjectStart(current, start);
@@ -139,11 +149,14 @@ export function EstimatePackageProvider({
       setCrew(next) {
         setCrewState((current) => (typeof next === "function" ? next(current) : next));
       },
+      setJobMeta(next) {
+        setJobMetaState((current) => (typeof next === "function" ? next(current) : next));
+      },
       addCraftRow() {
         return craftRowFromPhases(schedule.phases);
       },
     }),
-    [crew, estimateKey, schedule],
+    [crew, estimateKey, jobMeta, schedule],
   );
 
   return <EstimatePackageContext.Provider value={api}>{children}</EstimatePackageContext.Provider>;
@@ -156,10 +169,12 @@ export function useEstimatePackage() {
       estimateKey: "",
       schedule: defaultPhaseSchedule(),
       crew: emptyCrew(),
+      jobMeta: emptyJobMeta(),
       setProjectStartDate() {},
       patch() {},
       pickOt() {},
       setCrew() {},
+      setJobMeta() {},
       addCraftRow: () => blankCraftRow(),
     } satisfies EstimatePackageApi;
   }
