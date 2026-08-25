@@ -5,7 +5,6 @@ import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { GripToPan } from "@/components/GripToPan";
 import {
   CRAFT_POSITIONS,
-  CRAFT_SHIFTS,
   LISTED_POSITIONS,
   STAFF_POSITIONS,
   blankCraftRow,
@@ -13,7 +12,6 @@ import {
   cloneCraftRow,
   type CalendarRange,
   type CraftRow,
-  type CraftShift,
 } from "@/lib/craft-labor";
 import {
   clockNote,
@@ -248,9 +246,10 @@ function CraftAccordionRow({
               onClick={onToggle}
               title={open ? "Collapse" : "Expand"}
               aria-label={open ? "Collapse" : "Expand"}
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-[#5b6f73]"
+              className="crew-chevron"
             >
-              {open ? "▾" : "▸"}
+              <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+              <span className="crew-chevron-label">{open ? "Collapse" : "Expand"}</span>
             </button>
             <div className="min-w-[14rem]">
               <select
@@ -311,23 +310,7 @@ function CraftAccordionRow({
           </div>
         </td>
         <td className="px-2 py-2">
-          <select
-            value={row.shift}
-            onChange={(event) => {
-              const shift = event.target.value as CraftShift;
-              onPatch({
-                shift,
-                ranges: row.ranges.map((range) => clampPerDiem(range, shift)),
-              });
-            }}
-            className="paper-field"
-          >
-            {CRAFT_SHIFTS.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
+          <span className="text-sm text-[#5b6f73]">Per phase</span>
         </td>
         <td className="px-2 py-2">
           <span className="paper-field inline-flex min-h-[2.6rem] items-center">Calendar</span>

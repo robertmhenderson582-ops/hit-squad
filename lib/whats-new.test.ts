@@ -42,6 +42,8 @@ describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
+    assert.match(TESTER_WHATS_NEW, /Each Crew position has its own five phase cards/);
+    assert.match(TESTER_WHATS_NEW, /Collapse a position/);
     assert.match(TESTER_WHATS_NEW, /Date fields show a calendar icon/);
     assert.match(OWNER_WHATS_NEW, /calendar icon/);
     assert.equal(/password|auth|Novus|vault|Drive|\/tmp|SMTP|seat/i.test(TESTER_WHATS_NEW), false);

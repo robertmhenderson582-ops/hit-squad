@@ -1,6 +1,6 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.6";
+export const DESK_VERSION = "1.6.1";
 export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.6";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
 export const DESK_THREAD_ID = "th-desk-v1.6";
@@ -8,11 +8,16 @@ export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
   "Hit Squad Project Controls V1.6",
+  "• Each Crew position has its own five phase cards",
+  "• Collapse a position you’re not on",
   "• Date fields show a calendar icon",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
   "Hit Squad Project Controls V1.6",
+  "• Each Crew position owns its own Pre / Oil Out / Mechanical / Oil In / Post cards — adding a position does not share one global set",
+  "• Positions accordion: one open while working, collapsed on re-entry, duplicate lands collapsed, hover chevron Expand/Collapse",
+  "• Shift lives on each phase card (Days / Nights / Days & nights). Days & nights is dual count",
   "• Phase START/STOP and Job setup date fields show a high-contrast steel/teal calendar icon",
 ].join("\n");
 

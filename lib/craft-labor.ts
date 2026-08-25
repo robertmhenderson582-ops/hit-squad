@@ -1,6 +1,6 @@
 import type { ClockOverride } from "./hours-clock";
 import type { LaborClass } from "./labor-class";
-import { rangeSeedsFromPhases, type PhaseRow } from "./phase-schedule";
+import { PHASE_IDS, rangeSeedsFromPhases, type PhaseRow } from "./phase-schedule.ts";
 
 export const STAFF_POSITIONS = [
   "Analyst Cost 01",
@@ -149,7 +149,7 @@ export function uniqueCraftNames(rows: CraftRow[]) {
 export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange): CalendarRange {
   const seed = rangeSeedsFromPhases([row])[0];
   return {
-    id: prev?.id || seed.id,
+    id: prev?.id && prev.phaseId === seed.phaseId ? prev.id : uid("rg"),
     phaseId: seed.phaseId,
     start: seed.start,
     end: seed.end,
@@ -167,10 +167,10 @@ export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange): CalendarRan
 
 export function rangesFromPhases(phases: PhaseRow[], previous: CalendarRange[] = []): CalendarRange[] {
   const extras = previous.filter((range) => !range.phaseId);
-  return [
-    ...phases.filter((row) => row.on).map((row) => rangeFromPhase(row, previous.find((item) => item.phaseId === row.id))),
-    ...extras,
-  ];
+  const owned = PHASE_IDS.map((id) => phases.find((item) => item.id === id))
+    .filter((row): row is PhaseRow => Boolean(row?.on))
+    .map((row) => rangeFromPhase(row, previous.find((item) => item.phaseId === row.id)));
+  return [...owned, ...extras];
 }
 
 export function craftRowFromPhases(phases: PhaseRow[]): CraftRow {

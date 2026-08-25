@@ -31,7 +31,7 @@ export function CrewPhaseCards({
 
   return (
     <GripToPan className="mt-3">
-      <div className="flex min-w-max gap-3 pb-1">
+      <div className="flex min-w-max gap-3 pb-1" data-crew-position={row.id}>
         {PHASE_IDS.map((id) => {
           const phase = pack.schedule.phases.find((item) => item.id === id);
           const range = row.ranges.find((item) => item.phaseId === id);
