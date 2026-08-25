@@ -1,5 +1,6 @@
 "use client";
 
+import { DateField } from "@/components/DateField";
 import { GripToPan } from "@/components/GripToPan";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import {
@@ -189,24 +190,24 @@ function CalendarPattern({
       </div>
       <p className="text-xs text-[#163038]">Headcount × shift hours on each selected weekday in the range.</p>
       <div className="grid grid-cols-2 gap-2">
-        <label className="text-xs">
+        <div className="text-xs">
           Start
-          <input
-            type="date"
+          <DateField
             value={range.start}
-            onChange={(event) => onPatch({ start: event.target.value })}
-            className="paper-field mt-1"
+            className="mt-1"
+            aria-label="Calendar pattern start"
+            onChange={(start) => onPatch({ start })}
           />
-        </label>
-        <label className="text-xs">
+        </div>
+        <div className="text-xs">
           End
-          <input
-            type="date"
+          <DateField
             value={range.end}
-            onChange={(event) => onPatch({ end: event.target.value < range.start ? range.start : event.target.value })}
-            className="paper-field mt-1"
+            className="mt-1"
+            aria-label="Calendar pattern end"
+            onChange={(end) => onPatch({ end: end < range.start ? range.start : end })}
           />
-        </label>
+        </div>
         <label className="text-xs">
           Shift
           <select

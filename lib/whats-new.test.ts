@@ -42,8 +42,10 @@ describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Crew expand\/collapse control is larger and easier to see/);
+    assert.match(TESTER_WHATS_NEW, /Crew collapse control is larger/);
+    assert.match(TESTER_WHATS_NEW, /Phase START\/STOP dates open a calendar/);
     assert.match(OWNER_WHATS_NEW, /24px steel\/teal control/);
+    assert.match(OWNER_WHATS_NEW, /opens the date picker/);
     assert.equal(/password|auth|Novus|vault|Drive|\/tmp|SMTP|seat/i.test(TESTER_WHATS_NEW), false);
 
     const first = applyWhatsNew([], "tester-joseph-new", false);

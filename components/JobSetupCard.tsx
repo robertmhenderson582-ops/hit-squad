@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CreatedBy } from "@/components/CreatedBy";
+import { DateField } from "@/components/DateField";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { displayEstimateType, ESTIMATE_TYPES, type EstimateType } from "@/lib/estimate-type";
 import { jobEventLabel } from "@/lib/job-event";
@@ -76,15 +77,15 @@ export function JobSetupCard({
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE NAME</span>
         <input readOnly value={name} className="paper-field mt-2" />
       </label>
-      <label className="mt-4 block">
+      <div className="mt-4">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">PROJECT START</span>
-        <input
-          type="date"
+        <DateField
           value={pack.schedule.projectStart}
-          onChange={(event) => pack.setProjectStartDate(event.target.value)}
-          className="paper-field mt-2"
+          onChange={(start) => pack.setProjectStartDate(start)}
+          className="mt-2"
+          aria-label="Project start"
         />
-      </label>
+      </div>
       <label className="mt-4 block">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">AFE / TA NAME</span>
         <input

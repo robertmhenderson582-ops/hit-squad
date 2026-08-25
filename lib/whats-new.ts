@@ -8,13 +8,15 @@ export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
   "Hit Squad Project Controls V1.7",
-  "• Crew expand/collapse control is larger and easier to see",
+  "• Crew collapse control is larger",
+  "• Phase START/STOP dates open a calendar",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
   "Hit Squad Project Controls V1.7",
   "• Crew expand/collapse chevron is a 24px steel/teal control so it reads on the dark HUD",
   "• Same larger control on Staff, General Foreman, Foreman, and Direct Craft position rows",
+  "• Job setup phase START/STOP (and project start) show a steel/teal calendar icon that opens the date picker",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

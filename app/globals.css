@@ -1343,6 +1343,62 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   white-space: nowrap;
 }
 
+.date-field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 11.25rem;
+  width: 100%;
+}
+
+.date-field-input {
+  color-scheme: light;
+  padding-right: 2.4rem;
+}
+
+.date-field-input::-webkit-calendar-picker-indicator {
+  display: none;
+}
+
+.date-field-cal {
+  position: absolute;
+  right: 0.35rem;
+  display: grid;
+  height: 24px;
+  width: 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #0f5f6d;
+  cursor: pointer;
+}
+
+.date-field-cal svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.date-field-cal:hover,
+.date-field-cal:focus-visible {
+  background: rgba(15, 95, 109, 0.12);
+}
+
+.date-field.is-disabled .date-field-cal {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+.industrial-root .date-field-cal {
+  color: #3ec6d4;
+}
+
+.industrial-root .date-field-cal:hover,
+.industrial-root .date-field-cal:focus-visible {
+  background: rgba(62, 198, 212, 0.18);
+}
+
 .staffing-grid {
   border-collapse: separate;
   border-spacing: 0;
