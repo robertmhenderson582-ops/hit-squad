@@ -174,8 +174,8 @@ textarea:focus {
   isolation: isolate;
   min-height: 460px;
   background:
-    radial-gradient(55% 48% at 50% 36%, rgba(6, 22, 26, 0.08) 0%, rgba(6, 22, 26, 0.38) 52%, rgba(6, 22, 26, 0.9) 100%),
-    url("/brand-hero.jpg") center 38% / cover no-repeat #06161a;
+    radial-gradient(58% 46% at 50% 28%, rgba(6, 22, 26, 0.12) 0%, rgba(6, 22, 26, 0.28) 55%, rgba(6, 22, 26, 0.78) 100%),
+    url("/brand-hero.jpg") center 22% / cover no-repeat #06161a;
 }
 
 .desk-hero::before,

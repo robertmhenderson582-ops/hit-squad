@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "HIT SQUAD PROJECT CONTROLS",
     description: "Field trial — not a release.",
-    images: [{ url: "/brand-hero.jpg", width: 1536, height: 1024, alt: "HIT SQUAD PROJECT CONTROLS" }],
+    images: [{ url: "/brand-hero.jpg", width: 1536, height: 840, alt: "HIT SQUAD PROJECT CONTROLS" }],
   },
 };
 

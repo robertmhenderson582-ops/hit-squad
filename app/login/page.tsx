@@ -16,7 +16,7 @@ export default function LoginPage() {
             src="/brand-hero.jpg"
             alt="HIT SQUAD PROJECT CONTROLS"
             width={1536}
-            height={1024}
+            height={840}
             priority
             className="login-og-image"
           />
