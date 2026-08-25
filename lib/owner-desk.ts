@@ -244,6 +244,8 @@ export const VIEW_AS_HIDDEN_SETTINGS = [
   "/settings/users",
   "/settings/follow",
   "/settings/activity",
+  "/settings/view-as",
+  "/settings/aliases",
   "/settings/vault",
   "/settings/republish",
   "/settings/branding",

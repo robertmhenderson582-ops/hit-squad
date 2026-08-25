@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useSession } from "@/components/SessionProvider";
 import { aliasText, shouldApplyAliases } from "@/lib/catalog-aliases";
-import { canUseViewAs, hasBuildDesk, isTester } from "@/lib/desk-role";
+import { canUseViewAs, hasBuildDesk, isTester, lensUser, testerFromViewAs, viewingAsOther } from "@/lib/desk-role";
 import {
   aliasLensFor,
   type FollowSeat,
@@ -112,8 +112,21 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       .catch(() => undefined);
   }, [tester, user?.email]);
 
-  const aliasSeat = tester ? (tester.aliased ? "aliased" : "real") : aliasLensFor(followSeat);
-  const applyingAliases = shouldApplyAliases(aliasesOn, aliasSeat);
+  const viewedSeat = hasBuildDesk(user) && viewingAsOther(viewAs) ? testerFromViewAs(viewAs) : undefined;
+  const aliasSeat = viewedSeat
+    ? viewedSeat.aliased
+      ? "aliased"
+      : "real"
+    : tester
+      ? tester.aliased
+        ? "aliased"
+        : "real"
+      : aliasLensFor(followSeat);
+  const applyingAliases = viewedSeat
+    ? viewedSeat.aliased
+    : tester
+      ? tester.aliased
+      : shouldApplyAliases(aliasesOn, aliasSeat);
 
   const setAliasesOn = useCallback((on: boolean) => {
     if (isTester(user) || !hasBuildDesk(user)) return;
@@ -185,4 +198,10 @@ export function useOwnerDesk() {
 export function useAlias() {
   const ctx = useContext(OwnerDeskContext);
   return ctx?.alias ?? ((text: string) => text);
+}
+
+export function useLensUser() {
+  const { user } = useSession();
+  const desk = useOwnerDesk();
+  return lensUser(user, desk?.viewAs);
 }

@@ -3,8 +3,7 @@
 import { playInboxChime } from "@/lib/chime";
 import type { Density, ThemeChoice, TypeSize } from "@/lib/display";
 import { useDisplay } from "@/components/DisplayProvider";
-import { useOwnerDesk } from "@/components/OwnerDeskContext";
-import { useSession } from "@/components/SessionProvider";
+import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { hasBuildDesk } from "@/lib/desk-role";
 
 const THEMES: { value: ThemeChoice; title: string; copy: string }[] = [
@@ -15,12 +14,12 @@ const THEMES: { value: ThemeChoice; title: string; copy: string }[] = [
 
 export function DisplayDesk() {
   const { prefs, setPrefs } = useDisplay();
-  const { user } = useSession();
+  const lens = useLensUser();
   const desk = useOwnerDesk();
 
   return (
     <div className="space-y-5">
-      {hasBuildDesk(user) && desk ? (
+      {hasBuildDesk(lens) && desk ? (
         <section className="plant-card px-5 py-5">
           <h2 className="text-2xl font-semibold text-[#163038]">Catalog aliases</h2>
           <p className="mt-2 text-sm text-[#5b6f73]">

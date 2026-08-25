@@ -21,7 +21,7 @@ export function seatPasswordPath() {
   return join(process.cwd(), "data", "seat-passwords.json");
 }
 
-function loadPersisted(): SeatFile["hashes"] {
+function loadPersisted(): NonNullable<SeatFile["hashes"]> {
   try {
     const parsed = JSON.parse(readFileSync(seatPasswordPath(), "utf8")) as SeatFile;
     return parsed.hashes && typeof parsed.hashes === "object" ? parsed.hashes : {};

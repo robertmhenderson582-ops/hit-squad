@@ -2,12 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useOwnerDesk } from "@/components/OwnerDeskContext";
-import { useSession } from "@/components/SessionProvider";
+import { useLensUser } from "@/components/OwnerDeskContext";
 import { canUseViewAs, hasBuildDesk, isOwner } from "@/lib/desk-role";
-import { VIEW_AS_HIDDEN_SETTINGS } from "@/lib/owner-desk";
-
-const HIDE_WHILE_VIEWING = new Set<string>(VIEW_AS_HIDDEN_SETTINGS);
 
 const SECTIONS: {
   href: string;
@@ -40,12 +36,10 @@ function active(pathname: string, href: string, exact?: boolean) {
 
 export function SettingsShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user } = useSession();
-  const desk = useOwnerDesk();
-  const owner = isOwner(user);
-  const buildDesk = hasBuildDesk(user);
-  const viewAsOk = canUseViewAs(user);
-  const viewingAs = Boolean(desk?.viewAs && desk.viewAs !== "owner" && buildDesk);
+  const lens = useLensUser();
+  const owner = isOwner(lens);
+  const buildDesk = hasBuildDesk(lens);
+  const viewAsOk = canUseViewAs(lens);
 
   return (
     <div className="mt-5 grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
@@ -56,7 +50,6 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
             if (item.ownerOnly && !owner) return false;
             if (item.buildDesk && !buildDesk) return false;
             if (item.viewAs && !viewAsOk) return false;
-            if (viewingAs && HIDE_WHILE_VIEWING.has(item.href)) return false;
             return true;
           }).map((item) => {
             const on = active(pathname, item.href, item.exact);

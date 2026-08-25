@@ -1,7 +1,6 @@
 "use client";
 
-import { useSession } from "@/components/SessionProvider";
-import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useAlias, useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { hasBuildDesk } from "@/lib/desk-role";
 import { VIEW_RESPONSIBILITIES, VIEW_SITES, VISUAL_ROSTER, type ViewAsSeat, type ViewResponsibility } from "@/lib/owner-desk";
 import { isJosephEmail } from "@/lib/tester-seats";
@@ -9,10 +8,10 @@ import { isJosephEmail } from "@/lib/tester-seats";
 export function ViewAsDesk() {
   const desk = useOwnerDesk();
   const alias = useAlias();
-  const { user } = useSession();
+  const lens = useLensUser();
   if (!desk) return <p className="text-[#5b6f73]">Owner desk only.</p>;
-  const joseph = isJosephEmail(user?.email);
-  const buildDesk = hasBuildDesk(user);
+  const joseph = isJosephEmail(lens?.email);
+  const buildDesk = hasBuildDesk(lens);
 
   return (
     <section className="plant-card px-5 py-5">
