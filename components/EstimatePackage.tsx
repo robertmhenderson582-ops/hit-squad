@@ -21,6 +21,7 @@ import {
   type PhaseScheduleState,
 } from "@/lib/phase-schedule";
 import { emptyJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
+import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
 import type { SupportLine } from "@/components/SupportCrewCard";
 
 type CrewState = {
@@ -37,11 +38,13 @@ type EstimatePackageApi = {
   schedule: PhaseScheduleState;
   crew: CrewState;
   jobMeta: JobMeta;
+  activities: WorkActivity[];
   setProjectStartDate: (start: string) => void;
   patch: (id: PhaseId, next: Partial<PhaseRow>) => void;
   pickOt: (id: PhaseId, pick: PhaseOtPick) => void;
   setCrew: (next: CrewState | ((current: CrewState) => CrewState)) => void;
   setJobMeta: (next: JobMeta | ((current: JobMeta) => JobMeta)) => void;
+  setActivities: (next: WorkActivity[] | ((current: WorkActivity[]) => WorkActivity[])) => void;
   addCraftRow: () => CraftRow;
 };
 
@@ -99,12 +102,14 @@ export function EstimatePackageProvider({
   const [schedule, setSchedule] = useState<PhaseScheduleState>(() => readSchedule(estimateKey));
   const [crew, setCrewState] = useState<CrewState>(() => syncCrew(readCrew(estimateKey), readSchedule(estimateKey).phases));
   const [jobMeta, setJobMetaState] = useState<JobMeta>(() => readJobMeta(estimateKey));
+  const [activities, setActivitiesState] = useState<WorkActivity[]>(() => readActivities(estimateKey) ?? []);
 
   useEffect(() => {
     const next = readSchedule(estimateKey);
     setSchedule(next);
     setCrewState(syncCrew(readCrew(estimateKey), next.phases));
     setJobMetaState(readJobMeta(estimateKey));
+    setActivitiesState(readActivities(estimateKey) ?? []);
   }, [estimateKey]);
 
   useEffect(() => {
@@ -119,12 +124,17 @@ export function EstimatePackageProvider({
     writeJobMeta(estimateKey, jobMeta);
   }, [estimateKey, jobMeta]);
 
+  useEffect(() => {
+    writeActivities(estimateKey, activities);
+  }, [activities, estimateKey]);
+
   const api = useMemo<EstimatePackageApi>(
     () => ({
       estimateKey,
       schedule,
       crew,
       jobMeta,
+      activities,
       setProjectStartDate(start) {
         setSchedule((current) => {
           const next = setProjectStart(current, start);
@@ -152,11 +162,14 @@ export function EstimatePackageProvider({
       setJobMeta(next) {
         setJobMetaState((current) => (typeof next === "function" ? next(current) : next));
       },
+      setActivities(next) {
+        setActivitiesState((current) => (typeof next === "function" ? next(current) : next));
+      },
       addCraftRow() {
         return craftRowFromPhases(schedule.phases);
       },
     }),
-    [crew, estimateKey, jobMeta, schedule],
+    [activities, crew, estimateKey, jobMeta, schedule],
   );
 
   return <EstimatePackageContext.Provider value={api}>{children}</EstimatePackageContext.Provider>;
@@ -170,11 +183,13 @@ export function useEstimatePackage() {
       schedule: defaultPhaseSchedule(),
       crew: emptyCrew(),
       jobMeta: emptyJobMeta(),
+      activities: [],
       setProjectStartDate() {},
       patch() {},
       pickOt() {},
       setCrew() {},
       setJobMeta() {},
+      setActivities() {},
       addCraftRow: () => blankCraftRow(),
     } satisfies EstimatePackageApi;
   }

@@ -25,6 +25,7 @@ export type ComputeRangeInput = {
   shift?: "Days" | "Nights" | "Days & nights";
   days?: boolean[];
   perDiemPeople?: number;
+  nightPerDiemPeople?: number;
   otAfter8?: boolean;
   clockOverride?: ClockOverride;
   skipDates?: string[];
@@ -242,7 +243,9 @@ export function computeRangeHours(input: ComputeRangeInput): RangeHours {
   const st = raw.reduce((sum, day) => sum + day.st, 0);
   const ot = raw.reduce((sum, day) => sum + day.ot, 0);
   const dt = raw.reduce((sum, day) => sum + day.dt, 0);
-  const pd = workedDays * Math.max(0, input.perDiemPeople ?? 0);
+  const dayPd = Math.max(0, input.perDiemPeople ?? 0);
+  const nightPd = input.shift === "Days & nights" ? Math.max(0, input.nightPerDiemPeople ?? 0) : 0;
+  const pd = workedDays * (dayPd + nightPd);
   return {
     st,
     ot,
@@ -272,6 +275,7 @@ export function computeRowHours(
       headcount: number;
       nightHeadcount: number;
       perDiemPeople: number;
+      nightPerDiemPeople?: number;
       days: boolean[];
       otAfter8?: boolean;
       shift?: "Days" | "Nights" | "Days & nights";
@@ -298,6 +302,7 @@ export function computeRowHours(
         shift: range.shift ?? row.shift,
         days: range.days,
         perDiemPeople: range.perDiemPeople,
+        nightPerDiemPeople: range.nightPerDiemPeople,
         otAfter8: range.otAfter8 ?? crewOtAfter8,
         clockOverride: row.clockOverride ?? "auto",
         skipDates: range.skipDates,

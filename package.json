@@ -9,7 +9,7 @@
     "start": "next start --hostname 127.0.0.1 --port 3000",
     "lint": "next lint",
     "auth:check": "node --env-file=.env.local scripts/auth-check.mjs",
-    "test": "node --experimental-strip-types --test lib/hours-clock.test.ts lib/desk-role.test.ts lib/tickets.test.ts lib/whats-new.test.ts lib/ticket-mail.test.ts lib/ticket-cache.test.ts lib/phase-schedule.test.ts lib/capture-root.test.ts lib/staffing-plan.test.ts"
+    "test": "node --experimental-strip-types --test lib/hours-clock.test.ts lib/desk-role.test.ts lib/tickets.test.ts lib/whats-new.test.ts lib/ticket-mail.test.ts lib/ticket-cache.test.ts lib/phase-schedule.test.ts lib/capture-root.test.ts lib/staffing-plan.test.ts lib/estimate-open.test.ts lib/work-activities.test.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

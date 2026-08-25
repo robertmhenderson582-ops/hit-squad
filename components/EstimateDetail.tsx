@@ -7,6 +7,7 @@ import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
 import { LaborRollup } from "@/components/LaborRollup";
 import { ModuleTable } from "@/components/ModuleTable";
+import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { EstimatePackageProvider } from "@/components/EstimatePackage";
 import { JobSetupCard } from "@/components/JobSetupCard";
@@ -24,10 +25,6 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
   const [status, setStatus] = useState<EstimateStatus>("Estimate");
   const estimate = board?.estimates.find((row) => row.id === estimateId);
   const site = board?.sites.find((row) => row.id === estimate?.siteId);
-  const activities = useMemo(
-    () => board?.activities.filter((row) => row.estimateId === estimateId) ?? [],
-    [board, estimateId],
-  );
   const equipment = useMemo(
     () => board?.equipment.filter((row) => row.estimateId === estimateId) ?? [],
     [board, estimateId],
@@ -102,20 +99,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       ) : null}
 
       {tab === "activities" ? (
-        <ModuleTable caption="ACTIVITIES" headers={["WBS", "ACTIVITY", "CRAFT", "MH", "DOLLARS", "STATUS"]}>
-          {activities.map((row) => (
-            <tr key={row.id} className="border-t border-steel-rim/20">
-              <td className="px-4 py-3 font-mono text-amber-label">{row.wbs}</td>
-              <td className="px-4 py-3">{row.name}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.craft}</td>
-              <td className="px-4 py-3 font-mono">{row.mh.toLocaleString()}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.dollars}</td>
-              <td className="px-4 py-3">
-                <StatusStamp value={row.status} />
-              </td>
-            </tr>
-          ))}
-        </ModuleTable>
+        <WorkActivitiesDesk client={estimate.client} site={site?.name} />
       ) : null}
 
       {tab === "crew" ? (

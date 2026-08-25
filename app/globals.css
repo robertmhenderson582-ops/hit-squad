@@ -1222,6 +1222,40 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   user-select: none;
 }
 
+.estimate-card {
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.estimate-card:hover {
+  box-shadow: 0 10px 24px rgba(15, 95, 109, 0.16);
+}
+
+.crew-phase-card {
+  min-width: 16.5rem;
+  max-width: 18rem;
+  border: 1px solid #c5d4d4;
+  background: #fff;
+  color: #163038;
+}
+
+.crew-phase-card.is-off {
+  opacity: 0.58;
+}
+
+.crew-phase-bar {
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.phase-setup-table th,
+.phase-setup-table td {
+  white-space: nowrap;
+}
+
 .staffing-grid {
   border-collapse: separate;
   border-spacing: 0;

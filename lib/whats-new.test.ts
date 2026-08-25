@@ -42,15 +42,11 @@ describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(OWNER_WHATS_NEW, /cascades/);
-    assert.match(OWNER_WHATS_NEW, /50413486/);
-    assert.match(OWNER_WHATS_NEW, /blank, not zero/);
-    assert.match(TESTER_WHATS_NEW, /Staffing tab is back/);
-    assert.match(TESTER_WHATS_NEW, /Export P66 staffing plan/);
-    assert.match(TESTER_WHATS_NEW, /Phases & work schedule now sets the job/);
-    assert.match(TESTER_WHATS_NEW, /Crew picks up those windows/);
-    assert.match(TESTER_WHATS_NEW, /Capture grabs the whole desk/);
-    assert.match(TESTER_WHATS_NEW, /New\/Potential client/);
+    assert.match(TESTER_WHATS_NEW, /Click a card opens that estimate/);
+    assert.match(TESTER_WHATS_NEW, /phase card in each window/);
+    assert.match(TESTER_WHATS_NEW, /Add activity on Work Activities/);
+    assert.match(OWNER_WHATS_NEW, /inherit/);
+    assert.match(OWNER_WHATS_NEW, /Per-diem Headcount/);
     assert.equal(/password|auth|Novus|vault|Drive|\/tmp|SMTP|seat/i.test(TESTER_WHATS_NEW), false);
 
     const first = applyWhatsNew([], "tester-joseph-new", false);
@@ -64,20 +60,20 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.3 onto an existing Hit Squad desk thread", () => {
+  it("appends V1.4 onto an existing Hit Squad desk thread", () => {
     const prior = [
       {
-        id: "th-desk-v1.1",
+        id: "th-desk-v1.3",
         personId: DESK_PERSON_ID,
         name: "Hit Squad",
         company: "Project Controls",
         unread: 0,
         messages: [
           {
-            id: "im-desk-1.1",
+            id: "im-desk-1.3.1",
             from: "them" as const,
             author: "Desk",
-            text: "Hit Squad Project Controls V1.1",
+            text: "Hit Squad Project Controls V1.3",
             photo: null,
             sentAt: "",
             readAt: "seen",

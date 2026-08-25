@@ -38,7 +38,7 @@ export function PhaseSchedule() {
     <section className="plant-card px-5 py-5">
       <h2 className="font-display text-2xl font-semibold text-[#163038]">Phases & work schedule</h2>
       <GripToPan className="mt-4">
-        <table className="min-w-max text-left text-sm">
+        <table className="phase-setup-table min-w-max text-left text-sm">
           <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
             <tr>
               {HEADERS.map((header) => (

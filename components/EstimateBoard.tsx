@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CreatedBy } from "@/components/CreatedBy";
+import { EstimateCard } from "@/components/EstimateCard";
 import { useEstimateModal } from "@/components/EstimateModalContext";
-import { ModuleTable } from "@/components/ModuleTable";
 import { PresencePulse } from "@/components/PresencePulse";
 import { useAlias } from "@/components/OwnerDeskContext";
-import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { useSession } from "@/components/SessionProvider";
 import { readClosed, reopenPackage } from "@/lib/desk-closeout";
+import { estimateHref } from "@/lib/estimate-open";
 
 export function EstimateBoard() {
   const alias = useAlias();
@@ -72,38 +72,11 @@ export function EstimateBoard() {
             <h2 className="font-display text-xl font-semibold text-[#163038]">{who}</h2>
             <CreatedBy author={who} />
           </div>
-          <ModuleTable
-            caption="ESTIMATE LOG — OWNER SCOPED"
-            headers={["CODE", "PACKAGE", "CLIENT / UNIT", "TYPE", "REV", "WINDOW", "TOTAL", "STATUS", ""]}
-          >
+          <div className="grid gap-3 lg:grid-cols-2">
             {list.map((row) => (
-              <tr key={row.id} className="border-t border-steel-rim/20">
-                <td className="px-4 py-3 font-mono text-amber-label">
-                  <Link href={`/estimates/${row.id}`} className="underline underline-offset-4">
-                    {row.code}
-                  </Link>
-                </td>
-                <td className="px-4 py-3">
-                  <Link href={`/estimates/${row.id}`}>{row.title}</Link>
-                </td>
-                <td className="px-4 py-3 font-mono text-xs">
-                  {alias(row.client)}
-                  <br />
-                  {alias(row.unit)}
-                </td>
-                <td className="px-4 py-3 font-mono text-xs">{row.type}</td>
-                <td className="px-4 py-3 font-mono text-xs">{row.revision}</td>
-                <td className="px-4 py-3 font-mono text-xs">{row.window}</td>
-                <td className="px-4 py-3 font-mono text-xs">{row.total}</td>
-                <td className="px-4 py-3">
-                  <StatusStamp value={row.status} />
-                </td>
-                <td className="px-4 py-3">
-                  <CreatedBy author={row.estimator || who} />
-                </td>
-              </tr>
+              <EstimateCard key={row.id} estimate={row} />
             ))}
-          </ModuleTable>
+          </div>
         </section>
       ))}
       {closedRows.length ? (
@@ -116,7 +89,7 @@ export function EstimateBoard() {
                   {row.code} · {row.title}
                 </span>
                 <span className="flex gap-2">
-                  <Link href={`/estimates/${row.id}`} className="underline">
+                  <Link href={estimateHref(row.id)} className="underline">
                     View
                   </Link>
                   <button

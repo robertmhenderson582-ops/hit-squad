@@ -9,6 +9,14 @@ export const PHASE_NAMES: Record<PhaseId, string> = {
   post: "Post",
 };
 
+export const PHASE_TONES: Record<PhaseId, string> = {
+  pre: "phase-moss",
+  "oil-out": "phase-rust",
+  mech: "phase-steel",
+  "oil-in": "phase-amber",
+  post: "phase-green",
+};
+
 export type PhaseOtPick = "4x10-st" | "4x10-ot8" | "5x8-st" | "5x8-ot8";
 
 export type PhaseRow = {

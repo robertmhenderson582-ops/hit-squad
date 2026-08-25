@@ -44,6 +44,7 @@ export type CalendarRange = {
   nightHeadcount: number;
   hoursPerShift: number;
   perDiemPeople: number;
+  nightPerDiemPeople?: number;
   days: boolean[];
   otAfter8?: boolean;
   phaseId?: string;
@@ -92,6 +93,7 @@ export function blankRange(): CalendarRange {
     nightHeadcount: 1,
     hoursPerShift: 10,
     perDiemPeople: 1,
+    nightPerDiemPeople: 1,
     days: [false, true, true, true, true, true, true],
   };
 }
@@ -121,15 +123,23 @@ export function cloneCraftRow(row: CraftRow): CraftRow {
   };
 }
 
-export function perDiemCap(range: CalendarRange, shift: CraftShift) {
-  const head =
-    shift === "Days & nights" ? range.headcount + range.nightHeadcount : range.headcount;
-  return Math.max(0, head);
+export function perDiemCap(range: CalendarRange, _shift?: CraftShift) {
+  return Math.max(0, range.headcount);
 }
 
-export function clampPerDiem(range: CalendarRange, shift: CraftShift): CalendarRange {
-  const cap = perDiemCap(range, shift);
-  return { ...range, perDiemPeople: Math.min(Math.max(0, range.perDiemPeople), cap) };
+export function nightPerDiemCap(range: CalendarRange) {
+  return Math.max(0, range.nightHeadcount);
+}
+
+export function clampPerDiem(range: CalendarRange, _shift?: CraftShift): CalendarRange {
+  const dayCap = perDiemCap(range);
+  const nightCap = nightPerDiemCap(range);
+  const nightPd = range.nightPerDiemPeople ?? 1;
+  return {
+    ...range,
+    perDiemPeople: Math.min(Math.max(0, range.perDiemPeople), dayCap),
+    nightPerDiemPeople: Math.min(Math.max(0, nightPd), nightCap),
+  };
 }
 
 export function uniqueCraftNames(rows: CraftRow[]) {
@@ -147,6 +157,7 @@ export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange): CalendarRan
     nightHeadcount: prev?.nightHeadcount ?? 1,
     hoursPerShift: seed.hoursPerShift,
     perDiemPeople: prev?.perDiemPeople ?? 1,
+    nightPerDiemPeople: prev?.nightPerDiemPeople ?? 1,
     days: seed.days,
     otAfter8: seed.otAfter8,
     shift: prev?.shift ?? "Days",
