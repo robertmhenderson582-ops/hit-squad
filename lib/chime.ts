@@ -1,5 +1,16 @@
+let unlocked = false;
+
+export function unlockInboxAudio() {
+  if (typeof window === "undefined" || unlocked) return;
+  unlocked = true;
+  const ctx = new AudioContext();
+  void ctx.resume();
+  window.setTimeout(() => ctx.close(), 200);
+}
+
 export function playInboxChime() {
   if (typeof window === "undefined") return;
+  unlockInboxAudio();
   const ctx = new AudioContext();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();

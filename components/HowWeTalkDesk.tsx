@@ -13,7 +13,8 @@ export function HowWeTalkDesk() {
     <section className="plant-card px-5 py-5">
       <h2 className="text-2xl font-semibold text-[#163038]">How we talk</h2>
       <p className="mt-2 text-sm text-[#5b6f73]">
-        Short briefing for testers after first sign-in. Owner skips the demo. Replay lives here.
+        Briefing, then the walk. Owner skips the demo. Testers see it on first sign-in. Returning
+        testers get Walkthrough updated. Replay lives in Settings → How we talk.
         {owner ? " You can skip." : ""}
       </p>
       <dl className="mt-4 space-y-3">

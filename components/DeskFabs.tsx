@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { shootViewport } from "@/lib/capture";
 import { TICKET_DRAFT_KEY, TICKET_KINDS, type TicketKind } from "@/lib/tickets";
+import { unlockInboxAudio } from "@/lib/chime";
+import { InboxPanel } from "@/components/InboxPanel";
 import { useInbox } from "@/components/InboxProvider";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 
 type Draft = {
@@ -25,17 +28,29 @@ function readDraft(): Draft {
   }
 }
 
+function hasStoredDraft(draft: Draft) {
+  return Boolean(draft.note.trim() || draft.capture);
+}
+
 export function DeskFabs() {
   const { status, user } = useSession();
+  const desk = useOwnerDesk();
   const inbox = useInbox();
   const [ticketOpen, setTicketOpen] = useState(false);
+  const [hiddenForShot, setHiddenForShot] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
+  const [savedDraft, setSavedDraft] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const drag = useRef<{ ox: number; oy: number; sx: number; sy: number } | null>(null);
+  const joseph = desk?.viewAs === "joseph" || user?.name === "Joseph Henderson";
 
   useEffect(() => {
-    if (status === "authenticated") setDraft(readDraft());
+    if (status === "authenticated") {
+      const next = readDraft();
+      setDraft(next);
+      setSavedDraft(hasStoredDraft(next));
+    }
   }, [status]);
 
   if (status !== "authenticated" || !user) return null;
@@ -45,12 +60,12 @@ export function DeskFabs() {
     window.localStorage.setItem(TICKET_DRAFT_KEY, JSON.stringify(next));
   }
 
-  async function submit(later: boolean) {
+  async function submit() {
     const response = await fetch("/api/desk/tickets", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...draft, later }),
+      body: JSON.stringify({ ...draft, later: false }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -59,16 +74,20 @@ export function DeskFabs() {
     }
     window.localStorage.removeItem(TICKET_DRAFT_KEY);
     setDraft(EMPTY_DRAFT);
+    setSavedDraft(false);
     setTicketOpen(false);
-    setNote(later ? "Saved to Tickets. Mail is not sent tonight." : "Saved to Tickets.");
+    setNote("Saved to Tickets. Not Inbox.");
   }
 
   async function capture() {
+    setHiddenForShot(true);
     setTicketOpen(false);
+    await new Promise((resolve) => window.setTimeout(resolve, 80));
     const shot = await shootViewport();
     persist({ ...draft, capture: shot });
+    setHiddenForShot(false);
     setTicketOpen(true);
-    setNote("Capture attached. Ticket stays off Inbox.");
+    setNote("Capture attached. Capture stays off Inbox.");
   }
 
   function onDragStart(event: PointerEvent<HTMLDivElement>) {
@@ -84,50 +103,31 @@ export function DeskFabs() {
     });
   }
 
+  const showTicket = ticketOpen && !hiddenForShot;
+
   return (
     <div className="desk-fabs print-hide">
       {inbox.toast ? <div className="inbox-toast">{inbox.toast}</div> : null}
-      {note && !ticketOpen ? <p className="fab-note">{note}</p> : null}
+      {note && !showTicket ? <p className="fab-note">{note}</p> : null}
 
       {inbox.open ? (
         <section className="inbox-card" role="dialog" aria-label="Inbox">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-semibold text-[#163038]">Inbox</h2>
-              <p className="mt-1 text-sm text-[#5b6f73]">Testers do not see each other.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={inbox.startDraft} className="inbox-new">
-                + New
-              </button>
-              <button type="button" onClick={inbox.closeInbox} className="text-[#5b6f73]" aria-label="Close inbox">
-                ×
-              </button>
-            </div>
+          <div className="flex justify-end">
+            <button type="button" onClick={inbox.closeInbox} className="text-[#5b6f73]" aria-label="Close inbox">
+              ×
+            </button>
           </div>
-          <div className="mt-6 space-y-5">
-            {inbox.threads.length === 0 ? (
-              <p className="text-sm text-[#5b6f73]">No threads on this seat.</p>
-            ) : (
-              inbox.threads.map((thread) => (
-                <article key={thread.id}>
-                  <p className="font-semibold text-[#163038]">{thread.name}</p>
-                  <p className="text-sm text-[#5b6f73]">{thread.preview}</p>
-                </article>
-              ))
-            )}
-          </div>
-          {inbox.draft ? (
-            <p className="mt-5 text-sm text-[#5b6f73]">New thread stays on this desk. Testers never see each other.</p>
-          ) : null}
+          <InboxPanel compact />
         </section>
       ) : null}
 
-      {ticketOpen ? (
+      {showTicket ? <div className="ticket-scrim" aria-hidden="true" /> : null}
+
+      {showTicket ? (
         <section
           className="ticket-card"
           role="dialog"
-          aria-label="Ticket"
+          aria-label="Send a ticket"
           style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
         >
           <div
@@ -138,7 +138,7 @@ export function DeskFabs() {
               drag.current = null;
             }}
           >
-            Ticket
+            Send a ticket
           </div>
           <fieldset className="mt-3 space-y-2">
             <legend className="text-xs tracking-[0.14em] text-[#5b6f73]">KIND</legend>
@@ -166,25 +166,28 @@ export function DeskFabs() {
             <img src={draft.capture} alt="Capture" className="mt-3 max-h-28 rounded border border-[#d5e0de]" />
           ) : null}
           {note ? <p className="mt-2 text-xs text-[#5b6f73]">{note}</p> : null}
+          {joseph ? (
+            <p className="mt-2 text-xs text-[#5b6f73]">
+              Submit emails robertmhenderson582@gmail.com. Mail is not sent from this trial.
+            </p>
+          ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={capture} className="rounded-lg border border-steel px-3 py-2 text-sm text-steel">
-              Capture
+              Capture screen
             </button>
             <button
               type="button"
               onClick={() => {
                 persist(draft);
-                setNote("Saved for later on this device.");
+                setSavedDraft(true);
+                setNote("Draft saved on this device.");
               }}
               className="rounded-lg border border-steel px-3 py-2 text-sm text-steel"
             >
-              Save for later
+              {savedDraft || hasStoredDraft(draft) ? "Draft" : "Save for later"}
             </button>
-            <button type="button" onClick={() => submit(false)} className="rounded-lg bg-steel px-3 py-2 text-sm text-white">
+            <button type="button" onClick={() => void submit()} className="rounded-lg bg-steel px-3 py-2 text-sm text-white">
               Submit
-            </button>
-            <button type="button" onClick={() => submit(true)} className="rounded-lg border border-steel px-3 py-2 text-sm text-steel">
-              Submit later
             </button>
           </div>
           <Link href="/tickets" className="mt-3 inline-block text-sm text-steel underline">
@@ -195,13 +198,18 @@ export function DeskFabs() {
 
       <button
         type="button"
-        onClick={inbox.open ? inbox.closeInbox : inbox.openInbox}
+        onClick={() => {
+          unlockInboxAudio();
+          if (inbox.open) inbox.closeInbox();
+          else inbox.openInbox();
+        }}
         className={`inbox-fab ${inbox.unread > 0 ? "inbox-fab-pulse" : ""}`}
       >
         Inbox
+        {inbox.unread > 0 ? <span className="inbox-count">{inbox.unread}</span> : null}
       </button>
       <button type="button" onClick={() => setTicketOpen((open) => !open)} className="ticket-fab">
-        + Ticket
+        {savedDraft || hasStoredDraft(draft) ? "Draft" : "+ Ticket"}
       </button>
     </div>
   );

@@ -7,6 +7,7 @@ import { BrandMark } from "@/components/BrandMark";
 import { DeskBanners } from "@/components/DeskBanners";
 import { useDisplay } from "@/components/DisplayProvider";
 import { ShareTurnover } from "@/components/ShareTurnover";
+import { InboxBadge } from "@/components/InboxBadge";
 import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { RfqPreview } from "@/components/RfqPreview";
@@ -87,6 +88,7 @@ export function EstimateWorkspace({
             <p className="truncate text-sm text-white/70">{crumb}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
+            <InboxBadge />
             <ThemeFlip />
             <ShareTurnover title={name || crumb} />
             {ACTIONS.map((action) => (

@@ -1,53 +1,87 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { playInboxChime } from "@/lib/chime";
+import { playInboxChime, unlockInboxAudio } from "@/lib/chime";
+import {
+  contactsFor,
+  makeMessage,
+  makeThread,
+  previewOf,
+  readThreads,
+  unreadCount,
+  writeThreads,
+  type InboxPerson,
+  type InboxThread,
+} from "@/lib/inbox";
 import { useDisplay } from "@/components/DisplayProvider";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-
-export type InboxThread = {
-  id: string;
-  name: string;
-  preview: string;
-  unread: boolean;
-};
-
-const OWNER_THREADS: InboxThread[] = [
-  { id: "1", name: "James Cain", preview: "What do you think?", unread: true },
-  { id: "2", name: "Mark H Schneider", preview: "Made some updates", unread: true },
-  { id: "3", name: "Joseph Henderson", preview: "UI is inconsistent when changing ta...", unread: true },
-];
 
 type InboxState = {
   open: boolean;
-  draft: boolean;
+  composing: boolean;
   toast: string | null;
   threads: InboxThread[];
   unread: number;
+  activeId: string | null;
+  selectedIds: string[];
+  contacts: InboxPerson[];
+  ownerChrome: boolean;
+  previewOf: (thread: InboxThread) => string;
   openInbox: () => void;
   closeInbox: () => void;
   startDraft: () => void;
+  cancelDraft: () => void;
+  startThread: (person: InboxPerson) => void;
+  openThread: (id: string) => void;
+  closeThread: () => void;
+  sendMessage: (text: string, photo?: string | null) => void;
+  deleteMessage: (threadId: string, messageId: string) => void;
+  clearConversation: (threadId: string) => void;
+  toggleSelect: (id: string) => void;
+  selectAll: () => void;
+  clearSelect: () => void;
+  deleteSelected: () => void;
+  emptyInbox: () => void;
 };
 
 const InboxContext = createContext<InboxState | null>(null);
 
 export function InboxProvider({ children }: { children: React.ReactNode }) {
   const { user, status } = useSession();
+  const desk = useOwnerDesk();
   const { prefs } = useDisplay();
+  const ownerChrome = Boolean(user?.role === "owner" && (!desk?.viewAs || desk.viewAs === "owner"));
+  const seat = ownerChrome ? "owner" : desk?.viewAs && desk.viewAs !== "owner" ? desk.viewAs : user?.id || "tester";
+
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(false);
+  const [composing, setComposing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [threads, setThreads] = useState<InboxThread[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (status !== "authenticated" || !user) {
       setThreads([]);
+      setReady(false);
       return;
     }
-    setThreads(user.role === "owner" ? OWNER_THREADS : []);
-  }, [status, user]);
+    setThreads(readThreads(seat, ownerChrome));
+    setActiveId(null);
+    setSelectedIds([]);
+    setComposing(false);
+    setReady(true);
+  }, [ownerChrome, seat, status, user]);
 
-  const unread = threads.filter((row) => row.unread).length;
+  useEffect(() => {
+    if (!ready || status !== "authenticated" || !user) return;
+    writeThreads(seat, threads);
+  }, [ready, seat, status, threads, user]);
+
+  const unread = unreadCount(threads);
+  const contacts = useMemo(() => contactsFor(ownerChrome), [ownerChrome]);
 
   const announce = useCallback(
     (preview: string) => {
@@ -59,29 +93,176 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    if (status !== "authenticated" || !user) return;
-    if (user.role !== "owner") return;
+    if (!ready || !ownerChrome) return;
     if (sessionStorage.getItem("hs_inbox_announced")) return;
     if (unread === 0) return;
     sessionStorage.setItem("hs_inbox_announced", "1");
     announce("New inbox message");
-  }, [announce, status, unread, user]);
+  }, [announce, ownerChrome, ready, unread]);
 
-  const openInbox = useCallback(() => {
-    setOpen(true);
-    setThreads((current) => current.map((row) => ({ ...row, unread: false })));
+  const persist = useCallback((next: InboxThread[] | ((current: InboxThread[]) => InboxThread[])) => {
+    setThreads((current) => (typeof next === "function" ? next(current) : next));
   }, []);
 
-  const closeInbox = useCallback(() => setOpen(false), []);
+  const openInbox = useCallback(() => {
+    unlockInboxAudio();
+    setOpen(true);
+  }, []);
+
+  const closeInbox = useCallback(() => {
+    setOpen(false);
+    setComposing(false);
+  }, []);
 
   const startDraft = useCallback(() => {
-    setDraft(true);
-    if (prefs.inboxSound) playInboxChime();
-  }, [prefs.inboxSound]);
+    unlockInboxAudio();
+    if (!ownerChrome) {
+      const owner = contacts[0];
+      persist((current) => {
+        const existing = current.find((thread) => thread.personId === owner.id);
+        if (existing) {
+          setActiveId(existing.id);
+          return current;
+        }
+        const created = makeThread(owner);
+        setActiveId(created.id);
+        return [created, ...current];
+      });
+      setComposing(false);
+      setOpen(true);
+      return;
+    }
+    setComposing(true);
+    setActiveId(null);
+    setOpen(true);
+  }, [contacts, ownerChrome, persist]);
 
-  const value = useMemo(
-    () => ({ open, draft, toast, threads, unread, openInbox, closeInbox, startDraft }),
-    [open, draft, toast, threads, unread, openInbox, closeInbox, startDraft],
+  const startThread = useCallback(
+    (person: InboxPerson) => {
+      persist((current) => {
+        const existing = current.find((thread) => thread.personId === person.id);
+        if (existing) {
+          setActiveId(existing.id);
+          return current;
+        }
+        const created = makeThread(person);
+        setActiveId(created.id);
+        return [created, ...current];
+      });
+      setComposing(false);
+    },
+    [persist],
+  );
+
+  const openThread = useCallback((id: string) => {
+    setActiveId(id);
+    setComposing(false);
+    persist((current) =>
+      current.map((thread) => {
+        if (thread.id !== id) return thread;
+        return {
+          ...thread,
+          unread: 0,
+          messages: thread.messages.map((message) =>
+            message.from === "self" && !message.readAt ? { ...message, readAt: new Date().toLocaleString("en-GB", { hour12: false }) } : message,
+          ),
+        };
+      }),
+    );
+  }, [persist]);
+
+  const sendMessage = useCallback(
+    (text: string, photo?: string | null) => {
+      if (!activeId) return;
+      const trimmed = text.trim();
+      if (!trimmed && !photo) return;
+      persist((current) =>
+        current.map((thread) =>
+          thread.id === activeId
+            ? {
+                ...thread,
+                messages: [
+                  ...thread.messages,
+                  makeMessage({
+                    from: "self",
+                    author: user?.name || "You",
+                    text: trimmed,
+                    photo,
+                  }),
+                ],
+              }
+            : thread,
+        ),
+      );
+    },
+    [activeId, persist, user?.name],
+  );
+
+  const value = useMemo<InboxState>(
+    () => ({
+      open,
+      composing,
+      toast,
+      threads,
+      unread,
+      activeId,
+      selectedIds,
+      contacts,
+      ownerChrome,
+      previewOf,
+      openInbox,
+      closeInbox,
+      startDraft,
+      cancelDraft: () => setComposing(false),
+      startThread,
+      openThread,
+      closeThread: () => setActiveId(null),
+      sendMessage,
+      deleteMessage: (threadId, messageId) =>
+        persist((current) =>
+          current.map((thread) =>
+            thread.id === threadId
+              ? { ...thread, messages: thread.messages.filter((message) => message.id !== messageId) }
+              : thread,
+          ),
+        ),
+      clearConversation: (threadId) =>
+        persist((current) =>
+          current.map((thread) => (thread.id === threadId ? { ...thread, messages: [], unread: 0 } : thread)),
+        ),
+      toggleSelect: (id) =>
+        setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id])),
+      selectAll: () => setSelectedIds(threads.map((thread) => thread.id)),
+      clearSelect: () => setSelectedIds([]),
+      deleteSelected: () => {
+        persist((current) => current.filter((thread) => !selectedIds.includes(thread.id)));
+        setSelectedIds([]);
+        setActiveId((current) => (current && selectedIds.includes(current) ? null : current));
+      },
+      emptyInbox: () => {
+        persist([]);
+        setSelectedIds([]);
+        setActiveId(null);
+      },
+    }),
+    [
+      activeId,
+      closeInbox,
+      composing,
+      contacts,
+      open,
+      openInbox,
+      openThread,
+      ownerChrome,
+      persist,
+      selectedIds,
+      sendMessage,
+      startDraft,
+      startThread,
+      threads,
+      toast,
+      unread,
+    ],
   );
 
   return <InboxContext.Provider value={value}>{children}</InboxContext.Provider>;

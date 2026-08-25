@@ -18,6 +18,31 @@ function stampFallback(): string {
   return canvas.toDataURL("image/jpeg", 0.82);
 }
 
+export async function burnCaption(dataUrl: string, caption: string): Promise<string> {
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("image"));
+    img.src = dataUrl;
+  });
+  const extra = 88;
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height + extra;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dataUrl;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(image, 0, 0);
+  ctx.fillStyle = "#163038";
+  ctx.font = "14px sans-serif";
+  const lines = caption.split("\n").slice(0, 3);
+  lines.forEach((line, index) => {
+    ctx.fillText(line.slice(0, 90), 16, image.height + 24 + index * 20);
+  });
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
 export async function shootViewport(): Promise<string> {
   if (typeof window === "undefined") return "";
   await new Promise((resolve) => window.setTimeout(resolve, 120));

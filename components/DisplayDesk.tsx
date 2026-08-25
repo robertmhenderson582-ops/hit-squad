@@ -99,8 +99,8 @@ export function DisplayDesk() {
           }}
         />
         <p className="mt-2 text-sm text-[#5b6f73]">
-          New Inbox messages play a short chime, on by default. Toggle off on that device. Flip on
-          to hear a preview.
+          New Inbox messages play a short chime, on by default. Toggle off on that device. Click
+          Inbox once so the browser allows audio. Flip the toggle on to hear a preview.
         </p>
       </section>
     </div>

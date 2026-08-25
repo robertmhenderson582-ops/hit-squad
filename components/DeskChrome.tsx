@@ -9,6 +9,7 @@ import { EstimateModalProvider, useEstimateModal } from "@/components/EstimateMo
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { BrandMark } from "@/components/BrandMark";
 import { ThemeFlip } from "@/components/ThemeFlip";
+import { InboxBadge } from "@/components/InboxBadge";
 import { Wordmark } from "@/components/Wordmark";
 import { useSession } from "@/components/SessionProvider";
 
@@ -90,6 +91,7 @@ function ChromeInner({
               )}
             </Link>
             <div className="flex flex-wrap items-center gap-3">
+              <InboxBadge />
               <ThemeFlip />
               <button
                 type="button"

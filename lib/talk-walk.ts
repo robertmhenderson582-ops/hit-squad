@@ -1,22 +1,22 @@
-export const TALK_WALK_VERSION = 1;
+export const TALK_WALK_VERSION = 2;
 export const TALK_WALK_KEY = "hs_talk_walk";
 
 export const TALK_STEPS = [
   {
-    title: "How we talk",
-    body: "This desk is confidential. Do not share, copy, or discuss it outside the people Robert invited.",
+    title: "Email is out",
+    body: "Messages, tickets, and screenshots stay in Inbox and Tickets. Nothing is emailed from this desk.",
   },
   {
-    title: "The home",
-    body: "Home stays four tiles: Jobs, Estimates, Cost, and HSE. New estimate is not a fifth tile.",
+    title: "Inbox FAB",
+    body: "Inbox sits above Ticket. New message, Enter to send, Shift+Enter for a newline. Double-check when it is read.",
   },
   {
-    title: "Short words",
-    body: "This job · People · Daily count · Extra work · Letter to the client. Easy Mode stays off unless you turn it on in Settings → Copy.",
+    title: "Ticket beacon",
+    body: "Ticket kinds are Broke / doesn’t make sense / missing / better way / other.",
   },
   {
-    title: "Ticket and Inbox",
-    body: "Inbox sits above Ticket at the bottom-right. Tickets do not copy into Inbox.",
+    title: "Attach a screen",
+    body: "Capture the screen with the note. The ticket popup hides for the shot, then comes back. Replay lives in Settings → How we talk.",
   },
 ] as const;
 

@@ -9,7 +9,7 @@ import {
 } from "@/lib/talk-walk";
 import { useSession } from "@/components/SessionProvider";
 
-type TalkMode = "closed" | "walk" | "updated";
+type TalkMode = "closed" | "briefing" | "walk" | "updated";
 
 type TalkWalkApi = {
   openWalk: () => void;
@@ -42,7 +42,7 @@ export function TalkWalkProvider({ children }: { children: React.ReactNode }) {
     }
     const seen = readTalkWalk();
     if (!seen) {
-      setMode("walk");
+      setMode("briefing");
       return;
     }
     if (seen.version < TALK_WALK_VERSION) setMode("updated");
@@ -53,6 +53,26 @@ export function TalkWalkProvider({ children }: { children: React.ReactNode }) {
   return (
     <TalkWalkContext.Provider value={value}>
       {children}
+      {mode === "briefing" ? (
+        <div className="talk-scrim">
+          <section className="talk-card">
+            <p className="text-xs tracking-[0.16em] text-[#5b6f73]">HOW WE TALK</p>
+            <h2 className="mt-2 font-display text-2xl text-[#163038]">Briefing</h2>
+            <p className="mt-3 text-sm leading-6 text-[#163038]">
+              Email is out. Messages, tickets, and screenshots stay in Inbox and Tickets. This short
+              walk shows the Inbox FAB, Enter to send, and the Ticket beacon.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => finish(true)} className="rounded-lg border border-steel px-4 py-2 text-steel">
+                Skip
+              </button>
+              <button type="button" onClick={() => setMode("walk")} className="rounded-lg bg-steel px-4 py-2 text-white">
+                Walk through it
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {mode === "updated" ? (
         <div className="talk-scrim">
           <section className="talk-card">
