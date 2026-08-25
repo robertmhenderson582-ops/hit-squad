@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { estimateForJob, estimateHref, estimatesForPlant } from "./estimate-open.ts";
+import { estimateForJob, estimateHref, estimatesForPlant, newEstimateKey, newEstimatePackId } from "./estimate-open.ts";
 import type { EstimateRecord, JobRecord, SiteRecord } from "./types.ts";
 
 const ESTIMATES = [
@@ -54,5 +54,13 @@ describe("estimate card open", () => {
       ["est-coker", "est-tower", "est-u3"],
     );
     assert.equal(estimatesForPlant(ESTIMATES, SITES, "Rodeo", "Rodeo, CA").length, 0);
+  });
+
+  it("gives each new estimate its own empty pack key", () => {
+    const first = newEstimatePackId();
+    const second = newEstimatePackId();
+    assert.equal(first === second, false);
+    assert.match(newEstimateKey(first), /^new:new-/);
+    assert.equal(newEstimateKey("est-coker"), "new:est-coker");
   });
 });

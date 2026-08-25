@@ -8,7 +8,9 @@ export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
   "Hit Squad Project Controls V1.11",
-  "• OT after 8 is set on Job setup, not on Crew cards",
+  "• Staff and Direct Craft are picker only; OT after 8 is on Job setup",
+  "• New estimate Crew starts empty",
+  "• Add date range adds a second stretch on the same phase",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
@@ -16,6 +18,10 @@ export const OWNER_WHATS_NEW = [
   "• Shared Crew OT after 8 checkbox is gone — one check was flipping every lane",
   "• Hours follow the Job setup phase OT pick plus Calendar Pattern",
   "• Direct Craft has no OT-after-8 option — CBA is time and a half after 8",
+  "• Staff, GF, Foreman, and Direct Craft are picker only — no Position title",
+  "• Support Position can be typed after Type a title…; Billed as stays a craft-rate picker",
+  "• New estimate Crew starts empty; existing filled estimates stay",
+  "• Add date range adds a second stretch on the same phase",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

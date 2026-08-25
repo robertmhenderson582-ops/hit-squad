@@ -42,10 +42,14 @@ describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /OT after 8 is set on Job setup, not on Crew cards/);
+    assert.match(TESTER_WHATS_NEW, /Staff and Direct Craft are picker only; OT after 8 is on Job setup/);
+    assert.match(TESTER_WHATS_NEW, /New estimate Crew starts empty/);
+    assert.match(TESTER_WHATS_NEW, /Add date range adds a second stretch on the same phase/);
     assert.match(OWNER_WHATS_NEW, /Shared Crew OT after 8 checkbox is gone/);
     assert.match(OWNER_WHATS_NEW, /Hours follow the Job setup phase OT pick plus Calendar Pattern/);
     assert.match(OWNER_WHATS_NEW, /Direct Craft has no OT-after-8 option/);
+    assert.match(OWNER_WHATS_NEW, /picker only — no Position title/);
+    assert.match(OWNER_WHATS_NEW, /New estimate Crew starts empty/);
     assert.equal(/password|auth|Novus|vault|Drive|\/tmp|SMTP|seat/i.test(TESTER_WHATS_NEW), false);
 
     const first = applyWhatsNew([], "tester-joseph-new", false);

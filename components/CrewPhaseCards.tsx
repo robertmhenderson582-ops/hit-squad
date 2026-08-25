@@ -107,9 +107,19 @@ function PhaseWindowCard({
                 onRemove={() => onRemoveRange(range.id)}
               />
             ))}
-            <button type="button" onClick={onAddRange} className="text-sm text-steel underline underline-offset-2">
-              + Add date range
-            </button>
+            <div>
+              <button
+                type="button"
+                onClick={onAddRange}
+                title="Second date range on this phase."
+                className="text-sm text-steel underline underline-offset-2"
+              >
+                + Add date range
+              </button>
+              <p className="text-xs text-[#5b6f73]">
+                Adds another stretch on this same phase — work, sit out, then come back.
+              </p>
+            </div>
           </>
         )}
       </div>

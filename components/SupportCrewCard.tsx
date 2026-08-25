@@ -22,23 +22,25 @@ function CatalogPick({
   options,
   placeholder,
   onChange,
+  allowCustom = false,
 }: {
   label: string;
   value: string;
   options: readonly string[];
   placeholder: string;
   onChange: (value: string) => void;
+  allowCustom?: boolean;
 }) {
   const listed = (options as readonly string[]).includes(value);
-  const [typing, setTyping] = useState(!listed && Boolean(value));
-  const selectValue = listed ? value : typing ? CUSTOM : "";
+  const [typing, setTyping] = useState(allowCustom && !listed && Boolean(value));
+  const selectValue = listed ? value : typing ? CUSTOM : value;
   return (
     <div className="min-w-[14rem] flex-1">
       <p className="text-xs">{label}</p>
       <select
         value={selectValue}
         onChange={(event) => {
-          if (event.target.value === CUSTOM) {
+          if (allowCustom && event.target.value === CUSTOM) {
             setTyping(true);
             onChange("");
             return;
@@ -55,9 +57,10 @@ function CatalogPick({
             {item}
           </option>
         ))}
-        <option value={CUSTOM}>Type a title…</option>
+        {allowCustom ? <option value={CUSTOM}>Type a title…</option> : null}
+        {!allowCustom && !listed && value ? <option value={value}>{value}</option> : null}
       </select>
-      {typing ? (
+      {allowCustom && typing ? (
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -127,6 +130,7 @@ export function SupportCrewCard({
                 options={SUPPORT_DUTIES}
                 placeholder="Select position"
                 onChange={(position) => patch(row.id, { position })}
+                allowCustom
               />
               <CatalogPick
                 label="Billed as"

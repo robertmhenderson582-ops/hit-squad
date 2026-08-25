@@ -23,7 +23,6 @@ import { CrewPhaseCards } from "@/components/CrewPhaseCards";
 import { defaultLaborClass, type LaborClass } from "@/lib/labor-class";
 
 const HEADERS = ["POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST"];
-const CUSTOM = "__custom__";
 
 export function CraftLaborGrid({
   rows,
@@ -227,7 +226,6 @@ function CraftAccordionRow({
 }) {
   const options = catalog && catalog.length > 0 ? catalog : LISTED_POSITIONS;
   const listed = (options as readonly string[]).includes(row.position);
-  const selectValue = listed ? row.position : row.position ? CUSTOM : "";
   const naturalClass = defaultLaborClass(row.position);
   const laborClass = row.laborClassOverride ?? naturalClass;
   const starred = Boolean(row.laborClassOverride && row.laborClassOverride !== naturalClass);
@@ -277,11 +275,8 @@ function CraftAccordionRow({
             </button>
             <div className="min-w-[14rem]">
               <select
-                value={selectValue}
-                onChange={(event) => {
-                  const value = event.target.value === CUSTOM ? "" : event.target.value;
-                  onAssignPosition(value);
-                }}
+                value={row.position}
+                onChange={(event) => onAssignPosition(event.target.value)}
                 className="paper-field w-full"
               >
                 <option value="">Select position</option>
@@ -309,16 +304,8 @@ function CraftAccordionRow({
                     </optgroup>
                   </>
                 )}
-                <option value={CUSTOM}>Type a title…</option>
+                {!listed && row.position ? <option value={row.position}>{row.position}</option> : null}
               </select>
-              {!listed ? (
-                <input
-                  value={row.position}
-                  onChange={(event) => onPatch({ position: event.target.value })}
-                  placeholder="Position title"
-                  className="paper-field mt-1 w-full"
-                />
-              ) : null}
               {row.position ? (
                 <button
                   type="button"
