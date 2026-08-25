@@ -1,19 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import type { RosterEntry, RosterPermission } from "@/lib/types";
+import { useEffect, useState } from "react";
+import type { RosterEntry } from "@/lib/types";
 
 export function UsersAdmin() {
   const [roster, setRoster] = useState<RosterEntry[]>([]);
-  const [permissions, setPermissions] = useState<RosterPermission[]>(["Staff — estimates only"]);
   const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [permission, setPermission] = useState<RosterPermission>("Staff — estimates only");
-  const [expires, setExpires] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
 
   async function load() {
     const response = await fetch("/api/desk/roster", { credentials: "include", cache: "no-store" });
@@ -23,42 +15,33 @@ export function UsersAdmin() {
       return;
     }
     setRoster(data.roster);
-    setPermissions(data.permissions);
-    setPermission(data.permissions[0]);
   }
 
   useEffect(() => {
     load();
   }, []);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    // Password stays on this form only. Never sent to auth or the roster API.
+  async function resetOne(email: string) {
     const response = await fetch("/api/desk/roster", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, username, email, permission, expires }),
+      body: JSON.stringify({ resetInvite: true, email }),
     });
     const data = await response.json();
     if (!response.ok) {
-      setError(data.error || "Could not add user.");
+      setError(data.error || "Could not reset invite.");
       return;
     }
     setRoster(data.roster);
-    setName("");
-    setUsername("");
-    setEmail("");
-    setExpires("");
-    setPassword("");
   }
 
-  async function resetTesters() {
+  async function resetAll() {
     const response = await fetch("/api/desk/roster", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reset: true }),
+      body: JSON.stringify({ resetAllInvites: true }),
     });
     const data = await response.json();
     if (response.ok) setRoster(data.roster);
@@ -70,113 +53,44 @@ export function UsersAdmin() {
         <h2 className="text-2xl font-semibold text-[#163038]">Fresh accounts</h2>
         <p className="mt-1 text-sm text-[#5b6f73]">Your view only. Testers never see this.</p>
         <p className="mt-3 text-sm leading-6 text-[#163038]">
-          This roster is the owner book. It does not change email sign-in or the session cookie.
-          Login stays the first-party desk. Issued rows appear below.
+          Seven invite-only seats. They set their own password on first visit at /login. No public
+          create-account. No old Grok passwords. Resetting an invite forces a new password. This does
+          not change the owner session cookie.
         </p>
-        <button type="button" onClick={resetTesters} className="mt-4 rounded border border-red-500 px-3 py-2 text-sm text-red-600">
-          Remove all testers
+        <button type="button" onClick={resetAll} className="mt-4 rounded border border-red-500 px-3 py-2 text-sm text-red-600">
+          Reset all invites
         </button>
       </section>
 
-      <form onSubmit={onSubmit} className="plant-card px-5 py-5">
-        <h2 className="text-2xl font-semibold text-[#163038]">Add a user</h2>
-        {error ? <p className="mt-2 text-amber-flare">{error}</p> : null}
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <label>
-            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">NAME</span>
-            <input required value={name} onChange={(event) => setName(event.target.value)} className="paper-field mt-1" />
-          </label>
-          <label>
-            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">USERNAME</span>
-            <input value={username} onChange={(event) => setUsername(event.target.value)} className="paper-field mt-1" />
-          </label>
-          <label>
-            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">EMAIL</span>
-            <input
-              required
-              type="email"
-              placeholder="Where the invite will go."
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="paper-field mt-1"
-            />
-          </label>
-          <label>
-            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">PASSWORD</span>
-            <span className="relative mt-1 block">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="paper-field pr-10"
-                autoComplete="new-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((open) => !open)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-[#5b6f73]"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? "●" : "○"}
-              </button>
-            </span>
-          </label>
-          <label>
-            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">PERMISSION</span>
-            <select
-              value={permission}
-              onChange={(event) => setPermission(event.target.value as RosterPermission)}
-              className="paper-field mt-1"
-            >
-              {permissions.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">EXPIRES (OPTIONAL)</span>
-            <input type="date" value={expires} onChange={(event) => setExpires(event.target.value)} className="paper-field mt-1" />
-          </label>
-        </div>
-        <button type="submit" className="mt-5 rounded-lg bg-steel px-5 py-2.5 text-white">
-          Add user
-        </button>
-      </form>
-
       <section className="plant-card overflow-hidden px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Roster</h2>
+        {error ? <p className="mt-2 text-amber-flare">{error}</p> : null}
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs tracking-[0.14em] text-[#5b6f73]">
               <tr>
-                {["NAME", "USERNAME", "INVITE", "PERMISSION", "EXPIRES", "SIGN-IN"].map((header) => (
-                  <th key={header} className="px-2 py-2">
+                {["NAME", "USERNAME", "INVITE", "PERMISSION", "SIGN-IN", ""].map((header) => (
+                  <th key={header || "action"} className="px-2 py-2">
                     {header}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {roster.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-2 py-4 text-[#5b6f73]">
-                    No entries.
+              {roster.map((row) => (
+                <tr key={row.id} className="border-t border-[#d5e0de]">
+                  <td className="px-2 py-2">{row.name}</td>
+                  <td className="px-2 py-2">{row.username}</td>
+                  <td className="px-2 py-2">{row.email}</td>
+                  <td className="px-2 py-2">{row.permission}</td>
+                  <td className="px-2 py-2">{row.signIn}</td>
+                  <td className="px-2 py-2">
+                    <button type="button" onClick={() => resetOne(row.email)} className="text-sm text-[#0f5f6d] underline">
+                      Reset invite
+                    </button>
                   </td>
                 </tr>
-              ) : (
-                roster.map((row) => (
-                  <tr key={row.id} className="border-t border-[#d5e0de]">
-                    <td className="px-2 py-2">{row.name}</td>
-                    <td className="px-2 py-2">{row.username}</td>
-                    <td className="px-2 py-2">{row.email}</td>
-                    <td className="px-2 py-2">{row.permission}</td>
-                    <td className="px-2 py-2">{row.expires || "—"}</td>
-                    <td className="px-2 py-2">{row.signIn}</td>
-                  </tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>

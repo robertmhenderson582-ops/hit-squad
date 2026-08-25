@@ -4,7 +4,7 @@ Private invite-only industrial outage / T&M estimating desk (also called **Forge
 
 This is a from-scratch rebuild. Email + password is the only sign-in path. Sessions live in a first-party `HttpOnly` `SameSite=Lax` cookie on this app's own origin. The client confirms `/api/auth/session` returns a user before the desk renders, and the auth gate waits while the session is loading so a pending check cannot remount the Sign in screen.
 
-Owner desk is seeded for **Robert Henderson** (`robertmhenderson582@gmail.com`). Users never see another user's jobs.
+Owner desk is seeded for **Robert Henderson** (`robertmhenderson582@gmail.com`). Seven invite-only tester seats are seeded (Wendell, Benny, Chance, Nathan Boyte, Joseph Henderson, Mark Schneider, Bill Stubblebine). Testers set their own password on first visit. Testers never see each other. James Cain and `jhenderson582` are not seeded.
 
 ## Run locally
 
@@ -29,6 +29,7 @@ Local owner password is the value in `.env.example` / `.env.local` (`OWNER_PASSW
 | `OWNER_PASSWORD` | Local / field-trial password. Keep it out of git. |
 | `AUTH_SECRET` | Signs the session cookie. Use a long random string. |
 | `AUTH_COOKIE_SECURE` | `false` on local HTTP. `true` on HTTPS deploys. |
+| `BLOB_READ_WRITE_TOKEN` | Optional. Persists tester password hashes on Vercel. |
 
 The session cookie is named `hs_session`. It is `HttpOnly`, `Path=/`, `SameSite=Lax`, and `Secure` when `AUTH_COOKIE_SECURE=true` (or when `NODE_ENV=production` unless you force it off).
 
@@ -40,6 +41,7 @@ The session cookie is named `hs_session`. It is `HttpOnly`, `Path=/`, `SameSite=
 4. Wrong password stays on `/login` with a visible error. No session cookie is set.
 5. A hard refresh re-reads the cookie via `get-session` and stays on the desk.
 6. While session status is `loading`, the gate holds. It does not treat `null` as logged out.
+7. Invite testers set a password with `POST /api/auth/claim` JSON `{ email, password, acknowledged: true }` (same cookie after that). No passwords in URLs or GET forms. No public Create account.
 
 ## Checks
 
@@ -61,5 +63,6 @@ Login uses the night-refinery brand hero with HIT SQUAD ESTIMATORS. After sign-i
 - Home (`/`) stays **four tiles**: Jobs / Estimates / Cost / HSE, plus the night-refinery HIT SQUAD ESTIMATORS hero (New Phillips 66 estimate / Other client / Simple shop job) and Madison plant tiles. Do not replace home with an Estimates-only blotter.
 - Header may add Sites, Change orders, Rates (Illinois builder), Quality / ITP, Cost / PPR, New estimate.
 - Brand: HIT SQUAD over PROJECT CONTROLS, steel `#0f5f6d`, amber FIELD TRIAL — NOT A RELEASE, Madison confidentiality checkbox, original night-refinery hero.
-- Do not touch auth files (`/api/auth/*`, session cookie, AuthGate). No Google/X, no public Create account, no GET-submit login, no `sessionStorage` fake sessions.
-- B-1 ingest is parked. Do not invent Submit/ticket permission UI this turn; do not block adding it later.
+- Keep the working login contract: JSON `POST /api/auth/login`, `hs_session`, `GET /api/auth/session`, AuthGate. No Google/X, no public Create account, no GET-submit login, no `sessionStorage` fake sessions.
+- Owner-only: Users, Follow, Activity, republish. Joseph has tickets + View as and no Rate builder. Benny sees alias plant names only.
+- B-1 ingest is parked.

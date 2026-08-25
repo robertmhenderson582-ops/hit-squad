@@ -1,4 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
+import { ALL_CAPABILITIES, capabilitiesFor } from "@/lib/access";
+import { findSeatById, findSeatByUserId } from "@/lib/seats";
 import type { PublicUser } from "@/lib/types";
 
 export const SESSION_COOKIE = "hs_session";
@@ -8,7 +10,8 @@ type SessionClaims = {
   sub: string;
   email: string;
   name: string;
-  role: "owner";
+  role: "owner" | "tester";
+  seatId?: string;
 };
 
 function secretKey() {
@@ -40,12 +43,39 @@ export async function signSession(user: PublicUser): Promise<string> {
     email: user.email,
     name: user.name,
     role: user.role,
+    seatId: user.seatId,
   } satisfies Omit<SessionClaims, "sub">)
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
     .setIssuedAt()
     .setExpirationTime(`${SESSION_MAX_AGE}s`)
     .sign(secretKey());
+}
+
+function hydrateUser(base: {
+  id: string;
+  email: string;
+  name: string;
+  role: "owner" | "tester";
+  seatId?: string;
+}): PublicUser {
+  if (base.role === "owner") {
+    return {
+      ...base,
+      permission: "Owner desk",
+      can: { ...ALL_CAPABILITIES },
+      aliasPlants: false,
+    };
+  }
+
+  const seat = (base.seatId ? findSeatById(base.seatId) : undefined) ?? findSeatByUserId(base.id);
+  return {
+    ...base,
+    seatId: seat?.id ?? base.seatId,
+    permission: seat?.permission ?? "Staff/numbers",
+    can: seat?.can ?? capabilitiesFor("Staff/numbers"),
+    aliasPlants: Boolean(seat?.aliasPlants),
+  };
 }
 
 export async function readSession(token: string | undefined): Promise<PublicUser | null> {
@@ -55,12 +85,14 @@ export async function readSession(token: string | undefined): Promise<PublicUser
     if (!payload.sub || typeof payload.email !== "string" || typeof payload.name !== "string") {
       return null;
     }
-    return {
+    const role = payload.role === "tester" ? "tester" : "owner";
+    return hydrateUser({
       id: payload.sub,
       email: payload.email,
       name: payload.name,
-      role: "owner",
-    };
+      role,
+      seatId: typeof payload.seatId === "string" ? payload.seatId : undefined,
+    });
   } catch {
     return null;
   }

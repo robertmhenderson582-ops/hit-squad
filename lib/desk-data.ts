@@ -1,3 +1,5 @@
+import { aliasBoard } from "@/lib/aliases";
+import { findSeatByUserId } from "@/lib/seats";
 import type {
   ActivityLine,
   ChangeOrderRecord,
@@ -7,6 +9,7 @@ import type {
   EstimateRecord,
   ForgebookBoard,
   HseRecord,
+  PublicUser,
   QualityRecord,
   RateLine,
   SiteRecord,
@@ -314,8 +317,7 @@ const EMPTY: ForgebookBoard = {
   cost: [],
 };
 
-export function boardForUser(userId: string): ForgebookBoard {
-  if (userId !== OWNER) return EMPTY;
+function sharedBoard(): ForgebookBoard {
   return {
     sites: SITES,
     estimates: ESTIMATES,
@@ -329,6 +331,33 @@ export function boardForUser(userId: string): ForgebookBoard {
     quality: QUALITY,
     cost: COST,
   };
+}
+
+export function boardForViewer(user: PublicUser): ForgebookBoard {
+  const seat = findSeatByUserId(user.id);
+  if (user.role !== "owner" && !seat) return EMPTY;
+
+  const raw = sharedBoard();
+  const can = user.can;
+  const filtered: ForgebookBoard = {
+    sites: can.sites || can.estimates ? raw.sites : [],
+    estimates: can.estimates ? raw.estimates : [],
+    crews: can.estimates ? raw.crews : [],
+    activities: can.estimates ? raw.activities : [],
+    equipment: can.estimates ? raw.equipment : [],
+    staffing: can.estimates ? raw.staffing : [],
+    changeOrders: can.changeOrders ? raw.changeOrders : [],
+    rates: can.rates ? raw.rates : [],
+    hse: can.hse ? raw.hse : [],
+    quality: can.quality ? raw.quality : [],
+    cost: can.cost ? raw.cost : [],
+  };
+  return user.aliasPlants ? aliasBoard(filtered) : filtered;
+}
+
+export function boardForUser(userId: string): ForgebookBoard {
+  if (userId === OWNER) return sharedBoard();
+  return EMPTY;
 }
 
 export function estimateForUser(userId: string, estimateId: string): EstimateRecord | undefined {

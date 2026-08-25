@@ -1,7 +1,9 @@
+import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { sessionCookieOptions, SESSION_COOKIE, signSession } from "@/lib/auth";
-import { markSeatSignIn } from "@/lib/seat-store";
-import { findUserByEmail, toPublicUser, verifyPassword } from "@/lib/users";
+import { isBlockedEmail } from "@/lib/seats";
+import { getSeatSecret, markSeatSignIn, setSeatPassword } from "@/lib/seat-store";
+import { findUserByEmail, toPublicUser } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -23,31 +25,38 @@ export async function POST(request: Request) {
     );
   }
 
-  const email = typeof body.email === "string" ? body.email : "";
+  const email = typeof body.email === "string" ? body.email.trim() : "";
   const password = typeof body.password === "string" ? body.password : "";
 
   if (!email || !password) {
     return NextResponse.json({ error: GENERIC_ERROR }, { status: 401 });
   }
-
-  const user = await findUserByEmail(email);
-  if (user && user.role === "tester" && !user.passwordHash) {
-    return NextResponse.json(
-      {
-        error: "This invite is open. Set your own password on this screen first.",
-        needsPassword: true,
-      },
-      { status: 401 },
-    );
+  if (isBlockedEmail(email)) {
+    return NextResponse.json({ error: GENERIC_ERROR }, { status: 401 });
+  }
+  if (password.length < 10) {
+    return NextResponse.json({ error: "Choose a password of at least 10 characters." }, { status: 400 });
   }
 
-  if (!user || !verifyPassword(user, password)) {
+  const user = await findUserByEmail(email);
+  if (!user || user.role !== "tester") {
     return NextResponse.json({ error: GENERIC_ERROR }, { status: 401 });
   }
 
-  const publicUser = toPublicUser(user);
+  const existing = await getSeatSecret(user.email);
+  if (existing?.passwordHash) {
+    return NextResponse.json({ error: "Password already set. Use Enter the desk." }, { status: 409 });
+  }
+
+  await setSeatPassword(user.email, bcrypt.hashSync(password, 12));
+  const claimed = await findUserByEmail(user.email);
+  if (!claimed) {
+    return NextResponse.json({ error: GENERIC_ERROR }, { status: 401 });
+  }
+
+  const publicUser = toPublicUser(claimed);
   const token = await signSession(publicUser);
-  if (publicUser.role === "tester") await markSeatSignIn(publicUser.email);
+  await markSeatSignIn(publicUser.email);
   const response = NextResponse.json({ user: publicUser });
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
   return response;
