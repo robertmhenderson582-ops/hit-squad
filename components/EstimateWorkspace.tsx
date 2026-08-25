@@ -23,7 +23,6 @@ const TABS = [
   { id: "activities", label: "Activities", icon: "∿" },
   { id: "crew", label: "Crew", icon: "⛑" },
   { id: "staffing", label: "Staffing", icon: "▦" },
-  { id: "support", label: "Support", icon: "▣" },
   { id: "equipment", label: "Equipment", icon: "⛟" },
   { id: "costs", label: "Costs", icon: "▤" },
   { id: "change-orders", label: "Change orders", icon: "⚖" },
