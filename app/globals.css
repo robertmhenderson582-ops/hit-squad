@@ -1123,44 +1123,65 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   color: #efe6d4;
 }
 
+.phase-moss,
+.phase-rust,
+.phase-steel,
+.phase-amber,
+.phase-green {
+  color: #163038;
+}
+
+.phase-name {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
 .phase-moss {
-  background: #e6eedc;
+  background: #d5e2c4;
 }
 
 .phase-rust {
-  background: #f3ddd2;
+  background: #ebcfc0;
 }
 
 .phase-steel {
-  background: #d5dde0;
+  background: #c5d0d5;
 }
 
 .phase-amber {
-  background: #f3e4b8;
+  background: #e6ce86;
 }
 
 .phase-green {
-  background: #d4ead9;
+  background: #c0dec6;
+}
+
+.industrial-root .phase-moss,
+.industrial-root .phase-rust,
+.industrial-root .phase-steel,
+.industrial-root .phase-amber,
+.industrial-root .phase-green {
+  color: #122428;
 }
 
 .industrial-root .phase-moss {
-  background: rgba(90, 122, 74, 0.28);
+  background: #c8d6b0;
 }
 
 .industrial-root .phase-rust {
-  background: rgba(139, 58, 31, 0.32);
+  background: #e0b8a6;
 }
 
 .industrial-root .phase-steel {
-  background: rgba(74, 92, 102, 0.38);
+  background: #b7c4ca;
 }
 
 .industrial-root .phase-amber {
-  background: rgba(196, 138, 26, 0.28);
+  background: #d9be72;
 }
 
 .industrial-root .phase-green {
-  background: rgba(61, 107, 79, 0.3);
+  background: #aecdb6;
 }
 
 .crew-stack {
