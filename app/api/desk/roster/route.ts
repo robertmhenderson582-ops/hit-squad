@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
-import { addRosterEntry, clearRoster, listRoster, PERMISSIONS } from "@/lib/roster";
-import type { RosterPermission } from "@/lib/types";
+import { listRoster, PERMISSIONS, resetAllInvites, resetInvite } from "@/lib/roster";
+import { findSeatByEmail } from "@/lib/seats";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +20,8 @@ export async function GET(request: Request) {
   if (gate.response) return gate.response;
   return NextResponse.json({
     permissions: PERMISSIONS,
-    roster: listRoster(),
-    note: "Roster is owner-visible only. It does not create a login session.",
+    roster: await listRoster(),
+    note: "Owner book only. Testers never see this list. Seats do not use old Grok passwords.",
   });
 }
 
@@ -29,35 +29,28 @@ export async function POST(request: Request) {
   const gate = await requireOwner(request);
   if (gate.response) return gate.response;
 
-  let body: {
-    name?: string;
-    username?: string;
-    email?: string;
-    permission?: RosterPermission;
-    expires?: string;
-    reset?: boolean;
-  };
+  let body: { email?: string; resetInvite?: boolean; resetAllInvites?: boolean };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Send JSON." }, { status: 400 });
   }
 
-  if (body.reset) {
-    clearRoster();
-    return NextResponse.json({ roster: listRoster() });
+  if (body.resetAllInvites) {
+    await resetAllInvites();
+    return NextResponse.json({ roster: await listRoster() });
   }
 
-  if (!body.name || !body.email || !body.permission) {
-    return NextResponse.json({ error: "Name, email, and permission are required." }, { status: 400 });
+  if (body.resetInvite && body.email) {
+    if (!findSeatByEmail(body.email)) {
+      return NextResponse.json({ error: "That email is not a field-trial seat." }, { status: 400 });
+    }
+    await resetInvite(body.email);
+    return NextResponse.json({ roster: await listRoster() });
   }
 
-  const entry = addRosterEntry({
-    name: body.name,
-    username: body.username || body.email.split("@")[0],
-    email: body.email,
-    permission: body.permission,
-    expires: body.expires || "",
-  });
-  return NextResponse.json({ entry, roster: listRoster() });
+  return NextResponse.json(
+    { error: "Field-trial seats are locked to the seven invitees. Reset an invite instead." },
+    { status: 400 },
+  );
 }

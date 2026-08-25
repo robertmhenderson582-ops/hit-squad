@@ -8,3 +8,4 @@ out
 .env.*.local
 .vercel
 next-env.d.ts
+data/seat-secrets.json

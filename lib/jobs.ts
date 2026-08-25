@@ -1,4 +1,6 @@
-import type { DeskBoard, JobRecord } from "@/lib/types";
+import { aliasJobs } from "@/lib/aliases";
+import { findSeatByUserId } from "@/lib/seats";
+import type { DeskBoard, JobRecord, PublicUser } from "@/lib/types";
 
 const JOBS: JobRecord[] = [
   {
@@ -55,14 +57,29 @@ const JOBS: JobRecord[] = [
   },
 ];
 
-export function deskForUser(userId: string): DeskBoard {
-  const jobs = JOBS.filter((job) => job.ownerId === userId);
+function summarize(jobs: JobRecord[]): DeskBoard {
   return {
     jobs,
     estimatesOpen: jobs.filter((job) => job.kind === "estimate" || job.status !== "CLOSED").length,
     costTickets: jobs.filter((job) => job.kind === "t&m" || job.kind === "outage").length,
     hseOpen: jobs.filter((job) => job.kind === "hse" || job.hseNote.toLowerCase().includes("open")).length,
   };
+}
+
+export function deskForViewer(user: PublicUser): DeskBoard {
+  const seat = findSeatByUserId(user.id);
+  if (user.role !== "owner" && !seat) return summarize([]);
+
+  let jobs = JOBS;
+  if (!user.can.jobs && !user.can.estimates) jobs = [];
+  if (!user.can.hse) jobs = jobs.filter((job) => job.kind !== "hse");
+  if (user.aliasPlants) jobs = aliasJobs(jobs);
+  return summarize(jobs);
+}
+
+export function deskForUser(userId: string): DeskBoard {
+  const jobs = JOBS.filter((job) => job.ownerId === userId);
+  return summarize(jobs);
 }
 
 export function jobsForUser(userId: string, kind?: JobRecord["kind"]): JobRecord[] {

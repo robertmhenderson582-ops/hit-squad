@@ -1,8 +1,16 @@
+import type { Capabilities, SeatPermission } from "@/lib/access";
+
+export type UserRole = "owner" | "tester";
+
 export type PublicUser = {
   id: string;
   email: string;
   name: string;
-  role: "owner";
+  role: UserRole;
+  seatId?: string;
+  permission: SeatPermission;
+  can: Capabilities;
+  aliasPlants: boolean;
 };
 
 export type JobRecord = {
@@ -32,7 +40,7 @@ export type SiteRecord = {
   code: string;
   name: string;
   client: string;
-  family: "Georgia Power" | "Phillips 66";
+  family: string;
   city: string;
   openJobs: number;
   plant: string;
@@ -62,11 +70,7 @@ export type StaffingLine = {
   headcount: number;
 };
 
-export type RosterPermission =
-  | "Staff — estimates only"
-  | "Look & feel"
-  | "Cost / HSE"
-  | "Owner desk";
+export type RosterPermission = SeatPermission;
 
 export type RosterEntry = {
   id: string;

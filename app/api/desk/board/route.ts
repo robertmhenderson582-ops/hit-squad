@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
-import { boardForUser } from "@/lib/desk-data";
+import { boardForViewer } from "@/lib/desk-data";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +13,6 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     user: { id: user.id, email: user.email, name: user.name },
-    board: boardForUser(user.id),
+    board: boardForViewer(user),
   });
 }

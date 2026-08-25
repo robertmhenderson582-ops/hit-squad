@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
 import { EstimateDetail } from "@/components/EstimateDetail";
+import { ModuleGate } from "@/components/ModuleGate";
 
 export default function EstimateDetailPage() {
   const params = useParams<{ id: string }>();
@@ -10,7 +11,9 @@ export default function EstimateDetailPage() {
 
   return (
     <AuthGate require="authenticated">
-      <EstimateDetail estimateId={id} />
+      <ModuleGate need="estimates">
+        <EstimateDetail estimateId={id} />
+      </ModuleGate>
     </AuthGate>
   );
 }

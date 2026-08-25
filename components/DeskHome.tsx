@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { hasCapability } from "@/lib/access";
 import { DeskHero } from "@/components/DeskHero";
 import { SitesDesk } from "@/components/SitesDesk";
 import { StatusStamp } from "@/components/StatusStamp";
+import { useSession } from "@/components/SessionProvider";
 import type { DeskBoard } from "@/lib/types";
 
 // Home must stay these four tiles. Do not replace / with an Estimates-only blotter.
@@ -16,8 +18,10 @@ const TILES = [
 ] as const;
 
 export function DeskHome() {
+  const { user } = useSession();
   const [desk, setDesk] = useState<DeskBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const tiles = TILES.filter((tile) => hasCapability(user, tile.key));
 
   useEffect(() => {
     let cancelled = false;
@@ -50,11 +54,12 @@ export function DeskHome() {
     <div className="space-y-6">
       <DeskHero />
       <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
-        Owner blotter for Madison / P66 outage, T&amp;M, cost, and HSE. Records stay with the
-        signed-in desk. Field trial — not a release.
+        {user?.aliasPlants
+          ? "Owner blotter for Shop North / Client West outage, T&M, cost, and HSE. Records stay with the signed-in desk. Field trial — not a release."
+          : "Owner blotter for Madison / P66 outage, T&M, cost, and HSE. Records stay with the signed-in desk. Field trial — not a release."}
       </p>
       <div className="desk-grid">
-        {TILES.map((tile) => (
+        {tiles.map((tile) => (
           <Link
             key={tile.href}
             href={tile.href}
@@ -67,6 +72,7 @@ export function DeskHome() {
         ))}
       </div>
 
+      {hasCapability(user, "jobs") ? (
       <section className="steel-plate paper-grain overflow-hidden">
         <div className="border-b border-steel-rim/30 px-4 py-3 font-mono text-[11px] tracking-[0.22em] text-steel-glow">
           OPEN JOBS — THIS DESK ONLY
@@ -103,7 +109,8 @@ export function DeskHome() {
           </table>
         </div>
       </section>
-      <SitesDesk />
+      ) : null}
+      {hasCapability(user, "sites") || hasCapability(user, "estimates") ? <SitesDesk /> : null}
     </div>
   );
 }

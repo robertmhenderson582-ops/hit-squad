@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -114,11 +115,134 @@ async function runChecks() {
   const foreign = await fetch(`${BASE}/api/desk/jobs`, { cache: "no-store" });
   assert(foreign.status === 401, "Anonymous callers cannot read desk jobs");
 
+  await rm("data/seat-secrets.json", { force: true });
+  await rm("/tmp/hs-seat-secrets.json", { force: true });
+
+  const blocked = await fetch(`${BASE}/api/auth/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: "jhenderson582@gmail.com",
+      password: "not-a-real-invite-password",
+      acknowledged: true,
+    }),
+  });
+  assert(blocked.status === 401, "jhenderson582 must not be a seat");
+
+  const james = await fetch(`${BASE}/api/auth/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: "jamescain@gmail.com",
+      password: "not-a-real-invite-password",
+      acknowledged: true,
+    }),
+  });
+  assert(james.status === 401, "James Cain must not be a seat");
+
+  const josephPassword = "joseph-field-trial-local";
+  const josephClaim = await fetch(`${BASE}/api/auth/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: "josephmhenderson2002@gmail.com",
+      password: josephPassword,
+      acknowledged: true,
+    }),
+  });
+  const josephClaimBody = await josephClaim.json();
+  assert(josephClaim.status === 200, `Joseph claim should be 200, got ${josephClaim.status}`);
+  assert(josephClaimBody.user?.email === "josephmhenderson2002@gmail.com", "Joseph claim must return Joseph");
+  const josephCookie = cookieHeader(josephClaim.headers.get("set-cookie"));
+
+  const josephLogin = await fetch(`${BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: "josephmhenderson2002@gmail.com",
+      password: josephPassword,
+      acknowledged: true,
+    }),
+  });
+  assert(josephLogin.status === 200, "Joseph must sign in after setting a password");
+
+  const josephBoard = await fetch(`${BASE}/api/desk/board`, {
+    headers: { cookie: josephCookie },
+    cache: "no-store",
+  });
+  const josephBoardBody = await josephBoard.json();
+  assert(josephBoard.status === 200, "Joseph can read the shared blotter");
+  assert(!josephBoardBody.board.rates?.length, "Joseph must not receive rate-builder rows");
+
+  const josephRoster = await fetch(`${BASE}/api/desk/roster`, {
+    headers: { cookie: josephCookie },
+    cache: "no-store",
+  });
+  assert(josephRoster.status === 403, "Joseph cannot open Users / other testers");
+
+  const bennyPassword = "benny-field-trial-local";
+  const bennyClaim = await fetch(`${BASE}/api/auth/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: "bccamp2@gmail.com",
+      password: bennyPassword,
+      acknowledged: true,
+    }),
+  });
+  assert(bennyClaim.status === 200, "Benny claim should be 200");
+  const bennyCookie = cookieHeader(bennyClaim.headers.get("set-cookie"));
+  const bennyBoard = await fetch(`${BASE}/api/desk/board`, {
+    headers: { cookie: bennyCookie },
+    cache: "no-store",
+  });
+  const bennyBoardBody = await bennyBoard.json();
+  const bennyDump = JSON.stringify(bennyBoardBody);
+  assert(!/phillips\s*66/i.test(bennyDump), "Benny must not see Phillips 66");
+  assert(!/\bP66\b/.test(bennyDump), "Benny must not see P66");
+  assert(!/madison/i.test(bennyDump), "Benny must not see Madison");
+  assert(!/wood river/i.test(bennyDump), "Benny must not see Wood River");
+
+  const otherSeats = [
+    ["Wlanderno@yahoo.com", "wendell-field-trial-local"],
+    ["chancec318@yahoo.com", "chance-field-trial-local"],
+    ["nathanboyte@gmail.com", "nathan-field-trial-local"],
+    ["marks544@yahoo.com", "mark544-field-trial-local"],
+    ["bstubby@aol.com", "bill-field-trial-local"],
+  ];
+  for (const [email, password] of otherSeats) {
+    const claimed = await fetch(`${BASE}/api/auth/claim`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, acknowledged: true }),
+    });
+    assert(claimed.status === 200, `${email} claim should be 200`);
+    const signed = await fetch(`${BASE}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, acknowledged: true }),
+    });
+    assert(signed.status === 200, `${email} must sign in after setting a password`);
+  }
+
+  const ownerRoster = await fetch(`${BASE}/api/desk/roster`, {
+    headers: { cookie },
+    cache: "no-store",
+  });
+  const ownerRosterBody = await ownerRoster.json();
+  assert(ownerRoster.status === 200, "Owner can open Users");
+  assert(ownerRosterBody.roster?.length === 7, "Owner roster must show the seven seats");
+  const emails = ownerRosterBody.roster.map((row) => row.email);
+  assert(emails.includes("josephmhenderson2002@gmail.com"), "Joseph seat must be listed");
+  assert(!emails.some((item) => item.includes("jhenderson582")), "jhenderson582 must not be seeded");
+  assert(!emails.some((item) => item.includes("james")), "James Cain must not be seeded");
+
   console.log("AUTH CHECK PASSED");
   console.log("- wrong password stays 401 with a visible error");
   console.log("- email sign-in sets a first-party HttpOnly SameSite=Lax cookie");
   console.log("- get-session returns the user after login and again on refresh");
   console.log("- desk jobs stay scoped to the signed-in owner");
+  console.log("- seven invite seats; Joseph has no rates; Benny sees aliases only");
 }
 
 async function main() {

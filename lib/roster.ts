@@ -1,28 +1,37 @@
-import type { RosterEntry, RosterPermission } from "@/lib/types";
+import type { SeatPermission } from "@/lib/access";
+import { SEEDED_SEATS } from "@/lib/seats";
+import { clearAllSeatPasswords, clearSeatPassword, loadSeatSecrets } from "@/lib/seat-store";
+import type { RosterEntry } from "@/lib/types";
 
-const roster: RosterEntry[] = [];
-
-export const PERMISSIONS: RosterPermission[] = [
-  "Staff — estimates only",
+export const PERMISSIONS: SeatPermission[] = [
+  "Trusted/HSE",
+  "Trusted/Quality",
+  "PM/estimator",
   "Look & feel",
-  "Cost / HSE",
+  "Staff/numbers",
   "Owner desk",
 ];
 
-export function listRoster(): RosterEntry[] {
-  return [...roster];
+export async function listRoster(): Promise<RosterEntry[]> {
+  const secrets = await loadSeatSecrets();
+  return SEEDED_SEATS.map((seat) => {
+    const secret = secrets[seat.email];
+    return {
+      id: seat.userId,
+      name: seat.name,
+      username: seat.username,
+      email: seat.email,
+      permission: seat.permission,
+      expires: "",
+      signIn: secret?.signInAt ? new Date(secret.signInAt).toLocaleString() : secret?.passwordHash ? "Password set" : "Invite open",
+    };
+  });
 }
 
-export function addRosterEntry(input: Omit<RosterEntry, "id" | "signIn">): RosterEntry {
-  const entry: RosterEntry = {
-    ...input,
-    id: `roster-${Date.now()}`,
-    signIn: "—",
-  };
-  roster.push(entry);
-  return entry;
+export async function resetInvite(email: string): Promise<void> {
+  await clearSeatPassword(email);
 }
 
-export function clearRoster() {
-  roster.splice(0, roster.length);
+export async function resetAllInvites(): Promise<void> {
+  await clearAllSeatPasswords();
 }

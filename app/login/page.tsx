@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { AuthGate } from "@/components/AuthGate";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
+import { ClaimInviteForm } from "@/components/ClaimInviteForm";
 import { LoginForm } from "@/components/LoginForm";
 
 export default function LoginPage() {
@@ -27,6 +28,7 @@ export default function LoginPage() {
               FORGEBOOK · OWNER DESK · PROJECT CONTROLS
             </p>
             <LoginForm />
+            <ClaimInviteForm />
             <p className="mt-6 text-center font-mono text-[10px] leading-5 tracking-[0.12em] text-paper-cream/45">
               Invite only. Owner: Robert Henderson. Not a public product.
             </p>
