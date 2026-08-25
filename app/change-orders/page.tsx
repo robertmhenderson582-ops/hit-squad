@@ -2,13 +2,13 @@
 
 import { AuthGate } from "@/components/AuthGate";
 import { DeskChrome } from "@/components/DeskChrome";
-import { HseDesk } from "@/components/HseDesk";
+import { ChangeOrderDesk } from "@/components/ChangeOrderDesk";
 
-export default function HsePage() {
+export default function ChangeOrdersPage() {
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="HSE">
-        <HseDesk />
+      <DeskChrome title="CHANGE ORDERS">
+        <ChangeOrderDesk />
       </DeskChrome>
     </AuthGate>
   );

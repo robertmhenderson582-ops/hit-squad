@@ -2,13 +2,13 @@
 
 import { AuthGate } from "@/components/AuthGate";
 import { DeskChrome } from "@/components/DeskChrome";
-import { HseDesk } from "@/components/HseDesk";
+import { SitesDesk } from "@/components/SitesDesk";
 
-export default function HsePage() {
+export default function SitesPage() {
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="HSE">
-        <HseDesk />
+      <DeskChrome title="SITES / PLANTS">
+        <SitesDesk />
       </DeskChrome>
     </AuthGate>
   );

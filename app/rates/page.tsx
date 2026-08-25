@@ -2,13 +2,13 @@
 
 import { AuthGate } from "@/components/AuthGate";
 import { DeskChrome } from "@/components/DeskChrome";
-import { HseDesk } from "@/components/HseDesk";
+import { RateBuilder } from "@/components/RateBuilder";
 
-export default function HsePage() {
+export default function RatesPage() {
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="HSE">
-        <HseDesk />
+      <DeskChrome title="RATES">
+        <RateBuilder />
       </DeskChrome>
     </AuthGate>
   );

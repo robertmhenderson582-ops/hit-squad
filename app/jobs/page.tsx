@@ -1,18 +1,21 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
-import { DeskChrome } from "@/components/DeskChrome";
-import { JobList } from "@/components/JobList";
 
-export default function JobsPage() {
+export default function JobsRedirectPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/sites");
+  }, [router]);
+
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="JOBS">
-        <p className="mt-2 text-sm text-paper-cream/80">
-          Outage and T&amp;M jobs loaded for this desk. Other users never see this board.
-        </p>
-        <JobList />
-      </DeskChrome>
+      <div className="industrial-root flex min-h-screen items-center justify-center">
+        <p className="font-mono text-xs tracking-[0.24em] text-steel-glow">OPENING SITES</p>
+      </div>
     </AuthGate>
   );
 }

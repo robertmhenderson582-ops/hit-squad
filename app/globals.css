@@ -35,7 +35,7 @@ body {
 .industrial-root {
   min-height: 100vh;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
   background:
     radial-gradient(ellipse 80% 50% at 12% 18%, rgba(227, 139, 42, 0.22), transparent 48%),
     radial-gradient(ellipse 70% 45% at 82% 24%, rgba(15, 95, 109, 0.55), transparent 52%),
@@ -52,9 +52,9 @@ body {
 }
 
 .plant-silhouette {
-  position: absolute;
+  position: fixed;
   inset: auto 0 0 0;
-  height: 46%;
+  height: 42%;
   pointer-events: none;
   background:
     linear-gradient(180deg, transparent, rgba(4, 12, 14, 0.72)),
@@ -110,9 +110,19 @@ button {
   font: inherit;
 }
 
-input:focus {
+input:focus,
+select:focus,
+textarea:focus {
   outline: 1px solid #3ec6d4;
   outline-offset: 1px;
+}
+
+.steel-field {
+  border: 1px solid rgba(26, 122, 136, 0.4);
+  background: rgba(6, 22, 26, 0.72);
+  color: #efe6d4;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.875rem;
 }
 
 .desk-grid {

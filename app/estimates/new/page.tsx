@@ -2,13 +2,13 @@
 
 import { AuthGate } from "@/components/AuthGate";
 import { DeskChrome } from "@/components/DeskChrome";
-import { HseDesk } from "@/components/HseDesk";
+import { NewEstimateForm } from "@/components/NewEstimateForm";
 
-export default function HsePage() {
+export default function NewEstimatePage() {
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="HSE">
-        <HseDesk />
+      <DeskChrome title="NEW ESTIMATE">
+        <NewEstimateForm />
       </DeskChrome>
     </AuthGate>
   );

@@ -54,4 +54,4 @@ npm run auth:check
 
 One Next.js app. Set the env vars on the host, use HTTPS, and set `AUTH_COOKIE_SECURE=true`. There is no Google sign-in yet.
 
-This commit exists only to trigger the first Vercel production deploy.
+After sign-in the estimator home is **Estimates**. Header rails: Sites, Estimates, Change orders, HSE, Quality, Rates, Cost / PPR, plus New estimate. Packages include job setup, crew/staffing, WBS, an SCR change-order form, an Illinois FUI/SUI/workers' comp rate builder, and a weekly earned-value blotter. All records stay owner-scoped.
