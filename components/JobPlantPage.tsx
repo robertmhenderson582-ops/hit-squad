@@ -126,23 +126,6 @@ export function JobPlantPage({ slug }: { slug: string }) {
           <div className="plant-card px-5 py-6">
             <p className="text-[#5b6f73]">No open estimates on this plant yet.</p>
           </div>
-          <div className="plant-card overflow-hidden px-5 py-5">
-            <p className="text-xs tracking-[0.16em] text-[#5b6f73]">TRAVEL</p>
-            <table className="mt-3 min-w-full text-left text-sm">
-              <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
-                <tr>
-                  <th className="py-2">ITEM</th>
-                  <th className="py-2">Mileage Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-t border-[#d5e0de]">
-                  <td className="py-2">Craft travel</td>
-                  <td className="py-2">—</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </div>
       ) : null}
 

@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { CreatedBy } from "@/components/CreatedBy";
+import { displayEstimateType, ESTIMATE_TYPES, type EstimateType } from "@/lib/estimate-type";
 
 export function JobSetupCard({
   type,
@@ -10,6 +12,7 @@ export function JobSetupCard({
   author,
   code,
   window,
+  mileageRate,
   children,
 }: {
   type: string;
@@ -19,8 +22,12 @@ export function JobSetupCard({
   author?: string;
   code?: string;
   window?: string;
+  mileageRate?: string | null;
   children?: React.ReactNode;
 }) {
+  const [estimateType, setEstimateType] = useState<EstimateType>(displayEstimateType(type));
+  const travelOn = Boolean(mileageRate && mileageRate !== "—");
+
   return (
     <section className="plant-card mx-auto max-w-3xl px-6 py-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -33,7 +40,18 @@ export function JobSetupCard({
       </div>
       <label className="mt-6 block">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE TYPE</span>
-        <input readOnly value={type} className="paper-field mt-2" />
+        <select
+          value={estimateType}
+          onChange={(event) => setEstimateType(event.target.value as EstimateType)}
+          className="paper-field mt-2"
+        >
+          {ESTIMATE_TYPES.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-[#5b6f73]">Outage is the job. This field is the contract type.</p>
       </label>
       <label className="mt-4 block">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">CLIENT</span>
@@ -62,23 +80,25 @@ export function JobSetupCard({
           {[code, window].filter(Boolean).join(" · ")} · Dollars stay on the rail.
         </p>
       ) : null}
-      <div className="mt-6">
-        <p className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">TRAVEL</p>
-        <table className="mt-2 min-w-full text-left text-sm">
-          <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
-            <tr>
-              <th className="py-2">ITEM</th>
-              <th className="py-2">Mileage Rate</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-t border-[#d5e0de]">
-              <td className="py-2">Craft travel</td>
-              <td className="py-2">—</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      {travelOn ? (
+        <div className="mt-6">
+          <p className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">TRAVEL</p>
+          <table className="mt-2 min-w-full text-left text-sm">
+            <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
+              <tr>
+                <th className="py-2">ITEM</th>
+                <th className="py-2">Mileage Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-[#d5e0de]">
+                <td className="py-2">Craft travel</td>
+                <td className="py-2">{mileageRate}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </section>
   );
 }

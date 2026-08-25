@@ -6,6 +6,7 @@ import { DeskChrome } from "@/components/DeskChrome";
 import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
 import { JobSetupCard } from "@/components/JobSetupCard";
+import { PhaseSchedule } from "@/components/PhaseSchedule";
 import { ModuleTable } from "@/components/ModuleTable";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
@@ -56,13 +57,16 @@ function NewEstimateDesk({
       statusLocked
     >
       {tab === "summary" ? (
-        <JobSetupCard
-          type="Outage / T&M"
-          client={alias(client)}
-          name={name}
-          otRule={otRule}
-          author={user?.name}
-        />
+        <div className="space-y-5">
+          <JobSetupCard
+            type="T&M"
+            client={alias(client)}
+            name={name}
+            otRule={otRule}
+            author={user?.name}
+          />
+          <PhaseSchedule />
+        </div>
       ) : null}
       {tab === "activities" ? (
         <ModuleTable caption="ACTIVITIES" headers={["WBS", "ACTIVITY", "CRAFT", "MH", "DOLLARS", "STATUS"]}>

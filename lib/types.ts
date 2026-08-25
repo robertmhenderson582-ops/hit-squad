@@ -97,7 +97,7 @@ export type EstimateRecord = {
   title: string;
   client: string;
   unit: string;
-  type: "Lump sum" | "T&M" | "Hybrid";
+  type: "Lump sum" | "T&M" | "Hybrid" | "CR/FF";
   status: "DRAFT" | "WORKING" | "ISSUED" | "HOLD";
   window: string;
   labor: string;

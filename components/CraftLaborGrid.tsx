@@ -39,6 +39,9 @@ export function CraftLaborGrid({
   client = "",
   otAfter8 = false,
   onOtAfter8,
+  title = "Direct Craft",
+  note,
+  positions,
 }: {
   rows: CraftRow[];
   onRows: (next: CraftRow[] | ((current: CraftRow[]) => CraftRow[])) => void;
@@ -46,6 +49,9 @@ export function CraftLaborGrid({
   client?: string;
   otAfter8?: boolean;
   onOtAfter8?: (next: boolean) => void;
+  title?: string;
+  note?: string;
+  positions?: readonly string[];
 }) {
   const confirmRemove = useConfirmRemove();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -109,29 +115,31 @@ export function CraftLaborGrid({
     <section className="plant-card px-5 py-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-display text-2xl font-semibold text-[#163038]">Direct Craft</h2>
+          <h2 className="font-display text-2xl font-semibold text-[#163038]">{title}</h2>
           <p className="text-sm text-[#5b6f73]">
             {totals.hours.toLocaleString()} hrs · {totals.st.toLocaleString()} ST · {totals.ot.toLocaleString()} OT ·{" "}
             {totals.dt.toLocaleString()} DT
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-[#163038]">
-            <input
-              type="checkbox"
-              checked={otAfter8}
-              onChange={(event) => onOtAfter8?.(event.target.checked)}
-            />
-            OT after 8
-          </label>
+          {onOtAfter8 ? (
+            <label className="flex items-center gap-2 text-sm text-[#163038]">
+              <input
+                type="checkbox"
+                checked={otAfter8}
+                onChange={(event) => onOtAfter8(event.target.checked)}
+              />
+              OT after 8
+            </label>
+          ) : null}
           <button type="button" onClick={addPosition} className="rounded-lg bg-steel px-3 py-2 text-sm text-white">
             + Add position
           </button>
         </div>
       </div>
       <p className="mt-2 text-xs text-[#5b6f73]">
-        Hours follow the position. OT after 8 is optional — weekly 40 still sits on top. Default is ST to 10
-        on East Coast / staff.
+        {note ||
+          "Hours follow the position. OT after 8 is optional — weekly 40 still sits on top. Default is ST to 10 on East Coast / staff."}
       </p>
       <GripToPan className="mt-4">
         <table className="min-w-[960px] text-left text-sm">
@@ -173,6 +181,7 @@ export function CraftLaborGrid({
                   }}
                   onDuplicate={() => duplicatePosition(row)}
                   onRemove={() => void removePosition(row)}
+                  catalog={positions}
                 />
               );
             })}
@@ -196,6 +205,7 @@ function CraftAccordionRow({
   onRemoveRange,
   onDuplicate,
   onRemove,
+  catalog,
 }: {
   row: CraftRow;
   site: string;
@@ -209,8 +219,10 @@ function CraftAccordionRow({
   onRemoveRange: (rangeId: string) => void;
   onDuplicate: () => void;
   onRemove: () => void;
+  catalog?: readonly string[];
 }) {
-  const listed = (LISTED_POSITIONS as readonly string[]).includes(row.position);
+  const options = catalog && catalog.length > 0 ? catalog : LISTED_POSITIONS;
+  const listed = (options as readonly string[]).includes(row.position);
   const selectValue = listed ? row.position : row.position ? CUSTOM : "";
   const naturalClass = defaultLaborClass(row.position);
   const laborClass = row.laborClassOverride ?? naturalClass;
@@ -247,20 +259,30 @@ function CraftAccordionRow({
                 className="paper-field w-full"
               >
                 <option value="">Select position</option>
-                <optgroup label="Supervision / staff">
-                  {STAFF_POSITIONS.map((item) => (
+                {catalog && catalog.length > 0 ? (
+                  catalog.map((item) => (
                     <option key={item} value={item}>
                       {item}
                     </option>
-                  ))}
-                </optgroup>
-                <optgroup label="GF / craft">
-                  {CRAFT_POSITIONS.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </optgroup>
+                  ))
+                ) : (
+                  <>
+                    <optgroup label="Supervision / staff">
+                      {STAFF_POSITIONS.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="GF / craft">
+                      {CRAFT_POSITIONS.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </>
+                )}
                 <option value={CUSTOM}>Type a title…</option>
               </select>
               {!listed ? (

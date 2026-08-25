@@ -7,6 +7,7 @@ import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { burnCaption } from "@/lib/capture";
 import { buildDeskChrome } from "@/lib/desk-role";
+import { mergeTickets, readTicketCache, ticketsForViewer, writeTicketCache } from "@/lib/ticket-cache";
 import { ticketCopyText, type DeskTicket } from "@/lib/tickets";
 
 export function TicketsDesk() {
@@ -19,7 +20,11 @@ export function TicketsDesk() {
   const [view, setView] = useState<{ src: string; caption: string } | null>(null);
 
   function load(list: DeskTicket[]) {
-    setTickets(list);
+    const mine = user?.email || "";
+    const visible = ticketsForViewer(list, mine, ownerChrome);
+    const next = ownerChrome || !mine ? visible : mergeTickets(visible, readTicketCache(mine).filter((row) => row.who === mine));
+    if (mine && !ownerChrome) writeTicketCache(mine, next);
+    setTickets(next);
   }
 
   useEffect(() => {
@@ -33,7 +38,7 @@ export function TicketsDesk() {
         load(data.tickets ?? []);
       })
       .catch(() => setError("Tickets could not load."));
-  }, []);
+  }, [ownerChrome, user?.email]);
 
   async function patch(id: string, body: { done?: boolean; notifyFix?: boolean | null }) {
     const response = await fetch("/api/desk/tickets", {
