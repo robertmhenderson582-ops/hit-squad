@@ -21,12 +21,12 @@ export function FollowDesk() {
   const subject = VISUAL_ROSTER.find((row) => row.id === desk.followSeat);
 
   return (
-    <div className="mt-5 space-y-5">
+    <div className="space-y-5">
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Follow</h2>
         <p className="mt-1 text-sm leading-6 text-[#163038]">
-          Watch a tester’s screen. Sign-in, Users, Follow, and Activity stay yours. Joseph cannot use
-          Follow. This is not View as.
+          Watch a tester’s screen. Password fields stay blank on Follow. Sign-in, Users, Follow, and
+          Activity stay yours. Joseph cannot use Follow. This is not View as.
         </p>
       </section>
 

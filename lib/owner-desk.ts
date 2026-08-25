@@ -20,6 +20,29 @@ export const VISUAL_ROSTER: VisualSeat[] = [
 
 export type FollowSeat = VisualSeat["id"] | "owner";
 export type ViewAsSeat = "owner" | "joseph";
+export type ViewResponsibility =
+  | "Project manager"
+  | "Quality manager"
+  | "Safety/HSE"
+  | "Estimator"
+  | "Change-order lead";
+
+export const VIEW_RESPONSIBILITIES: ViewResponsibility[] = [
+  "Project manager",
+  "Quality manager",
+  "Safety/HSE",
+  "Estimator",
+  "Change-order lead",
+];
+
+export const VIEW_SITES = [
+  "Wood River — Roxana, IL",
+  "Yates — Newnan, GA",
+  "Rodeo — Rodeo, CA",
+  "Bayway — Linden, NJ",
+  "Ferndale — Ferndale, WA",
+  "Billings — Billings, MT",
+];
 
 export const FOLLOW_SEATS: FollowSeat[] = [
   "owner",
@@ -42,16 +65,42 @@ export function aliasLensFor(seat: FollowSeat): AliasSeat {
   return "benny";
 }
 
+export type RepublishWait = 0 | 5 | 10 | 15;
+
+export type RepublishState = {
+  waitMinutes: RepublishWait;
+  note: string;
+  until: number | null;
+  active: boolean;
+  buildStamp: string;
+  inboxNotice: string | null;
+};
+
+const BUILD_STAMP = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "local";
+
 export type OwnerSettings = {
   aliasesOn: boolean;
   followSeat: FollowSeat;
   viewAs: ViewAsSeat;
+  viewResponsibility: ViewResponsibility;
+  viewSite: string;
+  republish: RepublishState;
 };
 
 const settings: OwnerSettings = {
   aliasesOn: true,
   followSeat: "owner",
   viewAs: "owner",
+  viewResponsibility: "Estimator",
+  viewSite: "Wood River — Roxana, IL",
+  republish: {
+    waitMinutes: 5,
+    note: "",
+    until: null,
+    active: false,
+    buildStamp: BUILD_STAMP,
+    inboxNotice: null,
+  },
 };
 
 export type ActivityRow = {
@@ -68,14 +117,56 @@ const activity: ActivityRow[] = [
   { at: "24 Aug 2026 · 23:51", kind: "feature", who: "Robert Henderson", detail: "Aliases catalog reviewed" },
 ];
 
+function clearStaleRepublish() {
+  if (settings.republish.buildStamp !== BUILD_STAMP) {
+    settings.republish = {
+      waitMinutes: 5,
+      note: "",
+      until: null,
+      active: false,
+      buildStamp: BUILD_STAMP,
+      inboxNotice: null,
+    };
+  }
+}
+
 export function getOwnerSettings(): OwnerSettings {
-  return { ...settings };
+  clearStaleRepublish();
+  return { ...settings, republish: { ...settings.republish } };
 }
 
 export function setOwnerSettings(next: Partial<OwnerSettings>): OwnerSettings {
   if (typeof next.aliasesOn === "boolean") settings.aliasesOn = next.aliasesOn;
   if (isFollowSeat(next.followSeat)) settings.followSeat = next.followSeat;
   if (next.viewAs === "owner" || next.viewAs === "joseph") settings.viewAs = next.viewAs;
+  if (next.viewResponsibility) settings.viewResponsibility = next.viewResponsibility;
+  if (typeof next.viewSite === "string") settings.viewSite = next.viewSite;
+  if (next.republish) settings.republish = { ...settings.republish, ...next.republish, buildStamp: BUILD_STAMP };
+  return getOwnerSettings();
+}
+
+export function startRepublish(waitMinutes: RepublishWait, note: string): OwnerSettings {
+  const until = waitMinutes === 0 ? Date.now() : Date.now() + waitMinutes * 60 * 1000;
+  settings.republish = {
+    waitMinutes,
+    note,
+    until,
+    active: true,
+    buildStamp: BUILD_STAMP,
+    inboxNotice: waitMinutes === 0 ? "Desk locked for a republish. Owner stays in." : `Desk republish in ${waitMinutes} minutes.${note ? ` ${note}` : ""}`,
+  };
+  return getOwnerSettings();
+}
+
+export function clearRepublish(): OwnerSettings {
+  settings.republish = {
+    waitMinutes: 5,
+    note: "",
+    until: null,
+    active: false,
+    buildStamp: BUILD_STAMP,
+    inboxNotice: "We’re back.",
+  };
   return getOwnerSettings();
 }
 

@@ -1,22 +1,19 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
-import { DeskChrome } from "@/components/DeskChrome";
-import { FollowDesk } from "@/components/FollowDesk";
-import { useSession } from "@/components/SessionProvider";
 
-export default function FollowPage() {
-  const { user } = useSession();
+export default function FollowRedirectPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/settings/follow");
+  }, [router]);
 
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="FOLLOW">
-        {user?.role === "owner" ? (
-          <FollowDesk />
-        ) : (
-          <p className="mt-4 text-[#5b6f73]">Owner desk only. Joseph cannot use Follow.</p>
-        )}
-      </DeskChrome>
+      <p className="p-6 text-sm text-[#5b6f73]">Opening Settings / Follow…</p>
     </AuthGate>
   );
 }
