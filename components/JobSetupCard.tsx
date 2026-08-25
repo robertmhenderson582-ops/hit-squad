@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CreatedBy } from "@/components/CreatedBy";
+import { useEstimatePackage } from "@/components/EstimatePackage";
 import { displayEstimateType, ESTIMATE_TYPES, type EstimateType } from "@/lib/estimate-type";
 
 export function JobSetupCard({
@@ -13,6 +14,7 @@ export function JobSetupCard({
   code,
   window,
   mileageRate,
+  existingClient = false,
   children,
 }: {
   type: string;
@@ -23,8 +25,10 @@ export function JobSetupCard({
   code?: string;
   window?: string;
   mileageRate?: string | null;
+  existingClient?: boolean;
   children?: React.ReactNode;
 }) {
+  const pack = useEstimatePackage();
   const [estimateType, setEstimateType] = useState<EstimateType>(displayEstimateType(type));
   const travelOn = Boolean(mileageRate && mileageRate !== "—");
 
@@ -35,8 +39,14 @@ export function JobSetupCard({
         {author ? <CreatedBy author={author} /> : null}
       </div>
       <div className="mt-5 flex flex-wrap gap-2">
-        <span className="pill bg-steel text-white">Existing customer</span>
-        <span className="pill border border-[#c5d4d4] bg-white">New / potential client</span>
+        {existingClient ? (
+          <span className="pill bg-steel text-white">Existing customer</span>
+        ) : (
+          <>
+            <span className="pill border border-[#c5d4d4] bg-white">Existing customer</span>
+            <span className="pill bg-steel text-white">New / potential client</span>
+          </>
+        )}
       </div>
       <label className="mt-6 block">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE TYPE</span>
@@ -60,6 +70,15 @@ export function JobSetupCard({
       <label className="mt-4 block">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE NAME</span>
         <input readOnly value={name} className="paper-field mt-2" />
+      </label>
+      <label className="mt-4 block">
+        <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">PROJECT START</span>
+        <input
+          type="date"
+          value={pack.schedule.projectStart}
+          onChange={(event) => pack.setProjectStartDate(event.target.value)}
+          className="paper-field mt-2"
+        />
       </label>
       <label className="mt-4 block">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">AFE / TA NAME</span>

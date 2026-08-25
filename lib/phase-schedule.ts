@@ -1,0 +1,310 @@
+export const PHASE_IDS = ["pre", "oil-out", "mech", "oil-in", "post"] as const;
+export type PhaseId = (typeof PHASE_IDS)[number];
+
+export const PHASE_NAMES: Record<PhaseId, string> = {
+  pre: "Pre-Turnaround",
+  "oil-out": "Oil Out",
+  mech: "Mechanical Window",
+  "oil-in": "Oil In",
+  post: "Post",
+};
+
+export type PhaseOtPick = "4x10-st" | "4x10-ot8" | "5x8-st" | "5x8-ot8";
+
+export type PhaseRow = {
+  id: PhaseId;
+  name: string;
+  on: boolean;
+  start: string;
+  stop: string;
+  daysPerWeek: number;
+  hoursPerDay: number;
+  otAfter8: boolean;
+  sundaysOff: string[];
+};
+
+export type PhaseScheduleState = {
+  projectStart: string;
+  phases: PhaseRow[];
+};
+
+export const PHASE_STORE_PREFIX = "hs_phase_v1:";
+export const CREW_STORE_PREFIX = "hs_crew_v1:";
+
+export function parseYmd(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function formatYmd(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+export function addDays(iso: string, days: number): string {
+  const date = parseYmd(iso);
+  if (!date) return iso;
+  date.setDate(date.getDate() + days);
+  return formatYmd(date);
+}
+
+export function inclusiveDays(start: string, stop: string): number {
+  const from = parseYmd(start);
+  const to = parseYmd(stop);
+  if (!from || !to || to < from) return 1;
+  return Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
+}
+
+export function eachYmd(start: string, stop: string): string[] {
+  const from = parseYmd(start);
+  const to = parseYmd(stop);
+  if (!from || !to || to < from) return [];
+  const out: string[] = [];
+  const cursor = new Date(from);
+  while (cursor <= to) {
+    out.push(formatYmd(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return out;
+}
+
+export function maskForPhaseDays(daysPerWeek: number): boolean[] {
+  const count = Math.min(7, Math.max(0, Math.round(daysPerWeek)));
+  if (count === 7) return [true, true, true, true, true, true, true];
+  if (count === 6) return [false, true, true, true, true, true, true];
+  if (count === 5) return [false, true, true, true, true, true, false];
+  if (count === 4) return [false, true, true, true, true, false, false];
+  const next = [false, false, false, false, false, false, false];
+  const order = [1, 2, 3, 4, 5, 6, 0];
+  for (let i = 0; i < count; i += 1) next[order[i]] = true;
+  return next;
+}
+
+/** 4-day = Mon–Thu. 5-day skips weekends. 6-day skips Sunday. 7-day every day. */
+export function isWorkedDay(iso: string, daysPerWeek: number, sundaysOff: string[] = []): boolean {
+  const date = parseYmd(iso);
+  if (!date) return false;
+  const dow = date.getDay();
+  const days = Math.min(7, Math.max(0, Math.round(daysPerWeek)));
+  if (days === 7) {
+    if (dow === 0 && sundaysOff.includes(iso)) return false;
+    return true;
+  }
+  return Boolean(maskForPhaseDays(days)[dow]);
+}
+
+export function workedDays(row: Pick<PhaseRow, "start" | "stop" | "daysPerWeek" | "sundaysOff">): number {
+  return eachYmd(row.start, row.stop).filter((iso) => isWorkedDay(iso, row.daysPerWeek, row.sundaysOff)).length;
+}
+
+export function sundaysInRange(start: string, stop: string): string[] {
+  return eachYmd(start, stop).filter((iso) => parseYmd(iso)?.getDay() === 0);
+}
+
+export function defaultPhases(): PhaseRow[] {
+  return [
+    {
+      id: "pre",
+      name: PHASE_NAMES.pre,
+      on: true,
+      start: "2026-08-21",
+      stop: "2026-09-03",
+      daysPerWeek: 4,
+      hoursPerDay: 10,
+      otAfter8: false,
+      sundaysOff: [],
+    },
+    {
+      id: "oil-out",
+      name: PHASE_NAMES["oil-out"],
+      on: true,
+      start: "2026-09-04",
+      stop: "2026-09-06",
+      daysPerWeek: 7,
+      hoursPerDay: 12,
+      otAfter8: false,
+      sundaysOff: [],
+    },
+    {
+      id: "mech",
+      name: PHASE_NAMES.mech,
+      on: true,
+      start: "2026-09-07",
+      stop: "2026-09-20",
+      daysPerWeek: 6,
+      hoursPerDay: 10,
+      otAfter8: false,
+      sundaysOff: [],
+    },
+    {
+      id: "oil-in",
+      name: PHASE_NAMES["oil-in"],
+      on: true,
+      start: "2026-09-21",
+      stop: "2026-09-27",
+      daysPerWeek: 7,
+      hoursPerDay: 12,
+      otAfter8: false,
+      sundaysOff: [],
+    },
+    {
+      id: "post",
+      name: PHASE_NAMES.post,
+      on: true,
+      start: "2026-09-28",
+      stop: "2026-10-05",
+      daysPerWeek: 5,
+      hoursPerDay: 8,
+      otAfter8: false,
+      sundaysOff: [],
+    },
+  ];
+}
+
+export function defaultPhaseSchedule(): PhaseScheduleState {
+  const phases = defaultPhases();
+  return { projectStart: phases[0].start, phases };
+}
+
+export function mergeSchedule(saved: Partial<PhaseScheduleState> | null | undefined): PhaseScheduleState {
+  const base = defaultPhaseSchedule();
+  if (!saved) return base;
+  const incoming = Array.isArray(saved.phases) ? saved.phases : [];
+  return {
+    projectStart: saved.projectStart || base.projectStart,
+    phases: base.phases.map((row) => {
+      const hit = incoming.find((item) => item.id === row.id);
+      if (!hit) return row;
+      return {
+        ...row,
+        ...hit,
+        id: row.id,
+        name: row.name,
+        daysPerWeek: Math.min(7, Math.max(0, Number(hit.daysPerWeek ?? row.daysPerWeek) || 0)),
+        hoursPerDay: Math.max(0, Number(hit.hoursPerDay ?? row.hoursPerDay) || 0),
+        sundaysOff: Array.isArray(hit.sundaysOff) ? hit.sundaysOff : row.sundaysOff,
+        on: Boolean(hit.on),
+      };
+    }),
+  };
+}
+
+function lengthOf(row: PhaseRow): number {
+  return Math.max(1, inclusiveDays(row.start, row.stop));
+}
+
+/** Pack ON phases back-to-back. OFF rows keep locked dates and are ignored as neighbors. */
+export function cascadePhases(phases: PhaseRow[]): PhaseRow[] {
+  let prevOnStop: string | null = null;
+  return phases.map((row) => {
+    if (!row.on) return row;
+    const length = lengthOf(row);
+    let start = row.start;
+    let stop = row.stop;
+    if (prevOnStop) {
+      start = addDays(prevOnStop, 1);
+      stop = addDays(start, length - 1);
+    }
+    if (stop < start) stop = start;
+    prevOnStop = stop;
+    return { ...row, start, stop };
+  });
+}
+
+export function setProjectStart(state: PhaseScheduleState, projectStart: string): PhaseScheduleState {
+  const start = parseYmd(projectStart) ? projectStart : state.projectStart;
+  const phases = state.phases.map((row) => {
+    if (row.id !== "pre") return row;
+    const length = lengthOf(row);
+    return { ...row, start, stop: addDays(start, length - 1) };
+  });
+  return { projectStart: start, phases: cascadePhases(phases) };
+}
+
+export function patchPhase(state: PhaseScheduleState, id: PhaseId, patch: Partial<PhaseRow>): PhaseScheduleState {
+  const phases = state.phases.map((row) => {
+    if (row.id !== id) return row;
+    const next = { ...row, ...patch, id: row.id, name: row.name };
+    if (next.stop < next.start) next.stop = next.start;
+    next.daysPerWeek = Math.min(7, Math.max(0, next.daysPerWeek));
+    next.hoursPerDay = Math.max(0, next.hoursPerDay);
+    return next;
+  });
+  const packed = cascadePhases(phases);
+  const pre = packed.find((row) => row.id === "pre");
+  return {
+    projectStart: id === "pre" && patch.start && pre ? pre.start : state.projectStart,
+    phases: packed,
+  };
+}
+
+export function applyOtPick(state: PhaseScheduleState, id: PhaseId, pick: PhaseOtPick): PhaseScheduleState {
+  if (pick === "4x10-st") {
+    return patchPhase(state, id, { daysPerWeek: 4, hoursPerDay: 10, otAfter8: false });
+  }
+  if (pick === "4x10-ot8") {
+    return patchPhase(state, id, { daysPerWeek: 4, hoursPerDay: 10, otAfter8: true });
+  }
+  if (pick === "5x8-ot8") {
+    return patchPhase(state, id, { daysPerWeek: 5, hoursPerDay: 8, otAfter8: true });
+  }
+  return patchPhase(state, id, { daysPerWeek: 5, hoursPerDay: 8, otAfter8: false });
+}
+
+export function phaseOtPick(row: PhaseRow): PhaseOtPick | null {
+  if (row.daysPerWeek === 4 && row.hoursPerDay === 10) return row.otAfter8 ? "4x10-ot8" : "4x10-st";
+  if (row.daysPerWeek === 5 && row.hoursPerDay === 8) return row.otAfter8 ? "5x8-ot8" : "5x8-st";
+  return null;
+}
+
+export type PhaseRangeSeed = {
+  id: string;
+  phaseId: PhaseId;
+  start: string;
+  end: string;
+  hoursPerShift: number;
+  days: boolean[];
+  otAfter8: boolean;
+  skipDates: string[];
+};
+
+export function rangeSeedFromPhase(row: PhaseRow): PhaseRangeSeed {
+  return {
+    id: `rg-${row.id}`,
+    phaseId: row.id,
+    start: row.start,
+    end: row.stop,
+    hoursPerShift: row.hoursPerDay,
+    days: maskForPhaseDays(row.daysPerWeek),
+    otAfter8: row.otAfter8,
+    skipDates: row.daysPerWeek === 7 ? [...row.sundaysOff] : [],
+  };
+}
+
+export function rangeSeedsFromPhases(phases: PhaseRow[]): PhaseRangeSeed[] {
+  return phases.filter((row) => row.on).map(rangeSeedFromPhase);
+}
+
+export function readSchedule(key: string): PhaseScheduleState {
+  if (typeof window === "undefined" || !key) return defaultPhaseSchedule();
+  try {
+    const raw = window.localStorage.getItem(`${PHASE_STORE_PREFIX}${key}`);
+    return mergeSchedule(raw ? (JSON.parse(raw) as PhaseScheduleState) : null);
+  } catch {
+    return defaultPhaseSchedule();
+  }
+}
+
+export function writeSchedule(key: string, state: PhaseScheduleState) {
+  if (typeof window === "undefined" || !key) return;
+  try {
+    window.localStorage.setItem(`${PHASE_STORE_PREFIX}${key}`, JSON.stringify(state));
+  } catch {
+    // keep the previous copy
+  }
+}
+

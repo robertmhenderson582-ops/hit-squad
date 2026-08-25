@@ -7,6 +7,7 @@ import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
 import { LaborRollup } from "@/components/LaborRollup";
 import { ModuleTable } from "@/components/ModuleTable";
+import { EstimatePackageProvider } from "@/components/EstimatePackage";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
 import { useAlias } from "@/components/OwnerDeskContext";
@@ -57,6 +58,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
   }
 
   return (
+    <EstimatePackageProvider estimateKey={estimate.id}>
     <EstimateWorkspace
       crumb={`${alias(site?.name ?? estimate.unit)} / ${estimate.title}`}
       tab={tab}
@@ -79,6 +81,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
             author={estimate.estimator}
             code={estimate.code}
             window={estimate.window}
+            existingClient
           >
             {status !== "Estimate" ? (
               <>
@@ -192,5 +195,6 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
         </ModuleTable>
       ) : null}
     </EstimateWorkspace>
+    </EstimatePackageProvider>
   );
 }

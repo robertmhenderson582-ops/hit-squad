@@ -42,10 +42,11 @@ describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(OWNER_WHATS_NEW, /Novus/);
-    assert.match(TESTER_WHATS_NEW, /stay on the list after you submit/);
-    assert.match(TESTER_WHATS_NEW, /close X/);
-    assert.match(TESTER_WHATS_NEW, /draw on a capture/);
+    assert.match(OWNER_WHATS_NEW, /cascades/);
+    assert.match(TESTER_WHATS_NEW, /Phases & work schedule now sets the job/);
+    assert.match(TESTER_WHATS_NEW, /Crew picks up those windows/);
+    assert.match(TESTER_WHATS_NEW, /Capture grabs the whole desk/);
+    assert.match(TESTER_WHATS_NEW, /New\/Potential client/);
     assert.equal(/password|auth|Novus|vault|Drive|\/tmp|SMTP|seat/i.test(TESTER_WHATS_NEW), false);
 
     const first = applyWhatsNew([], "tester-joseph-new", false);
@@ -59,7 +60,7 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.2 onto an existing Hit Squad desk thread", () => {
+  it("appends V1.3 onto an existing Hit Squad desk thread", () => {
     const prior = [
       {
         id: "th-desk-v1.1",

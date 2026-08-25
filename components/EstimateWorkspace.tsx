@@ -74,7 +74,7 @@ export function EstimateWorkspace({
   const closed = packageId ? isClosed(packageId) : false;
 
   return (
-    <div className={paper ? "desk-day min-h-screen overflow-x-hidden bg-[#d8e4e2]" : "industrial-root"}>
+    <div className={paper ? "desk-day min-h-screen overflow-x-hidden bg-[#d8e4e2]" : "industrial-root"} data-capture-root>
       <FieldTrialBanner />
       {rfq ? (
         <RfqPreview

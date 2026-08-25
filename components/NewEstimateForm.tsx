@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { DeskChrome } from "@/components/DeskChrome";
 import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
+import { EstimatePackageProvider } from "@/components/EstimatePackage";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
 import { ModuleTable } from "@/components/ModuleTable";
@@ -28,17 +29,19 @@ export function NewEstimateForm() {
     );
   }
 
-  return <NewEstimateDesk client={client} site={site} name={name} />;
+  return <NewEstimateDesk client={client} site={site} name={name} size={size} />;
 }
 
 function NewEstimateDesk({
   client,
   site,
   name,
+  size,
 }: {
   client: string;
   site: string;
   name: string;
+  size: string | null;
 }) {
   const alias = useAlias();
   const { user } = useSession();
@@ -46,7 +49,11 @@ function NewEstimateDesk({
   const plant = site.split("—")[0]?.trim() || site;
   const otRule = boundOtLabel(site, client);
 
+  const existingClient = size !== "other";
+  const estimateKey = `new:${client}:${site}:${name}`;
+
   return (
+    <EstimatePackageProvider estimateKey={estimateKey}>
     <EstimateWorkspace
       crumb={`${alias(plant)} / ${name}`}
       tab={tab}
@@ -64,6 +71,7 @@ function NewEstimateDesk({
             name={name}
             otRule={otRule}
             author={user?.name}
+            existingClient={existingClient}
           />
           <PhaseSchedule />
         </div>
@@ -99,5 +107,6 @@ function NewEstimateDesk({
         </ModuleTable>
       ) : null}
     </EstimateWorkspace>
+    </EstimatePackageProvider>
   );
 }

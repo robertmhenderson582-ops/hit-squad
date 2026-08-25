@@ -27,6 +27,7 @@ export type ComputeRangeInput = {
   perDiemPeople?: number;
   otAfter8?: boolean;
   clockOverride?: ClockOverride;
+  skipDates?: string[];
 };
 
 export type RangeDay = {
@@ -214,7 +215,10 @@ export function computeRangeHours(input: ComputeRangeInput): RangeHours {
   let workedDays = 0;
   const workedInWeek = new Map<string, number>();
 
+  const skip = new Set(input.skipDates ?? []);
   for (const date of dates) {
+    const stamp = ymd(date);
+    if (skip.has(stamp)) continue;
     const dow = date.getDay();
     if (!daysMask[dow]) continue;
     const key = mondayKey(date);
@@ -270,6 +274,8 @@ export function computeRowHours(
       perDiemPeople: number;
       days: boolean[];
       otAfter8?: boolean;
+      shift?: "Days" | "Nights" | "Days & nights";
+      skipDates?: string[];
     }[];
   },
   site = "",
@@ -289,11 +295,12 @@ export function computeRowHours(
         hoursPerShift: range.hoursPerShift,
         headcount: range.headcount,
         nightHeadcount: range.nightHeadcount,
-        shift: row.shift,
+        shift: range.shift ?? row.shift,
         days: range.days,
         perDiemPeople: range.perDiemPeople,
         otAfter8: range.otAfter8 ?? crewOtAfter8,
         clockOverride: row.clockOverride ?? "auto",
+        skipDates: range.skipDates,
       }),
     ),
   );
