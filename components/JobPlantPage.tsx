@@ -80,7 +80,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
           onClick={() => openNewEstimate({ client: plant.folder, site: plant.site, size: "outage", knownPlant: true })}
           className="rounded-lg bg-steel px-4 py-2 text-white"
         >
-          New estimate
+          + New estimate
         </button>
       </div>
       <div className="mt-5 flex flex-wrap gap-2">
@@ -116,23 +116,14 @@ export function JobPlantPage({ slug }: { slug: string }) {
             </article>
           </div>
           <p className="mt-5 text-sm text-[#5b6f73]">
-            Start an estimate for this plant from the header. SCRs live on that job’s Change orders
-            tab. People assigns who owns change orders, HSE, or quality on {alias(plant.name)}.
+            Start an estimate for this plant with + New estimate. SCRs live on that job’s Change
+            orders tab. People assigns who owns change orders, HSE, or quality on {alias(plant.name)}.
           </p>
         </>
       ) : null}
 
       {tab === "Estimates" ? (
         <div className="mt-6 space-y-4">
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => openNewEstimate({ client: plant.folder, site: plant.site, size: "outage", knownPlant: true })}
-              className="rounded-lg bg-steel px-4 py-2 text-white"
-            >
-              + New estimate
-            </button>
-          </div>
           <div className="plant-card px-5 py-6">
             <p className="text-[#5b6f73]">No open estimates on this plant yet.</p>
           </div>

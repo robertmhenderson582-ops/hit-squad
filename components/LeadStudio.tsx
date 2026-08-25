@@ -70,7 +70,7 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
 
   if (screen === "welcome") {
     return (
-      <section className="plant-card mt-5 px-5 py-5">
+      <section className="plant-card px-5 py-5">
         <p className="font-mono text-[10px] tracking-[0.24em] text-amber-label">UNDER CONSTRUCTION</p>
         <h2 className="mt-2 font-display text-3xl tracking-wide">{title}</h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5b6f73]">
@@ -96,7 +96,7 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
   }
 
   return (
-    <section className="plant-card mt-5 px-5 py-5">
+    <section className="plant-card px-5 py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-mono text-[10px] tracking-[0.24em] text-amber-label">UNDER CONSTRUCTION</p>

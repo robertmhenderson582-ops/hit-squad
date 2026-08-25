@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CreatedBy } from "@/components/CreatedBy";
+import { useEstimateModal } from "@/components/EstimateModalContext";
 import { ModuleTable } from "@/components/ModuleTable";
 import { PresencePulse } from "@/components/PresencePulse";
 import { useAlias } from "@/components/OwnerDeskContext";
@@ -14,6 +15,7 @@ import { readClosed, reopenPackage } from "@/lib/desk-closeout";
 export function EstimateBoard() {
   const alias = useAlias();
   const { user } = useSession();
+  const { openNewEstimate } = useEstimateModal();
   const { board, error } = useDeskBoard();
   const [closed, setClosed] = useState<{ id: string; title: string }[]>([]);
   useEffect(() => {
@@ -32,6 +34,15 @@ export function EstimateBoard() {
   return (
     <div className="mt-4 space-y-5">
       <PresencePulse />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => openNewEstimate()}
+          className="rounded-lg bg-steel px-4 py-2 text-white"
+        >
+          + New estimate
+        </button>
+      </div>
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
         Working estimates for this owner desk only. {alias("Madison")} / {alias("P66")} plant figures stay on the signed-in
         blotter. Created by is chrome only — authors stay the signed-in owner for now.

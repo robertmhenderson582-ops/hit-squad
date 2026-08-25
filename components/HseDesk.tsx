@@ -26,6 +26,7 @@ export function HseDesk() {
 
   return (
     <div className="mt-4 space-y-5">
+      <LeadStudio title="HSE lead studio" kind="hse" />
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
         Empty HSE desk. Client folders only — no invented TRIR or recordable counts. Open the lead
         studio when you are ready.
@@ -57,7 +58,6 @@ export function HseDesk() {
           <EmptyLane key={lane.title} title={lane.title} headers={[...lane.headers]} />
         ))}
       </div>
-      <LeadStudio title="HSE lead studio" kind="hse" />
     </div>
   );
 }

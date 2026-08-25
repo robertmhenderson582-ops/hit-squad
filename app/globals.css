@@ -340,6 +340,71 @@ textarea:focus {
   color: #fff;
 }
 
+.under-construction-banner {
+  margin-bottom: 1rem;
+  border: 1px solid rgba(227, 139, 42, 0.55);
+  background: rgba(227, 139, 42, 0.14);
+  color: #e38b2a;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  padding: 0.7rem 1rem;
+}
+
+.future-mods-menu {
+  z-index: 30;
+  min-width: 17rem;
+  margin-top: 0.35rem;
+  border: 1px solid #d5e0de;
+  background: #fff;
+  padding: 0.4rem;
+}
+
+.future-mods-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.55rem 0.7rem;
+  color: #163038;
+}
+
+.future-mods-item:hover {
+  background: #e7eeec;
+}
+
+.future-mods-note {
+  font-size: 0.65rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: #5b6f73;
+}
+
+.industrial-root .future-mods-menu {
+  border-color: rgba(62, 198, 212, 0.28);
+  background: #0c3036;
+}
+
+.industrial-root .future-mods-item {
+  color: #efe6d4;
+}
+
+.industrial-root .future-mods-item:hover {
+  background: rgba(62, 198, 212, 0.1);
+}
+
+.industrial-root .future-mods-note {
+  color: #9db4b6;
+}
+
+@media (min-width: 640px) {
+  .future-mods-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+  }
+}
+
 .hud-scan {
   pointer-events: none;
 }

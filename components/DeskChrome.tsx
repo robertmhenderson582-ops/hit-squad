@@ -5,28 +5,31 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useDisplay } from "@/components/DisplayProvider";
 import { DeskBanners } from "@/components/DeskBanners";
-import { EstimateModalProvider, useEstimateModal } from "@/components/EstimateModalContext";
+import { EstimateModalProvider } from "@/components/EstimateModalContext";
+import { UnderConstructionBanner } from "@/components/UnderConstructionBanner";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { BrandMark } from "@/components/BrandMark";
 import { ThemeFlip } from "@/components/ThemeFlip";
-import { InboxBadge } from "@/components/InboxBadge";
 import { Wordmark } from "@/components/Wordmark";
 import { noteSessionEnd } from "@/components/FeatureTrail";
+import { FUTURE_MODULES } from "@/components/FutureModulesDesk";
 import { useSession } from "@/components/SessionProvider";
 
-const NAV: { href: string; label: string }[] = [
+const NAV: { href: string; label: string; modules?: boolean }[] = [
   { href: "/jobs", label: "Jobs" },
   { href: "/sites", label: "Sites" },
   { href: "/estimates", label: "Estimates" },
   { href: "/change-orders", label: "Change orders" },
-  { href: "/hse", label: "HSE" },
-  { href: "/quality", label: "Quality" },
+  { href: "/modules", label: "Future Modules", modules: true },
   { href: "/rates", label: "Rates" },
   { href: "/cost", label: "Cost / PPR" },
   { href: "/settings", label: "Settings" },
 ];
 
-function navActive(pathname: string, href: string) {
+const MODULE_HREFS = ["/modules", ...FUTURE_MODULES.map((item) => item.href)];
+
+function navActive(pathname: string, href: string, modules?: boolean) {
+  if (modules) return MODULE_HREFS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -44,27 +47,52 @@ function ChromeInner({
 }) {
   const pathname = usePathname();
   const { user, signOut } = useSession();
-  const { openNewEstimate } = useEstimateModal();
   const { resolvedTheme } = useDisplay();
   const paper = resolvedTheme === "day";
   const [menuOpen, setMenuOpen] = useState(false);
+  const [modsOpen, setModsOpen] = useState(false);
 
   useEffect(() => {
     setMenuOpen(false);
+    setModsOpen(false);
   }, [pathname]);
 
+  const rail = (active: boolean) =>
+    paper ? `rounded px-3 py-2 ${active ? "paper-rail-active" : "paper-rail"}` : `hud-rail px-3 py-2 ${active ? "hud-rail-active" : ""}`;
+
   const links = NAV.map((item) => {
-    const active = navActive(pathname, item.href);
+    const active = navActive(pathname, item.href, item.modules);
+    if (item.modules) {
+      return (
+        <div key={item.href} className="future-mods relative">
+          <button
+            type="button"
+            className={`${rail(active)} flex items-center gap-1`}
+            aria-expanded={modsOpen}
+            aria-haspopup="true"
+            onClick={() => setModsOpen((open) => !open)}
+          >
+            {item.label.toUpperCase()}
+            <span aria-hidden="true">{modsOpen ? "▴" : "▾"}</span>
+          </button>
+          {modsOpen ? (
+            <div className="future-mods-menu" role="menu">
+              <Link href={item.href} className="future-mods-item" role="menuitem">
+                All modules
+              </Link>
+              {FUTURE_MODULES.map((mod) => (
+                <Link key={mod.href} href={mod.href} className="future-mods-item" role="menuitem">
+                  <span>{mod.name}</span>
+                  <span className="future-mods-note">{mod.note}</span>
+                </Link>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
     return (
-      <Link
-        key={item.href}
-        href={item.href}
-        className={
-          paper
-            ? `rounded px-3 py-2 ${active ? "paper-rail-active" : "paper-rail"}`
-            : `hud-rail px-3 py-2 ${active ? "hud-rail-active" : ""}`
-        }
-      >
+      <Link key={item.href} href={item.href} className={rail(active)}>
         {item.label.toUpperCase()}
       </Link>
     );
@@ -92,19 +120,7 @@ function ChromeInner({
               )}
             </Link>
             <div className="flex flex-wrap items-center gap-3">
-              <InboxBadge />
               <ThemeFlip />
-              <button
-                type="button"
-                onClick={() => openNewEstimate()}
-                className={
-                  paper
-                    ? "rounded-lg bg-white px-4 py-2 font-display text-sm tracking-[0.14em] text-steel"
-                    : "bg-amber-flare px-4 py-2 font-display text-sm tracking-[0.18em] text-ink"
-                }
-              >
-                NEW ESTIMATE
-              </button>
               <div className="text-right">
                 <p className={`font-mono text-[10px] tracking-[0.24em] ${paper ? "text-white/70" : "text-steel-glow"}`}>
                   OWNER DESK
@@ -148,6 +164,7 @@ function ChromeInner({
 
         <main className="mt-5">
           <DeskBanners />
+          {MODULE_HREFS.includes(pathname) || pathname === "/settings/modules" ? <UnderConstructionBanner /> : null}
           {hideTitle ? null : (
             <>
               <p className={`font-mono text-[10px] tracking-[0.32em] ${paper ? "text-steel" : "text-amber-label"}`}>

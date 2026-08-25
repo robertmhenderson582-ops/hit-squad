@@ -25,6 +25,7 @@ export function QualityDesk() {
 
   return (
     <div className="mt-4 space-y-5">
+      <LeadStudio title="Quality lead studio" kind="quality" />
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
         Empty Quality desk. Client folders only — no fake NCR counts and no QC Manual digest.
       </p>
@@ -58,7 +59,6 @@ export function QualityDesk() {
           <EmptyLane key={lane.title} title={lane.title} headers={[...lane.headers]} />
         ))}
       </div>
-      <LeadStudio title="Quality lead studio" kind="quality" />
     </div>
   );
 }
