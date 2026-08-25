@@ -60,11 +60,11 @@ export function DeskHome() {
           <Link
             key={tile.href}
             href={tile.href}
-            className="steel-plate paper-grain block px-4 py-5 hover:border-steel-glow"
+            className="hud-tile block px-4 py-5"
           >
             <p className="font-mono text-[10px] tracking-[0.28em] text-steel-glow">{tile.note.toUpperCase()}</p>
             <p className="mt-2 font-display text-3xl tracking-[0.16em] text-paper-cream">{tile.label.toUpperCase()}</p>
-            <p className="mt-3 font-mono text-2xl text-amber-label">{counts[tile.key]}</p>
+            <p className="hud-readout mt-3 font-mono text-2xl text-amber-label">{counts[tile.key]}</p>
           </Link>
         ))}
       </div>
@@ -90,7 +90,7 @@ export function DeskHome() {
             <tbody>
               {(desk?.jobs ?? []).map((job) => (
                 <tr key={job.id} className="border-t border-steel-rim/20">
-                  <td className="px-4 py-3 font-mono text-amber-label">{job.code}</td>
+                  <td className="hud-readout px-4 py-3 font-mono text-amber-label">{job.code}</td>
                   <td className="px-4 py-3">{alias(job.title)}</td>
                   <td className="px-4 py-3">{alias(job.client)}</td>
                   <td className="px-4 py-3 font-mono text-xs">{job.window}</td>
