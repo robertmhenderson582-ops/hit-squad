@@ -134,17 +134,24 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       ) : null}
 
       {tab === "staffing" ? (
-        <ModuleTable caption="STAFFING" headers={["BILLED AS", "POSITION", "DAYS", "SHIFT", "HEADCOUNT"]}>
-          {staffing.map((row) => (
-            <tr key={row.id} className="border-t border-steel-rim/20">
-              <td className="px-4 py-3">{row.role}</td>
-              <td className="px-4 py-3 text-[#5b6f73]">—</td>
-              <td className="px-4 py-3">{row.days}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.shift}</td>
-              <td className="px-4 py-3 font-mono">{row.headcount}</td>
-            </tr>
-          ))}
-        </ModuleTable>
+        <div className="space-y-3">
+          <p className="text-sm text-[#5b6f73]">
+            Billed as is the craft rate. Position is the duty title. Example labels: billed as
+            Boilermaker Journeyman, position Tool Room Attendant. This split stays on Staffing — not
+            on Direct Craft.
+          </p>
+          <ModuleTable caption="STAFFING" headers={["BILLED AS", "POSITION", "DAYS", "SHIFT", "HEADCOUNT"]}>
+            {staffing.map((row) => (
+              <tr key={row.id} className="border-t border-steel-rim/20">
+                <td className="px-4 py-3">{row.role}</td>
+                <td className="px-4 py-3 text-[#5b6f73]">—</td>
+                <td className="px-4 py-3">{row.days}</td>
+                <td className="px-4 py-3 font-mono text-xs">{row.shift}</td>
+                <td className="px-4 py-3 font-mono">{row.headcount}</td>
+              </tr>
+            ))}
+          </ModuleTable>
+        </div>
       ) : null}
 
       {tab === "equipment" ? (
