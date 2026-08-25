@@ -1,6 +1,6 @@
 # Hit Squad Project Controls
 
-Private invite-only industrial outage / T&M estimating desk (also called **Forgebook**). Field trial — not a release. Confidential.
+Private invite-only industrial outage / T&M estimating desk. Field trial — not a release. Confidential.
 
 This is a from-scratch rebuild. Email + password is the only sign-in path. Sessions live in a first-party `HttpOnly` `SameSite=Lax` cookie on this app's own origin. The client confirms `/api/auth/session` returns a user before the desk renders, and the auth gate waits while the session is loading so a pending check cannot remount the Sign in screen.
 
@@ -54,11 +54,11 @@ npm run auth:check
 
 One Next.js app. Set the env vars on the host, use HTTPS, and set `AUTH_COOKIE_SECURE=true`. There is no Google sign-in yet.
 
-Login uses the night-refinery brand hero with HIT SQUAD ESTIMATORS. After sign-in the desk home is four tiles — Jobs, Estimates, Cost, HSE — plus the estimate/change-order/rate rails. All records stay owner-scoped.
+Login uses the night-refinery brand hero with HIT SQUAD over PROJECT CONTROLS. After sign-in the desk home is four tiles — Jobs, Estimates, Cost, HSE — plus the estimate/change-order/rate rails. All records stay owner-scoped.
 
 ## Rebuild list (do not regress)
 
-- Home (`/`) stays **four tiles**: Jobs / Estimates / Cost / HSE, plus the night-refinery HIT SQUAD ESTIMATORS hero (New Phillips 66 estimate / Other client / Simple shop job) and Madison plant tiles. Do not replace home with an Estimates-only blotter.
+- Home (`/`) stays **four tiles**: Jobs / Estimates / Cost / HSE, plus the night-refinery HIT SQUAD / PROJECT CONTROLS hero (New Phillips 66 estimate / Other client / Simple shop job) and Madison plant tiles. Do not replace home with an Estimates-only blotter.
 - Header may add Sites, Change orders, Rates (Illinois builder), Quality / ITP, Cost / PPR, New estimate.
 - Brand: HIT SQUAD over PROJECT CONTROLS, steel `#0f5f6d`, amber FIELD TRIAL — NOT A RELEASE, Madison confidentiality checkbox, original night-refinery hero.
 - Do not touch auth files (`/api/auth/*`, session cookie, AuthGate). No Google/X, no public Create account, no GET-submit login, no `sessionStorage` fake sessions.

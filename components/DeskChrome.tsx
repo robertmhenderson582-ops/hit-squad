@@ -44,7 +44,7 @@ function ThemeFlip() {
 function ChromeInner({
   children,
   title,
-  kicker = "FORGEBOOK",
+  kicker = "PROJECT CONTROLS",
   hideTitle = false,
   variant = "paper",
 }: {
@@ -70,7 +70,12 @@ function ChromeInner({
               {paper ? (
                 <span className="flex items-center gap-2">
                   <BrandMark variant="stacked" className="h-8 w-6" />
-                  <span className="font-display text-2xl tracking-[0.14em] text-white">HIT SQUAD</span>
+                  <span className="leading-none">
+                    <span className="block font-display text-2xl tracking-[0.14em] text-white">HIT SQUAD</span>
+                    <span className="mt-0.5 block font-display text-[11px] tracking-[0.22em] text-white/80">
+                      PROJECT CONTROLS
+                    </span>
+                  </span>
                 </span>
               ) : (
                 <Wordmark compact />
@@ -155,7 +160,7 @@ function ChromeInner({
 export function DeskChrome({
   children,
   title,
-  kicker = "FORGEBOOK",
+  kicker = "PROJECT CONTROLS",
   hideTitle = false,
   variant = "paper",
 }: {

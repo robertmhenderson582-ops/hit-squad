@@ -37,7 +37,7 @@ export function RfqPreview({
             </button>
           </div>
         </div>
-        <p className="mt-6 text-xs tracking-[0.2em] text-[#5b6f73]">HIT SQUAD ESTIMATORS</p>
+        <p className="mt-6 text-xs tracking-[0.2em] text-[#5b6f73]">HIT SQUAD PROJECT CONTROLS</p>
         <h2 className="mt-2 font-display text-3xl font-semibold text-[#163038]">{name}</h2>
         <p className="mt-2 text-[#5b6f73]">{client}</p>
         {total ? <p className="mt-6 text-2xl text-[#163038]">{total}</p> : null}
