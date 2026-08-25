@@ -88,7 +88,11 @@ export type FcrJobRow = {
   position: string;
   shift: string;
   clockOverride?: ClockOverride;
-  hours?: HoursSplit;
+  st?: number;
+  ot?: number;
+  dt?: number;
+  pd?: number;
+  hours?: HoursSplit | number;
   ranges?: {
     start: string;
     end: string;
@@ -103,6 +107,13 @@ export type FcrJobRow = {
     skipDates?: string[];
   }[];
 };
+
+function fallbackSplit(row: FcrJobRow): FcrDayHours & { pd: number } {
+  if (row.hours && typeof row.hours === "object") {
+    return { st: row.hours.st, ot: row.hours.ot, dt: row.hours.dt, pd: row.hours.pd };
+  }
+  return { st: row.st ?? 0, ot: row.ot ?? 0, dt: row.dt ?? 0, pd: row.pd ?? 0 };
+}
 
 function uid(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -233,12 +244,13 @@ function peopleRowFromShift(
   client = "",
   crewOtAfter8 = false,
 ): FcrPeopleRow {
+  const fallback = fallbackSplit(row);
   const computed = row.ranges?.length
     ? weekFromRanges(row, shift, site, client, crewOtAfter8)
-    : { week: emptyWeek(), pd: row.hours?.pd ?? 0, headcount: 1 };
+    : { week: emptyWeek(), pd: fallback.pd, headcount: 1 };
   const totals = row.ranges?.length
     ? weekTotals(computed.week)
-    : { st: row.hours?.st ?? 0, ot: row.hours?.ot ?? 0, dt: row.hours?.dt ?? 0 };
+    : { st: fallback.st, ot: fallback.ot, dt: fallback.dt };
   return {
     id: `${row.id}-${shift === "Nights" ? "n" : "d"}`,
     block: fcrBlockFor(row.position, shift),

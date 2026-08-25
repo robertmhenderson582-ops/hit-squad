@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  APPROVAL_STATUSES,
+  blankLogRow,
+  emptyFcrHeader,
+  emptyScr,
+  emptyWeek,
   fcrBlockFor,
   fcrSummary,
+  FCR_BLOCKS,
+  IMPACT_LEVELS,
+  LOG_STATUSES,
   mileageDollars,
   MILEAGE_YES_FLAT,
   peopleFromJob,
@@ -34,6 +42,48 @@ function range(partial: {
   };
 }
 
+test("V1 on-job packet shape stays locked to the Drive books", () => {
+  assert.deepEqual([...LOG_STATUSES], ["Open", "Pending", "Cancelled"]);
+  assert.deepEqual([...IMPACT_LEVELS], ["Low", "High", "Critical"]);
+  assert.deepEqual([...APPROVAL_STATUSES], ["Approved", "Pending"]);
+  assert.deepEqual([...FCR_BLOCKS], ["Staff Day", "Staff Night", "Craft Day", "Craft Night"]);
+  assert.deepEqual(Object.keys(emptyFcrHeader()), [
+    "pm",
+    "costTracker",
+    "publishDate",
+    "nte",
+    "projectScope",
+  ]);
+  assert.deepEqual(Object.keys(blankLogRow()).filter((key) => key !== "id"), [
+    "scr",
+    "requestDate",
+    "requestedBy",
+    "reviewedBy",
+    "status",
+    "scope",
+    "impact",
+    "impactLevel",
+    "approvedBy",
+    "approvalStatus",
+    "approvalDate",
+    "approvedMh",
+    "approvedCost",
+    "planChanges",
+    "revisedComp",
+    "notes",
+    "loggedBy",
+  ]);
+  assert.deepEqual(Object.keys(emptyScr()), [
+    "taRm",
+    "categories",
+    "moc",
+    "sap",
+    "costNote",
+    "scheduleNote",
+    "signOff",
+  ]);
+});
+
 test("mileage Yes is a flat $2500, never times headcount", () => {
   assert.equal(MILEAGE_YES_FLAT, 2500);
   assert.equal(mileageDollars(true), 2500);
@@ -50,6 +100,7 @@ test("mileage Yes is a flat $2500, never times headcount", () => {
         mileage: true,
         daysPd: 0,
         headcount: 2,
+        week: emptyWeek(),
         st: 0,
         ot: 0,
         dt: 0,
@@ -62,6 +113,7 @@ test("mileage Yes is a flat $2500, never times headcount", () => {
         mileage: true,
         daysPd: 0,
         headcount: 2,
+        week: emptyWeek(),
         st: 0,
         ot: 0,
         dt: 0,
