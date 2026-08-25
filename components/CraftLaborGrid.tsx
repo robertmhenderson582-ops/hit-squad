@@ -30,8 +30,6 @@ export function CraftLaborGrid({
   onRows,
   site = "",
   client = "",
-  otAfter8 = false,
-  onOtAfter8,
   title = "Direct Craft",
   note,
   positions,
@@ -41,8 +39,6 @@ export function CraftLaborGrid({
   onRows: (next: CraftRow[] | ((current: CraftRow[]) => CraftRow[])) => void;
   site?: string;
   client?: string;
-  otAfter8?: boolean;
-  onOtAfter8?: (next: boolean) => void;
   title?: string;
   note?: string;
   positions?: readonly string[];
@@ -54,10 +50,10 @@ export function CraftLaborGrid({
   const computed = useMemo(
     () =>
       rows.map((row) => {
-        const hours = computeRowHours(row, site, client, otAfter8);
+        const hours = computeRowHours(row, site, client);
         return { ...row, ...hours, cost: "" };
       }),
-    [rows, site, client, otAfter8],
+    [rows, site, client],
   );
 
   const totals = useMemo(() => sumSplits(computed), [computed]);
@@ -129,16 +125,6 @@ export function CraftLaborGrid({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {onOtAfter8 ? (
-            <label className="flex items-center gap-2 text-sm text-[#163038]">
-              <input
-                type="checkbox"
-                checked={otAfter8}
-                onChange={(event) => onOtAfter8(event.target.checked)}
-              />
-              OT after 8
-            </label>
-          ) : null}
           <button type="button" onClick={addPosition} className="rounded-lg bg-steel px-3 py-2 text-sm text-white">
             + Add position
           </button>
@@ -146,7 +132,7 @@ export function CraftLaborGrid({
       </div>
       <p className="mt-2 text-xs text-[#5b6f73]">
         {note ||
-          "Hours follow the position. OT after 8 is optional — weekly 40 still sits on top. Default is ST to 10 on East Coast / staff."}
+          "Hours follow the position clock and Job setup. Weekly 40 still sits on top. Default is ST to 10 on East Coast / staff."}
       </p>
       <GripToPan className="mt-4">
         <table className="min-w-[960px] text-left text-sm">
@@ -176,7 +162,6 @@ export function CraftLaborGrid({
                   row={row}
                   site={site}
                   client={client}
-                  otAfter8={otAfter8}
                   open={open}
                   onToggle={() => setOpenId(open ? null : row.id)}
                   onPatch={(patch) => patchRow(row.id, patch)}
@@ -215,7 +200,6 @@ function CraftAccordionRow({
   row,
   site,
   client,
-  otAfter8,
   open,
   onToggle,
   onPatch,
@@ -230,7 +214,6 @@ function CraftAccordionRow({
   row: CraftRow;
   site: string;
   client: string;
-  otAfter8: boolean;
   open: boolean;
   onToggle: () => void;
   onPatch: (patch: Partial<CraftRow>) => void;
@@ -403,7 +386,6 @@ function CraftAccordionRow({
               row={row}
               site={site}
               client={client}
-              otAfter8={otAfter8}
               onPatchRange={onPatchRange}
               onAddRange={onAddRange}
               onRemoveRange={onRemoveRange}

@@ -42,9 +42,10 @@ describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Support Position is a single picker per row/);
-    assert.match(OWNER_WHATS_NEW, /Type-in appears only after Type a title/);
-    assert.match(OWNER_WHATS_NEW, /empty row is the two selects plus Remove/);
+    assert.match(TESTER_WHATS_NEW, /OT after 8 is set on Job setup, not on Crew cards/);
+    assert.match(OWNER_WHATS_NEW, /Shared Crew OT after 8 checkbox is gone/);
+    assert.match(OWNER_WHATS_NEW, /Hours follow the Job setup phase OT pick plus Calendar Pattern/);
+    assert.match(OWNER_WHATS_NEW, /Direct Craft has no OT-after-8 option/);
     assert.equal(/password|auth|Novus|vault|Drive|\/tmp|SMTP|seat/i.test(TESTER_WHATS_NEW), false);
 
     const first = applyWhatsNew([], "tester-joseph-new", false);
@@ -58,20 +59,20 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.10 onto an existing Hit Squad desk thread", () => {
+  it("appends V1.11 onto an existing Hit Squad desk thread", () => {
     const prior = [
       {
-        id: "th-desk-v1.9",
+        id: "th-desk-v1.10",
         personId: DESK_PERSON_ID,
         name: "Hit Squad",
         company: "Project Controls",
         unread: 0,
         messages: [
           {
-            id: "im-desk-1.9.0",
+            id: "im-desk-1.10.0",
             from: "them" as const,
             author: "Desk",
-            text: "Hit Squad Project Controls V1.9",
+            text: "Hit Squad Project Controls V1.10",
             photo: null,
             sentAt: "",
             readAt: "seen",

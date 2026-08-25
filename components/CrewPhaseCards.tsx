@@ -21,7 +21,6 @@ export function CrewPhaseCards({
   row,
   site,
   client,
-  otAfter8,
   onPatchRange,
   onAddRange,
   onRemoveRange,
@@ -29,7 +28,6 @@ export function CrewPhaseCards({
   row: CraftRow;
   site: string;
   client: string;
-  otAfter8: boolean;
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
   onAddRange: (range: CalendarRange) => void;
   onRemoveRange: (rangeId: string) => void;
@@ -51,7 +49,6 @@ export function CrewPhaseCards({
               row={row}
               site={site}
               client={client}
-              otAfter8={otAfter8}
               onPatchRange={onPatchRange}
               onAddRange={() => onAddRange(extraRangeFromPhase(phase, ranges[0]))}
               onRemoveRange={onRemoveRange}
@@ -74,7 +71,6 @@ function PhaseWindowCard({
   row,
   site,
   client,
-  otAfter8,
   onPatchRange,
   onAddRange,
   onRemoveRange,
@@ -84,7 +80,6 @@ function PhaseWindowCard({
   row: CraftRow;
   site: string;
   client: string;
-  otAfter8: boolean;
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
   onAddRange: () => void;
   onRemoveRange: (rangeId: string) => void;
@@ -106,7 +101,7 @@ function PhaseWindowCard({
                 row={row}
                 site={site}
                 client={client}
-                otAfter8={otAfter8}
+                phaseOtAfter8={phase.otAfter8}
                 canRemove={index > 0}
                 onPatch={(patch) => onPatchRange(range.id, patch)}
                 onRemove={() => onRemoveRange(range.id)}
@@ -127,7 +122,7 @@ function CalendarPattern({
   row,
   site,
   client,
-  otAfter8,
+  phaseOtAfter8,
   canRemove,
   onPatch,
   onRemove,
@@ -136,7 +131,7 @@ function CalendarPattern({
   row: CraftRow;
   site: string;
   client: string;
-  otAfter8: boolean;
+  phaseOtAfter8: boolean;
   canRemove: boolean;
   onPatch: (patch: Partial<CalendarRange>) => void;
   onRemove: () => void;
@@ -158,7 +153,7 @@ function CalendarPattern({
     days: range.days,
     perDiemPeople: range.perDiemPeople,
     nightPerDiemPeople: range.nightPerDiemPeople,
-    otAfter8: range.otAfter8 ?? otAfter8,
+    otAfter8: range.otAfter8 ?? phaseOtAfter8,
     clockOverride: row.clockOverride,
     skipDates: range.skipDates,
   });
