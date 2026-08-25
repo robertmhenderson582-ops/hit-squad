@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DeskChrome } from "@/components/DeskChrome";
 import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
@@ -15,13 +15,23 @@ import { useAlias } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { ShopRigSheet } from "@/components/ShopRigSheet";
 import { boundOtLabel } from "@/lib/hours-clock";
+import { newEstimateKey, newEstimatePackId } from "@/lib/estimate-open";
 
 export function NewEstimateForm() {
   const params = useSearchParams();
+  const router = useRouter();
   const size = params.get("size");
   const client = params.get("client") || "Phillips 66";
   const site = params.get("site") || "Wood River — Roxana, IL";
   const name = params.get("name") || "New T&M estimate";
+  const pack = params.get("pack");
+
+  useEffect(() => {
+    if (pack || size === "shop") return;
+    const next = new URLSearchParams(params.toString());
+    next.set("pack", newEstimatePackId());
+    router.replace(`/estimates/new?${next.toString()}`);
+  }, [pack, params, router, size]);
 
   if (size === "shop") {
     return (
@@ -31,7 +41,11 @@ export function NewEstimateForm() {
     );
   }
 
-  return <NewEstimateDesk client={client} site={site} name={name} size={size} />;
+  if (!pack) {
+    return <p className="p-6 text-sm text-[#5b6f73]">Opening package</p>;
+  }
+
+  return <NewEstimateDesk client={client} site={site} name={name} size={size} pack={pack} />;
 }
 
 function NewEstimateDesk({
@@ -39,11 +53,13 @@ function NewEstimateDesk({
   site,
   name,
   size,
+  pack,
 }: {
   client: string;
   site: string;
   name: string;
   size: string | null;
+  pack: string;
 }) {
   const alias = useAlias();
   const { user } = useSession();
@@ -52,7 +68,7 @@ function NewEstimateDesk({
   const otRule = boundOtLabel(site, client);
 
   const existingClient = size !== "other";
-  const estimateKey = `new:${client}:${site}:${name}`;
+  const estimateKey = newEstimateKey(pack);
 
   return (
     <EstimatePackageProvider estimateKey={estimateKey}>

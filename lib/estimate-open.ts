@@ -8,6 +8,14 @@ export function estimateHref(id: string) {
   return `/estimates/${id}`;
 }
 
+export function newEstimatePackId() {
+  return `new-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+export function newEstimateKey(packId: string) {
+  return `new:${packId}`;
+}
+
 export function estimateForJob(job: JobRecord, estimates: EstimateRecord[]): EstimateRecord | undefined {
   const jobTitle = norm(job.title);
   return estimates.find((row) => {

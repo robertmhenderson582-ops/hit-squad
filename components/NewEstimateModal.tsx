@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
 import { jobEventLabel } from "@/lib/job-event";
+import { newEstimatePackId } from "@/lib/estimate-open";
 
 const CLIENTS = ["Phillips 66", "Georgia Power", "Shop"];
 const SITES = [
@@ -56,6 +57,7 @@ export function NewEstimateModal({
       rule,
       name,
       size,
+      pack: newEstimatePackId(),
     });
     onClose();
     router.push(`/estimates/new?${query.toString()}`);

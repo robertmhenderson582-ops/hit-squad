@@ -82,6 +82,17 @@ describe("crew ranges are per position", () => {
     assert.deepEqual(copy.ranges[0].skipDates, ["2026-09-06", "2026-09-13"]);
   });
 
+  it("copies Job setup OT-after-8 onto each phase range", () => {
+    const phases = defaultPhases().map((row) =>
+      row.id === "pre" ? { ...row, otAfter8: true, hoursPerDay: 10, daysPerWeek: 4 } : row,
+    );
+    const ranges = rangesFromPhases(phases);
+    assert.equal(ranges.find((range) => range.phaseId === "pre")?.otAfter8, true);
+    assert.equal(ranges.find((range) => range.phaseId === "mech")?.otAfter8, false);
+    const synced = syncCraftRows([craftRowFromPhases(defaultPhases())], phases)[0];
+    assert.equal(synced.ranges.find((range) => range.phaseId === "pre")?.otAfter8, true);
+  });
+
   it("does not invent ranges for OFF phases so hours stay on worked windows", () => {
     const phases = defaultPhases().map((row) => (row.id === "oil-out" ? { ...row, on: false } : row));
     const ranges = rangesFromPhases(phases);
