@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import {
   APPROVAL_STATUSES,
   blankLogRow,
   emptyFcrPacket,
   FCR_BLOCKS,
+  FCR_DAY_LABELS,
+  FCR_DAYS,
   fcrSummary,
   IMPACT_LEVELS,
   LOG_STATUSES,
@@ -17,7 +19,6 @@ import {
   type FcrPacket,
   type FcrPeopleRow,
 } from "@/lib/change-order-packet";
-import { computeRowHours } from "@/lib/hours-clock";
 
 const SHELLS = ["Log", "Estimate", "SCR"] as const;
 
@@ -32,14 +33,7 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
 
   const jobPeople = useMemo(() => {
     const rows = [...pack.crew.staff, ...pack.crew.generalForeman, ...pack.crew.foreman, ...pack.crew.direct];
-    return peopleFromJob(
-      rows.map((row) => ({
-        id: row.id,
-        position: row.position,
-        shift: row.shift,
-        hours: computeRowHours(row, site, client, pack.crew.otAfter8),
-      })),
-    );
+    return peopleFromJob(rows, site, client, pack.crew.otAfter8);
   }, [client, pack.crew, site]);
 
   useEffect(() => {
@@ -311,8 +305,10 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
         <section className="plant-card px-5 py-5">
           <h2 className="text-2xl font-semibold text-[#163038]">Estimate</h2>
           <p className="mt-1 text-sm text-[#5b6f73]">
-            Staff Day / Night and Craft Day / Night from this job. 10s = Mon–Fri. 12s = 10+2. PT = DT.
-            Pull people from Crew if the packet is still empty.
+            Staff Day / Night and Craft Day / Night from this job’s hours. 10s = Mon–Fri. 12s = 10+2.
+            Saturday OT / Sunday DT when those days are on. PT = DT. East Coast still does not turn
+            12s into DT. Mileage Yes is a flat ${MILEAGE_YES_FLAT}, not times headcount. Dollars stay
+            off a Monroe / Bayway / Rodeo rate tab.
           </p>
           <button
             type="button"
@@ -330,17 +326,37 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
                   <table className="min-w-full text-left text-sm">
                     <thead className="text-xs tracking-[0.1em] text-[#5b6f73]">
                       <tr>
-                        {["POSITION", "WEEKS", "MILEAGE", "DAYS PD", "HC", "ST", "OT", "DT", "MILEAGE $"].map((header) => (
-                          <th key={header} className="px-2 py-2">
+                        {["POSITION", "WEEKS", "MILEAGE", "DAYS PD", "HC"].map((header) => (
+                          <th key={header} className="px-2 py-2" rowSpan={2}>
                             {header}
                           </th>
                         ))}
+                        {FCR_DAY_LABELS.map((day) => (
+                          <th key={day} className="px-2 py-2 text-center" colSpan={3}>
+                            {day}
+                          </th>
+                        ))}
+                        <th className="px-2 py-2 text-center" colSpan={3}>
+                          TOTAL
+                        </th>
+                        <th className="px-2 py-2" rowSpan={2}>
+                          MILEAGE $
+                        </th>
+                      </tr>
+                      <tr>
+                        {[...FCR_DAYS, "tot"].flatMap((day) =>
+                          ["ST", "OT", "DT"].map((kind) => (
+                            <th key={`${day}-${kind}`} className="px-1 py-1 font-mono text-[10px]">
+                              {kind}
+                            </th>
+                          )),
+                        )}
                       </tr>
                     </thead>
                     <tbody>
                       {rows.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="px-2 py-3 text-[#5b6f73]">
+                          <td colSpan={30} className="px-2 py-3 text-[#5b6f73]">
                             Empty.
                           </td>
                         </tr>
@@ -397,8 +413,9 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
             </label>
           </div>
           <p className="mt-4 text-sm text-[#163038]">
-            Staff labor hours stay on Crew. Per diem {money(summary.perDiem)} · Mileage {money(summary.mileage)} ·
-            Sub {money(summary.sub)} · Equipment {money(summary.equipment)} · Misc {money(summary.misc)}
+            Staff Labor {summary.staffHours}h · Craft Labor {summary.craftHours}h · Per Diem{" "}
+            {money(summary.perDiem)} · Mileage {money(summary.mileage)} · Sub {money(summary.sub)} · Equipment{" "}
+            {money(summary.equipment)} · Misc {money(summary.misc)}
           </p>
         </section>
       ) : null}
@@ -465,9 +482,16 @@ function PeopleRow({ row, onChange }: { row: FcrPeopleRow; onChange: (next: FcrP
           onChange={(event) => onChange({ ...row, headcount: Number(event.target.value) || 0 })}
         />
       </td>
-      <td className="px-2 py-2 font-mono text-xs">{row.st}</td>
-      <td className="px-2 py-2 font-mono text-xs">{row.ot}</td>
-      <td className="px-2 py-2 font-mono text-xs">{row.dt}</td>
+      {FCR_DAYS.map((day) => (
+        <Fragment key={day}>
+          <td className="px-1 py-2 font-mono text-xs">{row.week?.[day]?.st || ""}</td>
+          <td className="px-1 py-2 font-mono text-xs">{row.week?.[day]?.ot || ""}</td>
+          <td className="px-1 py-2 font-mono text-xs">{row.week?.[day]?.dt || ""}</td>
+        </Fragment>
+      ))}
+      <td className="px-1 py-2 font-mono text-xs">{row.st || ""}</td>
+      <td className="px-1 py-2 font-mono text-xs">{row.ot || ""}</td>
+      <td className="px-1 py-2 font-mono text-xs">{row.dt || ""}</td>
       <td className="px-2 py-2 font-semibold">{row.mileage ? money(MILEAGE_YES_FLAT) : "—"}</td>
     </tr>
   );
