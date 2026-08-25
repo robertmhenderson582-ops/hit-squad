@@ -1,31 +1,19 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.4.2";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.4";
+export const DESK_VERSION = "1.5";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.5";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.4";
+export const DESK_THREAD_ID = "th-desk-v1.5";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.4",
-  "• Click a card opens that estimate",
-  "• Crew shows a phase card in each window",
-  "• Add activity on Work Activities",
-  "• Capture keeps the popup you had open",
-  "• P66 start-job says Turnaround not Outage",
-  "• You can remove a capture from the ticket before submit",
+  "Hit Squad Project Controls V1.5",
+  "• Ticket confirmation fades",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.4",
-  "• Estimate cards on Home, the plant Estimates tab, and the Estimates list open the package — icon clicks stay on the icon",
-  "• Crew is calendar-only: one craft row, five locked phase cards left to right. OFF phases keep their name and stay off",
-  "• Dates, days/wk, and hrs/day inherit from Job setup Phases & work schedule — do not retype the window",
-  "• Shift is per phase. Days & nights is dual count (Days/Nights headcount and Per-diem Headcount), not doubled",
-  "• Work Activities: Add activity (Activity no., WBS, Unit, name, Resource, Phase). Activities do not bill. Hours sit next to crew hours",
-  "• Capture keeps the open New estimate popup, other dialogs, and the ticket drawer so markup can land on them",
-  "• P66 / refinery start-job size says Turnaround; powerhouse and shop keep Outage. Estimate type stays T&M / contract types",
-  "• Send a ticket: X on the capture thumbnail drops that shot. Recapture or submit without an image. Captures stay off Inbox",
+  "Hit Squad Project Controls V1.5",
+  "• Ticket-save and capture-save toasts fade after a few seconds",
 ].join("\n");
 
 const FORBIDDEN_TESTER =
