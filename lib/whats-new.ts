@@ -1,22 +1,20 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.8.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.8";
+export const DESK_VERSION = "1.9.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.9";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.8";
+export const DESK_THREAD_ID = "th-desk-v1.9";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.8",
-  "• Days & nights counts day and night people",
-  "• Calendar Pattern label is gone",
+  "Hit Squad Project Controls V1.9",
+  "• Craft by phase is gone",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.8",
-  "• Days & nights bills day crew and night crew as two clocks — 1+1 at 8h Mo–Fr is 80 ST, not 40 ST / 40 OT",
-  "• Per-diem is days PD + nights PD; weekly 40 still applies to each crew",
-  "• The beige Calendar Pattern badge is off the phase card; weekday chips and dates stay",
+  "Hit Squad Project Controls V1.9",
+  "• The cream Craft by phase card is removed — subtitle, CRAFT / five-phase header, and the empty Direct Craft row are gone",
+  "• Each Crew position still has its own five locked phase cards; Days & nights still bills both crews",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

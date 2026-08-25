@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { CraftByPhase } from "@/components/CraftByPhase";
 import { CraftLaborGrid } from "@/components/CraftLaborGrid";
 import { LaborRollup } from "@/components/LaborRollup";
 import { SupportCrewCard } from "@/components/SupportCrewCard";
@@ -80,7 +79,6 @@ export function EstimateWorkbook({
           }))
         }
       />
-      <CraftByPhase rows={direct} />
       <LaborRollup estHours={labor.hours} />
     </div>
   );

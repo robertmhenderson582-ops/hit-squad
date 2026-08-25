@@ -147,10 +147,6 @@ export function clampPerDiem(range: CalendarRange, _shift?: CraftShift): Calenda
   };
 }
 
-export function uniqueCraftNames(rows: CraftRow[]) {
-  return [...new Set(rows.map((row) => row.position).filter(Boolean))];
-}
-
 export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange): CalendarRange {
   const seed = rangeSeedsFromPhases([row])[0];
   return {
