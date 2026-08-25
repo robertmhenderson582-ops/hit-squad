@@ -12,20 +12,27 @@ export function VaultDesk() {
         not share the folder.
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {ROOMS.map((room) => (
-          <a
-            key={room}
-            href="https://drive.google.com"
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-lg border border-[#d5e0de] px-4 py-4"
-          >
-            <p className="font-semibold text-[#163038]">{room}</p>
-            <p className="mt-1 text-xs text-[#5b6f73]">
-              {room === "Snapshots" ? "dated dumps before an outage-window republish" : "Hit Squad Estimators → Data"}
-            </p>
-          </a>
-        ))}
+        {ROOMS.map((room) =>
+          room === "Tickets" ? (
+            <a key={room} href="/tickets" className="rounded-lg border border-[#d5e0de] px-4 py-4">
+              <p className="font-semibold text-[#163038]">{room}</p>
+              <p className="mt-1 text-xs text-[#5b6f73]">Filed Ticket button items. Not Inbox.</p>
+            </a>
+          ) : (
+            <a
+              key={room}
+              href="https://drive.google.com"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg border border-[#d5e0de] px-4 py-4"
+            >
+              <p className="font-semibold text-[#163038]">{room}</p>
+              <p className="mt-1 text-xs text-[#5b6f73]">
+                {room === "Snapshots" ? "dated dumps before an outage-window republish" : "Hit Squad Estimators → Data"}
+              </p>
+            </a>
+          ),
+        )}
       </div>
     </section>
   );

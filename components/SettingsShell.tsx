@@ -17,6 +17,7 @@ const SECTIONS: { href: string; label: string; ownerOnly?: boolean; exact?: bool
   { href: "/settings/vault", label: "Data vault", ownerOnly: true },
   { href: "/settings/branding", label: "Branding", ownerOnly: true },
   { href: "/settings/checks", label: "Checks", ownerOnly: true },
+  { href: "/settings/modules", label: "Future modules" },
 ];
 
 function active(pathname: string, href: string, exact?: boolean) {

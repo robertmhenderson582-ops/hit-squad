@@ -13,7 +13,7 @@ const SITES = [
   "Billings — Billings, MT",
   "Yates — Newnan, GA",
 ];
-const RULES = ["East Coast", "Pennsylvania", "Illinois", "West Coast"];
+const RULES = ["East Coast", "Illinois", "West Coast"];
 const RATES = [
   "East Coast pack",
   "Illinois FUI/SUI/WC pack",

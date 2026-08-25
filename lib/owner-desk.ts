@@ -19,7 +19,7 @@ export const VISUAL_ROSTER: VisualSeat[] = [
 ];
 
 export type FollowSeat = VisualSeat["id"] | "owner";
-export type ViewAsSeat = "owner" | "joseph";
+export type ViewAsSeat = FollowSeat;
 export type ViewResponsibility =
   | "Project manager"
   | "Quality manager"
@@ -57,6 +57,10 @@ export const FOLLOW_SEATS: FollowSeat[] = [
 
 export function isFollowSeat(value: unknown): value is FollowSeat {
   return typeof value === "string" && (FOLLOW_SEATS as string[]).includes(value);
+}
+
+export function isViewAsSeat(value: unknown): value is ViewAsSeat {
+  return isFollowSeat(value);
 }
 
 export function aliasLensFor(seat: FollowSeat): AliasSeat {
@@ -138,7 +142,7 @@ export function getOwnerSettings(): OwnerSettings {
 export function setOwnerSettings(next: Partial<OwnerSettings>): OwnerSettings {
   if (typeof next.aliasesOn === "boolean") settings.aliasesOn = next.aliasesOn;
   if (isFollowSeat(next.followSeat)) settings.followSeat = next.followSeat;
-  if (next.viewAs === "owner" || next.viewAs === "joseph") settings.viewAs = next.viewAs;
+  if (isViewAsSeat(next.viewAs)) settings.viewAs = next.viewAs;
   if (next.viewResponsibility) settings.viewResponsibility = next.viewResponsibility;
   if (typeof next.viewSite === "string") settings.viewSite = next.viewSite;
   if (next.republish) settings.republish = { ...settings.republish, ...next.republish, buildStamp: BUILD_STAMP };

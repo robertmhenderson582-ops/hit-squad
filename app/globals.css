@@ -303,12 +303,19 @@ textarea:focus {
 
 .brand-static,
 .brand-static:hover,
-.brand-static:focus {
+.brand-static:focus,
+.brand-static:active {
   background: none;
   filter: none;
   opacity: 1;
   text-decoration: none;
   box-shadow: none;
+  transform: none;
+  cursor: default;
+}
+
+a.brand-static {
+  cursor: pointer;
 }
 
 .theme-flip {
@@ -363,12 +370,149 @@ html[data-targets="large"] button,
 html[data-targets="large"] a { min-height: 2.75rem; }
 html[data-easy="on"] { letter-spacing: 0.01em; }
 
+.desk-fabs {
+  position: fixed;
+  right: 1.15rem;
+  bottom: 1.15rem;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.7rem;
+}
+
+.inbox-fab,
+.ticket-fab {
+  border-radius: 999px;
+  padding: 0.7rem 1.1rem;
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(15, 95, 109, 0.28);
+}
+
+.inbox-fab {
+  background: #8a3d12;
+}
+
+.ticket-fab {
+  background: #0f5f6d;
+}
+
+@keyframes rust-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(183, 65, 32, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(183, 65, 32, 0);
+  }
+}
+
+.inbox-fab-pulse {
+  animation: rust-pulse 1.4s ease-out infinite;
+  background: #b74120;
+}
+
+.inbox-toast {
+  max-width: 16rem;
+  border-radius: 12px;
+  background: #b74120;
+  color: #fff;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.9rem;
+}
+
+.fab-note {
+  max-width: 16rem;
+  border-radius: 12px;
+  background: #122226;
+  color: #efe6d4;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.8rem;
+}
+
+.inbox-card {
+  width: min(22rem, calc(100vw - 2rem));
+  border-radius: 24px;
+  background: #fff;
+  color: #163038;
+  color-scheme: light;
+  padding: 1.25rem 1.35rem;
+  box-shadow: 0 18px 40px rgba(15, 95, 109, 0.18);
+}
+
+.inbox-new {
+  border-radius: 999px;
+  background: #0f5f6d;
+  color: #fff;
+  padding: 0.4rem 0.85rem;
+}
+
+.ticket-card {
+  width: min(22rem, calc(100vw - 2rem));
+  border-radius: 16px;
+  background: #fff;
+  color: #163038;
+  color-scheme: light;
+  padding: 1rem 1.1rem;
+  box-shadow: 0 18px 40px rgba(15, 95, 109, 0.18);
+}
+
+.ticket-card label,
+.ticket-card legend,
+.ticket-card textarea,
+.ticket-card a {
+  color: #163038;
+}
+
+.ticket-drag {
+  cursor: grab;
+  font-weight: 600;
+  color: #163038;
+}
+
+.rfq-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  overflow: auto;
+  background: rgba(6, 22, 26, 0.35);
+  padding: 1.5rem;
+}
+
+.rfq-sheet {
+  margin: 0 auto;
+  width: min(720px, 100%);
+  min-height: 80vh;
+  background: #fff;
+  color: #163038;
+  padding: 2rem;
+  box-shadow: 0 18px 40px rgba(15, 95, 109, 0.16);
+}
+
+html[data-print="day"],
+html[data-print="day"] body,
+html[data-theme="night"] .rfq-sheet {
+  background: #fff !important;
+  color: #163038 !important;
+}
+
 @media print {
   html,
   body,
   .paper-page,
-  .industrial-root {
+  .industrial-root,
+  .paper-desk,
+  .est-chrome,
+  .rfq-sheet,
+  .rfq-scrim {
     background: #fff !important;
     color: #163038 !important;
+  }
+
+  .print-hide,
+  .desk-fabs,
+  .theme-flip,
+  .inbox-toast {
+    display: none !important;
   }
 }

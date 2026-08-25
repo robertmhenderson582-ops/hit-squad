@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Rajdhani } from "next/font/google";
 import { ConfirmDialogProvider } from "@/components/ConfirmDialog";
+import { DeskFabs } from "@/components/DeskFabs";
 import { DisplayProvider } from "@/components/DisplayProvider";
+import { InboxProvider } from "@/components/InboxProvider";
 import { InactivityLock } from "@/components/InactivityLock";
+import { OwnerDeskProvider } from "@/components/OwnerDeskContext";
 import { SessionProvider } from "@/components/SessionProvider";
 import "./globals.css";
 
@@ -41,10 +44,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${sans.className}`}>
         <SessionProvider>
           <DisplayProvider>
-            <ConfirmDialogProvider>
-              {children}
-              <InactivityLock />
-            </ConfirmDialogProvider>
+            <OwnerDeskProvider>
+              <InboxProvider>
+                <ConfirmDialogProvider>
+                  {children}
+                  <InactivityLock />
+                  <DeskFabs />
+                </ConfirmDialogProvider>
+              </InboxProvider>
+            </OwnerDeskProvider>
           </DisplayProvider>
         </SessionProvider>
       </body>

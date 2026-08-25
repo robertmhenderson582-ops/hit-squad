@@ -1,18 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useDisplay } from "@/components/DisplayProvider";
+import { DeskBanners } from "@/components/DeskBanners";
 import { EstimateModalProvider, useEstimateModal } from "@/components/EstimateModalContext";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { BrandMark } from "@/components/BrandMark";
-import { OwnerDeskProvider, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { Wordmark } from "@/components/Wordmark";
 import { useSession } from "@/components/SessionProvider";
-import { seatLabel } from "@/lib/owner-desk";
 
-const NAV: { href: string; label: string; ownerOnly?: boolean }[] = [
+const NAV: { href: string; label: string }[] = [
   { href: "/jobs", label: "Jobs" },
   { href: "/sites", label: "Sites" },
   { href: "/estimates", label: "Estimates" },
@@ -21,7 +19,6 @@ const NAV: { href: string; label: string; ownerOnly?: boolean }[] = [
   { href: "/quality", label: "Quality" },
   { href: "/rates", label: "Rates" },
   { href: "/cost", label: "Cost / PPR" },
-  { href: "/inbox", label: "Inbox", ownerOnly: true },
   { href: "/settings", label: "Settings" },
 ];
 
@@ -44,42 +41,6 @@ function ThemeFlip() {
   );
 }
 
-function RepublishBanner() {
-  const owner = useOwnerDesk();
-  const { user } = useSession();
-  const [now, setNow] = useState(Date.now());
-  const pub = owner?.republish;
-
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  if (!pub?.active) return null;
-  const remaining = pub.until ? Math.max(0, pub.until - now) : 0;
-  const testersWait = pub.waitMinutes === 0 || remaining === 0;
-  if (testersWait && user?.role !== "owner") {
-    return (
-      <div className="republish-banner mb-4 px-4 py-3">
-        Wait — we’re republishing. Don’t keep typing.
-      </div>
-    );
-  }
-  if (user?.role !== "owner") return null;
-  const mins = Math.floor(remaining / 60000);
-  const secs = Math.floor((remaining % 60000) / 1000);
-  return (
-    <div className="republish-banner mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-      <p>
-        {pub.waitMinutes === 0
-          ? "Immediate republish. Testers lock. Owner stays in."
-          : `Heads up — republish. Comes down in ${mins}:${String(secs).padStart(2, "0")}. Save.`}
-        {pub.note ? ` ${pub.note}` : ""}
-      </p>
-    </div>
-  );
-}
-
 function ChromeInner({
   children,
   title,
@@ -96,7 +57,6 @@ function ChromeInner({
   const pathname = usePathname();
   const { user, signOut } = useSession();
   const { openNewEstimate } = useEstimateModal();
-  const owner = useOwnerDesk();
   const { resolvedTheme } = useDisplay();
   const paper = resolvedTheme === "day" || variant === "paper";
 
@@ -148,7 +108,7 @@ function ChromeInner({
             </div>
           </div>
           <nav className="mt-4 flex flex-wrap gap-2 font-mono text-[11px] tracking-[0.16em]">
-            {NAV.filter((item) => !item.ownerOnly || user?.role === "owner").map((item) => {
+            {NAV.map((item) => {
               const active = navActive(pathname, item.href);
               return (
                 <Link
@@ -172,29 +132,7 @@ function ChromeInner({
         </header>
 
         <main className="mt-5">
-          <RepublishBanner />
-          {owner && owner.followSeat !== "owner" ? (
-            <div className="follow-banner mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-              <p className="text-sm">
-                Following {seatLabel(owner.followSeat)}’s screen
-                {owner.applyingAliases ? " · aliases on" : owner.followSeat === "nathan" ? " · Madison real names" : " · aliases off"}
-              </p>
-              <button type="button" onClick={() => owner.setFollowSeat("owner")} className="text-sm underline">
-                Stop following
-              </button>
-            </div>
-          ) : null}
-          {owner && owner.viewAs === "joseph" ? (
-            <div className="viewas-banner mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-              <p className="text-sm">
-                View as {owner.viewResponsibility} · {owner.viewSite}. Settings / Users / Follow /
-                Activity stay. Republish heads-up stays.
-              </p>
-              <button type="button" onClick={() => owner.setViewAs("owner")} className="text-sm underline">
-                Back to owner
-              </button>
-            </div>
-          ) : null}
+          <DeskBanners />
           {hideTitle ? null : (
             <>
               <p className={`font-mono text-[10px] tracking-[0.32em] ${paper ? "text-steel" : "text-amber-label"}`}>
@@ -228,12 +166,10 @@ export function DeskChrome({
   variant?: "paper" | "hero";
 }) {
   return (
-    <OwnerDeskProvider>
-      <EstimateModalProvider>
-        <ChromeInner title={title} kicker={kicker} hideTitle={hideTitle} variant={variant}>
-          {children}
-        </ChromeInner>
-      </EstimateModalProvider>
-    </OwnerDeskProvider>
+    <EstimateModalProvider>
+      <ChromeInner title={title} kicker={kicker} hideTitle={hideTitle} variant={variant}>
+        {children}
+      </ChromeInner>
+    </EstimateModalProvider>
   );
 }
