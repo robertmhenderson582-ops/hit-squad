@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Rajdhani } from "next/font/google";
+import { ConfirmDialogProvider } from "@/components/ConfirmDialog";
+import { DisplayProvider } from "@/components/DisplayProvider";
+import { InactivityLock } from "@/components/InactivityLock";
 import { SessionProvider } from "@/components/SessionProvider";
 import "./globals.css";
 
@@ -36,7 +39,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
       <body className={`${sans.className}`}>
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider>
+          <DisplayProvider>
+            <ConfirmDialogProvider>
+              {children}
+              <InactivityLock />
+            </ConfirmDialogProvider>
+          </DisplayProvider>
+        </SessionProvider>
       </body>
     </html>
   );

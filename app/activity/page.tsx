@@ -1,22 +1,19 @@
 "use client";
 
-import { ActivityDesk } from "@/components/ActivityDesk";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
-import { DeskChrome } from "@/components/DeskChrome";
-import { useSession } from "@/components/SessionProvider";
 
-export default function ActivityPage() {
-  const { user } = useSession();
+export default function ActivityRedirectPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/settings/activity");
+  }, [router]);
 
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="ACTIVITY">
-        {user?.role === "owner" ? (
-          <ActivityDesk />
-        ) : (
-          <p className="mt-4 text-[#5b6f73]">Owner desk only. Joseph and testers never see Activity.</p>
-        )}
-      </DeskChrome>
+      <p className="p-6 text-sm text-[#5b6f73]">Opening Settings / Activity…</p>
     </AuthGate>
   );
 }

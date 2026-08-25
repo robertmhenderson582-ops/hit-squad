@@ -27,7 +27,7 @@ export function ActivityDesk() {
   }, []);
 
   return (
-    <div className="mt-5 space-y-5">
+    <div className="space-y-5">
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Activity</h2>
         <p className="mt-1 text-sm text-[#5b6f73]">
