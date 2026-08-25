@@ -251,8 +251,22 @@ export function DeskFabs() {
             placeholder="What happened"
           />
           {draft.capture ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={draft.capture} alt="Capture" className="mt-3 max-h-28 rounded border border-[#d5e0de]" />
+            <div className="relative mt-3 inline-block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={draft.capture} alt="Capture" className="max-h-28 rounded border border-[#d5e0de]" />
+              <button
+                type="button"
+                aria-label="Remove capture"
+                onClick={() => {
+                  persist({ ...draft, capture: null });
+                  setSavedDraft(hasStoredDraft({ ...draft, capture: null }));
+                  setNote(null);
+                }}
+                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-[#163038] text-sm leading-none text-white"
+              >
+                ×
+              </button>
+            </div>
           ) : null}
           {note ? <p className="mt-2 text-xs text-[#5b6f73]">{note}</p> : null}
           {joseph ? (
