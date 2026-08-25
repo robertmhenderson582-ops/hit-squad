@@ -55,3 +55,11 @@ npm run auth:check
 One Next.js app. Set the env vars on the host, use HTTPS, and set `AUTH_COOKIE_SECURE=true`. There is no Google sign-in yet.
 
 Login uses the night-refinery brand hero with HIT SQUAD ESTIMATORS. After sign-in the desk home is four tiles — Jobs, Estimates, Cost, HSE — plus the estimate/change-order/rate rails. All records stay owner-scoped.
+
+## Rebuild list (do not regress)
+
+- Home (`/`) stays **four tiles**: Jobs / Estimates / Cost / HSE. Do not replace home with an Estimates-only blotter.
+- Header may add Sites, Change orders, Rates (Illinois builder), Quality / ITP, Cost / PPR, New estimate.
+- Brand: HIT SQUAD over PROJECT CONTROLS, steel `#0f5f6d`, amber FIELD TRIAL — NOT A RELEASE, Madison confidentiality checkbox, original night-refinery hero.
+- Do not touch auth files (`/api/auth/*`, session cookie, AuthGate). No Google/X, no public Create account, no GET-submit login, no `sessionStorage` fake sessions.
+- B-1 ingest is parked. Do not invent Submit/ticket permission UI this turn; do not block adding it later.

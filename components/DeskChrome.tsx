@@ -9,11 +9,11 @@ import { useSession } from "@/components/SessionProvider";
 const NAV = [
   { href: "/jobs", label: "Jobs" },
   { href: "/estimates", label: "Estimates" },
-  { href: "/cost", label: "Cost" },
+  { href: "/cost", label: "Cost / PPR" },
   { href: "/hse", label: "HSE" },
   { href: "/sites", label: "Sites" },
   { href: "/change-orders", label: "Change orders" },
-  { href: "/quality", label: "Quality" },
+  { href: "/quality", label: "Quality / ITP" },
   { href: "/rates", label: "Rates" },
 ];
 

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { StatusStamp } from "@/components/StatusStamp";
 import type { DeskBoard } from "@/lib/types";
 
+// Home must stay these four tiles. Do not replace / with an Estimates-only blotter.
 const TILES = [
   { href: "/jobs", key: "jobs", label: "Jobs", note: "Open outage board" },
   { href: "/estimates", key: "estimates", label: "Estimates", note: "Working figures" },

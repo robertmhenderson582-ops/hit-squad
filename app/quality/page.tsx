@@ -7,7 +7,7 @@ import { QualityDesk } from "@/components/QualityDesk";
 export default function QualityPage() {
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="QUALITY">
+      <DeskChrome title="QUALITY / ITP">
         <QualityDesk />
       </DeskChrome>
     </AuthGate>

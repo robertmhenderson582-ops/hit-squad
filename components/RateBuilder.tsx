@@ -15,8 +15,8 @@ export function RateBuilder() {
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
         Illinois burden build-up for Madison / Wood River work: FICA, FUI, SUI, workers&apos; comp,
-        GL, and small tools rolled into the burdened craft rate. Field-trial figures stay on this
-        desk.
+        GL, and small tools rolled into the burdened craft rate. This is the IL rate builder — B-1
+        ingest is parked. Field-trial figures stay on this desk.
       </p>
       {error ? <p className="text-amber-label">{error}</p> : null}
       <ModuleTable
