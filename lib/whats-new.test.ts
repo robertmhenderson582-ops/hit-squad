@@ -42,8 +42,11 @@ describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
+    assert.match(TESTER_WHATS_NEW, /Pre-Turnaround has the same schedule\/shift options as Post/);
     assert.match(TESTER_WHATS_NEW, /Ticket confirmation fades/);
+    assert.match(TESTER_WHATS_NEW, /The button says Suggestion Box/);
     assert.match(OWNER_WHATS_NEW, /fade/);
+    assert.match(OWNER_WHATS_NEW, /Suggestion Box/);
     assert.equal(/password|auth|Novus|vault|Drive|\/tmp|SMTP|seat/i.test(TESTER_WHATS_NEW), false);
 
     const first = applyWhatsNew([], "tester-joseph-new", false);

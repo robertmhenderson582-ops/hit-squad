@@ -328,7 +328,7 @@ export function DeskFabs() {
         className="ticket-fab"
         data-capture="ignore"
       >
-        {savedDraft ? "Draft" : "+ Ticket"}
+        Suggestion Box
       </button>
     </div>
     {markupSrc ? (

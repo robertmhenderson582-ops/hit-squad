@@ -1,6 +1,6 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.5";
+export const DESK_VERSION = "1.5.1";
 export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.5";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
 export const DESK_THREAD_ID = "th-desk-v1.5";
@@ -8,12 +8,17 @@ export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
   "Hit Squad Project Controls V1.5",
+  "• Pre-Turnaround has the same schedule/shift options as Post",
   "• Ticket confirmation fades",
+  "• The button says Suggestion Box",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
   "Hit Squad Project Controls V1.5",
+  "• Job setup: Pre-Turnaround schedule picker matches Post (5×8 all ST, 5×8 OT after 8, 4×10 all ST, 4×10 OT after 8)",
+  "• Crew phase-card Shift is Days / Nights / Days & nights on every phase, including Pre. Days & nights is dual count",
   "• Ticket-save and capture-save toasts fade after a few seconds",
+  "• The FAB says Suggestion Box",
 ].join("\n");
 
 const FORBIDDEN_TESTER =
