@@ -126,7 +126,7 @@ export function InboxPanel({ compact = false }: { compact?: boolean }) {
       ) : (
         <div className="mt-5 space-y-4">
           {inbox.threads.length === 0 ? (
-            <p className="text-sm text-[#5b6f73]">No threads on this seat. Tickets do not land here.</p>
+            <p className="text-sm text-[#5b6f73]">No threads yet. Tickets do not land here.</p>
           ) : (
             inbox.threads.map((thread) => (
               <article key={thread.id} className="flex items-start gap-3">
@@ -187,7 +187,7 @@ function Conversation({
           Clear conversation
         </button>
       </div>
-      <div className="mt-3 max-h-72 space-y-3 overflow-y-auto">
+      <div className="mt-3 max-h-[22rem] space-y-3 overflow-y-auto">
         {thread.messages.length === 0 ? <p className="text-sm text-[#5b6f73]">No messages yet.</p> : null}
         {thread.messages.map((message) => (
           <div key={message.id} className={`rounded-xl px-3 py-2 ${message.from === "self" ? "bg-[#e7eeec]" : "bg-[#f4f1e8]"}`}>
@@ -237,7 +237,7 @@ function Conversation({
             onSend();
           }
         }}
-        rows={3}
+        rows={5}
         className="paper-field mt-3"
         placeholder="Message · Enter sends · Shift+Enter newline"
       />

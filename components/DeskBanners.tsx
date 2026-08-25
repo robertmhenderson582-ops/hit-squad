@@ -3,12 +3,15 @@
 import { useEffect, useState } from "react";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { hasBuildDesk } from "@/lib/desk-role";
 import { seatLabel } from "@/lib/owner-desk";
 
 export function DeskBanners() {
   const owner = useOwnerDesk();
+  const { user } = useSession();
   const [now, setNow] = useState(Date.now());
   const pub = owner?.republish;
+  const buildDesk = hasBuildDesk(user);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -18,7 +21,7 @@ export function DeskBanners() {
   return (
     <>
       {pub?.active ? <RepublishBanner now={now} /> : null}
-      {owner && owner.followSeat !== "owner" ? (
+      {buildDesk && owner && owner.followSeat !== "owner" ? (
         <div className="follow-banner mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm">
             Following {seatLabel(owner.followSeat)}’s screen
@@ -29,7 +32,7 @@ export function DeskBanners() {
           </button>
         </div>
       ) : null}
-      {owner && owner.viewAs !== "owner" ? (
+      {buildDesk && owner && owner.viewAs !== "owner" ? (
         <div className="viewas-banner mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm">Viewing as {seatLabel(owner.viewAs)}</p>
           <button type="button" onClick={() => owner.setViewAs("owner")} className="text-sm underline">

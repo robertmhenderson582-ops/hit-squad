@@ -1,20 +1,28 @@
 "use client";
 
+import { useSession } from "@/components/SessionProvider";
+import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { hasBuildDesk } from "@/lib/desk-role";
 import { VIEW_RESPONSIBILITIES, VIEW_SITES, VISUAL_ROSTER, type ViewAsSeat, type ViewResponsibility } from "@/lib/owner-desk";
-import { useOwnerDesk } from "@/components/OwnerDeskContext";
+import { isJosephEmail } from "@/lib/tester-seats";
 
 export function ViewAsDesk() {
   const desk = useOwnerDesk();
+  const alias = useAlias();
+  const { user } = useSession();
   if (!desk) return <p className="text-[#5b6f73]">Owner desk only.</p>;
+  const joseph = isJosephEmail(user?.email);
+  const buildDesk = hasBuildDesk(user);
 
   return (
     <section className="plant-card px-5 py-5">
       <h2 className="text-2xl font-semibold text-[#163038]">View as</h2>
       <p className="mt-2 text-sm text-[#5b6f73]">
-        Owner in View as is still the owner. An amber Viewing as bar with Exit stays on the desk.
-        Users, Follow, Activity, vault, republish, branding, and Checks hide while viewing as. This
-        does not seed logins.
+        {joseph
+          ? "Look & feel lens on this device only. Responsibility and site change what you see. Other people stay off this page."
+          : "Owner in View as is still the owner. An amber Viewing as bar with Exit stays on the desk. Users, Follow, Activity, vault, republish, branding, and Checks hide while viewing as. This does not seed logins."}
       </p>
+      {buildDesk ? (
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
@@ -34,6 +42,7 @@ export function ViewAsDesk() {
           </button>
         ))}
       </div>
+      ) : null}
       <label className="mt-4 block">
         Responsibility
         <select
@@ -54,7 +63,9 @@ export function ViewAsDesk() {
           className="paper-field mt-1"
         >
           {VIEW_SITES.map((item) => (
-            <option key={item}>{item}</option>
+            <option key={item} value={item}>
+              {alias(item)}
+            </option>
           ))}
         </select>
       </label>

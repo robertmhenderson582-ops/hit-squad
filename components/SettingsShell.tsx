@@ -4,12 +4,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { hasBuildDesk, isOwner } from "@/lib/desk-role";
+import { canUseViewAs, hasBuildDesk, isOwner } from "@/lib/desk-role";
 import { VIEW_AS_HIDDEN_SETTINGS } from "@/lib/owner-desk";
 
 const HIDE_WHILE_VIEWING = new Set<string>(VIEW_AS_HIDDEN_SETTINGS);
 
-const SECTIONS: { href: string; label: string; ownerOnly?: boolean; buildDesk?: boolean; exact?: boolean }[] = [
+const SECTIONS: {
+  href: string;
+  label: string;
+  ownerOnly?: boolean;
+  buildDesk?: boolean;
+  viewAs?: boolean;
+  exact?: boolean;
+}[] = [
   { href: "/settings", label: "Display", exact: true },
   { href: "/settings/security", label: "Security" },
   { href: "/settings/copy", label: "Copy" },
@@ -17,7 +24,7 @@ const SECTIONS: { href: string; label: string; ownerOnly?: boolean; buildDesk?: 
   { href: "/settings/users", label: "Manage users", buildDesk: true },
   { href: "/settings/follow", label: "Follow", buildDesk: true },
   { href: "/settings/activity", label: "Activity", buildDesk: true },
-  { href: "/settings/view-as", label: "View as", buildDesk: true },
+  { href: "/settings/view-as", label: "View as", viewAs: true },
   { href: "/settings/aliases", label: "Aliases", buildDesk: true },
   { href: "/settings/republish", label: "Heads up — republish", buildDesk: true },
   { href: "/settings/vault", label: "Data vault", buildDesk: true },
@@ -37,7 +44,8 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
   const desk = useOwnerDesk();
   const owner = isOwner(user);
   const buildDesk = hasBuildDesk(user);
-  const viewingAs = Boolean(desk?.viewAs && desk.viewAs !== "owner");
+  const viewAsOk = canUseViewAs(user);
+  const viewingAs = Boolean(desk?.viewAs && desk.viewAs !== "owner" && buildDesk);
 
   return (
     <div className="mt-5 grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
@@ -47,6 +55,7 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
           {SECTIONS.filter((item) => {
             if (item.ownerOnly && !owner) return false;
             if (item.buildDesk && !buildDesk) return false;
+            if (item.viewAs && !viewAsOk) return false;
             if (viewingAs && HIDE_WHILE_VIEWING.has(item.href)) return false;
             return true;
           }).map((item) => {

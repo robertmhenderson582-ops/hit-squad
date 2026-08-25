@@ -1,4 +1,4 @@
-export type AliasSeat = "owner" | "benny" | "nathan" | "john" | "other";
+export type AliasSeat = "owner" | "real" | "aliased";
 
 export const ALIAS_CATALOG: { real: string; alias: string; note: string }[] = [
   { real: "Phillips 66", alias: "Ironwood Refining", note: "Parent" },
@@ -11,8 +11,10 @@ export const ALIAS_CATALOG: { real: string; alias: string; note: string }[] = [
   { real: "Ferndale", alias: "Northwest", note: "Northwest plant" },
   { real: "Billings", alias: "Rockies", note: "Rockies plant" },
   { real: "Georgia Power", alias: "Piedmont Power", note: "GPC parent" },
+  { real: "GP", alias: "Piedmont Power", note: "GPC short" },
   { real: "Yates", alias: "Ridge Station", note: "GPC plant" },
   { real: "Monroe Energy", alias: "Harbor Fuels", note: "Trainer parent" },
+  { real: "Monroe", alias: "Harbor Fuels", note: "Harbor parent short" },
   { real: "Trainer", alias: "Harbor Works", note: "Harbor plant" },
   { real: "Chevron", alias: "Pacific Fuels", note: "Richmond parent" },
   { real: "Richmond", alias: "Bay Point", note: "Pacific plant" },
@@ -25,7 +27,7 @@ export const ALIAS_CATALOG: { real: string; alias: string; note: string }[] = [
 const ORDERED = [...ALIAS_CATALOG].sort((a, b) => b.real.length - a.real.length);
 
 export function shouldApplyAliases(aliasesOn: boolean, seat: AliasSeat): boolean {
-  if (seat === "nathan" || seat === "john") return false;
+  if (seat === "real") return false;
   if (seat === "owner") return aliasesOn;
   return true;
 }

@@ -253,7 +253,7 @@ export function DeskFabs() {
           <textarea
             value={draft.note}
             onChange={(event) => persist({ ...draft, note: event.target.value })}
-            rows={4}
+            rows={8}
             className="paper-field mt-3"
             placeholder="What happened"
           />

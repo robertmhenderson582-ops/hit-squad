@@ -6,7 +6,7 @@ import { DeskChrome } from "@/components/DeskChrome";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { SettingsShell } from "@/components/SettingsShell";
 import { useSession } from "@/components/SessionProvider";
-import { hasBuildDesk, isOwner } from "@/lib/desk-role";
+import { canUseViewAs, hasBuildDesk, isOwner } from "@/lib/desk-role";
 import { VIEW_AS_HIDDEN_SETTINGS } from "@/lib/owner-desk";
 
 const HIDE_WHILE_VIEWING = new Set<string>(VIEW_AS_HIDDEN_SETTINGS);
@@ -14,18 +14,26 @@ const HIDE_WHILE_VIEWING = new Set<string>(VIEW_AS_HIDDEN_SETTINGS);
 export function SettingsGate({
   ownerOnly,
   buildDesk,
+  viewAs,
   children,
 }: {
   ownerOnly?: boolean;
   buildDesk?: boolean;
+  viewAs?: boolean;
   children: React.ReactNode;
 }) {
   const { user } = useSession();
   const pathname = usePathname();
   const desk = useOwnerDesk();
-  const viewingAs = Boolean(desk?.viewAs && desk.viewAs !== "owner");
+  const viewingAs = Boolean(desk?.viewAs && desk.viewAs !== "owner" && hasBuildDesk(user));
   const hidden = viewingAs && HIDE_WHILE_VIEWING.has(pathname);
-  const roleOk = ownerOnly ? isOwner(user) : buildDesk ? hasBuildDesk(user) : true;
+  const roleOk = ownerOnly
+    ? isOwner(user)
+    : viewAs
+      ? canUseViewAs(user)
+      : buildDesk
+        ? hasBuildDesk(user)
+        : true;
   const allowed = roleOk && !hidden;
 
   return (

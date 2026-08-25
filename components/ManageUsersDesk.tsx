@@ -26,6 +26,7 @@ export function ManageUsersDesk() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [issueEmail, setIssueEmail] = useState(NOVUS_EMAIL);
   const [issuePassword, setIssuePassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [permission, setPermission] = useState<RosterPermission>("Staff");
@@ -58,7 +59,7 @@ export function ManageUsersDesk() {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: NOVUS_EMAIL, password: issuePassword }),
+      body: JSON.stringify({ email: issueEmail, password: issuePassword }),
     });
     const data = await response.json();
     setIssuePassword("");
@@ -67,7 +68,7 @@ export function ManageUsersDesk() {
       return;
     }
     setSeats(data.seats ?? []);
-    setSeatNote("Password issued on this desk. Don’t send. Novus sets a new one at first sign-in.");
+    setSeatNote("Password issued on this desk. Don’t send. First sign-in must change it.");
   }
 
   async function onAdd(event: FormEvent) {
@@ -129,10 +130,9 @@ export function ManageUsersDesk() {
         onToggle={() => setOpen((current) => ({ ...current, seats: !current.seats }))}
       >
         <p className="text-sm leading-6 text-[#5b6f73]">
-          Robert Henderson stays the only owner. Novus is an operator / build desk seat — tickets,
-          inbox, heads up, vault, settings except transferring ownership, view as, activity, and
-          follow. Testers never see this row. Joseph and testers do not get these tools. No invite
-          email.
+          Robert Henderson stays the only owner. Novus is a hidden operator seat. Testers never see
+          this list, Novus, or each other. Issue a one-time password here. Don’t send. They change it
+          on first sign-in. No invite email.
         </p>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
@@ -150,7 +150,9 @@ export function ManageUsersDesk() {
                 <tr key={row.id} className="border-t border-[#d5e0de]">
                   <td className="px-2 py-2">{row.name}</td>
                   <td className="px-2 py-2">{row.email}</td>
-                  <td className="px-2 py-2">{row.role === "owner" ? "Owner" : "Operator / build desk"}</td>
+                  <td className="px-2 py-2">
+                    {row.role === "owner" ? "Owner" : row.role === "operator" ? "Operator" : "Tester"}
+                  </td>
                   <td className="px-2 py-2">
                     {row.role === "owner"
                       ? "Owner password"
@@ -167,7 +169,19 @@ export function ManageUsersDesk() {
           <form onSubmit={onIssue} className="mt-4 grid gap-3 sm:grid-cols-2">
             <label>
               <span className="text-xs tracking-[0.14em] text-[#5b6f73]">SEAT</span>
-              <input value={`${NOVUS_EMAIL} · Novus`} readOnly className="paper-field mt-1" />
+              <select
+                value={issueEmail}
+                onChange={(event) => setIssueEmail(event.target.value)}
+                className="paper-field mt-1"
+              >
+                {seats
+                  .filter((row) => row.role !== "owner")
+                  .map((row) => (
+                    <option key={row.id} value={row.email}>
+                      {row.name} · {row.email}
+                    </option>
+                  ))}
+              </select>
             </label>
             <PasswordField
               label="Issue password"
@@ -196,7 +210,7 @@ export function ManageUsersDesk() {
           >
             <p className="text-sm leading-6 text-[#5b6f73]">
               Visual roster only. Does not create a login, send email, or open a claimable account.
-              The seven field testers are not seeded.
+              Logins are issued above. Don’t send.
             </p>
             <form onSubmit={onAdd} className="mt-3 grid gap-3 sm:grid-cols-2">
               <Field label="NAME" value={name} onChange={setName} required />
@@ -271,7 +285,7 @@ export function ManageUsersDesk() {
                   {roster.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-2 py-4 text-[#5b6f73]">
-                        Empty. The seven field testers are not seeded. Novus is not a tester.
+                        Empty visual book. Logins are the seeded seats above. Novus is not a tester.
                       </td>
                     </tr>
                   ) : (

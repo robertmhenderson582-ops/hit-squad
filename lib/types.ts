@@ -1,4 +1,4 @@
-export type DeskRole = "owner" | "operator";
+export type DeskRole = "owner" | "operator" | "tester";
 
 export type PublicUser = {
   id: string;

@@ -1,7 +1,7 @@
 import type { AliasSeat } from "@/lib/catalog-aliases";
 
 export type VisualSeat = {
-  id: "wendell" | "benny" | "chance" | "nathan" | "joseph" | "mark" | "bill";
+  id: "wendell" | "benny" | "chance" | "nathan" | "john" | "joseph" | "mark" | "cody" | "bill" | "james";
   name: string;
   email: string;
   permission: string;
@@ -9,13 +9,16 @@ export type VisualSeat = {
 };
 
 export const VISUAL_ROSTER: VisualSeat[] = [
-  { id: "wendell", name: "Wendell", email: "Wlanderno@yahoo.com", permission: "Trusted / HSE", shop: "field" },
-  { id: "benny", name: "Benny", email: "bccamp2@gmail.com", permission: "Trusted / HSE · aliases", shop: "field" },
+  { id: "wendell", name: "Wendell", email: "wlanderno@yahoo.com", permission: "Trusted / HSE", shop: "field" },
+  { id: "benny", name: "Benny", email: "bccamp2@gmail.com", permission: "Trusted / HSE", shop: "field" },
   { id: "chance", name: "Chance", email: "chancec318@yahoo.com", permission: "Trusted / Quality", shop: "field" },
   { id: "nathan", name: "Nathan Boyte", email: "nathanboyte@gmail.com", permission: "PM / estimator · Madison", shop: "madison" },
+  { id: "john", name: "John Beech", email: "johnbeech.madison@gmail.com", permission: "PM / estimator · Madison", shop: "madison" },
   { id: "joseph", name: "Joseph Henderson", email: "josephmhenderson2002@gmail.com", permission: "Look & feel", shop: "field" },
   { id: "mark", name: "Mark Schneider", email: "marks544@yahoo.com", permission: "Staff / numbers", shop: "field" },
+  { id: "cody", name: "Cody Puma", email: "puma.cody@gmail.com", permission: "Staff", shop: "field" },
   { id: "bill", name: "Bill Stubblebine", email: "bstubby@aol.com", permission: "Staff / numbers", shop: "field" },
+  { id: "james", name: "James Cain", email: "jameshcainjr@gmail.com", permission: "Staff", shop: "field" },
 ];
 
 export type FollowSeat = VisualSeat["id"] | "owner";
@@ -50,9 +53,12 @@ export const FOLLOW_SEATS: FollowSeat[] = [
   "benny",
   "chance",
   "nathan",
+  "john",
   "joseph",
   "mark",
+  "cody",
   "bill",
+  "james",
 ];
 
 export function isFollowSeat(value: unknown): value is FollowSeat {
@@ -65,8 +71,10 @@ export function isViewAsSeat(value: unknown): value is ViewAsSeat {
 
 export function aliasLensFor(seat: FollowSeat): AliasSeat {
   if (seat === "owner") return "owner";
-  if (seat === "nathan") return "nathan";
-  return "benny";
+  if (seat === "nathan" || seat === "john" || seat === "wendell" || seat === "benny" || seat === "chance") {
+    return "real";
+  }
+  return "aliased";
 }
 
 export type RepublishWait = 0 | 5 | 10 | 15;
