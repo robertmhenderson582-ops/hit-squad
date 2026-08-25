@@ -1,23 +1,20 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.9.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.9";
+export const DESK_VERSION = "1.10.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.10";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.9";
+export const DESK_THREAD_ID = "th-desk-v1.10";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.9",
-  "• Support Position opens like the other cards; you can still name the duty",
-  "• Craft by phase is gone",
+  "Hit Squad Project Controls V1.10",
+  "• Support Position is a single picker per row",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.9",
-  "• Support Position and Billed as use the same pickers as the other Crew cards — duty can be typed if it is not in the list; Billed as is the craft rate",
-  "• Support no longer shows empty Position · billed as — rows; a row appears when you Add position",
-  "• The cream Craft by phase card is removed — subtitle, CRAFT / five-phase header, and the empty Direct Craft row are gone",
-  "• Each Crew position still has its own five locked phase cards; Days & nights still bills both crews",
+  "Hit Squad Project Controls V1.10",
+  "• Support no longer stacks a second unlabeled Position / Billed as box on an empty row",
+  "• Type-in appears only after Type a title… — empty row is the two selects plus Remove",
 ].join("\n");
 
 const FORBIDDEN_TESTER =
