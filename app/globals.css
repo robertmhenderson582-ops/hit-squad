@@ -37,9 +37,17 @@ body {
   position: relative;
   overflow-x: hidden;
   background:
-    radial-gradient(ellipse 80% 50% at 12% 18%, rgba(227, 139, 42, 0.22), transparent 48%),
-    radial-gradient(ellipse 70% 45% at 82% 24%, rgba(15, 95, 109, 0.55), transparent 52%),
-    linear-gradient(180deg, #08262d 0%, #06161a 55%, #041014 100%);
+    linear-gradient(180deg, rgba(6, 22, 26, 0.78) 0%, rgba(6, 22, 26, 0.9) 100%),
+    url("/brand-hero.jpg") center top / cover no-repeat #06161a;
+}
+
+.login-hero {
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  background:
+    linear-gradient(180deg, rgba(6, 22, 26, 0.28) 0%, rgba(6, 22, 26, 0.52) 42%, rgba(6, 22, 26, 0.78) 100%),
+    url("/brand-hero.jpg") center / cover no-repeat #06161a;
 }
 
 .industrial-root::before {

@@ -3,9 +3,11 @@ import { BrandMark } from "@/components/BrandMark";
 export function Wordmark({
   compact = false,
   subline = "PROJECT CONTROLS",
+  kicker,
 }: {
   compact?: boolean;
   subline?: string;
+  kicker?: string;
 }) {
   return (
     <div className={`flex ${compact ? "items-center gap-3" : "flex-col items-center gap-3"}`}>
@@ -26,8 +28,8 @@ export function Wordmark({
           {subline}
         </p>
         {!compact ? (
-          <p className="mt-3 font-mono text-[11px] tracking-[0.42em] text-paper-cream/70">
-            ESTIMATE &amp; COST
+          <p className="mt-3 font-mono text-[11px] tracking-[0.42em] text-paper-cream/80">
+            {kicker ?? "ESTIMATE & COST"}
           </p>
         ) : null}
       </div>

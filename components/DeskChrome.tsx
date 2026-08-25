@@ -7,19 +7,17 @@ import { Wordmark } from "@/components/Wordmark";
 import { useSession } from "@/components/SessionProvider";
 
 const NAV = [
-  { href: "/sites", label: "Sites" },
+  { href: "/jobs", label: "Jobs" },
   { href: "/estimates", label: "Estimates" },
-  { href: "/change-orders", label: "Change orders" },
+  { href: "/cost", label: "Cost" },
   { href: "/hse", label: "HSE" },
+  { href: "/sites", label: "Sites" },
+  { href: "/change-orders", label: "Change orders" },
   { href: "/quality", label: "Quality" },
   { href: "/rates", label: "Rates" },
-  { href: "/cost", label: "Cost / PPR" },
 ];
 
 function navActive(pathname: string, href: string) {
-  if (href === "/estimates") {
-    return pathname === "/" || pathname === "/estimates" || pathname.startsWith("/estimates/");
-  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -37,12 +35,11 @@ export function DeskChrome({
 
   return (
     <div className="industrial-root">
-      <div className="plant-silhouette" />
       <FieldTrialBanner />
       <div className="relative z-10 mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
         <header className="steel-plate paper-grain px-4 py-4 sm:px-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <Link href="/estimates" className="min-w-0">
+            <Link href="/" className="min-w-0">
               <Wordmark compact />
             </Link>
             <div className="flex flex-wrap items-center gap-3">

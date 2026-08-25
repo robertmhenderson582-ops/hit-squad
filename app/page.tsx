@@ -2,13 +2,13 @@
 
 import { AuthGate } from "@/components/AuthGate";
 import { DeskChrome } from "@/components/DeskChrome";
-import { EstimateBoard } from "@/components/EstimateBoard";
+import { DeskHome } from "@/components/DeskHome";
 
 export default function DeskPage() {
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="ESTIMATES">
-        <EstimateBoard />
+      <DeskChrome title="THE DESK">
+        <DeskHome />
       </DeskChrome>
     </AuthGate>
   );
