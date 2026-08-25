@@ -9,16 +9,16 @@ export function DeskHero() {
   return (
     <section className="desk-hero desk-hero-bleed px-4 py-16 text-center sm:py-20">
       <div className="relative z-10">
-        <div className="brand-static">
+        <div className="hud-mark brand-static">
           <BrandMark variant="stacked" className="mx-auto h-14 w-10" />
           <p className="mt-3 font-display text-5xl font-semibold tracking-[0.16em] text-white sm:text-6xl">
             HIT SQUAD
           </p>
-          <p className="mt-2 font-display text-xl font-semibold tracking-[0.28em] text-white/90 sm:text-2xl">
+          <p className="mt-2 font-display text-xl font-semibold tracking-[0.28em] text-white sm:text-2xl">
             PROJECT CONTROLS
           </p>
         </div>
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-5">
+        <div className="mt-12 flex flex-wrap items-center justify-center gap-5">
           <Link
             href="/estimates/new?preset=p66"
             className="inline-flex items-center gap-2 rounded-lg bg-steel px-5 py-3 text-sm text-white"

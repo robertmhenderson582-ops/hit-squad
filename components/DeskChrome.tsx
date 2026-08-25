@@ -64,7 +64,7 @@ function ChromeInner({
     <div className={paper && resolvedTheme === "day" ? "paper-page" : variant === "hero" && resolvedTheme === "night" ? "industrial-root" : "paper-page"}>
       <FieldTrialBanner />
       <div className={`relative z-10 mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6`}>
-        <header className={paper ? "paper-header rounded-xl px-4 py-4 sm:px-5" : "steel-plate paper-grain px-4 py-4 sm:px-5"}>
+        <header className={paper ? "paper-header rounded-xl px-4 py-4 sm:px-5" : "hud-bezel steel-plate px-4 py-4 sm:px-5"}>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <Link href="/" className="brand-static min-w-0">
               {paper ? (
