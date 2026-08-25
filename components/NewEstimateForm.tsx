@@ -9,6 +9,7 @@ import { EstimatePackageProvider } from "@/components/EstimatePackage";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
 import { ModuleTable } from "@/components/ModuleTable";
+import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
@@ -69,6 +70,7 @@ function NewEstimateDesk({
           <JobSetupCard
             type="T&M"
             client={alias(client)}
+            site={site}
             name={name}
             otRule={otRule}
             author={user?.name}
@@ -77,11 +79,7 @@ function NewEstimateDesk({
           <PhaseSchedule />
         </div>
       ) : null}
-      {tab === "activities" ? (
-        <ModuleTable caption="ACTIVITIES" headers={["WBS", "ACTIVITY", "CRAFT", "MH", "DOLLARS", "STATUS"]}>
-          {null}
-        </ModuleTable>
-      ) : null}
+      {tab === "activities" ? <WorkActivitiesDesk client={client} site={site} /> : null}
       {tab === "crew" ? <EstimateWorkbook client={client} site={site} name={name} /> : null}
       {tab === "staffing" ? <StaffingPlanDesk client={client} site={site} name={name} /> : null}
       {tab === "support" ? (

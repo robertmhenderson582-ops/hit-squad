@@ -8,27 +8,21 @@ import {
   CRAFT_SHIFTS,
   LISTED_POSITIONS,
   STAFF_POSITIONS,
-  WEEKDAYS,
   blankCraftRow,
-  blankRange,
   clampPerDiem,
   cloneCraftRow,
-  daysPerWeekFromMask,
-  maskForDaysPerWeek,
-  perDiemCap,
   type CalendarRange,
   type CraftRow,
   type CraftShift,
 } from "@/lib/craft-labor";
 import {
   clockNote,
-  computeRangeHours,
   computeRowHours,
   seatKind,
   sumSplits,
 } from "@/lib/hours-clock";
+import { CrewPhaseCards } from "@/components/CrewPhaseCards";
 import { defaultLaborClass, type LaborClass } from "@/lib/labor-class";
-import { PHASE_NAMES, type PhaseId } from "@/lib/phase-schedule";
 
 const HEADERS = ["POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST"];
 const CUSTOM = "__custom__";
@@ -93,6 +87,17 @@ export function CraftLaborGrid({
   function addPosition() {
     const next = newRow ? newRow() : blankCraftRow();
     onRows((current) => [...current, next]);
+    setOpenId(next.id);
+  }
+
+  function assignPosition(rowId: string, position: string) {
+    onRows((current) => {
+      if (position && current.some((row) => row.id !== rowId && row.position === position)) {
+        setOpenId((open) => (open === rowId ? current.find((row) => row.position === position)?.id ?? null : open));
+        return current.filter((row) => row.id !== rowId);
+      }
+      return current.map((row) => (row.id === rowId ? { ...row, position } : row));
+    });
   }
 
   async function removePosition(row: CraftRow) {
@@ -177,14 +182,8 @@ export function CraftLaborGrid({
                   open={open}
                   onToggle={() => setOpenId(open ? null : row.id)}
                   onPatch={(patch) => patchRow(row.id, patch)}
+                  onAssignPosition={(position) => assignPosition(row.id, position)}
                   onPatchRange={(rangeId, patch) => patchRange(row.id, rangeId, patch)}
-                  onAddRange={() =>
-                    patchRow(row.id, { ranges: [...row.ranges, { ...blankRange(), shift: row.shift }] })
-                  }
-                  onRemoveRange={(rangeId) => {
-                    if (row.ranges.length <= 1) return;
-                    patchRow(row.id, { ranges: row.ranges.filter((range) => range.id !== rangeId) });
-                  }}
                   onDuplicate={() => duplicatePosition(row)}
                   onRemove={() => void removePosition(row)}
                   catalog={positions}
@@ -206,9 +205,8 @@ function CraftAccordionRow({
   open,
   onToggle,
   onPatch,
+  onAssignPosition,
   onPatchRange,
-  onAddRange,
-  onRemoveRange,
   onDuplicate,
   onRemove,
   catalog,
@@ -220,9 +218,8 @@ function CraftAccordionRow({
   open: boolean;
   onToggle: () => void;
   onPatch: (patch: Partial<CraftRow>) => void;
+  onAssignPosition: (position: string) => void;
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
-  onAddRange: () => void;
-  onRemoveRange: (rangeId: string) => void;
   onDuplicate: () => void;
   onRemove: () => void;
   catalog?: readonly string[];
@@ -259,8 +256,8 @@ function CraftAccordionRow({
               <select
                 value={selectValue}
                 onChange={(event) => {
-                  const value = event.target.value;
-                  onPatch({ position: value === CUSTOM ? "" : value });
+                  const value = event.target.value === CUSTOM ? "" : event.target.value;
+                  onAssignPosition(value);
                 }}
                 className="paper-field w-full"
               >
@@ -381,198 +378,16 @@ function CraftAccordionRow({
               Uncheck returns to auto. Union/Merit is a label only — a union superintendent still uses the
               staff split unless Use COMP clock is on.
             </p>
-            <div className="mt-3 space-y-4">
-              {row.ranges.map((range) => (
-                <CalendarRangeFields
-                  key={range.id}
-                  range={range}
-                  shift={row.shift}
-                  position={row.position}
-                  site={site}
-                  client={client}
-                  clockOverride={row.clockOverride}
-                  otAfter8={otAfter8}
-                  canRemove={row.ranges.length > 1}
-                  onPatch={(patch) => onPatchRange(range.id, patch)}
-                  onRemove={() => onRemoveRange(range.id)}
-                />
-              ))}
-            </div>
-            <button type="button" onClick={onAddRange} className="mt-3 text-sm text-steel">
-              + Add date range
-            </button>
+            <CrewPhaseCards
+              row={row}
+              site={site}
+              client={client}
+              otAfter8={otAfter8}
+              onPatchRange={onPatchRange}
+            />
           </td>
         </tr>
       ) : null}
     </>
-  );
-}
-
-function CalendarRangeFields({
-  range,
-  shift,
-  position,
-  site,
-  client,
-  clockOverride,
-  otAfter8,
-  canRemove,
-  onPatch,
-  onRemove,
-}: {
-  range: CalendarRange;
-  shift: CraftShift;
-  position: string;
-  site: string;
-  client: string;
-  clockOverride: CraftRow["clockOverride"];
-  otAfter8: boolean;
-  canRemove: boolean;
-  onPatch: (patch: Partial<CalendarRange>) => void;
-  onRemove: () => void;
-}) {
-  const rangeShift = range.shift ?? shift;
-  const twoCounts = rangeShift === "Days & nights";
-  const cap = perDiemCap(range, rangeShift);
-  const phaseName = range.phaseId && range.phaseId in PHASE_NAMES ? PHASE_NAMES[range.phaseId as PhaseId] : null;
-  const split = computeRangeHours({
-    position,
-    site,
-    client,
-    start: range.start,
-    end: range.end,
-    hoursPerShift: range.hoursPerShift,
-    headcount: range.headcount,
-    nightHeadcount: range.nightHeadcount,
-    shift: rangeShift,
-    days: range.days,
-    perDiemPeople: range.perDiemPeople,
-    otAfter8: range.otAfter8 ?? otAfter8,
-    clockOverride,
-    skipDates: range.skipDates,
-  });
-
-  return (
-    <div>
-      {phaseName ? (
-        <p className="mb-2 text-xs font-semibold tracking-[0.12em] text-[#5b6f73]">{phaseName}</p>
-      ) : null}
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="text-xs">
-          Shift
-          <select
-            value={rangeShift}
-            onChange={(event) => onPatch({ shift: event.target.value as CraftShift })}
-            className="paper-field mt-1"
-          >
-            {CRAFT_SHIFTS.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="text-xs">
-          Start
-          <input
-            type="date"
-            value={range.start}
-            onChange={(event) => onPatch({ start: event.target.value })}
-            className="paper-field mt-1"
-          />
-        </label>
-        <label className="text-xs">
-          End
-          <input
-            type="date"
-            value={range.end}
-            onChange={(event) => onPatch({ end: event.target.value })}
-            className="paper-field mt-1"
-          />
-        </label>
-        <label className="text-xs">
-          {twoCounts ? "Headcount (days)" : "Headcount"}
-          <input
-            type="number"
-            min={1}
-            value={range.headcount}
-            onChange={(event) => onPatch({ headcount: Math.max(1, Number(event.target.value) || 1) })}
-            className="paper-field mt-1 w-24"
-          />
-        </label>
-        {twoCounts ? (
-          <label className="text-xs">
-            Headcount (nights)
-            <input
-              type="number"
-              min={1}
-              value={range.nightHeadcount}
-              onChange={(event) =>
-                onPatch({ nightHeadcount: Math.max(1, Number(event.target.value) || 1) })
-              }
-              className="paper-field mt-1 w-24"
-            />
-          </label>
-        ) : null}
-        <label className="text-xs">
-          Hours / shift
-          <input
-            type="number"
-            min={0}
-            value={range.hoursPerShift}
-            onChange={(event) => onPatch({ hoursPerShift: Math.max(0, Number(event.target.value) || 0) })}
-            className="paper-field mt-1 w-24"
-          />
-        </label>
-        <label className="text-xs">
-          Per-diem people
-          <input
-            type="number"
-            min={0}
-            max={cap}
-            value={range.perDiemPeople}
-            onChange={(event) => onPatch({ perDiemPeople: Number(event.target.value) || 0 })}
-            className="paper-field mt-1 w-24"
-          />
-        </label>
-        <label className="text-xs">
-          Days / wk
-          <input
-            type="number"
-            min={0}
-            max={7}
-            value={daysPerWeekFromMask(range.days)}
-            onChange={(event) =>
-              onPatch({ days: maskForDaysPerWeek(Math.min(7, Math.max(0, Number(event.target.value) || 0))) })
-            }
-            className="paper-field mt-1 w-20"
-          />
-        </label>
-        {canRemove ? (
-          <button type="button" onClick={onRemove} className="text-sm text-[#5b6f73]">
-            Remove range
-          </button>
-        ) : null}
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {WEEKDAYS.map((day, index) => (
-          <button
-            key={day}
-            type="button"
-            onClick={() => {
-              const days = range.days.slice();
-              days[index] = !days[index];
-              onPatch({ days });
-            }}
-            className={`day-chip ${range.days[index] ? "day-chip-on" : "day-chip-off"}`}
-          >
-            {day}
-          </button>
-        ))}
-        <p className="ml-auto text-xs text-[#5b6f73]">
-          {split.st} ST · {split.ot} OT · {split.dt} DT · {split.pd} PD · {split.workedDays} days
-        </p>
-      </div>
-    </div>
   );
 }

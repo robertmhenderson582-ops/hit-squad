@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { EstimateCard } from "@/components/EstimateCard";
 import { useEstimateModal } from "@/components/EstimateModalContext";
+import { useDeskBoard } from "@/components/useDeskBoard";
+import { estimatesForPlant } from "@/lib/estimate-open";
+import { readClosed } from "@/lib/desk-closeout";
 import { ChangeOrderDesk } from "@/components/ChangeOrderDesk";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { VIEW_RESPONSIBILITIES, VISUAL_ROSTER } from "@/lib/owner-desk";
@@ -65,6 +69,14 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const { openNewEstimate } = useEstimateModal();
   const alias = useAlias();
   const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
+  const { board } = useDeskBoard();
+  const closed = readClosed().filter((item) => item.kind === "estimate").map((item) => item.id);
+  const plantEstimates = estimatesForPlant(
+    (board?.estimates ?? []).filter((row) => !closed.includes(row.id)),
+    board?.sites ?? [],
+    plant.name,
+    plant.city,
+  );
 
   return (
     <div className="mt-4">
@@ -104,7 +116,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <article className="plant-card px-5 py-5">
               <p className="text-xs tracking-[0.16em] text-[#5b6f73]">OPEN ESTIMATES</p>
-              <p className="mt-2 font-display text-4xl">0</p>
+              <p className="mt-2 font-display text-4xl">{plantEstimates.length || "0"}</p>
             </article>
             <article className="plant-card px-5 py-5">
               <p className="text-xs tracking-[0.16em] text-[#5b6f73]">OT RULE</p>
@@ -123,9 +135,17 @@ export function JobPlantPage({ slug }: { slug: string }) {
 
       {tab === "Estimates" ? (
         <div className="mt-6 space-y-4">
-          <div className="plant-card px-5 py-6">
-            <p className="text-[#5b6f73]">No open estimates on this plant yet.</p>
-          </div>
+          {plantEstimates.length ? (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {plantEstimates.map((row) => (
+                <EstimateCard key={row.id} estimate={row} />
+              ))}
+            </div>
+          ) : (
+            <div className="plant-card px-5 py-6">
+              <p className="text-[#5b6f73]">No open estimates on this plant yet.</p>
+            </div>
+          )}
         </div>
       ) : null}
 

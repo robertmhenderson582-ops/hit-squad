@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useDisplay } from "@/components/DisplayProvider";
 import { DeskBanners } from "@/components/DeskBanners";
-import { EstimateModalProvider } from "@/components/EstimateModalContext";
+import { EstimateModalProvider, NewEstimateHost } from "@/components/EstimateModalContext";
 import { UnderConstructionBanner } from "@/components/UnderConstructionBanner";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { BrandMark } from "@/components/BrandMark";
@@ -183,6 +183,7 @@ function ChromeInner({
           {children}
         </main>
       </div>
+      <NewEstimateHost />
     </div>
   );
 }

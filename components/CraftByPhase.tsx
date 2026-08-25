@@ -2,14 +2,8 @@
 
 import { GripToPan } from "@/components/GripToPan";
 import { uniqueCraftNames, type CraftRow } from "@/lib/craft-labor";
-
-const PHASES = [
-  { id: "pre", name: "Pre-Turnaround", tone: "phase-moss" },
-  { id: "oil-out", name: "Oil Out", tone: "phase-rust" },
-  { id: "mech", name: "Mechanical Window", tone: "phase-steel" },
-  { id: "oil-in", name: "Oil In", tone: "phase-amber" },
-  { id: "post", name: "Post", tone: "phase-green" },
-] as const;
+import { computeRangeHours } from "@/lib/hours-clock";
+import { PHASE_IDS, PHASE_NAMES, PHASE_TONES } from "@/lib/phase-schedule";
 
 export function CraftByPhase({ rows }: { rows: CraftRow[] }) {
   const crafts = uniqueCraftNames(rows);
@@ -17,20 +11,18 @@ export function CraftByPhase({ rows }: { rows: CraftRow[] }) {
   return (
     <section className="plant-card px-5 py-5">
       <h2 className="font-display text-2xl font-semibold text-[#163038]">Craft by phase</h2>
-      <p className="mt-1 text-sm text-[#5b6f73]">
-        Same craft left to right. Hours stay empty — look only.
-      </p>
+      <p className="mt-1 text-sm text-[#5b6f73]">Same craft left to right across the five locked windows.</p>
       <GripToPan className="mt-4">
         <table className="min-w-max text-left text-sm">
           <thead>
             <tr className="phase-bar">
               <th className="whitespace-nowrap px-3 py-2 text-xs tracking-[0.12em]">CRAFT</th>
-              {PHASES.map((phase) => (
+              {PHASE_IDS.map((id) => (
                 <th
-                  key={phase.id}
-                  className={`phase-name whitespace-nowrap px-3 py-2 text-xs ${phase.tone}`}
+                  key={id}
+                  className={`phase-name whitespace-nowrap px-3 py-2 text-xs ${PHASE_TONES[id]}`}
                 >
-                  {phase.name}
+                  {PHASE_NAMES[id]}
                 </th>
               ))}
             </tr>
@@ -43,16 +35,35 @@ export function CraftByPhase({ rows }: { rows: CraftRow[] }) {
                 </td>
               </tr>
             ) : (
-              crafts.map((craft) => (
-                <tr key={craft} className="border-t border-[#d5e0de]">
-                  <td className="whitespace-nowrap px-3 py-3 font-semibold">{craft}</td>
-                  {PHASES.map((phase) => (
-                    <td key={phase.id} className={`whitespace-nowrap px-3 py-3 ${phase.tone}`}>
-                      —
-                    </td>
-                  ))}
-                </tr>
-              ))
+              crafts.map((craft) => {
+                const row = rows.find((item) => item.position === craft);
+                return (
+                  <tr key={craft} className="border-t border-[#d5e0de]">
+                    <td className="whitespace-nowrap px-3 py-3 font-semibold">{craft}</td>
+                    {PHASE_IDS.map((id) => {
+                      const range = row?.ranges.find((item) => item.phaseId === id);
+                      const hours = range
+                        ? computeRangeHours({
+                            position: craft,
+                            start: range.start,
+                            end: range.end,
+                            hoursPerShift: range.hoursPerShift,
+                            headcount: range.headcount,
+                            nightHeadcount: range.nightHeadcount,
+                            shift: range.shift ?? row?.shift,
+                            days: range.days,
+                            skipDates: range.skipDates,
+                          }).hours
+                        : 0;
+                      return (
+                        <td key={id} className={`whitespace-nowrap px-3 py-3 ${PHASE_TONES[id]}`}>
+                          {hours ? hours.toLocaleString() : "—"}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

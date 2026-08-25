@@ -1,14 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
+import { useDeskBoard } from "@/components/useDeskBoard";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
+import { estimateForJob, estimateHref } from "@/lib/estimate-open";
 import type { JobRecord } from "@/lib/types";
 
 export function JobsDesk() {
   const alias = useAlias();
+  const router = useRouter();
+  const { board } = useDeskBoard();
+  const estimates = board?.estimates ?? [];
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,12 +41,19 @@ export function JobsDesk() {
   return (
     <div className="mt-4 space-y-4">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Outage and T&amp;M jobs loaded for this owner. Open {alias("Wood River")} for Overview /
+        Turnaround / Outage and T&amp;M jobs loaded for this owner. Open {alias("Wood River")} for Overview /
         Estimates / Change orders / People.
       </p>
       {error ? <p className="text-amber-flare">{error}</p> : null}
-      {jobs.map((job) => (
-        <article key={job.id} className="plant-card px-4 py-5">
+      {jobs.map((job) => {
+        const estimate = estimateForJob(job, estimates);
+        const href = estimate ? estimateHref(estimate.id) : undefined;
+        return (
+        <article
+          key={job.id}
+          className={`plant-card px-4 py-5 ${href ? "estimate-card cursor-pointer" : ""}`}
+          onClick={href ? () => router.push(href) : undefined}
+        >
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <p className="font-mono text-xs text-steel">{job.code}</p>
             <StatusStamp value={job.status} />
@@ -63,7 +76,10 @@ export function JobsDesk() {
               <dd className="mt-1 font-mono text-xs">{job.hseNote}</dd>
             </div>
           </dl>
-          <div className="mt-4 flex flex-wrap gap-2 font-mono text-[10px] tracking-[0.16em]">
+          <div
+            className="mt-4 flex flex-wrap gap-2 font-mono text-[10px] tracking-[0.16em]"
+            onClick={(event) => event.stopPropagation()}
+          >
             <Link href="/jobs/wood-river" className="border border-steel px-3 py-2 text-steel">
               {alias("WOOD RIVER")}
             </Link>
@@ -75,7 +91,8 @@ export function JobsDesk() {
             </Link>
           </div>
         </article>
-      ))}
+        );
+      })}
     </div>
   );
 }

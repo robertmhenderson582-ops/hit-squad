@@ -4,10 +4,12 @@ import { useState } from "react";
 import { CreatedBy } from "@/components/CreatedBy";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { displayEstimateType, ESTIMATE_TYPES, type EstimateType } from "@/lib/estimate-type";
+import { jobEventLabel } from "@/lib/job-event";
 
 export function JobSetupCard({
   type,
   client,
+  site,
   name,
   otRule,
   author,
@@ -19,6 +21,7 @@ export function JobSetupCard({
 }: {
   type: string;
   client: string;
+  site?: string;
   name: string;
   otRule: string;
   author?: string;
@@ -61,7 +64,9 @@ export function JobSetupCard({
             </option>
           ))}
         </select>
-        <p className="mt-1 text-xs text-[#5b6f73]">Outage is the job. This field is the contract type.</p>
+        <p className="mt-1 text-xs text-[#5b6f73]">
+          {jobEventLabel(client, site)} is the job. This field is the contract type.
+        </p>
       </label>
       <label className="mt-4 block">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">CLIENT</span>

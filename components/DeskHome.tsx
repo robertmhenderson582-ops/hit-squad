@@ -1,13 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DeskHero } from "@/components/DeskHero";
 import { useDisplay } from "@/components/DisplayProvider";
 import { useAlias } from "@/components/OwnerDeskContext";
+import { EstimateCard } from "@/components/EstimateCard";
 import { SitesDesk } from "@/components/SitesDesk";
 import { StatusStamp } from "@/components/StatusStamp";
+import { useDeskBoard } from "@/components/useDeskBoard";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
+import { estimateForJob, estimateHref } from "@/lib/estimate-open";
 import type { DeskBoard } from "@/lib/types";
 
 // Home must stay these four tiles. Do not replace / with an Estimates-only blotter.
@@ -20,11 +24,14 @@ const TILES = [
 
 export function DeskHome() {
   const alias = useAlias();
+  const router = useRouter();
   const { resolvedTheme } = useDisplay();
   const night = resolvedTheme === "night";
   const [desk, setDesk] = useState<DeskBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [closedPacks, setClosedPacks] = useState<ReturnType<typeof readClosed>>([]);
+  const { board } = useDeskBoard();
+  const estimates = board?.estimates ?? [];
 
   useEffect(() => {
     let cancelled = false;
@@ -107,19 +114,27 @@ export function DeskHome() {
               </tr>
             </thead>
             <tbody>
-              {openJobs.map((job) => (
-                <tr key={job.id} className="border-t border-steel-rim/20">
-                  <td className="hud-readout px-4 py-3 font-mono text-amber-label">{job.code}</td>
-                  <td className="px-4 py-3">{alias(job.title)}</td>
-                  <td className="px-4 py-3">{alias(job.client)}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{job.window}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{job.workingFigure}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-steel-glow">{job.hseNote}</td>
-                  <td className="px-4 py-3">
-                    <StatusStamp value={job.status} />
-                  </td>
-                </tr>
-              ))}
+              {openJobs.map((job) => {
+                const estimate = estimateForJob(job, estimates);
+                const href = estimate ? estimateHref(estimate.id) : undefined;
+                return (
+                  <tr
+                    key={job.id}
+                    className={`border-t border-steel-rim/20 ${href ? "cursor-pointer" : ""}`}
+                    onClick={href ? () => router.push(href) : undefined}
+                  >
+                    <td className="hud-readout px-4 py-3 font-mono text-amber-label">{job.code}</td>
+                    <td className="px-4 py-3">{alias(job.title)}</td>
+                    <td className="px-4 py-3">{alias(job.client)}</td>
+                    <td className="px-4 py-3 font-mono text-xs">{job.window}</td>
+                    <td className="px-4 py-3 font-mono text-xs">{job.workingFigure}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-steel-glow">{job.hseNote}</td>
+                    <td className="px-4 py-3">
+                      <StatusStamp value={job.status} />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -135,6 +150,19 @@ export function DeskHome() {
             ))}
           </ul>
         </details>
+      ) : null}
+      {estimates.length ? (
+        <section>
+          <h2 className={`font-display text-2xl ${night ? "text-paper-cream" : "text-[#163038]"}`}>Estimates</h2>
+          <p className={`mt-1 text-sm ${night ? "text-paper-cream/70" : "text-[#5b6f73]"}`}>
+            Click a card to open that estimate.
+          </p>
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            {estimates.map((row) => (
+              <EstimateCard key={row.id} estimate={row} />
+            ))}
+          </div>
+        </section>
       ) : null}
       <SitesDesk />
     </div>

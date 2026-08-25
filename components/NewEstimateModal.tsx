@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
+import { jobEventLabel } from "@/lib/job-event";
 
 const CLIENTS = ["Phillips 66", "Georgia Power", "Shop"];
 const SITES = [
@@ -14,13 +15,17 @@ const SITES = [
   "Billings — Billings, MT",
   "Yates — Newnan, GA",
 ];
-const SIZES = [
-  { id: "outage", label: "Outage" },
-  { id: "other", label: "Other client" },
-  { id: "shop", label: "Shop / rig" },
-] as const;
+const SIZE_IDS = ["outage", "other", "shop"] as const;
 
-export type EstimateSize = (typeof SIZES)[number]["id"];
+export type EstimateSize = (typeof SIZE_IDS)[number];
+
+function startJobSizes(client: string, site: string) {
+  return [
+    { id: "outage" as const, label: jobEventLabel(client, site) },
+    { id: "other" as const, label: "Other client" },
+    { id: "shop" as const, label: "Shop / rig" },
+  ];
+}
 
 export function NewEstimateModal({
   preset,
@@ -69,7 +74,7 @@ export function NewEstimateModal({
         </div>
         <p className="mt-3 text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">START-JOB SIZE</p>
         <div className="mt-2 flex flex-wrap gap-2">
-          {SIZES.map((item) => (
+          {startJobSizes(client, site).map((item) => (
             <button
               key={item.id}
               type="button"
