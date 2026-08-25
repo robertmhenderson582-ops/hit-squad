@@ -1,11 +1,14 @@
 import { BrandMark } from "@/components/BrandMark";
+import { HomeCue } from "@/components/HomeCue";
 
 export function Wordmark({
   compact = false,
   subline = "PROJECT CONTROLS",
+  homeCue = false,
 }: {
   compact?: boolean;
   subline?: string;
+  homeCue?: boolean;
 }) {
   return (
     <div className={`flex ${compact ? "items-center gap-3" : "flex-col items-center gap-3"}`}>
@@ -25,6 +28,7 @@ export function Wordmark({
         >
           {subline}
         </p>
+        {homeCue ? <HomeCue /> : null}
       </div>
     </div>
   );

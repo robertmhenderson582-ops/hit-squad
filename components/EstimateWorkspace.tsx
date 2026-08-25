@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { BrandMark } from "@/components/BrandMark";
+import { HomeCue } from "@/components/HomeCue";
 import { DeskBanners } from "@/components/DeskBanners";
 import { useDisplay } from "@/components/DisplayProvider";
 import { ShareTurnover } from "@/components/ShareTurnover";
@@ -77,13 +78,14 @@ export function EstimateWorkspace({
       <header className={paper ? "est-chrome" : "est-chrome hud-bezel"}>
         <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <Link href="/" className="brand-static flex items-center gap-2">
-              <BrandMark className="h-7 w-7" />
-              <span className="leading-none">
+            <Link href="/" className="brand-static header-home flex min-w-0 shrink-0 items-center gap-2" title="Home" aria-label="Home">
+              <BrandMark className="h-7 w-7 shrink-0" />
+              <span className="min-w-0 leading-none">
                 <span className="block font-display text-lg tracking-[0.16em] text-white">HIT SQUAD</span>
                 <span className="mt-0.5 block font-display text-[10px] tracking-[0.22em] text-white/75">
                   PROJECT CONTROLS
                 </span>
+                <HomeCue tight />
               </span>
             </Link>
             <p className="truncate text-sm text-white/70">{crumb}</p>

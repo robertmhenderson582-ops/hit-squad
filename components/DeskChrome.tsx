@@ -9,6 +9,7 @@ import { EstimateModalProvider } from "@/components/EstimateModalContext";
 import { UnderConstructionBanner } from "@/components/UnderConstructionBanner";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { BrandMark } from "@/components/BrandMark";
+import { HomeCue } from "@/components/HomeCue";
 import { ThemeFlip } from "@/components/ThemeFlip";
 import { Wordmark } from "@/components/Wordmark";
 import { noteSessionEnd } from "@/components/FeatureTrail";
@@ -104,19 +105,20 @@ function ChromeInner({
       <div className="relative z-10 mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
         <header className={paper ? "paper-header rounded-xl px-4 py-4 sm:px-5" : "hud-bezel steel-plate px-4 py-4 sm:px-5"}>
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <Link href="/" className="brand-static min-w-0">
+            <Link href="/" className="brand-static header-home min-w-0" title="Home" aria-label="Home">
               {paper ? (
-                <span className="flex items-center gap-2">
-                  <BrandMark variant="stacked" className="h-8 w-6" />
-                  <span className="leading-none">
+                <span className="flex min-w-0 items-center gap-2">
+                  <BrandMark variant="stacked" className="h-8 w-6 shrink-0" />
+                  <span className="min-w-0 leading-none">
                     <span className="block font-display text-2xl tracking-[0.14em] text-white">HIT SQUAD</span>
                     <span className="mt-0.5 block font-display text-[11px] tracking-[0.22em] text-white/80">
                       PROJECT CONTROLS
                     </span>
+                    <HomeCue />
                   </span>
                 </span>
               ) : (
-                <Wordmark compact />
+                <Wordmark compact homeCue />
               )}
             </Link>
             <div className="flex flex-wrap items-center gap-3">

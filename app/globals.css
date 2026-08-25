@@ -790,8 +790,34 @@ html[data-motion="reduce"] .hud-scan {
   cursor: default;
 }
 
-a.brand-static {
+a.brand-static,
+a.brand-static:hover,
+a.brand-static:focus,
+a.brand-static:active,
+a.brand-static * {
   cursor: pointer;
+}
+
+.header-home {
+  max-width: 100%;
+}
+
+.header-home-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  margin-top: 0.28rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.header-home-cue-tight {
+  margin-top: 0.22rem;
+  font-size: 0.58rem;
 }
 
 .theme-flip {
