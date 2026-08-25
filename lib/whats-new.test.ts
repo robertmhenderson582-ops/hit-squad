@@ -42,11 +42,8 @@ describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Pre-Turnaround has the same schedule\/shift options as Post/);
-    assert.match(TESTER_WHATS_NEW, /Ticket confirmation fades/);
-    assert.match(TESTER_WHATS_NEW, /The button says Suggestion Box/);
-    assert.match(OWNER_WHATS_NEW, /fade/);
-    assert.match(OWNER_WHATS_NEW, /Suggestion Box/);
+    assert.match(TESTER_WHATS_NEW, /Date fields show a calendar icon/);
+    assert.match(OWNER_WHATS_NEW, /calendar icon/);
     assert.equal(/password|auth|Novus|vault|Drive|\/tmp|SMTP|seat/i.test(TESTER_WHATS_NEW), false);
 
     const first = applyWhatsNew([], "tester-joseph-new", false);
@@ -60,20 +57,20 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.5 onto an existing Hit Squad desk thread", () => {
+  it("appends V1.6 onto an existing Hit Squad desk thread", () => {
     const prior = [
       {
-        id: "th-desk-v1.4",
+        id: "th-desk-v1.5",
         personId: DESK_PERSON_ID,
         name: "Hit Squad",
         company: "Project Controls",
         unread: 0,
         messages: [
           {
-            id: "im-desk-1.4.2",
+            id: "im-desk-1.5.1",
             from: "them" as const,
             author: "Desk",
-            text: "Hit Squad Project Controls V1.4",
+            text: "Hit Squad Project Controls V1.5",
             photo: null,
             sentAt: "",
             readAt: "seen",

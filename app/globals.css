@@ -610,6 +610,35 @@ textarea:focus {
   color: #163038;
 }
 
+/* Root color-scheme is dark, so the native date glyph vanishes on cream paper. */
+input[type="date"].paper-field {
+  color-scheme: light;
+  padding-right: 2.35rem;
+}
+
+input[type="date"].paper-field::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  cursor: pointer;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0.12rem;
+  border-radius: 4px;
+  background-color: #0f5f6d;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='4' fill='%230f5f6d'/%3E%3Crect x='5' y='7' width='14' height='12' rx='1.5' fill='none' stroke='%23efe6d4' stroke-width='1.7'/%3E%3Cpath d='M5 11h14' stroke='%23efe6d4' stroke-width='1.7'/%3E%3Cpath d='M9 5v4M15 5v4' stroke='%23efe6d4' stroke-width='1.7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 1.25rem 1.25rem;
+}
+
+.industrial-root input[type="date"].paper-field {
+  color-scheme: dark;
+}
+
+.industrial-root input[type="date"].paper-field::-webkit-calendar-picker-indicator {
+  background-color: #3ec6d4;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='4' fill='%233ec6d4'/%3E%3Crect x='5' y='7' width='14' height='12' rx='1.5' fill='none' stroke='%2306161a' stroke-width='1.7'/%3E%3Cpath d='M5 11h14' stroke='%2306161a' stroke-width='1.7'/%3E%3Cpath d='M9 5v4M15 5v4' stroke='%2306161a' stroke-width='1.7'/%3E%3C/svg%3E");
+}
+
 .est-chrome {
   background:
     linear-gradient(#e38b2a, #e38b2a) 10px 10px / 14px 1px no-repeat,
