@@ -30,6 +30,14 @@ export const CRAFT_POSITIONS = [
 
 export const LISTED_POSITIONS = [...STAFF_POSITIONS, ...CRAFT_POSITIONS] as const;
 
+export const SUPPORT_DUTIES = [
+  "Tool Room Attendant",
+  "Fire Watch",
+  "Hole Watch",
+  "Safety Attendant",
+  "Material Handler",
+] as const;
+
 export const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 
 export const CRAFT_SHIFTS = ["Days", "Nights", "Days & nights"] as const;
@@ -145,10 +153,6 @@ export function clampPerDiem(range: CalendarRange, _shift?: CraftShift): Calenda
     perDiemPeople: Math.min(Math.max(0, range.perDiemPeople), dayCap),
     nightPerDiemPeople: Math.min(Math.max(0, nightPd), nightCap),
   };
-}
-
-export function uniqueCraftNames(rows: CraftRow[]) {
-  return [...new Set(rows.map((row) => row.position).filter(Boolean))];
 }
 
 export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange): CalendarRange {
