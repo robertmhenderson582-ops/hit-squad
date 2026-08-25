@@ -1367,9 +1367,9 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   height: 24px;
   width: 24px;
   place-items: center;
-  border: 0;
+  border: 1px solid rgba(15, 95, 109, 0.45);
   border-radius: 4px;
-  background: transparent;
+  background: rgba(15, 95, 109, 0.12);
   color: #0f5f6d;
   cursor: pointer;
 }
@@ -1382,7 +1382,8 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 
 .date-field-cal:hover,
 .date-field-cal:focus-visible {
-  background: rgba(15, 95, 109, 0.12);
+  background: rgba(15, 95, 109, 0.22);
+  color: #083943;
 }
 
 .date-field.is-disabled .date-field-cal {
@@ -1391,12 +1392,15 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 }
 
 .industrial-root .date-field-cal {
+  border-color: rgba(62, 198, 212, 0.5);
+  background: rgba(62, 198, 212, 0.16);
   color: #3ec6d4;
 }
 
 .industrial-root .date-field-cal:hover,
 .industrial-root .date-field-cal:focus-visible {
-  background: rgba(62, 198, 212, 0.18);
+  background: rgba(62, 198, 212, 0.28);
+  color: #7ee3ec;
 }
 
 .staffing-grid {
