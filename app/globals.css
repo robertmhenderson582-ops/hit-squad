@@ -9,6 +9,7 @@
   --ink: #06161a;
   --cream: #efe6d4;
   --flare: #e38b2a;
+  --mint: #e7eeec;
 }
 
 html,
@@ -201,4 +202,101 @@ textarea:focus {
   border-radius: 999px;
   padding: 0.45rem 1rem;
   font-size: 0.9rem;
+}
+
+.paper-page {
+  min-height: 100vh;
+  color: #163038;
+  background-color: #e7eeec;
+  background-image:
+    linear-gradient(rgba(15, 95, 109, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 95, 109, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.paper-header {
+  background: #0f5f6d;
+  color: #fff;
+}
+
+.paper-rail {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.paper-rail-active {
+  background: #083943;
+  border-color: #f0a13a;
+  color: #f0a13a;
+}
+
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(6, 22, 26, 0.45);
+}
+
+.estimate-modal {
+  width: min(560px, 100%);
+  border-radius: 20px;
+  background: #f4f1e8;
+  box-shadow: 0 24px 60px rgba(15, 95, 109, 0.22);
+}
+
+.day-chip {
+  display: inline-flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+.day-chip-on {
+  background: #0f5f6d;
+  color: #fff;
+}
+
+.day-chip-off {
+  background: #eadfc8;
+  color: #163038;
+}
+
+.hours-tile {
+  border-radius: 12px;
+  background: #122226;
+  color: #efe6d4;
+  padding: 1rem 1.1rem;
+}
+
+.line-chip {
+  border-radius: 999px;
+  border: 1px solid rgba(15, 95, 109, 0.25);
+  background: #fff;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.8rem;
+  color: #0f5f6d;
+}
+
+.follow-banner {
+  border-radius: 12px;
+  background: #122226;
+  color: #efe6d4;
+}
+
+.viewas-banner {
+  border-radius: 12px;
+  background: #eadfc8;
+  color: #163038;
+}
+
+.follow-screen {
+  border-radius: 16px;
+  border: 2px dashed rgba(15, 95, 109, 0.28);
+  background: #f4f1e8;
 }

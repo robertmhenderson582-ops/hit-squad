@@ -2,17 +2,19 @@
 
 import Link from "next/link";
 import { ModuleTable } from "@/components/ModuleTable";
+import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 
 export function EstimateBoard() {
+  const alias = useAlias();
   const { board, error } = useDeskBoard();
   const rows = board?.estimates ?? [];
 
   return (
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
-        Working estimates for this owner desk only. Madison / P66 plant figures stay on the signed-in
+        Working estimates for this owner desk only. {alias("Madison")} / {alias("P66")} plant figures stay on the signed-in
         blotter. Field trial — not a release.
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -49,9 +51,9 @@ export function EstimateBoard() {
               <Link href={`/estimates/${row.id}`}>{row.title}</Link>
             </td>
             <td className="px-4 py-3 font-mono text-xs">
-              {row.client}
+              {alias(row.client)}
               <br />
-              {row.unit}
+              {alias(row.unit)}
             </td>
             <td className="px-4 py-3 font-mono text-xs">{row.type}</td>
             <td className="px-4 py-3 font-mono text-xs">{row.revision}</td>

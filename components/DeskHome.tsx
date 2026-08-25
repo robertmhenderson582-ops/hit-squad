@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { DeskHero } from "@/components/DeskHero";
+import { useAlias } from "@/components/OwnerDeskContext";
 import { SitesDesk } from "@/components/SitesDesk";
 import { StatusStamp } from "@/components/StatusStamp";
 import type { DeskBoard } from "@/lib/types";
@@ -16,6 +17,7 @@ const TILES = [
 ] as const;
 
 export function DeskHome() {
+  const alias = useAlias();
   const [desk, setDesk] = useState<DeskBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,7 +52,7 @@ export function DeskHome() {
     <div className="space-y-6">
       <DeskHero />
       <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
-        Owner blotter for Madison / P66 outage, T&amp;M, cost, and HSE. Records stay with the
+        Owner blotter for {alias("Madison")} / {alias("P66")} outage, T&amp;M, cost, and HSE. Records stay with the
         signed-in desk. Field trial — not a release.
       </p>
       <div className="desk-grid">
@@ -89,8 +91,8 @@ export function DeskHome() {
               {(desk?.jobs ?? []).map((job) => (
                 <tr key={job.id} className="border-t border-steel-rim/20">
                   <td className="px-4 py-3 font-mono text-amber-label">{job.code}</td>
-                  <td className="px-4 py-3">{job.title}</td>
-                  <td className="px-4 py-3">{job.client}</td>
+                  <td className="px-4 py-3">{alias(job.title)}</td>
+                  <td className="px-4 py-3">{alias(job.client)}</td>
                   <td className="px-4 py-3 font-mono text-xs">{job.window}</td>
                   <td className="px-4 py-3 font-mono text-xs">{job.workingFigure}</td>
                   <td className="px-4 py-3 font-mono text-xs text-steel-glow">{job.hseNote}</td>

@@ -1,17 +1,19 @@
 "use client";
 
 import { ModuleTable } from "@/components/ModuleTable";
+import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 
 export function HseDesk() {
+  const alias = useAlias();
   const { board, error } = useDeskBoard();
   const rows = board?.hse ?? [];
 
   return (
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
-        Permits, JSAs, walkdowns, and open actions for Madison / P66 work on this desk.
+        Permits, JSAs, walkdowns, and open actions for {alias("Madison")} / {alias("P66")} work on this desk.
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         <article className="steel-plate paper-grain px-4 py-3">
@@ -39,7 +41,7 @@ export function HseDesk() {
           <tr key={row.id} className="border-t border-steel-rim/20">
             <td className="px-4 py-3 font-mono text-amber-label">{row.code}</td>
             <td className="px-4 py-3">{row.title}</td>
-            <td className="px-4 py-3 font-mono text-xs">{row.site}</td>
+            <td className="px-4 py-3 font-mono text-xs">{alias(row.site)}</td>
             <td className="px-4 py-3 font-mono text-xs">{row.type}</td>
             <td className="px-4 py-3">{row.owner}</td>
             <td className="px-4 py-3 font-mono text-xs text-steel-glow">{row.note}</td>

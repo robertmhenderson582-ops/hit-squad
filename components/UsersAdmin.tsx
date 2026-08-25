@@ -1,157 +1,106 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import type { RosterEntry, RosterPermission } from "@/lib/types";
+import { ALIAS_CATALOG } from "@/lib/catalog-aliases";
+import { VISUAL_ROSTER } from "@/lib/owner-desk";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
 
 export function UsersAdmin() {
-  const [roster, setRoster] = useState<RosterEntry[]>([]);
-  const [permissions, setPermissions] = useState<RosterPermission[]>(["Staff — estimates only"]);
-  const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [permission, setPermission] = useState<RosterPermission>("Staff — estimates only");
-  const [expires, setExpires] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-
-  async function load() {
-    const response = await fetch("/api/desk/roster", { credentials: "include", cache: "no-store" });
-    const data = await response.json();
-    if (!response.ok) {
-      setError(data.error || "Owner desk only.");
-      return;
-    }
-    setRoster(data.roster);
-    setPermissions(data.permissions);
-    setPermission(data.permissions[0]);
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    // Password stays on this form only. Never sent to auth or the roster API.
-    const response = await fetch("/api/desk/roster", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, username, email, permission, expires }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setError(data.error || "Could not add user.");
-      return;
-    }
-    setRoster(data.roster);
-    setName("");
-    setUsername("");
-    setEmail("");
-    setExpires("");
-    setPassword("");
-  }
-
-  async function resetTesters() {
-    const response = await fetch("/api/desk/roster", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reset: true }),
-    });
-    const data = await response.json();
-    if (response.ok) setRoster(data.roster);
-  }
+  const desk = useOwnerDesk();
+  if (!desk) return <p className="mt-4 text-[#5b6f73]">Owner desk only.</p>;
 
   return (
-    <div className="paper-desk -mx-3 mt-5 space-y-5 rounded-sm px-4 py-6 sm:-mx-4">
+    <div className="mt-5 space-y-5">
       <section className="plant-card px-5 py-5">
-        <h2 className="text-2xl font-semibold text-[#163038]">Fresh accounts</h2>
-        <p className="mt-1 text-sm text-[#5b6f73]">Your view only. Testers never see this.</p>
-        <p className="mt-3 text-sm leading-6 text-[#163038]">
-          This roster is the owner book. It does not change email sign-in or the session cookie.
-          Login stays the first-party desk. Issued rows appear below.
+        <h2 className="text-2xl font-semibold text-[#163038]">Owner settings</h2>
+        <p className="mt-2 text-sm leading-6 text-[#163038]">
+          Sign-in, Users, Follow, and Activity stay yours. Joseph and testers never see this page.
+          Invites and claim passwords stay parked until the look matches.
         </p>
-        <button type="button" onClick={resetTesters} className="mt-4 rounded border border-red-500 px-3 py-2 text-sm text-red-600">
-          Remove all testers
-        </button>
       </section>
 
-      <form onSubmit={onSubmit} className="plant-card px-5 py-5">
-        <h2 className="text-2xl font-semibold text-[#163038]">Add a user</h2>
-        {error ? <p className="mt-2 text-amber-flare">{error}</p> : null}
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <label>
-            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">NAME</span>
-            <input required value={name} onChange={(event) => setName(event.target.value)} className="paper-field mt-1" />
-          </label>
-          <label>
-            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">USERNAME</span>
-            <input value={username} onChange={(event) => setUsername(event.target.value)} className="paper-field mt-1" />
-          </label>
-          <label>
-            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">EMAIL</span>
-            <input
-              required
-              type="email"
-              placeholder="Where the invite will go."
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="paper-field mt-1"
-            />
-          </label>
-          <label>
-            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">PASSWORD</span>
-            <span className="relative mt-1 block">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="paper-field pr-10"
-                autoComplete="new-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((open) => !open)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-[#5b6f73]"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? "●" : "○"}
-              </button>
-            </span>
-          </label>
-          <label>
-            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">PERMISSION</span>
-            <select
-              value={permission}
-              onChange={(event) => setPermission(event.target.value as RosterPermission)}
-              className="paper-field mt-1"
-            >
-              {permissions.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">EXPIRES (OPTIONAL)</span>
-            <input type="date" value={expires} onChange={(event) => setExpires(event.target.value)} className="paper-field mt-1" />
-          </label>
+      <section className="plant-card px-5 py-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-semibold text-[#163038]">Aliases</h2>
+            <p className="mt-1 text-sm text-[#5b6f73]">
+              Whole catalog, not only P66. Madison shop (Nathan / later John) still sees real names.
+              Benny never sees real client names when this is on.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={desk.aliasesOn}
+            onClick={() => desk.setAliasesOn(!desk.aliasesOn)}
+            className={`rounded-full px-4 py-2 text-sm text-white ${desk.aliasesOn ? "bg-steel" : "bg-[#5b6f73]"}`}
+          >
+            {desk.aliasesOn ? "Aliases on" : "Aliases off"}
+          </button>
         </div>
-        <button type="submit" className="mt-5 rounded-lg bg-steel px-5 py-2.5 text-white">
-          Add user
-        </button>
-      </form>
-
-      <section className="plant-card overflow-hidden px-5 py-5">
-        <h2 className="text-2xl font-semibold text-[#163038]">Roster</h2>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs tracking-[0.14em] text-[#5b6f73]">
               <tr>
-                {["NAME", "USERNAME", "INVITE", "PERMISSION", "EXPIRES", "SIGN-IN"].map((header) => (
+                <th className="px-2 py-2">REAL NAME</th>
+                <th className="px-2 py-2">ALIAS</th>
+                <th className="px-2 py-2">NOTE</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ALIAS_CATALOG.map((row) => (
+                <tr key={row.real} className="border-t border-[#d5e0de]">
+                  <td className="px-2 py-2">{row.real}</td>
+                  <td className="px-2 py-2 font-semibold">{row.alias}</td>
+                  <td className="px-2 py-2 text-[#5b6f73]">{row.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-xs text-[#5b6f73]">
+          Imports that still say Phillips 66 / P66 still match under Ironwood. Owner viewing normally
+          sees real names. Follow Benny with aliases on to check his lens.
+        </p>
+      </section>
+
+      <section className="plant-card px-5 py-5">
+        <h2 className="text-2xl font-semibold text-[#163038]">View as</h2>
+        <p className="mt-1 text-sm text-[#5b6f73]">
+          Responsibility + site lens for Owner and Joseph later. This is not Follow. Follow watches a
+          tester’s screen and stays Robert-only.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => desk.setViewAs("owner")}
+            className={`rounded-lg px-4 py-2 text-sm ${
+              desk.viewAs === "owner" ? "bg-steel text-white" : "border border-steel text-steel"
+            }`}
+          >
+            Owner
+          </button>
+          <button
+            type="button"
+            onClick={() => desk.setViewAs("joseph")}
+            className={`rounded-lg px-4 py-2 text-sm ${
+              desk.viewAs === "joseph" ? "bg-steel text-white" : "border border-steel text-steel"
+            }`}
+          >
+            Joseph (later)
+          </button>
+        </div>
+      </section>
+
+      <section className="plant-card overflow-hidden px-5 py-5">
+        <h2 className="text-2xl font-semibold text-[#163038]">Roster</h2>
+        <p className="mt-1 text-sm text-[#5b6f73]">
+          Visual book only. No live seats, no claim passwords, no mail.
+        </p>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-xs tracking-[0.14em] text-[#5b6f73]">
+              <tr>
+                {["NAME", "INVITE", "PERMISSION", "SHOP"].map((header) => (
                   <th key={header} className="px-2 py-2">
                     {header}
                   </th>
@@ -159,24 +108,14 @@ export function UsersAdmin() {
               </tr>
             </thead>
             <tbody>
-              {roster.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-2 py-4 text-[#5b6f73]">
-                    No entries.
-                  </td>
+              {VISUAL_ROSTER.map((row) => (
+                <tr key={row.id} className="border-t border-[#d5e0de]">
+                  <td className="px-2 py-2">{row.name}</td>
+                  <td className="px-2 py-2">{row.email}</td>
+                  <td className="px-2 py-2">{row.permission}</td>
+                  <td className="px-2 py-2">{row.shop === "madison" ? "Madison · real names" : "Field · aliases"}</td>
                 </tr>
-              ) : (
-                roster.map((row) => (
-                  <tr key={row.id} className="border-t border-[#d5e0de]">
-                    <td className="px-2 py-2">{row.name}</td>
-                    <td className="px-2 py-2">{row.username}</td>
-                    <td className="px-2 py-2">{row.email}</td>
-                    <td className="px-2 py-2">{row.permission}</td>
-                    <td className="px-2 py-2">{row.expires || "—"}</td>
-                    <td className="px-2 py-2">{row.signIn}</td>
-                  </tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>

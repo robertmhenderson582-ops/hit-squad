@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { BrandMark } from "@/components/BrandMark";
+import { useAlias } from "@/components/OwnerDeskContext";
 
 export function DeskHero() {
+  const alias = useAlias();
   return (
     <section className="desk-hero desk-hero-bleed paper-grain px-4 py-16 text-center sm:py-20">
       <div className="relative z-10">
@@ -20,7 +22,7 @@ export function DeskHero() {
             className="inline-flex items-center gap-2 rounded-lg bg-steel px-5 py-3 text-sm text-white"
           >
             <span className="text-lg leading-none">+</span>
-            New Phillips 66 estimate
+            New {alias("Phillips 66")} estimate
           </Link>
           <Link href="/estimates/new?preset=other" className="text-sm text-white underline-offset-4 hover:underline">
             Other client

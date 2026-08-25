@@ -2,17 +2,21 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { CrewManHours } from "@/components/CrewManHours";
+import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
+import { LaborRollup } from "@/components/LaborRollup";
 import { ModuleTable } from "@/components/ModuleTable";
+import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 
 export function EstimateDetail({ estimateId }: { estimateId: string }) {
+  const alias = useAlias();
   const { board, error } = useDeskBoard();
   const [tab, setTab] = useState<EstimateTab>("summary");
   const estimate = board?.estimates.find((row) => row.id === estimateId);
   const site = board?.sites.find((row) => row.id === estimate?.siteId);
-  const crews = useMemo(() => board?.crews.filter((row) => row.estimateId === estimateId) ?? [], [board, estimateId]);
   const activities = useMemo(
     () => board?.activities.filter((row) => row.estimateId === estimateId) ?? [],
     [board, estimateId],
@@ -48,7 +52,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
   }
 
   return (
-    <EstimateWorkspace crumb={`${site?.name ?? estimate.unit} / ${estimate.title}`} tab={tab} onTab={setTab}>
+    <EstimateWorkspace crumb={`${alias(site?.name ?? estimate.unit)} / ${estimate.title}`} tab={tab} onTab={setTab}>
       {tab === "summary" ? (
         <section className="plant-card mx-auto max-w-3xl px-6 py-6">
           <h1 className="text-3xl font-semibold text-[#163038]">Project</h1>
@@ -68,7 +72,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
           </label>
           <label className="mt-4 block">
             <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">CLIENT</span>
-            <input readOnly value={estimate.client} className="paper-field mt-2" />
+            <input readOnly value={alias(estimate.client)} className="paper-field mt-2" />
           </label>
           <label className="mt-4 block">
             <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE NAME</span>
@@ -98,18 +102,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       ) : null}
 
       {tab === "crew" ? (
-        <ModuleTable caption="CREW" headers={["CRAFT", "HEADCOUNT", "SHIFT", "HRS", "BASE", "BURDENED"]}>
-          {crews.map((row) => (
-            <tr key={row.id} className="border-t border-steel-rim/20">
-              <td className="px-4 py-3">{row.craft}</td>
-              <td className="px-4 py-3 font-mono">{row.headcount}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.shift}</td>
-              <td className="px-4 py-3 font-mono">{row.hours}</td>
-              <td className="px-4 py-3 font-mono text-xs">${row.baseRate.toFixed(2)}</td>
-              <td className="px-4 py-3 font-mono text-xs text-amber-label">${row.burdenedRate.toFixed(2)}</td>
-            </tr>
-          ))}
-        </ModuleTable>
+        <EstimateWorkbook client={estimate.client} site={site?.name} name={estimate.title} />
       ) : null}
 
       {tab === "staffing" ? (
@@ -139,19 +132,23 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       ) : null}
 
       {tab === "costs" ? (
-        <ModuleTable caption="COSTS" headers={["PERIOD", "BUDGET", "EARNED", "ACTUAL", "CPI", "SPI", "FORECAST"]}>
-          {cost.map((row) => (
-            <tr key={row.id} className="border-t border-steel-rim/20">
-              <td className="px-4 py-3 font-mono text-xs">{row.period}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.budget}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.earned}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.actual}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.cpi}</td>
-              <td className="px-4 py-3 font-mono text-xs">{row.spi}</td>
-              <td className="px-4 py-3 font-mono text-xs text-amber-label">{row.forecast}</td>
-            </tr>
-          ))}
-        </ModuleTable>
+        <div className="space-y-5">
+          <LaborRollup />
+          <CrewManHours />
+          <ModuleTable caption="COSTS" headers={["PERIOD", "BUDGET", "EARNED", "ACTUAL", "CPI", "SPI", "FORECAST"]}>
+            {cost.map((row) => (
+              <tr key={row.id} className="border-t border-steel-rim/20">
+                <td className="px-4 py-3 font-mono text-xs">{row.period}</td>
+                <td className="px-4 py-3 font-mono text-xs">{row.budget}</td>
+                <td className="px-4 py-3 font-mono text-xs">{row.earned}</td>
+                <td className="px-4 py-3 font-mono text-xs">{row.actual}</td>
+                <td className="px-4 py-3 font-mono text-xs">{row.cpi}</td>
+                <td className="px-4 py-3 font-mono text-xs">{row.spi}</td>
+                <td className="px-4 py-3 font-mono text-xs text-amber-label">{row.forecast}</td>
+              </tr>
+            ))}
+          </ModuleTable>
+        </div>
       ) : null}
 
       {tab === "change-orders" ? (

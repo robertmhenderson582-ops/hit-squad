@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import type { JobRecord } from "@/lib/types";
 
 export function JobsDesk() {
+  const alias = useAlias();
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,20 +33,20 @@ export function JobsDesk() {
 
   return (
     <div className="mt-4 space-y-4">
-      <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
-        Outage and T&amp;M jobs loaded for this owner. Open a package on Estimates, Cost, or HSE
-        from the same blotter.
+      <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
+        Outage and T&amp;M jobs loaded for this owner. Open Wood River for Overview / Estimate /
+        Change-order / Photos.
       </p>
-      {error ? <p className="text-amber-label">{error}</p> : null}
+      {error ? <p className="text-amber-flare">{error}</p> : null}
       {jobs.map((job) => (
-        <article key={job.id} className="steel-plate paper-grain px-4 py-5">
+        <article key={job.id} className="plant-card px-4 py-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="font-mono text-xs text-amber-label">{job.code}</p>
+            <p className="font-mono text-xs text-steel">{job.code}</p>
             <StatusStamp value={job.status} />
           </div>
-          <h2 className="mt-1 font-display text-2xl tracking-wide">{job.title}</h2>
-          <p className="mt-2 text-sm text-paper-cream/80">
-            {job.client} · {job.discipline} · {job.kind.toUpperCase()}
+          <h2 className="mt-1 font-display text-2xl tracking-wide">{alias(job.title)}</h2>
+          <p className="mt-2 text-sm text-[#5b6f73]">
+            {alias(job.client)} · {job.discipline} · {job.kind.toUpperCase()}
           </p>
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
             <div>
@@ -61,14 +63,14 @@ export function JobsDesk() {
             </div>
           </dl>
           <div className="mt-4 flex flex-wrap gap-2 font-mono text-[10px] tracking-[0.16em]">
-            <Link href="/estimates" className="border border-steel-rim/40 px-3 py-2 text-paper-cream/90">
+            <Link href="/jobs/wood-river" className="border border-steel px-3 py-2 text-steel">
+              WOOD RIVER
+            </Link>
+            <Link href="/estimates" className="border border-steel px-3 py-2 text-steel">
               ESTIMATES
             </Link>
-            <Link href="/cost" className="border border-steel-rim/40 px-3 py-2 text-paper-cream/90">
+            <Link href="/cost" className="border border-steel px-3 py-2 text-steel">
               COST
-            </Link>
-            <Link href="/hse" className="border border-steel-rim/40 px-3 py-2 text-paper-cream/90">
-              HSE
             </Link>
           </div>
         </article>
