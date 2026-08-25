@@ -47,6 +47,7 @@ describe("inbox what's-new", () => {
     assert.match(TESTER_WHATS_NEW, /Add activity on Work Activities/);
     assert.match(TESTER_WHATS_NEW, /Capture keeps the popup you had open/);
     assert.match(TESTER_WHATS_NEW, /P66 start-job says Turnaround not Outage/);
+    assert.match(TESTER_WHATS_NEW, /remove a capture from the ticket before submit/);
     assert.match(OWNER_WHATS_NEW, /inherit/);
     assert.match(OWNER_WHATS_NEW, /Per-diem Headcount/);
     assert.match(OWNER_WHATS_NEW, /Turnaround/);
