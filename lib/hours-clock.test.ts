@@ -132,4 +132,44 @@ describe("CAT 2 Wood River hour cases", () => {
       workedDays: 1,
     });
   });
+
+  it("Days & nights 1+1 at 8h Mo–Fr is two people, not one 40 ST / 40 OT line", () => {
+    const result = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Cost Analyst",
+      start: "2027-01-04",
+      end: "2027-01-08",
+      hoursPerShift: 8,
+      days: [false, true, true, true, true, true, false],
+      shift: "Days & nights",
+      headcount: 1,
+      nightHeadcount: 1,
+      perDiemPeople: 1,
+      nightPerDiemPeople: 1,
+    });
+    assert.equal(result.st, 80);
+    assert.equal(result.ot, 0);
+    assert.equal(result.dt, 0);
+    assert.equal(result.pd, 10);
+    assert.equal(result.hours, 80);
+    assert.notEqual(result.st, 40);
+    assert.notEqual(result.ot, 40);
+  });
+
+  it("Days & nights keeps East Coast clocks per crew — 13h weekday is 20 ST + 6 OT, never DT after 12", () => {
+    const result = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "General Foreman",
+      start: "2026-10-05",
+      end: "2026-10-05",
+      hoursPerShift: 13,
+      days: [false, true, true, true, true, true, false],
+      shift: "Days & nights",
+      headcount: 1,
+      nightHeadcount: 1,
+    });
+    assert.equal(result.st, 20);
+    assert.equal(result.ot, 6);
+    assert.equal(result.dt, 0);
+  });
 });
