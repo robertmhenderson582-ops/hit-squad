@@ -70,4 +70,32 @@ describe("ticket file store", { concurrency: 1 }, () => {
     assert.equal(ticketsForViewer(all, "robertmhenderson582@gmail.com", true).length, 2);
     assert.equal(ticketsForViewer(all, "robertmhenderson582+novus@gmail.com", true).length, 2);
   });
+
+  it("adding a ticket does not drop tickets already on disk", () => {
+    const keepFile = join(dir, "keep.json");
+    resetTicketStoreForTests(keepFile);
+    const first = addStoredTicket(
+      makeTicket({
+        kind: "Broke",
+        note: "first stays",
+        capture: null,
+        later: false,
+        who: "robertmhenderson582@gmail.com",
+      }),
+    );
+    const second = addStoredTicket(
+      makeTicket({
+        kind: "missing",
+        note: "second added",
+        capture: null,
+        later: false,
+        who: "robertmhenderson582@gmail.com",
+      }),
+    );
+    resetTicketStoreForTests(keepFile);
+    const again = listStoredTickets();
+    assert.equal(again.length, 2);
+    assert.equal(again.some((row) => row.id === first.id), true);
+    assert.equal(again.some((row) => row.id === second.id), true);
+  });
 });

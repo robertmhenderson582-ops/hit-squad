@@ -26,12 +26,14 @@ export function isTicketKind(value: unknown): value is TicketKind {
   return typeof value === "string" && (TICKET_KINDS as readonly string[]).includes(value);
 }
 
-export function makeTicket(input: Omit<DeskTicket, "id" | "at" | "done" | "notifyFix">): DeskTicket {
+export function makeTicket(
+  input: Omit<DeskTicket, "id" | "at" | "done" | "notifyFix"> & { id?: string },
+): DeskTicket {
   return {
     ...input,
     done: false,
     notifyFix: null,
-    id: `tkt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: input.id && /^tkt-/.test(input.id) ? input.id : `tkt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     at: new Date().toLocaleString("en-GB", { hour12: false }),
   };
 }

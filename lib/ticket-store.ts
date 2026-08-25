@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DeskTicket } from "./tickets";
 
@@ -43,8 +43,14 @@ function save(tickets: DeskTicket[]) {
   cache = tickets;
   const file = ticketStorePath();
   loadedFrom = file;
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, JSON.stringify({ tickets }, null, 2), "utf8");
+  try {
+    mkdirSync(dirname(file), { recursive: true });
+    const tmp = `${file}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ tickets }, null, 2), "utf8");
+    renameSync(tmp, file);
+  } catch {
+    // Best-effort only. A failed write must not wipe the previous file.
+  }
 }
 
 export function listStoredTickets(who?: string): DeskTicket[] {
@@ -55,9 +61,19 @@ export function listStoredTickets(who?: string): DeskTicket[] {
 
 export function addStoredTicket(entry: DeskTicket): DeskTicket {
   const tickets = load();
-  tickets.unshift(entry);
+  const index = tickets.findIndex((row) => row.id === entry.id);
+  if (index >= 0) {
+    tickets[index] = {
+      ...tickets[index],
+      ...entry,
+      capture: entry.capture || tickets[index].capture,
+      note: entry.note || tickets[index].note,
+    };
+  } else {
+    tickets.unshift(entry);
+  }
   save(tickets);
-  return entry;
+  return index >= 0 ? tickets[index] : entry;
 }
 
 export function patchStoredTicket(

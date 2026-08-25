@@ -43,10 +43,12 @@ describe("inbox what's-new", () => {
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
     assert.match(OWNER_WHATS_NEW, /Novus/);
-    assert.match(TESTER_WHATS_NEW, /Capture screen now grabs the desk/);
-    assert.equal(/password|auth|Novus|vault|Drive/i.test(TESTER_WHATS_NEW), false);
+    assert.match(TESTER_WHATS_NEW, /stay on the list after you submit/);
+    assert.match(TESTER_WHATS_NEW, /close X/);
+    assert.match(TESTER_WHATS_NEW, /draw on a capture/);
+    assert.equal(/password|auth|Novus|vault|Drive|\/tmp|SMTP|seat/i.test(TESTER_WHATS_NEW), false);
 
-    const first = applyWhatsNew([], "tester-joseph", false);
+    const first = applyWhatsNew([], "tester-joseph-new", false);
     assert.equal(first.length, 1);
     assert.equal(first[0].personId, DESK_PERSON_ID);
     assert.equal(first[0].name, "Hit Squad");
@@ -55,5 +57,34 @@ describe("inbox what's-new", () => {
 
     const owner = deskWhatsNewThread(true);
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
+  });
+
+  it("appends V1.2 onto an existing Hit Squad desk thread", () => {
+    const prior = [
+      {
+        id: "th-desk-v1.1",
+        personId: DESK_PERSON_ID,
+        name: "Hit Squad",
+        company: "Project Controls",
+        unread: 0,
+        messages: [
+          {
+            id: "im-desk-1.1",
+            from: "them" as const,
+            author: "Desk",
+            text: "Hit Squad Project Controls V1.1",
+            photo: null,
+            sentAt: "",
+            readAt: "seen",
+          },
+        ],
+      },
+    ];
+    const next = applyWhatsNew(prior, "tester-joseph-append", false);
+    assert.equal(next.length, 1);
+    assert.equal(next[0].messages.length, 2);
+    assert.equal(next[0].messages[1]?.text, TESTER_WHATS_NEW);
+    assert.equal(next[0].unread, 1);
+    assert.equal(applyWhatsNew(next, "tester-joseph-append", false)[0].messages.length, 2);
   });
 });

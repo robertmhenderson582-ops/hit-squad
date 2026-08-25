@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { PhotoViewer } from "@/components/PhotoViewer";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { burnCaption } from "@/lib/capture";
 import { buildDeskChrome } from "@/lib/desk-role";
-import { mergeTickets, readTicketCache, ticketsForViewer, writeTicketCache } from "@/lib/ticket-cache";
+import {
+  hydrateTickets,
+  patchCachedTicket,
+  removeCachedDone,
+  removeCachedTicket,
+} from "@/lib/ticket-cache";
 import { ticketCopyText, type DeskTicket } from "@/lib/tickets";
 
 export function TicketsDesk() {
@@ -18,68 +23,88 @@ export function TicketsDesk() {
   const [tickets, setTickets] = useState<DeskTicket[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<{ src: string; caption: string } | null>(null);
+  const mine = user?.email || "";
 
-  function applyList(list: DeskTicket[]) {
-    const mine = user?.email || "";
-    const visible = ticketsForViewer(list, mine, ownerChrome);
-    const next = ownerChrome || !mine ? visible : mergeTickets(visible, readTicketCache(mine).filter((row) => row.who === mine));
-    if (mine && !ownerChrome) writeTicketCache(mine, next);
-    setTickets(next);
-  }
+  const refresh = useCallback(
+    (server: DeskTicket[] = []) => {
+      if (!mine) {
+        setTickets(server);
+        return;
+      }
+      setTickets(hydrateTickets(server, mine, ownerChrome));
+    },
+    [mine, ownerChrome],
+  );
 
   useEffect(() => {
-    const mine = user?.email || "";
+    if (mine) refresh();
     fetch("/api/desk/tickets", { credentials: "include", cache: "no-store" })
       .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
       .then(({ ok, data }) => {
         if (!ok) {
           setError(data.error || "Tickets could not load.");
+          if (mine) refresh();
           return;
         }
-        const list = (data.tickets ?? []) as DeskTicket[];
-        const visible = ticketsForViewer(list, mine, ownerChrome);
-        const next = ownerChrome || !mine ? visible : mergeTickets(visible, readTicketCache(mine).filter((row) => row.who === mine));
-        if (mine && !ownerChrome) writeTicketCache(mine, next);
-        setTickets(next);
+        refresh((data.tickets ?? []) as DeskTicket[]);
       })
-      .catch(() => setError("Tickets could not load."));
-  }, [ownerChrome, user?.email]);
+      .catch(() => {
+        setError("Tickets could not load.");
+        if (mine) refresh();
+      });
+  }, [mine, ownerChrome, refresh]);
+
+  useEffect(() => {
+    function onChange() {
+      if (mine) refresh();
+    }
+    window.addEventListener("hs-tickets-changed", onChange);
+    return () => window.removeEventListener("hs-tickets-changed", onChange);
+  }, [mine, refresh]);
 
   async function patch(id: string, body: { done?: boolean; notifyFix?: boolean | null }) {
+    if (mine) {
+      setTickets(patchCachedTicket(mine, id, body).filter((row) => ownerChrome || row.who === mine));
+    }
     const response = await fetch("/api/desk/tickets", {
       method: "PATCH",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, ...body }),
     });
-    const data = await response.json();
-    if (response.ok) applyList(data.tickets ?? []);
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) refresh((data.tickets ?? []) as DeskTicket[]);
+    else if (mine) refresh();
   }
 
   async function remove(id: string, label: string) {
     if (!(await confirmRemove(label, { title: "Remove this ticket?", confirmLabel: "Delete" }))) return;
+    if (mine) setTickets(removeCachedTicket(mine, id).filter((row) => ownerChrome || row.who === mine));
     const response = await fetch("/api/desk/tickets", {
       method: "DELETE",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
-    const data = await response.json();
-    if (response.ok) applyList(data.tickets ?? []);
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) refresh((data.tickets ?? []) as DeskTicket[]);
+    else if (mine) refresh();
   }
 
   async function removeDone() {
     if (!(await confirmRemove("Done tickets leave this list.", { title: "Delete done?", confirmLabel: "Delete done" }))) {
       return;
     }
+    if (mine) setTickets(removeCachedDone(mine).filter((row) => ownerChrome || row.who === mine));
     const response = await fetch("/api/desk/tickets", {
       method: "DELETE",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ done: true }),
     });
-    const data = await response.json();
-    if (response.ok) applyList(data.tickets ?? []);
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) refresh((data.tickets ?? []) as DeskTicket[]);
+    else if (mine) refresh();
   }
 
   async function copyShot(row: DeskTicket) {

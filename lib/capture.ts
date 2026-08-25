@@ -15,7 +15,8 @@ export function shouldIgnoreForCapture(el: Element) {
     el.classList.contains("ticket-scrim") ||
     el.classList.contains("inbox-card") ||
     el.classList.contains("inbox-toast") ||
-    el.classList.contains("fab-note")
+    el.classList.contains("fab-note") ||
+    el.classList.contains("ticket-markup")
   );
 }
 
@@ -82,6 +83,32 @@ export async function burnCaption(dataUrl: string, caption: string): Promise<str
     ctx.fillText(line.slice(0, 90), 16, image.height + 24 + index * 20);
   });
   return canvas.toDataURL("image/jpeg", 0.82);
+}
+
+export async function compressCapture(dataUrl: string, maxEdge = 1280, quality = 0.7): Promise<string> {
+  if (!dataUrl.startsWith("data:image/")) return dataUrl;
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("image"));
+      img.src = dataUrl;
+    });
+    const scale = Math.min(1, maxEdge / Math.max(image.width, image.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.fillStyle = "#06161a";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    let next = canvas.toDataURL("image/jpeg", quality);
+    if (next.length > 450_000) next = canvas.toDataURL("image/jpeg", 0.52);
+    return usableShot(next) ? next : dataUrl;
+  } catch {
+    return dataUrl;
+  }
 }
 
 export async function shootViewport(): Promise<string> {

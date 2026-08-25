@@ -81,6 +81,7 @@ html.hs-capturing .industrial-root::before,
 html.hs-capturing .desk-fabs,
 html.hs-capturing .ticket-card,
 html.hs-capturing .ticket-scrim,
+html.hs-capturing .ticket-markup,
 html.hs-capturing .inbox-card,
 html.hs-capturing .inbox-toast,
 html.hs-capturing .fab-note {
@@ -1042,6 +1043,8 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 
 .inbox-fab,
 .ticket-fab {
+  position: relative;
+  z-index: 2;
   border-radius: 999px;
   padding: 0.7rem 1.1rem;
   color: #fff;
@@ -1120,6 +1123,8 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 }
 
 .ticket-card {
+  position: relative;
+  z-index: 3;
   width: min(22rem, calc(100vw - 2rem));
   border-radius: 16px;
   background: #fff;
@@ -1145,8 +1150,38 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 .ticket-scrim {
   position: fixed;
   inset: 0;
-  pointer-events: none;
+  z-index: 1;
+  pointer-events: auto;
   background: rgba(6, 22, 26, 0.16);
+}
+
+.ticket-markup {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(6, 22, 26, 0.92);
+}
+
+.ticket-markup-bar {
+  width: min(1100px, 100%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.ticket-markup-canvas {
+  touch-action: none;
+  cursor: crosshair;
+  max-width: 100%;
+  border-radius: 8px;
+  background: #06161a;
 }
 
 .inbox-header-badge {

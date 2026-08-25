@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { shootViewport } from "@/lib/capture";
-import { mergeTickets, readTicketCache, writeTicketCache } from "@/lib/ticket-cache";
-import { TICKET_DRAFT_KEY, TICKET_KINDS, type DeskTicket, type TicketKind } from "@/lib/tickets";
+import { CaptureMarkup } from "@/components/CaptureMarkup";
+import { compressCapture, shootViewport } from "@/lib/capture";
+import { mergeTickets, readTicketCache, rememberTicket, writeTicketCache } from "@/lib/ticket-cache";
+import { makeTicket, TICKET_DRAFT_KEY, TICKET_KINDS, type DeskTicket, type TicketKind } from "@/lib/tickets";
 import { unlockInboxAudio } from "@/lib/chime";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { InboxPanel } from "@/components/InboxPanel";
@@ -24,7 +25,12 @@ function readDraft(): Draft {
   try {
     const raw = window.localStorage.getItem(TICKET_DRAFT_KEY);
     if (!raw) return EMPTY_DRAFT;
-    return { ...EMPTY_DRAFT, ...(JSON.parse(raw) as Partial<Draft>) };
+    const parsed = JSON.parse(raw) as Partial<Draft>;
+    return {
+      ...EMPTY_DRAFT,
+      ...parsed,
+      kind: TICKET_KINDS.includes(parsed.kind as TicketKind) ? (parsed.kind as TicketKind) : "Broke",
+    };
   } catch {
     return EMPTY_DRAFT;
   }
@@ -34,12 +40,17 @@ function hasStoredDraft(draft: Draft) {
   return Boolean(draft.note.trim() || draft.capture);
 }
 
+function announceTicketsChanged() {
+  window.dispatchEvent(new Event("hs-tickets-changed"));
+}
+
 export function DeskFabs() {
   const { status, user } = useSession();
   const desk = useOwnerDesk();
   const inbox = useInbox();
   const [ticketOpen, setTicketOpen] = useState(false);
   const [hiddenForShot, setHiddenForShot] = useState(false);
+  const [markupSrc, setMarkupSrc] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [savedDraft, setSavedDraft] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -55,6 +66,17 @@ export function DeskFabs() {
     }
   }, [status]);
 
+  useEffect(() => {
+    if (!ticketOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape" && !markupSrc && !hiddenForShot) {
+        setTicketOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hiddenForShot, markupSrc, ticketOpen]);
+
   if (status !== "authenticated" || !user) return null;
   const email = user.email;
 
@@ -63,43 +85,79 @@ export function DeskFabs() {
     window.localStorage.setItem(TICKET_DRAFT_KEY, JSON.stringify(next));
   }
 
+  function closeTicket() {
+    persist(draft);
+    setSavedDraft(hasStoredDraft(draft));
+    setTicketOpen(false);
+  }
+
   async function submit() {
-    const response = await fetch("/api/desk/tickets", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...draft, later: false }),
+    const capture = draft.capture ? await compressCapture(draft.capture) : null;
+    const filed = makeTicket({
+      kind: draft.kind,
+      note: draft.note,
+      capture,
+      later: false,
+      who: email,
     });
-    const data = await response.json();
-    if (!response.ok) {
-      setNote(data.error || "Could not save ticket.");
-      return;
-    }
-    const filed = data.ticket as DeskTicket | undefined;
-    const serverList = (data.tickets ?? []) as DeskTicket[];
-    writeTicketCache(email, mergeTickets(serverList, filed ? [filed, ...readTicketCache(email)] : readTicketCache(email)));
+    rememberTicket(email, filed);
+    announceTicketsChanged();
     window.localStorage.removeItem(TICKET_DRAFT_KEY);
     setDraft(EMPTY_DRAFT);
     setSavedDraft(false);
     setTicketOpen(false);
     setNote("Saved to Tickets. Not Inbox.");
     noteFeatureTrail("ticket");
+
+    try {
+      const response = await fetch("/api/desk/tickets", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: filed.id,
+          kind: filed.kind,
+          note: filed.note,
+          capture: filed.capture,
+          later: false,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setNote("Saved on this device. Tickets list has it.");
+        return;
+      }
+      const serverTicket = data.ticket as DeskTicket | undefined;
+      const serverList = (data.tickets ?? []) as DeskTicket[];
+      writeTicketCache(
+        email,
+        mergeTickets(serverList, [serverTicket ?? filed, ...readTicketCache(email)]),
+      );
+      announceTicketsChanged();
+    } catch {
+      setNote("Saved on this device. Tickets list has it.");
+    }
   }
 
   async function capture() {
     setHiddenForShot(true);
     setTicketOpen(false);
+    setMarkupSrc(null);
     await new Promise((resolve) => window.setTimeout(resolve, 280));
     try {
       const shot = await Promise.race([
         shootViewport(),
         new Promise<string>((resolve) => window.setTimeout(() => resolve(""), 20000)),
       ]);
-      if (shot) persist({ ...draft, capture: shot });
-      setNote(shot ? "Capture attached. Capture stays off Inbox." : "Capture could not grab the desk. Try again.");
+      if (!shot) {
+        setNote("Capture could not grab the desk. Try again.");
+        setTicketOpen(true);
+        return;
+      }
+      const compact = await compressCapture(shot);
+      setMarkupSrc(compact);
     } finally {
       setHiddenForShot(false);
-      setTicketOpen(true);
     }
   }
 
@@ -116,12 +174,13 @@ export function DeskFabs() {
     });
   }
 
-  const showTicket = ticketOpen && !hiddenForShot;
+  const showTicket = ticketOpen && !hiddenForShot && !markupSrc;
 
   return (
-    <div className={`desk-fabs print-hide ${hiddenForShot ? "pointer-events-none opacity-0" : ""}`} data-capture="ignore">
+    <>
+    <div className={`desk-fabs print-hide ${hiddenForShot || markupSrc ? "pointer-events-none opacity-0" : ""}`} data-capture="ignore">
       {inbox.toast ? <div className="inbox-toast">{inbox.toast}</div> : null}
-      {note && !showTicket ? <p className="fab-note">{note}</p> : null}
+      {note && !showTicket && !markupSrc ? <p className="fab-note">{note}</p> : null}
 
       {inbox.open ? (
         <section className="inbox-card" role="dialog" aria-label="Inbox">
@@ -134,7 +193,13 @@ export function DeskFabs() {
         </section>
       ) : null}
 
-      {showTicket ? <div className="ticket-scrim" aria-hidden="true" /> : null}
+      {showTicket ? (
+        <div
+          className="ticket-scrim"
+          role="presentation"
+          onClick={closeTicket}
+        />
+      ) : null}
 
       {showTicket ? (
         <section
@@ -142,30 +207,40 @@ export function DeskFabs() {
           role="dialog"
           aria-label="Send a ticket"
           style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
+          onClick={(event) => event.stopPropagation()}
         >
-          <div
-            className="ticket-drag"
-            onPointerDown={onDragStart}
-            onPointerMove={onDrag}
-            onPointerUp={() => {
-              drag.current = null;
-            }}
-          >
-            Send a ticket
+          <div className="flex items-start justify-between gap-3">
+            <div
+              className="ticket-drag min-w-0 flex-1"
+              onPointerDown={onDragStart}
+              onPointerMove={onDrag}
+              onPointerUp={() => {
+                drag.current = null;
+              }}
+            >
+              Send a ticket
+            </div>
+            <button type="button" onClick={closeTicket} className="text-xl leading-none text-[#5b6f73]" aria-label="Close ticket">
+              ×
+            </button>
           </div>
-          <fieldset className="mt-3 space-y-2">
+          <fieldset className="mt-3">
             <legend className="text-xs tracking-[0.14em] text-[#5b6f73]">KIND</legend>
-            {TICKET_KINDS.map((kind) => (
-              <label key={kind} className="flex items-center gap-2 text-sm font-medium text-[#163038]">
-                <input
-                  type="radio"
-                  name="ticket-kind"
-                  checked={draft.kind === kind}
-                  onChange={() => persist({ ...draft, kind })}
-                />
-                {kind}
-              </label>
-            ))}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {TICKET_KINDS.map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={draft.kind === kind}
+                  onClick={() => persist({ ...draft, kind })}
+                  className={`rounded-full px-3 py-1.5 text-sm ${
+                    draft.kind === kind ? "bg-steel text-white" : "border border-steel text-steel"
+                  }`}
+                >
+                  {kind}
+                </button>
+              ))}
+            </div>
           </fieldset>
           <textarea
             value={draft.note}
@@ -185,7 +260,7 @@ export function DeskFabs() {
             </p>
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={capture} className="rounded-lg border border-steel px-3 py-2 text-sm text-steel">
+            <button type="button" onClick={() => void capture()} className="rounded-lg border border-steel px-3 py-2 text-sm text-steel">
               Capture screen
             </button>
             <button
@@ -221,9 +296,34 @@ export function DeskFabs() {
         Inbox
         {inbox.unread > 0 ? <span className="inbox-count">{inbox.unread}</span> : null}
       </button>
-      <button type="button" onClick={() => setTicketOpen((open) => !open)} className="ticket-fab">
+      <button
+        type="button"
+        onClick={() => {
+          if (ticketOpen) closeTicket();
+          else setTicketOpen(true);
+        }}
+        className="ticket-fab"
+      >
         {savedDraft ? "Draft" : "+ Ticket"}
       </button>
     </div>
+    {markupSrc ? (
+      <CaptureMarkup
+        src={markupSrc}
+        onDone={(marked) => {
+          persist({ ...draft, capture: marked });
+          setMarkupSrc(null);
+          setTicketOpen(true);
+          setNote("Capture attached. Capture stays off Inbox.");
+        }}
+        onCancel={() => {
+          persist({ ...draft, capture: markupSrc });
+          setMarkupSrc(null);
+          setTicketOpen(true);
+          setNote("Capture attached. Capture stays off Inbox.");
+        }}
+      />
+    ) : null}
+    </>
   );
 }
