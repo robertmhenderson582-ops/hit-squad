@@ -38,10 +38,10 @@ export function EstimateWorkspace({
   const router = useRouter();
 
   return (
-    <div className="min-h-screen bg-[#d8e4e2]">
+    <div className="min-h-screen overflow-x-hidden bg-[#d8e4e2]">
       <FieldTrialBanner />
       <header className="est-chrome">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <Link href="/" className="flex items-center gap-2">
               <BrandMark className="h-7 w-7" />
