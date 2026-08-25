@@ -1,27 +1,20 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.2";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.2";
+export const DESK_VERSION = "1.3";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.3";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.2";
+export const DESK_THREAD_ID = "th-desk-v1.3";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.2",
-  "• Tickets you file stay on the list after you submit and after an upgrade",
-  "• Ticket popup has a close X",
-  "• You can draw on a capture before submit",
+  "Hit Squad Project Controls V1.3",
+  "• Capture grabs the whole desk, not one card.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.2",
-  "• Tickets you file stay on the list after submit and after an upgrade — this device keeps the list and merges any server copy",
-  "• Owner GET / PATCH / DELETE also merge; a shorter server list cannot wipe the desk",
-  "• Ticket popup has a close X; Escape and the dimmed page keep the draft",
-  "• Capture can be marked up (pen, undo, clear) before submit",
-  "• KIND chips stick; list Copy / Done / Notify / Delete apply here even if the server row is missing",
-  "• Owner and Novus see every ticket; testers see only their own",
-  "• Tickets stay off Inbox",
+  "Hit Squad Project Controls V1.3",
+  "• Capture grabs the whole visible desk, not one card.",
+  "• Root cause: the shot was taking the first Sites/Plants card instead of the page you see, then sizing that card to the window so it looked zoomed.",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

@@ -31,9 +31,9 @@ export function CaptureMarkup({
       imageRef.current = image;
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const maxW = Math.min(window.innerWidth - 48, 1100);
-      const maxH = Math.min(window.innerHeight - 160, 720);
-      const scale = Math.min(maxW / image.width, maxH / image.height, 1);
+      const maxW = Math.max(240, window.innerWidth - 32);
+      const maxH = Math.max(180, window.innerHeight - 140);
+      const scale = Math.min(maxW / image.width, maxH / image.height);
       canvas.width = Math.max(1, Math.round(image.width * scale));
       canvas.height = Math.max(1, Math.round(image.height * scale));
       paint();

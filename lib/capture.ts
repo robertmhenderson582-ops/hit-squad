@@ -1,9 +1,45 @@
+/** Full-page shells only. Never `.paper-desk` — that is a nested card (Sites/Plants). */
+export const CAPTURE_ROOT_SELECTORS = [
+  "[data-capture-root]",
+  ".paper-page",
+  ".desk-day",
+  ".industrial-root",
+] as const;
+
+export function pickCaptureSelector(classNames: string[]): string {
+  if (classNames.includes("data-capture-root")) return "[data-capture-root]";
+  if (classNames.includes("paper-page")) return ".paper-page";
+  if (classNames.includes("desk-day")) return ".desk-day";
+  if (classNames.includes("industrial-root")) return ".industrial-root";
+  return "documentElement";
+}
+
 function deskRoot(): HTMLElement {
-  return (
-    (document.querySelector(".paper-desk") as HTMLElement | null) ||
-    (document.querySelector(".industrial-root") as HTMLElement | null) ||
-    document.body
-  );
+  for (const selector of CAPTURE_ROOT_SELECTORS) {
+    const hit = document.querySelector(selector);
+    if (hit instanceof HTMLElement) return hit;
+  }
+  return document.documentElement;
+}
+
+function paperDesk(target: HTMLElement) {
+  if (
+    target.closest(".paper-page, .desk-day") ||
+    target.classList.contains("paper-page") ||
+    target.classList.contains("desk-day")
+  ) {
+    return true;
+  }
+  return Boolean(document.querySelector(".paper-page, .desk-day"));
+}
+
+function viewportBox() {
+  return {
+    width: Math.max(1, Math.round(window.innerWidth)),
+    height: Math.max(1, Math.round(window.innerHeight)),
+    x: window.scrollX,
+    y: window.scrollY,
+  };
 }
 
 export function shouldIgnoreForCapture(el: Element) {
@@ -26,14 +62,13 @@ function usableShot(dataUrl: string) {
 
 async function modernShot(target: HTMLElement): Promise<string> {
   const { domToJpeg } = await import("modern-screenshot");
-  const width = Math.min(window.innerWidth, 1600);
-  const height = Math.min(window.innerHeight, 1000);
+  const { width, height } = viewportBox();
   return domToJpeg(target, {
     quality: 0.82,
     scale: 1,
     width,
     height,
-    backgroundColor: target.classList.contains("paper-desk") ? "#d5e4e2" : "#06161a",
+    backgroundColor: paperDesk(target) ? "#d5e4e2" : "#06161a",
     filter: (el) => !(el instanceof Element) || !shouldIgnoreForCapture(el),
   });
 }
@@ -41,20 +76,21 @@ async function modernShot(target: HTMLElement): Promise<string> {
 async function html2canvasShot(target: HTMLElement): Promise<string> {
   const mod = await import("html2canvas");
   const html2canvas = mod.default;
-  const width = Math.min(window.innerWidth, target.clientWidth || window.innerWidth, 1600);
-  const height = Math.min(window.innerHeight, target.clientHeight || window.innerHeight, 1000);
+  const { width, height, x, y } = viewportBox();
   const canvas = await html2canvas(target, {
     logging: false,
     useCORS: true,
     allowTaint: false,
-    backgroundColor: target.classList.contains("paper-desk") ? "#d5e4e2" : "#06161a",
+    backgroundColor: paperDesk(target) ? "#d5e4e2" : "#06161a",
     scale: 1,
     width,
     height,
-    windowWidth: window.innerWidth,
-    windowHeight: window.innerHeight,
-    scrollX: 0,
-    scrollY: 0,
+    windowWidth: width,
+    windowHeight: height,
+    x,
+    y,
+    scrollX: -x,
+    scrollY: -y,
     ignoreElements: (el) => shouldIgnoreForCapture(el),
   });
   return canvas.toDataURL("image/jpeg", 0.82);
@@ -117,14 +153,21 @@ export async function shootViewport(): Promise<string> {
   await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
   await new Promise((resolve) => window.setTimeout(resolve, 180));
   try {
-    const target = deskRoot();
+    const shell = deskRoot();
+    const page = document.documentElement;
     try {
-      const shot = await modernShot(target);
+      const shot = await html2canvasShot(page);
       if (usableShot(shot)) return shot;
     } catch {
-      // try html2canvas
+      // try modern-screenshot on the page shell
     }
-    const shot = await html2canvasShot(target);
+    try {
+      const shot = await modernShot(shell);
+      if (usableShot(shot)) return shot;
+    } catch {
+      // last try: html2canvas on the shell
+    }
+    const shot = await html2canvasShot(shell);
     return usableShot(shot) ? shot : "";
   } catch {
     return "";
