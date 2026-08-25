@@ -184,6 +184,16 @@ export function addActivity(row: Omit<ActivityRow, "at">): ActivityRow {
   return entry;
 }
 
+export const VIEW_AS_HIDDEN_SETTINGS = [
+  "/settings/users",
+  "/settings/follow",
+  "/settings/activity",
+  "/settings/vault",
+  "/settings/republish",
+  "/settings/branding",
+  "/settings/checks",
+] as const;
+
 export function seatLabel(seat: FollowSeat): string {
   if (seat === "owner") return "Robert (owner)";
   return VISUAL_ROSTER.find((row) => row.id === seat)?.name ?? seat;

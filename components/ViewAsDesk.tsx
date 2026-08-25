@@ -11,8 +11,9 @@ export function ViewAsDesk() {
     <section className="plant-card px-5 py-5">
       <h2 className="text-2xl font-semibold text-[#163038]">View as</h2>
       <p className="mt-2 text-sm text-[#5b6f73]">
-        Owner in View as is still the owner. Republish must not lock him. Settings / Users / Follow /
-        Activity stay. This does not seed logins.
+        Owner in View as is still the owner. An amber Viewing as bar with Exit stays on the desk.
+        Users, Follow, Activity, vault, republish, branding, and Checks hide while viewing as. This
+        does not seed logins.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
         <button
