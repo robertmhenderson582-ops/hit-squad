@@ -141,7 +141,6 @@ export function DeskFabs() {
 
   async function capture() {
     setHiddenForShot(true);
-    setTicketOpen(false);
     setMarkupSrc(null);
     await new Promise((resolve) => window.setTimeout(resolve, 280));
     try {
@@ -151,7 +150,6 @@ export function DeskFabs() {
       ]);
       if (!shot) {
         setNote("Capture could not grab the desk. Try again.");
-        setTicketOpen(true);
         return;
       }
       const compact = await compressCapture(shot);
@@ -174,16 +172,16 @@ export function DeskFabs() {
     });
   }
 
-  const showTicket = ticketOpen && !hiddenForShot && !markupSrc;
+  const showTicket = ticketOpen && !markupSrc;
 
   return (
     <>
-    <div className={`desk-fabs print-hide ${hiddenForShot || markupSrc ? "pointer-events-none opacity-0" : ""}`} data-capture="ignore">
+    <div className={`desk-fabs print-hide ${hiddenForShot || markupSrc ? "hs-fabs-quiet" : ""}`}>
       {inbox.toast ? <div className="inbox-toast">{inbox.toast}</div> : null}
       {note && !showTicket && !markupSrc ? <p className="fab-note">{note}</p> : null}
 
       {inbox.open ? (
-        <section className="inbox-card" role="dialog" aria-label="Inbox">
+        <section className="inbox-card" role="dialog" aria-label="Inbox" data-capture="ignore">
           <div className="flex justify-end">
             <button type="button" onClick={inbox.closeInbox} className="text-[#5b6f73]" aria-label="Close inbox">
               ×
@@ -197,7 +195,10 @@ export function DeskFabs() {
         <div
           className="ticket-scrim"
           role="presentation"
-          onClick={closeTicket}
+          onClick={() => {
+            if (hiddenForShot || markupSrc) return;
+            closeTicket();
+          }}
         />
       ) : null}
 
@@ -292,6 +293,7 @@ export function DeskFabs() {
           else inbox.openInbox();
         }}
         className={`inbox-fab ${inbox.unread > 0 ? "inbox-fab-pulse" : ""}`}
+        data-capture="ignore"
       >
         Inbox
         {inbox.unread > 0 ? <span className="inbox-count">{inbox.unread}</span> : null}
@@ -303,6 +305,7 @@ export function DeskFabs() {
           else setTicketOpen(true);
         }}
         className="ticket-fab"
+        data-capture="ignore"
       >
         {savedDraft ? "Draft" : "+ Ticket"}
       </button>

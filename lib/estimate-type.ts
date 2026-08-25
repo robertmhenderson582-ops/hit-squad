@@ -6,7 +6,7 @@ export function isEstimateType(value: unknown): value is EstimateType {
   return typeof value === "string" && (ESTIMATE_TYPES as readonly string[]).includes(value);
 }
 
-/** Outage is the job/event, never the contract type. */
+/** Turnaround / Outage is the job-event chip, never the contract type. */
 export function displayEstimateType(value: unknown): EstimateType {
   if (typeof value !== "string") return "T&M";
   if (/outage/i.test(value)) return "T&M";

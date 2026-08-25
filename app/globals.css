@@ -78,13 +78,20 @@ body {
 }
 
 html.hs-capturing .industrial-root::before,
-html.hs-capturing .desk-fabs,
-html.hs-capturing .ticket-card,
-html.hs-capturing .ticket-scrim,
+html.hs-capturing .inbox-fab,
+html.hs-capturing .ticket-fab,
 html.hs-capturing .ticket-markup,
 html.hs-capturing .inbox-card,
 html.hs-capturing .inbox-toast,
 html.hs-capturing .fab-note {
+  display: none !important;
+}
+
+/* Ticket stays mounted. Hide it in the bitmap only when a page dialog is open so markup can land on that dialog. */
+html.hs-capturing:has(.modal-scrim) .ticket-card,
+html.hs-capturing:has(.modal-scrim) .ticket-scrim,
+html.hs-capturing:has(.estimate-modal) .ticket-card,
+html.hs-capturing:has(.estimate-modal) .ticket-scrim {
   display: none !important;
 }
 
@@ -1039,6 +1046,14 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   flex-direction: column;
   align-items: flex-end;
   gap: 0.7rem;
+}
+
+.hs-fabs-quiet .inbox-fab,
+.hs-fabs-quiet .ticket-fab,
+.hs-fabs-quiet .inbox-toast,
+.hs-fabs-quiet .fab-note {
+  pointer-events: none;
+  opacity: 0;
 }
 
 .inbox-fab,

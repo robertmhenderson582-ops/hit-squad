@@ -70,6 +70,7 @@ function NewEstimateDesk({
           <JobSetupCard
             type="T&M"
             client={alias(client)}
+            site={site}
             name={name}
             otRule={otRule}
             author={user?.name}

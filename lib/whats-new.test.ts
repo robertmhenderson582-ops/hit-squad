@@ -45,8 +45,11 @@ describe("inbox what's-new", () => {
     assert.match(TESTER_WHATS_NEW, /Click a card opens that estimate/);
     assert.match(TESTER_WHATS_NEW, /phase card in each window/);
     assert.match(TESTER_WHATS_NEW, /Add activity on Work Activities/);
+    assert.match(TESTER_WHATS_NEW, /Capture keeps the popup you had open/);
+    assert.match(TESTER_WHATS_NEW, /P66 start-job says Turnaround not Outage/);
     assert.match(OWNER_WHATS_NEW, /inherit/);
     assert.match(OWNER_WHATS_NEW, /Per-diem Headcount/);
+    assert.match(OWNER_WHATS_NEW, /Turnaround/);
     assert.equal(/password|auth|Novus|vault|Drive|\/tmp|SMTP|seat/i.test(TESTER_WHATS_NEW), false);
 
     const first = applyWhatsNew([], "tester-joseph-new", false);

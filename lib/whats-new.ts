@@ -1,6 +1,6 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.4";
+export const DESK_VERSION = "1.4.1";
 export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.4";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
 export const DESK_THREAD_ID = "th-desk-v1.4";
@@ -11,6 +11,8 @@ export const TESTER_WHATS_NEW = [
   "• Click a card opens that estimate",
   "• Crew shows a phase card in each window",
   "• Add activity on Work Activities",
+  "• Capture keeps the popup you had open",
+  "• P66 start-job says Turnaround not Outage",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
@@ -20,6 +22,8 @@ export const OWNER_WHATS_NEW = [
   "• Dates, days/wk, and hrs/day inherit from Job setup Phases & work schedule — do not retype the window",
   "• Shift is per phase. Days & nights is dual count (Days/Nights headcount and Per-diem Headcount), not doubled",
   "• Work Activities: Add activity (Activity no., WBS, Unit, name, Resource, Phase). Activities do not bill. Hours sit next to crew hours",
+  "• Capture keeps the open New estimate popup, other dialogs, and the ticket drawer so markup can land on them",
+  "• P66 / refinery start-job size says Turnaround; powerhouse and shop keep Outage. Estimate type stays T&M / contract types",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

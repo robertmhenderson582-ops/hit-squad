@@ -7,6 +7,9 @@ type EstimatePreset = { client?: string; site?: string; size?: "outage" | "other
 
 type EstimateModalContextValue = {
   openNewEstimate: (preset?: EstimatePreset) => void;
+  newEstimateOpen: boolean;
+  newEstimatePreset: EstimatePreset;
+  closeNewEstimate: () => void;
 };
 
 const EstimateModalContext = createContext<EstimateModalContextValue | null>(null);
@@ -20,14 +23,26 @@ export function EstimateModalProvider({ children }: { children: React.ReactNode 
     setOpen(true);
   }, []);
 
-  const value = useMemo(() => ({ openNewEstimate }), [openNewEstimate]);
+  const closeNewEstimate = useCallback(() => setOpen(false), []);
 
-  return (
-    <EstimateModalContext.Provider value={value}>
-      {children}
-      {open ? <NewEstimateModal preset={preset} onClose={() => setOpen(false)} /> : null}
-    </EstimateModalContext.Provider>
+  const value = useMemo(
+    () => ({
+      openNewEstimate,
+      newEstimateOpen: open,
+      newEstimatePreset: preset,
+      closeNewEstimate,
+    }),
+    [closeNewEstimate, open, openNewEstimate, preset],
   );
+
+  return <EstimateModalContext.Provider value={value}>{children}</EstimateModalContext.Provider>;
+}
+
+/** Rendered inside the desk capture root so the open popup is in the shot. */
+export function NewEstimateHost() {
+  const { newEstimateOpen, newEstimatePreset, closeNewEstimate } = useEstimateModal();
+  if (!newEstimateOpen) return null;
+  return <NewEstimateModal preset={newEstimatePreset} onClose={closeNewEstimate} />;
 }
 
 export function useEstimateModal() {

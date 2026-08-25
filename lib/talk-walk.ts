@@ -1,4 +1,4 @@
-export const TALK_WALK_VERSION = 2;
+export const TALK_WALK_VERSION = 3;
 export const TALK_WALK_KEY = "hs_talk_walk";
 
 export const TALK_STEPS = [
@@ -16,7 +16,7 @@ export const TALK_STEPS = [
   },
   {
     title: "Attach a screen",
-    body: "Capture the screen with the note. The ticket popup hides for the shot, then comes back. Replay lives in Settings → How we talk.",
+    body: "Capture the screen with the note. Open dialogs, the New estimate popup, and the ticket stay on screen. Replay lives in Settings → How we talk.",
   },
 ] as const;
 

@@ -41,7 +41,7 @@ export function JobsDesk() {
   return (
     <div className="mt-4 space-y-4">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Outage and T&amp;M jobs loaded for this owner. Open {alias("Wood River")} for Overview /
+        Turnaround / Outage and T&amp;M jobs loaded for this owner. Open {alias("Wood River")} for Overview /
         Estimates / Change orders / People.
       </p>
       {error ? <p className="text-amber-flare">{error}</p> : null}

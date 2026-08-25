@@ -5,12 +5,49 @@ export const CAPTURE_ROOT_SELECTORS = [
   ".industrial-root",
 ] as const;
 
+export const CAPTURE_OVERLAY_CLASSES = [
+  "modal-scrim",
+  "estimate-modal",
+  "ticket-card",
+  "ticket-scrim",
+] as const;
+
+export const CAPTURE_CHROME_CLASSES = [
+  "inbox-fab",
+  "ticket-fab",
+  "inbox-card",
+  "inbox-toast",
+  "fab-note",
+  "ticket-markup",
+] as const;
+
+export const CAPTURE_OVERLAY_SELECTOR = ".modal-scrim, .estimate-modal, .ticket-card, .ticket-scrim";
+
 export function pickCaptureSelector(classNames: string[]): string {
   if (classNames.includes("data-capture-root")) return "[data-capture-root]";
   if (classNames.includes("paper-page")) return ".paper-page";
   if (classNames.includes("desk-day")) return ".desk-day";
   if (classNames.includes("industrial-root")) return ".industrial-root";
   return "body";
+}
+
+export function overlayClassesOpen(classLists: string[][]): boolean {
+  return classLists.some((list) =>
+    list.some((name) => (CAPTURE_OVERLAY_CLASSES as readonly string[]).includes(name)),
+  );
+}
+
+/** Open dialogs live outside the desk shell (portals / layout FABs). Shoot the document. */
+export function pickCaptureTarget(overlayOpen: boolean, classNames: string[] = ["data-capture-root"]) {
+  return overlayOpen ? "document-element" : pickCaptureSelector(classNames);
+}
+
+export function ignoreClassForCapture(classNames: string[], captureIgnore = false) {
+  if (classNames.some((name) => (CAPTURE_OVERLAY_CLASSES as readonly string[]).includes(name))) {
+    return false;
+  }
+  if (captureIgnore) return true;
+  return classNames.some((name) => (CAPTURE_CHROME_CLASSES as readonly string[]).includes(name));
 }
 
 function deskRoot(): HTMLElement {
@@ -21,6 +58,15 @@ function deskRoot(): HTMLElement {
   return document.body;
 }
 
+function deskOverlaysOpen() {
+  return Boolean(document.querySelector(CAPTURE_OVERLAY_SELECTOR));
+}
+
+function captureTarget(): HTMLElement {
+  if (deskOverlaysOpen()) return document.documentElement;
+  return deskRoot();
+}
+
 function paperShot(target: HTMLElement) {
   return Boolean(
     target.closest(".paper-page, .desk-day, .paper-desk") || target.classList.contains("paper-page"),
@@ -29,16 +75,12 @@ function paperShot(target: HTMLElement) {
 
 export function shouldIgnoreForCapture(el: Element) {
   if (!(el instanceof HTMLElement)) return false;
-  if (el.dataset.capture === "ignore") return true;
-  return (
-    el.classList.contains("desk-fabs") ||
-    el.classList.contains("ticket-card") ||
-    el.classList.contains("ticket-scrim") ||
-    el.classList.contains("inbox-card") ||
-    el.classList.contains("inbox-toast") ||
-    el.classList.contains("fab-note") ||
-    el.classList.contains("ticket-markup")
-  );
+  const classNames = [...el.classList];
+  if (classNames.some((name) => (CAPTURE_OVERLAY_CLASSES as readonly string[]).includes(name))) {
+    return false;
+  }
+  if (el.closest("[data-capture='ignore']")) return true;
+  return ignoreClassForCapture(classNames, el.dataset.capture === "ignore");
 }
 
 function usableShot(dataUrl: string) {
@@ -140,7 +182,7 @@ export async function shootViewport(): Promise<string> {
   await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
   await new Promise((resolve) => window.setTimeout(resolve, 180));
   try {
-    const target = deskRoot();
+    const target = captureTarget();
     try {
       const shot = await modernShot(target);
       if (usableShot(shot)) return shot;

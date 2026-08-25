@@ -74,6 +74,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
           <JobSetupCard
             type={estimate.type}
             client={alias(estimate.client)}
+            site={site?.name}
             name={estimate.title}
             otRule={boundOtLabel(site?.name ?? "", estimate.client, site?.code)}
             author={estimate.estimator}
