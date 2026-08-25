@@ -5,7 +5,6 @@ import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { GripToPan } from "@/components/GripToPan";
 import {
   CRAFT_POSITIONS,
-  CRAFT_SHIFTS,
   LISTED_POSITIONS,
   STAFF_POSITIONS,
   blankCraftRow,
@@ -13,7 +12,6 @@ import {
   cloneCraftRow,
   type CalendarRange,
   type CraftRow,
-  type CraftShift,
 } from "@/lib/craft-labor";
 import {
   clockNote,
@@ -184,6 +182,22 @@ export function CraftLaborGrid({
                   onPatch={(patch) => patchRow(row.id, patch)}
                   onAssignPosition={(position) => assignPosition(row.id, position)}
                   onPatchRange={(rangeId, patch) => patchRange(row.id, rangeId, patch)}
+                  onAddRange={(range) =>
+                    onRows((current) =>
+                      current.map((item) =>
+                        item.id === row.id ? { ...item, ranges: [...item.ranges, range] } : item,
+                      ),
+                    )
+                  }
+                  onRemoveRange={(rangeId) =>
+                    onRows((current) =>
+                      current.map((item) =>
+                        item.id === row.id
+                          ? { ...item, ranges: item.ranges.filter((range) => range.id !== rangeId) }
+                          : item,
+                      ),
+                    )
+                  }
                   onDuplicate={() => duplicatePosition(row)}
                   onRemove={() => void removePosition(row)}
                   catalog={positions}
@@ -207,6 +221,8 @@ function CraftAccordionRow({
   onPatch,
   onAssignPosition,
   onPatchRange,
+  onAddRange,
+  onRemoveRange,
   onDuplicate,
   onRemove,
   catalog,
@@ -220,6 +236,8 @@ function CraftAccordionRow({
   onPatch: (patch: Partial<CraftRow>) => void;
   onAssignPosition: (position: string) => void;
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
+  onAddRange: (range: CalendarRange) => void;
+  onRemoveRange: (rangeId: string) => void;
   onDuplicate: () => void;
   onRemove: () => void;
   catalog?: readonly string[];
@@ -248,9 +266,10 @@ function CraftAccordionRow({
               onClick={onToggle}
               title={open ? "Collapse" : "Expand"}
               aria-label={open ? "Collapse" : "Expand"}
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-[#5b6f73]"
+              className="crew-chevron"
             >
-              {open ? "▾" : "▸"}
+              <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+              <span className="crew-chevron-label">{open ? "Collapse" : "Expand"}</span>
             </button>
             <div className="min-w-[14rem]">
               <select
@@ -311,23 +330,7 @@ function CraftAccordionRow({
           </div>
         </td>
         <td className="px-2 py-2">
-          <select
-            value={row.shift}
-            onChange={(event) => {
-              const shift = event.target.value as CraftShift;
-              onPatch({
-                shift,
-                ranges: row.ranges.map((range) => clampPerDiem(range, shift)),
-              });
-            }}
-            className="paper-field"
-          >
-            {CRAFT_SHIFTS.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
+          <span className="text-sm text-[#5b6f73]">Per phase</span>
         </td>
         <td className="px-2 py-2">
           <span className="paper-field inline-flex min-h-[2.6rem] items-center">Calendar</span>
@@ -358,10 +361,7 @@ function CraftAccordionRow({
       {open ? (
         <tr>
           <td colSpan={10} className="bg-[#f4f1e8] px-4 py-4">
-            <p className="inline-block rounded-full bg-[#eadfc8] px-3 py-1 text-xs font-semibold tracking-[0.14em] text-[#163038]">
-              CALENDAR PATTERN
-            </p>
-            <p className="mt-2 text-xs text-[#163038]">{clockNote(row.position, site, client, row.clockOverride ?? "auto")}</p>
+            <p className="text-xs text-[#163038]">{clockNote(row.position, site, client, row.clockOverride ?? "auto")}</p>
             <label className="mt-2 flex items-center gap-2 text-sm text-[#163038]">
               <input
                 type="checkbox"
@@ -384,6 +384,8 @@ function CraftAccordionRow({
               client={client}
               otAfter8={otAfter8}
               onPatchRange={onPatchRange}
+              onAddRange={onAddRange}
+              onRemoveRange={onRemoveRange}
             />
           </td>
         </tr>

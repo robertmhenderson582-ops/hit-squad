@@ -1,24 +1,23 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.5.1";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.5";
+export const DESK_VERSION = "1.6.2";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.6";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.5";
+export const DESK_THREAD_ID = "th-desk-v1.6";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.5",
-  "• Pre-Turnaround has the same schedule/shift options as Post",
-  "• Ticket confirmation fades",
-  "• The button says Suggestion Box",
+  "Hit Squad Project Controls V1.6",
+  "• Each Crew position has its own five phase cards you can collapse",
+  "• Each card has a Calendar Pattern (weekdays + which Sundays)",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.5",
-  "• Job setup: Pre-Turnaround schedule picker matches Post (5×8 all ST, 5×8 OT after 8, 4×10 all ST, 4×10 OT after 8)",
-  "• Crew phase-card Shift is Days / Nights / Days & nights on every phase, including Pre. Days & nights is dual count",
-  "• Ticket-save and capture-save toasts fade after a few seconds",
-  "• The FAB says Suggestion Box",
+  "Hit Squad Project Controls V1.6",
+  "• Each Crew position owns its own Pre / Oil Out / Mechanical / Oil In / Post cards — adding a position does not share one global set",
+  "• Positions accordion: one open while working, collapsed on re-entry, add opens the new row, duplicate lands collapsed",
+  "• Each phase card has Calendar Pattern: start/end, headcount, hours/shift, Per-diem Headcount, weekday chips, Sunday date chips at the bottom",
+  "• The painted START/STOP calendar icon was dropped — native date fields stay as date fields",
 ].join("\n");
 
 const FORBIDDEN_TESTER =
