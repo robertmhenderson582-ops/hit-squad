@@ -4,10 +4,11 @@ import {
   cloneCraftRow,
   craftRowFromPhases,
   extraRangeFromPhase,
+  nextUnitId,
   rangesFromPhases,
   syncCraftRows,
 } from "./craft-labor.ts";
-import { defaultPhases } from "./phase-schedule.ts";
+import { addUnit, defaultPhaseSchedule, defaultPhases, setMultiUnits } from "./phase-schedule.ts";
 
 describe("crew ranges are per position", () => {
   it("gives each new position its own five phase ranges with unique ids", () => {
@@ -98,5 +99,29 @@ describe("crew ranges are per position", () => {
     const ranges = rangesFromPhases(phases);
     assert.equal(ranges.some((range) => range.phaseId === "oil-out"), false);
     assert.equal(ranges.length, 4);
+  });
+
+  it("tags a second date range as the next unit without cloning the position row", () => {
+    const schedule = addUnit(setMultiUnits(defaultPhaseSchedule(), true));
+    const [unitA, unitB] = schedule.units;
+    const row = craftRowFromPhases(schedule.phases, schedule.units, true);
+    assert.equal(row.ranges.filter((range) => range.phaseId === "pre").length, 1);
+    assert.equal(row.ranges.find((range) => range.phaseId === "pre")?.unitId, unitA.id);
+    const extra = extraRangeFromPhase(
+      unitB.phases.find((item) => item.id === "pre")!,
+      row.ranges.find((range) => range.phaseId === "pre"),
+      nextUnitId(schedule.units, row.ranges.filter((range) => range.phaseId === "pre")),
+    );
+    assert.equal(extra.unitId, unitB.id);
+    row.ranges.push(extra);
+    const synced = syncCraftRows([row], schedule.phases, schedule.units, true);
+    assert.equal(synced.length, 1);
+    const pres = synced[0].ranges.filter((range) => range.phaseId === "pre");
+    assert.equal(pres.length, 2);
+    assert.equal(pres[0].unitId, unitA.id);
+    assert.equal(pres[1].unitId, unitB.id);
+    const off = syncCraftRows(synced, schedule.phases, schedule.units, false);
+    assert.equal(off[0].ranges.filter((range) => range.phaseId === "pre").length, 2);
+    assert.equal(off[0].ranges.find((range) => range.phaseId === "pre")?.start, schedule.phases[0].start);
   });
 });

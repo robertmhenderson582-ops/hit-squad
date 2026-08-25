@@ -9,10 +9,16 @@ import {
 } from "@/lib/craft-labor";
 import {
   CREW_STORE_PREFIX,
+  addUnit,
   applyOtPick,
+  applyUnitOtPick,
   defaultPhaseSchedule,
   patchPhase,
+  patchUnitPhase,
   readSchedule,
+  removeUnit,
+  renameUnit,
+  setMultiUnits,
   setProjectStart,
   writeSchedule,
   type PhaseId,
@@ -46,6 +52,12 @@ type EstimatePackageApi = {
   setJobMeta: (next: JobMeta | ((current: JobMeta) => JobMeta)) => void;
   setActivities: (next: WorkActivity[] | ((current: WorkActivity[]) => WorkActivity[])) => void;
   addCraftRow: () => CraftRow;
+  setMultiUnitsOn: (on: boolean) => void;
+  addJobUnit: () => void;
+  removeJobUnit: (id: string) => void;
+  renameJobUnit: (id: string, name: string) => void;
+  patchUnit: (unitId: string, id: PhaseId, next: Partial<PhaseRow>) => void;
+  pickUnitOt: (unitId: string, id: PhaseId, pick: PhaseOtPick) => void;
 };
 
 const EstimatePackageContext = createContext<EstimatePackageApi | null>(null);
@@ -82,13 +94,16 @@ function writeCrew(key: string, crew: CrewState) {
   }
 }
 
-function syncCrew(crew: CrewState, phases: PhaseRow[]): CrewState {
+function syncCrew(crew: CrewState, schedule: PhaseScheduleState): CrewState {
+  const phases = schedule.phases;
+  const units = schedule.units ?? [];
+  const multi = Boolean(schedule.multiUnits);
   return {
     ...crew,
-    staff: syncCraftRows(crew.staff, phases),
-    generalForeman: syncCraftRows(crew.generalForeman, phases),
-    foreman: syncCraftRows(crew.foreman, phases),
-    direct: syncCraftRows(crew.direct, phases),
+    staff: syncCraftRows(crew.staff, phases, units, multi),
+    generalForeman: syncCraftRows(crew.generalForeman, phases, units, multi),
+    foreman: syncCraftRows(crew.foreman, phases, units, multi),
+    direct: syncCraftRows(crew.direct, phases, units, multi),
   };
 }
 
@@ -100,14 +115,14 @@ export function EstimatePackageProvider({
   children: React.ReactNode;
 }) {
   const [schedule, setSchedule] = useState<PhaseScheduleState>(() => readSchedule(estimateKey));
-  const [crew, setCrewState] = useState<CrewState>(() => syncCrew(readCrew(estimateKey), readSchedule(estimateKey).phases));
+  const [crew, setCrewState] = useState<CrewState>(() => syncCrew(readCrew(estimateKey), readSchedule(estimateKey)));
   const [jobMeta, setJobMetaState] = useState<JobMeta>(() => readJobMeta(estimateKey));
   const [activities, setActivitiesState] = useState<WorkActivity[]>(() => readActivities(estimateKey) ?? []);
 
   useEffect(() => {
     const next = readSchedule(estimateKey);
     setSchedule(next);
-    setCrewState(syncCrew(readCrew(estimateKey), next.phases));
+    setCrewState(syncCrew(readCrew(estimateKey), next));
     setJobMetaState(readJobMeta(estimateKey));
     setActivitiesState(readActivities(estimateKey) ?? []);
   }, [estimateKey]);
@@ -138,21 +153,59 @@ export function EstimatePackageProvider({
       setProjectStartDate(start) {
         setSchedule((current) => {
           const next = setProjectStart(current, start);
-          setCrewState((existing) => syncCrew(existing, next.phases));
+          setCrewState((existing) => syncCrew(existing, next));
           return next;
         });
       },
       patch(id, next) {
         setSchedule((current) => {
           const updated = patchPhase(current, id, next);
-          setCrewState((existing) => syncCrew(existing, updated.phases));
+          setCrewState((existing) => syncCrew(existing, updated));
           return updated;
         });
       },
       pickOt(id, pick) {
         setSchedule((current) => {
           const updated = applyOtPick(current, id, pick);
-          setCrewState((existing) => syncCrew(existing, updated.phases));
+          setCrewState((existing) => syncCrew(existing, updated));
+          return updated;
+        });
+      },
+      setMultiUnitsOn(on) {
+        setSchedule((current) => {
+          const updated = setMultiUnits(current, on);
+          setCrewState((existing) => syncCrew(existing, updated));
+          return updated;
+        });
+      },
+      addJobUnit() {
+        setSchedule((current) => {
+          const updated = addUnit(current);
+          setCrewState((existing) => syncCrew(existing, updated));
+          return updated;
+        });
+      },
+      removeJobUnit(id) {
+        setSchedule((current) => {
+          const updated = removeUnit(current, id);
+          setCrewState((existing) => syncCrew(existing, updated));
+          return updated;
+        });
+      },
+      renameJobUnit(id, name) {
+        setSchedule((current) => renameUnit(current, id, name));
+      },
+      patchUnit(unitId, id, next) {
+        setSchedule((current) => {
+          const updated = patchUnitPhase(current, unitId, id, next);
+          setCrewState((existing) => syncCrew(existing, updated));
+          return updated;
+        });
+      },
+      pickUnitOt(unitId, id, pick) {
+        setSchedule((current) => {
+          const updated = applyUnitOtPick(current, unitId, id, pick);
+          setCrewState((existing) => syncCrew(existing, updated));
           return updated;
         });
       },
@@ -166,7 +219,7 @@ export function EstimatePackageProvider({
         setActivitiesState((current) => (typeof next === "function" ? next(current) : next));
       },
       addCraftRow() {
-        return craftRowFromPhases(schedule.phases);
+        return craftRowFromPhases(schedule.phases, schedule.units, schedule.multiUnits);
       },
     }),
     [activities, crew, estimateKey, jobMeta, schedule],
@@ -191,6 +244,12 @@ export function useEstimatePackage() {
       setJobMeta() {},
       setActivities() {},
       addCraftRow: () => blankCraftRow(),
+      setMultiUnitsOn() {},
+      addJobUnit() {},
+      removeJobUnit() {},
+      renameJobUnit() {},
+      patchUnit() {},
+      pickUnitOt() {},
     } satisfies EstimatePackageApi;
   }
   return ctx;

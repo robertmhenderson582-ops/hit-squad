@@ -1,20 +1,24 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.11.1";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.11";
+export const DESK_VERSION = "1.12.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.12";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.11.1";
+export const DESK_THREAD_ID = "th-desk-v1.12";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.11",
+  "Hit Squad Project Controls V1.12",
+  "• Multiple units can be turned on in Job setup; off keeps one timeline",
   "• The extra Support tab is gone; Support stays on Crew",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.11",
-  "• The extra Support estimate tab is gone; the dead page is deleted",
-  "• Support stays on Crew (Position duty / Billed as craft rate)",
+  "Hit Squad Project Controls V1.12",
+  "• Multiple units is a Job setup toggle, default off",
+  "• Off keeps today’s single five-phase timeline",
+  "• On: each unit has the same five locked phases with its own dates",
+  "• Crew stays one position and five phase cards — a second unit is a second date range, not a cloned Staff row",
+  "• The extra Support estimate tab is gone; Support stays on Crew",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

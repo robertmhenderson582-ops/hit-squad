@@ -8,6 +8,7 @@ import {
   WEEKDAYS,
   clampPerDiem,
   extraRangeFromPhase,
+  nextUnitId,
   nightPerDiemCap,
   perDiemCap,
   type CalendarRange,
@@ -15,7 +16,15 @@ import {
   type CraftShift,
 } from "@/lib/craft-labor";
 import { computeRangeHours } from "@/lib/hours-clock";
-import { PHASE_IDS, PHASE_NAMES, PHASE_TONES, sundaysInRange, type PhaseId, type PhaseRow } from "@/lib/phase-schedule";
+import {
+  PHASE_IDS,
+  PHASE_NAMES,
+  PHASE_TONES,
+  sundaysInRange,
+  type JobUnit,
+  type PhaseId,
+  type PhaseRow,
+} from "@/lib/phase-schedule";
 
 export function CrewPhaseCards({
   row,
@@ -33,6 +42,8 @@ export function CrewPhaseCards({
   onRemoveRange: (rangeId: string) => void;
 }) {
   const pack = useEstimatePackage();
+  const multi = Boolean(pack.schedule.multiUnits);
+  const units = pack.schedule.units ?? [];
 
   return (
     <GripToPan className="mt-3">
@@ -40,7 +51,11 @@ export function CrewPhaseCards({
         {PHASE_IDS.map((id) => {
           const phase = pack.schedule.phases.find((item) => item.id === id);
           const ranges = row.ranges.filter((item) => item.phaseId === id);
-          if (!phase) return null;
+          const unitOn = multi && units.some((unit) => unit.phases.find((item) => item.id === id)?.on);
+          if (!phase || (!phase.on && !unitOn)) return null;
+          const nextId = multi ? nextUnitId(units, ranges) : undefined;
+          const source =
+            (nextId && units.find((unit) => unit.id === nextId)?.phases.find((item) => item.id === id)) || phase;
           return (
             <PhaseWindowCard
               key={id}
@@ -49,8 +64,9 @@ export function CrewPhaseCards({
               row={row}
               site={site}
               client={client}
+              units={multi ? units : []}
               onPatchRange={onPatchRange}
-              onAddRange={() => onAddRange(extraRangeFromPhase(phase, ranges[0]))}
+              onAddRange={() => onAddRange(extraRangeFromPhase(source, ranges[0], nextId))}
               onRemoveRange={onRemoveRange}
             />
           );
@@ -74,6 +90,7 @@ function PhaseWindowCard({
   onPatchRange,
   onAddRange,
   onRemoveRange,
+  units,
 }: {
   phase: PhaseRow;
   ranges: CalendarRange[];
@@ -83,8 +100,9 @@ function PhaseWindowCard({
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
   onAddRange: () => void;
   onRemoveRange: (rangeId: string) => void;
+  units: JobUnit[];
 }) {
-  const off = !phase.on || ranges.length === 0;
+  const off = ranges.length === 0 && !phase.on;
 
   return (
     <article className={`crew-phase-card ${off ? "is-off" : ""}`}>
@@ -103,6 +121,7 @@ function PhaseWindowCard({
                 client={client}
                 phaseOtAfter8={phase.otAfter8}
                 canRemove={index > 0}
+                units={units}
                 onPatch={(patch) => onPatchRange(range.id, patch)}
                 onRemove={() => onRemoveRange(range.id)}
               />
@@ -134,6 +153,7 @@ function CalendarPattern({
   client,
   phaseOtAfter8,
   canRemove,
+  units,
   onPatch,
   onRemove,
 }: {
@@ -143,6 +163,7 @@ function CalendarPattern({
   client: string;
   phaseOtAfter8: boolean;
   canRemove: boolean;
+  units: JobUnit[];
   onPatch: (patch: Partial<CalendarRange>) => void;
   onRemove: () => void;
 }) {
@@ -191,6 +212,28 @@ function CalendarPattern({
         </div>
       ) : null}
       <p className="text-xs text-[#163038]">Headcount × shift hours on each selected weekday in the range.</p>
+      {units.length > 0 ? (
+        <label className="text-xs">
+          Unit
+          <select
+            value={range.unitId ?? ""}
+            aria-label="Unit"
+            onChange={(event) => {
+              const unitId = event.target.value || undefined;
+              const tagged = units.find((unit) => unit.id === unitId)?.phases.find((item) => item.id === range.phaseId);
+              onPatch(tagged ? { unitId, start: tagged.start, end: tagged.stop } : { unitId });
+            }}
+            className="paper-field mt-1"
+          >
+            <option value="">Select unit</option>
+            {units.map((unit) => (
+              <option key={unit.id} value={unit.id}>
+                {unit.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <div className="grid grid-cols-2 gap-2">
         <div className="text-xs">
           Start

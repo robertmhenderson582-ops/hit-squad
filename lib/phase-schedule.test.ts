@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  addUnit,
   applyOtPick,
   cascadePhases,
   defaultPhaseSchedule,
@@ -8,6 +9,7 @@ import {
   otPicksForPhase,
   patchPhase,
   PHASE_OT_PICKS,
+  setMultiUnits,
   setProjectStart,
   workedDays,
 } from "./phase-schedule.ts";
@@ -129,5 +131,27 @@ describe("phase schedule", () => {
     assert.equal(saved.phases[1].name, "Oil Out");
     const packed = cascadePhases(saved.phases);
     assert.equal(packed[1].start, "2026-08-29");
+    assert.equal(saved.multiUnits, false);
+    assert.deepEqual(saved.units, []);
+  });
+
+  it("Multiple units is off by default and does not clone the job timeline until turned on", () => {
+    const start = defaultPhaseSchedule();
+    assert.equal(start.multiUnits, false);
+    assert.equal(start.units.length, 0);
+    const on = setMultiUnits(start, true);
+    assert.equal(on.multiUnits, true);
+    assert.equal(on.units.length, 1);
+    assert.equal(on.units[0].name, "Unit 1");
+    assert.deepEqual(
+      on.units[0].phases.map((row) => row.id),
+      ["pre", "oil-out", "mech", "oil-in", "post"],
+    );
+    const two = addUnit(on);
+    assert.equal(two.units.length, 2);
+    const off = setMultiUnits(two, false);
+    assert.equal(off.multiUnits, false);
+    assert.equal(off.units.length, 2);
+    assert.equal(off.phases.find((row) => row.id === "pre")?.start, two.units[0].phases[0].start);
   });
 });
