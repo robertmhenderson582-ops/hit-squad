@@ -1,0 +1,105 @@
+"use client";
+
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { aliasText, shouldApplyAliases } from "@/lib/catalog-aliases";
+import {
+  aliasLensFor,
+  type FollowSeat,
+  type OwnerSettings,
+  type ViewAsSeat,
+} from "@/lib/owner-desk";
+
+type OwnerDeskState = {
+  aliasesOn: boolean;
+  followSeat: FollowSeat;
+  viewAs: ViewAsSeat;
+  setAliasesOn: (on: boolean) => void;
+  setFollowSeat: (seat: FollowSeat) => void;
+  setViewAs: (seat: ViewAsSeat) => void;
+  alias: (text: string) => string;
+  applyingAliases: boolean;
+};
+
+const OwnerDeskContext = createContext<OwnerDeskState | null>(null);
+
+async function saveSettings(next: Partial<OwnerSettings>) {
+  await fetch("/api/desk/owner-settings", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(next),
+  }).catch(() => undefined);
+}
+
+async function noteFeature(detail: string) {
+  await fetch("/api/desk/activity", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "feature", detail }),
+  }).catch(() => undefined);
+}
+
+export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
+  const [aliasesOn, setAliasesOnState] = useState(true);
+  const [followSeat, setFollowSeatState] = useState<FollowSeat>("owner");
+  const [viewAs, setViewAsState] = useState<ViewAsSeat>("owner");
+
+  useEffect(() => {
+    fetch("/api/desk/owner-settings", { credentials: "include", cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (typeof data.aliasesOn === "boolean") setAliasesOnState(data.aliasesOn);
+        if (data.followSeat) setFollowSeatState(data.followSeat);
+        if (data.viewAs) setViewAsState(data.viewAs);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const applyingAliases = shouldApplyAliases(aliasesOn, aliasLensFor(followSeat));
+
+  const setAliasesOn = useCallback((on: boolean) => {
+    setAliasesOnState(on);
+    saveSettings({ aliasesOn: on });
+    noteFeature(on ? "Aliases catalog on for testers" : "Aliases catalog off");
+  }, []);
+
+  const setFollowSeat = useCallback((seat: FollowSeat) => {
+    setFollowSeatState(seat);
+    saveSettings({ followSeat: seat });
+    noteFeature(seat === "owner" ? "Stopped Follow" : `Follow ${seat} screen`);
+  }, []);
+
+  const setViewAs = useCallback((seat: ViewAsSeat) => {
+    setViewAsState(seat);
+    saveSettings({ viewAs: seat });
+    noteFeature(seat === "owner" ? "View as owner" : "View as Joseph (look & feel lens)");
+  }, []);
+
+  const alias = useCallback((text: string) => aliasText(text, aliasesOn, aliasLensFor(followSeat)), [aliasesOn, followSeat]);
+
+  const value = useMemo<OwnerDeskState>(
+    () => ({
+      aliasesOn,
+      followSeat,
+      viewAs,
+      setAliasesOn,
+      setFollowSeat,
+      setViewAs,
+      alias,
+      applyingAliases,
+    }),
+    [aliasesOn, followSeat, viewAs, setAliasesOn, setFollowSeat, setViewAs, alias, applyingAliases],
+  );
+
+  return <OwnerDeskContext.Provider value={value}>{children}</OwnerDeskContext.Provider>;
+}
+
+export function useOwnerDesk() {
+  return useContext(OwnerDeskContext);
+}
+
+export function useAlias() {
+  const ctx = useContext(OwnerDeskContext);
+  return ctx?.alias ?? ((text: string) => text);
+}

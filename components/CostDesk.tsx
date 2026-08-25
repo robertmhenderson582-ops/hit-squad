@@ -1,5 +1,7 @@
 "use client";
 
+import { CrewManHours } from "@/components/CrewManHours";
+import { LaborRollup } from "@/components/LaborRollup";
 import { ModuleTable } from "@/components/ModuleTable";
 import { useDeskBoard } from "@/components/useDeskBoard";
 
@@ -9,11 +11,14 @@ export function CostDesk() {
 
   return (
     <div className="mt-4 space-y-5">
-      <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
-        Period progress / earned-value blotter. Budget, earned, and actual stay scoped to the
-        signed-in owner.
+      <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
+        Cost report: EST HOURS / HOURS EARNED / REMAINING, then Crew & man-hours. Workbook math stays
+        stubbed.
       </p>
-      {error ? <p className="text-amber-label">{error}</p> : null}
+      {error ? <p className="text-amber-flare">{error}</p> : null}
+      <LaborRollup />
+      <h2 className="font-display text-2xl font-semibold text-[#163038]">Crew & man-hours</h2>
+      <CrewManHours />
       <ModuleTable
         caption="COST / PPR — WEEKLY EARNED VALUE"
         headers={["ESTIMATE", "PERIOD", "BUDGET", "EARNED", "ACTUAL", "CPI", "SPI", "FORECAST", "NOTE"]}

@@ -2,19 +2,19 @@
 
 import { AuthGate } from "@/components/AuthGate";
 import { DeskChrome } from "@/components/DeskChrome";
-import { UsersAdmin } from "@/components/UsersAdmin";
+import { InboxDesk } from "@/components/InboxDesk";
 import { useSession } from "@/components/SessionProvider";
 
-export default function UsersPage() {
+export default function InboxPage() {
   const { user } = useSession();
 
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="USERS">
+      <DeskChrome title="INBOX" hideTitle>
         {user?.role === "owner" ? (
-          <UsersAdmin />
+          <InboxDesk />
         ) : (
-          <p className="mt-4 text-[#5b6f73]">Owner desk only.</p>
+          <p className="mt-4 text-[#5b6f73]">Owner desk only. Testers do not see each other.</p>
         )}
       </DeskChrome>
     </AuthGate>

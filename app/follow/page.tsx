@@ -2,19 +2,19 @@
 
 import { AuthGate } from "@/components/AuthGate";
 import { DeskChrome } from "@/components/DeskChrome";
-import { UsersAdmin } from "@/components/UsersAdmin";
+import { FollowDesk } from "@/components/FollowDesk";
 import { useSession } from "@/components/SessionProvider";
 
-export default function UsersPage() {
+export default function FollowPage() {
   const { user } = useSession();
 
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="USERS">
+      <DeskChrome title="FOLLOW">
         {user?.role === "owner" ? (
-          <UsersAdmin />
+          <FollowDesk />
         ) : (
-          <p className="mt-4 text-[#5b6f73]">Owner desk only.</p>
+          <p className="mt-4 text-[#5b6f73]">Owner desk only. Joseph cannot use Follow.</p>
         )}
       </DeskChrome>
     </AuthGate>
