@@ -52,10 +52,17 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
   }
 
   return (
-    <EstimateWorkspace crumb={`${alias(site?.name ?? estimate.unit)} / ${estimate.title}`} tab={tab} onTab={setTab}>
+    <EstimateWorkspace
+      crumb={`${alias(site?.name ?? estimate.unit)} / ${estimate.title}`}
+      tab={tab}
+      onTab={setTab}
+      client={alias(estimate.client)}
+      name={estimate.title}
+      total={estimate.total}
+    >
       {tab === "summary" ? (
         <section className="plant-card mx-auto max-w-3xl px-6 py-6">
-          <h1 className="text-3xl font-semibold text-[#163038]">Project</h1>
+          <h1 className="text-3xl font-semibold text-[#163038]">Job setup</h1>
           <div className="mt-5 flex flex-wrap gap-2">
             <span className="pill bg-steel text-white">Existing customer</span>
             <span className="pill border border-[#c5d4d4] bg-white">New / potential client</span>
@@ -79,8 +86,25 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
             <input readOnly value={estimate.title} className="paper-field mt-2" />
           </label>
           <p className="mt-4 text-sm text-[#5b6f73]">
-            {estimate.code} · {estimate.window} · {estimate.total} · <StatusStamp value={estimate.status} />
+            {estimate.code} · {estimate.window} · Dollars stay on the rail.
           </p>
+          <div className="mt-6">
+            <p className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">TRAVEL</p>
+            <table className="mt-2 min-w-full text-left text-sm">
+              <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
+                <tr>
+                  <th className="py-2">ITEM</th>
+                  <th className="py-2">Mileage Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-t border-[#d5e0de]">
+                  <td className="py-2">Craft travel</td>
+                  <td className="py-2">—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
       ) : null}
 

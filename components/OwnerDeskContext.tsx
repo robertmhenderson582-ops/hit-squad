@@ -85,7 +85,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
   const setViewAs = useCallback((seat: ViewAsSeat) => {
     setViewAsState(seat);
     saveSettings({ viewAs: seat });
-    noteFeature(seat === "owner" ? "View as owner" : "View as Joseph later");
+    noteFeature(seat === "owner" ? "View as owner" : `View as ${seat}`);
   }, []);
 
   const setViewLens = useCallback((responsibility: ViewResponsibility, site: string) => {
