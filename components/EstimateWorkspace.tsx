@@ -6,13 +6,20 @@ import { BrandMark } from "@/components/BrandMark";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 
 const TABS = [
-  { id: "summary", label: "Summary" },
-  { id: "activities", label: "Activities" },
-  { id: "crew", label: "Crew" },
-  { id: "staffing", label: "Staffing" },
-  { id: "equipment", label: "Equipment" },
-  { id: "costs", label: "Costs" },
-  { id: "change-orders", label: "Change orders" },
+  { id: "summary", label: "Summary", icon: "📄" },
+  { id: "activities", label: "Activities", icon: "∿" },
+  { id: "crew", label: "Crew", icon: "⛑" },
+  { id: "staffing", label: "Staffing", icon: "▦" },
+  { id: "equipment", label: "Equipment", icon: "⛟" },
+  { id: "costs", label: "Costs", icon: "▤" },
+  { id: "change-orders", label: "Change orders", icon: "⚖" },
+] as const;
+
+const ACTIONS = [
+  { id: "team", label: "Team" },
+  { id: "undo", label: "Undo" },
+  { id: "export", label: "Export" },
+  { id: "duplicate", label: "Duplicate" },
 ] as const;
 
 export type EstimateTab = (typeof TABS)[number]["id"];
@@ -43,9 +50,9 @@ export function EstimateWorkspace({
             <p className="truncate text-sm text-white/70">{crumb}</p>
           </div>
           <div className="flex flex-wrap gap-2 text-sm">
-            {["Team", "Undo", "Export", "Duplicate"].map((action) => (
-              <button key={action} type="button" className="rounded border border-white/20 px-3 py-1.5 text-white/90">
-                {action}
+            {ACTIONS.map((action) => (
+              <button key={action.id} type="button" className="rounded border border-white/20 px-3 py-1.5 text-white/90">
+                {action.label}
               </button>
             ))}
             <button
@@ -67,6 +74,9 @@ export function EstimateWorkspace({
                 tab === item.id ? "bg-[#0f5f6d] text-white" : "text-white/75 hover:text-white"
               }`}
             >
+              <span className="mr-1.5 opacity-80" aria-hidden="true">
+                {item.icon}
+              </span>
               {item.label}
             </button>
           ))}

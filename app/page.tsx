@@ -7,7 +7,7 @@ import { DeskHome } from "@/components/DeskHome";
 export default function DeskPage() {
   return (
     <AuthGate require="authenticated">
-      <DeskChrome title="THE DESK">
+      <DeskChrome title="THE DESK" hideTitle>
         <DeskHome />
       </DeskChrome>
     </AuthGate>

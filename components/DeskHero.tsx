@@ -5,13 +5,13 @@ import { BrandMark } from "@/components/BrandMark";
 
 export function DeskHero() {
   return (
-    <section className="desk-hero paper-grain px-4 py-12 text-center sm:py-16">
+    <section className="desk-hero desk-hero-bleed paper-grain px-4 py-16 text-center sm:py-20">
       <div className="relative z-10">
-        <BrandMark className="mx-auto h-12 w-12 drop-shadow-[0_0_12px_rgba(62,198,212,0.55)]" />
+        <BrandMark variant="stacked" className="mx-auto h-14 w-10 drop-shadow-[0_0_12px_rgba(255,255,255,0.35)]" />
         <p className="mt-3 font-display text-5xl font-semibold tracking-[0.16em] text-white sm:text-6xl">
           HIT SQUAD
         </p>
-        <p className="mt-2 font-display text-xl font-semibold tracking-[0.55em] text-steel sm:text-2xl">
+        <p className="mt-2 font-display text-xl font-semibold tracking-[0.48em] text-[#0f5f6d] [text-shadow:0_1px_12px_rgba(62,198,212,0.45)] sm:text-2xl">
           ESTIMATORS
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-5">

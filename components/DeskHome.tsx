@@ -47,7 +47,7 @@ export function DeskHome() {
   };
 
   return (
-    <div className="mt-5 space-y-6">
+    <div className="space-y-6">
       <DeskHero />
       <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
         Owner blotter for Madison / P66 outage, T&amp;M, cost, and HSE. Records stay with the

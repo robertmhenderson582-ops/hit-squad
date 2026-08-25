@@ -12,6 +12,8 @@ export function UsersAdmin() {
   const [email, setEmail] = useState("");
   const [permission, setPermission] = useState<RosterPermission>("Staff — estimates only");
   const [expires, setExpires] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   async function load() {
     const response = await fetch("/api/desk/roster", { credentials: "include", cache: "no-store" });
@@ -31,6 +33,7 @@ export function UsersAdmin() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Password stays on this form only. Never sent to auth or the roster API.
     const response = await fetch("/api/desk/roster", {
       method: "POST",
       credentials: "include",
@@ -47,6 +50,7 @@ export function UsersAdmin() {
     setUsername("");
     setEmail("");
     setExpires("");
+    setPassword("");
   }
 
   async function resetTesters() {
@@ -96,6 +100,26 @@ export function UsersAdmin() {
               onChange={(event) => setEmail(event.target.value)}
               className="paper-field mt-1"
             />
+          </label>
+          <label>
+            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">PASSWORD</span>
+            <span className="relative mt-1 block">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="paper-field pr-10"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((open) => !open)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-[#5b6f73]"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? "●" : "○"}
+              </button>
+            </span>
           </label>
           <label>
             <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">PERMISSION</span>

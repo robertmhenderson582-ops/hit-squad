@@ -26,10 +26,12 @@ export function DeskChrome({
   children,
   title,
   kicker = "FORGEBOOK",
+  hideTitle = false,
 }: {
   children: React.ReactNode;
   title: string;
   kicker?: string;
+  hideTitle?: boolean;
 }) {
   const pathname = usePathname();
   const { user, signOut } = useSession();
@@ -85,8 +87,12 @@ export function DeskChrome({
         </header>
 
         <main className="mt-5">
-          <p className="font-mono text-[10px] tracking-[0.32em] text-amber-label">{kicker}</p>
-          <h1 className="mt-1 font-display text-3xl tracking-[0.12em] text-paper-cream">{title}</h1>
+          {hideTitle ? null : (
+            <>
+              <p className="font-mono text-[10px] tracking-[0.32em] text-amber-label">{kicker}</p>
+              <h1 className="mt-1 font-display text-3xl tracking-[0.12em] text-paper-cream">{title}</h1>
+            </>
+          )}
           {children}
         </main>
       </div>
