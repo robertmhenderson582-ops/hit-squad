@@ -56,7 +56,7 @@ body {
   width: 100%;
   height: min(52vh, 430px);
   object-fit: cover;
-  object-position: center 42%;
+  object-position: center 48%;
 }
 
 .login-og-mark {
@@ -173,10 +173,10 @@ textarea:focus {
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  min-height: 460px;
+  min-height: 500px;
   background:
-    radial-gradient(58% 46% at 50% 28%, rgba(6, 22, 26, 0.12) 0%, rgba(6, 22, 26, 0.28) 55%, rgba(6, 22, 26, 0.78) 100%),
-    url("/brand-hero.jpg") center 22% / cover no-repeat #06161a;
+    radial-gradient(70% 58% at 50% 42%, rgba(6, 22, 26, 0.1) 0%, rgba(6, 22, 26, 0.28) 58%, rgba(6, 22, 26, 0.72) 100%),
+    url("/brand-hero.jpg") center 48% / cover no-repeat #06161a;
 }
 
 .desk-hero::before,
