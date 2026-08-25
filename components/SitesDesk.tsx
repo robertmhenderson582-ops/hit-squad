@@ -1,47 +1,71 @@
 "use client";
 
 import Link from "next/link";
-import { useAlias } from "@/components/OwnerDeskContext";
+import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useDeskBoard } from "@/components/useDeskBoard";
+import type { SiteRecord } from "@/lib/types";
+
+function slugFor(site: SiteRecord) {
+  return site.name.toLowerCase().replace(/\s+/g, "-");
+}
+
+function assignedZero(site: SiteRecord, viewSite?: string) {
+  if (!viewSite) return false;
+  return viewSite.toLowerCase().includes(site.name.toLowerCase()) && site.openJobs === 0;
+}
 
 export function SitesDesk() {
   const { board, error } = useDeskBoard();
   const alias = useAlias();
-  const georgia = (board?.sites ?? []).filter((site) => site.family === "Georgia Power");
-  const p66 = (board?.sites ?? []).filter((site) => site.family === "Phillips 66" && !site.id.includes("coker"));
+  const owner = useOwnerDesk();
+  const all = (board?.sites ?? []).filter((site) => !site.id.includes("coker"));
+  const visible = all.filter((site) => site.openJobs > 0 || assignedZero(site, owner?.viewSite));
+  const noneOpen = all.every((site) => site.openJobs === 0);
+  const georgia = visible.filter((site) => site.family === "Georgia Power");
+  const p66 = visible.filter((site) => site.family === "Phillips 66");
 
   return (
     <div className="paper-desk -mx-3 mt-5 rounded-sm px-4 py-6 sm:-mx-4 sm:px-6">
       <h2 className="text-3xl font-semibold text-[#163038]">{alias("Madison")}</h2>
       {error ? <p className="mt-3 text-amber-flare">{error}</p> : null}
+      {noneOpen ? (
+        <p className="mt-4 max-w-3xl text-sm text-[#5b6f73]">
+          A client or plant shows up here once an estimate starts. A plant only lists once it has
+          work. A PM still sees their assigned site at zero jobs.
+        </p>
+      ) : null}
 
-      <p className="mt-8 text-xs font-semibold tracking-[0.22em] text-[#5b6f73]">{alias("Georgia Power").toUpperCase()}</p>
-      <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {georgia.map((site) => (
-          <Link key={site.id} href="/jobs/yates" className="plant-card block px-5 py-5">
-            <p className="text-xl font-semibold text-[#163038]">{alias(site.name)}</p>
-            <p className="mt-1 text-sm text-[#5b6f73]">
-              {alias(site.city)} · {site.openJobs} open jobs
-            </p>
-          </Link>
-        ))}
-      </div>
+      {georgia.length ? (
+        <>
+          <p className="mt-8 text-xs font-semibold tracking-[0.22em] text-[#5b6f73]">{alias("Georgia Power").toUpperCase()}</p>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {georgia.map((site) => (
+              <Link key={site.id} href="/jobs/yates" className="plant-card block px-5 py-5">
+                <p className="text-xl font-semibold text-[#163038]">{alias(site.name)}</p>
+                <p className="mt-1 text-sm text-[#5b6f73]">
+                  {alias(site.city)} · {site.openJobs} open jobs
+                </p>
+              </Link>
+            ))}
+          </div>
+        </>
+      ) : null}
 
-      <p className="mt-10 text-xs font-semibold tracking-[0.22em] text-[#5b6f73]">{alias("Phillips 66").toUpperCase()}</p>
-      <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {p66.map((site) => (
-          <Link
-            key={site.id}
-            href={`/jobs/${site.name.toLowerCase().replace(/\s+/g, "-")}`}
-            className="plant-card block px-5 py-5"
-          >
-            <p className="text-xl font-semibold text-[#163038]">{alias(site.name)}</p>
-            <p className="mt-1 text-sm text-[#5b6f73]">
-              {alias(site.city)} · {site.openJobs} open jobs
-            </p>
-          </Link>
-        ))}
-      </div>
+      {p66.length ? (
+        <>
+          <p className="mt-10 text-xs font-semibold tracking-[0.22em] text-[#5b6f73]">{alias("Phillips 66").toUpperCase()}</p>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {p66.map((site) => (
+              <Link key={site.id} href={`/jobs/${slugFor(site)}`} className="plant-card block px-5 py-5">
+                <p className="text-xl font-semibold text-[#163038]">{alias(site.name)}</p>
+                <p className="mt-1 text-sm text-[#5b6f73]">
+                  {alias(site.city)} · {site.openJobs} open jobs
+                </p>
+              </Link>
+            ))}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

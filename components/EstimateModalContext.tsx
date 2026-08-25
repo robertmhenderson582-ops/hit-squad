@@ -3,17 +3,19 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { NewEstimateModal } from "@/components/NewEstimateModal";
 
+type EstimatePreset = { client?: string; site?: string; size?: "outage" | "other" | "shop"; knownPlant?: boolean };
+
 type EstimateModalContextValue = {
-  openNewEstimate: (preset?: { client?: string; site?: string }) => void;
+  openNewEstimate: (preset?: EstimatePreset) => void;
 };
 
 const EstimateModalContext = createContext<EstimateModalContextValue | null>(null);
 
 export function EstimateModalProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [preset, setPreset] = useState<{ client?: string; site?: string }>({});
+  const [preset, setPreset] = useState<EstimatePreset>({});
 
-  const openNewEstimate = useCallback((next?: { client?: string; site?: string }) => {
+  const openNewEstimate = useCallback((next?: EstimatePreset) => {
     setPreset(next ?? {});
     setOpen(true);
   }, []);
