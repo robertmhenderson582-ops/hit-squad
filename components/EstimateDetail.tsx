@@ -111,30 +111,6 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
         <StaffingPlanDesk client={estimate.client} site={site?.name} name={estimate.title} />
       ) : null}
 
-      {tab === "support" ? (
-        <div className="space-y-3">
-          <h2 className="font-display text-2xl font-semibold text-[#163038]">Support</h2>
-          <p className="text-sm text-[#5b6f73]">
-            <span className="font-semibold text-[#163038]">Billed as</span> is the craft rate (for
-            example Boilermaker Journeyman).{" "}
-            <span className="font-semibold text-[#163038]">Position</span> is the duty (for example
-            Tool Room Attendant). Print shows the duty and “billed as”. Look only — this split stays
-            on Support, not on Direct Craft. The Staffing tab is the generated P66 plan.
-          </p>
-          <ModuleTable caption="SUPPORT" headers={["BILLED AS", "POSITION", "DAYS", "SHIFT", "HEADCOUNT"]}>
-            {staffing.map((row) => (
-              <tr key={row.id} className="border-t border-steel-rim/20">
-                <td className="px-4 py-3">{row.billedAs}</td>
-                <td className="px-4 py-3">{row.position}</td>
-                <td className="px-4 py-3">{row.days}</td>
-                <td className="px-4 py-3 font-mono text-xs">{row.shift}</td>
-                <td className="px-4 py-3 font-mono">{row.headcount}</td>
-              </tr>
-            ))}
-          </ModuleTable>
-        </div>
-      ) : null}
-
       {tab === "equipment" ? (
         <ModuleTable caption="EQUIPMENT" headers={["ITEM", "QTY", "PERIOD", "RATE"]}>
           {equipment.map((row) => (

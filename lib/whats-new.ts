@@ -1,27 +1,20 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.11.0";
+export const DESK_VERSION = "1.11.1";
 export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.11";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.11";
+export const DESK_THREAD_ID = "th-desk-v1.11.1";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
   "Hit Squad Project Controls V1.11",
-  "• Staff and Direct Craft are picker only; OT after 8 is on Job setup",
-  "• New estimate Crew starts empty",
-  "• Add date range adds a second stretch on the same phase",
+  "• The extra Support tab is gone; Support stays on Crew",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
   "Hit Squad Project Controls V1.11",
-  "• Shared Crew OT after 8 checkbox is gone — one check was flipping every lane",
-  "• Hours follow the Job setup phase OT pick plus Calendar Pattern",
-  "• Direct Craft has no OT-after-8 option — CBA is time and a half after 8",
-  "• Staff, GF, Foreman, and Direct Craft are picker only — no Position title",
-  "• Support Position can be typed after Type a title…; Billed as stays a craft-rate picker",
-  "• New estimate Crew starts empty; existing filled estimates stay",
-  "• Add date range adds a second stretch on the same phase",
+  "• The extra Support estimate tab is gone; the dead page is deleted",
+  "• Support stays on Crew (Position duty / Billed as craft rate)",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

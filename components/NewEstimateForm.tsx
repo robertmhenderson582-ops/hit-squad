@@ -98,18 +98,6 @@ function NewEstimateDesk({
       {tab === "activities" ? <WorkActivitiesDesk client={client} site={site} /> : null}
       {tab === "crew" ? <EstimateWorkbook client={client} site={site} name={name} /> : null}
       {tab === "staffing" ? <StaffingPlanDesk client={client} site={site} name={name} /> : null}
-      {tab === "support" ? (
-        <div className="space-y-3">
-          <h2 className="font-display text-2xl font-semibold text-[#163038]">Support</h2>
-          <p className="text-sm text-[#5b6f73]">
-            Support is the duty split. Direct Craft stays empty until you add a position. The
-            Staffing tab is the generated P66 plan.
-          </p>
-          <ModuleTable caption="SUPPORT" headers={["BILLED AS", "POSITION", "DAYS", "SHIFT", "HEADCOUNT"]}>
-            {null}
-          </ModuleTable>
-        </div>
-      ) : null}
       {tab === "equipment" ? (
         <ModuleTable caption="EQUIPMENT" headers={["ITEM", "QTY", "PERIOD", "RATE"]}>{null}</ModuleTable>
       ) : null}
