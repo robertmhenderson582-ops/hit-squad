@@ -89,11 +89,11 @@ export function DeskFabs() {
   async function capture() {
     setHiddenForShot(true);
     setTicketOpen(false);
-    await new Promise((resolve) => window.setTimeout(resolve, 200));
+    await new Promise((resolve) => window.setTimeout(resolve, 280));
     try {
       const shot = await Promise.race([
         shootViewport(),
-        new Promise<string>((resolve) => window.setTimeout(() => resolve(""), 8000)),
+        new Promise<string>((resolve) => window.setTimeout(() => resolve(""), 20000)),
       ]);
       if (shot) persist({ ...draft, capture: shot });
       setNote(shot ? "Capture attached. Capture stays off Inbox." : "Capture could not grab the desk. Try again.");

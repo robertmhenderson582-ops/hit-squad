@@ -1,29 +1,9 @@
-type CaptureOpts = {
-  ignore?: (el: Element) => boolean;
-};
-
-async function html2canvasShot(opts: CaptureOpts): Promise<string> {
-  const html2canvas = (await import("html2canvas")).default;
-  const width = Math.min(window.innerWidth, 1600);
-  const height = Math.min(window.innerHeight, 1000);
-  const canvas = await html2canvas(document.documentElement, {
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: "#06161a",
-    scale: Math.min(2, window.devicePixelRatio || 1),
-    width,
-    height,
-    windowWidth: window.innerWidth,
-    windowHeight: window.innerHeight,
-    x: window.scrollX,
-    y: window.scrollY,
-    ignoreElements: (el) => Boolean(opts.ignore?.(el)),
-  });
-  return canvas.toDataURL("image/jpeg", 0.82);
-}
-
-function looksLikeStamp(dataUrl: string) {
-  return !dataUrl || dataUrl.length < 800;
+function deskRoot(): HTMLElement {
+  return (
+    (document.querySelector(".paper-desk") as HTMLElement | null) ||
+    (document.querySelector(".industrial-root") as HTMLElement | null) ||
+    document.body
+  );
 }
 
 export function shouldIgnoreForCapture(el: Element) {
@@ -37,6 +17,46 @@ export function shouldIgnoreForCapture(el: Element) {
     el.classList.contains("inbox-toast") ||
     el.classList.contains("fab-note")
   );
+}
+
+function usableShot(dataUrl: string) {
+  return Boolean(dataUrl && dataUrl.startsWith("data:image/") && dataUrl.length > 2000);
+}
+
+async function modernShot(target: HTMLElement): Promise<string> {
+  const { domToJpeg } = await import("modern-screenshot");
+  const width = Math.min(window.innerWidth, 1600);
+  const height = Math.min(window.innerHeight, 1000);
+  return domToJpeg(target, {
+    quality: 0.82,
+    scale: 1,
+    width,
+    height,
+    backgroundColor: target.classList.contains("paper-desk") ? "#d5e4e2" : "#06161a",
+    filter: (el) => !(el instanceof Element) || !shouldIgnoreForCapture(el),
+  });
+}
+
+async function html2canvasShot(target: HTMLElement): Promise<string> {
+  const mod = await import("html2canvas");
+  const html2canvas = mod.default;
+  const width = Math.min(window.innerWidth, target.clientWidth || window.innerWidth, 1600);
+  const height = Math.min(window.innerHeight, target.clientHeight || window.innerHeight, 1000);
+  const canvas = await html2canvas(target, {
+    logging: false,
+    useCORS: true,
+    allowTaint: false,
+    backgroundColor: target.classList.contains("paper-desk") ? "#d5e4e2" : "#06161a",
+    scale: 1,
+    width,
+    height,
+    windowWidth: window.innerWidth,
+    windowHeight: window.innerHeight,
+    scrollX: 0,
+    scrollY: 0,
+    ignoreElements: (el) => shouldIgnoreForCapture(el),
+  });
+  return canvas.toDataURL("image/jpeg", 0.82);
 }
 
 export async function burnCaption(dataUrl: string, caption: string): Promise<string> {
@@ -66,12 +86,22 @@ export async function burnCaption(dataUrl: string, caption: string): Promise<str
 
 export async function shootViewport(): Promise<string> {
   if (typeof window === "undefined") return "";
+  document.documentElement.classList.add("hs-capturing");
   await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
-  await new Promise((resolve) => window.setTimeout(resolve, 160));
+  await new Promise((resolve) => window.setTimeout(resolve, 180));
   try {
-    const dataUrl = await html2canvasShot({ ignore: shouldIgnoreForCapture });
-    return looksLikeStamp(dataUrl) ? "" : dataUrl;
+    const target = deskRoot();
+    try {
+      const shot = await modernShot(target);
+      if (usableShot(shot)) return shot;
+    } catch {
+      // try html2canvas
+    }
+    const shot = await html2canvasShot(target);
+    return usableShot(shot) ? shot : "";
   } catch {
     return "";
+  } finally {
+    document.documentElement.classList.remove("hs-capturing");
   }
 }
