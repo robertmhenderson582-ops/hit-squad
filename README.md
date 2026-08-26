@@ -29,8 +29,10 @@ Local owner password is the value in `.env.example` / `.env.local` (`OWNER_PASSW
 | `OWNER_PASSWORD` | Local / field-trial password. Keep it out of git. |
 | `AUTH_SECRET` | Signs the session cookie. Use a long random string. |
 | `AUTH_COOKIE_SECURE` | `false` on local HTTP. `true` on HTTPS deploys. |
-| `TICKET_STORE_PATH` | Optional. Server JSON file for tickets. Not committed. Local default `data/tickets.json`. On Vercel `/tmp/hit-squad-tickets.json`. |
-| `TICKET_SMTP_URL` / `GMAIL_APP_PASSWORD` | Optional. Emails each ticket to `OWNER_EMAIL` (Novus/Gmail copy). Drive API is not in this repo. |
+| `TICKET_STORE_PATH` | Optional. Server JSON file for Suggestion Box tickets. Not committed. Local default `data/tickets.json`. On Vercel `/tmp/hit-squad-tickets.json`. |
+| `INBOX_STORE_PATH` | Optional. Server JSON file for owner↔tester Inbox. Not committed. Local default `data/inbox.json`. On Vercel `/tmp/hit-squad-inbox.json`. |
+| `SEAT_PASSWORD_PATH` | Optional. Extra tester seats plus password hashes. Not committed. Local default `data/seat-passwords.json`. On Vercel `/tmp/hit-squad-seats.json`. |
+| `TICKET_SMTP_URL` / `GMAIL_APP_PASSWORD` | Optional. Emails each ticket to owner Gmail (`robertmhenderson582@gmail.com`) — that is the Novus copy — plus a short assessing ack on that same thread. Tester invites go to that tester only. Never madisonltd.com / p66.com. Drive API is not in this repo. No paid database. |
 
 The session cookie is named `hs_session`. It is `HttpOnly`, `Path=/`, `SameSite=Lax`, and `Secure` when `AUTH_COOKIE_SECURE=true` (or when `NODE_ENV=production` unless you force it off).
 
@@ -54,7 +56,9 @@ npm run auth:check
 
 ## Deploy
 
-One Next.js app. Set the env vars on the host, use HTTPS, and set `AUTH_COOKIE_SECURE=true`. There is no Google sign-in yet.
+One Next.js app (`hitsquad-desk` only). Set the env vars on the host, use HTTPS, and set `AUTH_COOKIE_SECURE=true`. There is no Google sign-in yet.
+
+Seats, Inbox, and Suggestion Box persist as JSON files — the same pattern, not a paid database. Locally they live under `data/` (gitignored). On Vercel they live under `/tmp` so every signed-in seat on the same live instance sees the same threads and tickets. A cold instance / new deploy can empty `/tmp`; the next submit writes the file again. Do not put P66 / Madison books or a Drive vault on the live desk.
 
 Login uses the night-refinery brand hero with HIT SQUAD over PROJECT CONTROLS. After sign-in the desk home is four tiles — Jobs, Estimates, Cost, HSE — plus the estimate/change-order/rate rails. All records stay owner-scoped.
 

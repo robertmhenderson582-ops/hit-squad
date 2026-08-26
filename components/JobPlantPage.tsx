@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { EstimateCard } from "@/components/EstimateCard";
 import { useEstimateModal } from "@/components/EstimateModalContext";
 import { useDeskBoard } from "@/components/useDeskBoard";
+import { useSeatEstimates } from "@/components/useSeatEstimates";
 import { useDisplay } from "@/components/DisplayProvider";
 import { estimateForJob, estimateHref, estimatesForPlant } from "@/lib/estimate-open";
 import { readClosed } from "@/lib/desk-closeout";
@@ -81,15 +82,16 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const tab = plantTabFromQuery(searchParams.get("tab"));
   const openedJob = jobByCode(jobCode);
   const { board } = useDeskBoard();
+  const { records: seatEstimates } = useSeatEstimates();
   const closed = readClosed().filter((item) => item.kind === "estimate").map((item) => item.id);
   const plantEstimates = estimatesForPlant(
-    (board?.estimates ?? []).filter((row) => !closed.includes(row.id)),
+    seatEstimates.filter((row) => !closed.includes(row.id)),
     board?.sites ?? [],
     plant.name,
     plant.city,
   );
   const tally = plantJobTally();
-  const openedEstimate = openedJob ? estimateForJob(openedJob, board?.estimates ?? []) : undefined;
+  const openedEstimate = openedJob ? estimateForJob(openedJob, seatEstimates) : undefined;
 
   function setTab(next: PlantTab) {
     const params = new URLSearchParams(searchParams.toString());

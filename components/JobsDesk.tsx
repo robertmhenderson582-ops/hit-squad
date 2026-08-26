@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
-import { useDeskBoard } from "@/components/useDeskBoard";
+import { useSeatEstimates } from "@/components/useSeatEstimates";
 import { useDisplay } from "@/components/DisplayProvider";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
@@ -15,10 +15,9 @@ import type { JobRecord } from "@/lib/types";
 export function JobsDesk() {
   const alias = useAlias();
   const router = useRouter();
-  const { board } = useDeskBoard();
+  const { records: estimates } = useSeatEstimates();
   const { resolvedTheme } = useDisplay();
   const night = resolvedTheme === "night";
-  const estimates = board?.estimates ?? [];
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,6 +54,9 @@ export function JobsDesk() {
         plant with that job still showing.
       </p>
       {error ? <p className="text-amber-flare">{error}</p> : null}
+      {jobs.length === 0 ? (
+        <p className="mt-4 text-sm text-[#5b6f73]">No jobs on this desk yet. A job you create keeps its ID.</p>
+      ) : null}
       {jobs.map((job) => {
         const estimate = estimateForJob(job, estimates);
         const plantHref = jobPlantHref(job.code);

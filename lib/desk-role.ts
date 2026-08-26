@@ -23,10 +23,15 @@ export function hasBuildDesk(user?: { role?: string } | null): boolean {
   return isOwner(user) || isOperator(user);
 }
 
-export function canUseRateBuilder(user?: { email?: string; role?: string } | null): boolean {
+export function canUseRateBuilder(
+  user?: { email?: string; role?: string; rateBuilder?: boolean } | null,
+): boolean {
   if (!user) return false;
   if (isJosephEmail(user.email)) return false;
-  if (isTester(user)) return testerByEmail(user.email || "")?.rateBuilder !== false;
+  if (isTester(user)) {
+    if (user.rateBuilder === false) return false;
+    return testerByEmail(user.email || "")?.rateBuilder !== false;
+  }
   return true;
 }
 

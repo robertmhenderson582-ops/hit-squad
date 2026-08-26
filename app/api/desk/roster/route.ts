@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { hasBuildDesk, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
+import { hasBuildDesk, isOwner } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
-import { addRosterEntry, clearRoster, EMPTY_MODULES, listRoster, PERMISSIONS, removeRosterEntry } from "@/lib/roster";
-import type { RosterEntry, RosterPermission } from "@/lib/types";
+import { PERMISSIONS } from "@/lib/roster";
+import { addTesterSeatWithInvite, listAddedRoster } from "@/lib/users";
+import type { RosterPermission } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,9 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   if (!hasBuildDesk(user)) return NextResponse.json({ error: "Build desk only." }, { status: 403 });
   return NextResponse.json({
-    permissions: PERMISSIONS,
-    roster: listRoster(),
-    note: "Visual tester roster only. It does not create a login session. Novus is never listed.",
+    permissions: PERMISSIONS.filter((item) => item !== "Owner"),
+    roster: listAddedRoster(),
+    note: "Added testers. Each row is a real login. Novus is never listed.",
   });
 }
 
@@ -39,10 +40,6 @@ export async function POST(request: Request) {
     expires?: string;
     reset?: boolean;
     removeId?: string;
-    modules?: RosterEntry["modules"];
-    estimate?: boolean;
-    rateBuilder?: boolean;
-    passwordSet?: boolean;
   };
   try {
     body = await request.json();
@@ -50,32 +47,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Send JSON." }, { status: 400 });
   }
 
-  if (body.reset) {
-    clearRoster();
-    return NextResponse.json({ roster: listRoster() });
-  }
-  if (body.removeId) {
-    removeRosterEntry(body.removeId);
-    return NextResponse.json({ roster: listRoster() });
+  if (body.reset || body.removeId) {
+    return NextResponse.json(
+      { error: "Added testers are real logins and are not cleared from this form." },
+      { status: 400 },
+    );
   }
 
-  if (!body.name || !body.email || !body.permission) {
-    return NextResponse.json({ error: "Name, email, and permission are required." }, { status: 400 });
-  }
-  if (body.email.trim().toLowerCase() === NOVUS_EMAIL) {
-    return NextResponse.json({ error: "Novus is not a tester and stays off this roster." }, { status: 400 });
-  }
-
-  const entry = addRosterEntry({
+  const result = await addTesterSeatWithInvite({
     name: body.name,
-    username: body.username || body.email.split("@")[0],
     email: body.email,
     permission: body.permission,
-    expires: body.expires || "",
-    modules: body.modules ?? EMPTY_MODULES,
-    estimate: body.estimate ?? true,
-    rateBuilder: body.rateBuilder ?? body.permission !== "Look & feel",
-    passwordSet: body.passwordSet ?? false,
+    username: body.username,
+    expires: body.expires,
   });
-  return NextResponse.json({ entry, roster: listRoster() });
+  if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
+  return NextResponse.json({
+    entry: listAddedRoster().find((row) => row.email === result.user.email),
+    roster: listAddedRoster(),
+    inviteSent: result.inviteSent,
+    inviteText: result.inviteText,
+    note: result.inviteSent
+      ? "Login created. Invite sent. They create their own sign-in on first visit."
+      : "Login created. Invite was not sent (mail is not configured). Copy the invite below.",
+  });
 }

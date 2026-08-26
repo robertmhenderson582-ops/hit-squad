@@ -1,21 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
+import { applyFollow, liveRowChrome } from "@/lib/follow";
 import { NOVUS_EMAIL } from "@/lib/desk-role";
 import { VISUAL_ROSTER, type FollowSeat } from "@/lib/owner-desk";
-
-const PREVIEW = [
-  { family: "Georgia Power", name: "Yates", city: "Newnan, GA" },
-  { family: "Phillips 66", name: "Wood River", city: "Roxana, IL" },
-  { family: "Phillips 66", name: "Rodeo", city: "Rodeo, CA" },
-  { family: "Phillips 66", name: "Bayway", city: "Linden, NJ" },
-  { family: "Phillips 66", name: "Ferndale", city: "Ferndale, WA" },
-  { family: "Phillips 66", name: "Billings", city: "Billings, MT" },
-  { family: "Monroe Energy", name: "Trainer", city: "Trainer, PA" },
-  { family: "Chevron", name: "Richmond", city: "Richmond, CA" },
-  { family: "Kinder Morgan", name: "Wood River terminal", city: "Roxana, IL" },
-];
 
 type LiveSeat = {
   email: string;
@@ -42,7 +32,7 @@ function lastSeen(at: number) {
 
 export function FollowDesk() {
   const desk = useOwnerDesk();
-  const alias = useAlias();
+  const router = useRouter();
   const [seats, setSeats] = useState<LiveSeat[]>([]);
 
   useEffect(() => {
@@ -90,62 +80,69 @@ export function FollowDesk() {
     })),
   ].sort((a, b) => Number(b.live) - Number(a.live) || b.lastAt - a.lastAt);
 
+  function watch(seat: FollowSeat, livePath = "") {
+    const next = applyFollow(desk!.followSeat, seat, livePath);
+    desk!.setFollowSeat(next.followSeat);
+    router.push(next.path);
+  }
+
   return (
     <div className="space-y-5">
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Follow</h2>
         <p className="mt-1 text-sm leading-6 text-[#163038]">
-          Live people jump to the top. Green pulse and Live tag while they are on the desk. Grey and
-          no pulse after about 90 seconds. Last seen stays a day after idle. You do not show in your
-          own list. Password fields stay blank. Testers never see that they are watched. This is not
-          remote-desktop capture — list chrome only.
+          Follow opens that seat’s desk — same lens as View as. Green dot and Live tag while they are
+          on the desk. Grey and no pulse after about 90 seconds. Last seen stays a day after idle.
+          You do not show in your own list. Password fields stay blank. Testers never see that they
+          are watched. This is not remote-desktop capture.
         </p>
       </section>
 
       <section className="plant-card px-5 py-5">
         <div className="space-y-2">
-          {people.map((row) => (
-            <article
-              key={row.id}
-              className={`flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3 ${
-                row.live ? "follow-live" : "follow-idle"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className={`follow-dot ${row.live ? "follow-dot-live" : ""}`} aria-hidden="true" />
-                <div>
-                  <p className="font-semibold text-[#163038]">
-                    {row.name}
-                    {row.live ? <span className="live-tag">Live</span> : null}
-                  </p>
-                  <p className="text-xs text-[#5b6f73]">
-                    {row.live
-                      ? screenOf(row.path)
-                      : row.lastAt
-                        ? `Last seen ${lastSeen(row.lastAt)}`
-                        : "Idle"}
-                  </p>
-                  <input type="password" readOnly value="" autoComplete="off" placeholder="Password" className="follow-pw mt-2" />
+          {people.map((row) => {
+            const chrome = liveRowChrome(row.live);
+            return (
+              <article
+                key={row.id}
+                className={`flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3 ${chrome.rowClass}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={chrome.dotClass} aria-hidden="true" />
+                  <div>
+                    <p className="font-semibold text-[#163038]">
+                      {row.name}
+                      {chrome.tag ? <span className="live-tag">{chrome.tag}</span> : null}
+                    </p>
+                    <p className="text-xs text-[#5b6f73]">
+                      {row.live
+                        ? screenOf(row.path)
+                        : row.lastAt
+                          ? `Last seen ${lastSeen(row.lastAt)}`
+                          : "Idle"}
+                    </p>
+                    <input type="password" readOnly value="" autoComplete="off" placeholder="Password" className="follow-pw mt-2" />
+                  </div>
                 </div>
-              </div>
-              {row.followable ? (
-                <button
-                  type="button"
-                  onClick={() => desk.setFollowSeat(row.id as FollowSeat)}
-                  className={`rounded-lg px-3 py-1.5 text-sm ${
-                    desk.followSeat === row.id ? "bg-steel text-white" : "border border-steel text-steel"
-                  }`}
-                >
-                  {desk.followSeat === row.id ? "Watching" : "Follow"}
-                </button>
-              ) : null}
-            </article>
-          ))}
+                {row.followable ? (
+                  <button
+                    type="button"
+                    onClick={() => watch(row.id as FollowSeat, row.path)}
+                    className={`rounded-lg px-3 py-1.5 text-sm ${
+                      desk.followSeat === row.id ? "bg-steel text-white" : "border border-steel text-steel"
+                    }`}
+                  >
+                    {desk.followSeat === row.id ? "Watching" : "Follow"}
+                  </button>
+                ) : null}
+              </article>
+            );
+          })}
         </div>
         <div className="mt-4">
           <button
             type="button"
-            onClick={() => desk.setFollowSeat("owner")}
+            onClick={() => watch("owner")}
             className={`rounded-lg px-4 py-2 text-sm ${
               desk.followSeat === "owner" ? "bg-steel text-white" : "border border-steel text-steel"
             }`}
@@ -168,26 +165,6 @@ export function FollowDesk() {
               ? "Owner tester view — Ironwood / Midwest names. Follow an aliased seat to check that lens."
               : "Owner view — real names. Turn aliases on to preview tester view."}
         </p>
-      </section>
-
-      <section className="follow-screen px-5 py-5">
-        <p className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">
-          {watching ? `${(subject?.name ?? "TESTER").toUpperCase()}’S SCREEN` : "OWNER SCREEN"}
-        </p>
-        <h3 className="mt-2 font-display text-3xl text-[#163038]">{alias("Madison")}</h3>
-        <label className="mt-4 block text-sm text-[#5b6f73]">
-          Password
-          <input type="password" readOnly value="" autoComplete="off" className="paper-field mt-1" />
-        </label>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {PREVIEW.map((plant) => (
-            <article key={plant.name} className="plant-card px-4 py-4">
-              <p className="text-xs tracking-[0.16em] text-[#5b6f73]">{alias(plant.family).toUpperCase()}</p>
-              <p className="mt-1 text-xl font-semibold text-[#163038]">{alias(plant.name)}</p>
-              <p className="text-sm text-[#5b6f73]">{alias(plant.city)}</p>
-            </article>
-          ))}
-        </div>
       </section>
     </div>
   );

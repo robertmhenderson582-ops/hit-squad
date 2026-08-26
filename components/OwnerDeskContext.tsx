@@ -144,8 +144,11 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       .then((response) => response.json())
       .then((data) => {
         if (typeof data.aliasesOn === "boolean") setAliasesOnState(data.aliasesOn);
-        if (data.followSeat) setFollowSeatState(data.followSeat);
-        const nextView = preferredViewAs(readStoredViewAs(), data.viewAs);
+        if (isViewAsSeat(data.followSeat)) setFollowSeatState(data.followSeat);
+        const nextView =
+          isViewAsSeat(data.followSeat) && data.followSeat !== "owner"
+            ? data.followSeat
+            : preferredViewAs(readStoredViewAs(), data.viewAs);
         setViewAsState(nextView);
         writeStoredViewAs(nextView);
         if (data.viewResponsibility) setViewResponsibility(data.viewResponsibility);
@@ -182,7 +185,9 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
   const setFollowSeat = useCallback((seat: FollowSeat) => {
     if (user?.role !== "owner") return;
     setFollowSeatState(seat);
-    saveSettings({ followSeat: seat });
+    setViewAsState(seat);
+    writeStoredViewAs(seat);
+    saveSettings({ followSeat: seat, viewAs: seat });
     noteFeature(seat === "owner" ? "Stopped Follow" : `Follow ${seat} screen`);
   }, [user?.role]);
 
@@ -196,7 +201,12 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     }
     if (!hasBuildDesk(user)) return;
     writeStoredViewAs(seat);
-    saveSettings({ viewAs: seat });
+    if (seat === "owner") {
+      setFollowSeatState("owner");
+      saveSettings({ viewAs: seat, followSeat: "owner" });
+    } else {
+      saveSettings({ viewAs: seat });
+    }
     noteFeature(seat === "owner" ? "View as owner" : `View as ${seat}`);
   }, [user]);
 

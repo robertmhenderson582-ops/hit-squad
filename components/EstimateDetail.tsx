@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EstimateWorkbook } from "@/components/EstimateWorkbook";
-import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
+import { EstimateWorkspace, type EstimateStatus, type EstimateTab } from "@/components/EstimateWorkspace";
 import { ChangeOrderPacket } from "@/components/ChangeOrderPacket";
 import { EquipmentDesk } from "@/components/EquipmentDesk";
 import { OtherCostDesk } from "@/components/OtherCostDesk";
@@ -12,26 +12,48 @@ import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { EstimatePackageProvider } from "@/components/EstimatePackage";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
-import { useAlias } from "@/components/OwnerDeskContext";
-import { useDeskBoard } from "@/components/useDeskBoard";
+import { useAlias, useLensUser } from "@/components/OwnerDeskContext";
+import { useSession } from "@/components/SessionProvider";
 import { boundOtLabel } from "@/lib/hours-clock";
-import type { EstimateStatus } from "@/components/EstimateWorkspace";
+import {
+  ensureSeatEstimates,
+  findCopy,
+  folderIsLocked,
+  seedExampleSheetsOnce,
+  setCopyStatus,
+  showsAwardFields,
+  writeSeatEstimates,
+  type SeatEstimate,
+} from "@/lib/seat-estimates";
 
 export function EstimateDetail({ estimateId }: { estimateId: string }) {
   const alias = useAlias();
-  const { board, error } = useDeskBoard();
+  const { user } = useSession();
+  const lens = useLensUser();
+  const seatId = lens?.id || user?.id || "";
+  const seatName = lens?.name || user?.name || "Owner";
   const [tab, setTab] = useState<EstimateTab>("summary");
-  const [status, setStatus] = useState<EstimateStatus>("Estimate");
-  const estimate = board?.estimates.find((row) => row.id === estimateId);
-  const site = board?.sites.find((row) => row.id === estimate?.siteId);
-  const staffing = useMemo(
-    () => board?.staffing.filter((row) => row.estimateId === estimateId) ?? [],
-    [board, estimateId],
-  );
+  const [copy, setCopy] = useState<SeatEstimate | null>(null);
+  const [ready, setReady] = useState(false);
 
-  if (error) return <p className="p-6 text-amber-flare">{error}</p>;
-  if (!board) return <p className="p-6 font-mono text-xs tracking-[0.2em] text-steel">LOADING PACKAGE</p>;
-  if (!estimate) {
+  useEffect(() => {
+    if (!seatId || !estimateId) return;
+    const list = ensureSeatEstimates(seatId, seatName);
+    const row = findCopy(list, estimateId) ?? null;
+    if (row) seedExampleSheetsOnce(row.id, row.templateId);
+    setCopy(row);
+    setReady(true);
+  }, [estimateId, seatId, seatName]);
+
+  const estimateKey = copy?.id || "";
+  const status = (copy?.status || "Estimate") as EstimateStatus;
+  const locked = copy ? folderIsLocked(status, "example") : false;
+  const awardFields = copy ? showsAwardFields(status) : false;
+
+  const staffing = useMemo(() => [], []);
+
+  if (!seatId || !ready) return <p className="p-6 font-mono text-xs tracking-[0.2em] text-steel">LOADING PACKAGE</p>;
+  if (!copy) {
     return (
       <p className="p-6">
         That package is not on this desk.{" "}
@@ -43,36 +65,42 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
   }
 
   return (
-    <EstimatePackageProvider estimateKey={estimate.id}>
+    <EstimatePackageProvider estimateKey={estimateKey}>
     <EstimateWorkspace
-      crumb={`${alias(site?.name ?? estimate.unit)} / ${estimate.title}`}
+      crumb={`${alias(copy.siteName)} / ${copy.title}`}
       tab={tab}
       onTab={setTab}
-      client={alias(estimate.client)}
-      site={alias(site?.name ?? "")}
-      jobClient={estimate.client}
-      jobSite={site?.name}
-      name={estimate.title}
-      total={estimate.total}
-      packageId={estimate.id}
+      client={alias(copy.client)}
+      site={alias(copy.siteName)}
+      jobClient={copy.client}
+      jobSite={copy.siteName}
+      name={copy.title}
+      total={copy.total}
+      packageId={copy.id}
       staffing={staffing}
       status={status}
-      onStatus={setStatus}
+      onStatus={(next) => {
+        const list = ensureSeatEstimates(seatId, seatName);
+        const updated = setCopyStatus(list, copy.id, next);
+        writeSeatEstimates(seatId, updated);
+        setCopy(findCopy(updated, copy.id) ?? copy);
+      }}
+      folderLocked={locked}
     >
       {tab === "summary" ? (
         <div className="space-y-5">
           <JobSetupCard
-            type={estimate.type}
-            client={alias(estimate.client)}
-            site={site?.name}
-            name={estimate.title}
-            otRule={boundOtLabel(site?.name ?? "", estimate.client, site?.code)}
-            author={estimate.estimator}
-            code={estimate.code}
-            window={estimate.window}
+            type={copy.type}
+            client={alias(copy.client)}
+            site={copy.siteName}
+            name={copy.title}
+            otRule={boundOtLabel(copy.siteName, copy.client)}
+            author={copy.estimator}
+            code={copy.code}
+            window={copy.window}
             existingClient
           >
-            {status !== "Estimate" ? (
+            {awardFields ? (
               <>
                 <label className="mt-4 block">
                   <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">JOB / CR</span>
@@ -90,22 +118,22 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       ) : null}
 
       {tab === "activities" ? (
-        <WorkActivitiesDesk client={estimate.client} site={site?.name} />
+        <WorkActivitiesDesk client={copy.client} site={copy.siteName} />
       ) : null}
 
       {tab === "crew" ? (
-        <EstimateWorkbook client={estimate.client} site={site?.name} name={estimate.title} />
+        <EstimateWorkbook client={copy.client} site={copy.siteName} name={copy.title} />
       ) : null}
 
       {tab === "staffing" ? (
-        <StaffingPlanDesk client={estimate.client} site={site?.name} name={estimate.title} />
+        <StaffingPlanDesk client={copy.client} site={copy.siteName} name={copy.title} />
       ) : null}
 
       {tab === "equipment" ? <EquipmentDesk /> : null}
 
-      {tab === "costs" ? <OtherCostDesk client={estimate.client} site={site?.name} /> : null}
+      {tab === "costs" ? <OtherCostDesk client={copy.client} site={copy.siteName} /> : null}
 
-      {tab === "change-orders" ? <ChangeOrderPacket client={estimate.client} site={site?.name} /> : null}
+      {tab === "change-orders" ? <ChangeOrderPacket client={copy.client} site={copy.siteName} /> : null}
     </EstimateWorkspace>
     </EstimatePackageProvider>
   );

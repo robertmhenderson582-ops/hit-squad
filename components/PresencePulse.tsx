@@ -46,9 +46,10 @@ export function PresencePulse() {
   if (!row) return null;
 
   return (
-    <p className="presence-pulse">
+    <p className={`presence-pulse ${row.live ? "follow-live" : "follow-idle"}`}>
       <span className={`follow-dot ${row.live ? "follow-dot-live" : ""}`} aria-hidden="true" />
       {row.name}
+      {row.live ? <span className="live-tag">Live</span> : null}
       <span className="mx-2 text-[#5b6f73]">·</span>
       {row.live ? screenOf(row.path) : `Last seen ${new Date(row.lastAt).toLocaleTimeString()}`}
     </p>

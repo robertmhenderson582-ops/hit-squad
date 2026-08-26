@@ -4,18 +4,16 @@ import { FormEvent, useEffect, useState } from "react";
 import { PasswordField } from "@/components/PasswordField";
 import { PresencePulse } from "@/components/PresencePulse";
 import { useSession } from "@/components/SessionProvider";
-import { isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
-import { EMPTY_MODULES } from "@/lib/roster";
+import { isOwner } from "@/lib/desk-role";
 import type { PublicUser, RosterEntry, RosterPermission } from "@/lib/types";
 
-const PERMISSION_OPTIONS: { value: RosterPermission; label: string }[] = [
-  { value: "Owner", label: "Owner" },
+const PERMISSION_OPTIONS: { value: Exclude<RosterPermission, "Owner">; label: string }[] = [
   { value: "Trusted", label: "Trusted" },
   { value: "Look & feel", label: "Look & feel" },
   { value: "Staff", label: "Staff — estimates only" },
 ];
 
-type SeatRow = PublicUser & { passwordIssued: boolean };
+type SeatRow = PublicUser & { passwordIssued: boolean; added?: boolean; permission?: string };
 
 export function ManageUsersDesk() {
   const { user } = useSession();
@@ -25,36 +23,34 @@ export function ManageUsersDesk() {
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [issueEmail, setIssueEmail] = useState(NOVUS_EMAIL);
+  const [issueEmail, setIssueEmail] = useState("");
   const [issuePassword, setIssuePassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [permission, setPermission] = useState<RosterPermission>("Staff");
+  const [permission, setPermission] = useState<Exclude<RosterPermission, "Owner">>("Staff");
   const [expires, setExpires] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [seatNote, setSeatNote] = useState<string | null>(null);
+  const [inviteText, setInviteText] = useState<string | null>(null);
   const [open, setOpen] = useState({ seats: true, add: true, roster: true });
 
   async function loadSeats() {
     const response = await fetch("/api/desk/seats", { credentials: "include", cache: "no-store" });
     const data = await response.json();
-    if (response.ok) setSeats(data.seats ?? []);
-  }
-
-  async function loadRoster() {
-    const response = await fetch("/api/desk/roster", { credentials: "include", cache: "no-store" });
-    const data = await response.json();
-    if (response.ok) setRoster(data.roster ?? []);
+    if (response.ok) {
+      const nextSeats = (data.seats ?? []) as SeatRow[];
+      setSeats(nextSeats);
+      if (data.roster) setRoster(data.roster);
+      setIssueEmail((current) => current || nextSeats.find((row) => row.role !== "owner")?.email || "");
+    }
   }
 
   useEffect(() => {
     void loadSeats();
-    void loadRoster();
   }, []);
 
   async function onIssue(event: FormEvent) {
     event.preventDefault();
     setSeatNote(null);
+    setInviteText(null);
     const response = await fetch("/api/desk/seats", {
       method: "POST",
       credentials: "include",
@@ -68,16 +64,33 @@ export function ManageUsersDesk() {
       return;
     }
     setSeats(data.seats ?? []);
+    if (data.roster) setRoster(data.roster);
     setSeatNote("Password issued on this desk. Don’t send. First sign-in must change it.");
+  }
+
+  async function onResend(target: string) {
+    setSeatNote(null);
+    setInviteText(null);
+    const response = await fetch("/api/desk/seats", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: target, resendInvite: true }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setSeatNote(data.error || "Could not resend.");
+      return;
+    }
+    setSeatNote(data.note || "Invite sent again.");
+    if (!data.inviteSent && data.inviteText) setInviteText(data.inviteText);
   }
 
   async function onAdd(event: FormEvent) {
     event.preventDefault();
-    if (password.length < 8) {
-      setNote("Password must be 8+.");
-      return;
-    }
-    const response = await fetch("/api/desk/roster", {
+    setNote(null);
+    setInviteText(null);
+    const response = await fetch("/api/desk/seats", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -87,10 +100,6 @@ export function ManageUsersDesk() {
         email,
         permission,
         expires,
-        modules: EMPTY_MODULES,
-        estimate: true,
-        rateBuilder: permission !== "Look & feel",
-        passwordSet: true,
       }),
     });
     const data = await response.json();
@@ -98,27 +107,14 @@ export function ManageUsersDesk() {
       setNote(data.error || "Could not add.");
       return;
     }
-    setRoster(data.roster);
+    setSeats(data.seats ?? []);
+    setRoster(data.roster ?? []);
     setName("");
     setUsername("");
     setEmail("");
-    setPassword("");
     setExpires("");
-    setNote("Added to the visual roster. No login and no invite sent.");
-  }
-
-  async function removeAll() {
-    const response = await fetch("/api/desk/roster", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reset: true }),
-    });
-    const data = await response.json();
-    if (response.ok) {
-      setRoster(data.roster ?? []);
-      setNote("Roster cleared. Nobody was seeded.");
-    }
+    setNote(data.note || "Login created.");
+    if (!data.inviteSent && data.inviteText) setInviteText(data.inviteText);
   }
 
   return (
@@ -131,15 +127,16 @@ export function ManageUsersDesk() {
       >
         <p className="text-sm leading-6 text-[#5b6f73]">
           Robert Henderson stays the only owner. Novus is a hidden operator seat. Testers never see
-          this list, Novus, or each other. Issue a one-time password here. Don’t send. They change it
-          on first sign-in. No invite email.
+          this list, Novus, or each other. Issue a one-time password here for a seat that already
+          exists. Don’t send. Adding a user below creates a login and sends the first-visit invite —
+          they create their own sign-in.
         </p>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
               <tr>
-                {["NAME", "EMAIL", "ROLE", "PASSWORD"].map((header) => (
-                  <th key={header} className="px-2 py-2">
+                {["NAME", "EMAIL", "ROLE", "PASSWORD", ""].map((header) => (
+                  <th key={header || "action"} className="px-2 py-2">
                     {header}
                   </th>
                 ))}
@@ -159,6 +156,17 @@ export function ManageUsersDesk() {
                       : row.passwordIssued
                         ? "Issued — first sign-in must change"
                         : "Not issued"}
+                  </td>
+                  <td className="px-2 py-2">
+                    {owner && row.role === "tester" && !row.passwordIssued ? (
+                      <button
+                        type="button"
+                        onClick={() => void onResend(row.email)}
+                        className="text-sm text-steel underline"
+                      >
+                        Resend invite
+                      </button>
+                    ) : null}
                   </td>
                 </tr>
               ))}
@@ -199,49 +207,39 @@ export function ManageUsersDesk() {
           <p className="mt-4 text-sm text-[#5b6f73]">Only the owner can issue this password.</p>
         )}
         {seatNote ? <p className="mt-3 text-sm text-[#5b6f73]">{seatNote}</p> : null}
+        {inviteText ? (
+          <label className="mt-3 block">
+            <span className="text-xs tracking-[0.14em] text-[#5b6f73]">INVITE TO COPY</span>
+            <textarea
+              readOnly
+              value={inviteText}
+              className="paper-field mt-1 min-h-40 font-mono text-sm"
+            />
+          </label>
+        ) : null}
       </Collapsible>
 
       {owner ? (
         <>
           <Collapsible
-            title="Add a visual tester"
+            title="Add user"
             open={open.add}
             onToggle={() => setOpen((current) => ({ ...current, add: !current.add }))}
           >
             <p className="text-sm leading-6 text-[#5b6f73]">
-              Visual roster only. Does not create a login, send email, or open a claimable account.
-              Logins are issued above. Don’t send.
+              Creates a real login and sends the first-visit invite. They hard-refresh the login
+              page, check confidentiality, and create their own sign-in (8+). No password is issued
+              here.
             </p>
             <form onSubmit={onAdd} className="mt-3 grid gap-3 sm:grid-cols-2">
               <Field label="NAME" value={name} onChange={setName} required />
               <Field label="USERNAME" value={username} onChange={setUsername} />
-              <Field label="EMAIL" value={email} onChange={setEmail} required type="email" placeholder="Visual only — no invite" />
-              <label>
-                <span className="text-xs tracking-[0.14em] text-[#5b6f73]">PASSWORD</span>
-                <span className="relative mt-1 block">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    className="paper-field pr-12"
-                    minLength={8}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((on) => !on)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#5b6f73]"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? "hide" : "show"}
-                  </button>
-                </span>
-              </label>
+              <Field label="EMAIL" value={email} onChange={setEmail} required type="email" />
               <label>
                 <span className="text-xs tracking-[0.14em] text-[#5b6f73]">PERMISSION</span>
                 <select
                   value={permission}
-                  onChange={(event) => setPermission(event.target.value as RosterPermission)}
+                  onChange={(event) => setPermission(event.target.value as Exclude<RosterPermission, "Owner">)}
                   className="paper-field mt-1"
                 >
                   {PERMISSION_OPTIONS.map((item) => (
@@ -256,21 +254,32 @@ export function ManageUsersDesk() {
                 <input type="date" value={expires} onChange={(event) => setExpires(event.target.value)} className="paper-field mt-1" />
               </label>
               <button type="submit" className="rounded-lg bg-steel px-4 py-2 text-white sm:col-span-2">
-                Add visual row
+                Add user
               </button>
             </form>
-            <button type="button" onClick={removeAll} className="mt-4 rounded-lg border border-[#d5e0de] px-4 py-2 text-[#b74120]">
-              Clear visual roster
-            </button>
             {note ? <p className="mt-3 text-sm text-[#5b6f73]">{note}</p> : null}
+            {inviteText ? (
+              <label className="mt-3 block">
+                <span className="text-xs tracking-[0.14em] text-[#5b6f73]">INVITE TO COPY</span>
+                <textarea
+                  readOnly
+                  value={inviteText}
+                  className="paper-field mt-1 min-h-40 font-mono text-sm"
+                />
+              </label>
+            ) : null}
           </Collapsible>
 
           <Collapsible
-            title="Visual roster"
+            title="Added testers"
             open={open.roster}
             onToggle={() => setOpen((current) => ({ ...current, roster: !current.roster }))}
           >
-            <div className="overflow-x-auto">
+            <p className="text-sm leading-6 text-[#5b6f73]">
+              People added from this form. The built-in ten stay in Operator seats. Testers never
+              see this list.
+            </p>
+            <div className="mt-3 overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
                   <tr>
@@ -285,7 +294,8 @@ export function ManageUsersDesk() {
                   {roster.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-2 py-4 text-[#5b6f73]">
-                        Empty visual book. Logins are the seeded seats above. Novus is not a tester.
+                        No added testers yet. The built-in ten are in Operator seats. Novus is not a
+                        tester.
                       </td>
                     </tr>
                   ) : (

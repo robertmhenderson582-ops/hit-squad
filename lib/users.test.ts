@@ -3,13 +3,16 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
-import { NOVUS_EMAIL } from "./desk-role.ts";
+import { canUseRateBuilder, NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import {
+  addTesterSeat,
+  addTesterSeatWithInvite,
   claimFirstPassword,
   findUserByEmail,
   GENERIC_SIGNIN_ERROR,
   issueSeatPassword,
+  listAddedRoster,
   loginOutcome,
   resetUsersForTests,
   seatNeedsPasswordCreate,
@@ -196,6 +199,124 @@ test("confirm mismatch is rejected on first-login create", () => {
     assert.equal(result.error, "New password and confirm did not match.");
   }
   assert.equal(seatNeedsPasswordCreate(TESTER), true);
+});
+
+test("add tester creates a login with no hash so first visit needs create", async () => {
+  delete process.env.TICKET_SMTP_URL;
+  delete process.env.SMTP_URL;
+  delete process.env.GMAIL_APP_PASSWORD;
+  const added = await addTesterSeatWithInvite({
+    name: "Casey Jones",
+    email: "casey.tester@example.com",
+    permission: "Trusted",
+    username: "casey",
+  });
+  assert.equal("ok" in added, true);
+  if (!("ok" in added)) return;
+  assert.equal(added.inviteSent, false);
+  assert.match(added.inviteText, /^Hey Casey,/);
+  assert.equal(/password/i.test(added.inviteText), false);
+  assert.equal(added.inviteText.includes("?"), false);
+  assert.equal(findUserByEmail("casey.tester@example.com")?.passwordHash, undefined);
+  assert.equal(loginOutcome({ email: "casey.tester@example.com" }).status, "needsCreate");
+  assert.equal(seatNeedsPasswordCreate("casey.tester@example.com"), true);
+  assert.equal(canUseRateBuilder(added.user), true);
+  assert.equal(listAddedRoster().some((row) => row.email === "casey.tester@example.com"), true);
+
+  resetUsersForTests();
+  assert.equal(loginOutcome({ email: "casey.tester@example.com" }).status, "needsCreate");
+  assert.equal(findUserByEmail("casey.tester@example.com")?.name, "Casey Jones");
+
+  const persisted = JSON.parse(readFileSync(seatFile, "utf8")) as {
+    extras?: Array<{ email?: string; name?: string }>;
+    hashes?: Record<string, { passwordHash?: string }>;
+  };
+  assert.equal(persisted.extras?.some((row) => row.email === "casey.tester@example.com"), true);
+  assert.equal(Boolean(persisted.hashes?.["casey.tester@example.com"]?.passwordHash), false);
+
+  const created = loginOutcome({
+    email: "casey.tester@example.com",
+    newPassword: CHOSEN,
+    confirmPassword: CHOSEN,
+  });
+  assert.equal(created.status, "authenticated");
+  const afterClaim = JSON.parse(readFileSync(seatFile, "utf8")) as {
+    extras?: Array<{ email?: string }>;
+    hashes?: Record<string, { passwordHash?: string }>;
+  };
+  assert.equal(afterClaim.extras?.some((row) => row.email === "casey.tester@example.com"), true);
+  assert.equal(Boolean(afterClaim.hashes?.["casey.tester@example.com"]?.passwordHash), true);
+  assert.equal(readFileSync(seatFile, "utf8").includes(CHOSEN), false);
+});
+
+test("add tester rejects duplicates, owner, Novus, and company inboxes", () => {
+  const first = addTesterSeat({
+    name: "Casey Jones",
+    email: "casey.dup@example.com",
+    permission: "Staff",
+  });
+  assert.equal("ok" in first, true);
+
+  const dup = addTesterSeat({
+    name: "Casey Two",
+    email: "Casey.Dup@example.com",
+    permission: "Staff",
+  });
+  assert.equal("error" in dup, true);
+  if ("error" in dup) assert.equal(dup.status, 409);
+
+  const owner = addTesterSeat({
+    name: "Robert Henderson",
+    email: OWNER_LOGIN_EMAIL,
+    permission: "Trusted",
+  });
+  assert.equal("error" in owner, true);
+
+  const novus = addTesterSeat({
+    name: "Novus",
+    email: NOVUS_EMAIL,
+    permission: "Trusted",
+  });
+  assert.equal("error" in novus, true);
+
+  const seeded = addTesterSeat({
+    name: "Nathan Boyte",
+    email: TESTER,
+    permission: "Trusted",
+  });
+  assert.equal("error" in seeded, true);
+
+  const madison = addTesterSeat({
+    name: "Shop Mail",
+    email: "someone@madisonltd.com",
+    permission: "Trusted",
+  });
+  assert.equal("error" in madison, true);
+
+  const p66 = addTesterSeat({
+    name: "Plant Mail",
+    email: "someone@p66.com",
+    permission: "Staff",
+  });
+  assert.equal("error" in p66, true);
+});
+
+test("Look & feel extra seat cannot use Rate builder", () => {
+  const look = addTesterSeat({
+    name: "Pat Look",
+    email: "pat.look@example.com",
+    permission: "Look & feel",
+  });
+  assert.equal("ok" in look, true);
+  if ("ok" in look) assert.equal(canUseRateBuilder(look.user), false);
+
+  const staff = addTesterSeat({
+    name: "Pat Staff",
+    email: "pat.staff@example.com",
+    permission: "Staff",
+  });
+  assert.equal("ok" in staff, true);
+  if ("ok" in staff) assert.equal(canUseRateBuilder(staff.user), true);
 });
 
 test("Novus can create a password only when no hash exists", () => {

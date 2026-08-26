@@ -90,7 +90,7 @@ export function InboxPanel({ compact = false }: { compact?: boolean }) {
       {inbox.composing ? (
         <div className="mt-4 rounded-xl bg-[#f4f1e8] px-3 py-3">
           <p className="text-sm text-[#163038]">
-            {inbox.ownerChrome ? "Pick a person. Testers never share a thread." : "Write the owner. Teammates only if they share your company."}
+            {inbox.ownerChrome ? "Pick a person. Testers never share a thread." : "Write the owner. Testers do not see each other."}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {inbox.contacts.map((person) => (

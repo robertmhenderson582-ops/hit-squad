@@ -24,7 +24,7 @@ export function DeskBanners() {
       {buildDesk && owner && owner.followSeat !== "owner" ? (
         <div className="follow-banner mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm">
-            Following {seatLabel(owner.followSeat)}’s screen
+            Watching {seatLabel(owner.followSeat)}
             {owner.applyingAliases ? " · aliases on" : owner.followSeat === "nathan" ? " · Madison real names" : " · aliases off"}
           </p>
           <button type="button" onClick={() => owner.setFollowSeat("owner")} className="text-sm underline">
@@ -32,7 +32,7 @@ export function DeskBanners() {
           </button>
         </div>
       ) : null}
-      {buildDesk && owner && owner.viewAs !== "owner" ? (
+      {buildDesk && owner && owner.viewAs !== "owner" && owner.followSeat === "owner" ? (
         <div className="viewas-banner mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm">Viewing as {seatLabel(owner.viewAs)}</p>
           <button type="button" onClick={() => owner.setViewAs("owner")} className="text-sm underline">

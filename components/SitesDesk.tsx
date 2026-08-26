@@ -2,18 +2,13 @@
 
 import Link from "next/link";
 import { useDisplay } from "@/components/DisplayProvider";
-import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useAlias } from "@/components/OwnerDeskContext";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { plantJobTally, plantJobsLine } from "@/lib/jobs";
 import type { SiteRecord } from "@/lib/types";
 
 function slugFor(site: SiteRecord) {
   return site.name.toLowerCase().replace(/\s+/g, "-");
-}
-
-function assignedZero(site: SiteRecord, viewSite?: string) {
-  if (!viewSite) return false;
-  return viewSite.toLowerCase().includes(site.name.toLowerCase()) && site.openJobs === 0;
 }
 
 function siteCountLine(site: SiteRecord) {
@@ -27,11 +22,10 @@ function siteCountLine(site: SiteRecord) {
 export function SitesDesk() {
   const { board, error } = useDeskBoard();
   const alias = useAlias();
-  const owner = useOwnerDesk();
   const { resolvedTheme } = useDisplay();
   const night = resolvedTheme === "night";
   const all = (board?.sites ?? []).filter((site) => !site.id.includes("coker"));
-  const visible = all.filter((site) => site.openJobs > 0 || assignedZero(site, owner?.viewSite));
+  const visible = all;
   const noneOpen = all.every((site) => site.openJobs === 0);
   const georgia = visible.filter((site) => site.family === "Georgia Power");
   const p66 = visible.filter((site) => site.family === "Phillips 66");
@@ -43,8 +37,8 @@ export function SitesDesk() {
       {error ? <p className="mt-3 text-amber-flare">{error}</p> : null}
       {noneOpen ? (
         <p className="mt-4 max-w-3xl text-sm text-[#5b6f73]">
-          A client or plant shows up here once an estimate starts. A plant only lists once it has
-          work. A PM still sees their assigned site at zero jobs.
+          Plant tiles are a site directory. Open-job counts stay at zero until a job is on this
+          desk. Assigned sites still show at zero.
         </p>
       ) : null}
 
