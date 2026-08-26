@@ -167,7 +167,8 @@ function dailySplit(
   return { st, ot: Math.max(0, hours - st), dt: 0 };
 }
 
-function applyWeekly40(days: { key: string; st: number; ot: number; dt: number }[]) {
+function applyWeekly40(days: { key: string; st: number; ot: number; dt: number }[], headcount: number) {
+  const weeklySt = 40 * Math.max(1, headcount);
   const weeks = new Map<string, typeof days>();
   for (const day of days) {
     const list = weeks.get(day.key) ?? [];
@@ -177,7 +178,7 @@ function applyWeekly40(days: { key: string; st: number; ot: number; dt: number }
   for (const week of weeks.values()) {
     let kept = 0;
     for (const day of week) {
-      const room = Math.max(0, 40 - kept);
+      const room = Math.max(0, weeklySt - kept);
       if (day.st <= room) {
         kept += day.st;
         continue;
@@ -185,7 +186,7 @@ function applyWeekly40(days: { key: string; st: number; ot: number; dt: number }
       const extra = day.st - room;
       day.st = room;
       day.ot += extra;
-      kept = 40;
+      kept = weeklySt;
     }
   }
 }
@@ -277,7 +278,7 @@ export function computeRangeHours(input: ComputeRangeInput): RangeHours {
     workedDays += 1;
   }
 
-  applyWeekly40(raw);
+  applyWeekly40(raw, head);
 
   const st = raw.reduce((sum, day) => sum + day.st, 0);
   const ot = raw.reduce((sum, day) => sum + day.ot, 0);
