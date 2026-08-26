@@ -18,6 +18,7 @@ import { useSession } from "@/components/SessionProvider";
 import { ShopRigSheet } from "@/components/ShopRigSheet";
 import { boundOtLabel } from "@/lib/hours-clock";
 import { newEstimateKey, newEstimatePackId } from "@/lib/estimate-open";
+import { defaultEstimateName } from "@/lib/job-event";
 
 export function NewEstimateForm() {
   const params = useSearchParams();
@@ -25,7 +26,7 @@ export function NewEstimateForm() {
   const size = params.get("size");
   const client = params.get("client") || "Phillips 66";
   const site = params.get("site") || "Wood River — Roxana, IL";
-  const name = params.get("name") || "New T&M estimate";
+  const name = params.get("name") || defaultEstimateName(client, site, size);
   const pack = params.get("pack");
 
   useEffect(() => {

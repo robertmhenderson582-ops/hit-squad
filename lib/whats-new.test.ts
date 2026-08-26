@@ -63,6 +63,8 @@ describe("inbox what's-new", () => {
     assert.match(TESTER_WHATS_NEW, /Crew starts empty/);
     assert.match(TESTER_WHATS_NEW, /Opening a job keeps its ID, window, and working figure/);
     assert.match(TESTER_WHATS_NEW, /4 Wood River jobs \(3 open, 1 hold\) and 3 estimates/);
+    assert.match(TESTER_WHATS_NEW, /New estimate asks for the job \/ event/);
+    assert.match(TESTER_WHATS_NEW, /Escape and × close it/);
     assert.match(OWNER_WHATS_NEW, /Equipment, Other Cost, Change Order FCR, and Staffing are locked/);
     assert.match(OWNER_WHATS_NEW, /Tester seats \/ View as stay as V1.13/);
     assert.match(OWNER_WHATS_NEW, /Mileage Yes is a flat \$2,500/);

@@ -74,9 +74,9 @@ export function SecurityDesk() {
         <h2 className="text-xl font-semibold text-[#163038]">Inactivity lock</h2>
         <p className="mt-2 text-sm text-[#5b6f73]">
           Default 15 minutes with no mouse, keyboard, or tap. One-minute warning: Stay signed in or
-          Lock now. After lock: Session locked — sign in again. A stored “never lock” on a shared PC
-          still times out at 15 when a staff user is signed in. Set the lock time here if 15 minutes
-          is too tight for a long bid.
+          Lock now. After lock: Session locked — sign in again. Don’t lock means this owner seat will
+          not idle-lock on this device. Testers and staff always lock at 15 minutes and cannot pick
+          Don’t lock. Set 30 minutes or 1 hour here if 15 is too tight for a long bid.
         </p>
         <div className="mt-4 space-y-2">
           {OPTIONS.map((item) => {

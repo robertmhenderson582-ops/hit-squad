@@ -18,6 +18,15 @@ export type DisplayPrefs = {
 
 export const DISPLAY_KEY = "hs_display";
 
+/** Owner Don’t lock (0) is real. Testers and staff always lock at 15. */
+export function effectiveLockMinutes(role: string | undefined, minutes: number) {
+  if (role !== "owner") {
+    if (minutes === 0 || minutes === 30 || minutes === 60) return 15;
+    return Math.min(minutes || 15, 15);
+  }
+  return minutes;
+}
+
 export const DEFAULT_DISPLAY: DisplayPrefs = {
   theme: "night",
   easyMode: false,

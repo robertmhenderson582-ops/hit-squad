@@ -875,7 +875,7 @@ textarea:focus {
 .modal-scrim {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 80;
   display: grid;
   place-items: center;
   padding: 1rem;
@@ -887,6 +887,12 @@ textarea:focus {
   border-radius: 20px;
   background: #f4f1e8;
   box-shadow: 0 24px 60px rgba(15, 95, 109, 0.22);
+}
+
+.estimate-modal-close {
+  border: 1px solid rgba(15, 95, 109, 0.28);
+  border-radius: 8px;
+  background: #fff;
 }
 
 .day-chip {

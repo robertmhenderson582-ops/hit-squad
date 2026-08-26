@@ -70,6 +70,7 @@ export function DeskFabs() {
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+      if (document.querySelector(".modal-scrim, .estimate-modal")) return;
       if (inbox.open) {
         inbox.closeInbox();
         return;
