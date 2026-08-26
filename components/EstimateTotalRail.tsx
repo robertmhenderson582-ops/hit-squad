@@ -11,7 +11,7 @@ import {
 } from "@/lib/equipment-sheet";
 import { estimateTotalBreakdown, parseDeskDollars } from "@/lib/estimate-total";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
-import { otherCostTotals, readOtherCost } from "@/lib/other-cost";
+import { otherCostTotals, readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
 
 function money(value: number) {
@@ -35,7 +35,9 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
 
   const breakdown = useMemo(() => {
     const equipment = readEquipmentSheet(pack.estimateKey);
-    const other = readOtherCost(pack.estimateKey);
+    const other = syncOtherCostTravel(readOtherCost(pack.estimateKey), pack.crew, {
+      perMile: pack.jobMeta.mileageRate,
+    });
     const fcr = readFcrPacket(pack.estimateKey);
     const thirdCost = equipment.thirdParty.reduce((sum, line) => sum + thirdPartyCost(line), 0);
     const thirdMarked = equipment.thirdParty.reduce((sum, line) => sum + thirdPartyMarkedUp(line), 0);
@@ -51,7 +53,7 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
       client,
       site,
     });
-  }, [client, crewRows, hours.hours, hours.pd, pack.estimateKey, pack.jobMeta.perDiemRate, site, tick]);
+  }, [client, crewRows, hours.hours, hours.pd, pack.crew, pack.estimateKey, pack.jobMeta.mileageRate, pack.jobMeta.perDiemRate, site, tick]);
 
   return (
     <aside className="est-total-rail hud-tile print-hide" aria-label="Estimate total">

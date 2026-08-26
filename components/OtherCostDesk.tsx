@@ -5,20 +5,23 @@ import { useEstimatePackage } from "@/components/EstimatePackage";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import {
   blankMisc,
-  blankTravel,
   emptyOtherCost,
   miscAmount,
   otherCostTotals,
   readOtherCost,
-  showCraftTravelRow,
+  syncOtherCostTravel,
+  TRAVEL_LANE_LABEL,
   travelAmount,
   writeOtherCost,
   type OtherCostSheet,
+  type TravelLine,
 } from "@/lib/other-cost";
 
 function money(value: number) {
   return value ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
 }
+
+const TRAVEL_HEADERS = ["LANE", "POSITION", "HEADCOUNT", "TRAVELERS", "$ / MILE", "MILES", "TOTAL"];
 
 export function OtherCostDesk({ client, site }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
@@ -29,23 +32,37 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
   }, [client, pack.crew, site]);
 
   useEffect(() => {
-    setSheet(readOtherCost(pack.estimateKey));
-  }, [pack.estimateKey]);
+    const stored = readOtherCost(pack.estimateKey);
+    const next = syncOtherCostTravel(stored, pack.crew, { perMile: pack.jobMeta.mileageRate });
+    setSheet(next);
+    if (JSON.stringify(stored.travel) !== JSON.stringify(next.travel)) {
+      writeOtherCost(pack.estimateKey, next);
+    }
+  }, [pack.crew, pack.estimateKey, pack.jobMeta.mileageRate]);
 
   function persist(next: OtherCostSheet) {
     setSheet(next);
     writeOtherCost(pack.estimateKey, next);
   }
 
+  function patchTravel(index: number, patch: Partial<TravelLine>) {
+    const next = sheet.travel.slice();
+    const line = next[index];
+    if (!line) return;
+    const travelers = patch.travelers != null ? Math.min(Math.max(0, patch.travelers), line.headcount) : line.travelers;
+    next[index] = { ...line, ...patch, travelers };
+    persist({ ...sheet, travel: next });
+  }
+
   const pdRate = pack.jobMeta.perDiemRate || sheet.perDiemRate;
   const totals = otherCostTotals({ ...sheet, perDiemRate: pdRate }, pdDays);
-  const showMileage = showCraftTravelRow(pack.jobMeta.mileageRate) || sheet.travel.some((line) => line.mileageRate > 0);
 
   return (
     <div className="space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Other Cost. Per diem uses this job’s rate and Crew PD days. Travel is Yes/No traveler, Mileage
-        Rate, and travel $. Misc is CAT 2 reimbursables — not B-3 small tools.
+        Other Cost. Per diem uses this job’s rate and Crew PD days. Travel queues every Crew position
+        and bills travelers × miles × $ / mile. Headcount stays on Crew. Misc is CAT 2 reimbursables —
+        not B-3 small tools.
       </p>
 
       <section className="plant-card px-5 py-5">
@@ -73,34 +90,16 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
       </section>
 
       <section className="plant-card px-5 py-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-2xl font-semibold text-[#163038]">Travel</h2>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() =>
-                persist({ ...sheet, travel: [...sheet.travel, blankTravel("staff", pack.jobMeta.mileageRate)] })
-              }
-              className="rounded-lg border border-steel px-3 py-1.5 text-sm text-steel"
-            >
-              + Staff traveler
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                persist({ ...sheet, travel: [...sheet.travel, blankTravel("craft", pack.jobMeta.mileageRate)] })
-              }
-              className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white"
-            >
-              + Craft travel
-            </button>
-          </div>
-        </div>
+        <h2 className="text-2xl font-semibold text-[#163038]">Travel</h2>
+        <p className="mt-1 text-sm text-[#5b6f73]">
+          Rows come from Crew. Type who travels, $ / mile, and miles. Travelers cannot exceed that
+          position’s headcount.
+        </p>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
               <tr>
-                {["KIND", "NAME", "TRAVELER", ...(showMileage ? ["MILEAGE RATE"] : []), "TRAVEL $", "TOTAL"].map((header) => (
+                {TRAVEL_HEADERS.map((header) => (
                   <th key={header} className="px-2 py-2">
                     {header}
                   </th>
@@ -110,65 +109,50 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
             <tbody>
               {sheet.travel.length === 0 ? (
                 <tr>
-                  <td colSpan={showMileage ? 6 : 5} className="px-2 py-4 text-[#5b6f73]">
-                    No travelers.
+                  <td colSpan={7} className="px-2 py-4 text-[#5b6f73]">
+                    Add Crew positions to queue travel.
                   </td>
                 </tr>
               ) : (
                 sheet.travel.map((line, index) => (
                   <tr key={line.id} className="border-t border-[#d5e0de]">
-                    <td className="px-2 py-2">{line.kind === "staff" ? "Staff" : "Craft"}</td>
-                    <td className="px-2 py-2">
-                      <input
-                        className="paper-field"
-                        value={line.name}
-                        onChange={(event) => {
-                          const next = sheet.travel.slice();
-                          next[index] = { ...line, name: event.target.value };
-                          persist({ ...sheet, travel: next });
-                        }}
-                      />
-                    </td>
-                    <td className="px-2 py-2">
-                      <select
-                        className="paper-field"
-                        value={line.traveler ? "yes" : "no"}
-                        onChange={(event) => {
-                          const next = sheet.travel.slice();
-                          next[index] = { ...line, traveler: event.target.value === "yes" };
-                          persist({ ...sheet, travel: next });
-                        }}
-                      >
-                        <option value="no">No</option>
-                        <option value="yes">Yes</option>
-                      </select>
-                    </td>
-                    {showMileage ? (
-                      <td className="px-2 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          className="paper-field w-28"
-                          value={line.mileageRate || pack.jobMeta.mileageRate || ""}
-                          onChange={(event) => {
-                            const next = sheet.travel.slice();
-                            next[index] = { ...line, mileageRate: Number(event.target.value) || 0 };
-                            persist({ ...sheet, travel: next });
-                          }}
-                        />
-                      </td>
-                    ) : null}
+                    <td className="px-2 py-2">{TRAVEL_LANE_LABEL[line.lane]}</td>
+                    <td className="px-2 py-2 font-medium text-[#163038]">{line.name}</td>
+                    <td className="px-2 py-2">{line.headcount}</td>
                     <td className="px-2 py-2">
                       <input
                         type="number"
                         min={0}
-                        className="paper-field w-28"
-                        value={line.travelDollars || ""}
-                        onChange={(event) => {
-                          const next = sheet.travel.slice();
-                          next[index] = { ...line, travelDollars: Number(event.target.value) || 0 };
-                          persist({ ...sheet, travel: next });
-                        }}
+                        max={line.headcount}
+                        className="paper-field w-20"
+                        value={line.travelers || ""}
+                        onChange={(event) =>
+                          patchTravel(index, { travelers: Number(event.target.value) || 0 })
+                        }
+                        aria-label={`${line.name} travelers`}
+                      />
+                    </td>
+                    <td className="px-2 py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="paper-field w-24"
+                        value={line.perMile || ""}
+                        onChange={(event) =>
+                          patchTravel(index, { perMile: Number(event.target.value) || 0 })
+                        }
+                        aria-label={`${line.name} dollars per mile`}
+                      />
+                    </td>
+                    <td className="px-2 py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        className="paper-field w-24"
+                        value={line.miles || ""}
+                        onChange={(event) => patchTravel(index, { miles: Number(event.target.value) || 0 })}
+                        aria-label={`${line.name} miles`}
                       />
                     </td>
                     <td className="px-2 py-2 font-semibold">{money(travelAmount(line))}</td>

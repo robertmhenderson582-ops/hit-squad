@@ -32,6 +32,7 @@ import { emptyJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/sta
 import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
 import { packIdFromStoreKey, touchLocalPack } from "@/lib/local-estimates";
 import { hydrateFromVault, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
+import { persistCrewTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
 
 type CrewState = {
@@ -157,12 +158,13 @@ export function EstimatePackageProvider({
   useEffect(() => {
     if (!ready) return;
     writeCrew(estimateKey, crew);
+    persistCrewTravel(estimateKey, crew, jobMeta.mileageRate);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
       touchLocalPack(packId);
       scheduleVaultUpsert(packId);
     }
-  }, [crew, estimateKey, ready]);
+  }, [crew, estimateKey, jobMeta.mileageRate, ready]);
 
   useEffect(() => {
     if (!ready) return;
