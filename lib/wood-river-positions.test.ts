@@ -47,10 +47,25 @@ describe("Wood River position catalog", () => {
   });
 
   it("fills GF / Foreman / Direct Craft from book titles plus today's craft names", () => {
-    for (const title of ["General Foreman", "GENERAL FOREMAN 01", "GENERAL FOREMAN 02"]) {
+    for (const title of [
+      "Boilermaker GF Union",
+      "Pipefitter GF Union",
+      "General Foreman",
+      "GENERAL FOREMAN 01",
+      "GENERAL FOREMAN 02",
+    ]) {
       assert.equal(WOOD_RIVER_GENERAL_FOREMAN_TITLES.includes(title), true);
     }
-    for (const title of ["Foreman", "FOREMAN 01", "FOREMAN 02"]) {
+    for (const title of [
+      "Boilermaker Foreman",
+      "Pipefitter Foreman",
+      "Laborer Foreman 3-9",
+      "Operator Foreman Gr XII",
+      "Laydown Pipefitter Foreman",
+      "Foreman",
+      "FOREMAN 01",
+      "FOREMAN 02",
+    ]) {
       assert.equal(WOOD_RIVER_FOREMAN_TITLES.includes(title), true);
     }
     assert.deepEqual(WOOD_RIVER_GENERAL_FOREMAN_TITLES, uniqueSortedTitles(WOOD_RIVER_GENERAL_FOREMAN_TITLES));

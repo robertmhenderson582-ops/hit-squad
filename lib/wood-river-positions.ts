@@ -121,12 +121,19 @@ export const WOOD_RIVER_STAFF_TITLES = uniqueSortedTitles([
 ]);
 
 export const WOOD_RIVER_GENERAL_FOREMAN_TITLES = uniqueSortedTitles([
+  "Boilermaker GF Union",
+  "Pipefitter GF Union",
   "General Foreman",
   "GENERAL FOREMAN 01",
   "GENERAL FOREMAN 02",
 ]);
 
 export const WOOD_RIVER_FOREMAN_TITLES = uniqueSortedTitles([
+  "Boilermaker Foreman",
+  "Pipefitter Foreman",
+  "Laborer Foreman 3-9",
+  "Operator Foreman Gr XII",
+  "Laydown Pipefitter Foreman",
   "Foreman",
   "FOREMAN 01",
   "FOREMAN 02",
