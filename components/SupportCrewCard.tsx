@@ -1,17 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CatalogPick } from "@/components/CatalogPick";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { CrewPhaseCards } from "@/components/CrewPhaseCards";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { CREW_LANES } from "@/lib/crew-lanes";
 import {
+  addSupportLine,
   assignSupportBilledAs,
   assignSupportDuty,
-  blankSupportLine,
   clampPerDiem,
   hydrateSupportLine,
+  syncSupportRows,
   type CalendarRange,
   type SupportLine,
 } from "@/lib/craft-labor";
@@ -35,12 +36,21 @@ export function SupportCrewCard({
   const confirmRemove = useConfirmRemove();
   const pack = useEstimatePackage();
   const [openId, setOpenId] = useState<string | null | undefined>(undefined);
-  const lines = rows.map((row) => hydrateSupportLine(row));
+  const phases = pack.schedule.phases;
+  const units = pack.schedule.units ?? [];
+  const multi = Boolean(pack.schedule.multiUnits);
+  const lines = syncSupportRows(rows, phases, units, multi);
   const resolvedOpen = openId === undefined ? (lines[0]?.id ?? null) : openId;
+  const needsPhaseSeed = rows.some((row) => !hydrateSupportLine(row).ranges.some((range) => range.phaseId));
+
+  useEffect(() => {
+    if (!needsPhaseSeed) return;
+    onRows((current) => syncSupportRows(current, phases, units, multi));
+  }, [multi, needsPhaseSeed, onRows, phases, units]);
 
   function addPosition() {
-    const next = blankSupportLine();
-    onRows((current) => [...current.map((row) => hydrateSupportLine(row)), next]);
+    const next = addSupportLine(phases, units, multi);
+    onRows((current) => [...syncSupportRows(current, phases, units, multi), next]);
     setOpenId(next.id);
   }
 
