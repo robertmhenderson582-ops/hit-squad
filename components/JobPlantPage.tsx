@@ -81,12 +81,12 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const night = resolvedTheme === "night";
   const jobCode = searchParams.get("job");
   const tab = plantTabFromQuery(searchParams.get("tab"));
+  const { board } = useDeskBoard();
   const [localJobs, setLocalJobs] = useState<ReturnType<typeof localPackToJob>[]>([]);
   useEffect(() => {
     setLocalJobs(listLocalPacks().map((pack) => localPackToJob(pack)));
-  }, []);
+  }, [board]);
   const openedJob = jobByCode(jobCode, localJobs);
-  const { board } = useDeskBoard();
   const closed = readClosed().filter((item) => item.kind === "estimate").map((item) => item.id);
   const plantEstimates = estimatesForPlant(
     (board?.estimates ?? []).filter((row) => !closed.includes(row.id)),

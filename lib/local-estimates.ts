@@ -30,6 +30,7 @@ export type LocalPack = {
   size?: string;
   siteId: string;
   createdAt: number;
+  updatedAt: number;
 };
 
 export type StorageLike = {
@@ -73,7 +74,7 @@ export function storageKeyForPack(packId: string): string {
   return newEstimateKey(packId);
 }
 
-function readJson<T>(store: StorageLike, key: string): T | null {
+export function readStoreJson<T>(store: StorageLike, key: string): T | null {
   try {
     const raw = store.getItem(key);
     if (!raw) return null;
@@ -83,7 +84,7 @@ function readJson<T>(store: StorageLike, key: string): T | null {
   }
 }
 
-function writeJson(store: StorageLike, key: string, value: unknown) {
+export function writeStoreJson(store: StorageLike, key: string, value: unknown) {
   try {
     store.setItem(key, JSON.stringify(value));
   } catch {
@@ -92,13 +93,19 @@ function writeJson(store: StorageLike, key: string, value: unknown) {
 }
 
 function readIndex(store: StorageLike): LocalPack[] {
-  const parsed = readJson<LocalPack[]>(store, PACK_INDEX_KEY);
+  const parsed = readStoreJson<LocalPack[]>(store, PACK_INDEX_KEY);
   if (!Array.isArray(parsed)) return [];
   return parsed.filter((row) => row && typeof row.packId === "string" && row.packId.startsWith("new-"));
 }
 
 function writeIndex(store: StorageLike, rows: LocalPack[]) {
-  writeJson(store, PACK_INDEX_KEY, rows);
+  writeStoreJson(store, PACK_INDEX_KEY, rows);
+}
+
+function upsertIndex(store: StorageLike, next: LocalPack) {
+  const index = readIndex(store).filter((row) => row.packId !== next.packId);
+  index.unshift(next);
+  writeIndex(store, index);
 }
 
 export function rememberLocalPack(
@@ -112,20 +119,50 @@ export function rememberLocalPack(
   store: StorageLike | null = typeof window === "undefined" ? null : window.localStorage,
 ): LocalPack | null {
   if (!store || !input.packId.startsWith("new-")) return null;
+  const key = storageKeyForPack(input.packId);
+  const existing = readStoreJson<Partial<LocalPack>>(store, `${PACK_STORE_PREFIX}${key}`);
+  const now = Date.now();
+  const title = input.title.trim() || existing?.title || "Working estimate";
+  const client = input.client || existing?.client || "Phillips 66";
+  const site = input.site || existing?.site || "Wood River — Roxana, IL";
+  const size = input.size ?? existing?.size;
+  const unchanged =
+    existing &&
+    existing.title === title &&
+    existing.client === client &&
+    existing.site === site &&
+    existing.size === size;
   const next: LocalPack = {
     packId: input.packId,
-    key: storageKeyForPack(input.packId),
-    title: input.title.trim() || "Working estimate",
-    client: input.client,
-    site: input.site,
-    size: input.size,
-    siteId: siteIdFromSite(input.site, input.client),
-    createdAt: Date.now(),
+    key,
+    title,
+    client,
+    site,
+    size,
+    siteId: siteIdFromSite(site, client),
+    createdAt: existing?.createdAt || now,
+    updatedAt: unchanged ? existing.updatedAt || existing.createdAt || now : now,
   };
-  writeJson(store, `${PACK_STORE_PREFIX}${next.key}`, next);
-  const index = readIndex(store).filter((row) => row.packId !== next.packId);
-  index.unshift(next);
-  writeIndex(store, index);
+  writeStoreJson(store, `${PACK_STORE_PREFIX}${next.key}`, next);
+  upsertIndex(store, next);
+  return next;
+}
+
+export function touchLocalPack(
+  packId: string,
+  updatedAt = Date.now(),
+  store: StorageLike | null = typeof window === "undefined" ? null : window.localStorage,
+  createdAt?: number,
+): LocalPack | null {
+  if (!store || !packId.startsWith("new-")) return null;
+  const current = packFromStore(packId, store);
+  const next: LocalPack = {
+    ...current,
+    createdAt: createdAt || current.createdAt || updatedAt,
+    updatedAt,
+  };
+  writeStoreJson(store, `${PACK_STORE_PREFIX}${next.key}`, next);
+  upsertIndex(store, next);
   return next;
 }
 
@@ -144,11 +181,12 @@ export function scanStoredPackIds(store: StorageLike): string[] {
 
 function packFromStore(packId: string, store: StorageLike): LocalPack {
   const key = storageKeyForPack(packId);
-  const saved = readJson<Partial<LocalPack>>(store, `${PACK_STORE_PREFIX}${key}`);
+  const saved = readStoreJson<Partial<LocalPack>>(store, `${PACK_STORE_PREFIX}${key}`);
   const indexed = readIndex(store).find((row) => row.packId === packId);
   const title = saved?.title || indexed?.title || "Working estimate";
   const client = saved?.client || indexed?.client || "Phillips 66";
   const site = saved?.site || indexed?.site || "Wood River — Roxana, IL";
+  const createdAt = saved?.createdAt || indexed?.createdAt || 0;
   return {
     packId,
     key,
@@ -157,7 +195,8 @@ function packFromStore(packId: string, store: StorageLike): LocalPack {
     site,
     size: saved?.size || indexed?.size,
     siteId: saved?.siteId || indexed?.siteId || siteIdFromSite(site, client),
-    createdAt: saved?.createdAt || indexed?.createdAt || 0,
+    createdAt,
+    updatedAt: saved?.updatedAt || indexed?.updatedAt || createdAt,
   };
 }
 

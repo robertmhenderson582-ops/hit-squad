@@ -10,6 +10,7 @@ import { useDisplay } from "@/components/DisplayProvider";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
 import { jobPlantHref, plantJobTally, plantJobsLine } from "@/lib/jobs";
+import { hydrateFromVault } from "@/lib/estimate-vault-client";
 import { listLocalPacks, mergeLocalJobs } from "@/lib/local-estimates";
 import type { JobRecord } from "@/lib/types";
 
@@ -26,6 +27,7 @@ export function JobsDesk() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      await hydrateFromVault();
       const response = await fetch("/api/desk/jobs", {
         credentials: "include",
         cache: "no-store",

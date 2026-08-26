@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CatalogPick } from "@/components/CatalogPick";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import {
@@ -8,17 +9,23 @@ import {
   blankTravel,
   emptyOtherCost,
   miscAmount,
+  miscDescriptionsFor,
+  MISC_HEADERS,
   otherCostTotals,
   readOtherCost,
-  showCraftTravelRow,
+  syncOtherCostTravel,
+  TRAVEL_KIND_LABEL,
   travelAmount,
   writeOtherCost,
   type OtherCostSheet,
+  type TravelLine,
 } from "@/lib/other-cost";
 
 function money(value: number) {
   return value ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
 }
+
+const TRAVEL_HEADERS = ["KIND", "HEADCOUNT", "TRAVELERS", "$ / MILE", "MILES", "TOTAL"];
 
 export function OtherCostDesk({ client, site }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
@@ -29,23 +36,44 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
   }, [client, pack.crew, site]);
 
   useEffect(() => {
-    setSheet(readOtherCost(pack.estimateKey));
-  }, [pack.estimateKey]);
+    const stored = readOtherCost(pack.estimateKey);
+    const next = syncOtherCostTravel(stored, pack.crew, { perMile: pack.jobMeta.mileageRate });
+    setSheet(next);
+    if (JSON.stringify(stored.travel) !== JSON.stringify(next.travel)) {
+      writeOtherCost(pack.estimateKey, next);
+    }
+  }, [pack.crew, pack.estimateKey, pack.jobMeta.mileageRate]);
 
   function persist(next: OtherCostSheet) {
     setSheet(next);
     writeOtherCost(pack.estimateKey, next);
   }
 
+  function patchTravel(index: number, patch: Partial<TravelLine>) {
+    const next = sheet.travel.slice();
+    const line = next[index];
+    if (!line) return;
+    const headcount =
+      line.source === "extra" && patch.headcount != null ? Math.max(0, patch.headcount) : line.headcount;
+    const travelers = capOrKeep(line, patch, headcount);
+    next[index] = { ...line, ...patch, headcount, travelers };
+    persist({ ...sheet, travel: next });
+  }
+
+  function capOrKeep(line: TravelLine, patch: Partial<TravelLine>, headcount: number) {
+    const raw = patch.travelers != null ? patch.travelers : line.travelers;
+    return Math.min(Math.max(0, raw), headcount);
+  }
+
   const pdRate = pack.jobMeta.perDiemRate || sheet.perDiemRate;
   const totals = otherCostTotals({ ...sheet, perDiemRate: pdRate }, pdDays);
-  const showMileage = showCraftTravelRow(pack.jobMeta.mileageRate) || sheet.travel.some((line) => line.mileageRate > 0);
 
   return (
     <div className="space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Other Cost. Per diem uses this job’s rate and Crew PD days. Travel is Yes/No traveler, Mileage
-        Rate, and travel $. Misc is CAT 2 reimbursables — not B-3 small tools.
+        Other Cost. Per diem uses this job’s rate and Crew PD days. Travel is Staff and Craft
+        headcount from Crew, then travelers × miles × $ / mile. Misc is CAT 2 reimbursables — not B-3
+        small tools.
       </p>
 
       <section className="plant-card px-5 py-5">
@@ -74,7 +102,13 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
 
       <section className="plant-card px-5 py-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-2xl font-semibold text-[#163038]">Travel</h2>
+          <div>
+            <h2 className="text-2xl font-semibold text-[#163038]">Travel</h2>
+            <p className="mt-1 text-sm text-[#5b6f73]">
+              Staff headcount is Staff + GF. Craft is Foreman + Direct Craft + Support. Travelers
+              cannot exceed that line’s headcount.
+            </p>
+          </div>
           <div className="flex gap-2">
             <button
               type="button"
@@ -100,81 +134,86 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
               <tr>
-                {["KIND", "NAME", "TRAVELER", ...(showMileage ? ["MILEAGE RATE"] : []), "TRAVEL $", "TOTAL"].map((header) => (
+                {TRAVEL_HEADERS.map((header) => (
                   <th key={header} className="px-2 py-2">
                     {header}
                   </th>
                 ))}
+                <th className="px-2 py-2" />
               </tr>
             </thead>
             <tbody>
-              {sheet.travel.length === 0 ? (
-                <tr>
-                  <td colSpan={showMileage ? 6 : 5} className="px-2 py-4 text-[#5b6f73]">
-                    No travelers.
-                  </td>
-                </tr>
-              ) : (
-                sheet.travel.map((line, index) => (
-                  <tr key={line.id} className="border-t border-[#d5e0de]">
-                    <td className="px-2 py-2">{line.kind === "staff" ? "Staff" : "Craft"}</td>
-                    <td className="px-2 py-2">
-                      <input
-                        className="paper-field"
-                        value={line.name}
-                        onChange={(event) => {
-                          const next = sheet.travel.slice();
-                          next[index] = { ...line, name: event.target.value };
-                          persist({ ...sheet, travel: next });
-                        }}
-                      />
-                    </td>
-                    <td className="px-2 py-2">
-                      <select
-                        className="paper-field"
-                        value={line.traveler ? "yes" : "no"}
-                        onChange={(event) => {
-                          const next = sheet.travel.slice();
-                          next[index] = { ...line, traveler: event.target.value === "yes" };
-                          persist({ ...sheet, travel: next });
-                        }}
-                      >
-                        <option value="no">No</option>
-                        <option value="yes">Yes</option>
-                      </select>
-                    </td>
-                    {showMileage ? (
-                      <td className="px-2 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          className="paper-field w-28"
-                          value={line.mileageRate || pack.jobMeta.mileageRate || ""}
-                          onChange={(event) => {
-                            const next = sheet.travel.slice();
-                            next[index] = { ...line, mileageRate: Number(event.target.value) || 0 };
-                            persist({ ...sheet, travel: next });
-                          }}
-                        />
-                      </td>
-                    ) : null}
-                    <td className="px-2 py-2">
+              {sheet.travel.map((line, index) => (
+                <tr key={line.id} className="border-t border-[#d5e0de]">
+                  <td className="px-2 py-2">{TRAVEL_KIND_LABEL[line.kind]}</td>
+                  <td className="px-2 py-2">
+                    {line.source === "crew" ? (
+                      line.headcount
+                    ) : (
                       <input
                         type="number"
                         min={0}
-                        className="paper-field w-28"
-                        value={line.travelDollars || ""}
-                        onChange={(event) => {
-                          const next = sheet.travel.slice();
-                          next[index] = { ...line, travelDollars: Number(event.target.value) || 0 };
-                          persist({ ...sheet, travel: next });
-                        }}
+                        className="paper-field w-20"
+                        value={line.headcount || ""}
+                        onChange={(event) =>
+                          patchTravel(index, { headcount: Number(event.target.value) || 0 })
+                        }
+                        aria-label={`${TRAVEL_KIND_LABEL[line.kind]} extra headcount`}
                       />
-                    </td>
-                    <td className="px-2 py-2 font-semibold">{money(travelAmount(line))}</td>
-                  </tr>
-                ))
-              )}
+                    )}
+                  </td>
+                  <td className="px-2 py-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={line.headcount}
+                      className="paper-field w-20"
+                      value={line.travelers || ""}
+                      onChange={(event) =>
+                        patchTravel(index, { travelers: Number(event.target.value) || 0 })
+                      }
+                      aria-label={`${TRAVEL_KIND_LABEL[line.kind]} travelers`}
+                    />
+                  </td>
+                  <td className="px-2 py-2">
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className="paper-field w-24"
+                      value={line.perMile || ""}
+                      onChange={(event) =>
+                        patchTravel(index, { perMile: Number(event.target.value) || 0 })
+                      }
+                      aria-label={`${TRAVEL_KIND_LABEL[line.kind]} dollars per mile`}
+                    />
+                  </td>
+                  <td className="px-2 py-2">
+                    <input
+                      type="number"
+                      min={0}
+                      className="paper-field w-24"
+                      value={line.miles || ""}
+                      onChange={(event) => patchTravel(index, { miles: Number(event.target.value) || 0 })}
+                      aria-label={`${TRAVEL_KIND_LABEL[line.kind]} miles`}
+                    />
+                  </td>
+                  <td className="px-2 py-2 font-semibold">{money(travelAmount(line))}</td>
+                  <td className="px-2 py-2">
+                    {line.source === "extra" ? (
+                      <button
+                        type="button"
+                        className="text-xs text-[#5b6f73] underline"
+                        onClick={() =>
+                          persist({ ...sheet, travel: sheet.travel.filter((row) => row.id !== line.id) })
+                        }
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -195,7 +234,7 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
               <tr>
-                {["ITEM", "QTY", "EACH", "TOTAL"].map((header) => (
+                {MISC_HEADERS.map((header) => (
                   <th key={header} className="px-2 py-2">
                     {header}
                   </th>
@@ -212,6 +251,19 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
                       onChange={(event) => {
                         const next = sheet.misc.slice();
                         next[index] = { ...line, item: event.target.value };
+                        persist({ ...sheet, misc: next });
+                      }}
+                    />
+                  </td>
+                  <td className="px-2 py-2">
+                    <CatalogPick
+                      value={line.description}
+                      options={miscDescriptionsFor(line.item)}
+                      placeholder={line.item ? "Shop description" : "Pick or type an item first"}
+                      allowCustom
+                      onChange={(description) => {
+                        const next = sheet.misc.slice();
+                        next[index] = { ...line, description };
                         persist({ ...sheet, misc: next });
                       }}
                     />

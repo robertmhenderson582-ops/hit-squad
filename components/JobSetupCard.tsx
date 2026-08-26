@@ -6,7 +6,6 @@ import { DateField } from "@/components/DateField";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { displayEstimateType, ESTIMATE_TYPES, type EstimateType } from "@/lib/estimate-type";
 import { jobEventLabel } from "@/lib/job-event";
-import { showCraftTravelRow } from "@/lib/other-cost";
 
 export function JobSetupCard({
   type,
@@ -33,7 +32,6 @@ export function JobSetupCard({
 }) {
   const pack = useEstimatePackage();
   const [estimateType, setEstimateType] = useState<EstimateType>(displayEstimateType(type));
-  const travelOn = showCraftTravelRow(pack.jobMeta.mileageRate);
 
   return (
     <section className="plant-card mx-auto max-w-3xl px-6 py-6">
@@ -145,27 +143,9 @@ export function JobSetupCard({
               pack.setJobMeta((current) => ({ ...current, mileageRate: Number(event.target.value) || 0 }))
             }
           />
+          <p className="mt-1 text-xs text-[#5b6f73]">Seeds $ / mile on new Travel rows. Travel itself stays on Other Cost.</p>
         </label>
       </div>
-      {travelOn ? (
-        <div className="mt-4">
-          <p className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">TRAVEL</p>
-          <table className="mt-2 min-w-full text-left text-sm">
-            <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
-              <tr>
-                <th className="py-2">ITEM</th>
-                <th className="py-2">Mileage Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-t border-[#d5e0de]">
-                <td className="py-2">Craft travel</td>
-                <td className="py-2">{pack.jobMeta.mileageRate || "—"}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      ) : null}
     </section>
   );
 }

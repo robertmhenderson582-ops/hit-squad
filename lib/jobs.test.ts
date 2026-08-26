@@ -15,7 +15,7 @@ describe("desk counts", () => {
     assert.equal(desk.jobs.length, 4);
     assert.equal(desk.jobs.some((job) => job.kind === "hse"), true);
     assert.equal(desk.estimatesOpen, 3);
-    assert.equal(desk.estimatesOpen === desk.jobs.length, false);
+    assert.notEqual(desk.estimatesOpen, desk.jobs.length);
   });
 
   it("keeps Wood River job IDs openable without inventing a fifth job", () => {

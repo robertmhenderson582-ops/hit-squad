@@ -30,7 +30,7 @@ export function SitesDesk() {
   const [tally, setTally] = useState(plantJobTally());
   useEffect(() => {
     setTally(plantJobTally([...seedJobs(), ...listLocalPacks().map((pack) => localPackToJob(pack))]));
-  }, []);
+  }, [board]);
   const alias = useAlias();
   const owner = useOwnerDesk();
   const { resolvedTheme } = useDisplay();
