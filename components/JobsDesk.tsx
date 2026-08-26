@@ -9,7 +9,8 @@ import { useDeskBoard } from "@/components/useDeskBoard";
 import { useDisplay } from "@/components/DisplayProvider";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
-import { jobPlantHref, plantJobsLine } from "@/lib/jobs";
+import { jobPlantHref, plantJobTally, plantJobsLine } from "@/lib/jobs";
+import { listLocalPacks, mergeLocalJobs } from "@/lib/local-estimates";
 import type { JobRecord } from "@/lib/types";
 
 export function JobsDesk() {
@@ -35,7 +36,11 @@ export function JobsDesk() {
         setError(data.error || "Jobs stayed on this desk.");
         return;
       }
-      setJobs(((data.desk.jobs as JobRecord[]) ?? []).filter((job) => !jobLooksClosed(job, readClosed())));
+      setJobs(
+        mergeLocalJobs((data.desk.jobs as JobRecord[]) ?? [], listLocalPacks()).filter(
+          (job) => !jobLooksClosed(job, readClosed()),
+        ),
+      );
     })();
     return () => {
       cancelled = true;
@@ -51,7 +56,7 @@ export function JobsDesk() {
   return (
     <div className={`${night ? "instrument-desk" : "paper-desk"} -mx-3 mt-4 rounded-sm px-4 py-5 sm:-mx-4 sm:px-6`}>
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        {plantJobsLine()} Open a job to keep its ID, window, and working figure. {alias("WOOD RIVER")} opens the
+        {plantJobsLine(plantJobTally(jobs))} Open a job to keep its ID, window, and working figure. {alias("WOOD RIVER")} opens the
         plant with that job still showing.
       </p>
       {error ? <p className="text-amber-flare">{error}</p> : null}

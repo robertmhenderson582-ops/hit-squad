@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useDisplay } from "@/components/DisplayProvider";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useDeskBoard } from "@/components/useDeskBoard";
-import { plantJobTally, plantJobsLine } from "@/lib/jobs";
+import { plantJobTally, plantJobsLine, seedJobs } from "@/lib/jobs";
+import { listLocalPacks, localPackToJob } from "@/lib/local-estimates";
 import type { SiteRecord } from "@/lib/types";
 
 function slugFor(site: SiteRecord) {
@@ -16,9 +18,8 @@ function assignedZero(site: SiteRecord, viewSite?: string) {
   return viewSite.toLowerCase().includes(site.name.toLowerCase()) && site.openJobs === 0;
 }
 
-function siteCountLine(site: SiteRecord) {
+function siteCountLine(site: SiteRecord, tally = plantJobTally()) {
   if (site.name.toLowerCase().includes("wood river")) {
-    const tally = plantJobTally();
     return `${tally.total} jobs · ${tally.open} open · ${tally.hold} hold · ${tally.estimates} estimates`;
   }
   return `${site.openJobs} open jobs`;
@@ -26,6 +27,10 @@ function siteCountLine(site: SiteRecord) {
 
 export function SitesDesk() {
   const { board, error } = useDeskBoard();
+  const [tally, setTally] = useState(plantJobTally());
+  useEffect(() => {
+    setTally(plantJobTally([...seedJobs(), ...listLocalPacks().map((pack) => localPackToJob(pack))]));
+  }, []);
   const alias = useAlias();
   const owner = useOwnerDesk();
   const { resolvedTheme } = useDisplay();
@@ -39,7 +44,7 @@ export function SitesDesk() {
   return (
     <div className={`${night ? "instrument-desk" : "paper-desk"} -mx-3 mt-5 rounded-sm px-4 py-6 sm:-mx-4 sm:px-6`}>
       <h2 className="text-3xl font-semibold text-[#163038]">{alias("Madison")}</h2>
-      <p className="mt-3 max-w-3xl text-sm leading-6 text-[#5b6f73]">{plantJobsLine()}</p>
+      <p className="mt-3 max-w-3xl text-sm leading-6 text-[#5b6f73]">{plantJobsLine(tally)}</p>
       {error ? <p className="mt-3 text-amber-flare">{error}</p> : null}
       {noneOpen ? (
         <p className="mt-4 max-w-3xl text-sm text-[#5b6f73]">
@@ -56,7 +61,7 @@ export function SitesDesk() {
               <Link key={site.id} href="/jobs/yates" className="site-plate plant-card block px-5 py-5">
                 <p className="text-xl font-semibold text-[#163038]">{alias(site.name)}</p>
                 <p className="mt-1 text-sm text-[#5b6f73]">
-                  {alias(site.city)} · {siteCountLine(site)}
+                  {alias(site.city)} · {siteCountLine(site, tally)}
                 </p>
               </Link>
             ))}
@@ -72,7 +77,7 @@ export function SitesDesk() {
               <Link key={site.id} href={`/jobs/${slugFor(site)}`} className="site-plate plant-card block px-5 py-5">
                 <p className="text-xl font-semibold text-[#163038]">{alias(site.name)}</p>
                 <p className="mt-1 text-sm text-[#5b6f73]">
-                  {alias(site.city)} · {siteCountLine(site)}
+                  {alias(site.city)} · {siteCountLine(site, tally)}
                 </p>
               </Link>
             ))}

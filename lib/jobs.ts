@@ -59,10 +59,14 @@ const JOBS: JobRecord[] = [
 export const PLANT_TABS = ["Overview", "Estimates", "Change orders", "People"] as const;
 export type PlantTab = (typeof PLANT_TABS)[number];
 
-export function jobByCode(code: string | null | undefined): JobRecord | undefined {
+export function jobByCode(code: string | null | undefined, extras: JobRecord[] = []): JobRecord | undefined {
   if (!code) return undefined;
   const needle = code.trim().toLowerCase();
-  return JOBS.find((job) => job.code.toLowerCase() === needle);
+  return [...JOBS, ...extras].find((job) => job.code.toLowerCase() === needle);
+}
+
+export function seedJobs(): JobRecord[] {
+  return JOBS;
 }
 
 export function plantJobTally(jobs: JobRecord[] = JOBS) {

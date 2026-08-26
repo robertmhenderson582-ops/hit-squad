@@ -15,6 +15,8 @@ import { PhaseSchedule } from "@/components/PhaseSchedule";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { boundOtLabel } from "@/lib/hours-clock";
+import { estimateStorageKey } from "@/lib/estimate-open";
+import { findLocalPack, localPackToEstimate } from "@/lib/local-estimates";
 import type { EstimateStatus } from "@/components/EstimateWorkspace";
 
 export function EstimateDetail({ estimateId }: { estimateId: string }) {
@@ -22,15 +24,17 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
   const { board, error } = useDeskBoard();
   const [tab, setTab] = useState<EstimateTab>("summary");
   const [status, setStatus] = useState<EstimateStatus>("Estimate");
-  const estimate = board?.estimates.find((row) => row.id === estimateId);
+  const local = findLocalPack(estimateId);
+  const estimate = board?.estimates.find((row) => row.id === estimateId) ?? (local ? localPackToEstimate(local) : undefined);
   const site = board?.sites.find((row) => row.id === estimate?.siteId);
+  const siteName = site?.name ?? local?.site ?? estimate?.unit ?? "";
   const staffing = useMemo(
     () => board?.staffing.filter((row) => row.estimateId === estimateId) ?? [],
     [board, estimateId],
   );
 
-  if (error) return <p className="p-6 text-amber-flare">{error}</p>;
-  if (!board) return <p className="p-6 font-mono text-xs tracking-[0.2em] text-steel">LOADING PACKAGE</p>;
+  if (error && !estimate) return <p className="p-6 text-amber-flare">{error}</p>;
+  if (!board && !estimate) return <p className="p-6 font-mono text-xs tracking-[0.2em] text-steel">LOADING PACKAGE</p>;
   if (!estimate) {
     return (
       <p className="p-6">
@@ -43,15 +47,15 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
   }
 
   return (
-    <EstimatePackageProvider estimateKey={estimate.id}>
+    <EstimatePackageProvider estimateKey={estimateStorageKey(estimate.id)}>
     <EstimateWorkspace
-      crumb={`${alias(site?.name ?? estimate.unit)} / ${estimate.title}`}
+      crumb={`${alias(siteName)} / ${estimate.title}`}
       tab={tab}
       onTab={setTab}
       client={alias(estimate.client)}
-      site={alias(site?.name ?? "")}
+      site={alias(siteName)}
       jobClient={estimate.client}
-      jobSite={site?.name}
+      jobSite={siteName}
       name={estimate.title}
       total={estimate.total}
       packageId={estimate.id}
@@ -64,9 +68,9 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
           <JobSetupCard
             type={estimate.type}
             client={alias(estimate.client)}
-            site={site?.name}
+            site={siteName}
             name={estimate.title}
-            otRule={boundOtLabel(site?.name ?? "", estimate.client, site?.code)}
+            otRule={boundOtLabel(siteName, estimate.client, site?.code)}
             author={estimate.estimator}
             code={estimate.code}
             window={estimate.window}
@@ -90,22 +94,22 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       ) : null}
 
       {tab === "activities" ? (
-        <WorkActivitiesDesk client={estimate.client} site={site?.name} />
+        <WorkActivitiesDesk client={estimate.client} site={siteName} />
       ) : null}
 
       {tab === "crew" ? (
-        <EstimateWorkbook client={estimate.client} site={site?.name} name={estimate.title} />
+        <EstimateWorkbook client={estimate.client} site={siteName} name={estimate.title} />
       ) : null}
 
       {tab === "staffing" ? (
-        <StaffingPlanDesk client={estimate.client} site={site?.name} name={estimate.title} />
+        <StaffingPlanDesk client={estimate.client} site={siteName} name={estimate.title} />
       ) : null}
 
       {tab === "equipment" ? <EquipmentDesk /> : null}
 
-      {tab === "costs" ? <OtherCostDesk client={estimate.client} site={site?.name} /> : null}
+      {tab === "costs" ? <OtherCostDesk client={estimate.client} site={siteName} /> : null}
 
-      {tab === "change-orders" ? <ChangeOrderPacket client={estimate.client} site={site?.name} /> : null}
+      {tab === "change-orders" ? <ChangeOrderPacket client={estimate.client} site={siteName} /> : null}
     </EstimateWorkspace>
     </EstimatePackageProvider>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { EstimateCard } from "@/components/EstimateCard";
 import { useEstimateModal } from "@/components/EstimateModalContext";
@@ -13,7 +14,8 @@ import { StatusStamp } from "@/components/StatusStamp";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { VIEW_RESPONSIBILITIES, VISUAL_ROSTER } from "@/lib/owner-desk";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
-import { jobByCode, plantJobTally, plantJobsLine, plantTabFromQuery, plantTabQuery, type PlantTab } from "@/lib/jobs";
+import { jobByCode, plantJobTally, plantJobsLine, plantTabFromQuery, plantTabQuery, seedJobs, type PlantTab } from "@/lib/jobs";
+import { listLocalPacks, localPackToJob } from "@/lib/local-estimates";
 
 const PLANTS: Record<string, { client: string; folder: string; name: string; city: string; plant: string; site: string }> = {
   "wood-river": {
@@ -79,7 +81,11 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const night = resolvedTheme === "night";
   const jobCode = searchParams.get("job");
   const tab = plantTabFromQuery(searchParams.get("tab"));
-  const openedJob = jobByCode(jobCode);
+  const [localJobs, setLocalJobs] = useState<ReturnType<typeof localPackToJob>[]>([]);
+  useEffect(() => {
+    setLocalJobs(listLocalPacks().map((pack) => localPackToJob(pack)));
+  }, []);
+  const openedJob = jobByCode(jobCode, localJobs);
   const { board } = useDeskBoard();
   const closed = readClosed().filter((item) => item.kind === "estimate").map((item) => item.id);
   const plantEstimates = estimatesForPlant(
@@ -88,7 +94,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
     plant.name,
     plant.city,
   );
-  const tally = plantJobTally();
+  const tally = plantJobTally([...seedJobs(), ...localJobs]);
   const openedEstimate = openedJob ? estimateForJob(openedJob, board?.estimates ?? []) : undefined;
 
   function setTab(next: PlantTab) {
@@ -192,7 +198,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
             </article>
           </div>
           <p className="mt-5 text-sm text-[#5b6f73]">
-            {plantJobsLine()} Start an estimate for this plant with + New estimate. SCRs live on that
+            {plantJobsLine(tally)} Start an estimate for this plant with + New estimate. SCRs live on that
             job’s Change orders tab. People assigns who owns change orders, HSE, or quality on{" "}
             {alias(plant.name)}.
           </p>

@@ -8,6 +8,10 @@ export function estimateHref(id: string) {
   return `/estimates/${id}`;
 }
 
+export function estimateStorageKey(id: string) {
+  return id.startsWith("new-") ? newEstimateKey(id) : id;
+}
+
 export function newEstimatePackId() {
   return `new-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }

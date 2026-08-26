@@ -19,6 +19,7 @@ import { ShopRigSheet } from "@/components/ShopRigSheet";
 import { boundOtLabel } from "@/lib/hours-clock";
 import { newEstimateKey, newEstimatePackId } from "@/lib/estimate-open";
 import { defaultEstimateName } from "@/lib/job-event";
+import { rememberLocalPack } from "@/lib/local-estimates";
 
 export function NewEstimateForm() {
   const params = useSearchParams();
@@ -35,6 +36,11 @@ export function NewEstimateForm() {
     next.set("pack", newEstimatePackId());
     router.replace(`/estimates/new?${next.toString()}`);
   }, [pack, params, router, size]);
+
+  useEffect(() => {
+    if (!pack || size === "shop") return;
+    rememberLocalPack({ packId: pack, title: name, client, site, size: size ?? undefined });
+  }, [client, name, pack, site, size]);
 
   if (size === "shop") {
     return (
