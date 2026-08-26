@@ -75,7 +75,15 @@ export function setCopyStatus(list: SeatEstimate[], id: string, status: PackageS
 }
 
 export function findCopy(list: SeatEstimate[], id: string) {
-  return list.find((row) => !row.deleted && (row.id === id || row.templateId === id));
+  const templateId = templateIdFromCopyId(id);
+  return list.find(
+    (row) =>
+      !row.deleted &&
+      (row.id === id ||
+        row.templateId === id ||
+        row.templateId === templateId ||
+        row.id.replace(/:|--/g, "--") === id.replace(/:|--/g, "--")),
+  );
 }
 
 function buildCopy(seatId: string, seatName: string, templateId: ExampleTemplateId): SeatEstimate {
