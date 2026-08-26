@@ -1,47 +1,34 @@
+import {
+  WOOD_RIVER_CRAFT_TITLES,
+  WOOD_RIVER_FOREMAN_TITLES,
+  WOOD_RIVER_GENERAL_FOREMAN_TITLES,
+  WOOD_RIVER_STAFF_TITLES,
+} from "./wood-river-positions.ts";
+
 export const CREW_LANES = [
   {
     id: "staff",
     title: "Staff",
     note: "Supervision / GF & above",
-    positions: [
-      "Analyst Cost 01",
-      "Cost Analyst",
-      "Project Controls",
-      "Superintendent",
-      "Superintendent General PF 01",
-      "General Superintendent",
-      "Project Manager",
-    ],
+    positions: WOOD_RIVER_STAFF_TITLES,
   },
   {
     id: "general-foreman",
     title: "General Foreman",
     note: "General Foreman sits on this card. It does not count as a working foreman.",
-    positions: ["General Foreman"],
+    positions: WOOD_RIVER_GENERAL_FOREMAN_TITLES,
   },
   {
     id: "foreman",
     title: "Foreman",
     note: "Working foreman. General Foreman does not count as working foreman.",
-    positions: ["Foreman"],
+    positions: WOOD_RIVER_FOREMAN_TITLES,
   },
   {
     id: "direct",
     title: "Direct Craft",
     note: "Craft positions. Add a position to start — nothing is prefilled.",
-    positions: [
-      "Boilermaker Journeyman",
-      "Boilermaker Helper",
-      "Pipefitter Journeyman",
-      "Pipefitter Helper",
-      "Ironworker Journeyman",
-      "Operator",
-      "Laborer",
-      "Millwright",
-      "Electrician",
-      "Welder",
-      "Merit welder",
-    ],
+    positions: WOOD_RIVER_CRAFT_TITLES,
   },
   {
     id: "support",
