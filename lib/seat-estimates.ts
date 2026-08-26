@@ -10,6 +10,7 @@ import {
   isExampleTemplateId,
   type ExampleTemplateId,
 } from "./example-packages.ts";
+import type { EstimateRecord } from "./types.ts";
 
 export const PACKAGE_STATUSES = ["Estimate", "Submitted", "Awarded", "Execute", "Close out"] as const;
 export type PackageStatus = (typeof PACKAGE_STATUSES)[number];
@@ -48,6 +49,26 @@ export function folderIsLocked(status: PackageStatus, kind: "example" | "new" = 
 
 export function showsAwardFields(status: PackageStatus) {
   return status === "Awarded" || status === "Execute" || status === "Close out";
+}
+
+export function asEstimateRecord(row: SeatEstimate, ownerId: string): EstimateRecord {
+  return {
+    id: row.id,
+    ownerId,
+    siteId: row.siteId,
+    code: row.code,
+    title: row.title,
+    client: row.client,
+    unit: row.unit,
+    type: row.type,
+    status: row.status === "Close out" ? "HOLD" : "WORKING",
+    window: row.window,
+    labor: "",
+    material: "",
+    total: row.total,
+    estimator: row.estimator,
+    revision: row.revision,
+  };
 }
 
 export function workingCopies(list: SeatEstimate[]) {

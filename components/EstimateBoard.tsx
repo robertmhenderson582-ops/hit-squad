@@ -12,6 +12,7 @@ import type { EstimateStatus } from "@/components/EstimateWorkspace";
 import {
   archiveCopy,
   archivedCopies,
+  asEstimateRecord,
   deleteCopy,
   ensureSeatEstimates,
   restoreCopy,
@@ -20,27 +21,6 @@ import {
   writeSeatEstimates,
   type SeatEstimate,
 } from "@/lib/seat-estimates";
-import type { EstimateRecord } from "@/lib/types";
-
-function asRecord(row: SeatEstimate, ownerId: string): EstimateRecord {
-  return {
-    id: row.id,
-    ownerId,
-    siteId: row.siteId,
-    code: row.code,
-    title: row.title,
-    client: row.client,
-    unit: row.unit,
-    type: row.type,
-    status: row.status === "Close out" ? "HOLD" : "WORKING",
-    window: row.window,
-    labor: "",
-    material: "",
-    total: row.total,
-    estimator: row.estimator,
-    revision: row.revision,
-  };
-}
 
 export function EstimateBoard() {
   const alias = useAlias();
@@ -122,7 +102,7 @@ export function EstimateBoard() {
             {group.map((row) => (
               <EstimateCard
                 key={row.id}
-                estimate={asRecord(row, seatId)}
+                estimate={asEstimateRecord(row, seatId)}
                 status={row.status}
                 archived={row.archived}
                 onStatus={(next: EstimateStatus) => persist(setCopyStatus(list, row.id, next))}

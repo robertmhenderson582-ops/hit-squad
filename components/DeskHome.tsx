@@ -9,7 +9,7 @@ import { useAlias } from "@/components/OwnerDeskContext";
 import { EstimateCard } from "@/components/EstimateCard";
 import { SitesDesk } from "@/components/SitesDesk";
 import { StatusStamp } from "@/components/StatusStamp";
-import { useDeskBoard } from "@/components/useDeskBoard";
+import { useSeatEstimates } from "@/components/useSeatEstimates";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
 import type { DeskBoard } from "@/lib/types";
@@ -30,8 +30,7 @@ export function DeskHome() {
   const [desk, setDesk] = useState<DeskBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [closedPacks, setClosedPacks] = useState<ReturnType<typeof readClosed>>([]);
-  const { board } = useDeskBoard();
-  const estimates = board?.estimates ?? [];
+  const { records: estimates } = useSeatEstimates();
 
   useEffect(() => {
     let cancelled = false;
@@ -115,6 +114,13 @@ export function DeskHome() {
               </tr>
             </thead>
             <tbody>
+              {openJobs.length === 0 ? (
+                <tr className="border-t border-steel-rim/20">
+                  <td className="px-4 py-4 text-sm text-[#5b6f73]" colSpan={7}>
+                    No open jobs on this desk yet.
+                  </td>
+                </tr>
+              ) : null}
               {openJobs.map((job) => {
                 const estimate = estimateForJob(job, estimates);
                 const href = estimate ? estimateHref(estimate.id) : undefined;

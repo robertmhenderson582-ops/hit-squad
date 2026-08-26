@@ -1,17 +1,4 @@
-import type {
-  ActivityLine,
-  ChangeOrderRecord,
-  CostPeriod,
-  CrewLine,
-  EquipmentLine,
-  EstimateRecord,
-  ForgebookBoard,
-  HseRecord,
-  QualityRecord,
-  RateLine,
-  SiteRecord,
-  StaffingLine,
-} from "./types.ts";
+import type { EstimateRecord, ForgebookBoard, RateLine, SiteRecord } from "./types.ts";
 
 const OWNER = "owner-robert-henderson";
 
@@ -92,11 +79,11 @@ const SITES: SiteRecord[] = [
     client: "Phillips 66",
     family: "Phillips 66",
     city: "Roxana, IL",
-    openJobs: 3,
+    openJobs: 0,
     plant: "Wood River refining complex",
     units: ["Unit 3 crude / vacuum", "Coker", "Flare & piperack", "Cooling towers"],
     state: "Illinois",
-    turnaround: "12 Sep → 04 Oct 2026",
+    turnaround: "As released",
     contract: "Master T&M + discrete lump-sum packages",
     gate: "North contractor gate · badge + TWIC",
     notes: "Client and contractor records are loaded for estimating only. Not Madison software.",
@@ -126,133 +113,14 @@ const SITES: SiteRecord[] = [
     client: "Phillips 66",
     family: "Phillips 66",
     city: "Roxana, IL",
-    openJobs: 1,
+    openJobs: 0,
     plant: "Delayed coker",
     units: ["Drum A/B", "Switch deck", "Blowdown"],
     state: "Illinois",
-    turnaround: "Night-shift T&M window",
+    turnaround: "As released",
     contract: "Time & material, weekly ticket",
     gate: "Coker sally port",
     notes: "Hot work and confined-space control stay with the HSE rail.",
-  },
-];
-
-const ESTIMATES: EstimateRecord[] = [
-  {
-    id: "est-u3",
-    ownerId: OWNER,
-    siteId: "site-madison",
-    code: "EST-2609-U3",
-    title: "Unit 3 turnaround — mechanical package",
-    client: "Madison / P66",
-    unit: "Unit 3",
-    type: "Hybrid",
-    status: "WORKING",
-    window: "12 Sep → 04 Oct 2026",
-    labor: "$1,640,000",
-    material: "$770,000",
-    total: "$2,410,000",
-    estimator: "Robert Henderson",
-    revision: "C",
-  },
-  {
-    id: "est-coker",
-    ownerId: OWNER,
-    siteId: "site-coker-pad",
-    code: "EST-2610-CKR",
-    title: "Coker drum valve package — T&M",
-    client: "Madison / P66",
-    unit: "Coker",
-    type: "T&M",
-    status: "WORKING",
-    window: "Night shift window",
-    labor: "$142,000",
-    material: "$44,000",
-    total: "$186,000",
-    estimator: "Robert Henderson",
-    revision: "B",
-  },
-  {
-    id: "est-tower",
-    ownerId: OWNER,
-    siteId: "site-madison",
-    code: "EST-2608-CT",
-    title: "Cooling-tower basin repair",
-    client: "Confidential contractor",
-    unit: "CT-2",
-    type: "Lump sum",
-    status: "HOLD",
-    window: "Quote due Friday",
-    labor: "$248,000",
-    material: "$162,000",
-    total: "$410,000",
-    estimator: "Robert Henderson",
-    revision: "A",
-  },
-];
-
-const CREWS: CrewLine[] = [
-  { id: "cr-1", estimateId: "est-u3", craft: "Boilermaker", headcount: 12, shift: "Days", hours: 10, baseRate: 48.75, burdenedRate: 71.42 },
-  { id: "cr-2", estimateId: "est-u3", craft: "Pipefitter", headcount: 16, shift: "Days", hours: 10, baseRate: 51.2, burdenedRate: 75.01 },
-  { id: "cr-3", estimateId: "est-u3", craft: "Ironworker", headcount: 8, shift: "Days", hours: 10, baseRate: 47.1, burdenedRate: 69.0 },
-  { id: "cr-4", estimateId: "est-u3", craft: "Foreman", headcount: 3, shift: "Days", hours: 10, baseRate: 58.0, burdenedRate: 84.97 },
-  { id: "cr-5", estimateId: "est-u3", craft: "Safety attendant", headcount: 4, shift: "Nights", hours: 10, baseRate: 36.4, burdenedRate: 53.35 },
-  { id: "cr-6", estimateId: "est-coker", craft: "Pipefitter", headcount: 6, shift: "Nights", hours: 12, baseRate: 51.2, burdenedRate: 75.01 },
-  { id: "cr-7", estimateId: "est-coker", craft: "Operator", headcount: 2, shift: "Nights", hours: 12, baseRate: 44.8, burdenedRate: 65.63 },
-  { id: "cr-8", estimateId: "est-tower", craft: "Civil / carpenter", headcount: 8, shift: "Days", hours: 10, baseRate: 39.25, burdenedRate: 57.52 },
-];
-
-const ACTIVITIES: ActivityLine[] = [
-  { id: "wbs-1", estimateId: "est-u3", wbs: "01", name: "Mobilize / badge / orientation", craft: "All", mh: 320, dollars: "$22,800", status: "PLANNED" },
-  { id: "wbs-2", estimateId: "est-u3", wbs: "02", name: "Scaffold & access — Unit 3 piperack", craft: "Scaffold", mh: 1_840, dollars: "$118,400", status: "PLANNED" },
-  { id: "wbs-3", estimateId: "est-u3", wbs: "03", name: "Blind list / isolation package", craft: "Pipefitter", mh: 960, dollars: "$72,000", status: "IN PROGRESS" },
-  { id: "wbs-4", estimateId: "est-u3", wbs: "04", name: "Exchanger bundle pull — E-310 / E-314", craft: "Boilermaker", mh: 2_200, dollars: "$157,000", status: "PLANNED" },
-  { id: "wbs-5", estimateId: "est-u3", wbs: "05", name: "Valve change-out 6\"–18\"", craft: "Pipefitter", mh: 3_100, dollars: "$232,500", status: "PLANNED" },
-  { id: "wbs-6", estimateId: "est-u3", wbs: "06", name: "Hydro / reinstatement", craft: "Pipefitter", mh: 740, dollars: "$55,500", status: "HOLD" },
-  { id: "wbs-7", estimateId: "est-coker", wbs: "01", name: "Drum valve isolation", craft: "Pipefitter", mh: 180, dollars: "$13,500", status: "IN PROGRESS" },
-  { id: "wbs-8", estimateId: "est-coker", wbs: "02", name: "Switch-deck T&M extras", craft: "Mixed", mh: 96, dollars: "$7,200", status: "PLANNED" },
-  { id: "wbs-9", estimateId: "est-tower", wbs: "01", name: "Basin demo / shoring", craft: "Civil", mh: 640, dollars: "$36,800", status: "HOLD" },
-];
-
-const CHANGE_ORDERS: ChangeOrderRecord[] = [
-  {
-    id: "co-014",
-    ownerId: OWNER,
-    number: "CO-014",
-    estimateCode: "EST-2609-U3",
-    title: "Added hydro on 12\" transfer line after ops discovery",
-    origin: "Ops",
-    status: "SUBMITTED",
-    laborDelta: "+$38,400",
-    materialDelta: "+$6,200",
-    schedule: "+1 night",
-    filed: "18 Aug 2026",
-  },
-  {
-    id: "scr-003",
-    ownerId: OWNER,
-    number: "SCR-003",
-    estimateCode: "EST-2610-CKR",
-    title: "Night-shift premium — coker switch deck",
-    origin: "Contractor",
-    status: "OPEN",
-    laborDelta: "+$12,800",
-    materialDelta: "$0",
-    schedule: "None",
-    filed: "21 Aug 2026",
-  },
-  {
-    id: "co-011",
-    ownerId: OWNER,
-    number: "CO-011",
-    estimateCode: "EST-2609-U3",
-    title: "Additional blinds from P66 isolation list rev D",
-    origin: "Engineering",
-    status: "APPROVED",
-    laborDelta: "+$21,000",
-    materialDelta: "+$4,750",
-    schedule: "Absorbed",
-    filed: "09 Aug 2026",
   },
 ];
 
@@ -267,67 +135,25 @@ const RATES: RateLine[] = [
   { id: "rt-8", ownerId: OWNER, craft: "Safety attendant", state: "IL", base: 36.4, fica: 7.65, fui: 0.6, sui: 3.15, wc: 7.2, gl: 2.1, smallTools: 0.75, burdened: 53.35 },
 ];
 
-const HSE: HseRecord[] = [
-  { id: "hse-1", ownerId: OWNER, code: "HW-U3-19", title: "Hot work — Unit 3 piperack west", site: "Madison / Wood River", type: "Permit", status: "CURRENT", owner: "Night captain", note: "Gas test AM + after lunch" },
-  { id: "hse-2", ownerId: OWNER, code: "CS-CKR-04", title: "Confined space — coker blowdown", site: "Coker pad", type: "Permit", status: "OPEN", owner: "HSE tech", note: "Attendant + retrieval staged" },
-  { id: "hse-3", ownerId: OWNER, code: "WD-FLR-01", title: "Pre-outage walkdown — flare / piperack", site: "Madison / Wood River", type: "Walkdown", status: "OPEN", owner: "Robert Henderson", note: "3 actions still open" },
-  { id: "hse-4", ownerId: OWNER, code: "JSA-E310", title: "Bundle pull JSA — E-310", site: "Unit 3", type: "JSA", status: "CURRENT", owner: "Foreman BM", note: "Signed this morning" },
-  { id: "hse-5", ownerId: OWNER, code: "ACT-118", title: "Missing fire watch on south rack", site: "Unit 3", type: "Action", status: "OVERDUE", owner: "Night captain", note: "Due yesterday · still open" },
-];
-
-const EQUIPMENT: EquipmentLine[] = [
-  { id: "eq-1", estimateId: "est-u3", name: "160T crane", qty: 1, period: "18 days", rate: "$4,200/day" },
-  { id: "eq-2", estimateId: "est-u3", name: "Manlift 60'", qty: 4, period: "TA window", rate: "$285/day" },
-  { id: "eq-3", estimateId: "est-coker", name: "Night light tower", qty: 2, period: "T&M nights", rate: "$95/night" },
-];
-
-const STAFFING: StaffingLine[] = [
-  { id: "st-1", estimateId: "est-u3", billedAs: "Boilermaker Journeyman", position: "Superintendent", days: "Mon–Sat", shift: "Days", headcount: 1 },
-  { id: "st-2", estimateId: "est-u3", billedAs: "Pipefitter Journeyman", position: "Night captain", days: "Sun–Thu", shift: "Nights", headcount: 1 },
-  { id: "st-3", estimateId: "est-coker", billedAs: "Boilermaker Journeyman", position: "Tool Room Attendant", days: "Night window", shift: "Nights", headcount: 1 },
-];
-
-const QUALITY: QualityRecord[] = [
-  { id: "qa-1", ownerId: OWNER, code: "ITP-U3-04", title: "Weld hold — 12\" transfer spool", unit: "Unit 3", type: "Hold", status: "HOLD", note: "Waiting NDE before hydro" },
-  { id: "qa-2", ownerId: OWNER, code: "NDE-441", title: "UT — coker drum nozzle N2", unit: "Coker", type: "NDE", status: "OPEN", note: "Tech booked Thursday night" },
-  { id: "qa-3", ownerId: OWNER, code: "P-118", title: "Punch — missing nameplate on PSV-314", unit: "Unit 3", type: "Punch", status: "OPEN", note: "Ops will not accept without tag" },
-  { id: "qa-4", ownerId: OWNER, code: "ITP-CT-01", title: "Concrete ITP — basin pour", unit: "CT-2", type: "ITP", status: "CLEARED", note: "Cylinder breaks accepted" },
-];
-
-const COST: CostPeriod[] = [
-  { id: "ppr-1", ownerId: OWNER, estimateCode: "EST-2609-U3", period: "2026-W34", budget: "$412,000", earned: "$363,000", actual: "$386,000", cpi: "0.94", spi: "0.88", forecast: "$2.56M", note: "Scaffold late · hydro hold" },
-  { id: "ppr-2", ownerId: OWNER, estimateCode: "EST-2610-CKR", period: "2026-W34", budget: "$48,000", earned: "$51,200", actual: "$49,800", cpi: "1.03", spi: "1.07", forecast: "$181k", note: "Night T&M running clean" },
-  { id: "ppr-3", ownerId: OWNER, estimateCode: "EST-2608-CT", period: "2026-W34", budget: "$0", earned: "$0", actual: "$0", cpi: "—", spi: "—", forecast: "$410k", note: "On hold pending confined-space plan" },
-];
-
-const EMPTY: ForgebookBoard = {
-  sites: [],
-  estimates: [],
-  crews: [],
-  activities: [],
-  equipment: [],
-  staffing: [],
-  changeOrders: [],
-  rates: [],
-  hse: [],
-  quality: [],
-  cost: [],
-};
+function emptyRows(rates: RateLine[] = []): Omit<ForgebookBoard, "sites"> {
+  return {
+    estimates: [],
+    crews: [],
+    activities: [],
+    equipment: [],
+    staffing: [],
+    changeOrders: [],
+    rates,
+    hse: [],
+    quality: [],
+    cost: [],
+  };
+}
 
 export function boardForUser(userId: string): ForgebookBoard {
-  if (userId !== OWNER) return EMPTY;
   return {
     sites: SITES,
-    estimates: ESTIMATES,
-    crews: CREWS,
-    activities: ACTIVITIES,
-    equipment: EQUIPMENT,
-    staffing: STAFFING,
-    changeOrders: CHANGE_ORDERS,
-    rates: RATES,
-    hse: HSE,
-    quality: QUALITY,
-    cost: COST,
+    ...emptyRows(userId === OWNER ? RATES : []),
   };
 }
 

@@ -7,6 +7,7 @@ import {
   examplePackage,
   exampleRail,
 } from "./example-packages.ts";
+import { boardForUser } from "./desk-data.ts";
 import { folderIsLocked, seedSeatList, workingCopies, archiveCopy, deleteCopy } from "./seat-estimates.ts";
 
 test("each example package opens with filled tabs and a rail total", () => {
@@ -60,4 +61,14 @@ test("archive hides a seat copy and delete removes it after the list update", ()
   assert.equal(folderIsLocked("Estimate", "example"), true);
   assert.equal(folderIsLocked("Submitted", "example"), true);
   assert.equal(folderIsLocked("Awarded", "example"), false);
+});
+
+test("the API blotter does not list the three codes; a seat copy does", () => {
+  const board = boardForUser("owner-robert-henderson");
+  assert.equal(board.estimates.some((row) => row.code === "EST-2609-U3"), false);
+  const copies = seedSeatList("owner-robert-henderson", "Robert Henderson");
+  assert.deepEqual(
+    workingCopies(copies).map((row) => row.code),
+    ["EST-2609-U3", "EST-2610-CKR", "EST-2608-CT"],
+  );
 });
