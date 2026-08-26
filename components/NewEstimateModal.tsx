@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
-import { defaultEstimateName, isDefaultEstimateName, jobEventLabel } from "@/lib/job-event";
+import { defaultEstimateName, isDefaultEstimateName, startJobEventLabel } from "@/lib/job-event";
 import { newEstimatePackId } from "@/lib/estimate-open";
 
 const CLIENTS = ["Phillips 66", "Georgia Power", "Shop"];
@@ -18,9 +18,9 @@ const SITES = [
 ];
 export type EstimateSize = "outage" | "other" | "shop";
 
-function startJobSizes(client: string, site: string) {
+function startJobSizes(client: string, site: string, size: EstimateSize) {
   return [
-    { id: "outage" as const, label: jobEventLabel(client, site) },
+    { id: "outage" as const, label: startJobEventLabel(client, site, size) },
     { id: "other" as const, label: "Other client" },
     { id: "shop" as const, label: "Shop / rig" },
   ];
@@ -118,11 +118,12 @@ export function NewEstimateModal({
         </div>
         <p className="mt-3 text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">JOB / EVENT</p>
         <p className="mt-1 text-xs text-[#5b6f73]">
-          This is the job kind — Turnaround on Phillips 66, Outage elsewhere. Estimate type (T&amp;M /
-          lump sum / CR-FF / Hybrid) stays on Job setup. Never use Outage as an estimate type.
+          This is the job kind — Turnaround on Phillips 66, Outage on a powerhouse. Shop / rig stays
+          Shop / rig. Estimate type (T&amp;M / lump sum / CR-FF / Hybrid) stays on Job setup. Never
+          use Outage as an estimate type.
         </p>
         <div className="mt-2 flex flex-wrap gap-2">
-          {startJobSizes(client, site).map((item) => (
+          {startJobSizes(client, site, size).map((item) => (
             <button
               key={item.id}
               type="button"
@@ -198,7 +199,11 @@ export function NewEstimateModal({
         <div className="mt-3">
           <p className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">OVERTIME / RATE</p>
           <p className="estimate-ot-readout hud-readout mt-1 px-3 py-2 text-sm">{size === "shop" ? "Shop sheet" : rule}</p>
-          <p className="mt-1 text-xs text-[#5b6f73]">Locked from the plant. Not a field. There is no picker.</p>
+          <p className="mt-1 text-xs text-[#5b6f73]">
+            {size === "shop"
+              ? "Locked from the shop sheet. Not a field. There is no picker."
+              : "Locked from the plant. Not a field. There is no picker."}
+          </p>
         </div>
         <label className="mt-3 block">
           <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">ESTIMATE NAME</span>

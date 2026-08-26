@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { defaultEstimateName, isDefaultEstimateName, isPhillips66Plant, jobEventLabel } from "./job-event.ts";
+import {
+  defaultEstimateName,
+  isDefaultEstimateName,
+  isPhillips66Plant,
+  isPowerhouse,
+  isShopJob,
+  jobEventLabel,
+  startJobEventLabel,
+} from "./job-event.ts";
 
 describe("P66 job-event chip", () => {
   it("says Turnaround on Phillips 66 / refinery plants", () => {
@@ -12,10 +20,17 @@ describe("P66 job-event chip", () => {
     assert.equal(jobEventLabel("Any client", "Some refinery unit"), "Turnaround");
   });
 
-  it("keeps Outage for powerhouse / shop and never uses Outage as a type", () => {
+  it("keeps Outage for a powerhouse only — never on P66 or Shop / rig", () => {
     assert.equal(jobEventLabel("Georgia Power", "Yates — Newnan, GA"), "Outage");
-    assert.equal(jobEventLabel("Shop", "Shop"), "Outage");
+    assert.equal(isPowerhouse("Georgia Power", "Yates — Newnan, GA"), true);
     assert.equal(isPhillips66Plant("Georgia Power", "Yates"), false);
+    assert.equal(jobEventLabel("Shop", "Shop"), "Turnaround");
+    assert.equal(isShopJob("Shop", "Shop"), true);
+    assert.equal(isPowerhouse("Shop", "Shop"), false);
+    assert.equal(startJobEventLabel("Shop", "Shop", "shop"), "Turnaround");
+    assert.equal(startJobEventLabel("Phillips 66", "Wood River — Roxana, IL", "shop"), "Turnaround");
+    assert.equal(startJobEventLabel("Georgia Power", "Yates — Newnan, GA", "other"), "Outage");
+    assert.notEqual(startJobEventLabel("Shop", "Shop", "shop"), "Outage");
   });
 
   it("defaults the estimate name from the job/event, never T&M", () => {

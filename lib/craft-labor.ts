@@ -190,9 +190,14 @@ export function extraRangeFromPhase(phase: PhaseRow, template?: CalendarRange, u
     id: uid("rg"),
     start: newUnit ? phase.start : "",
     end: newUnit ? phase.stop : "",
+    hoursPerShift: newUnit ? base.hoursPerShift : 0,
+    headcount: newUnit ? (template?.headcount ?? 1) : 1,
+    nightHeadcount: newUnit ? (template?.nightHeadcount ?? 1) : 1,
+    perDiemPeople: newUnit ? (template?.perDiemPeople ?? 1) : 0,
+    nightPerDiemPeople: newUnit ? (template?.nightPerDiemPeople ?? 1) : 0,
     skipDates: newUnit ? [...(base.skipDates ?? [])] : [],
     days: template?.days ? [...template.days] : [...base.days],
-    unitId: unitId ?? template?.unitId ?? base.unitId,
+    unitId: newUnit ? unitId : template?.unitId,
   };
 }
 
@@ -235,15 +240,18 @@ export function rangesFromPhases(
     return prior.map((prev, index) => {
       const source = phaseForRange(prev, phases, units, multiUnits) ?? fallback;
       const next = rangeFromPhase(source, prev, multiUnits ? prev.unitId ?? firstUnitId : prev.unitId);
+      if (index > 0) {
+        next.start = prev.start;
+        next.end = prev.end;
+        next.hoursPerShift = prev.hoursPerShift;
+        return next;
+      }
       if (multiUnits && next.unitId) {
         const tagged = units.find((unit) => unit.id === next.unitId)?.phases.find((item) => item.id === id);
         if (tagged) {
           next.start = tagged.start;
           next.end = tagged.stop;
         }
-      } else if (index > 0) {
-        next.start = prev.start;
-        next.end = prev.end;
       }
       return next;
     });
