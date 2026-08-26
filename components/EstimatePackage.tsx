@@ -3,8 +3,11 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   blankCraftRow,
+  hydrateSupportLines,
   syncCraftRows,
+  syncSupportRows,
   type CraftRow,
+  type SupportLine,
 } from "@/lib/craft-labor";
 import {
   CREW_STORE_PREFIX,
@@ -27,7 +30,6 @@ import {
 } from "@/lib/phase-schedule";
 import { emptyJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
 import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
-import type { SupportLine } from "@/components/SupportCrewCard";
 
 type CrewState = {
   staff: CraftRow[];
@@ -76,7 +78,7 @@ function readCrew(key: string): CrewState {
       generalForeman: Array.isArray(parsed.generalForeman) ? parsed.generalForeman : [],
       foreman: Array.isArray(parsed.foreman) ? parsed.foreman : [],
       direct: Array.isArray(parsed.direct) ? parsed.direct : [],
-      support: Array.isArray(parsed.support) ? parsed.support : [],
+      support: hydrateSupportLines(parsed.support),
       otAfter8: Boolean(parsed.otAfter8),
     };
   } catch {
@@ -103,6 +105,7 @@ function syncCrew(crew: CrewState, schedule: PhaseScheduleState): CrewState {
     generalForeman: syncCraftRows(crew.generalForeman, phases, units, multi),
     foreman: syncCraftRows(crew.foreman, phases, units, multi),
     direct: syncCraftRows(crew.direct, phases, units, multi),
+    support: syncSupportRows(crew.support, phases, units, multi),
   };
 }
 

@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { CRAFT_POSITIONS, STAFF_POSITIONS } from "./craft-labor.ts";
+import { CRAFT_POSITIONS, STAFF_POSITIONS, SUPPORT_DUTIES } from "./craft-labor.ts";
 import { CREW_LANES } from "./crew-lanes.ts";
 import {
   WOOD_RIVER_CRAFT_TITLES,
   WOOD_RIVER_FOREMAN_TITLES,
   WOOD_RIVER_GENERAL_FOREMAN_TITLES,
   WOOD_RIVER_STAFF_TITLES,
+  WOOD_RIVER_SUPPORT_TITLES,
   uniqueSortedTitles,
 } from "./wood-river-positions.ts";
 
@@ -39,6 +40,7 @@ describe("Wood River position catalog", () => {
       ...WOOD_RIVER_GENERAL_FOREMAN_TITLES,
       ...WOOD_RIVER_FOREMAN_TITLES,
       ...WOOD_RIVER_CRAFT_TITLES,
+      ...WOOD_RIVER_SUPPORT_TITLES,
     ];
     for (const title of titles) {
       assert.equal(title.includes("$"), false);
@@ -87,7 +89,28 @@ describe("Wood River position catalog", () => {
     assert.deepEqual([...lane("general-foreman").positions], WOOD_RIVER_GENERAL_FOREMAN_TITLES);
     assert.deepEqual([...lane("foreman").positions], WOOD_RIVER_FOREMAN_TITLES);
     assert.deepEqual([...lane("direct").positions], WOOD_RIVER_CRAFT_TITLES);
+    assert.deepEqual([...lane("support").positions], WOOD_RIVER_SUPPORT_TITLES);
     assert.deepEqual([...STAFF_POSITIONS], WOOD_RIVER_STAFF_TITLES);
     assert.deepEqual([...CRAFT_POSITIONS], WOOD_RIVER_CRAFT_TITLES);
+    assert.deepEqual([...SUPPORT_DUTIES], WOOD_RIVER_SUPPORT_TITLES);
+  });
+
+  it("keeps Support Position duties and links Billed as to the Direct Craft catalog", () => {
+    for (const title of [
+      "Tool Room Attendant",
+      "Fire Watch",
+      "Hole Watch",
+      "Safety Attendant",
+      "Material Handler",
+      "Firewatch",
+      "Holewatch",
+    ]) {
+      assert.equal(WOOD_RIVER_SUPPORT_TITLES.includes(title), true);
+    }
+    assert.deepEqual(WOOD_RIVER_SUPPORT_TITLES, uniqueSortedTitles(WOOD_RIVER_SUPPORT_TITLES));
+    assert.deepEqual([...lane("direct").positions], WOOD_RIVER_CRAFT_TITLES);
+    assert.equal(WOOD_RIVER_CRAFT_TITLES.includes("Boilermaker Journeyman"), true);
+    assert.equal(WOOD_RIVER_CRAFT_TITLES.includes("Combo Welder"), true);
+    assert.equal(WOOD_RIVER_CRAFT_TITLES.length > 10, true);
   });
 });

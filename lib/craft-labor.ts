@@ -7,19 +7,16 @@ import {
   type JobUnit,
   type PhaseRow,
 } from "./phase-schedule.ts";
-import { WOOD_RIVER_CRAFT_TITLES, WOOD_RIVER_STAFF_TITLES } from "./wood-river-positions.ts";
+import {
+  WOOD_RIVER_CRAFT_TITLES,
+  WOOD_RIVER_STAFF_TITLES,
+  WOOD_RIVER_SUPPORT_TITLES,
+} from "./wood-river-positions.ts";
 
 export const STAFF_POSITIONS = WOOD_RIVER_STAFF_TITLES;
 export const CRAFT_POSITIONS = WOOD_RIVER_CRAFT_TITLES;
 export const LISTED_POSITIONS = [...STAFF_POSITIONS, ...CRAFT_POSITIONS];
-
-export const SUPPORT_DUTIES = [
-  "Tool Room Attendant",
-  "Fire Watch",
-  "Hole Watch",
-  "Safety Attendant",
-  "Material Handler",
-] as const;
+export const SUPPORT_DUTIES = WOOD_RIVER_SUPPORT_TITLES;
 
 export const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 
@@ -57,6 +54,10 @@ export type CraftRow = {
   clockOverride: ClockOverride;
   laborClassOverride: LaborClass | null;
   ranges: CalendarRange[];
+};
+
+export type SupportLine = CraftRow & {
+  billedAs: string;
 };
 
 export function maskForDaysPerWeek(n: number): boolean[] {
@@ -268,4 +269,78 @@ export function assignCraftPosition(
     return { ...craftRowFromPhases(phases, units, multiUnits), id: row.id, position };
   }
   return { ...row, position };
+}
+
+export function blankSupportLine(): SupportLine {
+  return { ...blankCraftRow(), id: uid("sup"), billedAs: "" };
+}
+
+export function hydrateSupportLine(raw: Partial<SupportLine> | null | undefined): SupportLine {
+  const next = blankSupportLine();
+  if (!raw || typeof raw !== "object") return next;
+  return {
+    ...next,
+    ...raw,
+    id: raw.id || next.id,
+    position: raw.position ?? "",
+    billedAs: raw.billedAs ?? "",
+    shift: raw.shift ?? next.shift,
+    clockOverride: raw.clockOverride ?? next.clockOverride,
+    laborClassOverride: raw.laborClassOverride ?? next.laborClassOverride,
+    ranges: Array.isArray(raw.ranges) ? raw.ranges : [],
+  };
+}
+
+export function hydrateSupportLines(rows: unknown): SupportLine[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.map((row) => hydrateSupportLine(row as Partial<SupportLine>));
+}
+
+function seedSupportRanges(
+  row: SupportLine,
+  phases: PhaseRow[],
+  units: JobUnit[] = [],
+  multiUnits = false,
+): SupportLine {
+  if (row.ranges.length > 0) return row;
+  if (!row.position.trim() && !row.billedAs.trim()) return row;
+  return { ...row, ranges: craftRowFromPhases(phases, units, multiUnits).ranges };
+}
+
+export function assignSupportDuty(
+  row: SupportLine,
+  position: string,
+  phases: PhaseRow[],
+  units: JobUnit[] = [],
+  multiUnits = false,
+): SupportLine {
+  const billedAs = row.billedAs;
+  if (!position.trim()) {
+    return seedSupportRanges({ ...hydrateSupportLine(row), position: "", billedAs }, phases, units, multiUnits);
+  }
+  const next = assignCraftPosition(hydrateSupportLine(row), position, phases, units, multiUnits);
+  return { ...next, billedAs };
+}
+
+export function assignSupportBilledAs(
+  row: SupportLine,
+  billedAs: string,
+  phases: PhaseRow[],
+  units: JobUnit[] = [],
+  multiUnits = false,
+): SupportLine {
+  return seedSupportRanges({ ...hydrateSupportLine(row), billedAs }, phases, units, multiUnits);
+}
+
+export function syncSupportRows(
+  rows: SupportLine[],
+  phases: PhaseRow[],
+  units: JobUnit[] = [],
+  multiUnits = false,
+): SupportLine[] {
+  return hydrateSupportLines(rows).map((row) => {
+    const named = row.position.trim() || row.billedAs.trim();
+    if (!named && row.ranges.length === 0) return row;
+    return { ...row, ranges: rangesFromPhases(phases, row.ranges, units, multiUnits) };
+  });
 }
