@@ -140,6 +140,17 @@ export function EstimateWorkspace({
               <button
                 key={action.id}
                 type="button"
+                title={
+                  action.id === "export"
+                    ? "Export RFQ preview"
+                    : action.id === "print"
+                      ? "Print this estimate"
+                      : action.id === "duplicate"
+                        ? "Start a copy of this estimate"
+                        : action.id === "undo"
+                          ? "Undo is not wired yet"
+                          : "Team is chrome only"
+                }
                 onClick={() => {
                   if (action.id === "export") {
                     setRfq(true);
@@ -167,7 +178,7 @@ export function EstimateWorkspace({
                 type="button"
                 onClick={() => setConfirmClose(true)}
                 className="rounded border border-white/20 px-3 py-1.5 text-white/90"
-                title="Close out"
+                title="Close out this estimate. It leaves Home; nothing is deleted."
               >
                 Close out
               </button>
@@ -176,6 +187,7 @@ export function EstimateWorkspace({
               type="button"
               onClick={() => router.push("/estimates")}
               className="rounded border border-white/20 px-3 py-1.5 text-white/90"
+              title="Back to Estimates"
             >
               Close
             </button>
@@ -203,7 +215,7 @@ export function EstimateWorkspace({
           ))}
         </nav>
       </header>
-      <div className="paper-desk est-desk-body min-h-[70vh] px-4 py-6">
+      <div className={`${paper ? "paper-desk desk-day" : "instrument-desk desk-night"} est-desk-body min-h-[70vh] px-4 py-6`}>
         <DeskBanners />
         {tab === "rates" ? (
           <section className="plant-card px-5 py-5">

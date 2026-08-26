@@ -148,6 +148,7 @@ function PhaseRowsTable({
                                   : [...row.sundaysOff, iso],
                               })
                             }
+                            title={`Sunday ${iso.slice(5)}. On = worked. Off = skip that Sunday.`}
                             className={`rounded-full px-2 py-0.5 text-xs ${
                               off ? "border border-[#c5d4d4] text-[#5b6f73]" : "bg-steel text-white"
                             }`}
@@ -209,7 +210,7 @@ function PhaseRowsTable({
                     className="paper-field w-20"
                   />
                 </td>
-                <td className="whitespace-nowrap px-2 py-3 align-top font-semibold">{workedDays(row)}</td>
+                <td className="phase-total-days whitespace-nowrap px-2 py-3 align-top font-semibold">{workedDays(row)}</td>
               </tr>
             );
           })}

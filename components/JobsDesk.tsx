@@ -77,10 +77,13 @@ export function JobsDesk() {
             </div>
           </dl>
           <div
-            className="mt-4 flex flex-wrap gap-2 font-mono text-[10px] tracking-[0.16em]"
+            className="relative z-10 mt-4 flex flex-wrap gap-2 font-mono text-[10px] tracking-[0.16em]"
             onClick={(event) => event.stopPropagation()}
           >
-            <Link href="/jobs/wood-river" className="border border-steel px-3 py-2 text-steel">
+            <Link
+              href={`/jobs/wood-river?job=${encodeURIComponent(job.code)}`}
+              className="border border-steel px-3 py-2 text-steel"
+            >
               {alias("WOOD RIVER")}
             </Link>
             <Link href="/estimates" className="border border-steel px-3 py-2 text-steel">

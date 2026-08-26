@@ -56,10 +56,11 @@ export function DeskHome() {
 
   const openJobs = (desk?.jobs ?? []).filter((job) => job.status === "OPEN" && !jobLooksClosed(job, closedPacks));
   const closedJobs = (desk?.jobs ?? []).filter((job) => jobLooksClosed(job, closedPacks));
+  const openEstimates = estimates.filter((row) => !closedPacks.some((item) => item.id === row.id));
 
   const counts = {
     jobs: openJobs.length || "—",
-    estimates: desk?.estimatesOpen ?? "—",
+    estimates: openEstimates.length || "—",
     cost: desk?.costTickets ?? "—",
     hse: desk?.hseOpen ?? "—",
   };

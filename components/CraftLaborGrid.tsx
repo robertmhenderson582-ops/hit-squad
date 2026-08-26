@@ -7,6 +7,7 @@ import {
   CRAFT_POSITIONS,
   LISTED_POSITIONS,
   STAFF_POSITIONS,
+  assignCraftPosition,
   blankCraftRow,
   clampPerDiem,
   cloneCraftRow,
@@ -20,6 +21,7 @@ import {
   sumSplits,
 } from "@/lib/hours-clock";
 import { CrewPhaseCards } from "@/components/CrewPhaseCards";
+import { useEstimatePackage } from "@/components/EstimatePackage";
 import { defaultLaborClass, type LaborClass } from "@/lib/labor-class";
 
 const HEADERS = ["POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST"];
@@ -44,6 +46,7 @@ export function CraftLaborGrid({
   newRow?: () => CraftRow;
 }) {
   const confirmRemove = useConfirmRemove();
+  const pack = useEstimatePackage();
   const [openId, setOpenId] = useState<string | null>(null);
 
   const computed = useMemo(
@@ -89,7 +92,11 @@ export function CraftLaborGrid({
         setOpenId((open) => (open === rowId ? current.find((row) => row.position === position)?.id ?? null : open));
         return current.filter((row) => row.id !== rowId);
       }
-      return current.map((row) => (row.id === rowId ? { ...row, position } : row));
+      return current.map((row) =>
+        row.id === rowId
+          ? assignCraftPosition(row, position, pack.schedule.phases, pack.schedule.units, pack.schedule.multiUnits)
+          : row,
+      );
     });
   }
 

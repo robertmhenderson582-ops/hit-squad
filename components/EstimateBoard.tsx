@@ -44,8 +44,8 @@ export function EstimateBoard() {
         </button>
       </div>
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Working estimates for this owner desk only. {alias("Madison")} / {alias("P66")} plant figures stay on the signed-in
-        blotter. Created by is chrome only — authors stay the signed-in owner for now.
+        Working estimates on this owner desk. {alias("Madison")} / {alias("P66")} figures stay with the signed-in
+        blotter. The Created by chip is a label only — it still shows the signed-in owner.
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         <article className="steel-plate paper-grain px-4 py-4">

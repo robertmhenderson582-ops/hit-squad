@@ -25,6 +25,7 @@ export function GripToPan({
   return (
     <div
       ref={ref}
+      title="Grip the grid to pan dates"
       className={`grip-pan overflow-x-auto ${className ?? ""}`}
       onPointerDown={(event) => {
         if (event.button !== 0) return;

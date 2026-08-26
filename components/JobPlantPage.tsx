@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { EstimateCard } from "@/components/EstimateCard";
 import { useEstimateModal } from "@/components/EstimateModalContext";
 import { useDeskBoard } from "@/components/useDeskBoard";
@@ -68,6 +69,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const plant = PLANTS[slug] ?? PLANTS["wood-river"];
   const { openNewEstimate } = useEstimateModal();
   const alias = useAlias();
+  const jobCode = useSearchParams().get("job");
   const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
   const { board } = useDeskBoard();
   const closed = readClosed().filter((item) => item.kind === "estimate").map((item) => item.id);
@@ -86,6 +88,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
           <h2 className="font-display text-4xl font-semibold text-[#163038]">{alias(plant.name)}</h2>
           <p className="mt-1 text-[#5b6f73]">
             {alias(plant.city)} · {alias(plant.plant)}
+            {jobCode ? ` · Opened from ${jobCode}` : ""}
           </p>
         </div>
         <button

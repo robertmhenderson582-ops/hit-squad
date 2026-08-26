@@ -1,4 +1,5 @@
-import type { DeskBoard, JobRecord } from "@/lib/types";
+import { boardForUser } from "./desk-data.ts";
+import type { DeskBoard, JobRecord } from "./types.ts";
 
 const JOBS: JobRecord[] = [
   {
@@ -59,7 +60,7 @@ export function deskForUser(userId: string): DeskBoard {
   const jobs = JOBS.filter((job) => job.ownerId === userId);
   return {
     jobs,
-    estimatesOpen: jobs.filter((job) => job.kind === "estimate" || job.status !== "CLOSED").length,
+    estimatesOpen: boardForUser(userId).estimates.length,
     costTickets: jobs.filter((job) => job.kind === "t&m" || job.kind === "outage").length,
     hseOpen: jobs.filter((job) => job.kind === "hse" || job.hseNote.toLowerCase().includes("open")).length,
   };

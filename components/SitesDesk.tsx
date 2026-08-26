@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useDisplay } from "@/components/DisplayProvider";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import type { SiteRecord } from "@/lib/types";
@@ -18,6 +19,8 @@ export function SitesDesk() {
   const { board, error } = useDeskBoard();
   const alias = useAlias();
   const owner = useOwnerDesk();
+  const { resolvedTheme } = useDisplay();
+  const night = resolvedTheme === "night";
   const all = (board?.sites ?? []).filter((site) => !site.id.includes("coker"));
   const visible = all.filter((site) => site.openJobs > 0 || assignedZero(site, owner?.viewSite));
   const noneOpen = all.every((site) => site.openJobs === 0);
@@ -25,7 +28,7 @@ export function SitesDesk() {
   const p66 = visible.filter((site) => site.family === "Phillips 66");
 
   return (
-    <div className="paper-desk -mx-3 mt-5 rounded-sm px-4 py-6 sm:-mx-4 sm:px-6">
+    <div className={`${night ? "instrument-desk" : "paper-desk"} -mx-3 mt-5 rounded-sm px-4 py-6 sm:-mx-4 sm:px-6`}>
       <h2 className="text-3xl font-semibold text-[#163038]">{alias("Madison")}</h2>
       {error ? <p className="mt-3 text-amber-flare">{error}</p> : null}
       {noneOpen ? (

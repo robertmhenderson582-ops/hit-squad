@@ -42,10 +42,10 @@ export function DateField({
         onClick={() => openDatePicker(inputRef.current)}
         className="paper-field date-field-input"
       />
+      {disabled ? null : (
       <button
         type="button"
         className="date-field-cal"
-        disabled={disabled}
         tabIndex={-1}
         title="Open calendar"
         aria-label="Open calendar"
@@ -80,6 +80,7 @@ export function DateField({
           />
         </svg>
       </button>
+      )}
     </div>
   );
 }
