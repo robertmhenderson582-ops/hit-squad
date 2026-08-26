@@ -121,6 +121,11 @@ export function cloneCraftRow(row: CraftRow): CraftRow {
   };
 }
 
+export function cloneSupportLine(row: SupportLine): SupportLine {
+  const copy = cloneCraftRow(row);
+  return { ...copy, id: uid("sup"), billedAs: row.billedAs };
+}
+
 export function perDiemCap(range: CalendarRange, _shift?: CraftShift) {
   return Math.max(0, range.headcount);
 }
@@ -149,7 +154,7 @@ export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange, unitId?: str
     end: seed.end,
     headcount: prev?.headcount ?? 1,
     nightHeadcount: prev?.nightHeadcount ?? 1,
-    hoursPerShift: seed.hoursPerShift,
+    hoursPerShift: prev && Number.isFinite(prev.hoursPerShift) ? prev.hoursPerShift : seed.hoursPerShift,
     perDiemPeople: prev?.perDiemPeople ?? 1,
     nightPerDiemPeople: prev?.nightPerDiemPeople ?? 1,
     days: seed.days,

@@ -37,7 +37,6 @@ export function GripToPan({
       <p className="grip-pan-hint">Drag the bar or the grid sideways to see more dates.</p>
       <div
         ref={ref}
-        title="Drag sideways to pan dates"
         className="grip-pan overflow-x-auto"
         onPointerDown={startPan}
         onPointerMove={(event) => {
@@ -47,7 +46,7 @@ export function GripToPan({
         onPointerUp={endPan}
         onPointerCancel={endPan}
       >
-        <div className="grip-pan-bar" aria-hidden="true" />
+        <div className="grip-pan-bar" aria-hidden="true" title="Drag sideways to pan dates" />
         {children}
       </div>
     </div>

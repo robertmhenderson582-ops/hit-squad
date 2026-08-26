@@ -319,7 +319,13 @@ function CraftAccordionRow({
             >
               ⧉
             </button>
-            <button type="button" onClick={onRemove} aria-label="Remove this position" className="trash-btn">
+            <button
+              type="button"
+              onClick={onRemove}
+              title="Remove position"
+              aria-label="Remove position"
+              className="trash-btn"
+            >
               ⌫
             </button>
           </div>

@@ -43,8 +43,13 @@ describe("seat vs clock override", () => {
 
   it("GF and craft codes stay on the COMP clock", () => {
     assert.equal(seatKind("General Foreman"), "craft");
+    assert.equal(seatKind("Foreman"), "craft");
     assert.equal(seatKind("Boilermaker"), "craft");
+    assert.equal(seatKind("Pipefitter Journeyman"), "craft");
     assert.equal(seatKind("Pipefitter PF"), "craft");
+    assert.equal(runningClock("Pipefitter Journeyman", "Wood River", "Phillips 66", "auto"), "east-coast");
+    assert.equal(runningClock("Foreman", "Wood River", "Phillips 66", "auto"), "east-coast");
+    assert.equal(runningClock("General Foreman", "Wood River", "Phillips 66", "auto"), "east-coast");
   });
 
   it("union label does not flip the OT clock; checkbox does", () => {
@@ -131,6 +136,64 @@ describe("CAT 2 Wood River hour cases", () => {
       hours: 13,
       workedDays: 1,
     });
+  });
+
+  it("weekly 40 and ST-to-10 multiply by headcount — 8 journeymen at 8h for 8 weekdays are 512 ST, not 80", () => {
+    const result = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Pipefitter Journeyman",
+      start: "2026-10-05",
+      end: "2026-10-14",
+      hoursPerShift: 8,
+      days: [false, true, true, true, true, true, false],
+      headcount: 8,
+    });
+    assert.equal(result.workedDays, 8);
+    assert.equal(result.hours, 512);
+    assert.equal(result.st, 512);
+    assert.equal(result.ot, 0);
+    assert.equal(result.dt, 0);
+    assert.notEqual(result.st, 80);
+    assert.notEqual(result.ot, 432);
+  });
+
+  it("2+2 Foremen at 8h for those 8 weekdays are 256 ST, not 160 — each head on each shift gets 40", () => {
+    const result = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Foreman",
+      start: "2026-10-05",
+      end: "2026-10-14",
+      hoursPerShift: 8,
+      days: [false, true, true, true, true, true, false],
+      shift: "Days & nights",
+      headcount: 2,
+      nightHeadcount: 2,
+      clockOverride: "auto",
+    });
+    assert.equal(runningClock("Foreman", WOOD_RIVER.site, WOOD_RIVER.client, "auto"), "east-coast");
+    assert.equal(result.hours, 256);
+    assert.equal(result.st, 256);
+    assert.equal(result.ot, 0);
+    assert.equal(result.dt, 0);
+    assert.notEqual(result.st, 160);
+    assert.notEqual(result.ot, 96);
+  });
+
+  it("Sunday DT still multiplies headcount — 8 people × 10h × 2 Sundays = 160 DT", () => {
+    const result = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Pipefitter Journeyman",
+      start: "2026-08-23",
+      end: "2026-08-30",
+      hoursPerShift: 10,
+      days: [true, false, false, false, false, false, false],
+      headcount: 8,
+    });
+    assert.equal(result.workedDays, 2);
+    assert.equal(result.dt, 160);
+    assert.equal(result.st, 0);
+    assert.equal(result.ot, 0);
+    assert.equal(result.hours, 160);
   });
 
   it("Days & nights 1+1 at 8h Mo–Fr is two people, not one 40 ST / 40 OT line", () => {
