@@ -20,7 +20,7 @@ import {
 } from "@/lib/craft-labor";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import { defaultLaborClass } from "@/lib/labor-class";
-import { formatShahanCrewCost, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
+import { formatShahanCrewCost, shahanCrewTitle, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
 
 export type { SupportLine };
 
@@ -52,7 +52,7 @@ export function SupportCrewCard({
     () =>
       lines.map((row) => {
         const hours = computeRowHours(row, site, client, pack.crew.otAfter8);
-        const title = row.billedAs || row.position || "";
+        const title = shahanCrewTitle(row);
         const opts = { laborClass: row.laborClassOverride ?? defaultLaborClass(title) };
         return { ...row, ...hours, cost: formatShahanCrewCost(title, hours, opts) };
       }),
@@ -229,7 +229,7 @@ function SupportAccordionRow({
   onDuplicate: () => void;
   onRemove: () => void;
 }) {
-  const billedTitle = row.billedAs || row.position || "";
+  const billedTitle = shahanCrewTitle(row);
   const noRate = shahanTitleHasNoRate(billedTitle, {
     laborClass: row.laborClassOverride ?? defaultLaborClass(billedTitle),
   });

@@ -344,18 +344,22 @@ export const SHAHAN_LABOR_FIXTURE: ShahanLaborRow[] = [
 ];
 
 /**
- * Official B-1 / Crew picker wording → exact Shahan craftName.
- * Do not map comma vs no-comma staff titles onto each other (BM vs Merit).
- * Nathan estimate titles stay unmatched.
+ * Official B-1 / leftover Cat 2 working titles → exact Shahan craftName.
+ * Name-only. Do not invent ST / OT / DT. Do not map comma vs no-comma
+ * staff titles onto each other (BM vs Merit). Unaliased Merit 01 / 02 stay unmatched.
  */
 const B1_TO_SHAHAN: Record<string, string> = {
   "coordinator qa qc 01": "COORDINATOR QA-QC 1",
   "coordinator qa qc 1": "COORDINATOR QA-QC 1",
   "coordinator qa qc 2": "COORDINATOR QA-QC 2",
+  "coordinator qa qc merit 01": "COORDINATOR QA-QC 1",
   "lead qa qc 1": "Lead QA/QC 01",
   "lead qa qc 01": "Lead QA/QC 01",
   "lead qa qc 2": "Lead QA/QC 02",
   "lead qa qc 02": "Lead QA/QC 02",
+  "coordinator safety merit 01": "Coordinator Safety 01",
+  "pf general superintendent union 01": "General Superintendent PF 01",
+  "bm general superintendent union": "General Superintendent BM 01",
   "boilermaker gf union": "Boilermaker General Foreman",
   "boilermaker general foreman": "Boilermaker General Foreman",
   "pipefitter gf union": "Pipefitter General Foreman",
@@ -364,6 +368,10 @@ const B1_TO_SHAHAN: Record<string, string> = {
   "pipefitter foreman": "PIPEFITTER FORMAN",
   "pipefitter forman": "PIPEFITTER FORMAN",
   "pipefitter journeyman": "PIPEFITTER JOURNEYMAN",
+  "pipefitter direct": "PIPEFITTER JOURNEYMAN",
+  "boilermaker direct": "Boilermaker Journeyman",
+  "boilermaker indirect tool room": "Boilermaker Journeyman",
+  "tool room attendant": "Boilermaker Journeyman",
   "laborer foreman 3 9": "Laborer Foreman 03-09 GRP 1",
   "laborer foreman 03 09": "Laborer Foreman 03-09 GRP 1",
   "laborer foreman 3 9 grp 1": "Laborer Foreman 03-09 GRP 1",
@@ -407,9 +415,17 @@ export function exactTitleKey(title: string): string {
 export function resolveShahanCraftName(title: string): string {
   const trimmed = title.trim();
   if (!trimmed) return "";
+  const aliased = B1_TO_SHAHAN[normalizeTitle(trimmed)];
+  if (aliased) return aliased;
   if (isNathanEstimateTitle(trimmed)) return "";
-  const key = normalizeTitle(trimmed);
-  return B1_TO_SHAHAN[key] ?? trimmed;
+  return trimmed;
+}
+
+/** Support bills Billed as when set. Duty names only bill through an alias. */
+export function shahanCrewTitle(row: { position?: string; billedAs?: string }): string {
+  const billed = (row.billedAs ?? "").trim();
+  if (billed) return billed;
+  return (row.position ?? "").trim();
 }
 
 function rowKeys(row: ShahanLaborRow): string[] {
@@ -577,7 +593,7 @@ export function laborDollarsFromCrew(
     Math.round(
       rows.reduce((sum, row) => {
         const hours = computeRowHours(row, site, client, crew.otAfter8);
-        const title = row.billedAs || row.position || "";
+        const title = shahanCrewTitle(row);
         return sum + shahanCrewCostAmount(title, hours, {
           ...opts,
           laborClass: row.laborClassOverride ?? opts.laborClass ?? defaultLaborClass(title),
@@ -664,29 +680,34 @@ export function rematchCrewToShahan<T extends {
   direct?: HourRow[];
   support?: HourRow[];
 }>(crew: T, opts: ShahanLookupOpts = {}): T {
+  const lookupOpts = (row: HourRow): ShahanLookupOpts => ({
+    ...opts,
+    laborClass: row.laborClassOverride ?? opts.laborClass,
+  });
   const remap = <R extends HourRow>(rows: R[] | undefined): R[] | undefined =>
     rows?.map((row) => ({
       ...row,
-      position: rematchShahanTitle(row.position, {
-        ...opts,
-        laborClass: row.laborClassOverride ?? opts.laborClass,
-      }),
-      ...(row.billedAs != null
-        ? {
-            billedAs: rematchShahanTitle(row.billedAs, {
-              ...opts,
-              laborClass: row.laborClassOverride ?? opts.laborClass,
-            }),
-          }
-        : {}),
+      position: rematchShahanTitle(row.position, lookupOpts(row)),
     }));
+  const remapSupport = <R extends HourRow>(rows: R[] | undefined): R[] | undefined =>
+    rows?.map((row) => {
+      const billed = (row.billedAs ?? "").trim();
+      if (billed) {
+        return { ...row, billedAs: rematchShahanTitle(row.billedAs ?? "", lookupOpts(row)) };
+      }
+      const looked = lookupShahanLabor(row.position, lookupOpts(row));
+      if (looked && normalizeTitle(looked.craftName) !== normalizeTitle(row.position)) {
+        return { ...row, billedAs: looked.craftName };
+      }
+      return { ...row, position: rematchShahanTitle(row.position, lookupOpts(row)) };
+    });
   return {
     ...crew,
     staff: remap(crew.staff) ?? crew.staff,
     generalForeman: remap(crew.generalForeman) ?? crew.generalForeman,
     foreman: remap(crew.foreman) ?? crew.foreman,
     direct: remap(crew.direct) ?? crew.direct,
-    support: remap(crew.support) ?? crew.support,
+    support: remapSupport(crew.support) ?? crew.support,
   };
 }
 

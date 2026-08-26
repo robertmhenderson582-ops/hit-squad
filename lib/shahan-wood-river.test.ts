@@ -31,6 +31,7 @@ import {
   rematchEquipmentSheetToShahan,
   rematchShahanEquipmentId,
   shahanCrewCostAmount,
+  shahanCrewTitle,
   shahanEquipmentByFuel,
   shahanEquipmentId,
   shahanEquipmentRows,
@@ -89,6 +90,36 @@ describe("Shahan TM OCIP — Wood River", () => {
     assert.equal(isNathanEstimateTitle("Project Manager Merit 01"), true);
     assert.equal(lookupShahanLabor("Project Manager Merit 01"), null);
     assert.equal(lookupShahanLabor("Made Up Title"), null);
+  });
+
+  it("aliases leftover Cat 2 working titles onto existing Shahan craftName rows", () => {
+    assert.equal(lookupShahanLabor("COORDINATOR QA/QC Merit 01")?.craftName, "COORDINATOR QA-QC 1");
+    assert.equal(lookupShahanLabor("Coordinator QA/QC Merit 01")?.st, 105.76);
+    assert.equal(lookupShahanLabor("Coordinator Safety Merit 01")?.craftName, "Coordinator Safety 01");
+    assert.equal(lookupShahanLabor("Coordinator Safety  Merit 01")?.st, 91.02);
+    assert.equal(lookupShahanLabor("PF General Superintendent Union 01")?.craftName, "General Superintendent PF 01");
+    assert.equal(lookupShahanLabor("PF General Superintendent Union 01")?.st, 123.45);
+    assert.equal(lookupShahanLabor("BM General Superintendent Union")?.craftName, "General Superintendent BM 01");
+    assert.equal(lookupShahanLabor("BM General Superintendent Union")?.st, 130.99);
+    assert.equal(lookupShahanLabor("Pipefitter Direct")?.craftName, "PIPEFITTER JOURNEYMAN");
+    assert.equal(lookupShahanLabor("Boilermaker Direct")?.craftName, "Boilermaker Journeyman");
+    assert.equal(lookupShahanLabor("Boilermaker Indirect (Tool Room)")?.craftName, "Boilermaker Journeyman");
+    assert.equal(lookupShahanLabor("Tool Room Attendant")?.craftName, "Boilermaker Journeyman");
+    assert.equal(lookupShahanLabor("Pipefitter GF Union")?.craftName, "Pipefitter General Foreman");
+    assert.equal(lookupShahanLabor("Boilermaker GF Union")?.craftName, "Boilermaker General Foreman");
+    assert.deepEqual(
+      {
+        craftName: lookupShahanLabor("Pipefitter Foreman")?.craftName,
+        st: lookupShahanLabor("Pipefitter Foreman")?.st,
+        ot: lookupShahanLabor("Pipefitter Foreman")?.ot,
+        dt: lookupShahanLabor("Pipefitter Foreman")?.dt,
+      },
+      { craftName: "PIPEFITTER FORMAN", st: 105.28, ot: 147.5, dt: 189.72 },
+    );
+    assert.equal(isNathanEstimateTitle("COORDINATOR QA/QC Merit 01"), true);
+    assert.equal(lookupShahanLabor("Project Manager Merit 01"), null);
+    assert.equal(SHAHAN_STAFF_TITLES.includes("COORDINATOR QA/QC Merit 01"), false);
+    assert.equal(SHAHAN_CRAFT_TITLES.includes("Boilermaker Direct"), false);
   });
 
   it("uses labor class when the same title sits on BM and Merit", () => {
@@ -201,6 +232,10 @@ describe("Shahan TM OCIP — Wood River", () => {
     assert.match(jobSetup, /Update rates/);
     assert.match(jobSetup, /offerRateBookForSite/);
     assert.match(jobSetup, /applyShahanJobRates/);
+    const supportCard = readFileSync(fileURLToPath(new URL("../components/SupportCrewCard.tsx", import.meta.url)), "utf8");
+    assert.match(supportCard, /shahanCrewTitle/);
+    assert.match(supportCard, /formatShahanCrewCost/);
+    assert.equal(/cost: row\.cost/.test(supportCard), false);
   });
 
   it("does not put workbooks in the repo", () => {
@@ -227,6 +262,49 @@ describe("Shahan TM OCIP — Wood River", () => {
     const billedAs = "Boilermaker Journeyman";
     assert.equal(shahanCrewCostAmount(billedAs, hours), billed(craft.st!, craft.ot!, craft.dt!));
     assert.equal(shahanCrewCostAmount("Fire Watch", hours), 0);
+  });
+
+  it("Support Cost and rail labor use billedAs first, then the duty alias", () => {
+    const hours = { st: 10, ot: 2, dt: 1 };
+    const journeyman = lookupShahanLabor("Boilermaker Journeyman");
+    const pipe = lookupShahanLabor("PIPEFITTER JOURNEYMAN");
+    assert.ok(journeyman && pipe);
+    const billed = (st: number, ot: number, dt: number) => Math.round((10 * st + 2 * ot + dt) * 100) / 100;
+    assert.equal(shahanCrewTitle({ position: "Tool Room Attendant", billedAs: "PIPEFITTER JOURNEYMAN" }), "PIPEFITTER JOURNEYMAN");
+    assert.equal(shahanCrewTitle({ position: "Tool Room Attendant", billedAs: "" }), "Tool Room Attendant");
+    assert.equal(shahanCrewTitle({ position: "Fire Watch" }), "Fire Watch");
+    assert.equal(
+      shahanCrewCostAmount(shahanCrewTitle({ position: "Tool Room Attendant", billedAs: "PIPEFITTER JOURNEYMAN" }), hours),
+      billed(pipe.st!, pipe.ot!, pipe.dt!),
+    );
+    assert.equal(
+      shahanCrewCostAmount(shahanCrewTitle({ position: "Tool Room Attendant", billedAs: "" }), hours),
+      billed(journeyman.st!, journeyman.ot!, journeyman.dt!),
+    );
+    assert.equal(shahanCrewCostAmount(shahanCrewTitle({ position: "Fire Watch", billedAs: "" }), hours), 0);
+    assert.equal(shahanTitleHasNoRate("Fire Watch"), true);
+    assert.equal(shahanTitleHasNoRate(shahanCrewTitle({ position: "Tool Room Attendant", billedAs: "" })), false);
+    const range = {
+      start: "2026-09-21",
+      end: "2026-09-21",
+      hoursPerShift: 10,
+      headcount: 1,
+      nightHeadcount: 0,
+      perDiemPeople: 0,
+      days: [false, true, true, true, true, true, false],
+    };
+    const supportBilled = laborDollarsFromCrew({
+      support: [{ position: "Tool Room Attendant", billedAs: "Boilermaker Direct", ranges: [range] }],
+    }, "Wood River", "Phillips 66");
+    const supportDuty = laborDollarsFromCrew({
+      support: [{ position: "Tool Room Attendant", billedAs: "", ranges: [range] }],
+    }, "Wood River", "Phillips 66");
+    const supportWatch = laborDollarsFromCrew({
+      support: [{ position: "Fire Watch", billedAs: "", ranges: [range] }],
+    }, "Wood River", "Phillips 66");
+    assert.ok(supportBilled > 0);
+    assert.equal(supportBilled, supportDuty);
+    assert.equal(supportWatch, 0);
   });
 
   it("leftover Merit 01 bills 0 and shows no-rate", () => {
@@ -287,13 +365,21 @@ describe("Shahan TM OCIP — Wood River", () => {
     const crew = rematchCrewToShahan({
       staff: [{ position: "MANAGER, PROJECT 01", ranges }],
       generalForeman: [{ position: "Boilermaker GF Union", ranges }],
-      support: [{ position: "Fire Watch", billedAs: "Project Manager Merit 01", ranges }],
+      support: [
+        { position: "Fire Watch", billedAs: "Project Manager Merit 01", ranges },
+        { position: "Tool Room Attendant", billedAs: "", ranges },
+        { position: "Hole Watch", billedAs: "Boilermaker Indirect (Tool Room)", ranges },
+      ],
       otAfter8: false,
     });
     assert.equal(crew.staff?.[0]?.position, "Manager, Project 01");
     assert.equal(crew.generalForeman?.[0]?.position, "Boilermaker General Foreman");
     assert.equal(crew.support?.[0]?.position, "Fire Watch");
     assert.equal(crew.support?.[0]?.billedAs, "Project Manager Merit 01");
+    assert.equal(crew.support?.[1]?.position, "Tool Room Attendant");
+    assert.equal(crew.support?.[1]?.billedAs, "Boilermaker Journeyman");
+    assert.equal(crew.support?.[2]?.position, "Hole Watch");
+    assert.equal(crew.support?.[2]?.billedAs, "Boilermaker Journeyman");
     assert.deepEqual(crew.staff?.[0]?.ranges, ranges);
     assert.equal(crew.staff?.[0]?.ranges[0]?.headcount, 3);
     assert.equal(crew.staff?.[0]?.ranges[0]?.hoursPerShift, 10);

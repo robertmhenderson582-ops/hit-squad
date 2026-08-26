@@ -14,7 +14,7 @@ export const TESTER_WHATS_NEW = [
 
 export const OWNER_WHATS_NEW = [
   "Hit Squad Project Controls V1.18",
-  "• Crew and Equipment dropdowns use Debbie Shahan TM OCIP — Wood River. Staff and craft Cost use that book's ST / OT / DT. Leftover Merit 01 names stay and show No rate.",
+  "• Crew and Equipment dropdowns use Debbie Shahan TM OCIP — Wood River. Staff and craft Cost use that book's ST / OT / DT. Cat 2 working titles rematch to existing Shahan rows. Unmatched leftover names show No rate.",
   "• Equipment lists with fuel (wet) and without fuel (dry) as separate picks. Update rates on Job setup pulls Staff PD $140 / Craft PD $130 for Wood River without wiping hours.",
   "• Testers who already saw V1.17 get this note (versioned seen key).",
 ].join("\n");
