@@ -16,9 +16,7 @@ const SITES = [
   "Billings — Billings, MT",
   "Yates — Newnan, GA",
 ];
-const SIZE_IDS = ["outage", "other", "shop"] as const;
-
-export type EstimateSize = (typeof SIZE_IDS)[number];
+export type EstimateSize = "outage" | "other" | "shop";
 
 function startJobSizes(client: string, site: string) {
   return [

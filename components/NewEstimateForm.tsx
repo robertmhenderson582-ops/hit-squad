@@ -26,7 +26,7 @@ export function NewEstimateForm() {
   const size = params.get("size");
   const client = params.get("client") || "Phillips 66";
   const site = params.get("site") || "Wood River — Roxana, IL";
-  const name = params.get("name") || defaultEstimateName(client, site, size);
+  const name = params.get("name") || defaultEstimateName(client, site, size ?? undefined);
   const pack = params.get("pack");
 
   useEffect(() => {
