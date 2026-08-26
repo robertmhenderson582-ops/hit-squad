@@ -275,6 +275,15 @@ export function blankSupportLine(): SupportLine {
   return { ...blankCraftRow(), id: uid("sup"), billedAs: "" };
 }
 
+export function addSupportLine(
+  phases: PhaseRow[],
+  units: JobUnit[] = [],
+  multiUnits = false,
+): SupportLine {
+  const next = blankSupportLine();
+  return { ...next, ranges: craftRowFromPhases(phases, units, multiUnits).ranges };
+}
+
 export function hydrateSupportLine(raw: Partial<SupportLine> | null | undefined): SupportLine {
   const next = blankSupportLine();
   if (!raw || typeof raw !== "object") return next;
@@ -302,9 +311,8 @@ function seedSupportRanges(
   units: JobUnit[] = [],
   multiUnits = false,
 ): SupportLine {
-  if (row.ranges.length > 0) return row;
-  if (!row.position.trim() && !row.billedAs.trim()) return row;
-  return { ...row, ranges: craftRowFromPhases(phases, units, multiUnits).ranges };
+  if (row.ranges.some((range) => range.phaseId)) return row;
+  return { ...row, ranges: rangesFromPhases(phases, row.ranges, units, multiUnits) };
 }
 
 export function assignSupportDuty(
@@ -338,9 +346,8 @@ export function syncSupportRows(
   units: JobUnit[] = [],
   multiUnits = false,
 ): SupportLine[] {
-  return hydrateSupportLines(rows).map((row) => {
-    const named = row.position.trim() || row.billedAs.trim();
-    if (!named && row.ranges.length === 0) return row;
-    return { ...row, ranges: rangesFromPhases(phases, row.ranges, units, multiUnits) };
-  });
+  return hydrateSupportLines(rows).map((row) => ({
+    ...row,
+    ranges: rangesFromPhases(phases, row.ranges, units, multiUnits),
+  }));
 }

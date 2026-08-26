@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  addSupportLine,
   assignCraftPosition,
   assignSupportBilledAs,
   assignSupportDuty,
@@ -202,32 +203,39 @@ describe("crew ranges are per position", () => {
 });
 
 describe("support position calendars", () => {
-  it("adding a Support position seeds the same phase cards as Direct Craft", () => {
+  it("adding a Support position seeds Job setup phase dates, not only Add a date range", () => {
     const phases = defaultPhases();
-    const added = blankSupportLine();
-    assert.equal(added.position, "");
-    assert.equal(added.billedAs, "");
-    assert.equal(added.ranges.length, 0);
-
-    const support = assignSupportDuty(added, "Tool Room Attendant", phases);
-    const billed = assignSupportBilledAs(support, "Boilermaker Journeyman", phases);
+    const added = addSupportLine(phases);
     const direct = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
 
-    assert.equal(billed.position, "Tool Room Attendant");
-    assert.equal(billed.billedAs, "Boilermaker Journeyman");
+    assert.equal(added.position, "");
+    assert.equal(added.billedAs, "");
+    assert.equal(added.ranges.length, direct.ranges.length);
+    assert.equal(added.ranges.length > 0, true);
     assert.deepEqual(
-      billed.ranges.map((range) => range.phaseId),
+      added.ranges.map((range) => range.phaseId),
       direct.ranges.map((range) => range.phaseId),
     );
-    assert.equal(billed.ranges.length, direct.ranges.length);
-    assert.equal(billed.ranges.length > 0, true);
-    for (const range of billed.ranges) {
-      assert.equal(typeof range.start, "string");
-      assert.equal(typeof range.end, "string");
-      assert.equal(typeof range.headcount, "number");
-      assert.equal(typeof range.hoursPerShift, "number");
-      assert.equal(Array.isArray(range.days), true);
+    for (const phase of phases.filter((row) => row.on)) {
+      const range = added.ranges.find((item) => item.phaseId === phase.id);
+      assert.ok(range, `missing ${phase.id} calendar`);
+      assert.equal(range.start, phase.start);
+      assert.equal(range.end, phase.stop);
+      assert.equal(range.hoursPerShift, phase.hoursPerDay);
     }
+    assert.equal(
+      added.ranges.every((range) => range.start === "" && range.end === ""),
+      false,
+    );
+
+    const titled = assignSupportBilledAs(
+      assignSupportDuty(added, "Tool Room Attendant", phases),
+      "Boilermaker Journeyman",
+      phases,
+    );
+    assert.equal(titled.position, "Tool Room Attendant");
+    assert.equal(titled.billedAs, "Boilermaker Journeyman");
+    assert.equal(titled.ranges.find((range) => range.phaseId === "pre")?.start, phases[0].start);
   });
 
   it("keeps old saved Position + Billed as and fills phase ranges", () => {
