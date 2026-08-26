@@ -17,7 +17,8 @@ import { EstimateTotalRail } from "@/components/EstimateTotalRail";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
 import type { StaffingLine } from "@/lib/types";
 
-export type EstimateStatus = "Estimate" | "Submitted" | "Awarded";
+export type EstimateStatus = "Estimate" | "Submitted" | "Awarded" | "Execute" | "Close out";
+export const ESTIMATE_STATUSES: EstimateStatus[] = ["Estimate", "Submitted", "Awarded", "Execute", "Close out"];
 
 const TABS = [
   { id: "summary", label: "Job setup", icon: "📄" },
@@ -55,6 +56,7 @@ export function EstimateWorkspace({
   status = "Estimate",
   onStatus,
   statusLocked = false,
+  folderLocked = false,
   children,
 }: {
   crumb: string;
@@ -71,6 +73,7 @@ export function EstimateWorkspace({
   status?: EstimateStatus;
   onStatus?: (next: EstimateStatus) => void;
   statusLocked?: boolean;
+  folderLocked?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -109,7 +112,7 @@ export function EstimateWorkspace({
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <div className="flex flex-wrap items-center gap-1.5">
-              {(["Estimate", "Submitted", "Awarded"] as const).map((item) => {
+              {ESTIMATE_STATUSES.map((item) => {
                 const locked = statusLocked && item !== "Estimate";
                 const active = status === item;
                 return (
@@ -225,7 +228,15 @@ export function EstimateWorkspace({
             </p>
           </section>
         ) : null}
-        {tab === "rates" ? null : children}
+        {folderLocked ? (
+          <p className="mb-4 text-sm text-[#5b6f73]">
+            This folder is locked against accidental edits. Submitted and Estimate stay locked.
+            Awarded opens PO and Job number.
+          </p>
+        ) : null}
+        <div className={folderLocked ? "pointer-events-none opacity-80" : undefined}>
+          {tab === "rates" ? null : children}
+        </div>
         <EstimateTotalRail client={jobClient || client} site={jobSite || site} />
       </div>
       {confirmClose && packageId ? (
