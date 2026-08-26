@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { NOVUS_EMAIL } from "@/lib/desk-role";
-import { canFollowSeatId, followLandPath } from "@/lib/follow";
+import { canFollowSeatId } from "@/lib/follow";
 import { VISUAL_ROSTER, type FollowSeat } from "@/lib/owner-desk";
 
 type LiveSeat = {
@@ -50,11 +50,9 @@ export function FollowDesk() {
   const watching = desk.followSeat !== "owner";
   const subject = VISUAL_ROSTER.find((row) => row.id === desk.followSeat);
   const applyFollow = desk.setFollowSeat;
-
   function startFollow(id: FollowSeat, path: string) {
     if (!canFollowSeatId(id)) return;
-    applyFollow(id);
-    window.location.assign(followLandPath(path));
+    applyFollow(id, path);
   }
 
   const known = new Set(VISUAL_ROSTER.map((row) => row.email.toLowerCase()));

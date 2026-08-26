@@ -16,6 +16,7 @@ import {
   type ViewAsSeat,
   type ViewResponsibility,
 } from "@/lib/owner-desk";
+import { followLandPath } from "@/lib/follow";
 import { isJosephEmail, testerByEmail } from "@/lib/tester-seats";
 
 const JOSEPH_VIEW_KEY = "hs_joseph_view";
@@ -89,7 +90,7 @@ type OwnerDeskState = {
   republish: RepublishState | null;
   lensReady: boolean;
   setAliasesOn: (on: boolean) => void;
-  setFollowSeat: (seat: FollowSeat) => void;
+  setFollowSeat: (seat: FollowSeat, land?: string) => void;
   setViewAs: (seat: ViewAsSeat) => void;
   setViewLens: (responsibility: ViewResponsibility, site: string) => void;
   alias: (text: string) => string;
@@ -207,15 +208,19 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     noteFeature(on ? "Aliases tester view on" : "Aliases real names");
   }, [user]);
 
-  const setFollowSeat = useCallback((seat: FollowSeat) => {
+  const setFollowSeat = useCallback((seat: FollowSeat, land?: string) => {
     if (!canUseFollow(user)) return;
     const lens = seat === "owner" ? "owner" : seat;
-    setFollowSeatState(seat);
-    setViewAsState(lens);
     writeStoredFollow(seat);
     writeStoredViewAs(lens);
     saveSettings({ followSeat: seat, viewAs: lens });
     noteFeature(seat === "owner" ? "Stopped Follow" : `Follow ${seat} screen`);
+    if (seat !== "owner") {
+      window.location.assign(followLandPath(land ?? "/"));
+      return;
+    }
+    setFollowSeatState("owner");
+    setViewAsState("owner");
   }, [user]);
 
   const setViewAs = useCallback((seat: ViewAsSeat) => {

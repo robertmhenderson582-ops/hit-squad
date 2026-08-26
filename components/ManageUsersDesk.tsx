@@ -6,7 +6,7 @@ import { PresencePulse } from "@/components/PresencePulse";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { canUseFollow, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
-import { followLandPath, followSeatFromEmail } from "@/lib/follow";
+import { followSeatFromEmail } from "@/lib/follow";
 import { EMPTY_MODULES } from "@/lib/roster";
 import type { PublicUser, RosterEntry, RosterPermission } from "@/lib/types";
 
@@ -67,9 +67,7 @@ export function ManageUsersDesk() {
     const seat = followSeatFromEmail(email);
     if (!seat || !desk || !followOk) return;
     const ping = liveSeats.find((row) => row.email.toLowerCase() === email.trim().toLowerCase());
-    const land = followLandPath(ping?.path ?? "/");
-    desk.setFollowSeat(seat);
-    window.location.assign(land);
+    desk.setFollowSeat(seat, ping?.path ?? "/");
   }
 
   async function onIssue(event: FormEvent) {
