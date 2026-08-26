@@ -6,6 +6,7 @@ import { DateField } from "@/components/DateField";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { displayEstimateType, ESTIMATE_TYPES, type EstimateType } from "@/lib/estimate-type";
 import { jobEventLabel } from "@/lib/job-event";
+import { showCraftTravelRow } from "@/lib/other-cost";
 
 export function JobSetupCard({
   type,
@@ -32,7 +33,7 @@ export function JobSetupCard({
 }) {
   const pack = useEstimatePackage();
   const [estimateType, setEstimateType] = useState<EstimateType>(displayEstimateType(type));
-  const travelOn = pack.jobMeta.mileageRate > 0 || pack.jobMeta.perDiemRate > 0;
+  const travelOn = showCraftTravelRow(pack.jobMeta.mileageRate);
 
   return (
     <section className="plant-card mx-auto max-w-3xl px-6 py-6">

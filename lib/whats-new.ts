@@ -1,22 +1,30 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.13.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.13";
+export const DESK_VERSION = "1.14.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.14";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.13";
+export const DESK_THREAD_ID = "th-desk-v1.14";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.13",
-  "• Inbox and Suggestion Box open larger",
+  "Hit Squad Project Controls V1.14",
+  "• Equipment: listed large tools plus typed third-party rental at cost + 6%",
+  "• Other Cost is reimbursables, travel, and CAT 2 misc — Home Cost stays Cost/PPR",
+  "• Empty Craft travel / Mileage Rate stays hidden until a mileage rate is entered",
+  "• Change Order FCR packet is on the estimate: log, estimate, and SCR. Mileage Yes is $2,500",
+  "• Staffing follows Crew calendars and Job setup phases",
+  "• Multiple units is a larger Job setup control; default stays off",
+  "• Crew Start and End calendars no longer overlap",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.13",
-  "• Tester seats are on the desk (first-login change, aliases, testers anonymous to each other)",
-  "• View as is a true lens: selected seat’s desk AND Settings; owner keeps Back to me",
-  "• Testers cannot see Novus, owner tools, other testers, or the alias switch",
-  "• Inbox and Suggestion Box open larger",
+  "Hit Squad Project Controls V1.14",
+  "• Equipment, Other Cost, Change Order FCR, and Staffing are locked for the morning ship",
+  "• Tester seats / View as stay as V1.13",
+  "• Empty Craft travel / Mileage Rate hides until a mileage rate exists",
+  "• Change Order Mileage Yes is a flat $2,500, never times headcount",
+  "• Multiple units is a larger Job setup control; default off",
+  "• Crew Start/End calendars stack so they do not overlap",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

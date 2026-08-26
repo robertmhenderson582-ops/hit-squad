@@ -97,6 +97,18 @@ export function formatStaffingHeader(ymd: string): string {
   return `${mm}/${dd}/${yyyy} (${WEEKDAY_MARK[date.getDay()]})`;
 }
 
+export function staffingPhasesFromSchedule(schedule: {
+  multiUnits?: boolean;
+  phases: PhaseRow[];
+  units?: { phases: PhaseRow[] }[];
+}): PhaseRow[] {
+  if (schedule.multiUnits && schedule.units?.length) {
+    const fromUnits = schedule.units.flatMap((unit) => unit.phases);
+    if (fromUnits.some((row) => row.on && row.start && row.stop)) return fromUnits;
+  }
+  return schedule.phases;
+}
+
 export function calendarDatesFromPhases(phases: PhaseRow[]): StaffingDate[] {
   const on = phases.filter((row) => row.on && row.start && row.stop);
   if (!on.length) return [];

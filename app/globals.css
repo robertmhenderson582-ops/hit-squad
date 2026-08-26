@@ -1347,7 +1347,8 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   white-space: nowrap;
 }
 
-.phase-setup-table .phase-date-cell {
+.phase-setup-table .phase-date-cell,
+.phase-date-cell {
   min-width: 13.25rem;
   padding-right: 0.85rem;
 }

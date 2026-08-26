@@ -7,6 +7,7 @@ import {
   otherCostTotals,
   perDiemAmount,
   seedMiscCatalog,
+  showCraftTravelRow,
   travelAmount,
 } from "./other-cost.ts";
 
@@ -22,6 +23,11 @@ test("travel is Yes/No plus Mileage Rate and travel $, not a second Miles column
   assert.equal(travelAmount({ ...no, travelDollars: 400 }), 0);
   assert.equal(travelAmount({ ...no, traveler: true, travelDollars: 400 }), 400);
   assert.equal("miles" in no, false);
+});
+
+test("empty Craft travel / Mileage Rate stays hidden until a mileage rate exists", () => {
+  assert.equal(showCraftTravelRow(0), false);
+  assert.equal(showCraftTravelRow(0.67), true);
 });
 
 test("misc reimbursables are the CAT 2 list, not B-3 small tools", () => {

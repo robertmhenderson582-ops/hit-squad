@@ -10,6 +10,7 @@ import {
   miscAmount,
   otherCostTotals,
   readOtherCost,
+  showCraftTravelRow,
   travelAmount,
   writeOtherCost,
   type OtherCostSheet,
@@ -38,6 +39,7 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
 
   const pdRate = pack.jobMeta.perDiemRate || sheet.perDiemRate;
   const totals = otherCostTotals({ ...sheet, perDiemRate: pdRate }, pdDays);
+  const showMileage = showCraftTravelRow(pack.jobMeta.mileageRate) || sheet.travel.some((line) => line.mileageRate > 0);
 
   return (
     <div className="space-y-5">
@@ -98,7 +100,7 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
               <tr>
-                {["KIND", "NAME", "TRAVELER", "MILEAGE RATE", "TRAVEL $", "TOTAL"].map((header) => (
+                {["KIND", "NAME", "TRAVELER", ...(showMileage ? ["MILEAGE RATE"] : []), "TRAVEL $", "TOTAL"].map((header) => (
                   <th key={header} className="px-2 py-2">
                     {header}
                   </th>
@@ -108,7 +110,7 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
             <tbody>
               {sheet.travel.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-2 py-4 text-[#5b6f73]">
+                  <td colSpan={showMileage ? 6 : 5} className="px-2 py-4 text-[#5b6f73]">
                     No travelers.
                   </td>
                 </tr>
@@ -141,19 +143,21 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
                         <option value="yes">Yes</option>
                       </select>
                     </td>
-                    <td className="px-2 py-2">
-                      <input
-                        type="number"
-                        min={0}
-                        className="paper-field w-28"
-                        value={line.mileageRate || pack.jobMeta.mileageRate || ""}
-                        onChange={(event) => {
-                          const next = sheet.travel.slice();
-                          next[index] = { ...line, mileageRate: Number(event.target.value) || 0 };
-                          persist({ ...sheet, travel: next });
-                        }}
-                      />
-                    </td>
+                    {showMileage ? (
+                      <td className="px-2 py-2">
+                        <input
+                          type="number"
+                          min={0}
+                          className="paper-field w-28"
+                          value={line.mileageRate || pack.jobMeta.mileageRate || ""}
+                          onChange={(event) => {
+                            const next = sheet.travel.slice();
+                            next[index] = { ...line, mileageRate: Number(event.target.value) || 0 };
+                            persist({ ...sheet, travel: next });
+                          }}
+                        />
+                      </td>
+                    ) : null}
                     <td className="px-2 py-2">
                       <input
                         type="number"

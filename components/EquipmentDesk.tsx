@@ -146,7 +146,7 @@ export function EquipmentDesk() {
                           className="paper-field w-20"
                         />
                       </td>
-                      <td className="px-2 py-2">
+                      <td className="phase-date-cell px-2 py-2">
                         <DateField
                           value={line.start}
                           onChange={(start) => {
@@ -157,7 +157,7 @@ export function EquipmentDesk() {
                           aria-label="Large tool start"
                         />
                       </td>
-                      <td className="px-2 py-2">
+                      <td className="phase-date-cell px-2 py-2">
                         <DateField
                           value={line.end}
                           onChange={(end) => {
@@ -292,31 +292,33 @@ export function EquipmentDesk() {
                     }}
                   />
                 </label>
-                <div>
-                  <span className="text-sm">Start</span>
-                  <DateField
-                    className="mt-1"
-                    value={line.start}
-                    onChange={(start) => {
-                      const next = sheet.thirdParty.slice();
-                      next[index] = { ...line, start };
-                      persist({ ...sheet, thirdParty: next });
-                    }}
-                    aria-label="Rental start"
-                  />
-                </div>
-                <div>
-                  <span className="text-sm">End</span>
-                  <DateField
-                    className="mt-1"
-                    value={line.end}
-                    onChange={(end) => {
-                      const next = sheet.thirdParty.slice();
-                      next[index] = { ...line, end };
-                      persist({ ...sheet, thirdParty: next });
-                    }}
-                    aria-label="Rental end"
-                  />
+                <div className="calendar-dates sm:col-span-2">
+                  <div>
+                    <span className="text-sm">Start</span>
+                    <DateField
+                      className="mt-1"
+                      value={line.start}
+                      onChange={(start) => {
+                        const next = sheet.thirdParty.slice();
+                        next[index] = { ...line, start };
+                        persist({ ...sheet, thirdParty: next });
+                      }}
+                      aria-label="Rental start"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-sm">End</span>
+                    <DateField
+                      className="mt-1"
+                      value={line.end}
+                      onChange={(end) => {
+                        const next = sheet.thirdParty.slice();
+                        next[index] = { ...line, end };
+                        persist({ ...sheet, thirdParty: next });
+                      }}
+                      aria-label="Rental end"
+                    />
+                  </div>
                 </div>
                 <p className="text-sm text-[#5b6f73] sm:col-span-2">
                   Cost {money(thirdPartyCost(line))} · after 6% {money(thirdPartyMarkedUp(line))}

@@ -60,6 +60,10 @@ export function travelAmount(line: TravelLine) {
   return Math.max(0, line.travelDollars);
 }
 
+export function showCraftTravelRow(mileageRate: number) {
+  return Number(mileageRate) > 0;
+}
+
 export function perDiemAmount(rate: number, pdDays: number) {
   return Math.max(0, rate) * Math.max(0, pdDays);
 }
