@@ -646,6 +646,81 @@ textarea:focus {
   color: #fff;
 }
 
+.est-desk-body {
+  padding-right: 1rem;
+}
+
+.est-total-rail {
+  position: fixed;
+  top: 7.4rem;
+  right: 0.85rem;
+  z-index: 28;
+  width: 16.75rem;
+  padding: 0.85rem 0.95rem 1rem;
+  color: #efe6d4;
+}
+
+.est-total-rail h2 {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: #f0a13a;
+}
+
+.est-total-rail-grand {
+  margin: 0.35rem 0 0.7rem;
+  font-size: 1.55rem;
+  font-weight: 650;
+  color: #fff;
+  text-shadow: 0 0 10px rgba(62, 198, 212, 0.4);
+}
+
+.est-total-rail ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.est-total-rail li,
+.est-total-rail-hours {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.28rem 0;
+  border-top: 1px solid rgba(62, 198, 212, 0.16);
+  font-size: 0.78rem;
+  color: #c5d4d4;
+}
+
+.est-total-rail li span:last-child,
+.est-total-rail-hours .hud-readout {
+  color: #efe6d4;
+}
+
+.est-total-rail-empty {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: rgba(239, 230, 212, 0.62);
+}
+
+.est-total-rail-hours {
+  margin: 0.55rem 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #f0a13a;
+}
+
+@media (min-width: 1100px) {
+  .est-desk-body {
+    padding-right: 18.25rem;
+  }
+}
+
 .pill {
   border-radius: 999px;
   padding: 0.45rem 1rem;
@@ -1647,7 +1722,8 @@ html[data-theme="night"] .rfq-sheet {
   .hours-tile,
   .steel-plate,
   .est-chrome,
-  .est-total-card {
+  .est-total-card,
+  .est-total-rail {
     background: #fff !important;
     box-shadow: none !important;
     border-color: #c5d4d4 !important;

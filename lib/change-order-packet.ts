@@ -1,4 +1,5 @@
 import { computeRangeHours, seatKind, type ClockOverride, type HoursSplit } from "./hours-clock.ts";
+import { notifyEstimateSheets } from "./sheet-events.ts";
 
 export const FCR_STORE_PREFIX = "hs_fcr_v1:";
 export const MILEAGE_YES_FLAT = 2500;
@@ -356,6 +357,7 @@ export function writeFcrPacket(key: string, packet: FcrPacket) {
   if (typeof window === "undefined" || !key) return;
   try {
     window.localStorage.setItem(`${FCR_STORE_PREFIX}${key}`, JSON.stringify(packet));
+    notifyEstimateSheets();
   } catch {
     // keep the previous copy
   }

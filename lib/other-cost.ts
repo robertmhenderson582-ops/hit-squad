@@ -1,3 +1,5 @@
+import { notifyEstimateSheets } from "./sheet-events.ts";
+
 export const OTHER_COST_STORE_PREFIX = "hs_other_v1:";
 
 export const MISC_CATALOG = [
@@ -95,6 +97,7 @@ export function writeOtherCost(key: string, sheet: OtherCostSheet) {
   if (typeof window === "undefined" || !key) return;
   try {
     window.localStorage.setItem(`${OTHER_COST_STORE_PREFIX}${key}`, JSON.stringify(sheet));
+    notifyEstimateSheets();
   } catch {
     // keep the previous copy
   }

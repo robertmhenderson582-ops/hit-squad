@@ -49,6 +49,9 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       tab={tab}
       onTab={setTab}
       client={alias(estimate.client)}
+      site={alias(site?.name ?? "")}
+      jobClient={estimate.client}
+      jobSite={site?.name}
       name={estimate.title}
       total={estimate.total}
       packageId={estimate.id}

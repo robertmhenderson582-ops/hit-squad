@@ -79,6 +79,9 @@ function NewEstimateDesk({
       tab={tab}
       onTab={setTab}
       client={alias(client)}
+      site={alias(site)}
+      jobClient={client}
+      jobSite={site}
       name={name}
       status="Estimate"
       statusLocked

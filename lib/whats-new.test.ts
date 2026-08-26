@@ -58,6 +58,7 @@ describe("inbox what's-new", () => {
     assert.match(TESTER_WHATS_NEW, /Staffing follows Crew calendars and Job setup phases/);
     assert.match(TESTER_WHATS_NEW, /Multiple units is a larger Job setup control; default stays off/);
     assert.match(TESTER_WHATS_NEW, /Crew Start and End calendars no longer overlap/);
+    assert.match(TESTER_WHATS_NEW, /Estimate total is a floating right-side breakdown/);
     assert.match(OWNER_WHATS_NEW, /Equipment, Other Cost, Change Order FCR, and Staffing are locked/);
     assert.match(OWNER_WHATS_NEW, /Tester seats \/ View as stay as V1.13/);
     assert.match(OWNER_WHATS_NEW, /Mileage Yes is a flat \$2,500/);

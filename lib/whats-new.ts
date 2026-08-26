@@ -15,6 +15,7 @@ export const TESTER_WHATS_NEW = [
   "• Staffing follows Crew calendars and Job setup phases",
   "• Multiple units is a larger Job setup control; default stays off",
   "• Crew Start and End calendars no longer overlap",
+  "• Estimate total is a floating right-side breakdown; $0 lines stay hidden",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
@@ -25,6 +26,7 @@ export const OWNER_WHATS_NEW = [
   "• Change Order Mileage Yes is a flat $2,500, never times headcount",
   "• Multiple units is a larger Job setup control; default off",
   "• Crew Start/End calendars stack so they do not overlap",
+  "• Estimate total is the old right-side HUD rail; no header dollars; margin stays off it",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

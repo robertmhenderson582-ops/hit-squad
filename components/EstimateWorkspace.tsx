@@ -13,6 +13,7 @@ import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { RfqPreview } from "@/components/RfqPreview";
+import { EstimateTotalRail } from "@/components/EstimateTotalRail";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
 import type { StaffingLine } from "@/lib/types";
 
@@ -44,6 +45,9 @@ export function EstimateWorkspace({
   tab,
   onTab,
   client,
+  site,
+  jobClient,
+  jobSite,
   name,
   total,
   packageId,
@@ -57,6 +61,9 @@ export function EstimateWorkspace({
   tab: EstimateTab;
   onTab: (next: EstimateTab) => void;
   client?: string;
+  site?: string;
+  jobClient?: string;
+  jobSite?: string;
   name?: string;
   total?: string;
   packageId?: string;
@@ -125,10 +132,6 @@ export function EstimateWorkspace({
                   </button>
                 );
               })}
-            </div>
-            <div className="est-total-card">
-              <p>ESTIMATE TOTAL</p>
-              <p>{total && total !== "$0" ? total : "—"}</p>
             </div>
             <InboxBadge />
             <ThemeFlip />
@@ -200,7 +203,7 @@ export function EstimateWorkspace({
           ))}
         </nav>
       </header>
-      <div className="paper-desk min-h-[70vh] px-4 py-6">
+      <div className="paper-desk est-desk-body min-h-[70vh] px-4 py-6">
         <DeskBanners />
         {tab === "rates" ? (
           <section className="plant-card px-5 py-5">
@@ -211,6 +214,7 @@ export function EstimateWorkspace({
           </section>
         ) : null}
         {tab === "rates" ? null : children}
+        <EstimateTotalRail client={jobClient || client} site={jobSite || site} />
       </div>
       {confirmClose && packageId ? (
         <div className="modal-scrim" role="dialog" aria-modal="true">

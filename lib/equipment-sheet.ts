@@ -1,4 +1,5 @@
 import { b2ItemById, b2LineTotal, markup6, type B2Period } from "./b2-east-coast.ts";
+import { notifyEstimateSheets } from "./sheet-events.ts";
 
 export const EQUIPMENT_STORE_PREFIX = "hs_equip_v1:";
 export const THIRD_PARTY_MARKUP = 0.06;
@@ -86,6 +87,7 @@ export function writeEquipmentSheet(key: string, sheet: EquipmentSheet) {
   if (typeof window === "undefined" || !key) return;
   try {
     window.localStorage.setItem(`${EQUIPMENT_STORE_PREFIX}${key}`, JSON.stringify(sheet));
+    notifyEstimateSheets();
   } catch {
     // keep the previous copy
   }
