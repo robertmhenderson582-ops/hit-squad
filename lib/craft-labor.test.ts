@@ -154,9 +154,44 @@ describe("crew ranges are per position", () => {
     const extra = extraRangeFromPhase(oil, first);
     assert.equal(extra.start, "");
     assert.equal(extra.end, "");
+    assert.equal(extra.hoursPerShift, 0);
     assert.equal(phaseRangesOverlap([first, extra], "oil-out"), false);
     extra.start = first.start;
     extra.end = first.end;
     assert.equal(phaseRangesOverlap([first, extra], "oil-out"), true);
+  });
+
+  it("adding a second Pre-Turnaround range does not clone 08/21→09/03 × 10 × 1", () => {
+    const phases = defaultPhases();
+    const pre = phases.find((row) => row.id === "pre");
+    assert.ok(pre);
+    const row = craftRowFromPhases(phases);
+    row.position = "Boilermaker Journeyman";
+    const first = row.ranges.find((range) => range.phaseId === "pre");
+    assert.ok(first);
+    assert.equal(first.start, "2026-08-21");
+    assert.equal(first.end, "2026-09-03");
+    assert.equal(first.hoursPerShift, 10);
+    assert.equal(first.headcount, 1);
+    const before = computeRowHours(row, "Wood River — Roxana, IL", "Phillips 66");
+    const extra = extraRangeFromPhase(pre, first);
+    assert.equal(extra.start, "");
+    assert.equal(extra.end, "");
+    assert.equal(extra.hoursPerShift, 0);
+    assert.notEqual(
+      `${extra.start}→${extra.end}×${extra.hoursPerShift}×${extra.headcount}`,
+      "2026-08-21→2026-09-03×10×1",
+    );
+    assert.equal(phaseRangesOverlap([first, extra], "pre"), false);
+    row.ranges.push(extra);
+    const synced = syncCraftRows([row], phases)[0];
+    const pres = synced.ranges.filter((range) => range.phaseId === "pre");
+    assert.equal(pres.length, 2);
+    assert.equal(pres[1].start, "");
+    assert.equal(pres[1].end, "");
+    assert.equal(pres[1].hoursPerShift, 0);
+    assert.equal(phaseRangesOverlap(pres, "pre"), false);
+    const after = computeRowHours(synced, "Wood River — Roxana, IL", "Phillips 66");
+    assert.equal(after.hours, before.hours);
   });
 });

@@ -142,7 +142,8 @@ function PhaseWindowCard({
               </p>
               {overlap ? (
                 <p className="text-xs text-[#e38b2a]">
-                  These date ranges overlap on this phase. Hours will bill twice for the overlap.
+                  Overlapping dates on this phase bill twice. Move the new range so it does not cover
+                  the first.
                 </p>
               ) : null}
             </div>
