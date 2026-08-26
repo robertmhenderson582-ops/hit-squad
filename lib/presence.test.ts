@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -37,4 +37,26 @@ test("presence persist keeps Live green across a memory reset", () => {
     seats.some((seat) => seat.email === "robertmhenderson582@gmail.com"),
     false,
   );
+});
+
+test("listSeats picks up a newer file beat so Live stays green", () => {
+  resetPresenceForTests(file);
+  beatPresence({ email: "owner-local@example.com", name: "Owner", path: "/" });
+  const now = Date.now();
+  const parsed = JSON.parse(readFileSync(file, "utf8")) as {
+    seats: Array<{ email: string; name: string; path: string; startedAt: number; lastAt: number }>;
+  };
+  parsed.seats.push({
+    email: "marks544@yahoo.com",
+    name: "Mark Schneider",
+    path: "/jobs",
+    startedAt: now,
+    lastAt: now,
+  });
+  writeFileSync(file, JSON.stringify(parsed), "utf8");
+  const seats = listSeats("owner-local@example.com");
+  const mark = seats.find((seat) => seat.email === "marks544@yahoo.com");
+  assert.ok(mark);
+  assert.equal(mark.live, true);
+  assert.equal(mark.path, "/jobs");
 });

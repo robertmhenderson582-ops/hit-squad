@@ -41,12 +41,12 @@ export function resetPresenceForTests(path?: string) {
 
 function hydrate() {
   const file = presenceStorePath();
-  if (loadedFrom === file && seats.size > 0) return;
   try {
     const parsed = JSON.parse(readFileSync(file, "utf8")) as { seats?: PresenceSeat[] };
-    seats.clear();
     for (const row of parsed.seats ?? []) {
-      if (row?.email) seats.set(row.email, row);
+      if (!row?.email) continue;
+      const existing = seats.get(row.email);
+      if (!existing || row.lastAt >= existing.lastAt) seats.set(row.email, row);
     }
   } catch {
     if (loadedFrom !== file) seats.clear();

@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { PasswordField } from "@/components/PasswordField";
 import { PresencePulse } from "@/components/PresencePulse";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
@@ -25,7 +24,6 @@ type LiveSeat = { email: string; path: string };
 export function ManageUsersDesk() {
   const { user } = useSession();
   const desk = useOwnerDesk();
-  const router = useRouter();
   const owner = isOwner(user);
   const followOk = canUseFollow(user);
   const [seats, setSeats] = useState<SeatRow[]>([]);
@@ -69,8 +67,9 @@ export function ManageUsersDesk() {
     const seat = followSeatFromEmail(email);
     if (!seat || !desk || !followOk) return;
     const ping = liveSeats.find((row) => row.email.toLowerCase() === email.trim().toLowerCase());
+    const land = followLandPath(ping?.path ?? "/");
     desk.setFollowSeat(seat);
-    router.push(followLandPath(ping?.path ?? "/"));
+    window.location.assign(land);
   }
 
   async function onIssue(event: FormEvent) {

@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { NOVUS_EMAIL } from "@/lib/desk-role";
@@ -32,7 +31,6 @@ function lastSeen(at: number) {
 
 export function FollowDesk() {
   const desk = useOwnerDesk();
-  const router = useRouter();
   const [seats, setSeats] = useState<LiveSeat[]>([]);
 
   useEffect(() => {
@@ -56,7 +54,7 @@ export function FollowDesk() {
   function startFollow(id: FollowSeat, path: string) {
     if (!canFollowSeatId(id)) return;
     applyFollow(id);
-    router.push(followLandPath(path));
+    window.location.assign(followLandPath(path));
   }
 
   const known = new Set(VISUAL_ROSTER.map((row) => row.email.toLowerCase()));
