@@ -120,7 +120,7 @@ export function SupportCrewCard({
           <p className="text-sm text-[#5b6f73]">No support positions yet.</p>
         ) : (
           <>
-          <div className="hidden px-3 text-xs tracking-[0.12em] text-[#5b6f73] sm:grid sm:grid-cols-[1fr_1fr_auto] sm:gap-3">
+          <div className="grid grid-cols-[1fr_1fr_auto] gap-3 px-3 text-xs tracking-[0.12em] text-[#5b6f73]">
             <p>POSITION</p>
             <p>BILLED AS</p>
             <p />

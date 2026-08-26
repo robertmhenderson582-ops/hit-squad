@@ -17,6 +17,7 @@ export const TESTER_WHATS_NEW = [
   "• Crew Start and End calendars no longer overlap",
   "• Estimate total is a floating right-side breakdown; $0 lines stay hidden",
   "• Estimate desk uses instrument chrome (HUD), not paper cards",
+  "• Crew starts empty — hours wait until you pick a position",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
@@ -29,6 +30,7 @@ export const OWNER_WHATS_NEW = [
   "• Crew Start/End calendars stack so they do not overlap",
   "• Estimate total is the old right-side HUD rail; no header dollars; margin stays off it",
   "• Night estimate desk uses instrument chrome (HUD), not paper cards",
+  "• Crew starts empty — hours wait until you pick a position",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

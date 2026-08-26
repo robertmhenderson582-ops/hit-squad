@@ -134,6 +134,7 @@ function PhaseRowsTable({
                   ) : null}
                   {sundays.length ? (
                     <div className="mt-2 flex flex-wrap gap-1">
+                      <p className="w-full text-[11px] text-[#5b6f73]">Tap a Sunday to skip it.</p>
                       {sundays.map((iso) => {
                         const off = row.sundaysOff.includes(iso);
                         return (

@@ -60,11 +60,13 @@ describe("inbox what's-new", () => {
     assert.match(TESTER_WHATS_NEW, /Crew Start and End calendars no longer overlap/);
     assert.match(TESTER_WHATS_NEW, /Estimate total is a floating right-side breakdown/);
     assert.match(TESTER_WHATS_NEW, /instrument chrome \(HUD\), not paper cards/);
+    assert.match(TESTER_WHATS_NEW, /Crew starts empty/);
     assert.match(OWNER_WHATS_NEW, /Equipment, Other Cost, Change Order FCR, and Staffing are locked/);
     assert.match(OWNER_WHATS_NEW, /Tester seats \/ View as stay as V1.13/);
     assert.match(OWNER_WHATS_NEW, /Mileage Yes is a flat \$2,500/);
     assert.match(OWNER_WHATS_NEW, /Crew Start\/End calendars stack/);
     assert.match(OWNER_WHATS_NEW, /instrument chrome \(HUD\), not paper cards/);
+    assert.match(OWNER_WHATS_NEW, /Crew starts empty/);
     assert.equal(
       /password|passwords|auth|security|Novus|vault|Drive|seats|owner tools|View as|aliases|other testers/i.test(
         TESTER_WHATS_NEW,

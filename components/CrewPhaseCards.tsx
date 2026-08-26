@@ -361,7 +361,7 @@ function CalendarPattern({
       {sundays.length ? (
         <div>
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold tracking-[0.12em] text-[#5b6f73]">SUNDAYS</p>
+            <p className="text-xs font-semibold tracking-[0.12em] text-[#5b6f73]">SUNDAYS — tap to skip that Sunday</p>
             <button type="button" onClick={() => onPatch({ skipDates: [] })} className="text-xs text-steel underline">
               All
             </button>

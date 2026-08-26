@@ -118,8 +118,8 @@ export function StaffingPlanDesk({
         </table>
       </GripToPan>
       <p className="mt-3 text-xs text-[#5b6f73]">
-        Export contractor: {P66_CONTRACTOR}. Totals on the sheet are SUM formulas. Grip the grid to
-        pan dates.
+        Export contractor: {P66_CONTRACTOR}. Totals on the sheet are SUM formulas. Use the striped bar
+        above the grid to slide dates.
       </p>
     </section>
   );

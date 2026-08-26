@@ -150,6 +150,13 @@ html.hs-capturing:has(.estimate-modal) .ticket-scrim {
   color: #1a0d03;
 }
 
+@media (max-width: 640px) {
+  .trial-banner {
+    padding-left: 0.75rem;
+    padding-top: 2.35rem;
+  }
+}
+
 input,
 button {
   font: inherit;
@@ -1416,6 +1423,42 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   user-select: none;
 }
 
+.grip-pan-hint {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  color: #b7c9cb;
+}
+
+.industrial-root .grip-pan-hint {
+  color: #d5e4e2;
+}
+
+.grip-pan-bar {
+  height: 1.15rem;
+  margin-bottom: 0.4rem;
+  border: 1px solid rgba(62, 198, 212, 0.35);
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(62, 198, 212, 0.22) 0 8px,
+      transparent 8px 16px
+    ),
+    rgba(6, 22, 26, 0.45);
+  cursor: grab;
+}
+
+.desk-day .grip-pan-bar,
+.paper-page .grip-pan-bar {
+  border-color: rgba(15, 95, 109, 0.35);
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(15, 95, 109, 0.18) 0 8px,
+      transparent 8px 16px
+    ),
+    #e7eeec;
+}
+
 .estimate-card {
   position: relative;
   z-index: 1;
@@ -1564,11 +1607,16 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 
 .date-field {
   position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
   min-width: 12.5rem;
   width: 100%;
+}
+
+.date-field:focus-within {
+  z-index: 6;
 }
 
 .date-field-input {

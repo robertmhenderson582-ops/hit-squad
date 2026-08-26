@@ -114,9 +114,9 @@ export function JobSetupCard({
       {children}
       {code || window ? (
         <p className="mt-4 text-sm text-[#5b6f73]">
-          {[code, window].filter(Boolean).join(" · ")} · Dollars stay on the rail.
+          {code ? `${code}. ` : ""}
           {window
-            ? " Blotter window is the job-card dates, not the phase START/STOP above. They can differ."
+            ? `The job card still shows ${window}. Crew follows Project start and the phase START/STOP table above — those can differ from the job card.`
             : ""}
         </p>
       ) : null}
