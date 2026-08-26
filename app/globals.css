@@ -1323,8 +1323,8 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 }
 
 .crew-phase-card {
-  min-width: 18.5rem;
-  max-width: 21rem;
+  min-width: 20rem;
+  max-width: 22.5rem;
   border: 1px solid #c5d4d4;
   background: #fff;
   color: #163038;
@@ -1347,11 +1347,56 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   white-space: nowrap;
 }
 
+.phase-setup-table .phase-date-cell {
+  min-width: 13.25rem;
+  padding-right: 0.85rem;
+}
+
+.calendar-dates {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+}
+
+.multi-units-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--hud-line);
+  background: rgba(15, 95, 109, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+  color: #163038;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.multi-units-toggle input {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex-shrink: 0;
+  accent-color: #0f5f6d;
+}
+
+.industrial-root .multi-units-toggle {
+  border-color: rgba(62, 198, 212, 0.42);
+  background: rgba(62, 198, 212, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(6, 22, 26, 0.45);
+  color: #efe6d4;
+}
+
+.industrial-root .multi-units-toggle input {
+  accent-color: #3ec6d4;
+}
+
 .date-field {
   position: relative;
   display: inline-flex;
   align-items: center;
-  min-width: 11.25rem;
+  flex-shrink: 0;
+  min-width: 12.5rem;
   width: 100%;
 }
 
