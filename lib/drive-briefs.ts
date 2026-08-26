@@ -115,6 +115,12 @@ export function responseLeaksBriefVault(payload: unknown) {
   return /141Js9RQZKXq|1A7anV1UKx8m7|10f8lfsKSVgvQ|1zYl2dEvW21|drive\.google\.com/i.test(text);
 }
 
+function copyBytes(bytes: Uint8Array) {
+  const out = new Uint8Array(bytes.byteLength);
+  out.set(bytes);
+  return out;
+}
+
 export function memoryBriefDrive(): BriefDrive & {
   files: Map<string, { file: BriefDriveFile; content: Uint8Array }>;
 } {
@@ -122,7 +128,7 @@ export function memoryBriefDrive(): BriefDrive & {
   let n = 0;
 
   function put(file: BriefDriveFile, content = new Uint8Array()) {
-    files.set(file.id, { file, content });
+    files.set(file.id, { file, content: copyBytes(content) });
     return file;
   }
 
@@ -149,7 +155,7 @@ export function memoryBriefDrive(): BriefDrive & {
       n += 1;
       return put(
         { id: `file-${n}`, name, mimeType, parents: [folderId], properties },
-        bytes,
+        copyBytes(bytes),
       );
     },
     async readBytes(fileId) {

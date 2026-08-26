@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const fileId = new URL(request.url).searchParams.get("id") || "";
   const file = await getVisibleBriefFile(user, fileId);
   if (!file) return NextResponse.json({ error: "That file is not on this desk." }, { status: 404 });
-  return new NextResponse(Buffer.from(file.bytes), {
+  return new NextResponse(Uint8Array.from(file.bytes), {
     headers: {
       "content-type": file.type || "application/octet-stream",
       "content-disposition": `attachment; filename="${file.name.replace(/"/g, "")}"`,
