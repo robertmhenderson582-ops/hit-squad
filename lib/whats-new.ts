@@ -1,24 +1,25 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.19.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.19";
+export const DESK_VERSION = "1.20.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.20";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.19";
+export const DESK_THREAD_ID = "th-desk-v1.20";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.19",
-  "• Subcontractor tab is on the estimate, next to Equipment and Other Cost.",
-  "• Plug your own sub rates on Rates or the Subcontractor tab. Pick a book row or type a one-off.",
-  "• Save your work, then hard-refresh.",
+  "Hit Squad Project Controls V1.20",
+  "• Subcontractor labor and equipment cards with calendar.",
+  "• Scheduling is listed under Future modules — not open for trial yet.",
+  "• Estimate Total adds a 6.5% markup on subcontractors, third-party rental, and misc.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.19",
-  "• Subcontractor tab is on the estimate. Estimate Total gets a Subcontractor line. No markup. Not Crew labor.",
-  "• Plug your own sub rates on Rates or the Subcontractor tab. Empty book is fine.",
-  "• Testers who already saw V1.18 get this note (versioned seen key).",
-  "• Shane Smith tester seat.",
+  "Hit Squad Project Controls V1.20",
+  "• Subcontractor labor and equipment cards with calendar.",
+  "• Scheduling is listed under Future modules — not open for trial yet.",
+  "• Follow now lands on that person's desk.",
+  "• Estimate Total 6.5% markup on subcontractors, third-party rental, and misc only.",
+  "• Testers who already saw V1.19 get this note (versioned seen key).",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

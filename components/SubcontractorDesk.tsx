@@ -1,24 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
+import { CrewPhaseCards } from "@/components/CrewPhaseCards";
+import { GripToPan } from "@/components/GripToPan";
 import { useEstimatePackage } from "@/components/EstimatePackage";
+import { clampPerDiem, type CalendarRange } from "@/lib/craft-labor";
 import {
+  SUB_CARD_KINDS,
+  SUB_EQUIP_PERIODS,
+  SUB_EQUIP_PERIOD_LABEL,
   SUB_UNITS,
   SUB_UNIT_LABEL,
   applyBookRate,
   applyTypedAmount,
+  blankSubCard,
+  blankSubEquipLine,
+  blankSubLaborPosition,
   blankSubLine,
   blankSubRate,
   bookLabel,
+  cardShowsEquipment,
+  cardShowsLabor,
   emptySubBook,
   emptySubSheet,
   lineAmount,
   readSubBook,
   readSubSheet,
+  subCardTotal,
+  subEquipAmount,
+  subLaborAsCraftRow,
+  subLaborCost,
+  subLaborHours,
   subcontractorTotal,
+  syncSubSheet,
   writeSubBook,
   writeSubSheet,
+  type SubCard,
+  type SubCardKind,
+  type SubEquipLine,
+  type SubEquipPeriod,
+  type SubLaborPosition,
   type SubLine,
   type SubRate,
   type SubSheet,
@@ -209,48 +231,115 @@ export function SubcontractorRateBook({
   );
 }
 
-export function SubcontractorDesk() {
+export function SubcontractorDesk({ site = "", client = "" }: { site?: string; client?: string } = {}) {
   const pack = useEstimatePackage();
   const confirmRemove = useConfirmRemove();
   const [sheet, setSheet] = useState<SubSheet>(emptySubSheet);
   const [book, setBook] = useState<SubRate[]>(emptySubBook);
   const [openIds, setOpenIds] = useState<string[]>([]);
-  const total = subcontractorTotal(sheet);
+  const [openCardIds, setOpenCardIds] = useState<string[]>([]);
+  const ctx = useMemo(
+    () => ({ site, client, otAfter8: pack.crew.otAfter8 }),
+    [client, pack.crew.otAfter8, site],
+  );
+  const total = subcontractorTotal(sheet, ctx);
 
   useEffect(() => {
-    const next = readSubSheet(pack.estimateKey);
+    const next = syncSubSheet(
+      readSubSheet(pack.estimateKey),
+      pack.schedule.phases,
+      pack.schedule.units ?? [],
+      Boolean(pack.schedule.multiUnits),
+    );
     setSheet(next);
     setOpenIds(next.lines.filter((line) => !line.vendor && !line.scope && !line.rate).map((line) => line.id));
+    setOpenCardIds(next.cards.filter((card) => !card.vendor).map((card) => card.id));
     setBook(readSubBook());
-  }, [pack.estimateKey]);
+  }, [pack.estimateKey, pack.schedule.multiUnits, pack.schedule.phases, pack.schedule.units]);
 
   function persist(next: SubSheet) {
-    setSheet(next);
-    writeSubSheet(pack.estimateKey, next);
+    const synced = syncSubSheet(next, pack.schedule.phases, pack.schedule.units ?? [], Boolean(pack.schedule.multiUnits));
+    setSheet(synced);
+    writeSubSheet(pack.estimateKey, synced);
   }
 
   function patch(index: number, nextLine: SubLine) {
     const next = sheet.lines.slice();
     next[index] = nextLine;
-    persist({ lines: next });
+    persist({ ...sheet, lines: next });
   }
 
   function addRow() {
     const line = blankSubLine();
-    persist({ lines: [...sheet.lines, line] });
+    persist({ ...sheet, lines: [...sheet.lines, line] });
     setOpenIds((current) => [...current, line.id]);
+  }
+
+  function addCard() {
+    const card = blankSubCard();
+    persist({ ...sheet, cards: [...sheet.cards, card] });
+    setOpenCardIds((current) => [...current, card.id]);
+  }
+
+  function persistCard(index: number, nextCard: SubCard) {
+    const cards = sheet.cards.slice();
+    cards[index] = nextCard;
+    persist({ ...sheet, cards });
   }
 
   return (
     <div className="space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Subcontractor. Not Crew labor and not Other Cost misc. Pick a plugged rate or type a
-        one-off. Amount is qty × rate. Lump sum is unit LS with qty 1, or type the amount.
+        Subcontractor. Add a vendor card for labor (typed ST / OT / DT × calendar hours) and/or
+        equipment (typed rows). Same vendor can carry both. One-off LS / hour / day / each rows
+        still work. Not Crew labor and not Other Cost misc.
       </p>
+
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-2xl font-semibold text-[#163038]">Subcontractor cards</h2>
+          <button type="button" onClick={addCard} className={ADD_BTN}>
+            + Add card
+          </button>
+        </div>
+        {sheet.cards.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-[#d5e0de] px-4 py-4 text-sm text-[#5b6f73]">
+            No vendor cards yet. Add card, type the vendor, then add labor positions and/or
+            equipment rows.
+          </p>
+        ) : (
+          sheet.cards.map((card, index) => (
+            <SubVendorCard
+              key={card.id}
+              card={card}
+              site={site}
+              client={client}
+              otAfter8={pack.crew.otAfter8}
+              open={openCardIds.includes(card.id)}
+              onToggle={() =>
+                setOpenCardIds((current) =>
+                  current.includes(card.id) ? current.filter((id) => id !== card.id) : [...current, card.id],
+                )
+              }
+              onChange={(next) => persistCard(index, next)}
+              onRemove={() =>
+                void confirmRemove(card.vendor || "this card", {
+                  title: "Remove this card?",
+                  confirmLabel: "Remove",
+                }).then((ok) => {
+                  if (!ok) return;
+                  persist({ ...sheet, cards: sheet.cards.filter((item) => item.id !== card.id) });
+                  setOpenCardIds((current) => current.filter((id) => id !== card.id));
+                })
+              }
+            />
+          ))
+        )}
+      </section>
 
       <section className="plant-card px-5 py-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-2xl font-semibold text-[#163038]">Subcontractor</h2>
+          <h2 className="text-2xl font-semibold text-[#163038]">One-off rows</h2>
           <button type="button" onClick={addRow} className={ADD_BTN}>
             + Add row
           </button>
@@ -270,8 +359,7 @@ export function SubcontractorDesk() {
               {sheet.lines.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-2 py-4 text-[#5b6f73]">
-                    No subcontractors on this package. Add row, then pick a book rate or type a
-                    one-off.
+                    No one-off rows. Add row to pick a book rate or type LS / hour / day / each.
                   </td>
                 </tr>
               ) : (
@@ -297,7 +385,7 @@ export function SubcontractorDesk() {
                           confirmLabel: "Remove",
                         }).then((ok) => {
                           if (!ok) return;
-                          persist({ lines: sheet.lines.filter((item) => item.id !== line.id) });
+                          persist({ ...sheet, lines: sheet.lines.filter((item) => item.id !== line.id) });
                           setOpenIds((current) => current.filter((id) => id !== line.id));
                         })
                       }
@@ -435,6 +523,423 @@ function SubRow({
                 />
               </label>
             </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+const KIND_LABEL: Record<SubCardKind, string> = {
+  labor: "Labor",
+  equipment: "Equipment",
+  both: "Labor + equipment",
+};
+
+const LABOR_HEADERS = ["POSITION", "ST RATE", "OT RATE", "DT RATE", "ST", "OT", "DT", "HOURS", "COST", ""];
+const EQUIP_HEADERS = ["DESCRIPTION", "PERIOD", "RATE", "QTY", "FREIGHT", "TOTAL", ""];
+
+function SubVendorCard({
+  card,
+  site,
+  client,
+  otAfter8,
+  open,
+  onToggle,
+  onChange,
+  onRemove,
+}: {
+  card: SubCard;
+  site: string;
+  client: string;
+  otAfter8: boolean;
+  open: boolean;
+  onToggle: () => void;
+  onChange: (next: SubCard) => void;
+  onRemove: () => void;
+}) {
+  const pack = useEstimatePackage();
+  const confirmRemove = useConfirmRemove();
+  const [openLaborIds, setOpenLaborIds] = useState<string[]>([]);
+  const amount = subCardTotal(card, { site, client, otAfter8 });
+
+  function addLabor() {
+    const row = blankSubLaborPosition(pack.schedule.phases, pack.schedule.units ?? [], Boolean(pack.schedule.multiUnits));
+    onChange({ ...card, labor: [...card.labor, row] });
+    setOpenLaborIds((current) => [...current, row.id]);
+  }
+
+  function patchLabor(index: number, next: SubLaborPosition) {
+    const labor = card.labor.slice();
+    labor[index] = next;
+    onChange({ ...card, labor });
+  }
+
+  function patchLaborRange(rowId: string, rangeId: string, patch: Partial<CalendarRange>) {
+    onChange({
+      ...card,
+      labor: card.labor.map((row) => {
+        if (row.id !== rowId) return row;
+        return {
+          ...row,
+          ranges: row.ranges.map((range) => {
+            if (range.id !== rangeId) return range;
+            const next = { ...range, ...patch };
+            return clampPerDiem(next, next.shift ?? row.shift);
+          }),
+        };
+      }),
+    });
+  }
+
+  function addEquip() {
+    onChange({ ...card, equipment: [...card.equipment, blankSubEquipLine()] });
+  }
+
+  function patchEquip(index: number, next: SubEquipLine) {
+    const equipment = card.equipment.slice();
+    equipment[index] = next;
+    onChange({ ...card, equipment });
+  }
+
+  return (
+    <section className="plant-card px-5 py-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <Chevron open={open} onToggle={onToggle} />
+          <input
+            className="paper-field min-w-[14rem] font-semibold"
+            value={card.vendor}
+            onChange={(event) => onChange({ ...card, vendor: event.target.value })}
+            aria-label="Vendor or sub name"
+            placeholder="Vendor / sub"
+          />
+          <label className="text-xs text-[#5b6f73]">
+            Card
+            <select
+              className="paper-field mt-1"
+              value={card.kind}
+              onChange={(event) => onChange({ ...card, kind: event.target.value as SubCardKind })}
+              aria-label="Labor, equipment, or both"
+            >
+              {SUB_CARD_KINDS.map((kind) => (
+                <option key={kind} value={kind}>
+                  {KIND_LABEL[kind]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="flex items-center gap-3">
+          <p className="hud-readout text-sm font-semibold">{money(amount)}</p>
+          <button type="button" onClick={onRemove} title="Remove card" aria-label="Remove card" className="trash-btn">
+            ⌫
+          </button>
+        </div>
+      </div>
+
+      {open ? (
+        <div className="mt-4 space-y-5">
+          {cardShowsLabor(card.kind) ? (
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-display text-xl font-semibold text-[#163038]">Labor</h3>
+                  <p className="text-xs text-[#5b6f73]">
+                    Type the title. Type ST / OT / DT. Hours follow Job setup phases like Crew.
+                  </p>
+                </div>
+                <button type="button" onClick={addLabor} className={ADD_BTN}>
+                  + Add position
+                </button>
+              </div>
+              <GripToPan className="mt-3">
+                <table className="min-w-[1100px] text-left text-sm">
+                  <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
+                    <tr>
+                      {LABOR_HEADERS.map((header) => (
+                        <th key={header || "actions"} className="whitespace-nowrap px-2 py-2">
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {card.labor.length === 0 ? (
+                      <tr className="border-t border-[#d5e0de]">
+                        <td colSpan={10} className="px-2 py-4 text-sm text-[#5b6f73]">
+                          No labor positions. Add position and type the title.
+                        </td>
+                      </tr>
+                    ) : (
+                      card.labor.map((row, index) => {
+                        const hours = subLaborHours(row, site, client, otAfter8);
+                        const cost = subLaborCost(row, site, client, otAfter8);
+                        const laborOpen = openLaborIds.includes(row.id);
+                        return (
+                          <SubLaborRow
+                            key={row.id}
+                            row={row}
+                            hours={hours}
+                            cost={cost}
+                            site={site}
+                            client={client}
+                            open={laborOpen}
+                            onToggle={() =>
+                              setOpenLaborIds((current) =>
+                                current.includes(row.id)
+                                  ? current.filter((id) => id !== row.id)
+                                  : [...current, row.id],
+                              )
+                            }
+                            onChange={(next) => patchLabor(index, next)}
+                            onPatchRange={(rangeId, patch) => patchLaborRange(row.id, rangeId, patch)}
+                            onAddRange={(range) => patchLabor(index, { ...row, ranges: [...row.ranges, range] })}
+                            onRemoveRange={(rangeId) =>
+                              patchLabor(index, { ...row, ranges: row.ranges.filter((range) => range.id !== rangeId) })
+                            }
+                            onRemove={() =>
+                              void confirmRemove(row.position || "this position", {
+                                title: "Remove this position?",
+                                confirmLabel: "Remove",
+                              }).then((ok) => {
+                                if (!ok) return;
+                                onChange({ ...card, labor: card.labor.filter((item) => item.id !== row.id) });
+                                setOpenLaborIds((current) => current.filter((id) => id !== row.id));
+                              })
+                            }
+                          />
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </GripToPan>
+            </div>
+          ) : null}
+
+          {cardShowsEquipment(card.kind) ? (
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-display text-xl font-semibold text-[#163038]">Equipment</h3>
+                  <p className="text-xs text-[#5b6f73]">
+                    Typed rows. Cost is rate × qty, plus freight if you type it. Stays on Subcontractor.
+                  </p>
+                </div>
+                <button type="button" onClick={addEquip} className={ADD_BTN}>
+                  + Add equipment
+                </button>
+              </div>
+              <div className="mt-3 overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
+                    <tr>
+                      {EQUIP_HEADERS.map((header) => (
+                        <th key={header || "actions"} className="px-2 py-2">
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {card.equipment.length === 0 ? (
+                      <tr className="border-t border-[#d5e0de]">
+                        <td colSpan={7} className="px-2 py-4 text-sm text-[#5b6f73]">
+                          No equipment rows. Add equipment and type the description.
+                        </td>
+                      </tr>
+                    ) : (
+                      card.equipment.map((line, index) => (
+                        <tr key={line.id} className="border-t border-[#d5e0de]">
+                          <td className="px-2 py-2">
+                            <input
+                              className="paper-field min-w-[14rem]"
+                              value={line.description}
+                              onChange={(event) => patchEquip(index, { ...line, description: event.target.value })}
+                              aria-label="Equipment description"
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <select
+                              className="paper-field"
+                              value={line.period}
+                              onChange={(event) =>
+                                patchEquip(index, { ...line, period: event.target.value as SubEquipPeriod })
+                              }
+                              aria-label="Period"
+                            >
+                              {SUB_EQUIP_PERIODS.map((period) => (
+                                <option key={period} value={period}>
+                                  {SUB_EQUIP_PERIOD_LABEL[period]}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-2 py-2">
+                            <input
+                              type="number"
+                              min={0}
+                              className="paper-field w-24"
+                              value={line.rate || ""}
+                              onChange={(event) => patchEquip(index, { ...line, rate: Number(event.target.value) || 0 })}
+                              aria-label="Equipment rate"
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <input
+                              type="number"
+                              min={0}
+                              className="paper-field w-20"
+                              value={line.qty}
+                              onChange={(event) => patchEquip(index, { ...line, qty: Number(event.target.value) || 0 })}
+                              aria-label="Equipment qty"
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <input
+                              type="number"
+                              min={0}
+                              className="paper-field w-24"
+                              value={line.freight || ""}
+                              onChange={(event) =>
+                                patchEquip(index, { ...line, freight: Number(event.target.value) || 0 })
+                              }
+                              aria-label="Freight"
+                            />
+                          </td>
+                          <td className="hud-readout px-2 py-2 font-semibold">{money(subEquipAmount(line))}</td>
+                          <td className="px-2 py-2">
+                            <button
+                              type="button"
+                              className="trash-btn"
+                              title="Remove equipment"
+                              aria-label="Remove equipment"
+                              onClick={() =>
+                                void confirmRemove(line.description || "this equipment", {
+                                  title: "Remove this equipment?",
+                                  confirmLabel: "Remove",
+                                }).then((ok) => {
+                                  if (ok) {
+                                    onChange({
+                                      ...card,
+                                      equipment: card.equipment.filter((item) => item.id !== line.id),
+                                    });
+                                  }
+                                })
+                              }
+                            >
+                              ⌫
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function SubLaborRow({
+  row,
+  hours,
+  cost,
+  site,
+  client,
+  open,
+  onToggle,
+  onChange,
+  onPatchRange,
+  onAddRange,
+  onRemoveRange,
+  onRemove,
+}: {
+  row: SubLaborPosition;
+  hours: { st: number; ot: number; dt: number; hours: number };
+  cost: number;
+  site: string;
+  client: string;
+  open: boolean;
+  onToggle: () => void;
+  onChange: (next: SubLaborPosition) => void;
+  onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
+  onAddRange: (range: CalendarRange) => void;
+  onRemoveRange: (rangeId: string) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <>
+      <tr className="border-t border-[#d5e0de] align-top">
+        <td className="px-2 py-2">
+          <div className="flex items-center gap-2">
+            <Chevron open={open} onToggle={onToggle} />
+            <input
+              className="paper-field min-w-[12rem]"
+              value={row.position}
+              onChange={(event) => onChange({ ...row, position: event.target.value })}
+              aria-label="Position title"
+              placeholder="Type position"
+            />
+          </div>
+        </td>
+        <td className="px-2 py-2">
+          <input
+            type="number"
+            min={0}
+            className="paper-field w-24"
+            value={row.stRate || ""}
+            onChange={(event) => onChange({ ...row, stRate: Number(event.target.value) || 0 })}
+            aria-label="ST rate"
+          />
+        </td>
+        <td className="px-2 py-2">
+          <input
+            type="number"
+            min={0}
+            className="paper-field w-24"
+            value={row.otRate || ""}
+            onChange={(event) => onChange({ ...row, otRate: Number(event.target.value) || 0 })}
+            aria-label="OT rate"
+          />
+        </td>
+        <td className="px-2 py-2">
+          <input
+            type="number"
+            min={0}
+            className="paper-field w-24"
+            value={row.dtRate || ""}
+            onChange={(event) => onChange({ ...row, dtRate: Number(event.target.value) || 0 })}
+            aria-label="DT rate"
+          />
+        </td>
+        <td className="hud-readout px-2 py-2">{hours.st.toLocaleString()}</td>
+        <td className="hud-readout px-2 py-2">{hours.ot.toLocaleString()}</td>
+        <td className="hud-readout px-2 py-2">{hours.dt.toLocaleString()}</td>
+        <td className="hud-readout px-2 py-2">{hours.hours.toLocaleString()}</td>
+        <td className="hud-readout px-2 py-2 font-semibold">{money(cost)}</td>
+        <td className="px-2 py-2">
+          <button type="button" onClick={onRemove} title="Remove position" aria-label="Remove position" className="trash-btn">
+            ⌫
+          </button>
+        </td>
+      </tr>
+      {open ? (
+        <tr>
+          <td colSpan={10} className="bg-[#f4f1e8] px-4 py-4">
+            <CrewPhaseCards
+              row={subLaborAsCraftRow(row)}
+              site={site}
+              client={client}
+              onPatchRange={onPatchRange}
+              onAddRange={onAddRange}
+              onRemoveRange={onRemoveRange}
+            />
           </td>
         </tr>
       ) : null}

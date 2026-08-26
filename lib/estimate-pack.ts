@@ -94,7 +94,7 @@ export function packHasWork(pack: EstimatePackSnapshot | null | undefined) {
   }
   const other = asRecord(pack.otherCost);
   if (other && (arrayLen(other.travel) || Number(other.perDiemRate) > 0)) return true;
-  if (arrayLen(asRecord(pack.subcontractor)?.lines)) return true;
+  if (arrayLen(asRecord(pack.subcontractor)?.lines) || arrayLen(asRecord(pack.subcontractor)?.cards)) return true;
   if (Array.isArray(pack.activities) && pack.activities.some((row) => {
     const item = asRecord(row);
     return Boolean(item && (item.name || Number(item.hours) > 0));

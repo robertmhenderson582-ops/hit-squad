@@ -56,7 +56,11 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     return estimateTotalBreakdown({
       labor: laborDollarsFromCrew(pack.crew, site, client),
       equipment: tools + thirdCost,
-      subcontractor: subcontractorTotal(readSubSheet(pack.estimateKey)),
+      subcontractor: subcontractorTotal(readSubSheet(pack.estimateKey), {
+        site,
+        client,
+        otAfter8: pack.crew.otAfter8,
+      }),
       markup: Math.round((thirdMarked - thirdCost) * 100) / 100,
       otherCost: rest.total + perDiem,
       changeOrders: fcrSummary(fcr, 0, 0).total,
@@ -68,6 +72,7 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     client,
     hours.hours,
     pack.crew,
+    pack.crew.otAfter8,
     pack.estimateKey,
     pack.jobMeta,
     site,
