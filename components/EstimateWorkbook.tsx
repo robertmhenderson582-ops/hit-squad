@@ -72,6 +72,8 @@ export function EstimateWorkbook({
       })}
       <SupportCrewCard
         rows={support}
+        site={site}
+        client={client}
         onRows={(next) =>
           pack.setCrew((current) => ({
             ...current,

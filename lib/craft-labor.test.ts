@@ -2,14 +2,19 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   assignCraftPosition,
+  assignSupportBilledAs,
+  assignSupportDuty,
   blankCraftRow,
+  blankSupportLine,
   cloneCraftRow,
   craftRowFromPhases,
   extraRangeFromPhase,
+  hydrateSupportLine,
   nextUnitId,
   phaseRangesOverlap,
   rangesFromPhases,
   syncCraftRows,
+  syncSupportRows,
 } from "./craft-labor.ts";
 import { computeRowHours } from "./hours-clock.ts";
 import { addUnit, defaultPhaseSchedule, defaultPhases, setMultiUnits } from "./phase-schedule.ts";
@@ -193,5 +198,55 @@ describe("crew ranges are per position", () => {
     assert.equal(phaseRangesOverlap(pres, "pre"), false);
     const after = computeRowHours(synced, "Wood River — Roxana, IL", "Phillips 66");
     assert.equal(after.hours, before.hours);
+  });
+});
+
+describe("support position calendars", () => {
+  it("adding a Support position seeds the same phase cards as Direct Craft", () => {
+    const phases = defaultPhases();
+    const added = blankSupportLine();
+    assert.equal(added.position, "");
+    assert.equal(added.billedAs, "");
+    assert.equal(added.ranges.length, 0);
+
+    const support = assignSupportDuty(added, "Tool Room Attendant", phases);
+    const billed = assignSupportBilledAs(support, "Boilermaker Journeyman", phases);
+    const direct = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+
+    assert.equal(billed.position, "Tool Room Attendant");
+    assert.equal(billed.billedAs, "Boilermaker Journeyman");
+    assert.deepEqual(
+      billed.ranges.map((range) => range.phaseId),
+      direct.ranges.map((range) => range.phaseId),
+    );
+    assert.equal(billed.ranges.length, direct.ranges.length);
+    assert.equal(billed.ranges.length > 0, true);
+    for (const range of billed.ranges) {
+      assert.equal(typeof range.start, "string");
+      assert.equal(typeof range.end, "string");
+      assert.equal(typeof range.headcount, "number");
+      assert.equal(typeof range.hoursPerShift, "number");
+      assert.equal(Array.isArray(range.days), true);
+    }
+  });
+
+  it("keeps old saved Position + Billed as and fills phase ranges", () => {
+    const phases = defaultPhases();
+    const saved = hydrateSupportLine({
+      id: "sup-old",
+      position: "Tool Room Attendant",
+      billedAs: "Boilermaker Journeyman",
+    });
+    assert.equal(saved.ranges.length, 0);
+    const next = syncSupportRows([saved], phases)[0];
+    const direct = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    assert.equal(next.id, "sup-old");
+    assert.equal(next.position, "Tool Room Attendant");
+    assert.equal(next.billedAs, "Boilermaker Journeyman");
+    assert.deepEqual(
+      next.ranges.map((range) => range.phaseId),
+      direct.ranges.map((range) => range.phaseId),
+    );
+    assert.equal(next.ranges.length, 5);
   });
 });

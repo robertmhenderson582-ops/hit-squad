@@ -12,6 +12,7 @@ import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
+import { listLocalPacks, mergeLocalJobs } from "@/lib/local-estimates";
 import type { DeskBoard } from "@/lib/types";
 
 // Home must stay these four tiles. Do not replace / with an Estimates-only blotter.
@@ -46,7 +47,12 @@ export function DeskHome() {
         setError(data.error || "Desk records could not be loaded.");
         return;
       }
-      setDesk(data.desk as DeskBoard);
+      const next = data.desk as DeskBoard;
+      setDesk({
+        ...next,
+        jobs: mergeLocalJobs(next.jobs ?? [], listLocalPacks()),
+        estimatesOpen: Math.max(next.estimatesOpen, listLocalPacks().length + next.estimatesOpen),
+      });
       setClosedPacks(readClosed());
     })();
     return () => {

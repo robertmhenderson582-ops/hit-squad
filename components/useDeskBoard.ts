@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { listLocalPacks, mergeLocalBoard } from "@/lib/local-estimates";
 import type { ForgebookBoard } from "@/lib/types";
 
 export function useDeskBoard() {
@@ -20,7 +21,7 @@ export function useDeskBoard() {
         setError(data.error || "Desk records stayed on this board.");
         return;
       }
-      setBoard(data.board as ForgebookBoard);
+      setBoard(mergeLocalBoard(data.board as ForgebookBoard, listLocalPacks()));
     })();
     return () => {
       cancelled = true;

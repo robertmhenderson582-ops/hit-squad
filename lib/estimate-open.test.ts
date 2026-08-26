@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { estimateForJob, estimateHref, estimatesForPlant, newEstimateKey, newEstimatePackId } from "./estimate-open.ts";
+import { estimateForJob, estimateHref, estimateStorageKey, estimatesForPlant, newEstimateKey, newEstimatePackId } from "./estimate-open.ts";
 import type { EstimateRecord, JobRecord, SiteRecord } from "./types.ts";
 
 const ESTIMATES = [
@@ -62,5 +62,8 @@ describe("estimate card open", () => {
     assert.equal(first === second, false);
     assert.match(newEstimateKey(first), /^new:new-/);
     assert.equal(newEstimateKey("est-coker"), "new:est-coker");
+    assert.equal(estimateStorageKey("new-cat2pit"), "new:new-cat2pit");
+    assert.equal(estimateStorageKey("est-u3"), "est-u3");
+    assert.equal(estimateHref("new-cat2pit"), "/estimates/new-cat2pit");
   });
 });

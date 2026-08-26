@@ -3,6 +3,7 @@ import {
   WOOD_RIVER_FOREMAN_TITLES,
   WOOD_RIVER_GENERAL_FOREMAN_TITLES,
   WOOD_RIVER_STAFF_TITLES,
+  WOOD_RIVER_SUPPORT_TITLES,
 } from "./wood-river-positions.ts";
 
 export const CREW_LANES = [
@@ -34,7 +35,7 @@ export const CREW_LANES = [
     id: "support",
     title: "Support",
     note: "Position is the duty. Billed as is the craft rate.",
-    positions: [] as string[],
+    positions: WOOD_RIVER_SUPPORT_TITLES,
   },
 ] as const;
 

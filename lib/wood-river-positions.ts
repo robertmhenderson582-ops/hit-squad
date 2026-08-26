@@ -143,3 +143,18 @@ export const WOOD_RIVER_CRAFT_TITLES = uniqueSortedTitles([
   ...LEGACY_DIRECT_CRAFT_TITLES,
   ...ipsCraftClassTitles(),
 ]);
+
+/** Duties already sitting on saved Support rows, plus IPS watch spellings. */
+const LEGACY_SUPPORT_DUTIES = [
+  "Tool Room Attendant",
+  "Fire Watch",
+  "Hole Watch",
+  "Safety Attendant",
+  "Material Handler",
+] as const;
+
+export const WOOD_RIVER_SUPPORT_TITLES = uniqueSortedTitles([
+  ...LEGACY_SUPPORT_DUTIES,
+  "Firewatch",
+  "Holewatch",
+]);
