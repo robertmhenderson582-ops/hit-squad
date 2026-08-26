@@ -17,6 +17,7 @@ import {
   parseOtherCostJson,
   perDiemAmount,
   seedMiscCatalog,
+  defaultTravelLine,
   syncTravelFromCrew,
   travelAmount,
   type TravelLine,
@@ -128,6 +129,30 @@ test("Travel keeps two Crew lines and extra + Staff / + Craft rows", () => {
   assert.equal(grown[2].id, "tr-extra");
   assert.equal(grown[2].source, "extra");
   assert.equal(grown[2].travelers, 3);
+});
+
+test("Travel Staff vs Craft inherit Job setup mileage unless already typed", () => {
+  const crew = {
+    staff: [row("st-1", { ranges: [{ headcount: 1 }] })],
+    direct: [row("bm-1", { ranges: [{ headcount: 2 }] })],
+  };
+  const seeded = syncTravelFromCrew(
+    [defaultTravelLine("staff", 0), defaultTravelLine("craft", 0)],
+    crew,
+    { staffPerMile: 0.67, craftPerMile: 0.55 },
+  );
+  assert.equal(seeded[0].perMile, 0.67);
+  assert.equal(seeded[1].perMile, 0.55);
+  const kept = syncTravelFromCrew(
+    [
+      { ...seeded[0], perMile: 0.8 },
+      { ...seeded[1], perMile: 0.4 },
+    ],
+    crew,
+    { staffPerMile: 0.99, craftPerMile: 0.11 },
+  );
+  assert.equal(kept[0].perMile, 0.8);
+  assert.equal(kept[1].perMile, 0.4);
 });
 
 test("persisted travel keeps travelers, $/mile, and miles; old Yes/No and Name rows drop", () => {

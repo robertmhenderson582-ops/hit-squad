@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CatalogPick } from "@/components/CatalogPick";
 import { useEstimatePackage } from "@/components/EstimatePackage";
-import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import {
   blankMisc,
   blankTravel,
@@ -20,6 +19,7 @@ import {
   type OtherCostSheet,
   type TravelLine,
 } from "@/lib/other-cost";
+import { perDiemDaysFromCrew, perDiemDollarsFromCrew } from "@/lib/shahan-wood-river";
 
 function money(value: number) {
   return value ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
@@ -30,19 +30,26 @@ const TRAVEL_HEADERS = ["KIND", "HEADCOUNT", "TRAVELERS", "$ / MILE", "MILES", "
 export function OtherCostDesk({ client, site }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
   const [sheet, setSheet] = useState<OtherCostSheet>(emptyOtherCost);
-  const pdDays = useMemo(() => {
-    const rows = [...pack.crew.staff, ...pack.crew.generalForeman, ...pack.crew.foreman, ...pack.crew.direct];
-    return sumSplits(rows.map((row) => computeRowHours(row, site, client, pack.crew.otAfter8))).pd;
-  }, [client, pack.crew, site]);
+  const pdDays = useMemo(
+    () => perDiemDaysFromCrew(pack.crew, site, client),
+    [client, pack.crew, site],
+  );
+  const pdDollars = useMemo(
+    () => perDiemDollarsFromCrew(pack.crew, pack.jobMeta, site, client),
+    [client, pack.crew, pack.jobMeta, site],
+  );
 
   useEffect(() => {
     const stored = readOtherCost(pack.estimateKey);
-    const next = syncOtherCostTravel(stored, pack.crew, { perMile: pack.jobMeta.mileageRate });
+    const next = syncOtherCostTravel(stored, pack.crew, {
+      staffPerMile: pack.jobMeta.staffMileageRate,
+      craftPerMile: pack.jobMeta.craftMileageRate,
+    });
     setSheet(next);
     if (JSON.stringify(stored.travel) !== JSON.stringify(next.travel)) {
       writeOtherCost(pack.estimateKey, next);
     }
-  }, [pack.crew, pack.estimateKey, pack.jobMeta.mileageRate]);
+  }, [pack.crew, pack.estimateKey, pack.jobMeta.craftMileageRate, pack.jobMeta.staffMileageRate]);
 
   function persist(next: OtherCostSheet) {
     setSheet(next);
@@ -65,36 +72,35 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
     return Math.min(Math.max(0, raw), headcount);
   }
 
-  const pdRate = pack.jobMeta.perDiemRate || sheet.perDiemRate;
-  const totals = otherCostTotals({ ...sheet, perDiemRate: pdRate }, pdDays);
+  const rest = otherCostTotals({ ...sheet, perDiemRate: 0 }, 0);
+  const totals = { ...rest, perDiem: pdDollars, total: rest.total + pdDollars };
 
   return (
     <div className="space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Other Cost. Per diem uses this job’s rate and Crew PD days. Travel is Staff and Craft
-        headcount from Crew, then travelers × miles × $ / mile. Misc is CAT 2 reimbursables — not B-3
-        small tools.
+        Other Cost. Per diem uses Job setup Staff vs Craft $ / day and Crew PD days. Travel is Staff
+        and Craft headcount from Crew, then travelers × miles × $ / mile. Mileage on those lines
+        starts from Job setup. Misc is CAT 2 reimbursables — not B-3 small tools.
       </p>
 
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Per diem</h2>
+        <p className="mt-1 text-sm text-[#5b6f73]">
+          Staff + GF use Staff PD / day. Foreman + Direct + Support use Craft PD / day. Change those
+          rates on Job setup.
+        </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <label className="block text-sm">
-            Job PD $ / day
-            <input
-              type="number"
-              min={0}
-              className="paper-field mt-1"
-              value={pdRate || ""}
-              onChange={(event) => {
-                const perDiemRate = Number(event.target.value) || 0;
-                persist({ ...sheet, perDiemRate });
-                pack.setJobMeta((current) => ({ ...current, perDiemRate }));
-              }}
-            />
-          </label>
           <p className="text-sm text-[#5b6f73]">
-            PD days from Crew: <span className="font-semibold text-[#163038]">{pdDays}</span>
+            Staff PD days: <span className="font-semibold text-[#163038]">{pdDays.staff}</span>
+            <span className="block">
+              × ${pack.jobMeta.staffPerDiemRate || 0} / day
+            </span>
+          </p>
+          <p className="text-sm text-[#5b6f73]">
+            Craft PD days: <span className="font-semibold text-[#163038]">{pdDays.craft}</span>
+            <span className="block">
+              × ${pack.jobMeta.craftPerDiemRate || 0} / day
+            </span>
           </p>
           <p className="text-sm font-semibold text-[#163038]">{money(totals.perDiem)}</p>
         </div>
@@ -113,7 +119,7 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
             <button
               type="button"
               onClick={() =>
-                persist({ ...sheet, travel: [...sheet.travel, blankTravel("staff", pack.jobMeta.mileageRate)] })
+                persist({ ...sheet, travel: [...sheet.travel, blankTravel("staff", pack.jobMeta.staffMileageRate)] })
               }
               className="rounded-lg border border-steel px-3 py-1.5 text-sm text-steel"
             >
@@ -122,7 +128,7 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
             <button
               type="button"
               onClick={() =>
-                persist({ ...sheet, travel: [...sheet.travel, blankTravel("craft", pack.jobMeta.mileageRate)] })
+                persist({ ...sheet, travel: [...sheet.travel, blankTravel("craft", pack.jobMeta.craftMileageRate)] })
               }
               className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white"
             >

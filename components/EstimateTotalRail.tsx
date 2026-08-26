@@ -9,9 +9,10 @@ import {
   thirdPartyCost,
   thirdPartyMarkedUp,
 } from "@/lib/equipment-sheet";
-import { estimateTotalBreakdown, parseDeskDollars } from "@/lib/estimate-total";
+import { estimateTotalBreakdown } from "@/lib/estimate-total";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import { otherCostTotals, readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
+import { laborDollarsFromCrew, perDiemDollarsFromCrew } from "@/lib/shahan-wood-river";
 import { onEstimateSheets } from "@/lib/sheet-events";
 
 function money(value: number) {
@@ -25,7 +26,13 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
   useEffect(() => onEstimateSheets(() => setTick((n) => n + 1)), []);
 
   const crewRows = useMemo(
-    () => [...pack.crew.staff, ...pack.crew.generalForeman, ...pack.crew.foreman, ...pack.crew.direct],
+    () => [
+      ...pack.crew.staff,
+      ...pack.crew.generalForeman,
+      ...pack.crew.foreman,
+      ...pack.crew.direct,
+      ...pack.crew.support,
+    ],
     [pack.crew],
   );
   const hours = useMemo(
@@ -36,24 +43,34 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
   const breakdown = useMemo(() => {
     const equipment = readEquipmentSheet(pack.estimateKey);
     const other = syncOtherCostTravel(readOtherCost(pack.estimateKey), pack.crew, {
-      perMile: pack.jobMeta.mileageRate,
+      staffPerMile: pack.jobMeta.staffMileageRate,
+      craftPerMile: pack.jobMeta.craftMileageRate,
     });
     const fcr = readFcrPacket(pack.estimateKey);
     const thirdCost = equipment.thirdParty.reduce((sum, line) => sum + thirdPartyCost(line), 0);
     const thirdMarked = equipment.thirdParty.reduce((sum, line) => sum + thirdPartyMarkedUp(line), 0);
     const tools = equipmentTotals(equipment).largeTools;
-    const pdRate = pack.jobMeta.perDiemRate || other.perDiemRate;
+    const rest = otherCostTotals({ ...other, perDiemRate: 0 }, 0);
+    const perDiem = perDiemDollarsFromCrew(pack.crew, pack.jobMeta, site, client);
     return estimateTotalBreakdown({
-      labor: crewRows.reduce((sum, row) => sum + parseDeskDollars(row.cost), 0),
+      labor: laborDollarsFromCrew(pack.crew, site, client),
       equipment: tools + thirdCost,
       markup: Math.round((thirdMarked - thirdCost) * 100) / 100,
-      otherCost: otherCostTotals({ ...other, perDiemRate: pdRate }, hours.pd).total,
-      changeOrders: fcrSummary(fcr, 0, pdRate).total,
+      otherCost: rest.total + perDiem,
+      changeOrders: fcrSummary(fcr, 0, 0).total,
       hours: hours.hours,
       client,
       site,
     });
-  }, [client, crewRows, hours.hours, hours.pd, pack.crew, pack.estimateKey, pack.jobMeta.mileageRate, pack.jobMeta.perDiemRate, site, tick]);
+  }, [
+    client,
+    hours.hours,
+    pack.crew,
+    pack.estimateKey,
+    pack.jobMeta,
+    site,
+    tick,
+  ]);
 
   return (
     <aside className="est-total-rail hud-tile print-hide" aria-label="Estimate total">

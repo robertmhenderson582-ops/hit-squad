@@ -47,7 +47,7 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
     writeFcrPacket(pack.estimateKey, next);
   }
 
-  const summary = fcrSummary(packet, 0, pack.jobMeta.perDiemRate);
+  const summary = fcrSummary(packet, 0, 0);
 
   return (
     <div className="mt-4 space-y-5">

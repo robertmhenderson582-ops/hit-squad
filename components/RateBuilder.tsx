@@ -1,50 +1,119 @@
 "use client";
 
-import { ModuleTable } from "@/components/ModuleTable";
-import { useAlias } from "@/components/OwnerDeskContext";
-import { useDeskBoard } from "@/components/useDeskBoard";
+import {
+  SHAHAN_BOOK_LABEL,
+  SHAHAN_CRAFT_PD,
+  SHAHAN_EQUIPMENT,
+  SHAHAN_LABOR,
+  SHAHAN_OT_MULTIPLIER,
+  SHAHAN_PT_MULTIPLIER,
+  SHAHAN_STAFF_PD,
+  formatDeskDollars,
+  shahanEquipmentRows,
+  shahanLaborByGroup,
+} from "@/lib/shahan-wood-river";
 
-function pct(value: number) {
-  return `${value.toFixed(2)}%`;
+function rateCell(value: number | null) {
+  return value && value > 0 ? formatDeskDollars(value) : "—";
 }
 
 export function RateBuilder() {
-  const alias = useAlias();
-  const { board, error } = useDeskBoard();
-  const rows = board?.rates ?? [];
+  const groups = shahanLaborByGroup(SHAHAN_LABOR);
+  const equipment = shahanEquipmentRows(SHAHAN_EQUIPMENT);
 
   return (
-    <div className="mt-4 space-y-5">
-      <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
-        Illinois burden columns for {alias("Madison")} / {alias("Wood River")} work: FICA, FUI, SUI,
-        workers&apos; comp, GL, and small tools. Burdened dollars on the right are stored field-trial
-        figures — not live-computed from those columns. B-1 ingest is parked.
-      </p>
-      {error ? <p className="text-amber-label">{error}</p> : null}
-      <ModuleTable
-        caption={alias("RATE BUILDER — IL / WOOD RIVER")}
-        headers={["CRAFT", "ST", "BASE", "FICA", "FUI", "SUI", "W/C", "GL", "TOOLS", "BURDENED"]}
-      >
-        {rows.map((row) => (
-          <tr key={row.id} className="border-t border-steel-rim/20">
-            <td className="px-4 py-3">{row.craft}</td>
-            <td className="px-4 py-3 font-mono text-xs">{row.state}</td>
-            <td className="px-4 py-3 font-mono text-xs">${row.base.toFixed(2)}</td>
-            <td className="px-4 py-3 font-mono text-xs">{pct(row.fica)}</td>
-            <td className="px-4 py-3 font-mono text-xs">{pct(row.fui)}</td>
-            <td className="px-4 py-3 font-mono text-xs">{pct(row.sui)}</td>
-            <td className="px-4 py-3 font-mono text-xs">{pct(row.wc)}</td>
-            <td className="px-4 py-3 font-mono text-xs">{pct(row.gl)}</td>
-            <td className="px-4 py-3 font-mono text-xs">{pct(row.smallTools)}</td>
-            <td className="px-4 py-3 font-mono text-xs text-amber-label">${row.burdened.toFixed(2)}</td>
-          </tr>
-        ))}
-      </ModuleTable>
-      <p className="font-mono text-[11px] leading-5 text-paper-cream/55">
-        Burdened dollars are field-trial figures stored on this desk. They are not live-computed
-        from the FICA / FUI / SUI / W/C / GL / tools columns. The wrap stays as stored until it is
-        decided later. B-1 ingest is parked. Do not treat this as a published wage schedule.
-      </p>
+    <div className="space-y-5">
+      <section className="plant-card px-5 py-5">
+        <h2 className="font-display text-2xl font-semibold text-[#163038]">{SHAHAN_BOOK_LABEL}</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">
+          Debbie Shahan TM OCIP book for P66 Wood River. Crew Cost uses these ST / OT / DT bill
+          rates when a row title matches. PT Bill Rate maps to DT. OT × {SHAHAN_OT_MULTIPLIER}. PT ×{" "}
+          {SHAHAN_PT_MULTIPLIER}. Staff PD ${SHAHAN_STAFF_PD} / day. Craft PD ${SHAHAN_CRAFT_PD} /
+          day. East Coast weekly-40 / Sunday DT — not DT after 12.
+        </p>
+        {SHAHAN_LABOR.length === 0 ? (
+          <p className="mt-3 text-sm text-[#5b6f73]">
+            Labor rows list here once the 159-row Shahan sheet is pasted. Titles stay blank until
+            then.
+          </p>
+        ) : null}
+      </section>
+
+      {groups.map((group) => (
+        <section key={group.group} className="plant-card px-5 py-5">
+          <h3 className="text-lg font-semibold text-[#163038]">{group.group}</h3>
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
+                <tr>
+                  {["CRAFT", "ST", "OT", "DT", "PD"].map((header) => (
+                    <th key={header} className="px-2 py-2">
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {group.rows.length === 0 ? (
+                  <tr className="border-t border-[#d5e0de]">
+                    <td colSpan={5} className="px-2 py-4 text-sm text-[#5b6f73]">
+                      No Shahan rows in this group yet.
+                    </td>
+                  </tr>
+                ) : (
+                  group.rows.map((row) => (
+                    <tr key={`${group.group}:${row.craftName}`} className="border-t border-[#d5e0de]">
+                      <td className="px-2 py-2">{row.craftName}</td>
+                      <td className="px-2 py-2 font-semibold">{rateCell(row.st)}</td>
+                      <td className="px-2 py-2 font-semibold">{rateCell(row.ot)}</td>
+                      <td className="px-2 py-2 font-semibold">{rateCell(row.dt)}</td>
+                      <td className="px-2 py-2 font-semibold">{rateCell(row.pd)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))}
+
+      <section className="plant-card px-5 py-5">
+        <h3 className="text-lg font-semibold text-[#163038]">Equipment</h3>
+        <p className="mt-1 text-sm text-[#5b6f73]">
+          Same Shahan book. Daily / weekly / monthly. The WET header row is skipped.
+        </p>
+        <div className="mt-3 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
+              <tr>
+                {["DESCRIPTION", "DAILY", "WEEKLY", "MONTHLY"].map((header) => (
+                  <th key={header} className="px-2 py-2">
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {equipment.length === 0 ? (
+                <tr className="border-t border-[#d5e0de]">
+                  <td colSpan={4} className="px-2 py-4 text-sm text-[#5b6f73]">
+                    No Shahan equipment rows yet.
+                  </td>
+                </tr>
+              ) : (
+                equipment.map((row) => (
+                  <tr key={row.description} className="border-t border-[#d5e0de]">
+                    <td className="px-2 py-2">{row.description}</td>
+                    <td className="px-2 py-2 font-semibold">{rateCell(row.daily)}</td>
+                    <td className="px-2 py-2 font-semibold">{rateCell(row.weekly)}</td>
+                    <td className="px-2 py-2 font-semibold">{rateCell(row.monthly)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }

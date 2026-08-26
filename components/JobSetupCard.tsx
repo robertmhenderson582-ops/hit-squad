@@ -120,30 +120,58 @@ export function JobSetupCard({
       ) : null}
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">PER DIEM $ / DAY</span>
+          <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">STAFF PER DIEM $ / DAY</span>
           <input
             type="number"
             min={0}
             className="paper-field mt-2"
-            value={pack.jobMeta.perDiemRate || ""}
+            value={pack.jobMeta.staffPerDiemRate || ""}
             onChange={(event) =>
-              pack.setJobMeta((current) => ({ ...current, perDiemRate: Number(event.target.value) || 0 }))
+              pack.setJobMeta((current) => ({ ...current, staffPerDiemRate: Number(event.target.value) || 0 }))
             }
           />
-          <p className="mt-1 text-xs text-[#5b6f73]">Job rate already on this desk. Not a new COMP table.</p>
+          <p className="mt-1 text-xs text-[#5b6f73]">Staff + GF. Shahan TM OCIP default is $140.</p>
         </label>
         <label className="block">
-          <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">MILEAGE RATE</span>
+          <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">CRAFT PER DIEM $ / DAY</span>
           <input
             type="number"
             min={0}
             className="paper-field mt-2"
-            value={pack.jobMeta.mileageRate || ""}
+            value={pack.jobMeta.craftPerDiemRate || ""}
             onChange={(event) =>
-              pack.setJobMeta((current) => ({ ...current, mileageRate: Number(event.target.value) || 0 }))
+              pack.setJobMeta((current) => ({ ...current, craftPerDiemRate: Number(event.target.value) || 0 }))
             }
           />
-          <p className="mt-1 text-xs text-[#5b6f73]">Seeds $ / mile on new Travel rows. Travel itself stays on Other Cost.</p>
+          <p className="mt-1 text-xs text-[#5b6f73]">Foreman + Direct + Support. Shahan TM OCIP default is $130.</p>
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">STAFF MILEAGE $ / MILE</span>
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            className="paper-field mt-2"
+            value={pack.jobMeta.staffMileageRate || ""}
+            onChange={(event) =>
+              pack.setJobMeta((current) => ({ ...current, staffMileageRate: Number(event.target.value) || 0 }))
+            }
+          />
+          <p className="mt-1 text-xs text-[#5b6f73]">Seeds Other Cost Travel Staff. No Shahan default — type it here.</p>
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">CRAFT MILEAGE $ / MILE</span>
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            className="paper-field mt-2"
+            value={pack.jobMeta.craftMileageRate || ""}
+            onChange={(event) =>
+              pack.setJobMeta((current) => ({ ...current, craftMileageRate: Number(event.target.value) || 0 }))
+            }
+          />
+          <p className="mt-1 text-xs text-[#5b6f73]">Seeds Other Cost Travel Craft. You can still override on that line.</p>
         </label>
       </div>
     </section>

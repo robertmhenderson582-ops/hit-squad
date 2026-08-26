@@ -158,13 +158,16 @@ export function EstimatePackageProvider({
   useEffect(() => {
     if (!ready) return;
     writeCrew(estimateKey, crew);
-    persistCrewTravel(estimateKey, crew, jobMeta.mileageRate);
+    persistCrewTravel(estimateKey, crew, {
+      staffPerMile: jobMeta.staffMileageRate,
+      craftPerMile: jobMeta.craftMileageRate,
+    });
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
       touchLocalPack(packId);
       scheduleVaultUpsert(packId);
     }
-  }, [crew, estimateKey, jobMeta.mileageRate, ready]);
+  }, [crew, estimateKey, jobMeta.craftMileageRate, jobMeta.staffMileageRate, ready]);
 
   useEffect(() => {
     if (!ready) return;
