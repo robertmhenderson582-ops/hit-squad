@@ -1,12 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CatalogPick } from "@/components/CatalogPick";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { GripToPan } from "@/components/GripToPan";
 import {
-  CRAFT_POSITIONS,
   LISTED_POSITIONS,
-  STAFF_POSITIONS,
   assignCraftPosition,
   blankCraftRow,
   clampPerDiem,
@@ -87,17 +86,13 @@ export function CraftLaborGrid({
   }
 
   function assignPosition(rowId: string, position: string) {
-    onRows((current) => {
-      if (position && current.some((row) => row.id !== rowId && row.position === position)) {
-        setOpenId((open) => (open === rowId ? current.find((row) => row.position === position)?.id ?? null : open));
-        return current.filter((row) => row.id !== rowId);
-      }
-      return current.map((row) =>
+    onRows((current) =>
+      current.map((row) =>
         row.id === rowId
           ? assignCraftPosition(row, position, pack.schedule.phases, pack.schedule.units, pack.schedule.multiUnits)
           : row,
-      );
-    });
+      ),
+    );
   }
 
   async function removePosition(row: CraftRow) {
@@ -232,7 +227,6 @@ function CraftAccordionRow({
   catalog?: readonly string[];
 }) {
   const options = catalog && catalog.length > 0 ? catalog : LISTED_POSITIONS;
-  const listed = (options as readonly string[]).includes(row.position);
   const naturalClass = defaultLaborClass(row.position);
   const laborClass = row.laborClassOverride ?? naturalClass;
   const starred = Boolean(row.laborClassOverride && row.laborClassOverride !== naturalClass);
@@ -281,38 +275,13 @@ function CraftAccordionRow({
               <span className="crew-chevron-label">{open ? "Collapse" : "Expand"}</span>
             </button>
             <div className="min-w-[14rem]">
-              <select
+              <CatalogPick
                 value={row.position}
-                onChange={(event) => onAssignPosition(event.target.value)}
-                className="paper-field w-full"
-              >
-                <option value="">Select position</option>
-                {catalog && catalog.length > 0 ? (
-                  catalog.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))
-                ) : (
-                  <>
-                    <optgroup label="Supervision / staff">
-                      {STAFF_POSITIONS.map((item) => (
-                        <option key={item} value={item}>
-                          {item}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="GF / craft">
-                      {CRAFT_POSITIONS.map((item) => (
-                        <option key={item} value={item}>
-                          {item}
-                        </option>
-                      ))}
-                    </optgroup>
-                  </>
-                )}
-                {!listed && row.position ? <option value={row.position}>{row.position}</option> : null}
-              </select>
+                options={options}
+                placeholder="Select position"
+                onChange={onAssignPosition}
+                allowCustom
+              />
               {row.position ? (
                 <button
                   type="button"

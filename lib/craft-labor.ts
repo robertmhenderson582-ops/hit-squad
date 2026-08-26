@@ -7,34 +7,11 @@ import {
   type JobUnit,
   type PhaseRow,
 } from "./phase-schedule.ts";
+import { WOOD_RIVER_CRAFT_TITLES, WOOD_RIVER_STAFF_TITLES } from "./wood-river-positions.ts";
 
-export const STAFF_POSITIONS = [
-  "Analyst Cost 01",
-  "Cost Analyst",
-  "Project Controls",
-  "Superintendent",
-  "Superintendent General PF 01",
-  "General Superintendent",
-  "Project Manager",
-] as const;
-
-export const CRAFT_POSITIONS = [
-  "General Foreman",
-  "Foreman",
-  "Boilermaker Journeyman",
-  "Boilermaker Helper",
-  "Pipefitter Journeyman",
-  "Pipefitter Helper",
-  "Ironworker Journeyman",
-  "Operator",
-  "Laborer",
-  "Millwright",
-  "Electrician",
-  "Welder",
-  "Merit welder",
-] as const;
-
-export const LISTED_POSITIONS = [...STAFF_POSITIONS, ...CRAFT_POSITIONS] as const;
+export const STAFF_POSITIONS = WOOD_RIVER_STAFF_TITLES;
+export const CRAFT_POSITIONS = WOOD_RIVER_CRAFT_TITLES;
+export const LISTED_POSITIONS = [...STAFF_POSITIONS, ...CRAFT_POSITIONS];
 
 export const SUPPORT_DUTIES = [
   "Tool Room Attendant",
