@@ -1,10 +1,10 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import bcrypt from "bcryptjs";
-import { NOVUS_EMAIL, NOVUS_ID } from "@/lib/desk-role";
-import { OWNER_LOGIN_EMAIL } from "@/lib/owner-login";
-import { TESTER_SEATS } from "@/lib/tester-seats";
-import type { PublicUser } from "@/lib/types";
+import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
+import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
+import { TESTER_SEATS } from "./tester-seats.ts";
+import type { PublicUser } from "./types.ts";
 
 type StoredUser = PublicUser & {
   passwordHash?: string;
