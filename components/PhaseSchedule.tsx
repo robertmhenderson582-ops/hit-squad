@@ -35,7 +35,7 @@ export function PhaseSchedule() {
     <section className="plant-card px-5 py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h2 className="font-display text-2xl font-semibold text-[#163038]">Phases & work schedule</h2>
-        <label className="flex items-center gap-2 text-sm text-[#163038]">
+        <label className="multi-units-toggle">
           <input
             type="checkbox"
             checked={multi}
@@ -134,6 +134,7 @@ function PhaseRowsTable({
                   ) : null}
                   {sundays.length ? (
                     <div className="mt-2 flex flex-wrap gap-1">
+                      <p className="w-full text-[11px] text-[#5b6f73]">Tap a Sunday to skip it.</p>
                       {sundays.map((iso) => {
                         const off = row.sundaysOff.includes(iso);
                         return (
@@ -148,6 +149,7 @@ function PhaseRowsTable({
                                   : [...row.sundaysOff, iso],
                               })
                             }
+                            title={`Sunday ${iso.slice(5)}. On = worked. Off = skip that Sunday.`}
                             className={`rounded-full px-2 py-0.5 text-xs ${
                               off ? "border border-[#c5d4d4] text-[#5b6f73]" : "bg-steel text-white"
                             }`}
@@ -168,7 +170,7 @@ function PhaseRowsTable({
                     aria-label={`${row.name} on`}
                   />
                 </td>
-                <td className="whitespace-nowrap px-2 py-3 align-top">
+                <td className="phase-date-cell whitespace-nowrap px-2 py-3 align-top">
                   <DateField
                     value={row.start}
                     disabled={startLocked}
@@ -176,7 +178,7 @@ function PhaseRowsTable({
                     onChange={(start) => onPatch(row.id, { start })}
                   />
                 </td>
-                <td className="whitespace-nowrap px-2 py-3 align-top">
+                <td className="phase-date-cell whitespace-nowrap px-2 py-3 align-top">
                   <DateField
                     value={row.stop}
                     disabled={!row.on}
@@ -209,7 +211,7 @@ function PhaseRowsTable({
                     className="paper-field w-20"
                   />
                 </td>
-                <td className="whitespace-nowrap px-2 py-3 align-top font-semibold">{workedDays(row)}</td>
+                <td className="phase-total-days whitespace-nowrap px-2 py-3 align-top font-semibold">{workedDays(row)}</td>
               </tr>
             );
           })}

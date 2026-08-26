@@ -9,4 +9,9 @@ out
 .vercel
 next-env.d.ts
 data/
+# COMP / B-1 / B-2 source books — never commit
+**/PCA000110*.pdf
+**/*B-1*.xlsx
+**/*B-2*.xlsx
+**/*COMP*.pdf
 tsconfig.tsbuildinfo

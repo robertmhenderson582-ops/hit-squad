@@ -1,10 +1,10 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
-import { jobEventLabel } from "@/lib/job-event";
+import { defaultEstimateName, isDefaultEstimateName, jobEventLabel } from "@/lib/job-event";
 import { newEstimatePackId } from "@/lib/estimate-open";
 
 const CLIENTS = ["Phillips 66", "Georgia Power", "Shop"];
@@ -16,9 +16,7 @@ const SITES = [
   "Billings — Billings, MT",
   "Yates — Newnan, GA",
 ];
-const SIZE_IDS = ["outage", "other", "shop"] as const;
-
-export type EstimateSize = (typeof SIZE_IDS)[number];
+export type EstimateSize = "outage" | "other" | "shop";
 
 function startJobSizes(client: string, site: string) {
   return [
@@ -38,16 +36,40 @@ export function NewEstimateModal({
   const router = useRouter();
   const alias = useAlias();
   const knownPlant = Boolean(preset.knownPlant && preset.client);
-  const [size, setSize] = useState<EstimateSize>(preset.size || (knownPlant ? "outage" : "outage"));
+  const [size, setSize] = useState<EstimateSize>(preset.size || "outage");
   const [client, setClient] = useState(preset.client || (preset.size === "shop" ? "Shop" : "Phillips 66"));
   const [site, setSite] = useState(preset.site || "Wood River — Roxana, IL");
-  const [name, setName] = useState(preset.size === "shop" ? "Shop / rig job" : "New T&M estimate");
+  const [name, setName] = useState(
+    defaultEstimateName(
+      preset.client || (preset.size === "shop" ? "Shop" : "Phillips 66"),
+      preset.site || "Wood River — Roxana, IL",
+      preset.size || "outage",
+    ),
+  );
   const rule = boundOtLabel(site, client);
   const eastCoast = siteClockFromText(site, client) === "east-coast";
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      onClose();
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
 
   const clientLocked = knownPlant || size === "shop";
 
   const sites = useMemo(() => (size === "shop" ? ["Shop"] : SITES), [size]);
+
+  function keepGeneratedName(nextClient: string, nextSite: string, nextSize: EstimateSize) {
+    setName((current) =>
+      isDefaultEstimateName(current) ? defaultEstimateName(nextClient, nextSite, nextSize) : current,
+    );
+  }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -64,17 +86,41 @@ export function NewEstimateModal({
   }
 
   return (
-    <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby="new-estimate-title">
-      <form onSubmit={onSubmit} className="estimate-modal px-6 py-5">
+    <div
+      className="modal-scrim"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="new-estimate-title"
+      onClick={onClose}
+    >
+      <form
+        onSubmit={onSubmit}
+        onClick={(event) => event.stopPropagation()}
+        className="estimate-modal px-6 py-5"
+      >
         <div className="flex items-start justify-between">
           <h2 id="new-estimate-title" className="font-display text-2xl font-semibold text-[#163038]">
             New estimate
           </h2>
-          <button type="button" onClick={onClose} className="text-xl text-[#5b6f73]" aria-label="Close">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onClose();
+            }}
+            className="inbox-close estimate-modal-close"
+            aria-label="Close"
+            title="Close"
+          >
             ×
           </button>
         </div>
-        <p className="mt-3 text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">START-JOB SIZE</p>
+        <p className="mt-3 text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">JOB / EVENT</p>
+        <p className="mt-1 text-xs text-[#5b6f73]">
+          This is the job kind — Turnaround on Phillips 66, Outage elsewhere. Estimate type (T&amp;M /
+          lump sum / CR-FF / Hybrid) stays on Job setup. Never use Outage as an estimate type.
+        </p>
         <div className="mt-2 flex flex-wrap gap-2">
           {startJobSizes(client, site).map((item) => (
             <button
@@ -85,9 +131,12 @@ export function NewEstimateModal({
                 if (item.id === "shop") {
                   setClient("Shop");
                   setSite("Shop");
-                  setName("Shop / rig job");
+                  keepGeneratedName("Shop", "Shop", "shop");
                 } else if (item.id === "other" && !knownPlant) {
                   setClient("Georgia Power");
+                  keepGeneratedName("Georgia Power", site, "other");
+                } else {
+                  keepGeneratedName(client, site, item.id);
                 }
               }}
               className={`rounded-full px-3 py-1.5 text-sm ${
@@ -103,7 +152,15 @@ export function NewEstimateModal({
           {clientLocked ? (
             <input readOnly value={alias(size === "shop" ? "Shop" : client)} className="paper-field mt-1" />
           ) : (
-            <select value={client} onChange={(event) => setClient(event.target.value)} className="paper-field mt-1">
+            <select
+              value={client}
+              onChange={(event) => {
+                const next = event.target.value;
+                setClient(next);
+                keepGeneratedName(next, site, size);
+              }}
+              className="paper-field mt-1"
+            >
               {CLIENTS.map((item) => (
                 <option key={item} value={item}>
                   {alias(item)}
@@ -117,7 +174,11 @@ export function NewEstimateModal({
             <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">SITE</span>
             <select
               value={site}
-              onChange={(event) => setSite(event.target.value)}
+              onChange={(event) => {
+                const next = event.target.value;
+                setSite(next);
+                keepGeneratedName(client, next, size);
+              }}
               className="paper-field mt-1"
               disabled={knownPlant}
             >
@@ -134,10 +195,11 @@ export function NewEstimateModal({
             Summary / Job sheet / Rates / Print only. Chrome only — no rate math.
           </p>
         )}
-        <label className="mt-3 block">
-          <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">OVERTIME / RATE</span>
-          <input readOnly value={size === "shop" ? "Shop sheet" : rule} className="paper-field mt-1" />
-        </label>
+        <div className="mt-3">
+          <p className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">OVERTIME / RATE</p>
+          <p className="estimate-ot-readout hud-readout mt-1 px-3 py-2 text-sm">{size === "shop" ? "Shop sheet" : rule}</p>
+          <p className="mt-1 text-xs text-[#5b6f73]">Locked from the plant. Not a field. There is no picker.</p>
+        </div>
         <label className="mt-3 block">
           <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">ESTIMATE NAME</span>
           <input value={name} onChange={(event) => setName(event.target.value)} className="paper-field mt-1" />
@@ -145,7 +207,7 @@ export function NewEstimateModal({
         {eastCoast && size !== "shop" ? (
           <p className="mt-3 text-xs text-[#5b6f73]">
             East Coast (PCA0001103) — never PA or Mid-Atlantic. Catalog plants fill OT from the bound
-            contract; there is no picker.
+            contract.
           </p>
         ) : null}
         <div className="mt-5 flex justify-end gap-3">

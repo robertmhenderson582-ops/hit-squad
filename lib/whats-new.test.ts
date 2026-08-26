@@ -46,16 +46,33 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
-    assert.equal(DESK_VERSION, "1.13.0");
-    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.13");
-    assert.equal(DESK_THREAD_ID, "th-desk-v1.13");
+    assert.equal(DESK_VERSION, "1.14.0");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.14");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.14");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Inbox and Suggestion Box open larger/);
-    assert.match(OWNER_WHATS_NEW, /Tester seats are on the desk/);
-    assert.match(OWNER_WHATS_NEW, /View as is a true lens/);
-    assert.match(OWNER_WHATS_NEW, /Testers cannot see Novus, owner tools, other testers, or the alias switch/);
-    assert.match(OWNER_WHATS_NEW, /Inbox and Suggestion Box open larger/);
+    assert.match(TESTER_WHATS_NEW, /Equipment: listed large tools plus typed third-party rental at cost \+ 6%/);
+    assert.match(TESTER_WHATS_NEW, /Other Cost is reimbursables, travel, and CAT 2 misc/);
+    assert.match(TESTER_WHATS_NEW, /Empty Craft travel \/ Mileage Rate stays hidden/);
+    assert.match(TESTER_WHATS_NEW, /Change Order FCR packet is on the estimate/);
+    assert.match(TESTER_WHATS_NEW, /Staffing follows Crew calendars and Job setup phases/);
+    assert.match(TESTER_WHATS_NEW, /Multiple units is a larger Job setup control; default stays off/);
+    assert.match(TESTER_WHATS_NEW, /Crew Start and End calendars no longer overlap/);
+    assert.match(TESTER_WHATS_NEW, /Estimate total is a floating right-side breakdown/);
+    assert.match(TESTER_WHATS_NEW, /instrument chrome \(HUD\), not paper cards/);
+    assert.match(TESTER_WHATS_NEW, /Crew starts empty/);
+    assert.match(TESTER_WHATS_NEW, /Opening a job keeps its ID, window, and working figure/);
+    assert.match(TESTER_WHATS_NEW, /4 Wood River jobs \(3 open, 1 hold\) and 3 estimates/);
+    assert.match(TESTER_WHATS_NEW, /New estimate asks for the job \/ event/);
+    assert.match(TESTER_WHATS_NEW, /Escape and × close it/);
+    assert.match(TESTER_WHATS_NEW, /Cost EST hours follow Crew calendars/);
+    assert.match(TESTER_WHATS_NEW, /Rate burdened figures are field-trial/);
+    assert.match(OWNER_WHATS_NEW, /Equipment, Other Cost, Change Order FCR, and Staffing are locked/);
+    assert.match(OWNER_WHATS_NEW, /Tester seats \/ View as stay as V1.13/);
+    assert.match(OWNER_WHATS_NEW, /Mileage Yes is a flat \$2,500/);
+    assert.match(OWNER_WHATS_NEW, /Crew Start\/End calendars stack/);
+    assert.match(OWNER_WHATS_NEW, /instrument chrome \(HUD\), not paper cards/);
+    assert.match(OWNER_WHATS_NEW, /Crew starts empty/);
     assert.equal(
       /password|passwords|auth|security|Novus|vault|Drive|seats|owner tools|View as|aliases|other testers/i.test(
         TESTER_WHATS_NEW,
@@ -75,7 +92,7 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.13 onto an existing Hit Squad desk thread", () => {
+  it("appends V1.14 onto an existing Hit Squad desk thread", () => {
     const prior = [
       {
         id: "th-desk-v1.11.1",

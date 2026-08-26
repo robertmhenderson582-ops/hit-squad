@@ -18,8 +18,9 @@ export function EstimateCard({
   return (
     <Link
       href={estimateHref(estimate.id)}
-      className="estimate-card plant-card block px-5 py-5"
+      className="estimate-card plant-card relative z-[1] block cursor-pointer px-5 py-5"
       data-estimate-id={estimate.id}
+      title={`Open ${estimate.code}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="font-mono text-xs text-steel">{estimate.code}</p>

@@ -218,6 +218,9 @@ function mergeDualCrew(day: RangeHours, night: RangeHours): RangeHours {
 }
 
 export function computeRangeHours(input: ComputeRangeInput): RangeHours {
+  if (!input.position.trim()) {
+    return { st: 0, ot: 0, dt: 0, pd: 0, hours: 0, workedDays: 0, days: [] };
+  }
   if (input.shift === "Days & nights") {
     return mergeDualCrew(
       computeRangeHours({
@@ -322,6 +325,9 @@ export function computeRowHours(
   crewOtAfter8 = false,
   plantCode = "",
 ): HoursSplit {
+  if (!row.position.trim()) {
+    return { st: 0, ot: 0, dt: 0, pd: 0, hours: 0, workedDays: 0 };
+  }
   return sumSplits(
     row.ranges.map((range) =>
       computeRangeHours({

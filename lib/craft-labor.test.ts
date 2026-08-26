@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  assignCraftPosition,
+  blankCraftRow,
   cloneCraftRow,
   craftRowFromPhases,
   extraRangeFromPhase,
   nextUnitId,
+  phaseRangesOverlap,
   rangesFromPhases,
   syncCraftRows,
 } from "./craft-labor.ts";
+import { computeRowHours } from "./hours-clock.ts";
 import { addUnit, defaultPhaseSchedule, defaultPhases, setMultiUnits } from "./phase-schedule.ts";
 
 describe("crew ranges are per position", () => {
@@ -123,5 +127,36 @@ describe("crew ranges are per position", () => {
     const off = syncCraftRows(synced, schedule.phases, schedule.units, false);
     assert.equal(off[0].ranges.filter((range) => range.phaseId === "pre").length, 2);
     assert.equal(off[0].ranges.find((range) => range.phaseId === "pre")?.start, schedule.phases[0].start);
+  });
+
+  it("adds a position empty — no hours until a real craft is chosen", () => {
+    const phases = defaultPhases();
+    const empty = blankCraftRow();
+    assert.equal(empty.position, "");
+    assert.equal(empty.ranges.length, 0);
+    assert.equal(computeRowHours(empty).hours, 0);
+    const synced = syncCraftRows([empty], phases)[0];
+    assert.equal(synced.ranges.length, 0);
+    const assigned = assignCraftPosition(empty, "Boilermaker Journeyman", phases);
+    assert.equal(assigned.position, "Boilermaker Journeyman");
+    assert.equal(assigned.ranges.length, 5);
+    assert.ok(computeRowHours(assigned, "Wood River", "Phillips 66").hours > 0);
+  });
+
+  it("adds a second date range empty so it does not clone and double-count", () => {
+    const phases = defaultPhases();
+    const oil = phases.find((row) => row.id === "oil-out");
+    assert.ok(oil);
+    const row = craftRowFromPhases(phases);
+    row.position = "Pipefitter Journeyman";
+    const first = row.ranges.find((range) => range.phaseId === "oil-out");
+    assert.ok(first);
+    const extra = extraRangeFromPhase(oil, first);
+    assert.equal(extra.start, "");
+    assert.equal(extra.end, "");
+    assert.equal(phaseRangesOverlap([first, extra], "oil-out"), false);
+    extra.start = first.start;
+    extra.end = first.end;
+    assert.equal(phaseRangesOverlap([first, extra], "oil-out"), true);
   });
 });

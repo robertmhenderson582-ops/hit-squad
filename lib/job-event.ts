@@ -11,3 +11,12 @@ export function isPhillips66Plant(client = "", site = ""): boolean {
 export function jobEventLabel(client = "", site = ""): JobEventLabel {
   return isPhillips66Plant(client, site) ? "Turnaround" : "Outage";
 }
+
+export function defaultEstimateName(client = "", site = "", size?: string | null) {
+  if (size === "shop") return "Shop / rig job";
+  return `New ${jobEventLabel(client, site)} estimate`;
+}
+
+export function isDefaultEstimateName(name: string) {
+  return /^(New (Turnaround|Outage) estimate|Shop \/ rig job|New T&M estimate)$/i.test(name.trim());
+}

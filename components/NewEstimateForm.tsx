@@ -8,7 +8,9 @@ import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorksp
 import { EstimatePackageProvider } from "@/components/EstimatePackage";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
-import { ModuleTable } from "@/components/ModuleTable";
+import { EquipmentDesk } from "@/components/EquipmentDesk";
+import { OtherCostDesk } from "@/components/OtherCostDesk";
+import { ChangeOrderPacket } from "@/components/ChangeOrderPacket";
 import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { useAlias } from "@/components/OwnerDeskContext";
@@ -16,6 +18,7 @@ import { useSession } from "@/components/SessionProvider";
 import { ShopRigSheet } from "@/components/ShopRigSheet";
 import { boundOtLabel } from "@/lib/hours-clock";
 import { newEstimateKey, newEstimatePackId } from "@/lib/estimate-open";
+import { defaultEstimateName } from "@/lib/job-event";
 
 export function NewEstimateForm() {
   const params = useSearchParams();
@@ -23,7 +26,7 @@ export function NewEstimateForm() {
   const size = params.get("size");
   const client = params.get("client") || "Phillips 66";
   const site = params.get("site") || "Wood River — Roxana, IL";
-  const name = params.get("name") || "New T&M estimate";
+  const name = params.get("name") || defaultEstimateName(client, site, size ?? undefined);
   const pack = params.get("pack");
 
   useEffect(() => {
@@ -77,6 +80,9 @@ function NewEstimateDesk({
       tab={tab}
       onTab={setTab}
       client={alias(client)}
+      site={alias(site)}
+      jobClient={client}
+      jobSite={site}
       name={name}
       status="Estimate"
       statusLocked
@@ -98,19 +104,9 @@ function NewEstimateDesk({
       {tab === "activities" ? <WorkActivitiesDesk client={client} site={site} /> : null}
       {tab === "crew" ? <EstimateWorkbook client={client} site={site} name={name} /> : null}
       {tab === "staffing" ? <StaffingPlanDesk client={client} site={site} name={name} /> : null}
-      {tab === "equipment" ? (
-        <ModuleTable caption="EQUIPMENT" headers={["ITEM", "QTY", "PERIOD", "RATE"]}>{null}</ModuleTable>
-      ) : null}
-      {tab === "costs" ? (
-        <ModuleTable caption="COSTS" headers={["PERIOD", "BUDGET", "EARNED", "ACTUAL", "CPI", "SPI", "FORECAST"]}>
-          {null}
-        </ModuleTable>
-      ) : null}
-      {tab === "change-orders" ? (
-        <ModuleTable caption="CHANGE ORDERS" headers={["NO.", "SCOPE", "ORIGIN", "LABOR", "MATL", "STATUS"]}>
-          {null}
-        </ModuleTable>
-      ) : null}
+      {tab === "equipment" ? <EquipmentDesk /> : null}
+      {tab === "costs" ? <OtherCostDesk client={client} site={site} /> : null}
+      {tab === "change-orders" ? <ChangeOrderPacket client={client} site={site} /> : null}
     </EstimateWorkspace>
     </EstimatePackageProvider>
   );

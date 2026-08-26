@@ -42,7 +42,7 @@ export function WorkActivitiesDesk({ site = "", client = "" }: { site?: string; 
           + Add activity
         </button>
       </div>
-      <LaborRollup estHours={crewHours} />
+      <LaborRollup key={crewHours} estHours={crewHours} />
       <p className="text-sm text-[#5b6f73]">
         Activity hours {workHours.toLocaleString()} · Crew hours {crewHours.toLocaleString()}
       </p>

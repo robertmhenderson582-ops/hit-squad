@@ -13,6 +13,7 @@ import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { RfqPreview } from "@/components/RfqPreview";
+import { EstimateTotalRail } from "@/components/EstimateTotalRail";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
 import type { StaffingLine } from "@/lib/types";
 
@@ -24,7 +25,7 @@ const TABS = [
   { id: "crew", label: "Crew", icon: "⛑" },
   { id: "staffing", label: "Staffing", icon: "▦" },
   { id: "equipment", label: "Equipment", icon: "⛟" },
-  { id: "costs", label: "Costs", icon: "▤" },
+  { id: "costs", label: "Other Cost", icon: "▤" },
   { id: "change-orders", label: "Change orders", icon: "⚖" },
   { id: "rates", label: "Rates", icon: "％" },
 ] as const;
@@ -44,6 +45,9 @@ export function EstimateWorkspace({
   tab,
   onTab,
   client,
+  site,
+  jobClient,
+  jobSite,
   name,
   total,
   packageId,
@@ -57,6 +61,9 @@ export function EstimateWorkspace({
   tab: EstimateTab;
   onTab: (next: EstimateTab) => void;
   client?: string;
+  site?: string;
+  jobClient?: string;
+  jobSite?: string;
   name?: string;
   total?: string;
   packageId?: string;
@@ -126,10 +133,6 @@ export function EstimateWorkspace({
                 );
               })}
             </div>
-            <div className="est-total-card">
-              <p>ESTIMATE TOTAL</p>
-              <p>{total && total !== "$0" ? total : "—"}</p>
-            </div>
             <InboxBadge />
             <ThemeFlip />
             <ShareTurnover title={name || crumb} />
@@ -137,6 +140,17 @@ export function EstimateWorkspace({
               <button
                 key={action.id}
                 type="button"
+                title={
+                  action.id === "export"
+                    ? "Export RFQ preview"
+                    : action.id === "print"
+                      ? "Print this estimate"
+                      : action.id === "duplicate"
+                        ? "Start a copy of this estimate"
+                        : action.id === "undo"
+                          ? "Undo is not wired yet"
+                          : "Team is chrome only"
+                }
                 onClick={() => {
                   if (action.id === "export") {
                     setRfq(true);
@@ -164,7 +178,7 @@ export function EstimateWorkspace({
                 type="button"
                 onClick={() => setConfirmClose(true)}
                 className="rounded border border-white/20 px-3 py-1.5 text-white/90"
-                title="Close out"
+                title="Close out — park this estimate on the Closed out list. Nothing is deleted."
               >
                 Close out
               </button>
@@ -173,6 +187,7 @@ export function EstimateWorkspace({
               type="button"
               onClick={() => router.push("/estimates")}
               className="rounded border border-white/20 px-3 py-1.5 text-white/90"
+              title="Close this sheet and go back to Estimates. Does not close out the job."
             >
               Close
             </button>
@@ -200,7 +215,7 @@ export function EstimateWorkspace({
           ))}
         </nav>
       </header>
-      <div className="paper-desk min-h-[70vh] px-4 py-6">
+      <div className={`${paper ? "paper-desk desk-day" : "instrument-desk desk-night"} est-desk-body min-h-[70vh] px-4 py-6`}>
         <DeskBanners />
         {tab === "rates" ? (
           <section className="plant-card px-5 py-5">
@@ -211,6 +226,7 @@ export function EstimateWorkspace({
           </section>
         ) : null}
         {tab === "rates" ? null : children}
+        <EstimateTotalRail client={jobClient || client} site={jobSite || site} />
       </div>
       {confirmClose && packageId ? (
         <div className="modal-scrim" role="dialog" aria-modal="true">

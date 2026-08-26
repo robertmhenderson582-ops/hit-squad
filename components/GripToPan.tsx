@@ -22,27 +22,34 @@ export function GripToPan({
     }
   }
 
+  function startPan(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement).closest(SKIP)) return;
+    const el = ref.current;
+    if (!el) return;
+    drag.current = { x: event.clientX, sl: el.scrollLeft };
+    el.setPointerCapture(event.pointerId);
+    el.classList.add("is-panning");
+  }
+
   return (
-    <div
-      ref={ref}
-      className={`grip-pan overflow-x-auto ${className ?? ""}`}
-      onPointerDown={(event) => {
-        if (event.button !== 0) return;
-        if ((event.target as HTMLElement).closest(SKIP)) return;
-        const el = ref.current;
-        if (!el) return;
-        drag.current = { x: event.clientX, sl: el.scrollLeft };
-        el.setPointerCapture(event.pointerId);
-        el.classList.add("is-panning");
-      }}
-      onPointerMove={(event) => {
-        if (!drag.current || !ref.current) return;
-        ref.current.scrollLeft = drag.current.sl - (event.clientX - drag.current.x);
-      }}
-      onPointerUp={endPan}
-      onPointerCancel={endPan}
-    >
-      {children}
+    <div className={`grip-pan-wrap ${className ?? ""}`}>
+      <p className="grip-pan-hint">Drag the bar or the grid sideways to see more dates.</p>
+      <div
+        ref={ref}
+        title="Drag sideways to pan dates"
+        className="grip-pan overflow-x-auto"
+        onPointerDown={startPan}
+        onPointerMove={(event) => {
+          if (!drag.current || !ref.current) return;
+          ref.current.scrollLeft = drag.current.sl - (event.clientX - drag.current.x);
+        }}
+        onPointerUp={endPan}
+        onPointerCancel={endPan}
+      >
+        <div className="grip-pan-bar" aria-hidden="true" />
+        {children}
+      </div>
     </div>
   );
 }

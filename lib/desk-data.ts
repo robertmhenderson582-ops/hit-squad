@@ -11,7 +11,7 @@ import type {
   RateLine,
   SiteRecord,
   StaffingLine,
-} from "@/lib/types";
+} from "./types.ts";
 
 const OWNER = "owner-robert-henderson";
 

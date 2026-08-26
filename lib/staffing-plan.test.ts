@@ -14,6 +14,7 @@ import {
   exportStaffingRows,
   generateStaffingPlan,
   staffingExportCells,
+  staffingPhasesFromSchedule,
   staffingPlanToXlsx,
   visibleStaffingRows,
 } from "./staffing-plan.ts";
@@ -230,6 +231,39 @@ describe("generate staffing from crew + phases", () => {
     assert.equal(laborer?.cells["2026-09-12"]?.day, 8);
     assert.equal(laborer?.cells["2026-09-13"], undefined);
     assert.equal(plan.dates.at(-1)?.header, "09/13/2026 (S)");
+  });
+
+  it("Multiple units uses unit phase dates, not only the job timeline", () => {
+    const job = phase({ id: "mech", start: "2026-09-01", stop: "2026-09-03" });
+    const later = phase({ id: "mech", start: "2026-09-10", stop: "2026-09-12" });
+    const phases = staffingPhasesFromSchedule({
+      multiUnits: true,
+      phases: [job],
+      units: [{ phases: [job] }, { phases: [later] }],
+    });
+    const plan = generateStaffingPlan({
+      site: "Wood River — Roxana, IL",
+      phases,
+      crew: {
+        direct: [
+          craft("Boilermaker Journeyman", "Days", [
+            {
+              id: "rg-u2",
+              start: "2026-09-10",
+              end: "2026-09-12",
+              headcount: 2,
+              nightHeadcount: 0,
+              hoursPerShift: 10,
+              perDiemPeople: 2,
+              days: [false, true, true, true, true, true, true],
+              shift: "Days",
+            },
+          ]),
+        ],
+      },
+    });
+    assert.equal(plan.dates.some((date) => date.ymd === "2026-09-10"), true);
+    assert.equal(plan.rows.find((row) => row.code === "201")?.cells["2026-09-10"]?.day, 2);
   });
 });
 

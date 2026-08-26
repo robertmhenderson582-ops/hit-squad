@@ -126,7 +126,7 @@ export function blankCraftRow(): CraftRow {
     cost: "",
     clockOverride: "auto",
     laborClassOverride: null,
-    ranges: [blankRange()],
+    ranges: [],
   };
 }
 
@@ -184,15 +184,31 @@ export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange, unitId?: str
 
 export function extraRangeFromPhase(phase: PhaseRow, template?: CalendarRange, unitId?: string): CalendarRange {
   const base = rangeFromPhase(phase, template, unitId);
+  const newUnit = Boolean(unitId && unitId !== template?.unitId);
   return {
     ...base,
     id: uid("rg"),
-    start: unitId && unitId !== template?.unitId ? phase.start : template?.start || phase.start,
-    end: unitId && unitId !== template?.unitId ? phase.stop : template?.end || phase.stop,
-    skipDates: template?.skipDates ? [...template.skipDates] : [...(base.skipDates ?? [])],
+    start: newUnit ? phase.start : "",
+    end: newUnit ? phase.stop : "",
+    skipDates: newUnit ? [...(base.skipDates ?? [])] : [],
     days: template?.days ? [...template.days] : [...base.days],
     unitId: unitId ?? template?.unitId ?? base.unitId,
   };
+}
+
+export function rangesOverlap(a: Pick<CalendarRange, "start" | "end">, b: Pick<CalendarRange, "start" | "end">) {
+  if (!a.start || !a.end || !b.start || !b.end) return false;
+  return a.start <= b.end && b.start <= a.end;
+}
+
+export function phaseRangesOverlap(ranges: CalendarRange[], phaseId?: string) {
+  const list = ranges.filter((range) => (phaseId ? range.phaseId === phaseId : true));
+  for (let i = 0; i < list.length; i += 1) {
+    for (let j = i + 1; j < list.length; j += 1) {
+      if (rangesOverlap(list[i], list[j])) return true;
+    }
+  }
+  return false;
 }
 
 export function nextUnitId(units: JobUnit[], existing: CalendarRange[] = []): string | undefined {
@@ -247,5 +263,24 @@ export function syncCraftRows(
   units: JobUnit[] = [],
   multiUnits = false,
 ): CraftRow[] {
-  return rows.map((row) => ({ ...row, ranges: rangesFromPhases(phases, row.ranges, units, multiUnits) }));
+  return rows.map((row) => {
+    if (!row.position.trim() && row.ranges.length === 0) return row;
+    return { ...row, ranges: rangesFromPhases(phases, row.ranges, units, multiUnits) };
+  });
+}
+
+export function assignCraftPosition(
+  row: CraftRow,
+  position: string,
+  phases: PhaseRow[],
+  units: JobUnit[] = [],
+  multiUnits = false,
+): CraftRow {
+  if (!position.trim()) {
+    return { ...row, position: "", ranges: [] };
+  }
+  if (row.ranges.length === 0) {
+    return { ...craftRowFromPhases(phases, units, multiUnits), id: row.id, position };
+  }
+  return { ...row, position };
 }

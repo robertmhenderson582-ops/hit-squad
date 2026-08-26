@@ -3,7 +3,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   blankCraftRow,
-  craftRowFromPhases,
   syncCraftRows,
   type CraftRow,
 } from "@/lib/craft-labor";
@@ -219,7 +218,7 @@ export function EstimatePackageProvider({
         setActivitiesState((current) => (typeof next === "function" ? next(current) : next));
       },
       addCraftRow() {
-        return craftRowFromPhases(schedule.phases, schedule.units, schedule.multiUnits);
+        return blankCraftRow();
       },
     }),
     [activities, crew, estimateKey, jobMeta, schedule],

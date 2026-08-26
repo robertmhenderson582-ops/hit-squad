@@ -9,6 +9,7 @@ import {
   clampPerDiem,
   extraRangeFromPhase,
   nextUnitId,
+  phaseRangesOverlap,
   nightPerDiemCap,
   perDiemCap,
   type CalendarRange,
@@ -103,6 +104,7 @@ function PhaseWindowCard({
   units: JobUnit[];
 }) {
   const off = ranges.length === 0 && !phase.on;
+  const overlap = phaseRangesOverlap(ranges, phase.id);
 
   return (
     <article className={`crew-phase-card ${off ? "is-off" : ""}`}>
@@ -136,8 +138,13 @@ function PhaseWindowCard({
                 + Add date range
               </button>
               <p className="text-xs text-[#5b6f73]">
-                Adds another stretch on this same phase — work, sit out, then come back.
+                Adds another stretch on this same phase — work, sit out, then come back. New dates start empty so hours do not double-count.
               </p>
+              {overlap ? (
+                <p className="text-xs text-[#e38b2a]">
+                  These date ranges overlap on this phase. Hours will bill twice for the overlap.
+                </p>
+              ) : null}
             </div>
           </>
         )}
@@ -234,7 +241,7 @@ function CalendarPattern({
           </select>
         </label>
       ) : null}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="calendar-dates">
         <div className="text-xs">
           Start
           <DateField
@@ -253,6 +260,8 @@ function CalendarPattern({
             onChange={(end) => onPatch({ end: end < range.start ? range.start : end })}
           />
         </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
         <label className="text-xs">
           Shift
           <select
@@ -352,7 +361,7 @@ function CalendarPattern({
       {sundays.length ? (
         <div>
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold tracking-[0.12em] text-[#5b6f73]">SUNDAYS</p>
+            <p className="text-xs font-semibold tracking-[0.12em] text-[#5b6f73]">SUNDAYS — tap to skip that Sunday</p>
             <button type="button" onClick={() => onPatch({ skipDates: [] })} className="text-xs text-steel underline">
               All
             </button>
@@ -365,11 +374,12 @@ function CalendarPattern({
                   key={iso}
                   type="button"
                   onClick={() => toggleSunday(iso)}
+                  title={`Sunday ${shortDate(iso)}. On = worked. Off = skip that Sunday.`}
                   className={`rounded-full px-2 py-0.5 text-xs ${
                     off ? "border border-[#c5d4d4] text-[#5b6f73]" : "bg-steel text-white"
                   }`}
                 >
-                  {shortDate(iso)}
+                  Su {shortDate(iso)}
                   {off ? " off" : ""}
                 </button>
               );

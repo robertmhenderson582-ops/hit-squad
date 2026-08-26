@@ -9,6 +9,7 @@ import {
   cellValue,
   generateStaffingPlan,
   staffingFilename,
+  staffingPhasesFromSchedule,
   staffingPlanToXlsx,
   visibleStaffingRows,
 } from "@/lib/staffing-plan";
@@ -30,10 +31,10 @@ export function StaffingPlanDesk({
       generateStaffingPlan({
         site,
         client,
-        phases: pack.schedule.phases,
+        phases: staffingPhasesFromSchedule(pack.schedule),
         crew: pack.crew,
       }),
-    [client, pack.crew, pack.schedule.phases, site],
+    [client, pack.crew, pack.schedule, site],
   );
   const rows = visibleStaffingRows(plan, showFull);
   const coastLabel = plan.coast === "west" ? "West Coast (John)" : "East Coast (Nathan)";
@@ -117,8 +118,8 @@ export function StaffingPlanDesk({
         </table>
       </GripToPan>
       <p className="mt-3 text-xs text-[#5b6f73]">
-        Export contractor: {P66_CONTRACTOR}. Totals on the sheet are SUM formulas. Grip the grid to
-        pan dates.
+        Export contractor: {P66_CONTRACTOR}. Totals on the sheet are SUM formulas. Use the striped bar
+        above the grid to slide dates.
       </p>
     </section>
   );

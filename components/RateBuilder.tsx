@@ -16,9 +16,9 @@ export function RateBuilder() {
   return (
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-paper-cream/80">
-        Illinois burden build-up for {alias("Madison")} / {alias("Wood River")} work: FICA, FUI, SUI,
-        workers&apos; comp, GL, and small tools rolled into the burdened craft rate. This is the IL
-        rate builder — B-1 ingest is parked. Field-trial figures stay on this desk.
+        Illinois burden columns for {alias("Madison")} / {alias("Wood River")} work: FICA, FUI, SUI,
+        workers&apos; comp, GL, and small tools. Burdened dollars on the right are stored field-trial
+        figures — not live-computed from those columns. B-1 ingest is parked.
       </p>
       {error ? <p className="text-amber-label">{error}</p> : null}
       <ModuleTable
@@ -41,9 +41,9 @@ export function RateBuilder() {
         ))}
       </ModuleTable>
       <p className="font-mono text-[11px] leading-5 text-paper-cream/55">
-        Burdened = base × (1 + FICA + FUI + SUI + WC + GL + small tools). SUI is the Illinois
-        contractor rate loaded for this trial. Adjust on the blotter — do not treat as a published
-        wage schedule.
+        Burdened dollars are field-trial figures stored on this desk. They are not live-computed
+        from the FICA / FUI / SUI / W/C / GL / tools columns. The wrap stays as stored until it is
+        decided later. B-1 ingest is parked. Do not treat this as a published wage schedule.
       </p>
     </div>
   );

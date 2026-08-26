@@ -6,14 +6,7 @@ import { useDisplay } from "@/components/DisplayProvider";
 import { PasswordField } from "@/components/PasswordField";
 import { useSession } from "@/components/SessionProvider";
 import { setDeskLocked } from "@/lib/desk-lock";
-
-function effectiveLock(role: string | undefined, minutes: number) {
-  if (role !== "owner") {
-    if (minutes === 0 || minutes === 30 || minutes === 60) return 15;
-    return Math.min(minutes || 15, 15);
-  }
-  return minutes;
-}
+import { effectiveLockMinutes } from "@/lib/display";
 
 export function InactivityLock() {
   const { prefs, resolvedTheme, flipDayNight } = useDisplay();
@@ -23,7 +16,7 @@ export function InactivityLock() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const lastActive = useRef(Date.now());
-  const minutes = effectiveLock(user?.role, prefs.lockMinutes);
+  const minutes = effectiveLockMinutes(user?.role, prefs.lockMinutes);
 
   const bump = useCallback(() => {
     lastActive.current = Date.now();

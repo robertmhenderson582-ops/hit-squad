@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { NewEstimateModal } from "@/components/NewEstimateModal";
+import { useInbox } from "@/components/InboxProvider";
 
 type EstimatePreset = { client?: string; site?: string; size?: "outage" | "other" | "shop"; knownPlant?: boolean };
 
@@ -17,11 +18,13 @@ const EstimateModalContext = createContext<EstimateModalContextValue | null>(nul
 export function EstimateModalProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [preset, setPreset] = useState<EstimatePreset>({});
+  const inbox = useInbox();
 
   const openNewEstimate = useCallback((next?: EstimatePreset) => {
+    inbox.closeInbox();
     setPreset(next ?? {});
     setOpen(true);
-  }, []);
+  }, [inbox.closeInbox]);
 
   const closeNewEstimate = useCallback(() => setOpen(false), []);
 

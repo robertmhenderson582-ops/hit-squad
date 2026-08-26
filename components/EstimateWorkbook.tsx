@@ -9,6 +9,7 @@ import { useAlias } from "@/components/OwnerDeskContext";
 import { CREW_LANES } from "@/lib/crew-lanes";
 import type { CraftRow } from "@/lib/craft-labor";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
+import { defaultEstimateName } from "@/lib/job-event";
 
 type CraftSetter = (next: CraftRow[] | ((current: CraftRow[]) => CraftRow[])) => void;
 
@@ -36,7 +37,8 @@ export function EstimateWorkbook({
   return (
     <div className="space-y-5">
       <p className="text-sm text-[#5b6f73]">
-        {alias(client || "Phillips 66")} · {alias(site || "Wood River — Roxana, IL")} · {name || "New T&M estimate"}.
+        {alias(client || "Phillips 66")} · {alias(site || "Wood River — Roxana, IL")} ·{" "}
+        {name || defaultEstimateName(client, site)}.
         Hours follow the position clock and Job setup. Calendars follow Phases & work schedule.
       </p>
       {CREW_LANES.filter((lane) => lane.id !== "support").map((lane) => {

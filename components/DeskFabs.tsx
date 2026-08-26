@@ -68,15 +68,20 @@ export function DeskFabs() {
   }, [status]);
 
   useEffect(() => {
-    if (!ticketOpen) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape" && !markupSrc && !hiddenForShot) {
+      if (event.key !== "Escape") return;
+      if (document.querySelector(".modal-scrim, .estimate-modal")) return;
+      if (inbox.open) {
+        inbox.closeInbox();
+        return;
+      }
+      if (ticketOpen && !markupSrc && !hiddenForShot) {
         setTicketOpen(false);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [hiddenForShot, markupSrc, ticketOpen]);
+  }, [hiddenForShot, inbox.closeInbox, inbox.open, markupSrc, ticketOpen]);
 
   useEffect(() => {
     if (!note) return;
@@ -190,7 +195,17 @@ export function DeskFabs() {
       {inbox.open ? (
         <section className="inbox-card" role="dialog" aria-label="Inbox" data-capture="ignore">
           <div className="flex justify-end">
-            <button type="button" onClick={inbox.closeInbox} className="text-[#5b6f73]" aria-label="Close inbox">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                inbox.closeInbox();
+              }}
+              className="inbox-close"
+              aria-label="Close inbox"
+              title="Close inbox"
+            >
               ×
             </button>
           </div>

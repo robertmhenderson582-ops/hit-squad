@@ -119,7 +119,13 @@ export function SupportCrewCard({
         {rows.length === 0 ? (
           <p className="text-sm text-[#5b6f73]">No support positions yet.</p>
         ) : (
-          rows.map((row) => (
+          <>
+          <div className="grid grid-cols-[1fr_1fr_auto] gap-3 px-3 text-xs tracking-[0.12em] text-[#5b6f73]">
+            <p>POSITION</p>
+            <p>BILLED AS</p>
+            <p />
+          </div>
+          {rows.map((row) => (
             <article
               key={row.id}
               className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-[#d5e0de] px-3 py-3"
@@ -143,7 +149,8 @@ export function SupportCrewCard({
                 Remove
               </button>
             </article>
-          ))
+          ))}
+          </>
         )}
       </div>
     </section>

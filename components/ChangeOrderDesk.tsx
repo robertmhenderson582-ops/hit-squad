@@ -10,8 +10,9 @@ export function ChangeOrderDesk() {
   return (
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Change-order chrome only. Empty log, estimate, and SCR shells. No FCR math and no mileage
-        dollars.
+        Standalone change-order list is parked. The V1 FCR packet lives on the estimate Change
+        orders tab — log, estimate from this job’s hours, and SCR. Mileage Yes is a flat $2,500,
+        not times headcount.
       </p>
       <nav className="flex flex-wrap gap-2 text-sm">
         {SHELLS.map((item) => (

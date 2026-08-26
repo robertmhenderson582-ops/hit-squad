@@ -11,10 +11,20 @@ export function ShareTurnover({ title }: { title?: string }) {
 
   return (
     <>
-      <button type="button" onClick={() => setOpen("share")} className="rounded border border-white/20 px-3 py-1.5 text-white/90">
+      <button
+        type="button"
+        title="Share this estimate. Owner stays owner."
+        onClick={() => setOpen("share")}
+        className="rounded border border-white/20 px-3 py-1.5 text-white/90"
+      >
         Share
       </button>
-      <button type="button" onClick={() => setOpen("turnover")} className="rounded border border-white/20 px-3 py-1.5 text-white/90">
+      <button
+        type="button"
+        title="Turn this estimate over. Owner still sees it."
+        onClick={() => setOpen("turnover")}
+        className="rounded border border-white/20 px-3 py-1.5 text-white/90"
+      >
         Turn over
       </button>
       {open ? (
