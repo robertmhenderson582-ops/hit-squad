@@ -3,10 +3,12 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useSession } from "@/components/SessionProvider";
 import { aliasText, shouldApplyAliases } from "@/lib/catalog-aliases";
-import { canUseViewAs, hasBuildDesk, isTester, lensUser, testerFromViewAs, viewingAsOther } from "@/lib/desk-role";
+import { canUseFollow, canUseViewAs, hasBuildDesk, isTester, lensUser, testerFromViewAs, viewingAsOther } from "@/lib/desk-role";
 import {
   aliasLensFor,
+  isFollowSeat,
   isViewAsSeat,
+  preferredFollowSeat,
   preferredViewAs,
   type FollowSeat,
   type OwnerSettings,
@@ -18,6 +20,7 @@ import { isJosephEmail, testerByEmail } from "@/lib/tester-seats";
 
 const JOSEPH_VIEW_KEY = "hs_joseph_view";
 const VIEW_AS_STORE = "hs_view_as";
+const FOLLOW_STORE = "hs_follow";
 
 function readStoredViewAs(): ViewAsSeat | undefined {
   if (typeof window === "undefined") return undefined;
@@ -33,6 +36,25 @@ function writeStoredViewAs(seat: ViewAsSeat) {
   if (typeof window === "undefined") return;
   try {
     window.sessionStorage.setItem(VIEW_AS_STORE, seat);
+  } catch {
+    // keep the in-memory lens
+  }
+}
+
+function readStoredFollow(): FollowSeat | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const raw = window.sessionStorage.getItem(FOLLOW_STORE);
+    return isFollowSeat(raw) ? raw : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeStoredFollow(seat: FollowSeat) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(FOLLOW_STORE, seat);
   } catch {
     // keep the in-memory lens
   }
@@ -108,11 +130,14 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
   useLayoutEffect(() => {
     if (tester || !hasBuildDesk(user)) {
       setViewAsState("owner");
+      setFollowSeatState("owner");
       setLensReady(true);
       return;
     }
     const stored = readStoredViewAs();
+    const storedFollow = readStoredFollow();
     if (stored) setViewAsState(stored);
+    if (storedFollow) setFollowSeatState(storedFollow);
     setLensReady(true);
   }, [tester, user]);
 
@@ -122,6 +147,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       setFollowSeatState("owner");
       setViewAsState("owner");
       writeStoredViewAs("owner");
+      writeStoredFollow("owner");
       setLensReady(true);
       if (isJosephEmail(user?.email)) {
         const saved = readJosephView();
@@ -144,7 +170,9 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       .then((response) => response.json())
       .then((data) => {
         if (typeof data.aliasesOn === "boolean") setAliasesOnState(data.aliasesOn);
-        if (data.followSeat) setFollowSeatState(data.followSeat);
+        const nextFollow = preferredFollowSeat(readStoredFollow(), data.followSeat);
+        setFollowSeatState(nextFollow);
+        writeStoredFollow(nextFollow);
         const nextView = preferredViewAs(readStoredViewAs(), data.viewAs);
         setViewAsState(nextView);
         writeStoredViewAs(nextView);
@@ -180,11 +208,15 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const setFollowSeat = useCallback((seat: FollowSeat) => {
-    if (user?.role !== "owner") return;
+    if (!canUseFollow(user)) return;
+    const lens = seat === "owner" ? "owner" : seat;
     setFollowSeatState(seat);
-    saveSettings({ followSeat: seat });
+    setViewAsState(lens);
+    writeStoredFollow(seat);
+    writeStoredViewAs(lens);
+    saveSettings({ followSeat: seat, viewAs: lens });
     noteFeature(seat === "owner" ? "Stopped Follow" : `Follow ${seat} screen`);
-  }, [user?.role]);
+  }, [user]);
 
   const setViewAs = useCallback((seat: ViewAsSeat) => {
     if (!canUseViewAs(user)) return;
@@ -249,5 +281,5 @@ export function useAlias() {
 export function useLensUser() {
   const { user } = useSession();
   const desk = useOwnerDesk();
-  return lensUser(user, desk?.viewAs);
+  return lensUser(user, desk?.viewAs, desk?.followSeat);
 }

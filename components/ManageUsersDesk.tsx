@@ -1,10 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PasswordField } from "@/components/PasswordField";
 import { PresencePulse } from "@/components/PresencePulse";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
+import { canUseFollow, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
+import { followLandPath, followSeatFromEmail } from "@/lib/follow";
 import { EMPTY_MODULES } from "@/lib/roster";
 import type { PublicUser, RosterEntry, RosterPermission } from "@/lib/types";
 
@@ -17,11 +20,17 @@ const PERMISSION_OPTIONS: { value: RosterPermission; label: string }[] = [
 
 type SeatRow = PublicUser & { passwordIssued: boolean };
 
+type LiveSeat = { email: string; path: string };
+
 export function ManageUsersDesk() {
   const { user } = useSession();
+  const desk = useOwnerDesk();
+  const router = useRouter();
   const owner = isOwner(user);
+  const followOk = canUseFollow(user);
   const [seats, setSeats] = useState<SeatRow[]>([]);
   const [roster, setRoster] = useState<RosterEntry[]>([]);
+  const [liveSeats, setLiveSeats] = useState<LiveSeat[]>([]);
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -50,7 +59,19 @@ export function ManageUsersDesk() {
   useEffect(() => {
     void loadSeats();
     void loadRoster();
+    fetch("/api/desk/presence", { credentials: "include", cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => setLiveSeats(data.seats ?? []))
+      .catch(() => undefined);
   }, []);
+
+  function followEmail(email: string) {
+    const seat = followSeatFromEmail(email);
+    if (!seat || !desk || !followOk) return;
+    const ping = liveSeats.find((row) => row.email.toLowerCase() === email.trim().toLowerCase());
+    desk.setFollowSeat(seat);
+    router.push(followLandPath(ping?.path ?? "/"));
+  }
 
   async function onIssue(event: FormEvent) {
     event.preventDefault();
@@ -138,7 +159,7 @@ export function ManageUsersDesk() {
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
               <tr>
-                {["NAME", "EMAIL", "ROLE", "PASSWORD"].map((header) => (
+                {["NAME", "EMAIL", "ROLE", "PASSWORD", followOk ? "FOLLOW" : ""].filter(Boolean).map((header) => (
                   <th key={header} className="px-2 py-2">
                     {header}
                   </th>
@@ -160,6 +181,25 @@ export function ManageUsersDesk() {
                         ? "Issued — first sign-in must change"
                         : "Not issued"}
                   </td>
+                  {followOk ? (
+                    <td className="px-2 py-2">
+                      {followSeatFromEmail(row.email) && row.email.toLowerCase() !== NOVUS_EMAIL ? (
+                        <button
+                          type="button"
+                          onClick={() => followEmail(row.email)}
+                          className={`rounded-lg px-3 py-1.5 text-sm ${
+                            desk?.followSeat === followSeatFromEmail(row.email)
+                              ? "bg-steel text-white"
+                              : "border border-steel text-steel"
+                          }`}
+                        >
+                          {desk?.followSeat === followSeatFromEmail(row.email) ? "Watching" : "Follow"}
+                        </button>
+                      ) : (
+                        <span className="text-[#5b6f73]">—</span>
+                      )}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
@@ -274,7 +314,7 @@ export function ManageUsersDesk() {
               <table className="min-w-full text-left text-sm">
                 <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
                   <tr>
-                    {["NAME", "USERNAME", "EMAIL", "PERMISSION", "EXPIRES", "SIGN-IN"].map((header) => (
+                    {["NAME", "USERNAME", "EMAIL", "PERMISSION", "EXPIRES", "SIGN-IN", "FOLLOW"].map((header) => (
                       <th key={header} className="px-2 py-2">
                         {header}
                       </th>
@@ -284,7 +324,7 @@ export function ManageUsersDesk() {
                 <tbody>
                   {roster.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-2 py-4 text-[#5b6f73]">
+                      <td colSpan={7} className="px-2 py-4 text-[#5b6f73]">
                         Empty visual book. Logins are the seeded seats above. Novus is not a tester.
                       </td>
                     </tr>
@@ -299,6 +339,23 @@ export function ManageUsersDesk() {
                         </td>
                         <td className="px-2 py-2">{row.expires || "—"}</td>
                         <td className="px-2 py-2">{row.signIn}</td>
+                        <td className="px-2 py-2">
+                          {followSeatFromEmail(row.email) ? (
+                            <button
+                              type="button"
+                              onClick={() => followEmail(row.email)}
+                              className={`rounded-lg px-3 py-1.5 text-sm ${
+                                desk?.followSeat === followSeatFromEmail(row.email)
+                                  ? "bg-steel text-white"
+                                  : "border border-steel text-steel"
+                              }`}
+                            >
+                              {desk?.followSeat === followSeatFromEmail(row.email) ? "Watching" : "Follow"}
+                            </button>
+                          ) : (
+                            <span className="text-[#5b6f73]">—</span>
+                          )}
+                        </td>
                       </tr>
                     ))
                   )}

@@ -10,8 +10,8 @@ import {
   SUB_CARD_KINDS,
   SUB_EQUIP_PERIODS,
   SUB_EQUIP_PERIOD_LABEL,
-  SUB_UNITS,
   SUB_UNIT_LABEL,
+  oneOffUnitsFor,
   applyBookRate,
   applyTypedAmount,
   blankSubCard,
@@ -182,7 +182,7 @@ export function SubcontractorRateBook({
                       }}
                       aria-label="Unit"
                     >
-                      {SUB_UNITS.map((unit) => (
+                      {oneOffUnitsFor(row.unit).map((unit) => (
                         <option key={unit} value={unit}>
                           {SUB_UNIT_LABEL[unit]}
                         </option>
@@ -290,9 +290,10 @@ export function SubcontractorDesk({ site = "", client = "" }: { site?: string; c
   return (
     <div className="space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Subcontractor. Add a vendor card for labor (typed ST / OT / DT × calendar hours) and/or
-        equipment (typed rows). Same vendor can carry both. One-off LS / hour / day / each rows
-        still work. Not Crew labor and not Other Cost misc.
+        Subcontractor. Labor lives on a vendor card: typed ST / OT / DT and hours from the Job
+        setup calendar, same as Crew. Equipment is typed rows on that card — optional start/end
+        uses date-span math. Same vendor can carry both. One-off LS / day / each rows stay for
+        lump or unit price. Hour labor is not Qty × Rate. Not Crew labor and not Other Cost misc.
       </p>
 
       <section className="space-y-4">
@@ -359,7 +360,8 @@ export function SubcontractorDesk({ site = "", client = "" }: { site?: string; c
               {sheet.lines.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-2 py-4 text-[#5b6f73]">
-                    No one-off rows. Add row to pick a book rate or type LS / hour / day / each.
+                    No one-off rows. Add row to pick a book rate or type LS / day / each. Hour
+                    labor goes on a vendor card.
                   </td>
                 </tr>
               ) : (
@@ -495,7 +497,7 @@ function SubRow({
                     onChange({ ...line, unit, qty: unit === "LS" && !(line.qty > 0) ? 1 : line.qty });
                   }}
                 >
-                  {SUB_UNITS.map((unit) => (
+                  {oneOffUnitsFor(line.unit).map((unit) => (
                     <option key={unit} value={unit}>
                       {SUB_UNIT_LABEL[unit]}
                     </option>
@@ -537,7 +539,7 @@ const KIND_LABEL: Record<SubCardKind, string> = {
 };
 
 const LABOR_HEADERS = ["POSITION", "ST RATE", "OT RATE", "DT RATE", "ST", "OT", "DT", "HOURS", "COST", ""];
-const EQUIP_HEADERS = ["DESCRIPTION", "PERIOD", "RATE", "QTY", "FREIGHT", "TOTAL", ""];
+const EQUIP_HEADERS = ["DESCRIPTION", "PERIOD", "RATE", "QTY", "START", "END", "FREIGHT", "TOTAL", ""];
 
 function SubVendorCard({
   card,
@@ -724,7 +726,8 @@ function SubVendorCard({
                 <div>
                   <h3 className="font-display text-xl font-semibold text-[#163038]">Equipment</h3>
                   <p className="text-xs text-[#5b6f73]">
-                    Typed rows. Cost is rate × qty, plus freight if you type it. Stays on Subcontractor.
+                    Typed rows. Cost is rate × qty, plus freight. Optional start/end multiplies by
+                    the date span (daily / weekly / monthly). Stays on Subcontractor.
                   </p>
                 </div>
                 <button type="button" onClick={addEquip} className={ADD_BTN}>
@@ -745,7 +748,7 @@ function SubVendorCard({
                   <tbody>
                     {card.equipment.length === 0 ? (
                       <tr className="border-t border-[#d5e0de]">
-                        <td colSpan={7} className="px-2 py-4 text-sm text-[#5b6f73]">
+                        <td colSpan={9} className="px-2 py-4 text-sm text-[#5b6f73]">
                           No equipment rows. Add equipment and type the description.
                         </td>
                       </tr>
@@ -794,6 +797,24 @@ function SubVendorCard({
                               value={line.qty}
                               onChange={(event) => patchEquip(index, { ...line, qty: Number(event.target.value) || 0 })}
                               aria-label="Equipment qty"
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <input
+                              type="date"
+                              className="paper-field w-36"
+                              value={line.start ?? ""}
+                              onChange={(event) => patchEquip(index, { ...line, start: event.target.value })}
+                              aria-label="Equipment start"
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <input
+                              type="date"
+                              className="paper-field w-36"
+                              value={line.end ?? ""}
+                              onChange={(event) => patchEquip(index, { ...line, end: event.target.value })}
+                              aria-label="Equipment end"
                             />
                           </td>
                           <td className="px-2 py-2">

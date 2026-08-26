@@ -53,14 +53,14 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   const { user, status } = useSession();
   const desk = useOwnerDesk();
   const { prefs } = useDisplay();
-  const ownerChrome = buildDeskChrome(user, desk?.viewAs);
+  const ownerChrome = buildDeskChrome(user, desk?.viewAs, desk?.followSeat);
+  const watched = desk?.followSeat && desk.followSeat !== "owner" ? desk.followSeat : undefined;
+  const viewed = desk?.viewAs && desk.viewAs !== "owner" ? desk.viewAs : undefined;
   const seat = isTester(user)
     ? user?.email || user?.id || "tester"
     : ownerChrome
-      ? user?.id || "owner"
-      : desk?.viewAs && desk.viewAs !== "owner"
-        ? desk.viewAs
-        : user?.id || user?.email || "tester";
+    ? user?.id || "owner"
+    : watched || viewed || user?.id || user?.email || "tester";
 
   const [open, setOpen] = useState(false);
   const [composing, setComposing] = useState(false);

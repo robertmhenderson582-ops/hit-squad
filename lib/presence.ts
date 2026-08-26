@@ -1,3 +1,6 @@
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+
 export type PresencePing = {
   email: string;
   name: string;
@@ -19,12 +22,62 @@ const IDLE_MS = 90 * 1000;
 const alreadyOn = new Set<string>();
 const waiting: PresencePing[] = [];
 const seats = new Map<string, PresenceSeat>();
+let loadedFrom: string | null = null;
+
+export function presenceStorePath() {
+  if (process.env.PRESENCE_STORE_PATH) return process.env.PRESENCE_STORE_PATH;
+  if (process.env.VERCEL) return "/tmp/hit-squad-presence.json";
+  return join(process.cwd(), "data", "presence.json");
+}
+
+export function resetPresenceForTests(path?: string) {
+  alreadyOn.clear();
+  waiting.length = 0;
+  seats.clear();
+  loadedFrom = null;
+  if (path) process.env.PRESENCE_STORE_PATH = path;
+  else delete process.env.PRESENCE_STORE_PATH;
+}
+
+function hydrate() {
+  const file = presenceStorePath();
+  if (loadedFrom === file && seats.size > 0) return;
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8")) as { seats?: PresenceSeat[] };
+    seats.clear();
+    for (const row of parsed.seats ?? []) {
+      if (row?.email) seats.set(row.email, row);
+    }
+  } catch {
+    if (loadedFrom !== file) seats.clear();
+  }
+  loadedFrom = file;
+}
+
+function persist() {
+  const file = presenceStorePath();
+  loadedFrom = file;
+  try {
+    mkdirSync(dirname(file), { recursive: true });
+    const tmp = `${file}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ seats: [...seats.values()] }), "utf8");
+    renameSync(tmp, file);
+  } catch {
+    // keep the in-memory copy
+  }
+}
 
 function prune() {
+  hydrate();
   const cutoff = Date.now() - DAY_MS;
+  let dirty = false;
   for (const [email, seat] of seats) {
-    if (seat.lastAt < cutoff) seats.delete(email);
+    if (seat.lastAt < cutoff) {
+      seats.delete(email);
+      dirty = true;
+    }
   }
+  if (dirty) persist();
 }
 
 export function beatPresence(input: { email: string; name: string; path: string }): PresenceSeat {
@@ -39,6 +92,7 @@ export function beatPresence(input: { email: string; name: string; path: string 
     lastAt: now,
   };
   seats.set(input.email, row);
+  persist();
   return row;
 }
 
@@ -72,10 +126,13 @@ export function alreadySignedIn(email: string) {
 
 export function markSignedOut(email: string) {
   alreadyOn.delete(email);
+  hydrate();
   seats.delete(email);
+  persist();
 }
 
 export function seatFor(email: string): PresenceSeat | undefined {
+  hydrate();
   return seats.get(email);
 }
 

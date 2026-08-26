@@ -75,6 +75,11 @@ export function preferredViewAs(stored: ViewAsSeat | undefined, server?: ViewAsS
   return server && isViewAsSeat(server) ? server : "owner";
 }
 
+export function preferredFollowSeat(stored: FollowSeat | undefined, server?: FollowSeat): FollowSeat {
+  if (stored) return stored;
+  return server && isFollowSeat(server) ? server : "owner";
+}
+
 export function aliasLensFor(seat: FollowSeat): AliasSeat {
   if (seat === "owner") return "owner";
   if (seat === "nathan" || seat === "john" || seat === "wendell" || seat === "benny" || seat === "chance") {

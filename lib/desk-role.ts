@@ -34,6 +34,17 @@ export function canUseViewAs(user?: { email?: string; role?: string } | null): b
   return hasBuildDesk(user) || isJosephEmail(user?.email);
 }
 
+export function canUseFollow(user?: { role?: string } | null): boolean {
+  return hasBuildDesk(user);
+}
+
+/** Follow and View as share the desk lens. Follow wins while a seat is watched. */
+export function activeLensSeat(viewAs?: string | null, followSeat?: string | null): string | null {
+  if (viewingAsOther(followSeat)) return followSeat ?? null;
+  if (viewingAsOther(viewAs)) return viewAs ?? null;
+  return null;
+}
+
 export function viewingAsOther(viewAs?: string | null): boolean {
   return Boolean(viewAs && viewAs !== "owner");
 }
@@ -45,10 +56,16 @@ export function testerFromViewAs(viewAs?: string | null): TesterSeatDef | undefi
 }
 
 /** Chrome / Settings use this seat. Real logins still gate on the session user. */
-export function lensUser(session?: PublicUser | null, viewAs?: string | null): PublicUser | null {
+export function lensUser(
+  session?: PublicUser | null,
+  viewAs?: string | null,
+  followSeat?: string | null,
+): PublicUser | null {
   if (!session) return null;
-  if (!hasBuildDesk(session) || !viewingAsOther(viewAs)) return session;
-  const seat = testerFromViewAs(viewAs);
+  if (!hasBuildDesk(session)) return session;
+  const seatId = activeLensSeat(viewAs, followSeat);
+  if (!seatId) return session;
+  const seat = testerFromViewAs(seatId);
   if (!seat) return session;
   return { id: seat.id, email: seat.email, name: seat.name, role: "tester" };
 }
@@ -63,6 +80,10 @@ export function pageAllowedForSeat(
   return true;
 }
 
-export function buildDeskChrome(user?: PublicUser | null, viewAs?: string | null): boolean {
-  return hasBuildDesk(user) && !viewingAsOther(viewAs);
+export function buildDeskChrome(
+  user?: PublicUser | null,
+  viewAs?: string | null,
+  followSeat?: string | null,
+): boolean {
+  return hasBuildDesk(user) && !activeLensSeat(viewAs, followSeat);
 }

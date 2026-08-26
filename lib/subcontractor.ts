@@ -5,6 +5,7 @@ import {
   type CraftRow,
   type CraftShift,
 } from "./craft-labor.ts";
+import { billedPeriodCount } from "./equipment-sheet.ts";
 import { computeRowHours, type ClockOverride } from "./hours-clock.ts";
 import type { JobUnit, PhaseRow } from "./phase-schedule.ts";
 import { notifyEstimateSheets } from "./sheet-events.ts";
@@ -20,12 +21,20 @@ export const SUB_BOOK_KEY = "hs_sub_book_v1";
 export const SUB_UNITS = ["LS", "hour", "day", "each"] as const;
 export type SubUnit = (typeof SUB_UNITS)[number];
 
+/** New one-off and book pickers. Hour stays on the type so old rows still load. */
+export const SUB_ONE_OFF_UNITS: SubUnit[] = ["LS", "day", "each"];
+
 export const SUB_UNIT_LABEL: Record<SubUnit, string> = {
   LS: "LS",
   hour: "Hour",
   day: "Day",
   each: "Each",
 };
+
+export function oneOffUnitsFor(current?: SubUnit): SubUnit[] {
+  if (current === "hour") return ["LS", "hour", "day", "each"];
+  return [...SUB_ONE_OFF_UNITS];
+}
 
 export const SUB_CARD_KINDS = ["labor", "equipment", "both"] as const;
 export type SubCardKind = (typeof SUB_CARD_KINDS)[number];
@@ -76,6 +85,8 @@ export type SubEquipLine = {
   rate: number;
   qty: number;
   freight: number;
+  start?: string;
+  end?: string;
 };
 
 export type SubCard = {
@@ -163,7 +174,7 @@ export function blankSubLaborPosition(
 }
 
 export function blankSubEquipLine(): SubEquipLine {
-  return { id: uid("se"), description: "", period: "daily", rate: 0, qty: 1, freight: 0 };
+  return { id: uid("se"), description: "", period: "daily", rate: 0, qty: 1, freight: 0, start: "", end: "" };
 }
 
 export function blankSubCard(): SubCard {
@@ -253,8 +264,18 @@ export function subLaborCost(
   return laborHoursCost(subLaborHours(row, site, client, otAfter8), row);
 }
 
-export function subEquipAmount(line: Pick<SubEquipLine, "rate" | "qty" | "freight">) {
-  return Math.max(0, Number(line.rate) || 0) * Math.max(0, Number(line.qty) || 0) + Math.max(0, Number(line.freight) || 0);
+export function subEquipSpan(line: Pick<SubEquipLine, "period" | "start" | "end">) {
+  const start = typeof line.start === "string" ? line.start.trim() : "";
+  const end = typeof line.end === "string" ? line.end.trim() : "";
+  if (!start || !end || line.period === "each") return 1;
+  return billedPeriodCount(start, end, line.period);
+}
+
+export function subEquipAmount(line: Pick<SubEquipLine, "rate" | "qty" | "freight" | "period" | "start" | "end">) {
+  const rate = Math.max(0, Number(line.rate) || 0);
+  const qty = Math.max(0, Number(line.qty) || 0);
+  const freight = Math.max(0, Number(line.freight) || 0);
+  return rate * qty * subEquipSpan(line) + freight;
 }
 
 export function cardShowsLabor(kind: SubCardKind) {
@@ -339,6 +360,8 @@ export function normalizeSubEquipLine(raw: Partial<SubEquipLine> | null | undefi
     rate: Math.max(0, Number(raw?.rate) || 0),
     qty: Math.max(0, Number(raw?.qty) || 0),
     freight: Math.max(0, Number(raw?.freight) || 0),
+    start: typeof raw?.start === "string" ? raw.start : "",
+    end: typeof raw?.end === "string" ? raw.end : "",
   };
 }
 

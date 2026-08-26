@@ -32,7 +32,7 @@ export function DeskBanners() {
           </button>
         </div>
       ) : null}
-      {buildDesk && owner && owner.viewAs !== "owner" ? (
+      {buildDesk && owner && owner.followSeat === "owner" && owner.viewAs !== "owner" ? (
         <div className="viewas-banner mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm">Viewing as {seatLabel(owner.viewAs)}</p>
           <button type="button" onClick={() => owner.setViewAs("owner")} className="text-sm underline">

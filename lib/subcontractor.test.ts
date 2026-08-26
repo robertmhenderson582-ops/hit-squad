@@ -13,6 +13,7 @@ import {
   lineQty,
   normalizeSubBook,
   normalizeSubSheet,
+  oneOffUnitsFor,
   readSubBook,
   readSubSheet,
   subCardTotal,
@@ -49,6 +50,18 @@ test("amount is qty times rate", () => {
   assert.equal(lineAmount({ qty: 3, unit: "day", rate: 400 }), 1200);
   assert.equal(lineAmount({ qty: 8, unit: "hour", rate: 125 }), 1000);
   assert.equal(lineAmount({ qty: 0, unit: "each", rate: 50 }), 0);
+});
+
+test("one-off picker drops Hour; old hour rows still load", () => {
+  assert.deepEqual(oneOffUnitsFor("LS"), ["LS", "day", "each"]);
+  assert.deepEqual(oneOffUnitsFor("day"), ["LS", "day", "each"]);
+  assert.deepEqual(oneOffUnitsFor("hour"), ["LS", "hour", "day", "each"]);
+  const old = normalizeSubSheet({
+    lines: [{ id: "a", vendor: "Trucking Company", scope: "Haul", qty: 1, unit: "hour", rate: 1000 }],
+  });
+  assert.equal(old.lines[0].unit, "hour");
+  assert.equal(old.lines[0].qty, 1);
+  assert.equal(lineAmount(old.lines[0]), 1000);
 });
 
 test("lump sum uses qty 1, or the typed amount", () => {
@@ -158,10 +171,46 @@ test("labor hours times typed ST/OT/DT rates", () => {
 });
 
 test("equipment cost is rate times qty plus freight", () => {
-  assert.equal(subEquipAmount({ rate: 400, qty: 3, freight: 0 }), 1200);
-  assert.equal(subEquipAmount({ rate: 400, qty: 3, freight: 50 }), 1250);
-  assert.equal(subEquipAmount({ rate: 0, qty: 5, freight: 80 }), 80);
-  assert.equal(subEquipAmount({ rate: 250, qty: 0, freight: 0 }), 0);
+  assert.equal(subEquipAmount({ rate: 400, qty: 3, freight: 0, period: "daily" }), 1200);
+  assert.equal(subEquipAmount({ rate: 400, qty: 3, freight: 50, period: "daily" }), 1250);
+  assert.equal(subEquipAmount({ rate: 0, qty: 5, freight: 80, period: "daily" }), 80);
+  assert.equal(subEquipAmount({ rate: 250, qty: 0, freight: 0, period: "daily" }), 0);
+});
+
+test("equipment date span multiplies daily/weekly/monthly; each ignores dates", () => {
+  assert.equal(
+    subEquipAmount({ rate: 400, qty: 1, freight: 0, period: "daily", start: "2026-10-05", end: "2026-10-07" }),
+    1200,
+  );
+  assert.equal(
+    subEquipAmount({ rate: 100, qty: 2, freight: 10, period: "each", start: "2026-10-05", end: "2026-10-07" }),
+    210,
+  );
+  const saved = normalizeSubSheet({
+    cards: [
+      {
+        id: "sc-eq",
+        vendor: "Rig Co",
+        kind: "equipment",
+        labor: [],
+        equipment: [
+          {
+            id: "se-1",
+            description: "Scaffold",
+            period: "daily",
+            rate: 400,
+            qty: 1,
+            freight: 50,
+            start: "2026-10-05",
+            end: "2026-10-07",
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(saved.cards[0].equipment[0].start, "2026-10-05");
+  assert.equal(saved.cards[0].equipment[0].end, "2026-10-07");
+  assert.equal(subEquipAmount(saved.cards[0].equipment[0]), 1250);
 });
 
 test("vendor cards roll labor and equipment into Subcontractor, not Crew or Equipment", () => {

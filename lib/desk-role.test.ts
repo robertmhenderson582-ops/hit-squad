@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  buildDeskChrome,
+  canUseFollow,
   canUseRateBuilder,
   canUseViewAs,
   hasBuildDesk,
@@ -38,6 +40,10 @@ test("operator has build desk; testers do not", () => {
   assert.equal(hasBuildDesk({ role: "operator" }), true);
   assert.equal(hasBuildDesk({ role: "tester" }), false);
   assert.equal(hasBuildDesk(null), false);
+  assert.equal(canUseFollow({ role: "owner" }), true);
+  assert.equal(canUseFollow({ role: "operator" }), true);
+  assert.equal(canUseFollow({ role: "tester" }), false);
+  assert.equal(canUseFollow(null), false);
 });
 
 test("Joseph has View as and no Rate builder", () => {
@@ -106,4 +112,36 @@ test("every View-as seat matches that tester, including Settings flags", () => {
   assert.equal(preferredViewAs("owner", "mark"), "owner");
   assert.equal(preferredViewAs(undefined, "cody"), "cody");
   assert.equal(preferredViewAs(undefined, undefined), "owner");
+});
+
+test("Follow applies the desk lens and wins over View as", () => {
+  const owner = {
+    id: "owner-robert-henderson",
+    email: "robertmhenderson582@gmail.com",
+    name: "Robert Henderson",
+    role: "owner" as const,
+  };
+  const operator = {
+    id: NOVUS_ID,
+    email: NOVUS_EMAIL,
+    name: "Novus",
+    role: "operator" as const,
+  };
+  const followed = lensUser(owner, "mark", "cody");
+  assert.equal(followed?.email, "puma.cody@gmail.com");
+  assert.equal(followed?.role, "tester");
+  assert.equal(buildDeskChrome(owner, "mark", "cody"), false);
+  assert.equal(buildDeskChrome(owner, "owner", "owner"), true);
+  assert.equal(lensUser(owner, "mark", "owner")?.email, "marks544@yahoo.com");
+  assert.equal(canUseFollow(followed), false);
+  assert.equal(pageAllowedForSeat(followed, { buildDesk: true }), false);
+
+  const fromOperator = lensUser(operator, "owner", "nathan");
+  assert.equal(fromOperator?.email, "nathanboyte@gmail.com");
+  assert.equal(buildDeskChrome(operator, "owner", "nathan"), false);
+  assert.equal(canUseFollow(operator), true);
+
+  const realMark = { id: "tester-mark", email: "marks544@yahoo.com", name: "Mark Schneider", role: "tester" as const };
+  assert.equal(lensUser(realMark, "cody", "nathan")?.email, realMark.email);
+  assert.equal(canUseFollow(realMark), false);
 });

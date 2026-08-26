@@ -19,7 +19,7 @@ export function TicketsDesk() {
   const { user } = useSession();
   const desk = useOwnerDesk();
   const confirmRemove = useConfirmRemove();
-  const ownerChrome = buildDeskChrome(user, desk?.viewAs);
+  const ownerChrome = buildDeskChrome(user, desk?.viewAs, desk?.followSeat);
   const [tickets, setTickets] = useState<DeskTicket[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<{ src: string; caption: string } | null>(null);

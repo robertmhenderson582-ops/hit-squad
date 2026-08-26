@@ -41,6 +41,7 @@ export function SignedInToast() {
   useEffect(() => {
     if (status !== "authenticated" || !hasBuildDesk(user)) return;
     if (owner?.viewAs && owner.viewAs !== "owner") return;
+    if (owner?.followSeat && owner.followSeat !== "owner") return;
     const tick = window.setInterval(() => {
       fetch("/api/desk/presence", { credentials: "include", cache: "no-store" })
         .then((response) => response.json())
@@ -51,7 +52,7 @@ export function SignedInToast() {
         .catch(() => undefined);
     }, 8000);
     return () => window.clearInterval(tick);
-  }, [owner?.viewAs, status, user]);
+  }, [owner?.followSeat, owner?.viewAs, status, user]);
 
   useEffect(() => {
     if (!arrival) return;
@@ -59,8 +60,9 @@ export function SignedInToast() {
     return () => window.clearTimeout(id);
   }, [arrival]);
 
-  if (user?.role !== "owner") return null;
+  if (!hasBuildDesk(user)) return null;
   if (owner?.viewAs && owner.viewAs !== "owner") return null;
+  if (owner?.followSeat && owner.followSeat !== "owner") return null;
   if (!arrival) return null;
 
   return (
