@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 const ROOMS: { name: string; note: string }[] = [
   { name: "Clients", note: "Plant and agreement names. Ids stay real underneath." },
   { name: "Estimates", note: "Live working packages. Open jobs stay so the same pack can be opened again." },
+  { name: "Quality", note: "Tester Quality Save folders. Versioned. Owner desk lists them." },
+  { name: "HSE", note: "Tester HSE Save folders. Versioned. Owner desk lists them." },
   { name: "Rates", note: "Burdened craft rates. Not a published wage schedule." },
   { name: "Tickets", note: "Filed Ticket button items. Not Inbox." },
   { name: "Workbooks", note: "Gut-check sheets. Live packs stay in Estimates." },

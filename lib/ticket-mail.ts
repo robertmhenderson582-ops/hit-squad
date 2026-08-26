@@ -33,7 +33,7 @@ export function ticketEmailBody(row: DeskTicket) {
   ].join("\n");
 }
 
-export async function emailOwnerTicket(row: DeskTicket): Promise<boolean> {
+export async function emailOwnerNote(subject: string, text: string): Promise<boolean> {
   const url = smtpTarget();
   if (!url) return false;
   try {
@@ -42,11 +42,15 @@ export async function emailOwnerTicket(row: DeskTicket): Promise<boolean> {
     await transporter.sendMail({
       to: ownerInbox(),
       from: process.env.GMAIL_USER || ownerInbox(),
-      subject: `Hit Squad ticket · ${row.kind} · ${row.who}`,
-      text: ticketEmailBody(row),
+      subject,
+      text,
     });
     return true;
   } catch {
     return false;
   }
+}
+
+export async function emailOwnerTicket(row: DeskTicket): Promise<boolean> {
+  return emailOwnerNote(`Hit Squad ticket · ${row.kind} · ${row.who}`, ticketEmailBody(row));
 }

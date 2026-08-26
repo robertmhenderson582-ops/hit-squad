@@ -1,22 +1,23 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.17.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.17";
+export const DESK_VERSION = "1.18.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.18";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.17";
+export const DESK_THREAD_ID = "th-desk-v1.18";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.17",
+  "Hit Squad Project Controls V1.18",
+  "• Quality and HSE Save now keep your forms. The owner can open them.",
   "• Cost now fills from Wood River Shahan. The Rate tab shows that book.",
   "• Save your work, then hard-refresh.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.17",
-  "• Crew Cost and the Rate tab use Debbie Shahan TM OCIP — Wood River. Live catalog stays empty until the 159-row sheet is pasted. Not Nathan, not RRFF.",
-  "• Job setup now has Staff PD $140 / Craft PD $130 and Staff / Craft mileage. Travel Staff and Craft inherit those mileage rates unless already typed.",
-  "• Testers who already saw V1.16 get this note (versioned seen key).",
+  "Hit Squad Project Controls V1.18",
+  "• Quality and HSE Save now version every drop into the Data vault rooms. Owner Quality/HSE desks list who, when, describe, and file names. Testers keep a local working copy and never see that list.",
+  "• Vault writes reuse GOOGLE_SERVICE_ACCOUNT_JSON. Missing key keeps the local brief and shows an owner-only waiting note. Share the service-account email as Editor on Quality and HSE the same way as Estimates.",
+  "• Testers who already saw V1.17 get this note (versioned seen key).",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

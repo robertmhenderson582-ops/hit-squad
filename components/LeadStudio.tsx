@@ -2,24 +2,32 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
-import { fileToLead, leadToBytes, readBrief, writeBrief, type LeadFile } from "@/lib/lead-briefs";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useSession } from "@/components/SessionProvider";
+import { postBriefToVault } from "@/lib/brief-vault-client";
+import { isOwner, viewingAsOther } from "@/lib/desk-role";
+import { fileToLead, leadToBytes, mergeLeadFiles, readBrief, writeBrief, type LeadFile } from "@/lib/lead-briefs";
 import { buildZip } from "@/lib/zip";
 
 const JOBS = [
   { id: "describe", label: "Describe the desk", copy: "How this lead works. What the empty board should hold." },
   { id: "forms", label: "Drop forms", copy: "PDF, Excel, Word, or pictures people already use." },
-  { id: "save", label: "Save", copy: "Owner sees the brief and files on this desk." },
+  { id: "save", label: "Save", copy: "Save keeps the brief on this desk. The owner can open them." },
 ] as const;
 
 type Job = (typeof JOBS)[number]["id"];
 type Screen = "welcome" | Job;
 
 export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "quality" }) {
+  const { user } = useSession();
+  const desk = useOwnerDesk();
+  const ownerDesk = isOwner(user) && !viewingAsOther(desk?.viewAs);
   const [screen, setScreen] = useState<Screen>("welcome");
   const [describe, setDescribe] = useState("");
   const [files, setFiles] = useState<LeadFile[]>([]);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const brief = readBrief(kind);
@@ -35,21 +43,38 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
       savedAt: next.savedAt === undefined ? savedAt : next.savedAt,
     };
     writeBrief(kind, brief);
+    return brief;
   }
 
-  function onSave(event: FormEvent) {
+  async function onSave(event: FormEvent) {
     event.preventDefault();
     const stamp = new Date().toLocaleString("en-GB", { hour12: false });
+    const brief = persist({ savedAt: stamp });
     setSavedAt(stamp);
-    persist({ savedAt: stamp });
-    setNote("Saved on this desk. Owner can open the brief and files. Empty board stays empty.");
+    setSaving(true);
+    try {
+      const result = await postBriefToVault(kind, brief);
+      if (ownerDesk && result.store === "unconfigured") {
+        setNote("Saved on this desk. Vault copy is waiting on the Drive key.");
+      } else if (ownerDesk && result.stored) {
+        setNote("Saved on this desk. Landed for the owner list.");
+      } else {
+        setNote("Saved. The owner can open them.");
+      }
+      window.dispatchEvent(new Event("hs-briefs-changed"));
+    } catch {
+      setNote(ownerDesk ? "Saved on this desk. Vault copy did not land. Local brief is unchanged." : "Saved. The owner can open them.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function onFiles(list: FileList | null) {
-    const next = await Promise.all(Array.from(list ?? []).map(fileToLead));
+    const incoming = await Promise.all(Array.from(list ?? []).map(fileToLead));
+    const next = mergeLeadFiles(files, incoming);
     setFiles(next);
     persist({ files: next });
-    if (next.length) noteFeatureTrail("import");
+    if (incoming.length) noteFeatureTrail("import");
   }
 
   function submitBrief() {
@@ -75,7 +100,7 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
         <h2 className="mt-2 font-display text-3xl tracking-wide">{title}</h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5b6f73]">
           You are the lead. This desk is empty on purpose — no invented board, no fake counts. Open
-          it. Tell us how you work. Drop the forms you already carry. Save so the owner can see the
+          it. Tell us how you work. Drop the forms you already carry. Save so the owner can open the
           brief.
         </p>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -137,7 +162,7 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
         {screen === "forms" ? (
           <label className="block">
             <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">DROP FORMS</span>
-            <p className="mt-1 text-sm text-[#5b6f73]">PDF, Excel, Word, or pictures.</p>
+            <p className="mt-1 text-sm text-[#5b6f73]">PDF, Excel, Word, or pictures. Added files stay on this desk.</p>
             <input
               type="file"
               multiple
@@ -151,7 +176,8 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
         {screen === "save" ? (
           <div className="space-y-3">
             <p className="text-sm text-[#5b6f73]">
-              Save keeps the brief on this desk. Submit brief packs write-up + attachments into a zip
+              Save keeps the brief on this desk so a refresh does not wipe it. The owner can open
+              the write-up and files. Submit brief packs write-up + attachments into a zip
               (brief.md + forms). Mail is not sent.
             </p>
             <p className="text-sm">
@@ -162,8 +188,8 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
               {savedAt ? ` · Saved ${savedAt}` : ""}
             </p>
             <div className="flex flex-wrap gap-2">
-              <button type="submit" className="rounded-lg bg-steel px-4 py-2 text-white">
-                Save
+              <button type="submit" disabled={saving} className="rounded-lg bg-steel px-4 py-2 text-white">
+                {saving ? "Saving…" : "Save"}
               </button>
               <button type="button" onClick={submitBrief} className="rounded-lg border border-steel px-4 py-2 text-steel">
                 Submit brief

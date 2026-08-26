@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { EmptyLane } from "@/components/EmptyLane";
+import { LandedBriefs } from "@/components/LandedBriefs";
 import { LeadStudio } from "@/components/LeadStudio";
+import { useSession } from "@/components/SessionProvider";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { isOwner, viewingAsOther } from "@/lib/desk-role";
 
 const CLIENTS = ["Phillips 66", "Georgia Power", "Other"] as const;
 
@@ -21,12 +24,15 @@ const LANES = [
 export function HseDesk() {
   const alias = useAlias();
   const owner = useOwnerDesk();
+  const { user } = useSession();
   const [client, setClient] = useState<(typeof CLIENTS)[number]>("Phillips 66");
   const assigned = owner?.viewAs === "wendell" || owner?.viewAs === "benny";
+  const ownerList = isOwner(user) && !viewingAsOther(owner?.viewAs);
 
   return (
     <div className="mt-4 space-y-5">
       <LeadStudio title="HSE lead studio" kind="hse" />
+      {ownerList ? <LandedBriefs kind="hse" /> : null}
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
         Empty HSE desk. Client folders only — no invented TRIR or recordable counts. Open the lead
         studio when you are ready.

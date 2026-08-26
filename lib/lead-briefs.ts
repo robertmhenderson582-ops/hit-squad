@@ -1,8 +1,19 @@
+export type LeadKind = "quality" | "hse";
 export type LeadFile = { name: string; type: string; data: string };
 export type LeadBrief = { describe: string; files: LeadFile[]; savedAt: string | null };
 
+export function isLeadKind(value: unknown): value is LeadKind {
+  return value === "quality" || value === "hse";
+}
+
 export function briefKey(kind: string) {
   return `hs_lead_${kind}`;
+}
+
+export function mergeLeadFiles(current: LeadFile[], incoming: LeadFile[]) {
+  const byName = new Map(current.map((file) => [file.name, file]));
+  for (const file of incoming) byName.set(file.name, file);
+  return [...byName.values()];
 }
 
 export function readBrief(kind: string): LeadBrief {
