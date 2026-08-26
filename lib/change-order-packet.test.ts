@@ -24,6 +24,7 @@ function range(partial: {
   start: string;
   end: string;
   hoursPerShift: number;
+  nightHoursPerShift?: number;
   days?: boolean[];
   headcount?: number;
   nightHeadcount?: number;
@@ -34,6 +35,7 @@ function range(partial: {
     start: partial.start,
     end: partial.end,
     hoursPerShift: partial.hoursPerShift,
+    nightHoursPerShift: partial.nightHoursPerShift,
     headcount: partial.headcount ?? 1,
     nightHeadcount: partial.nightHeadcount ?? 0,
     perDiemPeople: partial.perDiemPeople ?? 1,
@@ -231,6 +233,36 @@ test("Days & nights splits into Day and Night blocks from this job", () => {
   assert.equal(rows[1]?.block, "Craft Night");
   assert.equal(rows[0]?.week.mo.st, 10);
   assert.equal(rows[1]?.week.mo.st, 10);
+});
+
+test("Days & nights FCR night block uses night hours, not the day Hours / shift", () => {
+  const rows = peopleFromJob(
+    [
+      {
+        id: "dual-hours",
+        position: "Boilermaker Journeyman",
+        shift: "Days & nights",
+        ranges: [
+          range({
+            start: "2026-09-07",
+            end: "2026-09-07",
+            hoursPerShift: 9,
+            nightHoursPerShift: 8,
+            days: [false, true, false, false, false, false, false],
+            headcount: 1,
+            nightHeadcount: 1,
+            perDiemPeople: 1,
+            nightPerDiemPeople: 1,
+          }),
+        ],
+      },
+    ],
+    WOOD,
+    P66,
+  );
+  assert.equal(rows[0]?.week.mo.st, 9);
+  assert.equal(rows[1]?.week.mo.st, 8);
+  assert.notEqual(rows[1]?.week.mo.st, rows[0]?.week.mo.st);
 });
 
 test("summary uses this job hours and PD, not a shipped rate tab", () => {
