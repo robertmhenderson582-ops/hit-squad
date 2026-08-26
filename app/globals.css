@@ -144,6 +144,7 @@ html.hs-capturing:has(.estimate-modal) .ticket-scrim {
 }
 
 .trial-banner {
+  padding-left: 16.5rem;
   letter-spacing: 0.22em;
   background: linear-gradient(90deg, #b86a12, #e38b2a 40%, #f0a13a 60%, #b86a12);
   color: #1a0d03;
@@ -465,8 +466,9 @@ textarea:focus {
   color: #efe6d4;
 }
 
-.industrial-root .text-\[\#5b6f73\] {
-  color: #b7c9cb;
+.industrial-root .text-\[\#5b6f73\],
+.industrial-root thead {
+  color: #d5e4e2;
 }
 
 .industrial-root .text-steel {
@@ -1164,13 +1166,13 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 
 .desk-fabs {
   position: fixed;
-  right: 1.15rem;
-  bottom: 1.15rem;
-  z-index: 40;
+  top: 0.2rem;
+  left: 0.45rem;
+  z-index: 50;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.7rem;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem;
   pointer-events: none;
 }
 
@@ -1191,9 +1193,10 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   position: relative;
   z-index: 2;
   border-radius: 999px;
-  padding: 0.7rem 1.1rem;
+  padding: 0.28rem 0.75rem;
+  font-size: 0.78rem;
   color: #fff;
-  box-shadow: 0 10px 24px rgba(15, 95, 109, 0.28);
+  box-shadow: 0 6px 14px rgba(6, 22, 26, 0.28);
 }
 
 .inbox-fab {
@@ -1232,6 +1235,14 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   background: #b74120;
 }
 
+.inbox-toast,
+.fab-note {
+  position: fixed;
+  top: 2.65rem;
+  left: 0.45rem;
+  z-index: 53;
+}
+
 .inbox-toast {
   max-width: 16rem;
   border-radius: 12px;
@@ -1266,10 +1277,12 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 }
 
 .inbox-card {
-  position: relative;
-  z-index: 5;
+  position: fixed;
+  top: 2.65rem;
+  left: 0.45rem;
+  z-index: 51;
   width: min(36rem, calc(100vw - 1.5rem));
-  max-height: min(40rem, calc(100vh - 7rem));
+  max-height: min(40rem, calc(100vh - 4rem));
   overflow: auto;
   border-radius: 24px;
   background: #fff;
@@ -1300,10 +1313,12 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 }
 
 .ticket-card {
-  position: relative;
-  z-index: 3;
+  position: fixed;
+  top: 2.65rem;
+  left: 0.45rem;
+  z-index: 52;
   width: min(34rem, calc(100vw - 1.5rem));
-  max-height: min(38rem, calc(100vh - 7rem));
+  max-height: min(38rem, calc(100vh - 4rem));
   overflow: auto;
   border-radius: 16px;
   background: #fff;
@@ -1733,7 +1748,7 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 }
 
 .industrial-root .phase-total-days {
-  color: #efe6d4;
+  color: #f0a13a;
   font-weight: 700;
 }
 

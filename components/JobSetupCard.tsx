@@ -65,8 +65,8 @@ export function JobSetupCard({
           ))}
         </select>
         <p className="mt-1 text-xs text-[#5b6f73]">
-          Contract type for this sheet — T&amp;M, lump sum, CR/FF, or Hybrid. {jobEventLabel(client, site)} is the
-          job kind, not this field.
+          How this sheet is priced: T&amp;M, lump sum, CR/FF, or Hybrid. {jobEventLabel(client, site)} is the job
+          itself. This list is never Outage.
         </p>
       </label>
       <label className="mt-4 block">
@@ -103,7 +103,9 @@ export function JobSetupCard({
           value={pack.jobMeta.area}
           onChange={(event) => pack.setJobMeta((current) => ({ ...current, area: event.target.value }))}
         />
-        <p className="mt-1 text-xs text-[#5b6f73]">Process unit on the job — CAT, Coker, FCC — not the refinery name.</p>
+        <p className="mt-1 text-xs text-[#5b6f73]">
+          Which unit you are bidding — CAT, Coker, FCC. Leave the refinery name on the Client line.
+        </p>
       </label>
       <label className="mt-4 block">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">OVERTIME / RATE</span>

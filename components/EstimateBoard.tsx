@@ -45,7 +45,7 @@ export function EstimateBoard() {
       </div>
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
         Working estimates on this owner desk. {alias("Madison")} / {alias("P66")} figures stay with the signed-in
-        blotter. The Created by chip is a label only — it still shows the signed-in owner.
+        blotter. The Yours chip just marks the signed-in owner — it is not a separate author list.
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         <article className="steel-plate paper-grain px-4 py-4">

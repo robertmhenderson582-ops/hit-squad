@@ -178,7 +178,7 @@ export function EstimateWorkspace({
                 type="button"
                 onClick={() => setConfirmClose(true)}
                 className="rounded border border-white/20 px-3 py-1.5 text-white/90"
-                title="Close out this estimate. It leaves Home; nothing is deleted."
+                title="Close out — park this estimate on the Closed out list. Nothing is deleted."
               >
                 Close out
               </button>
@@ -187,7 +187,7 @@ export function EstimateWorkspace({
               type="button"
               onClick={() => router.push("/estimates")}
               className="rounded border border-white/20 px-3 py-1.5 text-white/90"
-              title="Back to Estimates"
+              title="Close this sheet and go back to Estimates. Does not close out the job."
             >
               Close
             </button>
