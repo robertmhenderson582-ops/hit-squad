@@ -6,6 +6,7 @@ export type PublicUser = {
   name: string;
   role: DeskRole;
   mustChangePassword?: boolean;
+  rateBuilder?: boolean;
 };
 
 export type JobRecord = {

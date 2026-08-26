@@ -30,7 +30,8 @@ Local owner password is the value in `.env.example` / `.env.local` (`OWNER_PASSW
 | `AUTH_SECRET` | Signs the session cookie. Use a long random string. |
 | `AUTH_COOKIE_SECURE` | `false` on local HTTP. `true` on HTTPS deploys. |
 | `TICKET_STORE_PATH` | Optional. Server JSON file for tickets. Not committed. Local default `data/tickets.json`. On Vercel `/tmp/hit-squad-tickets.json`. |
-| `TICKET_SMTP_URL` / `GMAIL_APP_PASSWORD` | Optional. Emails each ticket to `OWNER_EMAIL` (Novus/Gmail copy). Drive API is not in this repo. |
+| `SEAT_PASSWORD_PATH` | Optional. Extra tester seats plus password hashes. Not committed. Local default `data/seat-passwords.json`. On Vercel `/tmp/hit-squad-seats.json`. |
+| `TICKET_SMTP_URL` / `GMAIL_APP_PASSWORD` | Optional. Emails each ticket to `OWNER_EMAIL`, and each new tester invite to that tester (Novus/Gmail copy). Drive API is not in this repo. |
 
 The session cookie is named `hs_session`. It is `HttpOnly`, `Path=/`, `SameSite=Lax`, and `Secure` when `AUTH_COOKIE_SECURE=true` (or when `NODE_ENV=production` unless you force it off).
 

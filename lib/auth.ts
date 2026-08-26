@@ -10,6 +10,7 @@ type SessionClaims = {
   name: string;
   role: DeskRole;
   mustChangePassword?: boolean;
+  rateBuilder?: boolean;
 };
 
 function secretKey() {
@@ -42,6 +43,7 @@ export async function signSession(user: PublicUser): Promise<string> {
     name: user.name,
     role: user.role,
     mustChangePassword: Boolean(user.mustChangePassword),
+    rateBuilder: user.rateBuilder,
   } satisfies Omit<SessionClaims, "sub">)
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
@@ -65,6 +67,7 @@ export async function readSession(token: string | undefined): Promise<PublicUser
       name: payload.name,
       role,
       mustChangePassword: Boolean(payload.mustChangePassword),
+      rateBuilder: payload.rateBuilder === false ? false : payload.rateBuilder === true ? true : undefined,
     };
   } catch {
     return null;
