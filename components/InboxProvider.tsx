@@ -4,16 +4,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { playInboxChime, unlockInboxAudio } from "@/lib/chime";
 import {
   contactsFor,
-  makeMessage,
   makeThread,
   previewOf,
-  readThreads,
   unreadCount,
-  writeThreads,
   type InboxPerson,
   type InboxThread,
 } from "@/lib/inbox";
-import { applyWhatsNew } from "@/lib/whats-new";
+import { applyWhatsNew, DESK_PERSON_ID } from "@/lib/whats-new";
 import { useDisplay } from "@/components/DisplayProvider";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
@@ -49,6 +46,13 @@ type InboxState = {
 
 const InboxContext = createContext<InboxState | null>(null);
 
+function attachDesk(server: InboxThread[], current: InboxThread[], seat: string, ownerChrome: boolean) {
+  const next = applyWhatsNew(server, seat, ownerChrome);
+  if (next.some((thread) => thread.personId === DESK_PERSON_ID)) return next;
+  const desk = current.find((thread) => thread.personId === DESK_PERSON_ID);
+  return desk ? [desk, ...server] : server;
+}
+
 export function InboxProvider({ children }: { children: React.ReactNode }) {
   const { user, status } = useSession();
   const desk = useOwnerDesk();
@@ -66,9 +70,37 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   const [composing, setComposing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [threads, setThreads] = useState<InboxThread[]>([]);
+  const [contacts, setContacts] = useState<InboxPerson[]>(() => contactsFor(ownerChrome));
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
+
+  const applyServer = useCallback(
+    (server: InboxThread[]) => {
+      setThreads((current) => {
+        const next = attachDesk(server, current, seat, ownerChrome);
+        setActiveId((active) => {
+          if (!active) return active;
+          if (next.some((thread) => thread.id === active)) return active;
+          const old = current.find((thread) => thread.id === active);
+          return old ? next.find((thread) => thread.personId === old.personId)?.id ?? null : null;
+        });
+        return next;
+      });
+    },
+    [ownerChrome, seat],
+  );
+
+  const refresh = useCallback(async () => {
+    if (status !== "authenticated" || !user) return [];
+    const response = await fetch("/api/desk/inbox", { credentials: "include", cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    const server = Array.isArray(data.threads) ? (data.threads as InboxThread[]) : [];
+    if (Array.isArray(data.contacts)) setContacts(data.contacts as InboxPerson[]);
+    applyServer(server);
+    setReady(true);
+    return server;
+  }, [applyServer, status, user]);
 
   useEffect(() => {
     if (status !== "authenticated" || !user) {
@@ -76,20 +108,32 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       setReady(false);
       return;
     }
-    setThreads(applyWhatsNew(readThreads(seat, ownerChrome), seat, ownerChrome));
     setActiveId(null);
     setSelectedIds([]);
     setComposing(false);
-    setReady(true);
-  }, [ownerChrome, seat, status, user]);
+    void refresh();
+    const id = window.setInterval(() => void refresh(), 4000);
+    return () => window.clearInterval(id);
+  }, [refresh, status, user]);
 
-  useEffect(() => {
-    if (!ready || status !== "authenticated" || !user) return;
-    writeThreads(seat, threads);
-  }, [ready, seat, status, threads, user]);
+  const post = useCallback(
+    async (body: Record<string, unknown>) => {
+      const response = await fetch("/api/desk/inbox", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json().catch(() => ({}));
+      const server = Array.isArray(data.threads) ? (data.threads as InboxThread[]) : [];
+      if (Array.isArray(data.contacts)) setContacts(data.contacts as InboxPerson[]);
+      applyServer(server);
+      return server;
+    },
+    [applyServer],
+  );
 
   const unread = unreadCount(threads);
-  const contacts = useMemo(() => contactsFor(ownerChrome), [ownerChrome]);
 
   const announce = useCallback(
     (preview: string) => {
@@ -108,14 +152,11 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
     announce("New inbox message");
   }, [announce, ready, seat, unread]);
 
-  const persist = useCallback((next: InboxThread[] | ((current: InboxThread[]) => InboxThread[])) => {
-    setThreads((current) => (typeof next === "function" ? next(current) : next));
-  }, []);
-
   const openInbox = useCallback(() => {
     unlockInboxAudio();
     setOpen(true);
-  }, []);
+    void refresh();
+  }, [refresh]);
 
   const closeInbox = useCallback(() => {
     setOpen(false);
@@ -125,8 +166,8 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   const startDraft = useCallback(() => {
     unlockInboxAudio();
     if (!ownerChrome) {
-      const owner = contacts[0];
-      persist((current) => {
+      const owner = contacts[0] || contactsFor(false)[0];
+      setThreads((current) => {
         const existing = current.find((thread) => thread.personId === owner.id);
         if (existing) {
           setActiveId(existing.id);
@@ -143,67 +184,40 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
     setComposing(true);
     setActiveId(null);
     setOpen(true);
-  }, [contacts, ownerChrome, persist]);
+  }, [contacts, ownerChrome]);
 
-  const startThread = useCallback(
-    (person: InboxPerson) => {
-      persist((current) => {
-        const existing = current.find((thread) => thread.personId === person.id);
-        if (existing) {
-          setActiveId(existing.id);
-          return current;
-        }
-        const created = makeThread(person);
-        setActiveId(created.id);
-        return [created, ...current];
-      });
-      setComposing(false);
-    },
-    [persist],
-  );
-
-  const openThread = useCallback((id: string) => {
-    setActiveId(id);
+  const startThread = useCallback((person: InboxPerson) => {
+    setThreads((current) => {
+      const existing = current.find((thread) => thread.personId === person.id);
+      if (existing) {
+        setActiveId(existing.id);
+        return current;
+      }
+      const created = makeThread(person);
+      setActiveId(created.id);
+      return [created, ...current];
+    });
     setComposing(false);
-    persist((current) =>
-      current.map((thread) => {
-        if (thread.id !== id) return thread;
-        return {
-          ...thread,
-          unread: 0,
-          messages: thread.messages.map((message) =>
-            message.from === "self" && !message.readAt ? { ...message, readAt: new Date().toLocaleString("en-GB", { hour12: false }) } : message,
-          ),
-        };
-      }),
-    );
-  }, [persist]);
+  }, []);
+
+  const openThread = useCallback(
+    (id: string) => {
+      setActiveId(id);
+      setComposing(false);
+      void post({ action: "read", threadId: id });
+    },
+    [post],
+  );
 
   const sendMessage = useCallback(
     (text: string, photo?: string | null) => {
-      if (!activeId) return;
+      const active = threads.find((thread) => thread.id === activeId);
+      if (!active) return;
       const trimmed = text.trim();
       if (!trimmed && !photo) return;
-      persist((current) =>
-        current.map((thread) =>
-          thread.id === activeId
-            ? {
-                ...thread,
-                messages: [
-                  ...thread.messages,
-                  makeMessage({
-                    from: "self",
-                    author: user?.name || "You",
-                    text: trimmed,
-                    photo,
-                  }),
-                ],
-              }
-            : thread,
-        ),
-      );
+      void post({ action: "send", to: active.personId, text: trimmed, photo });
     },
-    [activeId, persist, user?.name],
+    [activeId, post, threads],
   );
 
   const value = useMemo<InboxState>(
@@ -226,29 +240,23 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       openThread,
       closeThread: () => setActiveId(null),
       sendMessage,
-      deleteMessage: (threadId, messageId) =>
-        persist((current) =>
-          current.map((thread) =>
-            thread.id === threadId
-              ? { ...thread, messages: thread.messages.filter((message) => message.id !== messageId) }
-              : thread,
-          ),
-        ),
-      clearConversation: (threadId) =>
-        persist((current) =>
-          current.map((thread) => (thread.id === threadId ? { ...thread, messages: [], unread: 0 } : thread)),
-        ),
+      deleteMessage: (threadId, messageId) => {
+        void post({ action: "deleteMessage", threadId, messageId });
+      },
+      clearConversation: (threadId) => {
+        void post({ action: "clear", threadId });
+      },
       toggleSelect: (id) =>
         setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id])),
       selectAll: () => setSelectedIds(threads.map((thread) => thread.id)),
       clearSelect: () => setSelectedIds([]),
       deleteSelected: () => {
-        persist((current) => current.filter((thread) => !selectedIds.includes(thread.id)));
+        for (const id of selectedIds) void post({ action: "clear", threadId: id });
         setSelectedIds([]);
         setActiveId((current) => (current && selectedIds.includes(current) ? null : current));
       },
       emptyInbox: () => {
-        persist([]);
+        void post({ action: "empty" });
         setSelectedIds([]);
         setActiveId(null);
       },
@@ -262,7 +270,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       openInbox,
       openThread,
       ownerChrome,
-      persist,
+      post,
       selectedIds,
       sendMessage,
       startDraft,

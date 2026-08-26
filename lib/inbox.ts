@@ -44,65 +44,21 @@ export function stamp(at = new Date()) {
   return at.toLocaleString("en-GB", { hour12: false });
 }
 
-function demoMessage(author: string, text: string): InboxMessage {
-  return {
-    id: uid("im"),
-    from: "them",
-    author,
-    text,
-    photo: null,
-    sentAt: stamp(),
-    readAt: null,
-  };
-}
-
+/** Example-only chrome. Not unread mail. Real threads come from the server store. */
 export function ownerDemoThreads(): InboxThread[] {
-  return [
-    {
-      id: "th-james",
-      personId: "james",
-      name: "James Cain",
-      company: "Hit Squad",
-      unread: 1,
-      messages: [demoMessage("James Cain", "What do you think?")],
-    },
-    {
-      id: "th-mark",
-      personId: "mark",
-      name: "Mark H Schneider",
-      company: "Hit Squad",
-      unread: 1,
-      messages: [demoMessage("Mark H Schneider", "Made some updates")],
-    },
-    {
-      id: "th-joseph",
-      personId: "joseph",
-      name: "Joseph Henderson",
-      company: "Hit Squad",
-      unread: 1,
-      messages: [demoMessage("Joseph Henderson", "UI is inconsistent when changing tabs.")],
-    },
-  ];
+  return [];
 }
 
 export function storeKey(seat: string) {
   return `${INBOX_STORE_PREFIX}${seat}`;
 }
 
-export function readThreads(seat: string, ownerChrome: boolean): InboxThread[] {
-  if (typeof window === "undefined") return ownerChrome ? ownerDemoThreads() : [];
-  try {
-    const raw = window.localStorage.getItem(storeKey(seat));
-    if (!raw) return ownerChrome ? ownerDemoThreads() : [];
-    const parsed = JSON.parse(raw) as { threads?: InboxThread[] };
-    return Array.isArray(parsed.threads) ? parsed.threads : ownerChrome ? ownerDemoThreads() : [];
-  } catch {
-    return ownerChrome ? ownerDemoThreads() : [];
-  }
+export function readThreads(_seat: string, _ownerChrome: boolean): InboxThread[] {
+  return [];
 }
 
-export function writeThreads(seat: string, threads: InboxThread[]) {
-  window.localStorage.setItem(storeKey(seat), JSON.stringify({ threads }));
+export function writeThreads(_seat: string, _threads: InboxThread[]) {
+  // Real send is the server JSON store. Do not write Inbox to localStorage.
 }
 
 export function unreadCount(threads: InboxThread[]) {
