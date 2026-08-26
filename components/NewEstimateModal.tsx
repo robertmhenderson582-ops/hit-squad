@@ -36,20 +36,15 @@ export function NewEstimateModal({
   const router = useRouter();
   const alias = useAlias();
   const knownPlant = Boolean(preset.knownPlant && preset.client);
-  const [size, setSize] = useState<EstimateSize>(preset.size || "outage");
-  const [client, setClient] = useState(
-    preset.client || (preset.size === "shop" ? "Shop" : preset.size === "other" ? "Georgia Power" : "Phillips 66"),
-  );
-  const [site, setSite] = useState(
-    preset.site || (preset.size === "other" ? "Yates — Newnan, GA" : "Wood River — Roxana, IL"),
-  );
-  const [name, setName] = useState(
-    defaultEstimateName(
-      preset.client || (preset.size === "shop" ? "Shop" : "Phillips 66"),
-      preset.site || "Wood River — Roxana, IL",
-      preset.size || "outage",
-    ),
-  );
+  const startSize: EstimateSize = preset.size || "outage";
+  const startClient =
+    preset.client || (startSize === "shop" ? "Shop" : startSize === "other" ? "Georgia Power" : "Phillips 66");
+  const startSite =
+    preset.site || (startSize === "other" ? "Yates — Newnan, GA" : "Wood River — Roxana, IL");
+  const [size, setSize] = useState<EstimateSize>(startSize);
+  const [client, setClient] = useState(startClient);
+  const [site, setSite] = useState(startSite);
+  const [name, setName] = useState(defaultEstimateName(startClient, startSite, startSize));
   const rule = boundOtLabel(site, client);
   const eastCoast = siteClockFromText(site, client) === "east-coast";
 
