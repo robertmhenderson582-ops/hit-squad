@@ -37,8 +37,12 @@ export function NewEstimateModal({
   const alias = useAlias();
   const knownPlant = Boolean(preset.knownPlant && preset.client);
   const [size, setSize] = useState<EstimateSize>(preset.size || "outage");
-  const [client, setClient] = useState(preset.client || (preset.size === "shop" ? "Shop" : "Phillips 66"));
-  const [site, setSite] = useState(preset.site || "Wood River — Roxana, IL");
+  const [client, setClient] = useState(
+    preset.client || (preset.size === "shop" ? "Shop" : preset.size === "other" ? "Georgia Power" : "Phillips 66"),
+  );
+  const [site, setSite] = useState(
+    preset.site || (preset.size === "other" ? "Yates — Newnan, GA" : "Wood River — Roxana, IL"),
+  );
   const [name, setName] = useState(
     defaultEstimateName(
       preset.client || (preset.size === "shop" ? "Shop" : "Phillips 66"),
@@ -135,7 +139,12 @@ export function NewEstimateModal({
                   keepGeneratedName("Shop", "Shop", "shop");
                 } else if (item.id === "other" && !knownPlant) {
                   setClient("Georgia Power");
-                  keepGeneratedName("Georgia Power", site, "other");
+                  setSite("Yates — Newnan, GA");
+                  keepGeneratedName("Georgia Power", "Yates — Newnan, GA", "other");
+                } else if (item.id === "outage" && !knownPlant) {
+                  setClient("Phillips 66");
+                  setSite("Wood River — Roxana, IL");
+                  keepGeneratedName("Phillips 66", "Wood River — Roxana, IL", "outage");
                 } else {
                   keepGeneratedName(client, site, item.id);
                 }

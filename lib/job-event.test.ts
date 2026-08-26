@@ -30,6 +30,8 @@ describe("P66 job-event chip", () => {
     assert.equal(startJobEventLabel("Shop", "Shop", "shop"), "Turnaround");
     assert.equal(startJobEventLabel("Phillips 66", "Wood River — Roxana, IL", "shop"), "Turnaround");
     assert.equal(startJobEventLabel("Georgia Power", "Yates — Newnan, GA", "other"), "Outage");
+    assert.equal(jobEventLabel("Georgia Power", "Wood River — Roxana, IL"), "Outage");
+    assert.equal(startJobEventLabel("Georgia Power", "Wood River — Roxana, IL", "other"), "Outage");
     assert.notEqual(startJobEventLabel("Shop", "Shop", "shop"), "Outage");
   });
 

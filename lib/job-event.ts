@@ -7,18 +7,21 @@ const POWERHOUSE_HINT = /georgia\s*power|yates|piedmont|powerhouse/i;
 
 const SHOP_HINT = /^\s*shop(\s*\/\s*rig)?\s*$/i;
 
-export function isPhillips66Plant(client = "", site = ""): boolean {
-  return P66_HINT.test(`${client} ${site}`);
-}
-
 export function isShopJob(client = "", site = ""): boolean {
   return SHOP_HINT.test(client.trim()) || SHOP_HINT.test(site.trim());
 }
 
-/** Powerhouse only. P66 and Shop / rig never count as Outage. */
+/** Powerhouse only. P66 and Shop / rig never count as Outage. Client wins over a leftover site. */
 export function isPowerhouse(client = "", site = ""): boolean {
-  if (isPhillips66Plant(client, site) || isShopJob(client, site)) return false;
-  return POWERHOUSE_HINT.test(`${client} ${site}`);
+  if (isShopJob(client, site)) return false;
+  if (POWERHOUSE_HINT.test(client)) return true;
+  if (P66_HINT.test(client)) return false;
+  return POWERHOUSE_HINT.test(site) && !P66_HINT.test(site);
+}
+
+export function isPhillips66Plant(client = "", site = ""): boolean {
+  if (isShopJob(client, site) || POWERHOUSE_HINT.test(client)) return false;
+  return P66_HINT.test(`${client} ${site}`);
 }
 
 /** Job-event chip only. Estimate type stays T&M / contract types. */
