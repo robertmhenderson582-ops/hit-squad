@@ -1,9 +1,10 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import bcrypt from "bcryptjs";
-import { NOVUS_EMAIL, NOVUS_ID } from "@/lib/desk-role";
-import { TESTER_SEATS } from "@/lib/tester-seats";
-import type { PublicUser } from "@/lib/types";
+import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
+import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
+import { TESTER_SEATS } from "./tester-seats.ts";
+import type { PublicUser } from "./types.ts";
 
 type StoredUser = PublicUser & {
   passwordHash?: string;
@@ -58,7 +59,7 @@ function seedUsers(): StoredUser[] {
   const persisted = loadPersisted();
   const owner: StoredUser = {
     id: "owner-robert-henderson",
-    email: (process.env.OWNER_EMAIL || "robertmhenderson582@gmail.com").toLowerCase(),
+    email: (process.env.OWNER_EMAIL || OWNER_LOGIN_EMAIL).toLowerCase(),
     name: process.env.OWNER_NAME || "Robert Henderson",
     role: "owner",
     passwordHash: bcrypt.hashSync(ownerPassword, 12),
@@ -109,9 +110,76 @@ export function findUserById(id: string): StoredUser | undefined {
   return ownerUsers().find((user) => user.id === id);
 }
 
+export const GENERIC_SIGNIN_ERROR = "Sign-in failed. Check the email and password.";
+
 export function verifyPassword(user: StoredUser, password: string): boolean {
   if (!user.passwordHash) return false;
   return bcrypt.compareSync(password, user.passwordHash);
+}
+
+export function seatNeedsPasswordCreate(email: string): boolean {
+  const user = findUserByEmail(email);
+  if (!user || user.role === "owner") return false;
+  return !user.passwordHash;
+}
+
+export function claimFirstPassword(
+  email: string,
+  password: string,
+  confirm: string,
+): { ok: true } | { error: string; status: number } {
+  const user = findUserByEmail(email);
+  if (!user || user.role === "owner" || user.passwordHash) {
+    return { error: GENERIC_SIGNIN_ERROR, status: 401 };
+  }
+  if (password.length < 8) return { error: "Password must be 8+.", status: 400 };
+  if (password !== confirm) return { error: "New password and confirm did not match.", status: 400 };
+  user.passwordHash = bcrypt.hashSync(password, 12);
+  user.mustChangePassword = false;
+  persistHashes(ownerUsers());
+  return { ok: true };
+}
+
+export type LoginOutcome =
+  | { status: "needsCreate" }
+  | { status: "needsPassword" }
+  | { status: "authenticated"; user: PublicUser }
+  | { status: "error"; error: string; http: number };
+
+export function loginOutcome(input: {
+  email?: string;
+  password?: string;
+  newPassword?: string;
+  confirmPassword?: string;
+}): LoginOutcome {
+  const email = typeof input.email === "string" ? input.email.trim() : "";
+  const password = typeof input.password === "string" ? input.password : "";
+  const newPassword = typeof input.newPassword === "string" ? input.newPassword : "";
+  const confirmPassword = typeof input.confirmPassword === "string" ? input.confirmPassword : "";
+
+  if (!email) return { status: "error", error: GENERIC_SIGNIN_ERROR, http: 401 };
+
+  if (newPassword || confirmPassword) {
+    const claimed = claimFirstPassword(email, newPassword, confirmPassword);
+    if ("error" in claimed) return { status: "error", error: claimed.error, http: claimed.status };
+    const user = findUserByEmail(email);
+    if (!user || user.role === "owner") {
+      return { status: "error", error: GENERIC_SIGNIN_ERROR, http: 401 };
+    }
+    return { status: "authenticated", user: toPublicUser(user) };
+  }
+
+  if (!password) {
+    return seatNeedsPasswordCreate(email)
+      ? { status: "needsCreate" }
+      : { status: "needsPassword" };
+  }
+
+  const user = findUserByEmail(email);
+  if (!user || !verifyPassword(user, password)) {
+    return { status: "error", error: GENERIC_SIGNIN_ERROR, http: 401 };
+  }
+  return { status: "authenticated", user: toPublicUser(user) };
 }
 
 export function listBuildSeats(): PublicUser[] {
