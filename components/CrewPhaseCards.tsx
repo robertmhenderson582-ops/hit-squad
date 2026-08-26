@@ -16,7 +16,7 @@ import {
   type CraftRow,
   type CraftShift,
 } from "@/lib/craft-labor";
-import { computeRangeHours } from "@/lib/hours-clock";
+import { computeRangeHours, nightShiftHours } from "@/lib/hours-clock";
 import {
   PHASE_IDS,
   PHASE_NAMES,
@@ -186,6 +186,7 @@ function CalendarPattern({
     start: range.start,
     end: range.end,
     hoursPerShift: range.hoursPerShift,
+    nightHoursPerShift: range.nightHoursPerShift,
     headcount: range.headcount,
     nightHeadcount: range.nightHeadcount,
     shift,
@@ -263,13 +264,25 @@ function CalendarPattern({
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <label className="text-xs">
+        <label className={`text-xs${two ? " col-span-2" : ""}`}>
           Shift
           <select
             value={shift}
-            onChange={(event) =>
-              onPatch(clampPerDiem({ ...range, shift: event.target.value as CraftShift }, event.target.value as CraftShift))
-            }
+            onChange={(event) => {
+              const nextShift = event.target.value as CraftShift;
+              onPatch(
+                clampPerDiem(
+                  {
+                    ...range,
+                    shift: nextShift,
+                    ...(nextShift === "Days & nights" && range.nightHoursPerShift == null
+                      ? { nightHoursPerShift: range.hoursPerShift }
+                      : {}),
+                  },
+                  nextShift,
+                ),
+              );
+            }}
             className="paper-field mt-1"
           >
             {CRAFT_SHIFTS.map((item) => (
@@ -279,16 +292,41 @@ function CalendarPattern({
             ))}
           </select>
         </label>
-        <label className="text-xs">
-          Hours / shift
-          <input
-            type="number"
-            min={0}
-            value={range.hoursPerShift}
-            onChange={(event) => onPatch({ hoursPerShift: Math.max(0, Number(event.target.value) || 0) })}
-            className="paper-field mt-1"
-          />
-        </label>
+        {two ? (
+          <>
+            <label className="text-xs">
+              Days hours
+              <input
+                type="number"
+                min={0}
+                value={range.hoursPerShift}
+                onChange={(event) => onPatch({ hoursPerShift: Math.max(0, Number(event.target.value) || 0) })}
+                className="paper-field mt-1"
+              />
+            </label>
+            <label className="text-xs">
+              Nights hours
+              <input
+                type="number"
+                min={0}
+                value={nightShiftHours(range.hoursPerShift, range.nightHoursPerShift)}
+                onChange={(event) => onPatch({ nightHoursPerShift: Math.max(0, Number(event.target.value) || 0) })}
+                className="paper-field mt-1"
+              />
+            </label>
+          </>
+        ) : (
+          <label className="text-xs">
+            Hours / shift
+            <input
+              type="number"
+              min={0}
+              value={range.hoursPerShift}
+              onChange={(event) => onPatch({ hoursPerShift: Math.max(0, Number(event.target.value) || 0) })}
+              className="paper-field mt-1"
+            />
+          </label>
+        )}
         <label className="text-xs">
           {two ? "Days headcount" : "Headcount"}
           <input

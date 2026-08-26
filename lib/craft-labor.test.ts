@@ -111,12 +111,16 @@ describe("crew ranges are per position", () => {
     const row = craftRowFromPhases(schedule.phases, schedule.units, true);
     assert.equal(row.ranges.filter((range) => range.phaseId === "pre").length, 1);
     assert.equal(row.ranges.find((range) => range.phaseId === "pre")?.unitId, unitA.id);
+    const firstPre = row.ranges.find((range) => range.phaseId === "pre");
+    assert.ok(firstPre);
+    firstPre.nightHoursPerShift = 8;
     const extra = extraRangeFromPhase(
       unitB.phases.find((item) => item.id === "pre")!,
-      row.ranges.find((range) => range.phaseId === "pre"),
+      firstPre,
       nextUnitId(schedule.units, row.ranges.filter((range) => range.phaseId === "pre")),
     );
     assert.equal(extra.unitId, unitB.id);
+    assert.equal(extra.nightHoursPerShift, 8);
     row.ranges.push(extra);
     const synced = syncCraftRows([row], schedule.phases, schedule.units, true);
     assert.equal(synced.length, 1);
@@ -193,5 +197,42 @@ describe("crew ranges are per position", () => {
     assert.equal(phaseRangesOverlap(pres, "pre"), false);
     const after = computeRowHours(synced, "Wood River — Roxana, IL", "Phillips 66");
     assert.equal(after.hours, before.hours);
+  });
+
+  it("keeps Days & nights night hours through sync and does not clone them onto an empty extra range", () => {
+    const phases = defaultPhases();
+    const pre = phases.find((row) => row.id === "pre");
+    assert.ok(pre);
+    const row = craftRowFromPhases(phases);
+    row.position = "Boilermaker Journeyman";
+    row.ranges = row.ranges.map((range) =>
+      range.phaseId === "pre"
+        ? { ...range, shift: "Days & nights", hoursPerShift: 10, nightHoursPerShift: 8, nightHeadcount: 2 }
+        : range,
+    );
+    const first = row.ranges.find((range) => range.phaseId === "pre");
+    assert.ok(first);
+    const extra = extraRangeFromPhase(pre, first);
+    assert.equal(extra.hoursPerShift, 0);
+    assert.equal(extra.nightHoursPerShift, undefined);
+    const before = computeRowHours(row, "Wood River — Roxana, IL", "Phillips 66");
+    const synced = syncCraftRows([row], phases)[0];
+    const kept = synced.ranges.find((range) => range.phaseId === "pre");
+    assert.equal(kept?.hoursPerShift, 10);
+    assert.equal(kept?.nightHoursPerShift, 8);
+    assert.equal(kept?.nightHeadcount, 2);
+    const after = computeRowHours(synced, "Wood River — Roxana, IL", "Phillips 66");
+    assert.equal(after.hours, before.hours);
+    const sameDayNightHours = computeRowHours(
+      {
+        ...synced,
+        ranges: synced.ranges.map((range) =>
+          range.phaseId === "pre" ? { ...range, nightHoursPerShift: 10 } : range,
+        ),
+      },
+      "Wood River — Roxana, IL",
+      "Phillips 66",
+    );
+    assert.notEqual(after.hours, sameDayNightHours.hours);
   });
 });

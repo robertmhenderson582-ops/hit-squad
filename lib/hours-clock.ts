@@ -20,6 +20,7 @@ export type ComputeRangeInput = {
   start: string;
   end: string;
   hoursPerShift: number;
+  nightHoursPerShift?: number;
   headcount?: number;
   nightHeadcount?: number;
   shift?: "Days" | "Nights" | "Days & nights";
@@ -30,6 +31,11 @@ export type ComputeRangeInput = {
   clockOverride?: ClockOverride;
   skipDates?: string[];
 };
+
+/** Nights hours on a dual range; old workbooks without the field keep hoursPerShift. */
+export function nightShiftHours(hoursPerShift: number, nightHoursPerShift?: number): number {
+  return nightHoursPerShift ?? hoursPerShift;
+}
 
 export type RangeDay = {
   date: string;
@@ -228,14 +234,17 @@ export function computeRangeHours(input: ComputeRangeInput): RangeHours {
         shift: "Days",
         nightHeadcount: undefined,
         nightPerDiemPeople: undefined,
+        nightHoursPerShift: undefined,
       }),
       computeRangeHours({
         ...input,
         shift: "Nights",
+        hoursPerShift: nightShiftHours(input.hoursPerShift, input.nightHoursPerShift),
         headcount: input.nightHeadcount ?? 1,
         perDiemPeople: input.nightPerDiemPeople ?? 0,
         nightHeadcount: undefined,
         nightPerDiemPeople: undefined,
+        nightHoursPerShift: undefined,
       }),
     );
   }
@@ -310,6 +319,7 @@ export function computeRowHours(
       start: string;
       end: string;
       hoursPerShift: number;
+      nightHoursPerShift?: number;
       headcount: number;
       nightHeadcount: number;
       perDiemPeople: number;
@@ -338,6 +348,7 @@ export function computeRowHours(
         start: range.start,
         end: range.end,
         hoursPerShift: range.hoursPerShift,
+        nightHoursPerShift: range.nightHoursPerShift,
         headcount: range.headcount,
         nightHeadcount: range.nightHeadcount,
         shift: range.shift ?? row.shift,

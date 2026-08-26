@@ -57,6 +57,7 @@ export type CalendarRange = {
   headcount: number;
   nightHeadcount: number;
   hoursPerShift: number;
+  nightHoursPerShift?: number;
   perDiemPeople: number;
   nightPerDiemPeople?: number;
   days: boolean[];
@@ -172,6 +173,7 @@ export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange, unitId?: str
     headcount: prev?.headcount ?? 1,
     nightHeadcount: prev?.nightHeadcount ?? 1,
     hoursPerShift: seed.hoursPerShift,
+    nightHoursPerShift: prev?.nightHoursPerShift,
     perDiemPeople: prev?.perDiemPeople ?? 1,
     nightPerDiemPeople: prev?.nightPerDiemPeople ?? 1,
     days: seed.days,
@@ -191,6 +193,7 @@ export function extraRangeFromPhase(phase: PhaseRow, template?: CalendarRange, u
     start: newUnit ? phase.start : "",
     end: newUnit ? phase.stop : "",
     hoursPerShift: newUnit ? base.hoursPerShift : 0,
+    nightHoursPerShift: newUnit ? template?.nightHoursPerShift : undefined,
     headcount: newUnit ? (template?.headcount ?? 1) : 1,
     nightHeadcount: newUnit ? (template?.nightHeadcount ?? 1) : 1,
     perDiemPeople: newUnit ? (template?.perDiemPeople ?? 1) : 0,
@@ -244,6 +247,7 @@ export function rangesFromPhases(
         next.start = prev.start;
         next.end = prev.end;
         next.hoursPerShift = prev.hoursPerShift;
+        next.nightHoursPerShift = prev.nightHoursPerShift;
         return next;
       }
       if (multiUnits && next.unitId) {

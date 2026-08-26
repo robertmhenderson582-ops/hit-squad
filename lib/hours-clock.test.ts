@@ -4,6 +4,8 @@ import {
   boundOtLabel,
   clockNote,
   computeRangeHours,
+  computeRowHours,
+  nightShiftHours,
   runningClock,
   seatKind,
   siteClockFromText,
@@ -171,5 +173,133 @@ describe("CAT 2 Wood River hour cases", () => {
     assert.equal(result.st, 20);
     assert.equal(result.ot, 6);
     assert.equal(result.dt, 0);
+  });
+
+  it("Days & nights 9h days + 8h nights is not both-9 — ST / OT / DT / hours follow each side", () => {
+    const window = {
+      ...WOOD_RIVER,
+      position: "Cost Analyst",
+      start: "2027-01-03",
+      end: "2027-01-08",
+      days: [true, true, true, true, true, true, false],
+      shift: "Days & nights" as const,
+      headcount: 1,
+      nightHeadcount: 1,
+      perDiemPeople: 1,
+      nightPerDiemPeople: 1,
+    };
+    const splitHours = computeRangeHours({
+      ...window,
+      hoursPerShift: 9,
+      nightHoursPerShift: 8,
+    });
+    const bothNine = computeRangeHours({
+      ...window,
+      hoursPerShift: 9,
+    });
+    const bothEight = computeRangeHours({
+      ...window,
+      hoursPerShift: 8,
+    });
+    assert.equal(splitHours.st, 80);
+    assert.equal(splitHours.ot, 5);
+    assert.equal(splitHours.dt, 17);
+    assert.equal(splitHours.hours, 102);
+    assert.equal(splitHours.pd, 12);
+    assert.equal(bothNine.st, 80);
+    assert.equal(bothNine.ot, 10);
+    assert.equal(bothNine.dt, 18);
+    assert.equal(bothNine.hours, 108);
+    assert.equal(bothNine.pd, 12);
+    assert.notDeepEqual(
+      { st: splitHours.st, ot: splitHours.ot, dt: splitHours.dt, hours: splitHours.hours },
+      { st: bothNine.st, ot: bothNine.ot, dt: bothNine.dt, hours: bothNine.hours },
+    );
+    assert.notDeepEqual(
+      { st: splitHours.st, ot: splitHours.ot, dt: splitHours.dt, hours: splitHours.hours },
+      { st: bothEight.st, ot: bothEight.ot, dt: bothEight.dt, hours: bothEight.hours },
+    );
+  });
+
+  it("Days & nights without nightHoursPerShift falls back to hoursPerShift so old workbooks stay put", () => {
+    const window = {
+      ...WOOD_RIVER,
+      position: "General Foreman",
+      start: "2026-10-05",
+      end: "2026-10-05",
+      hoursPerShift: 9,
+      days: [false, true, true, true, true, true, false],
+      shift: "Days & nights" as const,
+      headcount: 1,
+      nightHeadcount: 1,
+      perDiemPeople: 1,
+      nightPerDiemPeople: 1,
+    };
+    const missing = computeRangeHours(window);
+    const explicit = computeRangeHours({ ...window, nightHoursPerShift: 9 });
+    assert.deepEqual(
+      { st: missing.st, ot: missing.ot, dt: missing.dt, pd: missing.pd, hours: missing.hours },
+      { st: explicit.st, ot: explicit.ot, dt: explicit.dt, pd: explicit.pd, hours: explicit.hours },
+    );
+    assert.equal(missing.st, 18);
+    assert.equal(missing.ot, 0);
+    assert.equal(nightShiftHours(9), 9);
+    assert.equal(nightShiftHours(9, 8), 8);
+    assert.equal(nightShiftHours(9, 0), 0);
+  });
+
+  it("Days-only ignores nightHoursPerShift and keeps one Hours / shift", () => {
+    const daysOnly = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Cost Analyst",
+      start: "2027-01-04",
+      end: "2027-01-08",
+      hoursPerShift: 9,
+      nightHoursPerShift: 8,
+      days: [false, true, true, true, true, true, false],
+      shift: "Days",
+      headcount: 1,
+      perDiemPeople: 1,
+    });
+    assert.equal(daysOnly.st, 40);
+    assert.equal(daysOnly.ot, 5);
+    assert.equal(daysOnly.dt, 0);
+    assert.equal(daysOnly.hours, 45);
+    assert.equal(daysOnly.pd, 5);
+  });
+
+  it("computeRowHours passes each side's hours so crew totals match the range editor", () => {
+    const row = {
+      position: "Cost Analyst",
+      shift: "Days & nights" as const,
+      ranges: [
+        {
+          start: "2027-01-03",
+          end: "2027-01-08",
+          hoursPerShift: 9,
+          nightHoursPerShift: 8,
+          headcount: 1,
+          nightHeadcount: 1,
+          perDiemPeople: 1,
+          nightPerDiemPeople: 1,
+          days: [true, true, true, true, true, true, false],
+        },
+      ],
+    };
+    const split = computeRowHours(row, WOOD_RIVER.site, WOOD_RIVER.client, false, WOOD_RIVER.plantCode);
+    const sameNine = computeRowHours(
+      { ...row, ranges: [{ ...row.ranges[0], nightHoursPerShift: undefined }] },
+      WOOD_RIVER.site,
+      WOOD_RIVER.client,
+      false,
+      WOOD_RIVER.plantCode,
+    );
+    assert.equal(split.ot, 5);
+    assert.equal(split.dt, 17);
+    assert.equal(split.hours, 102);
+    assert.equal(sameNine.ot, 10);
+    assert.equal(sameNine.dt, 18);
+    assert.equal(sameNine.hours, 108);
+    assert.notEqual(split.hours, sameNine.hours);
   });
 });

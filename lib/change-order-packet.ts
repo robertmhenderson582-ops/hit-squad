@@ -1,4 +1,4 @@
-import { computeRangeHours, seatKind, type ClockOverride, type HoursSplit } from "./hours-clock.ts";
+import { computeRangeHours, nightShiftHours, seatKind, type ClockOverride, type HoursSplit } from "./hours-clock.ts";
 import { notifyEstimateSheets } from "./sheet-events.ts";
 
 export const FCR_STORE_PREFIX = "hs_fcr_v1:";
@@ -98,6 +98,7 @@ export type FcrJobRow = {
     start: string;
     end: string;
     hoursPerShift: number;
+    nightHoursPerShift?: number;
     headcount: number;
     nightHeadcount: number;
     perDiemPeople: number;
@@ -222,7 +223,7 @@ function weekFromRanges(
       client,
       start: range.start,
       end: range.end,
-      hoursPerShift: range.hoursPerShift,
+      hoursPerShift: night ? nightShiftHours(range.hoursPerShift, range.nightHoursPerShift) : range.hoursPerShift,
       headcount: night ? range.nightHeadcount : range.headcount,
       shift,
       days: range.days,
