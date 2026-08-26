@@ -1,4 +1,4 @@
-import { NOVUS_EMAIL } from "./desk-role";
+import { NOVUS_EMAIL } from "./desk-role.ts";
 import type { DeskTicket } from "./tickets";
 
 const OWNER_TICKET_EMAIL = "robertmhenderson582@gmail.com";
