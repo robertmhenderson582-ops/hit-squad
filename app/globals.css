@@ -886,13 +886,36 @@ textarea:focus {
   width: min(560px, 100%);
   border-radius: 20px;
   background: #f4f1e8;
+  color: #163038;
   box-shadow: 0 24px 60px rgba(15, 95, 109, 0.22);
+}
+
+.industrial-root .estimate-modal,
+.industrial-root .estimate-modal h2,
+.industrial-root .estimate-modal .text-\[\#163038\],
+.industrial-root .estimate-modal .hud-readout {
+  color: #163038;
+}
+
+.industrial-root .estimate-modal .text-\[\#5b6f73\] {
+  color: #5b6f73;
+}
+
+.industrial-root .estimate-modal .paper-field {
+  background: #fff;
+  border: 1px solid #c5d4d4;
+  color: #163038;
 }
 
 .estimate-modal-close {
   border: 1px solid rgba(15, 95, 109, 0.28);
   border-radius: 8px;
   background: #fff;
+  color: #163038;
+}
+
+.industrial-root .estimate-modal-close {
+  color: #163038;
 }
 
 .day-chip {
