@@ -9,6 +9,7 @@
  */
 
 import { computeRowHours, type HoursSplit } from "./hours-clock.ts";
+import { defaultLaborClass } from "./labor-class.ts";
 
 export const SHAHAN_BOOK_LABEL = "Shahan TM OCIP — Wood River";
 export const SHAHAN_PLANT = "Wood River";
@@ -21,6 +22,9 @@ export const SHAHAN_LABOR_GROUPS = [
   "Staff|BM UNION STAFF",
   "Staff|PF UNION STAFF",
   "Staff|MERIT STAFF",
+  "Staff|BM UNION",
+  "Staff|PIPEFITTER UNION",
+  "Staff|LABORER UNION",
   "CRAFT|OPERATOR UNION",
   "CRAFT|PIPEFITTER UNION",
   "CRAFT|BM UNION",
@@ -44,17 +48,234 @@ export type ShahanEquipmentRow = {
   daily: number | null;
   weekly: number | null;
   monthly: number | null;
+  wet: boolean;
 };
 
 export type ShahanLookupOpts = {
   catalog?: ShahanLaborRow[];
+  laborClass?: "Merit" | "Union" | null;
+  group?: string;
 };
 
-/** Live labor catalog. Empty until the 159-row Shahan sheet is pasted. Do not invent. */
-export const SHAHAN_LABOR: ShahanLaborRow[] = [];
+/** Live labor catalog from Debbie Shahan TM OCIP. Exact sheet dollars. Do not invent. */
+export const SHAHAN_LABOR: ShahanLaborRow[] = [
+  { craftName: "Lead Site Boilermaker 01", group: "Staff|BM UNION STAFF", st: 141.9, ot: 201.14, dt: 260.38, pd: 140 },
+  { craftName: "Lead Site Boilermaker 02", group: "Staff|BM UNION STAFF", st: 139.48, ot: 197.55, dt: 255.62, pd: 140 },
+  { craftName: "Manager, Project 01", group: "Staff|BM UNION STAFF", st: 133.42, ot: 188.57, dt: 243.72, pd: 140 },
+  { craftName: "Manager, Project 02", group: "Staff|BM UNION STAFF", st: 121.25, ot: 170.54, dt: 219.82, pd: 140 },
+  { craftName: "Engineer, Project 01", group: "Staff|BM UNION STAFF", st: 120.04, ot: 168.74, dt: 217.44, pd: 140 },
+  { craftName: "Engineer, Project 02", group: "Staff|BM UNION STAFF", st: 111.55, ot: 156.17, dt: 200.78, pd: 140 },
+  { craftName: "Engineer, Field 01", group: "Staff|BM UNION STAFF", st: 117.61, ot: 165.15, dt: 212.68, pd: 140 },
+  { craftName: "Engineer, Field 02", group: "Staff|BM UNION STAFF", st: 115.19, ot: 161.56, dt: 207.92, pd: 140 },
+  { craftName: "Planner Estimator 01", group: "Staff|BM UNION STAFF", st: 113.98, ot: 159.76, dt: 205.54, pd: 140 },
+  { craftName: "Planner Estimator 02", group: "Staff|BM UNION STAFF", st: 111.55, ot: 156.17, dt: 200.78, pd: 140 },
+  { craftName: "Planner Scheduler 01", group: "Staff|BM UNION STAFF", st: 115.19, ot: 161.56, dt: 207.92, pd: 140 },
+  { craftName: "Planner Scheduler 02", group: "Staff|BM UNION STAFF", st: 111.55, ot: 156.17, dt: 200.78, pd: 140 },
+  { craftName: "Lead QA/QC Boilermaker 01", group: "Staff|BM UNION STAFF", st: 128.57, ot: 181.39, dt: 234.2, pd: 140 },
+  { craftName: "Lead QA/QC Boilermaker 02", group: "Staff|BM UNION STAFF", st: 126.15, ot: 177.79, dt: 229.44, pd: 140 },
+  { craftName: "Coordinator QA/QC Boilermaker 01", group: "Staff|BM UNION STAFF", st: 124.93, ot: 176, dt: 227.06, pd: 140 },
+  { craftName: "Coordinator QA/QC Boilermaker02", group: "Staff|BM UNION STAFF", st: 122.51, ot: 172.41, dt: 222.3, pd: 140 },
+  { craftName: "Lead Safety 01", group: "Staff|BM UNION STAFF", st: 127.36, ot: 179.59, dt: 231.82, pd: 140 },
+  { craftName: "Lead Safety 02", group: "Staff|BM UNION STAFF", st: 124.93, ot: 176, dt: 227.06, pd: 140 },
+  { craftName: "Coordinator Safety BLRMKR 01", group: "Staff|BM UNION STAFF", st: 109.18, ot: 152.65, dt: 196.12, pd: 140 },
+  { craftName: "Coordinator Safety BLRMKR 02", group: "Staff|BM UNION STAFF", st: 106.75, ot: 149.06, dt: 191.36, pd: 140 },
+  { craftName: "Coordinator Subcontract 01", group: "Staff|BM UNION STAFF", st: 107.97, ot: 150.85, dt: 193.74, pd: 140 },
+  { craftName: "Coordinator Subcontract 02", group: "Staff|BM UNION STAFF", st: 105.54, ot: 147.26, dt: 188.98, pd: 140 },
+  { craftName: "Coordinator Material BLRMKR 01", group: "Staff|BM UNION STAFF", st: 118.87, ot: 167.02, dt: 215.16, pd: 140 },
+  { craftName: "Coordinator Material BLRMKR 02", group: "Staff|BM UNION STAFF", st: 116.45, ot: 163.43, dt: 210.4, pd: 140 },
+  { craftName: "Superintendent Boilermaker 01", group: "Staff|BM UNION STAFF", st: 127.36, ot: 179.59, dt: 231.82, pd: 140 },
+  { craftName: "Superintendent Boilermaker 02", group: "Staff|BM UNION STAFF", st: 124.93, ot: 176, dt: 227.06, pd: 140 },
+  { craftName: "General Superintendent BM 01", group: "Staff|BM UNION STAFF", st: 130.99, ot: 184.98, dt: 238.96, pd: 140 },
+  { craftName: "General Superintendent BM 02", group: "Staff|BM UNION STAFF", st: 128.57, ot: 181.39, dt: 234.2, pd: 140 },
+  { craftName: "Manager, Project PF 01", group: "Staff|PF UNION STAFF", st: 127.23, ot: 179.17, dt: 231.11, pd: 140 },
+  { craftName: "Manager, Project PF 02", group: "Staff|PF UNION STAFF", st: 124.04, ot: 174.46, dt: 224.89, pd: 140 },
+  { craftName: "Manager, Project PF 03", group: "Staff|PF UNION STAFF", st: 119.13, ot: 167.22, dt: 215.31, pd: 140 },
+  { craftName: "General Superintendent PF 01", group: "Staff|PF UNION STAFF", st: 123.45, ot: 173.59, dt: 223.74, pd: 140 },
+  { craftName: "General Superintendent PF 02", group: "Staff|PF UNION STAFF", st: 114.13, ot: 159.83, dt: 205.54, pd: 140 },
+  { craftName: "General Superintendent PF 03", group: "Staff|PF UNION STAFF", st: 115.35, ot: 161.64, dt: 207.94, pd: 140 },
+  { craftName: "Superintendent PF 01", group: "Staff|PF UNION STAFF", st: 111.67, ot: 156.21, dt: 200.75, pd: 140 },
+  { craftName: "Superintendent PF 02", group: "Staff|PF UNION STAFF", st: 109.22, ot: 152.59, dt: 195.96, pd: 140 },
+  { craftName: "Superintendent PF 03", group: "Staff|PF UNION STAFF", st: 106.77, ot: 148.97, dt: 191.17, pd: 140 },
+  { craftName: "Engineer Project PIPFTR 01", group: "Staff|PF UNION STAFF", st: 109.22, ot: 152.59, dt: 195.96, pd: 140 },
+  { craftName: "Engineer Field PIPEFITTER 01", group: "Staff|PF UNION STAFF", st: 106.77, ot: 148.97, dt: 191.17, pd: 140 },
+  { craftName: "Planner/Estimator PIPFTR 01", group: "Staff|PF UNION STAFF", st: 107.99, ot: 150.78, dt: 193.57, pd: 140 },
+  { craftName: "Planner/Estimator PIPFTR 02", group: "Staff|PF UNION STAFF", st: 105.54, ot: 147.16, dt: 188.78, pd: 140 },
+  { craftName: "Planner/Estimator PIPFTR 03", group: "Staff|PF UNION STAFF", st: 103.09, ot: 143.54, dt: 183.99, pd: 140 },
+  { craftName: "Planner/Scheduler PIPFTR 01", group: "Staff|PF UNION STAFF", st: 106.77, ot: 148.97, dt: 191.17, pd: 140 },
+  { craftName: "Planner/Scheduler PIPFTR 02", group: "Staff|PF UNION STAFF", st: 104.32, ot: 145.35, dt: 186.38, pd: 140 },
+  { craftName: "Lead QA/QC PIPEFITTER 01", group: "Staff|PF UNION STAFF", st: 117.32, ot: 164.54, dt: 211.77, pd: 140 },
+  { craftName: "Lead QA/QC PIPEFITTER 02", group: "Staff|PF UNION STAFF", st: 115.35, ot: 161.64, dt: 207.94, pd: 140 },
+  { craftName: "Lead QA/QC PIPEFITTER 03", group: "Staff|PF UNION STAFF", st: 112.9, ot: 158.02, dt: 203.15, pd: 140 },
+  { craftName: "Coordinator QA/QC PIPEFITTER 01", group: "Staff|PF UNION STAFF", st: 105.54, ot: 147.16, dt: 188.78, pd: 140 },
+  { craftName: "Coordinator QA/QC PIPEFITTER 02", group: "Staff|PF UNION STAFF", st: 105.05, ot: 146.44, dt: 187.82, pd: 140 },
+  { craftName: "Coordinator QA/QC PIPEFITTER 03", group: "Staff|PF UNION STAFF", st: 104.44, ot: 145.53, dt: 186.62, pd: 140 },
+  { craftName: "Lead Safety PIPEFITTER 01", group: "Staff|PF UNION STAFF", st: 107.39, ot: 149.9, dt: 192.39, pd: 140 },
+  { craftName: "Coordinator Safety PIPFTR 01", group: "Staff|PF UNION STAFF", st: 105.79, ot: 147.52, dt: 189.26, pd: 140 },
+  { craftName: "Coordinator Safety PIPFTR 02", group: "Staff|PF UNION STAFF", st: 105.17, ot: 146.62, dt: 188.06, pd: 140 },
+  { craftName: "Coordinator Safety PIPFTR 03", group: "Staff|PF UNION STAFF", st: 104.56, ot: 145.71, dt: 186.86, pd: 140 },
+  { craftName: "Coordinator Material 01", group: "Staff|PF UNION STAFF", st: 103.09, ot: 143.54, dt: 183.99, pd: 140 },
+  { craftName: "Lead Site 01", group: "Staff|MERIT STAFF", st: 139.09, ot: 192.55, dt: 246.01, pd: 140 },
+  { craftName: "Lead Site 02", group: "Staff|MERIT STAFF", st: 136.53, ot: 188.8, dt: 241.07, pd: 140 },
+  { craftName: "Manager Project 01", group: "Staff|MERIT STAFF", st: 130.76, ot: 180.36, dt: 229.96, pd: 140 },
+  { craftName: "Manager Project 02", group: "Staff|MERIT STAFF", st: 128.19, ot: 176.6, dt: 225.02, pd: 140 },
+  { craftName: "Engineer Project 01", group: "Staff|MERIT STAFF", st: 107.04, ot: 145.65, dt: 184.26, pd: 140 },
+  { craftName: "Engineer Project 02", group: "Staff|MERIT STAFF", st: 104.48, ot: 141.9, dt: 179.32, pd: 140 },
+  { craftName: "Engineer Field 01", group: "Staff|MERIT STAFF", st: 110.89, ot: 151.28, dt: 191.67, pd: 140 },
+  { craftName: "Engineer Field 02", group: "Staff|MERIT STAFF", st: 108.32, ot: 147.53, dt: 186.73, pd: 140 },
+  { craftName: "Analyst Cost 01", group: "Staff|MERIT STAFF", st: 130.12, ot: 179.42, dt: 228.72, pd: 140 },
+  { craftName: "Analyst Cost 02", group: "Staff|MERIT STAFF", st: 126.27, ot: 173.79, dt: 221.31, pd: 140 },
+  { craftName: "Analyst Project Controls 01", group: "Staff|MERIT STAFF", st: 132.68, ot: 183.17, dt: 233.66, pd: 140 },
+  { craftName: "Analyst Project Controls 02", group: "Staff|MERIT STAFF", st: 126.27, ot: 173.79, dt: 221.31, pd: 140 },
+  { craftName: "Planner Estimator 01", group: "Staff|MERIT STAFF", st: 85.89, ot: 114.7, dt: 143.51, pd: 140 },
+  { craftName: "Planner Estimator 02", group: "Staff|MERIT STAFF", st: 83.32, ot: 110.94, dt: 138.57, pd: 140 },
+  { craftName: "Planner Scheduler 01", group: "Staff|MERIT STAFF", st: 103.84, ot: 140.96, dt: 178.09, pd: 140 },
+  { craftName: "Planner Scheduler 02", group: "Staff|MERIT STAFF", st: 101.27, ot: 137.21, dt: 173.15, pd: 140 },
+  { craftName: "Lead QA/QC 01", group: "Staff|MERIT STAFF", st: 101.27, ot: 137.21, dt: 173.15, pd: 140 },
+  { craftName: "Lead QA/QC 02", group: "Staff|MERIT STAFF", st: 98.07, ot: 132.52, dt: 166.97, pd: 140 },
+  { craftName: "Lead Safety 01", group: "Staff|MERIT STAFF", st: 91.02, ot: 122.2, dt: 153.39, pd: 140 },
+  { craftName: "Lead Safety 02", group: "Staff|MERIT STAFF", st: 88.45, ot: 118.45, dt: 148.45, pd: 140 },
+  { craftName: "Coordinator Safety 01", group: "Staff|MERIT STAFF", st: 91.02, ot: 122.2, dt: 153.39, pd: 140 },
+  { craftName: "Coordinator Safety 02", group: "Staff|MERIT STAFF", st: 88.45, ot: 118.45, dt: 148.45, pd: 140 },
+  { craftName: "Coordinator Material 01", group: "Staff|MERIT STAFF", st: 81.4, ot: 108.13, dt: 134.86, pd: 140 },
+  { craftName: "Coordinator Material 02", group: "Staff|MERIT STAFF", st: 78.84, ot: 104.38, dt: 129.92, pd: 140 },
+  { craftName: "Clerk Field 01", group: "Staff|MERIT STAFF", st: 74.99, ot: 98.75, dt: 122.51, pd: 140 },
+  { craftName: "Clerk Field 02", group: "Staff|MERIT STAFF", st: 72.43, ot: 95, dt: 117.57, pd: 140 },
+  { craftName: "Manager Office 01", group: "Staff|MERIT STAFF", st: 94.22, ot: 126.89, dt: 159.56, pd: 140 },
+  { craftName: "Manager Office 02", group: "Staff|MERIT STAFF", st: 85.25, ot: 113.76, dt: 142.27, pd: 140 },
+  { craftName: "Clerk Office 01", group: "Staff|MERIT STAFF", st: 64.73, ot: 83.74, dt: 102.75, pd: 140 },
+  { craftName: "Clerk Office 02", group: "Staff|MERIT STAFF", st: 62.17, ot: 79.99, dt: 97.81, pd: 140 },
+  { craftName: "Clerk Timekeeper 01", group: "Staff|MERIT STAFF", st: 72.43, ot: 95, dt: 117.57, pd: 140 },
+  { craftName: "Clerk Timekeeper 02", group: "Staff|MERIT STAFF", st: 69.86, ot: 91.25, dt: 112.63, pd: 140 },
+  { craftName: "Clerk Document 01", group: "Staff|MERIT STAFF", st: 69.86, ot: 91.25, dt: 112.63, pd: 140 },
+  { craftName: "Clerk Document 02", group: "Staff|MERIT STAFF", st: 67.3, ot: 87.49, dt: 107.69, pd: 140 },
+  { craftName: "General Superintendent 01", group: "Staff|MERIT STAFF", st: 134.6, ot: 185.98, dt: 237.37, pd: 140 },
+  { craftName: "General Superintendent 02", group: "Staff|MERIT STAFF", st: 129.48, ot: 178.48, dt: 198.29, pd: 140 },
+  { craftName: "Superintendent 01", group: "Staff|MERIT STAFF", st: 121.78, ot: 167.22, dt: 212.67, pd: 140 },
+  { craftName: "Superintendent 02", group: "Staff|MERIT STAFF", st: 117.94, ot: 161.6, dt: 205.26, pd: 140 },
+  { craftName: "Asst Superintendent 01", group: "Staff|MERIT STAFF", st: 116.01, ot: 158.78, dt: 201.55, pd: 140 },
+  { craftName: "Asst Superintendent 02", group: "Staff|MERIT STAFF", st: 113.45, ot: 155.03, dt: 196.61, pd: 140 },
+  { craftName: "Boilermaker General Foreman", group: "Staff|BM UNION", st: 114.44, ot: 161.76, dt: 209.09, pd: 140 },
+  { craftName: "Boilermaker Foreman", group: "CRAFT|BM UNION", st: 112.62, ot: 159.07, dt: 205.52, pd: 130 },
+  { craftName: "Boilermaker ASST Foreman", group: "CRAFT|BM UNION", st: 111.71, ot: 157.72, dt: 203.73, pd: 130 },
+  { craftName: "Boilermaker Journeyman", group: "CRAFT|BM UNION", st: 108.38, ot: 152.78, dt: 197.19, pd: 130 },
+  { craftName: "Boilermaker Apprentice Y1P1 70%", group: "CRAFT|BM UNION", st: 93.83, ot: 131.23, dt: 168.63, pd: 130 },
+  { craftName: "Boilermaker Apprentice Y1P2 72.5%", group: "CRAFT|BM UNION", st: 95.29, ot: 133.39, dt: 171.48, pd: 130 },
+  { craftName: "Boilermaker Apprentice Y2P3 75%", group: "CRAFT|BM UNION", st: 96.74, ot: 135.54, dt: 174.34, pd: 130 },
+  { craftName: "Boilermaker Apprentice Y2P4 77.5%", group: "CRAFT|BM UNION", st: 98.2, ot: 137.7, dt: 177.2, pd: 130 },
+  { craftName: "Boilermaker Apprentice Y3P5 80%", group: "CRAFT|BM UNION", st: 99.65, ot: 139.85, dt: 180.05, pd: 130 },
+  { craftName: "Boilermaker Apprentice Y3P6 85%", group: "CRAFT|BM UNION", st: 102.56, ot: 144.16, dt: 185.76, pd: 130 },
+  { craftName: "Boilermaker Apprentice Y4P7 90%", group: "CRAFT|BM UNION", st: 105.47, ot: 148.47, dt: 191.48, pd: 130 },
+  { craftName: "Boilermaker Apprentice Y4P8 95%", group: "CRAFT|BM UNION", st: 105.61, ot: 148.69, dt: 191.76, pd: 130 },
+  { craftName: "PIPEFITTER APPR 95%", group: "CRAFT|PIPEFITTER UNION", st: 96.36, ot: 134.29, dt: 172.22, pd: 130 },
+  { craftName: "PIPEFITTER APPR 90%", group: "CRAFT|PIPEFITTER UNION", st: 96.21, ot: 134.06, dt: 171.91, pd: 130 },
+  { craftName: "PIPEFITTER APPR 85%", group: "CRAFT|PIPEFITTER UNION", st: 93.08, ot: 129.42, dt: 165.77, pd: 130 },
+  { craftName: "PIPEFITTER APPR 80%", group: "CRAFT|PIPEFITTER UNION", st: 89.95, ot: 124.79, dt: 159.63, pd: 130 },
+  { craftName: "PIPEFITTER APPR 75%", group: "CRAFT|PIPEFITTER UNION", st: 86.82, ot: 120.15, dt: 153.48, pd: 130 },
+  { craftName: "PIPEFITTER APPR 70%", group: "CRAFT|PIPEFITTER UNION", st: 83.7, ot: 115.52, dt: 147.34, pd: 130 },
+  { craftName: "PIPEFITTER APPR 65%", group: "CRAFT|PIPEFITTER UNION", st: 80.57, ot: 110.88, dt: 141.2, pd: 130 },
+  { craftName: "PIPEFITTER APPR 60%", group: "CRAFT|PIPEFITTER UNION", st: 77.44, ot: 106.25, dt: 135.06, pd: 130 },
+  { craftName: "PIPEFITTER APPR 55%", group: "CRAFT|PIPEFITTER UNION", st: 74.31, ot: 101.62, dt: 128.92, pd: 130 },
+  { craftName: "PIPEFITTER APPR 50%", group: "CRAFT|PIPEFITTER UNION", st: 71.19, ot: 96.98, dt: 122.78, pd: 130 },
+  { craftName: "PIPEFITTER APPR 45%", group: "CRAFT|PIPEFITTER UNION", st: 68.05, ot: 92.35, dt: 116.63, pd: 130 },
+  { craftName: "PIPEFITTER JOURNEYMAN", group: "CRAFT|PIPEFITTER UNION", st: 99.33, ot: 138.69, dt: 178.05, pd: 130 },
+  { craftName: "PIPEFITTER FORMAN", group: "CRAFT|PIPEFITTER UNION", st: 105.28, ot: 147.5, dt: 189.72, pd: 130 },
+  { craftName: "Pipefitter General Foreman", group: "Staff|PIPEFITTER UNION", st: 111.22, ot: 156.31, dt: 201.4, pd: 140 },
+  { craftName: "Pipefitter Steward 01", group: "CRAFT|PIPEFITTER UNION", st: 105.28, ot: 147.5, dt: 189.72, pd: 130 },
+  { craftName: "TEAMSTERS GRP 01", group: "CRAFT|TEAMSTER UNION", st: 97.6, ot: 115.65, dt: 142.39, pd: 130 },
+  { craftName: "TEAMSTERS GRP 02", group: "CRAFT|TEAMSTER UNION", st: 98.27, ot: 116.64, dt: 143.7, pd: 130 },
+  { craftName: "TEAMSTERS GRP 03", group: "CRAFT|TEAMSTER UNION", st: 98.64, ot: 117.18, dt: 144.43, pd: 130 },
+  { craftName: "TEAMSTERS GRP 04", group: "CRAFT|TEAMSTER UNION", st: 99.04, ot: 117.78, dt: 145.22, pd: 130 },
+  { craftName: "TEAMSTERS GRP 05", group: "CRAFT|TEAMSTER UNION", st: 100.32, ot: 119.67, dt: 147.73, pd: 130 },
+  { craftName: "TEAMSTERS GRP 06", group: "CRAFT|TEAMSTER UNION", st: 102.62, ot: 123.08, dt: 152.25, pd: 130 },
+  { craftName: "Laborer General Foreman GRP1", group: "Staff|LABORER UNION", st: 94.21, ot: 135.68, dt: 177.16, pd: 140 },
+  { craftName: "Laborer General Foreman GRP 2", group: "Staff|LABORER UNION", st: 94.82, ot: 136.58, dt: 178.35, pd: 140 },
+  { craftName: "Laborer Foreman 10-20 GRP 1", group: "CRAFT|LABORER UNION", st: 92.39, ot: 132.99, dt: 173.59, pd: 130 },
+  { craftName: "Laborer Foreman Abate 10-20 GRP2", group: "CRAFT|LABORER UNION", st: 93, ot: 133.89, dt: 174.78, pd: 130 },
+  { craftName: "Laborer Foreman 03-09 GRP 1", group: "CRAFT|LABORER UNION", st: 91.18, ot: 131.19, dt: 171.21, pd: 130 },
+  { craftName: "Laborer Foreman Abate 03-09 GRP 2", group: "CRAFT|LABORER UNION", st: 91.79, ot: 132.09, dt: 172.4, pd: 130 },
+  { craftName: "Laborer Journeyman GRP1", group: "CRAFT|LABORER UNION", st: 89.97, ot: 129.4, dt: 168.83, pd: 130 },
+  { craftName: "Laborer Journeyman GRP2", group: "CRAFT|LABORER UNION", st: 90.58, ot: 130.3, dt: 170.02, pd: 130 },
+  { craftName: "LABORER APPRENTICE Y4", group: "CRAFT|LABORER UNION", st: 87.88, ot: 126.3, dt: 164.72, pd: 130 },
+  { craftName: "LABORER APPRENTICE Y3", group: "CRAFT|LABORER UNION", st: 85.57, ot: 122.87, dt: 160.18, pd: 130 },
+  { craftName: "LABORER APPRENTICE Y2", group: "CRAFT|LABORER UNION", st: 83.37, ot: 119.61, dt: 155.86, pd: 130 },
+  { craftName: "LABORER APPRENTICE Y1", group: "CRAFT|LABORER UNION", st: 81.16, ot: 116.35, dt: 151.53, pd: 130 },
+  { craftName: "Operating Eng Grp 01", group: "CRAFT|OPERATOR UNION", st: 112.95, ot: 161.76, dt: 210.56, pd: 130 },
+  { craftName: "Operating Eng Grp 02", group: "CRAFT|OPERATOR UNION", st: 111.65, ot: 159.83, dt: 208.01, pd: 130 },
+  { craftName: "Operating Eng Grp 03", group: "CRAFT|OPERATOR UNION", st: 106.49, ot: 152.18, dt: 197.88, pd: 130 },
+  { craftName: "Operating Eng Grp 04", group: "CRAFT|OPERATOR UNION", st: 114.1, ot: 163.46, dt: 212.82, pd: 130 },
+  { craftName: "Operating Eng Grp 05", group: "CRAFT|OPERATOR UNION", st: 115.25, ot: 165.17, dt: 215.09, pd: 130 },
+  { craftName: "Operating Eng Grp 05B", group: "CRAFT|OPERATOR UNION", st: 115.54, ot: 165.59, dt: 215.65, pd: 130 },
+  { craftName: "Operating Eng Grp 06", group: "CRAFT|OPERATOR UNION", st: 115.88, ot: 166.11, dt: 216.33, pd: 130 },
+  { craftName: "Operating Eng Grp 06B", group: "CRAFT|OPERATOR UNION", st: 116.11, ot: 166.45, dt: 216.78, pd: 130 },
+  { craftName: "Operating Eng Grp 07", group: "CRAFT|OPERATOR UNION", st: 116.23, ot: 166.62, dt: 217.01, pd: 130 },
+  { craftName: "Operating Eng Grp 07B", group: "CRAFT|OPERATOR UNION", st: 116.34, ot: 166.79, dt: 217.23, pd: 130 },
+  { craftName: "Operating Eng Grp 07C", group: "CRAFT|OPERATOR UNION", st: 116.52, ot: 167.04, dt: 217.57, pd: 130 },
+  { craftName: "Operating Eng Grp 08", group: "CRAFT|OPERATOR UNION", st: 116.57, ot: 167.13, dt: 217.69, pd: 130 },
+  { craftName: "Operating Eng Grp 08B", group: "CRAFT|OPERATOR UNION", st: 116.69, ot: 167.3, dt: 217.91, pd: 130 },
+  { craftName: "Operating Eng Grp 08C", group: "CRAFT|OPERATOR UNION", st: 116.86, ot: 167.56, dt: 218.25, pd: 130 },
+  { craftName: "Operating Eng Grp 08D", group: "CRAFT|OPERATOR UNION", st: 117.27, ot: 168.15, dt: 219.04, pd: 130 },
+  { craftName: "Operating Eng Grp 11", group: "CRAFT|OPERATOR UNION", st: 115.25, ot: 165.17, dt: 215.09, pd: 130 },
+  { craftName: "Operating Eng Grp 12", group: "CRAFT|OPERATOR UNION", st: 116.4, ot: 166.87, dt: 217.35, pd: 130 },
+  { craftName: "COORDINATOR QA-QC 1", group: "Staff|MERIT STAFF", st: 105.76, ot: 143.77, dt: 181.79, pd: 140 },
+  { craftName: "COORDINATOR QA-QC 2", group: "Staff|MERIT STAFF", st: 96.78, ot: 130.64, dt: 164.5, pd: 140 },
+];
 
-/** Live equipment catalog from the same book. Skip the WET header row. Do not invent. */
-export const SHAHAN_EQUIPMENT: ShahanEquipmentRow[] = [];
+/** Live equipment catalog from the same book. First WET table, then dry. Duplicates kept. */
+export const SHAHAN_EQUIPMENT: ShahanEquipmentRow[] = [
+  { description: "EXTRACTOR BUNDLE AERIAL <21FT REQUIRES OPERATOR", daily: 1592, weekly: 4776, monthly: 14328, wet: true },
+  { description: "EXTRACTOR BUNDLE AERIAL <26FT REQUIRES OPERATOR", daily: 1592, weekly: 4776, monthly: 14328, wet: true },
+  { description: "EXTRACTOR BUNDLE AERIAL <33FT REQUIRES OPERATOR", daily: 1592, weekly: 4776, monthly: 14328, wet: true },
+  { description: "EXTRACTOR BUNDLE AERIAL 45 TON REQUIRES OPERATOR", daily: 2600, weekly: 7800, monthly: 23400, wet: true },
+  { description: "EXTRACTOR SELF PROPELLED REQUIRES OPERATOR", daily: 3040, weekly: 9120, monthly: 27360, wet: true },
+  { description: "EXTRACTOR TRUCK MOUNT REQUIRES OPERATOR", daily: 2240, weekly: 6720, monthly: 20160, wet: true },
+  { description: "PUMP HYDROSTATIC TEST AIR DRIVEN", daily: 80, weekly: 240, monthly: 720, wet: true },
+  { description: "PUMP TORQUE CONSOLE 10K PSI", daily: 1160, weekly: 3480, monthly: 10440, wet: true },
+  { description: "TRUCK CREW", daily: 184, weekly: 552, monthly: 1656, wet: true },
+  { description: "TRUCK RIG WELDER", daily: 0, weekly: 0, monthly: 0, wet: true },
+  { description: "VAN 15 PASSENGER", daily: 216, weekly: 648, monthly: 1944, wet: true },
+  { description: "WELDER AR 100-300 AMP DIESEL", daily: 56, weekly: 168, monthly: 504, wet: true },
+  { description: "WELDER ARC 301-499 AMO DIESEL", daily: 64, weekly: 192, monthly: 576, wet: true },
+  { description: "AIR MOVER", daily: 32, weekly: 96, monthly: 288, wet: false },
+  { description: "EXTRACTOR BUNDLE AERIAL <21FT REQUIRES OPERATOR", daily: 1512, weekly: 4536, monthly: 13608, wet: false },
+  { description: "EXTRACTOR BUNDLE AERIAL <26FT REQUIRES OPERATOR", daily: 1512, weekly: 4536, monthly: 13608, wet: false },
+  { description: "EXTRACTOR BUNDLE AERIAL <33FT REQUIRES OPERATOR", daily: 1512, weekly: 4536, monthly: 13608, wet: false },
+  { description: "EXTRACTOR BUNDLE AERIAL 45 TON REQUIRES OPERATOR", daily: 2520, weekly: 7560, monthly: 22680, wet: false },
+  { description: "EXTRACTOR SELF PROPELLED REQUIRES OPERATOR", daily: 2960, weekly: 8880, monthly: 26640, wet: false },
+  { description: "EXTRACTOR TRUCK MOUNT REQUIRES OPERATOR", daily: 2160, weekly: 6480, monthly: 19440, wet: false },
+  { description: "MACHINE FLANGE FACING <24\" REQUIRES OPERATOR", daily: 960, weekly: 2880, monthly: 8640, wet: false },
+  { description: "MACHINE FLANGE FACING 34\"-36\" REQUIRES OPERATOR", daily: 1120, weekly: 3360, monthly: 10080, wet: false },
+  { description: "MACHINE FLANGE FACING 2\"-12\" REQUIRES OPERATOR", daily: 960, weekly: 2880, monthly: 8640, wet: false },
+  { description: "MACHINE FLANGE FACING 24\"-60\" REQUIRES OPERATOR", daily: 960, weekly: 2880, monthly: 8640, wet: false },
+  { description: "MACHINE FLANGE FACING 38\"-60\" REQUIRES OPERATOR", daily: 960, weekly: 2880, monthly: 8640, wet: false },
+  { description: "MACHINE FLANGE FACING 60\"-80\" REQUIRES OPERATOR", daily: 960, weekly: 2880, monthly: 8640, wet: false },
+  { description: "PRE CUT BEVEL 14\"-24\" REQUIRES OPERATOR", daily: 912, weekly: 2736, monthly: 8208, wet: false },
+  { description: "PRE CUT BEVEL 26\"-36\" REQUIRES OPERATOR", daily: 1024, weekly: 3072, monthly: 9216, wet: false },
+  { description: "PRE CUT BEVEL OVER 36\" REQUIRES OPERATOR", daily: 1120, weekly: 3360, monthly: 10080, wet: false },
+  { description: "PRE CUT BEVEL TO 12\" REQUIRES OPERATOR", daily: 912, weekly: 2736, monthly: 8208, wet: false },
+  { description: "PUMP HYDROSTATIC TEST AIR DRIVEN", daily: 208, weekly: 624, monthly: 1872, wet: false },
+  { description: "PUMP TORQUE CONSOLE 10K PSI", daily: 1320, weekly: 3960, monthly: 11880, wet: false },
+  { description: "TRAILER ALKY DECON", daily: 0, weekly: 0, monthly: 0, wet: false },
+  { description: "TRAILER FLATBED", daily: 48, weekly: 144, monthly: 432, wet: false },
+  { description: "TRAILER GOOSENECK", daily: 144, weekly: 432, monthly: 1296, wet: false },
+  { description: "TRAILER TRAILER <40FT", daily: 208, weekly: 624, monthly: 1872, wet: false },
+  { description: "TRAILER TRAILER >40FT", daily: 200, weekly: 600, monthly: 1800, wet: false },
+  { description: "TRAILER TOWER TRAY HARDWARE CONSIGNMENT COST PLUS 6%", daily: 400, weekly: 1200, monthly: 3600, wet: false },
+  { description: "TRAILER TUBE BUNDLE", daily: 232, weekly: 696, monthly: 2088, wet: false },
+  { description: "TRAILER WELDING", daily: 0, weekly: 0, monthly: 0, wet: false },
+  { description: "TRUCK CREW", daily: 104, weekly: 312, monthly: 936, wet: false },
+  { description: "TRUCK RIG WELDER ", daily: 0, weekly: 0, monthly: 0, wet: false },
+  { description: "VAN 15 PASSENGER", daily: 176, weekly: 528, monthly: 1584, wet: false },
+  { description: "WELDER ARC 100-300 AMP ELECTRIC", daily: 68, weekly: 204, monthly: 612, wet: false },
+  { description: "WELDER ARC 301-499 AMP ELECTRIC", daily: 88, weekly: 264, monthly: 792, wet: false },
+  { description: "WELDER EIGHT BANK", daily: 120, weekly: 360, monthly: 1080, wet: false },
+  { description: "PUMP TORQUE CONSOLE 10K PSI", daily: 1320, weekly: 3960, monthly: 11880, wet: false },
+  { description: "PIPE THREADERS (535 AND LARGER) COST PLUS 6%", daily: 0, weekly: 0, monthly: 0, wet: false },
+  { description: "SPREADER BARD COST PLUS 6%", daily: 0, weekly: 0, monthly: 0, wet: false },
+  { description: "BUNDLE DAILY", daily: 232, weekly: 696, monthly: 2088, wet: false },
+  { description: "RAD GUN TORQUE", daily: 496, weekly: 1488, monthly: 4464, wet: false },
+  { description: "PORTA POWER >25 T COST PLUS 6%", daily: 0, weekly: 0, monthly: 0, wet: false },
+  { description: "BAM TROLLEYS >5  T COST PLUS 6%", daily: 0, weekly: 0, monthly: 0, wet: false },
+];
 
 export const SHAHAN_WET_EQUIPMENT_HEADER = "EQUIPMENT RATES WITH FUEL (WET)";
 
@@ -114,35 +335,39 @@ export const SHAHAN_LABOR_FIXTURE: ShahanLaborRow[] = [
   },
 ];
 
-/** Official B-1 picker wording → Shahan craftName. Not Nathan estimate titles. */
+/**
+ * Official B-1 / Crew picker wording → exact Shahan craftName.
+ * Do not map comma vs no-comma staff titles onto each other (BM vs Merit).
+ * Nathan estimate titles stay unmatched.
+ */
 const B1_TO_SHAHAN: Record<string, string> = {
   "coordinator qa qc 01": "COORDINATOR QA-QC 1",
   "coordinator qa qc 1": "COORDINATOR QA-QC 1",
   "coordinator qa qc 2": "COORDINATOR QA-QC 2",
-  "lead qa qc 1": "LEAD QA-QC 01",
-  "lead qa qc 01": "LEAD QA-QC 01",
-  "manager project 01": "MANAGER, PROJECT 01",
-  "manager project 02": "MANAGER, PROJECT 02",
-  "lead site 01": "LEAD SITE 01",
-  "lead site 02": "LEAD SITE 02",
-  "general superintendent 01": "GENERAL SUPERINTENDENT 01",
-  "superintendent 01": "SUPERINTENDENT 01",
-  "coordinator safety 01": "COORDINATOR SAFETY 01",
-  "coordinator safety 02": "COORDINATOR SAFETY 02",
-  "lead safety 01": "LEAD SAFETY 01",
-  "lead safety 02": "LEAD SAFETY 02",
-  "engineer project 01": "ENGINEER, PROJECT 01",
-  "engineer project 02": "ENGINEER, PROJECT 02",
-  "clerk timekeeper 01": "CLERK TIMEKEEPER 01",
-  "clerk document 01": "CLERK DOCUMENT 01",
-  "manager office 01": "MANAGER OFFICE 01",
-  "boilermaker gf union": "Boilermaker GF Union",
-  "pipefitter gf union": "Pipefitter GF Union",
+  "lead qa qc 1": "Lead QA/QC 01",
+  "lead qa qc 01": "Lead QA/QC 01",
+  "lead qa qc 2": "Lead QA/QC 02",
+  "lead qa qc 02": "Lead QA/QC 02",
+  "boilermaker gf union": "Boilermaker General Foreman",
+  "boilermaker general foreman": "Boilermaker General Foreman",
+  "pipefitter gf union": "Pipefitter General Foreman",
+  "pipefitter general foreman": "Pipefitter General Foreman",
   "boilermaker foreman": "Boilermaker Foreman",
-  "pipefitter foreman": "Pipefitter Foreman",
-  "laborer foreman 3 9": "Laborer Foreman 3-9",
-  "operator foreman gr xii": "Operator Foreman Gr XII",
-  "laydown pipefitter foreman": "Laydown Pipefitter Foreman",
+  "pipefitter foreman": "PIPEFITTER FORMAN",
+  "pipefitter forman": "PIPEFITTER FORMAN",
+  "pipefitter journeyman": "PIPEFITTER JOURNEYMAN",
+  "laborer foreman 3 9": "Laborer Foreman 03-09 GRP 1",
+  "laborer foreman 03 09": "Laborer Foreman 03-09 GRP 1",
+  "laborer foreman 3 9 grp 1": "Laborer Foreman 03-09 GRP 1",
+  "laborer foreman 03 09 grp 1": "Laborer Foreman 03-09 GRP 1",
+  "laborer foreman 10 20 grp 1": "Laborer Foreman 10-20 GRP 1",
+  "laborer journeyman grp1": "Laborer Journeyman GRP1",
+  "laborer journeyman grp 1": "Laborer Journeyman GRP1",
+  "operator foreman gr xii": "Operating Eng Grp 12",
+  "operator foreman gr 12": "Operating Eng Grp 12",
+  "operating eng grp 01": "Operating Eng Grp 01",
+  "operating eng grp 1": "Operating Eng Grp 01",
+  "operating eng grp 12": "Operating Eng Grp 12",
 };
 
 export function normalizeTitle(title: string): string {
@@ -167,6 +392,10 @@ function classNumberKeys(normalized: string): string[] {
   return Array.from(new Set([normalized, `${match[1]} ${n}`, `${match[1]} ${padded}`]));
 }
 
+export function exactTitleKey(title: string): string {
+  return title.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export function resolveShahanCraftName(title: string): string {
   const trimmed = title.trim();
   if (!trimmed) return "";
@@ -179,13 +408,46 @@ function rowKeys(row: ShahanLaborRow): string[] {
   return classNumberKeys(normalizeTitle(row.craftName));
 }
 
+function groupIsMerit(group: string): boolean {
+  return /merit/i.test(group);
+}
+
+function pickAmong(rows: ShahanLaborRow[], title: string, opts: ShahanLookupOpts): ShahanLaborRow | null {
+  if (!rows.length) return null;
+  if (rows.length === 1) return rows[0];
+  if (opts.group) {
+    const wanted = normalizeTitle(opts.group);
+    const byGroup = rows.filter((row) => normalizeTitle(row.group) === wanted || normalizeTitle(row.group).endsWith(wanted));
+    if (byGroup.length === 1) return byGroup[0];
+    if (byGroup.length > 1) rows = byGroup;
+  }
+  if (opts.laborClass === "Merit") {
+    const merit = rows.filter((row) => groupIsMerit(row.group));
+    if (merit.length === 1) return merit[0];
+    if (merit.length > 1) rows = merit;
+  } else if (opts.laborClass === "Union") {
+    const union = rows.filter((row) => !groupIsMerit(row.group));
+    if (union.length === 1) return union[0];
+    if (union.length > 1) rows = union;
+  }
+  const comma = /,/.test(title);
+  const byComma = rows.filter((row) => /,/.test(row.craftName) === comma);
+  if (byComma.length === 1) return byComma[0];
+  return null;
+}
+
 export function lookupShahanLabor(title: string, opts: ShahanLookupOpts = {}): ShahanLaborRow | null {
   const catalog = opts.catalog ?? SHAHAN_LABOR;
   if (!catalog.length) return null;
   const resolved = resolveShahanCraftName(title);
   if (!resolved) return null;
+  const exact = exactTitleKey(resolved);
+  const exactHits = catalog.filter((row) => exactTitleKey(row.craftName) === exact);
+  const exactPick = pickAmong(exactHits, resolved, opts);
+  if (exactPick) return exactPick;
   const keys = new Set(classNumberKeys(normalizeTitle(resolved)));
-  return catalog.find((row) => rowKeys(row).some((key) => keys.has(key))) ?? null;
+  const softHits = catalog.filter((row) => rowKeys(row).some((key) => keys.has(key)));
+  return pickAmong(softHits, resolved, opts);
 }
 
 function priced(rate: number | null | undefined): rate is number {
@@ -247,6 +509,17 @@ export function shahanEquipmentRows(catalog: ShahanEquipmentRow[] = SHAHAN_EQUIP
   return catalog.filter((row) => normalizeTitle(row.description) !== normalizeTitle(SHAHAN_WET_EQUIPMENT_HEADER));
 }
 
+export function shahanEquipmentByFuel(catalog: ShahanEquipmentRow[] = SHAHAN_EQUIPMENT): {
+  wet: ShahanEquipmentRow[];
+  dry: ShahanEquipmentRow[];
+} {
+  const rows = shahanEquipmentRows(catalog);
+  return {
+    wet: rows.filter((row) => row.wet),
+    dry: rows.filter((row) => !row.wet),
+  };
+}
+
 export function isStaffPerDiemLane(lane: "staff" | "general-foreman" | "foreman" | "direct" | "support" | string): boolean {
   return lane === "staff" || lane === "general-foreman" || lane === "generalForeman";
 }
@@ -254,6 +527,7 @@ export function isStaffPerDiemLane(lane: "staff" | "general-foreman" | "foreman"
 type HourRow = {
   position: string;
   billedAs?: string;
+  laborClassOverride?: "Merit" | "Union" | null;
   shift?: "Days" | "Nights" | "Days & nights";
   clockOverride?: "auto" | "comp" | "staff";
   ranges: {
@@ -296,7 +570,10 @@ export function laborDollarsFromCrew(
       rows.reduce((sum, row) => {
         const hours = computeRowHours(row, site, client, crew.otAfter8);
         const title = row.position || row.billedAs || "";
-        return sum + shahanCrewCostAmount(title, hours, opts);
+        return sum + shahanCrewCostAmount(title, hours, {
+          ...opts,
+          laborClass: row.laborClassOverride ?? opts.laborClass ?? defaultLaborClass(title),
+        });
       }, 0) * 100,
     ) / 100
   );

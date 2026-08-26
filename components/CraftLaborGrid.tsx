@@ -54,7 +54,13 @@ export function CraftLaborGrid({
       rows.map((row) => {
         const hours = computeRowHours(row, site, client, pack.crew.otAfter8);
         const title = row.position || ("billedAs" in row ? String(row.billedAs || "") : "");
-        return { ...row, ...hours, cost: formatShahanCrewCost(title, hours) };
+        return {
+          ...row,
+          ...hours,
+          cost: formatShahanCrewCost(title, hours, {
+            laborClass: row.laborClassOverride ?? defaultLaborClass(title),
+          }),
+        };
       }),
     [client, pack.crew.otAfter8, rows, site],
   );

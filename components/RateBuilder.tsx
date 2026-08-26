@@ -9,7 +9,7 @@ import {
   SHAHAN_PT_MULTIPLIER,
   SHAHAN_STAFF_PD,
   formatDeskDollars,
-  shahanEquipmentRows,
+  shahanEquipmentByFuel,
   shahanLaborByGroup,
 } from "@/lib/shahan-wood-river";
 
@@ -17,9 +17,55 @@ function rateCell(value: number | null) {
   return value && value > 0 ? formatDeskDollars(value) : "—";
 }
 
+function EquipmentTable({
+  rows,
+  caption,
+}: {
+  rows: { description: string; daily: number | null; weekly: number | null; monthly: number | null }[];
+  caption: string;
+}) {
+  return (
+    <section className="plant-card px-5 py-5">
+      <h3 className="text-lg font-semibold text-[#163038]">{caption}</h3>
+      <p className="mt-1 text-sm text-[#5b6f73]">Daily / weekly / monthly. $0 / cost-plus stays in the book as a blank cell.</p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
+            <tr>
+              {["DESCRIPTION", "DAILY", "WEEKLY", "MONTHLY"].map((header) => (
+                <th key={header} className="px-2 py-2">
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr className="border-t border-[#d5e0de]">
+                <td colSpan={4} className="px-2 py-4 text-sm text-[#5b6f73]">
+                  No Shahan equipment rows in this table.
+                </td>
+              </tr>
+            ) : (
+              rows.map((row, index) => (
+                <tr key={`${caption}:${index}:${row.description}`} className="border-t border-[#d5e0de]">
+                  <td className="px-2 py-2">{row.description}</td>
+                  <td className="px-2 py-2 font-semibold">{rateCell(row.daily)}</td>
+                  <td className="px-2 py-2 font-semibold">{rateCell(row.weekly)}</td>
+                  <td className="px-2 py-2 font-semibold">{rateCell(row.monthly)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export function RateBuilder() {
   const groups = shahanLaborByGroup(SHAHAN_LABOR);
-  const equipment = shahanEquipmentRows(SHAHAN_EQUIPMENT);
+  const equipment = shahanEquipmentByFuel(SHAHAN_EQUIPMENT);
 
   return (
     <div className="space-y-5">
@@ -31,12 +77,6 @@ export function RateBuilder() {
           {SHAHAN_PT_MULTIPLIER}. Staff PD ${SHAHAN_STAFF_PD} / day. Craft PD ${SHAHAN_CRAFT_PD} /
           day. East Coast weekly-40 / Sunday DT — not DT after 12.
         </p>
-        {SHAHAN_LABOR.length === 0 ? (
-          <p className="mt-3 text-sm text-[#5b6f73]">
-            Labor rows list here once the 159-row Shahan sheet is pasted. Titles stay blank until
-            then.
-          </p>
-        ) : null}
       </section>
 
       {groups.map((group) => (
@@ -61,8 +101,8 @@ export function RateBuilder() {
                     </td>
                   </tr>
                 ) : (
-                  group.rows.map((row) => (
-                    <tr key={`${group.group}:${row.craftName}`} className="border-t border-[#d5e0de]">
+                  group.rows.map((row, index) => (
+                    <tr key={`${group.group}:${index}:${row.craftName}`} className="border-t border-[#d5e0de]">
                       <td className="px-2 py-2">{row.craftName}</td>
                       <td className="px-2 py-2 font-semibold">{rateCell(row.st)}</td>
                       <td className="px-2 py-2 font-semibold">{rateCell(row.ot)}</td>
@@ -77,43 +117,8 @@ export function RateBuilder() {
         </section>
       ))}
 
-      <section className="plant-card px-5 py-5">
-        <h3 className="text-lg font-semibold text-[#163038]">Equipment</h3>
-        <p className="mt-1 text-sm text-[#5b6f73]">
-          Same Shahan book. Daily / weekly / monthly. The WET header row is skipped.
-        </p>
-        <div className="mt-3 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
-              <tr>
-                {["DESCRIPTION", "DAILY", "WEEKLY", "MONTHLY"].map((header) => (
-                  <th key={header} className="px-2 py-2">
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {equipment.length === 0 ? (
-                <tr className="border-t border-[#d5e0de]">
-                  <td colSpan={4} className="px-2 py-4 text-sm text-[#5b6f73]">
-                    No Shahan equipment rows yet.
-                  </td>
-                </tr>
-              ) : (
-                equipment.map((row) => (
-                  <tr key={row.description} className="border-t border-[#d5e0de]">
-                    <td className="px-2 py-2">{row.description}</td>
-                    <td className="px-2 py-2 font-semibold">{rateCell(row.daily)}</td>
-                    <td className="px-2 py-2 font-semibold">{rateCell(row.weekly)}</td>
-                    <td className="px-2 py-2 font-semibold">{rateCell(row.monthly)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <EquipmentTable rows={equipment.wet} caption="Equipment — with fuel (WET)" />
+      <EquipmentTable rows={equipment.dry} caption="Equipment" />
     </div>
   );
 }
