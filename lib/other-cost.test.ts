@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   MISC_CATALOG,
+  MISC_HEADERS,
   capTravelers,
   crewPositionHeadcount,
   crewTravelPositions,
+  hydrateMiscLine,
   hydrateTravelLine,
   miscAmount,
+  miscDescriptionsFor,
   otherCostTotals,
   parseOtherCostJson,
   perDiemAmount,
@@ -143,7 +146,7 @@ test("persisted travel keeps travelers, $/mile, and miles; old Yes/No lines drop
       { id: "bm-1", lane: "direct", name: "Boilermaker", headcount: 8, travelers: 3, perMile: 0.7, miles: 10 },
       { id: "tr-old", kind: "staff", name: "Pat", traveler: true, mileageRate: 0.67, travelDollars: 400 },
     ],
-    misc: [{ id: "m", item: "Steel", qty: 1, each: 50 }],
+    misc: [{ id: "m", item: "Steel", description: "Channel", qty: 1, each: 50 }],
   });
   assert.equal(sheet.travel.length, 1);
   assert.equal(sheet.travel[0].id, "bm-1");
@@ -166,7 +169,34 @@ test("misc reimbursables are the CAT 2 list, not B-3 small tools", () => {
   ]);
   const seeded = seedMiscCatalog();
   assert.equal(seeded.some((row) => /PPE|small tool|consumable/i.test(row.item)), false);
-  assert.equal(miscAmount({ id: "1", item: "Alloy rod", qty: 2, each: 40 }), 80);
+  assert.equal(miscAmount({ id: "1", item: "Alloy rod", description: "Stainless", qty: 2, each: 40 }), 80);
+});
+
+test("misc description sits between item and qty and keeps a custom type-in", () => {
+  assert.deepEqual([...MISC_HEADERS], ["ITEM", "DESCRIPTION", "QTY", "EACH", "TOTAL"]);
+  assert.ok(miscDescriptionsFor("Alloy rod").includes("Stainless"));
+  assert.ok(miscDescriptionsFor("Alloy rod").includes("Inconel"));
+  assert.ok(miscDescriptionsFor("Steel").includes("Wide flange beam"));
+  assert.ok(miscDescriptionsFor("Steel").includes("2x2 angle iron"));
+  assert.ok(miscDescriptionsFor("Steel").includes("Channel"));
+  assert.deepEqual(miscDescriptionsFor(""), []);
+  const custom = hydrateMiscLine({
+    id: "1",
+    item: "Steel",
+    description: "odd leftover clip",
+    qty: 2,
+    each: 40,
+  });
+  assert.equal(custom.description, "odd leftover clip");
+  assert.equal(miscAmount(custom), 80);
+  const sheet = parseOtherCostJson({ misc: [custom] });
+  assert.equal(sheet.misc[0].description, "odd leftover clip");
+  assert.deepEqual(
+    Object.keys(sheet.misc[0]),
+    ["id", "item", "description", "qty", "each"],
+  );
+  const again = parseOtherCostJson(JSON.parse(JSON.stringify(sheet)));
+  assert.equal(again.misc[0].description, "odd leftover clip");
 });
 
 test("other cost totals PD + travel + misc", () => {
@@ -176,7 +206,7 @@ test("other cost totals PD + travel + misc", () => {
       travel: [
         { id: "bm-1", lane: "direct", name: "Boilermaker", headcount: 8, travelers: 2, perMile: 0.5, miles: 100 },
       ],
-      misc: [{ id: "m", item: "Steel", qty: 1, each: 50 }],
+      misc: [{ id: "m", item: "Steel", description: "Channel", qty: 1, each: 50 }],
     },
     3,
   );

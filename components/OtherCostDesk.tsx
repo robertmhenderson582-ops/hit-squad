@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CatalogPick } from "@/components/CatalogPick";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import {
   blankMisc,
   emptyOtherCost,
   miscAmount,
+  miscDescriptionsFor,
+  MISC_HEADERS,
   otherCostTotals,
   readOtherCost,
   syncOtherCostTravel,
@@ -179,7 +182,7 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
               <tr>
-                {["ITEM", "QTY", "EACH", "TOTAL"].map((header) => (
+                {MISC_HEADERS.map((header) => (
                   <th key={header} className="px-2 py-2">
                     {header}
                   </th>
@@ -196,6 +199,19 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
                       onChange={(event) => {
                         const next = sheet.misc.slice();
                         next[index] = { ...line, item: event.target.value };
+                        persist({ ...sheet, misc: next });
+                      }}
+                    />
+                  </td>
+                  <td className="px-2 py-2">
+                    <CatalogPick
+                      value={line.description}
+                      options={miscDescriptionsFor(line.item)}
+                      placeholder={line.item ? "Shop description" : "Pick or type an item first"}
+                      allowCustom
+                      onChange={(description) => {
+                        const next = sheet.misc.slice();
+                        next[index] = { ...line, description };
                         persist({ ...sheet, misc: next });
                       }}
                     />

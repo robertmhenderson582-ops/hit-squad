@@ -1,4 +1,4 @@
-import type { CalendarRange, CraftRow, CraftShift, SupportLine } from "./craft-labor.ts";
+import type { CalendarRange, CraftRow, CraftShift } from "./craft-labor.ts";
 import { notifyEstimateSheets } from "./sheet-events.ts";
 
 export const OTHER_COST_STORE_PREFIX = "hs_other_v1:";
@@ -10,6 +10,49 @@ export const MISC_CATALOG = [
   "Weld / cut gas",
   "Fire blanket",
   "Anti-seize",
+] as const;
+
+export const MISC_HEADERS = ["ITEM", "DESCRIPTION", "QTY", "EACH", "TOTAL"] as const;
+
+/** Ordinary shop wording. Not a COMP book and not prices. */
+export const MISC_DESCRIPTIONS: Record<(typeof MISC_CATALOG)[number], readonly string[]> = {
+  "Alloy rod": ["Stainless", "Inconel", "Carbon steel", "Chrome-moly", "Nickel alloy", "Aluminum", "Hardfacing"],
+  Steel: [
+    "Wide flange beam",
+    "2x2 angle iron",
+    "Channel",
+    "Beams",
+    "Plate",
+    "Pipe",
+    "Tube",
+    "Flat bar",
+    "Round bar",
+    "I-beam",
+    "Sheet",
+  ],
+  "Grinding wheels": [
+    "4-1/2\" flap disc",
+    "7\" grinding disc",
+    "Cut-off wheel",
+    "Wire wheel",
+    "Cup wheel",
+    "Pipeline wheel",
+    "Sanding disc",
+  ],
+  "Weld / cut gas": ["Oxygen", "Acetylene", "Argon", "C-25", "Nitrogen", "Propane", "Helium", "Mixed shielding"],
+  "Fire blanket": ["Welding blanket", "Carbon blanket", "Fiberglass blanket", "Silica blanket", "Curtain", "Pad"],
+  "Anti-seize": ["Nickel", "Copper", "Silver", "Aluminum", "High-temp", "Food-grade"],
+};
+
+export const MISC_EXTRA_DESCRIPTIONS = [
+  "Consumable",
+  "Hardware",
+  "Gasket",
+  "Bolt-up",
+  "Rigging",
+  "Insulation",
+  "Scaffold",
+  "Other shop item",
 ] as const;
 
 export const TRAVEL_LANES = ["staff", "generalForeman", "foreman", "direct", "support"] as const;
@@ -36,6 +79,7 @@ export type TravelLine = {
 export type MiscLine = {
   id: string;
   item: string;
+  description: string;
   qty: number;
   each: number;
 };
@@ -70,7 +114,28 @@ export function emptyOtherCost(): OtherCostSheet {
 }
 
 export function blankMisc(item = ""): MiscLine {
-  return { id: uid("mc"), item, qty: 1, each: 0 };
+  return { id: uid("mc"), item, description: "", qty: 1, each: 0 };
+}
+
+export function hydrateMiscLine(raw: unknown): MiscLine {
+  const item = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    id: String(item.id || uid("mc")),
+    item: String(item.item || ""),
+    description: String(item.description || ""),
+    qty: Number(item.qty) || 0,
+    each: Number(item.each) || 0,
+  };
+}
+
+export function miscDescriptionsFor(item: string): string[] {
+  const name = item.trim().toLowerCase();
+  if (!name) return [];
+  const listed = MISC_CATALOG.find((row) => row.toLowerCase() === name);
+  if (listed) return [...MISC_DESCRIPTIONS[listed]];
+  const fuzzy = MISC_CATALOG.find((row) => name.includes(row.toLowerCase()) || row.toLowerCase().includes(name));
+  if (fuzzy) return [...MISC_DESCRIPTIONS[fuzzy]];
+  return [...MISC_EXTRA_DESCRIPTIONS];
 }
 
 export function seedMiscCatalog(): MiscLine[] {
@@ -204,7 +269,7 @@ export function readOtherCost(key: string): OtherCostSheet {
       travel: Array.isArray(parsed.travel)
         ? parsed.travel.map(hydrateTravelLine).filter((line): line is TravelLine => Boolean(line))
         : [],
-      misc: Array.isArray(parsed.misc) && parsed.misc.length ? parsed.misc : seedMiscCatalog(),
+      misc: Array.isArray(parsed.misc) && parsed.misc.length ? parsed.misc.map(hydrateMiscLine) : seedMiscCatalog(),
     };
   } catch {
     return { ...emptyOtherCost(), misc: seedMiscCatalog() };
@@ -228,6 +293,6 @@ export function parseOtherCostJson(raw: unknown): OtherCostSheet {
     travel: Array.isArray(parsed.travel)
       ? parsed.travel.map(hydrateTravelLine).filter((line): line is TravelLine => Boolean(line))
       : [],
-    misc: Array.isArray(parsed.misc) && parsed.misc.length ? parsed.misc : seedMiscCatalog(),
+    misc: Array.isArray(parsed.misc) && parsed.misc.length ? parsed.misc.map(hydrateMiscLine) : seedMiscCatalog(),
   };
 }
