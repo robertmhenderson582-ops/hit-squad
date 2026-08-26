@@ -1,4 +1,6 @@
 export const BUILDERS_RISK_YATES = 0.00834;
+export const ESTIMATE_MARKUP_RATE = 0.065;
+export const ESTIMATE_MARKUP_LABEL = "6.5% markup";
 
 export type EstimateTotalLine = {
   id: string;
@@ -40,6 +42,17 @@ export function moneyLines(candidates: EstimateTotalLine[]): EstimateTotalLine[]
   return candidates.filter((line) => line.amount > 0);
 }
 
+/** Base for the locked rail markup. Crew, Staff, owned tools, per diem, and travel stay out. */
+export function markupBase(input: { subcontractor?: number; thirdParty?: number; misc?: number }) {
+  return (
+    parseDeskDollars(input.subcontractor) + parseDeskDollars(input.thirdParty) + parseDeskDollars(input.misc)
+  );
+}
+
+export function estimateMarkupDollars(input: { subcontractor?: number; thirdParty?: number; misc?: number }) {
+  return Math.round(markupBase(input) * ESTIMATE_MARKUP_RATE * 100) / 100;
+}
+
 export function estimateTotalBreakdown(input: {
   labor?: number;
   equipment?: number;
@@ -57,7 +70,7 @@ export function estimateTotalBreakdown(input: {
     { id: "subcontractor", label: "Subcontractor", amount: parseDeskDollars(input.subcontractor) },
     { id: "other", label: "Other Cost", amount: parseDeskDollars(input.otherCost) },
     { id: "change-orders", label: "Change orders", amount: parseDeskDollars(input.changeOrders) },
-    { id: "markup", label: "Markup", amount: parseDeskDollars(input.markup) },
+    { id: "markup", label: ESTIMATE_MARKUP_LABEL, amount: parseDeskDollars(input.markup) },
   ]);
   const subtotal = base.reduce((sum, line) => sum + line.amount, 0);
   const risk = Math.round(subtotal * buildersRiskPct(input.client, input.site) * 100) / 100;
