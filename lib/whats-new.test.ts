@@ -9,8 +9,10 @@ import {
   DESK_VERSION_LABEL,
   OWNER_WHATS_NEW,
   TESTER_WHATS_NEW,
+  WHATS_NEW_MARK_PREFIX,
   applyWhatsNew,
   deskWhatsNewThread,
+  seenKey,
   testerCopyIsSafe,
 } from "./whats-new.ts";
 
@@ -46,23 +48,46 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
-    assert.equal(DESK_VERSION, "1.15.0");
-    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.15");
-    assert.equal(DESK_THREAD_ID, "th-desk-v1.15");
+    assert.equal(DESK_VERSION, "1.16.0");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.16");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.16");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /People who were invited can finish first visit/);
-    assert.match(TESTER_WHATS_NEW, /confidentiality box/);
-    assert.match(TESTER_WHATS_NEW, /create their own sign-in, 8\+/);
-    assert.match(TESTER_WHATS_NEW, /That step cannot be skipped/);
-    assert.match(OWNER_WHATS_NEW, /Owner login is unchanged/);
-    assert.match(OWNER_WHATS_NEW, /Testers create a password on first visit/);
+    assert.match(TESTER_WHATS_NEW, /Short update is live/);
+    assert.match(TESTER_WHATS_NEW, /Save your work, then hard-refresh/);
+    assert.match(TESTER_WHATS_NEW, /Sign-in now sticks after you leave/);
+    assert.match(TESTER_WHATS_NEW, /create it one more time on this computer/);
+    assert.match(TESTER_WHATS_NEW, /will not send you to first-time/);
+    assert.equal(/Wendell|Joseph|testers/i.test(TESTER_WHATS_NEW), false);
+    assert.match(OWNER_WHATS_NEW, /Vercel \/tmp/);
+    assert.match(OWNER_WHATS_NEW, /claim cookie/);
+    assert.match(OWNER_WHATS_NEW, /owner login is unchanged/);
+    assert.match(OWNER_WHATS_NEW, /Wendell/);
+    assert.equal(testerCopyIsSafe(OWNER_WHATS_NEW), false);
     assert.equal(
-      /password|passwords|auth|security|Novus|vault|Drive|seats|owner tools|View as|aliases|other testers/i.test(
+      /password|passwords|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
         TESTER_WHATS_NEW,
       ),
       false,
     );
+    for (const word of [
+      "password",
+      "auth",
+      "cookie",
+      "session",
+      "security",
+      "novus",
+      "vault",
+      "seats",
+      "owner tools",
+      "view as",
+      "deploy",
+      "other users",
+      "other testers",
+      "anyone else",
+    ]) {
+      assert.equal(testerCopyIsSafe(word), false, word);
+    }
 
     const first = applyWhatsNew([], "tester-joseph-new", false);
     assert.equal(first.length, 1);
@@ -76,20 +101,24 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.15 onto an existing Hit Squad desk thread", () => {
+  it("appends V1.16 onto an existing Hit Squad desk thread after V1.15", () => {
+    assert.equal(seenKey("tester-x", "1.15.0"), `${WHATS_NEW_MARK_PREFIX}1.15.0:tester-x`);
+    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.16.0:tester-x`);
+    assert.notEqual(seenKey("tester-x", "1.15.0"), seenKey("tester-x"));
+
     const prior = [
       {
-        id: "th-desk-v1.14",
+        id: "th-desk-v1.15",
         personId: DESK_PERSON_ID,
         name: "Hit Squad",
         company: "Project Controls",
         unread: 0,
         messages: [
           {
-            id: "im-desk-1.14.0",
+            id: "im-desk-1.15.0",
             from: "them" as const,
             author: "Desk",
-            text: "Hit Squad Project Controls V1.14",
+            text: "Hit Squad Project Controls V1.15",
             photo: null,
             sentAt: "",
             readAt: "seen",
