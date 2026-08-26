@@ -11,10 +11,13 @@
 import { computeRowHours, type HoursSplit } from "./hours-clock.ts";
 import { defaultLaborClass } from "./labor-class.ts";
 
+export const SHAHAN_BOOK_ID = "shahan-wood-river";
 export const SHAHAN_BOOK_LABEL = "Shahan TM OCIP — Wood River";
 export const SHAHAN_PLANT = "Wood River";
 export const SHAHAN_STAFF_PD = 140;
 export const SHAHAN_CRAFT_PD = 130;
+export const SHAHAN_ONLY_BOOK_MESSAGE = "Only Wood River is loaded.";
+export const SHAHAN_NO_RATE_LABEL = "No rate";
 export const SHAHAN_OT_MULTIPLIER = 1.5;
 export const SHAHAN_PT_MULTIPLIER = 2;
 
@@ -284,7 +287,10 @@ export type JobRates = {
   craftPerDiemRate: number;
   staffMileageRate: number;
   craftMileageRate: number;
+  rateBook: string;
 };
+
+export type CrewCardId = "staff" | "general-foreman" | "foreman" | "direct" | "support";
 
 export function emptyJobRates(): JobRates {
   return {
@@ -292,6 +298,7 @@ export function emptyJobRates(): JobRates {
     craftPerDiemRate: SHAHAN_CRAFT_PD,
     staffMileageRate: 0,
     craftMileageRate: 0,
+    rateBook: "",
   };
 }
 
@@ -309,6 +316,7 @@ export function hydrateJobRates(raw: Partial<JobRates> | Record<string, unknown>
     craftPerDiemRate: num(row.craftPerDiemRate, defaults.craftPerDiemRate),
     staffMileageRate: "staffMileageRate" in row ? num(row.staffMileageRate, 0) : leftoverMileage,
     craftMileageRate: "craftMileageRate" in row ? num(row.craftMileageRate, 0) : leftoverMileage,
+    rateBook: typeof row.rateBook === "string" ? row.rateBook : defaults.rateBook,
   };
 }
 
@@ -569,7 +577,7 @@ export function laborDollarsFromCrew(
     Math.round(
       rows.reduce((sum, row) => {
         const hours = computeRowHours(row, site, client, crew.otAfter8);
-        const title = row.position || row.billedAs || "";
+        const title = row.billedAs || row.position || "";
         return sum + shahanCrewCostAmount(title, hours, {
           ...opts,
           laborClass: row.laborClassOverride ?? opts.laborClass ?? defaultLaborClass(title),
@@ -606,4 +614,204 @@ export function perDiemDollarsFromCrew(
 ): number {
   const days = perDiemDaysFromCrew(crew, site, client);
   return Math.round((days.staff * Math.max(0, rates.staffPerDiemRate) + days.craft * Math.max(0, rates.craftPerDiemRate)) * 100) / 100;
+}
+
+export function uniqueSortedTitles(titles: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const next: string[] = [];
+  for (const title of titles) {
+    const trimmed = title.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    next.push(trimmed);
+  }
+  return next.sort((a, b) => a.localeCompare(b, "en", { numeric: true, sensitivity: "base" }));
+}
+
+export function isWoodRiverSite(site = ""): boolean {
+  return /wood\s*river/i.test(site);
+}
+
+export function offerRateBookForSite(site = ""):
+  | { ok: true; bookId: typeof SHAHAN_BOOK_ID; bookLabel: typeof SHAHAN_BOOK_LABEL }
+  | { ok: false; message: string } {
+  if (!isWoodRiverSite(site)) {
+    return { ok: false, message: SHAHAN_ONLY_BOOK_MESSAGE };
+  }
+  return { ok: true, bookId: SHAHAN_BOOK_ID, bookLabel: SHAHAN_BOOK_LABEL };
+}
+
+export function applyShahanJobRates<T extends JobRates>(rates: T): T {
+  return {
+    ...rates,
+    staffPerDiemRate: SHAHAN_STAFF_PD,
+    craftPerDiemRate: SHAHAN_CRAFT_PD,
+    rateBook: SHAHAN_BOOK_ID,
+  };
+}
+
+export function rematchShahanTitle(title: string, opts: ShahanLookupOpts = {}): string {
+  const trimmed = title.trim();
+  if (!trimmed) return title;
+  const row = lookupShahanLabor(trimmed, opts);
+  return row?.craftName ?? title;
+}
+
+export function rematchCrewToShahan<T extends {
+  staff?: HourRow[];
+  generalForeman?: HourRow[];
+  foreman?: HourRow[];
+  direct?: HourRow[];
+  support?: HourRow[];
+}>(crew: T, opts: ShahanLookupOpts = {}): T {
+  const remap = <R extends HourRow>(rows: R[] | undefined): R[] | undefined =>
+    rows?.map((row) => ({
+      ...row,
+      position: rematchShahanTitle(row.position, {
+        ...opts,
+        laborClass: row.laborClassOverride ?? opts.laborClass,
+      }),
+      ...(row.billedAs != null
+        ? {
+            billedAs: rematchShahanTitle(row.billedAs, {
+              ...opts,
+              laborClass: row.laborClassOverride ?? opts.laborClass,
+            }),
+          }
+        : {}),
+    }));
+  return {
+    ...crew,
+    staff: remap(crew.staff) ?? crew.staff,
+    generalForeman: remap(crew.generalForeman) ?? crew.generalForeman,
+    foreman: remap(crew.foreman) ?? crew.foreman,
+    direct: remap(crew.direct) ?? crew.direct,
+    support: remap(crew.support) ?? crew.support,
+  };
+}
+
+export function shahanTitleHasNoRate(title: string, opts: ShahanLookupOpts = {}): boolean {
+  const trimmed = title.trim();
+  if (!trimmed) return false;
+  return !hasShahanBillRate(lookupShahanLabor(trimmed, opts));
+}
+
+function isGeneralForemanName(name: string): boolean {
+  return /general\s*foreman|\bgf\b/i.test(name);
+}
+
+function isForemanName(name: string): boolean {
+  return /(?:asst\s+)?fore?man/i.test(name) && !isGeneralForemanName(name);
+}
+
+function isStaffSupervisionRow(row: ShahanLaborRow): boolean {
+  if (isGeneralForemanName(row.craftName) || isForemanName(row.craftName)) return false;
+  if (/journeyman|apprentice|\bappr\b/i.test(row.craftName)) return false;
+  return /^staff\|/i.test(row.group) && /staff/i.test(row.group);
+}
+
+function isSupportTypeRow(row: ShahanLaborRow): boolean {
+  return /support|watch|attendant|handler|tool room/i.test(row.craftName);
+}
+
+export function shahanTitlesForCard(card: CrewCardId, catalog: ShahanLaborRow[] = SHAHAN_LABOR): string[] {
+  const names = catalog
+    .filter((row) => {
+      if (card === "staff") return isStaffSupervisionRow(row);
+      if (card === "general-foreman") return isGeneralForemanName(row.craftName);
+      if (card === "foreman") return isForemanName(row.craftName);
+      if (card === "support") return isSupportTypeRow(row);
+      if (isGeneralForemanName(row.craftName) || isForemanName(row.craftName) || isStaffSupervisionRow(row)) {
+        return false;
+      }
+      return (
+        /^craft\|/i.test(row.group) ||
+        /journeyman|apprentice|\bappr\b|operating eng|teamster|steward/i.test(row.craftName)
+      );
+    })
+    .map((row) => row.craftName);
+  return uniqueSortedTitles(names);
+}
+
+export const SHAHAN_STAFF_TITLES = shahanTitlesForCard("staff");
+export const SHAHAN_GENERAL_FOREMAN_TITLES = shahanTitlesForCard("general-foreman");
+export const SHAHAN_FOREMAN_TITLES = shahanTitlesForCard("foreman");
+export const SHAHAN_CRAFT_TITLES = shahanTitlesForCard("direct");
+export const SHAHAN_SUPPORT_TITLES = shahanTitlesForCard("support");
+
+export function shahanEquipmentId(row: ShahanEquipmentRow, index: number): string {
+  const slug = normalizeTitle(row.description).replace(/\s+/g, "-");
+  return `${row.wet ? "wet" : "dry"}:${index}:${slug}`;
+}
+
+export function isShahanCostPlus(row: ShahanEquipmentRow): boolean {
+  return /cost\s*plus/i.test(row.description);
+}
+
+export function shahanEquipmentHasRate(row: ShahanEquipmentRow | null | undefined): boolean {
+  return Boolean(row && (priced(row.daily) || priced(row.weekly) || priced(row.monthly)));
+}
+
+export function shahanPeriodRate(row: ShahanEquipmentRow, period: "hourly" | "daily" | "weekly" | "monthly"): number | null {
+  if (period === "hourly") return null;
+  if (period === "daily") return row.daily;
+  if (period === "weekly") return row.weekly;
+  return row.monthly;
+}
+
+function equipmentNameKey(value: string): string {
+  return normalizeTitle(value.replace(/^(wet|dry):\d+:/i, "").replace(/-/g, " "));
+}
+
+export function rematchShahanEquipment(
+  itemId: string,
+  catalog: ShahanEquipmentRow[] = SHAHAN_EQUIPMENT,
+): ShahanEquipmentRow | null {
+  const rows = shahanEquipmentRows(catalog);
+  const key = equipmentNameKey(itemId);
+  if (!key) return null;
+  const exact = rows.filter((row) => normalizeTitle(row.description) === key);
+  if (exact.length) return exact.find((row) => !row.wet) ?? exact[0];
+  const starts = rows.filter((row) => {
+    const name = normalizeTitle(row.description);
+    return name.startsWith(key) || key.startsWith(name);
+  });
+  if (starts.length) return starts.find((row) => !row.wet) ?? starts[0];
+  return null;
+}
+
+export function lookupShahanEquipment(
+  itemId: string,
+  catalog: ShahanEquipmentRow[] = SHAHAN_EQUIPMENT,
+): ShahanEquipmentRow | null {
+  if (!itemId) return null;
+  const rows = shahanEquipmentRows(catalog);
+  const exact = rows.find((row, index) => shahanEquipmentId(row, index) === itemId);
+  if (exact) return exact;
+  return rematchShahanEquipment(itemId, catalog);
+}
+
+export function rematchShahanEquipmentId(
+  itemId: string,
+  catalog: ShahanEquipmentRow[] = SHAHAN_EQUIPMENT,
+): string {
+  if (!itemId) return "";
+  const rows = shahanEquipmentRows(catalog);
+  if (rows.some((row, index) => shahanEquipmentId(row, index) === itemId)) return itemId;
+  const row = rematchShahanEquipment(itemId, catalog);
+  if (!row) return itemId;
+  return shahanEquipmentId(row, rows.indexOf(row));
+}
+
+export function rematchEquipmentSheetToShahan<T extends { largeTools?: { itemId: string }[]; thirdParty?: unknown[] }>(
+  sheet: T,
+  catalog: ShahanEquipmentRow[] = SHAHAN_EQUIPMENT,
+): T {
+  return {
+    ...sheet,
+    largeTools: sheet.largeTools?.map((line) => ({
+      ...line,
+      itemId: rematchShahanEquipmentId(line.itemId, catalog),
+    })),
+  };
 }

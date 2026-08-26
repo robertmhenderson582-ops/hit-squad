@@ -4,22 +4,39 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  SHAHAN_BOOK_ID,
   SHAHAN_BOOK_LABEL,
   SHAHAN_CRAFT_PD,
+  SHAHAN_CRAFT_TITLES,
   SHAHAN_EQUIPMENT,
+  SHAHAN_FOREMAN_TITLES,
+  SHAHAN_GENERAL_FOREMAN_TITLES,
   SHAHAN_LABOR,
   SHAHAN_LABOR_FIXTURE,
+  SHAHAN_NO_RATE_LABEL,
+  SHAHAN_ONLY_BOOK_MESSAGE,
   SHAHAN_STAFF_PD,
+  SHAHAN_STAFF_TITLES,
   SHAHAN_WET_EQUIPMENT_HEADER,
+  applyShahanJobRates,
   emptyJobRates,
   formatShahanCrewCost,
   hydrateJobRates,
   isNathanEstimateTitle,
+  laborDollarsFromCrew,
+  lookupShahanEquipment,
   lookupShahanLabor,
+  offerRateBookForSite,
+  rematchCrewToShahan,
+  rematchEquipmentSheetToShahan,
+  rematchShahanEquipmentId,
   shahanCrewCostAmount,
   shahanEquipmentByFuel,
+  shahanEquipmentId,
   shahanEquipmentRows,
   shahanLaborByGroup,
+  shahanPeriodRate,
+  shahanTitleHasNoRate,
 } from "./shahan-wood-river.ts";
 import { emptyJobMeta } from "./staffing-plan.ts";
 import { blankTravel, defaultTravelLine, syncTravelFromCrew } from "./other-cost.ts";
@@ -104,10 +121,17 @@ describe("Shahan TM OCIP — Wood River", () => {
     assert.equal(fresh.craftPerDiemRate, SHAHAN_CRAFT_PD);
     assert.equal(fresh.staffMileageRate, 0);
     assert.equal(fresh.craftMileageRate, 0);
+    assert.equal(fresh.rateBook, "");
     const hydrated = hydrateJobRates({});
     assert.equal(hydrated.staffPerDiemRate, 140);
     assert.equal(hydrated.craftPerDiemRate, 130);
-    assert.deepEqual(emptyJobRates(), { staffPerDiemRate: 140, craftPerDiemRate: 130, staffMileageRate: 0, craftMileageRate: 0 });
+    assert.deepEqual(emptyJobRates(), {
+      staffPerDiemRate: 140,
+      craftPerDiemRate: 130,
+      staffMileageRate: 0,
+      craftMileageRate: 0,
+      rateBook: "",
+    });
     const leftover = hydrateJobRates({ mileageRate: 0.67, perDiemRate: 185 });
     assert.equal(leftover.staffMileageRate, 0.67);
     assert.equal(leftover.craftMileageRate, 0.67);
@@ -166,12 +190,137 @@ describe("Shahan TM OCIP — Wood River", () => {
     assert.equal(SHAHAN_EQUIPMENT.filter((row) => row.description === "EXTRACTOR BUNDLE AERIAL <21FT REQUIRES OPERATOR").length, 2);
     const rateTab = readFileSync(fileURLToPath(new URL("../components/RateBuilder.tsx", import.meta.url)), "utf8");
     assert.match(rateTab, /SHAHAN_BOOK_LABEL/);
-    assert.match(rateTab, /with fuel \(WET\)/);
+    assert.match(rateTab, /with fuel \(wet\)/);
+    assert.match(rateTab, /without fuel \(dry\)/);
     assert.equal(/useDeskBoard|field-trial|Nathan CAT|RRFF official/i.test(rateTab), false);
+    const equipmentDesk = readFileSync(fileURLToPath(new URL("../components/EquipmentDesk.tsx", import.meta.url)), "utf8");
+    assert.match(equipmentDesk, /With fuel \(wet\)/);
+    assert.match(equipmentDesk, /Without fuel \(dry\)/);
+    assert.equal(/East Coast COMP|dry, w\/o fuel|B2_COAST|billableB2Items/i.test(equipmentDesk), false);
+    const jobSetup = readFileSync(fileURLToPath(new URL("../components/JobSetupCard.tsx", import.meta.url)), "utf8");
+    assert.match(jobSetup, /Update rates/);
+    assert.match(jobSetup, /offerRateBookForSite/);
+    assert.match(jobSetup, /applyShahanJobRates/);
   });
 
   it("does not put workbooks in the repo", () => {
     const listed = execSync('git ls-files "*.xlsx" "*.xlsm" "*.xls" "*.pdf"', { encoding: "utf8" }).trim();
     assert.equal(listed, "");
+  });
+
+  it("bills ST×st + OT×ot + DT×dt for a Shahan title on each Crew card", () => {
+    const hours = { st: 10, ot: 2, dt: 1 };
+    const staff = lookupShahanLabor("Lead Site Boilermaker 01");
+    const gf = lookupShahanLabor("Boilermaker General Foreman");
+    const foreman = lookupShahanLabor("Boilermaker Foreman");
+    const craft = lookupShahanLabor("Boilermaker Journeyman");
+    assert.ok(staff && gf && foreman && craft);
+    assert.equal(SHAHAN_STAFF_TITLES.includes("Lead Site Boilermaker 01"), true);
+    assert.equal(SHAHAN_GENERAL_FOREMAN_TITLES.includes("Boilermaker General Foreman"), true);
+    assert.equal(SHAHAN_FOREMAN_TITLES.includes("Boilermaker Foreman"), true);
+    assert.equal(SHAHAN_CRAFT_TITLES.includes("Boilermaker Journeyman"), true);
+    const billed = (st: number, ot: number, dt: number) => Math.round((10 * st + 2 * ot + dt) * 100) / 100;
+    assert.equal(shahanCrewCostAmount("Lead Site Boilermaker 01", hours), billed(staff.st!, staff.ot!, staff.dt!));
+    assert.equal(shahanCrewCostAmount("Boilermaker General Foreman", hours), billed(gf.st!, gf.ot!, gf.dt!));
+    assert.equal(shahanCrewCostAmount("Boilermaker Foreman", hours), billed(foreman.st!, foreman.ot!, foreman.dt!));
+    assert.equal(shahanCrewCostAmount("Boilermaker Journeyman", hours), billed(craft.st!, craft.ot!, craft.dt!));
+    const billedAs = "Boilermaker Journeyman";
+    assert.equal(shahanCrewCostAmount(billedAs, hours), billed(craft.st!, craft.ot!, craft.dt!));
+    assert.equal(shahanCrewCostAmount("Fire Watch", hours), 0);
+  });
+
+  it("leftover Merit 01 bills 0 and shows no-rate", () => {
+    assert.equal(isNathanEstimateTitle("Project Manager Merit 01"), true);
+    assert.equal(lookupShahanLabor("Project Manager Merit 01"), null);
+    assert.equal(shahanCrewCostAmount("Project Manager Merit 01", { st: 10, ot: 2, dt: 1 }), 0);
+    assert.equal(formatShahanCrewCost("Project Manager Merit 01", { st: 10, ot: 2, dt: 1 }), "");
+    assert.equal(shahanTitleHasNoRate("Project Manager Merit 01"), true);
+    assert.equal(SHAHAN_NO_RATE_LABEL, "No rate");
+    assert.equal(
+      laborDollarsFromCrew({
+        staff: [{ position: "Project Manager Merit 01", ranges: [] }],
+      }),
+      0,
+    );
+  });
+
+  it("keeps wet and dry copies of the same description as different dollars", () => {
+    const rows = shahanEquipmentRows();
+    const wet = rows.find((row) => row.wet && row.description === "EXTRACTOR BUNDLE AERIAL <21FT REQUIRES OPERATOR");
+    const dry = rows.find((row) => !row.wet && row.description === "EXTRACTOR BUNDLE AERIAL <21FT REQUIRES OPERATOR");
+    assert.ok(wet && dry);
+    assert.equal(wet.daily, 1592);
+    assert.equal(dry.daily, 1512);
+    assert.notEqual(wet.daily, dry.daily);
+    assert.notEqual(shahanEquipmentId(wet, rows.indexOf(wet)), shahanEquipmentId(dry, rows.indexOf(dry)));
+    assert.equal(lookupShahanEquipment(shahanEquipmentId(wet, rows.indexOf(wet)))?.daily, 1592);
+    assert.equal(lookupShahanEquipment(shahanEquipmentId(dry, rows.indexOf(dry)))?.daily, 1512);
+    const rad = lookupShahanEquipment("RAD GUN TORQUE");
+    assert.deepEqual(
+      { daily: rad?.daily, weekly: rad?.weekly, monthly: rad?.monthly, wet: rad?.wet },
+      { daily: 496, weekly: 1488, monthly: 4464, wet: false },
+    );
+    assert.equal(shahanPeriodRate(rad!, "hourly"), null);
+  });
+
+  it("Update rates sets Wood River PD 140/130, binds the book, and does not wipe hours", () => {
+    const bayway = offerRateBookForSite("Bayway");
+    assert.equal(bayway.ok, false);
+    assert.equal(bayway.ok ? "" : bayway.message, SHAHAN_ONLY_BOOK_MESSAGE);
+    assert.equal(offerRateBookForSite("Yates — Newnan, GA").ok, false);
+    const wood = offerRateBookForSite("Wood River — Roxana, IL");
+    assert.equal(wood.ok, true);
+    if (!wood.ok) throw new Error("expected Wood River book");
+    assert.equal(wood.bookId, SHAHAN_BOOK_ID);
+    assert.equal(wood.bookLabel, SHAHAN_BOOK_LABEL);
+    const ranges = [
+      {
+        start: "2026-09-21",
+        end: "2026-09-25",
+        hoursPerShift: 10,
+        headcount: 3,
+        nightHeadcount: 1,
+        perDiemPeople: 2,
+        days: [false, true, true, true, true, true, false],
+      },
+    ];
+    const crew = rematchCrewToShahan({
+      staff: [{ position: "MANAGER, PROJECT 01", ranges }],
+      generalForeman: [{ position: "Boilermaker GF Union", ranges }],
+      support: [{ position: "Fire Watch", billedAs: "Project Manager Merit 01", ranges }],
+      otAfter8: false,
+    });
+    assert.equal(crew.staff?.[0]?.position, "Manager, Project 01");
+    assert.equal(crew.generalForeman?.[0]?.position, "Boilermaker General Foreman");
+    assert.equal(crew.support?.[0]?.position, "Fire Watch");
+    assert.equal(crew.support?.[0]?.billedAs, "Project Manager Merit 01");
+    assert.deepEqual(crew.staff?.[0]?.ranges, ranges);
+    assert.equal(crew.staff?.[0]?.ranges[0]?.headcount, 3);
+    assert.equal(crew.staff?.[0]?.ranges[0]?.hoursPerShift, 10);
+    const meta = applyShahanJobRates({
+      afeName: "AFE-1",
+      area: "CAT",
+      staffPerDiemRate: 99,
+      craftPerDiemRate: 88,
+      staffMileageRate: 0.67,
+      craftMileageRate: 0.55,
+      rateBook: "",
+    });
+    assert.equal(meta.staffPerDiemRate, SHAHAN_STAFF_PD);
+    assert.equal(meta.craftPerDiemRate, SHAHAN_CRAFT_PD);
+    assert.equal(meta.rateBook, SHAHAN_BOOK_ID);
+    assert.equal(meta.afeName, "AFE-1");
+    assert.equal(meta.staffMileageRate, 0.67);
+    const sheet = rematchEquipmentSheetToShahan({
+      largeTools: [{ id: "lt-1", itemId: "air-mover", period: "daily", qty: 2, start: "2026-09-21", end: "2026-09-23", freight: 40, enteredCost: 0 }],
+      thirdParty: [{ id: "tp-1", item: "Crane", period: "weekly", rate: 1000, freight: 200, qty: 2, start: "2026-09-21", end: "2026-09-28" }],
+    });
+    assert.equal(sheet.largeTools?.[0]?.qty, 2);
+    assert.equal(sheet.largeTools?.[0]?.freight, 40);
+    assert.equal(sheet.largeTools?.[0]?.start, "2026-09-21");
+    assert.equal(sheet.thirdParty?.[0]?.item, "Crane");
+    assert.equal(sheet.thirdParty?.[0]?.rate, 1000);
+    assert.match(sheet.largeTools?.[0]?.itemId || "", /^dry:\d+:air-mover$/);
+    assert.equal(rematchShahanEquipmentId(""), "");
   });
 });

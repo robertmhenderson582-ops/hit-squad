@@ -117,8 +117,8 @@ export function RateBuilder() {
         </section>
       ))}
 
-      <EquipmentTable rows={equipment.wet} caption="Equipment — with fuel (WET)" />
-      <EquipmentTable rows={equipment.dry} caption="Equipment" />
+      <EquipmentTable rows={equipment.wet} caption="Equipment — with fuel (wet)" />
+      <EquipmentTable rows={equipment.dry} caption="Equipment — without fuel (dry)" />
     </div>
   );
 }

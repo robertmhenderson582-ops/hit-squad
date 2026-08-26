@@ -1,22 +1,22 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.17.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.17";
+export const DESK_VERSION = "1.18.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.18";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.17";
+export const DESK_THREAD_ID = "th-desk-v1.18";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.17",
-  "• Cost now fills from Wood River Shahan. The Rate tab shows that book.",
+  "Hit Squad Project Controls V1.18",
+  "• Wood River Shahan rates on Crew and Equipment. Wet and dry equipment. Update rates on Job setup.",
   "• Save your work, then hard-refresh.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.17",
-  "• Crew Cost and the Rate tab use Debbie Shahan TM OCIP — Wood River. Live catalog stays empty until the 159-row sheet is pasted. Not Nathan, not RRFF.",
-  "• Job setup now has Staff PD $140 / Craft PD $130 and Staff / Craft mileage. Travel Staff and Craft inherit those mileage rates unless already typed.",
-  "• Testers who already saw V1.16 get this note (versioned seen key).",
+  "Hit Squad Project Controls V1.18",
+  "• Crew and Equipment dropdowns use Debbie Shahan TM OCIP — Wood River. Staff and craft Cost use that book's ST / OT / DT. Leftover Merit 01 names stay and show No rate.",
+  "• Equipment lists with fuel (wet) and without fuel (dry) as separate picks. Update rates on Job setup pulls Staff PD $140 / Craft PD $130 for Wood River without wiping hours.",
+  "• Testers who already saw V1.17 get this note (versioned seen key).",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

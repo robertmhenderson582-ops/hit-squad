@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { b2ItemById } from "./b2-east-coast.ts";
+import { lookupShahanEquipment, rematchShahanEquipmentId, shahanEquipmentId, shahanEquipmentRows } from "./shahan-wood-river.ts";
 import {
   billedPeriodCount,
   blankLargeTool,
@@ -16,16 +16,16 @@ import {
   type LargeToolLine,
 } from "./equipment-sheet.ts";
 
-test("third-party rental is typed cost + 6%, not a COMP picker", () => {
+test("third-party rental is typed cost + 6%, not a plant picker", () => {
   const line = { ...blankThirdParty(), item: "Crane", period: "weekly" as const, rate: 1000, freight: 200, qty: 2 };
   assert.equal(thirdPartyCost(line), 2200);
   assert.equal(thirdPartyMarkedUp(line), 2332);
   assert.equal("itemId" in line, false);
-  assert.equal(b2ItemById("crane"), undefined);
+  assert.equal(lookupShahanEquipment("crane"), null);
 });
 
-test("large tools use the East Coast listed dry rate", () => {
-  const mover = b2ItemById("air-mover");
+test("large tools use the Shahan Wood River listed rate", () => {
+  const mover = lookupShahanEquipment("air-mover");
   assert.ok(mover);
   const line: LargeToolLine = {
     id: "lt-1",
@@ -45,6 +45,27 @@ test("large tools use the East Coast listed dry rate", () => {
   assert.equal(totals.largeTools, 64);
   assert.equal(totals.thirdParty, 106);
   assert.equal(totals.total, 170);
+});
+
+test("wet and dry copies of the same description bill different Shahan dollars", () => {
+  const rows = shahanEquipmentRows();
+  const wet = rows.find((row) => row.wet && row.description === "EXTRACTOR BUNDLE AERIAL <21FT REQUIRES OPERATOR");
+  const dry = rows.find((row) => !row.wet && row.description === "EXTRACTOR BUNDLE AERIAL <21FT REQUIRES OPERATOR");
+  assert.ok(wet && dry);
+  const wetLine: LargeToolLine = {
+    id: "lt-wet",
+    itemId: shahanEquipmentId(wet, rows.indexOf(wet)),
+    period: "daily",
+    qty: 1,
+    start: "",
+    end: "",
+    enteredCost: 0,
+    freight: 0,
+  };
+  const dryLine = { ...wetLine, id: "lt-dry", itemId: shahanEquipmentId(dry, rows.indexOf(dry)) };
+  assert.equal(largeToolAmount(wetLine), 1592);
+  assert.equal(largeToolAmount(dryLine), 1512);
+  assert.equal(rematchShahanEquipmentId("air-mover").startsWith("dry:"), true);
 });
 
 test("unlisted large tools cannot be billed", () => {

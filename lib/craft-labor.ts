@@ -8,15 +8,15 @@ import {
   type PhaseRow,
 } from "./phase-schedule.ts";
 import {
-  WOOD_RIVER_CRAFT_TITLES,
-  WOOD_RIVER_STAFF_TITLES,
-  WOOD_RIVER_SUPPORT_TITLES,
-} from "./wood-river-positions.ts";
+  SHAHAN_CRAFT_TITLES,
+  SHAHAN_STAFF_TITLES,
+  SHAHAN_SUPPORT_TITLES,
+} from "./shahan-wood-river.ts";
 
-export const STAFF_POSITIONS = WOOD_RIVER_STAFF_TITLES;
-export const CRAFT_POSITIONS = WOOD_RIVER_CRAFT_TITLES;
+export const STAFF_POSITIONS = SHAHAN_STAFF_TITLES;
+export const CRAFT_POSITIONS = SHAHAN_CRAFT_TITLES;
 export const LISTED_POSITIONS = [...STAFF_POSITIONS, ...CRAFT_POSITIONS];
-export const SUPPORT_DUTIES = WOOD_RIVER_SUPPORT_TITLES;
+export const SUPPORT_DUTIES = SHAHAN_SUPPORT_TITLES;
 
 export const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 

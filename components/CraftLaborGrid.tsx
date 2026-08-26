@@ -22,7 +22,7 @@ import {
 import { CrewPhaseCards } from "@/components/CrewPhaseCards";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { defaultLaborClass, type LaborClass } from "@/lib/labor-class";
-import { formatShahanCrewCost } from "@/lib/shahan-wood-river";
+import { formatShahanCrewCost, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
 
 const HEADERS = ["POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST"];
 
@@ -237,6 +237,9 @@ function CraftAccordionRow({
   const options = catalog && catalog.length > 0 ? catalog : LISTED_POSITIONS;
   const naturalClass = defaultLaborClass(row.position);
   const laborClass = row.laborClassOverride ?? naturalClass;
+  const noRate = shahanTitleHasNoRate(row.position || ("billedAs" in row ? String(row.billedAs || "") : ""), {
+    laborClass,
+  });
   const starred = Boolean(row.laborClassOverride && row.laborClassOverride !== naturalClass);
   const staff = seatKind(row.position) === "staff";
   const clockChecked = staff ? row.clockOverride === "comp" : row.clockOverride === "staff";
@@ -315,7 +318,15 @@ function CraftAccordionRow({
         <td className="hud-readout px-2 py-2">{row.dt.toLocaleString()}</td>
         <td className="hud-readout px-2 py-2">{row.pd}</td>
         <td className="hud-readout px-2 py-2">{row.hours.toLocaleString()}</td>
-        <td className="hud-readout px-2 py-2 font-semibold">{row.cost || null}</td>
+        <td className="hud-readout px-2 py-2 font-semibold">
+          {row.cost ? (
+            row.cost
+          ) : noRate ? (
+            <span className="text-xs font-medium text-[#8a4b2f]" title="This title is not in the Shahan Wood River book">
+              No rate
+            </span>
+          ) : null}
+        </td>
         <td className="px-2 py-2">
           <div className="flex items-center gap-1">
             <button
