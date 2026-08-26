@@ -918,6 +918,12 @@ textarea:focus {
   color: #163038;
 }
 
+.estimate-ot-readout {
+  border: 1px solid #c5d4d4;
+  background: #eadfc8;
+  color: #163038;
+}
+
 .day-chip {
   display: inline-flex;
   height: 2rem;

@@ -1,26 +1,32 @@
 "use client";
 
+import { useMemo } from "react";
 import { CrewManHours } from "@/components/CrewManHours";
 import { LaborRollup } from "@/components/LaborRollup";
 import { ModuleTable } from "@/components/ModuleTable";
 import { useDeskBoard } from "@/components/useDeskBoard";
+import { deskStoredCrewHours } from "@/lib/crew-hours";
 
 export function CostDesk() {
   const { board, error } = useDeskBoard();
   const rows = board?.cost ?? [];
+  const estHours = useMemo(
+    () => deskStoredCrewHours(board?.estimates ?? [], board?.sites ?? []),
+    [board],
+  );
 
   return (
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Cost report: EST HOURS / HOURS EARNED / REMAINING, then Crew & man-hours. Hours earned stays 0
-        until the job turns.
+        EST hours come from Crew calendars on open estimates. Hours earned stays 0 until the job
+        turns. The weekly table is seed demo — not live CPI / SPI / forecast.
       </p>
       {error ? <p className="text-amber-flare">{error}</p> : null}
-      <LaborRollup />
+      <LaborRollup estHours={estHours} />
       <h2 className="font-display text-2xl font-semibold text-[#163038]">Crew & man-hours</h2>
       <CrewManHours />
       <ModuleTable
-        caption="COST / PPR — WEEKLY EARNED VALUE"
+        caption="COST / PPR — WEEKLY EARNED VALUE (seed demo)"
         headers={["ESTIMATE", "PERIOD", "BUDGET", "EARNED", "ACTUAL", "CPI", "SPI", "FORECAST", "NOTE"]}
       >
         {rows.map((row) => (

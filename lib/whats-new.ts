@@ -21,6 +21,7 @@ export const TESTER_WHATS_NEW = [
   "• Opening a job keeps its ID, window, and working figure on Wood River",
   "• Sites lists 4 Wood River jobs (3 open, 1 hold) and 3 estimates — HSE is a job, not an estimate",
   "• New estimate asks for the job / event, not a size. The name follows Turnaround or Outage. Overtime is a locked readout. Escape and × close it",
+  "• Cost EST hours follow Crew calendars. Hours earned stays 0. Rate burdened figures are field-trial, not computed from the columns",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
@@ -38,6 +39,7 @@ export const OWNER_WHATS_NEW = [
   "• Sites lists 4 Wood River jobs (3 open, 1 hold) and 3 estimates — HSE is a job, not an estimate",
   "• New estimate asks for the job / event, not a size. The name follows Turnaround or Outage. Escape and × close it",
   "• Don’t lock on the owner seat is real. Testers still lock at 15 minutes",
+  "• Cost EST hours follow Crew calendars. Hours earned stays 0. Rate burdened figures stay stored field-trial numbers",
 ].join("\n");
 
 const FORBIDDEN_TESTER =
