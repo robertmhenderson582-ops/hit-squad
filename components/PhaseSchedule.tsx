@@ -35,7 +35,7 @@ export function PhaseSchedule() {
     <section className="plant-card px-5 py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h2 className="font-display text-2xl font-semibold text-[#163038]">Phases & work schedule</h2>
-        <label className="flex items-center gap-2 text-sm text-[#163038]">
+        <label className="multi-units-toggle">
           <input
             type="checkbox"
             checked={multi}
@@ -168,7 +168,7 @@ function PhaseRowsTable({
                     aria-label={`${row.name} on`}
                   />
                 </td>
-                <td className="whitespace-nowrap px-2 py-3 align-top">
+                <td className="phase-date-cell whitespace-nowrap px-2 py-3 align-top">
                   <DateField
                     value={row.start}
                     disabled={startLocked}
@@ -176,7 +176,7 @@ function PhaseRowsTable({
                     onChange={(start) => onPatch(row.id, { start })}
                   />
                 </td>
-                <td className="whitespace-nowrap px-2 py-3 align-top">
+                <td className="phase-date-cell whitespace-nowrap px-2 py-3 align-top">
                   <DateField
                     value={row.stop}
                     disabled={!row.on}

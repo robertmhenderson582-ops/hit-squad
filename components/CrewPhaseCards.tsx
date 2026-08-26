@@ -234,7 +234,7 @@ function CalendarPattern({
           </select>
         </label>
       ) : null}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="calendar-dates">
         <div className="text-xs">
           Start
           <DateField
@@ -253,6 +253,8 @@ function CalendarPattern({
             onChange={(end) => onPatch({ end: end < range.start ? range.start : end })}
           />
         </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
         <label className="text-xs">
           Shift
           <select
