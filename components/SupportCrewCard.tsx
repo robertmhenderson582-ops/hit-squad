@@ -184,8 +184,14 @@ export function SupportCrewCard({
                       onChange={(billedAs) => assignBilledAs(row.id, billedAs)}
                       allowCustom
                     />
-                    <button type="button" onClick={() => void remove(row)} className="text-sm text-[#b74120]">
-                      Remove
+                    <button
+                      type="button"
+                      onClick={() => void remove(row)}
+                      title="Remove position"
+                      aria-label="Remove position"
+                      className="trash-btn"
+                    >
+                      ⌫
                     </button>
                   </div>
                   {open ? (
