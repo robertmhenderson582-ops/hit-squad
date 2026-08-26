@@ -19,6 +19,8 @@ import {
   type SupportLine,
 } from "@/lib/craft-labor";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
+import { defaultLaborClass } from "@/lib/labor-class";
+import { formatShahanCrewCost, shahanCrewTitle, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
 
 export type { SupportLine };
 
@@ -49,10 +51,12 @@ export function SupportCrewCard({
   const computed = useMemo(
     () =>
       lines.map((row) => {
-        const hours = computeRowHours(row, site, client);
-        return { ...row, ...hours, cost: row.cost || "" };
+        const hours = computeRowHours(row, site, client, pack.crew.otAfter8);
+        const title = shahanCrewTitle(row);
+        const opts = { laborClass: row.laborClassOverride ?? defaultLaborClass(title) };
+        return { ...row, ...hours, cost: formatShahanCrewCost(title, hours, opts) };
       }),
-    [client, lines, site],
+    [client, lines, pack.crew.otAfter8, site],
   );
   const totals = useMemo(() => sumSplits(computed), [computed]);
 
@@ -225,6 +229,10 @@ function SupportAccordionRow({
   onDuplicate: () => void;
   onRemove: () => void;
 }) {
+  const billedTitle = shahanCrewTitle(row);
+  const noRate = shahanTitleHasNoRate(billedTitle, {
+    laborClass: row.laborClassOverride ?? defaultLaborClass(billedTitle),
+  });
   return (
     <>
       <tr className="border-t border-[#d5e0de] align-top">
@@ -290,7 +298,15 @@ function SupportAccordionRow({
         <td className="hud-readout px-2 py-2">{row.dt.toLocaleString()}</td>
         <td className="hud-readout px-2 py-2">{row.pd}</td>
         <td className="hud-readout px-2 py-2">{row.hours.toLocaleString()}</td>
-        <td className="hud-readout px-2 py-2 font-semibold">{row.cost || null}</td>
+        <td className="hud-readout px-2 py-2 font-semibold">
+          {row.cost ? (
+            row.cost
+          ) : noRate ? (
+            <span className="text-xs font-medium text-[#8a4b2f]" title="This title is not in the Shahan Wood River book">
+              No rate
+            </span>
+          ) : null}
+        </td>
         <td className="px-2 py-2">
           <div className="flex items-center gap-1">
             <button

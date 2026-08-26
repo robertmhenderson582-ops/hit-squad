@@ -1,5 +1,13 @@
-import { b2ItemById, markup6, periodRate, type B2Period } from "./b2-east-coast.ts";
+import { markup6, type B2Period } from "./b2-east-coast.ts";
 import { inclusiveDays, parseYmd } from "./phase-schedule.ts";
+import {
+  isShahanCostPlus,
+  lookupShahanEquipment,
+  rematchEquipmentSheetToShahan,
+  rematchShahanEquipmentId,
+  shahanEquipmentHasRate,
+  shahanPeriodRate,
+} from "./shahan-wood-river.ts";
 import { notifyEstimateSheets } from "./sheet-events.ts";
 
 export const EQUIPMENT_STORE_PREFIX = "hs_equip_v1:";
@@ -112,15 +120,20 @@ export function billedPeriodCount(start: string, end: string, period: B2Period |
 }
 
 export function largeToolAmount(line: LargeToolLine) {
-  const item = b2ItemById(line.itemId);
-  if (!item || item.billing === "no-cost" || item.billing === "skip") return 0;
+  const item = lookupShahanEquipment(line.itemId);
+  if (!item) return 0;
   const freight = Math.max(0, Number(line.freight) || 0);
   const qty = Math.max(0, Number(line.qty) || 0);
   const periods = billedPeriodCount(line.start, line.end, line.period);
-  const dry = periodRate(item, line.period);
-  if (dry != null) return dry * qty * periods + freight;
-  if (item.billing === "cost-plus") return markup6(line.enteredCost ?? 0) + freight;
-  return 0;
+  const rate = shahanPeriodRate(item, line.period);
+  if (typeof rate === "number" && Number.isFinite(rate) && rate > 0) {
+    return rate * qty * periods + freight;
+  }
+  if (isShahanCostPlus(item) || !shahanEquipmentHasRate(item)) {
+    if (isShahanCostPlus(item)) return markup6(line.enteredCost ?? 0) + freight;
+    return freight;
+  }
+  return freight;
 }
 
 export function thirdPartyCost(line: ThirdPartyLine) {
@@ -144,12 +157,17 @@ export function readEquipmentSheet(key: string): EquipmentSheet {
     const raw = window.localStorage.getItem(`${EQUIPMENT_STORE_PREFIX}${key}`);
     if (!raw) return emptyEquipmentSheet();
     const parsed = JSON.parse(raw) as Partial<EquipmentSheet>;
-    return {
+    const sheet = {
       largeTools: Array.isArray(parsed.largeTools)
-        ? parsed.largeTools.map((line) => ({ ...line, freight: Number(line.freight) || 0 }))
+        ? parsed.largeTools.map((line) => ({
+            ...line,
+            itemId: rematchShahanEquipmentId(line.itemId || ""),
+            freight: Number(line.freight) || 0,
+          }))
         : [],
       thirdParty: Array.isArray(parsed.thirdParty) ? parsed.thirdParty : [],
     };
+    return rematchEquipmentSheetToShahan(sheet);
   } catch {
     return emptyEquipmentSheet();
   }

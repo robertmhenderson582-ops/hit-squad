@@ -3,15 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DateField } from "@/components/DateField";
 import { useEstimatePackage } from "@/components/EstimatePackage";
-import {
-  B2_COAST,
-  B2_PERIODS,
-  B2_PLANT,
-  billableB2Items,
-  b2ItemById,
-  periodRate,
-  type B2Period,
-} from "@/lib/b2-east-coast";
+import { B2_PERIODS, type B2Period } from "@/lib/b2-east-coast";
 import {
   blankLargeTool,
   blankThirdParty,
@@ -27,8 +19,23 @@ import {
   type EquipmentSheet,
   type ThirdPartyPeriod,
 } from "@/lib/equipment-sheet";
+import {
+  SHAHAN_BOOK_LABEL,
+  SHAHAN_EQUIPMENT,
+  isShahanCostPlus,
+  lookupShahanEquipment,
+  rematchShahanEquipmentId,
+  shahanEquipmentId,
+  shahanEquipmentRows,
+  shahanPeriodRate,
+} from "@/lib/shahan-wood-river";
 
-const ITEMS = billableB2Items();
+const LISTED_EQUIPMENT = shahanEquipmentRows(SHAHAN_EQUIPMENT).map((row, index) => ({
+  row,
+  id: shahanEquipmentId(row, index),
+}));
+const WET_ITEMS = LISTED_EQUIPMENT.filter((entry) => entry.row.wet);
+const DRY_ITEMS = LISTED_EQUIPMENT.filter((entry) => !entry.row.wet);
 
 function money(value: number) {
   return value ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
@@ -74,10 +81,9 @@ export function EquipmentDesk() {
   return (
     <div className="space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        {B2_COAST} COMP {B2_PLANT} large tools (dry, w/o fuel). Wood River and Bayway share this book.
-        8 hr = day, 3 days = week, 3 weeks = month. Only listed items bill. Replacement stays blank
-        unless sourced — do not guess. Operator hours stay on Crew. B-3 small tools stay in B-1 misc
-        burden, not here.
+        {SHAHAN_BOOK_LABEL} large tools. With fuel (wet) and without fuel (dry) are different picks —
+        same description can bill two different dollars. $0 / cost-plus stays selectable; do not
+        invent a rate. Operator hours stay on Crew. Third-party rental is typed.
       </p>
 
       <section className="plant-card px-5 py-5">
@@ -111,12 +117,14 @@ export function EquipmentDesk() {
                 </tr>
               ) : (
                 sheet.largeTools.map((line, index) => {
-                  const item = b2ItemById(line.itemId);
+                  const itemId = rematchShahanEquipmentId(line.itemId);
+                  const item = lookupShahanEquipment(itemId);
+                  const costPlus = item ? isShahanCostPlus(item) && !shahanPeriodRate(item, line.period) : false;
                   return (
                     <tr key={line.id} className="border-t border-[#d5e0de] align-top">
                       <td className="px-2 py-2">
                         <select
-                          value={line.itemId}
+                          value={itemId}
                           onChange={(event) => {
                             const next = sheet.largeTools.slice();
                             next[index] = { ...line, itemId: event.target.value };
@@ -125,18 +133,29 @@ export function EquipmentDesk() {
                           className="paper-field min-w-[16rem]"
                         >
                           <option value="">Pick a listed item</option>
-                          {ITEMS.map((row) => (
-                            <option key={row.id} value={row.id}>
-                              {row.description}
-                              {row.requiresOperator ? " · op on Crew" : ""}
-                              {row.billing === "cost-plus" ? " · cost+6%" : ""}
-                            </option>
-                          ))}
+                          <optgroup label="With fuel (wet)">
+                            {WET_ITEMS.map((entry) => (
+                              <option key={entry.id} value={entry.id}>
+                                {entry.row.description}
+                                {/requires operator/i.test(entry.row.description) ? " · op on Crew" : ""}
+                                {isShahanCostPlus(entry.row) ? " · cost+6%" : ""}
+                              </option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="Without fuel (dry)">
+                            {DRY_ITEMS.map((entry) => (
+                              <option key={entry.id} value={entry.id}>
+                                {entry.row.description}
+                                {/requires operator/i.test(entry.row.description) ? " · op on Crew" : ""}
+                                {isShahanCostPlus(entry.row) ? " · cost+6%" : ""}
+                              </option>
+                            ))}
+                          </optgroup>
                         </select>
                       </td>
                       {(["hourly", "daily", "weekly", "monthly"] as const).map((period) => (
                         <td key={period} className="px-2 py-2 font-mono text-xs">
-                          {item ? money(periodRate(item, period) ?? 0) : "—"}
+                          {item ? money(shahanPeriodRate(item, period) ?? 0) : "—"}
                         </td>
                       ))}
                       <td className="px-2 py-2">
@@ -205,11 +224,9 @@ export function EquipmentDesk() {
                           aria-label="Freight"
                         />
                       </td>
-                      <td className="px-2 py-2 text-[#5b6f73]">
-                        {item?.replacement != null ? money(item.replacement) : "—"}
-                      </td>
+                      <td className="px-2 py-2 text-[#5b6f73]">—</td>
                       <td className="px-2 py-2 font-semibold">
-                        {item?.billing === "cost-plus" && periodRate(item, line.period) == null ? (
+                        {costPlus ? (
                           <label className="block text-xs text-[#5b6f73]">
                             Cost
                             <input
