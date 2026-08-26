@@ -1,4 +1,4 @@
-import type { CalendarRange, CraftRow, CraftShift } from "./craft-labor.ts";
+import type { CalendarRange, CraftShift } from "./craft-labor.ts";
 import { notifyEstimateSheets } from "./sheet-events.ts";
 
 export const OTHER_COST_STORE_PREFIX = "hs_other_v1:";
@@ -55,21 +55,20 @@ export const MISC_EXTRA_DESCRIPTIONS = [
   "Other shop item",
 ] as const;
 
-export const TRAVEL_LANES = ["staff", "generalForeman", "foreman", "direct", "support"] as const;
-export type TravelLane = (typeof TRAVEL_LANES)[number];
+export const STAFF_TRAVEL_ID = "travel-staff";
+export const CRAFT_TRAVEL_ID = "travel-craft";
+export type TravelKind = "staff" | "craft";
+export type TravelSource = "crew" | "extra";
 
-export const TRAVEL_LANE_LABEL: Record<TravelLane, string> = {
+export const TRAVEL_KIND_LABEL: Record<TravelKind, string> = {
   staff: "Staff",
-  generalForeman: "GF",
-  foreman: "Foreman",
-  direct: "Direct Craft",
-  support: "Support",
+  craft: "Craft",
 };
 
 export type TravelLine = {
   id: string;
-  lane: TravelLane;
-  name: string;
+  kind: TravelKind;
+  source: TravelSource;
   headcount: number;
   travelers: number;
   perMile: number;
@@ -91,10 +90,10 @@ export type OtherCostSheet = {
 };
 
 export type TravelCrewRow = {
-  id: string;
+  id?: string;
   position?: string;
   shift?: CraftShift;
-  ranges?: CalendarRange[];
+  ranges?: Array<Partial<CalendarRange> & { headcount?: number; nightHeadcount?: number; shift?: CraftShift }>;
 };
 
 export type TravelCrew = {
@@ -109,8 +108,81 @@ function uid(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+function rangePeople(shift: CraftShift | undefined, range: { headcount?: number; nightHeadcount?: number }) {
+  const days = Math.max(0, Number(range.headcount) || 0);
+  const nights = Math.max(0, Number(range.nightHeadcount) || 0);
+  if (shift === "Days & nights") return days + nights;
+  if (shift === "Nights") return nights || days;
+  return days;
+}
+
+/** Peak people on the Crew row. Days + nights when the row works both. */
+export function crewPositionHeadcount(row: { shift?: CraftShift; ranges?: TravelCrewRow["ranges"] }) {
+  const ranges = Array.isArray(row.ranges) ? row.ranges : [];
+  if (!ranges.length) return 0;
+  return ranges.reduce((max, range) => Math.max(max, rangePeople(range.shift ?? row.shift, range)), 0);
+}
+
+export function crewLaneHeadcount(rows: TravelCrewRow[] | undefined) {
+  return (rows ?? []).reduce((sum, row) => sum + crewPositionHeadcount(row), 0);
+}
+
+export function crewTravelHeadcounts(crew: TravelCrew = {}) {
+  return {
+    staff: crewLaneHeadcount(crew.staff) + crewLaneHeadcount(crew.generalForeman),
+    craft: crewLaneHeadcount(crew.foreman) + crewLaneHeadcount(crew.direct) + crewLaneHeadcount(crew.support),
+  };
+}
+
+export function capTravelers(travelers: number, headcount: number) {
+  const cap = Math.max(0, Number(headcount) || 0);
+  const count = Math.max(0, Number(travelers) || 0);
+  return Math.min(Math.floor(count), cap);
+}
+
+export function travelAmount(line: Pick<TravelLine, "travelers" | "perMile" | "miles" | "headcount">) {
+  return (
+    capTravelers(line.travelers, line.headcount) *
+    Math.max(0, Number(line.miles) || 0) *
+    Math.max(0, Number(line.perMile) || 0)
+  );
+}
+
+export function defaultTravelLine(
+  kind: TravelKind,
+  headcount = 0,
+  prev?: Partial<TravelLine>,
+  seedPerMile = 0,
+): TravelLine {
+  return {
+    id: kind === "staff" ? STAFF_TRAVEL_ID : CRAFT_TRAVEL_ID,
+    kind,
+    source: "crew",
+    headcount,
+    travelers: capTravelers(prev?.travelers ?? 0, headcount),
+    perMile: prev ? Math.max(0, Number(prev.perMile) || 0) : Math.max(0, seedPerMile),
+    miles: prev ? Math.max(0, Number(prev.miles) || 0) : 0,
+  };
+}
+
+export function blankTravel(kind: TravelKind = "staff", mileageRate = 0): TravelLine {
+  return {
+    id: uid("tr"),
+    kind,
+    source: "extra",
+    headcount: 0,
+    travelers: 0,
+    perMile: Math.max(0, Number(mileageRate) || 0),
+    miles: 0,
+  };
+}
+
 export function emptyOtherCost(): OtherCostSheet {
-  return { perDiemRate: 0, travel: [], misc: [] };
+  return {
+    perDiemRate: 0,
+    travel: [defaultTravelLine("staff", 0), defaultTravelLine("craft", 0)],
+    misc: [],
+  };
 }
 
 export function blankMisc(item = ""): MiscLine {
@@ -146,64 +218,31 @@ export function miscAmount(line: MiscLine) {
   return Math.max(0, line.qty) * Math.max(0, line.each);
 }
 
-function asLane(value: unknown): TravelLane {
-  return TRAVEL_LANES.includes(value as TravelLane) ? (value as TravelLane) : "direct";
-}
-
-function rangePeople(shift: CraftShift | undefined, range: Pick<CalendarRange, "headcount" | "nightHeadcount">) {
-  const days = Math.max(0, Number(range.headcount) || 0);
-  const nights = Math.max(0, Number(range.nightHeadcount) || 0);
-  if (shift === "Days & nights") return days + nights;
-  if (shift === "Nights") return nights || days;
-  return days;
-}
-
-/** Peak people on the Crew row. Days + nights when the row works both. */
-export function crewPositionHeadcount(row: Pick<CraftRow, "shift" | "ranges"> | TravelCrewRow) {
-  const ranges = Array.isArray(row.ranges) ? row.ranges : [];
-  if (!ranges.length) return 0;
-  return ranges.reduce((max, range) => Math.max(max, rangePeople(range.shift ?? row.shift, range)), 0);
-}
-
-export function capTravelers(travelers: number, headcount: number) {
-  const cap = Math.max(0, Number(headcount) || 0);
-  const count = Math.max(0, Number(travelers) || 0);
-  return Math.min(Math.floor(count), cap);
-}
-
-export function travelAmount(line: Pick<TravelLine, "travelers" | "perMile" | "miles" | "headcount">) {
-  return (
-    capTravelers(line.travelers, line.headcount) *
-    Math.max(0, Number(line.miles) || 0) *
-    Math.max(0, Number(line.perMile) || 0)
-  );
-}
-
-export function crewTravelPositions(crew: TravelCrew = {}) {
-  const rows: Array<{ id: string; lane: TravelLane; name: string; headcount: number }> = [];
-  for (const lane of TRAVEL_LANES) {
-    for (const row of crew[lane] ?? []) {
-      if (!row?.id) continue;
-      const headcount = crewPositionHeadcount(row);
-      if (headcount <= 0) continue;
-      const name = String(row.position || "").trim() || "Position";
-      rows.push({ id: row.id, lane, name, headcount });
-    }
-  }
-  return rows;
+function asKind(raw: Record<string, unknown>): TravelKind {
+  if (raw.kind === "staff" || raw.kind === "craft") return raw.kind;
+  if (raw.lane === "staff" || raw.lane === "generalForeman") return "staff";
+  return "craft";
 }
 
 export function hydrateTravelLine(raw: unknown): TravelLine | null {
   if (!raw || typeof raw !== "object") return null;
   const item = raw as Record<string, unknown>;
   if ("traveler" in item && !("travelers" in item) && !("miles" in item)) return null;
-  const id = String(item.id || item.crewId || "");
-  if (!id || id.startsWith("tr-")) return null;
+  if ("lane" in item && !("kind" in item) && !("source" in item)) return null;
+  const kind = asKind(item);
+  const source: TravelSource =
+    item.source === "extra" || (item.id && String(item.id).startsWith("tr-")) ? "extra" : "crew";
   const headcount = Math.max(0, Number(item.headcount) || 0);
+  const id =
+    source === "crew"
+      ? kind === "staff"
+        ? STAFF_TRAVEL_ID
+        : CRAFT_TRAVEL_ID
+      : String(item.id || uid("tr"));
   return {
     id,
-    lane: asLane(item.lane),
-    name: String(item.name || ""),
+    kind,
+    source,
     headcount,
     travelers: capTravelers(Number(item.travelers) || 0, headcount),
     perMile: Math.max(0, Number(item.perMile) || 0),
@@ -216,20 +255,18 @@ export function syncTravelFromCrew(
   crew: TravelCrew,
   defaults: { perMile?: number } = {},
 ): TravelLine[] {
-  const kept = new Map(travel.map((line) => [line.id, line]));
+  const counts = crewTravelHeadcounts(crew);
   const seed = Math.max(0, Number(defaults.perMile) || 0);
-  return crewTravelPositions(crew).map((row) => {
-    const prev = kept.get(row.id);
-    return {
-      id: row.id,
-      lane: row.lane,
-      name: row.name,
-      headcount: row.headcount,
-      travelers: capTravelers(prev?.travelers ?? 0, row.headcount),
-      perMile: prev ? Math.max(0, Number(prev.perMile) || 0) : seed,
-      miles: prev ? Math.max(0, Number(prev.miles) || 0) : 0,
-    };
-  });
+  const staffPrev = travel.find((line) => line.id === STAFF_TRAVEL_ID || (line.source === "crew" && line.kind === "staff"));
+  const craftPrev = travel.find((line) => line.id === CRAFT_TRAVEL_ID || (line.source === "crew" && line.kind === "craft"));
+  const extras = travel
+    .filter((line) => line.source === "extra")
+    .map((line) => ({ ...line, travelers: capTravelers(line.travelers, line.headcount) }));
+  return [
+    defaultTravelLine("staff", counts.staff, staffPrev, seed),
+    defaultTravelLine("craft", counts.craft, craftPrev, seed),
+    ...extras,
+  ];
 }
 
 export function syncOtherCostTravel(

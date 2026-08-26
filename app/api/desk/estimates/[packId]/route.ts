@@ -5,10 +5,7 @@ import { getVisiblePack } from "@/lib/estimate-vault";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  request: Request,
-  context: { params: { packId: string } | Promise<{ packId: string }> },
-) {
+export async function GET(request: Request, context: { params: Promise<{ packId: string }> }) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   const { packId } = await context.params;
