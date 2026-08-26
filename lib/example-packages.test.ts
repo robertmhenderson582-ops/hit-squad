@@ -44,6 +44,8 @@ test("a new estimate starts with empty Crew", () => {
 
 test("archive hides a seat copy and delete removes it after the list update", () => {
   const seat = seedSeatList("tester-nathan", "Nathan Boyte");
+  assert.equal(seat[0].id.includes(":"), false);
+  assert.match(seat[0].id, /tester-nathan--est-u3/);
   assert.equal(workingCopies(seat).length, 3);
   assert.deepEqual(
     workingCopies(seat).map((row) => row.code),
