@@ -30,6 +30,9 @@ import {
 } from "@/lib/phase-schedule";
 import { emptyJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
 import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
+import { packIdFromStoreKey, touchLocalPack } from "@/lib/local-estimates";
+import { hydrateFromVault, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
+import { onEstimateSheets } from "@/lib/sheet-events";
 
 type CrewState = {
   staff: CraftRow[];
@@ -120,30 +123,76 @@ export function EstimatePackageProvider({
   const [crew, setCrewState] = useState<CrewState>(() => syncCrew(readCrew(estimateKey), readSchedule(estimateKey)));
   const [jobMeta, setJobMetaState] = useState<JobMeta>(() => readJobMeta(estimateKey));
   const [activities, setActivitiesState] = useState<WorkActivity[]>(() => readActivities(estimateKey) ?? []);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const next = readSchedule(estimateKey);
-    setSchedule(next);
-    setCrewState(syncCrew(readCrew(estimateKey), next));
-    setJobMetaState(readJobMeta(estimateKey));
-    setActivitiesState(readActivities(estimateKey) ?? []);
+    let cancelled = false;
+    setReady(false);
+    const packId = packIdFromStoreKey(estimateKey);
+    const boot = packId ? hydrateFromVault() : Promise.resolve([]);
+    void boot.finally(() => {
+      if (cancelled) return;
+      const next = readSchedule(estimateKey);
+      setSchedule(next);
+      setCrewState(syncCrew(readCrew(estimateKey), next));
+      setJobMetaState(readJobMeta(estimateKey));
+      setActivitiesState(readActivities(estimateKey) ?? []);
+      setReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [estimateKey]);
 
   useEffect(() => {
+    if (!ready) return;
     writeSchedule(estimateKey, schedule);
-  }, [estimateKey, schedule]);
+    const packId = packIdFromStoreKey(estimateKey);
+    if (packId) {
+      touchLocalPack(packId);
+      scheduleVaultUpsert(packId);
+    }
+  }, [estimateKey, ready, schedule]);
 
   useEffect(() => {
+    if (!ready) return;
     writeCrew(estimateKey, crew);
-  }, [crew, estimateKey]);
+    const packId = packIdFromStoreKey(estimateKey);
+    if (packId) {
+      touchLocalPack(packId);
+      scheduleVaultUpsert(packId);
+    }
+  }, [crew, estimateKey, ready]);
 
   useEffect(() => {
+    if (!ready) return;
     writeJobMeta(estimateKey, jobMeta);
-  }, [estimateKey, jobMeta]);
+    const packId = packIdFromStoreKey(estimateKey);
+    if (packId) {
+      touchLocalPack(packId);
+      scheduleVaultUpsert(packId);
+    }
+  }, [estimateKey, jobMeta, ready]);
 
   useEffect(() => {
+    if (!ready) return;
     writeActivities(estimateKey, activities);
-  }, [activities, estimateKey]);
+    const packId = packIdFromStoreKey(estimateKey);
+    if (packId) {
+      touchLocalPack(packId);
+      scheduleVaultUpsert(packId);
+    }
+  }, [activities, estimateKey, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const packId = packIdFromStoreKey(estimateKey);
+    if (!packId) return;
+    return onEstimateSheets(() => {
+      touchLocalPack(packId);
+      scheduleVaultUpsert(packId);
+    });
+  }, [estimateKey, ready]);
 
   const api = useMemo<EstimatePackageApi>(
     () => ({

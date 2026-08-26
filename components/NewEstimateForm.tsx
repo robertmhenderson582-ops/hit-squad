@@ -19,6 +19,7 @@ import { ShopRigSheet } from "@/components/ShopRigSheet";
 import { boundOtLabel } from "@/lib/hours-clock";
 import { newEstimateKey, newEstimatePackId } from "@/lib/estimate-open";
 import { defaultEstimateName } from "@/lib/job-event";
+import { hydrateFromVault, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
 import { rememberLocalPack } from "@/lib/local-estimates";
 
 export function NewEstimateForm() {
@@ -39,7 +40,10 @@ export function NewEstimateForm() {
 
   useEffect(() => {
     if (!pack || size === "shop") return;
-    rememberLocalPack({ packId: pack, title: name, client, site, size: size ?? undefined });
+    void hydrateFromVault().then(() => {
+      rememberLocalPack({ packId: pack, title: name, client, site, size: size ?? undefined });
+      scheduleVaultUpsert(pack);
+    });
   }, [client, name, pack, site, size]);
 
   if (size === "shop") {

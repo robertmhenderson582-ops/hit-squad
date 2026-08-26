@@ -12,6 +12,7 @@ import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
+import { hydrateFromVault } from "@/lib/estimate-vault-client";
 import { listLocalPacks, mergeLocalJobs } from "@/lib/local-estimates";
 import type { DeskBoard } from "@/lib/types";
 
@@ -37,6 +38,7 @@ export function DeskHome() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      await hydrateFromVault();
       const response = await fetch("/api/desk/jobs", {
         credentials: "include",
         cache: "no-store",

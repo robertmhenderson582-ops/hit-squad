@@ -30,7 +30,10 @@ Local owner password is the value in `.env.example` / `.env.local` (`OWNER_PASSW
 | `AUTH_SECRET` | Signs the session cookie. Use a long random string. |
 | `AUTH_COOKIE_SECURE` | `false` on local HTTP. `true` on HTTPS deploys. |
 | `TICKET_STORE_PATH` | Optional. Server JSON file for tickets. Not committed. Local default `data/tickets.json`. On Vercel `/tmp/hit-squad-tickets.json`. |
-| `TICKET_SMTP_URL` / `GMAIL_APP_PASSWORD` | Optional. Emails each ticket to `OWNER_EMAIL` (Novus/Gmail copy). Drive API is not in this repo. |
+| `TICKET_SMTP_URL` / `GMAIL_APP_PASSWORD` | Optional. Emails each ticket to `OWNER_EMAIL` (Novus/Gmail copy). |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Optional. Full service-account JSON (raw or base64) so auto-saved estimate packs upsert into the owner Drive Estimates room. |
+| `GOOGLE_CLIENT_EMAIL` / `GOOGLE_PRIVATE_KEY` | Optional alternative to the JSON blob. |
+| `DRIVE_ESTIMATES_FOLDER_ID` | Optional. Estimates room folder id. Server-only. Do not expose to testers. |
 
 The session cookie is named `hs_session`. It is `HttpOnly`, `Path=/`, `SameSite=Lax`, and `Secure` when `AUTH_COOKIE_SECURE=true` (or when `NODE_ENV=production` unless you force it off).
 

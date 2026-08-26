@@ -66,6 +66,18 @@ describe("local estimate packs", () => {
     assert.equal(listed[0].title, "Cat 2 Pit Stop");
     assert.equal(listed[0].packId, packId);
     assert.equal(localPackToEstimate(listed[0]).id, packId);
+    const createdAt = listed[0].createdAt;
+    const again = rememberLocalPack(
+      {
+        packId,
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+      },
+      store,
+    );
+    assert.equal(again?.createdAt, createdAt);
+    assert.ok((again?.updatedAt || 0) >= createdAt);
   });
 
   it("recovers orphan new: keys so a lost URL still lists the pack", () => {

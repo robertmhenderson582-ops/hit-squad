@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { hydrateFromVault } from "@/lib/estimate-vault-client";
 import { listLocalPacks, mergeLocalBoard } from "@/lib/local-estimates";
 import type { ForgebookBoard } from "@/lib/types";
 
@@ -11,6 +12,7 @@ export function useDeskBoard() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      await hydrateFromVault();
       const response = await fetch("/api/desk/board", {
         credentials: "include",
         cache: "no-store",
