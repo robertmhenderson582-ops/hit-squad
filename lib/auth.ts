@@ -1,8 +1,14 @@
 import { SignJWT, jwtVerify } from "jose";
-import type { DeskRole, PublicUser } from "@/lib/types";
+import type { DeskRole, PublicUser, SeatHashClaim } from "./types.ts";
+
+export type { SeatHashClaim };
 
 export const SESSION_COOKIE = "hs_session";
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
+
+/** Survives logout. Restores a tester hash after a Vercel /tmp cold start. */
+export const SEAT_CLAIM_COOKIE = "hs_seat_claim";
+export const SEAT_CLAIM_MAX_AGE = 60 * 60 * 24 * 365;
 
 type SessionClaims = {
   sub: string;
@@ -34,6 +40,50 @@ export function sessionCookieOptions() {
     path: "/",
     maxAge: SESSION_MAX_AGE,
   };
+}
+
+export function seatClaimCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: cookieSecure(),
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: SEAT_CLAIM_MAX_AGE,
+  };
+}
+
+export async function signSeatClaim(claim: SeatHashClaim): Promise<string> {
+  return new SignJWT({
+    email: claim.email,
+    passwordHash: claim.passwordHash,
+    mustChangePassword: Boolean(claim.mustChangePassword),
+  } satisfies SeatHashClaim)
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject("seat-claim")
+    .setIssuedAt()
+    .setExpirationTime(`${SEAT_CLAIM_MAX_AGE}s`)
+    .sign(secretKey());
+}
+
+export async function readSeatClaim(token: string | undefined): Promise<SeatHashClaim | null> {
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, secretKey());
+    if (
+      payload.sub !== "seat-claim" ||
+      typeof payload.email !== "string" ||
+      typeof payload.passwordHash !== "string"
+    ) {
+      return null;
+    }
+    return {
+      email: payload.email,
+      passwordHash: payload.passwordHash,
+      mustChangePassword: Boolean(payload.mustChangePassword),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function signSession(user: PublicUser): Promise<string> {

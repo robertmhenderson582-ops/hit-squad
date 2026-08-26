@@ -4,7 +4,9 @@ import bcrypt from "bcryptjs";
 import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
-import type { PublicUser } from "./types.ts";
+import type { PublicUser, SeatHashClaim } from "./types.ts";
+
+export type { SeatHashClaim };
 
 type StoredUser = PublicUser & {
   passwordHash?: string;
@@ -121,6 +123,32 @@ export function seatNeedsPasswordCreate(email: string): boolean {
   const user = findUserByEmail(email);
   if (!user || user.role === "owner") return false;
   return !user.passwordHash;
+}
+
+const BCRYPT_HASH = /^\$2[abxy]\$\d{2}\$[./A-Za-z0-9]{53}$/;
+
+export function seatHashClaimFor(email: string): SeatHashClaim | null {
+  const user = findUserByEmail(email);
+  if (!user || user.role === "owner" || !user.passwordHash) return null;
+  return {
+    email: user.email,
+    passwordHash: user.passwordHash,
+    mustChangePassword: Boolean(user.mustChangePassword),
+  };
+}
+
+/** Rehydrate a tester hash after /tmp (or the in-memory cache) is empty. File wins if present. */
+export function restoreSeatHash(email: string, claim: SeatHashClaim | null | undefined): boolean {
+  if (!claim) return false;
+  const wanted = email.trim().toLowerCase();
+  if (!wanted || claim.email.trim().toLowerCase() !== wanted) return false;
+  if (!BCRYPT_HASH.test(claim.passwordHash)) return false;
+  const user = findUserByEmail(wanted);
+  if (!user || user.role === "owner" || user.passwordHash) return false;
+  user.passwordHash = claim.passwordHash;
+  user.mustChangePassword = Boolean(claim.mustChangePassword);
+  persistHashes(ownerUsers());
+  return true;
 }
 
 export function claimFirstPassword(

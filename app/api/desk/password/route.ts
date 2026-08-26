@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
-import { readSession, SESSION_COOKIE, sessionCookieOptions, signSession } from "@/lib/auth";
+import {
+  readSession,
+  SEAT_CLAIM_COOKIE,
+  SESSION_COOKIE,
+  seatClaimCookieOptions,
+  sessionCookieOptions,
+  signSeatClaim,
+  signSession,
+} from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
-import { findUserByEmail, setOwnPassword, toPublicUser } from "@/lib/users";
+import { findUserByEmail, seatHashClaimFor, setOwnPassword, toPublicUser } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -28,5 +36,9 @@ export async function POST(request: Request) {
     note: "Password changed on this desk process. Never logged.",
   });
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
+  const claim = seatHashClaimFor(publicUser.email);
+  if (claim) {
+    response.cookies.set(SEAT_CLAIM_COOKIE, await signSeatClaim(claim), seatClaimCookieOptions());
+  }
   return response;
 }

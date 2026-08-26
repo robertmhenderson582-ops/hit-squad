@@ -8,6 +8,12 @@ export type PublicUser = {
   mustChangePassword?: boolean;
 };
 
+export type SeatHashClaim = {
+  email: string;
+  passwordHash: string;
+  mustChangePassword?: boolean;
+};
+
 export type JobRecord = {
   id: string;
   ownerId: string;

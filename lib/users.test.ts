@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
+import { readSeatClaim, signSeatClaim } from "./auth.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import {
@@ -12,6 +13,8 @@ import {
   issueSeatPassword,
   loginOutcome,
   resetUsersForTests,
+  restoreSeatHash,
+  seatHashClaimFor,
   seatNeedsPasswordCreate,
   setOwnPassword,
   verifyPassword,
@@ -31,6 +34,7 @@ const seatFile = join(dir, "seats.json");
 process.env.OWNER_PASSWORD = OWNER_SECRET;
 process.env.OWNER_EMAIL = OWNER_LOGIN_EMAIL;
 process.env.SEAT_PASSWORD_PATH = seatFile;
+process.env.AUTH_SECRET = "test-auth-secret-16chars";
 
 function wipePersisted() {
   if (existsSync(seatFile)) unlinkSync(seatFile);
@@ -196,6 +200,63 @@ test("confirm mismatch is rejected on first-login create", () => {
     assert.equal(result.error, "New password and confirm did not match.");
   }
   assert.equal(seatNeedsPasswordCreate(TESTER), true);
+});
+
+test("claimed hash still needsPassword after the seat file is wiped when the browser claim restores", async () => {
+  const created = loginOutcome({
+    email: TESTER,
+    newPassword: CHOSEN,
+    confirmPassword: CHOSEN,
+  });
+  assert.equal(created.status, "authenticated");
+  const claim = seatHashClaimFor(TESTER);
+  assert.ok(claim);
+  assert.equal(claim.email, TESTER);
+  assert.equal(claim.passwordHash.includes(CHOSEN), false);
+  assert.match(claim.passwordHash, /^\$2[abxy]\$/);
+
+  const token = await signSeatClaim(claim);
+  const readBack = await readSeatClaim(token);
+  assert.ok(readBack);
+  assert.equal(readBack.email, TESTER);
+  assert.equal(readBack.passwordHash, claim.passwordHash);
+
+  unlinkSync(seatFile);
+  resetUsersForTests();
+  assert.equal(existsSync(seatFile), false);
+  assert.equal(loginOutcome({ email: TESTER }).status, "needsCreate");
+
+  assert.equal(restoreSeatHash(TESTER, readBack), true);
+  assert.equal(loginOutcome({ email: TESTER }).status, "needsPassword");
+  const ok = loginOutcome({ email: TESTER, password: CHOSEN });
+  assert.equal(ok.status, "authenticated");
+  if (ok.status === "authenticated") {
+    assert.equal(ok.user.role, "tester");
+    assert.equal(ok.user.mustChangePassword, false);
+  }
+  assert.equal(verifyPassword(findUserByEmail(TESTER)!, CHOSEN), true);
+
+  resetUsersForTests();
+  assert.equal(loginOutcome({ email: TESTER }).status, "needsPassword");
+
+  assert.equal(seatHashClaimFor(OWNER_LOGIN_EMAIL), null);
+  assert.equal(
+    restoreSeatHash(OWNER_LOGIN_EMAIL, {
+      email: OWNER_LOGIN_EMAIL,
+      passwordHash: claim.passwordHash,
+    }),
+    false,
+  );
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL }).status, "needsPassword");
+  const owner = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET });
+  assert.equal(owner.status, "authenticated");
+  if (owner.status === "authenticated") {
+    assert.equal(owner.user.role, "owner");
+  }
+
+  assert.equal(restoreSeatHash(UNKNOWN, { email: UNKNOWN, passwordHash: claim.passwordHash }), false);
+  assert.equal(loginOutcome({ email: UNKNOWN }).status, "needsPassword");
+  assert.equal(restoreSeatHash(TESTER, { email: NOVUS_EMAIL, passwordHash: claim.passwordHash }), false);
 });
 
 test("Novus can create a password only when no hash exists", () => {
