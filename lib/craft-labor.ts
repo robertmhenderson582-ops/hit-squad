@@ -121,6 +121,11 @@ export function cloneCraftRow(row: CraftRow): CraftRow {
   };
 }
 
+export function cloneSupportLine(row: SupportLine): SupportLine {
+  const copy = cloneCraftRow(row);
+  return { ...copy, id: uid("sup"), billedAs: row.billedAs };
+}
+
 export function perDiemCap(range: CalendarRange, _shift?: CraftShift) {
   return Math.max(0, range.headcount);
 }

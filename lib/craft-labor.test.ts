@@ -8,6 +8,7 @@ import {
   blankCraftRow,
   blankSupportLine,
   cloneCraftRow,
+  cloneSupportLine,
   craftRowFromPhases,
   extraRangeFromPhase,
   hydrateSupportLine,
@@ -276,6 +277,24 @@ describe("support position calendars", () => {
     );
     const overrideHours = computeRowHours(synced, "Wood River — Roxana, IL", "Phillips 66");
     assert.equal(overrideHours.hours > seededHours.hours, true);
+  });
+
+  it("duplicate keeps Position, Billed as, and hours, and a titled Support row has ST/OT/hours", () => {
+    const phases = defaultPhases();
+    const row = assignSupportBilledAs(
+      assignSupportDuty(addSupportLine(phases), "Tool Room Attendant", phases),
+      "Boilermaker Journeyman",
+      phases,
+    );
+    const hours = computeRowHours(row, "Wood River — Roxana, IL", "Phillips 66");
+    assert.equal(hours.hours > 0, true);
+    assert.equal(hours.st > 0, true);
+    const copy = cloneSupportLine(row);
+    assert.equal(copy.id === row.id, false);
+    assert.equal(copy.position, "Tool Room Attendant");
+    assert.equal(copy.billedAs, "Boilermaker Journeyman");
+    assert.equal(copy.ranges[0].id === row.ranges[0].id, false);
+    assert.equal(computeRowHours(copy, "Wood River — Roxana, IL", "Phillips 66").hours, hours.hours);
   });
 
   it("keeps old saved Position + Billed as and fills phase ranges", () => {
