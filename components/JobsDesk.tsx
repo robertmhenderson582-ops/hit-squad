@@ -6,14 +6,18 @@ import { useEffect, useState } from "react";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
+import { useDisplay } from "@/components/DisplayProvider";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
+import { jobPlantHref, plantJobsLine } from "@/lib/jobs";
 import type { JobRecord } from "@/lib/types";
 
 export function JobsDesk() {
   const alias = useAlias();
   const router = useRouter();
   const { board } = useDeskBoard();
+  const { resolvedTheme } = useDisplay();
+  const night = resolvedTheme === "night";
   const estimates = board?.estimates ?? [];
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -38,62 +42,74 @@ export function JobsDesk() {
     };
   }, []);
 
+  function go(href: string, event?: { preventDefault: () => void; stopPropagation: () => void }) {
+    event?.preventDefault();
+    event?.stopPropagation();
+    router.push(href);
+  }
+
   return (
-    <div className="mt-4 space-y-4">
+    <div className={`${night ? "instrument-desk" : "paper-desk"} -mx-3 mt-4 rounded-sm px-4 py-5 sm:-mx-4 sm:px-6`}>
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Turnaround / Outage and T&amp;M jobs loaded for this owner. Open {alias("Wood River")} for Overview /
-        Estimates / Change orders / People.
+        {plantJobsLine()} Open a job to keep its ID, window, and working figure. {alias("WOOD RIVER")} opens the
+        plant with that job still showing.
       </p>
       {error ? <p className="text-amber-flare">{error}</p> : null}
       {jobs.map((job) => {
         const estimate = estimateForJob(job, estimates);
-        const href = estimate ? estimateHref(estimate.id) : undefined;
+        const plantHref = jobPlantHref(job.code);
+        const estimatesHref = estimate ? estimateHref(estimate.id) : jobPlantHref(job.code, "Estimates");
         return (
-        <article
-          key={job.id}
-          className={`plant-card px-4 py-5 ${href ? "estimate-card cursor-pointer" : ""}`}
-          onClick={href ? () => router.push(href) : undefined}
-        >
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="font-mono text-xs text-steel">{job.code}</p>
-            <StatusStamp value={job.status} />
-          </div>
-          <h2 className="mt-1 font-display text-2xl tracking-wide">{alias(job.title)}</h2>
-          <p className="mt-2 text-sm text-[#5b6f73]">
-            {alias(job.client)} · {job.discipline} · {job.kind.toUpperCase()}
-          </p>
-          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-            <div>
-              <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">WINDOW</dt>
-              <dd className="mt-1 font-mono text-xs">{job.window}</dd>
-            </div>
-            <div>
-              <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">WORKING FIGURE</dt>
-              <dd className="mt-1 font-mono text-xs text-amber-label">{job.workingFigure}</dd>
-            </div>
-            <div>
-              <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">HSE</dt>
-              <dd className="mt-1 font-mono text-xs">{job.hseNote}</dd>
-            </div>
-          </dl>
-          <div
-            className="relative z-10 mt-4 flex flex-wrap gap-2 font-mono text-[10px] tracking-[0.16em]"
-            onClick={(event) => event.stopPropagation()}
+          <article
+            key={job.id}
+            className="site-plate plant-card estimate-card mt-4 cursor-pointer px-4 py-5"
+            role="link"
+            tabIndex={0}
+            onClick={() => router.push(plantHref)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                router.push(plantHref);
+              }
+            }}
           >
-            <Link
-              href={`/jobs/wood-river?job=${encodeURIComponent(job.code)}`}
-              className="border border-steel px-3 py-2 text-steel"
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="font-mono text-xs text-steel">{job.code}</p>
+              <StatusStamp value={job.status} />
+            </div>
+            <h2 className="mt-1 font-display text-2xl tracking-wide">{alias(job.title)}</h2>
+            <p className="mt-2 text-sm text-[#5b6f73]">
+              {alias(job.client)} · {job.discipline} · {job.kind.toUpperCase()}
+            </p>
+            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+              <div>
+                <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">WINDOW</dt>
+                <dd className="mt-1 font-mono text-xs">{job.window}</dd>
+              </div>
+              <div>
+                <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">WORKING FIGURE</dt>
+                <dd className="mt-1 font-mono text-xs text-amber-label">{job.workingFigure}</dd>
+              </div>
+              <div>
+                <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">HSE</dt>
+                <dd className="mt-1 font-mono text-xs">{job.hseNote}</dd>
+              </div>
+            </dl>
+            <div
+              className="relative z-20 mt-4 flex flex-wrap gap-2 font-mono text-[10px] tracking-[0.16em]"
+              onClick={(event) => event.stopPropagation()}
             >
-              {alias("WOOD RIVER")}
-            </Link>
-            <Link href="/estimates" className="border border-steel px-3 py-2 text-steel">
-              ESTIMATES
-            </Link>
-            <Link href="/cost" className="border border-steel px-3 py-2 text-steel">
-              COST
-            </Link>
-          </div>
-        </article>
+              <Link href={plantHref} className="job-action" onClick={(event) => go(plantHref, event)}>
+                {alias("WOOD RIVER")}
+              </Link>
+              <Link href={estimatesHref} className="job-action" onClick={(event) => go(estimatesHref, event)}>
+                ESTIMATES
+              </Link>
+              <Link href="/cost" className="job-action" onClick={(event) => go("/cost", event)}>
+                COST
+              </Link>
+            </div>
+          </article>
         );
       })}
     </div>

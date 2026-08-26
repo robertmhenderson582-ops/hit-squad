@@ -654,6 +654,60 @@ textarea:focus {
   color: #efe6d4;
 }
 
+.industrial-root .site-plate,
+.industrial-root .site-plate.plant-card {
+  --hud-bracket: #e38b2a;
+  --hud-line: rgba(62, 198, 212, 0.34);
+  background:
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px 7px / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px 7px / 1px 12px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) 7px / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) 7px / 1px 12px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px calc(100% - 7px) / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) 7px calc(100% - 7px) / 1px 12px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) calc(100% - 7px) / 12px 1px no-repeat,
+    linear-gradient(var(--hud-bracket), var(--hud-bracket)) calc(100% - 7px) calc(100% - 7px) / 1px 12px no-repeat,
+    radial-gradient(circle at 11px 11px, #8aa4a8 0 1.1px, transparent 1.5px),
+    radial-gradient(circle at calc(100% - 11px) 11px, #8aa4a8 0 1.1px, transparent 1.5px),
+    linear-gradient(180deg, #0c3036 0%, #06161a 100%);
+  border: 1px solid var(--hud-line);
+  color: #efe6d4;
+}
+
+.industrial-root .site-plate,
+.industrial-root .site-plate p,
+.industrial-root .site-plate h2,
+.industrial-root .site-plate h3,
+.industrial-root .site-plate .text-\[\#163038\],
+.industrial-root .site-plate .text-\[\#5b6f73\] {
+  color: #efe6d4;
+}
+
+.job-action {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  cursor: pointer;
+  pointer-events: auto;
+  border: 1px solid #0f5f6d;
+  background: #fff;
+  padding: 0.5rem 0.75rem;
+  color: #0f5f6d;
+  text-decoration: none;
+}
+
+.industrial-root .job-action {
+  border-color: rgba(62, 198, 212, 0.45);
+  background: rgba(6, 22, 26, 0.72);
+  color: #3ec6d4;
+}
+
+.industrial-root .job-action:hover,
+.industrial-root .job-action:focus-visible {
+  border-color: #e38b2a;
+  color: #efe6d4;
+}
+
 .paper-field {
   width: 100%;
   border: 1px solid #c5d4d4;
