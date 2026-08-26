@@ -7,14 +7,19 @@ import {
   inviteEmailBody,
   INVITE_SUBJECT,
   LOGIN_URL,
+  ticketAssessingAckBody,
+  ticketAssessingAckSubject,
   ticketEmailBody,
   ticketEmailConfigured,
+  ticketEmailSubject,
+  ticketMailRecipients,
 } from "./ticket-mail.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { makeTicket } from "./tickets.ts";
 
 describe("ticket email", () => {
   it("does not send when SMTP is not configured, and keeps capture off the mail body", async () => {
+    process.env.OWNER_EMAIL = "robertmhenderson582@gmail.com";
     delete process.env.TICKET_SMTP_URL;
     delete process.env.SMTP_URL;
     delete process.env.GMAIL_APP_PASSWORD;
@@ -31,6 +36,12 @@ describe("ticket email", () => {
     assert.match(body, /desk capture failed/);
     assert.match(body, /Capture: yes/);
     assert.equal(body.includes("data:image"), false);
+    assert.equal(ticketMailRecipients().join(), "robertmhenderson582@gmail.com");
+    assert.equal(/madisonltd\.com|p66\.com|login|password/i.test(body), false);
+    assert.match(ticketEmailSubject(row), /Hit Squad ticket/);
+    assert.equal(ticketAssessingAckSubject(row).startsWith("Re: "), true);
+    assert.equal(ticketAssessingAckBody(), "Got it. Assessing.");
+    assert.equal(/login|password|madisonltd|p66\.com|hitsquad-desk/i.test(ticketAssessingAckBody()), false);
   });
 
   it("invite body has no password and no credentials in the URL", () => {

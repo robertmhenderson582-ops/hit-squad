@@ -6,11 +6,15 @@ import { after, describe, it } from "node:test";
 import {
   inboxStoreKind,
   postInboxMessage,
+  postTicketInboxNotice,
   resetInboxStoreForTests,
+  SUGGESTION_BOX_PERSON_ID,
+  ticketInboxText,
   threadsForViewer,
 } from "./inbox-store.ts";
 import { INBOX_STORE_PREFIX } from "./inbox.ts";
 import { JOSEPH_EMAIL } from "./tester-seats.ts";
+import { makeTicket } from "./tickets.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-inbox-"));
 const file = join(dir, "inbox.json");
@@ -90,5 +94,60 @@ it("localStorage-only send is gone", () => {
   const blocked = postInboxMessage({ from: joseph, to: nathan.email, text: "secret" });
   assert.equal("error" in blocked, true);
   assert.equal(threadsForViewer(nathan).length, 0);
+});
+
+it("Suggestion Box lands in owner Inbox and not on another tester", () => {
+  resetInboxStoreForTests(join(dir, "tickets-inbox.json"));
+  const josephTicket = makeTicket({
+    kind: "Broke",
+    note: "clock did not add",
+    capture: null,
+    later: false,
+    who: JOSEPH_EMAIL,
+  });
+  const markTicket = makeTicket({
+    kind: "missing",
+    note: "mark only",
+    capture: null,
+    later: false,
+    who: nathan.email,
+  });
+  postTicketInboxNotice(josephTicket);
+  postTicketInboxNotice(markTicket);
+
+  const ownerThreads = threadsForViewer(owner);
+  const box = ownerThreads.find((row) => row.personId === SUGGESTION_BOX_PERSON_ID);
+  assert.equal(Boolean(box), true);
+  assert.equal(box?.name, "Suggestion Box");
+  assert.equal(box?.messages.some((row) => row.text.includes("clock did not add")), true);
+  assert.equal(box?.messages.some((row) => row.text.includes("mark only")), true);
+  assert.equal(box?.unread > 0, true);
+
+  const novusThreads = threadsForViewer({
+    email: "robertmhenderson582+novus@gmail.com",
+    name: "Novus",
+    role: "operator",
+  });
+  assert.equal(
+    novusThreads.some((row) => row.messages.some((message) => message.text.includes("clock did not add"))),
+    true,
+  );
+
+  const josephThreads = threadsForViewer(joseph);
+  assert.equal(
+    josephThreads.some((row) => row.personId === SUGGESTION_BOX_PERSON_ID),
+    false,
+  );
+  assert.equal(
+    josephThreads.some((row) => row.messages.some((message) => message.text.includes("mark only"))),
+    false,
+  );
+  assert.equal(
+    josephThreads.some((row) => row.messages.some((message) => message.text.includes("clock did not add"))),
+    false,
+  );
+
+  const notice = ticketInboxText(josephTicket);
+  assert.equal(/password|login|madisonltd|p66\.com/i.test(notice), false);
 });
 });

@@ -5,6 +5,12 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import { ticketsForViewer } from "./ticket-cache.ts";
 import {
+  postTicketInboxNotice,
+  resetInboxStoreForTests,
+  SUGGESTION_BOX_PERSON_ID,
+  threadsForViewer,
+} from "./inbox-store.ts";
+import {
   addStoredTicket,
   listStoredTickets,
   resetTicketStoreForTests,
@@ -17,6 +23,7 @@ const file = join(dir, "tickets.json");
 
 after(() => {
   resetTicketStoreForTests();
+  resetInboxStoreForTests();
 });
 
 describe("ticket file store", { concurrency: 1 }, () => {
@@ -97,5 +104,41 @@ describe("ticket file store", { concurrency: 1 }, () => {
     assert.equal(again.length, 2);
     assert.equal(again.some((row) => row.id === first.id), true);
     assert.equal(again.some((row) => row.id === second.id), true);
+  });
+
+  it("a filed ticket is still on disk and in owner Inbox after a store reload", () => {
+    const ticketFile = join(dir, "desk-ticket.json");
+    const inboxFile = join(dir, "desk-inbox.json");
+    resetTicketStoreForTests(ticketFile);
+    resetInboxStoreForTests(inboxFile);
+    const filed = addStoredTicket(
+      makeTicket({
+        kind: "Broke",
+        note: "Hello from Suggestion Box",
+        capture: null,
+        later: false,
+        who: "josephmhenderson2002@gmail.com",
+      }),
+    );
+    postTicketInboxNotice(filed);
+    resetTicketStoreForTests(ticketFile);
+    resetInboxStoreForTests(inboxFile);
+    assert.equal(listStoredTickets("josephmhenderson2002@gmail.com")[0]?.note, "Hello from Suggestion Box");
+    assert.equal(listStoredTickets("marks544@yahoo.com").length, 0);
+    const ownerBox = threadsForViewer({
+      email: "robertmhenderson582@gmail.com",
+      name: "Robert Henderson",
+      role: "owner",
+    }).find((row) => row.personId === SUGGESTION_BOX_PERSON_ID);
+    assert.equal(ownerBox?.messages.some((row) => row.text.includes("Hello from Suggestion Box")), true);
+    const josephBox = threadsForViewer({
+      email: "josephmhenderson2002@gmail.com",
+      name: "Joseph Henderson",
+      role: "tester",
+    });
+    assert.equal(
+      josephBox.some((row) => row.messages.some((message) => message.text.includes("Hello from Suggestion Box"))),
+      false,
+    );
   });
 });

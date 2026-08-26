@@ -5,6 +5,10 @@ import { OWNER_CONTACT, type InboxMessage, type InboxPerson, type InboxThread } 
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { listExtraSeats } from "./seat-store.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
+import type { DeskTicket } from "./tickets.ts";
+
+export const SUGGESTION_BOX_PERSON_ID = "suggestion-box";
+export const SUGGESTION_BOX_THREAD_ID = "th:suggestion-box";
 
 export type StoredInboxMessage = {
   id: string;
@@ -21,6 +25,7 @@ export type StoredInboxThread = {
   id: string;
   testerEmail: string;
   testerName: string;
+  kind?: "chat" | "ticket";
   messages: StoredInboxMessage[];
 };
 
@@ -45,6 +50,7 @@ export function inboxStoreKind() {
 
 export function inboxStorePath() {
   if (process.env.INBOX_STORE_PATH) return process.env.INBOX_STORE_PATH;
+  // Same live instance is shared across seats. A cold Vercel instance can empty /tmp.
   if (process.env.VERCEL) return "/tmp/hit-squad-inbox.json";
   return join(process.cwd(), "data", "inbox.json");
 }
@@ -184,6 +190,14 @@ function projectMessage(message: StoredInboxMessage, viewerEmail: string): Inbox
   };
 }
 
+function isSuggestionBoxThread(thread: StoredInboxThread) {
+  return (
+    thread.id === SUGGESTION_BOX_THREAD_ID ||
+    thread.kind === "ticket" ||
+    thread.testerEmail === SUGGESTION_BOX_PERSON_ID
+  );
+}
+
 function projectThread(thread: StoredInboxThread, viewer: Viewer, view: InboxSeatView): InboxThread | null {
   const email = norm(viewer.email);
   const messages = visibleMessages(thread, email, view);
@@ -192,6 +206,16 @@ function projectThread(thread: StoredInboxThread, viewer: Viewer, view: InboxSea
     (message) => norm(message.fromEmail) !== email && !message.readBy.includes(email),
   ).length;
   const ownerView = isOwner(viewer) || hasBuildDesk(viewer);
+  if (isSuggestionBoxThread(thread)) {
+    return {
+      id: thread.id,
+      personId: SUGGESTION_BOX_PERSON_ID,
+      name: "Suggestion Box",
+      company: "Hit Squad",
+      unread,
+      messages: messages.map((message) => projectMessage(message, email)),
+    };
+  }
   return {
     id: thread.id,
     personId: ownerView ? thread.testerEmail : OWNER_CONTACT.id,
@@ -220,7 +244,10 @@ export function threadsForViewer(viewer: Viewer): InboxThread[] {
   const view = viewOf(state, email);
   const ownerView = isOwner(viewer) || hasBuildDesk(viewer);
   const rows = (state.threads || [])
-    .filter((thread) => (ownerView ? true : thread.testerEmail === email))
+    .filter((thread) => {
+      if (isSuggestionBoxThread(thread)) return ownerView;
+      return ownerView || thread.testerEmail === email;
+    })
     .map((thread) => projectThread(thread, viewer, view))
     .filter((thread): thread is InboxThread => Boolean(thread));
   return rows;
@@ -262,6 +289,38 @@ export function postInboxMessage(input: {
   thread.messages.push(message);
   save(state);
   return { ok: true, threadId: id, messageId: message.id };
+}
+
+export function ticketInboxText(row: DeskTicket) {
+  return [`Suggestion Box · ${row.kind}`, `From: ${row.who}`, row.note || "(no note)"].join("\n");
+}
+
+export function postTicketInboxNotice(row: DeskTicket) {
+  const state = load();
+  let thread = (state.threads || []).find((item) => item.id === SUGGESTION_BOX_THREAD_ID);
+  if (!thread) {
+    thread = {
+      id: SUGGESTION_BOX_THREAD_ID,
+      testerEmail: SUGGESTION_BOX_PERSON_ID,
+      testerName: "Suggestion Box",
+      kind: "ticket",
+      messages: [],
+    };
+    state.threads = [...(state.threads || []), thread];
+  }
+  const message: StoredInboxMessage = {
+    id: `im-tkt-${row.id}`,
+    fromEmail: norm(row.who),
+    fromName: testerName(row.who),
+    text: ticketInboxText(row),
+    photo: null,
+    sentAt: Date.now(),
+    deliveredTo: [norm(row.who)],
+    readBy: [],
+  };
+  thread.messages.push(message);
+  save(state);
+  return { threadId: thread.id, messageId: message.id };
 }
 
 export function markInboxRead(viewer: Viewer, threadId: string) {

@@ -9,6 +9,29 @@ function ownerInbox() {
   return process.env.OWNER_EMAIL || OWNER_TICKET_EMAIL;
 }
 
+export function ticketMailRecipients() {
+  return [ownerInbox().trim().toLowerCase()];
+}
+
+function ticketMailAllowed(to: string) {
+  const dest = to.trim().toLowerCase();
+  const host = dest.split("@")[1] || "";
+  if (host === "madisonltd.com" || host === "p66.com") return false;
+  return ticketMailRecipients().includes(dest);
+}
+
+export function ticketEmailSubject(row: DeskTicket) {
+  return `Hit Squad ticket · ${row.kind} · ${row.who}`;
+}
+
+export function ticketAssessingAckSubject(row: DeskTicket) {
+  return `Re: ${ticketEmailSubject(row)}`;
+}
+
+export function ticketAssessingAckBody() {
+  return "Got it. Assessing.";
+}
+
 function smtpTarget() {
   if (process.env.TICKET_SMTP_URL) return process.env.TICKET_SMTP_URL;
   if (process.env.SMTP_URL) return process.env.SMTP_URL;
@@ -32,22 +55,37 @@ export function ticketEmailBody(row: DeskTicket) {
     "",
     row.note || "(no note)",
     "",
-    "Hit Squad ticket copy. Not Inbox.",
+    "Hit Squad ticket copy for Novus (owner Gmail).",
   ].join("\n");
 }
 
 export async function emailOwnerTicket(row: DeskTicket): Promise<boolean> {
   const url = smtpTarget();
   if (!url) return false;
+  const to = ownerInbox();
+  if (!ticketMailAllowed(to)) return false;
   try {
     const nodemailer = (await import("nodemailer")).default;
     const transporter = nodemailer.createTransport(url);
-    await transporter.sendMail({
-      to: ownerInbox(),
-      from: process.env.GMAIL_USER || ownerInbox(),
-      subject: `Hit Squad ticket · ${row.kind} · ${row.who}`,
+    const from = process.env.GMAIL_USER || ownerInbox();
+    const first = await transporter.sendMail({
+      to,
+      from,
+      subject: ticketEmailSubject(row),
       text: ticketEmailBody(row),
     });
+    try {
+      await transporter.sendMail({
+        to,
+        from,
+        subject: ticketAssessingAckSubject(row),
+        text: ticketAssessingAckBody(),
+        inReplyTo: first.messageId,
+        references: first.messageId,
+      });
+    } catch {
+      // Ticket copy already left. Assessing ack is same-thread only.
+    }
     return true;
   } catch {
     return false;

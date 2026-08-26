@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
 import { hasBuildDesk } from "@/lib/desk-role";
+import { postTicketInboxNotice } from "@/lib/inbox-store";
 import { emailOwnerTicket } from "@/lib/ticket-mail";
 import {
   addStoredTicket,
@@ -52,12 +53,14 @@ export async function POST(request: Request) {
     }),
   );
 
+  const inbox = postTicketInboxNotice(ticket);
   const emailed = await emailOwnerTicket(ticket);
 
   return NextResponse.json({
     ticket,
     tickets: scoped(user),
     emailed,
+    inboxThreadId: inbox.threadId,
     store: ticketStoreKind(),
   });
 }

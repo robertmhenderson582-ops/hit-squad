@@ -118,7 +118,7 @@ export function DeskFabs() {
     setDraft(EMPTY_DRAFT);
     setSavedDraft(false);
     setTicketOpen(false);
-    setNote("Saved to Tickets. Not Inbox.");
+    setNote("Ticket filed.");
     noteFeatureTrail("ticket");
 
     try {

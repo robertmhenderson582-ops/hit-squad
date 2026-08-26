@@ -15,6 +15,7 @@ export function ticketStoreKind() {
 
 export function ticketStorePath() {
   if (process.env.TICKET_STORE_PATH) return process.env.TICKET_STORE_PATH;
+  // Same live instance is shared across seats. A cold Vercel instance can empty /tmp.
   if (process.env.VERCEL) return "/tmp/hit-squad-tickets.json";
   return join(process.cwd(), "data", "tickets.json");
 }
