@@ -194,7 +194,7 @@ export function DeskFabs() {
 
       {inbox.open ? (
         <section className="inbox-card" role="dialog" aria-label="Inbox" data-capture="ignore">
-          <div className="flex justify-end">
+          <div className="flex shrink-0 justify-end">
             <button
               type="button"
               onClick={(event) => {

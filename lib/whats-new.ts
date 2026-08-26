@@ -1,24 +1,26 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.15.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.15";
+export const DESK_VERSION = "1.16.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.16";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.15";
+export const DESK_THREAD_ID = "th-desk-v1.16";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.15",
-  "• People who were invited can finish first visit (email, confidentiality box, then create their own sign-in, 8+). That step cannot be skipped.",
+  "Hit Squad Project Controls V1.16",
+  "• Short update is live. Save your work, then hard-refresh.",
+  "• Sign-in now sticks after you leave. If the desk asked you to create a sign-in again after you already did, create it one more time on this computer. After that, leaving and coming back will not send you to first-time.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.15",
-  "• Owner login is unchanged",
-  "• Testers create a password on first visit (email, confidentiality box, then create their own, 8+). That step cannot be skipped.",
+  "Hit Squad Project Controls V1.16",
+  "• Short update is live. Testers who already saw V1.15 get this note (versioned seen key).",
+  "• Sign-in hashes lived in Vercel /tmp and vanished on cold start. A signed claim cookie now keeps that browser’s tester hash. Logout leaves the claim cookie; owner login is unchanged.",
+  "• Wendell will create one more time on the live desk. After that, leave and return on the same computer will not send him to first-time.",
 ].join("\n");
 
 const FORBIDDEN_TESTER =
-  /\b(password|passwords|auth|authentication|cookie|session secret|security|novus|vault|drive|smtp|\/tmp|tmp file|other users?|other testers?|seats?|owner tools?|view as|aliases?|deploy internals?|anyone else.?s tickets)\b/i;
+  /\b(password|passwords|auth|authentication|cookie|session(?: secret)?|security|novus|vault|drive|smtp|\/tmp|tmp file|other users?|other testers?|seats?|owner tools?|view as|aliases?|deploy(?: internals?)?|anyone else(?:.?s tickets)?)\b/i;
 
 export function whatsNewCopy(ownerChrome: boolean) {
   return ownerChrome ? OWNER_WHATS_NEW : TESTER_WHATS_NEW;
