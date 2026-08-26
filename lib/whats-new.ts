@@ -1,28 +1,26 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.12.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.12";
+export const DESK_VERSION = "1.13.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.13";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.12";
+export const DESK_THREAD_ID = "th-desk-v1.13";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.12",
-  "• Multiple units can be turned on in Job setup; off keeps one timeline",
-  "• The extra Support tab is gone; Support stays on Crew",
+  "Hit Squad Project Controls V1.13",
+  "• Inbox and Suggestion Box open larger",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.12",
-  "• Multiple units is a Job setup toggle, default off",
-  "• Off keeps today’s single five-phase timeline",
-  "• On: each unit has the same five locked phases with its own dates",
-  "• Crew stays one position and five phase cards — a second unit is a second date range, not a cloned Staff row",
-  "• The extra Support estimate tab is gone; Support stays on Crew",
+  "Hit Squad Project Controls V1.13",
+  "• Tester seats are on the desk (first-login change, aliases, testers anonymous to each other)",
+  "• View as is a true lens: selected seat’s desk AND Settings; owner keeps Back to me",
+  "• Testers cannot see Novus, owner tools, other testers, or the alias switch",
+  "• Inbox and Suggestion Box open larger",
 ].join("\n");
 
 const FORBIDDEN_TESTER =
-  /\b(password|passwords|auth|authentication|cookie|session secret|security|novus|vault|drive|smtp|\/tmp|tmp file|other users?|other testers?|seats?|owner tools?|deploy internals?|anyone else.?s tickets)\b/i;
+  /\b(password|passwords|auth|authentication|cookie|session secret|security|novus|vault|drive|smtp|\/tmp|tmp file|other users?|other testers?|seats?|owner tools?|view as|aliases?|deploy internals?|anyone else.?s tickets)\b/i;
 
 export function whatsNewCopy(ownerChrome: boolean) {
   return ownerChrome ? OWNER_WHATS_NEW : TESTER_WHATS_NEW;

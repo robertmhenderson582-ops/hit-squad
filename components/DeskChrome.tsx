@@ -14,8 +14,9 @@ import { ThemeFlip } from "@/components/ThemeFlip";
 import { Wordmark } from "@/components/Wordmark";
 import { noteSessionEnd } from "@/components/FeatureTrail";
 import { FUTURE_MODULES } from "@/components/FutureModulesDesk";
+import { useLensUser } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { isOperator } from "@/lib/desk-role";
+import { canUseRateBuilder, isOperator, isTester } from "@/lib/desk-role";
 
 const NAV: { href: string; label: string; modules?: boolean }[] = [
   { href: "/jobs", label: "Jobs" },
@@ -49,6 +50,7 @@ function ChromeInner({
 }) {
   const pathname = usePathname();
   const { user, signOut } = useSession();
+  const lens = useLensUser();
   const { resolvedTheme } = useDisplay();
   const paper = resolvedTheme === "day";
   const [menuOpen, setMenuOpen] = useState(false);
@@ -62,7 +64,7 @@ function ChromeInner({
   const rail = (active: boolean) =>
     paper ? `rounded px-3 py-2 ${active ? "paper-rail-active" : "paper-rail"}` : `hud-rail px-3 py-2 ${active ? "hud-rail-active" : ""}`;
 
-  const links = NAV.map((item) => {
+  const links = NAV.filter((item) => item.href !== "/rates" || canUseRateBuilder(lens)).map((item) => {
     const active = navActive(pathname, item.href, item.modules);
     if (item.modules) {
       return (
@@ -126,12 +128,14 @@ function ChromeInner({
               <ThemeFlip />
               <div className="text-right">
                 <p className={`font-mono text-[10px] tracking-[0.24em] ${paper ? "text-white/70" : "text-steel-glow"}`}>
-                  {isOperator(user) ? "OPERATOR DESK" : "OWNER DESK"}
+                  {isTester(lens) ? "DESK" : isOperator(user) ? "OPERATOR DESK" : "OWNER DESK"}
                 </p>
                 <p className={`font-display text-lg tracking-wide sm:text-xl ${paper ? "text-white" : "text-paper-cream"}`}>
-                  {user?.name}
+                  {lens?.name || user?.name}
                 </p>
-                <p className={`font-mono text-[11px] ${paper ? "text-white/70" : "text-paper-cream/70"}`}>{user?.email}</p>
+                <p className={`font-mono text-[11px] ${paper ? "text-white/70" : "text-paper-cream/70"}`}>
+                  {lens?.email || user?.email}
+                </p>
                 <button
                   type="button"
                   onClick={() => {

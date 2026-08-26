@@ -1136,12 +1136,14 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 }
 
 .inbox-card {
-  width: min(22rem, calc(100vw - 2rem));
+  width: min(36rem, calc(100vw - 1.5rem));
+  max-height: min(40rem, calc(100vh - 7rem));
+  overflow: auto;
   border-radius: 24px;
   background: #fff;
   color: #163038;
   color-scheme: light;
-  padding: 1.25rem 1.35rem;
+  padding: 1.4rem 1.5rem;
   box-shadow: 0 18px 40px rgba(15, 95, 109, 0.18);
 }
 
@@ -1155,12 +1157,14 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 .ticket-card {
   position: relative;
   z-index: 3;
-  width: min(22rem, calc(100vw - 2rem));
+  width: min(34rem, calc(100vw - 1.5rem));
+  max-height: min(38rem, calc(100vh - 7rem));
+  overflow: auto;
   border-radius: 16px;
   background: #fff;
   color: #163038;
   color-scheme: light;
-  padding: 1rem 1.1rem;
+  padding: 1.25rem 1.35rem;
   box-shadow: 0 18px 40px rgba(15, 95, 109, 0.18);
 }
 

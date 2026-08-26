@@ -156,12 +156,16 @@ export function FollowDesk() {
         <p className="mt-3 text-sm text-[#5b6f73]">
           {watching
             ? `Watching ${subject?.name ?? desk.followSeat}. Password fields stay blank. ${
-                desk.followSeat === "nathan"
-                  ? "Madison seat — real client and plant names."
-                  : "Field seat — whole-catalog aliases stay on. Benny never sees real client names."
+                desk.followSeat === "nathan" ||
+                desk.followSeat === "john" ||
+                desk.followSeat === "wendell" ||
+                desk.followSeat === "benny" ||
+                desk.followSeat === "chance"
+                  ? "Real client and plant names."
+                  : "Whole-catalog aliases stay on."
               }`
             : desk.aliasesOn
-              ? "Owner tester view — Ironwood / Midwest names. Follow Benny to check his lens."
+              ? "Owner tester view — Ironwood / Midwest names. Follow an aliased seat to check that lens."
               : "Owner view — real names. Turn aliases on to preview tester view."}
         </p>
       </section>

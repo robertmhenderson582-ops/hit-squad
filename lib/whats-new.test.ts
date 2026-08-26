@@ -4,6 +4,8 @@ import { CREW_LANES } from "./crew-lanes.ts";
 import { displayEstimateType, ESTIMATE_TYPES } from "./estimate-type.ts";
 import {
   DESK_PERSON_ID,
+  DESK_THREAD_ID,
+  DESK_VERSION,
   DESK_VERSION_LABEL,
   OWNER_WHATS_NEW,
   TESTER_WHATS_NEW,
@@ -44,19 +46,27 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
+    assert.equal(DESK_VERSION, "1.13.0");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.13");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.13");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Multiple units can be turned on in Job setup; off keeps one timeline/);
-    assert.match(TESTER_WHATS_NEW, /The extra Support tab is gone; Support stays on Crew/);
-    assert.match(OWNER_WHATS_NEW, /Multiple units is a Job setup toggle, default off/);
-    assert.match(OWNER_WHATS_NEW, /Off keeps today’s single five-phase timeline/);
-    assert.match(OWNER_WHATS_NEW, /second unit is a second date range/);
-    assert.match(OWNER_WHATS_NEW, /Support stays on Crew/);
-    assert.equal(/password|auth|Novus|vault|Drive|\/tmp|SMTP|seat/i.test(TESTER_WHATS_NEW), false);
+    assert.match(TESTER_WHATS_NEW, /Inbox and Suggestion Box open larger/);
+    assert.match(OWNER_WHATS_NEW, /Tester seats are on the desk/);
+    assert.match(OWNER_WHATS_NEW, /View as is a true lens/);
+    assert.match(OWNER_WHATS_NEW, /Testers cannot see Novus, owner tools, other testers, or the alias switch/);
+    assert.match(OWNER_WHATS_NEW, /Inbox and Suggestion Box open larger/);
+    assert.equal(
+      /password|passwords|auth|security|Novus|vault|Drive|seats|owner tools|View as|aliases|other testers/i.test(
+        TESTER_WHATS_NEW,
+      ),
+      false,
+    );
 
     const first = applyWhatsNew([], "tester-joseph-new", false);
     assert.equal(first.length, 1);
     assert.equal(first[0].personId, DESK_PERSON_ID);
+    assert.equal(first[0].id, DESK_THREAD_ID);
     assert.equal(first[0].name, "Hit Squad");
     assert.equal(first[0].messages[0]?.author, "Desk");
     assert.equal(first[0].messages[0]?.text, TESTER_WHATS_NEW);
@@ -65,7 +75,7 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.12 onto an existing Hit Squad desk thread", () => {
+  it("appends V1.13 onto an existing Hit Squad desk thread", () => {
     const prior = [
       {
         id: "th-desk-v1.11.1",

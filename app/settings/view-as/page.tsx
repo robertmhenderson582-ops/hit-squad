@@ -5,7 +5,7 @@ import { ViewAsDesk } from "@/components/ViewAsDesk";
 
 export default function SettingsViewAsPage() {
   return (
-    <SettingsGate buildDesk>
+    <SettingsGate viewAs>
       <ViewAsDesk />
     </SettingsGate>
   );

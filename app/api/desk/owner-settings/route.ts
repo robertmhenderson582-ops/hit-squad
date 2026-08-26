@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { hasBuildDesk } from "@/lib/desk-role";
+import { hasBuildDesk, isTester } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
 import { clearRepublish, getOwnerSettings, setOwnerSettings, startRepublish, type RepublishWait } from "@/lib/owner-desk";
 
@@ -15,6 +15,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (isTester(user)) {
+    return NextResponse.json({ error: "Owner tools stay with the owner." }, { status: 403 });
+  }
   const body = (await request.json().catch(() => ({}))) as {
     aliasesOn?: boolean;
     followSeat?: string;
@@ -30,6 +33,9 @@ export async function POST(request: Request) {
   }
   if (body.action === "back" && hasBuildDesk(user)) {
     return NextResponse.json(clearRepublish());
+  }
+  if (!hasBuildDesk(user)) {
+    return NextResponse.json({ error: "Build desk only." }, { status: 403 });
   }
   return NextResponse.json(
     setOwnerSettings({

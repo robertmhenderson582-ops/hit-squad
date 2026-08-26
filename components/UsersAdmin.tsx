@@ -16,8 +16,8 @@ export function UsersAdmin() {
             <h2 className="text-2xl font-semibold text-[#163038]">Aliases</h2>
             <p className="mt-1 text-sm text-[#5b6f73]">
               Whole catalog, not only P66. Off = real names on the owner blotter. On = tester view.
-              Madison shop (Nathan / later John) still sees real names. Mark, Bill, Joseph, and Benny
-              stay aliased. Benny never sees real client or plant names.
+              Nathan, John, Wendell, Benny, and Chance stay on real names. Mark, Cody, Bill, James,
+              and Joseph stay aliased. Testers never see this switch.
             </p>
           </div>
           <button
@@ -52,7 +52,7 @@ export function UsersAdmin() {
         </div>
         <p className="mt-3 text-xs text-[#5b6f73]">
           Imports that still say Phillips 66 / P66 still match under Ironwood. Owner viewing with the
-          toggle off sees real names. Follow Benny to check his lens.
+          toggle off sees real names. Follow an aliased seat to check that lens.
         </p>
       </section>
 
@@ -106,7 +106,13 @@ export function UsersAdmin() {
                   <td className="px-2 py-2">{row.name}</td>
                   <td className="px-2 py-2">{row.email}</td>
                   <td className="px-2 py-2">{row.permission}</td>
-                  <td className="px-2 py-2">{row.shop === "madison" ? "Madison · real names" : "Field · aliases"}</td>
+                  <td className="px-2 py-2">
+                    {row.shop === "madison"
+                      ? "Madison · real names"
+                      : ["wendell", "benny", "chance"].includes(row.id)
+                        ? "Field · real names"
+                        : "Field · aliases"}
+                  </td>
                 </tr>
               ))}
             </tbody>

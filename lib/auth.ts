@@ -57,7 +57,8 @@ export async function readSession(token: string | undefined): Promise<PublicUser
     if (!payload.sub || typeof payload.email !== "string" || typeof payload.name !== "string") {
       return null;
     }
-    const role: DeskRole = payload.role === "operator" ? "operator" : "owner";
+    const role: DeskRole =
+      payload.role === "operator" ? "operator" : payload.role === "tester" ? "tester" : "owner";
     return {
       id: payload.sub,
       email: payload.email,

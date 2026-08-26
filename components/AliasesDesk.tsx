@@ -15,9 +15,9 @@ export function AliasesDesk() {
           <p className="mt-2 text-sm text-[#5b6f73]">
             Whole catalog, not only P66. Off = real names on the owner blotter. On = tester view.
             Ironwood Refining, Piedmont Power / Ridge Station, Harbor Fuels / Harbor Works, Pacific
-            Fuels / Bay Point, Midcontinent Pipeline / Midwest Terminal. Nathan / John / Madison shop
-            stay on real names. Mark, Bill, Joseph, and Benny stay aliased. Benny never sees real
-            client or plant names. Rates, site ids, and files stay real underneath.
+            Fuels / Bay Point, Midcontinent Pipeline / Midwest Terminal. Nathan, John, Wendell, Benny,
+            and Chance stay on real names. Mark, Cody, Bill, James, and Joseph stay aliased. Testers
+            never see this switch. Rates, site ids, and files stay real underneath.
           </p>
         </div>
         <button
