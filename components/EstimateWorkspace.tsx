@@ -14,6 +14,7 @@ import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { RfqPreview } from "@/components/RfqPreview";
 import { EstimateTotalRail } from "@/components/EstimateTotalRail";
+import { RateBuilder } from "@/components/RateBuilder";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
 import type { StaffingLine } from "@/lib/types";
 
@@ -217,14 +218,7 @@ export function EstimateWorkspace({
       </header>
       <div className={`${paper ? "paper-desk desk-day" : "instrument-desk desk-night"} est-desk-body min-h-[70vh] px-4 py-6`}>
         <DeskBanners />
-        {tab === "rates" ? (
-          <section className="plant-card px-5 py-5">
-            <h2 className="font-display text-2xl font-semibold text-[#163038]">Rates</h2>
-            <p className="mt-2 text-sm text-[#5b6f73]">
-              Rate packs and B-1 stay parked. This tab is chrome only — no invented totals.
-            </p>
-          </section>
-        ) : null}
+        {tab === "rates" ? <RateBuilder /> : null}
         {tab === "rates" ? null : children}
         <EstimateTotalRail client={jobClient || client} site={jobSite || site} />
       </div>

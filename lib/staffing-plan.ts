@@ -7,6 +7,7 @@ import {
   type StaffingCoast,
 } from "./p66-ips-crafts.ts";
 import { eachYmd, parseYmd, PHASE_NAMES, type PhaseRow } from "./phase-schedule.ts";
+import { emptyJobRates, hydrateJobRates, type JobRates } from "./shahan-wood-river.ts";
 import { buildXlsx, colLetter, type SheetCell } from "./xlsx-minimal.ts";
 
 export const JOB_META_PREFIX = "hs_job_v1:";
@@ -14,9 +15,7 @@ export const JOB_META_PREFIX = "hs_job_v1:";
 export type JobMeta = {
   afeName: string;
   area: string;
-  perDiemRate: number;
-  mileageRate: number;
-};
+} & JobRates;
 
 export type StaffingCrewInput = {
   staff?: CraftRow[];
@@ -59,7 +58,7 @@ export type StaffingExportMeta = {
 const WEEKDAY_MARK = ["S", "M", "T", "W", "T", "F", "S"] as const;
 
 export function emptyJobMeta(): JobMeta {
-  return { afeName: "", area: "", perDiemRate: 0, mileageRate: 0 };
+  return { afeName: "", area: "", ...emptyJobRates() };
 }
 
 export function readJobMeta(key: string): JobMeta {
@@ -71,8 +70,7 @@ export function readJobMeta(key: string): JobMeta {
     return {
       afeName: typeof parsed.afeName === "string" ? parsed.afeName : "",
       area: typeof parsed.area === "string" ? parsed.area : "",
-      perDiemRate: Number(parsed.perDiemRate) || 0,
-      mileageRate: Number(parsed.mileageRate) || 0,
+      ...hydrateJobRates(parsed),
     };
   } catch {
     return emptyJobMeta();

@@ -22,6 +22,7 @@ import {
 import { CrewPhaseCards } from "@/components/CrewPhaseCards";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { defaultLaborClass, type LaborClass } from "@/lib/labor-class";
+import { formatShahanCrewCost } from "@/lib/shahan-wood-river";
 
 const HEADERS = ["POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST"];
 
@@ -51,10 +52,17 @@ export function CraftLaborGrid({
   const computed = useMemo(
     () =>
       rows.map((row) => {
-        const hours = computeRowHours(row, site, client);
-        return { ...row, ...hours, cost: "" };
+        const hours = computeRowHours(row, site, client, pack.crew.otAfter8);
+        const title = row.position || ("billedAs" in row ? String(row.billedAs || "") : "");
+        return {
+          ...row,
+          ...hours,
+          cost: formatShahanCrewCost(title, hours, {
+            laborClass: row.laborClassOverride ?? defaultLaborClass(title),
+          }),
+        };
       }),
-    [rows, site, client],
+    [client, pack.crew.otAfter8, rows, site],
   );
 
   const totals = useMemo(() => sumSplits(computed), [computed]);

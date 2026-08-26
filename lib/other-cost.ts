@@ -148,6 +148,23 @@ export function travelAmount(line: Pick<TravelLine, "travelers" | "perMile" | "m
   );
 }
 
+export type TravelMileageDefaults = {
+  perMile?: number;
+  staffPerMile?: number;
+  craftPerMile?: number;
+};
+
+export function travelSeedPerMile(kind: TravelKind, defaults: TravelMileageDefaults = {}): number {
+  if (kind === "staff") return Math.max(0, Number(defaults.staffPerMile ?? defaults.perMile) || 0);
+  return Math.max(0, Number(defaults.craftPerMile ?? defaults.perMile) || 0);
+}
+
+/** Keep a typed $/mile. Inherit Job setup only when the line has no real rate yet. */
+export function inheritTravelPerMile(prev: Partial<TravelLine> | undefined, seedPerMile: number): number {
+  const typed = prev != null ? Math.max(0, Number(prev.perMile) || 0) : 0;
+  return typed > 0 ? typed : Math.max(0, seedPerMile);
+}
+
 export function defaultTravelLine(
   kind: TravelKind,
   headcount = 0,
@@ -160,7 +177,7 @@ export function defaultTravelLine(
     source: "crew",
     headcount,
     travelers: capTravelers(prev?.travelers ?? 0, headcount),
-    perMile: prev ? Math.max(0, Number(prev.perMile) || 0) : Math.max(0, seedPerMile),
+    perMile: inheritTravelPerMile(prev, seedPerMile),
     miles: prev ? Math.max(0, Number(prev.miles) || 0) : 0,
   };
 }
@@ -253,18 +270,17 @@ export function hydrateTravelLine(raw: unknown): TravelLine | null {
 export function syncTravelFromCrew(
   travel: TravelLine[],
   crew: TravelCrew,
-  defaults: { perMile?: number } = {},
+  defaults: TravelMileageDefaults = {},
 ): TravelLine[] {
   const counts = crewTravelHeadcounts(crew);
-  const seed = Math.max(0, Number(defaults.perMile) || 0);
   const staffPrev = travel.find((line) => line.id === STAFF_TRAVEL_ID || (line.source === "crew" && line.kind === "staff"));
   const craftPrev = travel.find((line) => line.id === CRAFT_TRAVEL_ID || (line.source === "crew" && line.kind === "craft"));
   const extras = travel
     .filter((line) => line.source === "extra")
     .map((line) => ({ ...line, travelers: capTravelers(line.travelers, line.headcount) }));
   return [
-    defaultTravelLine("staff", counts.staff, staffPrev, seed),
-    defaultTravelLine("craft", counts.craft, craftPrev, seed),
+    defaultTravelLine("staff", counts.staff, staffPrev, travelSeedPerMile("staff", defaults)),
+    defaultTravelLine("craft", counts.craft, craftPrev, travelSeedPerMile("craft", defaults)),
     ...extras,
   ];
 }
@@ -272,15 +288,16 @@ export function syncTravelFromCrew(
 export function syncOtherCostTravel(
   sheet: OtherCostSheet,
   crew: TravelCrew,
-  defaults: { perMile?: number } = {},
+  defaults: TravelMileageDefaults = {},
 ): OtherCostSheet {
   return { ...sheet, travel: syncTravelFromCrew(sheet.travel, crew, defaults) };
 }
 
-export function persistCrewTravel(key: string, crew: TravelCrew, perMile = 0) {
+export function persistCrewTravel(key: string, crew: TravelCrew, defaults: TravelMileageDefaults | number = {}) {
   if (typeof window === "undefined" || !key) return;
+  const seed: TravelMileageDefaults = typeof defaults === "number" ? { perMile: defaults } : defaults;
   const sheet = readOtherCost(key);
-  const next = syncOtherCostTravel(sheet, crew, { perMile });
+  const next = syncOtherCostTravel(sheet, crew, seed);
   if (JSON.stringify(sheet.travel) !== JSON.stringify(next.travel)) writeOtherCost(key, next);
 }
 

@@ -1,22 +1,22 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.16.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.16";
+export const DESK_VERSION = "1.17.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.17";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.16";
+export const DESK_THREAD_ID = "th-desk-v1.17";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.16",
-  "• Short update is live. Save your work, then hard-refresh.",
-  "• Sign-in now sticks after you leave. If the desk asked you to create a sign-in again after you already did, create it one more time on this computer. After that, leaving and coming back will not send you to first-time.",
+  "Hit Squad Project Controls V1.17",
+  "• Cost now fills from Wood River Shahan. The Rate tab shows that book.",
+  "• Save your work, then hard-refresh.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.16",
-  "• Short update is live. Testers who already saw V1.15 get this note (versioned seen key).",
-  "• Sign-in hashes lived in Vercel /tmp and vanished on cold start. A signed claim cookie now keeps that browser’s tester hash. Logout leaves the claim cookie; owner login is unchanged.",
-  "• Wendell will create one more time on the live desk. After that, leave and return on the same computer will not send him to first-time.",
+  "Hit Squad Project Controls V1.17",
+  "• Crew Cost and the Rate tab use Debbie Shahan TM OCIP — Wood River. Live catalog stays empty until the 159-row sheet is pasted. Not Nathan, not RRFF.",
+  "• Job setup now has Staff PD $140 / Craft PD $130 and Staff / Craft mileage. Travel Staff and Craft inherit those mileage rates unless already typed.",
+  "• Testers who already saw V1.16 get this note (versioned seen key).",
 ].join("\n");
 
 const FORBIDDEN_TESTER =
