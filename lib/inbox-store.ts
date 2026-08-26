@@ -69,6 +69,11 @@ export function resetInboxStoreForTests(path?: string) {
   } else delete process.env.INBOX_STORE_PATH;
 }
 
+export function unloadInboxStoreForTests() {
+  cache = null;
+  loadedFrom = null;
+}
+
 function emptyView(): InboxSeatView {
   return { hiddenMessageIds: [], clearedAt: {} };
 }

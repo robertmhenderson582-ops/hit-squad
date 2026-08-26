@@ -9,6 +9,7 @@ import {
   resetInboxStoreForTests,
   SUGGESTION_BOX_PERSON_ID,
   threadsForViewer,
+  unloadInboxStoreForTests,
 } from "./inbox-store.ts";
 import {
   addStoredTicket,
@@ -122,7 +123,7 @@ describe("ticket file store", { concurrency: 1 }, () => {
     );
     postTicketInboxNotice(filed);
     resetTicketStoreForTests(ticketFile);
-    resetInboxStoreForTests(inboxFile);
+    unloadInboxStoreForTests();
     assert.equal(listStoredTickets("josephmhenderson2002@gmail.com")[0]?.note, "Hello from Suggestion Box");
     assert.equal(listStoredTickets("marks544@yahoo.com").length, 0);
     const ownerBox = threadsForViewer({
