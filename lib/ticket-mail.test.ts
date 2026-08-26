@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { emailOwnerTicket, ticketEmailBody, ticketEmailConfigured } from "./ticket-mail.ts";
+import { emailOwnerNote, emailOwnerTicket, ticketEmailBody, ticketEmailConfigured } from "./ticket-mail.ts";
 import { makeTicket } from "./tickets.ts";
 
 describe("ticket email", () => {
@@ -17,6 +17,7 @@ describe("ticket email", () => {
     });
     assert.equal(ticketEmailConfigured(), false);
     assert.equal(await emailOwnerTicket(row), false);
+    assert.equal(await emailOwnerNote("Hit Squad brief · quality · chancec318@yahoo.com", "ITP pack"), false);
     const body = ticketEmailBody(row);
     assert.match(body, /desk capture failed/);
     assert.match(body, /Capture: yes/);

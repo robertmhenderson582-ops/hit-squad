@@ -48,19 +48,19 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
-    assert.equal(DESK_VERSION, "1.17.0");
-    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.17");
-    assert.equal(DESK_THREAD_ID, "th-desk-v1.17");
+    assert.equal(DESK_VERSION, "1.18.0");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.18");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.18");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Cost now fills from Wood River Shahan/);
-    assert.match(TESTER_WHATS_NEW, /Rate tab shows that book/);
+    assert.match(TESTER_WHATS_NEW, /Quality and HSE Save now keep your forms/);
+    assert.match(TESTER_WHATS_NEW, /The owner can open them/);
     assert.match(TESTER_WHATS_NEW, /Save your work, then hard-refresh/);
     assert.equal(/Wendell|Joseph|testers/i.test(TESTER_WHATS_NEW), false);
-    assert.match(OWNER_WHATS_NEW, /Shahan TM OCIP/);
-    assert.match(OWNER_WHATS_NEW, /Staff PD \$140/);
-    assert.match(OWNER_WHATS_NEW, /V1\.16/);
-    assert.equal(testerCopyIsSafe(OWNER_WHATS_NEW), true);
+    assert.match(OWNER_WHATS_NEW, /Data vault rooms/);
+    assert.match(OWNER_WHATS_NEW, /GOOGLE_SERVICE_ACCOUNT_JSON/);
+    assert.match(OWNER_WHATS_NEW, /V1\.17/);
+    assert.equal(testerCopyIsSafe(OWNER_WHATS_NEW), false);
     assert.equal(
       /password|passwords|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
         TESTER_WHATS_NEW,
@@ -98,24 +98,24 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.17 onto an existing Hit Squad desk thread after V1.16", () => {
-    assert.equal(seenKey("tester-x", "1.16.0"), `${WHATS_NEW_MARK_PREFIX}1.16.0:tester-x`);
-    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.17.0:tester-x`);
-    assert.notEqual(seenKey("tester-x", "1.16.0"), seenKey("tester-x"));
+  it("appends V1.18 onto an existing Hit Squad desk thread after V1.17", () => {
+    assert.equal(seenKey("tester-x", "1.17.0"), `${WHATS_NEW_MARK_PREFIX}1.17.0:tester-x`);
+    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.18.0:tester-x`);
+    assert.notEqual(seenKey("tester-x", "1.17.0"), seenKey("tester-x"));
 
     const prior = [
       {
-        id: "th-desk-v1.16",
+        id: "th-desk-v1.17",
         personId: DESK_PERSON_ID,
         name: "Hit Squad",
         company: "Project Controls",
         unread: 0,
         messages: [
           {
-            id: "im-desk-1.16.0",
+            id: "im-desk-1.17.0",
             from: "them" as const,
             author: "Desk",
-            text: "Hit Squad Project Controls V1.16",
+            text: "Hit Squad Project Controls V1.17",
             photo: null,
             sentAt: "",
             readAt: "seen",
