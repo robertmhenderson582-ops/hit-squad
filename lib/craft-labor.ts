@@ -149,7 +149,7 @@ export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange, unitId?: str
     end: seed.end,
     headcount: prev?.headcount ?? 1,
     nightHeadcount: prev?.nightHeadcount ?? 1,
-    hoursPerShift: seed.hoursPerShift,
+    hoursPerShift: prev && Number.isFinite(prev.hoursPerShift) ? prev.hoursPerShift : seed.hoursPerShift,
     perDiemPeople: prev?.perDiemPeople ?? 1,
     nightPerDiemPeople: prev?.nightPerDiemPeople ?? 1,
     days: seed.days,

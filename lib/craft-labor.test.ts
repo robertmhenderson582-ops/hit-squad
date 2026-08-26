@@ -238,6 +238,46 @@ describe("support position calendars", () => {
     assert.equal(titled.ranges.find((range) => range.phaseId === "pre")?.start, phases[0].start);
   });
 
+  it("Hours / shift stays a per-position override above the Job setup seed", () => {
+    const phases = defaultPhases();
+    const postPhase = phases.find((row) => row.id === "post");
+    const nightsPhase = phases.find((row) => row.id === "oil-out");
+    assert.equal(postPhase?.hoursPerDay, 8);
+    assert.equal(nightsPhase?.hoursPerDay, 12);
+
+    const added = addSupportLine(phases);
+    assert.equal(added.ranges.find((range) => range.phaseId === "post")?.hoursPerShift, 8);
+    assert.equal(added.ranges.find((range) => range.phaseId === "oil-out")?.hoursPerShift, 12);
+
+    const raised = {
+      ...assignSupportDuty(added, "Tool Room Attendant", phases),
+      ranges: added.ranges.map((range) => {
+        if (range.phaseId === "post") return { ...range, hoursPerShift: 10 };
+        if (range.phaseId === "oil-out") return { ...range, hoursPerShift: 13 };
+        return range;
+      }),
+    };
+    const synced = syncSupportRows([raised], phases)[0];
+    assert.equal(synced.ranges.find((range) => range.phaseId === "post")?.hoursPerShift, 10);
+    assert.equal(synced.ranges.find((range) => range.phaseId === "oil-out")?.hoursPerShift, 13);
+
+    const staff = craftRowFromPhases(phases);
+    staff.position = "Project Controls";
+    staff.ranges = staff.ranges.map((range) =>
+      range.phaseId === "post" ? { ...range, hoursPerShift: 10 } : range,
+    );
+    const staffSynced = syncCraftRows([staff], phases)[0];
+    assert.equal(staffSynced.ranges.find((range) => range.phaseId === "post")?.hoursPerShift, 10);
+
+    const seededHours = computeRowHours(
+      { ...synced, ranges: addSupportLine(phases).ranges },
+      "Wood River — Roxana, IL",
+      "Phillips 66",
+    );
+    const overrideHours = computeRowHours(synced, "Wood River — Roxana, IL", "Phillips 66");
+    assert.equal(overrideHours.hours > seededHours.hours, true);
+  });
+
   it("keeps old saved Position + Billed as and fills phase ranges", () => {
     const phases = defaultPhases();
     const saved = hydrateSupportLine({
