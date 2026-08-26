@@ -7,7 +7,7 @@ const ROOMS: { name: string; note: string }[] = [
   { name: "Estimates", note: "Live working packages. Open jobs stay so the same pack can be opened again." },
   { name: "Rates", note: "Burdened craft rates. Not a published wage schedule." },
   { name: "Tickets", note: "Filed Ticket button items. Not Inbox." },
-  { name: "Workbooks", note: "Estimate sheets and shop / rig copies." },
+  { name: "Workbooks", note: "Gut-check sheets. Live packs stay in Estimates." },
   { name: "Snapshots", note: "Dated dumps before an outage-window republish." },
 ];
 

@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  ESTIMATES_ROOM_ID,
   driveConfigured,
   driveStoreKind,
   findDrivePackFile,
   listDrivePacks,
   memoryDrive,
   parseServiceAccount,
+  resolveEstimatesFolder,
   upsertEstimateInDrive,
 } from "./drive-estimates.ts";
 import { estimateFileName, publicPack, responseLeaksDrive, type EstimatePackSnapshot } from "./estimate-pack.ts";
@@ -68,5 +70,11 @@ describe("drive estimate upsert", () => {
     assert.ok(ownerFile);
     assert.equal(testerFile, null);
     assert.equal(estimateFileName(cat2()), "wood-river-cat-2-pit-stop.json");
+    assert.equal(resolveEstimatesFolder(), ESTIMATES_ROOM_ID);
+    assert.equal(resolveEstimatesFolder("1QtYnsIw_Os3nYKAdByS9V1mzsv2A6dWy"), ESTIMATES_ROOM_ID);
+    assert.equal(resolveEstimatesFolder("1OvNT1G9UR69hXjIeR1DpJLFZPIhoPhuQ"), ESTIMATES_ROOM_ID);
+    const firstName = [...drive.files.values()][0]?.file.name;
+    assert.equal(firstName, "wood-river-cat-2-pit-stop.json");
+    assert.equal(drive.files.size, 2);
   });
 });

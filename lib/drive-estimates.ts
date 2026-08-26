@@ -37,8 +37,19 @@ type ServiceAccount = {
 
 let cachedToken: { value: string; exp: number } | null = null;
 
+/** Owner Estimates room. Live packs only. Never Workbooks / Nathan. */
+export const ESTIMATES_ROOM_ID = "1y6Q3TOnpXzV-Y1oeqjjrHfSXt9hcIrgW";
+const WORKBOOKS_ROOM_ID = "1OvNT1G9UR69hXjIeR1DpJLFZPIhoPhuQ";
+const NATHAN_WORKBOOKS_ID = "1QtYnsIw_Os3nYKAdByS9V1mzsv2A6dWy";
+const FORBIDDEN_ESTIMATE_FOLDERS = new Set([WORKBOOKS_ROOM_ID, NATHAN_WORKBOOKS_ID]);
+
+export function resolveEstimatesFolder(folderId?: string) {
+  const wanted = folderId || process.env.DRIVE_ESTIMATES_FOLDER_ID || ESTIMATES_ROOM_ID;
+  return FORBIDDEN_ESTIMATE_FOLDERS.has(wanted) ? ESTIMATES_ROOM_ID : wanted;
+}
+
 export function estimatesFolderId() {
-  return process.env.DRIVE_ESTIMATES_FOLDER_ID || "1y6Q3TOnpXzV-Y1oeqjjrHfSXt9hcIrgW";
+  return resolveEstimatesFolder();
 }
 
 export function parseServiceAccount(env: Record<string, string | undefined> = process.env): ServiceAccount | null {
@@ -243,21 +254,22 @@ export async function upsertEstimateInDrive(
   pack: EstimatePackSnapshot,
   folderId = estimatesFolderId(),
 ) {
+  const target = resolveEstimatesFolder(folderId);
   const ownerEmail = pack.ownerEmail.trim().toLowerCase();
   const payload = JSON.stringify(publicPack({ ...pack, ownerEmail }), null, 2);
-  const existing = await findDrivePackFile(adapter, folderId, pack.packId, ownerEmail);
+  const existing = await findDrivePackFile(adapter, target, pack.packId, ownerEmail);
   const properties = { packId: pack.packId, ownerEmail };
   if (existing) {
     const name = estimateFileName(pack);
     return adapter.updateJson(existing.id, payload, name === existing.name ? existing.name : name, properties);
   }
-  const taken = (await adapter.listJson(folderId)).map((file) => file.name);
+  const taken = (await adapter.listJson(target)).map((file) => file.name);
   const name = estimateFileName(pack, taken);
-  return adapter.createJson(folderId, name, payload, properties);
+  return adapter.createJson(target, name, payload, properties);
 }
 
 export async function listDrivePacks(adapter: DriveAdapter, folderId = estimatesFolderId()) {
-  const files = await adapter.listJson(folderId);
+  const files = await adapter.listJson(resolveEstimatesFolder(folderId));
   const packs: EstimatePackSnapshot[] = [];
   for (const file of files) {
     try {
@@ -276,7 +288,7 @@ export async function readDrivePack(
   ownerEmail: string,
   folderId = estimatesFolderId(),
 ) {
-  const file = await findDrivePackFile(adapter, folderId, packId, ownerEmail);
+  const file = await findDrivePackFile(adapter, resolveEstimatesFolder(folderId), packId, ownerEmail);
   if (!file) return null;
   const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
   return parsed.ok ? publicPack(parsed.pack) : null;
