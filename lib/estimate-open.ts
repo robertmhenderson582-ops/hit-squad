@@ -5,7 +5,7 @@ function norm(value: string) {
 }
 
 export function estimateHref(id: string) {
-  return `/estimates/${id}`;
+  return `/estimates/${encodeURIComponent(id)}`;
 }
 
 export function newEstimatePackId() {

@@ -33,12 +33,12 @@ export type SeatEstimate = {
   deleted: boolean;
 };
 
-export const SEAT_ESTIMATE_PREFIX = "hs_seat_estimates_v1:";
+export const SEAT_ESTIMATE_PREFIX = "hs_seat_estimates_v2:";
 export const SEEDED_SHEET_PREFIX = "hs_example_seeded_v1:";
 export const CREW_STORE_PREFIX = "hs_crew_v1:";
 
 export function copyId(seatId: string, templateId: ExampleTemplateId) {
-  return `${seatId}:${templateId}`;
+  return `${seatId}--${templateId}`;
 }
 
 export function folderIsLocked(status: PackageStatus, kind: "example" | "new" = "example") {
@@ -173,8 +173,10 @@ export function ensureSeatEstimates(seatId: string, seatName: string): SeatEstim
 }
 
 export function templateIdFromCopyId(id: string): ExampleTemplateId | undefined {
-  const tail = id.includes(":") ? id.slice(id.lastIndexOf(":") + 1) : id;
-  return isExampleTemplateId(tail) ? tail : isExampleTemplateId(id) ? id : undefined;
+  if (isExampleTemplateId(id)) return id;
+  const sep = id.includes("--") ? "--" : id.includes(":") ? ":" : "";
+  const tail = sep ? id.slice(id.lastIndexOf(sep) + sep.length) : id;
+  return isExampleTemplateId(tail) ? tail : undefined;
 }
 
 export function resetSeatEstimatesForTests() {

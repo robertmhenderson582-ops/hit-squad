@@ -6,7 +6,7 @@ import { EstimateDetail } from "@/components/EstimateDetail";
 
 export default function EstimateDetailPage() {
   const params = useParams<{ id: string }>();
-  const id = typeof params.id === "string" ? params.id : "";
+  const id = typeof params.id === "string" ? decodeURIComponent(params.id) : "";
 
   return (
     <AuthGate require="authenticated">
