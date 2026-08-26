@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { sessionCookieOptions, SESSION_COOKIE, signSession } from "@/lib/auth";
-import { findUserByEmail, toPublicUser, verifyPassword } from "@/lib/users";
+import { loginOutcome } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
-const GENERIC_ERROR = "Sign-in failed. Check the email and password.";
-
 export async function POST(request: Request) {
-  let body: { email?: unknown; password?: unknown; acknowledged?: unknown };
+  let body: {
+    email?: unknown;
+    password?: unknown;
+    acknowledged?: unknown;
+    newPassword?: unknown;
+    confirmPassword?: unknown;
+  };
 
   try {
     body = await request.json();
@@ -22,21 +26,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const email = typeof body.email === "string" ? body.email : "";
-  const password = typeof body.password === "string" ? body.password : "";
+  const outcome = loginOutcome({
+    email: typeof body.email === "string" ? body.email : "",
+    password: typeof body.password === "string" ? body.password : "",
+    newPassword: typeof body.newPassword === "string" ? body.newPassword : "",
+    confirmPassword: typeof body.confirmPassword === "string" ? body.confirmPassword : "",
+  });
 
-  if (!email || !password) {
-    return NextResponse.json({ error: GENERIC_ERROR }, { status: 401 });
+  if (outcome.status === "needsCreate") {
+    return NextResponse.json({ needsCreate: true });
+  }
+  if (outcome.status === "needsPassword") {
+    return NextResponse.json({ needsPassword: true });
+  }
+  if (outcome.status === "error") {
+    return NextResponse.json({ error: outcome.error }, { status: outcome.http });
   }
 
-  const user = findUserByEmail(email);
-  if (!user || !verifyPassword(user, password)) {
-    return NextResponse.json({ error: GENERIC_ERROR }, { status: 401 });
-  }
-
-  const publicUser = toPublicUser(user);
-  const token = await signSession(publicUser);
-  const response = NextResponse.json({ user: publicUser });
+  const token = await signSession(outcome.user);
+  const response = NextResponse.json({ user: outcome.user });
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
   return response;
 }

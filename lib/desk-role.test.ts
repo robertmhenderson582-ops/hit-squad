@@ -4,13 +4,23 @@ import {
   canUseRateBuilder,
   canUseViewAs,
   hasBuildDesk,
+  isOwnerLoginEmail,
   lensUser,
   NOVUS_EMAIL,
   NOVUS_ID,
+  OWNER_LOGIN_EMAIL,
   pageAllowedForSeat,
 } from "./desk-role.ts";
 import { preferredViewAs, VISUAL_ROSTER } from "./owner-desk.ts";
 import { JOSEPH_EMAIL, testerByEmail } from "./tester-seats.ts";
+
+test("owner login email never matches a first-login create seat", () => {
+  assert.equal(OWNER_LOGIN_EMAIL, "robertmhenderson582@gmail.com");
+  assert.equal(isOwnerLoginEmail("robertmhenderson582@gmail.com"), true);
+  assert.equal(isOwnerLoginEmail("  RobertMHenderson582@gmail.com  "), true);
+  assert.equal(isOwnerLoginEmail(NOVUS_EMAIL), false);
+  assert.equal(isOwnerLoginEmail("nathanboyte@gmail.com"), false);
+});
 
 test("Novus is never a visual tester peer", () => {
   assert.equal(

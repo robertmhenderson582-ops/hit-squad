@@ -1,15 +1,25 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { isOwnerLoginEmail } from "@/lib/owner-login";
 import type { PublicUser } from "@/lib/types";
 
 type SessionStatus = "loading" | "authenticated" | "unauthenticated";
+
+type SignInInput = {
+  email: string;
+  password?: string;
+  newPassword?: string;
+  confirmPassword?: string;
+  acknowledged: boolean;
+};
 
 type SessionContextValue = {
   status: SessionStatus;
   user: PublicUser | null;
   error: string | null;
-  signIn: (input: { email: string; password: string; acknowledged: boolean }) => Promise<void>;
+  probeSignIn: (input: { email: string; acknowledged: boolean }) => Promise<"create" | "password">;
+  signIn: (input: SignInInput) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<PublicUser | null>;
 };
@@ -53,15 +63,44 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signIn = useCallback(
-    async (input: { email: string; password: string; acknowledged: boolean }) => {
+  const probeSignIn = useCallback(
+    async (input: { email: string; acknowledged: boolean }): Promise<"create" | "password"> => {
+      if (isOwnerLoginEmail(input.email)) return "password";
       setError(null);
       const response = await fetch("/api/auth/login", {
         method: "POST",
         credentials: "include",
         cache: "no-store",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(input),
+        body: JSON.stringify({ email: input.email, acknowledged: input.acknowledged }),
+      });
+      const data = (await response.json()) as {
+        needsCreate?: boolean;
+        needsPassword?: boolean;
+        error?: string;
+      };
+      if (!response.ok) {
+        const message = data.error || "Sign-in failed. Check the email and password.";
+        setError(message);
+        throw new Error(message);
+      }
+      return data.needsCreate === true ? "create" : "password";
+    },
+    [],
+  );
+
+  const signIn = useCallback(
+    async (input: SignInInput) => {
+      setError(null);
+      const body: SignInInput = isOwnerLoginEmail(input.email)
+        ? { email: input.email, password: input.password, acknowledged: input.acknowledged }
+        : input;
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(body),
       });
       const data = (await response.json()) as { user?: PublicUser; error?: string };
       if (!response.ok || !data.user) {
@@ -99,8 +138,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ status, user, error, signIn, signOut, refresh }),
-    [status, user, error, signIn, signOut, refresh],
+    () => ({ status, user, error, probeSignIn, signIn, signOut, refresh }),
+    [status, user, error, probeSignIn, signIn, signOut, refresh],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

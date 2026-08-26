@@ -2,6 +2,8 @@ import type { PublicUser } from "@/lib/types";
 import { VISUAL_ROSTER } from "./owner-desk.ts";
 import { isJosephEmail, testerByEmail, type TesterSeatDef } from "./tester-seats.ts";
 
+export { OWNER_LOGIN_EMAIL, isOwnerLoginEmail } from "./owner-login.ts";
+
 export const NOVUS_EMAIL = "robertmhenderson582+novus@gmail.com";
 export const NOVUS_ID = "operator-novus";
 
