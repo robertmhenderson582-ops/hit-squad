@@ -26,6 +26,7 @@ const TABS = [
   { id: "crew", label: "Crew", icon: "⛑" },
   { id: "staffing", label: "Staffing", icon: "▦" },
   { id: "equipment", label: "Equipment", icon: "⛟" },
+  { id: "subs", label: "Subcontractor", icon: "▣" },
   { id: "costs", label: "Other Cost", icon: "▤" },
   { id: "change-orders", label: "Change orders", icon: "⚖" },
   { id: "rates", label: "Rates", icon: "％" },
@@ -203,6 +204,7 @@ export function EstimateWorkspace({
                 onTab(item.id);
                 if (item.id === "crew") noteFeatureTrail("Crew");
                 if (item.id === "staffing") noteFeatureTrail("Staffing");
+                if (item.id === "subs") noteFeatureTrail("Subcontractor");
               }}
               className={`rounded-t px-3 py-2 text-sm ${
                 tab === item.id ? "bg-[#0f5f6d] text-white" : "text-white/75 hover:text-white"

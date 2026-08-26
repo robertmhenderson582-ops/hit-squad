@@ -1,5 +1,6 @@
 "use client";
 
+import { SubcontractorRateBook } from "@/components/SubcontractorDesk";
 import {
   SHAHAN_BOOK_LABEL,
   SHAHAN_CRAFT_PD,
@@ -119,6 +120,7 @@ export function RateBuilder() {
 
       <EquipmentTable rows={equipment.wet} caption="Equipment — with fuel (wet)" />
       <EquipmentTable rows={equipment.dry} caption="Equipment — without fuel (dry)" />
+      <SubcontractorRateBook />
     </div>
   );
 }

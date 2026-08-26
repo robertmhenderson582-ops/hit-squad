@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CREW_STORE_PREFIX, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
+import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
+import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { newEstimateKey } from "./estimate-open.ts";
+import { SUB_STORE_PREFIX } from "./subcontractor.ts";
 import {
   applyPackToStore,
   collectPack,
@@ -151,6 +154,54 @@ describe("estimate pack snapshot", () => {
     const parsed = parseIncomingPack({ packId: "new-cat2pit", title: "Cat 2 Pit Stop" });
     assert.equal(parsed.ok, true);
     assert.equal(parseIncomingPack({ packId: "est-u3" }).ok, false);
+  });
+
+  it("persists subcontractors on the pack without wiping crew, equipment, or Other Cost", () => {
+    const store = memoryStore();
+    const key = newEstimateKey("new-cat2pit");
+    rememberLocalPack(
+      {
+        packId: "new-cat2pit",
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+      },
+      store,
+    );
+    store.setItem(`${CREW_STORE_PREFIX}${key}`, JSON.stringify({
+      direct: [{ id: "bm-1", position: "Boilermaker", hours: 40 }],
+      support: [{ id: "sup-1", position: "Tool Room Attendant" }],
+    }));
+    store.setItem(`${EQUIPMENT_STORE_PREFIX}${key}`, JSON.stringify({
+      largeTools: [{ id: "lt-1", itemId: "air-mover", qty: 1 }],
+      thirdParty: [],
+    }));
+    store.setItem(`${OTHER_COST_STORE_PREFIX}${key}`, JSON.stringify({
+      perDiemRate: 140,
+      travel: [{ id: "travel-staff", travelers: 1 }],
+      misc: [{ id: "m1", item: "Steel", qty: 2, each: 40 }],
+    }));
+    applyPackToStore(store, {
+      packId: "new-cat2pit",
+      key,
+      title: "Cat 2 Pit Stop",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 100,
+      updatedAt: 200,
+      ownerEmail: "",
+      subcontractor: { lines: [{ id: "sb-1", vendor: "Apex NDE", scope: "RT", qty: 2, unit: "each", rate: 85 }] },
+    });
+    const pack = collectPack(store, "new-cat2pit");
+    assert.deepEqual((pack?.crew as { direct: Array<{ hours: number }> }).direct, [
+      { id: "bm-1", position: "Boilermaker", hours: 40 },
+    ]);
+    assert.equal(((pack?.equipment as { largeTools: unknown[] }).largeTools || []).length, 1);
+    assert.equal((pack?.otherCost as { perDiemRate: number }).perDiemRate, 140);
+    assert.equal(((pack?.otherCost as { misc: unknown[] }).misc || []).length, 1);
+    assert.equal(((pack?.subcontractor as { lines: Array<{ rate: number }> }).lines || [])[0]?.rate, 85);
+    assert.ok(store.getItem(`${SUB_STORE_PREFIX}${key}`));
   });
 
   it("debounces repeat upserts onto one later call", async () => {

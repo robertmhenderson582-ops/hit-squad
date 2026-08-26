@@ -1,6 +1,7 @@
 import { ACTIVITY_STORE_PREFIX } from "./work-activities.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
+import { SUB_STORE_PREFIX } from "./subcontractor.ts";
 import {
   findLocalPack,
   isLocalPackId,
@@ -32,6 +33,7 @@ export type EstimatePackSnapshot = {
   activities?: unknown;
   equipment?: unknown;
   otherCost?: unknown;
+  subcontractor?: unknown;
 };
 
 const CREW_LANES = ["staff", "generalForeman", "foreman", "direct", "support"] as const;
@@ -92,6 +94,7 @@ export function packHasWork(pack: EstimatePackSnapshot | null | undefined) {
   }
   const other = asRecord(pack.otherCost);
   if (other && (arrayLen(other.travel) || Number(other.perDiemRate) > 0)) return true;
+  if (arrayLen(asRecord(pack.subcontractor)?.lines)) return true;
   if (Array.isArray(pack.activities) && pack.activities.some((row) => {
     const item = asRecord(row);
     return Boolean(item && (item.name || Number(item.hours) > 0));
@@ -118,6 +121,7 @@ export function pickPack(
     activities: newer.activities ?? older.activities,
     equipment: newer.equipment ?? older.equipment,
     otherCost: newer.otherCost ?? older.otherCost,
+    subcontractor: newer.subcontractor ?? older.subcontractor,
     createdAt: Math.min(local.createdAt || newer.createdAt, vault.createdAt || newer.createdAt) || newer.createdAt,
   };
 }
@@ -140,6 +144,7 @@ export function publicPack(pack: EstimatePackSnapshot): EstimatePackSnapshot {
     activities: pack.activities,
     equipment: pack.equipment,
     otherCost: pack.otherCost,
+    subcontractor: pack.subcontractor,
   };
 }
 
@@ -174,6 +179,7 @@ export function collectPack(
     activities: readStoreJson(store, `${ACTIVITY_STORE_PREFIX}${key}`) ?? undefined,
     equipment: readStoreJson(store, `${EQUIPMENT_STORE_PREFIX}${key}`) ?? undefined,
     otherCost: readStoreJson(store, `${OTHER_COST_STORE_PREFIX}${key}`) ?? undefined,
+    subcontractor: readStoreJson(store, `${SUB_STORE_PREFIX}${key}`) ?? undefined,
   };
 }
 
@@ -191,6 +197,7 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
   if (pack.activities != null) writeStoreJson(store, `${ACTIVITY_STORE_PREFIX}${key}`, pack.activities);
   if (pack.equipment != null) writeStoreJson(store, `${EQUIPMENT_STORE_PREFIX}${key}`, pack.equipment);
   if (pack.otherCost != null) writeStoreJson(store, `${OTHER_COST_STORE_PREFIX}${key}`, pack.otherCost);
+  if (pack.subcontractor != null) writeStoreJson(store, `${SUB_STORE_PREFIX}${key}`, pack.subcontractor);
 }
 
 export function mergeVaultIntoLocal(store: StorageLike, vault: EstimatePackSnapshot) {
@@ -232,6 +239,7 @@ export function parseIncomingPack(input: unknown): { ok: true; pack: EstimatePac
       activities: row?.activities,
       equipment: row?.equipment,
       otherCost: row?.otherCost,
+      subcontractor: row?.subcontractor,
     },
   };
 }

@@ -7,6 +7,7 @@ import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorksp
 import { ChangeOrderPacket } from "@/components/ChangeOrderPacket";
 import { EquipmentDesk } from "@/components/EquipmentDesk";
 import { OtherCostDesk } from "@/components/OtherCostDesk";
+import { SubcontractorDesk } from "@/components/SubcontractorDesk";
 import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { EstimatePackageProvider } from "@/components/EstimatePackage";
@@ -106,6 +107,8 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       ) : null}
 
       {tab === "equipment" ? <EquipmentDesk /> : null}
+
+      {tab === "subs" ? <SubcontractorDesk /> : null}
 
       {tab === "costs" ? <OtherCostDesk client={estimate.client} site={siteName} /> : null}
 

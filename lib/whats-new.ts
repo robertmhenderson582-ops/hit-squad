@@ -1,22 +1,23 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.18.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.18";
+export const DESK_VERSION = "1.19.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.19";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.18";
+export const DESK_THREAD_ID = "th-desk-v1.19";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.18",
-  "• Wood River Shahan rates on Crew and Equipment. Wet and dry equipment. Update rates on Job setup.",
+  "Hit Squad Project Controls V1.19",
+  "• Subcontractor tab is on the estimate, next to Equipment and Other Cost.",
+  "• Plug your own sub rates on Rates or the Subcontractor tab. Pick a book row or type a one-off.",
   "• Save your work, then hard-refresh.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.18",
-  "• Crew and Equipment dropdowns use Debbie Shahan TM OCIP — Wood River. Staff and craft Cost use that book's ST / OT / DT. Cat 2 working titles rematch to existing Shahan rows. Unmatched leftover names show No rate.",
-  "• Equipment lists with fuel (wet) and without fuel (dry) as separate picks. Update rates on Job setup pulls Staff PD $140 / Craft PD $130 for Wood River without wiping hours.",
-  "• Testers who already saw V1.17 get this note (versioned seen key).",
+  "Hit Squad Project Controls V1.19",
+  "• Subcontractor tab is on the estimate. Estimate Total gets a Subcontractor line. No markup. Not Crew labor.",
+  "• Plug your own sub rates on Rates or the Subcontractor tab. Empty book is fine.",
+  "• Testers who already saw V1.18 get this note (versioned seen key).",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

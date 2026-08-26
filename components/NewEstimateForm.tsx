@@ -10,6 +10,7 @@ import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
 import { EquipmentDesk } from "@/components/EquipmentDesk";
 import { OtherCostDesk } from "@/components/OtherCostDesk";
+import { SubcontractorDesk } from "@/components/SubcontractorDesk";
 import { ChangeOrderPacket } from "@/components/ChangeOrderPacket";
 import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
@@ -116,6 +117,7 @@ function NewEstimateDesk({
       {tab === "crew" ? <EstimateWorkbook client={client} site={site} name={name} /> : null}
       {tab === "staffing" ? <StaffingPlanDesk client={client} site={site} name={name} /> : null}
       {tab === "equipment" ? <EquipmentDesk /> : null}
+      {tab === "subs" ? <SubcontractorDesk /> : null}
       {tab === "costs" ? <OtherCostDesk client={client} site={site} /> : null}
       {tab === "change-orders" ? <ChangeOrderPacket client={client} site={site} /> : null}
     </EstimateWorkspace>

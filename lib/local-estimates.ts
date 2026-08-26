@@ -4,6 +4,7 @@ import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
 import { FCR_STORE_PREFIX } from "./change-order-packet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { CREW_STORE_PREFIX, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
+import { SUB_STORE_PREFIX } from "./subcontractor.ts";
 import { JOB_META_PREFIX } from "./staffing-plan.ts";
 import type { EstimateRecord, ForgebookBoard, JobRecord } from "./types.ts";
 
@@ -17,6 +18,7 @@ const STORE_PREFIXES = [
   ACTIVITY_STORE_PREFIX,
   EQUIPMENT_STORE_PREFIX,
   OTHER_COST_STORE_PREFIX,
+  SUB_STORE_PREFIX,
   FCR_STORE_PREFIX,
   PACK_STORE_PREFIX,
 ];

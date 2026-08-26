@@ -51,6 +51,20 @@ test("markup is its own line only when the 6% third-party markup has dollars", (
   assert.equal(shown.total, 424);
 });
 
+test("Subcontractor is its own rail line, not inside Labor or Other Cost", () => {
+  const next = estimateTotalBreakdown({
+    labor: 1000,
+    equipment: 200,
+    subcontractor: 350,
+    otherCost: 50,
+    hours: 20,
+  });
+  assert.equal(next.lines.find((line) => line.id === "subcontractor")?.amount, 350);
+  assert.equal(next.lines.find((line) => line.id === "labor")?.amount, 1000);
+  assert.equal(next.lines.find((line) => line.id === "other")?.amount, 50);
+  assert.equal(next.total, 1600);
+});
+
 test("labor dollars stay hidden until a crew cost is actually on the row", () => {
   assert.equal(parseDeskDollars(""), 0);
   assert.equal(parseDeskDollars("$1,250.50"), 1250.5);

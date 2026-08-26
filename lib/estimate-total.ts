@@ -43,6 +43,7 @@ export function moneyLines(candidates: EstimateTotalLine[]): EstimateTotalLine[]
 export function estimateTotalBreakdown(input: {
   labor?: number;
   equipment?: number;
+  subcontractor?: number;
   markup?: number;
   otherCost?: number;
   changeOrders?: number;
@@ -53,6 +54,7 @@ export function estimateTotalBreakdown(input: {
   const base = moneyLines([
     { id: "labor", label: "Labor", amount: parseDeskDollars(input.labor) },
     { id: "equipment", label: "Equipment", amount: parseDeskDollars(input.equipment) },
+    { id: "subcontractor", label: "Subcontractor", amount: parseDeskDollars(input.subcontractor) },
     { id: "other", label: "Other Cost", amount: parseDeskDollars(input.otherCost) },
     { id: "change-orders", label: "Change orders", amount: parseDeskDollars(input.changeOrders) },
     { id: "markup", label: "Markup", amount: parseDeskDollars(input.markup) },
