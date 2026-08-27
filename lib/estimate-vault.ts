@@ -53,9 +53,9 @@ export async function getVisiblePack(user: ScopeUser, packId: string, adapter?: 
 async function claimedPack(drive: DriveAdapter, packId: string, ownerEmail: string) {
   if (!drive.configured) return null;
   try {
-    const byOwner = await readDrivePack(drive, packId, ownerEmail);
-    if (byOwner) return byOwner;
-    return await readDrivePackById(drive, packId);
+    const byId = await readDrivePackById(drive, packId);
+    if (byId) return byId;
+    return await readDrivePack(drive, packId, ownerEmail);
   } catch {
     return null;
   }
@@ -107,7 +107,14 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
   if (!drive.configured) {
     return { ok: true as const, stored: false, store: "unconfigured" as const, pack };
   }
-  await upsertEstimateInDrive(drive, pack);
+  try {
+    await upsertEstimateInDrive(drive, pack);
+  } catch (error) {
+    if (error instanceof Error && error.message === "PACK_OWNED_ELSEWHERE") {
+      return { ok: false as const, status: 404, error: "That package is not on this desk." };
+    }
+    throw error;
+  }
   return { ok: true as const, stored: true, store: "drive" as const, pack };
 }
 

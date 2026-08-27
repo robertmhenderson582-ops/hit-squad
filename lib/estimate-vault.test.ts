@@ -295,4 +295,59 @@ describe("estimate vault service", () => {
     const accept = await returnVisiblePack(tester, "new-cat2pit", drive, latest);
     assert.equal(accept.ok, false);
   });
+
+  it("refuses a leftover owner upsert after Turn over so Nathan keeps Cat 2", async () => {
+    const drive = memoryDrive();
+    await upsertVisiblePack(owner, cat2(), drive);
+    const handed = await transferVisiblePack(owner, "new-cat2pit", tester.email, drive);
+    assert.equal(handed.ok, true);
+    const undo = await upsertVisiblePack(
+      owner,
+      cat2({
+        updatedAt: Date.now() + 5000,
+        ownerEmail: OWNER_LOGIN_EMAIL,
+        transferredFrom: undefined,
+        transferredTo: undefined,
+      }),
+      drive,
+    );
+    assert.equal(undo.ok, false);
+    if (!undo.ok) assert.equal(undo.status, 404);
+    assert.equal(drive.files.size, 1);
+
+    const ownerList = await listVisiblePacks(owner, drive);
+    const nathanList = await listVisiblePacks(tester, drive);
+    assert.deepEqual(ownerList.packs.map((row) => row.packId), []);
+    assert.equal(nathanList.packs[0]?.ownerEmail, tester.email);
+    assert.equal(nathanList.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);
+    assert.equal(nathanList.packs[0]?.title, "Cat 2 Pit Stop");
+  });
+
+  it("ignores a newer leftover Drive file and keeps the transferred copy", async () => {
+    const drive = memoryDrive();
+    await upsertVisiblePack(owner, cat2(), drive);
+    const handed = await transferVisiblePack(owner, "new-cat2pit", tester.email, drive);
+    assert.equal(handed.ok, true);
+    await drive.createJson(
+      "folder",
+      "wood-river-cat-2-pit-stop-leftover.json",
+      JSON.stringify(
+        cat2({
+          updatedAt: Date.now() + 10_000,
+          ownerEmail: OWNER_LOGIN_EMAIL,
+          transferredFrom: undefined,
+          transferredTo: undefined,
+        }),
+      ),
+      { packId: "new-cat2pit", ownerEmail: OWNER_LOGIN_EMAIL },
+    );
+    assert.equal(drive.files.size, 2);
+
+    const ownerList = await listVisiblePacks(owner, drive);
+    const nathanList = await listVisiblePacks(tester, drive);
+    assert.deepEqual(ownerList.packs.map((row) => row.packId), []);
+    assert.equal(nathanList.packs.length, 1);
+    assert.equal(nathanList.packs[0]?.ownerEmail, tester.email);
+    assert.equal(nathanList.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);
+  });
 });

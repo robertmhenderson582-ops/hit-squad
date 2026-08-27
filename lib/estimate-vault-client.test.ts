@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   applyReturnLocally,
   applyTransferLocally,
+  flushVaultUpsert,
   hydrateFromVault,
   resetVaultHydrateForTests,
   setVaultViewAs,
@@ -61,6 +62,54 @@ describe("local transfer commit", () => {
     assert.equal(ok.keptLocal, false);
     assert.equal(findLocalPack("new-cat2pit", store), null);
     assert.equal(readJobMenu(store).transferred[0]?.toName, "Nathan Boyte");
+  });
+
+  it("does not flush a leftover local pack after Turn over", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-cat2pit",
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: "robertmhenderson582@gmail.com",
+      },
+      store,
+    );
+    applyTransferLocally(true, "new-cat2pit", {
+      id: "new-cat2pit",
+      title: "Cat 2 Pit Stop",
+      packId: "new-cat2pit",
+      toName: "Nathan Boyte",
+    }, store);
+    rememberLocalPack(
+      {
+        packId: "new-cat2pit",
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: "robertmhenderson582@gmail.com",
+      },
+      store,
+    );
+    const calls: string[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await flushVaultUpsert("new-cat2pit", store);
+      assert.equal(result.ok, true);
+      assert.equal("skipped" in result && result.skipped, true);
+      assert.equal(calls.length, 0);
+      assert.equal(findLocalPack("new-cat2pit", store), null);
+      assert.equal(readJobMenu(store).transferred[0]?.toName, "Nathan Boyte");
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
   });
 
   it("drops the recipient local copy after a successful return", () => {
@@ -174,6 +223,39 @@ describe("local transfer commit", () => {
       assert.equal(findLocalPack("new-mtaajdwa-f7539", store)?.ownerEmail, "nathanboyte@gmail.com");
       assert.deepEqual(packsMissingFromVault(["new-robert1"], store), []);
       assert.equal(calls.some((row) => row.includes("/api/desk/estimates")), true);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("turns a leftover owner copy into a Transferred note when the vault no longer lists it", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-mtaajdwa-f7539",
+        title: "Madison CAT 2 (Pit Stop)",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: "robertmhenderson582@gmail.com",
+      },
+      store,
+    );
+    writeVaultSeen(["new-mtaajdwa-f7539"], store);
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      return new Response(JSON.stringify({ persisted: true, packs: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      const packs = await hydrateFromVault(store);
+      assert.deepEqual(packs, []);
+      assert.equal(findLocalPack("new-mtaajdwa-f7539", store), null);
+      assert.equal(readJobMenu(store).transferred[0]?.title, "Madison CAT 2 (Pit Stop)");
+      assert.equal(isActiveMenuItem({ id: "new-mtaajdwa-f7539", packId: "new-mtaajdwa-f7539" }, readJobMenu(store)), false);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();

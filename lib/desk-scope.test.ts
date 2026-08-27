@@ -108,6 +108,37 @@ describe("owner View as desk scope", () => {
     assert.equal(canReturnPack(nathan, signedIn.packs[0]!), true);
   });
 
+  it("View as Nathan still lists Cat 2 when a leftover owner file exists", async () => {
+    const drive = memoryDrive();
+    const handed = await transferVisiblePack(owner, "new-mtaajdwa-f7539", nathan.email, drive, cat2());
+    assert.equal(handed.ok, true);
+    await drive.createJson(
+      "folder",
+      "leftover.json",
+      JSON.stringify(
+        cat2({
+          updatedAt: Date.now() + 10_000,
+          ownerEmail: OWNER_LOGIN_EMAIL,
+          transferredFrom: undefined,
+        }),
+      ),
+      { packId: "new-mtaajdwa-f7539", ownerEmail: OWNER_LOGIN_EMAIL },
+    );
+
+    const asNathan = deskScopeUser(owner, "nathan");
+    const viewed = await listVisiblePacks(asNathan, drive);
+    const signedIn = await listVisiblePacks(nathan, drive);
+    const ownerDesk = await listVisiblePacks(deskScopeUser(owner, null), drive);
+    assert.deepEqual(
+      viewed.packs.map((row) => row.packId),
+      signedIn.packs.map((row) => row.packId),
+    );
+    assert.equal(viewed.packs[0]?.title, "Madison CAT 2 (Pit Stop)");
+    assert.equal(handoffMarkText(viewed.packs[0], nathan.email), "Transferred to you from Robert Henderson.");
+    assert.equal(canReturnPack(asNathan, viewed.packs[0]!), true);
+    assert.deepEqual(ownerDesk.packs.map((row) => row.packId), []);
+  });
+
   it("lists a shared pack on Nathan's desk while Robert stays owner", async () => {
     const drive = memoryDrive();
     await upsertVisiblePack(owner, cat2({ packId: "new-robert1", title: "Robert working" }), drive);

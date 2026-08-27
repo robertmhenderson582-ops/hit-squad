@@ -1,7 +1,9 @@
 import { SignJWT, importPKCS8 } from "jose";
 import {
+  collapsePacksById,
   estimateFileName,
   parseIncomingPack,
+  preferCanonicalPack,
   publicPack,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
@@ -341,17 +343,19 @@ export async function findDrivePackFile(
 
 export async function findDrivePackByPackId(adapter: DriveAdapter, folderId: string, packId: string) {
   const files = await adapter.listJson(folderId);
-  const tagged = files.find((file) => file.properties?.packId === packId);
-  if (tagged) return tagged;
-  for (const file of files) {
+  const tagged = files.filter((file) => file.properties?.packId === packId);
+  const scan = tagged.length ? tagged : files;
+  const matches: { file: DriveFile; pack: EstimatePackSnapshot }[] = [];
+  for (const file of scan) {
     try {
       const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
-      if (parsed.ok && parsed.pack.packId === packId) return file;
+      if (parsed.ok && parsed.pack.packId === packId) matches.push({ file, pack: parsed.pack });
     } catch {
       // skip unreadable rows
     }
   }
-  return null;
+  if (!matches.length) return tagged[0] ?? null;
+  return matches.reduce((best, row) => (preferCanonicalPack(best.pack, row.pack) === row.pack ? row : best)).file;
 }
 
 export async function readDrivePackById(
@@ -419,13 +423,21 @@ export async function upsertEstimateInDrive(
 ) {
   const target = resolveEstimatesFolder(folderId);
   const ownerEmail = pack.ownerEmail.trim().toLowerCase();
-  let existing: DriveFile | null = null;
-  try {
-    existing = await findDrivePackFile(adapter, target, pack.packId, ownerEmail);
-  } catch {
-    existing = null;
+  const byId = await existingPackFile(adapter, target, pack.packId, ownerEmail);
+  if (byId) {
+    let currentOwner = (byId.properties?.ownerEmail || "").trim().toLowerCase();
+    try {
+      const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(byId.id)));
+      if (parsed.ok) currentOwner = parsed.pack.ownerEmail.trim().toLowerCase() || currentOwner;
+    } catch {
+      // keep tagged owner
+    }
+    if (currentOwner && currentOwner !== ownerEmail) {
+      throw new Error("PACK_OWNED_ELSEWHERE");
+    }
+    return writePackFile(adapter, pack, target, byId);
   }
-  return writePackFile(adapter, pack, target, existing);
+  return writePackFile(adapter, pack, target, null);
 }
 
 /** Same pack id, new owner — update the existing file so testers do not get a second copy. */
@@ -450,7 +462,7 @@ export async function listDrivePacks(adapter: DriveAdapter, folderId = estimates
       // skip
     }
   }
-  return packs;
+  return collapsePacksById(packs);
 }
 
 export async function readDrivePack(

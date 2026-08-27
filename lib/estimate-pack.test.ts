@@ -13,7 +13,9 @@ import {
   mergeVaultIntoLocal,
   packHasWork,
   parseIncomingPack,
+  collapsePacksById,
   pickPack,
+  preferCanonicalPack,
   publicPack,
   responseLeaksDrive,
   scheduleOnce,
@@ -115,6 +117,24 @@ describe("estimate pack snapshot", () => {
     assert.equal(pickPack(cat2({ updatedAt: 100 }), cat2({ updatedAt: 400 }))?.updatedAt, 400);
     assert.equal(pickPack(null, emptyVault), null);
     assert.equal(pickPack(null, cat2())?.packId, "new-cat2pit");
+    const leftover = cat2({
+      updatedAt: 9000,
+      ownerEmail: "robertmhenderson582@gmail.com",
+      transferredFrom: undefined,
+    });
+    const handed = cat2({
+      updatedAt: 400,
+      ownerEmail: "nathanboyte@gmail.com",
+      transferredFrom: "robertmhenderson582@gmail.com",
+      transferredFromName: "Robert Henderson",
+      transferredTo: "nathanboyte@gmail.com",
+    });
+    assert.equal(preferCanonicalPack(leftover, handed).ownerEmail, "nathanboyte@gmail.com");
+    assert.equal(collapsePacksById([leftover, handed]).length, 1);
+    assert.equal(collapsePacksById([leftover, handed])[0]?.ownerEmail, "nathanboyte@gmail.com");
+    const picked = pickPack(leftover, handed);
+    assert.equal(picked?.ownerEmail, "nathanboyte@gmail.com");
+    assert.equal(picked?.transferredFrom, "robertmhenderson582@gmail.com");
     const titleOnly = cat2({ updatedAt: 900, crew: undefined, schedule: undefined });
     const merged = pickPack(titleOnly, cat2({ updatedAt: 200 }));
     assert.equal(crewHasRows(merged?.crew), true);

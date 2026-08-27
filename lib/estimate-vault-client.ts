@@ -9,13 +9,15 @@ import { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./h
 import {
   archiveMenuItem,
   clearTransferredMenuItem,
+  menuStatus,
   packsMissingFromVault,
+  readJobMenu,
   recordTransferredMenuItem,
   unarchiveMenuItem,
   writeVaultSeen,
   type MenuItem,
 } from "./job-menu.ts";
-import { deleteLocalPack, isLocalPackId, listLocalPacks, type StorageLike } from "./local-estimates.ts";
+import { deleteLocalPack, findLocalPack, isLocalPackId, listLocalPacks, type StorageLike } from "./local-estimates.ts";
 
 export const ESTIMATE_VAULT_DEBOUNCE_MS = 1500;
 
@@ -77,6 +79,18 @@ export async function hydrateFromVault(
       const viewingAs = seat !== "owner";
       if (data.persisted && !viewingAs) {
         for (const packId of packsMissingFromVault(packs.map((pack) => pack.packId), target)) {
+          const leftover = findLocalPack(packId, target);
+          if (leftover && menuStatus({ id: packId, packId }, readJobMenu(target)) !== "transferred") {
+            recordTransferredMenuItem(
+              {
+                id: packId,
+                title: leftover.title,
+                packId,
+                toName: leftover.transferredToName || "the other desk",
+              },
+              target,
+            );
+          }
           deleteLocalPack(packId, target);
         }
         writeVaultSeen(
@@ -90,7 +104,9 @@ export async function hydrateFromVault(
         if (pack.archived) archiveMenuItem({ id: pack.packId, title: pack.title, packId: pack.packId }, target);
         else {
           unarchiveMenuItem({ id: pack.packId, packId: pack.packId }, target);
-          clearTransferredMenuItem({ id: pack.packId, packId: pack.packId }, target);
+          if (!pack.transferredFrom) {
+            clearTransferredMenuItem({ id: pack.packId, packId: pack.packId }, target);
+          }
         }
       }
       return packs;
@@ -106,6 +122,10 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   if (!isLocalPackId(packId)) return { ok: false as const };
   const target = browserStore(store);
   if (!target) return { ok: false as const };
+  if (menuStatus({ id: packId, packId }, readJobMenu(target)) === "transferred") {
+    deleteLocalPack(packId, target);
+    return { ok: true as const, skipped: true as const };
+  }
   const pack = collectPack(target, packId);
   if (!pack) return { ok: false as const };
   const body = JSON.stringify({ pack });
