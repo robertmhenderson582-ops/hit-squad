@@ -107,8 +107,7 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
     }
   }
 
-  async function onFiles(list: FileList | null) {
-    const picked = Array.from(list ?? []);
+  async function onFiles(picked: File[]) {
     if (!picked.length) return;
     const incoming = picked.map(dropFileFromBrowser);
     const current = files.map(dropFileFromLead);
@@ -217,7 +216,11 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
               multiple
               accept={BRIEF_FILE_ACCEPT}
               className="paper-field mt-2"
-              onChange={(event) => onFiles(event.target.files)}
+              onChange={(event) => {
+                const picked = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                void onFiles(picked);
+              }}
             />
             {files.length ? <p className="mt-1 text-xs text-[#5b6f73]">{files.map((file) => file.name).join(" · ")}</p> : null}
           </label>
