@@ -8,7 +8,7 @@ import {
   visiblePacks,
   type ScopeUser,
 } from "./estimate-scope.ts";
-import { findHandoffSeat, isHandoffEmail, TRANSFER_WRITE_ERROR } from "./handoff.ts";
+import { findHandoffSeat, isHandoffEmail, TRANSFER_WRITE_ERROR, UPSERT_WRITE_ERROR } from "./handoff.ts";
 import { parseIncomingPack, publicPack, type EstimatePackSnapshot } from "./estimate-pack.ts";
 import {
   deleteEstimateInDrive,
@@ -22,7 +22,7 @@ import {
   type DriveAdapter,
 } from "./drive-estimates.ts";
 
-export { TRANSFER_WRITE_ERROR } from "./handoff.ts";
+export { TRANSFER_WRITE_ERROR, UPSERT_WRITE_ERROR } from "./handoff.ts";
 
 export function estimateVaultAdapter(adapter?: DriveAdapter) {
   return adapter ?? driveAdapter();
@@ -93,7 +93,11 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
   if (!drive.configured) {
     return { ok: true as const, stored: false, store: "unconfigured" as const, pack };
   }
-  await upsertEstimateInDrive(drive, pack);
+  try {
+    await upsertEstimateInDrive(drive, pack);
+  } catch {
+    return { ok: false as const, status: 502, error: UPSERT_WRITE_ERROR };
+  }
   return { ok: true as const, stored: true, store: "drive" as const, pack };
 }
 

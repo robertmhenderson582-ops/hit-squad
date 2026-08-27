@@ -8,6 +8,7 @@ export type HandoffSeat = {
 };
 
 export const TRANSFER_WRITE_ERROR = "Could not turn that job over. The job is still on your desk.";
+export const UPSERT_WRITE_ERROR = "Could not save that job. It is still on this desk. Try again.";
 
 export function handoffSeats(): HandoffSeat[] {
   const ownerEmail = ownerVaultEmail();

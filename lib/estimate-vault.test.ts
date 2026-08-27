@@ -11,6 +11,7 @@ import {
   listVisiblePacks,
   packsResponse,
   TRANSFER_WRITE_ERROR,
+  UPSERT_WRITE_ERROR,
   transferVisiblePack,
   upsertVisiblePack,
 } from "./estimate-vault.ts";
@@ -186,6 +187,32 @@ describe("estimate vault service", () => {
     assert.equal(drive.files.size, 0);
     const missing = await transferVisiblePack(owner, "new-cat2pit", tester.email, memoryDrive());
     assert.equal(missing.ok, false);
+
+    const save = await upsertVisiblePack(owner, cat2(), drive);
+    assert.equal(save.ok, false);
+    if (!save.ok) {
+      assert.equal(save.status, 502);
+      assert.equal(save.error, UPSERT_WRITE_ERROR);
+    }
+    assert.equal(drive.files.size, 0);
+  });
+
+  it("still writes Cat 2 when Drive list throws but create works", async () => {
+    const inner = memoryDrive();
+    const drive: DriveAdapter & { files: typeof inner.files } = {
+      ...inner,
+      async listJson() {
+        throw new Error("list");
+      },
+    };
+    const saved = await upsertVisiblePack(owner, cat2(), drive);
+    assert.equal(saved.ok, true);
+    if (saved.ok) {
+      assert.equal(saved.stored, true);
+      assert.equal(saved.pack.ownerEmail, OWNER_LOGIN_EMAIL);
+    }
+    assert.equal(drive.files.size, 1);
+    assert.equal([...drive.files.values()][0]?.file.properties?.ownerEmail, OWNER_LOGIN_EMAIL);
   });
 
   it("archives and deletes only the caller's pack and never auto-removes Cat 2", async () => {
