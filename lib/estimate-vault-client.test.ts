@@ -13,6 +13,7 @@ import {
 import { VIEW_AS_HEADER } from "./desk-scope.ts";
 import { packsMissingFromVault, writeVaultSeen } from "./job-menu.ts";
 import { TRANSFER_WRITE_ERROR } from "./handoff.ts";
+import { readLensPacks } from "./lens-packs.ts";
 import { deleteLocalPack, findLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-menu.ts";
 import { collectPack } from "./estimate-pack.ts";
@@ -222,6 +223,7 @@ describe("local transfer commit", () => {
       assert.equal(packs[0]?.title, "Madison CAT 2 (Pit Stop)");
       assert.equal(findLocalPack("new-robert1", store)?.title, "Robert working");
       assert.equal(findLocalPack("new-mtaajdwa-f7539", store)?.ownerEmail, "nathanboyte@gmail.com");
+      assert.equal(readLensPacks("nathan", store)[0]?.title, "Madison CAT 2 (Pit Stop)");
       assert.deepEqual(packsMissingFromVault(["new-robert1"], store), []);
       assert.equal(calls.some((row) => row.includes("/api/desk/estimates")), true);
     } finally {
