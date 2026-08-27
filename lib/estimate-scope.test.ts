@@ -79,6 +79,63 @@ describe("estimate vault scope", () => {
     assert.equal(canReturnPack(owner, ownerPack), false);
   });
 
+  it("shows a tester-owned pack on the owner desk after it is shared with the owner", () => {
+    const shared = { ...testerPack, sharedWith: [OWNER_LOGIN_EMAIL] };
+    assert.equal(localPackVisibleTo(owner, testerPack), false);
+    assert.equal(localPackVisibleTo(owner, shared), true);
+    assert.equal(packVisibleTo(owner, shared), true);
+    assert.equal(canWritePack(owner, shared), true);
+    assert.equal(canTransferPack(owner, shared), false);
+    assert.equal(canSharePack(owner, shared), false);
+    assert.equal(canWritePack(tester, shared), true);
+    assert.equal(canTransferPack(tester, shared), true);
+
+    const data: Record<string, string> = {};
+    const store: StorageLike = {
+      getItem(key) {
+        return key in data ? data[key] : null;
+      },
+      setItem(key, value) {
+        data[key] = value;
+      },
+      removeItem(key) {
+        delete data[key];
+      },
+    };
+    rememberLocalPack(
+      {
+        packId: "new-tester1",
+        title: "Nathan trial",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: tester.email,
+        sharedWith: [OWNER_LOGIN_EMAIL],
+      },
+      store,
+    );
+    assert.deepEqual(
+      visibleDeskPacks(owner, false, store).map((row) => row.packId),
+      ["new-tester1"],
+    );
+    assert.equal(visibleDeskPacks(owner, false, store)[0]?.ownerEmail, tester.email);
+    rememberLocalPack(
+      {
+        packId: "new-tester1",
+        title: "Nathan trial",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: tester.email,
+        sharedWith: [],
+        replaceHandoff: true,
+      },
+      store,
+    );
+    assert.deepEqual(
+      visibleDeskPacks(owner, false, store).map((row) => row.packId),
+      [],
+    );
+  });
+
   it("keeps unstamped local work on the owner desk and hides it from testers", () => {
     const unstamped = { ownerEmail: "", packId: "new-local1" };
     assert.equal(localPackVisibleTo(owner, unstamped), true);

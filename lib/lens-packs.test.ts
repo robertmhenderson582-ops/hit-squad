@@ -70,3 +70,21 @@ test("leftover owner flush does not wipe the Follow seat snapshot", () => {
   const ownerDesk = packsForViewedDesk(owner, false, null, store);
   assert.equal(ownerDesk.some((pack) => pack.packId === "new-mtaajdwa-f7539"), false);
 });
+
+test("owner Back-to-me Jobs includes a pack Nathan shared with the owner", () => {
+  const store = memoryStore();
+  rememberLocalPack(
+    {
+      ...cat2,
+      transferredFrom: undefined,
+      transferredFromName: undefined,
+      sharedWith: [owner.email],
+    },
+    store,
+  );
+  const ownerDesk = packsForViewedDesk(owner, false, null, store);
+  assert.equal(ownerDesk.some((pack) => pack.packId === "new-mtaajdwa-f7539"), true);
+  assert.equal(ownerDesk.find((pack) => pack.packId === "new-mtaajdwa-f7539")?.ownerEmail, nathan.email);
+  const jobs = jobsOnDesk([], ownerDesk, false);
+  assert.equal(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+});
