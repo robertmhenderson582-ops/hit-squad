@@ -5,7 +5,7 @@ import { PasswordField } from "@/components/PasswordField";
 import { PresencePulse } from "@/components/PresencePulse";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { COMPANIES, companyName, isCompanyId, type CompanyId } from "@/lib/companies";
+import { COMPANIES, companyName, type Company, type CompanyId } from "@/lib/companies";
 import { canUseFollow, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
 import { followSeatFromEmail } from "@/lib/follow";
 import { EMPTY_MODULES } from "@/lib/roster";
@@ -21,8 +21,7 @@ const PERMISSION_OPTIONS: { value: RosterPermission; label: string }[] = [
 type SeatRow = PublicUser & { passwordIssued: boolean; companyId?: string };
 
 function seatCompanyId(row: SeatRow): CompanyId {
-  const id = row.companyId || "";
-  return isCompanyId(id) ? id : "hitsquad";
+  return (row.companyId || "hitsquad").trim() || "hitsquad";
 }
 
 type LiveSeat = { email: string; path: string };
@@ -33,6 +32,8 @@ export function ManageUsersDesk() {
   const owner = isOwner(user);
   const followOk = canUseFollow(user);
   const [seats, setSeats] = useState<SeatRow[]>([]);
+  const [companies, setCompanies] = useState<Company[]>(COMPANIES);
+  const [newCompany, setNewCompany] = useState("");
   const [roster, setRoster] = useState<RosterEntry[]>([]);
   const [liveSeats, setLiveSeats] = useState<LiveSeat[]>([]);
   const [name, setName] = useState("");
@@ -51,7 +52,10 @@ export function ManageUsersDesk() {
   async function loadSeats() {
     const response = await fetch("/api/desk/seats", { credentials: "include", cache: "no-store" });
     const data = await response.json();
-    if (response.ok) setSeats(data.seats ?? []);
+    if (response.ok) {
+      setSeats(data.seats ?? []);
+      if (Array.isArray(data.companies)) setCompanies(data.companies);
+    }
   }
 
   async function loadRoster() {
@@ -90,7 +94,28 @@ export function ManageUsersDesk() {
       return;
     }
     setSeats(data.seats ?? []);
+    if (Array.isArray(data.companies)) setCompanies(data.companies);
     setSeatNote("Company assignment saved. Changing it is the reverse of assign.");
+  }
+
+  async function onAddCompany(event: FormEvent) {
+    event.preventDefault();
+    setSeatNote(null);
+    const response = await fetch("/api/desk/seats", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ addCompany: newCompany }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setSeatNote(data.error || "Could not add company.");
+      return;
+    }
+    setNewCompany("");
+    setSeats(data.seats ?? []);
+    if (Array.isArray(data.companies)) setCompanies(data.companies);
+    setSeatNote("Company added. It is on the assign list.");
   }
 
   async function onIssue(event: FormEvent) {
@@ -109,6 +134,7 @@ export function ManageUsersDesk() {
       return;
     }
     setSeats(data.seats ?? []);
+    if (Array.isArray(data.companies)) setCompanies(data.companies);
     setSeatNote("Password issued on this desk. Don’t send. First sign-in must change it.");
   }
 
@@ -196,7 +222,7 @@ export function ManageUsersDesk() {
                   </td>
                   <td className="px-2 py-2">
                     {row.role === "owner" ? (
-                      <span>All · {companyName(seatCompanyId(row))}</span>
+                      <span>All · {companyName(seatCompanyId(row), companies)}</span>
                     ) : owner ? (
                       <select
                         value={seatCompanyId(row)}
@@ -204,14 +230,14 @@ export function ManageUsersDesk() {
                         className="paper-field"
                         aria-label={`Company for ${row.name}`}
                       >
-                        {COMPANIES.map((company) => (
+                        {companies.map((company) => (
                           <option key={company.id} value={company.id}>
                             {company.name}
                           </option>
                         ))}
                       </select>
                     ) : (
-                      companyName(seatCompanyId(row))
+                      companyName(seatCompanyId(row), companies)
                     )}
                   </td>
                   <td className="px-2 py-2">
@@ -245,6 +271,24 @@ export function ManageUsersDesk() {
             </tbody>
           </table>
         </div>
+        {owner ? (
+          <form onSubmit={onAddCompany} className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="sm:col-span-2">
+              <span className="text-xs tracking-[0.14em] text-[#5b6f73]">ADD COMPANY</span>
+              <input
+                value={newCompany}
+                onChange={(event) => setNewCompany(event.target.value)}
+                className="paper-field mt-1"
+                placeholder="Company name"
+                required
+                minLength={2}
+              />
+            </label>
+            <button type="submit" className="rounded-lg border border-steel px-4 py-2 text-steel sm:col-span-2">
+              Add company
+            </button>
+          </form>
+        ) : null}
         {owner ? (
           <form onSubmit={onIssue} className="mt-4 grid gap-3 sm:grid-cols-2">
             <label>
