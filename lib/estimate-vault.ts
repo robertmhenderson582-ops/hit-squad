@@ -1,15 +1,24 @@
 import { isTester } from "./desk-role.ts";
 import {
+  canReturnPack,
+  canSharePack,
   canTransferPack,
   canWritePack,
   ownerVaultEmail,
   packOwnerEmailForWrite,
+  packSharedEmails,
   packVisibleTo,
   visiblePacks,
   type ScopeUser,
 } from "./estimate-scope.ts";
-import { findHandoffSeat, isHandoffEmail, TRANSFER_WRITE_ERROR } from "./handoff.ts";
-import { parseIncomingPack, publicPack, type EstimatePackSnapshot } from "./estimate-pack.ts";
+import {
+  findHandoffSeat,
+  isHandoffEmail,
+  RETURN_WRITE_ERROR,
+  SHARE_WRITE_ERROR,
+  TRANSFER_WRITE_ERROR,
+} from "./handoff.ts";
+import { parseIncomingPack, pickPack, publicPack, type EstimatePackSnapshot } from "./estimate-pack.ts";
 import {
   deleteEstimateInDrive,
   driveAdapter,
@@ -22,7 +31,7 @@ import {
   type DriveAdapter,
 } from "./drive-estimates.ts";
 
-export { TRANSFER_WRITE_ERROR } from "./handoff.ts";
+export { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./handoff.ts";
 
 export function estimateVaultAdapter(adapter?: DriveAdapter) {
   return adapter ?? driveAdapter();
@@ -87,6 +96,11 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
   const pack = publicPack({
     ...parsed.pack,
     ownerEmail: claimed?.ownerEmail || ownerEmail,
+    sharedWith: claimed?.sharedWith ?? parsed.pack.sharedWith,
+    transferredFrom: claimed?.transferredFrom ?? parsed.pack.transferredFrom,
+    transferredTo: claimed?.transferredTo ?? parsed.pack.transferredTo,
+    transferredToName: claimed?.transferredToName ?? parsed.pack.transferredToName,
+    transferredFromName: claimed?.transferredFromName ?? parsed.pack.transferredFromName,
     archived: parsed.pack.archived,
     updatedAt: parsed.pack.updatedAt || Date.now(),
   });
@@ -114,14 +128,17 @@ export async function transferVisiblePack(
   const drive = estimateVaultAdapter(adapter);
   const fromDrive = await drivePackById(drive, packId);
   const fromLocal = localPackForTransfer(user, packId, incoming);
-  const current = fromDrive || fromLocal;
+  const current = pickPack(fromLocal, fromDrive) || fromDrive || fromLocal;
   if (!current || !packVisibleTo(user, current) || !canTransferPack(user, current)) {
     return { ok: false as const, status: 404, error: "That package is not on this desk." };
   }
+  const fromName = findHandoffSeat(user.email)?.name || user.email.trim().toLowerCase();
   const pack = publicPack({
     ...current,
     ownerEmail: target.email,
+    sharedWith: [],
     transferredFrom: user.email.trim().toLowerCase(),
+    transferredFromName: fromName,
     transferredTo: target.email,
     transferredToName: target.name,
     archived: false,
@@ -138,6 +155,127 @@ export async function transferVisiblePack(
     return { ok: false as const, status: 502, error: TRANSFER_WRITE_ERROR };
   }
   return { ok: true as const, stored: true, store: "drive" as const, pack, to: target };
+}
+
+async function currentPack(
+  user: ScopeUser,
+  packId: string,
+  drive: DriveAdapter,
+  incoming?: unknown,
+) {
+  const fromDrive = await drivePackById(drive, packId);
+  const fromLocal = localPackForTransfer(user, packId, incoming);
+  return pickPack(fromLocal, fromDrive) || fromDrive || fromLocal;
+}
+
+export async function shareVisiblePack(
+  user: ScopeUser,
+  packId: string,
+  toEmail: string,
+  adapter?: DriveAdapter,
+  incoming?: unknown,
+) {
+  const target = findHandoffSeat(toEmail);
+  if (!target || !isHandoffEmail(target.email)) {
+    return { ok: false as const, status: 400, error: "Pick someone on this desk." };
+  }
+  if (target.email === user.email.trim().toLowerCase()) {
+    return { ok: false as const, status: 400, error: "Pick someone else on this desk." };
+  }
+  const drive = estimateVaultAdapter(adapter);
+  const current = await currentPack(user, packId, drive, incoming);
+  if (!current || !packVisibleTo(user, current) || !canSharePack(user, current)) {
+    return { ok: false as const, status: 404, error: "That package is not on this desk." };
+  }
+  if (current.ownerEmail.trim().toLowerCase() === target.email) {
+    return { ok: false as const, status: 400, error: "They already own this job." };
+  }
+  const sharedWith = [...packSharedEmails(current).filter((email) => email !== target.email), target.email];
+  const pack = publicPack({
+    ...current,
+    ownerEmail: current.ownerEmail,
+    sharedWith,
+    updatedAt: Date.now(),
+  });
+  if (!drive.configured) {
+    return { ok: true as const, stored: false, store: "unconfigured" as const, pack, to: target };
+  }
+  try {
+    await upsertEstimateInDrive(drive, pack);
+  } catch {
+    return { ok: false as const, status: 502, error: SHARE_WRITE_ERROR };
+  }
+  return { ok: true as const, stored: true, store: "drive" as const, pack, to: target };
+}
+
+export async function unshareVisiblePack(
+  user: ScopeUser,
+  packId: string,
+  toEmail: string,
+  adapter?: DriveAdapter,
+  incoming?: unknown,
+) {
+  const target = findHandoffSeat(toEmail);
+  if (!target || !isHandoffEmail(target.email)) {
+    return { ok: false as const, status: 400, error: "Pick someone on this desk." };
+  }
+  const drive = estimateVaultAdapter(adapter);
+  const current = await currentPack(user, packId, drive, incoming);
+  if (!current || !packVisibleTo(user, current) || !canSharePack(user, current)) {
+    return { ok: false as const, status: 404, error: "That package is not on this desk." };
+  }
+  const pack = publicPack({
+    ...current,
+    ownerEmail: current.ownerEmail,
+    sharedWith: packSharedEmails(current).filter((email) => email !== target.email),
+    updatedAt: Date.now(),
+  });
+  if (!drive.configured) {
+    return { ok: true as const, stored: false, store: "unconfigured" as const, pack, to: target };
+  }
+  try {
+    await upsertEstimateInDrive(drive, pack);
+  } catch {
+    return { ok: false as const, status: 502, error: SHARE_WRITE_ERROR };
+  }
+  return { ok: true as const, stored: true, store: "drive" as const, pack, to: target };
+}
+
+export async function returnVisiblePack(
+  user: ScopeUser,
+  packId: string,
+  adapter?: DriveAdapter,
+  incoming?: unknown,
+) {
+  const drive = estimateVaultAdapter(adapter);
+  const current = await currentPack(user, packId, drive, incoming);
+  if (!current || !packVisibleTo(user, current) || !canReturnPack(user, current)) {
+    return { ok: false as const, status: 404, error: "That package is not on this desk." };
+  }
+  const previous = findHandoffSeat(current.transferredFrom || "");
+  if (!previous || !isHandoffEmail(previous.email)) {
+    return { ok: false as const, status: 400, error: "This job cannot go back." };
+  }
+  const pack = publicPack({
+    ...current,
+    ownerEmail: previous.email,
+    sharedWith: [],
+    transferredFrom: undefined,
+    transferredFromName: undefined,
+    transferredTo: undefined,
+    transferredToName: undefined,
+    archived: false,
+    updatedAt: Date.now(),
+  });
+  if (!drive.configured) {
+    return { ok: true as const, stored: false, store: "unconfigured" as const, pack, to: previous };
+  }
+  try {
+    await overwriteEstimateInDrive(drive, pack);
+  } catch {
+    return { ok: false as const, status: 502, error: RETURN_WRITE_ERROR };
+  }
+  return { ok: true as const, stored: true, store: "drive" as const, pack, to: previous };
 }
 
 export async function archiveVisiblePack(

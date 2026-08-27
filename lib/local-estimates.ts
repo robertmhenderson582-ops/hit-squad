@@ -36,6 +36,11 @@ export type LocalPack = {
   ownerEmail?: string;
   archived?: boolean;
   estimator?: string;
+  sharedWith?: string[];
+  transferredFrom?: string;
+  transferredTo?: string;
+  transferredToName?: string;
+  transferredFromName?: string;
 };
 
 export type StorageLike = {
@@ -123,6 +128,12 @@ export function rememberLocalPack(
     ownerEmail?: string;
     archived?: boolean;
     estimator?: string;
+    sharedWith?: string[];
+    transferredFrom?: string;
+    transferredTo?: string;
+    transferredToName?: string;
+    transferredFromName?: string;
+    replaceHandoff?: boolean;
   },
   store: StorageLike | null = typeof window === "undefined" ? null : window.localStorage,
 ): LocalPack | null {
@@ -153,6 +164,13 @@ export function rememberLocalPack(
     ownerEmail: input.ownerEmail || existing?.ownerEmail,
     archived: input.archived ?? existing?.archived,
     estimator: input.estimator || existing?.estimator,
+    sharedWith: input.replaceHandoff ? input.sharedWith : (input.sharedWith ?? existing?.sharedWith),
+    transferredFrom: input.replaceHandoff ? input.transferredFrom : (input.transferredFrom ?? existing?.transferredFrom),
+    transferredTo: input.replaceHandoff ? input.transferredTo : (input.transferredTo ?? existing?.transferredTo),
+    transferredToName: input.replaceHandoff ? input.transferredToName : (input.transferredToName ?? existing?.transferredToName),
+    transferredFromName: input.replaceHandoff
+      ? input.transferredFromName
+      : (input.transferredFromName ?? existing?.transferredFromName),
   };
   writeStoreJson(store, `${PACK_STORE_PREFIX}${next.key}`, next);
   upsertIndex(store, next);
@@ -211,6 +229,11 @@ function packFromStore(packId: string, store: StorageLike): LocalPack {
     ownerEmail: saved?.ownerEmail || indexed?.ownerEmail,
     archived: saved?.archived ?? indexed?.archived,
     estimator: saved?.estimator || indexed?.estimator,
+    sharedWith: saved?.sharedWith || indexed?.sharedWith,
+    transferredFrom: saved?.transferredFrom || indexed?.transferredFrom,
+    transferredTo: saved?.transferredTo || indexed?.transferredTo,
+    transferredToName: saved?.transferredToName || indexed?.transferredToName,
+    transferredFromName: saved?.transferredFromName || indexed?.transferredFromName,
   };
 }
 

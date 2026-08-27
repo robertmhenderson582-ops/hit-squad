@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  applyReturnLocally,
   applyTransferLocally,
   hydrateFromVault,
   resetVaultHydrateForTests,
@@ -60,6 +61,28 @@ describe("local transfer commit", () => {
     assert.equal(ok.keptLocal, false);
     assert.equal(findLocalPack("new-cat2pit", store), null);
     assert.equal(readJobMenu(store).transferred[0]?.toName, "Nathan Boyte");
+  });
+
+  it("drops the recipient local copy after a successful return", () => {
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-cat2pit",
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: "nathanboyte@gmail.com",
+        transferredFrom: "robertmhenderson582@gmail.com",
+        transferredFromName: "Robert Henderson",
+      },
+      store,
+    );
+    const kept = applyReturnLocally(false, "new-cat2pit", store);
+    assert.equal(kept.keptLocal, true);
+    assert.equal(findLocalPack("new-cat2pit", store)?.title, "Cat 2 Pit Stop");
+    const ok = applyReturnLocally(true, "new-cat2pit", store);
+    assert.equal(ok.keptLocal, false);
+    assert.equal(findLocalPack("new-cat2pit", store), null);
   });
 
   it("posts the local pack on transfer so an empty Drive can still take it", async () => {

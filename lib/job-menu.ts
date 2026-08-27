@@ -131,6 +131,18 @@ export function deleteMenuItem(item: MenuItem, store?: StorageLike | null) {
   return writeJobMenu(next, store);
 }
 
+export function clearTransferredMenuItem(item: MenuItem, store?: StorageLike | null) {
+  const menu = readJobMenu(store);
+  const keys = keysForItem(item);
+  return writeJobMenu(
+    {
+      ...menu,
+      transferred: menu.transferred.filter((row) => !keys.includes(row.id)),
+    },
+    store,
+  );
+}
+
 export function recordTransferredMenuItem(item: MenuItem & { toName: string }, store?: StorageLike | null) {
   const menu = readJobMenu(store);
   const keys = keysForItem(item);

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { JobHandoffMark } from "@/components/JobHandoffMark";
 import { JobMenuActions } from "@/components/JobMenuActions";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
@@ -56,6 +57,7 @@ export function JobsDesk() {
 
   const menu = menuForViewedDesk(viewingAs);
   const closed = readClosed();
+  const deskPacks = lens ? localPacksForUser(lens, listLocalPacks()) : [];
   const active = jobs.filter((job) => isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed));
   const archived = jobs.filter((job) => menuStatus(job, menu) === "archived");
   const transferred = menu.transferred;
@@ -96,6 +98,10 @@ export function JobsDesk() {
               <StatusStamp value={job.status} />
             </div>
             <h2 className="mt-1 font-display text-2xl tracking-wide">{alias(job.title)}</h2>
+            <JobHandoffMark
+              pack={deskPacks.find((pack) => pack.packId === estimate?.id || `job-${pack.packId}` === job.id)}
+              email={lens?.email}
+            />
             <p className="mt-2 text-sm text-[#5b6f73]">
               {alias(job.client)} · {job.discipline} · {job.kind.toUpperCase()}
             </p>

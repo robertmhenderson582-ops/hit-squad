@@ -5,9 +5,10 @@ import {
   scheduleOnce,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
-import { TRANSFER_WRITE_ERROR } from "./handoff.ts";
+import { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import {
   archiveMenuItem,
+  clearTransferredMenuItem,
   packsMissingFromVault,
   recordTransferredMenuItem,
   unarchiveMenuItem,
@@ -34,6 +35,11 @@ export function setVaultViewAs(seat?: string | null) {
 
 export function activeVaultViewAs() {
   return currentViewAs;
+}
+
+export function bustVaultHydrate() {
+  hydratePromise = null;
+  hydrateSeat = null;
 }
 
 export function deskFetch(input: RequestInfo | URL, init?: RequestInit) {
@@ -82,7 +88,10 @@ export async function hydrateFromVault(
         mergeVaultIntoLocal(target, pack);
         if (viewingAs) continue;
         if (pack.archived) archiveMenuItem({ id: pack.packId, title: pack.title, packId: pack.packId }, target);
-        else unarchiveMenuItem({ id: pack.packId, packId: pack.packId }, target);
+        else {
+          unarchiveMenuItem({ id: pack.packId, packId: pack.packId }, target);
+          clearTransferredMenuItem({ id: pack.packId, packId: pack.packId }, target);
+        }
       }
       return packs;
     } catch {
@@ -140,10 +149,8 @@ export async function transferVaultPack(packId: string, email: string, store?: S
   const target = browserStore(store);
   const pack = target ? collectPack(target, packId) : null;
   try {
-    const response = await fetch(`/api/desk/estimates/${encodeURIComponent(packId)}/transfer`, {
+    const response = await deskFetch(`/api/desk/estimates/${encodeURIComponent(packId)}/transfer`, {
       method: "POST",
-      credentials: "include",
-      cache: "no-store",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, pack: pack ?? undefined }),
     });
@@ -170,6 +177,67 @@ export function applyTransferLocally(
   if (!ok) return { keptLocal: true as const };
   recordTransferredMenuItem(item, store);
   deleteLocalPack(packId, store);
+  bustVaultHydrate();
+  return { keptLocal: false as const };
+}
+
+export async function shareVaultPack(
+  packId: string,
+  email: string,
+  action: "share" | "unshare" = "share",
+  store?: StorageLike | null,
+) {
+  const target = browserStore(store);
+  const pack = target ? collectPack(target, packId) : null;
+  try {
+    const response = await deskFetch(`/api/desk/estimates/${encodeURIComponent(packId)}/share`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, pack: pack ?? undefined, action }),
+    });
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      pack?: EstimatePackSnapshot;
+      to?: { name: string; email: string };
+    };
+    if (!response.ok) {
+      return { ok: false as const, error: data.error || SHARE_WRITE_ERROR };
+    }
+    if (data.pack && target) mergeVaultIntoLocal(target, data.pack);
+    bustVaultHydrate();
+    return { ok: true as const, pack: data.pack, to: data.to };
+  } catch {
+    return { ok: false as const, error: SHARE_WRITE_ERROR };
+  }
+}
+
+export async function returnVaultPack(packId: string, store?: StorageLike | null) {
+  const target = browserStore(store);
+  const pack = target ? collectPack(target, packId) : null;
+  try {
+    const response = await deskFetch(`/api/desk/estimates/${encodeURIComponent(packId)}/return`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pack: pack ?? undefined }),
+    });
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      pack?: EstimatePackSnapshot;
+      to?: { name: string; email: string };
+    };
+    if (!response.ok) {
+      return { ok: false as const, error: data.error || RETURN_WRITE_ERROR };
+    }
+    return { ok: true as const, pack: data.pack, to: data.to };
+  } catch {
+    return { ok: false as const, error: RETURN_WRITE_ERROR };
+  }
+}
+
+export function applyReturnLocally(ok: boolean, packId: string, store?: StorageLike | null) {
+  if (!ok) return { keptLocal: true as const };
+  deleteLocalPack(packId, store);
+  bustVaultHydrate();
   return { keptLocal: false as const };
 }
 

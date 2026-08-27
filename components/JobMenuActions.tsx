@@ -2,10 +2,20 @@
 
 import { useState } from "react";
 import { HandoffDialog } from "@/components/HandoffDialog";
-import { applyTransferLocally, archiveVaultPack, deleteVaultPack, transferVaultPack } from "@/lib/estimate-vault-client";
-import { isLocalPackId, deleteLocalPack } from "@/lib/local-estimates";
+import { useDeskLens } from "@/components/OwnerDeskContext";
+import {
+  applyReturnLocally,
+  applyTransferLocally,
+  archiveVaultPack,
+  deleteVaultPack,
+  returnVaultPack,
+  shareVaultPack,
+  transferVaultPack,
+} from "@/lib/estimate-vault-client";
+import { canReturnPack, canSharePack, packSharedEmails } from "@/lib/estimate-scope";
+import { findHandoffSeat, type HandoffSeat } from "@/lib/handoff";
+import { isLocalPackId, deleteLocalPack, findLocalPack } from "@/lib/local-estimates";
 import { archiveMenuItem, deleteMenuItem, unarchiveMenuItem } from "@/lib/job-menu";
-import type { HandoffSeat } from "@/lib/handoff";
 
 export function vaultPackIdOf(id: string, packId?: string) {
   if (packId && isLocalPackId(packId)) return packId;
@@ -27,11 +37,18 @@ export function JobMenuActions({
   archived?: boolean;
   onChange?: () => void;
 }) {
-  const [handoff, setHandoff] = useState(false);
+  const { lens } = useDeskLens();
+  const [handoff, setHandoff] = useState<"share" | "turnover" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const vaultId = vaultPackIdOf(id, packId);
   const item = { id, title, packId: vaultId || packId };
+  const pack = vaultId ? findLocalPack(vaultId) : null;
+  const deskUser = lens ? { email: lens.email, role: lens.role } : null;
+  const sharedEmails = pack ? packSharedEmails(pack) : [];
+  const canShare = Boolean(deskUser && pack && canSharePack(deskUser, pack));
+  const canReturn = Boolean(deskUser && pack && canReturnPack(deskUser, pack));
+  const sharedWith = sharedEmails.map((email) => findHandoffSeat(email)).filter(Boolean) as HandoffSeat[];
 
   async function refresh() {
     onChange?.();
@@ -69,7 +86,46 @@ export function JobMenuActions({
           >
             ARCHIVE
           </button>
-          {vaultId ? (
+          {vaultId && canShare ? (
+            <button
+              type="button"
+              className="job-action"
+              title="Share this job. You stay the owner."
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setHandoff("share");
+              }}
+            >
+              SHARE
+            </button>
+          ) : null}
+          {vaultId && canShare && sharedWith.length ? (
+            <button
+              type="button"
+              className="job-action"
+              title="Stop sharing this job."
+              onClick={async (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!vaultId) return;
+                let lastName = "";
+                for (const person of sharedWith) {
+                  const result = await shareVaultPack(vaultId, person.email, "unshare");
+                  if (!result.ok) {
+                    setNote(result.error);
+                    return;
+                  }
+                  lastName = person.name;
+                }
+                setNote(lastName ? `Stopped sharing with ${lastName}.` : "Stopped sharing.");
+                await refresh();
+              }}
+            >
+              UNSHARE
+            </button>
+          ) : null}
+          {vaultId && canShare ? (
             <button
               type="button"
               className="job-action"
@@ -77,10 +133,32 @@ export function JobMenuActions({
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                setHandoff(true);
+                setHandoff("turnover");
               }}
             >
               TURN OVER
+            </button>
+          ) : null}
+          {vaultId && canReturn ? (
+            <button
+              type="button"
+              className="job-action"
+              title="Send this job back to the previous owner."
+              onClick={async (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!vaultId) return;
+                const result = await returnVaultPack(vaultId);
+                if (!result.ok) {
+                  setNote(result.error);
+                  return;
+                }
+                applyReturnLocally(true, vaultId);
+                setNote(result.to ? `Returned to ${result.to.name}.` : "Returned.");
+                await refresh();
+              }}
+            >
+              RETURN
             </button>
           ) : null}
         </>
@@ -100,8 +178,25 @@ export function JobMenuActions({
       {note ? <p className="w-full text-[11px] text-[#5b6f73]">{note}</p> : null}
       <HandoffDialog
         title={title}
-        open={handoff}
-        onClose={() => setHandoff(false)}
+        open={handoff === "share"}
+        heading="Share"
+        body={`${title} stays on your desk. They can open it and work on it. You stay the owner.`}
+        confirmLabel="Share"
+        busyLabel="Sharing…"
+        onClose={() => setHandoff(null)}
+        onPick={async (person: HandoffSeat) => {
+          if (!vaultId) return "That job cannot be shared.";
+          const result = await shareVaultPack(vaultId, person.email);
+          if (!result.ok) return result.error;
+          setNote(`Shared with ${person.name}. You still own this job.`);
+          await refresh();
+          return null;
+        }}
+      />
+      <HandoffDialog
+        title={title}
+        open={handoff === "turnover"}
+        onClose={() => setHandoff(null)}
         onPick={async (person: HandoffSeat) => {
           if (!vaultId) return "That job cannot be turned over.";
           const result = await transferVaultPack(vaultId, person.email);

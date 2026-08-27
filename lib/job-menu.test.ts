@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   archiveMenuItem,
+  clearTransferredMenuItem,
   deleteMenuItem,
   isActiveMenuItem,
   menuForViewedDesk,
@@ -60,6 +61,9 @@ describe("job menu archive and delete", () => {
     assert.equal(menuForViewedDesk(true, store).transferred.length, 0);
     assert.equal(isActiveMenuItem({ id: "new-cat2pit" }, menuForViewedDesk(true, store)), true);
     assert.equal(menuForViewedDesk(false, store).transferred[0]?.toName, "Nathan Boyte");
+    clearTransferredMenuItem({ id: "new-cat2pit" }, store);
+    assert.equal(readJobMenu(store).transferred.length, 0);
+    assert.equal(isActiveMenuItem({ id: "new-cat2pit" }, readJobMenu(store)), true);
   });
 
   it("evicts packs that left this desk on the vault list", () => {

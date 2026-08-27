@@ -28,9 +28,11 @@ export type EstimatePackSnapshot = {
   updatedAt: number;
   ownerEmail: string;
   archived?: boolean;
+  sharedWith?: string[];
   transferredFrom?: string;
   transferredTo?: string;
   transferredToName?: string;
+  transferredFromName?: string;
   schedule?: unknown;
   crew?: unknown;
   jobMeta?: unknown;
@@ -127,6 +129,12 @@ export function pickPack(
     otherCost: newer.otherCost ?? older.otherCost,
     subcontractor: newer.subcontractor ?? older.subcontractor,
     createdAt: Math.min(local.createdAt || newer.createdAt, vault.createdAt || newer.createdAt) || newer.createdAt,
+    ownerEmail: vault.ownerEmail || newer.ownerEmail,
+    sharedWith: vault.sharedWith,
+    transferredFrom: vault.transferredFrom,
+    transferredTo: vault.transferredTo,
+    transferredToName: vault.transferredToName,
+    transferredFromName: vault.transferredFromName,
   };
 }
 
@@ -143,9 +151,11 @@ export function publicPack(pack: EstimatePackSnapshot): EstimatePackSnapshot {
     updatedAt: pack.updatedAt,
     ownerEmail: pack.ownerEmail,
     archived: pack.archived,
+    sharedWith: pack.sharedWith,
     transferredFrom: pack.transferredFrom,
     transferredTo: pack.transferredTo,
     transferredToName: pack.transferredToName,
+    transferredFromName: pack.transferredFromName,
     schedule: pack.schedule,
     crew: pack.crew,
     jobMeta: pack.jobMeta,
@@ -182,6 +192,11 @@ export function collectPack(
     updatedAt: identity.updatedAt || identity.createdAt || 0,
     ownerEmail: ownerEmail || identity.ownerEmail || "",
     archived: identity.archived,
+    sharedWith: identity.sharedWith,
+    transferredFrom: identity.transferredFrom,
+    transferredTo: identity.transferredTo,
+    transferredToName: identity.transferredToName,
+    transferredFromName: identity.transferredFromName,
     schedule: readStoreJson(store, `${PHASE_STORE_PREFIX}${key}`) ?? undefined,
     crew: readStoreJson(store, `${CREW_STORE_PREFIX}${key}`) ?? undefined,
     jobMeta: readStoreJson(store, `${JOB_META_PREFIX}${key}`) ?? undefined,
@@ -203,6 +218,12 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
       size: pack.size,
       ownerEmail: pack.ownerEmail,
       archived: pack.archived,
+      sharedWith: pack.sharedWith,
+      transferredFrom: pack.transferredFrom,
+      transferredTo: pack.transferredTo,
+      transferredToName: pack.transferredToName,
+      transferredFromName: pack.transferredFromName,
+      replaceHandoff: true,
     },
     store,
   );
@@ -251,9 +272,13 @@ export function parseIncomingPack(input: unknown): { ok: true; pack: EstimatePac
       updatedAt: Number(row?.updatedAt) || Date.now(),
     ownerEmail: typeof row?.ownerEmail === "string" ? row.ownerEmail : "",
     archived: Boolean(row?.archived),
+    sharedWith: Array.isArray(row?.sharedWith)
+      ? row.sharedWith.filter((item): item is string => typeof item === "string")
+      : undefined,
     transferredFrom: typeof row?.transferredFrom === "string" ? row.transferredFrom : undefined,
     transferredTo: typeof row?.transferredTo === "string" ? row.transferredTo : undefined,
     transferredToName: typeof row?.transferredToName === "string" ? row.transferredToName : undefined,
+    transferredFromName: typeof row?.transferredFromName === "string" ? row.transferredFromName : undefined,
     schedule: row?.schedule,
       crew: row?.crew,
       jobMeta: row?.jobMeta,

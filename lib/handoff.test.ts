@@ -3,7 +3,15 @@ import { describe, it } from "node:test";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { JOSEPH_EMAIL, SHANE_EMAIL } from "./tester-seats.ts";
-import { findHandoffSeat, handoffSeats, handoffTargetsFor, isHandoffEmail } from "./handoff.ts";
+import {
+  findHandoffSeat,
+  handoffSeats,
+  handoffTargetsFor,
+  isHandoffEmail,
+  packSharedWithYou,
+  packTransferredToYou,
+  transferredFromLabel,
+} from "./handoff.ts";
 
 describe("handoff seats", () => {
   it("lists real desk people and never Novus", () => {
@@ -26,5 +34,21 @@ describe("handoff seats", () => {
     const nathan = handoffTargetsFor({ email: "nathanboyte@gmail.com", role: "tester" });
     assert.equal(nathan.some((row) => row.email === "nathanboyte@gmail.com"), false);
     assert.equal(nathan.some((row) => row.email === OWNER_LOGIN_EMAIL), true);
+  });
+
+  it("marks a transferred job for the recipient and a shared job for the collaborator", () => {
+    const transferred = {
+      ownerEmail: "nathanboyte@gmail.com",
+      transferredFrom: OWNER_LOGIN_EMAIL,
+      transferredFromName: "Robert Henderson",
+      transferredTo: "nathanboyte@gmail.com",
+    };
+    assert.equal(packTransferredToYou(transferred, "nathanboyte@gmail.com"), true);
+    assert.equal(packTransferredToYou(transferred, OWNER_LOGIN_EMAIL), false);
+    assert.equal(transferredFromLabel(transferred), "Robert Henderson");
+    const shared = { ownerEmail: OWNER_LOGIN_EMAIL, sharedWith: ["nathanboyte@gmail.com"] };
+    assert.equal(packSharedWithYou(shared, "nathanboyte@gmail.com"), true);
+    assert.equal(packSharedWithYou(shared, OWNER_LOGIN_EMAIL), false);
+    assert.equal(packSharedWithYou(shared, JOSEPH_EMAIL), false);
   });
 });

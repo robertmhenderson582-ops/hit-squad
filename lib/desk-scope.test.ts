@@ -9,7 +9,7 @@ import {
   viewingOtherDesk,
 } from "./desk-scope.ts";
 import { localPacksForUser } from "./estimate-scope.ts";
-import { listVisiblePacks, transferVisiblePack, upsertVisiblePack } from "./estimate-vault.ts";
+import { listVisiblePacks, shareVisiblePack, transferVisiblePack, upsertVisiblePack } from "./estimate-vault.ts";
 import { memoryDrive } from "./drive-estimates.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
@@ -95,6 +95,33 @@ describe("owner View as desk scope", () => {
       nathanList.packs.some((row) => row.ownerEmail === OWNER_LOGIN_EMAIL),
       false,
     );
+    assert.equal(nathanList.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);
+    assert.equal(nathanList.packs[0]?.transferredFromName, "Robert Henderson");
+  });
+
+  it("lists a shared pack on Nathan's desk while Robert stays owner", async () => {
+    const drive = memoryDrive();
+    await upsertVisiblePack(owner, cat2({ packId: "new-robert1", title: "Robert working" }), drive);
+    const shared = await shareVisiblePack(owner, "new-mtaajdwa-f7539", nathan.email, drive, cat2());
+    assert.equal(shared.ok, true);
+    if (shared.ok) assert.equal(shared.pack.ownerEmail, OWNER_LOGIN_EMAIL);
+
+    const asNathan = deskScopeUser(owner, "nathan");
+    const nathanList = await listVisiblePacks(asNathan, drive);
+    const ownerList = await listVisiblePacks(deskScopeUser(owner, null), drive);
+    const josephList = await listVisiblePacks(deskUserFromRequest(joseph, requestAs("nathan")), drive);
+
+    assert.deepEqual(
+      nathanList.packs.map((row) => row.packId),
+      ["new-mtaajdwa-f7539"],
+    );
+    assert.equal(nathanList.packs[0]?.ownerEmail, OWNER_LOGIN_EMAIL);
+    assert.deepEqual(nathanList.packs[0]?.sharedWith, [nathan.email]);
+    assert.deepEqual(
+      ownerList.packs.map((row) => row.packId).sort(),
+      ["new-mtaajdwa-f7539", "new-robert1"],
+    );
+    assert.deepEqual(josephList.packs.map((row) => row.packId), []);
   });
 
   it("lets Novus View as Nathan and ignores Joseph or a tester asking for Nathan's desk", async () => {

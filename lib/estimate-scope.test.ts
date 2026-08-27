@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import {
+  canReturnPack,
+  canSharePack,
   canTransferPack,
   canWritePack,
   isOwnerVaultEmail,
@@ -61,6 +63,18 @@ describe("estimate vault scope", () => {
     assert.equal(canTransferPack(otherTester, testerPack), false);
     assert.equal(packVisibleTo({ email: "josephmhenderson2002@gmail.com", role: "tester" }, ownerPack), false);
     assert.equal(packVisibleTo({ email: "shane@apcontrolsllc.com", role: "tester" }, testerPack), false);
+  });
+
+  it("lets a shared person open and work without becoming owner", () => {
+    const shared = { ...ownerPack, sharedWith: [tester.email] };
+    assert.equal(packVisibleTo(tester, shared), true);
+    assert.equal(canWritePack(tester, shared), true);
+    assert.equal(canSharePack(tester, shared), false);
+    assert.equal(canTransferPack(tester, shared), false);
+    assert.equal(packVisibleTo(otherTester, shared), false);
+    assert.equal(packVisibleTo({ email: "josephmhenderson2002@gmail.com", role: "tester" }, shared), false);
+    assert.equal(canReturnPack(tester, { ...testerPack, transferredFrom: OWNER_LOGIN_EMAIL }), true);
+    assert.equal(canReturnPack(owner, ownerPack), false);
   });
 
   it("keeps unstamped local work on the owner desk and hides it from testers", () => {
