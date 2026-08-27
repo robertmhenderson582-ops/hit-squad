@@ -54,7 +54,7 @@ export function JobSetupCard({
   function requestUpdateRates() {
     if (!offer.ok) {
       setConfirmRates(false);
-      setRateStatus(offer.message);
+      setRateStatus(alias(offer.message));
       return;
     }
     setRateStatus("");
@@ -172,7 +172,7 @@ export function JobSetupCard({
         {confirmRates && offer.ok ? (
           <div className="mt-3 rounded-lg border border-[#c5d4d4] bg-white px-3 py-3">
             <p className="text-sm text-[#163038]">
-              Pull {offer.bookLabel}? Staff PD ${SHAHAN_STAFF_PD} and Craft PD ${SHAHAN_CRAFT_PD}.
+              Pull {alias(offer.bookLabel)}? Staff PD ${SHAHAN_STAFF_PD} and Craft PD ${SHAHAN_CRAFT_PD}.
               Crew titles rematch when they are in the book. Unmatched titles stay and show No rate.
             </p>
             <div className="mt-3 flex justify-end gap-3">
@@ -184,14 +184,14 @@ export function JobSetupCard({
                 Cancel
               </button>
               <button type="button" onClick={applyWoodRiverRates} className="rounded-lg bg-steel px-4 py-2 text-white">
-                Pull {offer.bookLabel}
+                Pull {alias(offer.bookLabel)}
               </button>
             </div>
           </div>
         ) : null}
         {rateStatus ? <p className="mt-2 text-sm text-[#163038]">{rateStatus}</p> : null}
         {pack.jobMeta.rateBook ? (
-          <p className="mt-2 text-xs text-[#5b6f73]">Rate book on this estimate: {SHAHAN_BOOK_LABEL}.</p>
+          <p className="mt-2 text-xs text-[#5b6f73]">Rate book on this estimate: {alias(SHAHAN_BOOK_LABEL)}.</p>
         ) : null}
       </div>
       <div className="mt-6 grid gap-3 sm:grid-cols-2">

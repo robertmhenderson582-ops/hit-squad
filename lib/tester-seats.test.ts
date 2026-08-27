@@ -142,4 +142,7 @@ test("aliased Mark never sees the East Coast PCA lock; real Nathan still does", 
   assert.match(markRates, /Midwest is the only loaded book/);
   assert.equal(/Wood River/i.test(markRates), false);
   assert.equal(aliasText(ratesBlurb, true, "real"), ratesBlurb);
+  assert.match(aliasText("Only Wood River is loaded.", true, "aliased"), /Only Midwest is loaded/);
+  assert.match(aliasText("Shahan TM OCIP — Wood River", true, "aliased"), /Midwest/);
+  assert.equal(/Wood River/i.test(aliasText("Shahan TM OCIP — Wood River", true, "aliased")), false);
 });
