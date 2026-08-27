@@ -5,7 +5,9 @@ import {
   VIEW_AS_HEADER,
   deskScopeUser,
   deskUserFromRequest,
+  viewAsInit,
   viewAsSeatFromRequest,
+  viewAsSeatFromValue,
   viewingOtherDesk,
 } from "./desk-scope.ts";
 import { canReturnPack, canWritePack, localPacksForUser } from "./estimate-scope.ts";
@@ -196,6 +198,9 @@ describe("owner View as desk scope", () => {
     );
 
     assert.equal(viewAsSeatFromRequest(requestAs("nathan")), "nathan");
+    assert.equal(new Headers(viewAsInit(null).headers).get(VIEW_AS_HEADER), "owner");
+    assert.equal(viewAsSeatFromValue("owner"), null);
+    assert.equal(new Headers(viewAsInit("nathan").headers).get(VIEW_AS_HEADER), "nathan");
     assert.equal(deskUserFromRequest(joseph, requestAs("nathan")).email, joseph.email);
     assert.equal(deskUserFromRequest(nathan, requestAs("joseph")).email, nathan.email);
 

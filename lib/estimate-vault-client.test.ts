@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   applyReturnLocally,
   applyTransferLocally,
+  flushLocalPacksToVault,
   flushVaultUpsert,
   hydrateFromVault,
   resetVaultHydrateForTests,
@@ -12,7 +13,7 @@ import {
 import { VIEW_AS_HEADER } from "./desk-scope.ts";
 import { packsMissingFromVault, writeVaultSeen } from "./job-menu.ts";
 import { TRANSFER_WRITE_ERROR } from "./handoff.ts";
-import { findLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
+import { deleteLocalPack, findLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-menu.ts";
 import { collectPack } from "./estimate-pack.ts";
 
@@ -256,6 +257,77 @@ describe("local transfer commit", () => {
       assert.equal(findLocalPack("new-mtaajdwa-f7539", store), null);
       assert.equal(readJobMenu(store).transferred[0]?.title, "Madison CAT 2 (Pit Stop)");
       assert.equal(isActiveMenuItem({ id: "new-mtaajdwa-f7539", packId: "new-mtaajdwa-f7539" }, readJobMenu(store)), false);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("re-applies a cached Follow hydrate so Cat 2 comes back without a reload", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const previous = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls += 1;
+      const headers = new Headers(init?.headers);
+      assert.equal(headers.get(VIEW_AS_HEADER), "nathan");
+      return new Response(
+        JSON.stringify({
+          persisted: true,
+          packs: [
+            {
+              packId: "new-mtaajdwa-f7539",
+              key: "new:new-mtaajdwa-f7539",
+              title: "Madison CAT 2 (Pit Stop)",
+              client: "Phillips 66",
+              site: "Wood River — Roxana, IL",
+              siteId: "site-madison",
+              createdAt: 1,
+              updatedAt: 2,
+              ownerEmail: "nathanboyte@gmail.com",
+              transferredFrom: "robertmhenderson582@gmail.com",
+              transferredFromName: "Robert Henderson",
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    try {
+      setVaultViewAs("nathan");
+      await hydrateFromVault(store, { viewAs: "nathan" });
+      assert.equal(findLocalPack("new-mtaajdwa-f7539", store)?.ownerEmail, "nathanboyte@gmail.com");
+      deleteLocalPack("new-mtaajdwa-f7539", store);
+      assert.equal(findLocalPack("new-mtaajdwa-f7539", store), null);
+      await hydrateFromVault(store, { viewAs: "nathan" });
+      assert.equal(calls, 1);
+      assert.equal(findLocalPack("new-mtaajdwa-f7539", store)?.title, "Madison CAT 2 (Pit Stop)");
+      assert.equal(findLocalPack("new-mtaajdwa-f7539", store)?.ownerEmail, "nathanboyte@gmail.com");
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("hydrates the owner desk when viewAs is explicitly cleared even if Follow is still cached", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const seats: string[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      seats.push(new Headers(init?.headers).get(VIEW_AS_HEADER) || "owner");
+      return new Response(JSON.stringify({ persisted: true, packs: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      setVaultViewAs("nathan");
+      await hydrateFromVault(store, { viewAs: null });
+      assert.deepEqual(seats, ["owner"]);
+      await flushLocalPacksToVault(store, { viewAs: "nathan" });
+      assert.deepEqual(seats, ["owner"]);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();

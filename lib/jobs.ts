@@ -1,4 +1,5 @@
 import { boardForUser } from "./desk-data.ts";
+import { mergeLocalJobs, type LocalPack } from "./local-estimates.ts";
 import type { DeskBoard, JobRecord } from "./types.ts";
 
 const JOBS: JobRecord[] = [
@@ -67,6 +68,14 @@ export function jobByCode(code: string | null | undefined, extras: JobRecord[] =
 
 export function seedJobs(): JobRecord[] {
   return JOBS;
+}
+
+/** Owner/Sites seed jobs stay on the signed-in desk. Follow / View as uses that person's packs only. */
+export function jobsOnDesk(serverJobs: JobRecord[] | undefined, packs: LocalPack[], viewingAs: boolean) {
+  const fromServer = serverJobs ?? [];
+  if (viewingAs) return mergeLocalJobs(fromServer, packs);
+  const seen = new Set(fromServer.map((job) => job.id));
+  return mergeLocalJobs([...seedJobs().filter((job) => !seen.has(job.id)), ...fromServer], packs);
 }
 
 export function plantJobTally(jobs: JobRecord[] = JOBS) {
