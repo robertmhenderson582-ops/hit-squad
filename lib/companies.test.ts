@@ -6,6 +6,8 @@ import { after, beforeEach, describe, it } from "node:test";
 
 import {
   COMPANIES,
+  LUCKY13_ID,
+  LUCKY13_NAME,
   canSeeCompany,
   catalogVisibleTo,
   companiesForScope,
@@ -13,13 +15,13 @@ import {
   seedCompanyForEmail,
   seedCompanyMap,
 } from "./companies.ts";
-import { assignedCompany, resetCompanyAssignmentsForTests, setAssignedCompany } from "./companies-store.ts";
+import { addCompany, assignedCompany, listCompanies, resetCompanyAssignmentsForTests, setAssignedCompany } from "./companies-store.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { boardForUser } from "./desk-data.ts";
 import { jobsOnDesk, seedJobs, visibleSeedJobs } from "./jobs.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
-import { JAMES_EMAIL, JOHN_BEECH_EMAIL, JOSEPH_EMAIL, TESTER_SEATS } from "./tester-seats.ts";
+import { JAMES_EMAIL, JOHN_BEECH_EMAIL, JOHN_HENRY_EMAIL, JOSEPH_EMAIL, TESTER_SEATS } from "./tester-seats.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-companies-"));
 process.env.COMPANY_ASSIGNMENT_PATH = join(dir, "companies.json");
@@ -29,6 +31,7 @@ const nathan = { isOwner: false, email: "nathanboyte@gmail.com", companyId: "mad
 const john = { isOwner: false, email: JOHN_BEECH_EMAIL, companyId: "madison" as const };
 const james = { isOwner: false, email: JAMES_EMAIL, companyId: "cbi" as const };
 const joseph = { isOwner: false, email: JOSEPH_EMAIL, companyId: "hitsquad" as const };
+const johnHenry = { isOwner: false, email: JOHN_HENRY_EMAIL, companyId: "lucky13" as const };
 const novus = { isOwner: false, email: NOVUS_EMAIL, companyId: "hitsquad" as const };
 
 beforeEach(() => {
@@ -40,12 +43,13 @@ after(() => {
 });
 
 describe("company catalog and seed", () => {
-  it("lists Hit Squad, Madison, and CBI only", () => {
+  it("lists Hit Squad, Madison, CBI, and Lucky 13", () => {
     assert.deepEqual(
       COMPANIES.map((row) => row.id),
-      ["hitsquad", "madison", "cbi"],
+      ["hitsquad", "madison", "cbi", LUCKY13_ID],
     );
     assert.equal(COMPANIES.find((row) => row.id === "cbi")?.name, "CBI");
+    assert.equal(COMPANIES.find((row) => row.id === LUCKY13_ID)?.name, LUCKY13_NAME);
   });
 
   it("seeds Nathan and John on Madison, James on CBI, everyone else Hit Squad", () => {
@@ -57,6 +61,7 @@ describe("company catalog and seed", () => {
     assert.equal(seedCompanyForEmail("wlanderno@yahoo.com"), "hitsquad");
     assert.equal(seedCompanyForEmail(NOVUS_EMAIL), "hitsquad");
     assert.equal(seedCompanyForEmail(OWNER_LOGIN_EMAIL), "hitsquad");
+    assert.equal(seedCompanyForEmail(JOHN_HENRY_EMAIL), "lucky13");
     const map = seedCompanyMap();
     assert.equal(map[JOHN_BEECH_EMAIL], "madison");
     assert.equal(map[JAMES_EMAIL], "cbi");
@@ -92,7 +97,7 @@ describe("assign and visibility", () => {
   it("lets the owner see every company and testers only their assigned one", () => {
     assert.deepEqual(
       companiesForScope(owner).map((row) => row.id),
-      ["hitsquad", "madison", "cbi"],
+      ["hitsquad", "madison", "cbi", LUCKY13_ID],
     );
     assert.deepEqual(
       companiesForScope(nathan).map((row) => row.id),
@@ -106,6 +111,14 @@ describe("assign and visibility", () => {
     assert.equal(canSeeCompany(joseph, "cbi"), false);
     assert.equal(canSeeCompany(novus, "hitsquad"), true);
     assert.equal(canSeeCompany(owner, "cbi"), true);
+    assert.equal(canSeeCompany(owner, LUCKY13_ID), true);
+    assert.equal(canSeeCompany(johnHenry, LUCKY13_ID), true);
+    assert.equal(canSeeCompany(johnHenry, "madison"), false);
+    assert.equal(canSeeCompany(nathan, LUCKY13_ID), false);
+    assert.deepEqual(
+      companiesForScope(johnHenry).map((row) => row.id),
+      [LUCKY13_ID],
+    );
   });
 
   it("hides Madison catalog from James and Hit Squad testers, and hides CBI from Madison", () => {
@@ -128,6 +141,9 @@ describe("assign and visibility", () => {
     const josephSeeds = visibleSeedJobs(joseph);
     assert.equal(josephSeeds.some((job) => job.code === "TA-8841"), false);
     assert.equal(josephSeeds.some((job) => job.id === "job-8710"), true);
+    const henrySeeds = visibleSeedJobs(johnHenry);
+    assert.equal(henrySeeds.some((job) => job.code === "TA-8841"), false);
+    assert.equal(henrySeeds.length, 0);
 
     const ownerJobs = jobsOnDesk([], [], false, owner);
     assert.equal(ownerJobs.length, seedJobs().length);
@@ -167,5 +183,19 @@ describe("assign and visibility", () => {
     assert.equal(/shahan|comp|p66|madison|mtaajd/i.test(JSON.stringify(dummy[0])), false);
     assert.deepEqual(dummyPacksForUser(nathan), []);
     assert.deepEqual(dummyPacksForUser(owner), []);
+  });
+
+  it("lets the owner add a company onto the live list and assign it", () => {
+    const added = addCompany("Acme Field Services");
+    assert.equal("ok" in added, true);
+    if (!("ok" in added)) return;
+    assert.equal(added.company.name, "Acme Field Services");
+    assert.equal(listCompanies().some((row) => row.id === added.company.id), true);
+    assert.equal(listCompanies().some((row) => row.name === LUCKY13_NAME), true);
+    setAssignedCompany(JOHN_HENRY_EMAIL, added.company.id);
+    assert.equal(assignedCompany(JOHN_HENRY_EMAIL), added.company.id);
+    const again = addCompany(LUCKY13_NAME);
+    assert.equal("ok" in again, true);
+    if ("ok" in again) assert.equal(again.company.id, LUCKY13_ID);
   });
 });

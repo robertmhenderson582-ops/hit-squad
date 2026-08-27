@@ -4,18 +4,23 @@ import { testerByEmail, TESTER_SEATS, type CompanyId } from "./tester-seats.ts";
 
 export type { CompanyId } from "./tester-seats.ts";
 
-export const COMPANY_IDS = ["hitsquad", "madison", "cbi"] as const;
-
 export type Company = {
   id: CompanyId;
   name: string;
 };
 
+export const LUCKY13_ID = "lucky13";
+export const LUCKY13_NAME = "Lucky 13 Welding & Fabrication";
+
+/** Seed catalog. Owner can add more; those persist separately. */
 export const COMPANIES: Company[] = [
   { id: "hitsquad", name: "Hit Squad" },
   { id: "madison", name: "Madison" },
   { id: "cbi", name: "CBI" },
+  { id: LUCKY13_ID, name: LUCKY13_NAME },
 ];
+
+export const COMPANY_IDS = COMPANIES.map((row) => row.id);
 
 export type CompanyScope = {
   isOwner: boolean;
@@ -23,12 +28,34 @@ export type CompanyScope = {
   companyId?: CompanyId;
 };
 
-export function isCompanyId(value: string): value is CompanyId {
-  return (COMPANY_IDS as readonly string[]).includes(value);
+const COMPANY_ID_RE = /^[a-z][a-z0-9]{0,39}$/;
+
+export function companyIdFromName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 40);
 }
 
-export function companyName(id: CompanyId): string {
-  return COMPANIES.find((row) => row.id === id)?.name ?? id;
+export function isCompanyId(value: string): value is CompanyId {
+  return COMPANY_ID_RE.test(value.trim());
+}
+
+export function companyName(id: CompanyId, catalog: Company[] = COMPANIES): string {
+  return catalog.find((row) => row.id === id)?.name ?? id;
+}
+
+export function mergeCompanies(extra: Company[] = []): Company[] {
+  const seen = new Set<string>();
+  const next: Company[] = [];
+  for (const row of [...COMPANIES, ...extra]) {
+    if (!row?.id || !row?.name || !isCompanyId(row.id) || seen.has(row.id)) continue;
+    seen.add(row.id);
+    next.push({ id: row.id, name: row.name });
+  }
+  return next;
 }
 
 export function seedCompanyForEmail(email: string): CompanyId {
@@ -53,10 +80,10 @@ export function assignedCompanyId(scope?: CompanyScope | null): CompanyId {
   return scope.companyId ?? seedCompanyForEmail(scope.email);
 }
 
-export function companiesForScope(scope?: CompanyScope | null): Company[] {
-  if (!scope || scope.isOwner) return COMPANIES;
+export function companiesForScope(scope?: CompanyScope | null, catalog: Company[] = COMPANIES): Company[] {
+  if (!scope || scope.isOwner) return catalog;
   const id = assignedCompanyId(scope);
-  return COMPANIES.filter((row) => row.id === id);
+  return catalog.filter((row) => row.id === id);
 }
 
 export function canSeeCompany(scope: CompanyScope | null | undefined, companyId: CompanyId): boolean {
@@ -68,9 +95,11 @@ export function canSeeCompany(scope: CompanyScope | null | undefined, companyId:
  * Infer which contractor a catalog job / site / board estimate belongs to.
  * Madison plant clients (P66, Yates, Georgia Power, Wood River) sit under Madison.
  * CBI is only the CBI label — no invented CBI sites.
+ * Lucky 13 matches that name only — no invented Lucky 13 sites.
  */
 export function inferCompanyId(text: string | undefined | null): CompanyId {
   const t = (text ?? "").toLowerCase();
+  if (/lucky\s*13/.test(t)) return LUCKY13_ID;
   if (/\bcbi\b/.test(t)) return "cbi";
   if (/\bmadison\b|\bp66\b|phillips 66|wood river|\byates\b|georgia power/.test(t)) {
     return "madison";

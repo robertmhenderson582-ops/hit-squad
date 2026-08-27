@@ -1,4 +1,4 @@
-export type CompanyId = "hitsquad" | "madison" | "cbi";
+export type CompanyId = string;
 
 export type TesterSeatDef = {
   id: string;
@@ -124,12 +124,23 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     shop: "field",
     company: "hitsquad",
   },
+  {
+    id: "tester-johnhenry",
+    email: "johnhenry484@gmail.com",
+    name: "John Henry",
+    aliased: true,
+    rateBuilder: true,
+    viewAs: false,
+    shop: "field",
+    company: "lucky13",
+  },
 ];
 
 export const JOHN_BEECH_EMAIL = "johnbeech.madison@gmail.com";
 export const JOSEPH_EMAIL = "josephmhenderson2002@gmail.com";
 export const SHANE_EMAIL = "shane@apcontrolsllc.com";
 export const JAMES_EMAIL = "jameshcainjr@gmail.com";
+export const JOHN_HENRY_EMAIL = "johnhenry484@gmail.com";
 
 export const FORBIDDEN_SEED_EMAILS = [
   "beechj@madisonltd.com",
@@ -138,7 +149,6 @@ export const FORBIDDEN_SEED_EMAILS = [
   "markhayes",
   "peffley",
   "sghenderson",
-  "johnhenry",
 ] as const;
 
 export const FORBIDDEN_SEED_NAMES = [
@@ -146,7 +156,6 @@ export const FORBIDDEN_SEED_NAMES = [
   "mark hayes",
   "ben peffley",
   "sg henderson",
-  "john henry",
 ] as const;
 
 export function testerByEmail(email: string): TesterSeatDef | undefined {

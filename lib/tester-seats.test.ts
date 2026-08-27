@@ -5,8 +5,10 @@ import { NOVUS_EMAIL } from "./desk-role.ts";
 import { boundOtLabel } from "./hours-clock.ts";
 import {
   FORBIDDEN_SEED_EMAILS,
+  FORBIDDEN_SEED_NAMES,
   JOHN_BEECH_EMAIL,
   JAMES_EMAIL,
+  JOHN_HENRY_EMAIL,
   JOSEPH_EMAIL,
   SHANE_EMAIL,
   TESTER_SEATS,
@@ -31,6 +33,12 @@ test("seeds company homes without inventing extra seats", () => {
   assert.equal(testerByEmail(JAMES_EMAIL)?.email, "jameshcainjr@gmail.com");
   assert.equal(testerByEmail(JOSEPH_EMAIL)?.company, "hitsquad");
   assert.equal(testerByEmail("marks544@yahoo.com")?.company, "hitsquad");
+  assert.equal(testerByEmail(JOHN_HENRY_EMAIL)?.company, "lucky13");
+  assert.equal(testerByEmail("JohnHenry484@gmail.com")?.email, JOHN_HENRY_EMAIL);
+  assert.equal(testerByEmail(JOHN_HENRY_EMAIL)?.aliased, true);
+  assert.equal(testerByEmail(JOHN_HENRY_EMAIL)?.rateBuilder, true);
+  assert.equal(testerByEmail(JOHN_HENRY_EMAIL)?.shop, "field");
+  assert.equal(testerByEmail(JOHN_HENRY_EMAIL)?.viewAs, false);
   assert.equal(
     TESTER_SEATS.filter((row) => row.company === "cbi").map((row) => row.email).join(),
     JAMES_EMAIL,
@@ -39,7 +47,9 @@ test("seeds company homes without inventing extra seats", () => {
 
 test("does not seed the held-out people", () => {
   assert.equal(hasForbiddenSeed(), false);
-  assert.equal(TESTER_SEATS.length, 11);
+  assert.equal(TESTER_SEATS.length, 12);
+  assert.equal(FORBIDDEN_SEED_EMAILS.includes("johnhenry" as never), false);
+  assert.equal((FORBIDDEN_SEED_NAMES as readonly string[]).includes("john henry"), false);
   assert.equal(
     TESTER_SEATS.some((row) => row.email === NOVUS_EMAIL),
     false,
@@ -61,6 +71,7 @@ test("alias flags and tools match the seat list", () => {
     "bstubby@aol.com",
     "jameshcainjr@gmail.com",
     JOSEPH_EMAIL,
+    JOHN_HENRY_EMAIL,
   ];
   for (const email of real) {
     assert.equal(testerByEmail(email)?.aliased, false, email);
