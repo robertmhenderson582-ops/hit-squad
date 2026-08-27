@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
   const deskUser = deskUserFromRequest(user, request);
-  const companyId = assignedCompany(deskUser.email);
+  const companyId = await assignedCompany(deskUser.email);
   const scope = { isOwner: deskUser.role === "owner", email: deskUser.email, companyId };
 
   return NextResponse.json({

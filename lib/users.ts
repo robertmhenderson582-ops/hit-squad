@@ -230,12 +230,15 @@ export function seatHasPassword(email: string): boolean {
   return Boolean(findUserByEmail(email)?.passwordHash);
 }
 
-export function listSeatRows(): Array<PublicUser & { passwordIssued: boolean; companyId: string }> {
-  return ownerUsers().map((user) => ({
-    ...toPublicUser(user),
-    passwordIssued: Boolean(user.passwordHash),
-    companyId: assignedCompany(user.email),
-  }));
+export async function listSeatRows(): Promise<Array<PublicUser & { passwordIssued: boolean; companyId: string }>> {
+  const rows = ownerUsers();
+  return Promise.all(
+    rows.map(async (user) => ({
+      ...toPublicUser(user),
+      passwordIssued: Boolean(user.passwordHash),
+      companyId: await assignedCompany(user.email),
+    })),
+  );
 }
 
 export function setOwnPassword(

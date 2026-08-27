@@ -12,8 +12,8 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   if (!hasBuildDesk(user)) return NextResponse.json({ error: "Build desk only." }, { status: 403 });
   return NextResponse.json({
-    seats: listSeatRows(),
-    companies: listCompanies(),
+    seats: await listSeatRows(),
+    companies: await listCompanies(),
     note: "Owner-created seats. Testers never see this list. No invite is sent.",
   });
 }
@@ -31,13 +31,13 @@ export async function POST(request: Request) {
   };
 
   if (typeof body.addCompany === "string") {
-    const result = addCompany(body.addCompany);
+    const result = await addCompany(body.addCompany);
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
     return NextResponse.json({
       ok: true,
       company: result.company,
-      seats: listSeatRows(),
-      companies: listCompanies(),
+      seats: await listSeatRows(),
+      companies: await listCompanies(),
       note: "Company added on this desk.",
     });
   }
@@ -50,14 +50,14 @@ export async function POST(request: Request) {
   }
 
   if (typeof body.companyId === "string") {
-    if (!isKnownCompany(body.companyId)) {
+    if (!(await isKnownCompany(body.companyId))) {
       return NextResponse.json({ error: "Pick a company on this desk." }, { status: 400 });
     }
-    setAssignedCompany(email, body.companyId);
+    await setAssignedCompany(email, body.companyId);
     return NextResponse.json({
       ok: true,
-      seats: listSeatRows(),
-      companies: listCompanies(),
+      seats: await listSeatRows(),
+      companies: await listCompanies(),
       note: "Company assignment saved on this desk.",
     });
   }
@@ -66,8 +66,8 @@ export async function POST(request: Request) {
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
   return NextResponse.json({
     ok: true,
-    seats: listSeatRows(),
-    companies: listCompanies(),
+    seats: await listSeatRows(),
+    companies: await listCompanies(),
     note: "Password issued on this desk. Don’t send. Never logged.",
   });
 }

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import {
@@ -9,13 +9,17 @@ import {
   type Company,
   type CompanyId,
 } from "./companies.ts";
+import { COMPANIES_VAULT_KIND, COMPANIES_VAULT_NAME, readVaultJson, writeVaultJson } from "./drive-data.ts";
+import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 
-type AssignmentFile = {
+export type AssignmentFile = {
   assignments: Record<string, CompanyId>;
   companies?: Company[];
 };
 
 let memoryOverride: AssignmentFile | null = null;
+let hydrated = false;
+let injectedAdapter: DriveAdapter | null | undefined;
 
 export function companyAssignmentPath(): string {
   if (process.env.COMPANY_ASSIGNMENT_PATH) return process.env.COMPANY_ASSIGNMENT_PATH;
@@ -23,7 +27,30 @@ export function companyAssignmentPath(): string {
   return join(process.cwd(), "data", "company-assignments.json");
 }
 
-function readFile(): AssignmentFile {
+export function parseAssignmentFile(raw: unknown): AssignmentFile {
+  const parsed = raw && typeof raw === "object" ? (raw as AssignmentFile) : { assignments: {}, companies: [] };
+  const assignments: Record<string, CompanyId> = {};
+  for (const [email, id] of Object.entries(parsed.assignments ?? {})) {
+    if (isCompanyId(id)) assignments[email.toLowerCase()] = id;
+  }
+  const companies: Company[] = [];
+  for (const row of parsed.companies ?? []) {
+    if (row && isCompanyId(row.id) && typeof row.name === "string" && row.name.trim()) {
+      companies.push({ id: row.id, name: row.name.trim() });
+    }
+  }
+  return { assignments, companies };
+}
+
+function emptyFile(): AssignmentFile {
+  return { assignments: {}, companies: [] };
+}
+
+function hasDeskData(data: AssignmentFile) {
+  return Object.keys(data.assignments).length > 0 || (data.companies?.length ?? 0) > 0;
+}
+
+function readCache(): AssignmentFile {
   if (memoryOverride) {
     return {
       assignments: { ...memoryOverride.assignments },
@@ -31,25 +58,13 @@ function readFile(): AssignmentFile {
     };
   }
   try {
-    const raw = readFileSync(companyAssignmentPath(), "utf8");
-    const parsed = JSON.parse(raw) as AssignmentFile;
-    const assignments: Record<string, CompanyId> = {};
-    for (const [email, id] of Object.entries(parsed.assignments ?? {})) {
-      if (isCompanyId(id)) assignments[email.toLowerCase()] = id;
-    }
-    const companies: Company[] = [];
-    for (const row of parsed.companies ?? []) {
-      if (row && isCompanyId(row.id) && typeof row.name === "string" && row.name.trim()) {
-        companies.push({ id: row.id, name: row.name.trim() });
-      }
-    }
-    return { assignments, companies };
+    return parseAssignmentFile(JSON.parse(readFileSync(companyAssignmentPath(), "utf8")));
   } catch {
-    return { assignments: {}, companies: [] };
+    return emptyFile();
   }
 }
 
-function writeFile(data: AssignmentFile) {
+function writeCache(data: AssignmentFile) {
   if (memoryOverride) {
     memoryOverride = {
       assignments: { ...data.assignments },
@@ -62,31 +77,63 @@ function writeFile(data: AssignmentFile) {
   writeFileSync(path, JSON.stringify(data, null, 2) + "\n", "utf8");
 }
 
-export function listCompanies(): Company[] {
-  return mergeCompanies(readFile().companies);
+function resolveAdapter(): DriveAdapter | null {
+  if (injectedAdapter !== undefined) return injectedAdapter;
+  if (process.env.COMPANY_ASSIGNMENT_PATH) return null;
+  const drive = driveAdapter();
+  return drive.configured ? drive : null;
 }
 
-export function isKnownCompany(id: string): boolean {
-  return listCompanies().some((row) => row.id === id);
+async function persist(data: AssignmentFile) {
+  writeCache(data);
+  const drive = resolveAdapter();
+  if (drive) await writeVaultJson(drive, COMPANIES_VAULT_NAME, COMPANIES_VAULT_KIND, data);
+}
+
+export async function hydrateCompanyStore(): Promise<AssignmentFile> {
+  if (memoryOverride) return readCache();
+  if (hydrated) return readCache();
+  const cache = readCache();
+  const drive = resolveAdapter();
+  if (drive) {
+    try {
+      const vault = parseAssignmentFile(await readVaultJson(drive, COMPANIES_VAULT_NAME, COMPANIES_VAULT_KIND));
+      if (hasDeskData(vault)) writeCache(vault);
+      else if (hasDeskData(cache)) await writeVaultJson(drive, COMPANIES_VAULT_NAME, COMPANIES_VAULT_KIND, cache);
+    } catch {
+      // Keep the local cache. A failed vault read must not wipe assignments.
+    }
+  }
+  hydrated = true;
+  return readCache();
+}
+
+export async function listCompanies(): Promise<Company[]> {
+  return mergeCompanies((await hydrateCompanyStore()).companies);
+}
+
+export async function isKnownCompany(id: string): Promise<boolean> {
+  return (await listCompanies()).some((row) => row.id === id);
 }
 
 /** Persisted assignment, falling back to the seed. Changing this is the reverse of assign. */
-export function assignedCompany(email: string): CompanyId {
+export async function assignedCompany(email: string): Promise<CompanyId> {
   const key = email.trim().toLowerCase();
-  return readFile().assignments[key] ?? seedCompanyForEmail(key);
+  const data = await hydrateCompanyStore();
+  return data.assignments[key] ?? seedCompanyForEmail(key);
 }
 
-export function setAssignedCompany(email: string, companyId: CompanyId) {
-  const data = readFile();
+export async function setAssignedCompany(email: string, companyId: CompanyId) {
+  const data = await hydrateCompanyStore();
   data.assignments[email.trim().toLowerCase()] = companyId;
-  writeFile(data);
+  await persist(data);
 }
 
-export function addCompany(name: string): { ok: true; company: Company } | { error: string } {
+export async function addCompany(name: string): Promise<{ ok: true; company: Company } | { error: string }> {
   const trimmed = name.trim().replace(/\s+/g, " ");
   if (trimmed.length < 2) return { error: "Type a company name." };
   if (trimmed.length > 80) return { error: "That name is too long." };
-  const existing = listCompanies();
+  const existing = await listCompanies();
   const sameName = existing.find((row) => row.name.toLowerCase() === trimmed.toLowerCase());
   if (sameName) return { ok: true, company: sameName };
   let id = companyIdFromName(trimmed);
@@ -96,20 +143,37 @@ export function addCompany(name: string): { ok: true; company: Company } | { err
     while (existing.some((row) => row.id === `${id}${n}`)) n += 1;
     id = `${id}${n}`;
   }
-  const data = readFile();
+  const data = await hydrateCompanyStore();
   data.companies = [...(data.companies ?? []), { id, name: trimmed }];
-  writeFile(data);
+  await persist(data);
   return { ok: true, company: { id, name: trimmed } };
 }
 
 export function resetCompanyAssignmentsForTests() {
   memoryOverride = null;
+  hydrated = false;
+  injectedAdapter = undefined;
   const path = companyAssignmentPath();
   if (process.env.COMPANY_ASSIGNMENT_PATH && existsSync(path)) {
     writeFileSync(path, JSON.stringify({ assignments: {}, companies: [] }, null, 2) + "\n", "utf8");
   }
 }
 
+export function forgetCompanyCacheForTests() {
+  memoryOverride = null;
+  hydrated = false;
+  const path = companyAssignmentPath();
+  if (existsSync(path)) unlinkSync(path);
+}
+
+export function useCompanyVaultForTests(adapter: DriveAdapter | null) {
+  injectedAdapter = adapter;
+  hydrated = false;
+  memoryOverride = null;
+}
+
 export function useMemoryCompanyAssignments() {
   memoryOverride = { assignments: {}, companies: [] };
+  hydrated = true;
+  injectedAdapter = null;
 }

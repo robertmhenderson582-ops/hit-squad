@@ -15,7 +15,16 @@ import {
   seedCompanyForEmail,
   seedCompanyMap,
 } from "./companies.ts";
-import { addCompany, assignedCompany, listCompanies, resetCompanyAssignmentsForTests, setAssignedCompany } from "./companies-store.ts";
+import {
+  addCompany,
+  assignedCompany,
+  forgetCompanyCacheForTests,
+  listCompanies,
+  resetCompanyAssignmentsForTests,
+  setAssignedCompany,
+  useCompanyVaultForTests,
+} from "./companies-store.ts";
+import { memoryDrive } from "./drive-estimates.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { boardForUser } from "./desk-data.ts";
@@ -86,12 +95,12 @@ describe("company catalog and seed", () => {
 });
 
 describe("assign and visibility", () => {
-  it("persists a company change and treats change as the reverse of assign", () => {
-    assert.equal(assignedCompany(JAMES_EMAIL), "cbi");
-    setAssignedCompany(JAMES_EMAIL, "hitsquad");
-    assert.equal(assignedCompany(JAMES_EMAIL), "hitsquad");
-    setAssignedCompany(JAMES_EMAIL, "cbi");
-    assert.equal(assignedCompany(JAMES_EMAIL), "cbi");
+  it("persists a company change and treats change as the reverse of assign", async () => {
+    assert.equal(await assignedCompany(JAMES_EMAIL), "cbi");
+    await setAssignedCompany(JAMES_EMAIL, "hitsquad");
+    assert.equal(await assignedCompany(JAMES_EMAIL), "hitsquad");
+    await setAssignedCompany(JAMES_EMAIL, "cbi");
+    assert.equal(await assignedCompany(JAMES_EMAIL), "cbi");
   });
 
   it("lets the owner see every company and testers only their assigned one", () => {
@@ -185,17 +194,34 @@ describe("assign and visibility", () => {
     assert.deepEqual(dummyPacksForUser(owner), []);
   });
 
-  it("lets the owner add a company onto the live list and assign it", () => {
-    const added = addCompany("Acme Field Services");
+  it("lets the owner add a company onto the live list and assign it", async () => {
+    const added = await addCompany("Acme Field Services");
     assert.equal("ok" in added, true);
     if (!("ok" in added)) return;
     assert.equal(added.company.name, "Acme Field Services");
-    assert.equal(listCompanies().some((row) => row.id === added.company.id), true);
-    assert.equal(listCompanies().some((row) => row.name === LUCKY13_NAME), true);
-    setAssignedCompany(JOHN_HENRY_EMAIL, added.company.id);
-    assert.equal(assignedCompany(JOHN_HENRY_EMAIL), added.company.id);
-    const again = addCompany(LUCKY13_NAME);
+    assert.equal((await listCompanies()).some((row) => row.id === added.company.id), true);
+    assert.equal((await listCompanies()).some((row) => row.name === LUCKY13_NAME), true);
+    await setAssignedCompany(JOHN_HENRY_EMAIL, added.company.id);
+    assert.equal(await assignedCompany(JOHN_HENRY_EMAIL), added.company.id);
+    const again = await addCompany(LUCKY13_NAME);
     assert.equal("ok" in again, true);
     if ("ok" in again) assert.equal(again.company.id, LUCKY13_ID);
+  });
+
+  it("keeps a custom company and assignment after the local cache is wiped", async () => {
+    const drive = memoryDrive();
+    useCompanyVaultForTests(drive);
+    const added = await addCompany("Acme Field Services");
+    assert.equal("ok" in added, true);
+    if (!("ok" in added)) return;
+    await setAssignedCompany(JOSEPH_EMAIL, added.company.id);
+    forgetCompanyCacheForTests();
+    useCompanyVaultForTests(drive);
+    const listed = await listCompanies();
+    assert.equal(listed.some((row) => row.id === added.company.id), true);
+    assert.equal(listed.some((row) => row.id === "hitsquad"), true);
+    assert.equal(listed.some((row) => row.id === "madison"), true);
+    assert.equal(await assignedCompany(JOSEPH_EMAIL), added.company.id);
+    assert.equal(await assignedCompany(JAMES_EMAIL), "cbi");
   });
 });
