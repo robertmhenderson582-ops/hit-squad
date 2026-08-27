@@ -71,7 +71,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
             client={alias(estimate.client)}
             site={siteName}
             name={estimate.title}
-            otRule={boundOtLabel(siteName, estimate.client, site?.code)}
+            otRule={alias(boundOtLabel(siteName, estimate.client, site?.code))}
             author={estimate.estimator}
             code={estimate.code}
             window={estimate.window}

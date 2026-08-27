@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { aliasText } from "./catalog-aliases.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
+import { boundOtLabel } from "./hours-clock.ts";
 import {
   FORBIDDEN_SEED_EMAILS,
   JOHN_BEECH_EMAIL,
@@ -113,4 +114,35 @@ test("aliased catalog covers the locked plant names", () => {
   assert.match(next, /Harbor/);
   assert.equal(/P66|Wood River|Bayway|Rodeo|Ferndale|Billings|Yates|Trainer|Monroe|\bGP\b/i.test(next), false);
   assert.equal(aliasText(sample, true, "real"), sample);
+});
+
+test("aliased Mark never sees the East Coast PCA lock; real Nathan still does", () => {
+  const mark = testerByEmail("marks544@yahoo.com");
+  const nathan = testerByEmail("nathanboyte@gmail.com");
+  const john = testerByEmail(JOHN_BEECH_EMAIL);
+  assert.equal(mark?.aliased, true);
+  assert.equal(nathan?.aliased, false);
+  assert.equal(john?.aliased, false);
+
+  const lock = boundOtLabel("Wood River — Roxana, IL", "Phillips 66");
+  assert.equal(lock, "East Coast (PCA0001103)");
+  const markLine = aliasText(lock, true, mark?.aliased ? "aliased" : "real");
+  const nathanLine = aliasText(lock, true, nathan?.aliased ? "aliased" : "real");
+  assert.equal(markLine, "Atlantic overtime");
+  assert.equal(/PCA0001103|East Coast/.test(markLine), false);
+  assert.equal(nathanLine, "East Coast (PCA0001103)");
+  assert.equal(aliasText(lock, true, "real"), "East Coast (PCA0001103)");
+  assert.equal(aliasText("PCA0001103", true, "aliased"), "Atlantic");
+  assert.equal(aliasText("West Coast (PCA0001100)", true, "aliased"), "Pacific overtime");
+  assert.equal(aliasText("PCA0001100", true, "aliased"), "Pacific");
+  assert.equal(aliasText("West Coast (PCA0001100)", true, "real"), "West Coast (PCA0001100)");
+
+  const ratesBlurb = "Pull the live book for this site. Wood River is the only loaded book. Hours, headcount, dates, qty, freight, and typed third-party stay.";
+  const markRates = aliasText(ratesBlurb, true, "aliased");
+  assert.match(markRates, /Midwest is the only loaded book/);
+  assert.equal(/Wood River/i.test(markRates), false);
+  assert.equal(aliasText(ratesBlurb, true, "real"), ratesBlurb);
+  assert.match(aliasText("Only Wood River is loaded.", true, "aliased"), /Only Midwest is loaded/);
+  assert.match(aliasText("Shahan TM OCIP — Wood River", true, "aliased"), /Midwest/);
+  assert.equal(/Wood River/i.test(aliasText("Shahan TM OCIP — Wood River", true, "aliased")), false);
 });

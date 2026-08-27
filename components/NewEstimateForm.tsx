@@ -117,7 +117,7 @@ function NewEstimateDesk({
             client={alias(client)}
             site={site}
             name={name}
-            otRule={otRule}
+            otRule={alias(otRule)}
             author={user?.name}
             existingClient={existingClient}
           />

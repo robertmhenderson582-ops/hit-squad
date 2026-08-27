@@ -202,7 +202,7 @@ export function NewEstimateModal({
         )}
         <div className="mt-3">
           <p className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">OVERTIME / RATE</p>
-          <p className="estimate-ot-readout hud-readout mt-1 px-3 py-2 text-sm">{size === "shop" ? "Shop sheet" : rule}</p>
+          <p className="estimate-ot-readout hud-readout mt-1 px-3 py-2 text-sm">{size === "shop" ? "Shop sheet" : alias(rule)}</p>
           <p className="mt-1 text-xs text-[#5b6f73]">
             {size === "shop"
               ? "Locked from the shop sheet. Not a field. There is no picker."
@@ -215,7 +215,7 @@ export function NewEstimateModal({
         </label>
         {eastCoast && size !== "shop" ? (
           <p className="mt-3 text-xs text-[#5b6f73]">
-            East Coast (PCA0001103) — never PA or Mid-Atlantic. Catalog plants fill OT from the bound
+            {alias("East Coast (PCA0001103)")} — never PA or Mid-Atlantic. Catalog plants fill OT from the bound
             contract.
           </p>
         ) : null}
