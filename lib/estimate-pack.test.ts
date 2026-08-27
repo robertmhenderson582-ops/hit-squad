@@ -191,7 +191,25 @@ describe("estimate pack snapshot", () => {
       createdAt: 100,
       updatedAt: 200,
       ownerEmail: "",
-      subcontractor: { lines: [{ id: "sb-1", vendor: "Apex NDE", scope: "RT", qty: 2, unit: "each", rate: 85 }] },
+      subcontractor: {
+        lines: [{ id: "sb-1", vendor: "Apex NDE", scope: "RT", qty: 2, unit: "each", rate: 85 }],
+        cards: [
+          {
+            id: "sc-1",
+            vendor: "Field Co",
+            kind: "both",
+            labor: [
+              {
+                id: "sl-1",
+                position: "Welder",
+                stRate: 85,
+                ranges: [{ id: "rg-1", start: "2026-09-14", end: "2026-09-18", hoursPerShift: 10, headcount: 2 }],
+              },
+            ],
+            equipment: [{ id: "se-1", description: "Scaffold", period: "daily", rate: 400, qty: 3, freight: 50 }],
+          },
+        ],
+      },
     });
     const pack = collectPack(store, "new-cat2pit");
     assert.deepEqual((pack?.crew as { direct: Array<{ hours: number }> }).direct, [
@@ -201,6 +219,10 @@ describe("estimate pack snapshot", () => {
     assert.equal((pack?.otherCost as { perDiemRate: number }).perDiemRate, 140);
     assert.equal(((pack?.otherCost as { misc: unknown[] }).misc || []).length, 1);
     assert.equal(((pack?.subcontractor as { lines: Array<{ rate: number }> }).lines || [])[0]?.rate, 85);
+    const cards = (pack?.subcontractor as { cards: Array<{ labor: Array<{ stRate: number; ranges: Array<{ start: string }> }>; equipment: Array<{ qty: number }> }> }).cards;
+    assert.equal(cards[0]?.labor[0]?.stRate, 85);
+    assert.equal(cards[0]?.labor[0]?.ranges[0]?.start, "2026-09-14");
+    assert.equal(cards[0]?.equipment[0]?.qty, 3);
     assert.ok(store.getItem(`${SUB_STORE_PREFIX}${key}`));
   });
 

@@ -20,7 +20,9 @@ export function PresencePulse() {
   const desk = useOwnerDesk();
   const [seats, setSeats] = useState<Seat[]>([]);
   const [index, setIndex] = useState(0);
-  const hidden = Boolean(desk?.viewAs && desk.viewAs !== "owner");
+  const hidden = Boolean(
+    (desk?.viewAs && desk.viewAs !== "owner") || (desk?.followSeat && desk.followSeat !== "owner"),
+  );
 
   useEffect(() => {
     if (!hasBuildDesk(user) || hidden) return;

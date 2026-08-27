@@ -8,6 +8,7 @@ export const FUTURE_MODULES = [
   { href: "/accounting", name: "Accounting", note: "not open for trial yet." },
   { href: "/payroll", name: "Payroll", note: "not open for trial yet." },
   { href: "/team", name: "Team", note: "not open for trial yet." },
+  { href: "/scheduling", name: "Scheduling", note: "not open for trial yet." },
 ] as const;
 
 export function FutureModulesDesk() {
@@ -16,7 +17,7 @@ export function FutureModulesDesk() {
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Future modules</h2>
         <p className="mt-2 text-sm text-[#5b6f73]">
-          HSE, Quality, Accounting, Payroll, and Team are not peer header links. They live here.
+          HSE, Quality, Accounting, Payroll, Team, and Scheduling are not peer header links. They live here.
           Chrome only — no invented boards, no Checks numbers, no clocks.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">

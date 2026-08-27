@@ -3,13 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { fcrSummary, readFcrPacket } from "@/lib/change-order-packet";
-import {
-  equipmentTotals,
-  readEquipmentSheet,
-  thirdPartyCost,
-  thirdPartyMarkedUp,
-} from "@/lib/equipment-sheet";
-import { estimateTotalBreakdown } from "@/lib/estimate-total";
+import { equipmentTotals, readEquipmentSheet, thirdPartyCost } from "@/lib/equipment-sheet";
+import { estimateMarkupDollars, estimateTotalBreakdown } from "@/lib/estimate-total";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import { otherCostTotals, readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
 import { laborDollarsFromCrew, perDiemDollarsFromCrew } from "@/lib/shahan-wood-river";
@@ -49,15 +44,23 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     });
     const fcr = readFcrPacket(pack.estimateKey);
     const thirdCost = equipment.thirdParty.reduce((sum, line) => sum + thirdPartyCost(line), 0);
-    const thirdMarked = equipment.thirdParty.reduce((sum, line) => sum + thirdPartyMarkedUp(line), 0);
     const tools = equipmentTotals(equipment).largeTools;
     const rest = otherCostTotals({ ...other, perDiemRate: 0 }, 0);
     const perDiem = perDiemDollarsFromCrew(pack.crew, pack.jobMeta, site, client);
+    const subcontractor = subcontractorTotal(readSubSheet(pack.estimateKey), {
+      site,
+      client,
+      otAfter8: pack.crew.otAfter8,
+    });
     return estimateTotalBreakdown({
       labor: laborDollarsFromCrew(pack.crew, site, client),
       equipment: tools + thirdCost,
-      subcontractor: subcontractorTotal(readSubSheet(pack.estimateKey)),
-      markup: Math.round((thirdMarked - thirdCost) * 100) / 100,
+      subcontractor,
+      markup: estimateMarkupDollars({
+        subcontractor,
+        thirdParty: thirdCost,
+        misc: rest.misc,
+      }),
       otherCost: rest.total + perDiem,
       changeOrders: fcrSummary(fcr, 0, 0).total,
       hours: hours.hours,
@@ -68,6 +71,7 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     client,
     hours.hours,
     pack.crew,
+    pack.crew.otAfter8,
     pack.estimateKey,
     pack.jobMeta,
     site,

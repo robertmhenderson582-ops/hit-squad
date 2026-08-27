@@ -108,7 +108,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
 
       {tab === "equipment" ? <EquipmentDesk /> : null}
 
-      {tab === "subs" ? <SubcontractorDesk /> : null}
+      {tab === "subs" ? <SubcontractorDesk client={estimate.client} site={siteName} /> : null}
 
       {tab === "costs" ? <OtherCostDesk client={estimate.client} site={siteName} /> : null}
 

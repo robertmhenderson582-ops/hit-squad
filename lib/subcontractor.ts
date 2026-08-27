@@ -1,3 +1,13 @@
+import {
+  blankCraftRow,
+  rangesFromPhases,
+  type CalendarRange,
+  type CraftRow,
+  type CraftShift,
+} from "./craft-labor.ts";
+import { billedPeriodCount } from "./equipment-sheet.ts";
+import { computeRowHours, type ClockOverride } from "./hours-clock.ts";
+import type { JobUnit, PhaseRow } from "./phase-schedule.ts";
 import { notifyEstimateSheets } from "./sheet-events.ts";
 
 type Store = {
@@ -11,10 +21,31 @@ export const SUB_BOOK_KEY = "hs_sub_book_v1";
 export const SUB_UNITS = ["LS", "hour", "day", "each"] as const;
 export type SubUnit = (typeof SUB_UNITS)[number];
 
+/** New one-off and book pickers. Hour stays on the type so old rows still load. */
+export const SUB_ONE_OFF_UNITS: SubUnit[] = ["LS", "day", "each"];
+
 export const SUB_UNIT_LABEL: Record<SubUnit, string> = {
   LS: "LS",
   hour: "Hour",
   day: "Day",
+  each: "Each",
+};
+
+export function oneOffUnitsFor(current?: SubUnit): SubUnit[] {
+  if (current === "hour") return ["LS", "hour", "day", "each"];
+  return [...SUB_ONE_OFF_UNITS];
+}
+
+export const SUB_CARD_KINDS = ["labor", "equipment", "both"] as const;
+export type SubCardKind = (typeof SUB_CARD_KINDS)[number];
+
+export const SUB_EQUIP_PERIODS = ["daily", "weekly", "monthly", "each"] as const;
+export type SubEquipPeriod = (typeof SUB_EQUIP_PERIODS)[number];
+
+export const SUB_EQUIP_PERIOD_LABEL: Record<SubEquipPeriod, string> = {
+  daily: "Daily",
+  weekly: "Weekly",
+  monthly: "Monthly",
   each: "Each",
 };
 
@@ -36,8 +67,45 @@ export type SubLine = {
   bookId?: string;
 };
 
+export type SubLaborPosition = {
+  id: string;
+  position: string;
+  stRate: number;
+  otRate: number;
+  dtRate: number;
+  shift: CraftShift;
+  clockOverride: ClockOverride;
+  ranges: CalendarRange[];
+};
+
+export type SubEquipLine = {
+  id: string;
+  description: string;
+  period: SubEquipPeriod;
+  rate: number;
+  qty: number;
+  freight: number;
+  start?: string;
+  end?: string;
+};
+
+export type SubCard = {
+  id: string;
+  vendor: string;
+  kind: SubCardKind;
+  labor: SubLaborPosition[];
+  equipment: SubEquipLine[];
+};
+
 export type SubSheet = {
   lines: SubLine[];
+  cards: SubCard[];
+};
+
+export type SubTotalContext = {
+  site?: string;
+  client?: string;
+  otAfter8?: boolean;
 };
 
 function uid(prefix: string) {
@@ -55,7 +123,23 @@ export function isSubUnit(value: unknown): value is SubUnit {
 }
 
 export function emptySubSheet(): SubSheet {
-  return { lines: [] };
+  return { lines: [], cards: [] };
+}
+
+export function isSubCardKind(value: unknown): value is SubCardKind {
+  return SUB_CARD_KINDS.includes(value as SubCardKind);
+}
+
+export function isSubEquipPeriod(value: unknown): value is SubEquipPeriod {
+  return SUB_EQUIP_PERIODS.includes(value as SubEquipPeriod);
+}
+
+export function normalizeSubCardKind(value: unknown): SubCardKind {
+  return isSubCardKind(value) ? value : "both";
+}
+
+export function normalizeSubEquipPeriod(value: unknown): SubEquipPeriod {
+  return isSubEquipPeriod(value) ? value : "daily";
 }
 
 export function emptySubBook(): SubRate[] {
@@ -68,6 +152,33 @@ export function blankSubLine(): SubLine {
 
 export function blankSubRate(): SubRate {
   return { id: uid("sr"), vendor: "", scope: "", unit: "LS", rate: 0 };
+}
+
+export function blankSubLaborPosition(
+  phases: PhaseRow[] = [],
+  units: JobUnit[] = [],
+  multiUnits = false,
+): SubLaborPosition {
+  const seeded = blankCraftRow();
+  const ranges = phases.length ? rangesFromPhases(phases, [], units, multiUnits) : seeded.ranges;
+  return {
+    id: uid("sl"),
+    position: "",
+    stRate: 0,
+    otRate: 0,
+    dtRate: 0,
+    shift: "Days",
+    clockOverride: "auto",
+    ranges,
+  };
+}
+
+export function blankSubEquipLine(): SubEquipLine {
+  return { id: uid("se"), description: "", period: "daily", rate: 0, qty: 1, freight: 0, start: "", end: "" };
+}
+
+export function blankSubCard(): SubCard {
+  return { id: uid("sc"), vendor: "", kind: "both", labor: [], equipment: [] };
 }
 
 export function normalizeSubUnit(value: unknown): SubUnit {
@@ -108,9 +219,91 @@ export function bookLabel(rate: SubRate) {
   return scope ? `${name} — ${scope}` : name;
 }
 
-export function subcontractorTotal(sheet: SubSheet | null | undefined) {
-  if (!sheet || !Array.isArray(sheet.lines)) return 0;
-  return sheet.lines.reduce((sum, line) => sum + lineAmount(line), 0);
+export function laborHoursCost(
+  hours: { st?: number; ot?: number; dt?: number },
+  rates: { stRate?: number; otRate?: number; dtRate?: number },
+) {
+  const st = Math.max(0, Number(hours.st) || 0) * Math.max(0, Number(rates.stRate) || 0);
+  const ot = Math.max(0, Number(hours.ot) || 0) * Math.max(0, Number(rates.otRate) || 0);
+  const dt = Math.max(0, Number(hours.dt) || 0) * Math.max(0, Number(rates.dtRate) || 0);
+  return st + ot + dt;
+}
+
+export function subLaborAsCraftRow(row: SubLaborPosition): CraftRow {
+  return {
+    id: row.id,
+    position: row.position,
+    shift: row.shift,
+    st: 0,
+    ot: 0,
+    dt: 0,
+    pd: 0,
+    hours: 0,
+    cost: "",
+    clockOverride: row.clockOverride,
+    laborClassOverride: null,
+    ranges: row.ranges,
+  };
+}
+
+export function subLaborHours(
+  row: SubLaborPosition,
+  site = "",
+  client = "",
+  otAfter8 = false,
+) {
+  return computeRowHours(subLaborAsCraftRow(row), site, client, otAfter8);
+}
+
+export function subLaborCost(
+  row: SubLaborPosition,
+  site = "",
+  client = "",
+  otAfter8 = false,
+) {
+  return laborHoursCost(subLaborHours(row, site, client, otAfter8), row);
+}
+
+export function subEquipSpan(line: Pick<SubEquipLine, "period" | "start" | "end">) {
+  const start = typeof line.start === "string" ? line.start.trim() : "";
+  const end = typeof line.end === "string" ? line.end.trim() : "";
+  if (!start || !end || line.period === "each") return 1;
+  return billedPeriodCount(start, end, line.period);
+}
+
+export function subEquipAmount(line: Pick<SubEquipLine, "rate" | "qty" | "freight" | "period" | "start" | "end">) {
+  const rate = Math.max(0, Number(line.rate) || 0);
+  const qty = Math.max(0, Number(line.qty) || 0);
+  const freight = Math.max(0, Number(line.freight) || 0);
+  return rate * qty * subEquipSpan(line) + freight;
+}
+
+export function cardShowsLabor(kind: SubCardKind) {
+  return kind === "labor" || kind === "both";
+}
+
+export function cardShowsEquipment(kind: SubCardKind) {
+  return kind === "equipment" || kind === "both";
+}
+
+export function subCardTotal(card: SubCard, ctx: SubTotalContext = {}) {
+  const site = ctx.site ?? "";
+  const client = ctx.client ?? "";
+  const otAfter8 = Boolean(ctx.otAfter8);
+  const labor = cardShowsLabor(card.kind)
+    ? card.labor.reduce((sum, row) => sum + subLaborCost(row, site, client, otAfter8), 0)
+    : 0;
+  const equipment = cardShowsEquipment(card.kind)
+    ? card.equipment.reduce((sum, line) => sum + subEquipAmount(line), 0)
+    : 0;
+  return labor + equipment;
+}
+
+export function subcontractorTotal(sheet: SubSheet | null | undefined, ctx: SubTotalContext = {}) {
+  if (!sheet) return 0;
+  const lines = Array.isArray(sheet.lines) ? sheet.lines.reduce((sum, line) => sum + lineAmount(line), 0) : 0;
+  const cards = Array.isArray(sheet.cards) ? sheet.cards.reduce((sum, card) => sum + subCardTotal(card, ctx), 0) : 0;
+  return lines + cards;
 }
 
 export function normalizeSubLine(raw: Partial<SubLine> | null | undefined): SubLine {
@@ -125,9 +318,94 @@ export function normalizeSubLine(raw: Partial<SubLine> | null | undefined): SubL
   };
 }
 
+export function normalizeCalendarRange(raw: Partial<CalendarRange> | null | undefined): CalendarRange {
+  const days = Array.isArray(raw?.days) ? raw.days.map(Boolean) : [false, true, true, true, true, true, true];
+  while (days.length < 7) days.push(false);
+  return {
+    id: typeof raw?.id === "string" && raw.id ? raw.id : uid("rg"),
+    start: typeof raw?.start === "string" ? raw.start : "",
+    end: typeof raw?.end === "string" ? raw.end : "",
+    headcount: Math.max(1, Number(raw?.headcount) || 1),
+    nightHeadcount: Math.max(1, Number(raw?.nightHeadcount) || 1),
+    hoursPerShift: Math.max(0, Number(raw?.hoursPerShift) || 0),
+    perDiemPeople: Math.max(0, Number(raw?.perDiemPeople) || 0),
+    nightPerDiemPeople: Math.max(0, Number(raw?.nightPerDiemPeople) || 0),
+    days: days.slice(0, 7),
+    otAfter8: raw?.otAfter8,
+    phaseId: typeof raw?.phaseId === "string" && raw.phaseId ? raw.phaseId : undefined,
+    shift: raw?.shift === "Nights" || raw?.shift === "Days & nights" ? raw.shift : raw?.shift === "Days" ? "Days" : undefined,
+    skipDates: Array.isArray(raw?.skipDates) ? raw.skipDates.filter((item): item is string => typeof item === "string") : [],
+    unitId: typeof raw?.unitId === "string" && raw.unitId ? raw.unitId : undefined,
+  };
+}
+
+export function normalizeSubLaborPosition(raw: Partial<SubLaborPosition> | null | undefined): SubLaborPosition {
+  return {
+    id: typeof raw?.id === "string" && raw.id ? raw.id : uid("sl"),
+    position: typeof raw?.position === "string" ? raw.position : "",
+    stRate: Math.max(0, Number(raw?.stRate) || 0),
+    otRate: Math.max(0, Number(raw?.otRate) || 0),
+    dtRate: Math.max(0, Number(raw?.dtRate) || 0),
+    shift: raw?.shift === "Nights" || raw?.shift === "Days & nights" ? raw.shift : "Days",
+    clockOverride: raw?.clockOverride === "comp" || raw?.clockOverride === "staff" ? raw.clockOverride : "auto",
+    ranges: Array.isArray(raw?.ranges) ? raw.ranges.map((range) => normalizeCalendarRange(range)) : [],
+  };
+}
+
+export function normalizeSubEquipLine(raw: Partial<SubEquipLine> | null | undefined): SubEquipLine {
+  return {
+    id: typeof raw?.id === "string" && raw.id ? raw.id : uid("se"),
+    description: typeof raw?.description === "string" ? raw.description : "",
+    period: normalizeSubEquipPeriod(raw?.period),
+    rate: Math.max(0, Number(raw?.rate) || 0),
+    qty: Math.max(0, Number(raw?.qty) || 0),
+    freight: Math.max(0, Number(raw?.freight) || 0),
+    start: typeof raw?.start === "string" ? raw.start : "",
+    end: typeof raw?.end === "string" ? raw.end : "",
+  };
+}
+
+export function normalizeSubCard(raw: Partial<SubCard> | null | undefined): SubCard {
+  return {
+    id: typeof raw?.id === "string" && raw.id ? raw.id : uid("sc"),
+    vendor: typeof raw?.vendor === "string" ? raw.vendor : "",
+    kind: normalizeSubCardKind(raw?.kind),
+    labor: Array.isArray(raw?.labor) ? raw.labor.map((row) => normalizeSubLaborPosition(row)) : [],
+    equipment: Array.isArray(raw?.equipment) ? raw.equipment.map((line) => normalizeSubEquipLine(line)) : [],
+  };
+}
+
 export function normalizeSubSheet(raw: Partial<SubSheet> | null | undefined): SubSheet {
   return {
     lines: Array.isArray(raw?.lines) ? raw.lines.map((line) => normalizeSubLine(line)) : [],
+    cards: Array.isArray(raw?.cards) ? raw.cards.map((card) => normalizeSubCard(card)) : [],
+  };
+}
+
+export function syncSubLaborPositions(
+  rows: SubLaborPosition[],
+  phases: PhaseRow[],
+  units: JobUnit[] = [],
+  multiUnits = false,
+): SubLaborPosition[] {
+  return rows.map((row) => ({
+    ...row,
+    ranges: rangesFromPhases(phases, row.ranges, units, multiUnits),
+  }));
+}
+
+export function syncSubSheet(
+  sheet: SubSheet,
+  phases: PhaseRow[],
+  units: JobUnit[] = [],
+  multiUnits = false,
+): SubSheet {
+  return {
+    ...sheet,
+    cards: sheet.cards.map((card) => ({
+      ...card,
+      labor: syncSubLaborPositions(card.labor, phases, units, multiUnits),
+    })),
   };
 }
 
@@ -158,7 +436,7 @@ export function readSubSheet(key: string, store?: Store | null): SubSheet {
   }
 }
 
-export function writeSubSheet(key: string, sheet: SubSheet, store?: Store | null) {
+export function writeSubSheet(key: string, sheet: Partial<SubSheet> | SubSheet, store?: Store | null) {
   const target = storeOf(store);
   if (!target || !key) return;
   try {
