@@ -1,8 +1,10 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import bcrypt from "bcryptjs";
 import { assignedCompany } from "./companies-store.ts";
 import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
+import { SEATS_VAULT_KIND, SEATS_VAULT_NAME, readVaultJson, writeVaultJson } from "./drive-data.ts";
+import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
 import type { PublicUser, SeatHashClaim } from "./types.ts";
@@ -13,11 +15,15 @@ type StoredUser = PublicUser & {
   passwordHash?: string;
 };
 
+type SeatHashRow = { passwordHash?: string; mustChangePassword?: boolean };
 type SeatFile = {
-  hashes?: Record<string, { passwordHash?: string; mustChangePassword?: boolean }>;
+  hashes?: Record<string, SeatHashRow>;
 };
 
 let cachedUsers: StoredUser[] | null = null;
+let hydrated = false;
+let injectedAdapter: DriveAdapter | null | undefined;
+let pendingVault: Promise<void> = Promise.resolve();
 
 export function seatPasswordPath() {
   if (process.env.SEAT_PASSWORD_PATH) return process.env.SEAT_PASSWORD_PATH;
@@ -25,16 +31,53 @@ export function seatPasswordPath() {
   return join(process.cwd(), "data", "seat-passwords.json");
 }
 
+const BCRYPT_HASH = /^\$2[abxy]\$\d{2}\$[./A-Za-z0-9]{53}$/;
+
+function ownerEmail() {
+  return (process.env.OWNER_EMAIL || OWNER_LOGIN_EMAIL).toLowerCase();
+}
+
+export function parseSeatHashes(raw: unknown): NonNullable<SeatFile["hashes"]> {
+  const parsed = raw && typeof raw === "object" ? (raw as SeatFile) : { hashes: {} };
+  const hashes: NonNullable<SeatFile["hashes"]> = {};
+  for (const [email, row] of Object.entries(parsed.hashes ?? {})) {
+    const key = email.trim().toLowerCase();
+    if (!key || key === ownerEmail()) continue;
+    if (!row || typeof row !== "object" || typeof row.passwordHash !== "string") continue;
+    if (!BCRYPT_HASH.test(row.passwordHash)) continue;
+    hashes[key] = {
+      passwordHash: row.passwordHash,
+      mustChangePassword: Boolean(row.mustChangePassword),
+    };
+  }
+  return hashes;
+}
+
+function hasHashes(hashes: NonNullable<SeatFile["hashes"]>) {
+  return Object.keys(hashes).length > 0;
+}
+
 function loadPersisted(): NonNullable<SeatFile["hashes"]> {
   try {
-    const parsed = JSON.parse(readFileSync(seatPasswordPath(), "utf8")) as SeatFile;
-    return parsed.hashes && typeof parsed.hashes === "object" ? parsed.hashes : {};
+    return parseSeatHashes(JSON.parse(readFileSync(seatPasswordPath(), "utf8")));
   } catch {
     return {};
   }
 }
 
-function persistHashes(users: StoredUser[]) {
+function writeHashFile(hashes: NonNullable<SeatFile["hashes"]>) {
+  try {
+    const file = seatPasswordPath();
+    mkdirSync(dirname(file), { recursive: true });
+    const tmp = `${file}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ hashes }, null, 2) + "\n", "utf8");
+    renameSync(tmp, file);
+  } catch {
+    // Best-effort only. A failed write must not wipe the previous file.
+  }
+}
+
+function hashesFromUsers(users: StoredUser[]) {
   const hashes: NonNullable<SeatFile["hashes"]> = {};
   for (const user of users) {
     if (!user.passwordHash || user.role === "owner") continue;
@@ -43,15 +86,49 @@ function persistHashes(users: StoredUser[]) {
       mustChangePassword: Boolean(user.mustChangePassword),
     };
   }
-  try {
-    const file = seatPasswordPath();
-    mkdirSync(dirname(file), { recursive: true });
-    const tmp = `${file}.${process.pid}.tmp`;
-    writeFileSync(tmp, JSON.stringify({ hashes }, null, 2), "utf8");
-    renameSync(tmp, file);
-  } catch {
-    // Best-effort only. A failed write must not wipe the previous file.
+  return hashes;
+}
+
+function resolveAdapter(): DriveAdapter | null {
+  if (injectedAdapter !== undefined) return injectedAdapter;
+  if (process.env.SEAT_PASSWORD_PATH) return null;
+  const drive = driveAdapter();
+  return drive.configured ? drive : null;
+}
+
+function persistHashes(users: StoredUser[]) {
+  const hashes = hashesFromUsers(users);
+  writeHashFile(hashes);
+  const drive = resolveAdapter();
+  if (drive) {
+    pendingVault = pendingVault
+      .then(() => writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, { hashes }))
+      .then(() => undefined)
+      .catch(() => undefined);
   }
+}
+
+export async function hydrateSeatStore() {
+  if (hydrated) return;
+  const cached = loadPersisted();
+  const drive = resolveAdapter();
+  if (drive) {
+    try {
+      const vault = parseSeatHashes(await readVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND));
+      if (hasHashes(vault)) writeHashFile(vault);
+      else if (hasHashes(cached)) {
+        await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, { hashes: cached });
+      }
+    } catch {
+      // Keep the local cache. Cookie restoreSeatHash remains a fallback.
+    }
+  }
+  cachedUsers = null;
+  hydrated = true;
+}
+
+export async function flushSeatVault() {
+  await pendingVault;
 }
 
 function seedUsers(): StoredUser[] {
@@ -125,8 +202,6 @@ export function seatNeedsPasswordCreate(email: string): boolean {
   if (!user || user.role === "owner") return false;
   return !user.passwordHash;
 }
-
-const BCRYPT_HASH = /^\$2[abxy]\$\d{2}\$[./A-Za-z0-9]{53}$/;
 
 export function seatHashClaimFor(email: string): SeatHashClaim | null {
   const user = findUserByEmail(email);
@@ -230,12 +305,16 @@ export function seatHasPassword(email: string): boolean {
   return Boolean(findUserByEmail(email)?.passwordHash);
 }
 
-export function listSeatRows(): Array<PublicUser & { passwordIssued: boolean; companyId: string }> {
-  return ownerUsers().map((user) => ({
-    ...toPublicUser(user),
-    passwordIssued: Boolean(user.passwordHash),
-    companyId: assignedCompany(user.email),
-  }));
+export async function listSeatRows(): Promise<Array<PublicUser & { passwordIssued: boolean; companyId: string }>> {
+  await hydrateSeatStore();
+  const rows = ownerUsers();
+  return Promise.all(
+    rows.map(async (user) => ({
+      ...toPublicUser(user),
+      passwordIssued: Boolean(user.passwordHash),
+      companyId: await assignedCompany(user.email),
+    })),
+  );
 }
 
 export function setOwnPassword(
@@ -260,5 +339,21 @@ export function setOwnPassword(
 }
 
 export function resetUsersForTests() {
+  cachedUsers = null;
+  hydrated = false;
+  injectedAdapter = undefined;
+  pendingVault = Promise.resolve();
+}
+
+export function forgetSeatCacheForTests() {
+  cachedUsers = null;
+  hydrated = false;
+  const file = seatPasswordPath();
+  if (existsSync(file)) unlinkSync(file);
+}
+
+export function useSeatVaultForTests(adapter: DriveAdapter | null) {
+  injectedAdapter = adapter;
+  hydrated = false;
   cachedUsers = null;
 }

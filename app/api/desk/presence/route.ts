@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { hasBuildDesk } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
-import { addActivity } from "@/lib/owner-desk";
+import { addActivity } from "@/lib/activity-store";
 import { beatPresence, listSeats, markSignedOut, pingPresence, seatFor, takeArrivals } from "@/lib/presence";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const seat = seatFor(user.email);
     const mins = seat ? Math.max(1, Math.round((Date.now() - seat.startedAt) / 60000)) : 0;
     const last = screenName(seat?.path || path);
-    addActivity({
+    await addActivity({
       kind: "session",
       who: user.name,
       detail: `${body.end === "sign-out" ? "Sign-out" : "Idle"} · ${last} · ${mins} min`,
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   const first = pingPresence({ email: user.email, name: user.name, path });
   beatPresence({ email: user.email, name: user.name, path });
   if (first) {
-    addActivity({ kind: "session", who: user.name, detail: `Start · ${screenName(path)}` });
+    await addActivity({ kind: "session", who: user.name, detail: `Start · ${screenName(path)}` });
   }
   return NextResponse.json({ ok: true });
 }

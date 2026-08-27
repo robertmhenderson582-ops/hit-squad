@@ -7,10 +7,14 @@ import { readSeatClaim, signSeatClaim } from "./auth.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { SHANE_EMAIL } from "./tester-seats.ts";
+import { memoryDrive } from "./drive-estimates.ts";
 import {
   claimFirstPassword,
   findUserByEmail,
+  flushSeatVault,
+  forgetSeatCacheForTests,
   GENERIC_SIGNIN_ERROR,
+  hydrateSeatStore,
   issueSeatPassword,
   loginOutcome,
   resetUsersForTests,
@@ -18,6 +22,7 @@ import {
   seatHashClaimFor,
   seatNeedsPasswordCreate,
   setOwnPassword,
+  useSeatVaultForTests,
   verifyPassword,
 } from "./users.ts";
 
@@ -272,6 +277,29 @@ test("claimed hash still needsPassword after the seat file is wiped when the bro
   assert.equal(restoreSeatHash(UNKNOWN, { email: UNKNOWN, passwordHash: claim.passwordHash }), false);
   assert.equal(loginOutcome({ email: UNKNOWN }).status, "needsPassword");
   assert.equal(restoreSeatHash(TESTER, { email: NOVUS_EMAIL, passwordHash: claim.passwordHash }), false);
+});
+
+test("keeps a tester hash after the local cache is wiped", async () => {
+  const drive = memoryDrive();
+  useSeatVaultForTests(drive);
+  const created = loginOutcome({
+    email: TESTER,
+    newPassword: CHOSEN,
+    confirmPassword: CHOSEN,
+  });
+  assert.equal(created.status, "authenticated");
+  await flushSeatVault();
+  forgetSeatCacheForTests();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  assert.equal(loginOutcome({ email: TESTER }).status, "needsPassword");
+  const ok = loginOutcome({ email: TESTER, password: CHOSEN });
+  assert.equal(ok.status, "authenticated");
+  assert.equal(verifyPassword(findUserByEmail(TESTER)!, CHOSEN), true);
+  const vaultRaw = [...drive.files.values()].map((row) => row.content).join();
+  assert.equal(vaultRaw.includes(CHOSEN), false);
+  assert.equal(vaultRaw.includes(OWNER_SECRET), false);
+  assert.match(vaultRaw, /"passwordHash"/);
 });
 
 test("Novus can create a password only when no hash exists", () => {

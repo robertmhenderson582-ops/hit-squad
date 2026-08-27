@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { GripToPan } from "@/components/GripToPan";
-import type { ActivityKind, ActivityRow } from "@/lib/owner-desk";
+import type { ActivityKind, ActivityRow } from "@/lib/activity-store";
 
 const KIND: Record<ActivityKind, string> = {
   "sign-in": "SIGN-IN OK",
@@ -116,7 +116,7 @@ export function ActivityDesk() {
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-2 py-6 text-sm text-[#5b6f73]">
-                    Ledger is empty. Demo owner rows appear only on a fresh desk.
+                    Ledger is empty.
                   </td>
                 </tr>
               ) : (

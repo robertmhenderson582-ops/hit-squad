@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   return NextResponse.json(
-    { user, companyId: user ? assignedCompany(user.email) : null },
+    { user, companyId: user ? await assignedCompany(user.email) : null },
     {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate",

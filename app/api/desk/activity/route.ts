@@ -9,7 +9,7 @@ import {
   removeActivity,
   removeActivityOlderThan,
   type ActivityKind,
-} from "@/lib/owner-desk";
+} from "@/lib/activity-store";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   if (!hasBuildDesk(user)) return NextResponse.json({ error: "Build desk ledger only." }, { status: 403 });
-  return NextResponse.json({ rows: listActivity() });
+  return NextResponse.json({ rows: await listActivity() });
 }
 
 export async function POST(request: Request) {
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   if (body.kind === "failed") {
     const who = typeof body.who === "string" ? body.who.trim().slice(0, 120) : "unknown";
     return NextResponse.json({
-      row: addActivity({
+      row: await addActivity({
         kind: "failed",
         who: who || "unknown",
         detail: "Sign-in failed · username only · password not stored",
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Owner trail only." }, { status: 400 });
   }
   return NextResponse.json({
-    row: addActivity({
+    row: await addActivity({
       kind: body.kind,
       who: user.name,
       detail: typeof body.detail === "string" && body.detail.trim() ? body.detail.trim().slice(0, 200) : body.kind,
@@ -63,9 +63,9 @@ export async function DELETE(request: Request) {
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   if (!hasBuildDesk(user)) return NextResponse.json({ error: "Build desk ledger only." }, { status: 403 });
   const body = (await request.json().catch(() => ({}))) as { id?: string; olderThanDays?: number; clear?: boolean };
-  if (body.clear) clearActivity();
-  else if (typeof body.olderThanDays === "number") removeActivityOlderThan(body.olderThanDays);
-  else if (body.id) removeActivity(body.id);
+  if (body.clear) await clearActivity();
+  else if (typeof body.olderThanDays === "number") await removeActivityOlderThan(body.olderThanDays);
+  else if (body.id) await removeActivity(body.id);
   else return NextResponse.json({ error: "Nothing to delete." }, { status: 400 });
-  return NextResponse.json({ rows: listActivity() });
+  return NextResponse.json({ rows: await listActivity() });
 }
