@@ -18,6 +18,7 @@ export const OWNER_WHATS_NEW = [
   "• Subcontractor tab is on the estimate. Estimate Total gets a Subcontractor line. No markup. Not Crew labor.",
   "• Plug your own sub rates on Rates or the Subcontractor tab. Empty book is fine.",
   "• Testers who already saw V1.18 get this note (versioned seen key).",
+  "• Shane Smith tester seat.",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

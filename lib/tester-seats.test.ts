@@ -6,6 +6,7 @@ import {
   FORBIDDEN_SEED_EMAILS,
   JOHN_BEECH_EMAIL,
   JOSEPH_EMAIL,
+  SHANE_EMAIL,
   TESTER_SEATS,
   hasForbiddenSeed,
   testerByEmail,
@@ -23,7 +24,7 @@ test("John Beech is only the madison gmail", () => {
 
 test("does not seed the held-out people", () => {
   assert.equal(hasForbiddenSeed(), false);
-  assert.equal(TESTER_SEATS.length, 10);
+  assert.equal(TESTER_SEATS.length, 11);
   assert.equal(
     TESTER_SEATS.some((row) => row.email === NOVUS_EMAIL),
     false,
@@ -31,7 +32,14 @@ test("does not seed the held-out people", () => {
 });
 
 test("alias flags and tools match the seat list", () => {
-  const real = ["nathanboyte@gmail.com", JOHN_BEECH_EMAIL, "wlanderno@yahoo.com", "bccamp2@gmail.com", "chancec318@yahoo.com"];
+  const real = [
+    "nathanboyte@gmail.com",
+    JOHN_BEECH_EMAIL,
+    "wlanderno@yahoo.com",
+    "bccamp2@gmail.com",
+    "chancec318@yahoo.com",
+    SHANE_EMAIL,
+  ];
   const aliased = [
     "marks544@yahoo.com",
     "puma.cody@gmail.com",
@@ -51,6 +59,30 @@ test("alias flags and tools match the seat list", () => {
   assert.deepEqual(
     TESTER_SEATS.filter((row) => row.viewAs).map((row) => row.email),
     [JOSEPH_EMAIL],
+  );
+});
+
+test("Shane Smith is a field tester, not Joseph tools, and only the AP Controls email", () => {
+  const shane = testerByEmail("Shane@APControlsLLC.com");
+  assert.equal(shane?.id, "tester-shane");
+  assert.equal(shane?.email, SHANE_EMAIL);
+  assert.equal(shane?.email, shane?.email.toLowerCase());
+  assert.equal(shane?.name, "Shane Smith");
+  assert.equal(shane?.aliased, false);
+  assert.equal(shane?.rateBuilder, true);
+  assert.equal(shane?.viewAs, false);
+  assert.equal(shane?.shop, "field");
+  assert.equal(
+    TESTER_SEATS.some((row) => row.email === "beechj@madisonltd.com"),
+    false,
+  );
+  assert.equal(
+    TESTER_SEATS.filter((row) => row.name === "Shane Smith").map((row) => row.email).join(),
+    SHANE_EMAIL,
+  );
+  assert.equal(
+    TESTER_SEATS.some((row) => /shane/i.test(row.email) && row.email !== SHANE_EMAIL),
+    false,
   );
 });
 
