@@ -5,6 +5,7 @@ import {
   scheduleOnce,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
+import { ownerVaultEmail, packSharedEmails } from "./estimate-scope.ts";
 import { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import {
   archiveMenuItem,
@@ -71,6 +72,15 @@ export function resetVaultHydrateForTests() {
   lastBody.clear();
 }
 
+/** Leftover after Turn over is a pack this desk used to own. Shared-with-me stays. */
+export function isLeftoverOwnerCopy(pack: { ownerEmail?: string; sharedWith?: string[] }, email = ownerVaultEmail()) {
+  const ownerEmail = (pack.ownerEmail || "").trim().toLowerCase();
+  const desk = email.trim().toLowerCase();
+  if (packSharedEmails(pack).includes(desk)) return false;
+  if (ownerEmail && ownerEmail !== desk) return false;
+  return true;
+}
+
 export async function hydrateFromVault(
   store?: StorageLike | null,
   opts?: { viewAs?: string | null },
@@ -93,8 +103,10 @@ export async function hydrateFromVault(
       const packs = Array.isArray(data.packs) ? data.packs : [];
       const viewingAs = seat !== "owner";
       if (data.persisted && !viewingAs) {
+        const deskEmail = ownerVaultEmail();
         for (const packId of packsMissingFromVault(packs.map((pack) => pack.packId), target)) {
           const leftover = findLocalPack(packId, target);
+          if (leftover && !isLeftoverOwnerCopy(leftover, deskEmail)) continue;
           if (leftover && menuStatus({ id: packId, packId }, readJobMenu(target)) !== "transferred") {
             recordTransferredMenuItem(
               {

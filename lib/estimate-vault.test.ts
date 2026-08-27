@@ -247,6 +247,33 @@ describe("estimate vault service", () => {
     assert.equal((await listVisiblePacks(owner, drive)).packs[0]?.ownerEmail, OWNER_LOGIN_EMAIL);
   });
 
+  it("shares a tester-owned pack to the owner without taking ownership; unshare hides it", async () => {
+    const drive = memoryDrive();
+    const nathanPack = cat2({ packId: "new-nathan1", title: "Nathan trial", ownerEmail: tester.email });
+    const saved = await upsertVisiblePack(tester, nathanPack, drive);
+    assert.equal(saved.ok, true);
+    const shared = await shareVisiblePack(tester, "new-nathan1", owner.email, drive);
+    assert.equal(shared.ok, true);
+    if (!shared.ok) return;
+    assert.equal(shared.pack.ownerEmail, tester.email);
+    assert.deepEqual(shared.pack.sharedWith, [owner.email]);
+
+    const ownerList = await listVisiblePacks(owner, drive);
+    const nathanList = await listVisiblePacks(tester, drive);
+    const josephList = await listVisiblePacks(joseph, drive);
+    assert.equal(ownerList.packs.some((row) => row.packId === "new-nathan1"), true);
+    assert.equal(ownerList.packs.find((row) => row.packId === "new-nathan1")?.ownerEmail, tester.email);
+    assert.equal(nathanList.packs[0]?.ownerEmail, tester.email);
+    assert.equal(nathanList.packs[0]?.title, "Nathan trial");
+    assert.deepEqual(josephList.packs, []);
+
+    const unshared = await unshareVisiblePack(tester, "new-nathan1", owner.email, drive);
+    assert.equal(unshared.ok, true);
+    if (unshared.ok) assert.equal(unshared.pack.ownerEmail, tester.email);
+    assert.equal((await listVisiblePacks(owner, drive)).packs.some((row) => row.packId === "new-nathan1"), false);
+    assert.equal((await listVisiblePacks(tester, drive)).packs[0]?.ownerEmail, tester.email);
+  });
+
   it("returns a turned-over Cat 2 to Robert as a working job", async () => {
     const drive = memoryDrive();
     await upsertVisiblePack(owner, cat2(), drive);

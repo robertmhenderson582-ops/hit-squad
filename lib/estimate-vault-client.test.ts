@@ -6,17 +6,21 @@ import {
   flushLocalPacksToVault,
   flushVaultUpsert,
   hydrateFromVault,
+  isLeftoverOwnerCopy,
   resetVaultHydrateForTests,
   setVaultViewAs,
+  shareVaultPack,
   transferVaultPack,
 } from "./estimate-vault-client.ts";
 import { VIEW_AS_HEADER } from "./desk-scope.ts";
+import { visibleDeskPacks } from "./estimate-scope.ts";
 import { packsMissingFromVault, writeVaultSeen } from "./job-menu.ts";
 import { TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import { readLensPacks } from "./lens-packs.ts";
 import { deleteLocalPack, findLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-menu.ts";
 import { collectPack } from "./estimate-pack.ts";
+import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 
 function memoryStore(seed: Record<string, string> = {}): StorageLike {
   const data = { ...seed };
@@ -226,6 +230,157 @@ describe("local transfer commit", () => {
       assert.equal(readLensPacks("nathan", store)[0]?.title, "Madison CAT 2 (Pit Stop)");
       assert.deepEqual(packsMissingFromVault(["new-robert1"], store), []);
       assert.equal(calls.some((row) => row.includes("/api/desk/estimates")), true);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("keeps a pack shared with the owner when leftover flush would treat View-as bleed as Turn over", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-mtaajdwa-f7539",
+        title: "Madison CAT 2 (Pit Stop)",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: "nathanboyte@gmail.com",
+        sharedWith: [OWNER_LOGIN_EMAIL],
+      },
+      store,
+    );
+    writeVaultSeen(["new-mtaajdwa-f7539"], store);
+    assert.equal(
+      isLeftoverOwnerCopy({
+        ownerEmail: "nathanboyte@gmail.com",
+        sharedWith: [OWNER_LOGIN_EMAIL],
+      }),
+      false,
+    );
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      return new Response(JSON.stringify({ persisted: true, packs: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      await hydrateFromVault(store);
+      assert.equal(findLocalPack("new-mtaajdwa-f7539", store)?.ownerEmail, "nathanboyte@gmail.com");
+      assert.deepEqual(findLocalPack("new-mtaajdwa-f7539", store)?.sharedWith, [OWNER_LOGIN_EMAIL]);
+      assert.equal(readJobMenu(store).transferred.length, 0);
+      assert.equal(
+        visibleDeskPacks({ email: OWNER_LOGIN_EMAIL, role: "owner" }, false, store).some(
+          (row) => row.packId === "new-mtaajdwa-f7539",
+        ),
+        true,
+      );
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("hydrates a shared-with-me pack onto the owner desk from the vault list", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          persisted: true,
+          packs: [
+            {
+              packId: "new-mtaajdwa-f7539",
+              key: "new:new-mtaajdwa-f7539",
+              title: "Madison CAT 2 (Pit Stop)",
+              client: "Phillips 66",
+              site: "Wood River — Roxana, IL",
+              siteId: "site-madison",
+              createdAt: 1,
+              updatedAt: 2,
+              ownerEmail: "nathanboyte@gmail.com",
+              sharedWith: [OWNER_LOGIN_EMAIL],
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    try {
+      const packs = await hydrateFromVault(store);
+      assert.equal(packs[0]?.ownerEmail, "nathanboyte@gmail.com");
+      assert.deepEqual(packs[0]?.sharedWith, [OWNER_LOGIN_EMAIL]);
+      assert.equal(findLocalPack("new-mtaajdwa-f7539", store)?.ownerEmail, "nathanboyte@gmail.com");
+      assert.equal(
+        visibleDeskPacks({ email: OWNER_LOGIN_EMAIL, role: "owner" }, false, store)[0]?.packId,
+        "new-mtaajdwa-f7539",
+      );
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("share to the owner keeps Nathan as owner and unshare hides it from the owner desk", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-nathan1",
+        title: "Nathan trial",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: "nathanboyte@gmail.com",
+      },
+      store,
+    );
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) as { action?: string } : {};
+      const shared = body.action === "unshare" ? [] : [OWNER_LOGIN_EMAIL];
+      return new Response(
+        JSON.stringify({
+          pack: {
+            packId: "new-nathan1",
+            key: "new:new-nathan1",
+            title: "Nathan trial",
+            client: "Phillips 66",
+            site: "Wood River — Roxana, IL",
+            siteId: "site-madison",
+            createdAt: 1,
+            updatedAt: 2,
+            ownerEmail: "nathanboyte@gmail.com",
+            sharedWith: shared,
+          },
+          to: { name: "Robert Henderson", email: OWNER_LOGIN_EMAIL },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    try {
+      const shared = await shareVaultPack("new-nathan1", OWNER_LOGIN_EMAIL, "share", store);
+      assert.equal(shared.ok, true);
+      if (shared.ok) assert.equal(shared.pack?.ownerEmail, "nathanboyte@gmail.com");
+      assert.deepEqual(findLocalPack("new-nathan1", store)?.sharedWith, [OWNER_LOGIN_EMAIL]);
+      assert.equal(
+        visibleDeskPacks({ email: OWNER_LOGIN_EMAIL, role: "owner" }, false, store).some(
+          (row) => row.packId === "new-nathan1",
+        ),
+        true,
+      );
+      const unshared = await shareVaultPack("new-nathan1", OWNER_LOGIN_EMAIL, "unshare", store);
+      assert.equal(unshared.ok, true);
+      if (unshared.ok) assert.equal(unshared.pack?.ownerEmail, "nathanboyte@gmail.com");
+      assert.deepEqual(findLocalPack("new-nathan1", store)?.sharedWith, []);
+      assert.equal(findLocalPack("new-nathan1", store)?.ownerEmail, "nathanboyte@gmail.com");
+      assert.equal(
+        visibleDeskPacks({ email: OWNER_LOGIN_EMAIL, role: "owner" }, false, store).some(
+          (row) => row.packId === "new-nathan1",
+        ),
+        false,
+      );
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();

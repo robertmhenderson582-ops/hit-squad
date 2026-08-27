@@ -141,6 +141,38 @@ describe("owner View as desk scope", () => {
     assert.deepEqual(ownerDesk.packs.map((row) => row.packId), []);
   });
 
+  it("lists a tester-owned pack on the owner desk after View as Nathan shares it back", async () => {
+    const drive = memoryDrive();
+    await upsertVisiblePack(owner, cat2({ packId: "new-robert1", title: "Robert working" }), drive);
+    const nathanPack = cat2({ ownerEmail: nathan.email });
+    const saved = await upsertVisiblePack(nathan, nathanPack, drive);
+    assert.equal(saved.ok, true);
+
+    const asNathan = deskScopeUser(owner, "nathan");
+    const shared = await shareVisiblePack(asNathan, "new-mtaajdwa-f7539", owner.email, drive);
+    assert.equal(shared.ok, true);
+    if (!shared.ok) return;
+    assert.equal(shared.pack.ownerEmail, nathan.email);
+    assert.deepEqual(shared.pack.sharedWith, [owner.email]);
+
+    const ownerList = await listVisiblePacks(deskScopeUser(owner, null), drive);
+    const nathanList = await listVisiblePacks(asNathan, drive);
+    const onOwner = ownerList.packs.find((row) => row.packId === "new-mtaajdwa-f7539");
+    assert.equal(Boolean(onOwner), true);
+    if (!onOwner) return;
+    assert.equal(onOwner.ownerEmail, nathan.email);
+    assert.equal(handoffMarkText(onOwner, owner.email), "Shared. You can work on this job.");
+    assert.equal(nathanList.packs[0]?.ownerEmail, nathan.email);
+    assert.equal(canWritePack(deskScopeUser(owner, null), onOwner), true);
+    assert.equal(canReturnPack(asNathan, nathanList.packs[0]!), false);
+
+    const unshared = await unshareVisiblePack(asNathan, "new-mtaajdwa-f7539", owner.email, drive);
+    assert.equal(unshared.ok, true);
+    const ownerAfter = await listVisiblePacks(deskScopeUser(owner, null), drive);
+    assert.equal(ownerAfter.packs.some((row) => row.packId === "new-mtaajdwa-f7539"), false);
+    assert.equal((await listVisiblePacks(asNathan, drive)).packs[0]?.ownerEmail, nathan.email);
+  });
+
   it("lists a shared pack on Nathan's desk while Robert stays owner", async () => {
     const drive = memoryDrive();
     await upsertVisiblePack(owner, cat2({ packId: "new-robert1", title: "Robert working" }), drive);
