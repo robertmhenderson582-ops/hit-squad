@@ -37,6 +37,29 @@ export function packSharedWithYou(pack: { ownerEmail?: string; sharedWith?: stri
   return Boolean(me && owner && owner !== me && normalizeEmails(pack.sharedWith).includes(me));
 }
 
+export function handoffMarkText(
+  pack: {
+    ownerEmail?: string;
+    sharedWith?: string[];
+    transferredFrom?: string;
+    transferredTo?: string;
+    transferredFromName?: string;
+  },
+  email = "",
+) {
+  if (packTransferredToYou(pack, email)) {
+    return `Transferred to you from ${transferredFromLabel(pack)}.`;
+  }
+  if (packSharedWithYou(pack, email)) {
+    return "Shared. You can work on this job.";
+  }
+  const names = sharedWithNames(normalizeEmails(pack.sharedWith));
+  if (names.length && pack.ownerEmail?.trim().toLowerCase() === email.trim().toLowerCase()) {
+    return `Shared with ${names.join(", ")}.`;
+  }
+  return null;
+}
+
 export function handoffSeats(): HandoffSeat[] {
   const ownerEmail = ownerVaultEmail();
   const owner: HandoffSeat = { name: "Robert Henderson", email: ownerEmail };

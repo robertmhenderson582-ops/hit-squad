@@ -11,18 +11,22 @@ import {
   shareVaultPack,
   transferVaultPack,
 } from "@/lib/estimate-vault-client";
-import { canReturnPack, canSharePack } from "@/lib/estimate-scope";
+import { canReturnPack, canSharePack, packSharedEmails } from "@/lib/estimate-scope";
+import { findHandoffSeat, type HandoffSeat } from "@/lib/handoff";
 import { findLocalPack, isLocalPackId } from "@/lib/local-estimates";
 
 export function ShareTurnover({ title, packId }: { title?: string; packId?: string }) {
   const router = useRouter();
   const { lens } = useDeskLens();
-  const [open, setOpen] = useState<"share" | "turnover" | null>(null);
+  const [open, setOpen] = useState<"share" | "unshare" | "turnover" | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const pack = packId && isLocalPackId(packId) ? findLocalPack(packId) : null;
   const deskUser = lens ? { email: lens.email, role: lens.role } : null;
   const canShare = Boolean(packId && pack && deskUser && canSharePack(deskUser, pack));
   const canReturn = Boolean(packId && pack && deskUser && canReturnPack(deskUser, pack));
+  const sharedWith = (pack ? packSharedEmails(pack) : [])
+    .map((email) => findHandoffSeat(email))
+    .filter(Boolean) as HandoffSeat[];
   const canHandoff = Boolean(packId && isLocalPackId(packId) && (canShare || !pack));
 
   return (
@@ -45,6 +49,29 @@ export function ShareTurnover({ title, packId }: { title?: string; packId?: stri
       >
         Turn over
       </button>
+      {canShare && sharedWith.length ? (
+        <button
+          type="button"
+          title="Stop sharing this job. You stay the owner."
+          onClick={async () => {
+            if (!packId) return;
+            if (sharedWith.length === 1) {
+              const person = sharedWith[0];
+              const result = await shareVaultPack(packId, person.email, "unshare");
+              if (!result.ok) {
+                setNote(result.error);
+                return;
+              }
+              setNote(`Stopped sharing with ${person.name}.`);
+              return;
+            }
+            setOpen("unshare");
+          }}
+          className="rounded border border-white/20 px-3 py-1.5 text-white/90"
+        >
+          Unshare
+        </button>
+      ) : null}
       {canReturn ? (
         <button
           type="button"
@@ -78,6 +105,23 @@ export function ShareTurnover({ title, packId }: { title?: string; packId?: stri
           const result = await shareVaultPack(packId, person.email);
           if (!result.ok) return result.error;
           setNote(`Shared with ${person.name}. You still own this job.`);
+          return null;
+        }}
+      />
+      <HandoffDialog
+        title={title || "This job"}
+        open={open === "unshare"}
+        heading="Unshare"
+        body={`${title || "This job"} stays on your desk. They will no longer see it.`}
+        confirmLabel="Unshare"
+        busyLabel="Unsharing…"
+        people={sharedWith}
+        onClose={() => setOpen(null)}
+        onPick={async (person) => {
+          if (!packId) return "That job cannot be unshared.";
+          const result = await shareVaultPack(packId, person.email, "unshare");
+          if (!result.ok) return result.error;
+          setNote(`Stopped sharing with ${person.name}.`);
           return null;
         }}
       />

@@ -13,6 +13,7 @@ export function HandoffDialog({
   body,
   confirmLabel = "Turn over",
   busyLabel = "Turning over…",
+  people: peopleProp,
 }: {
   title: string;
   open: boolean;
@@ -22,16 +23,22 @@ export function HandoffDialog({
   body?: string;
   confirmLabel?: string;
   busyLabel?: string;
+  people?: HandoffSeat[];
 }) {
-  const [people, setPeople] = useState<HandoffSeat[]>([]);
+  const [people, setPeople] = useState<HandoffSeat[]>(peopleProp ?? []);
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const presetKey = peopleProp?.map((row) => row.email).join(",") ?? "";
 
   useEffect(() => {
     if (!open) return;
     setEmail("");
     setError(null);
+    if (peopleProp) {
+      setPeople(peopleProp);
+      return;
+    }
     let cancelled = false;
     (async () => {
       const response = await deskFetch("/api/desk/handoff");
@@ -46,7 +53,7 @@ export function HandoffDialog({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, presetKey]);
 
   if (!open) return null;
   const selected = people.find((row) => row.email === email);

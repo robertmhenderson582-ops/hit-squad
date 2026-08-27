@@ -268,4 +268,31 @@ describe("estimate vault service", () => {
     assert.equal(ownerList.packs[0]?.transferredFrom, undefined);
     assert.deepEqual(nathanList.packs, []);
   });
+
+  it("returns the recipient's latest save instantly with no accept step", async () => {
+    const drive = memoryDrive();
+    await upsertVisiblePack(owner, cat2(), drive);
+    const handed = await transferVisiblePack(owner, "new-cat2pit", tester.email, drive);
+    assert.equal(handed.ok, true);
+    const latest = cat2({
+      ownerEmail: tester.email,
+      transferredFrom: OWNER_LOGIN_EMAIL,
+      transferredFromName: "Robert Henderson",
+      transferredTo: tester.email,
+      updatedAt: 1200,
+      crew: { support: [{ id: "sup-nate-latest" }] },
+    });
+    const back = await returnVisiblePack(tester, "new-cat2pit", drive, latest);
+    assert.equal(back.ok, true);
+    if (!back.ok) return;
+    assert.equal(back.pack.ownerEmail, OWNER_LOGIN_EMAIL);
+    assert.equal((back.pack.crew as { support: Array<{ id: string }> }).support[0].id, "sup-nate-latest");
+    assert.equal(back.pack.transferredFrom, undefined);
+    const ownerList = await listVisiblePacks(owner, drive);
+    const nathanList = await listVisiblePacks(tester, drive);
+    assert.equal((ownerList.packs[0]?.crew as { support: Array<{ id: string }> }).support[0].id, "sup-nate-latest");
+    assert.deepEqual(nathanList.packs, []);
+    const accept = await returnVisiblePack(tester, "new-cat2pit", drive, latest);
+    assert.equal(accept.ok, false);
+  });
 });

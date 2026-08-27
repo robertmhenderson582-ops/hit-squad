@@ -38,7 +38,7 @@ export function JobMenuActions({
   onChange?: () => void;
 }) {
   const { lens } = useDeskLens();
-  const [handoff, setHandoff] = useState<"share" | "turnover" | null>(null);
+  const [handoff, setHandoff] = useState<"share" | "unshare" | "turnover" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const vaultId = vaultPackIdOf(id, packId);
@@ -104,22 +104,23 @@ export function JobMenuActions({
             <button
               type="button"
               className="job-action"
-              title="Stop sharing this job."
+              title="Stop sharing this job. You stay the owner."
               onClick={async (event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 if (!vaultId) return;
-                let lastName = "";
-                for (const person of sharedWith) {
+                if (sharedWith.length === 1) {
+                  const person = sharedWith[0];
                   const result = await shareVaultPack(vaultId, person.email, "unshare");
                   if (!result.ok) {
                     setNote(result.error);
                     return;
                   }
-                  lastName = person.name;
+                  setNote(`Stopped sharing with ${person.name}.`);
+                  await refresh();
+                  return;
                 }
-                setNote(lastName ? `Stopped sharing with ${lastName}.` : "Stopped sharing.");
-                await refresh();
+                setHandoff("unshare");
               }}
             >
               UNSHARE
@@ -189,6 +190,24 @@ export function JobMenuActions({
           const result = await shareVaultPack(vaultId, person.email);
           if (!result.ok) return result.error;
           setNote(`Shared with ${person.name}. You still own this job.`);
+          await refresh();
+          return null;
+        }}
+      />
+      <HandoffDialog
+        title={title}
+        open={handoff === "unshare"}
+        heading="Unshare"
+        body={`${title} stays on your desk. They will no longer see it.`}
+        confirmLabel="Unshare"
+        busyLabel="Unsharing…"
+        people={sharedWith}
+        onClose={() => setHandoff(null)}
+        onPick={async (person: HandoffSeat) => {
+          if (!vaultId) return "That job cannot be unshared.";
+          const result = await shareVaultPack(vaultId, person.email, "unshare");
+          if (!result.ok) return result.error;
+          setNote(`Stopped sharing with ${person.name}.`);
           await refresh();
           return null;
         }}

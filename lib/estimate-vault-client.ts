@@ -236,6 +236,7 @@ export async function returnVaultPack(packId: string, store?: StorageLike | null
 
 export function applyReturnLocally(ok: boolean, packId: string, store?: StorageLike | null) {
   if (!ok) return { keptLocal: true as const };
+  clearTransferredMenuItem({ id: packId, packId }, store);
   deleteLocalPack(packId, store);
   bustVaultHydrate();
   return { keptLocal: false as const };

@@ -1,7 +1,6 @@
 "use client";
 
-import { packSharedWithYou, packTransferredToYou, sharedWithNames, transferredFromLabel } from "@/lib/handoff";
-import { packSharedEmails } from "@/lib/estimate-scope";
+import { handoffMarkText, packTransferredToYou } from "@/lib/handoff";
 
 export type HandoffPack = {
   ownerEmail?: string;
@@ -20,19 +19,11 @@ export function JobHandoffMark({
   email?: string;
 }) {
   if (!pack || !email) return null;
-  if (packTransferredToYou(pack, email)) {
-    return (
-      <p className="mt-2 text-sm font-semibold text-amber-label">
-        Transferred to you from {transferredFromLabel(pack)}.
-      </p>
-    );
-  }
-  if (packSharedWithYou(pack, email)) {
-    return <p className="mt-2 text-sm font-semibold text-steel">Shared. You can work on this job.</p>;
-  }
-  const names = sharedWithNames(packSharedEmails(pack));
-  if (names.length && pack.ownerEmail?.trim().toLowerCase() === email.trim().toLowerCase()) {
-    return <p className="mt-2 text-sm font-semibold text-steel">Shared with {names.join(", ")}.</p>;
-  }
-  return null;
+  const text = handoffMarkText(pack, email);
+  if (!text) return null;
+  return (
+    <p className={`mt-2 text-sm font-semibold ${packTransferredToYou(pack, email) ? "text-amber-label" : "text-steel"}`}>
+      {text}
+    </p>
+  );
 }

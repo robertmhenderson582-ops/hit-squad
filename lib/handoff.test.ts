@@ -5,6 +5,7 @@ import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { JOSEPH_EMAIL, SHANE_EMAIL } from "./tester-seats.ts";
 import {
   findHandoffSeat,
+  handoffMarkText,
   handoffSeats,
   handoffTargetsFor,
   isHandoffEmail,
@@ -50,5 +51,9 @@ describe("handoff seats", () => {
     assert.equal(packSharedWithYou(shared, "nathanboyte@gmail.com"), true);
     assert.equal(packSharedWithYou(shared, OWNER_LOGIN_EMAIL), false);
     assert.equal(packSharedWithYou(shared, JOSEPH_EMAIL), false);
+    assert.equal(handoffMarkText(transferred, "nathanboyte@gmail.com"), "Transferred to you from Robert Henderson.");
+    assert.equal(handoffMarkText(shared, "nathanboyte@gmail.com"), "Shared. You can work on this job.");
+    assert.equal(handoffMarkText(shared, OWNER_LOGIN_EMAIL), "Shared with Nathan Boyte.");
+    assert.equal(handoffMarkText(shared, JOSEPH_EMAIL), null);
   });
 });

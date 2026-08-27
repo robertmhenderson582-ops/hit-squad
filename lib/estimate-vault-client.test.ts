@@ -12,7 +12,7 @@ import { VIEW_AS_HEADER } from "./desk-scope.ts";
 import { packsMissingFromVault, writeVaultSeen } from "./job-menu.ts";
 import { TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import { findLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
-import { isActiveMenuItem, readJobMenu } from "./job-menu.ts";
+import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-menu.ts";
 import { collectPack } from "./estimate-pack.ts";
 
 function memoryStore(seed: Record<string, string> = {}): StorageLike {
@@ -80,9 +80,11 @@ describe("local transfer commit", () => {
     const kept = applyReturnLocally(false, "new-cat2pit", store);
     assert.equal(kept.keptLocal, true);
     assert.equal(findLocalPack("new-cat2pit", store)?.title, "Cat 2 Pit Stop");
+    recordTransferredMenuItem({ id: "new-cat2pit", title: "Cat 2 Pit Stop", toName: "Nathan Boyte" }, store);
     const ok = applyReturnLocally(true, "new-cat2pit", store);
     assert.equal(ok.keptLocal, false);
     assert.equal(findLocalPack("new-cat2pit", store), null);
+    assert.equal(readJobMenu(store).transferred.length, 0);
   });
 
   it("posts the local pack on transfer so an empty Drive can still take it", async () => {

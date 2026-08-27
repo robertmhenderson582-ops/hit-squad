@@ -18,7 +18,7 @@ import {
   SHARE_WRITE_ERROR,
   TRANSFER_WRITE_ERROR,
 } from "./handoff.ts";
-import { parseIncomingPack, pickPack, publicPack, type EstimatePackSnapshot } from "./estimate-pack.ts";
+import { packHasWork, parseIncomingPack, pickPack, publicPack, type EstimatePackSnapshot } from "./estimate-pack.ts";
 import {
   deleteEstimateInDrive,
   driveAdapter,
@@ -256,8 +256,10 @@ export async function returnVisiblePack(
   if (!previous || !isHandoffEmail(previous.email)) {
     return { ok: false as const, status: 400, error: "This job cannot go back." };
   }
+  const local = localPackForTransfer(user, packId, incoming);
+  const work = local && packHasWork(local) ? local : current;
   const pack = publicPack({
-    ...current,
+    ...work,
     ownerEmail: previous.email,
     sharedWith: [],
     transferredFrom: undefined,

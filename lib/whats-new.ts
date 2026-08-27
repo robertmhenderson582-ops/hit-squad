@@ -25,13 +25,13 @@ export const NEXT_SHIP_VERSION_LABEL = "Hit Squad Project Controls V1.25";
 export const TESTER_NEXT_SHIP_DRAFT = [
   "Hit Squad Project Controls V1.25",
   "• Jobs on your desk stay the ones you own.",
-  "• Share a job so they can work on it. You stay the owner.",
-  "• Turn over moves the job. They can send it back.",
+  "• Share a job so they can work on it. You stay the owner. Unshare takes it back.",
+  "• Turn over moves the job. They can send it back in one click.",
 ].join("\n");
 export const OWNER_NEXT_SHIP_DRAFT = [
   "Hit Squad Project Controls V1.25",
-  "• View as now shows that person's desk (jobs they own).",
-  "• Share keeps you the owner. Turn over moves the job. Return sends it back.",
+  "• View as now shows that person's desk, including transferred-to-you and Return.",
+  "• Share keeps you the owner. Unshare reverses it. Turn over moves. Return is instant.",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

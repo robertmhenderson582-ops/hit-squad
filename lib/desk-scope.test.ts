@@ -8,8 +8,9 @@ import {
   viewAsSeatFromRequest,
   viewingOtherDesk,
 } from "./desk-scope.ts";
-import { localPacksForUser } from "./estimate-scope.ts";
-import { listVisiblePacks, shareVisiblePack, transferVisiblePack, upsertVisiblePack } from "./estimate-vault.ts";
+import { canReturnPack, canWritePack, localPacksForUser } from "./estimate-scope.ts";
+import { listVisiblePacks, shareVisiblePack, transferVisiblePack, unshareVisiblePack, upsertVisiblePack } from "./estimate-vault.ts";
+import { handoffMarkText } from "./handoff.ts";
 import { memoryDrive } from "./drive-estimates.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
@@ -97,6 +98,14 @@ describe("owner View as desk scope", () => {
     );
     assert.equal(nathanList.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);
     assert.equal(nathanList.packs[0]?.transferredFromName, "Robert Henderson");
+    const signedIn = await listVisiblePacks(nathan, drive);
+    assert.deepEqual(
+      nathanList.packs.map((row) => row.packId),
+      signedIn.packs.map((row) => row.packId),
+    );
+    assert.equal(handoffMarkText(nathanList.packs[0], nathan.email), "Transferred to you from Robert Henderson.");
+    assert.equal(canReturnPack(asNathan, nathanList.packs[0]!), true);
+    assert.equal(canReturnPack(nathan, signedIn.packs[0]!), true);
   });
 
   it("lists a shared pack on Nathan's desk while Robert stays owner", async () => {
@@ -122,6 +131,20 @@ describe("owner View as desk scope", () => {
       ["new-mtaajdwa-f7539", "new-robert1"],
     );
     assert.deepEqual(josephList.packs.map((row) => row.packId), []);
+    const signedIn = await listVisiblePacks(nathan, drive);
+    assert.deepEqual(
+      nathanList.packs.map((row) => row.packId),
+      signedIn.packs.map((row) => row.packId),
+    );
+    assert.equal(handoffMarkText(nathanList.packs[0], nathan.email), "Shared. You can work on this job.");
+    assert.equal(canWritePack(asNathan, nathanList.packs[0]!), true);
+    const unshared = await unshareVisiblePack(owner, "new-mtaajdwa-f7539", nathan.email, drive);
+    assert.equal(unshared.ok, true);
+    assert.deepEqual((await listVisiblePacks(asNathan, drive)).packs, []);
+    assert.deepEqual((await listVisiblePacks(nathan, drive)).packs, []);
+    const ownerAfter = await listVisiblePacks(deskScopeUser(owner, null), drive);
+    assert.equal(ownerAfter.packs.every((row) => row.ownerEmail === OWNER_LOGIN_EMAIL), true);
+    assert.equal(ownerAfter.packs.some((row) => row.packId === "new-mtaajdwa-f7539"), true);
   });
 
   it("lets Novus View as Nathan and ignores Joseph or a tester asking for Nathan's desk", async () => {
