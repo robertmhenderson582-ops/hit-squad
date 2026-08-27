@@ -1,6 +1,8 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+/** Live heartbeat only. Leave ephemeral — do not vault presence across deploys. */
+
 export type PresencePing = {
   email: string;
   name: string;

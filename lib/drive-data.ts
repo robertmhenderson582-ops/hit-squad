@@ -2,8 +2,14 @@ import { ESTIMATES_ROOM_ID, type DriveAdapter, type DriveFile } from "./drive-es
 
 export const COMPANIES_VAULT_NAME = "companies.json";
 export const ACTIVITY_VAULT_NAME = "activity.json";
+export const TICKETS_VAULT_NAME = "tickets.json";
+export const SEATS_VAULT_NAME = "seats.json";
+export const SETTINGS_VAULT_NAME = "settings.json";
 export const COMPANIES_VAULT_KIND = "companies";
 export const ACTIVITY_VAULT_KIND = "activity";
+export const TICKETS_VAULT_KIND = "tickets";
+export const SEATS_VAULT_KIND = "seats";
+export const SETTINGS_VAULT_KIND = "settings";
 
 /** Owner Data room when set. Estimates room is the writable fallback already shared with the desk. */
 export function dataFolderId(env: Record<string, string | undefined> = process.env) {

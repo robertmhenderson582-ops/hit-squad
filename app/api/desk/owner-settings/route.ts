@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  return NextResponse.json(getOwnerSettings());
+  return NextResponse.json(await getOwnerSettings());
 }
 
 export async function POST(request: Request) {
@@ -29,16 +29,16 @@ export async function POST(request: Request) {
     note?: string;
   };
   if (body.action === "republish" && hasBuildDesk(user)) {
-    return NextResponse.json(startRepublish(body.waitMinutes ?? 5, body.note || ""));
+    return NextResponse.json(await startRepublish(body.waitMinutes ?? 5, body.note || ""));
   }
   if (body.action === "back" && hasBuildDesk(user)) {
-    return NextResponse.json(clearRepublish());
+    return NextResponse.json(await clearRepublish());
   }
   if (!hasBuildDesk(user)) {
     return NextResponse.json({ error: "Build desk only." }, { status: 403 });
   }
   return NextResponse.json(
-    setOwnerSettings({
+    await setOwnerSettings({
       aliasesOn: body.aliasesOn,
       followSeat: body.followSeat as never,
       viewAs: body.viewAs as never,

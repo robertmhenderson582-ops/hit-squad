@@ -16,14 +16,14 @@ import { isTicketKind, makeTicket } from "@/lib/tickets";
 
 export const dynamic = "force-dynamic";
 
-function scoped(user: { role: string; email: string }) {
+async function scoped(user: { role: string; email: string }) {
   return hasBuildDesk(user) ? listStoredTickets() : listStoredTickets(user.email);
 }
 
 export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  return NextResponse.json({ tickets: scoped(deskUserFromRequest(user, request)), store: ticketStoreKind() });
+  return NextResponse.json({ tickets: await scoped(deskUserFromRequest(user, request)), store: ticketStoreKind() });
 }
 
 export async function POST(request: Request) {
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Pick a ticket kind." }, { status: 400 });
   }
 
-  const ticket = addStoredTicket(
+  const ticket = await addStoredTicket(
     makeTicket({
       id: typeof body.id === "string" ? body.id : undefined,
       kind: body.kind,
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ticket,
-    tickets: scoped(user),
+    tickets: await scoped(user),
     emailed,
     store: ticketStoreKind(),
   });
@@ -76,14 +76,14 @@ export async function PATCH(request: Request) {
     notifyFix?: boolean | null;
   };
   if (!body.id) return NextResponse.json({ error: "Missing ticket." }, { status: 400 });
-  const ticket = patchStoredTicket(body.id, {
+  const ticket = await patchStoredTicket(body.id, {
     ...(typeof body.done === "boolean" ? { done: body.done } : {}),
     ...(body.notifyFix === true || body.notifyFix === false || body.notifyFix === null
       ? { notifyFix: body.notifyFix }
       : {}),
   });
   if (!ticket) return NextResponse.json({ error: "Ticket not found." }, { status: 404 });
-  return NextResponse.json({ tickets: listStoredTickets(), store: ticketStoreKind() });
+  return NextResponse.json({ tickets: await listStoredTickets(), store: ticketStoreKind() });
 }
 
 export async function DELETE(request: Request) {
@@ -94,8 +94,8 @@ export async function DELETE(request: Request) {
   }
 
   const body = (await request.json().catch(() => ({}))) as { id?: string; done?: boolean };
-  if (body.done) removeStoredDoneTickets();
-  else if (body.id) removeStoredTicket(body.id);
+  if (body.done) await removeStoredDoneTickets();
+  else if (body.id) await removeStoredTicket(body.id);
   else return NextResponse.json({ error: "Missing ticket." }, { status: 400 });
-  return NextResponse.json({ tickets: listStoredTickets(), store: ticketStoreKind() });
+  return NextResponse.json({ tickets: await listStoredTickets(), store: ticketStoreKind() });
 }

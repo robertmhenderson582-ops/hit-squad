@@ -6,11 +6,14 @@ import { after, describe, it } from "node:test";
 import { ticketsForViewer } from "./ticket-cache.ts";
 import {
   addStoredTicket,
+  forgetTicketCacheForTests,
   listStoredTickets,
   resetTicketStoreForTests,
   ticketStoreKind,
+  useTicketVaultForTests,
 } from "./ticket-store.ts";
 import { makeTicket } from "./tickets.ts";
+import { memoryDrive } from "./drive-estimates.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-tickets-"));
 const file = join(dir, "tickets.json");
@@ -20,7 +23,7 @@ after(() => {
 });
 
 describe("ticket file store", { concurrency: 1 }, () => {
-  it("is not a module-level array — a reload from disk still has the ticket", () => {
+  it("is not a module-level array — a reload from disk still has the ticket", async () => {
     resetTicketStoreForTests(file);
     const tester = makeTicket({
       kind: "Broke",
@@ -29,9 +32,9 @@ describe("ticket file store", { concurrency: 1 }, () => {
       later: false,
       who: "josephmhenderson2002@gmail.com",
     });
-    addStoredTicket(tester);
+    await addStoredTicket(tester);
     resetTicketStoreForTests(file);
-    const again = listStoredTickets();
+    const again = await listStoredTickets();
     assert.equal(again.length, 1);
     assert.equal(again[0].id, tester.id);
     assert.equal(again[0].note, "clock did not add");
@@ -40,9 +43,9 @@ describe("ticket file store", { concurrency: 1 }, () => {
     assert.equal(ticketStoreKind(), "server-json-file");
   });
 
-  it("testers see only their own tickets; owner and Novus see all", () => {
+  it("testers see only their own tickets; owner and Novus see all", async () => {
     resetTicketStoreForTests(join(dir, "scope.json"));
-    const joseph = addStoredTicket(
+    const joseph = await addStoredTicket(
       makeTicket({
         kind: "missing",
         note: "joseph only",
@@ -51,7 +54,7 @@ describe("ticket file store", { concurrency: 1 }, () => {
         who: "josephmhenderson2002@gmail.com",
       }),
     );
-    const mark = addStoredTicket(
+    const mark = await addStoredTicket(
       makeTicket({
         kind: "other",
         note: "mark only",
@@ -60,7 +63,7 @@ describe("ticket file store", { concurrency: 1 }, () => {
         who: "marks544@yahoo.com",
       }),
     );
-    const all = listStoredTickets();
+    const all = await listStoredTickets();
     assert.equal(
       ticketsForViewer(all, "josephmhenderson2002@gmail.com", false).map((row) => row.id).join(),
       joseph.id,
@@ -71,10 +74,10 @@ describe("ticket file store", { concurrency: 1 }, () => {
     assert.equal(ticketsForViewer(all, "robertmhenderson582+novus@gmail.com", true).length, 2);
   });
 
-  it("adding a ticket does not drop tickets already on disk", () => {
+  it("adding a ticket does not drop tickets already on disk", async () => {
     const keepFile = join(dir, "keep.json");
     resetTicketStoreForTests(keepFile);
-    const first = addStoredTicket(
+    const first = await addStoredTicket(
       makeTicket({
         kind: "Broke",
         note: "first stays",
@@ -83,7 +86,7 @@ describe("ticket file store", { concurrency: 1 }, () => {
         who: "robertmhenderson582@gmail.com",
       }),
     );
-    const second = addStoredTicket(
+    const second = await addStoredTicket(
       makeTicket({
         kind: "missing",
         note: "second added",
@@ -93,9 +96,31 @@ describe("ticket file store", { concurrency: 1 }, () => {
       }),
     );
     resetTicketStoreForTests(keepFile);
-    const again = listStoredTickets();
+    const again = await listStoredTickets();
     assert.equal(again.length, 2);
     assert.equal(again.some((row) => row.id === first.id), true);
     assert.equal(again.some((row) => row.id === second.id), true);
+  });
+
+  it("keeps tickets after the local cache is wiped", async () => {
+    const drive = memoryDrive();
+    resetTicketStoreForTests(join(dir, "vault.json"));
+    useTicketVaultForTests(drive);
+    const row = await addStoredTicket(
+      makeTicket({
+        kind: "Broke",
+        note: "survives recycle",
+        capture: null,
+        later: false,
+        who: "josephmhenderson2002@gmail.com",
+      }),
+    );
+    forgetTicketCacheForTests();
+    useTicketVaultForTests(drive);
+    const again = await listStoredTickets();
+    assert.equal(again.length, 1);
+    assert.equal(again[0].id, row.id);
+    assert.equal(again[0].who, "josephmhenderson2002@gmail.com");
+    assert.equal((await listStoredTickets("marks544@yahoo.com")).length, 0);
   });
 });

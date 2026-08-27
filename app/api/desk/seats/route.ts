@@ -3,7 +3,7 @@ import { readSession } from "@/lib/auth";
 import { addCompany, isKnownCompany, listCompanies, setAssignedCompany } from "@/lib/companies-store";
 import { hasBuildDesk, isOwner } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
-import { findUserByEmail, issueSeatPassword, listSeatRows } from "@/lib/users";
+import { findUserByEmail, flushSeatVault, hydrateSeatStore, issueSeatPassword, listSeatRows } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +11,7 @@ export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   if (!hasBuildDesk(user)) return NextResponse.json({ error: "Build desk only." }, { status: 403 });
+  await hydrateSeatStore();
   return NextResponse.json({
     seats: await listSeatRows(),
     companies: await listCompanies(),
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
 
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
+  await hydrateSeatStore();
   const target = findUserByEmail(email);
   if (!target || target.role === "owner") {
     return NextResponse.json({ error: "Pick a seeded non-owner seat." }, { status: 400 });
@@ -64,6 +66,7 @@ export async function POST(request: Request) {
 
   const result = issueSeatPassword(email, password);
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
+  await flushSeatVault();
   return NextResponse.json({
     ok: true,
     seats: await listSeatRows(),

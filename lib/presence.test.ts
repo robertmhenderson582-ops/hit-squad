@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { after, test } from "node:test";
 import { beatPresence, listSeats, resetPresenceForTests, seatFor } from "./presence.ts";
 
@@ -37,6 +38,11 @@ test("presence persist keeps Live green across a memory reset", () => {
     seats.some((seat) => seat.email === "robertmhenderson582@gmail.com"),
     false,
   );
+});
+
+test("presence stays off the owner Drive vault", () => {
+  const source = readFileSync(fileURLToPath(new URL("./presence.ts", import.meta.url)), "utf8");
+  assert.equal(/drive-data|writeVaultJson|SEATS_VAULT|TICKETS_VAULT/.test(source), false);
 });
 
 test("listSeats picks up a newer file beat so Live stays green", () => {

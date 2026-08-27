@@ -9,7 +9,7 @@ import {
   signSession,
 } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
-import { findUserByEmail, seatHashClaimFor, setOwnPassword, toPublicUser } from "@/lib/users";
+import { findUserByEmail, flushSeatVault, hydrateSeatStore, seatHashClaimFor, setOwnPassword, toPublicUser } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +21,12 @@ export async function POST(request: Request) {
   const next = typeof body.next === "string" ? body.next : "";
   const current = typeof body.current === "string" ? body.current : "";
 
+  await hydrateSeatStore();
   const result = setOwnPassword(session.email, next, current || undefined);
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
+  await flushSeatVault();
 
   const stored = findUserByEmail(session.email);
   if (!stored) return NextResponse.json({ error: "That seat is not on this desk." }, { status: 404 });
