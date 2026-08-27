@@ -22,6 +22,21 @@ export const OWNER_WHATS_NEW = [
   "• Testers who already saw V1.19 get this note (versioned seen key).",
 ].join("\n");
 
+/** Draft for the next ship. Not wired into applyWhatsNew — do not publish until Robert says look. */
+export const NEXT_SHIP_VERSION = "1.21.0";
+export const NEXT_SHIP_VERSION_LABEL = "Hit Squad Project Controls V1.21";
+export const TESTER_NEXT_SHIP_DRAFT = [
+  "Hit Squad Project Controls V1.21",
+  "• Affiliate checkbox on Subcontractor cards and one-off rows.",
+  "• No 6.5% markup on JVIC / affiliates. Those dollars still sit on Subcontractor.",
+  "• Third-party rental and misc still get the 6.5% markup.",
+].join("\n");
+export const OWNER_NEXT_SHIP_DRAFT = [
+  "Hit Squad Project Controls V1.21",
+  "• Affiliate checkbox on Subcontractor cards and one-off rows. No 6.5% on JVIC / affiliates.",
+  "• Testers who already saw V1.20 get this note (versioned seen key).",
+].join("\n");
+
 const FORBIDDEN_TESTER =
   /\b(password|passwords|auth|authentication|cookie|session(?: secret)?|security|novus|vault|drive|smtp|\/tmp|tmp file|other users?|other testers?|seats?|owner tools?|view as|aliases?|deploy(?: internals?)?|anyone else(?:.?s tickets)?)\b/i;
 

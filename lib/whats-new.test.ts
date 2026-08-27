@@ -7,7 +7,11 @@ import {
   DESK_THREAD_ID,
   DESK_VERSION,
   DESK_VERSION_LABEL,
+  NEXT_SHIP_VERSION,
+  NEXT_SHIP_VERSION_LABEL,
+  OWNER_NEXT_SHIP_DRAFT,
   OWNER_WHATS_NEW,
+  TESTER_NEXT_SHIP_DRAFT,
   TESTER_WHATS_NEW,
   WHATS_NEW_MARK_PREFIX,
   applyWhatsNew,
@@ -132,5 +136,27 @@ describe("inbox what's-new", () => {
     assert.equal(next[0].messages[1]?.text, TESTER_WHATS_NEW);
     assert.equal(next[0].unread, 1);
     assert.equal(applyWhatsNew(next, "tester-joseph-append", false)[0].messages.length, 2);
+  });
+
+  it("keeps a tester-safe V1.21 draft off the live Inbox until Robert ships", () => {
+    assert.equal(DESK_VERSION, "1.20.0");
+    assert.equal(NEXT_SHIP_VERSION, "1.21.0");
+    assert.equal(NEXT_SHIP_VERSION_LABEL, "Hit Squad Project Controls V1.21");
+    assert.equal(TESTER_NEXT_SHIP_DRAFT.startsWith(NEXT_SHIP_VERSION_LABEL), true);
+    assert.equal(testerCopyIsSafe(TESTER_NEXT_SHIP_DRAFT), true);
+    assert.equal(testerCopyIsSafe(OWNER_NEXT_SHIP_DRAFT), true);
+    assert.match(TESTER_NEXT_SHIP_DRAFT, /Affiliate checkbox/);
+    assert.match(TESTER_NEXT_SHIP_DRAFT, /No 6\.5% markup on JVIC \/ affiliates/);
+    assert.match(TESTER_NEXT_SHIP_DRAFT, /Subcontractor/);
+    assert.equal(/Wendell|Joseph|Follow|Shane|apcontrolsllc|seat|security|vault|other users/i.test(TESTER_NEXT_SHIP_DRAFT), false);
+    assert.equal(
+      /password|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
+        TESTER_NEXT_SHIP_DRAFT,
+      ),
+      false,
+    );
+    const live = applyWhatsNew([], "tester-no-publish", false);
+    assert.equal(live[0].messages[0]?.text, TESTER_WHATS_NEW);
+    assert.equal(live[0].messages.some((message) => message.text === TESTER_NEXT_SHIP_DRAFT), false);
   });
 });

@@ -13,7 +13,7 @@ import {
   parseDeskDollars,
 } from "./estimate-total.ts";
 import { miscAmount } from "./other-cost.ts";
-import { readSubSheet, subcontractorTotal, writeSubSheet } from "./subcontractor.ts";
+import { readSubSheet, subcontractorMarkupBase, subcontractorTotal, writeSubSheet } from "./subcontractor.ts";
 
 function memoryStore(seed: Record<string, string> = {}) {
   const data = { ...seed };
@@ -133,6 +133,31 @@ test("6.5% markup rereads the same dollars after the estimate sheets persist", (
     misc,
   });
   assert.equal(first, 330.2);
+  assert.equal(again, first);
+});
+
+test("affiliate one-off stays on Subcontractor and is left out of the persisted 6.5% markup", () => {
+  const store = memoryStore();
+  const key = "new:affiliate-markup";
+  writeSubSheet(
+    key,
+    { lines: [{ id: "a", vendor: "JVIC", scope: "LS", qty: 1, unit: "LS", rate: 4000, affiliate: true }] },
+    store,
+  );
+  const sheet = readSubSheet(key, store);
+  assert.equal(subcontractorTotal(sheet), 4000);
+  assert.equal(subcontractorMarkupBase(sheet), 0);
+  const first = estimateMarkupDollars({
+    subcontractor: subcontractorMarkupBase(sheet),
+    thirdParty: 200,
+    misc: 50,
+  });
+  const again = estimateMarkupDollars({
+    subcontractor: subcontractorMarkupBase(readSubSheet(key, store)),
+    thirdParty: 200,
+    misc: 50,
+  });
+  assert.equal(first, 16.25);
   assert.equal(again, first);
 });
 
