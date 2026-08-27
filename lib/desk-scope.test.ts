@@ -161,7 +161,8 @@ describe("owner View as desk scope", () => {
     assert.equal(Boolean(onOwner), true);
     if (!onOwner) return;
     assert.equal(onOwner.ownerEmail, nathan.email);
-    assert.equal(handoffMarkText(onOwner, owner.email), "Shared. You can work on this job.");
+    assert.equal(handoffMarkText(onOwner, owner.email), "Shared / from Nathan Boyte.");
+    assert.equal(handoffMarkText(nathanList.packs[0], nathan.email), "Shared with Robert Henderson.");
     assert.equal(nathanList.packs[0]?.ownerEmail, nathan.email);
     assert.equal(canWritePack(deskScopeUser(owner, null), onOwner), true);
     assert.equal(canReturnPack(asNathan, nathanList.packs[0]!), false);
@@ -201,7 +202,7 @@ describe("owner View as desk scope", () => {
       nathanList.packs.map((row) => row.packId),
       signedIn.packs.map((row) => row.packId),
     );
-    assert.equal(handoffMarkText(nathanList.packs[0], nathan.email), "Shared. You can work on this job.");
+    assert.equal(handoffMarkText(nathanList.packs[0], nathan.email), "Shared / from Robert Henderson.");
     assert.equal(canWritePack(asNathan, nathanList.packs[0]!), true);
     const unshared = await unshareVisiblePack(owner, "new-mtaajdwa-f7539", nathan.email, drive);
     assert.equal(unshared.ok, true);

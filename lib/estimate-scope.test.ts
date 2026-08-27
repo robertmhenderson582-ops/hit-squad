@@ -50,6 +50,7 @@ describe("estimate vault scope", () => {
     assert.equal(packOwnerEmailForWrite(owner), OWNER_LOGIN_EMAIL);
     assert.equal(packOwnerEmailForWrite(novus, OWNER_LOGIN_EMAIL), OWNER_LOGIN_EMAIL);
     assert.equal(packOwnerEmailForWrite(tester, OWNER_LOGIN_EMAIL), tester.email);
+    assert.equal(packOwnerEmailForWrite(owner, tester.email), tester.email);
     assert.equal(canWritePack(tester, ownerPack), false);
     assert.equal(canWritePack(tester, testerPack), true);
     assert.equal(canWritePack(novus, ownerPack), true);

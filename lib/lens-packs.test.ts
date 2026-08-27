@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { jobsOnDesk, seedJobs } from "./jobs.ts";
 import {
   LENS_PACKS_KEY,
+  findDeskPack,
   packsForViewedDesk,
   readLensPacks,
   snapshotLensPack,
@@ -69,6 +70,14 @@ test("leftover owner flush does not wipe the Follow seat snapshot", () => {
 
   const ownerDesk = packsForViewedDesk(owner, false, null, store);
   assert.equal(ownerDesk.some((pack) => pack.packId === "new-mtaajdwa-f7539"), false);
+});
+
+test("findDeskPack reads live local first, then the View as snapshot", () => {
+  const store = memoryStore();
+  writeLensPacks("nathan", [snapshotLensPack({ ...cat2, sharedWith: [owner.email] })], store);
+  assert.equal(findDeskPack("new-mtaajdwa-f7539", "nathan", store)?.sharedWith?.[0], owner.email);
+  rememberLocalPack({ ...cat2, sharedWith: [] }, store);
+  assert.deepEqual(findDeskPack("new-mtaajdwa-f7539", "nathan", store)?.sharedWith, []);
 });
 
 test("owner Back-to-me Jobs includes a pack Nathan shared with the owner", () => {

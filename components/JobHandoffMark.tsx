@@ -21,8 +21,11 @@ export function JobHandoffMark({
   if (!pack || !email) return null;
   const text = handoffMarkText(pack, email);
   if (!text) return null;
+  const shared = text.startsWith("Shared");
   return (
-    <p className={`mt-2 text-sm font-semibold ${packTransferredToYou(pack, email) ? "text-amber-label" : "text-steel"}`}>
+    <p
+      className={`mt-2 text-sm font-semibold ${shared ? "text-steel" : packTransferredToYou(pack, email) ? "text-amber-label" : "text-steel"}`}
+    >
       {text}
     </p>
   );

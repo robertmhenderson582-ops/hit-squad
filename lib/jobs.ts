@@ -77,6 +77,14 @@ export function visibleSeedJobs(scope?: CompanyScope | null): JobRecord[] {
 }
 
 /** Owner/Sites seed jobs stay on the signed-in desk. Follow / View as uses that person's packs only. */
+export function packForJob<T extends { packId: string }>(
+  job: { id: string },
+  packs: T[],
+  estimateId?: string,
+): T | undefined {
+  return packs.find((pack) => job.id === `job-${pack.packId}` || (estimateId ? pack.packId === estimateId : false));
+}
+
 export function jobsOnDesk(
   serverJobs: JobRecord[] | undefined,
   packs: LocalPack[],

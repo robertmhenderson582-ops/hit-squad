@@ -1,6 +1,6 @@
 import { visibleDeskPacks, type ScopeUser } from "./estimate-scope.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
-import { type LocalPack, type StorageLike } from "./local-estimates.ts";
+import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
 export const LENS_PACKS_KEY = "hs_lens_packs_v1";
 
@@ -66,6 +66,15 @@ export function snapshotLensPack(
     transferredToName: pack.transferredToName,
     transferredFromName: pack.transferredFromName,
   };
+}
+
+export function findDeskPack(packId: string, seat?: string | null, store?: StorageLike | null): LocalPack | null {
+  const id = (packId || "").trim();
+  if (!id) return null;
+  const local = listLocalPacks(store).find((row) => row.packId === id);
+  if (local) return local;
+  if (!seat) return null;
+  return readLensPacks(seat, store).find((row) => row.packId === id) ?? null;
 }
 
 export function readLensPacks(seat: string, store?: StorageLike | null): LocalPack[] {

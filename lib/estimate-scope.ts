@@ -26,6 +26,8 @@ export function packOwnerEmailForWrite(user: ScopeUser, existing?: string) {
   if (current && (isOwnerVaultEmail(current) || current === user.email.trim().toLowerCase())) {
     return current;
   }
+  // A leftover owner flush must not restamp a tester-owned share as the owner vault.
+  if (current && current !== user.email.trim().toLowerCase()) return current;
   return ownerVaultEmail();
 }
 

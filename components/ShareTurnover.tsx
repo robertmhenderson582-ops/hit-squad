@@ -13,21 +13,22 @@ import {
 } from "@/lib/estimate-vault-client";
 import { canReturnPack, canSharePack, packSharedEmails } from "@/lib/estimate-scope";
 import { findHandoffSeat, type HandoffSeat } from "@/lib/handoff";
-import { findLocalPack, isLocalPackId } from "@/lib/local-estimates";
+import { isLocalPackId } from "@/lib/local-estimates";
+import { findDeskPack } from "@/lib/lens-packs";
 
 export function ShareTurnover({ title, packId }: { title?: string; packId?: string }) {
   const router = useRouter();
-  const { lens } = useDeskLens();
+  const { lens, seat } = useDeskLens();
   const [open, setOpen] = useState<"share" | "unshare" | "turnover" | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const pack = packId && isLocalPackId(packId) ? findLocalPack(packId) : null;
+  const pack = packId && isLocalPackId(packId) ? findDeskPack(packId, seat) : null;
   const deskUser = lens ? { email: lens.email, role: lens.role } : null;
   const canShare = Boolean(packId && pack && deskUser && canSharePack(deskUser, pack));
   const canReturn = Boolean(packId && pack && deskUser && canReturnPack(deskUser, pack));
   const sharedWith = (pack ? packSharedEmails(pack) : [])
     .map((email) => findHandoffSeat(email))
     .filter(Boolean) as HandoffSeat[];
-  const canHandoff = Boolean(packId && isLocalPackId(packId) && (canShare || !pack));
+  const canHandoff = Boolean(packId && isLocalPackId(packId) && canShare);
 
   return (
     <>
