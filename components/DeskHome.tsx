@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { DeskHero } from "@/components/DeskHero";
 import { useDisplay } from "@/components/DisplayProvider";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
@@ -12,12 +12,11 @@ import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
-import { localPacksForUser } from "@/lib/estimate-scope";
+import { visibleDeskPacks } from "@/lib/estimate-scope";
 import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, hydrateFromVault } from "@/lib/estimate-vault-client";
 import { isActiveMenuItem, menuForViewedDesk } from "@/lib/job-menu";
 import { jobsOnDesk } from "@/lib/jobs";
-import { listLocalPacks } from "@/lib/local-estimates";
 import type { DeskBoard } from "@/lib/types";
 
 // Home must stay these four tiles. Do not replace / with an Estimates-only blotter.
@@ -37,20 +36,21 @@ export function DeskHome() {
   const [desk, setDesk] = useState<DeskBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [closedPacks, setClosedPacks] = useState<ReturnType<typeof readClosed>>([]);
+  const [packTick, setPackTick] = useState(0);
   const { board } = useDeskBoard();
   const estimates = board?.estimates ?? [];
-  const lensRef = useRef(lens);
-  lensRef.current = lens;
 
   useEffect(() => {
     if (!lensReady) return;
     let cancelled = false;
     (async () => {
-      const current = lensRef.current;
-      if (!current) return;
-      await hydrateFromVault(undefined, { viewAs: seat });
-      if (cancelled) return;
-      const response = await deskFetch("/api/desk/jobs", viewAsInit(seat));
+      const jobsReq = deskFetch("/api/desk/jobs", viewAsInit(seat));
+      void hydrateFromVault(undefined, { viewAs: seat })
+        .then(() => {
+          if (!cancelled) setPackTick((value) => value + 1);
+        })
+        .catch(() => undefined);
+      const response = await jobsReq;
       const data = await response.json();
       if (cancelled) return;
       if (!response.ok) {
@@ -58,13 +58,7 @@ export function DeskHome() {
         return;
       }
       const next = data.desk as DeskBoard;
-      const packs = localPacksForUser(current, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived);
-      const jobs = jobsOnDesk(next.jobs ?? [], packs, viewingAs);
-      setDesk({
-        ...next,
-        jobs,
-        estimatesOpen: Math.max(next.estimatesOpen, packs.length + next.estimatesOpen),
-      });
+      setDesk(next);
       setClosedPacks(readClosed());
     })();
     return () => {
@@ -73,10 +67,13 @@ export function DeskHome() {
   }, [lensKey, lensReady, seat, viewingAs]);
 
   const menu = menuForViewedDesk(viewingAs);
-  const openJobs = (desk?.jobs ?? []).filter(
+  const packs = visibleDeskPacks(lens, viewingAs);
+  void packTick;
+  const jobs = jobsOnDesk(desk?.jobs ?? [], packs, viewingAs);
+  const openJobs = jobs.filter(
     (job) => job.status === "OPEN" && !jobLooksClosed(job, closedPacks) && isActiveMenuItem(job, menu),
   );
-  const closedJobs = (desk?.jobs ?? []).filter((job) => jobLooksClosed(job, closedPacks));
+  const closedJobs = jobs.filter((job) => jobLooksClosed(job, closedPacks));
   const openEstimates = estimates.filter(
     (row) => !closedPacks.some((item) => item.id === row.id) && isActiveMenuItem(row, menu),
   );

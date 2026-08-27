@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { JobHandoffMark } from "@/components/JobHandoffMark";
 import { JobMenuActions } from "@/components/JobMenuActions";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
@@ -11,12 +11,11 @@ import { useDeskBoard } from "@/components/useDeskBoard";
 import { useDisplay } from "@/components/DisplayProvider";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
-import { localPacksForUser } from "@/lib/estimate-scope";
+import { visibleDeskPacks } from "@/lib/estimate-scope";
 import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
 import { jobPlantHref, jobsOnDesk, plantJobTally, plantJobsLine } from "@/lib/jobs";
-import { listLocalPacks } from "@/lib/local-estimates";
 import type { JobRecord } from "@/lib/types";
 
 export function JobsDesk() {
@@ -28,34 +27,31 @@ export function JobsDesk() {
   const { resolvedTheme } = useDisplay();
   const night = resolvedTheme === "night";
   const estimates = board?.estimates ?? [];
-  const [jobs, setJobs] = useState<JobRecord[]>([]);
+  const [serverJobs, setServerJobs] = useState<JobRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
-  const lensRef = useRef(lens);
-  const viewingAsRef = useRef(viewingAs);
-  lensRef.current = lens;
-  viewingAsRef.current = viewingAs;
+  const [packTick, setPackTick] = useState(0);
 
   useEffect(() => {
     if (!lensReady) return;
     let cancelled = false;
     (async () => {
-      const current = lensRef.current;
-      if (!current) return;
-      await hydrateFromVault(undefined, { viewAs: seat });
-      if (cancelled) return;
-      await flushLocalPacksToVault(undefined, { viewAs: seat });
-      if (cancelled) return;
-      const response = await deskFetch("/api/desk/jobs", viewAsInit(seat));
+      const jobsReq = deskFetch("/api/desk/jobs", viewAsInit(seat));
+      void hydrateFromVault(undefined, { viewAs: seat })
+        .then(async () => {
+          if (cancelled) return;
+          await flushLocalPacksToVault(undefined, { viewAs: seat });
+          if (!cancelled) setPackTick((value) => value + 1);
+        })
+        .catch(() => undefined);
+      const response = await jobsReq;
       const data = await response.json();
       if (cancelled) return;
       if (!response.ok) {
         setError(data.error || "Jobs stayed on this desk.");
         return;
       }
-      const following = viewingAsRef.current;
-      const packs = localPacksForUser(current, listLocalPacks()).filter((pack) => !following || !pack.archived);
-      setJobs(jobsOnDesk((data.desk.jobs as JobRecord[]) ?? [], packs, following));
+      setServerJobs((data.desk.jobs as JobRecord[]) ?? []);
     })();
     return () => {
       cancelled = true;
@@ -64,7 +60,9 @@ export function JobsDesk() {
 
   const menu = menuForViewedDesk(viewingAs);
   const closed = readClosed();
-  const deskPacks = lens ? localPacksForUser(lens, listLocalPacks()) : [];
+  const deskPacks = visibleDeskPacks(lens, viewingAs);
+  const jobs = jobsOnDesk(serverJobs, deskPacks, viewingAs);
+  void packTick;
   const active = jobs.filter((job) => isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed));
   const archived = jobs.filter((job) => menuStatus(job, menu) === "archived");
   const transferred = menu.transferred;
@@ -145,7 +143,10 @@ export function JobsDesk() {
                 id={job.id}
                 title={job.title}
                 packId={estimate?.id}
-                onChange={() => setTick((value) => value + 1)}
+                onChange={() => {
+                  setTick((value) => value + 1);
+                  setPackTick((value) => value + 1);
+                }}
               />
             </div>
           </article>
@@ -165,7 +166,10 @@ export function JobsDesk() {
                   title={job.title}
                   packId={estimateForJob(job, estimates)?.id}
                   archived
-                  onChange={() => setTick((value) => value + 1)}
+                  onChange={() => {
+                    setTick((value) => value + 1);
+                    setPackTick((value) => value + 1);
+                  }}
                 />
               </li>
             ))}

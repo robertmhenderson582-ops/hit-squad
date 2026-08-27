@@ -12,8 +12,10 @@ import {
   localPacksForUser,
   localPackVisibleTo,
   packVisibleTo,
+  visibleDeskPacks,
   visiblePacks,
 } from "./estimate-scope.ts";
+import { rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 
 const owner = { email: OWNER_LOGIN_EMAIL, role: "owner" as const };
 const novus = { email: NOVUS_EMAIL, role: "operator" as const };
@@ -85,6 +87,54 @@ describe("estimate vault scope", () => {
     assert.deepEqual(
       localPacksForUser(tester, [ownerPack, testerPack, unstamped]).map((row) => row.packId),
       ["new-tester1"],
+    );
+  });
+
+  it("reads owner local packs on first paint and hides archived ones while following", () => {
+    const data: Record<string, string> = {};
+    const store: StorageLike = {
+      getItem(key) {
+        return key in data ? data[key] : null;
+      },
+      setItem(key, value) {
+        data[key] = value;
+      },
+      removeItem(key) {
+        delete data[key];
+      },
+    };
+    rememberLocalPack(
+      {
+        packId: "new-owner1",
+        title: "Owner working",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: OWNER_LOGIN_EMAIL,
+      },
+      store,
+    );
+    rememberLocalPack(
+      {
+        packId: "new-archived1",
+        title: "Archived",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: tester.email,
+        archived: true,
+      },
+      store,
+    );
+    assert.deepEqual(
+      visibleDeskPacks(owner, false, store).map((row) => row.packId),
+      ["new-owner1"],
+    );
+    assert.deepEqual(
+      visibleDeskPacks(tester, true, store).map((row) => row.packId),
+      [],
+    );
+    assert.deepEqual(
+      visibleDeskPacks(tester, false, store).map((row) => row.packId),
+      ["new-archived1"],
     );
   });
 });

@@ -1,4 +1,5 @@
 import { hasBuildDesk, isTester } from "./desk-role.ts";
+import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import type { PublicUser } from "./types.ts";
 
@@ -83,6 +84,16 @@ export function localPackVisibleTo(user: ScopeUser, pack: ScopedPack) {
 
 export function localPacksForUser<T extends ScopedPack>(user: ScopeUser, packs: T[]) {
   return packs.filter((pack) => localPackVisibleTo(user, pack));
+}
+
+/** Local packs for the current desk. Safe to read during first paint. */
+export function visibleDeskPacks(
+  user?: ScopeUser | null,
+  viewingAs = false,
+  store?: StorageLike | null,
+): LocalPack[] {
+  if (!user) return [];
+  return localPacksForUser(user, listLocalPacks(store)).filter((pack) => !viewingAs || !pack.archived);
 }
 
 export function canWritePack(user: ScopeUser, pack: ScopedPack) {
