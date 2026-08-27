@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useState } from "react";
+import { ModalPortal } from "@/components/ModalPortal";
 import { useDisplay } from "@/components/DisplayProvider";
 
 type ConfirmOptions = {
@@ -47,20 +48,22 @@ export function ConfirmDialogProvider({ children }: { children: React.ReactNode 
     <ConfirmContext.Provider value={confirmRemove}>
       {children}
       {request ? (
-        <div className="modal-scrim">
-          <div className="estimate-modal px-6 py-5">
-            <h2 className="font-display text-2xl text-[#163038]">{request.title}</h2>
-            <p className="mt-2 text-sm text-[#5b6f73]">{request.name}</p>
-            <div className="mt-5 flex justify-end gap-3">
-              <button type="button" onClick={() => answer(false)} className="rounded-lg border border-steel px-4 py-2 text-steel">
-                Cancel
-              </button>
-              <button type="button" onClick={() => answer(true)} className="rounded-lg bg-steel px-4 py-2 text-white">
-                {request.confirmLabel}
-              </button>
+        <ModalPortal>
+          <div className="modal-scrim">
+            <div className="estimate-modal px-6 py-5">
+              <h2 className="font-display text-2xl text-[#163038]">{request.title}</h2>
+              <p className="mt-2 text-sm text-[#5b6f73]">{request.name}</p>
+              <div className="mt-5 flex justify-end gap-3">
+                <button type="button" onClick={() => answer(false)} className="rounded-lg border border-steel px-4 py-2 text-steel">
+                  Cancel
+                </button>
+                <button type="button" onClick={() => answer(true)} className="rounded-lg bg-steel px-4 py-2 text-white">
+                  {request.confirmLabel}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       ) : null}
     </ConfirmContext.Provider>
   );

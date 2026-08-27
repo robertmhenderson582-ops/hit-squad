@@ -14,6 +14,7 @@ import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { RfqPreview } from "@/components/RfqPreview";
 import { EstimateTotalRail } from "@/components/EstimateTotalRail";
+import { ModalPortal } from "@/components/ModalPortal";
 import { RatesDesk } from "@/components/RatesDesk";
 import { WOOD_RIVER_SITE_ID } from "@/lib/rate-books";
 import { isWoodRiverSite } from "@/lib/shahan-wood-river";
@@ -233,6 +234,7 @@ export function EstimateWorkspace({
         <EstimateTotalRail client={jobClient || client} site={jobSite || site} />
       </div>
       {confirmClose && packageId ? (
+        <ModalPortal>
         <div className="modal-scrim" role="dialog" aria-modal="true">
           <div className="estimate-modal px-6 py-5">
             <h2 className="font-display text-2xl text-[#163038]">Close out</h2>
@@ -258,6 +260,7 @@ export function EstimateWorkspace({
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </div>
   );

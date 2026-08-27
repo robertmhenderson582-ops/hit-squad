@@ -883,7 +883,7 @@ textarea:focus {
 .modal-scrim {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 200;
   display: grid;
   place-items: center;
   padding: 1rem;
