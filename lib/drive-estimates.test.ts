@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   ESTIMATES_ROOM_ID,
+  driveAdapter,
+  driveAuthKind,
   driveConfigured,
   driveStoreKind,
   deleteEstimateInDrive,
@@ -9,7 +11,9 @@ import {
   listDrivePacks,
   memoryDrive,
   overwriteEstimateInDrive,
+  parseOAuthClient,
   parseServiceAccount,
+  resetDriveTokenCache,
   resolveEstimatesFolder,
   upsertEstimateInDrive,
 } from "./drive-estimates.ts";
@@ -31,18 +35,87 @@ function cat2(over: Partial<EstimatePackSnapshot> = {}): EstimatePackSnapshot {
   };
 }
 
+const oauthEnv = {
+  GOOGLE_OAUTH_CLIENT_ID: "test-oauth-client-id",
+  GOOGLE_OAUTH_CLIENT_SECRET: "test-oauth-client-secret",
+  GOOGLE_OAUTH_REFRESH_TOKEN: "test-oauth-refresh-token",
+};
+
+const saEnv = {
+  GOOGLE_CLIENT_EMAIL: "vault@hitsquad.iam.gserviceaccount.com",
+  GOOGLE_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\nABC\\n-----END PRIVATE KEY-----\\n",
+};
+
 describe("drive estimate upsert", () => {
   it("reads service account env without treating SMTP as Drive", () => {
     assert.equal(parseServiceAccount({ GMAIL_APP_PASSWORD: "x" }), null);
     assert.equal(driveConfigured({ GMAIL_APP_PASSWORD: "x" }), false);
     assert.equal(driveStoreKind({}), "unconfigured");
-    const parsed = parseServiceAccount({
-      GOOGLE_CLIENT_EMAIL: "vault@hitsquad.iam.gserviceaccount.com",
-      GOOGLE_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\nABC\\n-----END PRIVATE KEY-----\\n",
-    });
+    assert.equal(driveAuthKind({}), "unconfigured");
+    const parsed = parseServiceAccount(saEnv);
     assert.equal(parsed?.client_email, "vault@hitsquad.iam.gserviceaccount.com");
     assert.match(parsed?.private_key || "", /BEGIN PRIVATE KEY/);
     assert.match(parsed?.private_key || "", /\n/);
+    assert.equal(driveConfigured(saEnv), true);
+    assert.equal(driveAuthKind(saEnv), "service-account");
+    assert.equal(driveAdapter(saEnv).configured, true);
+    assert.equal(parseOAuthClient({ GOOGLE_OAUTH_CLIENT_ID: "only-id" }), null);
+    assert.equal(driveConfigured({ GOOGLE_OAUTH_CLIENT_ID: "only-id" }), false);
+    assert.equal(parseOAuthClient(oauthEnv)?.clientId, "test-oauth-client-id");
+    assert.equal(driveConfigured(oauthEnv), true);
+    assert.equal(driveAuthKind(oauthEnv), "oauth");
+    assert.equal(driveAuthKind({ ...saEnv, ...oauthEnv }), "oauth");
+    assert.equal(driveStoreKind(oauthEnv), "drive");
+  });
+
+  it("uses a refresh-token bearer for createJson when OAuth env is set", async () => {
+    resetDriveTokenCache();
+    const calls: Array<{ url: string; method: string; auth: string; body: string }> = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || "GET").toUpperCase();
+      const headers = new Headers(init?.headers);
+      const body = typeof init?.body === "string" ? init.body : init?.body instanceof URLSearchParams ? init.body.toString() : "";
+      calls.push({ url, method, auth: headers.get("authorization") || "", body });
+      if (url.startsWith("https://oauth2.googleapis.com/token")) {
+        const params = new URLSearchParams(body);
+        assert.equal(params.get("grant_type"), "refresh_token");
+        assert.equal(params.get("client_id"), "test-oauth-client-id");
+        assert.equal(params.get("client_secret"), "test-oauth-client-secret");
+        assert.equal(params.get("refresh_token"), "test-oauth-refresh-token");
+        return new Response(JSON.stringify({ access_token: "ya29.test-oauth", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.startsWith("https://www.googleapis.com/upload/drive/v3/files")) {
+        assert.equal(headers.get("authorization"), "Bearer ya29.test-oauth");
+        return new Response(JSON.stringify({ id: "file-oauth-1", name: "wood-river-cat-2-pit-stop.json" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error(`unexpected fetch ${method} ${url}`);
+    }) as typeof fetch;
+    try {
+      const adapter = driveAdapter({ ...saEnv, ...oauthEnv });
+      const file = await adapter.createJson("folder", "wood-river-cat-2-pit-stop.json", "{}", {
+        packId: "new-cat2pit",
+        ownerEmail: "nathanboyte@gmail.com",
+      });
+      assert.equal(file.id, "file-oauth-1");
+      assert.equal(calls.length, 2);
+      assert.equal(calls[0].url, "https://oauth2.googleapis.com/token");
+      assert.equal(calls[0].method, "POST");
+      assert.match(calls[1].url, /upload\/drive\/v3\/files/);
+      assert.equal(calls[1].auth, "Bearer ya29.test-oauth");
+      await adapter.createJson("folder", "second.json", "{}", { packId: "new-second", ownerEmail: "nathanboyte@gmail.com" });
+      assert.equal(calls.filter((call) => call.url === "https://oauth2.googleapis.com/token").length, 1);
+    } finally {
+      globalThis.fetch = previous;
+      resetDriveTokenCache();
+    }
   });
 
   it("updates the same file in place and keeps testers off owner packs", async () => {

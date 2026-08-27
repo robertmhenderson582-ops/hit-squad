@@ -24,11 +24,14 @@ export const NEXT_SHIP_VERSION = "1.24.0";
 export const NEXT_SHIP_VERSION_LABEL = "Hit Squad Project Controls V1.24";
 export const TESTER_NEXT_SHIP_DRAFT = [
   "Hit Squad Project Controls V1.24",
-  "• Draft only. Not on the live Inbox.",
+  "• Turn over a job actually hands it to the other person.",
+  "• Save so it shows on your phone.",
 ].join("\n");
 export const OWNER_NEXT_SHIP_DRAFT = [
   "Hit Squad Project Controls V1.24",
-  "• Draft only. Not on the live Inbox.",
+  "• Turn over a job actually hands it to the other person.",
+  "• Save so it shows on your phone.",
+  "• Testers who already saw V1.23 get this note (versioned seen key).",
 ].join("\n");
 
 const FORBIDDEN_TESTER =
