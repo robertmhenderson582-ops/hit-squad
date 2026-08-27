@@ -124,6 +124,8 @@ export function JobsDesk() {
               <Link href="/cost" className="job-action" onClick={(event) => go("/cost", event)}>
                 COST
               </Link>
+            </div>
+            <div className="relative z-20 mt-3" onClick={(event) => event.stopPropagation()}>
               <JobMenuActions
                 id={job.id}
                 title={job.title}
