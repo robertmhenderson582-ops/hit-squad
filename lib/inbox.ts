@@ -11,11 +11,11 @@ export type InboxPerson = {
   company: string;
 };
 
-export const OWNER_CONTACTS: InboxPerson[] = [
-  { id: "james", name: "James Cain", company: "Hit Squad" },
-  { id: "mark", name: "Mark H Schneider", company: "Hit Squad" },
-  { id: "joseph", name: "Joseph Henderson", company: "Hit Squad" },
-];
+/** Grok-era demo people. Not real seats. Compose stays empty until a real list exists. */
+export const OWNER_CONTACTS: InboxPerson[] = [];
+
+export const DEMO_THREAD_IDS = ["th-james", "th-mark", "th-joseph"] as const;
+export const DEMO_PERSON_IDS = ["james", "mark", "joseph"] as const;
 
 export type InboxMessage = {
   id: string;
@@ -56,6 +56,17 @@ function demoMessage(author: string, text: string): InboxMessage {
   };
 }
 
+export function isDemoInboxThread(thread: Pick<InboxThread, "id" | "personId">) {
+  return (
+    (DEMO_THREAD_IDS as readonly string[]).includes(thread.id) ||
+    (DEMO_PERSON_IDS as readonly string[]).includes(thread.personId)
+  );
+}
+
+export function stripDemoThreads(threads: InboxThread[]) {
+  return threads.filter((thread) => !isDemoInboxThread(thread));
+}
+
 export function ownerDemoThreads(): InboxThread[] {
   return [
     {
@@ -89,15 +100,18 @@ export function storeKey(seat: string) {
   return `${INBOX_STORE_PREFIX}${seat}`;
 }
 
-export function readThreads(seat: string, ownerChrome: boolean): InboxThread[] {
-  if (typeof window === "undefined") return ownerChrome ? ownerDemoThreads() : [];
+export function readThreads(seat: string, _ownerChrome: boolean): InboxThread[] {
+  if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(storeKey(seat));
-    if (!raw) return ownerChrome ? ownerDemoThreads() : [];
+    if (!raw) return [];
     const parsed = JSON.parse(raw) as { threads?: InboxThread[] };
-    return Array.isArray(parsed.threads) ? parsed.threads : ownerChrome ? ownerDemoThreads() : [];
+    const threads = Array.isArray(parsed.threads) ? parsed.threads : [];
+    const stripped = stripDemoThreads(threads);
+    if (stripped.length !== threads.length) writeThreads(seat, stripped);
+    return stripped;
   } catch {
-    return ownerChrome ? ownerDemoThreads() : [];
+    return [];
   }
 }
 

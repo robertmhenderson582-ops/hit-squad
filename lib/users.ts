@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import bcrypt from "bcryptjs";
+import { assignedCompany } from "./companies-store.ts";
 import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
@@ -229,10 +230,11 @@ export function seatHasPassword(email: string): boolean {
   return Boolean(findUserByEmail(email)?.passwordHash);
 }
 
-export function listSeatRows(): Array<PublicUser & { passwordIssued: boolean }> {
+export function listSeatRows(): Array<PublicUser & { passwordIssued: boolean; companyId: string }> {
   return ownerUsers().map((user) => ({
     ...toPublicUser(user),
     passwordIssued: Boolean(user.passwordHash),
+    companyId: assignedCompany(user.email),
   }));
 }
 

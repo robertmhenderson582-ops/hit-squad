@@ -12,6 +12,7 @@ import { useDeskBoard } from "@/components/useDeskBoard";
 import { useSession } from "@/components/SessionProvider";
 import { readClosed, reopenPackage } from "@/lib/desk-closeout";
 import { estimateHref } from "@/lib/estimate-open";
+import { canSeeCompany, companyScopeFor } from "@/lib/companies";
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
 
 export function EstimateBoard() {
@@ -19,7 +20,9 @@ export function EstimateBoard() {
   const { user } = useSession();
   const { lens, viewingAs } = useDeskLens();
   const { openNewEstimate } = useEstimateModal();
-  const { board, error } = useDeskBoard();
+  const { board, error, companyId } = useDeskBoard();
+  const scope = companyScopeFor(lens, companyId);
+  const showMadison = canSeeCompany(scope, "madison");
   const [closed, setClosed] = useState<{ id: string; title: string }[]>([]);
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -52,7 +55,8 @@ export function EstimateBoard() {
         </button>
       </div>
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Working estimates on this desk. {alias("Madison")} / {alias("P66")} figures stay with this blotter.
+        Working estimates on this desk.
+        {showMadison ? ` ${alias("Madison")} / ${alias("P66")} figures stay with this blotter.` : ""}
         The Yours chip marks the person on this desk — it is not a separate author list.
       </p>
       <div className="grid gap-3 sm:grid-cols-3">

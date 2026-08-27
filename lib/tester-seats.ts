@@ -1,3 +1,5 @@
+export type CompanyId = "hitsquad" | "madison" | "cbi";
+
 export type TesterSeatDef = {
   id: string;
   email: string;
@@ -5,7 +7,10 @@ export type TesterSeatDef = {
   aliased: boolean;
   rateBuilder: boolean;
   viewAs: boolean;
+  /** Shop vs field. Default field. Not the company gate. */
   shop: "madison" | "field";
+  /** Seed contractor. Owner can reassign; changing assignment is the reverse of assign. */
+  company: CompanyId;
 };
 
 export const TESTER_SEATS: TesterSeatDef[] = [
@@ -17,6 +22,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     rateBuilder: true,
     viewAs: false,
     shop: "madison",
+    company: "madison",
   },
   {
     id: "tester-john",
@@ -26,6 +32,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     rateBuilder: true,
     viewAs: false,
     shop: "madison",
+    company: "madison",
   },
   {
     id: "tester-wendell",
@@ -35,6 +42,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     rateBuilder: true,
     viewAs: false,
     shop: "field",
+    company: "hitsquad",
   },
   {
     id: "tester-benny",
@@ -44,6 +52,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     rateBuilder: true,
     viewAs: false,
     shop: "field",
+    company: "hitsquad",
   },
   {
     id: "tester-chance",
@@ -53,6 +62,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     rateBuilder: true,
     viewAs: false,
     shop: "field",
+    company: "hitsquad",
   },
   {
     id: "tester-shane",
@@ -62,6 +72,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     rateBuilder: true,
     viewAs: false,
     shop: "field",
+    company: "hitsquad",
   },
   {
     id: "tester-mark",
@@ -71,6 +82,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     rateBuilder: true,
     viewAs: false,
     shop: "field",
+    company: "hitsquad",
   },
   {
     id: "tester-cody",
@@ -80,6 +92,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     rateBuilder: true,
     viewAs: false,
     shop: "field",
+    company: "hitsquad",
   },
   {
     id: "tester-bill",
@@ -89,6 +102,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     rateBuilder: true,
     viewAs: false,
     shop: "field",
+    company: "hitsquad",
   },
   {
     id: "tester-james",
@@ -98,6 +112,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     rateBuilder: true,
     viewAs: false,
     shop: "field",
+    company: "cbi",
   },
   {
     id: "tester-joseph",
@@ -107,12 +122,14 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     rateBuilder: false,
     viewAs: true,
     shop: "field",
+    company: "hitsquad",
   },
 ];
 
 export const JOHN_BEECH_EMAIL = "johnbeech.madison@gmail.com";
 export const JOSEPH_EMAIL = "josephmhenderson2002@gmail.com";
 export const SHANE_EMAIL = "shane@apcontrolsllc.com";
+export const JAMES_EMAIL = "jameshcainjr@gmail.com";
 
 export const FORBIDDEN_SEED_EMAILS = [
   "beechj@madisonltd.com",

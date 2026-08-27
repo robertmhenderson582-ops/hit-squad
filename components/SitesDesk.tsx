@@ -6,6 +6,7 @@ import { useAlias, useDeskLens, useOwnerDesk } from "@/components/OwnerDeskConte
 import { visibleDeskPacks } from "@/lib/estimate-scope";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { isActiveMenuItem, menuForViewedDesk } from "@/lib/job-menu";
+import { canSeeCompany, companyScopeFor } from "@/lib/companies";
 import { jobsOnDesk, plantJobTally, plantJobsLine } from "@/lib/jobs";
 import type { SiteRecord } from "@/lib/types";
 
@@ -26,28 +27,32 @@ function siteCountLine(site: SiteRecord, tally = plantJobTally()) {
 }
 
 export function SitesDesk() {
-  const { board, error } = useDeskBoard();
+  const { board, error, companyId } = useDeskBoard();
   const { lens, viewingAs } = useDeskLens();
+  const scope = companyScopeFor(lens, companyId);
   const menu = menuForViewedDesk(viewingAs);
   const tally = plantJobTally(
-    jobsOnDesk([], visibleDeskPacks(lens, viewingAs), viewingAs).filter((job) => isActiveMenuItem(job, menu)),
+    jobsOnDesk([], visibleDeskPacks(lens, viewingAs, undefined, scope), viewingAs, scope).filter((job) =>
+      isActiveMenuItem(job, menu),
+    ),
   );
   const alias = useAlias();
   const owner = useOwnerDesk();
   const { resolvedTheme } = useDisplay();
   const night = resolvedTheme === "night";
+  const showMadison = canSeeCompany(scope, "madison");
   const all = (board?.sites ?? []).filter((site) => !site.id.includes("coker"));
   const visible = all.filter((site) => site.openJobs > 0 || assignedZero(site, owner?.viewSite));
   const noneOpen = all.every((site) => site.openJobs === 0);
-  const georgia = visible.filter((site) => site.family === "Georgia Power");
-  const p66 = visible.filter((site) => site.family === "Phillips 66");
+  const georgia = showMadison ? visible.filter((site) => site.family === "Georgia Power") : [];
+  const p66 = showMadison ? visible.filter((site) => site.family === "Phillips 66") : [];
 
   return (
     <div className={`${night ? "instrument-desk" : "paper-desk"} -mx-3 mt-5 rounded-sm px-4 py-6 sm:-mx-4 sm:px-6`}>
-      <h2 className="text-3xl font-semibold text-[#163038]">{alias("Madison")}</h2>
-      <p className="mt-3 max-w-3xl text-sm leading-6 text-[#5b6f73]">{plantJobsLine(tally)}</p>
+      {showMadison ? <h2 className="text-3xl font-semibold text-[#163038]">{alias("Madison")}</h2> : null}
+      <p className={`${showMadison ? "mt-3" : ""} max-w-3xl text-sm leading-6 text-[#5b6f73]`}>{plantJobsLine(tally)}</p>
       {error ? <p className="mt-3 text-amber-flare">{error}</p> : null}
-      {noneOpen ? (
+      {showMadison && noneOpen ? (
         <p className="mt-4 max-w-3xl text-sm text-[#5b6f73]">
           A client or plant shows up here once an estimate starts. A plant only lists once it has
           work. A PM still sees their assigned site at zero jobs.

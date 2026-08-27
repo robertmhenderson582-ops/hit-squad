@@ -16,6 +16,7 @@ import { visibleDeskPacks } from "@/lib/estimate-scope";
 import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, hydrateFromVault } from "@/lib/estimate-vault-client";
 import { isActiveMenuItem, menuForViewedDesk } from "@/lib/job-menu";
+import { companyScopeFor } from "@/lib/companies";
 import { jobsOnDesk } from "@/lib/jobs";
 import type { DeskBoard } from "@/lib/types";
 
@@ -37,7 +38,7 @@ export function DeskHome() {
   const [error, setError] = useState<string | null>(null);
   const [closedPacks, setClosedPacks] = useState<ReturnType<typeof readClosed>>([]);
   const [packTick, setPackTick] = useState(0);
-  const { board } = useDeskBoard();
+  const { board, companyId } = useDeskBoard();
   const estimates = board?.estimates ?? [];
 
   useEffect(() => {
@@ -67,9 +68,10 @@ export function DeskHome() {
   }, [lensKey, lensReady, seat, viewingAs]);
 
   const menu = menuForViewedDesk(viewingAs);
-  const packs = visibleDeskPacks(lens, viewingAs);
+  const scope = companyScopeFor(lens, companyId);
+  const packs = visibleDeskPacks(lens, viewingAs, undefined, scope);
   void packTick;
-  const jobs = jobsOnDesk(desk?.jobs ?? [], packs, viewingAs);
+  const jobs = jobsOnDesk(desk?.jobs ?? [], packs, viewingAs, scope);
   const openJobs = jobs.filter(
     (job) => job.status === "OPEN" && !jobLooksClosed(job, closedPacks) && isActiveMenuItem(job, menu),
   );

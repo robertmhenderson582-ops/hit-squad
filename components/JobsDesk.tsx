@@ -15,6 +15,8 @@ import { packsForViewedDesk } from "@/lib/lens-packs";
 import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
+import { ensureCbiDummyPack, shouldSeedCbiDummy } from "@/lib/cbi-dummy";
+import { companyScopeFor, type CompanyId } from "@/lib/companies";
 import { jobPlantHref, jobsOnDesk, plantJobTally, plantJobsLine } from "@/lib/jobs";
 import type { JobRecord } from "@/lib/types";
 
@@ -28,6 +30,7 @@ export function JobsDesk() {
   const night = resolvedTheme === "night";
   const estimates = board?.estimates ?? [];
   const [serverJobs, setServerJobs] = useState<JobRecord[]>([]);
+  const [companyId, setCompanyId] = useState<CompanyId | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [packTick, setPackTick] = useState(0);
@@ -52,6 +55,9 @@ export function JobsDesk() {
         return;
       }
       setServerJobs((data.desk.jobs as JobRecord[]) ?? []);
+      if (typeof data.companyId === "string") setCompanyId(data.companyId as CompanyId);
+      const nextScope = companyScopeFor(lens, typeof data.companyId === "string" ? (data.companyId as CompanyId) : companyId);
+      if (shouldSeedCbiDummy(nextScope)) ensureCbiDummyPack();
     })();
     return () => {
       cancelled = true;
@@ -60,8 +66,9 @@ export function JobsDesk() {
 
   const menu = menuForViewedDesk(viewingAs);
   const closed = readClosed();
+  const scope = companyScopeFor(lens, companyId);
   const deskPacks = packsForViewedDesk(lens, viewingAs, seat);
-  const jobs = jobsOnDesk(serverJobs, deskPacks, viewingAs);
+  const jobs = jobsOnDesk(serverJobs, deskPacks, viewingAs, scope);
   void packTick;
   const active = jobs.filter((job) => isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed));
   const archived = jobs.filter((job) => menuStatus(job, menu) === "archived");

@@ -1,3 +1,4 @@
+import { assignedCompanyId, catalogVisibleTo, type CompanyScope } from "./companies.ts";
 import type {
   ActivityLine,
   ChangeOrderRecord,
@@ -314,21 +315,30 @@ const EMPTY: ForgebookBoard = {
   cost: [],
 };
 
-export function boardForUser(userId: string): ForgebookBoard {
-  if (userId !== OWNER) return EMPTY;
-  return {
-    sites: SITES,
-    estimates: ESTIMATES,
-    crews: CREWS,
-    activities: ACTIVITIES,
-    equipment: EQUIPMENT,
-    staffing: STAFFING,
-    changeOrders: CHANGE_ORDERS,
-    rates: RATES,
-    hse: HSE,
-    quality: QUALITY,
-    cost: COST,
-  };
+const OWNER_BOARD: ForgebookBoard = {
+  sites: SITES,
+  estimates: ESTIMATES,
+  crews: CREWS,
+  activities: ACTIVITIES,
+  equipment: EQUIPMENT,
+  staffing: STAFFING,
+  changeOrders: CHANGE_ORDERS,
+  rates: RATES,
+  hse: HSE,
+  quality: QUALITY,
+  cost: COST,
+};
+
+export function boardForUser(userId: string, scope?: CompanyScope | null): ForgebookBoard {
+  if (userId === OWNER || scope?.isOwner) return OWNER_BOARD;
+  if (assignedCompanyId(scope) === "madison") {
+    return {
+      ...EMPTY,
+      sites: SITES.filter((site) => catalogVisibleTo(scope, site.client, site.name, site.family, site.city)),
+      estimates: ESTIMATES.filter((row) => catalogVisibleTo(scope, row.client, row.title, row.unit)),
+    };
+  }
+  return EMPTY;
 }
 
 export function estimateForUser(userId: string, estimateId: string): EstimateRecord | undefined {

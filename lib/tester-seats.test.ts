@@ -5,6 +5,7 @@ import { NOVUS_EMAIL } from "./desk-role.ts";
 import {
   FORBIDDEN_SEED_EMAILS,
   JOHN_BEECH_EMAIL,
+  JAMES_EMAIL,
   JOSEPH_EMAIL,
   SHANE_EMAIL,
   TESTER_SEATS,
@@ -20,6 +21,19 @@ test("John Beech is only the madison gmail", () => {
     false,
   );
   assert.equal(FORBIDDEN_SEED_EMAILS.includes("beechj@madisonltd.com"), true);
+});
+
+test("seeds company homes without inventing extra seats", () => {
+  assert.equal(testerByEmail("nathanboyte@gmail.com")?.company, "madison");
+  assert.equal(testerByEmail(JOHN_BEECH_EMAIL)?.company, "madison");
+  assert.equal(testerByEmail(JAMES_EMAIL)?.company, "cbi");
+  assert.equal(testerByEmail(JAMES_EMAIL)?.email, "jameshcainjr@gmail.com");
+  assert.equal(testerByEmail(JOSEPH_EMAIL)?.company, "hitsquad");
+  assert.equal(testerByEmail("marks544@yahoo.com")?.company, "hitsquad");
+  assert.equal(
+    TESTER_SEATS.filter((row) => row.company === "cbi").map((row) => row.email).join(),
+    JAMES_EMAIL,
+  );
 });
 
 test("does not seed the held-out people", () => {

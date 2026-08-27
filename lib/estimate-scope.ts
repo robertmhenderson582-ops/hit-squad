@@ -1,3 +1,5 @@
+import { companyScopeFor, type CompanyScope } from "./companies.ts";
+import { dummyPacksForUser, mergeDummyPacks } from "./cbi-dummy.ts";
 import { hasBuildDesk, isTester } from "./desk-role.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
@@ -91,9 +93,14 @@ export function visibleDeskPacks(
   user?: ScopeUser | null,
   viewingAs = false,
   store?: StorageLike | null,
+  scope?: CompanyScope | null,
 ): LocalPack[] {
-  if (!user) return [];
-  return localPacksForUser(user, listLocalPacks(store)).filter((pack) => !viewingAs || !pack.archived);
+  if (!user) return dummyPacksForUser(scope);
+  const next = scope ?? companyScopeFor(user);
+  return mergeDummyPacks(
+    localPacksForUser(user, listLocalPacks(store)).filter((pack) => !viewingAs || !pack.archived),
+    next,
+  );
 }
 
 export function canWritePack(user: ScopeUser, pack: ScopedPack) {
