@@ -7,6 +7,7 @@ import { GripToPan } from "@/components/GripToPan";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { clampPerDiem, type CalendarRange } from "@/lib/craft-labor";
 import {
+  AFFILIATE_LABEL,
   SUB_CARD_KINDS,
   SUB_EQUIP_PERIODS,
   SUB_EQUIP_PERIOD_LABEL,
@@ -14,6 +15,7 @@ import {
   oneOffUnitsFor,
   applyBookRate,
   applyTypedAmount,
+  applyVendorName,
   blankSubCard,
   blankSubEquipLine,
   blankSubLaborPosition,
@@ -294,6 +296,8 @@ export function SubcontractorDesk({ site = "", client = "" }: { site?: string; c
         setup calendar, same as Crew. Equipment is typed rows on that card — optional start/end
         uses date-span math. Same vendor can carry both. One-off LS / day / each rows stay for
         lump or unit price. Hour labor is not Qty × Rate. Not Crew labor and not Other Cost misc.
+        Tick Affiliate — no markup for sibling companies such as JVIC. Those dollars still count
+        as Subcontractor cost.
       </p>
 
       <section className="space-y-4">
@@ -428,7 +432,10 @@ function SubRow({
         <td className="px-2 py-2">
           <div className="flex items-center gap-2">
             <Chevron open={open} onToggle={onToggle} />
-            <span className="min-w-[10rem] font-semibold text-[#163038]">{line.vendor || "—"}</span>
+            <span className="min-w-[10rem] font-semibold text-[#163038]">
+              {line.vendor || "—"}
+              {line.affiliate ? <span className="ml-2 text-xs font-normal text-[#5b6f73]">{AFFILIATE_LABEL}</span> : null}
+            </span>
           </div>
         </td>
         <td className="px-2 py-2 text-[#163038]">{line.scope || "—"}</td>
@@ -466,8 +473,18 @@ function SubRow({
                 <input
                   className="paper-field mt-1"
                   value={line.vendor}
-                  onChange={(event) => onChange({ ...line, vendor: event.target.value })}
+                  onChange={(event) => onChange(applyVendorName(line, event.target.value))}
                 />
+              </label>
+              <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={Boolean(line.affiliate)}
+                  onChange={(event) => onChange({ ...line, affiliate: event.target.checked })}
+                  className="h-4 w-4 accent-steel"
+                  aria-label={AFFILIATE_LABEL}
+                />
+                {AFFILIATE_LABEL}
               </label>
               <label className="block text-sm sm:col-span-2">
                 Description / scope
@@ -612,7 +629,7 @@ function SubVendorCard({
           <input
             className="paper-field min-w-[14rem] font-semibold"
             value={card.vendor}
-            onChange={(event) => onChange({ ...card, vendor: event.target.value })}
+            onChange={(event) => onChange(applyVendorName(card, event.target.value))}
             aria-label="Vendor or sub name"
             placeholder="Vendor / sub"
           />
@@ -630,6 +647,16 @@ function SubVendorCard({
                 </option>
               ))}
             </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-[#163038]">
+            <input
+              type="checkbox"
+              checked={Boolean(card.affiliate)}
+              onChange={(event) => onChange({ ...card, affiliate: event.target.checked })}
+              className="h-4 w-4 accent-steel"
+              aria-label={AFFILIATE_LABEL}
+            />
+            {AFFILIATE_LABEL}
           </label>
         </div>
         <div className="flex items-center gap-3">

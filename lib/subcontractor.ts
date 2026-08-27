@@ -57,6 +57,8 @@ export type SubRate = {
   rate: number;
 };
 
+export const AFFILIATE_LABEL = "Affiliate — no markup";
+
 export type SubLine = {
   id: string;
   vendor: string;
@@ -65,6 +67,7 @@ export type SubLine = {
   unit: SubUnit;
   rate: number;
   bookId?: string;
+  affiliate?: boolean;
 };
 
 export type SubLaborPosition = {
@@ -95,6 +98,7 @@ export type SubCard = {
   kind: SubCardKind;
   labor: SubLaborPosition[];
   equipment: SubEquipLine[];
+  affiliate?: boolean;
 };
 
 export type SubSheet = {
@@ -146,8 +150,33 @@ export function emptySubBook(): SubRate[] {
   return [];
 }
 
+export function looksLikeJvic(name: string) {
+  const raw = (name || "").trim().toLowerCase();
+  if (!raw) return false;
+  if (raw.includes("jvic.com")) return true;
+  if (/(?:^|[^a-z0-9])jvic(?:$|[^a-z0-9])/.test(raw)) return true;
+  return /(?:^|[^a-z0-9])j[\.\s]*v[\.\s]*i[\.\s]*c(?:$|[^a-z0-9])/.test(raw);
+}
+
+/** Auto-check when the name becomes JVIC. Leaving JVIC clears it. A manual tick on any other vendor stays. */
+export function affiliateAfterVendorChange(
+  previousVendor: string,
+  nextVendor: string,
+  currentAffiliate = false,
+) {
+  const was = looksLikeJvic(previousVendor);
+  const now = looksLikeJvic(nextVendor);
+  if (now && !was) return true;
+  if (was && !now) return false;
+  return Boolean(currentAffiliate);
+}
+
+export function applyVendorName<T extends { vendor: string; affiliate?: boolean }>(row: T, vendor: string): T {
+  return { ...row, vendor, affiliate: affiliateAfterVendorChange(row.vendor, vendor, row.affiliate) };
+}
+
 export function blankSubLine(): SubLine {
-  return { id: uid("sb"), vendor: "", scope: "", qty: 1, unit: "LS", rate: 0 };
+  return { id: uid("sb"), vendor: "", scope: "", qty: 1, unit: "LS", rate: 0, affiliate: false };
 }
 
 export function blankSubRate(): SubRate {
@@ -178,7 +207,7 @@ export function blankSubEquipLine(): SubEquipLine {
 }
 
 export function blankSubCard(): SubCard {
-  return { id: uid("sc"), vendor: "", kind: "both", labor: [], equipment: [] };
+  return { id: uid("sc"), vendor: "", kind: "both", labor: [], equipment: [], affiliate: false };
 }
 
 export function normalizeSubUnit(value: unknown): SubUnit {
@@ -210,6 +239,7 @@ export function applyBookRate(line: SubLine, rate: SubRate): SubLine {
     rate: rate.rate,
     bookId: rate.id,
     qty: rate.unit === "LS" && !(line.qty > 0) ? 1 : line.qty,
+    affiliate: affiliateAfterVendorChange(line.vendor, rate.vendor, line.affiliate),
   };
 }
 
@@ -299,11 +329,28 @@ export function subCardTotal(card: SubCard, ctx: SubTotalContext = {}) {
   return labor + equipment;
 }
 
-export function subcontractorTotal(sheet: SubSheet | null | undefined, ctx: SubTotalContext = {}) {
+function sumSheetDollars(
+  sheet: SubSheet | null | undefined,
+  ctx: SubTotalContext,
+  include: (affiliate: boolean) => boolean,
+) {
   if (!sheet) return 0;
-  const lines = Array.isArray(sheet.lines) ? sheet.lines.reduce((sum, line) => sum + lineAmount(line), 0) : 0;
-  const cards = Array.isArray(sheet.cards) ? sheet.cards.reduce((sum, card) => sum + subCardTotal(card, ctx), 0) : 0;
+  const lines = Array.isArray(sheet.lines)
+    ? sheet.lines.reduce((sum, line) => (include(Boolean(line.affiliate)) ? sum + lineAmount(line) : sum), 0)
+    : 0;
+  const cards = Array.isArray(sheet.cards)
+    ? sheet.cards.reduce((sum, card) => (include(Boolean(card.affiliate)) ? sum + subCardTotal(card, ctx) : sum), 0)
+    : 0;
   return lines + cards;
+}
+
+export function subcontractorTotal(sheet: SubSheet | null | undefined, ctx: SubTotalContext = {}) {
+  return sumSheetDollars(sheet, ctx, () => true);
+}
+
+/** Affiliate cards and one-offs stay in Subcontractor cost. They stay out of the 6.5% markup base. */
+export function subcontractorMarkupBase(sheet: SubSheet | null | undefined, ctx: SubTotalContext = {}) {
+  return sumSheetDollars(sheet, ctx, (affiliate) => !affiliate);
 }
 
 export function normalizeSubLine(raw: Partial<SubLine> | null | undefined): SubLine {
@@ -315,6 +362,7 @@ export function normalizeSubLine(raw: Partial<SubLine> | null | undefined): SubL
     unit: normalizeSubUnit(raw?.unit),
     rate: Math.max(0, Number(raw?.rate) || 0),
     bookId: typeof raw?.bookId === "string" && raw.bookId ? raw.bookId : undefined,
+    affiliate: Boolean(raw?.affiliate),
   };
 }
 
@@ -372,6 +420,7 @@ export function normalizeSubCard(raw: Partial<SubCard> | null | undefined): SubC
     kind: normalizeSubCardKind(raw?.kind),
     labor: Array.isArray(raw?.labor) ? raw.labor.map((row) => normalizeSubLaborPosition(row)) : [],
     equipment: Array.isArray(raw?.equipment) ? raw.equipment.map((line) => normalizeSubEquipLine(line)) : [],
+    affiliate: Boolean(raw?.affiliate),
   };
 }
 

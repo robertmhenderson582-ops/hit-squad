@@ -1,16 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  AFFILIATE_LABEL,
   SUB_BOOK_KEY,
   SUB_STORE_PREFIX,
+  affiliateAfterVendorChange,
   applyBookRate,
   applyTypedAmount,
+  applyVendorName,
   blankSubCard,
   blankSubLine,
   emptySubBook,
   laborHoursCost,
   lineAmount,
   lineQty,
+  looksLikeJvic,
   normalizeSubBook,
   normalizeSubSheet,
   oneOffUnitsFor,
@@ -19,11 +23,12 @@ import {
   subCardTotal,
   subEquipAmount,
   subLaborCost,
+  subcontractorMarkupBase,
   subcontractorTotal,
   writeSubBook,
   writeSubSheet,
 } from "./subcontractor.ts";
-import { estimateTotalBreakdown } from "./estimate-total.ts";
+import { ESTIMATE_MARKUP_RATE, estimateMarkupDollars, estimateTotalBreakdown } from "./estimate-total.ts";
 
 function memoryStore(seed: Record<string, string> = {}) {
   const data = { ...seed };
@@ -330,4 +335,180 @@ test("old sheets without cards keep their lines; normalize does not wipe qty or 
   assert.equal(withHours.cards[0].labor[0].ranges[0].end, "2026-09-18");
   assert.equal(withHours.cards[0].labor[0].ranges[0].hoursPerShift, 12);
   assert.equal(withHours.cards[0].labor[0].ranges[0].headcount, 2);
+});
+
+function dayLaborCard(vendor: string, affiliate = false, stRate = 80) {
+  return {
+    ...blankSubCard(),
+    id: `sc-${vendor.replace(/\W+/g, "").toLowerCase() || "card"}`,
+    vendor,
+    kind: "labor" as const,
+    affiliate,
+    labor: [
+      {
+        id: "sl-1",
+        position: "Welder",
+        stRate,
+        otRate: 120,
+        dtRate: 160,
+        shift: "Days" as const,
+        clockOverride: "auto" as const,
+        ranges: [
+          {
+            id: "rg-1",
+            start: "2026-10-05",
+            end: "2026-10-05",
+            headcount: 1,
+            nightHeadcount: 1,
+            hoursPerShift: 10,
+            perDiemPeople: 0,
+            days: [false, true, true, true, true, true, false],
+          },
+        ],
+      },
+    ],
+    equipment: [],
+  };
+}
+
+const WR = { site: "Wood River Refinery", client: "Phillips 66" };
+
+test("JVIC name match is case-insensitive and ignores dots, spaces, and .com", () => {
+  assert.equal(AFFILIATE_LABEL, "Affiliate — no markup");
+  for (const name of ["JVIC", "jvic", "J.V.I.C.", "J V I C", "jvic.com", "JVIC Insulation", "www.jvic.com"]) {
+    assert.equal(looksLikeJvic(name), true, name);
+  }
+  for (const name of ["", "Apex NDE", "Madison", "Shahan", "JVI", "Project"]) {
+    assert.equal(looksLikeJvic(name), false, name);
+  }
+});
+
+test("typing JVIC auto-checks affiliate; user can uncheck; other vendors stay unchecked", () => {
+  assert.equal(affiliateAfterVendorChange("", "JVIC", false), true);
+  assert.equal(affiliateAfterVendorChange("", "Apex", false), false);
+  assert.equal(affiliateAfterVendorChange("Apex", "Apex NDE", true), true);
+  assert.equal(affiliateAfterVendorChange("JVIC", "JVIC Insulation", false), false);
+  assert.equal(affiliateAfterVendorChange("JVIC", "Apex", true), false);
+
+  const typed = applyVendorName({ ...blankSubLine(), vendor: "" }, "jvic.com");
+  assert.equal(typed.affiliate, true);
+  const unchecked = { ...typed, affiliate: false };
+  assert.equal(applyVendorName(unchecked, "JVIC").affiliate, false);
+  const other = applyVendorName({ ...blankSubLine(), vendor: "" }, "Apex NDE");
+  assert.equal(other.affiliate, false);
+
+  const fromBook = applyBookRate(blankSubLine(), {
+    id: "sr-jvic",
+    vendor: "J.V.I.C.",
+    scope: "NDE",
+    unit: "LS",
+    rate: 4000,
+  });
+  assert.equal(fromBook.affiliate, true);
+  const apexBook = applyBookRate(blankSubLine(), {
+    id: "sr-apex",
+    vendor: "Apex NDE",
+    scope: "RT",
+    unit: "each",
+    rate: 85,
+  });
+  assert.equal(apexBook.affiliate, false);
+});
+
+test("affiliate flag persists on vendor cards and one-off rows", () => {
+  const store = memoryStore();
+  writeSubSheet(
+    "new:affiliate-keep",
+    {
+      lines: [{ id: "a", vendor: "JVIC", scope: "LS", qty: 1, unit: "LS", rate: 4000, affiliate: true }],
+      cards: [dayLaborCard("JVIC", true)],
+    },
+    store,
+  );
+  const saved = readSubSheet("new:affiliate-keep", store);
+  assert.equal(saved.lines[0].affiliate, true);
+  assert.equal(saved.cards[0].affiliate, true);
+  assert.equal(saved.cards[0].vendor, "JVIC");
+  const raw = store.getItem(`${SUB_STORE_PREFIX}new:affiliate-keep`) || "";
+  assert.match(raw, /"affiliate":true/);
+});
+
+test("JVIC labor card stays in Subcontractor and does not raise 6.5% markup", () => {
+  const card = dayLaborCard("JVIC", true);
+  assert.equal(subLaborCost(card.labor[0], WR.site, WR.client), 800);
+  const sheet = normalizeSubSheet({ cards: [card] });
+  assert.equal(subcontractorTotal(sheet, WR), 800);
+  assert.equal(subcontractorMarkupBase(sheet, WR), 0);
+  assert.equal(estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(sheet, WR) }), 0);
+  const rail = estimateTotalBreakdown({
+    subcontractor: subcontractorTotal(sheet, WR),
+    markup: estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(sheet, WR) }),
+  });
+  assert.equal(rail.lines.find((line) => line.id === "subcontractor")?.amount, 800);
+  assert.equal(rail.lines.some((line) => line.id === "markup"), false);
+  assert.equal(rail.total, 800);
+});
+
+test("a normal vendor card still gets the 6.5% markup", () => {
+  const card = dayLaborCard("Apex Insulation", false);
+  const sheet = normalizeSubSheet({ cards: [card] });
+  assert.equal(subcontractorTotal(sheet, WR), 800);
+  assert.equal(subcontractorMarkupBase(sheet, WR), 800);
+  assert.equal(estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(sheet, WR) }), 52);
+  assert.equal(ESTIMATE_MARKUP_RATE, 0.065);
+});
+
+test("mixed sheet marks up only the non-affiliate part; third-party and misc stay in", () => {
+  const sheet = normalizeSubSheet({
+    lines: [
+      { id: "a", vendor: "Apex NDE", scope: "RT", qty: 1, unit: "LS", rate: 1000 },
+      { id: "b", vendor: "JVIC", scope: "LS", qty: 1, unit: "LS", rate: 4000, affiliate: true },
+    ],
+    cards: [dayLaborCard("JVIC", true), dayLaborCard("Field Co", false, 100)],
+  });
+  const field = subLaborCost(sheet.cards[1].labor[0], WR.site, WR.client);
+  assert.equal(field, 1000);
+  assert.equal(subcontractorTotal(sheet, WR), 1000 + 4000 + 800 + 1000);
+  assert.equal(subcontractorMarkupBase(sheet, WR), 1000 + 1000);
+  const markup = estimateMarkupDollars({
+    subcontractor: subcontractorMarkupBase(sheet, WR),
+    thirdParty: 200,
+    misc: 50,
+  });
+  assert.equal(markup, 146.25);
+  assert.equal(
+    estimateMarkupDollars({ subcontractor: 2000, thirdParty: 200, misc: 50 }),
+    146.25,
+  );
+});
+
+test("unchecking JVIC puts those dollars back in the 6.5% markup", () => {
+  const checked = normalizeSubSheet({ cards: [dayLaborCard("JVIC", true)] });
+  assert.equal(estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(checked, WR) }), 0);
+  const unchecked = normalizeSubSheet({ cards: [dayLaborCard("JVIC", false)] });
+  assert.equal(subcontractorTotal(unchecked, WR), 800);
+  assert.equal(subcontractorMarkupBase(unchecked, WR), 800);
+  assert.equal(estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(unchecked, WR) }), 52);
+});
+
+test("one-off affiliate stays in Subcontractor and skips 6.5% markup until unchecked", () => {
+  const affiliate = normalizeSubSheet({
+    lines: [{ id: "a", vendor: "JVIC", scope: "NDE LS", qty: 1, unit: "LS", rate: 4000, affiliate: true }],
+  });
+  assert.equal(subcontractorTotal(affiliate), 4000);
+  assert.equal(subcontractorMarkupBase(affiliate), 0);
+  assert.equal(estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(affiliate) }), 0);
+
+  const thirdAndMisc = estimateMarkupDollars({
+    subcontractor: subcontractorMarkupBase(affiliate),
+    thirdParty: 200,
+    misc: 50,
+  });
+  assert.equal(thirdAndMisc, 16.25);
+
+  const unchecked = normalizeSubSheet({
+    lines: [{ id: "a", vendor: "JVIC", scope: "NDE LS", qty: 1, unit: "LS", rate: 4000, affiliate: false }],
+  });
+  assert.equal(subcontractorMarkupBase(unchecked), 4000);
+  assert.equal(estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(unchecked) }), 260);
 });

@@ -9,7 +9,7 @@ import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import { otherCostTotals, readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
 import { laborDollarsFromCrew, perDiemDollarsFromCrew } from "@/lib/shahan-wood-river";
 import { onEstimateSheets } from "@/lib/sheet-events";
-import { readSubSheet, subcontractorTotal } from "@/lib/subcontractor";
+import { readSubSheet, subcontractorMarkupBase, subcontractorTotal } from "@/lib/subcontractor";
 
 function money(value: number) {
   return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -47,17 +47,19 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     const tools = equipmentTotals(equipment).largeTools;
     const rest = otherCostTotals({ ...other, perDiemRate: 0 }, 0);
     const perDiem = perDiemDollarsFromCrew(pack.crew, pack.jobMeta, site, client);
-    const subcontractor = subcontractorTotal(readSubSheet(pack.estimateKey), {
+    const subCtx = {
       site,
       client,
       otAfter8: pack.crew.otAfter8,
-    });
+    };
+    const sheet = readSubSheet(pack.estimateKey);
+    const subcontractor = subcontractorTotal(sheet, subCtx);
     return estimateTotalBreakdown({
       labor: laborDollarsFromCrew(pack.crew, site, client),
       equipment: tools + thirdCost,
       subcontractor,
       markup: estimateMarkupDollars({
-        subcontractor,
+        subcontractor: subcontractorMarkupBase(sheet, subCtx),
         thirdParty: thirdCost,
         misc: rest.misc,
       }),
