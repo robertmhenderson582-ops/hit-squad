@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DeskHero } from "@/components/DeskHero";
 import { useDisplay } from "@/components/DisplayProvider";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
@@ -13,9 +13,11 @@ import { useDeskBoard } from "@/components/useDeskBoard";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
 import { localPacksForUser } from "@/lib/estimate-scope";
+import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, hydrateFromVault } from "@/lib/estimate-vault-client";
 import { isActiveMenuItem, menuForViewedDesk } from "@/lib/job-menu";
-import { listLocalPacks, mergeLocalJobs } from "@/lib/local-estimates";
+import { jobsOnDesk } from "@/lib/jobs";
+import { listLocalPacks } from "@/lib/local-estimates";
 import type { DeskBoard } from "@/lib/types";
 
 // Home must stay these four tiles. Do not replace / with an Estimates-only blotter.
@@ -37,13 +39,18 @@ export function DeskHome() {
   const [closedPacks, setClosedPacks] = useState<ReturnType<typeof readClosed>>([]);
   const { board } = useDeskBoard();
   const estimates = board?.estimates ?? [];
+  const lensRef = useRef(lens);
+  lensRef.current = lens;
 
   useEffect(() => {
-    if (!lensReady || !lens) return;
+    if (!lensReady) return;
     let cancelled = false;
     (async () => {
+      const current = lensRef.current;
+      if (!current) return;
       await hydrateFromVault(undefined, { viewAs: seat });
-      const response = await deskFetch("/api/desk/jobs");
+      if (cancelled) return;
+      const response = await deskFetch("/api/desk/jobs", viewAsInit(seat));
       const data = await response.json();
       if (cancelled) return;
       if (!response.ok) {
@@ -51,10 +58,11 @@ export function DeskHome() {
         return;
       }
       const next = data.desk as DeskBoard;
-      const packs = localPacksForUser(lens, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived);
+      const packs = localPacksForUser(current, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived);
+      const jobs = jobsOnDesk(next.jobs ?? [], packs, viewingAs);
       setDesk({
         ...next,
-        jobs: mergeLocalJobs(next.jobs ?? [], packs),
+        jobs,
         estimatesOpen: Math.max(next.estimatesOpen, packs.length + next.estimatesOpen),
       });
       setClosedPacks(readClosed());

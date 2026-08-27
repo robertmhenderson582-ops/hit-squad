@@ -4,9 +4,11 @@ import {
   deskForUser,
   jobByCode,
   jobPlantHref,
+  jobsOnDesk,
   plantJobTally,
   plantJobsLine,
   plantTabFromQuery,
+  seedJobs,
 } from "./jobs.ts";
 
 describe("desk counts", () => {
@@ -30,5 +32,32 @@ describe("desk counts", () => {
     assert.equal(jobPlantHref("TA-8841", "Estimates"), "/jobs/wood-river?job=TA-8841&tab=estimates");
     assert.equal(plantTabFromQuery("change-orders"), "Change orders");
     assert.equal(jobByCode("NO-SUCH"), undefined);
+  });
+
+  it("keeps owner seed jobs after header nav and hides them while following", () => {
+    const cat2 = {
+      packId: "new-mtaajdwa-f7539",
+      key: "new:new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    const ownerJobs = jobsOnDesk([], [cat2], false);
+    assert.equal(ownerJobs.some((job) => job.id === "job-8841"), true);
+    assert.equal(ownerJobs.some((job) => job.id === "job-new-mtaajdwa-f7539"), true);
+    assert.equal(ownerJobs.length, seedJobs().length + 1);
+
+    const followed = jobsOnDesk([], [cat2], true);
+    assert.equal(followed.some((job) => job.id === "job-8841"), false);
+    assert.equal(followed.length, 1);
+    assert.equal(followed[0]?.title, "Madison CAT 2 (Pit Stop)");
+
+    const emptyFollow = jobsOnDesk([], [], true);
+    assert.equal(emptyFollow.length, 0);
+    const emptyOwner = jobsOnDesk([], [], false);
+    assert.equal(emptyOwner.length, seedJobs().length);
   });
 });

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { JobHandoffMark } from "@/components/JobHandoffMark";
 import { JobMenuActions } from "@/components/JobMenuActions";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
@@ -12,16 +12,18 @@ import { useDisplay } from "@/components/DisplayProvider";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
 import { localPacksForUser } from "@/lib/estimate-scope";
+import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
-import { jobPlantHref, plantJobTally, plantJobsLine } from "@/lib/jobs";
-import { listLocalPacks, mergeLocalJobs } from "@/lib/local-estimates";
+import { jobPlantHref, jobsOnDesk, plantJobTally, plantJobsLine } from "@/lib/jobs";
+import { listLocalPacks } from "@/lib/local-estimates";
 import type { JobRecord } from "@/lib/types";
 
 export function JobsDesk() {
   const alias = useAlias();
   const { lens, seat, viewingAs, lensReady, lensKey } = useDeskLens();
   const router = useRouter();
+  const pathname = usePathname();
   const { board } = useDeskBoard();
   const { resolvedTheme } = useDisplay();
   const night = resolvedTheme === "night";
@@ -29,31 +31,36 @@ export function JobsDesk() {
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
-
-  const reload = useCallback(async () => {
-    if (!lensReady || !lens) return;
-    await hydrateFromVault(undefined, { viewAs: seat });
-    await flushLocalPacksToVault();
-    const response = await deskFetch("/api/desk/jobs");
-    const data = await response.json();
-    if (!response.ok) {
-      setError(data.error || "Jobs stayed on this desk.");
-      return;
-    }
-    const packs = localPacksForUser(lens, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived);
-    setJobs(mergeLocalJobs((data.desk.jobs as JobRecord[]) ?? [], packs));
-  }, [lensKey, lensReady, seat, viewingAs]);
+  const lensRef = useRef(lens);
+  const viewingAsRef = useRef(viewingAs);
+  lensRef.current = lens;
+  viewingAsRef.current = viewingAs;
 
   useEffect(() => {
+    if (!lensReady) return;
     let cancelled = false;
     (async () => {
-      await reload();
+      const current = lensRef.current;
+      if (!current) return;
+      await hydrateFromVault(undefined, { viewAs: seat });
       if (cancelled) return;
+      await flushLocalPacksToVault(undefined, { viewAs: seat });
+      if (cancelled) return;
+      const response = await deskFetch("/api/desk/jobs", viewAsInit(seat));
+      const data = await response.json();
+      if (cancelled) return;
+      if (!response.ok) {
+        setError(data.error || "Jobs stayed on this desk.");
+        return;
+      }
+      const following = viewingAsRef.current;
+      const packs = localPacksForUser(current, listLocalPacks()).filter((pack) => !following || !pack.archived);
+      setJobs(jobsOnDesk((data.desk.jobs as JobRecord[]) ?? [], packs, following));
     })();
     return () => {
       cancelled = true;
     };
-  }, [reload, tick]);
+  }, [lensKey, lensReady, pathname, seat, tick, viewingAs]);
 
   const menu = menuForViewedDesk(viewingAs);
   const closed = readClosed();

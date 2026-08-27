@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { EstimateCard } from "@/components/EstimateCard";
 import { useEstimateModal } from "@/components/EstimateModalContext";
@@ -85,9 +85,12 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const tab = plantTabFromQuery(searchParams.get("tab"));
   const { board } = useDeskBoard();
   const [localJobs, setLocalJobs] = useState<ReturnType<typeof localPackToJob>[]>([]);
+  const lensRef = useRef(lens);
+  lensRef.current = lens;
   useEffect(() => {
-    const packs = lens
-      ? localPacksForUser(lens, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived)
+    const current = lensRef.current;
+    const packs = current
+      ? localPacksForUser(current, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived)
       : [];
     setLocalJobs(packs.map((pack) => localPackToJob(pack)));
   }, [board, lensKey, viewingAs]);

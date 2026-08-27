@@ -1,4 +1,4 @@
-import { viewAsInit, viewAsSeatFromValue } from "./desk-scope.ts";
+import { VIEW_AS_HEADER, viewAsInit, viewAsSeatFromValue } from "./desk-scope.ts";
 import {
   collectPack,
   mergeVaultIntoLocal,
@@ -45,7 +45,16 @@ export function bustVaultHydrate() {
 }
 
 export function deskFetch(input: RequestInfo | URL, init?: RequestInit) {
+  const headers = new Headers(init?.headers);
+  if (headers.has(VIEW_AS_HEADER)) {
+    return fetch(input, { ...init, credentials: "include", cache: "no-store", headers });
+  }
   return fetch(input, viewAsInit(currentViewAs, init));
+}
+
+function requestedVaultSeat(opts?: { viewAs?: string | null }) {
+  const requested = opts && Object.prototype.hasOwnProperty.call(opts, "viewAs") ? opts.viewAs : currentViewAs;
+  return viewAsSeatFromValue(requested);
 }
 
 function browserStore(store?: StorageLike | null): StorageLike | null {
@@ -67,8 +76,12 @@ export async function hydrateFromVault(
 ): Promise<EstimatePackSnapshot[]> {
   const target = browserStore(store);
   if (!target) return [];
-  const seat = viewAsSeatFromValue(opts?.viewAs ?? currentViewAs) || "owner";
-  if (hydratePromise && hydrateSeat === seat) return hydratePromise;
+  const seat = requestedVaultSeat(opts) || "owner";
+  if (hydratePromise && hydrateSeat === seat) {
+    const packs = await hydratePromise;
+    for (const pack of packs) mergeVaultIntoLocal(target, pack);
+    return packs;
+  }
   hydrateSeat = seat;
   hydratePromise = (async () => {
     try {
@@ -149,8 +162,8 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   return { ok: false as const };
 }
 
-export async function flushLocalPacksToVault(store?: StorageLike | null) {
-  if (currentViewAs) return;
+export async function flushLocalPacksToVault(store?: StorageLike | null, opts?: { viewAs?: string | null }) {
+  if (requestedVaultSeat(opts)) return;
   const target = browserStore(store);
   if (!target) return;
   for (const pack of listLocalPacks(target)) {

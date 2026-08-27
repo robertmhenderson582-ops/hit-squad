@@ -7,8 +7,8 @@ import { useAlias, useDeskLens, useOwnerDesk } from "@/components/OwnerDeskConte
 import { localPacksForUser } from "@/lib/estimate-scope";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { isActiveMenuItem, menuForViewedDesk } from "@/lib/job-menu";
-import { plantJobTally, plantJobsLine, seedJobs } from "@/lib/jobs";
-import { listLocalPacks, localPackToJob } from "@/lib/local-estimates";
+import { jobsOnDesk, plantJobTally, plantJobsLine } from "@/lib/jobs";
+import { listLocalPacks } from "@/lib/local-estimates";
 import type { SiteRecord } from "@/lib/types";
 
 function slugFor(site: SiteRecord) {
@@ -36,9 +36,7 @@ export function SitesDesk() {
     const packs = lens
       ? localPacksForUser(lens, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived)
       : [];
-    const jobs = [...(viewingAs ? [] : seedJobs()), ...packs.map((pack) => localPackToJob(pack))].filter((job) =>
-      isActiveMenuItem(job, menu),
-    );
+    const jobs = jobsOnDesk([], packs, viewingAs).filter((job) => isActiveMenuItem(job, menu));
     setTally(plantJobTally(jobs));
   }, [board, lensKey, viewingAs]);
   const alias = useAlias();

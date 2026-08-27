@@ -220,6 +220,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     const lens = seat === "owner" ? "owner" : seat;
     writeStoredFollow(seat);
     writeStoredViewAs(lens);
+    setVaultViewAs(seat === "owner" ? null : seat);
     saveSettings({ followSeat: seat, viewAs: lens });
     noteFeature(seat === "owner" ? "Stopped Follow" : `Follow ${seat} screen`);
     if (seat !== "owner") {
@@ -240,9 +241,10 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     }
     if (!hasBuildDesk(user)) return;
     writeStoredViewAs(seat);
+    setVaultViewAs(activeLensSeat(seat, followSeat));
     saveSettings({ viewAs: seat });
     noteFeature(seat === "owner" ? "View as owner" : `View as ${seat}`);
-  }, [user]);
+  }, [followSeat, user]);
 
   const setViewLens = useCallback((responsibility: ViewResponsibility, site: string) => {
     if (!canUseViewAs(user)) return;

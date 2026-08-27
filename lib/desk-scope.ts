@@ -36,7 +36,7 @@ export function viewingOtherDesk(session: Pick<PublicUser, "email">, deskUser: P
 
 export function viewAsHeaders(seat?: string | null): HeadersInit {
   const next = viewAsSeatFromValue(seat);
-  return next ? { [VIEW_AS_HEADER]: next } : {};
+  return { [VIEW_AS_HEADER]: next || "owner" };
 }
 
 export function viewAsInit(seat?: string | null, init?: RequestInit): RequestInit {
