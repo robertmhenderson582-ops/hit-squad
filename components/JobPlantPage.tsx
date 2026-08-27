@@ -199,9 +199,9 @@ export function JobPlantPage({ slug }: { slug: string }) {
             </article>
             <article className="site-plate plant-card px-5 py-5">
               <p className="text-xs tracking-[0.16em] text-[#5b6f73]">OT RULE</p>
-              <p className="mt-2 font-display text-2xl">{boundOtLabel(plant.name, plant.folder)}</p>
+              <p className="mt-2 font-display text-2xl">{alias(boundOtLabel(plant.name, plant.folder))}</p>
               {siteClockFromText(plant.name, plant.folder) === "east-coast" ? (
-                <p className="mt-1 text-xs text-[#5b6f73]">PCA0001103 — never PA or Mid-Atlantic</p>
+                <p className="mt-1 text-xs text-[#5b6f73]">{alias("PCA0001103")} — never PA or Mid-Atlantic</p>
               ) : null}
             </article>
           </div>

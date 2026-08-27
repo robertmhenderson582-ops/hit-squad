@@ -1,6 +1,10 @@
 export type AliasSeat = "owner" | "real" | "aliased";
 
 export const ALIAS_CATALOG: { real: string; alias: string; note: string }[] = [
+  { real: "East Coast (PCA0001103)", alias: "Atlantic overtime", note: "East Coast OT lock" },
+  { real: "West Coast (PCA0001100)", alias: "Pacific overtime", note: "West Coast OT lock" },
+  { real: "PCA0001103", alias: "Atlantic", note: "East Coast plant code" },
+  { real: "PCA0001100", alias: "Pacific", note: "West Coast plant code" },
   { real: "Phillips 66", alias: "Ironwood Refining", note: "Parent" },
   { real: "P66", alias: "Ironwood", note: "Short mark" },
   { real: "Kinder Morgan", alias: "Midcontinent Pipeline", note: "Pipeline parent" },
