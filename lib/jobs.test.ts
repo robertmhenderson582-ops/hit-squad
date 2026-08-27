@@ -59,5 +59,14 @@ describe("desk counts", () => {
     assert.equal(emptyFollow.length, 0);
     const emptyOwner = jobsOnDesk([], [], false);
     assert.equal(emptyOwner.length, seedJobs().length);
+
+    const firstPaintOwner = jobsOnDesk(undefined, [cat2], false);
+    assert.equal(firstPaintOwner.length, seedJobs().length + 1);
+    assert.equal(
+      plantJobTally(firstPaintOwner.filter((job) => job.id !== "job-new-mtaajdwa-f7539")).total,
+      seedJobs().length,
+    );
+    const afterStopFollowing = jobsOnDesk([], [cat2], false);
+    assert.equal(afterStopFollowing.some((job) => job.code === "TA-8841"), true);
   });
 });

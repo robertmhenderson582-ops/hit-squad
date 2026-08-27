@@ -1,14 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useDisplay } from "@/components/DisplayProvider";
 import { useAlias, useDeskLens, useOwnerDesk } from "@/components/OwnerDeskContext";
-import { localPacksForUser } from "@/lib/estimate-scope";
+import { visibleDeskPacks } from "@/lib/estimate-scope";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { isActiveMenuItem, menuForViewedDesk } from "@/lib/job-menu";
 import { jobsOnDesk, plantJobTally, plantJobsLine } from "@/lib/jobs";
-import { listLocalPacks } from "@/lib/local-estimates";
 import type { SiteRecord } from "@/lib/types";
 
 function slugFor(site: SiteRecord) {
@@ -29,16 +27,11 @@ function siteCountLine(site: SiteRecord, tally = plantJobTally()) {
 
 export function SitesDesk() {
   const { board, error } = useDeskBoard();
-  const { lens, viewingAs, lensKey } = useDeskLens();
-  const [tally, setTally] = useState(plantJobTally(viewingAs ? [] : undefined));
-  useEffect(() => {
-    const menu = menuForViewedDesk(viewingAs);
-    const packs = lens
-      ? localPacksForUser(lens, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived)
-      : [];
-    const jobs = jobsOnDesk([], packs, viewingAs).filter((job) => isActiveMenuItem(job, menu));
-    setTally(plantJobTally(jobs));
-  }, [board, lensKey, viewingAs]);
+  const { lens, viewingAs } = useDeskLens();
+  const menu = menuForViewedDesk(viewingAs);
+  const tally = plantJobTally(
+    jobsOnDesk([], visibleDeskPacks(lens, viewingAs), viewingAs).filter((job) => isActiveMenuItem(job, menu)),
+  );
   const alias = useAlias();
   const owner = useOwnerDesk();
   const { resolvedTheme } = useDisplay();
