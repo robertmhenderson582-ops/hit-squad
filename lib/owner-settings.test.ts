@@ -12,7 +12,7 @@ import {
   resetOwnerSettingsForTests,
   setOwnerSettings,
   useOwnerSettingsVaultForTests,
-} from "./owner-desk.ts";
+} from "./owner-settings-store.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-settings-"));
 process.env.OWNER_SETTINGS_PATH = join(dir, "settings.json");

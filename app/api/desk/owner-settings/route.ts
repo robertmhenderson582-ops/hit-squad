@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { hasBuildDesk, isTester } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
-import { clearRepublish, getOwnerSettings, setOwnerSettings, startRepublish, type RepublishWait } from "@/lib/owner-desk";
+import type { RepublishWait } from "@/lib/owner-desk";
+import { clearRepublish, getOwnerSettings, setOwnerSettings, startRepublish } from "@/lib/owner-settings-store";
 
 export const dynamic = "force-dynamic";
 

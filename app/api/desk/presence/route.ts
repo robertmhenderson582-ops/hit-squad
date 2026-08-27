@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { hasBuildDesk } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
-import { addActivity } from "@/lib/owner-desk";
+import { addActivity } from "@/lib/activity-store";
 import { beatPresence, listSeats, markSignedOut, pingPresence, seatFor, takeArrivals } from "@/lib/presence";
 
 export const dynamic = "force-dynamic";

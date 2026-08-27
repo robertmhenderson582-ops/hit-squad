@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { GripToPan } from "@/components/GripToPan";
-import type { ActivityKind, ActivityRow } from "@/lib/owner-desk";
+import type { ActivityKind, ActivityRow } from "@/lib/activity-store";
 
 const KIND: Record<ActivityKind, string> = {
   "sign-in": "SIGN-IN OK",

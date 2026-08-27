@@ -9,7 +9,7 @@ import {
   removeActivity,
   removeActivityOlderThan,
   type ActivityKind,
-} from "@/lib/owner-desk";
+} from "@/lib/activity-store";
 
 export const dynamic = "force-dynamic";
 
