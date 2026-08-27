@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { useSession } from "@/components/SessionProvider";
 import { aliasText, shouldApplyAliases } from "@/lib/catalog-aliases";
 import { activeLensSeat, canUseFollow, canUseViewAs, deskLensKey, hasBuildDesk, isTester, lensUser, testerFromViewAs, viewingAsOther } from "@/lib/desk-role";
-import { setVaultViewAs } from "@/lib/estimate-vault-client";
+import { hydrateFromVault, setVaultViewAs } from "@/lib/estimate-vault-client";
 import {
   aliasLensFor,
   isFollowSeat,
@@ -215,7 +215,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     noteFeature(on ? "Aliases tester view on" : "Aliases real names");
   }, [user]);
 
-  const setFollowSeat = useCallback((seat: FollowSeat, land?: string) => {
+  const setFollowSeat = useCallback((seat: FollowSeat, nextLand?: string) => {
     if (!canUseFollow(user)) return;
     const lens = seat === "owner" ? "owner" : seat;
     writeStoredFollow(seat);
@@ -224,7 +224,10 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     saveSettings({ followSeat: seat, viewAs: lens });
     noteFeature(seat === "owner" ? "Stopped Follow" : `Follow ${seat} screen`);
     if (seat !== "owner") {
-      window.location.assign(followLandPath(land ?? "/"));
+      const land = followLandPath(nextLand ?? "/");
+      void hydrateFromVault(undefined, { viewAs: seat }).finally(() => {
+        window.location.assign(land);
+      });
       return;
     }
     setFollowSeatState("owner");
@@ -233,7 +236,6 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
 
   const setViewAs = useCallback((seat: ViewAsSeat) => {
     if (!canUseViewAs(user)) return;
-    setViewAsState(seat);
     if (isJosephEmail(user?.email)) {
       writeJosephView({ ...readJosephView(), viewAs: "owner" });
       setViewAsState("owner");
@@ -244,6 +246,13 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     setVaultViewAs(activeLensSeat(seat, followSeat));
     saveSettings({ viewAs: seat });
     noteFeature(seat === "owner" ? "View as owner" : `View as ${seat}`);
+    if (seat !== "owner") {
+      void hydrateFromVault(undefined, { viewAs: seat }).finally(() => {
+        setViewAsState(seat);
+      });
+      return;
+    }
+    setViewAsState("owner");
   }, [followSeat, user]);
 
   const setViewLens = useCallback((responsibility: ViewResponsibility, site: string) => {

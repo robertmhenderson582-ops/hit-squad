@@ -11,7 +11,7 @@ import { useDeskBoard } from "@/components/useDeskBoard";
 import { useDisplay } from "@/components/DisplayProvider";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
-import { visibleDeskPacks } from "@/lib/estimate-scope";
+import { packsForViewedDesk } from "@/lib/lens-packs";
 import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
@@ -60,7 +60,7 @@ export function JobsDesk() {
 
   const menu = menuForViewedDesk(viewingAs);
   const closed = readClosed();
-  const deskPacks = visibleDeskPacks(lens, viewingAs);
+  const deskPacks = packsForViewedDesk(lens, viewingAs, seat);
   const jobs = jobsOnDesk(serverJobs, deskPacks, viewingAs);
   void packTick;
   const active = jobs.filter((job) => isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed));

@@ -17,6 +17,7 @@ import {
   writeVaultSeen,
   type MenuItem,
 } from "./job-menu.ts";
+import { snapshotLensPack, writeLensPacks } from "./lens-packs.ts";
 import { deleteLocalPack, findLocalPack, isLocalPackId, listLocalPacks, type StorageLike } from "./local-estimates.ts";
 
 export const ESTIMATE_VAULT_DEBOUNCE_MS = 1500;
@@ -80,6 +81,7 @@ export async function hydrateFromVault(
   if (hydratePromise && hydrateSeat === seat) {
     const packs = await hydratePromise;
     for (const pack of packs) mergeVaultIntoLocal(target, pack);
+    if (seat !== "owner") writeLensPacks(seat, packs.map(snapshotLensPack), target);
     return packs;
   }
   hydrateSeat = seat;
@@ -111,6 +113,7 @@ export async function hydrateFromVault(
           target,
         );
       }
+      if (viewingAs) writeLensPacks(seat, packs.map(snapshotLensPack), target);
       for (const pack of packs) {
         mergeVaultIntoLocal(target, pack);
         if (viewingAs) continue;
