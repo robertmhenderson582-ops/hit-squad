@@ -1,6 +1,7 @@
 "use client";
 
 import { SubcontractorRateBook } from "@/components/SubcontractorDesk";
+import { useAlias } from "@/components/OwnerDeskContext";
 import {
   SHAHAN_BOOK_LABEL,
   SHAHAN_CRAFT_PD,
@@ -65,13 +66,14 @@ function EquipmentTable({
 }
 
 export function RateBuilder() {
+  const alias = useAlias();
   const groups = shahanLaborByGroup(SHAHAN_LABOR);
   const equipment = shahanEquipmentByFuel(SHAHAN_EQUIPMENT);
 
   return (
     <div className="space-y-5">
       <section className="plant-card px-5 py-5">
-        <h2 className="font-display text-2xl font-semibold text-[#163038]">{SHAHAN_BOOK_LABEL}</h2>
+        <h2 className="font-display text-2xl font-semibold text-[#163038]">{alias(SHAHAN_BOOK_LABEL)}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">
           Debbie Shahan TM OCIP book for P66 Wood River. Crew Cost uses these ST / OT / DT bill
           rates when a row title matches. PT Bill Rate maps to DT. OT × {SHAHAN_OT_MULTIPLIER}. PT ×{" "}

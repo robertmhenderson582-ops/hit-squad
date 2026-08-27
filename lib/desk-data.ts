@@ -329,6 +329,14 @@ const OWNER_BOARD: ForgebookBoard = {
   cost: COST,
 };
 
+export function catalogSites(): SiteRecord[] {
+  return SITES;
+}
+
+export function catalogEstimates(): EstimateRecord[] {
+  return ESTIMATES;
+}
+
 export function boardForUser(userId: string, scope?: CompanyScope | null): ForgebookBoard {
   if (userId === OWNER || scope?.isOwner) return OWNER_BOARD;
   if (assignedCompanyId(scope) === "madison") {
