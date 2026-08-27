@@ -14,7 +14,9 @@ import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { RfqPreview } from "@/components/RfqPreview";
 import { EstimateTotalRail } from "@/components/EstimateTotalRail";
-import { RateBuilder } from "@/components/RateBuilder";
+import { RatesDesk } from "@/components/RatesDesk";
+import { WOOD_RIVER_SITE_ID } from "@/lib/rate-books";
+import { isWoodRiverSite } from "@/lib/shahan-wood-river";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
 import type { StaffingLine } from "@/lib/types";
 
@@ -220,7 +222,13 @@ export function EstimateWorkspace({
       </header>
       <div className={`${paper ? "paper-desk desk-day" : "instrument-desk desk-night"} est-desk-body min-h-[70vh] px-4 py-6`}>
         <DeskBanners />
-        {tab === "rates" ? <RateBuilder /> : null}
+        {tab === "rates" ? (
+          <RatesDesk
+            initialSiteId={isWoodRiverSite(jobSite || site) ? WOOD_RIVER_SITE_ID : undefined}
+            initialJobId={packageId}
+            initialJobTitle={name}
+          />
+        ) : null}
         {tab === "rates" ? null : children}
         <EstimateTotalRail client={jobClient || client} site={jobSite || site} />
       </div>
