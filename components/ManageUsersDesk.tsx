@@ -5,6 +5,7 @@ import { PasswordField } from "@/components/PasswordField";
 import { PresencePulse } from "@/components/PresencePulse";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { COMPANIES, companyName, isCompanyId, type CompanyId } from "@/lib/companies";
 import { canUseFollow, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
 import { followSeatFromEmail } from "@/lib/follow";
 import { EMPTY_MODULES } from "@/lib/roster";
@@ -17,7 +18,12 @@ const PERMISSION_OPTIONS: { value: RosterPermission; label: string }[] = [
   { value: "Staff", label: "Staff — estimates only" },
 ];
 
-type SeatRow = PublicUser & { passwordIssued: boolean };
+type SeatRow = PublicUser & { passwordIssued: boolean; companyId?: string };
+
+function seatCompanyId(row: SeatRow): CompanyId {
+  const id = row.companyId || "";
+  return isCompanyId(id) ? id : "hitsquad";
+}
 
 type LiveSeat = { email: string; path: string };
 
@@ -68,6 +74,23 @@ export function ManageUsersDesk() {
     if (!seat || !desk || !followOk) return;
     const ping = liveSeats.find((row) => row.email.toLowerCase() === email.trim().toLowerCase());
     desk.setFollowSeat(seat, ping?.path ?? "/");
+  }
+
+  async function onAssignCompany(email: string, companyId: CompanyId) {
+    setSeatNote(null);
+    const response = await fetch("/api/desk/seats", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, companyId }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setSeatNote(data.error || "Could not assign company.");
+      return;
+    }
+    setSeats(data.seats ?? []);
+    setSeatNote("Company assignment saved. Changing it is the reverse of assign.");
   }
 
   async function onIssue(event: FormEvent) {
@@ -156,7 +179,7 @@ export function ManageUsersDesk() {
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
               <tr>
-                {["NAME", "EMAIL", "ROLE", "PASSWORD", followOk ? "FOLLOW" : ""].filter(Boolean).map((header) => (
+                {["NAME", "EMAIL", "ROLE", "COMPANY", "PASSWORD", followOk ? "FOLLOW" : ""].filter(Boolean).map((header) => (
                   <th key={header} className="px-2 py-2">
                     {header}
                   </th>
@@ -170,6 +193,26 @@ export function ManageUsersDesk() {
                   <td className="px-2 py-2">{row.email}</td>
                   <td className="px-2 py-2">
                     {row.role === "owner" ? "Owner" : row.role === "operator" ? "Operator" : "Tester"}
+                  </td>
+                  <td className="px-2 py-2">
+                    {row.role === "owner" ? (
+                      <span>All · {companyName(seatCompanyId(row))}</span>
+                    ) : owner ? (
+                      <select
+                        value={seatCompanyId(row)}
+                        onChange={(event) => onAssignCompany(row.email, event.target.value as CompanyId)}
+                        className="paper-field"
+                        aria-label={`Company for ${row.name}`}
+                      >
+                        {COMPANIES.map((company) => (
+                          <option key={company.id} value={company.id}>
+                            {company.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      companyName(seatCompanyId(row))
+                    )}
                   </td>
                   <td className="px-2 py-2">
                     {row.role === "owner"

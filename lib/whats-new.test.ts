@@ -59,7 +59,7 @@ describe("inbox what's-new", () => {
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
     assert.match(TESTER_WHATS_NEW, /Leftover copies can no longer undo a Turn over/);
     assert.match(TESTER_WHATS_NEW, /The person you handed the job to sees it again with Return/);
-    assert.equal(/Wendell|Joseph|testers|Follow|Shane|apcontrolsllc|seat/i.test(TESTER_WHATS_NEW), false);
+    assert.equal(/Wendell|Joseph|testers|Follow|Shane|apcontrolsllc|seat|James|CBI/i.test(TESTER_WHATS_NEW), false);
     assert.match(OWNER_WHATS_NEW, /Leftover copies can no longer undo a Turn over/);
     assert.match(OWNER_WHATS_NEW, /Jobs in the header stays put/);
     assert.equal(/View as/i.test(TESTER_WHATS_NEW), false);
@@ -143,7 +143,7 @@ describe("inbox what's-new", () => {
     assert.match(OWNER_WHATS_NEW, /Leftover copies can no longer undo a Turn over/);
     assert.match(TESTER_WHATS_NEW, /Leftover copies can no longer undo a Turn over/);
     assert.match(TESTER_WHATS_NEW, /sees it again with Return/);
-    assert.equal(/Wendell|Joseph|Follow|Shane|apcontrolsllc|seat|security|vault|other users/i.test(TESTER_WHATS_NEW), false);
+    assert.equal(/Wendell|Joseph|Follow|Shane|apcontrolsllc|seat|security|vault|other users|James|CBI/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
       /password|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
         TESTER_WHATS_NEW,

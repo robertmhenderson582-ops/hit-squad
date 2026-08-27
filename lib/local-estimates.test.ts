@@ -62,6 +62,7 @@ describe("local estimate packs", () => {
     assert.equal(saved.key, newEstimateKey(packId));
     assert.equal(storageKeyForPack(packId), "new:new-cat2pit");
     assert.equal(siteIdFromSite("Wood River — Roxana, IL"), "site-madison");
+    assert.equal(siteIdFromSite("Shop", "CBI"), "site-shop");
     const listed = listLocalPacks(store);
     assert.equal(listed.length, 1);
     assert.equal(listed[0].title, "Cat 2 Pit Stop");

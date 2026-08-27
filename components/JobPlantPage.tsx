@@ -12,10 +12,11 @@ import { readClosed } from "@/lib/desk-closeout";
 import { ChangeOrderDesk } from "@/components/ChangeOrderDesk";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
-import { localPacksForUser } from "@/lib/estimate-scope";
+import { companyScopeFor } from "@/lib/companies";
+import { visibleDeskPacks } from "@/lib/estimate-scope";
 import { VIEW_RESPONSIBILITIES, VISUAL_ROSTER } from "@/lib/owner-desk";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
-import { jobByCode, plantJobTally, plantJobsLine, plantTabFromQuery, plantTabQuery, seedJobs, type PlantTab } from "@/lib/jobs";
+import { jobByCode, plantJobTally, plantJobsLine, plantTabFromQuery, plantTabQuery, visibleSeedJobs, type PlantTab } from "@/lib/jobs";
 import { listLocalPacks, localPackToJob } from "@/lib/local-estimates";
 
 const PLANTS: Record<string, { client: string; folder: string; name: string; city: string; plant: string; site: string }> = {
@@ -83,17 +84,16 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const night = resolvedTheme === "night";
   const jobCode = searchParams.get("job");
   const tab = plantTabFromQuery(searchParams.get("tab"));
-  const { board } = useDeskBoard();
+  const { board, companyId } = useDeskBoard();
+  const scope = companyScopeFor(lens, companyId);
   const [localJobs, setLocalJobs] = useState<ReturnType<typeof localPackToJob>[]>([]);
   const lensRef = useRef(lens);
   lensRef.current = lens;
   useEffect(() => {
     const current = lensRef.current;
-    const packs = current
-      ? localPacksForUser(current, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived)
-      : [];
+    const packs = current ? visibleDeskPacks(current, viewingAs, undefined, companyScopeFor(current, companyId)) : [];
     setLocalJobs(packs.map((pack) => localPackToJob(pack)));
-  }, [board, lensKey, viewingAs]);
+  }, [board, companyId, lensKey, viewingAs]);
   const openedJob = jobByCode(jobCode, localJobs);
   const closed = readClosed().filter((item) => item.kind === "estimate").map((item) => item.id);
   const plantEstimates = estimatesForPlant(
@@ -102,7 +102,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
     plant.name,
     plant.city,
   );
-  const tally = plantJobTally([...(viewingAs ? [] : seedJobs()), ...localJobs]);
+  const tally = plantJobTally([...(viewingAs ? [] : visibleSeedJobs(scope)), ...localJobs]);
   const openedEstimate = openedJob ? estimateForJob(openedJob, board?.estimates ?? []) : undefined;
 
   function setTab(next: PlantTab) {

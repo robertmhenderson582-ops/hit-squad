@@ -65,6 +65,7 @@ function memoryKeys(store: StorageLike): string[] {
 
 export function siteIdFromSite(site = "", client = ""): string {
   const hay = `${site} ${client}`.toLowerCase();
+  if (/\bcbi\b/.test(hay)) return "site-shop";
   if (hay.includes("coker")) return "site-coker-pad";
   if (hay.includes("yates") || hay.includes("georgia power")) return "site-yates";
   if (hay.includes("rodeo")) return "site-rodeo";

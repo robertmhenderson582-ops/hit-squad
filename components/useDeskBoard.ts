@@ -2,16 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useDeskLens } from "@/components/OwnerDeskContext";
+import { ensureCbiDummyPack, shouldSeedCbiDummy } from "@/lib/cbi-dummy";
+import { companyScopeFor, type CompanyId } from "@/lib/companies";
 import { viewAsInit } from "@/lib/desk-scope";
-import { localPacksForUser } from "@/lib/estimate-scope";
+import { visibleDeskPacks } from "@/lib/estimate-scope";
 import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
-import { listLocalPacks, mergeLocalBoard } from "@/lib/local-estimates";
+import { mergeLocalBoard } from "@/lib/local-estimates";
 import type { ForgebookBoard } from "@/lib/types";
 
 export function useDeskBoard() {
   const { lens, seat, viewingAs, lensReady, lensKey } = useDeskLens();
   const [board, setBoard] = useState<ForgebookBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState<CompanyId | undefined>();
   const lensRef = useRef(lens);
   lensRef.current = lens;
 
@@ -32,7 +35,11 @@ export function useDeskBoard() {
         setError(data.error || "Desk records stayed on this board.");
         return;
       }
-      const packs = localPacksForUser(current, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived);
+      const nextCompany = typeof data.companyId === "string" ? data.companyId : undefined;
+      if (nextCompany) setCompanyId(nextCompany as CompanyId);
+      const scope = companyScopeFor(current, nextCompany as CompanyId | undefined);
+      if (shouldSeedCbiDummy(scope)) ensureCbiDummyPack();
+      const packs = visibleDeskPacks(current, viewingAs, undefined, scope);
       setBoard(mergeLocalBoard(data.board as ForgebookBoard, packs));
     })();
     return () => {
@@ -40,5 +47,5 @@ export function useDeskBoard() {
     };
   }, [lensKey, lensReady, seat, viewingAs]);
 
-  return { board, error };
+  return { board, error, companyId };
 }

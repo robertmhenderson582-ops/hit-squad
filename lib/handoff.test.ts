@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
-import { JOSEPH_EMAIL, SHANE_EMAIL } from "./tester-seats.ts";
+import { JAMES_EMAIL, JOSEPH_EMAIL, SHANE_EMAIL } from "./tester-seats.ts";
 import {
   findHandoffSeat,
   handoffMarkText,
@@ -21,6 +21,7 @@ describe("handoff seats", () => {
     assert.equal(seats.some((row) => row.email === "nathanboyte@gmail.com"), true);
     assert.equal(seats.some((row) => row.email === JOSEPH_EMAIL), true);
     assert.equal(seats.some((row) => row.email === SHANE_EMAIL), true);
+    assert.equal(seats.some((row) => row.email === JAMES_EMAIL), true);
     assert.equal(seats.some((row) => row.email === NOVUS_EMAIL), false);
     assert.equal(seats.every((row) => row.name && row.email && !("passwordIssued" in row) && !("role" in row)), true);
     assert.equal(isHandoffEmail("not-a-desk@example.com"), false);

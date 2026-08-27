@@ -1,3 +1,5 @@
+import { catalogVisibleTo, type CompanyScope } from "./companies.ts";
+import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { boardForUser } from "./desk-data.ts";
 import { mergeLocalJobs, type LocalPack } from "./local-estimates.ts";
 import type { DeskBoard, JobRecord } from "./types.ts";
@@ -70,12 +72,23 @@ export function seedJobs(): JobRecord[] {
   return JOBS;
 }
 
+export function visibleSeedJobs(scope?: CompanyScope | null): JobRecord[] {
+  return seedJobs().filter((job) => catalogVisibleTo(scope, job.client, job.title, job.code));
+}
+
 /** Owner/Sites seed jobs stay on the signed-in desk. Follow / View as uses that person's packs only. */
-export function jobsOnDesk(serverJobs: JobRecord[] | undefined, packs: LocalPack[], viewingAs: boolean) {
+export function jobsOnDesk(
+  serverJobs: JobRecord[] | undefined,
+  packs: LocalPack[],
+  viewingAs: boolean,
+  scope?: CompanyScope | null,
+) {
   const fromServer = serverJobs ?? [];
-  if (viewingAs) return mergeLocalJobs(fromServer, packs);
+  const nextPacks = [...packs, ...dummyPacksForUser(scope).filter((pack) => !packs.some((row) => row.packId === pack.packId))];
+  if (viewingAs) return mergeLocalJobs(fromServer, nextPacks);
+  const seeds = visibleSeedJobs(scope);
   const seen = new Set(fromServer.map((job) => job.id));
-  return mergeLocalJobs([...seedJobs().filter((job) => !seen.has(job.id)), ...fromServer], packs);
+  return mergeLocalJobs([...seeds.filter((job) => !seen.has(job.id)), ...fromServer], nextPacks);
 }
 
 export function plantJobTally(jobs: JobRecord[] = JOBS) {
@@ -119,11 +132,14 @@ export function jobPlantHref(code: string, tab?: PlantTab | string | null) {
   return `/jobs/wood-river?${params.toString()}`;
 }
 
-export function deskForUser(userId: string): DeskBoard {
-  const jobs = JOBS.filter((job) => job.ownerId === userId);
+export function deskForUser(userId: string, scope?: CompanyScope | null): DeskBoard {
+  const jobs =
+    userId === "owner-robert-henderson" || scope?.isOwner
+      ? JOBS
+      : visibleSeedJobs(scope);
   return {
     jobs,
-    estimatesOpen: boardForUser(userId).estimates.length,
+    estimatesOpen: boardForUser(userId, scope).estimates.length,
     costTickets: jobs.filter((job) => job.kind === "t&m" || job.kind === "outage").length,
     hseOpen: jobs.filter((job) => job.kind === "hse" || job.hseNote.toLowerCase().includes("open")).length,
   };
