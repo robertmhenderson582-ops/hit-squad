@@ -1,38 +1,29 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.23.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.23";
+export const DESK_VERSION = "1.25.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.25";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.23";
+export const DESK_THREAD_ID = "th-desk-v1.25";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.23",
-  "• Turn over a job actually hands it to the other person.",
-  "• Save so it shows on your phone.",
-].join("\n");
-
-export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.23",
-  "• Turn over a job actually hands it to the other person.",
-  "• Save so it shows on your phone.",
-  "• Testers who already saw V1.22 get this note (versioned seen key).",
-].join("\n");
-
-/** Draft for the next ship. Not wired into applyWhatsNew — do not publish until Robert says look. */
-export const NEXT_SHIP_VERSION = "1.25.0";
-export const NEXT_SHIP_VERSION_LABEL = "Hit Squad Project Controls V1.25";
-export const TESTER_NEXT_SHIP_DRAFT = [
   "Hit Squad Project Controls V1.25",
   "• Jobs on your desk stay the ones you own.",
   "• Share a job so they can work on it. You stay the owner. Unshare takes it back.",
   "• Turn over moves the job. They can send it back in one click.",
 ].join("\n");
-export const OWNER_NEXT_SHIP_DRAFT = [
+
+export const OWNER_WHATS_NEW = [
   "Hit Squad Project Controls V1.25",
   "• View as now shows that person's desk, including transferred-to-you and Return.",
   "• Share keeps you the owner. Unshare reverses it. Turn over moves. Return is instant.",
 ].join("\n");
+
+/** Same as the live V1.25 note. Kept so older imports still resolve. */
+export const NEXT_SHIP_VERSION = DESK_VERSION;
+export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
+export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;
+export const OWNER_NEXT_SHIP_DRAFT = OWNER_WHATS_NEW;
 
 const FORBIDDEN_TESTER =
   /\b(password|passwords|auth|authentication|cookie|session(?: secret)?|security|novus|vault|drive|smtp|\/tmp|tmp file|other users?|other testers?|seats?|owner tools?|view as|aliases?|deploy(?: internals?)?|anyone else(?:.?s tickets)?)\b/i;
