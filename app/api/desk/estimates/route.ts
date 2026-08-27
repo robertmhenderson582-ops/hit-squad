@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
 import { hasBuildDesk } from "@/lib/desk-role";
-import { listVisiblePacks, packsResponse, upsertVisiblePack } from "@/lib/estimate-vault";
+import { listVisiblePacks, packsResponse, UPSERT_WRITE_ERROR, upsertVisiblePack } from "@/lib/estimate-vault";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +31,6 @@ export async function PUT(request: Request) {
     if (hasBuildDesk(user)) payload.store = result.store;
     return NextResponse.json(payload);
   } catch {
-    return NextResponse.json({ error: "Could not store that package." }, { status: 502 });
+    return NextResponse.json({ error: UPSERT_WRITE_ERROR }, { status: 502 });
   }
 }

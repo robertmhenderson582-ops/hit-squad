@@ -316,7 +316,12 @@ async function writePackFile(
     const name = estimateFileName(pack);
     return adapter.updateJson(existing.id, payload, name === existing.name ? existing.name : name, properties);
   }
-  const taken = (await adapter.listJson(folderId)).map((file) => file.name);
+  let taken: string[] = [];
+  try {
+    taken = (await adapter.listJson(folderId)).map((file) => file.name);
+  } catch {
+    taken = [];
+  }
   const name = estimateFileName(pack, taken);
   return adapter.createJson(folderId, name, payload, properties);
 }
