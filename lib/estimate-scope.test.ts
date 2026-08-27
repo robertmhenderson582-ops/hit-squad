@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import {
+  canTransferPack,
   canWritePack,
   isOwnerVaultEmail,
   packOwnerEmailForWrite,
@@ -48,5 +49,15 @@ describe("estimate vault scope", () => {
     assert.equal(canWritePack(novus, ownerPack), true);
     assert.equal(canWritePack(owner, testerPack), false);
     assert.equal(canWritePack(novus, testerPack), false);
+  });
+
+  it("lets the current owner turn a pack over; Joseph and Shane cannot take it", () => {
+    assert.equal(canTransferPack(owner, ownerPack), true);
+    assert.equal(canTransferPack(novus, ownerPack), false);
+    assert.equal(canTransferPack(tester, ownerPack), false);
+    assert.equal(canTransferPack(tester, testerPack), true);
+    assert.equal(canTransferPack(otherTester, testerPack), false);
+    assert.equal(packVisibleTo({ email: "josephmhenderson2002@gmail.com", role: "tester" }, ownerPack), false);
+    assert.equal(packVisibleTo({ email: "shane@apcontrolsllc.com", role: "tester" }, testerPack), false);
   });
 });

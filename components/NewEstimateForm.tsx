@@ -26,6 +26,7 @@ import { rememberLocalPack } from "@/lib/local-estimates";
 export function NewEstimateForm() {
   const params = useSearchParams();
   const router = useRouter();
+  const { user } = useSession();
   const size = params.get("size");
   const client = params.get("client") || "Phillips 66";
   const site = params.get("site") || "Wood River — Roxana, IL";
@@ -42,10 +43,18 @@ export function NewEstimateForm() {
   useEffect(() => {
     if (!pack || size === "shop") return;
     void hydrateFromVault().then(() => {
-      rememberLocalPack({ packId: pack, title: name, client, site, size: size ?? undefined });
+      rememberLocalPack({
+        packId: pack,
+        title: name,
+        client,
+        site,
+        size: size ?? undefined,
+        ownerEmail: user?.email,
+        estimator: user?.name,
+      });
       scheduleVaultUpsert(pack);
     });
-  }, [client, name, pack, site, size]);
+  }, [client, name, pack, site, size, user?.email, user?.name]);
 
   if (size === "shop") {
     return (

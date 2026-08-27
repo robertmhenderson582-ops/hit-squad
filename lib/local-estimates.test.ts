@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { CREW_STORE_PREFIX, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
 import { newEstimateKey } from "./estimate-open.ts";
 import {
+  deleteLocalPack,
   listLocalPacks,
   localPackToEstimate,
   mergeLocalBoard,
@@ -116,5 +117,24 @@ describe("local estimate packs", () => {
     assert.equal(jobs.some((job) => job.title === "Cat 2 Pit Stop"), true);
     const board = mergeLocalBoard({ estimates: SAMPLES } as ForgebookBoard, packs);
     assert.equal(board.estimates.length, 4);
+  });
+
+  it("deletes one local pack without wiping other leftover work", () => {
+    const store = memoryStore();
+    rememberLocalPack(
+      { packId: "new-sample1", title: "Old sample", client: "Phillips 66", site: "Wood River — Roxana, IL" },
+      store,
+    );
+    rememberLocalPack(
+      { packId: "new-cat2pit", title: "Cat 2 Pit Stop", client: "Phillips 66", site: "Wood River — Roxana, IL" },
+      store,
+    );
+    deleteLocalPack("new-sample1", store);
+    const listed = listLocalPacks(store);
+    assert.deepEqual(
+      listed.map((row) => row.packId),
+      ["new-cat2pit"],
+    );
+    assert.equal(listed[0].title, "Cat 2 Pit Stop");
   });
 });

@@ -33,6 +33,9 @@ export type LocalPack = {
   siteId: string;
   createdAt: number;
   updatedAt: number;
+  ownerEmail?: string;
+  archived?: boolean;
+  estimator?: string;
 };
 
 export type StorageLike = {
@@ -117,6 +120,9 @@ export function rememberLocalPack(
     client: string;
     site: string;
     size?: string;
+    ownerEmail?: string;
+    archived?: boolean;
+    estimator?: string;
   },
   store: StorageLike | null = typeof window === "undefined" ? null : window.localStorage,
 ): LocalPack | null {
@@ -144,6 +150,9 @@ export function rememberLocalPack(
     siteId: siteIdFromSite(site, client),
     createdAt: existing?.createdAt || now,
     updatedAt: unchanged ? existing.updatedAt || existing.createdAt || now : now,
+    ownerEmail: input.ownerEmail || existing?.ownerEmail,
+    archived: input.archived ?? existing?.archived,
+    estimator: input.estimator || existing?.estimator,
   };
   writeStoreJson(store, `${PACK_STORE_PREFIX}${next.key}`, next);
   upsertIndex(store, next);
@@ -199,6 +208,9 @@ function packFromStore(packId: string, store: StorageLike): LocalPack {
     siteId: saved?.siteId || indexed?.siteId || siteIdFromSite(site, client),
     createdAt,
     updatedAt: saved?.updatedAt || indexed?.updatedAt || createdAt,
+    ownerEmail: saved?.ownerEmail || indexed?.ownerEmail,
+    archived: saved?.archived ?? indexed?.archived,
+    estimator: saved?.estimator || indexed?.estimator,
   };
 }
 
@@ -218,6 +230,21 @@ export function findLocalPack(
   return listLocalPacks(store).find((row) => row.packId === packId) ?? null;
 }
 
+export function deleteLocalPack(
+  packId: string,
+  store: StorageLike | null = typeof window === "undefined" ? null : window.localStorage,
+) {
+  if (!store || !packId.startsWith("new-")) return;
+  const key = storageKeyForPack(packId);
+  for (const prefix of STORE_PREFIXES) {
+    store.removeItem?.(`${prefix}${key}`);
+  }
+  writeIndex(
+    store,
+    readIndex(store).filter((row) => row.packId !== packId),
+  );
+}
+
 export function localPackToEstimate(pack: LocalPack, ownerId = "owner-robert-henderson"): EstimateRecord {
   const short = pack.packId.replace(/^new-/, "").slice(0, 6).toUpperCase();
   return {
@@ -234,7 +261,7 @@ export function localPackToEstimate(pack: LocalPack, ownerId = "owner-robert-hen
     labor: "",
     material: "",
     total: "",
-    estimator: "Robert Henderson",
+    estimator: pack.estimator || "Robert Henderson",
     revision: "A",
   };
 }

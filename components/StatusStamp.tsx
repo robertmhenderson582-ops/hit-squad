@@ -11,6 +11,8 @@ const TONE: Record<string, string> = {
   OVERDUE: "border-amber-flare text-amber-flare",
   "IN PROGRESS": "border-steel-glow/50 text-steel-glow",
   PLANNED: "border-paper-cream/30 text-paper-cream/80",
+  ARCHIVED: "border-paper-cream/30 text-paper-cream/80",
+  TRANSFERRED: "border-amber-label/60 text-amber-label",
 };
 
 export function StatusStamp({ value }: { value: string }) {
