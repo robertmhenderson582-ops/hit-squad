@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { JobMenuActions } from "@/components/JobMenuActions";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { useDisplay } from "@/components/DisplayProvider";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
-import { jobPlantHref, plantJobTally, plantJobsLine } from "@/lib/jobs";
 import { hydrateFromVault } from "@/lib/estimate-vault-client";
+import { isActiveMenuItem, menuStatus, readJobMenu } from "@/lib/job-menu";
+import { jobPlantHref, plantJobTally, plantJobsLine } from "@/lib/jobs";
 import { listLocalPacks, mergeLocalJobs } from "@/lib/local-estimates";
 import type { JobRecord } from "@/lib/types";
 
@@ -23,31 +25,38 @@ export function JobsDesk() {
   const estimates = board?.estimates ?? [];
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+
+  const reload = useCallback(async () => {
+    await hydrateFromVault();
+    const response = await fetch("/api/desk/jobs", {
+      credentials: "include",
+      cache: "no-store",
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setError(data.error || "Jobs stayed on this desk.");
+      return;
+    }
+    setJobs(mergeLocalJobs((data.desk.jobs as JobRecord[]) ?? [], listLocalPacks()));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      await hydrateFromVault();
-      const response = await fetch("/api/desk/jobs", {
-        credentials: "include",
-        cache: "no-store",
-      });
-      const data = await response.json();
+      await reload();
       if (cancelled) return;
-      if (!response.ok) {
-        setError(data.error || "Jobs stayed on this desk.");
-        return;
-      }
-      setJobs(
-        mergeLocalJobs((data.desk.jobs as JobRecord[]) ?? [], listLocalPacks()).filter(
-          (job) => !jobLooksClosed(job, readClosed()),
-        ),
-      );
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reload, tick]);
+
+  const menu = readJobMenu();
+  const closed = readClosed();
+  const active = jobs.filter((job) => isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed));
+  const archived = jobs.filter((job) => menuStatus(job, menu) === "archived");
+  const transferred = menu.transferred;
 
   function go(href: string, event?: { preventDefault: () => void; stopPropagation: () => void }) {
     event?.preventDefault();
@@ -58,11 +67,11 @@ export function JobsDesk() {
   return (
     <div className={`${night ? "instrument-desk" : "paper-desk"} -mx-3 mt-4 rounded-sm px-4 py-5 sm:-mx-4 sm:px-6`}>
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        {plantJobsLine(plantJobTally(jobs))} Open a job to keep its ID, window, and working figure. {alias("WOOD RIVER")} opens the
-        plant with that job still showing.
+        {plantJobsLine(plantJobTally(active))} Open a job to keep its ID, window, and working figure. {alias("WOOD RIVER")} opens the
+        plant with that job still showing. Archive hides a job. Delete removes your copy after you confirm.
       </p>
       {error ? <p className="text-amber-flare">{error}</p> : null}
-      {jobs.map((job) => {
+      {active.map((job) => {
         const estimate = estimateForJob(job, estimates);
         const plantHref = jobPlantHref(job.code);
         const estimatesHref = estimate ? estimateHref(estimate.id) : jobPlantHref(job.code, "Estimates");
@@ -115,10 +124,49 @@ export function JobsDesk() {
               <Link href="/cost" className="job-action" onClick={(event) => go("/cost", event)}>
                 COST
               </Link>
+              <JobMenuActions
+                id={job.id}
+                title={job.title}
+                packId={estimate?.id}
+                onChange={() => setTick((value) => value + 1)}
+              />
             </div>
           </article>
         );
       })}
+      {archived.length ? (
+        <details className="plant-card mt-6 px-5 py-4">
+          <summary className="cursor-pointer font-display text-xl">Archived</summary>
+          <ul className="mt-3 space-y-3 text-sm">
+            {archived.map((job) => (
+              <li key={job.id} className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  {job.code} · {alias(job.title)}
+                </span>
+                <JobMenuActions
+                  id={job.id}
+                  title={job.title}
+                  packId={estimateForJob(job, estimates)?.id}
+                  archived
+                  onChange={() => setTick((value) => value + 1)}
+                />
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      {transferred.length ? (
+        <details className="plant-card mt-4 px-5 py-4">
+          <summary className="cursor-pointer font-display text-xl">Transferred</summary>
+          <ul className="mt-3 space-y-2 text-sm">
+            {transferred.map((row) => (
+              <li key={`${row.id}-${row.at}`}>
+                {row.title} · turned over to {row.toName}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }

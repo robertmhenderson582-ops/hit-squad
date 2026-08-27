@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useDisplay } from "@/components/DisplayProvider";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useDeskBoard } from "@/components/useDeskBoard";
+import { isActiveMenuItem, readJobMenu } from "@/lib/job-menu";
 import { plantJobTally, plantJobsLine, seedJobs } from "@/lib/jobs";
 import { listLocalPacks, localPackToJob } from "@/lib/local-estimates";
 import type { SiteRecord } from "@/lib/types";
@@ -29,7 +30,11 @@ export function SitesDesk() {
   const { board, error } = useDeskBoard();
   const [tally, setTally] = useState(plantJobTally());
   useEffect(() => {
-    setTally(plantJobTally([...seedJobs(), ...listLocalPacks().map((pack) => localPackToJob(pack))]));
+    const menu = readJobMenu();
+    const jobs = [...seedJobs(), ...listLocalPacks().map((pack) => localPackToJob(pack))].filter((job) =>
+      isActiveMenuItem(job, menu),
+    );
+    setTally(plantJobTally(jobs));
   }, [board]);
   const alias = useAlias();
   const owner = useOwnerDesk();

@@ -14,16 +14,26 @@ export function isOwnerVaultEmail(email = "") {
 
 export function packOwnerEmailForWrite(user: ScopeUser, existing?: string) {
   if (isTester(user)) return user.email.trim().toLowerCase();
-  if (existing && isOwnerVaultEmail(existing)) return ownerVaultEmail();
+  const current = (existing || "").trim().toLowerCase();
+  if (current && (isOwnerVaultEmail(current) || current === user.email.trim().toLowerCase())) {
+    return current;
+  }
   return ownerVaultEmail();
 }
 
 export function packVisibleTo(user: ScopeUser, pack: { ownerEmail?: string }) {
   const ownerEmail = (pack.ownerEmail || "").trim().toLowerCase();
   const email = user.email.trim().toLowerCase();
-  if (isTester(user)) return Boolean(ownerEmail) && ownerEmail === email;
+  if (!ownerEmail) return false;
+  if (isTester(user)) return ownerEmail === email;
   if (hasBuildDesk(user)) return isOwnerVaultEmail(ownerEmail) || ownerEmail === email;
   return false;
+}
+
+export function canTransferPack(user: ScopeUser, pack: { ownerEmail?: string }) {
+  if (!canWritePack(user, pack)) return false;
+  const ownerEmail = (pack.ownerEmail || "").trim().toLowerCase();
+  return ownerEmail === user.email.trim().toLowerCase() || (user.role === "owner" && isOwnerVaultEmail(ownerEmail));
 }
 
 export function visiblePacks<T extends { ownerEmail?: string }>(user: ScopeUser, packs: T[]) {

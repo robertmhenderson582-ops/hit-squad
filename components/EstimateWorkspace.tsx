@@ -137,7 +137,7 @@ export function EstimateWorkspace({
             </div>
             <InboxBadge />
             <ThemeFlip />
-            <ShareTurnover title={name || crumb} />
+            <ShareTurnover title={name || crumb} packId={packageId} />
             {ACTIONS.map((action) => (
               <button
                 key={action.id}

@@ -13,6 +13,7 @@ import { useDeskBoard } from "@/components/useDeskBoard";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
 import { hydrateFromVault } from "@/lib/estimate-vault-client";
+import { isActiveMenuItem, readJobMenu } from "@/lib/job-menu";
 import { listLocalPacks, mergeLocalJobs } from "@/lib/local-estimates";
 import type { DeskBoard } from "@/lib/types";
 
@@ -62,9 +63,14 @@ export function DeskHome() {
     };
   }, []);
 
-  const openJobs = (desk?.jobs ?? []).filter((job) => job.status === "OPEN" && !jobLooksClosed(job, closedPacks));
+  const menu = readJobMenu();
+  const openJobs = (desk?.jobs ?? []).filter(
+    (job) => job.status === "OPEN" && !jobLooksClosed(job, closedPacks) && isActiveMenuItem(job, menu),
+  );
   const closedJobs = (desk?.jobs ?? []).filter((job) => jobLooksClosed(job, closedPacks));
-  const openEstimates = estimates.filter((row) => !closedPacks.some((item) => item.id === row.id));
+  const openEstimates = estimates.filter(
+    (row) => !closedPacks.some((item) => item.id === row.id) && isActiveMenuItem(row, menu),
+  );
 
   const counts = {
     jobs: openJobs.length || "—",
@@ -160,14 +166,14 @@ export function DeskHome() {
           </ul>
         </details>
       ) : null}
-      {estimates.length ? (
+      {openEstimates.length ? (
         <section>
           <h2 className={`font-display text-2xl ${night ? "text-paper-cream" : "text-[#163038]"}`}>Estimates</h2>
           <p className={`mt-1 text-sm ${night ? "text-paper-cream/70" : "text-[#5b6f73]"}`}>
             Click a card to open that estimate.
           </p>
           <div className="mt-3 grid gap-3 lg:grid-cols-2">
-            {estimates.map((row) => (
+            {openEstimates.map((row) => (
               <EstimateCard key={row.id} estimate={row} />
             ))}
           </div>

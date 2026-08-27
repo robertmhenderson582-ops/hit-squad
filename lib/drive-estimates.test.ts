@@ -4,9 +4,11 @@ import {
   ESTIMATES_ROOM_ID,
   driveConfigured,
   driveStoreKind,
+  deleteEstimateInDrive,
   findDrivePackFile,
   listDrivePacks,
   memoryDrive,
+  overwriteEstimateInDrive,
   parseServiceAccount,
   resolveEstimatesFolder,
   upsertEstimateInDrive,
@@ -76,5 +78,25 @@ describe("drive estimate upsert", () => {
     const firstName = [...drive.files.values()][0]?.file.name;
     assert.equal(firstName, "wood-river-cat-2-pit-stop.json");
     assert.equal(drive.files.size, 2);
+  });
+
+  it("overwrites the same file when the owner email changes and can delete that file", async () => {
+    const drive = memoryDrive();
+    const first = await upsertEstimateInDrive(drive, cat2(), "folder");
+    const handed = await overwriteEstimateInDrive(
+      drive,
+      cat2({ ownerEmail: "nathanboyte@gmail.com", updatedAt: 800 }),
+      "folder",
+    );
+    assert.equal(handed.id, first.id);
+    assert.equal(drive.files.size, 1);
+    assert.equal(handed.properties?.ownerEmail, "nathanboyte@gmail.com");
+    const ownerFile = await findDrivePackFile(drive, "folder", "new-cat2pit", "robertmhenderson582@gmail.com");
+    const testerFile = await findDrivePackFile(drive, "folder", "new-cat2pit", "nathanboyte@gmail.com");
+    assert.equal(ownerFile, null);
+    assert.ok(testerFile);
+    const removed = await deleteEstimateInDrive(drive, "new-cat2pit", "nathanboyte@gmail.com", "folder");
+    assert.equal(removed, true);
+    assert.equal(drive.files.size, 0);
   });
 });

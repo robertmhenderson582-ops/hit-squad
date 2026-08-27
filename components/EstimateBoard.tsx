@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CreatedBy } from "@/components/CreatedBy";
 import { EstimateCard } from "@/components/EstimateCard";
+import { JobMenuActions } from "@/components/JobMenuActions";
 import { useEstimateModal } from "@/components/EstimateModalContext";
 import { PresencePulse } from "@/components/PresencePulse";
 import { useAlias } from "@/components/OwnerDeskContext";
@@ -11,6 +12,7 @@ import { useDeskBoard } from "@/components/useDeskBoard";
 import { useSession } from "@/components/SessionProvider";
 import { readClosed, reopenPackage } from "@/lib/desk-closeout";
 import { estimateHref } from "@/lib/estimate-open";
+import { isActiveMenuItem, menuStatus, readJobMenu } from "@/lib/job-menu";
 
 export function EstimateBoard() {
   const alias = useAlias();
@@ -18,10 +20,15 @@ export function EstimateBoard() {
   const { openNewEstimate } = useEstimateModal();
   const { board, error } = useDeskBoard();
   const [closed, setClosed] = useState<{ id: string; title: string }[]>([]);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     setClosed(readClosed().filter((item) => item.kind === "estimate"));
-  }, []);
-  const rows = (board?.estimates ?? []).filter((row) => !closed.some((item) => item.id === row.id));
+  }, [tick]);
+  const menu = readJobMenu();
+  const rows = (board?.estimates ?? []).filter(
+    (row) => !closed.some((item) => item.id === row.id) && isActiveMenuItem(row, menu),
+  );
+  const archivedRows = (board?.estimates ?? []).filter((row) => menuStatus(row, menu) === "archived");
   const closedRows = (board?.estimates ?? []).filter((row) => closed.some((item) => item.id === row.id));
   const groups = new Map<string, typeof rows>();
   for (const row of rows) {
@@ -74,11 +81,44 @@ export function EstimateBoard() {
           </div>
           <div className="grid gap-3 lg:grid-cols-2">
             {list.map((row) => (
-              <EstimateCard key={row.id} estimate={row} />
+              <EstimateCard key={row.id} estimate={row} onMenuChange={() => setTick((value) => value + 1)} />
             ))}
           </div>
         </section>
       ))}
+      {archivedRows.length ? (
+        <details className="plant-card px-5 py-4">
+          <summary className="cursor-pointer font-display text-xl">Archived</summary>
+          <ul className="mt-3 space-y-3 text-sm">
+            {archivedRows.map((row) => (
+              <li key={row.id} className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  {row.code} · {row.title}
+                </span>
+                <JobMenuActions
+                  id={row.id}
+                  title={row.title}
+                  packId={row.id}
+                  archived
+                  onChange={() => setTick((value) => value + 1)}
+                />
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      {menu.transferred.length ? (
+        <details className="plant-card px-5 py-4">
+          <summary className="cursor-pointer font-display text-xl">Transferred</summary>
+          <ul className="mt-3 space-y-2 text-sm">
+            {menu.transferred.map((row) => (
+              <li key={`${row.id}-${row.at}`}>
+                {row.title} · turned over to {row.toName}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
       {closedRows.length ? (
         <details className="plant-card px-5 py-4">
           <summary className="cursor-pointer font-display text-xl">Closed out</summary>

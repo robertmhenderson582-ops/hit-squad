@@ -28,6 +28,7 @@ export type DriveAdapter = {
     name?: string,
     properties?: Record<string, string>,
   ): Promise<DriveFile>;
+  deleteJson(fileId: string): Promise<void>;
 };
 
 type ServiceAccount = {
@@ -116,6 +117,9 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
       files.set(fileId, { file, content });
       return file;
     },
+    async deleteJson(fileId) {
+      files.delete(fileId);
+    },
   };
 }
 
@@ -199,6 +203,14 @@ function googleDriveAdapter(account: ServiceAccount): DriveAdapter {
       }
       return { id: fileId, name: name || fileId, properties };
     },
+    async deleteJson(fileId) {
+      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+        method: "PATCH",
+        headers: await authHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ trashed: true }),
+      });
+      if (!response.ok) throw new Error("delete");
+    },
   };
 }
 
@@ -217,6 +229,9 @@ export function driveAdapter(env: Record<string, string | undefined> = process.e
         throw new Error("unconfigured");
       },
       async updateJson() {
+        throw new Error("unconfigured");
+      },
+      async deleteJson() {
         throw new Error("unconfigured");
       },
     };
@@ -249,6 +264,63 @@ export async function findDrivePackFile(
   return null;
 }
 
+export async function findDrivePackByPackId(adapter: DriveAdapter, folderId: string, packId: string) {
+  const files = await adapter.listJson(folderId);
+  const tagged = files.find((file) => file.properties?.packId === packId);
+  if (tagged) return tagged;
+  for (const file of files) {
+    try {
+      const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
+      if (parsed.ok && parsed.pack.packId === packId) return file;
+    } catch {
+      // skip unreadable rows
+    }
+  }
+  return null;
+}
+
+export async function readDrivePackById(
+  adapter: DriveAdapter,
+  packId: string,
+  folderId = estimatesFolderId(),
+) {
+  const file = await findDrivePackByPackId(adapter, resolveEstimatesFolder(folderId), packId);
+  if (!file) return null;
+  const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
+  return parsed.ok ? publicPack(parsed.pack) : null;
+}
+
+export async function deleteEstimateInDrive(
+  adapter: DriveAdapter,
+  packId: string,
+  ownerEmail: string,
+  folderId = estimatesFolderId(),
+) {
+  const target = resolveEstimatesFolder(folderId);
+  const file = await findDrivePackFile(adapter, target, packId, ownerEmail);
+  if (!file) return false;
+  await adapter.deleteJson(file.id);
+  return true;
+}
+
+async function writePackFile(
+  adapter: DriveAdapter,
+  pack: EstimatePackSnapshot,
+  folderId: string,
+  existing: DriveFile | null,
+) {
+  const ownerEmail = pack.ownerEmail.trim().toLowerCase();
+  const payload = JSON.stringify(publicPack({ ...pack, ownerEmail }), null, 2);
+  const properties = { packId: pack.packId, ownerEmail };
+  if (existing) {
+    const name = estimateFileName(pack);
+    return adapter.updateJson(existing.id, payload, name === existing.name ? existing.name : name, properties);
+  }
+  const taken = (await adapter.listJson(folderId)).map((file) => file.name);
+  const name = estimateFileName(pack, taken);
+  return adapter.createJson(folderId, name, payload, properties);
+}
+
 export async function upsertEstimateInDrive(
   adapter: DriveAdapter,
   pack: EstimatePackSnapshot,
@@ -256,16 +328,22 @@ export async function upsertEstimateInDrive(
 ) {
   const target = resolveEstimatesFolder(folderId);
   const ownerEmail = pack.ownerEmail.trim().toLowerCase();
-  const payload = JSON.stringify(publicPack({ ...pack, ownerEmail }), null, 2);
   const existing = await findDrivePackFile(adapter, target, pack.packId, ownerEmail);
-  const properties = { packId: pack.packId, ownerEmail };
-  if (existing) {
-    const name = estimateFileName(pack);
-    return adapter.updateJson(existing.id, payload, name === existing.name ? existing.name : name, properties);
-  }
-  const taken = (await adapter.listJson(target)).map((file) => file.name);
-  const name = estimateFileName(pack, taken);
-  return adapter.createJson(target, name, payload, properties);
+  return writePackFile(adapter, pack, target, existing);
+}
+
+/** Same pack id, new owner — update the existing file so testers do not get a second copy. */
+export async function overwriteEstimateInDrive(
+  adapter: DriveAdapter,
+  pack: EstimatePackSnapshot,
+  folderId = estimatesFolderId(),
+) {
+  const target = resolveEstimatesFolder(folderId);
+  const ownerEmail = pack.ownerEmail.trim().toLowerCase();
+  const existing =
+    (await findDrivePackByPackId(adapter, target, pack.packId)) ||
+    (await findDrivePackFile(adapter, target, pack.packId, ownerEmail));
+  return writePackFile(adapter, pack, target, existing);
 }
 
 export async function listDrivePacks(adapter: DriveAdapter, folderId = estimatesFolderId()) {

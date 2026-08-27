@@ -27,6 +27,10 @@ export type EstimatePackSnapshot = {
   createdAt: number;
   updatedAt: number;
   ownerEmail: string;
+  archived?: boolean;
+  transferredFrom?: string;
+  transferredTo?: string;
+  transferredToName?: string;
   schedule?: unknown;
   crew?: unknown;
   jobMeta?: unknown;
@@ -138,6 +142,10 @@ export function publicPack(pack: EstimatePackSnapshot): EstimatePackSnapshot {
     createdAt: pack.createdAt,
     updatedAt: pack.updatedAt,
     ownerEmail: pack.ownerEmail,
+    archived: pack.archived,
+    transferredFrom: pack.transferredFrom,
+    transferredTo: pack.transferredTo,
+    transferredToName: pack.transferredToName,
     schedule: pack.schedule,
     crew: pack.crew,
     jobMeta: pack.jobMeta,
@@ -173,6 +181,7 @@ export function collectPack(
     createdAt: identity.createdAt,
     updatedAt: identity.updatedAt || identity.createdAt || 0,
     ownerEmail,
+    archived: identity.archived,
     schedule: readStoreJson(store, `${PHASE_STORE_PREFIX}${key}`) ?? undefined,
     crew: readStoreJson(store, `${CREW_STORE_PREFIX}${key}`) ?? undefined,
     jobMeta: readStoreJson(store, `${JOB_META_PREFIX}${key}`) ?? undefined,
@@ -186,7 +195,15 @@ export function collectPack(
 export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot) {
   if (!isLocalPackId(pack.packId)) return;
   rememberLocalPack(
-    { packId: pack.packId, title: pack.title, client: pack.client, site: pack.site, size: pack.size },
+    {
+      packId: pack.packId,
+      title: pack.title,
+      client: pack.client,
+      site: pack.site,
+      size: pack.size,
+      ownerEmail: pack.ownerEmail,
+      archived: pack.archived,
+    },
     store,
   );
   touchLocalPack(pack.packId, pack.updatedAt || Date.now(), store, pack.createdAt);
@@ -232,8 +249,12 @@ export function parseIncomingPack(input: unknown): { ok: true; pack: EstimatePac
       siteId: typeof row?.siteId === "string" ? row.siteId : "site-madison",
       createdAt: Number(row?.createdAt) || Date.now(),
       updatedAt: Number(row?.updatedAt) || Date.now(),
-      ownerEmail: typeof row?.ownerEmail === "string" ? row.ownerEmail : "",
-      schedule: row?.schedule,
+    ownerEmail: typeof row?.ownerEmail === "string" ? row.ownerEmail : "",
+    archived: Boolean(row?.archived),
+    transferredFrom: typeof row?.transferredFrom === "string" ? row.transferredFrom : undefined,
+    transferredTo: typeof row?.transferredTo === "string" ? row.transferredTo : undefined,
+    transferredToName: typeof row?.transferredToName === "string" ? row.transferredToName : undefined,
+    schedule: row?.schedule,
       crew: row?.crew,
       jobMeta: row?.jobMeta,
       activities: row?.activities,
