@@ -110,13 +110,49 @@ export function packHasWork(pack: EstimatePackSnapshot | null | undefined) {
   return false;
 }
 
+export function packWasTransferred(pack: Pick<EstimatePackSnapshot, "transferredFrom">) {
+  return Boolean((pack.transferredFrom || "").trim());
+}
+
+/** Same packId: a transferred working copy beats a newer leftover owner stamp. */
+export function preferCanonicalPack(a: EstimatePackSnapshot, b: EstimatePackSnapshot): EstimatePackSnapshot {
+  const aMoved = packWasTransferred(a);
+  const bMoved = packWasTransferred(b);
+  if (aMoved !== bMoved) return aMoved ? a : b;
+  const aOwner = (a.ownerEmail || "").trim().toLowerCase();
+  const bOwner = (b.ownerEmail || "").trim().toLowerCase();
+  if (aOwner && bOwner && aOwner !== bOwner) {
+    const aTo = (a.transferredTo || "").trim().toLowerCase();
+    const bTo = (b.transferredTo || "").trim().toLowerCase();
+    if (aTo === aOwner && bTo !== bOwner) return a;
+    if (bTo === bOwner && aTo !== aOwner) return b;
+  }
+  return (a.updatedAt || 0) >= (b.updatedAt || 0) ? a : b;
+}
+
+export function collapsePacksById(packs: EstimatePackSnapshot[]): EstimatePackSnapshot[] {
+  const map = new Map<string, EstimatePackSnapshot>();
+  for (const pack of packs) {
+    const current = map.get(pack.packId);
+    map.set(pack.packId, current ? preferCanonicalPack(current, pack) : pack);
+  }
+  return [...map.values()];
+}
+
 export function pickPack(
   local: EstimatePackSnapshot | null | undefined,
   vault: EstimatePackSnapshot | null | undefined,
 ): EstimatePackSnapshot | null {
   if (!vault?.packId) return local ?? null;
   if (!local?.packId) return packHasWork(vault) ? vault : local ?? null;
-  if (!packHasWork(vault) && packHasWork(local)) return local;
+  const vaultMoved =
+    packWasTransferred(vault) ||
+    Boolean(
+      vault.ownerEmail &&
+        local.ownerEmail &&
+        vault.ownerEmail.trim().toLowerCase() !== local.ownerEmail.trim().toLowerCase(),
+    );
+  if (!packHasWork(vault) && packHasWork(local) && !vaultMoved) return local;
   const newer = (local.updatedAt || 0) >= (vault.updatedAt || 0) ? local : vault;
   const older = newer === local ? vault : local;
   return {
