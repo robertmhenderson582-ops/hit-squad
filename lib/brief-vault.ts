@@ -8,7 +8,7 @@ import {
   type BriefDrive,
   type LandedBrief,
 } from "./drive-briefs.ts";
-import { isLeadKind, type LeadFile, type LeadKind } from "./lead-briefs.ts";
+import { checkLeadFiles, isLeadFile, isLeadKind, type LeadKind } from "./lead-briefs.ts";
 import { emailOwnerNote } from "./ticket-mail.ts";
 import type { PublicUser } from "./types.ts";
 
@@ -38,6 +38,8 @@ export async function saveUserBrief(
   if (!isLeadKind(incoming.kind)) return { ok: false as const, status: 400, error: "Pick Quality or HSE." };
   const describe = typeof incoming.describe === "string" ? incoming.describe : "";
   const files = Array.isArray(incoming.files) ? incoming.files.filter(isLeadFile) : [];
+  const check = checkLeadFiles(files);
+  if (!check.ok) return { ok: false as const, status: 400, error: check.error };
   const drive = briefVaultAdapter(adapter);
   if (!drive.configured) {
     return {
@@ -110,10 +112,4 @@ export function saveBriefResponse(
 
 export function briefsLeak(payload: unknown) {
   return responseLeaksBriefVault(payload);
-}
-
-function isLeadFile(value: unknown): value is LeadFile {
-  if (!value || typeof value !== "object") return false;
-  const row = value as Partial<LeadFile>;
-  return typeof row.name === "string" && row.name.length > 0 && typeof row.data === "string";
 }

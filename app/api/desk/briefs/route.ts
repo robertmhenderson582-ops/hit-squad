@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { briefsResponse, listVisibleBriefs, saveBriefResponse, saveUserBrief } from "@/lib/brief-vault";
-import { isLeadKind } from "@/lib/lead-briefs";
+import { checkLeadFiles, isLeadFile, isLeadKind } from "@/lib/lead-briefs";
 import { cookieValue } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -23,8 +23,11 @@ export async function POST(request: Request) {
     describe?: unknown;
     files?: unknown;
   };
+  const files = Array.isArray(body.files) ? body.files.filter(isLeadFile) : [];
+  const check = checkLeadFiles(files);
+  if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
   try {
-    const result = await saveUserBrief(user, body);
+    const result = await saveUserBrief(user, { ...body, files });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
     return NextResponse.json(saveBriefResponse(user, result));
   } catch {

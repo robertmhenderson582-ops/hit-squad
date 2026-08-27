@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { getVisibleBriefFile } from "@/lib/brief-vault";
 import { cookieValue } from "@/lib/http";
+import { briefDownloadContentType } from "@/lib/lead-briefs";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +14,9 @@ export async function GET(request: Request) {
   if (!file) return NextResponse.json({ error: "That file is not on this desk." }, { status: 404 });
   return new NextResponse(Uint8Array.from(file.bytes), {
     headers: {
-      "content-type": file.type || "application/octet-stream",
+      "content-type": briefDownloadContentType(file.name, file.type),
       "content-disposition": `attachment; filename="${file.name.replace(/"/g, "")}"`,
+      "x-content-type-options": "nosniff",
       "cache-control": "private, no-store",
     },
   });

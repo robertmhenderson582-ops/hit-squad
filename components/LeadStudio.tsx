@@ -6,12 +6,25 @@ import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { postBriefToVault } from "@/lib/brief-vault-client";
 import { isOwner, viewingAsOther } from "@/lib/desk-role";
-import { fileToLead, leadToBytes, mergeLeadFiles, readBrief, writeBrief, type LeadFile } from "@/lib/lead-briefs";
+import {
+  BRIEF_FILE_ACCEPT,
+  BRIEF_SIZE_ERROR,
+  BRIEF_TYPE_ERROR,
+  checkBriefDrop,
+  dropFileFromBrowser,
+  dropFileFromLead,
+  fileToLead,
+  leadToBytes,
+  mergeLeadFiles,
+  readBrief,
+  writeBrief,
+  type LeadFile,
+} from "@/lib/lead-briefs";
 import { buildZip } from "@/lib/zip";
 
 const JOBS = [
   { id: "describe", label: "Describe the desk", copy: "How this lead works. What the empty board should hold." },
-  { id: "forms", label: "Drop forms", copy: "PDF, Excel, Word, or pictures people already use." },
+  { id: "forms", label: "Drop forms", copy: "PDF, Excel, CSV, or pictures. 15 MB each, 50 MB per drop." },
   { id: "save", label: "Save", copy: "Save keeps the brief on this desk. The owner can open them." },
 ] as const;
 
@@ -31,9 +44,24 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
 
   useEffect(() => {
     const brief = readBrief(kind);
+    const kept: LeadFile[] = [];
+    let reason: string | null = null;
+    for (const file of brief.files) {
+      const next = [...kept, file];
+      const check = checkBriefDrop(next.map(dropFileFromLead));
+      if (!check.ok) {
+        reason = check.error;
+        continue;
+      }
+      kept.push(file);
+    }
     setDescribe(brief.describe);
-    setFiles(brief.files);
+    setFiles(kept);
     setSavedAt(brief.savedAt);
+    if (reason) {
+      writeBrief(kind, { ...brief, files: kept });
+      setNote(reason);
+    }
   }, [kind]);
 
   function persist(next: { describe?: string; files?: LeadFile[]; savedAt?: string | null }) {
@@ -48,6 +76,11 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
 
   async function onSave(event: FormEvent) {
     event.preventDefault();
+    const check = checkBriefDrop(files.map(dropFileFromLead));
+    if (!check.ok) {
+      setNote(check.error);
+      return;
+    }
     const stamp = new Date().toLocaleString("en-GB", { hour12: false });
     const brief = persist({ savedAt: stamp });
     setSavedAt(stamp);
@@ -62,19 +95,35 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
         setNote("Saved. The owner can open them.");
       }
       window.dispatchEvent(new Event("hs-briefs-changed"));
-    } catch {
-      setNote(ownerDesk ? "Saved on this desk. Vault copy did not land. Local brief is unchanged." : "Saved. The owner can open them.");
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "";
+      if (reason === BRIEF_TYPE_ERROR || reason === BRIEF_SIZE_ERROR) {
+        setNote(reason);
+      } else {
+        setNote(ownerDesk ? "Saved on this desk. Vault copy did not land. Local brief is unchanged." : "Saved. The owner can open them.");
+      }
     } finally {
       setSaving(false);
     }
   }
 
   async function onFiles(list: FileList | null) {
-    const incoming = await Promise.all(Array.from(list ?? []).map(fileToLead));
-    const next = mergeLeadFiles(files, incoming);
+    const picked = Array.from(list ?? []);
+    if (!picked.length) return;
+    const incoming = picked.map(dropFileFromBrowser);
+    const current = files.map(dropFileFromLead);
+    const merged = new Map(current.map((file) => [file.name, file]));
+    for (const file of incoming) merged.set(file.name, file);
+    const check = checkBriefDrop([...merged.values()]);
+    if (!check.ok) {
+      setNote(check.error);
+      return;
+    }
+    const next = mergeLeadFiles(files, await Promise.all(picked.map(fileToLead)));
     setFiles(next);
     persist({ files: next });
-    if (incoming.length) noteFeatureTrail("import");
+    setNote(null);
+    noteFeatureTrail("import");
   }
 
   function submitBrief() {
@@ -162,11 +211,11 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
         {screen === "forms" ? (
           <label className="block">
             <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">DROP FORMS</span>
-            <p className="mt-1 text-sm text-[#5b6f73]">PDF, Excel, Word, or pictures. Added files stay on this desk.</p>
+            <p className="mt-1 text-sm text-[#5b6f73]">PDF, Excel, CSV, or pictures. 15 MB each, 50 MB per drop. Added files stay on this desk.</p>
             <input
               type="file"
               multiple
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt"
+              accept={BRIEF_FILE_ACCEPT}
               className="paper-field mt-2"
               onChange={(event) => onFiles(event.target.files)}
             />

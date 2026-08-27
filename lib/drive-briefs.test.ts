@@ -17,9 +17,10 @@ import {
   uniqueFileName,
   userFolderName,
 } from "./drive-briefs.ts";
+import { BRIEF_MAX_FILE_BYTES, BRIEF_SIZE_ERROR, BRIEF_TYPE_ERROR } from "./lead-briefs.ts";
 
-function file(name: string, text: string) {
-  return { name, type: "text/plain", data: Buffer.from(text).toString("base64") };
+function file(name: string, text: string, type = "application/pdf") {
+  return { name, type, data: Buffer.from(text).toString("base64") };
 }
 
 describe("drive brief rooms", () => {
@@ -46,7 +47,7 @@ describe("drive brief rooms", () => {
       who: "chancec318@yahoo.com",
       whoName: "Chance Middlebrooks",
       describe: "ITP pack",
-      files: [file("itp.pdf", "one"), file("notes.txt", "two")],
+      files: [file("itp.pdf", "one"), file("notes.csv", "two", "text/csv")],
       savedAt: "2026-08-26T21:05:00.000Z",
     });
     const second = await saveBriefToDrive(drive, {
@@ -61,7 +62,7 @@ describe("drive brief rooms", () => {
     assert.equal(first.files.length, 2);
     assert.deepEqual(
       first.files.map((row) => row.name),
-      ["itp.pdf", "notes.txt"],
+      ["itp.pdf", "notes.csv"],
     );
     const one = await readBriefFile(drive, first.files[0].id);
     const two = await readBriefFile(drive, first.files[1].id);
@@ -75,5 +76,41 @@ describe("drive brief rooms", () => {
     assert.equal(listed[0].describe, "ITP pack v2");
     assert.equal(responseLeaksBriefVault(listed), false);
     assert.equal(responseLeaksBriefVault({ folder: QUALITY_ROOM_ID }), true);
+  });
+
+  it("rejects blocked types and oversize files before any Drive write", async () => {
+    const drive = memoryBriefDrive();
+    const before = drive.files.size;
+    await assert.rejects(
+      () =>
+        saveBriefToDrive(drive, {
+          kind: "hse",
+          who: "wlanderno@yahoo.com",
+          whoName: "Wendell Landerno",
+          describe: "nope",
+          files: [file("trap.exe", "mz", "application/x-msdownload")],
+        }),
+      (error: unknown) => error instanceof Error && error.message === BRIEF_TYPE_ERROR,
+    );
+    await assert.rejects(
+      () =>
+        saveBriefToDrive(drive, {
+          kind: "quality",
+          who: "chancec318@yahoo.com",
+          whoName: "Chance Middlebrooks",
+          describe: "too big",
+          files: [
+            {
+              name: "huge.pdf",
+              type: "application/pdf",
+              data: "A".repeat(Math.ceil((BRIEF_MAX_FILE_BYTES + 1) / 3) * 4),
+            },
+          ],
+        }),
+      (error: unknown) => error instanceof Error && error.message === BRIEF_SIZE_ERROR,
+    );
+    assert.equal(drive.files.size, before);
+    assert.equal((await drive.listChildren(QUALITY_ROOM_ID)).length, 0);
+    assert.equal((await drive.listChildren(HSE_ROOM_ID)).length, 0);
   });
 });

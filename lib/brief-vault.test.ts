@@ -9,6 +9,13 @@ import {
   saveUserBrief,
 } from "./brief-vault.ts";
 import { HSE_ROOM_ID, QUALITY_ROOM_ID, memoryBriefDrive } from "./drive-briefs.ts";
+import {
+  BRIEF_ALLOWED_MIME,
+  BRIEF_MAX_DROP_BYTES,
+  BRIEF_MAX_FILE_BYTES,
+  BRIEF_SIZE_ERROR,
+  BRIEF_TYPE_ERROR,
+} from "./lead-briefs.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { JOSEPH_EMAIL } from "./tester-seats.ts";
 
@@ -20,8 +27,12 @@ const joseph = { email: JOSEPH_EMAIL, name: "Joseph Henderson", role: "tester" a
 function files(label: string) {
   return [
     { name: `${label}-a.pdf`, type: "application/pdf", data: Buffer.from(`${label}-a`).toString("base64") },
-    { name: `${label}-b.txt`, type: "text/plain", data: Buffer.from(`${label}-b`).toString("base64") },
+    { name: `${label}-b.csv`, type: "text/csv", data: Buffer.from(`${label}-b`).toString("base64") },
   ];
+}
+
+function sizedFile(name: string, type: string, bytes: number) {
+  return { name, type, data: "A".repeat(Math.ceil(bytes / 3) * 4) };
 }
 
 describe("brief vault service", () => {
@@ -100,5 +111,84 @@ describe("brief vault service", () => {
     const ownerBody = saveBriefResponse(owner, missing);
     assert.equal(ownerBody.store, "unconfigured");
     assert.equal(briefsLeak(testerBody), false);
+  });
+
+  it("lets allowed types through and rejects blocked types, oversize files, and oversize drops before upload", async () => {
+    const drive = memoryBriefDrive();
+    const allowed = await saveUserBrief(
+      chance,
+      {
+        kind: "quality",
+        describe: "allowed pack",
+        files: Object.entries(BRIEF_ALLOWED_MIME).map(([ext, type]) => ({
+          name: ext === "jpeg" ? "photo.jpeg" : `form.${ext}`,
+          type,
+          data: Buffer.from(ext).toString("base64"),
+        })),
+      },
+      drive,
+    );
+    assert.equal(allowed.ok, true);
+    if (!allowed.ok) return;
+    assert.equal(allowed.stored, true);
+    assert.equal(allowed.brief?.files.length, Object.keys(BRIEF_ALLOWED_MIME).length);
+
+    const blocked = await saveUserBrief(
+      chance,
+      { kind: "quality", describe: "exe", files: [{ name: "trap.exe", type: "application/x-msdownload", data: "QQ==" }] },
+      drive,
+    );
+    assert.equal(blocked.ok, false);
+    if (blocked.ok) return;
+    assert.equal(blocked.status, 400);
+    assert.equal(blocked.error, BRIEF_TYPE_ERROR);
+
+    const html = await saveUserBrief(
+      wendell,
+      { kind: "hse", describe: "html", files: [{ name: "page.html", type: "text/html", data: "PGg+" }] },
+      drive,
+    );
+    assert.equal(html.ok, false);
+    if (html.ok) return;
+    assert.equal(html.error, BRIEF_TYPE_ERROR);
+
+    const oversizeFile = await saveUserBrief(
+      chance,
+      {
+        kind: "quality",
+        describe: "too big",
+        files: [sizedFile("huge.pdf", "application/pdf", BRIEF_MAX_FILE_BYTES + 1)],
+      },
+      drive,
+    );
+    assert.equal(oversizeFile.ok, false);
+    if (oversizeFile.ok) return;
+    assert.equal(oversizeFile.error, BRIEF_SIZE_ERROR);
+
+    const oversizeDrop = await saveUserBrief(
+      wendell,
+      {
+        kind: "hse",
+        describe: "too many",
+        files: [
+          sizedFile("a.pdf", "application/pdf", BRIEF_MAX_FILE_BYTES),
+          sizedFile("b.pdf", "application/pdf", BRIEF_MAX_FILE_BYTES),
+          sizedFile("c.pdf", "application/pdf", BRIEF_MAX_FILE_BYTES),
+          sizedFile("d.csv", "text/csv", BRIEF_MAX_DROP_BYTES - BRIEF_MAX_FILE_BYTES * 3 + 1),
+        ],
+      },
+      drive,
+    );
+    assert.equal(oversizeDrop.ok, false);
+    if (oversizeDrop.ok) return;
+    assert.equal(oversizeDrop.error, BRIEF_SIZE_ERROR);
+
+    const chanceList = await listVisibleBriefs(chance, "quality", drive);
+    const wendellList = await listVisibleBriefs(wendell, "hse", drive);
+    assert.deepEqual(chanceList.briefs, []);
+    assert.deepEqual(wendellList.briefs, []);
+    assert.equal(await getVisibleBriefFile(chance, allowed.brief?.files[0]?.id || "missing", drive), null);
+    assert.equal(await getVisibleBriefFile(wendell, allowed.brief?.files[0]?.id || "missing", drive), null);
+    assert.equal((await drive.listChildren(HSE_ROOM_ID)).length, 0);
   });
 });

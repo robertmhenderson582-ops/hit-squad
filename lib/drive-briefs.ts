@@ -1,6 +1,6 @@
 import { SignJWT, importPKCS8 } from "jose";
 import { driveConfigured, parseServiceAccount } from "./drive-estimates.ts";
-import { isLeadKind, type LeadFile, type LeadKind } from "./lead-briefs.ts";
+import { assertBriefDrop, isLeadKind, type LeadFile, type LeadKind } from "./lead-briefs.ts";
 
 /**
  * Owner vault Data room (Hit Squad Estimators / Data).
@@ -386,6 +386,7 @@ export async function saveBriefToDrive(
     savedAt?: string;
   },
 ): Promise<LandedBrief> {
+  assertBriefDrop(input.files);
   const who = input.who.trim().toLowerCase();
   const savedAt = input.savedAt || new Date().toISOString();
   const roomId = await ensureBriefRoom(drive, input.kind);
