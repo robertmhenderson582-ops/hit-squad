@@ -180,7 +180,7 @@ export function collectPack(
     siteId: identity.siteId,
     createdAt: identity.createdAt,
     updatedAt: identity.updatedAt || identity.createdAt || 0,
-    ownerEmail,
+    ownerEmail: ownerEmail || identity.ownerEmail || "",
     archived: identity.archived,
     schedule: readStoreJson(store, `${PHASE_STORE_PREFIX}${key}`) ?? undefined,
     crew: readStoreJson(store, `${CREW_STORE_PREFIX}${key}`) ?? undefined,

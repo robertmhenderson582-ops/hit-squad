@@ -10,7 +10,7 @@ import { useDeskBoard } from "@/components/useDeskBoard";
 import { useDisplay } from "@/components/DisplayProvider";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
-import { hydrateFromVault } from "@/lib/estimate-vault-client";
+import { hydrateFromVault, flushLocalPacksToVault } from "@/lib/estimate-vault-client";
 import { isActiveMenuItem, menuStatus, readJobMenu } from "@/lib/job-menu";
 import { jobPlantHref, plantJobTally, plantJobsLine } from "@/lib/jobs";
 import { listLocalPacks, mergeLocalJobs } from "@/lib/local-estimates";
@@ -29,6 +29,7 @@ export function JobsDesk() {
 
   const reload = useCallback(async () => {
     await hydrateFromVault();
+    await flushLocalPacksToVault();
     const response = await fetch("/api/desk/jobs", {
       credentials: "include",
       cache: "no-store",

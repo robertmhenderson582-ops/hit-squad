@@ -321,6 +321,22 @@ async function writePackFile(
   return adapter.createJson(folderId, name, payload, properties);
 }
 
+async function existingPackFile(
+  adapter: DriveAdapter,
+  folderId: string,
+  packId: string,
+  ownerEmail?: string,
+) {
+  try {
+    const byId = await findDrivePackByPackId(adapter, folderId, packId);
+    if (byId) return byId;
+    if (ownerEmail) return await findDrivePackFile(adapter, folderId, packId, ownerEmail);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function upsertEstimateInDrive(
   adapter: DriveAdapter,
   pack: EstimatePackSnapshot,
@@ -328,7 +344,12 @@ export async function upsertEstimateInDrive(
 ) {
   const target = resolveEstimatesFolder(folderId);
   const ownerEmail = pack.ownerEmail.trim().toLowerCase();
-  const existing = await findDrivePackFile(adapter, target, pack.packId, ownerEmail);
+  let existing: DriveFile | null = null;
+  try {
+    existing = await findDrivePackFile(adapter, target, pack.packId, ownerEmail);
+  } catch {
+    existing = null;
+  }
   return writePackFile(adapter, pack, target, existing);
 }
 
@@ -339,10 +360,7 @@ export async function overwriteEstimateInDrive(
   folderId = estimatesFolderId(),
 ) {
   const target = resolveEstimatesFolder(folderId);
-  const ownerEmail = pack.ownerEmail.trim().toLowerCase();
-  const existing =
-    (await findDrivePackByPackId(adapter, target, pack.packId)) ||
-    (await findDrivePackFile(adapter, target, pack.packId, ownerEmail));
+  const existing = await existingPackFile(adapter, target, pack.packId, pack.ownerEmail.trim().toLowerCase());
   return writePackFile(adapter, pack, target, existing);
 }
 

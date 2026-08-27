@@ -4,8 +4,16 @@ import {
   scheduleOnce,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
-import { archiveMenuItem, packsMissingFromVault, unarchiveMenuItem, writeVaultSeen } from "./job-menu.ts";
-import { deleteLocalPack, isLocalPackId, type StorageLike } from "./local-estimates.ts";
+import { TRANSFER_WRITE_ERROR } from "./handoff.ts";
+import {
+  archiveMenuItem,
+  packsMissingFromVault,
+  recordTransferredMenuItem,
+  unarchiveMenuItem,
+  writeVaultSeen,
+  type MenuItem,
+} from "./job-menu.ts";
+import { deleteLocalPack, isLocalPackId, listLocalPacks, type StorageLike } from "./local-estimates.ts";
 
 export const ESTIMATE_VAULT_DEBOUNCE_MS = 1500;
 
@@ -61,13 +69,13 @@ export async function hydrateFromVault(store?: StorageLike | null): Promise<Esti
 }
 
 export async function flushVaultUpsert(packId: string, store?: StorageLike | null) {
-  if (!isLocalPackId(packId)) return;
+  if (!isLocalPackId(packId)) return { ok: false as const };
   const target = browserStore(store);
-  if (!target) return;
+  if (!target) return { ok: false as const };
   const pack = collectPack(target, packId);
-  if (!pack) return;
+  if (!pack) return { ok: false as const };
   const body = JSON.stringify({ pack });
-  if (lastBody.get(packId) === body) return;
+  if (lastBody.get(packId) === body) return { ok: true as const };
   try {
     const response = await fetch("/api/desk/estimates", {
       method: "PUT",
@@ -76,9 +84,21 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
       headers: { "content-type": "application/json" },
       body,
     });
-    if (response.ok) lastBody.set(packId, body);
+    if (response.ok) {
+      lastBody.set(packId, body);
+      return { ok: true as const };
+    }
   } catch {
-    // local copy stays; next edit retries
+    // local copy stays; next open/save retries
+  }
+  return { ok: false as const };
+}
+
+export async function flushLocalPacksToVault(store?: StorageLike | null) {
+  const target = browserStore(store);
+  if (!target) return;
+  for (const pack of listLocalPacks(target)) {
+    await flushVaultUpsert(pack.packId, target);
   }
 }
 
@@ -89,21 +109,41 @@ export function scheduleVaultUpsert(packId: string, store?: StorageLike | null) 
   });
 }
 
-export async function transferVaultPack(packId: string, email: string) {
-  const response = await fetch(`/api/desk/estimates/${encodeURIComponent(packId)}/transfer`, {
-    method: "POST",
-    credentials: "include",
-    cache: "no-store",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email }),
-  });
-  const data = (await response.json().catch(() => ({}))) as {
-    error?: string;
-    pack?: EstimatePackSnapshot;
-    to?: { name: string; email: string };
-  };
-  if (!response.ok) return { ok: false as const, error: data.error || "Could not turn that job over." };
-  return { ok: true as const, pack: data.pack, to: data.to };
+export async function transferVaultPack(packId: string, email: string, store?: StorageLike | null) {
+  const target = browserStore(store);
+  const pack = target ? collectPack(target, packId) : null;
+  try {
+    const response = await fetch(`/api/desk/estimates/${encodeURIComponent(packId)}/transfer`, {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, pack: pack ?? undefined }),
+    });
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      pack?: EstimatePackSnapshot;
+      to?: { name: string; email: string };
+    };
+    if (!response.ok) {
+      return { ok: false as const, error: data.error || TRANSFER_WRITE_ERROR };
+    }
+    return { ok: true as const, pack: data.pack, to: data.to };
+  } catch {
+    return { ok: false as const, error: TRANSFER_WRITE_ERROR };
+  }
+}
+
+export function applyTransferLocally(
+  ok: boolean,
+  packId: string,
+  item: MenuItem & { toName: string },
+  store?: StorageLike | null,
+) {
+  if (!ok) return { keptLocal: true as const };
+  recordTransferredMenuItem(item, store);
+  deleteLocalPack(packId, store);
+  return { keptLocal: false as const };
 }
 
 export async function archiveVaultPack(packId: string, archived: boolean) {

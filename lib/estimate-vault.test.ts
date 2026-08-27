@@ -3,13 +3,14 @@ import { describe, it } from "node:test";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { JOSEPH_EMAIL, SHANE_EMAIL } from "./tester-seats.ts";
-import { memoryDrive } from "./drive-estimates.ts";
+import { memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
 import { responseLeaksDrive, type EstimatePackSnapshot } from "./estimate-pack.ts";
 import {
   archiveVisiblePack,
   deleteVisiblePack,
   listVisiblePacks,
   packsResponse,
+  TRANSFER_WRITE_ERROR,
   transferVisiblePack,
   upsertVisiblePack,
 } from "./estimate-vault.ts";
@@ -130,6 +131,61 @@ describe("estimate vault service", () => {
       assert.equal(saved.pack.ownerEmail, tester.email);
     }
     assert.equal(drive.files.size, 1);
+  });
+
+  it("turns a local-only Cat 2 over to Nathan when Drive is configured but empty", async () => {
+    const empty = memoryDrive();
+    const planted = await transferVisiblePack(joseph, "new-cat2pit", tester.email, empty, cat2());
+    assert.equal(planted.ok, false);
+    assert.equal(empty.files.size, 0);
+
+    const drive = memoryDrive();
+    const handed = await transferVisiblePack(owner, "new-cat2pit", tester.email, drive, cat2());
+    assert.equal(handed.ok, true);
+    if (!handed.ok) return;
+    assert.equal(handed.stored, true);
+    assert.equal(handed.pack.ownerEmail, tester.email);
+    assert.equal(handed.pack.packId, "new-cat2pit");
+    assert.equal(handed.to.name, "Nathan Boyte");
+    assert.equal(drive.files.size, 1);
+    const stored = JSON.parse([...drive.files.values()][0]?.content || "{}") as EstimatePackSnapshot;
+    assert.equal(stored.ownerEmail, tester.email);
+    assert.equal(stored.title, "Cat 2 Pit Stop");
+    assert.equal([...drive.files.values()][0]?.file.properties?.ownerEmail, tester.email);
+
+    const nathanList = await listVisiblePacks(tester, drive);
+    const ownerList = await listVisiblePacks(owner, drive);
+    const josephList = await listVisiblePacks(joseph, drive);
+    const shaneList = await listVisiblePacks(shane, drive);
+    const novusList = await listVisiblePacks(novus, drive);
+    assert.equal(nathanList.packs[0]?.title, "Cat 2 Pit Stop");
+    assert.deepEqual(ownerList.packs, []);
+    assert.deepEqual(josephList.packs, []);
+    assert.deepEqual(shaneList.packs, []);
+    assert.deepEqual(novusList.packs, []);
+    const steal = await transferVisiblePack(joseph, "new-cat2pit", tester.email, drive, cat2());
+    assert.equal(steal.ok, false);
+  });
+
+  it("keeps Drive empty and returns an error when the write fails", async () => {
+    const inner = memoryDrive();
+    const drive: DriveAdapter & { files: typeof inner.files } = {
+      ...inner,
+      async createJson() {
+        throw new Error("create");
+      },
+      async updateJson() {
+        throw new Error("update");
+      },
+    };
+    const handed = await transferVisiblePack(owner, "new-cat2pit", tester.email, drive, cat2());
+    assert.equal(handed.ok, false);
+    if (handed.ok) return;
+    assert.equal(handed.status, 502);
+    assert.equal(handed.error, TRANSFER_WRITE_ERROR);
+    assert.equal(drive.files.size, 0);
+    const missing = await transferVisiblePack(owner, "new-cat2pit", tester.email, memoryDrive());
+    assert.equal(missing.ok, false);
   });
 
   it("archives and deletes only the caller's pack and never auto-removes Cat 2", async () => {
