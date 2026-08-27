@@ -36,7 +36,16 @@ type ServiceAccount = {
   private_key: string;
 };
 
-let cachedToken: { value: string; exp: number } | null = null;
+type OAuthClient = {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+};
+
+type CachedToken = { value: string; exp: number };
+
+let cachedSaToken: CachedToken | null = null;
+const cachedOAuthTokens = new Map<string, CachedToken>();
 
 /** Owner Estimates room. Live packs only. Never Workbooks / Nathan. */
 export const ESTIMATES_ROOM_ID = "1y6Q3TOnpXzV-Y1oeqjjrHfSXt9hcIrgW";
@@ -78,12 +87,31 @@ export function parseServiceAccount(env: Record<string, string | undefined> = pr
   return null;
 }
 
+export function parseOAuthClient(env: Record<string, string | undefined> = process.env): OAuthClient | null {
+  const clientId = env.GOOGLE_OAUTH_CLIENT_ID?.trim() || "";
+  const clientSecret = env.GOOGLE_OAUTH_CLIENT_SECRET?.trim() || "";
+  const refreshToken = env.GOOGLE_OAUTH_REFRESH_TOKEN?.trim() || "";
+  if (!clientId || !clientSecret || !refreshToken) return null;
+  return { clientId, clientSecret, refreshToken };
+}
+
 export function driveConfigured(env: Record<string, string | undefined> = process.env) {
-  return Boolean(parseServiceAccount(env));
+  return Boolean(parseOAuthClient(env) || parseServiceAccount(env));
+}
+
+export function driveAuthKind(env: Record<string, string | undefined> = process.env) {
+  if (parseOAuthClient(env)) return "oauth" as const;
+  if (parseServiceAccount(env)) return "service-account" as const;
+  return "unconfigured" as const;
 }
 
 export function driveStoreKind(env: Record<string, string | undefined> = process.env) {
   return driveConfigured(env) ? "drive" : "unconfigured";
+}
+
+export function resetDriveTokenCache() {
+  cachedSaToken = null;
+  cachedOAuthTokens.clear();
 }
 
 export function memoryDrive(): DriveAdapter & { files: Map<string, { file: DriveFile; content: string }> } {
@@ -123,9 +151,14 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
   };
 }
 
+function cachedTokenValue(row: CachedToken | undefined, now: number) {
+  return row && row.exp - 60 > now ? row.value : null;
+}
+
 async function googleAccessToken(account: ServiceAccount) {
   const now = Math.floor(Date.now() / 1000);
-  if (cachedToken && cachedToken.exp - 60 > now) return cachedToken.value;
+  const cached = cachedTokenValue(cachedSaToken ?? undefined, now);
+  if (cached) return cached;
   const key = await importPKCS8(account.private_key, "RS256");
   const jwt = await new SignJWT({ scope: "https://www.googleapis.com/auth/drive" })
     .setProtectedHeader({ alg: "RS256", typ: "JWT" })
@@ -144,13 +177,45 @@ async function googleAccessToken(account: ServiceAccount) {
   });
   const data = (await response.json()) as { access_token?: string; expires_in?: number };
   if (!data.access_token) throw new Error("token");
-  cachedToken = { value: data.access_token, exp: now + (Number(data.expires_in) || 3600) };
-  return cachedToken.value;
+  cachedSaToken = { value: data.access_token, exp: now + (Number(data.expires_in) || 3600) };
+  return cachedSaToken.value;
 }
 
-function googleDriveAdapter(account: ServiceAccount): DriveAdapter {
+async function oauthAccessToken(client: OAuthClient) {
+  const now = Math.floor(Date.now() / 1000);
+  const cached = cachedTokenValue(cachedOAuthTokens.get(client.refreshToken), now);
+  if (cached) return cached;
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: client.clientId,
+      client_secret: client.clientSecret,
+      refresh_token: client.refreshToken,
+    }),
+  });
+  const data = (await response.json()) as { access_token?: string; expires_in?: number };
+  if (!data.access_token) throw new Error("token");
+  const next = { value: data.access_token, exp: now + (Number(data.expires_in) || 3600) };
+  cachedOAuthTokens.set(client.refreshToken, next);
+  return next.value;
+}
+
+function driveApiError(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== "object") return fallback;
+  const error = (payload as { error?: unknown }).error;
+  if (typeof error === "string" && error.trim()) return error;
+  if (error && typeof error === "object") {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return fallback;
+}
+
+function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter {
   async function authHeaders(extra?: Record<string, string>) {
-    const token = await googleAccessToken(account);
+    const token = await getAccessToken();
     return { authorization: `Bearer ${token}`, ...extra };
   }
 
@@ -183,8 +248,8 @@ function googleDriveAdapter(account: ServiceAccount): DriveAdapter {
         headers: await authHeaders({ "content-type": `multipart/related; boundary=${boundary}` }),
         body,
       });
-      const file = (await response.json()) as DriveFile;
-      if (!file.id) throw new Error("create");
+      const file = (await response.json()) as DriveFile & { error?: { message?: string } | string };
+      if (!file.id) throw new Error(driveApiError(file, "create"));
       return { id: file.id, name: file.name || name, properties };
     },
     async updateJson(fileId, content, name, properties) {
@@ -193,7 +258,10 @@ function googleDriveAdapter(account: ServiceAccount): DriveAdapter {
         headers: await authHeaders({ "content-type": "application/json" }),
         body: content,
       });
-      if (!upload.ok) throw new Error("update");
+      if (!upload.ok) {
+        const payload = await upload.json().catch(() => null);
+        throw new Error(driveApiError(payload, "update"));
+      }
       if (name || properties) {
         await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
           method: "PATCH",
@@ -209,34 +277,41 @@ function googleDriveAdapter(account: ServiceAccount): DriveAdapter {
         headers: await authHeaders({ "content-type": "application/json" }),
         body: JSON.stringify({ trashed: true }),
       });
-      if (!response.ok) throw new Error("delete");
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(driveApiError(payload, "delete"));
+      }
+    },
+  };
+}
+
+function unconfiguredDrive(): DriveAdapter {
+  return {
+    configured: false,
+    async listJson() {
+      return [];
+    },
+    async readJson() {
+      return "";
+    },
+    async createJson() {
+      throw new Error("unconfigured");
+    },
+    async updateJson() {
+      throw new Error("unconfigured");
+    },
+    async deleteJson() {
+      throw new Error("unconfigured");
     },
   };
 }
 
 export function driveAdapter(env: Record<string, string | undefined> = process.env): DriveAdapter {
+  const oauth = parseOAuthClient(env);
+  if (oauth) return googleDriveAdapter(() => oauthAccessToken(oauth));
   const account = parseServiceAccount(env);
-  if (!account) {
-    return {
-      configured: false,
-      async listJson() {
-        return [];
-      },
-      async readJson() {
-        return "";
-      },
-      async createJson() {
-        throw new Error("unconfigured");
-      },
-      async updateJson() {
-        throw new Error("unconfigured");
-      },
-      async deleteJson() {
-        throw new Error("unconfigured");
-      },
-    };
-  }
-  return googleDriveAdapter(account);
+  if (account) return googleDriveAdapter(() => googleAccessToken(account));
+  return unconfiguredDrive();
 }
 
 function fileMatchesPack(file: DriveFile, packId: string, ownerEmail: string) {

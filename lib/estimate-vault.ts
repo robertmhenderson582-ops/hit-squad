@@ -132,7 +132,9 @@ export async function transferVisiblePack(
   }
   try {
     await overwriteEstimateInDrive(drive, pack);
-  } catch {
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "write";
+    console.error("estimate transfer write failed:", detail);
     return { ok: false as const, status: 502, error: TRANSFER_WRITE_ERROR };
   }
   return { ok: true as const, stored: true, store: "drive" as const, pack, to: target };

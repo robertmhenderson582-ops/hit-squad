@@ -141,6 +141,8 @@ describe("inbox what's-new", () => {
     assert.equal(TESTER_NEXT_SHIP_DRAFT.startsWith(NEXT_SHIP_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_NEXT_SHIP_DRAFT), true);
     assert.equal(testerCopyIsSafe(OWNER_NEXT_SHIP_DRAFT), true);
+    assert.match(TESTER_NEXT_SHIP_DRAFT, /Turn over a job actually hands it to the other person/);
+    assert.match(TESTER_NEXT_SHIP_DRAFT, /Save so it shows on your phone/);
     assert.equal(/Wendell|Joseph|Follow|Shane|apcontrolsllc|seat|security|vault|other users/i.test(TESTER_NEXT_SHIP_DRAFT), false);
     assert.equal(
       /password|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
