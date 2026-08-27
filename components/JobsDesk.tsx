@@ -17,7 +17,7 @@ import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estim
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
 import { ensureCbiDummyPack, shouldSeedCbiDummy } from "@/lib/cbi-dummy";
 import { companyScopeFor, type CompanyId } from "@/lib/companies";
-import { jobPlantHref, jobsOnDesk, plantJobTally, plantJobsLine } from "@/lib/jobs";
+import { jobPlantHref, jobsOnDesk, packForJob, plantJobTally, plantJobsLine } from "@/lib/jobs";
 import type { JobRecord } from "@/lib/types";
 
 export function JobsDesk() {
@@ -89,6 +89,7 @@ export function JobsDesk() {
       {error ? <p className="text-amber-flare">{error}</p> : null}
       {active.map((job) => {
         const estimate = estimateForJob(job, estimates);
+        const pack = packForJob(job, deskPacks, estimate?.id);
         const plantHref = jobPlantHref(job.code);
         const estimatesHref = estimate ? estimateHref(estimate.id) : jobPlantHref(job.code, "Estimates");
         return (
@@ -110,10 +111,7 @@ export function JobsDesk() {
               <StatusStamp value={job.status} />
             </div>
             <h2 className="mt-1 font-display text-2xl tracking-wide">{alias(job.title)}</h2>
-            <JobHandoffMark
-              pack={deskPacks.find((pack) => pack.packId === estimate?.id || `job-${pack.packId}` === job.id)}
-              email={lens?.email}
-            />
+            <JobHandoffMark pack={pack} email={lens?.email} />
             <p className="mt-2 text-sm text-[#5b6f73]">
               {alias(job.client)} · {job.discipline} · {job.kind.toUpperCase()}
             </p>
@@ -149,7 +147,7 @@ export function JobsDesk() {
               <JobMenuActions
                 id={job.id}
                 title={job.title}
-                packId={estimate?.id}
+                packId={pack?.packId || estimate?.id}
                 onChange={() => {
                   setTick((value) => value + 1);
                   setPackTick((value) => value + 1);
@@ -171,7 +169,7 @@ export function JobsDesk() {
                 <JobMenuActions
                   id={job.id}
                   title={job.title}
-                  packId={estimateForJob(job, estimates)?.id}
+                  packId={packForJob(job, deskPacks, estimateForJob(job, estimates)?.id)?.packId}
                   archived
                   onChange={() => {
                     setTick((value) => value + 1);

@@ -18,8 +18,15 @@ import {
   writeVaultSeen,
   type MenuItem,
 } from "./job-menu.ts";
-import { snapshotLensPack, writeLensPacks } from "./lens-packs.ts";
-import { deleteLocalPack, findLocalPack, isLocalPackId, listLocalPacks, type StorageLike } from "./local-estimates.ts";
+import { findDeskPack, readLensPacks, snapshotLensPack, writeLensPacks } from "./lens-packs.ts";
+import {
+  deleteLocalPack,
+  findLocalPack,
+  isLocalPackId,
+  listLocalPacks,
+  rememberLocalPack,
+  type StorageLike,
+} from "./local-estimates.ts";
 
 export const ESTIMATE_VAULT_DEBOUNCE_MS = 1500;
 
@@ -102,6 +109,18 @@ export async function hydrateFromVault(
       const data = (await response.json()) as { packs?: EstimatePackSnapshot[]; persisted?: boolean };
       const packs = Array.isArray(data.packs) ? data.packs : [];
       const viewingAs = seat !== "owner";
+      if (viewingAs) writeLensPacks(seat, packs.map(snapshotLensPack), target);
+      for (const pack of packs) {
+        mergeVaultIntoLocal(target, pack);
+        if (viewingAs) continue;
+        if (pack.archived) archiveMenuItem({ id: pack.packId, title: pack.title, packId: pack.packId }, target);
+        else {
+          unarchiveMenuItem({ id: pack.packId, packId: pack.packId }, target);
+          if (!pack.transferredFrom) {
+            clearTransferredMenuItem({ id: pack.packId, packId: pack.packId }, target);
+          }
+        }
+      }
       if (data.persisted && !viewingAs) {
         const deskEmail = ownerVaultEmail();
         for (const packId of packsMissingFromVault(packs.map((pack) => pack.packId), target)) {
@@ -124,18 +143,6 @@ export async function hydrateFromVault(
           packs.map((pack) => pack.packId),
           target,
         );
-      }
-      if (viewingAs) writeLensPacks(seat, packs.map(snapshotLensPack), target);
-      for (const pack of packs) {
-        mergeVaultIntoLocal(target, pack);
-        if (viewingAs) continue;
-        if (pack.archived) archiveMenuItem({ id: pack.packId, title: pack.title, packId: pack.packId }, target);
-        else {
-          unarchiveMenuItem({ id: pack.packId, packId: pack.packId }, target);
-          if (!pack.transferredFrom) {
-            clearTransferredMenuItem({ id: pack.packId, packId: pack.packId }, target);
-          }
-        }
       }
       return packs;
     } catch {
@@ -177,11 +184,17 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   return { ok: false as const };
 }
 
+function ownedByThisVault(pack: { ownerEmail?: string }, deskEmail = ownerVaultEmail()) {
+  const ownerEmail = (pack.ownerEmail || "").trim().toLowerCase();
+  return !ownerEmail || ownerEmail === deskEmail;
+}
+
 export async function flushLocalPacksToVault(store?: StorageLike | null, opts?: { viewAs?: string | null }) {
   if (requestedVaultSeat(opts)) return;
   const target = browserStore(store);
   if (!target) return;
   for (const pack of listLocalPacks(target)) {
+    if (!ownedByThisVault(pack)) continue;
     await flushVaultUpsert(pack.packId, target);
   }
 }
@@ -229,6 +242,61 @@ export function applyTransferLocally(
   return { keptLocal: false as const };
 }
 
+function incomingPackForHandoff(packId: string, store: StorageLike | null) {
+  if (!store) return null;
+  const collected = collectPack(store, packId);
+  if (collected) return collected;
+  const desk = findDeskPack(packId, currentViewAs, store);
+  if (!desk) return null;
+  return {
+    packId: desk.packId,
+    key: desk.key,
+    title: desk.title,
+    client: desk.client,
+    site: desk.site,
+    size: desk.size,
+    siteId: desk.siteId,
+    createdAt: desk.createdAt,
+    updatedAt: desk.updatedAt,
+    ownerEmail: desk.ownerEmail || "",
+    archived: desk.archived,
+    sharedWith: desk.sharedWith,
+    transferredFrom: desk.transferredFrom,
+    transferredTo: desk.transferredTo,
+    transferredToName: desk.transferredToName,
+    transferredFromName: desk.transferredFromName,
+  };
+}
+
+function applyShareToDesk(pack: EstimatePackSnapshot, store: StorageLike) {
+  mergeVaultIntoLocal(store, pack);
+  rememberLocalPack(
+    {
+      packId: pack.packId,
+      title: pack.title,
+      client: pack.client,
+      site: pack.site,
+      size: pack.size,
+      ownerEmail: pack.ownerEmail,
+      archived: pack.archived,
+      sharedWith: pack.sharedWith,
+      transferredFrom: pack.transferredFrom,
+      transferredTo: pack.transferredTo,
+      transferredToName: pack.transferredToName,
+      transferredFromName: pack.transferredFromName,
+      replaceHandoff: true,
+    },
+    store,
+  );
+  if (!currentViewAs) return;
+  const lens = readLensPacks(currentViewAs, store);
+  writeLensPacks(
+    currentViewAs,
+    [snapshotLensPack(pack), ...lens.filter((row) => row.packId !== pack.packId)],
+    store,
+  );
+}
+
 export async function shareVaultPack(
   packId: string,
   email: string,
@@ -236,7 +304,7 @@ export async function shareVaultPack(
   store?: StorageLike | null,
 ) {
   const target = browserStore(store);
-  const pack = target ? collectPack(target, packId) : null;
+  const pack = incomingPackForHandoff(packId, target);
   try {
     const response = await deskFetch(`/api/desk/estimates/${encodeURIComponent(packId)}/share`, {
       method: "POST",
@@ -251,7 +319,7 @@ export async function shareVaultPack(
     if (!response.ok) {
       return { ok: false as const, error: data.error || SHARE_WRITE_ERROR };
     }
-    if (data.pack && target) mergeVaultIntoLocal(target, data.pack);
+    if (data.pack && target) applyShareToDesk(data.pack, target);
     bustVaultHydrate();
     return { ok: true as const, pack: data.pack, to: data.to };
   } catch {

@@ -47,15 +47,16 @@ export function handoffMarkText(
   },
   email = "",
 ) {
-  if (packTransferredToYou(pack, email)) {
-    return `Transferred to you from ${transferredFromLabel(pack)}.`;
-  }
-  if (packSharedWithYou(pack, email)) {
-    return "Shared. You can work on this job.";
-  }
   const names = sharedWithNames(normalizeEmails(pack.sharedWith));
+  if (packSharedWithYou(pack, email)) {
+    const from = findHandoffSeat(pack.ownerEmail || "")?.name || "the owner";
+    return `Shared / from ${from}.`;
+  }
   if (names.length && pack.ownerEmail?.trim().toLowerCase() === email.trim().toLowerCase()) {
     return `Shared with ${names.join(", ")}.`;
+  }
+  if (packTransferredToYou(pack, email)) {
+    return `Transferred to you from ${transferredFromLabel(pack)}.`;
   }
   return null;
 }

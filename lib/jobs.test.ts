@@ -5,6 +5,7 @@ import {
   jobByCode,
   jobPlantHref,
   jobsOnDesk,
+  packForJob,
   plantJobTally,
   plantJobsLine,
   plantTabFromQuery,
@@ -68,5 +69,9 @@ describe("desk counts", () => {
     );
     const afterStopFollowing = jobsOnDesk([], [cat2], false);
     assert.equal(afterStopFollowing.some((job) => job.code === "TA-8841"), true);
+    const cat2Job = ownerJobs.find((job) => job.id === "job-new-mtaajdwa-f7539");
+    assert.ok(cat2Job);
+    assert.equal(packForJob(cat2Job, [cat2])?.packId, "new-mtaajdwa-f7539");
+    assert.equal(packForJob({ id: "job-8841" }, [cat2]), undefined);
   });
 });

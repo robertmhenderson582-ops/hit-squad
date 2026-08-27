@@ -4,7 +4,7 @@ import Link from "next/link";
 import { JobHandoffMark } from "@/components/JobHandoffMark";
 import { JobMenuActions } from "@/components/JobMenuActions";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
-import { findLocalPack } from "@/lib/local-estimates";
+import { findDeskPack } from "@/lib/lens-packs";
 import { StatusStamp } from "@/components/StatusStamp";
 import { estimateHref } from "@/lib/estimate-open";
 import type { EstimateRecord } from "@/lib/types";
@@ -21,8 +21,8 @@ export function EstimateCard({
   onMenuChange?: () => void;
 }) {
   const alias = useAlias();
-  const { lens } = useDeskLens();
-  const pack = findLocalPack(estimate.id);
+  const { lens, seat } = useDeskLens();
+  const pack = findDeskPack(estimate.id, seat);
 
   return (
     <article className="estimate-card plant-card relative z-[1] px-5 py-5" data-estimate-id={estimate.id}>

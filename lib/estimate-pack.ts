@@ -152,7 +152,17 @@ export function pickPack(
         local.ownerEmail &&
         vault.ownerEmail.trim().toLowerCase() !== local.ownerEmail.trim().toLowerCase(),
     );
-  if (!packHasWork(vault) && packHasWork(local) && !vaultMoved) return local;
+  if (!packHasWork(vault) && packHasWork(local) && !vaultMoved) {
+    return {
+      ...local,
+      ownerEmail: vault.ownerEmail || local.ownerEmail,
+      sharedWith: vault.sharedWith,
+      transferredFrom: vault.transferredFrom,
+      transferredTo: vault.transferredTo,
+      transferredToName: vault.transferredToName,
+      transferredFromName: vault.transferredFromName,
+    };
+  }
   const newer = (local.updatedAt || 0) >= (vault.updatedAt || 0) ? local : vault;
   const older = newer === local ? vault : local;
   return {

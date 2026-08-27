@@ -14,7 +14,8 @@ import {
 } from "@/lib/estimate-vault-client";
 import { canReturnPack, canSharePack, packSharedEmails } from "@/lib/estimate-scope";
 import { findHandoffSeat, type HandoffSeat } from "@/lib/handoff";
-import { isLocalPackId, deleteLocalPack, findLocalPack } from "@/lib/local-estimates";
+import { findDeskPack } from "@/lib/lens-packs";
+import { isLocalPackId, deleteLocalPack } from "@/lib/local-estimates";
 import { archiveMenuItem, deleteMenuItem, unarchiveMenuItem } from "@/lib/job-menu";
 
 export function vaultPackIdOf(id: string, packId?: string) {
@@ -37,13 +38,13 @@ export function JobMenuActions({
   archived?: boolean;
   onChange?: () => void;
 }) {
-  const { lens } = useDeskLens();
+  const { lens, seat } = useDeskLens();
   const [handoff, setHandoff] = useState<"share" | "unshare" | "turnover" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const vaultId = vaultPackIdOf(id, packId);
   const item = { id, title, packId: vaultId || packId };
-  const pack = vaultId ? findLocalPack(vaultId) : null;
+  const pack = vaultId ? findDeskPack(vaultId, seat) : null;
   const deskUser = lens ? { email: lens.email, role: lens.role } : null;
   const sharedEmails = pack ? packSharedEmails(pack) : [];
   const canShare = Boolean(deskUser && pack && canSharePack(deskUser, pack));

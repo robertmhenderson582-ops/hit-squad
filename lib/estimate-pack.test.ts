@@ -138,6 +138,22 @@ describe("estimate pack snapshot", () => {
     const titleOnly = cat2({ updatedAt: 900, crew: undefined, schedule: undefined });
     const merged = pickPack(titleOnly, cat2({ updatedAt: 200 }));
     assert.equal(crewHasRows(merged?.crew), true);
+    const emptyShare = cat2({
+      updatedAt: 900,
+      title: "Working estimate",
+      crew: { staff: [], support: [] },
+      schedule: { phases: [] },
+      ownerEmail: "nathanboyte@gmail.com",
+      sharedWith: ["robertmhenderson582@gmail.com"],
+    });
+    const localWork = cat2({
+      updatedAt: 500,
+      ownerEmail: "nathanboyte@gmail.com",
+    });
+    const stamped = pickPack(localWork, emptyShare);
+    assert.equal(stamped?.crew, localWork.crew);
+    assert.equal(stamped?.ownerEmail, "nathanboyte@gmail.com");
+    assert.deepEqual(stamped?.sharedWith, ["robertmhenderson582@gmail.com"]);
   });
 
   it("hydrates vault onto an empty browser and leaves a newer local pack alone", () => {

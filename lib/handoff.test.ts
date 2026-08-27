@@ -54,12 +54,18 @@ describe("handoff seats", () => {
     assert.equal(packSharedWithYou(shared, OWNER_LOGIN_EMAIL), false);
     assert.equal(packSharedWithYou(shared, JOSEPH_EMAIL), false);
     assert.equal(handoffMarkText(transferred, "nathanboyte@gmail.com"), "Transferred to you from Robert Henderson.");
-    assert.equal(handoffMarkText(shared, "nathanboyte@gmail.com"), "Shared. You can work on this job.");
+    assert.equal(handoffMarkText(shared, "nathanboyte@gmail.com"), "Shared / from Robert Henderson.");
     assert.equal(handoffMarkText(shared, OWNER_LOGIN_EMAIL), "Shared with Nathan Boyte.");
     assert.equal(handoffMarkText(shared, JOSEPH_EMAIL), null);
     const sharedToOwner = { ownerEmail: "nathanboyte@gmail.com", sharedWith: [OWNER_LOGIN_EMAIL] };
     assert.equal(packSharedWithYou(sharedToOwner, OWNER_LOGIN_EMAIL), true);
     assert.equal(packSharedWithYou(sharedToOwner, "nathanboyte@gmail.com"), false);
-    assert.equal(handoffMarkText(sharedToOwner, OWNER_LOGIN_EMAIL), "Shared. You can work on this job.");
+    assert.equal(handoffMarkText(sharedToOwner, OWNER_LOGIN_EMAIL), "Shared / from Nathan Boyte.");
+    const transferredThenShared = {
+      ...transferred,
+      sharedWith: [OWNER_LOGIN_EMAIL],
+    };
+    assert.equal(handoffMarkText(transferredThenShared, "nathanboyte@gmail.com"), "Shared with Robert Henderson.");
+    assert.equal(handoffMarkText(transferredThenShared, OWNER_LOGIN_EMAIL), "Shared / from Nathan Boyte.");
   });
 });
