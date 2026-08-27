@@ -109,7 +109,8 @@ test("every View-as seat matches that tester, including Settings flags", () => {
     assert.equal(pageAllowedForSeat(lens, { buildDesk: true }), false, row.id);
     assert.equal(pageAllowedForSeat(lens, { ownerOnly: true }), false, row.id);
     assert.equal(pageAllowedForSeat(lens, { viewAs: true }), def.viewAs, row.id);
-    assert.equal(pageAllowedForSeat(owner, { buildDesk: true }) && pageAllowedForSeat(lens, { buildDesk: true }), false, row.id);
+    assert.equal(pageAllowedForSeat(owner, { buildDesk: true }), true, row.id);
+    assert.equal(pageAllowedForSeat(lens, { buildDesk: true }), false, row.id);
 
     const realLogin = { id: def.id, email: def.email, name: def.name, role: "tester" as const };
     assert.equal(lensUser(realLogin, "mark")?.email, realLogin.email, row.id);

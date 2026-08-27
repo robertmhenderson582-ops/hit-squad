@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { after, beforeEach, describe, it } from "node:test";
 
 import {
@@ -27,6 +28,10 @@ after(() => {
 describe("activity vault persist", () => {
   it("does not invent a demo ledger", async () => {
     assert.deepEqual(await listActivity(), []);
+    const ownerDesk = readFileSync(fileURLToPath(new URL("./owner-desk.ts", import.meta.url)), "utf8");
+    assert.equal(/seedOwnerDemo|Owner desk · sign-in ok/.test(ownerDesk), false);
+    const desk = readFileSync(fileURLToPath(new URL("../components/ActivityDesk.tsx", import.meta.url)), "utf8");
+    assert.equal(/Demo owner rows/.test(desk), false);
   });
 
   it("keeps a real row after the local cache is wiped", async () => {
