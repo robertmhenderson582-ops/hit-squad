@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { JobHandoffMark } from "@/components/JobHandoffMark";
 import { JobMenuActions } from "@/components/JobMenuActions";
-import { useAlias } from "@/components/OwnerDeskContext";
+import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
+import { findLocalPack } from "@/lib/local-estimates";
 import { StatusStamp } from "@/components/StatusStamp";
 import { estimateHref } from "@/lib/estimate-open";
 import type { EstimateRecord } from "@/lib/types";
@@ -19,6 +21,8 @@ export function EstimateCard({
   onMenuChange?: () => void;
 }) {
   const alias = useAlias();
+  const { lens } = useDeskLens();
+  const pack = findLocalPack(estimate.id);
 
   return (
     <article className="estimate-card plant-card relative z-[1] px-5 py-5" data-estimate-id={estimate.id}>
@@ -31,6 +35,7 @@ export function EstimateCard({
           </div>
         </div>
         <h3 className="mt-2 font-display text-2xl font-semibold text-[#163038]">{estimate.title}</h3>
+        <JobHandoffMark pack={pack} email={lens?.email} />
         <p className="mt-1 text-sm text-[#5b6f73]">
           {alias(estimate.client)} · {alias(estimate.unit)} · {estimate.type}
         </p>

@@ -91,6 +91,12 @@ export function isActiveMenuItem(item: MenuItem, menu: JobMenuState = readJobMen
   return menuStatus(item, menu) === null;
 }
 
+/** Owner Transferred notes stay on the owner desk. View as uses the other person's jobs. */
+export function menuForViewedDesk(viewingAs: boolean, store?: StorageLike | null): JobMenuState {
+  if (!viewingAs) return readJobMenu(store);
+  return emptyJobMenu();
+}
+
 export function archiveMenuItem(item: MenuItem, store?: StorageLike | null) {
   const menu = readJobMenu(store);
   const keys = keysForItem(item);
@@ -123,6 +129,18 @@ export function deleteMenuItem(item: MenuItem, store?: StorageLike | null) {
     transferred: menu.transferred.filter((row) => !keys.includes(row.id)),
   };
   return writeJobMenu(next, store);
+}
+
+export function clearTransferredMenuItem(item: MenuItem, store?: StorageLike | null) {
+  const menu = readJobMenu(store);
+  const keys = keysForItem(item);
+  return writeJobMenu(
+    {
+      ...menu,
+      transferred: menu.transferred.filter((row) => !keys.includes(row.id)),
+    },
+    store,
+  );
 }
 
 export function recordTransferredMenuItem(item: MenuItem & { toName: string }, store?: StorageLike | null) {

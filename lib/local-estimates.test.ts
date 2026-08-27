@@ -137,4 +137,36 @@ describe("local estimate packs", () => {
     );
     assert.equal(listed[0].title, "Cat 2 Pit Stop");
   });
+
+  it("clears leftover transfer marks when a returned pack is applied", () => {
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-cat2pit",
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: "nathanboyte@gmail.com",
+        transferredFrom: "robertmhenderson582@gmail.com",
+        transferredFromName: "Robert Henderson",
+        transferredTo: "nathanboyte@gmail.com",
+      },
+      store,
+    );
+    const again = rememberLocalPack(
+      {
+        packId: "new-cat2pit",
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: "robertmhenderson582@gmail.com",
+        replaceHandoff: true,
+      },
+      store,
+    );
+    assert.equal(again?.ownerEmail, "robertmhenderson582@gmail.com");
+    assert.equal(again?.transferredFrom, undefined);
+    assert.equal(again?.transferredFromName, undefined);
+    assert.equal(again?.transferredTo, undefined);
+  });
 });

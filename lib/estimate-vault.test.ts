@@ -10,8 +10,11 @@ import {
   deleteVisiblePack,
   listVisiblePacks,
   packsResponse,
+  returnVisiblePack,
+  shareVisiblePack,
   TRANSFER_WRITE_ERROR,
   transferVisiblePack,
+  unshareVisiblePack,
   upsertVisiblePack,
 } from "./estimate-vault.ts";
 
@@ -109,6 +112,9 @@ describe("estimate vault service", () => {
     const novusList = await listVisiblePacks(novus, drive);
     assert.deepEqual(ownerList.packs.map((row) => row.packId), []);
     assert.equal(nathanList.packs[0]?.title, "Cat 2 Pit Stop");
+    assert.equal(nathanList.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);
+    assert.equal(nathanList.packs[0]?.transferredFromName, "Robert Henderson");
+    assert.equal(nathanList.packs[0]?.transferredTo, tester.email);
     assert.deepEqual(josephList.packs, []);
     assert.deepEqual(shaneList.packs, []);
     assert.deepEqual(novusList.packs, []);
@@ -207,5 +213,86 @@ describe("estimate vault service", () => {
     if (removed.ok) assert.equal(removed.deleted, true);
     assert.equal((await listVisiblePacks(tester, drive)).packs.length, 0);
     assert.equal((await listVisiblePacks(owner, drive)).packs[0]?.title, "Cat 2 Pit Stop");
+  });
+
+  it("shares Cat 2 so Nathan can work and Robert stays owner; Joseph cannot see it", async () => {
+    const drive = memoryDrive();
+    await upsertVisiblePack(owner, cat2(), drive);
+    const shared = await shareVisiblePack(owner, "new-cat2pit", tester.email, drive);
+    assert.equal(shared.ok, true);
+    if (!shared.ok) return;
+    assert.equal(shared.pack.ownerEmail, OWNER_LOGIN_EMAIL);
+    assert.deepEqual(shared.pack.sharedWith, [tester.email]);
+
+    const ownerList = await listVisiblePacks(owner, drive);
+    const nathanList = await listVisiblePacks(tester, drive);
+    const josephList = await listVisiblePacks(joseph, drive);
+    assert.equal(ownerList.packs[0]?.ownerEmail, OWNER_LOGIN_EMAIL);
+    assert.equal(nathanList.packs[0]?.title, "Cat 2 Pit Stop");
+    assert.deepEqual(josephList.packs, []);
+
+    const saved = await upsertVisiblePack(
+      tester,
+      { ...nathanList.packs[0], updatedAt: 800, crew: { support: [{ id: "sup-share" }] } },
+      drive,
+    );
+    assert.equal(saved.ok, true);
+    if (saved.ok) assert.equal(saved.pack.ownerEmail, OWNER_LOGIN_EMAIL);
+
+    const steal = await shareVisiblePack(joseph, "new-cat2pit", tester.email, drive);
+    assert.equal(steal.ok, false);
+    const unshared = await unshareVisiblePack(owner, "new-cat2pit", tester.email, drive);
+    assert.equal(unshared.ok, true);
+    assert.deepEqual((await listVisiblePacks(tester, drive)).packs, []);
+    assert.equal((await listVisiblePacks(owner, drive)).packs[0]?.ownerEmail, OWNER_LOGIN_EMAIL);
+  });
+
+  it("returns a turned-over Cat 2 to Robert as a working job", async () => {
+    const drive = memoryDrive();
+    await upsertVisiblePack(owner, cat2(), drive);
+    const handed = await transferVisiblePack(owner, "new-cat2pit", tester.email, drive);
+    assert.equal(handed.ok, true);
+    const stolen = await returnVisiblePack(joseph, "new-cat2pit", drive);
+    assert.equal(stolen.ok, false);
+    const back = await returnVisiblePack(tester, "new-cat2pit", drive);
+    assert.equal(back.ok, true);
+    if (!back.ok) return;
+    assert.equal(back.pack.ownerEmail, OWNER_LOGIN_EMAIL);
+    assert.equal(back.pack.transferredFrom, undefined);
+    assert.equal(back.to.email, OWNER_LOGIN_EMAIL);
+
+    const ownerList = await listVisiblePacks(owner, drive);
+    const nathanList = await listVisiblePacks(tester, drive);
+    assert.equal(ownerList.packs[0]?.title, "Cat 2 Pit Stop");
+    assert.equal(ownerList.packs[0]?.ownerEmail, OWNER_LOGIN_EMAIL);
+    assert.equal(ownerList.packs[0]?.transferredFrom, undefined);
+    assert.deepEqual(nathanList.packs, []);
+  });
+
+  it("returns the recipient's latest save instantly with no accept step", async () => {
+    const drive = memoryDrive();
+    await upsertVisiblePack(owner, cat2(), drive);
+    const handed = await transferVisiblePack(owner, "new-cat2pit", tester.email, drive);
+    assert.equal(handed.ok, true);
+    const latest = cat2({
+      ownerEmail: tester.email,
+      transferredFrom: OWNER_LOGIN_EMAIL,
+      transferredFromName: "Robert Henderson",
+      transferredTo: tester.email,
+      updatedAt: 1200,
+      crew: { support: [{ id: "sup-nate-latest" }] },
+    });
+    const back = await returnVisiblePack(tester, "new-cat2pit", drive, latest);
+    assert.equal(back.ok, true);
+    if (!back.ok) return;
+    assert.equal(back.pack.ownerEmail, OWNER_LOGIN_EMAIL);
+    assert.equal((back.pack.crew as { support: Array<{ id: string }> }).support[0].id, "sup-nate-latest");
+    assert.equal(back.pack.transferredFrom, undefined);
+    const ownerList = await listVisiblePacks(owner, drive);
+    const nathanList = await listVisiblePacks(tester, drive);
+    assert.equal((ownerList.packs[0]?.crew as { support: Array<{ id: string }> }).support[0].id, "sup-nate-latest");
+    assert.deepEqual(nathanList.packs, []);
+    const accept = await returnVisiblePack(tester, "new-cat2pit", drive, latest);
+    assert.equal(accept.ok, false);
   });
 });

@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { applyTransferLocally, resetVaultHydrateForTests, transferVaultPack } from "./estimate-vault-client.ts";
+import {
+  applyReturnLocally,
+  applyTransferLocally,
+  hydrateFromVault,
+  resetVaultHydrateForTests,
+  setVaultViewAs,
+  transferVaultPack,
+} from "./estimate-vault-client.ts";
+import { VIEW_AS_HEADER } from "./desk-scope.ts";
+import { packsMissingFromVault, writeVaultSeen } from "./job-menu.ts";
 import { TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import { findLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
-import { isActiveMenuItem, readJobMenu } from "./job-menu.ts";
+import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-menu.ts";
 import { collectPack } from "./estimate-pack.ts";
 
 function memoryStore(seed: Record<string, string> = {}): StorageLike {
@@ -54,6 +63,30 @@ describe("local transfer commit", () => {
     assert.equal(readJobMenu(store).transferred[0]?.toName, "Nathan Boyte");
   });
 
+  it("drops the recipient local copy after a successful return", () => {
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-cat2pit",
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: "nathanboyte@gmail.com",
+        transferredFrom: "robertmhenderson582@gmail.com",
+        transferredFromName: "Robert Henderson",
+      },
+      store,
+    );
+    const kept = applyReturnLocally(false, "new-cat2pit", store);
+    assert.equal(kept.keptLocal, true);
+    assert.equal(findLocalPack("new-cat2pit", store)?.title, "Cat 2 Pit Stop");
+    recordTransferredMenuItem({ id: "new-cat2pit", title: "Cat 2 Pit Stop", toName: "Nathan Boyte" }, store);
+    const ok = applyReturnLocally(true, "new-cat2pit", store);
+    assert.equal(ok.keptLocal, false);
+    assert.equal(findLocalPack("new-cat2pit", store), null);
+    assert.equal(readJobMenu(store).transferred.length, 0);
+  });
+
   it("posts the local pack on transfer so an empty Drive can still take it", async () => {
     resetVaultHydrateForTests();
     const store = memoryStore();
@@ -90,6 +123,60 @@ describe("local transfer commit", () => {
       assert.equal(findLocalPack("new-cat2pit", store)?.title, "Cat 2 Pit Stop");
     } finally {
       globalThis.fetch = previous;
+    }
+  });
+
+  it("does not evict owner local packs while hydrating View as Nathan", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-robert1",
+        title: "Robert working",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: "robertmhenderson582@gmail.com",
+      },
+      store,
+    );
+    writeVaultSeen(["new-robert1"], store);
+    const calls: string[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(`${init?.method || "GET"} ${String(input)}`);
+      const headers = new Headers(init?.headers);
+      assert.equal(headers.get(VIEW_AS_HEADER), "nathan");
+      return new Response(
+        JSON.stringify({
+          persisted: true,
+          packs: [
+            {
+              packId: "new-mtaajdwa-f7539",
+              key: "new:new-mtaajdwa-f7539",
+              title: "Madison CAT 2 (Pit Stop)",
+              client: "Phillips 66",
+              site: "Wood River — Roxana, IL",
+              siteId: "site-madison",
+              createdAt: 1,
+              updatedAt: 2,
+              ownerEmail: "nathanboyte@gmail.com",
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    try {
+      setVaultViewAs("nathan");
+      const packs = await hydrateFromVault(store, { viewAs: "nathan" });
+      assert.equal(packs[0]?.title, "Madison CAT 2 (Pit Stop)");
+      assert.equal(findLocalPack("new-robert1", store)?.title, "Robert working");
+      assert.equal(findLocalPack("new-mtaajdwa-f7539", store)?.ownerEmail, "nathanboyte@gmail.com");
+      assert.deepEqual(packsMissingFromVault(["new-robert1"], store), []);
+      assert.equal(calls.some((row) => row.includes("/api/desk/estimates")), true);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
     }
   });
 });

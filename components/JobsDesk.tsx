@@ -3,21 +3,24 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { JobHandoffMark } from "@/components/JobHandoffMark";
 import { JobMenuActions } from "@/components/JobMenuActions";
-import { useAlias } from "@/components/OwnerDeskContext";
+import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { useDisplay } from "@/components/DisplayProvider";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
-import { hydrateFromVault, flushLocalPacksToVault } from "@/lib/estimate-vault-client";
-import { isActiveMenuItem, menuStatus, readJobMenu } from "@/lib/job-menu";
+import { localPacksForUser } from "@/lib/estimate-scope";
+import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
+import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
 import { jobPlantHref, plantJobTally, plantJobsLine } from "@/lib/jobs";
 import { listLocalPacks, mergeLocalJobs } from "@/lib/local-estimates";
 import type { JobRecord } from "@/lib/types";
 
 export function JobsDesk() {
   const alias = useAlias();
+  const { lens, seat, viewingAs, lensReady } = useDeskLens();
   const router = useRouter();
   const { board } = useDeskBoard();
   const { resolvedTheme } = useDisplay();
@@ -28,19 +31,18 @@ export function JobsDesk() {
   const [tick, setTick] = useState(0);
 
   const reload = useCallback(async () => {
-    await hydrateFromVault();
+    if (!lensReady || !lens) return;
+    await hydrateFromVault(undefined, { viewAs: seat });
     await flushLocalPacksToVault();
-    const response = await fetch("/api/desk/jobs", {
-      credentials: "include",
-      cache: "no-store",
-    });
+    const response = await deskFetch("/api/desk/jobs");
     const data = await response.json();
     if (!response.ok) {
       setError(data.error || "Jobs stayed on this desk.");
       return;
     }
-    setJobs(mergeLocalJobs((data.desk.jobs as JobRecord[]) ?? [], listLocalPacks()));
-  }, []);
+    const packs = localPacksForUser(lens, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived);
+    setJobs(mergeLocalJobs((data.desk.jobs as JobRecord[]) ?? [], packs));
+  }, [lens, lensReady, seat, viewingAs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,8 +55,9 @@ export function JobsDesk() {
     };
   }, [reload, tick]);
 
-  const menu = readJobMenu();
+  const menu = menuForViewedDesk(viewingAs);
   const closed = readClosed();
+  const deskPacks = lens ? localPacksForUser(lens, listLocalPacks()) : [];
   const active = jobs.filter((job) => isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed));
   const archived = jobs.filter((job) => menuStatus(job, menu) === "archived");
   const transferred = menu.transferred;
@@ -95,6 +98,10 @@ export function JobsDesk() {
               <StatusStamp value={job.status} />
             </div>
             <h2 className="mt-1 font-display text-2xl tracking-wide">{alias(job.title)}</h2>
+            <JobHandoffMark
+              pack={deskPacks.find((pack) => pack.packId === estimate?.id || `job-${pack.packId}` === job.id)}
+              email={lens?.email}
+            />
             <p className="mt-2 text-sm text-[#5b6f73]">
               {alias(job.client)} · {job.discipline} · {job.kind.toUpperCase()}
             </p>

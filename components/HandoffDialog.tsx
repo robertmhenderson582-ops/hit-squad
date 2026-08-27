@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { deskFetch } from "@/lib/estimate-vault-client";
 import type { HandoffSeat } from "@/lib/handoff";
 
 export function HandoffDialog({
@@ -8,24 +9,39 @@ export function HandoffDialog({
   open,
   onClose,
   onPick,
+  heading = "Turn over",
+  body,
+  confirmLabel = "Turn over",
+  busyLabel = "Turning over…",
+  people: peopleProp,
 }: {
   title: string;
   open: boolean;
   onClose: () => void;
   onPick: (person: HandoffSeat) => Promise<string | null>;
+  heading?: string;
+  body?: string;
+  confirmLabel?: string;
+  busyLabel?: string;
+  people?: HandoffSeat[];
 }) {
-  const [people, setPeople] = useState<HandoffSeat[]>([]);
+  const [people, setPeople] = useState<HandoffSeat[]>(peopleProp ?? []);
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const presetKey = peopleProp?.map((row) => row.email).join(",") ?? "";
 
   useEffect(() => {
     if (!open) return;
     setEmail("");
     setError(null);
+    if (peopleProp) {
+      setPeople(peopleProp);
+      return;
+    }
     let cancelled = false;
     (async () => {
-      const response = await fetch("/api/desk/handoff", { credentials: "include", cache: "no-store" });
+      const response = await deskFetch("/api/desk/handoff");
       const data = (await response.json()) as { people?: HandoffSeat[]; error?: string };
       if (cancelled) return;
       if (!response.ok) {
@@ -37,7 +53,7 @@ export function HandoffDialog({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, presetKey]);
 
   if (!open) return null;
   const selected = people.find((row) => row.email === email);
@@ -45,10 +61,10 @@ export function HandoffDialog({
   return (
     <div className="modal-scrim" role="dialog" aria-modal="true">
       <div className="estimate-modal px-6 py-5">
-        <h2 className="font-display text-2xl text-[#163038]">Turn over</h2>
+        <h2 className="font-display text-2xl text-[#163038]">{heading}</h2>
         <p className="mt-2 text-sm text-[#5b6f73]">
-          {title} leaves this Jobs list and opens on the person you pick. They can finish it. You
-          keep a Transferred note here.
+          {body ||
+            `${title} leaves this Jobs list and opens on the person you pick. They can finish it. You keep a Transferred note here.`}
         </p>
         <label className="mt-4 block text-sm">
           Person
@@ -92,14 +108,14 @@ export function HandoffDialog({
                 }
                 onClose();
               } catch {
-                setError("Could not turn that job over. The job is still on your desk.");
+                setError(`Could not ${confirmLabel.toLowerCase()} that job.`);
               } finally {
                 setBusy(false);
               }
             }}
             className="rounded-lg bg-steel px-4 py-2 text-white disabled:opacity-40"
           >
-            {busy ? "Turning over…" : "Turn over"}
+            {busy ? busyLabel : confirmLabel}
           </button>
         </div>
       </div>

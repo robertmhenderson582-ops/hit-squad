@@ -1,5 +1,5 @@
 import { NOVUS_EMAIL } from "./desk-role.ts";
-import { ownerVaultEmail, type ScopeUser } from "./estimate-scope.ts";
+import { normalizeEmails, ownerVaultEmail, type ScopeUser } from "./estimate-scope.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
 
 export type HandoffSeat = {
@@ -8,6 +8,57 @@ export type HandoffSeat = {
 };
 
 export const TRANSFER_WRITE_ERROR = "Could not turn that job over. The job is still on your desk.";
+export const SHARE_WRITE_ERROR = "Could not share that job. You still own it.";
+export const RETURN_WRITE_ERROR = "Could not return that job. It is still on your desk.";
+
+export function transferredFromLabel(pack: { transferredFrom?: string; transferredFromName?: string }) {
+  return pack.transferredFromName || findHandoffSeat(pack.transferredFrom || "")?.name || "the previous owner";
+}
+
+export function sharedWithNames(emails: string[]) {
+  return normalizeEmails(emails)
+    .map((email) => findHandoffSeat(email)?.name || email)
+    .filter(Boolean);
+}
+
+export function packTransferredToYou(
+  pack: { ownerEmail?: string; transferredFrom?: string; transferredTo?: string },
+  email = "",
+) {
+  const me = email.trim().toLowerCase();
+  const owner = (pack.ownerEmail || "").trim().toLowerCase();
+  const to = (pack.transferredTo || "").trim().toLowerCase();
+  return Boolean(me && pack.transferredFrom && owner === me && (to === me || !to));
+}
+
+export function packSharedWithYou(pack: { ownerEmail?: string; sharedWith?: string[] }, email = "") {
+  const me = email.trim().toLowerCase();
+  const owner = (pack.ownerEmail || "").trim().toLowerCase();
+  return Boolean(me && owner && owner !== me && normalizeEmails(pack.sharedWith).includes(me));
+}
+
+export function handoffMarkText(
+  pack: {
+    ownerEmail?: string;
+    sharedWith?: string[];
+    transferredFrom?: string;
+    transferredTo?: string;
+    transferredFromName?: string;
+  },
+  email = "",
+) {
+  if (packTransferredToYou(pack, email)) {
+    return `Transferred to you from ${transferredFromLabel(pack)}.`;
+  }
+  if (packSharedWithYou(pack, email)) {
+    return "Shared. You can work on this job.";
+  }
+  const names = sharedWithNames(normalizeEmails(pack.sharedWith));
+  if (names.length && pack.ownerEmail?.trim().toLowerCase() === email.trim().toLowerCase()) {
+    return `Shared with ${names.join(", ")}.`;
+  }
+  return null;
+}
 
 export function handoffSeats(): HandoffSeat[] {
   const ownerEmail = ownerVaultEmail();

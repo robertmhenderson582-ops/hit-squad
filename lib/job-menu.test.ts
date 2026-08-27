@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   archiveMenuItem,
+  clearTransferredMenuItem,
   deleteMenuItem,
   isActiveMenuItem,
+  menuForViewedDesk,
   menuStatus,
   packsMissingFromVault,
   readJobMenu,
@@ -56,6 +58,12 @@ describe("job menu archive and delete", () => {
     assert.equal(menuStatus({ id: "new-cat2pit" }, menu), "transferred");
     assert.equal(menu.transferred[0]?.toName, "Nathan Boyte");
     assert.equal(isActiveMenuItem({ id: "job-new-cat2pit", packId: "new-cat2pit" }, menu), false);
+    assert.equal(menuForViewedDesk(true, store).transferred.length, 0);
+    assert.equal(isActiveMenuItem({ id: "new-cat2pit" }, menuForViewedDesk(true, store)), true);
+    assert.equal(menuForViewedDesk(false, store).transferred[0]?.toName, "Nathan Boyte");
+    clearTransferredMenuItem({ id: "new-cat2pit" }, store);
+    assert.equal(readJobMenu(store).transferred.length, 0);
+    assert.equal(isActiveMenuItem({ id: "new-cat2pit" }, readJobMenu(store)), true);
   });
 
   it("evicts packs that left this desk on the vault list", () => {

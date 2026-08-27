@@ -19,7 +19,7 @@ export function ViewAsDesk() {
       <p className="mt-2 text-sm text-[#5b6f73]">
         {joseph
           ? "Look & feel lens on this device only. Responsibility and site change what you see. Other people stay off this page."
-          : "Owner in View as is still the owner. An amber Viewing as bar with Exit stays on the desk. Users, Follow, Activity, vault, republish, branding, and Checks hide while viewing as. This does not seed logins."}
+          : "See that person's desk: their jobs, modules, and empty states. You stay signed in. An amber Viewing as bar with Exit stays on the desk. Users, Follow, Activity, vault, republish, branding, and Checks hide while viewing as. This does not seed logins."}
       </p>
       {buildDesk ? (
       <div className="mt-4 flex flex-wrap gap-2">

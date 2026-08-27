@@ -1,12 +1,14 @@
+import { viewAsInit, viewAsSeatFromValue } from "./desk-scope.ts";
 import {
   collectPack,
   mergeVaultIntoLocal,
   scheduleOnce,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
-import { TRANSFER_WRITE_ERROR } from "./handoff.ts";
+import { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import {
   archiveMenuItem,
+  clearTransferredMenuItem,
   packsMissingFromVault,
   recordTransferredMenuItem,
   unarchiveMenuItem,
@@ -20,6 +22,29 @@ export const ESTIMATE_VAULT_DEBOUNCE_MS = 1500;
 const debounce = scheduleOnce(ESTIMATE_VAULT_DEBOUNCE_MS);
 const lastBody = new Map<string, string>();
 let hydratePromise: Promise<EstimatePackSnapshot[]> | null = null;
+let hydrateSeat: string | null = null;
+let currentViewAs: string | null = null;
+
+export function setVaultViewAs(seat?: string | null) {
+  const next = viewAsSeatFromValue(seat);
+  if (next === currentViewAs) return;
+  currentViewAs = next;
+  hydratePromise = null;
+  hydrateSeat = null;
+}
+
+export function activeVaultViewAs() {
+  return currentViewAs;
+}
+
+export function bustVaultHydrate() {
+  hydratePromise = null;
+  hydrateSeat = null;
+}
+
+export function deskFetch(input: RequestInfo | URL, init?: RequestInit) {
+  return fetch(input, viewAsInit(currentViewAs, init));
+}
 
 function browserStore(store?: StorageLike | null): StorageLike | null {
   if (store) return store;
@@ -29,46 +54,55 @@ function browserStore(store?: StorageLike | null): StorageLike | null {
 
 export function resetVaultHydrateForTests() {
   hydratePromise = null;
+  hydrateSeat = null;
+  currentViewAs = null;
   lastBody.clear();
 }
 
-export async function hydrateFromVault(store?: StorageLike | null): Promise<EstimatePackSnapshot[]> {
+export async function hydrateFromVault(
+  store?: StorageLike | null,
+  opts?: { viewAs?: string | null },
+): Promise<EstimatePackSnapshot[]> {
   const target = browserStore(store);
   if (!target) return [];
-  if (!hydratePromise) {
-    hydratePromise = (async () => {
-      try {
-        const response = await fetch("/api/desk/estimates", {
-          credentials: "include",
-          cache: "no-store",
-        });
-        if (!response.ok) return [];
-        const data = (await response.json()) as { packs?: EstimatePackSnapshot[]; persisted?: boolean };
-        const packs = Array.isArray(data.packs) ? data.packs : [];
-        if (data.persisted) {
-          for (const packId of packsMissingFromVault(packs.map((pack) => pack.packId), target)) {
-            deleteLocalPack(packId, target);
-          }
-          writeVaultSeen(
-            packs.map((pack) => pack.packId),
-            target,
-          );
+  const seat = viewAsSeatFromValue(opts?.viewAs ?? currentViewAs) || "owner";
+  if (hydratePromise && hydrateSeat === seat) return hydratePromise;
+  hydrateSeat = seat;
+  hydratePromise = (async () => {
+    try {
+      const response = await deskFetch("/api/desk/estimates", viewAsInit(seat === "owner" ? null : seat));
+      if (!response.ok) return [];
+      const data = (await response.json()) as { packs?: EstimatePackSnapshot[]; persisted?: boolean };
+      const packs = Array.isArray(data.packs) ? data.packs : [];
+      const viewingAs = seat !== "owner";
+      if (data.persisted && !viewingAs) {
+        for (const packId of packsMissingFromVault(packs.map((pack) => pack.packId), target)) {
+          deleteLocalPack(packId, target);
         }
-        for (const pack of packs) {
-          mergeVaultIntoLocal(target, pack);
-          if (pack.archived) archiveMenuItem({ id: pack.packId, title: pack.title, packId: pack.packId }, target);
-          else unarchiveMenuItem({ id: pack.packId, packId: pack.packId }, target);
-        }
-        return packs;
-      } catch {
-        return [];
+        writeVaultSeen(
+          packs.map((pack) => pack.packId),
+          target,
+        );
       }
-    })();
-  }
+      for (const pack of packs) {
+        mergeVaultIntoLocal(target, pack);
+        if (viewingAs) continue;
+        if (pack.archived) archiveMenuItem({ id: pack.packId, title: pack.title, packId: pack.packId }, target);
+        else {
+          unarchiveMenuItem({ id: pack.packId, packId: pack.packId }, target);
+          clearTransferredMenuItem({ id: pack.packId, packId: pack.packId }, target);
+        }
+      }
+      return packs;
+    } catch {
+      return [];
+    }
+  })();
   return hydratePromise;
 }
 
 export async function flushVaultUpsert(packId: string, store?: StorageLike | null) {
+  if (currentViewAs) return { ok: true as const };
   if (!isLocalPackId(packId)) return { ok: false as const };
   const target = browserStore(store);
   if (!target) return { ok: false as const };
@@ -76,6 +110,7 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   if (!pack) return { ok: false as const };
   const body = JSON.stringify({ pack });
   if (lastBody.get(packId) === body) return { ok: true as const };
+  if (currentViewAs) return { ok: true as const };
   try {
     const response = await fetch("/api/desk/estimates", {
       method: "PUT",
@@ -95,6 +130,7 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
 }
 
 export async function flushLocalPacksToVault(store?: StorageLike | null) {
+  if (currentViewAs) return;
   const target = browserStore(store);
   if (!target) return;
   for (const pack of listLocalPacks(target)) {
@@ -113,10 +149,8 @@ export async function transferVaultPack(packId: string, email: string, store?: S
   const target = browserStore(store);
   const pack = target ? collectPack(target, packId) : null;
   try {
-    const response = await fetch(`/api/desk/estimates/${encodeURIComponent(packId)}/transfer`, {
+    const response = await deskFetch(`/api/desk/estimates/${encodeURIComponent(packId)}/transfer`, {
       method: "POST",
-      credentials: "include",
-      cache: "no-store",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, pack: pack ?? undefined }),
     });
@@ -143,6 +177,68 @@ export function applyTransferLocally(
   if (!ok) return { keptLocal: true as const };
   recordTransferredMenuItem(item, store);
   deleteLocalPack(packId, store);
+  bustVaultHydrate();
+  return { keptLocal: false as const };
+}
+
+export async function shareVaultPack(
+  packId: string,
+  email: string,
+  action: "share" | "unshare" = "share",
+  store?: StorageLike | null,
+) {
+  const target = browserStore(store);
+  const pack = target ? collectPack(target, packId) : null;
+  try {
+    const response = await deskFetch(`/api/desk/estimates/${encodeURIComponent(packId)}/share`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, pack: pack ?? undefined, action }),
+    });
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      pack?: EstimatePackSnapshot;
+      to?: { name: string; email: string };
+    };
+    if (!response.ok) {
+      return { ok: false as const, error: data.error || SHARE_WRITE_ERROR };
+    }
+    if (data.pack && target) mergeVaultIntoLocal(target, data.pack);
+    bustVaultHydrate();
+    return { ok: true as const, pack: data.pack, to: data.to };
+  } catch {
+    return { ok: false as const, error: SHARE_WRITE_ERROR };
+  }
+}
+
+export async function returnVaultPack(packId: string, store?: StorageLike | null) {
+  const target = browserStore(store);
+  const pack = target ? collectPack(target, packId) : null;
+  try {
+    const response = await deskFetch(`/api/desk/estimates/${encodeURIComponent(packId)}/return`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pack: pack ?? undefined }),
+    });
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      pack?: EstimatePackSnapshot;
+      to?: { name: string; email: string };
+    };
+    if (!response.ok) {
+      return { ok: false as const, error: data.error || RETURN_WRITE_ERROR };
+    }
+    return { ok: true as const, pack: data.pack, to: data.to };
+  } catch {
+    return { ok: false as const, error: RETURN_WRITE_ERROR };
+  }
+}
+
+export function applyReturnLocally(ok: boolean, packId: string, store?: StorageLike | null) {
+  if (!ok) return { keptLocal: true as const };
+  clearTransferredMenuItem({ id: packId, packId }, store);
+  deleteLocalPack(packId, store);
+  bustVaultHydrate();
   return { keptLocal: false as const };
 }
 
