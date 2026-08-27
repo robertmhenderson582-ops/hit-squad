@@ -70,6 +70,12 @@ export function lensUser(
   return { id: seat.id, email: seat.email, name: seat.name, role: "tester" };
 }
 
+/** Stable effect key. lensUser returns a new object while following/viewing as. */
+export function deskLensKey(user?: { id?: string; email?: string; role?: string } | null) {
+  if (!user) return "";
+  return `${user.id || ""}:${(user.email || "").trim().toLowerCase()}:${user.role || ""}`;
+}
+
 export function pageAllowedForSeat(
   user: PublicUser | null | undefined,
   flags: { ownerOnly?: boolean; buildDesk?: boolean; viewAs?: boolean },

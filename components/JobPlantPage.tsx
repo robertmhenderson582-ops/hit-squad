@@ -75,7 +75,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const plant = PLANTS[slug] ?? PLANTS["wood-river"];
   const { openNewEstimate } = useEstimateModal();
   const alias = useAlias();
-  const { lens, viewingAs } = useDeskLens();
+  const { lens, viewingAs, lensKey } = useDeskLens();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -90,7 +90,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
       ? localPacksForUser(lens, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived)
       : [];
     setLocalJobs(packs.map((pack) => localPackToJob(pack)));
-  }, [board, lens, viewingAs]);
+  }, [board, lensKey, viewingAs]);
   const openedJob = jobByCode(jobCode, localJobs);
   const closed = readClosed().filter((item) => item.kind === "estimate").map((item) => item.id);
   const plantEstimates = estimatesForPlant(

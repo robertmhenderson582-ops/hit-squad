@@ -28,7 +28,7 @@ const TILES = [
 
 export function DeskHome() {
   const alias = useAlias();
-  const { lens, seat, viewingAs, lensReady } = useDeskLens();
+  const { lens, seat, viewingAs, lensReady, lensKey } = useDeskLens();
   const router = useRouter();
   const { resolvedTheme } = useDisplay();
   const night = resolvedTheme === "night";
@@ -62,7 +62,7 @@ export function DeskHome() {
     return () => {
       cancelled = true;
     };
-  }, [lens, lensReady, seat, viewingAs]);
+  }, [lensKey, lensReady, seat, viewingAs]);
 
   const menu = menuForViewedDesk(viewingAs);
   const openJobs = (desk?.jobs ?? []).filter(

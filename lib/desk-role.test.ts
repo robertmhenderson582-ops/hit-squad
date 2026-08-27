@@ -7,6 +7,7 @@ import {
   canUseViewAs,
   hasBuildDesk,
   isOwnerLoginEmail,
+  deskLensKey,
   lensUser,
   NOVUS_EMAIL,
   NOVUS_ID,
@@ -71,6 +72,14 @@ test("View as lens matches the selected seat, not the signed-in owner", () => {
   assert.equal(pageAllowedForSeat(joseph, { viewAs: true }), true);
   assert.equal(pageAllowedForSeat(mark, { viewAs: true }), false);
 
+  const nathan = lensUser(owner, "owner", "nathan");
+  const nathanAgain = lensUser(owner, "owner", "nathan");
+  assert.equal(nathan?.email, "nathanboyte@gmail.com");
+  assert.equal(nathan?.name, "Nathan Boyte");
+  assert.notEqual(nathan, nathanAgain);
+  assert.equal(deskLensKey(nathan), deskLensKey(nathanAgain));
+  assert.equal(deskLensKey(nathan), deskLensKey(lensUser(owner, "nathan", "nathan")));
+  assert.notEqual(deskLensKey(nathan), deskLensKey(owner));
   const realMark = { id: "tester-mark", email: "marks544@yahoo.com", name: "Mark Schneider", role: "tester" as const };
   assert.equal(lensUser(realMark, "joseph")?.email, realMark.email);
   assert.equal(pageAllowedForSeat(realMark, { buildDesk: true }), false);

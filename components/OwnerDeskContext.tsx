@@ -1,9 +1,9 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "@/components/SessionProvider";
 import { aliasText, shouldApplyAliases } from "@/lib/catalog-aliases";
-import { activeLensSeat, canUseFollow, canUseViewAs, hasBuildDesk, isTester, lensUser, testerFromViewAs, viewingAsOther } from "@/lib/desk-role";
+import { activeLensSeat, canUseFollow, canUseViewAs, deskLensKey, hasBuildDesk, isTester, lensUser, testerFromViewAs, viewingAsOther } from "@/lib/desk-role";
 import { setVaultViewAs } from "@/lib/estimate-vault-client";
 import {
   aliasLensFor,
@@ -293,18 +293,34 @@ export function useAlias() {
 export function useLensUser() {
   const { user } = useSession();
   const desk = useOwnerDesk();
-  return lensUser(user, desk?.viewAs, desk?.followSeat);
+  const viewAs = desk?.viewAs;
+  const followSeat = desk?.followSeat;
+  const userKey = deskLensKey(user);
+  const userRef = useRef(user);
+  userRef.current = user;
+  return useMemo(() => lensUser(userRef.current, viewAs, followSeat), [userKey, viewAs, followSeat]);
 }
 
 export function useDeskLens() {
   const { user } = useSession();
   const desk = useOwnerDesk();
-  const seat = activeLensSeat(desk?.viewAs, desk?.followSeat);
-  return {
-    session: user,
-    lens: lensUser(user, desk?.viewAs, desk?.followSeat),
-    seat,
-    viewingAs: Boolean(seat),
-    lensReady: desk?.lensReady ?? true,
-  };
+  const viewAs = desk?.viewAs;
+  const followSeat = desk?.followSeat;
+  const userKey = deskLensKey(user);
+  const userRef = useRef(user);
+  userRef.current = user;
+  const seat = activeLensSeat(viewAs, followSeat);
+  const lens = useMemo(() => lensUser(userRef.current, viewAs, followSeat), [userKey, viewAs, followSeat]);
+  const lensKey = deskLensKey(lens);
+  return useMemo(
+    () => ({
+      session: userRef.current,
+      lens,
+      seat,
+      viewingAs: Boolean(seat),
+      lensReady: desk?.lensReady ?? true,
+      lensKey,
+    }),
+    [userKey, lens, lensKey, seat, desk?.lensReady],
+  );
 }

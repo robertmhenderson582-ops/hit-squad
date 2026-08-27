@@ -8,7 +8,7 @@ import { listLocalPacks, mergeLocalBoard } from "@/lib/local-estimates";
 import type { ForgebookBoard } from "@/lib/types";
 
 export function useDeskBoard() {
-  const { lens, seat, viewingAs, lensReady } = useDeskLens();
+  const { lens, seat, viewingAs, lensReady, lensKey } = useDeskLens();
   const [board, setBoard] = useState<ForgebookBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +31,7 @@ export function useDeskBoard() {
     return () => {
       cancelled = true;
     };
-  }, [lens, lensReady, seat, viewingAs]);
+  }, [lensKey, lensReady, seat, viewingAs]);
 
   return { board, error };
 }
