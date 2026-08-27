@@ -46,8 +46,9 @@ describe("lead briefs local copy", () => {
     assert.equal(merged.some((file) => file.name === "b.txt"), true);
 
     const memory = new MemoryStorage();
-    const prior = (globalThis as { window?: { localStorage: MemoryStorage } }).window;
-    (globalThis as { window?: { localStorage: MemoryStorage } }).window = { localStorage: memory };
+    const host = globalThis as unknown as { window?: { localStorage: MemoryStorage } };
+    const prior = host.window;
+    host.window = { localStorage: memory };
     try {
       const brief: LeadBrief = {
         describe: "Chance drop",
@@ -63,7 +64,7 @@ describe("lead briefs local copy", () => {
         ["a.pdf", "b.txt"],
       );
     } finally {
-      (globalThis as { window?: { localStorage: MemoryStorage } }).window = prior;
+      host.window = prior;
     }
   });
 });
