@@ -55,6 +55,15 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     shop: "field",
   },
   {
+    id: "tester-shane",
+    email: "shane@apcontrolsllc.com",
+    name: "Shane Smith",
+    aliased: false,
+    rateBuilder: true,
+    viewAs: false,
+    shop: "field",
+  },
+  {
     id: "tester-mark",
     email: "marks544@yahoo.com",
     name: "Mark Schneider",
@@ -103,6 +112,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
 
 export const JOHN_BEECH_EMAIL = "johnbeech.madison@gmail.com";
 export const JOSEPH_EMAIL = "josephmhenderson2002@gmail.com";
+export const SHANE_EMAIL = "shane@apcontrolsllc.com";
 
 export const FORBIDDEN_SEED_EMAILS = [
   "beechj@madisonltd.com",

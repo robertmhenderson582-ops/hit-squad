@@ -6,6 +6,7 @@ import { after, beforeEach, test } from "node:test";
 import { readSeatClaim, signSeatClaim } from "./auth.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
+import { SHANE_EMAIL } from "./tester-seats.ts";
 import {
   claimFirstPassword,
   findUserByEmail,
@@ -84,6 +85,20 @@ test("owner email never enters the create-password path", () => {
 
   assert.equal(seatNeedsPasswordCreate(OWNER_LOGIN_EMAIL), false);
   assert.equal(verifyPassword(findUserByEmail(OWNER_LOGIN_EMAIL)!, OWNER_SECRET), true);
+});
+
+test("Shane Smith is a tester seat that must create a password on first visit", () => {
+  const shane = findUserByEmail("Shane@APControlsLLC.com");
+  assert.ok(shane);
+  assert.equal(shane.id, "tester-shane");
+  assert.equal(shane.email, SHANE_EMAIL);
+  assert.equal(shane.name, "Shane Smith");
+  assert.equal(shane.role, "tester");
+  assert.equal(shane.mustChangePassword, true);
+  assert.equal(shane.passwordHash, undefined);
+  assert.equal(seatNeedsPasswordCreate(SHANE_EMAIL), true);
+  assert.equal(loginOutcome({ email: SHANE_EMAIL }).status, "needsCreate");
+  assert.equal(findUserByEmail("beechj@madisonltd.com"), undefined);
 });
 
 test("unissued invited email plus ack creates a password and session user", () => {

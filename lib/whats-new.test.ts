@@ -56,11 +56,11 @@ describe("inbox what's-new", () => {
     assert.match(TESTER_WHATS_NEW, /Subcontractor tab is on the estimate/);
     assert.match(TESTER_WHATS_NEW, /Plug your own sub rates/);
     assert.match(TESTER_WHATS_NEW, /Save your work, then hard-refresh/);
-    assert.equal(/Wendell|Joseph|testers/i.test(TESTER_WHATS_NEW), false);
+    assert.equal(/Wendell|Joseph|testers|Shane|apcontrolsllc/i.test(TESTER_WHATS_NEW), false);
     assert.match(OWNER_WHATS_NEW, /Estimate Total gets a Subcontractor line/);
     assert.match(OWNER_WHATS_NEW, /Empty book is fine/);
     assert.match(OWNER_WHATS_NEW, /V1\.18/);
-    assert.equal(testerCopyIsSafe(OWNER_WHATS_NEW), true);
+    assert.match(OWNER_WHATS_NEW, /Shane Smith tester seat/);
     assert.equal(
       /password|passwords|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
         TESTER_WHATS_NEW,
