@@ -29,7 +29,7 @@ function siteCountLine(site: SiteRecord, tally = plantJobTally()) {
 
 export function SitesDesk() {
   const { board, error } = useDeskBoard();
-  const { lens, viewingAs } = useDeskLens();
+  const { lens, viewingAs, lensKey } = useDeskLens();
   const [tally, setTally] = useState(plantJobTally(viewingAs ? [] : undefined));
   useEffect(() => {
     const menu = menuForViewedDesk(viewingAs);
@@ -40,7 +40,7 @@ export function SitesDesk() {
       isActiveMenuItem(job, menu),
     );
     setTally(plantJobTally(jobs));
-  }, [board, lens, viewingAs]);
+  }, [board, lensKey, viewingAs]);
   const alias = useAlias();
   const owner = useOwnerDesk();
   const { resolvedTheme } = useDisplay();

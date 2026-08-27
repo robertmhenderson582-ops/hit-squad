@@ -20,7 +20,7 @@ import type { JobRecord } from "@/lib/types";
 
 export function JobsDesk() {
   const alias = useAlias();
-  const { lens, seat, viewingAs, lensReady } = useDeskLens();
+  const { lens, seat, viewingAs, lensReady, lensKey } = useDeskLens();
   const router = useRouter();
   const { board } = useDeskBoard();
   const { resolvedTheme } = useDisplay();
@@ -42,7 +42,7 @@ export function JobsDesk() {
     }
     const packs = localPacksForUser(lens, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived);
     setJobs(mergeLocalJobs((data.desk.jobs as JobRecord[]) ?? [], packs));
-  }, [lens, lensReady, seat, viewingAs]);
+  }, [lensKey, lensReady, seat, viewingAs]);
 
   useEffect(() => {
     let cancelled = false;
