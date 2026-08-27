@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { PhotoViewer } from "@/components/PhotoViewer";
-import { useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useDeskLens, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { deskFetch } from "@/lib/estimate-vault-client";
 import { burnCaption } from "@/lib/capture";
 import { buildDeskChrome } from "@/lib/desk-role";
 import {
@@ -18,27 +19,33 @@ import { ticketCopyText, type DeskTicket } from "@/lib/tickets";
 export function TicketsDesk() {
   const { user } = useSession();
   const desk = useOwnerDesk();
+  const { lens, viewingAs } = useDeskLens();
   const confirmRemove = useConfirmRemove();
   const ownerChrome = buildDeskChrome(user, desk?.viewAs, desk?.followSeat);
   const [tickets, setTickets] = useState<DeskTicket[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<{ src: string; caption: string } | null>(null);
   const mine = user?.email || "";
+  const viewer = viewingAs ? lens?.email || "" : mine;
 
   const refresh = useCallback(
     (server: DeskTicket[] = []) => {
-      if (!mine) {
+      if (!viewer) {
         setTickets(server);
+        return;
+      }
+      if (viewingAs) {
+        setTickets(hydrateTickets(server, viewer, false, { persist: false }));
         return;
       }
       setTickets(hydrateTickets(server, mine, ownerChrome));
     },
-    [mine, ownerChrome],
+    [mine, ownerChrome, viewer, viewingAs],
   );
 
   useEffect(() => {
-    if (mine) refresh();
-    fetch("/api/desk/tickets", { credentials: "include", cache: "no-store" })
+    if (viewer) refresh();
+    deskFetch("/api/desk/tickets")
       .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
       .then(({ ok, data }) => {
         if (!ok) {
@@ -52,7 +59,7 @@ export function TicketsDesk() {
         setError("Tickets could not load.");
         if (mine) refresh();
       });
-  }, [mine, ownerChrome, refresh]);
+  }, [mine, ownerChrome, refresh, viewer]);
 
   useEffect(() => {
     function onChange() {
@@ -122,7 +129,7 @@ export function TicketsDesk() {
     void navigator.clipboard.writeText(tickets.map(ticketCopyText).join("\n\n"));
   }
 
-  const visible = ownerChrome ? tickets : tickets.filter((row) => row.who === user?.email);
+  const visible = ownerChrome ? tickets : tickets.filter((row) => row.who === (viewer || user?.email));
 
   return (
     <section className="plant-card mt-4 px-5 py-5">

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useDisplay } from "@/components/DisplayProvider";
-import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useAlias, useDeskLens, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { localPacksForUser } from "@/lib/estimate-scope";
 import { useDeskBoard } from "@/components/useDeskBoard";
-import { isActiveMenuItem, readJobMenu } from "@/lib/job-menu";
+import { isActiveMenuItem, menuForViewedDesk } from "@/lib/job-menu";
 import { plantJobTally, plantJobsLine, seedJobs } from "@/lib/jobs";
 import { listLocalPacks, localPackToJob } from "@/lib/local-estimates";
 import type { SiteRecord } from "@/lib/types";
@@ -28,14 +29,18 @@ function siteCountLine(site: SiteRecord, tally = plantJobTally()) {
 
 export function SitesDesk() {
   const { board, error } = useDeskBoard();
-  const [tally, setTally] = useState(plantJobTally());
+  const { lens, viewingAs } = useDeskLens();
+  const [tally, setTally] = useState(plantJobTally(viewingAs ? [] : undefined));
   useEffect(() => {
-    const menu = readJobMenu();
-    const jobs = [...seedJobs(), ...listLocalPacks().map((pack) => localPackToJob(pack))].filter((job) =>
+    const menu = menuForViewedDesk(viewingAs);
+    const packs = lens
+      ? localPacksForUser(lens, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived)
+      : [];
+    const jobs = [...(viewingAs ? [] : seedJobs()), ...packs.map((pack) => localPackToJob(pack))].filter((job) =>
       isActiveMenuItem(job, menu),
     );
     setTally(plantJobTally(jobs));
-  }, [board]);
+  }, [board, lens, viewingAs]);
   const alias = useAlias();
   const owner = useOwnerDesk();
   const { resolvedTheme } = useDisplay();

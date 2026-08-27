@@ -3,7 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useSession } from "@/components/SessionProvider";
 import { aliasText, shouldApplyAliases } from "@/lib/catalog-aliases";
-import { canUseFollow, canUseViewAs, hasBuildDesk, isTester, lensUser, testerFromViewAs, viewingAsOther } from "@/lib/desk-role";
+import { activeLensSeat, canUseFollow, canUseViewAs, hasBuildDesk, isTester, lensUser, testerFromViewAs, viewingAsOther } from "@/lib/desk-role";
+import { setVaultViewAs } from "@/lib/estimate-vault-client";
 import {
   aliasLensFor,
   isFollowSeat,
@@ -132,6 +133,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     if (tester || !hasBuildDesk(user)) {
       setViewAsState("owner");
       setFollowSeatState("owner");
+      setVaultViewAs(null);
       setLensReady(true);
       return;
     }
@@ -139,8 +141,13 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     const storedFollow = readStoredFollow();
     if (stored) setViewAsState(stored);
     if (storedFollow) setFollowSeatState(storedFollow);
+    setVaultViewAs(activeLensSeat(stored, storedFollow));
     setLensReady(true);
   }, [tester, user]);
+
+  useEffect(() => {
+    setVaultViewAs(hasBuildDesk(user) ? activeLensSeat(viewAs, followSeat) : null);
+  }, [followSeat, user, viewAs]);
 
   useEffect(() => {
     if (tester) {
@@ -287,4 +294,17 @@ export function useLensUser() {
   const { user } = useSession();
   const desk = useOwnerDesk();
   return lensUser(user, desk?.viewAs, desk?.followSeat);
+}
+
+export function useDeskLens() {
+  const { user } = useSession();
+  const desk = useOwnerDesk();
+  const seat = activeLensSeat(desk?.viewAs, desk?.followSeat);
+  return {
+    session: user,
+    lens: lensUser(user, desk?.viewAs, desk?.followSeat),
+    seat,
+    viewingAs: Boolean(seat),
+    lensReady: desk?.lensReady ?? true,
+  };
 }

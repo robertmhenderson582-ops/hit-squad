@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
 import { hasBuildDesk } from "@/lib/desk-role";
+import { deskUserFromRequest } from "@/lib/desk-scope";
 import { listVisiblePacks, packsResponse, upsertVisiblePack } from "@/lib/estimate-vault";
 
 export const dynamic = "force-dynamic";
@@ -9,8 +10,9 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  const { packs, store } = await listVisiblePacks(user);
-  return NextResponse.json(packsResponse(user, packs, store));
+  const deskUser = deskUserFromRequest(user, request);
+  const { packs, store } = await listVisiblePacks(deskUser);
+  return NextResponse.json(packsResponse(deskUser, packs, store));
 }
 
 export async function PUT(request: Request) {

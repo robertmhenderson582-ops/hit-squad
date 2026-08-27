@@ -20,18 +20,16 @@ export const OWNER_WHATS_NEW = [
 ].join("\n");
 
 /** Draft for the next ship. Not wired into applyWhatsNew — do not publish until Robert says look. */
-export const NEXT_SHIP_VERSION = "1.24.0";
-export const NEXT_SHIP_VERSION_LABEL = "Hit Squad Project Controls V1.24";
+export const NEXT_SHIP_VERSION = "1.25.0";
+export const NEXT_SHIP_VERSION_LABEL = "Hit Squad Project Controls V1.25";
 export const TESTER_NEXT_SHIP_DRAFT = [
-  "Hit Squad Project Controls V1.24",
-  "• Turn over a job actually hands it to the other person.",
-  "• Save so it shows on your phone.",
+  "Hit Squad Project Controls V1.25",
+  "• Jobs on your desk stay the ones you own.",
 ].join("\n");
 export const OWNER_NEXT_SHIP_DRAFT = [
-  "Hit Squad Project Controls V1.24",
-  "• Turn over a job actually hands it to the other person.",
-  "• Save so it shows on your phone.",
-  "• Testers who already saw V1.23 get this note (versioned seen key).",
+  "Hit Squad Project Controls V1.25",
+  "• View as now shows that person's desk (jobs they own).",
+  "• Exit puts you back on your own jobs, including Transferred notes.",
 ].join("\n");
 
 const FORBIDDEN_TESTER =

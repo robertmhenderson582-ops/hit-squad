@@ -14,7 +14,7 @@ import { SubcontractorDesk } from "@/components/SubcontractorDesk";
 import { ChangeOrderPacket } from "@/components/ChangeOrderPacket";
 import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
-import { useAlias } from "@/components/OwnerDeskContext";
+import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { ShopRigSheet } from "@/components/ShopRigSheet";
 import { boundOtLabel } from "@/lib/hours-clock";
@@ -27,6 +27,7 @@ export function NewEstimateForm() {
   const params = useSearchParams();
   const router = useRouter();
   const { user } = useSession();
+  const { lens, seat } = useDeskLens();
   const size = params.get("size");
   const client = params.get("client") || "Phillips 66";
   const site = params.get("site") || "Wood River — Roxana, IL";
@@ -42,20 +43,20 @@ export function NewEstimateForm() {
 
   useEffect(() => {
     if (!pack || size === "shop") return;
-    void hydrateFromVault().then(() => {
+    void hydrateFromVault(undefined, { viewAs: seat }).then(() => {
       rememberLocalPack({
         packId: pack,
         title: name,
         client,
         site,
         size: size ?? undefined,
-        ownerEmail: user?.email,
-        estimator: user?.name,
+        ownerEmail: lens?.email || user?.email,
+        estimator: lens?.name || user?.name,
       });
       scheduleVaultUpsert(pack);
       void flushVaultUpsert(pack);
     });
-  }, [client, name, pack, site, size, user?.email, user?.name]);
+  }, [client, lens?.email, lens?.name, name, pack, seat, site, size, user?.email, user?.name]);
 
   if (size === "shop") {
     return (

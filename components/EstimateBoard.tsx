@@ -7,16 +7,17 @@ import { EstimateCard } from "@/components/EstimateCard";
 import { JobMenuActions } from "@/components/JobMenuActions";
 import { useEstimateModal } from "@/components/EstimateModalContext";
 import { PresencePulse } from "@/components/PresencePulse";
-import { useAlias } from "@/components/OwnerDeskContext";
+import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { useSession } from "@/components/SessionProvider";
 import { readClosed, reopenPackage } from "@/lib/desk-closeout";
 import { estimateHref } from "@/lib/estimate-open";
-import { isActiveMenuItem, menuStatus, readJobMenu } from "@/lib/job-menu";
+import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
 
 export function EstimateBoard() {
   const alias = useAlias();
   const { user } = useSession();
+  const { lens, viewingAs } = useDeskLens();
   const { openNewEstimate } = useEstimateModal();
   const { board, error } = useDeskBoard();
   const [closed, setClosed] = useState<{ id: string; title: string }[]>([]);
@@ -24,7 +25,7 @@ export function EstimateBoard() {
   useEffect(() => {
     setClosed(readClosed().filter((item) => item.kind === "estimate"));
   }, [tick]);
-  const menu = readJobMenu();
+  const menu = menuForViewedDesk(viewingAs);
   const rows = (board?.estimates ?? []).filter(
     (row) => !closed.some((item) => item.id === row.id) && isActiveMenuItem(row, menu),
   );
@@ -32,7 +33,7 @@ export function EstimateBoard() {
   const closedRows = (board?.estimates ?? []).filter((row) => closed.some((item) => item.id === row.id));
   const groups = new Map<string, typeof rows>();
   for (const row of rows) {
-    const who = row.estimator || user?.name || "Owner";
+        const who = row.estimator || lens?.name || user?.name || "Owner";
     const list = groups.get(who) ?? [];
     list.push(row);
     groups.set(who, list);
@@ -51,8 +52,8 @@ export function EstimateBoard() {
         </button>
       </div>
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Working estimates on this owner desk. {alias("Madison")} / {alias("P66")} figures stay with the signed-in
-        blotter. The Yours chip just marks the signed-in owner — it is not a separate author list.
+        Working estimates on this desk. {alias("Madison")} / {alias("P66")} figures stay with this blotter.
+        The Yours chip marks the person on this desk — it is not a separate author list.
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         <article className="steel-plate paper-grain px-4 py-4">

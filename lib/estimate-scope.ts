@@ -40,6 +40,20 @@ export function visiblePacks<T extends { ownerEmail?: string }>(user: ScopeUser,
   return packs.filter((pack) => packVisibleTo(user, pack));
 }
 
+/** Local leftover work with no owner stamp stays on the signed-in owner desk only. */
+export function localPackVisibleTo(user: ScopeUser, pack: { ownerEmail?: string }) {
+  const ownerEmail = (pack.ownerEmail || "").trim().toLowerCase();
+  const email = user.email.trim().toLowerCase();
+  if (isTester(user)) return Boolean(ownerEmail) && ownerEmail === email;
+  if (!hasBuildDesk(user)) return false;
+  if (!ownerEmail) return true;
+  return isOwnerVaultEmail(ownerEmail) || ownerEmail === email;
+}
+
+export function localPacksForUser<T extends { ownerEmail?: string }>(user: ScopeUser, packs: T[]) {
+  return packs.filter((pack) => localPackVisibleTo(user, pack));
+}
+
 export function canWritePack(user: ScopeUser, pack: { ownerEmail?: string }) {
   if (isTester(user)) return packVisibleTo(user, pack);
   return hasBuildDesk(user) && packVisibleTo(user, pack);

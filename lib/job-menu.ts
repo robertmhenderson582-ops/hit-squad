@@ -91,6 +91,12 @@ export function isActiveMenuItem(item: MenuItem, menu: JobMenuState = readJobMen
   return menuStatus(item, menu) === null;
 }
 
+/** Owner Transferred notes stay on the owner desk. View as uses the other person's jobs. */
+export function menuForViewedDesk(viewingAs: boolean, store?: StorageLike | null): JobMenuState {
+  if (!viewingAs) return readJobMenu(store);
+  return emptyJobMenu();
+}
+
 export function archiveMenuItem(item: MenuItem, store?: StorageLike | null) {
   const menu = readJobMenu(store);
   const keys = keysForItem(item);

@@ -95,12 +95,14 @@ export function hydrateTickets(
   server: DeskTicket[],
   who: string,
   seeAll: boolean,
+  opts?: { persist?: boolean },
 ): DeskTicket[] {
-  const local = who ? readTicketCache(who) : [];
-  const merged = mergeTickets(server, local);
-  // Always persist the union. Owner view-as still uses this email's cache;
-  // writing a filtered list would wipe tickets the owner already filed.
-  if (who) writeTicketCache(who, merged);
+  const persist = opts?.persist !== false;
+  const local = who && persist ? readTicketCache(who) : [];
+  const merged = persist ? mergeTickets(server, local) : [...server];
+  // Always persist the union on the signed-in desk. Owner View as must not
+  // write a filtered list into that cache.
+  if (who && persist) writeTicketCache(who, merged);
   return ticketsForViewer(merged, who, seeAll);
 }
 

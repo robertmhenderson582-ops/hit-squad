@@ -7,6 +7,8 @@ import {
   canWritePack,
   isOwnerVaultEmail,
   packOwnerEmailForWrite,
+  localPacksForUser,
+  localPackVisibleTo,
   packVisibleTo,
   visiblePacks,
 } from "./estimate-scope.ts";
@@ -59,5 +61,16 @@ describe("estimate vault scope", () => {
     assert.equal(canTransferPack(otherTester, testerPack), false);
     assert.equal(packVisibleTo({ email: "josephmhenderson2002@gmail.com", role: "tester" }, ownerPack), false);
     assert.equal(packVisibleTo({ email: "shane@apcontrolsllc.com", role: "tester" }, testerPack), false);
+  });
+
+  it("keeps unstamped local work on the owner desk and hides it from testers", () => {
+    const unstamped = { ownerEmail: "", packId: "new-local1" };
+    assert.equal(localPackVisibleTo(owner, unstamped), true);
+    assert.equal(localPackVisibleTo(tester, unstamped), false);
+    assert.equal(localPackVisibleTo(tester, testerPack), true);
+    assert.deepEqual(
+      localPacksForUser(tester, [ownerPack, testerPack, unstamped]).map((row) => row.packId),
+      ["new-tester1"],
+    );
   });
 });

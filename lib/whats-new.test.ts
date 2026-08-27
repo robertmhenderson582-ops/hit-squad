@@ -64,6 +64,7 @@ describe("inbox what's-new", () => {
     assert.match(OWNER_WHATS_NEW, /Save so it shows on your phone/);
     assert.match(OWNER_WHATS_NEW, /V1\.22/);
     assert.equal(testerCopyIsSafe(OWNER_WHATS_NEW), true);
+    assert.equal(/View as/i.test(OWNER_WHATS_NEW), false);
     assert.equal(
       /password|passwords|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
         TESTER_WHATS_NEW,
@@ -134,15 +135,13 @@ describe("inbox what's-new", () => {
     assert.equal(applyWhatsNew(next, "tester-joseph-append", false)[0].messages.length, 2);
   });
 
-  it("keeps a tester-safe V1.24 draft off the live Inbox until Robert ships", () => {
+  it("keeps a tester-safe V1.25 draft off the live Inbox until Robert ships", () => {
     assert.equal(DESK_VERSION, "1.23.0");
-    assert.equal(NEXT_SHIP_VERSION, "1.24.0");
-    assert.equal(NEXT_SHIP_VERSION_LABEL, "Hit Squad Project Controls V1.24");
+    assert.equal(NEXT_SHIP_VERSION, "1.25.0");
+    assert.equal(NEXT_SHIP_VERSION_LABEL, "Hit Squad Project Controls V1.25");
     assert.equal(TESTER_NEXT_SHIP_DRAFT.startsWith(NEXT_SHIP_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_NEXT_SHIP_DRAFT), true);
-    assert.equal(testerCopyIsSafe(OWNER_NEXT_SHIP_DRAFT), true);
-    assert.match(TESTER_NEXT_SHIP_DRAFT, /Turn over a job actually hands it to the other person/);
-    assert.match(TESTER_NEXT_SHIP_DRAFT, /Save so it shows on your phone/);
+    assert.match(OWNER_NEXT_SHIP_DRAFT, /View as now shows that person's desk/);
     assert.equal(/Wendell|Joseph|Follow|Shane|apcontrolsllc|seat|security|vault|other users/i.test(TESTER_NEXT_SHIP_DRAFT), false);
     assert.equal(
       /password|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(

@@ -5,15 +5,16 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DeskHero } from "@/components/DeskHero";
 import { useDisplay } from "@/components/DisplayProvider";
-import { useAlias } from "@/components/OwnerDeskContext";
+import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
 import { EstimateCard } from "@/components/EstimateCard";
 import { SitesDesk } from "@/components/SitesDesk";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob, estimateHref } from "@/lib/estimate-open";
-import { hydrateFromVault } from "@/lib/estimate-vault-client";
-import { isActiveMenuItem, readJobMenu } from "@/lib/job-menu";
+import { localPacksForUser } from "@/lib/estimate-scope";
+import { deskFetch, hydrateFromVault } from "@/lib/estimate-vault-client";
+import { isActiveMenuItem, menuForViewedDesk } from "@/lib/job-menu";
 import { listLocalPacks, mergeLocalJobs } from "@/lib/local-estimates";
 import type { DeskBoard } from "@/lib/types";
 
@@ -27,6 +28,7 @@ const TILES = [
 
 export function DeskHome() {
   const alias = useAlias();
+  const { lens, seat, viewingAs, lensReady } = useDeskLens();
   const router = useRouter();
   const { resolvedTheme } = useDisplay();
   const night = resolvedTheme === "night";
@@ -37,13 +39,11 @@ export function DeskHome() {
   const estimates = board?.estimates ?? [];
 
   useEffect(() => {
+    if (!lensReady || !lens) return;
     let cancelled = false;
     (async () => {
-      await hydrateFromVault();
-      const response = await fetch("/api/desk/jobs", {
-        credentials: "include",
-        cache: "no-store",
-      });
+      await hydrateFromVault(undefined, { viewAs: seat });
+      const response = await deskFetch("/api/desk/jobs");
       const data = await response.json();
       if (cancelled) return;
       if (!response.ok) {
@@ -51,19 +51,20 @@ export function DeskHome() {
         return;
       }
       const next = data.desk as DeskBoard;
+      const packs = localPacksForUser(lens, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived);
       setDesk({
         ...next,
-        jobs: mergeLocalJobs(next.jobs ?? [], listLocalPacks()),
-        estimatesOpen: Math.max(next.estimatesOpen, listLocalPacks().length + next.estimatesOpen),
+        jobs: mergeLocalJobs(next.jobs ?? [], packs),
+        estimatesOpen: Math.max(next.estimatesOpen, packs.length + next.estimatesOpen),
       });
       setClosedPacks(readClosed());
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [lens, lensReady, seat, viewingAs]);
 
-  const menu = readJobMenu();
+  const menu = menuForViewedDesk(viewingAs);
   const openJobs = (desk?.jobs ?? []).filter(
     (job) => job.status === "OPEN" && !jobLooksClosed(job, closedPacks) && isActiveMenuItem(job, menu),
   );
@@ -83,8 +84,8 @@ export function DeskHome() {
     <div className="space-y-6">
       <DeskHero />
       <p className={`max-w-3xl text-sm leading-6 ${night ? "text-paper-cream/80" : "text-[#5b6f73]"}`}>
-        Owner blotter for {alias("Madison")} / {alias("P66")} outage, T&amp;M, cost, and HSE. Records stay with the
-        signed-in desk. Field trial — not a release.
+        Owner blotter for {alias("Madison")} / {alias("P66")} outage, T&amp;M, cost, and HSE. Records stay with this
+        desk. Field trial — not a release.
       </p>
       <div className="desk-grid">
         {TILES.map((tile) => (

@@ -11,7 +11,8 @@ import { estimateForJob, estimateHref, estimatesForPlant } from "@/lib/estimate-
 import { readClosed } from "@/lib/desk-closeout";
 import { ChangeOrderDesk } from "@/components/ChangeOrderDesk";
 import { StatusStamp } from "@/components/StatusStamp";
-import { useAlias } from "@/components/OwnerDeskContext";
+import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
+import { localPacksForUser } from "@/lib/estimate-scope";
 import { VIEW_RESPONSIBILITIES, VISUAL_ROSTER } from "@/lib/owner-desk";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
 import { jobByCode, plantJobTally, plantJobsLine, plantTabFromQuery, plantTabQuery, seedJobs, type PlantTab } from "@/lib/jobs";
@@ -74,6 +75,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const plant = PLANTS[slug] ?? PLANTS["wood-river"];
   const { openNewEstimate } = useEstimateModal();
   const alias = useAlias();
+  const { lens, viewingAs } = useDeskLens();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -84,8 +86,11 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const { board } = useDeskBoard();
   const [localJobs, setLocalJobs] = useState<ReturnType<typeof localPackToJob>[]>([]);
   useEffect(() => {
-    setLocalJobs(listLocalPacks().map((pack) => localPackToJob(pack)));
-  }, [board]);
+    const packs = lens
+      ? localPacksForUser(lens, listLocalPacks()).filter((pack) => !viewingAs || !pack.archived)
+      : [];
+    setLocalJobs(packs.map((pack) => localPackToJob(pack)));
+  }, [board, lens, viewingAs]);
   const openedJob = jobByCode(jobCode, localJobs);
   const closed = readClosed().filter((item) => item.kind === "estimate").map((item) => item.id);
   const plantEstimates = estimatesForPlant(
@@ -94,7 +99,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
     plant.name,
     plant.city,
   );
-  const tally = plantJobTally([...seedJobs(), ...localJobs]);
+  const tally = plantJobTally([...(viewingAs ? [] : seedJobs()), ...localJobs]);
   const openedEstimate = openedJob ? estimateForJob(openedJob, board?.estimates ?? []) : undefined;
 
   function setTab(next: PlantTab) {
