@@ -65,7 +65,14 @@ export function HandoffDialog({
             ))}
           </select>
         </label>
-        {error ? <p className="mt-3 text-sm text-amber-flare">{error}</p> : null}
+        {error ? (
+          <p
+            role="alert"
+            className="mt-3 rounded-lg border-2 border-[#8b1e1e] bg-[#8b1e1e] px-3 py-2 text-sm font-semibold text-white"
+          >
+            {error}
+          </p>
+        ) : null}
         <div className="mt-5 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="rounded-lg border border-steel px-4 py-2 text-steel">
             Cancel
@@ -76,13 +83,19 @@ export function HandoffDialog({
             onClick={async () => {
               if (!selected) return;
               setBusy(true);
-              const nextError = await onPick(selected);
-              setBusy(false);
-              if (nextError) {
-                setError(nextError);
-                return;
+              setError(null);
+              try {
+                const nextError = await onPick(selected);
+                if (nextError) {
+                  setError(nextError);
+                  return;
+                }
+                onClose();
+              } catch {
+                setError("Could not turn that job over. The job is still on your desk.");
+              } finally {
+                setBusy(false);
               }
-              onClose();
             }}
             className="rounded-lg bg-steel px-4 py-2 text-white disabled:opacity-40"
           >

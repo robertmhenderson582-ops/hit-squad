@@ -20,7 +20,7 @@ import { ShopRigSheet } from "@/components/ShopRigSheet";
 import { boundOtLabel } from "@/lib/hours-clock";
 import { newEstimateKey, newEstimatePackId } from "@/lib/estimate-open";
 import { defaultEstimateName } from "@/lib/job-event";
-import { hydrateFromVault, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
+import { hydrateFromVault, flushVaultUpsert, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
 import { rememberLocalPack } from "@/lib/local-estimates";
 
 export function NewEstimateForm() {
@@ -53,6 +53,7 @@ export function NewEstimateForm() {
         estimator: user?.name,
       });
       scheduleVaultUpsert(pack);
+      void flushVaultUpsert(pack);
     });
   }, [client, name, pack, site, size, user?.email, user?.name]);
 

@@ -7,6 +7,8 @@ export type HandoffSeat = {
   email: string;
 };
 
+export const TRANSFER_WRITE_ERROR = "Could not turn that job over. The job is still on your desk.";
+
 export function handoffSeats(): HandoffSeat[] {
   const ownerEmail = ownerVaultEmail();
   const owner: HandoffSeat = { name: "Robert Henderson", email: ownerEmail };

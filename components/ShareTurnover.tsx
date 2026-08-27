@@ -3,9 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { HandoffDialog } from "@/components/HandoffDialog";
-import { deleteLocalPack } from "@/lib/local-estimates";
-import { recordTransferredMenuItem } from "@/lib/job-menu";
-import { transferVaultPack } from "@/lib/estimate-vault-client";
+import { applyTransferLocally, transferVaultPack } from "@/lib/estimate-vault-client";
 import { isLocalPackId } from "@/lib/local-estimates";
 
 export function ShareTurnover({ title, packId }: { title?: string; packId?: string }) {
@@ -66,8 +64,7 @@ export function ShareTurnover({ title, packId }: { title?: string; packId?: stri
           if (!packId) return "That job cannot be turned over.";
           const result = await transferVaultPack(packId, person.email);
           if (!result.ok) return result.error;
-          recordTransferredMenuItem({ id: packId, title: title || "Working estimate", packId, toName: person.name });
-          deleteLocalPack(packId);
+          applyTransferLocally(true, packId, { id: packId, title: title || "Working estimate", packId, toName: person.name });
           setNote(`Turned over to ${person.name}. This job is on their desk now.`);
           router.push("/jobs");
           return null;

@@ -31,7 +31,7 @@ import {
 import { emptyJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
 import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
 import { packIdFromStoreKey, touchLocalPack } from "@/lib/local-estimates";
-import { hydrateFromVault, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
+import { hydrateFromVault, flushVaultUpsert, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
 import { persistCrewTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
 
@@ -139,6 +139,7 @@ export function EstimatePackageProvider({
       setJobMetaState(readJobMeta(estimateKey));
       setActivitiesState(readActivities(estimateKey) ?? []);
       setReady(true);
+      if (packId) void flushVaultUpsert(packId);
     });
     return () => {
       cancelled = true;

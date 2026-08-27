@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { HandoffDialog } from "@/components/HandoffDialog";
-import { archiveVaultPack, deleteVaultPack, transferVaultPack } from "@/lib/estimate-vault-client";
+import { applyTransferLocally, archiveVaultPack, deleteVaultPack, transferVaultPack } from "@/lib/estimate-vault-client";
 import { isLocalPackId, deleteLocalPack } from "@/lib/local-estimates";
-import { archiveMenuItem, deleteMenuItem, recordTransferredMenuItem, unarchiveMenuItem } from "@/lib/job-menu";
+import { archiveMenuItem, deleteMenuItem, unarchiveMenuItem } from "@/lib/job-menu";
 import type { HandoffSeat } from "@/lib/handoff";
 
 export function vaultPackIdOf(id: string, packId?: string) {
@@ -106,8 +106,7 @@ export function JobMenuActions({
           if (!vaultId) return "That job cannot be turned over.";
           const result = await transferVaultPack(vaultId, person.email);
           if (!result.ok) return result.error;
-          recordTransferredMenuItem({ ...item, toName: person.name });
-          deleteLocalPack(vaultId);
+          applyTransferLocally(true, vaultId, { ...item, toName: person.name });
           setNote(`Turned over to ${person.name}.`);
           await refresh();
           return null;

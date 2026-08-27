@@ -52,17 +52,17 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
-    assert.equal(DESK_VERSION, "1.22.0");
-    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.22");
-    assert.equal(DESK_THREAD_ID, "th-desk-v1.22");
+    assert.equal(DESK_VERSION, "1.23.0");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.23");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.23");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Turn a job over to another person on the desk/);
-    assert.match(TESTER_WHATS_NEW, /Archive or delete a job from your Jobs list/);
+    assert.match(TESTER_WHATS_NEW, /Turn over a job actually hands it to the other person/);
+    assert.match(TESTER_WHATS_NEW, /Save so it shows on your phone/);
     assert.equal(/Wendell|Joseph|testers|Follow|Shane|apcontrolsllc|seat/i.test(TESTER_WHATS_NEW), false);
-    assert.match(OWNER_WHATS_NEW, /Turn a job over to another person on the desk/);
-    assert.match(OWNER_WHATS_NEW, /Archive or delete/);
-    assert.match(OWNER_WHATS_NEW, /V1\.21/);
+    assert.match(OWNER_WHATS_NEW, /Turn over a job actually hands it to the other person/);
+    assert.match(OWNER_WHATS_NEW, /Save so it shows on your phone/);
+    assert.match(OWNER_WHATS_NEW, /V1\.22/);
     assert.equal(testerCopyIsSafe(OWNER_WHATS_NEW), true);
     assert.equal(
       /password|passwords|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
@@ -101,24 +101,24 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.22 onto an existing Hit Squad desk thread after V1.21", () => {
-    assert.equal(seenKey("tester-x", "1.21.0"), `${WHATS_NEW_MARK_PREFIX}1.21.0:tester-x`);
-    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.22.0:tester-x`);
-    assert.notEqual(seenKey("tester-x", "1.21.0"), seenKey("tester-x"));
+  it("appends V1.23 onto an existing Hit Squad desk thread after V1.22", () => {
+    assert.equal(seenKey("tester-x", "1.22.0"), `${WHATS_NEW_MARK_PREFIX}1.22.0:tester-x`);
+    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.23.0:tester-x`);
+    assert.notEqual(seenKey("tester-x", "1.22.0"), seenKey("tester-x"));
 
     const prior = [
       {
-        id: "th-desk-v1.21",
+        id: "th-desk-v1.22",
         personId: DESK_PERSON_ID,
         name: "Hit Squad",
         company: "Project Controls",
         unread: 0,
         messages: [
           {
-            id: "im-desk-1.21.0",
+            id: "im-desk-1.22.0",
             from: "them" as const,
             author: "Desk",
-            text: "Hit Squad Project Controls V1.21",
+            text: "Hit Squad Project Controls V1.22",
             photo: null,
             sentAt: "",
             readAt: "seen",
@@ -134,10 +134,10 @@ describe("inbox what's-new", () => {
     assert.equal(applyWhatsNew(next, "tester-joseph-append", false)[0].messages.length, 2);
   });
 
-  it("keeps a tester-safe V1.23 draft off the live Inbox until Robert ships", () => {
-    assert.equal(DESK_VERSION, "1.22.0");
-    assert.equal(NEXT_SHIP_VERSION, "1.23.0");
-    assert.equal(NEXT_SHIP_VERSION_LABEL, "Hit Squad Project Controls V1.23");
+  it("keeps a tester-safe V1.24 draft off the live Inbox until Robert ships", () => {
+    assert.equal(DESK_VERSION, "1.23.0");
+    assert.equal(NEXT_SHIP_VERSION, "1.24.0");
+    assert.equal(NEXT_SHIP_VERSION_LABEL, "Hit Squad Project Controls V1.24");
     assert.equal(TESTER_NEXT_SHIP_DRAFT.startsWith(NEXT_SHIP_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_NEXT_SHIP_DRAFT), true);
     assert.equal(testerCopyIsSafe(OWNER_NEXT_SHIP_DRAFT), true);
