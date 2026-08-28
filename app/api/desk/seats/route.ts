@@ -3,7 +3,7 @@ import { readSession } from "@/lib/auth";
 import { addCompany, isKnownCompany, listCompanies, setAssignedCompany } from "@/lib/companies-store";
 import { hasBuildDesk, isOwner } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
-import { findUserByEmail, flushSeatVault, hydrateSeatStore, issueSeatPassword, listSeatRows } from "@/lib/users";
+import { createSeat, findUserByEmail, flushSeatVault, hydrateSeatStore, issueSeatPassword, listSeatRows } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +25,7 @@ export async function POST(request: Request) {
   if (!isOwner(user)) return NextResponse.json({ error: "Owner issues one-time passwords." }, { status: 403 });
 
   const body = (await request.json().catch(() => ({}))) as {
+    name?: string;
     email?: string;
     password?: string;
     companyId?: string;
@@ -43,12 +44,30 @@ export async function POST(request: Request) {
     });
   }
 
+  if (typeof body.name === "string" && body.name.trim()) {
+    const created = await createSeat({
+      name: body.name,
+      email: body.email,
+      password: body.password,
+      companyId: body.companyId,
+    });
+    if ("error" in created) return NextResponse.json({ error: created.error }, { status: 400 });
+    await flushSeatVault();
+    return NextResponse.json({
+      ok: true,
+      user: created.user,
+      seats: await listSeatRows(),
+      companies: await listCompanies(),
+      note: "Login created on this desk. Don’t send. First sign-in must change the password.",
+    });
+  }
+
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
   await hydrateSeatStore();
   const target = findUserByEmail(email);
   if (!target || target.role === "owner") {
-    return NextResponse.json({ error: "Pick a seeded non-owner seat." }, { status: 400 });
+    return NextResponse.json({ error: "Pick a non-owner seat on this desk." }, { status: 400 });
   }
 
   if (typeof body.companyId === "string") {

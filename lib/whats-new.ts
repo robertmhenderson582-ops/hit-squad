@@ -1,24 +1,25 @@
 import type { InboxMessage, InboxThread } from "./inbox";
 
-export const DESK_VERSION = "1.26.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.26";
+export const DESK_VERSION = "1.27.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.27";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.26";
+export const DESK_THREAD_ID = "th-desk-v1.27";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.26",
+  "Hit Squad Project Controls V1.27",
   "• Leftover copies can no longer undo a Turn over.",
   "• The person you handed the job to sees it again with Return.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.26",
+  "Hit Squad Project Controls V1.27",
   "• Leftover copies can no longer undo a Turn over.",
   "• Jobs in the header stays put while you are viewing as or following someone.",
+  "• Add user on Users creates a login. Don’t send. They change it on first sign-in.",
 ].join("\n");
 
-/** Same as the live V1.26 note. Kept so older imports still resolve. */
+/** Same as the live V1.27 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;
