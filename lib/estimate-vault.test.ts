@@ -274,6 +274,69 @@ describe("estimate vault service", () => {
     assert.equal((await listVisiblePacks(tester, drive)).packs[0]?.ownerEmail, tester.email);
   });
 
+  it("Share keeps Nathan's equipment, subs, and FCR when the incoming leftover sheets are empty", async () => {
+    const drive = memoryDrive();
+    const full = cat2({
+      packId: "new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      ownerEmail: tester.email,
+      transferredFrom: OWNER_LOGIN_EMAIL,
+      equipment: { largeTools: [{ id: "lt-1", itemId: "air-mover", qty: 2 }], thirdParty: [{ id: "tp-1", item: "Crane", rate: 400 }] },
+      otherCost: { perDiemRate: 140, travel: [{ id: "travel-staff", travelers: 1 }], misc: [{ id: "m1", item: "Steel", qty: 2, each: 40 }] },
+      subcontractor: { lines: [{ id: "sb-1", vendor: "Apex NDE", qty: 2, rate: 85 }], cards: [] },
+      fcr: { log: [{ id: "fcr-1", scr: "SCR-1" }], people: [], sub: 0, equipment: 0, misc: 0 },
+    });
+    const saved = await upsertVisiblePack(tester, full, drive);
+    assert.equal(saved.ok, true);
+    const thin = cat2({
+      packId: "new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      ownerEmail: tester.email,
+      updatedAt: Date.now(),
+      equipment: { largeTools: [], thirdParty: [] },
+      otherCost: { perDiemRate: 140, travel: [{ id: "travel-staff", travelers: 1 }], misc: [] },
+      subcontractor: { lines: [], cards: [] },
+      fcr: { log: [], people: [], sub: 0, equipment: 0, misc: 0 },
+    });
+    const shared = await shareVisiblePack(tester, "new-mtaajdwa-f7539", owner.email, drive, thin);
+    assert.equal(shared.ok, true);
+    if (!shared.ok) return;
+    assert.equal(shared.pack.ownerEmail, tester.email);
+    assert.deepEqual(shared.pack.sharedWith, [owner.email]);
+    assert.equal(((shared.pack.equipment as { largeTools: unknown[] }).largeTools || []).length, 1);
+    assert.equal(((shared.pack.equipment as { thirdParty: unknown[] }).thirdParty || []).length, 1);
+    assert.equal(((shared.pack.subcontractor as { lines: unknown[] }).lines || []).length, 1);
+    assert.equal(((shared.pack.otherCost as { misc: unknown[] }).misc || []).length, 1);
+    assert.equal(((shared.pack.fcr as { log: unknown[] }).log || []).length, 1);
+    const leftoverFlush = await upsertVisiblePack(
+      owner,
+      cat2({
+        packId: "new-mtaajdwa-f7539",
+        title: "Madison CAT 2 (Pit Stop)",
+        ownerEmail: OWNER_LOGIN_EMAIL,
+        updatedAt: Date.now() + 5_000,
+        equipment: { largeTools: [], thirdParty: [] },
+        otherCost: { perDiemRate: 140, travel: [{ id: "travel-staff", travelers: 1 }], misc: [] },
+        subcontractor: { lines: [], cards: [] },
+        fcr: { log: [], people: [], sub: 0, equipment: 0, misc: 0 },
+      }),
+      drive,
+    );
+    assert.equal(leftoverFlush.ok, true);
+    if (leftoverFlush.ok) {
+      assert.equal(leftoverFlush.pack.ownerEmail, tester.email);
+      assert.equal(((leftoverFlush.pack.equipment as { largeTools: unknown[] }).largeTools || []).length, 1);
+      assert.equal(((leftoverFlush.pack.subcontractor as { lines: unknown[] }).lines || []).length, 1);
+      assert.equal(((leftoverFlush.pack.otherCost as { misc: unknown[] }).misc || []).length, 1);
+    }
+    const unshared = await unshareVisiblePack(tester, "new-mtaajdwa-f7539", owner.email, drive, thin);
+    assert.equal(unshared.ok, true);
+    if (!unshared.ok) return;
+    assert.equal(unshared.pack.ownerEmail, tester.email);
+    assert.equal(((unshared.pack.equipment as { largeTools: unknown[] }).largeTools || []).length, 1);
+    assert.equal(((unshared.pack.subcontractor as { lines: unknown[] }).lines || []).length, 1);
+  });
+
   it("returns a turned-over Cat 2 to Robert as a working job", async () => {
     const drive = memoryDrive();
     await upsertVisiblePack(owner, cat2(), drive);

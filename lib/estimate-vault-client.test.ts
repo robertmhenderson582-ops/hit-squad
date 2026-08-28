@@ -20,7 +20,7 @@ import { handoffMarkText, TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import { readLensPacks, snapshotLensPack, writeLensPacks } from "./lens-packs.ts";
 import { deleteLocalPack, findLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-menu.ts";
-import { collectPack } from "./estimate-pack.ts";
+import { applyPackToStore, collectPack } from "./estimate-pack.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 
 function memoryStore(seed: Record<string, string> = {}): StorageLike {
@@ -382,6 +382,64 @@ describe("local transfer commit", () => {
         ),
         false,
       );
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("Share onto a leftover empty equipment sheet keeps Nathan's worksheets", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    applyPackToStore(store, {
+      packId: "new-mtaajdwa-f7539",
+      key: "new:new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 9000,
+      ownerEmail: "nathanboyte@gmail.com",
+      equipment: { largeTools: [{ id: "lt-1", itemId: "air-mover", qty: 2 }], thirdParty: [{ id: "tp-1", item: "Crane", rate: 400 }] },
+      otherCost: { perDiemRate: 140, travel: [{ id: "travel-staff", travelers: 1 }], misc: [{ id: "m1", item: "Steel", qty: 2, each: 40 }] },
+      subcontractor: { lines: [{ id: "sb-1", vendor: "Apex NDE", qty: 2, rate: 85 }], cards: [] },
+      fcr: { log: [{ id: "fcr-1", scr: "SCR-1" }], people: [] },
+    });
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          pack: {
+            packId: "new-mtaajdwa-f7539",
+            key: "new:new-mtaajdwa-f7539",
+            title: "Madison CAT 2 (Pit Stop)",
+            client: "Phillips 66",
+            site: "Wood River — Roxana, IL",
+            siteId: "site-madison",
+            createdAt: 1,
+            updatedAt: Date.now(),
+            ownerEmail: "nathanboyte@gmail.com",
+            sharedWith: [OWNER_LOGIN_EMAIL],
+            equipment: { largeTools: [], thirdParty: [] },
+            otherCost: { perDiemRate: 140, travel: [{ id: "travel-staff", travelers: 1 }], misc: [] },
+            subcontractor: { lines: [], cards: [] },
+            fcr: { log: [], people: [] },
+          },
+          to: { name: "Robert Henderson", email: OWNER_LOGIN_EMAIL },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    try {
+      const shared = await shareVaultPack("new-mtaajdwa-f7539", OWNER_LOGIN_EMAIL, "share", store);
+      assert.equal(shared.ok, true);
+      const local = collectPack(store, "new-mtaajdwa-f7539");
+      assert.equal(((local?.equipment as { largeTools: unknown[] }).largeTools || []).length, 1);
+      assert.equal(((local?.subcontractor as { lines: unknown[] }).lines || []).length, 1);
+      assert.equal(((local?.otherCost as { misc: unknown[] }).misc || []).length, 1);
+      assert.equal(((local?.fcr as { log: unknown[] }).log || []).length, 1);
+      assert.equal(local?.ownerEmail, "nathanboyte@gmail.com");
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();
