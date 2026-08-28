@@ -58,6 +58,12 @@ test("does not seed the held-out people", () => {
     TESTER_SEATS.some((row) => /stephanie/i.test(row.name) || /stephanie/i.test(row.email)),
     false,
   );
+  assert.equal(
+    TESTER_SEATS.some((row) => /peffley/i.test(row.email) || /peffley/i.test(row.name)),
+    false,
+  );
+  assert.equal(FORBIDDEN_SEED_EMAILS.includes("peffley"), true);
+  assert.equal((FORBIDDEN_SEED_NAMES as readonly string[]).includes("ben peffley"), true);
 });
 
 test("alias flags and tools match the seat list", () => {

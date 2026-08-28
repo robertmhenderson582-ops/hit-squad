@@ -176,6 +176,7 @@ export function seededHaystack(): string {
   return TESTER_SEATS.map((row) => `${row.email} ${row.name}`).join("\n").toLowerCase();
 }
 
+/** Git-seeded TESTER_SEATS only. Owner Add user / vault extras may include these people. */
 export function hasForbiddenSeed(): boolean {
   const hay = seededHaystack();
   if (FORBIDDEN_SEED_EMAILS.some((needle) => hay.includes(needle))) return true;

@@ -6,6 +6,7 @@ import { after, beforeEach, test } from "node:test";
 import { readSeatClaim, signSeatClaim } from "./auth.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
+import { hasForbiddenSeed } from "./tester-seats.ts";
 import { JOSEPH_EMAIL, SHANE_EMAIL, TESTER_SEATS } from "./tester-seats.ts";
 import { assignedCompany, resetCompanyAssignmentsForTests } from "./companies-store.ts";
 import { canUseRateBuilder, canUseViewAs } from "./desk-role.ts";
@@ -425,6 +426,45 @@ test("createSeat rejects owner, Novus, duplicates, and a short password", async 
   assert.equal("error" in (await createSeat({ name: "Added Tester", email: "other.tester@example.com", password: ISSUED, companyId: "not-a-company" })), true);
   assert.equal(verifyPassword(findUserByEmail(ADDED)!, ISSUED), true);
   assert.equal(findUserByEmail("other.tester@example.com"), undefined);
+});
+
+test("owner-added vault seats can include Ben Peffley; git seed still cannot", async () => {
+  const email = "bpeffley@roadrunner.com";
+  assert.equal(
+    TESTER_SEATS.some((row) => /peffley/i.test(row.email) || /peffley/i.test(row.name)),
+    false,
+  );
+  assert.equal(hasForbiddenSeed(), false);
+
+  const created = await createSeat({
+    name: "Ben Peffley",
+    email,
+    password: ISSUED,
+  });
+  assert.equal("ok" in created, true);
+  if (!("ok" in created)) return;
+
+  const user = findUserByEmail(email);
+  assert.ok(user);
+  assert.equal(user.name, "Ben Peffley");
+  assert.equal(user.role, "tester");
+  assert.equal(user.mustChangePassword, true);
+  assert.equal(await assignedCompany(email), "hitsquad");
+  assert.equal(canUseRateBuilder(user), true);
+  assert.equal(canUseViewAs(user), false);
+
+  const ok = loginOutcome({ email, password: ISSUED });
+  assert.equal(ok.status, "authenticated");
+  if (ok.status === "authenticated") {
+    assert.equal(ok.user.mustChangePassword, true);
+  }
+
+  assert.equal(hasForbiddenSeed(), false);
+  assert.equal(TESTER_SEATS.some((row) => row.email === email), false);
+  const persisted = readFileSync(seatFile, "utf8");
+  assert.equal(persisted.includes(ISSUED), false);
+  assert.match(persisted, /bpeffley@roadrunner\.com/);
+  assert.match(persisted, /"extras"/);
 });
 
 test("parseExtraSeats skips owner, Novus, and seeded testers", () => {
