@@ -1,4 +1,5 @@
 import { ACTIVITY_STORE_PREFIX } from "./work-activities.ts";
+import { FCR_STORE_PREFIX } from "./change-order-packet.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { SUB_STORE_PREFIX } from "./subcontractor.ts";
@@ -40,6 +41,7 @@ export type EstimatePackSnapshot = {
   equipment?: unknown;
   otherCost?: unknown;
   subcontractor?: unknown;
+  fcr?: unknown;
 };
 
 const CREW_LANES = ["staff", "generalForeman", "foreman", "direct", "support"] as const;
@@ -90,17 +92,97 @@ export function scheduleHasWork(schedule: unknown) {
   });
 }
 
+export function equipmentHasWork(value: unknown) {
+  const row = asRecord(value);
+  if (!row) return false;
+  return Boolean(arrayLen(row.largeTools) || arrayLen(row.thirdParty));
+}
+
+function miscHasMoney(misc: unknown) {
+  if (!Array.isArray(misc)) return false;
+  return misc.some((line) => {
+    const item = asRecord(line);
+    return Boolean(item && (Number(item.qty) > 0 || Number(item.each) > 0 || Number(item.amount) > 0));
+  });
+}
+
+export function otherCostHasWork(value: unknown) {
+  const other = asRecord(value);
+  if (!other) return false;
+  return Boolean(arrayLen(other.travel) || Number(other.perDiemRate) > 0 || miscHasMoney(other.misc));
+}
+
+export function subcontractorHasWork(value: unknown) {
+  const row = asRecord(value);
+  if (!row) return false;
+  return Boolean(arrayLen(row.lines) || arrayLen(row.cards));
+}
+
+export function fcrHasWork(value: unknown) {
+  const row = asRecord(value);
+  if (!row) return false;
+  return Boolean(
+    arrayLen(row.log) ||
+      arrayLen(row.people) ||
+      Number(row.sub) > 0 ||
+      Number(row.equipment) > 0 ||
+      Number(row.misc) > 0,
+  );
+}
+
+function pickEquipment(newer: unknown, older: unknown) {
+  if (equipmentHasWork(newer)) return newer;
+  if (equipmentHasWork(older)) return older;
+  return newer ?? older;
+}
+
+function pickOtherCost(newer: unknown, older: unknown) {
+  const next = asRecord(newer);
+  const prev = asRecord(older);
+  if (!next) return older;
+  if (!prev) return newer;
+  return {
+    ...prev,
+    ...next,
+    travel: arrayLen(next.travel) ? next.travel : prev.travel,
+    misc: miscHasMoney(next.misc) ? next.misc : prev.misc,
+    perDiemRate: Number(next.perDiemRate) > 0 ? next.perDiemRate : prev.perDiemRate,
+  };
+}
+
+function pickSubcontractor(newer: unknown, older: unknown) {
+  if (subcontractorHasWork(newer)) return newer;
+  if (subcontractorHasWork(older)) return older;
+  return newer ?? older;
+}
+
+function pickFcr(newer: unknown, older: unknown) {
+  if (fcrHasWork(newer)) return newer;
+  if (fcrHasWork(older)) return older;
+  return newer ?? older;
+}
+
+function writeSheetIfRicher(
+  store: StorageLike,
+  key: string,
+  incoming: unknown,
+  hasWork: (value: unknown) => boolean,
+) {
+  if (incoming == null) return;
+  const existing = readStoreJson(store, key);
+  if (!hasWork(incoming) && hasWork(existing)) return;
+  writeStoreJson(store, key, incoming);
+}
+
 export function packHasWork(pack: EstimatePackSnapshot | null | undefined) {
   if (!pack?.packId) return false;
   if (pack.title && pack.title.trim() && pack.title !== "Working estimate") return true;
   if (crewHasRows(pack.crew)) return true;
   if (scheduleHasWork(pack.schedule)) return true;
-  if (arrayLen(asRecord(pack.equipment)?.largeTools) || arrayLen(asRecord(pack.equipment)?.thirdParty)) {
-    return true;
-  }
-  const other = asRecord(pack.otherCost);
-  if (other && (arrayLen(other.travel) || Number(other.perDiemRate) > 0)) return true;
-  if (arrayLen(asRecord(pack.subcontractor)?.lines) || arrayLen(asRecord(pack.subcontractor)?.cards)) return true;
+  if (equipmentHasWork(pack.equipment)) return true;
+  if (otherCostHasWork(pack.otherCost)) return true;
+  if (subcontractorHasWork(pack.subcontractor)) return true;
+  if (fcrHasWork(pack.fcr)) return true;
   if (Array.isArray(pack.activities) && pack.activities.some((row) => {
     const item = asRecord(row);
     return Boolean(item && (item.name || Number(item.hours) > 0));
@@ -171,9 +253,10 @@ export function pickPack(
     schedule: scheduleHasWork(newer.schedule) ? newer.schedule : older.schedule ?? newer.schedule,
     jobMeta: newer.jobMeta ?? older.jobMeta,
     activities: newer.activities ?? older.activities,
-    equipment: newer.equipment ?? older.equipment,
-    otherCost: newer.otherCost ?? older.otherCost,
-    subcontractor: newer.subcontractor ?? older.subcontractor,
+    equipment: pickEquipment(newer.equipment, older.equipment),
+    otherCost: pickOtherCost(newer.otherCost, older.otherCost),
+    subcontractor: pickSubcontractor(newer.subcontractor, older.subcontractor),
+    fcr: pickFcr(newer.fcr, older.fcr),
     createdAt: Math.min(local.createdAt || newer.createdAt, vault.createdAt || newer.createdAt) || newer.createdAt,
     ownerEmail: vault.ownerEmail || newer.ownerEmail,
     sharedWith: vault.sharedWith,
@@ -209,6 +292,7 @@ export function publicPack(pack: EstimatePackSnapshot): EstimatePackSnapshot {
     equipment: pack.equipment,
     otherCost: pack.otherCost,
     subcontractor: pack.subcontractor,
+    fcr: pack.fcr,
   };
 }
 
@@ -250,6 +334,7 @@ export function collectPack(
     equipment: readStoreJson(store, `${EQUIPMENT_STORE_PREFIX}${key}`) ?? undefined,
     otherCost: readStoreJson(store, `${OTHER_COST_STORE_PREFIX}${key}`) ?? undefined,
     subcontractor: readStoreJson(store, `${SUB_STORE_PREFIX}${key}`) ?? undefined,
+    fcr: readStoreJson(store, `${FCR_STORE_PREFIX}${key}`) ?? undefined,
   };
 }
 
@@ -279,9 +364,16 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
   if (pack.crew != null) writeStoreJson(store, `${CREW_STORE_PREFIX}${key}`, pack.crew);
   if (pack.jobMeta != null) writeStoreJson(store, `${JOB_META_PREFIX}${key}`, pack.jobMeta);
   if (pack.activities != null) writeStoreJson(store, `${ACTIVITY_STORE_PREFIX}${key}`, pack.activities);
-  if (pack.equipment != null) writeStoreJson(store, `${EQUIPMENT_STORE_PREFIX}${key}`, pack.equipment);
-  if (pack.otherCost != null) writeStoreJson(store, `${OTHER_COST_STORE_PREFIX}${key}`, pack.otherCost);
-  if (pack.subcontractor != null) writeStoreJson(store, `${SUB_STORE_PREFIX}${key}`, pack.subcontractor);
+  writeSheetIfRicher(store, `${EQUIPMENT_STORE_PREFIX}${key}`, pack.equipment, equipmentHasWork);
+  if (pack.otherCost != null) {
+    writeStoreJson(
+      store,
+      `${OTHER_COST_STORE_PREFIX}${key}`,
+      pickOtherCost(pack.otherCost, readStoreJson(store, `${OTHER_COST_STORE_PREFIX}${key}`)),
+    );
+  }
+  writeSheetIfRicher(store, `${SUB_STORE_PREFIX}${key}`, pack.subcontractor, subcontractorHasWork);
+  writeSheetIfRicher(store, `${FCR_STORE_PREFIX}${key}`, pack.fcr, fcrHasWork);
 }
 
 export function mergeVaultIntoLocal(store: StorageLike, vault: EstimatePackSnapshot) {
@@ -332,6 +424,7 @@ export function parseIncomingPack(input: unknown): { ok: true; pack: EstimatePac
       equipment: row?.equipment,
       otherCost: row?.otherCost,
       subcontractor: row?.subcontractor,
+      fcr: row?.fcr,
     },
   };
 }

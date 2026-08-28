@@ -5,6 +5,7 @@ import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { newEstimateKey } from "./estimate-open.ts";
 import { SUB_STORE_PREFIX } from "./subcontractor.ts";
+import { FCR_STORE_PREFIX } from "./change-order-packet.ts";
 import {
   applyPackToStore,
   collectPack,
@@ -22,6 +23,7 @@ import {
   slugify,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
+import { estimateMarkupDollars, estimateTotalBreakdown } from "./estimate-total.ts";
 import { rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 
 function memoryStore(seed: Record<string, string> = {}): StorageLike {
@@ -154,6 +156,51 @@ describe("estimate pack snapshot", () => {
     assert.equal(stamped?.crew, localWork.crew);
     assert.equal(stamped?.ownerEmail, "nathanboyte@gmail.com");
     assert.deepEqual(stamped?.sharedWith, ["robertmhenderson582@gmail.com"]);
+
+    const leftoverEmptySheets = cat2({
+      updatedAt: 9000,
+      ownerEmail: "robertmhenderson582@gmail.com",
+      equipment: { largeTools: [], thirdParty: [] },
+      otherCost: { perDiemRate: 140, travel: [{ id: "travel-staff", travelers: 1 }], misc: [] },
+      subcontractor: { lines: [], cards: [] },
+      fcr: { log: [], people: [], sub: 0, equipment: 0, misc: 0 },
+    });
+    const nathanFull = cat2({
+      updatedAt: 400,
+      ownerEmail: "nathanboyte@gmail.com",
+      sharedWith: ["robertmhenderson582@gmail.com"],
+      transferredFrom: "robertmhenderson582@gmail.com",
+      equipment: { largeTools: [{ id: "lt-1", itemId: "air-mover", qty: 2 }], thirdParty: [{ id: "tp-1", item: "Crane", rate: 400 }] },
+      otherCost: { perDiemRate: 140, travel: [{ id: "travel-staff", travelers: 1 }], misc: [{ id: "m1", item: "Steel", qty: 2, each: 40 }] },
+      subcontractor: { lines: [{ id: "sb-1", vendor: "Apex NDE", qty: 2, rate: 85 }], cards: [] },
+      fcr: { log: [{ id: "fcr-1", scr: "SCR-1" }], people: [], sub: 0, equipment: 0, misc: 0 },
+    });
+    const keptSheets = pickPack(leftoverEmptySheets, nathanFull);
+    assert.deepEqual((keptSheets?.equipment as { largeTools: Array<{ id: string }> }).largeTools, [
+      { id: "lt-1", itemId: "air-mover", qty: 2 },
+    ]);
+    assert.deepEqual((keptSheets?.subcontractor as { lines: Array<{ vendor: string }> }).lines, [
+      { id: "sb-1", vendor: "Apex NDE", qty: 2, rate: 85 },
+    ]);
+    assert.equal(((keptSheets?.otherCost as { misc: unknown[] }).misc || []).length, 1);
+    assert.equal(((keptSheets?.fcr as { log: unknown[] }).log || []).length, 1);
+    assert.equal(keptSheets?.ownerEmail, "nathanboyte@gmail.com");
+    const markup = estimateMarkupDollars({
+      subcontractor: 170,
+      thirdParty: 400,
+      misc: 80,
+    });
+    const rail = estimateTotalBreakdown({
+      labor: 1_157_983.04,
+      equipment: 400,
+      subcontractor: 170,
+      otherCost: 71_440,
+      markup,
+    });
+    assert.equal(rail.lines.some((line) => line.id === "equipment"), true);
+    assert.equal(rail.lines.some((line) => line.id === "subcontractor"), true);
+    assert.equal(rail.lines.some((line) => line.id === "markup"), true);
+    assert.notEqual(rail.total, 1_229_423.04);
   });
 
   it("hydrates vault onto an empty browser and leaves a newer local pack alone", () => {
@@ -181,6 +228,50 @@ describe("estimate pack snapshot", () => {
     );
     assert.equal(mergeVaultIntoLocal(titleFirst, cat2({ updatedAt: 50 })), "local");
     assert.equal(crewHasRows(collectPack(titleFirst, "new-cat2pit")?.crew), true);
+
+    const leftoverDesk = memoryStore();
+    applyPackToStore(
+      leftoverDesk,
+      cat2({
+        updatedAt: 9000,
+        ownerEmail: "robertmhenderson582@gmail.com",
+        equipment: { largeTools: [], thirdParty: [] },
+        otherCost: { perDiemRate: 140, travel: [{ id: "travel-staff", travelers: 1 }], misc: [] },
+        subcontractor: { lines: [], cards: [] },
+      }),
+    );
+    mergeVaultIntoLocal(
+      leftoverDesk,
+      cat2({
+        updatedAt: 400,
+        ownerEmail: "nathanboyte@gmail.com",
+        sharedWith: ["robertmhenderson582@gmail.com"],
+        equipment: { largeTools: [{ id: "lt-1", itemId: "air-mover", qty: 1 }], thirdParty: [] },
+        otherCost: { perDiemRate: 140, travel: [{ id: "travel-staff", travelers: 1 }], misc: [{ id: "m1", item: "Steel", qty: 2, each: 40 }] },
+        subcontractor: { lines: [{ id: "sb-1", vendor: "Apex NDE", qty: 2, rate: 85 }], cards: [] },
+        fcr: { log: [{ id: "fcr-1" }], people: [] },
+      }),
+    );
+    const afterShare = collectPack(leftoverDesk, "new-cat2pit");
+    assert.equal(((afterShare?.equipment as { largeTools: unknown[] }).largeTools || []).length, 1);
+    assert.equal(((afterShare?.subcontractor as { lines: unknown[] }).lines || []).length, 1);
+    assert.equal(((afterShare?.otherCost as { misc: unknown[] }).misc || []).length, 1);
+    assert.equal(((afterShare?.fcr as { log: unknown[] }).log || []).length, 1);
+    assert.ok(leftoverDesk.getItem(`${FCR_STORE_PREFIX}${newEstimateKey("new-cat2pit")}`));
+
+    applyPackToStore(
+      leftoverDesk,
+      cat2({
+        updatedAt: 12_000,
+        otherCost: { perDiemRate: 140, travel: [{ id: "travel-staff", travelers: 1 }], misc: [] },
+        equipment: { largeTools: [], thirdParty: [] },
+        subcontractor: { lines: [], cards: [] },
+      }),
+    );
+    const afterThinWrite = collectPack(leftoverDesk, "new-cat2pit");
+    assert.equal(((afterThinWrite?.equipment as { largeTools: unknown[] }).largeTools || []).length, 1);
+    assert.equal(((afterThinWrite?.subcontractor as { lines: unknown[] }).lines || []).length, 1);
+    assert.equal(((afterThinWrite?.otherCost as { misc: unknown[] }).misc || []).length, 1);
   });
 
   it("strips Drive ids from a public pack payload", () => {

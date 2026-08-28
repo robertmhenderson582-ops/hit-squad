@@ -93,14 +93,15 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
   if (claimed && !canWritePack(user, claimed)) {
     return { ok: false as const, status: 403, error: "That package is not on this desk." };
   }
+  const merged = pickPack(parsed.pack, claimed) || parsed.pack;
   const pack = publicPack({
-    ...parsed.pack,
+    ...merged,
     ownerEmail: claimed?.ownerEmail || ownerEmail,
-    sharedWith: claimed?.sharedWith ?? parsed.pack.sharedWith,
-    transferredFrom: claimed?.transferredFrom ?? parsed.pack.transferredFrom,
-    transferredTo: claimed?.transferredTo ?? parsed.pack.transferredTo,
-    transferredToName: claimed?.transferredToName ?? parsed.pack.transferredToName,
-    transferredFromName: claimed?.transferredFromName ?? parsed.pack.transferredFromName,
+    sharedWith: claimed?.sharedWith ?? merged.sharedWith,
+    transferredFrom: claimed?.transferredFrom ?? merged.transferredFrom,
+    transferredTo: claimed?.transferredTo ?? merged.transferredTo,
+    transferredToName: claimed?.transferredToName ?? merged.transferredToName,
+    transferredFromName: claimed?.transferredFromName ?? merged.transferredFromName,
     archived: parsed.pack.archived,
     updatedAt: parsed.pack.updatedAt || Date.now(),
   });
