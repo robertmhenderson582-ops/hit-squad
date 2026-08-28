@@ -1,6 +1,6 @@
 import type { PublicUser } from "@/lib/types";
 import { VISUAL_ROSTER } from "./owner-desk.ts";
-import { isJosephEmail, testerByEmail, type TesterSeatDef } from "./tester-seats.ts";
+import { isJosephEmail, testerByEmail, TESTER_SEATS, type TesterSeatDef } from "./tester-seats.ts";
 
 export { OWNER_LOGIN_EMAIL, isOwnerLoginEmail } from "./owner-login.ts";
 
@@ -49,10 +49,30 @@ export function viewingAsOther(viewAs?: string | null): boolean {
   return Boolean(viewAs && viewAs !== "owner");
 }
 
-export function testerFromViewAs(viewAs?: string | null): TesterSeatDef | undefined {
+export function testerFromViewAs(
+  viewAs?: string | null,
+  people: Array<{ id: string; email: string; name: string }> = [],
+): TesterSeatDef | undefined {
   if (!viewAs || viewAs === "owner") return undefined;
   const row = VISUAL_ROSTER.find((seat) => seat.id === viewAs);
-  return row ? testerByEmail(row.email) : undefined;
+  if (row) return testerByEmail(row.email);
+  const seeded = testerByEmail(people.find((person) => person.id === viewAs)?.email || "")
+    || TESTER_SEATS.find((seat) => seat.id === viewAs);
+  if (seeded) return seeded;
+  const person = people.find((item) => item.id === viewAs || item.email === viewAs);
+  if (!person) return undefined;
+  const known = testerByEmail(person.email);
+  if (known) return known;
+  return {
+    id: person.id,
+    email: person.email,
+    name: person.name,
+    aliased: true,
+    rateBuilder: true,
+    viewAs: false,
+    shop: "field",
+    company: "hitsquad",
+  };
 }
 
 /** Chrome / Settings use this seat. Real logins still gate on the session user. */
@@ -60,12 +80,13 @@ export function lensUser(
   session?: PublicUser | null,
   viewAs?: string | null,
   followSeat?: string | null,
+  people: Array<{ id: string; email: string; name: string }> = [],
 ): PublicUser | null {
   if (!session) return null;
   if (!hasBuildDesk(session)) return session;
   const seatId = activeLensSeat(viewAs, followSeat);
   if (!seatId) return session;
-  const seat = testerFromViewAs(seatId);
+  const seat = testerFromViewAs(seatId, people);
   if (!seat) return session;
   return { id: seat.id, email: seat.email, name: seat.name, role: "tester" };
 }

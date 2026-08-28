@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { HandoffDialog } from "@/components/HandoffDialog";
 import { useDeskLens } from "@/components/OwnerDeskContext";
+import { useHandoffPeople } from "@/components/useDeskPeople";
 import {
   applyReturnLocally,
   applyTransferLocally,
@@ -39,6 +40,7 @@ export function JobMenuActions({
   onChange?: () => void;
 }) {
   const { lens, seat } = useDeskLens();
+  const extras = useHandoffPeople();
   const [handoff, setHandoff] = useState<"share" | "unshare" | "turnover" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -49,7 +51,7 @@ export function JobMenuActions({
   const sharedEmails = pack ? packSharedEmails(pack) : [];
   const canShare = Boolean(deskUser && pack && canSharePack(deskUser, pack));
   const canReturn = Boolean(deskUser && pack && canReturnPack(deskUser, pack));
-  const sharedWith = sharedEmails.map((email) => findHandoffSeat(email)).filter(Boolean) as HandoffSeat[];
+  const sharedWith = sharedEmails.map((email) => findHandoffSeat(email, extras) ?? { name: email, email }) as HandoffSeat[];
 
   async function refresh() {
     onChange?.();

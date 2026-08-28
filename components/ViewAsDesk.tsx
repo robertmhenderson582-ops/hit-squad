@@ -2,7 +2,7 @@
 
 import { useAlias, useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { hasBuildDesk } from "@/lib/desk-role";
-import { VIEW_RESPONSIBILITIES, VIEW_SITES, VISUAL_ROSTER, type ViewAsSeat, type ViewResponsibility } from "@/lib/owner-desk";
+import { VIEW_RESPONSIBILITIES, VIEW_SITES, type ViewAsSeat, type ViewResponsibility } from "@/lib/owner-desk";
 import { isJosephEmail } from "@/lib/tester-seats";
 
 export function ViewAsDesk() {
@@ -30,7 +30,7 @@ export function ViewAsDesk() {
         >
           Owner
         </button>
-        {VISUAL_ROSTER.map((row) => (
+        {desk.people.map((row) => (
           <button
             key={row.id}
             type="button"

@@ -7,6 +7,7 @@ import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { COMPANIES, companyName, type Company, type CompanyId } from "@/lib/companies";
 import { canUseFollow, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
+import { lensPeopleFromSeats } from "@/lib/desk-people";
 import { followSeatFromEmail } from "@/lib/follow";
 import type { PublicUser, RosterEntry } from "@/lib/types";
 
@@ -62,8 +63,9 @@ export function ManageUsersDesk() {
       .catch(() => undefined);
   }, []);
 
+  const followPeople = lensPeopleFromSeats(seats);
   function followEmail(email: string) {
-    const seat = followSeatFromEmail(email);
+    const seat = followSeatFromEmail(email, followPeople);
     if (!seat || !desk || !followOk) return;
     const ping = liveSeats.find((row) => row.email.toLowerCase() === email.trim().toLowerCase());
     desk.setFollowSeat(seat, ping?.path ?? "/");
@@ -234,17 +236,17 @@ export function ManageUsersDesk() {
                   </td>
                   {followOk ? (
                     <td className="px-2 py-2">
-                      {followSeatFromEmail(row.email) && row.email.toLowerCase() !== NOVUS_EMAIL ? (
+                      {followSeatFromEmail(row.email, followPeople) && row.email.toLowerCase() !== NOVUS_EMAIL ? (
                         <button
                           type="button"
                           onClick={() => followEmail(row.email)}
                           className={`rounded-lg px-3 py-1.5 text-sm ${
-                            desk?.followSeat === followSeatFromEmail(row.email)
+                            desk?.followSeat === followSeatFromEmail(row.email, followPeople)
                               ? "bg-steel text-white"
                               : "border border-steel text-steel"
                           }`}
                         >
-                          {desk?.followSeat === followSeatFromEmail(row.email) ? "Watching" : "Follow"}
+                          {desk?.followSeat === followSeatFromEmail(row.email, followPeople) ? "Watching" : "Follow"}
                         </button>
                       ) : (
                         <span className="text-[#5b6f73]">—</span>
@@ -392,17 +394,17 @@ export function ManageUsersDesk() {
                         <td className="px-2 py-2">{row.expires || "—"}</td>
                         <td className="px-2 py-2">{row.signIn}</td>
                         <td className="px-2 py-2">
-                          {followSeatFromEmail(row.email) ? (
+                          {followSeatFromEmail(row.email, followPeople) ? (
                             <button
                               type="button"
                               onClick={() => followEmail(row.email)}
                               className={`rounded-lg px-3 py-1.5 text-sm ${
-                                desk?.followSeat === followSeatFromEmail(row.email)
+                                desk?.followSeat === followSeatFromEmail(row.email, followPeople)
                                   ? "bg-steel text-white"
                                   : "border border-steel text-steel"
                               }`}
                             >
-                              {desk?.followSeat === followSeatFromEmail(row.email) ? "Watching" : "Follow"}
+                              {desk?.followSeat === followSeatFromEmail(row.email, followPeople) ? "Watching" : "Follow"}
                             </button>
                           ) : (
                             <span className="text-[#5b6f73]">—</span>

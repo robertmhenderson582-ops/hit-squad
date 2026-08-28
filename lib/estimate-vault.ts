@@ -11,6 +11,7 @@ import {
   visiblePacks,
   type ScopeUser,
 } from "./estimate-scope.ts";
+import { hydratedHandoffExtras } from "./desk-scope-server.ts";
 import {
   findHandoffSeat,
   isHandoffEmail,
@@ -36,6 +37,7 @@ export { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./h
 export function estimateVaultAdapter(adapter?: DriveAdapter) {
   return adapter ?? driveAdapter();
 }
+
 
 export async function listVisiblePacks(user: ScopeUser, adapter?: DriveAdapter) {
   const drive = estimateVaultAdapter(adapter);
@@ -126,8 +128,9 @@ export async function transferVisiblePack(
   adapter?: DriveAdapter,
   incoming?: unknown,
 ) {
-  const target = findHandoffSeat(toEmail);
-  if (!target || !isHandoffEmail(target.email)) {
+  const extras = await hydratedHandoffExtras();
+  const target = findHandoffSeat(toEmail, extras);
+  if (!target || !isHandoffEmail(target.email, extras)) {
     return { ok: false as const, status: 400, error: "Pick someone on this desk." };
   }
   if (target.email === user.email.trim().toLowerCase()) {
@@ -140,7 +143,7 @@ export async function transferVisiblePack(
   if (!current || !packVisibleTo(user, current) || !canTransferPack(user, current)) {
     return { ok: false as const, status: 404, error: "That package is not on this desk." };
   }
-  const fromName = findHandoffSeat(user.email)?.name || user.email.trim().toLowerCase();
+  const fromName = findHandoffSeat(user.email, extras)?.name || user.email.trim().toLowerCase();
   const pack = publicPack({
     ...current,
     ownerEmail: target.email,
@@ -183,8 +186,9 @@ export async function shareVisiblePack(
   adapter?: DriveAdapter,
   incoming?: unknown,
 ) {
-  const target = findHandoffSeat(toEmail);
-  if (!target || !isHandoffEmail(target.email)) {
+  const extras = await hydratedHandoffExtras();
+  const target = findHandoffSeat(toEmail, extras);
+  if (!target || !isHandoffEmail(target.email, extras)) {
     return { ok: false as const, status: 400, error: "Pick someone on this desk." };
   }
   if (target.email === user.email.trim().toLowerCase()) {
@@ -223,8 +227,9 @@ export async function unshareVisiblePack(
   adapter?: DriveAdapter,
   incoming?: unknown,
 ) {
-  const target = findHandoffSeat(toEmail);
-  if (!target || !isHandoffEmail(target.email)) {
+  const extras = await hydratedHandoffExtras();
+  const target = findHandoffSeat(toEmail, extras);
+  if (!target || !isHandoffEmail(target.email, extras)) {
     return { ok: false as const, status: 400, error: "Pick someone on this desk." };
   }
   const drive = estimateVaultAdapter(adapter);
@@ -260,8 +265,9 @@ export async function returnVisiblePack(
   if (!current || !packVisibleTo(user, current) || !canReturnPack(user, current)) {
     return { ok: false as const, status: 404, error: "That package is not on this desk." };
   }
-  const previous = findHandoffSeat(current.transferredFrom || "");
-  if (!previous || !isHandoffEmail(previous.email)) {
+  const extras = await hydratedHandoffExtras();
+  const previous = findHandoffSeat(current.transferredFrom || "", extras);
+  if (!previous || !isHandoffEmail(previous.email, extras)) {
     return { ok: false as const, status: 400, error: "This job cannot go back." };
   }
   const local = localPackForTransfer(user, packId, incoming);

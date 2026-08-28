@@ -21,9 +21,10 @@ export function deskScopeUser(
   session: PublicUser,
   viewAs?: string | null,
   followSeat?: string | null,
+  people: Array<{ id: string; email: string; name: string }> = [],
 ): PublicUser {
   if (!hasBuildDesk(session)) return session;
-  return lensUser(session, viewAs, followSeat) ?? session;
+  return lensUser(session, viewAs, followSeat, people) ?? session;
 }
 
 export function deskUserFromRequest(session: PublicUser, request: Request): PublicUser {

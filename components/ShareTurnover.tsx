@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { HandoffDialog } from "@/components/HandoffDialog";
 import { useDeskLens } from "@/components/OwnerDeskContext";
+import { useHandoffPeople } from "@/components/useDeskPeople";
 import {
   applyReturnLocally,
   applyTransferLocally,
@@ -19,6 +20,7 @@ import { findDeskPack } from "@/lib/lens-packs";
 export function ShareTurnover({ title, packId }: { title?: string; packId?: string }) {
   const router = useRouter();
   const { lens, seat } = useDeskLens();
+  const extras = useHandoffPeople();
   const [open, setOpen] = useState<"share" | "unshare" | "turnover" | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const pack = packId && isLocalPackId(packId) ? findDeskPack(packId, seat) : null;
@@ -26,7 +28,7 @@ export function ShareTurnover({ title, packId }: { title?: string; packId?: stri
   const canShare = Boolean(packId && pack && deskUser && canSharePack(deskUser, pack));
   const canReturn = Boolean(packId && pack && deskUser && canReturnPack(deskUser, pack));
   const sharedWith = (pack ? packSharedEmails(pack) : [])
-    .map((email) => findHandoffSeat(email))
+    .map((email) => findHandoffSeat(email, extras) ?? { name: email, email })
     .filter(Boolean) as HandoffSeat[];
   const canHandoff = Boolean(packId && isLocalPackId(packId) && canShare);
 

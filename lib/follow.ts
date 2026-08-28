@@ -1,17 +1,15 @@
-import { VISUAL_ROSTER, type FollowSeat } from "./owner-desk.ts";
+import { followIdFromEmail, type DeskPerson } from "./desk-people.ts";
+import { isFollowSeat, type FollowSeat } from "./owner-desk.ts";
 
 const BLOCKED =
   /^\/(settings|users|follow|tickets|inbox|activity)(\/|$)/i;
 
 export function canFollowSeatId(id: string): id is FollowSeat {
-  return id !== "owner" && VISUAL_ROSTER.some((row) => row.id === id);
+  return id !== "owner" && isFollowSeat(id);
 }
 
-export function followSeatFromEmail(email = ""): FollowSeat | undefined {
-  const needle = email.trim().toLowerCase();
-  if (!needle) return undefined;
-  const row = VISUAL_ROSTER.find((item) => item.email.toLowerCase() === needle);
-  return row?.id;
+export function followSeatFromEmail(email = "", people: DeskPerson[] = []): FollowSeat | undefined {
+  return followIdFromEmail(email, people);
 }
 
 /** Testers never land on owner tools. Home if the last path is blocked or empty. */

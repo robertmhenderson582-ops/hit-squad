@@ -30,6 +30,17 @@ describe("handoff seats", () => {
     assert.equal(findHandoffSeat("NathanBoyte@gmail.com")?.name, "Nathan Boyte");
   });
 
+  it("merges owner-added vault extras and still never lists Novus", () => {
+    const extra = { name: "Added Tester", email: "added.tester@example.com" };
+    const seats = handoffSeats([extra, { name: "Novus", email: NOVUS_EMAIL }]);
+    assert.equal(seats.some((row) => row.email === extra.email && row.name === extra.name), true);
+    assert.equal(seats.some((row) => row.email === NOVUS_EMAIL), false);
+    assert.equal(isHandoffEmail(extra.email, [extra]), true);
+    assert.equal(findHandoffSeat(extra.email, [extra])?.name, extra.name);
+    assert.equal(handoffTargetsFor({ email: OWNER_LOGIN_EMAIL, role: "owner" }, [extra]).some((row) => row.email === extra.email), true);
+    assert.equal(handoffTargetsFor({ email: extra.email, role: "tester" }, [extra]).some((row) => row.email === extra.email), false);
+  });
+
   it("lets the current person pick someone else, not themselves", () => {
     const owner = handoffTargetsFor({ email: OWNER_LOGIN_EMAIL, role: "owner" });
     assert.equal(owner.some((row) => row.email === OWNER_LOGIN_EMAIL), false);

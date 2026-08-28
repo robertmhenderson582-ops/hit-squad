@@ -14,7 +14,7 @@ import {
   OWNER_LOGIN_EMAIL,
   pageAllowedForSeat,
 } from "./desk-role.ts";
-import { preferredViewAs, VISUAL_ROSTER } from "./owner-desk.ts";
+import { isFollowSeat, isViewAsSeat, preferredViewAs, VISUAL_ROSTER } from "./owner-desk.ts";
 import { JOSEPH_EMAIL, testerByEmail } from "./tester-seats.ts";
 
 test("owner login email never matches a first-login create seat", () => {
@@ -34,6 +34,11 @@ test("Novus is never a visual tester peer", () => {
     VISUAL_ROSTER.some((row) => String(row.id) === NOVUS_ID),
     false,
   );
+  assert.equal(isViewAsSeat("custom-added-tester"), true);
+  assert.equal(isFollowSeat("tester-shane"), true);
+  assert.equal(isViewAsSeat("operator-novus"), false);
+  assert.equal(isViewAsSeat("novus"), false);
+  assert.equal(isFollowSeat("owner"), true);
 });
 
 test("operator has build desk; testers do not", () => {
@@ -122,6 +127,24 @@ test("every View-as seat matches that tester, including Settings flags", () => {
   assert.equal(preferredViewAs("owner", "mark"), "owner");
   assert.equal(preferredViewAs(undefined, "cody"), "cody");
   assert.equal(preferredViewAs(undefined, undefined), "owner");
+});
+
+test("View as a vault extra uses that person, not the owner", () => {
+  const owner = {
+    id: "owner-robert-henderson",
+    email: "robertmhenderson582@gmail.com",
+    name: "Robert Henderson",
+    role: "owner" as const,
+  };
+  const extra = { id: "custom-added-tester", email: "added.tester@example.com", name: "Added Tester" };
+  const lens = lensUser(owner, extra.id, null, [extra]);
+  assert.equal(lens?.email, extra.email);
+  assert.equal(lens?.name, extra.name);
+  assert.equal(lens?.role, "tester");
+  assert.equal(canUseRateBuilder(lens), true);
+  assert.equal(canUseViewAs(lens), false);
+  assert.equal(pageAllowedForSeat(lens, { buildDesk: true }), false);
+  assert.equal(lensUser(owner, "operator-novus", null, [extra])?.email, owner.email);
 });
 
 test("Follow applies the desk lens and wins over View as", () => {
