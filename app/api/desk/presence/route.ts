@@ -45,7 +45,7 @@ export async function GET(request: Request) {
 function screenName(path: string) {
   if (path === "/") return "Home";
   if (path.startsWith("/estimates")) return "Estimates";
-  if (path.startsWith("/jobs")) return "Jobs";
+  if (path.startsWith("/jobs") || path.startsWith("/sites")) return "Jobs";
   if (path.startsWith("/rates")) return "Rates";
   if (path.startsWith("/tickets")) return "Tickets";
   if (path.startsWith("/settings")) return "Settings";

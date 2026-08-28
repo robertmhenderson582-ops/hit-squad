@@ -40,8 +40,8 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
     return (
       <p className="p-6">
         That package is not on this desk.{" "}
-        <Link href="/estimates" className="text-steel underline">
-          Back to estimates
+        <Link href="/jobs" className="text-steel underline">
+          Back to jobs
         </Link>
       </p>
     );
