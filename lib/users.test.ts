@@ -6,10 +6,13 @@ import { after, beforeEach, test } from "node:test";
 import { readSeatClaim, signSeatClaim } from "./auth.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
-import { SHANE_EMAIL } from "./tester-seats.ts";
+import { JOSEPH_EMAIL, SHANE_EMAIL, TESTER_SEATS } from "./tester-seats.ts";
+import { assignedCompany, resetCompanyAssignmentsForTests } from "./companies-store.ts";
+import { canUseRateBuilder, canUseViewAs } from "./desk-role.ts";
 import { memoryDrive } from "./drive-estimates.ts";
 import {
   claimFirstPassword,
+  createSeat,
   findUserByEmail,
   flushSeatVault,
   forgetSeatCacheForTests,
@@ -17,6 +20,8 @@ import {
   hydrateSeatStore,
   issueSeatPassword,
   loginOutcome,
+  listSeatRows,
+  parseExtraSeats,
   resetUsersForTests,
   restoreSeatHash,
   seatHashClaimFor,
@@ -36,15 +41,18 @@ const UNKNOWN = "not-on-this-desk@example.com";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-seats-"));
 const seatFile = join(dir, "seats.json");
+const companyFile = join(dir, "companies.json");
 
 process.env.OWNER_PASSWORD = OWNER_SECRET;
 process.env.OWNER_EMAIL = OWNER_LOGIN_EMAIL;
 process.env.SEAT_PASSWORD_PATH = seatFile;
+process.env.COMPANY_ASSIGNMENT_PATH = companyFile;
 process.env.AUTH_SECRET = "test-auth-secret-16chars";
 
 function wipePersisted() {
   if (existsSync(seatFile)) unlinkSync(seatFile);
   resetUsersForTests();
+  resetCompanyAssignmentsForTests();
 }
 
 beforeEach(() => {
@@ -315,4 +323,119 @@ test("Novus can create a password only when no hash exists", () => {
     assert.equal(created.user.mustChangePassword, false);
   }
   assert.equal(seatNeedsPasswordCreate(NOVUS_EMAIL), false);
+});
+
+const ADDED = "added.tester@example.com";
+
+test("owner can add a tester login that must change password on first sign-in", async () => {
+  const created = await createSeat({
+    name: "Added Tester",
+    email: "  Added.Tester@example.com ",
+    password: ISSUED,
+  });
+  assert.equal("ok" in created, true);
+  if (!("ok" in created)) return;
+
+  const user = findUserByEmail(ADDED);
+  assert.ok(user);
+  assert.equal(user.role, "tester");
+  assert.equal(user.name, "Added Tester");
+  assert.equal(user.mustChangePassword, true);
+  assert.match(user.id, /^custom-/);
+  assert.equal(TESTER_SEATS.some((row) => row.email === ADDED), false);
+  assert.equal(await assignedCompany(ADDED), "hitsquad");
+  assert.equal(canUseRateBuilder(user), true);
+  assert.equal(canUseViewAs(user), false);
+  assert.equal(canUseRateBuilder({ email: JOSEPH_EMAIL, role: "tester" }), false);
+
+  const rows = await listSeatRows();
+  assert.equal(rows.some((row) => row.email === ADDED && row.passwordIssued && row.companyId === "hitsquad"), true);
+
+  const ok = loginOutcome({ email: ADDED, password: ISSUED });
+  assert.equal(ok.status, "authenticated");
+  if (ok.status === "authenticated") {
+    assert.equal(ok.user.mustChangePassword, true);
+    assert.equal(ok.user.role, "tester");
+  }
+
+  const changed = setOwnPassword(ADDED, CHOSEN);
+  assert.equal("ok" in changed, true);
+  const again = loginOutcome({ email: ADDED, password: CHOSEN });
+  assert.equal(again.status, "authenticated");
+  if (again.status === "authenticated") {
+    assert.equal(again.user.mustChangePassword, false);
+  }
+
+  const persisted = readFileSync(seatFile, "utf8");
+  assert.equal(persisted.includes(ISSUED), false);
+  assert.equal(persisted.includes(CHOSEN), false);
+  assert.match(persisted, /"extras"/);
+  assert.match(persisted, /added\.tester@example\.com/);
+
+  resetUsersForTests();
+  const reloaded = findUserByEmail(ADDED);
+  assert.ok(reloaded);
+  assert.equal(reloaded.name, "Added Tester");
+  assert.equal(verifyPassword(reloaded, CHOSEN), true);
+});
+
+test("added tester persists in the seats vault after the local cache is wiped", async () => {
+  const drive = memoryDrive();
+  useSeatVaultForTests(drive);
+  const created = await createSeat({
+    name: "Vault Tester",
+    email: ADDED,
+    password: ISSUED,
+    companyId: "madison",
+  });
+  assert.equal("ok" in created, true);
+  await flushSeatVault();
+  assert.equal(await assignedCompany(ADDED), "madison");
+
+  forgetSeatCacheForTests();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  const user = findUserByEmail(ADDED);
+  assert.ok(user);
+  assert.equal(user.name, "Vault Tester");
+  assert.equal(user.role, "tester");
+  assert.equal(loginOutcome({ email: ADDED, password: ISSUED }).status, "authenticated");
+  assert.equal(verifyPassword(findUserByEmail(ADDED)!, ISSUED), true);
+  assert.equal(findUserByEmail(TESTER)?.email, TESTER);
+
+  const vaultRaw = [...drive.files.values()].map((row) => row.content).join();
+  assert.equal(vaultRaw.includes(ISSUED), false);
+  assert.match(vaultRaw, /"extras"/);
+  assert.match(vaultRaw, /vault tester/i);
+  assert.equal(loginOutcome({ email: TESTER }).status, "needsCreate");
+});
+
+test("createSeat rejects owner, Novus, duplicates, and a short password", async () => {
+  assert.equal("error" in (await createSeat({ name: "Robert", email: OWNER_LOGIN_EMAIL, password: ISSUED })), true);
+  assert.equal("error" in (await createSeat({ name: "Novus", email: NOVUS_EMAIL, password: ISSUED })), true);
+  assert.equal("error" in (await createSeat({ name: "Nathan", email: TESTER, password: ISSUED })), true);
+  assert.equal("error" in (await createSeat({ name: "Short", email: ADDED, password: SHORT })), true);
+  assert.equal("error" in (await createSeat({ name: "X", email: ADDED, password: ISSUED })), true);
+  assert.equal(findUserByEmail(ADDED), undefined);
+
+  const first = await createSeat({ name: "Added Tester", email: ADDED, password: ISSUED });
+  assert.equal("ok" in first, true);
+  const again = await createSeat({ name: "Added Tester", email: ADDED, password: OTHER });
+  assert.equal("error" in again, true);
+  assert.equal("error" in (await createSeat({ name: "Added Tester", email: "other.tester@example.com", password: ISSUED, companyId: "not-a-company" })), true);
+  assert.equal(verifyPassword(findUserByEmail(ADDED)!, ISSUED), true);
+  assert.equal(findUserByEmail("other.tester@example.com"), undefined);
+});
+
+test("parseExtraSeats skips owner, Novus, and seeded testers", () => {
+  const extras = parseExtraSeats({
+    extras: [
+      { id: "custom-ok", email: ADDED, name: "Added Tester" },
+      { id: "custom-owner", email: OWNER_LOGIN_EMAIL, name: "Nope" },
+      { id: "custom-novus", email: NOVUS_EMAIL, name: "Nope" },
+      { id: "custom-nathan", email: TESTER, name: "Nope" },
+      { id: "", email: "bad@example.com", name: "Nope" },
+    ],
+  });
+  assert.deepEqual(extras, [{ id: "custom-ok", email: ADDED, name: "Added Tester" }]);
 });

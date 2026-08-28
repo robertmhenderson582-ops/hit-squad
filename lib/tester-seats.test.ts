@@ -54,6 +54,10 @@ test("does not seed the held-out people", () => {
     TESTER_SEATS.some((row) => row.email === NOVUS_EMAIL),
     false,
   );
+  assert.equal(
+    TESTER_SEATS.some((row) => /stephanie/i.test(row.name) || /stephanie/i.test(row.email)),
+    false,
+  );
 });
 
 test("alias flags and tools match the seat list", () => {

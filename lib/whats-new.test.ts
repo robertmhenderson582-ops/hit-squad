@@ -52,9 +52,9 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
-    assert.equal(DESK_VERSION, "1.26.0");
-    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.26");
-    assert.equal(DESK_THREAD_ID, "th-desk-v1.26");
+    assert.equal(DESK_VERSION, "1.27.0");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.27");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.27");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
     assert.match(TESTER_WHATS_NEW, /Leftover copies can no longer undo a Turn over/);
@@ -100,24 +100,24 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.26 onto an existing Hit Squad desk thread after V1.25", () => {
-    assert.equal(seenKey("tester-x", "1.25.0"), `${WHATS_NEW_MARK_PREFIX}1.25.0:tester-x`);
-    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.26.0:tester-x`);
-    assert.notEqual(seenKey("tester-x", "1.25.0"), seenKey("tester-x"));
+  it("appends V1.27 onto an existing Hit Squad desk thread after V1.26", () => {
+    assert.equal(seenKey("tester-x", "1.26.0"), `${WHATS_NEW_MARK_PREFIX}1.26.0:tester-x`);
+    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.27.0:tester-x`);
+    assert.notEqual(seenKey("tester-x", "1.26.0"), seenKey("tester-x"));
 
     const prior = [
       {
-        id: "th-desk-v1.25",
+        id: "th-desk-v1.26",
         personId: DESK_PERSON_ID,
         name: "Hit Squad",
         company: "Project Controls",
         unread: 0,
         messages: [
           {
-            id: "im-desk-1.25.0",
+            id: "im-desk-1.26.0",
             from: "them" as const,
             author: "Desk",
-            text: "Hit Squad Project Controls V1.25",
+            text: "Hit Squad Project Controls V1.26",
             photo: null,
             sentAt: "",
             readAt: "seen",
@@ -133,27 +133,28 @@ describe("inbox what's-new", () => {
     assert.equal(applyWhatsNew(next, "tester-joseph-append", false)[0].messages.length, 2);
   });
 
-  it("posts the V1.26 Inbox note for testers and owner", () => {
-    assert.equal(DESK_VERSION, "1.26.0");
+  it("posts the V1.27 Inbox note for testers and owner", () => {
+    assert.equal(DESK_VERSION, "1.27.0");
     assert.equal(NEXT_SHIP_VERSION, DESK_VERSION);
     assert.equal(NEXT_SHIP_VERSION_LABEL, DESK_VERSION_LABEL);
     assert.equal(TESTER_NEXT_SHIP_DRAFT, TESTER_WHATS_NEW);
     assert.equal(OWNER_NEXT_SHIP_DRAFT, OWNER_WHATS_NEW);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
     assert.match(OWNER_WHATS_NEW, /Leftover copies can no longer undo a Turn over/);
+    assert.match(OWNER_WHATS_NEW, /Add user on Users creates a login/);
     assert.match(TESTER_WHATS_NEW, /Leftover copies can no longer undo a Turn over/);
     assert.match(TESTER_WHATS_NEW, /sees it again with Return/);
-    assert.equal(/Wendell|Joseph|Follow|Shane|apcontrolsllc|seat|security|vault|other users|James|CBI/i.test(TESTER_WHATS_NEW), false);
+    assert.equal(/Wendell|Joseph|Follow|Shane|apcontrolsllc|seat|security|vault|other users|James|CBI|Stephanie/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
       /password|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
         TESTER_WHATS_NEW,
       ),
       false,
     );
-    const live = applyWhatsNew([], "tester-v126-live", false);
-    assert.equal(live[0].id, "th-desk-v1.26");
+    const live = applyWhatsNew([], "tester-v127-live", false);
+    assert.equal(live[0].id, "th-desk-v1.27");
     assert.equal(live[0].messages[0]?.text, TESTER_WHATS_NEW);
-    const owner = applyWhatsNew([], "owner-v126-live", true);
+    const owner = applyWhatsNew([], "owner-v127-live", true);
     assert.equal(owner[0].messages[0]?.text, OWNER_WHATS_NEW);
   });
 });

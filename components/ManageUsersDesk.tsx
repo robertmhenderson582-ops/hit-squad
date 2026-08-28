@@ -8,15 +8,7 @@ import { useSession } from "@/components/SessionProvider";
 import { COMPANIES, companyName, type Company, type CompanyId } from "@/lib/companies";
 import { canUseFollow, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
 import { followSeatFromEmail } from "@/lib/follow";
-import { EMPTY_MODULES } from "@/lib/roster";
-import type { PublicUser, RosterEntry, RosterPermission } from "@/lib/types";
-
-const PERMISSION_OPTIONS: { value: RosterPermission; label: string }[] = [
-  { value: "Owner", label: "Owner" },
-  { value: "Trusted", label: "Trusted" },
-  { value: "Look & feel", label: "Look & feel" },
-  { value: "Staff", label: "Staff — estimates only" },
-];
+import type { PublicUser, RosterEntry } from "@/lib/types";
 
 type SeatRow = PublicUser & { passwordIssued: boolean; companyId?: string };
 
@@ -37,17 +29,14 @@ export function ManageUsersDesk() {
   const [roster, setRoster] = useState<RosterEntry[]>([]);
   const [liveSeats, setLiveSeats] = useState<LiveSeat[]>([]);
   const [name, setName] = useState("");
-  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [addCompanyId, setAddCompanyId] = useState<CompanyId>("hitsquad");
   const [issueEmail, setIssueEmail] = useState(NOVUS_EMAIL);
   const [issuePassword, setIssuePassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [permission, setPermission] = useState<RosterPermission>("Staff");
-  const [expires, setExpires] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [seatNote, setSeatNote] = useState<string | null>(null);
-  const [open, setOpen] = useState({ seats: true, add: true, roster: true });
+  const [open, setOpen] = useState({ seats: true, add: true, roster: false });
 
   async function loadSeats() {
     const response = await fetch("/api/desk/seats", { credentials: "include", cache: "no-store" });
@@ -140,24 +129,20 @@ export function ManageUsersDesk() {
 
   async function onAdd(event: FormEvent) {
     event.preventDefault();
+    setNote(null);
     if (password.length < 8) {
       setNote("Password must be 8+.");
       return;
     }
-    const response = await fetch("/api/desk/roster", {
+    const response = await fetch("/api/desk/seats", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name,
-        username,
         email,
-        permission,
-        expires,
-        modules: EMPTY_MODULES,
-        estimate: true,
-        rateBuilder: permission !== "Look & feel",
-        passwordSet: true,
+        password,
+        companyId: addCompanyId || "hitsquad",
       }),
     });
     const data = await response.json();
@@ -165,13 +150,13 @@ export function ManageUsersDesk() {
       setNote(data.error || "Could not add.");
       return;
     }
-    setRoster(data.roster);
+    setSeats(data.seats ?? []);
+    if (Array.isArray(data.companies)) setCompanies(data.companies);
     setName("");
-    setUsername("");
     setEmail("");
     setPassword("");
-    setExpires("");
-    setNote("Added to the visual roster. No login and no invite sent.");
+    setAddCompanyId("hitsquad");
+    setNote("Login created. Don’t send. First sign-in must change the password. No invite sent.");
   }
 
   async function removeAll() {
@@ -198,8 +183,8 @@ export function ManageUsersDesk() {
       >
         <p className="text-sm leading-6 text-[#5b6f73]">
           Robert Henderson stays the only owner. Novus is a hidden operator seat. Testers never see
-          this list, Novus, or each other. Issue a one-time password here. Don’t send. They change it
-          on first sign-in. No invite email.
+          this list, Novus, or each other. Add a tester below, or issue a one-time password for a
+          seat already on this desk. Don’t send. They change it on first sign-in. No invite email.
         </p>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
@@ -328,64 +313,44 @@ export function ManageUsersDesk() {
       {owner ? (
         <>
           <Collapsible
-            title="Add a visual tester"
+            title="Add user"
             open={open.add}
             onToggle={() => setOpen((current) => ({ ...current, add: !current.add }))}
           >
             <p className="text-sm leading-6 text-[#5b6f73]">
-              Visual roster only. Does not create a login, send email, or open a claimable account.
-              Logins are issued above. Don’t send.
+              Creates a login on this desk. Name, email, company, and a one-time password. Don’t
+              send. They change it on first sign-in. No invite email. Default company is Hit Squad.
             </p>
             <form onSubmit={onAdd} className="mt-3 grid gap-3 sm:grid-cols-2">
               <Field label="NAME" value={name} onChange={setName} required />
-              <Field label="USERNAME" value={username} onChange={setUsername} />
-              <Field label="EMAIL" value={email} onChange={setEmail} required type="email" placeholder="Visual only — no invite" />
+              <Field label="EMAIL" value={email} onChange={setEmail} required type="email" placeholder="They type this to sign in" />
               <label>
-                <span className="text-xs tracking-[0.14em] text-[#5b6f73]">PASSWORD</span>
-                <span className="relative mt-1 block">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    className="paper-field pr-12"
-                    minLength={8}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((on) => !on)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#5b6f73]"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? "hide" : "show"}
-                  </button>
-                </span>
-              </label>
-              <label>
-                <span className="text-xs tracking-[0.14em] text-[#5b6f73]">PERMISSION</span>
+                <span className="text-xs tracking-[0.14em] text-[#5b6f73]">COMPANY</span>
                 <select
-                  value={permission}
-                  onChange={(event) => setPermission(event.target.value as RosterPermission)}
+                  value={addCompanyId}
+                  onChange={(event) => setAddCompanyId(event.target.value as CompanyId)}
                   className="paper-field mt-1"
+                  aria-label="Company for the new user"
                 >
-                  {PERMISSION_OPTIONS.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
                     </option>
                   ))}
                 </select>
               </label>
-              <label>
-                <span className="text-xs tracking-[0.14em] text-[#5b6f73]">EXPIRES (OPTIONAL)</span>
-                <input type="date" value={expires} onChange={(event) => setExpires(event.target.value)} className="paper-field mt-1" />
-              </label>
+              <PasswordField
+                label="One-time password"
+                autoComplete="new-password"
+                value={password}
+                onChange={setPassword}
+                minLength={8}
+                required
+              />
               <button type="submit" className="rounded-lg bg-steel px-4 py-2 text-white sm:col-span-2">
-                Add visual row
+                Add user
               </button>
             </form>
-            <button type="button" onClick={removeAll} className="mt-4 rounded-lg border border-[#d5e0de] px-4 py-2 text-[#b74120]">
-              Clear visual roster
-            </button>
             {note ? <p className="mt-3 text-sm text-[#5b6f73]">{note}</p> : null}
           </Collapsible>
 
@@ -394,6 +359,9 @@ export function ManageUsersDesk() {
             open={open.roster}
             onToggle={() => setOpen((current) => ({ ...current, roster: !current.roster }))}
           >
+            <p className="mb-3 text-sm leading-6 text-[#5b6f73]">
+              Leftover names-on-the-board only. Add user above creates the login.
+            </p>
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
@@ -409,7 +377,7 @@ export function ManageUsersDesk() {
                   {roster.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-2 py-4 text-[#5b6f73]">
-                        Empty visual book. Logins are the seeded seats above. Novus is not a tester.
+                        Empty visual book. Use Add user for a login. Novus is not a tester.
                       </td>
                     </tr>
                   ) : (
@@ -446,6 +414,9 @@ export function ManageUsersDesk() {
                 </tbody>
               </table>
             </div>
+            <button type="button" onClick={removeAll} className="mt-4 rounded-lg border border-[#d5e0de] px-4 py-2 text-[#b74120]">
+              Clear visual roster
+            </button>
           </Collapsible>
         </>
       ) : null}
