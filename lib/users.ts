@@ -405,6 +405,7 @@ export async function createSeat(input: {
   if (password.length < 8) return { error: "Password must be 8+." };
   if (email === ownerEmail()) return { error: "Owner stays the only owner." };
   if (email === NOVUS_EMAIL) return { error: "Novus is not added from this form." };
+  // Git-seed forbids (peffley, etc.) apply to TESTER_SEATS only — not this vault path.
   if (!(await isKnownCompany(companyId))) return { error: "Pick a company on this desk." };
 
   await hydrateSeatStore();
