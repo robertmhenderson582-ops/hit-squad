@@ -1,15 +1,5 @@
-"use client";
-
-import { AuthGate } from "@/components/AuthGate";
-import { DeskChrome } from "@/components/DeskChrome";
-import { EstimateBoard } from "@/components/EstimateBoard";
+import { redirect } from "next/navigation";
 
 export default function EstimatesPage() {
-  return (
-    <AuthGate require="authenticated">
-      <DeskChrome title="ESTIMATES">
-        <EstimateBoard />
-      </DeskChrome>
-    </AuthGate>
-  );
+  redirect("/jobs");
 }

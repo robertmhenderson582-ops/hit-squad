@@ -189,9 +189,9 @@ export function EstimateWorkspace({
             ) : null}
             <button
               type="button"
-              onClick={() => router.push("/estimates")}
+              onClick={() => router.push("/jobs")}
               className="rounded border border-white/20 px-3 py-1.5 text-white/90"
-              title="Close this sheet and go back to Estimates. Does not close out the job."
+              title="Close this sheet and go back to Jobs. Does not close out the job."
             >
               Close
             </button>
@@ -249,7 +249,7 @@ export function EstimateWorkspace({
                 onClick={() => {
                   closePackage({ id: packageId, title: name || crumb, kind: "estimate" });
                   setConfirmClose(false);
-                  router.push("/estimates");
+                  router.push("/jobs");
                 }}
                 className="rounded-lg bg-steel px-4 py-2 text-white"
               >

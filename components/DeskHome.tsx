@@ -6,8 +6,6 @@ import { useEffect, useState } from "react";
 import { DeskHero } from "@/components/DeskHero";
 import { useDisplay } from "@/components/DisplayProvider";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
-import { EstimateCard } from "@/components/EstimateCard";
-import { SitesDesk } from "@/components/SitesDesk";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
@@ -22,8 +20,8 @@ import type { DeskBoard } from "@/lib/types";
 
 // Home must stay these four tiles. Do not replace / with an Estimates-only blotter.
 const TILES = [
-  { href: "/jobs", key: "jobs", label: "Jobs", note: "Open outage board" },
-  { href: "/estimates", key: "estimates", label: "Estimates", note: "Working figures" },
+  { href: "/jobs", key: "jobs", label: "Jobs", note: "Company · site · jobs" },
+  { href: "/jobs", key: "estimates", label: "Estimates", note: "Working figures" },
   { href: "/cost", key: "cost", label: "Cost", note: "T&M / earned value" },
   { href: "/hse", key: "hse", label: "HSE", note: "Permits & actions" },
 ] as const;
@@ -97,7 +95,7 @@ export function DeskHome() {
       <div className="desk-grid">
         {TILES.map((tile) => (
           <Link
-            key={tile.href}
+            key={tile.key}
             href={tile.href}
             className={night ? "hud-tile block px-4 py-5" : "plant-card block px-4 py-5"}
           >
@@ -174,20 +172,6 @@ export function DeskHome() {
           </ul>
         </details>
       ) : null}
-      {openEstimates.length ? (
-        <section>
-          <h2 className={`font-display text-2xl ${night ? "text-paper-cream" : "text-[#163038]"}`}>Estimates</h2>
-          <p className={`mt-1 text-sm ${night ? "text-paper-cream/70" : "text-[#5b6f73]"}`}>
-            Click a card to open that estimate.
-          </p>
-          <div className="mt-3 grid gap-3 lg:grid-cols-2">
-            {openEstimates.map((row) => (
-              <EstimateCard key={row.id} estimate={row} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-      <SitesDesk />
     </div>
   );
 }
