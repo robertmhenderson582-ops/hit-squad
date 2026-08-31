@@ -1,9 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { GripToPan } from "@/components/GripToPan";
-import type { ActivityKind, ActivityRow } from "@/lib/activity-store";
+import {
+  activityWhoNames,
+  filterActivityByWho,
+  type ActivityKind,
+  type ActivityRow,
+} from "@/lib/activity-store";
 
 const KIND: Record<ActivityKind, string> = {
   "sign-in": "SIGN-IN OK",
@@ -20,7 +25,14 @@ function when(at: number) {
 export function ActivityDesk() {
   const confirmRemove = useConfirmRemove();
   const [rows, setRows] = useState<ActivityRow[]>([]);
+  const [who, setWho] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const names = useMemo(() => activityWhoNames(rows), [rows]);
+  const visible = useMemo(() => filterActivityByWho(rows, who), [rows, who]);
+
+  useEffect(() => {
+    if (who && !names.includes(who)) setWho("");
+  }, [who, names]);
 
   const load = useCallback(async () => {
     const response = await fetch("/api/desk/activity", { credentials: "include", cache: "no-store" });
@@ -98,6 +110,35 @@ export function ActivityDesk() {
             Clear log
           </button>
         </div>
+        <div className="mt-5 border-t border-[#d5e0de] pt-4">
+          <p className="font-mono text-[10px] tracking-[0.2em] text-steel">NAME</p>
+          <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Filter Activity by name">
+            <button
+              type="button"
+              onClick={() => setWho("")}
+              className={`rounded-lg px-3 py-1.5 text-sm ${who === "" ? "bg-steel text-white" : "border border-steel text-steel"}`}
+            >
+              All
+            </button>
+            {names.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setWho(name)}
+                className={`rounded-lg px-3 py-1.5 text-sm ${
+                  who === name ? "bg-steel text-white" : "border border-steel text-steel"
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 font-mono text-[10px] tracking-[0.14em] text-[#5b6f73]">
+            {who
+              ? `${visible.length} ROW${visible.length === 1 ? "" : "S"} · ${who.toUpperCase()}`
+              : `${rows.length} ROW${rows.length === 1 ? "" : "S"} · ALL NAMES`}
+          </p>
+        </div>
       </section>
       <section className="plant-card overflow-hidden px-5 py-5">
         {error ? <p className="text-amber-flare">{error}</p> : null}
@@ -113,14 +154,18 @@ export function ActivityDesk() {
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {visible.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-2 py-6 text-sm text-[#5b6f73]">
-                    Ledger is empty.
+                    {rows.length === 0
+                      ? "Ledger is empty."
+                      : who
+                        ? `No rows for ${who}.`
+                        : "Ledger is empty."}
                   </td>
                 </tr>
               ) : (
-                rows.map((row) => (
+                visible.map((row) => (
                   <tr key={row.id} className="border-t border-[#d5e0de]">
                     <td className="whitespace-nowrap px-2 py-2 font-mono text-xs">{when(row.at)}</td>
                     <td className="px-2 py-2">
