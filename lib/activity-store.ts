@@ -104,27 +104,6 @@ export async function hydrateActivityStore(): Promise<ActivityRow[]> {
   return readCache();
 }
 
-function whoKey(who: string) {
-  return who.trim();
-}
-
-/** Unique `who` values that actually appear on rows. Not the seeded tester roster. */
-export function activityWhoNames(rows: ActivityRow[]): string[] {
-  const names = new Set<string>();
-  for (const row of rows) {
-    const who = whoKey(row.who);
-    if (who) names.add(who);
-  }
-  return [...names].sort((a, b) => a.localeCompare(b));
-}
-
-/** Empty / unset name keeps every row. Match is the person on the row (`who`). */
-export function filterActivityByWho(rows: ActivityRow[], who?: string | null): ActivityRow[] {
-  const wanted = whoKey(who ?? "");
-  if (!wanted) return [...rows];
-  return rows.filter((row) => whoKey(row.who) === wanted);
-}
-
 export async function listActivity(): Promise<ActivityRow[]> {
   const rows = await hydrateActivityStore();
   return [...rows].sort((a, b) => b.at - a.at);

@@ -5,10 +5,9 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, beforeEach, describe, it } from "node:test";
 
+import { activityWhoNames, filterActivityByWho } from "./activity-filter.ts";
 import {
-  activityWhoNames,
   addActivity,
-  filterActivityByWho,
   forgetActivityCacheForTests,
   listActivity,
   resetActivityStoreForTests,
@@ -83,13 +82,18 @@ describe("activity name filter", () => {
   it("lists only names that have rows — not TESTER_SEATS", () => {
     assert.deepEqual(activityWhoNames(rows), ["Ben Peffley", "Robert Henderson", "Stephanie Hall"]);
     assert.equal(activityWhoNames(rows).includes("Nathan Boyte"), false);
-    const filterSrc = readFileSync(fileURLToPath(new URL("./activity-store.ts", import.meta.url)), "utf8");
+    const filterSrc = readFileSync(fileURLToPath(new URL("./activity-filter.ts", import.meta.url)), "utf8");
+    const storeSrc = readFileSync(fileURLToPath(new URL("./activity-store.ts", import.meta.url)), "utf8");
     const desk = readFileSync(fileURLToPath(new URL("../components/ActivityDesk.tsx", import.meta.url)), "utf8");
     const testers = readFileSync(fileURLToPath(new URL("./tester-seats.ts", import.meta.url)), "utf8");
     assert.equal(/TESTER_SEATS/.test(filterSrc), false);
     assert.equal(/TESTER_SEATS/.test(desk), false);
+    assert.equal(/node:fs|node:path/.test(filterSrc), false);
     assert.match(testers, /Nathan Boyte/);
     assert.equal(/Nathan Boyte/.test(filterSrc), false);
+    assert.equal(/activityWhoNames|filterActivityByWho/.test(storeSrc), false);
+    assert.match(desk, /from "@\/lib\/activity-filter"/);
+    assert.match(desk, /import type \{ ActivityKind, ActivityRow \} from "@\/lib\/activity-store"/);
     assert.match(desk, /activityWhoNames/);
     assert.match(desk, /filterActivityByWho/);
     assert.equal(/paper-field|type="search"|placeholder="Search/.test(desk), false);

@@ -3,12 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { GripToPan } from "@/components/GripToPan";
-import {
-  activityWhoNames,
-  filterActivityByWho,
-  type ActivityKind,
-  type ActivityRow,
-} from "@/lib/activity-store";
+import { activityWhoNames, filterActivityByWho } from "@/lib/activity-filter";
+import type { ActivityKind, ActivityRow } from "@/lib/activity-store";
 
 const KIND: Record<ActivityKind, string> = {
   "sign-in": "SIGN-IN OK",
