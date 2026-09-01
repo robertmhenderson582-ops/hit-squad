@@ -6,6 +6,7 @@ import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import {
   otPicksForPhase,
+  phaseDateFieldDisabled,
   phaseOtPick,
   sundaysInRange,
   workedDays,
@@ -109,8 +110,7 @@ function PhaseRowsTable({
         </thead>
         <tbody>
           {phases.map((row) => {
-            const firstOn = phases.find((item) => item.on)?.id;
-            const startLocked = !row.on || row.id !== firstOn;
+            const dateLocked = phaseDateFieldDisabled(row);
             const picks = otPicksForPhase(row.id);
             const currentPick = phaseOtPick(row);
             const sundays = row.daysPerWeek === 7 ? sundaysInRange(row.start, row.stop) : [];
@@ -173,7 +173,7 @@ function PhaseRowsTable({
                 <td className="phase-date-cell whitespace-nowrap px-2 py-3 align-top">
                   <DateField
                     value={row.start}
-                    disabled={startLocked}
+                    disabled={dateLocked}
                     aria-label={`${row.name} start`}
                     onChange={(start) => onPatch(row.id, { start })}
                   />
@@ -181,7 +181,7 @@ function PhaseRowsTable({
                 <td className="phase-date-cell whitespace-nowrap px-2 py-3 align-top">
                   <DateField
                     value={row.stop}
-                    disabled={!row.on}
+                    disabled={dateLocked}
                     aria-label={`${row.name} stop`}
                     onChange={(stop) => onPatch(row.id, { stop })}
                   />

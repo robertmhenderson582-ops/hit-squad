@@ -52,16 +52,16 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
-    assert.equal(DESK_VERSION, "1.30.0");
-    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.30");
-    assert.equal(DESK_THREAD_ID, "th-desk-v1.30");
+    assert.equal(DESK_VERSION, "1.31.0");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.31");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.31");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /sent messages no longer appear twice/);
-    assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
+    assert.match(TESTER_WHATS_NEW, /Job setup calendars stay on the start dates after you set a phase stop/);
+    assert.equal(/poll|dedupe|optimistic|startLocked|cascade|DateField/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|testers|Follow|apcontrolsllc|seat|James|CBI|View as/i.test(TESTER_WHATS_NEW), false);
-    assert.match(OWNER_WHATS_NEW, /sent messages no longer appear twice/);
-    assert.match(OWNER_WHATS_NEW, /poll/);
+    assert.match(OWNER_WHATS_NEW, /Job setup calendars stay on the start dates after you set a phase stop/);
+    assert.match(OWNER_WHATS_NEW, /startLocked/);
     assert.equal(/View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
       /password|passwords|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
@@ -101,24 +101,24 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.30 onto an existing Hit Squad desk thread after V1.29", () => {
-    assert.equal(seenKey("tester-x", "1.29.0"), `${WHATS_NEW_MARK_PREFIX}1.29.0:tester-x`);
-    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.30.0:tester-x`);
-    assert.notEqual(seenKey("tester-x", "1.29.0"), seenKey("tester-x"));
+  it("appends V1.31 onto an existing Hit Squad desk thread after V1.30", () => {
+    assert.equal(seenKey("tester-x", "1.30.0"), `${WHATS_NEW_MARK_PREFIX}1.30.0:tester-x`);
+    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.31.0:tester-x`);
+    assert.notEqual(seenKey("tester-x", "1.30.0"), seenKey("tester-x"));
 
     const prior = [
       {
-        id: "th-desk-v1.29",
+        id: "th-desk-v1.30",
         personId: DESK_PERSON_ID,
         name: "Hit Squad",
         company: "Project Controls",
         unread: 0,
         messages: [
           {
-            id: "im-desk-1.29.0",
+            id: "im-desk-1.30.0",
             from: "them" as const,
             author: "Desk",
-            text: "Hit Squad Project Controls V1.29",
+            text: "Hit Squad Project Controls V1.30",
             photo: null,
             sentAt: "",
             readAt: "seen",
@@ -135,16 +135,16 @@ describe("inbox what's-new", () => {
     assert.deepEqual(applyWhatsNew(prior, "tester-joseph-append", false, "josephmhenderson2002@gmail.com"), prior);
   });
 
-  it("posts the V1.30 Inbox note for testers and owner", () => {
-    assert.equal(DESK_VERSION, "1.30.0");
+  it("posts the V1.31 Inbox note for testers and owner", () => {
+    assert.equal(DESK_VERSION, "1.31.0");
     assert.equal(NEXT_SHIP_VERSION, DESK_VERSION);
     assert.equal(NEXT_SHIP_VERSION_LABEL, DESK_VERSION_LABEL);
     assert.equal(TESTER_NEXT_SHIP_DRAFT, TESTER_WHATS_NEW);
     assert.equal(OWNER_NEXT_SHIP_DRAFT, OWNER_WHATS_NEW);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(OWNER_WHATS_NEW, /poll/);
-    assert.match(TESTER_WHATS_NEW, /sent messages no longer appear twice/);
-    assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
+    assert.match(OWNER_WHATS_NEW, /startLocked/);
+    assert.match(TESTER_WHATS_NEW, /Job setup calendars stay on the start dates after you set a phase stop/);
+    assert.equal(/poll|dedupe|optimistic|startLocked|cascade|DateField/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|Follow|apcontrolsllc|seat|security|vault|other users|James|CBI|Stephanie|View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
       /password|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
@@ -152,10 +152,10 @@ describe("inbox what's-new", () => {
       ),
       false,
     );
-    const live = applyWhatsNew([], "tester-v130-live", false, "nathanboyte@gmail.com");
-    assert.equal(live[0].id, "th-desk-v1.30");
+    const live = applyWhatsNew([], "tester-v131-live", false, "nathanboyte@gmail.com");
+    assert.equal(live[0].id, "th-desk-v1.31");
     assert.equal(live[0].messages[0]?.text, TESTER_WHATS_NEW);
-    const owner = applyWhatsNew([], "owner-v130-live", true);
+    const owner = applyWhatsNew([], "owner-v131-live", true);
     assert.equal(owner[0].messages[0]?.text, OWNER_WHATS_NEW);
   });
 });

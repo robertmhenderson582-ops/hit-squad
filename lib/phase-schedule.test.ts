@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   addUnit,
   applyOtPick,
@@ -9,10 +11,28 @@ import {
   otPicksForPhase,
   patchPhase,
   PHASE_OT_PICKS,
+  phaseDateFieldDisabled,
   setMultiUnits,
   setProjectStart,
+  sundaysInRange,
   workedDays,
 } from "./phase-schedule.ts";
+
+function readRel(rel: string) {
+  return readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+}
+
+/** Same gate DateField uses: a disabled or readOnly input never fires onChange from typing. */
+function typeStartDate(
+  disabled: boolean,
+  readOnly: boolean,
+  onChange: (value: string) => void,
+  typed: string,
+) {
+  if (disabled || readOnly) return false;
+  onChange(typed);
+  return true;
+}
 
 describe("phase schedule", () => {
   it("changing Pre stop slides Oil Out and keeps Oil Out length", () => {
@@ -153,5 +173,62 @@ describe("phase schedule", () => {
     assert.equal(off.multiUnits, false);
     assert.equal(off.units.length, 2);
     assert.equal(off.phases.find((row) => row.id === "pre")?.start, two.units[0].phases[0].start);
+  });
+
+  it("Mechanical stop does not disable later START pickers or block typed onChange", () => {
+    let state = defaultPhaseSchedule();
+    state = patchPhase(state, "pre", { start: "2027-01-11", stop: "2027-02-28", daysPerWeek: 5, hoursPerDay: 8 });
+    state = patchPhase(state, "oil-out", { stop: "2027-03-10", daysPerWeek: 7, hoursPerDay: 10 });
+    state = patchPhase(state, "mech", { stop: "2027-04-17", daysPerWeek: 7, hoursPerDay: 10 });
+    state = patchPhase(state, "oil-in", { stop: "2027-04-24", daysPerWeek: 7, hoursPerDay: 10 });
+    state = patchPhase(state, "post", { stop: "2027-05-02", daysPerWeek: 5, hoursPerDay: 8 });
+
+    const byId = Object.fromEntries(state.phases.map((row) => [row.id, row]));
+    assert.equal(byId.pre.start, "2027-01-11");
+    assert.equal(byId.pre.stop, "2027-02-28");
+    assert.equal(byId["oil-out"].start, "2027-03-01");
+    assert.equal(byId["oil-out"].stop, "2027-03-10");
+    assert.equal(byId.mech.start, "2027-03-11");
+    assert.equal(byId.mech.stop, "2027-04-17");
+    assert.equal(byId["oil-in"].start, "2027-04-18");
+    assert.equal(byId["oil-in"].stop, "2027-04-24");
+    assert.equal(byId.post.start, "2027-04-25");
+    assert.equal(byId.post.stop, "2027-05-02");
+
+    const sundays = sundaysInRange(byId.mech.start, byId.mech.stop);
+    assert.equal(sundays.includes("2027-04-04"), true);
+    assert.equal(sundays.includes("2027-04-11"), true);
+
+    for (const id of ["oil-out", "mech", "oil-in", "post"] as const) {
+      const row = byId[id];
+      assert.equal(row.on, true, id);
+      assert.equal(phaseDateFieldDisabled(row), false, `${id} start must stay enabled after Mechanical stop`);
+      let typed = "";
+      const fired = typeStartDate(phaseDateFieldDisabled(row), false, (value) => {
+        typed = value;
+      }, "2027-06-15");
+      assert.equal(fired, true, `${id} START must accept typed MM/DD/YYYY`);
+      assert.equal(typed, "2027-06-15");
+      const afterType = patchPhase(state, id, { start: typed });
+      assert.equal(afterType.phases.find((item) => item.id === id)?.start, typed);
+    }
+
+    const later = patchPhase(state, "mech", { stop: "2027-04-20" });
+    assert.equal(later.phases.find((row) => row.id === "oil-in")?.start, "2027-04-21");
+    assert.equal(phaseDateFieldDisabled(later.phases.find((row) => row.id === "mech")!), false);
+    assert.equal(phaseDateFieldDisabled(later.phases.find((row) => row.id === "oil-in")!), false);
+
+    const ui = readRel("../components/PhaseSchedule.tsx");
+    assert.doesNotMatch(ui, /startLocked|firstOn/);
+    assert.match(ui, /phaseDateFieldDisabled/);
+    assert.match(ui, /disabled=\{dateLocked\}/);
+    assert.match(ui, /onChange=\{\(start\) => onPatch\(row\.id, \{ start \}\)\}/);
+    assert.match(ui, /Tap a Sunday to skip it/);
+
+    const field = readRel("../components/DateField.tsx");
+    assert.doesNotMatch(field, /readOnly/);
+    assert.match(field, /onChange=\{\(event\) => onChange\(event\.target\.value\)\}/);
+    assert.match(field, /Open calendar/);
+    assert.match(field, /disabled \? null/);
   });
 });
