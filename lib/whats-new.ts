@@ -1,31 +1,20 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.28.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.28";
+export const DESK_VERSION = "1.28.1";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.28.1";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.28";
+export const DESK_THREAD_ID = "th-desk-v1.28.1";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.28",
-  "• Duplicate a Crew position keeps the same hours and the same title.",
-  "• Archive and Delete on estimate cards work.",
-  "• Job status (Estimate / Submitted / Awarded) lives under Job setup, with a confirm when you move between them.",
-  "• Project Managers can look up wage rates.",
-  "• Crew cards show a grand total at the bottom.",
-  "• Inbox: you, Nathan, Benny, Shane, Wendell, and Chance can message each other in the program.",
+  "Hit Squad Project Controls V1.28.1",
+  "• Inbox: compose stays open when you type. You can message Nathan without getting kicked to Inbox home.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.28",
-  "• Duplicate a Crew position keeps the same hours and the same title.",
-  "• Archive and Delete on estimate cards work.",
-  "• Job status (Estimate / Submitted / Awarded) lives under Job setup, with a confirm when you move between them.",
-  "• Project Managers can look up wage rates.",
-  "• Crew cards show a grand total at the bottom.",
-  "• People you add now show on View as / Follow.",
-  "• Inbox: you, Nathan, Benny, Shane, Wendell, and Chance can message each other in the program.",
+  "Hit Squad Project Controls V1.28.1",
+  "• Inbox: compose stays open when you type. You can message Nathan without getting kicked to Inbox home.",
 ].join("\n");
 
 /** Same as the live V1.28 note. Kept so older imports still resolve. */

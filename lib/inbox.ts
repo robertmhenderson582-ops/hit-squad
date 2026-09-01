@@ -1,4 +1,5 @@
 import { inboxContactsFor, isInboxCircleEmail } from "./inbox-circle.ts";
+import { DESK_PERSON_ID } from "./whats-new.ts";
 
 export const INBOX_STORE_PREFIX = "hs_inbox_v1:";
 export const OWNER_CONTACT = {
@@ -170,4 +171,34 @@ export function contactsFor(ownerChrome: boolean, email = ""): InboxPerson[] {
   }
   if (ownerChrome) return OWNER_CONTACTS;
   return [OWNER_CONTACT];
+}
+
+/**
+ * Merge a server poll into the open desk without kicking compose home.
+ * Desk-bot stays local. Remote peers win when the person already exists
+ * on the server. A brand-new local compose (Nathan, empty messages) is
+ * not on the server yet, so it must survive the poll. If the server later
+ * returns that same person under a stable id, remap activeId so the
+ * textarea stays on that conversation.
+ */
+export function reconcileInboxDesk(
+  local: InboxThread[],
+  remote: InboxThread[],
+  activeId: string | null,
+): { threads: InboxThread[]; activeId: string | null } {
+  const desk = local.filter((thread) => thread.personId === DESK_PERSON_ID);
+  const remotePeers = remote.filter((thread) => thread.personId !== DESK_PERSON_ID);
+  const remotePersonIds = new Set(remotePeers.map((thread) => thread.personId));
+  const localOnlyPeers = local.filter(
+    (thread) => thread.personId !== DESK_PERSON_ID && !remotePersonIds.has(thread.personId),
+  );
+  const threads = [...desk, ...remotePeers, ...localOnlyPeers];
+
+  if (!activeId) return { threads, activeId: null };
+  if (threads.some((thread) => thread.id === activeId)) return { threads, activeId };
+
+  const lost = local.find((thread) => thread.id === activeId);
+  if (!lost) return { threads, activeId: null };
+  const remapped = threads.find((thread) => thread.personId === lost.personId);
+  return { threads, activeId: remapped?.id ?? null };
 }
