@@ -5,7 +5,7 @@ import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { CrewPhaseCards } from "@/components/CrewPhaseCards";
 import { GripToPan } from "@/components/GripToPan";
 import { useEstimatePackage } from "@/components/EstimatePackage";
-import { clampPerDiem, type CalendarRange } from "@/lib/craft-labor";
+import { applyExtraRangeEnvelopes, clampPerDiem, type CalendarRange } from "@/lib/craft-labor";
 import {
   AFFILIATE_LABEL,
   SUB_CARD_KINDS,
@@ -601,11 +601,14 @@ function SubVendorCard({
         if (row.id !== rowId) return row;
         return {
           ...row,
-          ranges: row.ranges.map((range) => {
-            if (range.id !== rangeId) return range;
-            const next = { ...range, ...patch };
-            return clampPerDiem(next, next.shift ?? row.shift);
-          }),
+          ranges: applyExtraRangeEnvelopes(
+            row.ranges.map((range) => {
+              if (range.id !== rangeId) return range;
+              const next = { ...range, ...patch };
+              return clampPerDiem(next, next.shift ?? row.shift);
+            }),
+            pack.schedule.phases,
+          ),
         };
       }),
     });

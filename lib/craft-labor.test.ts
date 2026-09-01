@@ -14,10 +14,19 @@ import {
   craftRowFromPhases,
   duplicateCraftRow,
   duplicateSupportLine,
+  applyExtraRangeEnvelopes,
+  clampExtraRangeDates,
+  extraRangeEnvelope,
   extraRangeFromPhase,
+  extraRangeIsValid,
   hydrateSupportLine,
+  isListedRangeDescription,
   nextUnitId,
   phaseRangesOverlap,
+  RANGE_DESCRIPTION_OTHER,
+  RANGE_DESCRIPTION_REASONS,
+  rangeDescriptionChoice,
+  rangeDescriptionLabel,
   rangesFromPhases,
   syncCraftRows,
   syncSupportRows,
@@ -443,5 +452,212 @@ describe("duplicate position keeps the same ST/OT/DT/PD/cost", () => {
     assert.equal(grid.includes("assignCraftPosition(blankCraftRow()"), false);
     const support = readFileSync(fileURLToPath(new URL("../components/SupportCrewCard.tsx", import.meta.url)), "utf8");
     assert.match(support, /duplicateSupportLine/);
+  });
+});
+
+function splitKey(hours: { st: number; ot: number; dt: number; pd: number; hours: number }) {
+  return `${hours.st}/${hours.ot}/${hours.dt}/${hours.pd}/${hours.hours}`;
+}
+
+function insidePreComeback(template: ReturnType<typeof extraRangeFromPhase>) {
+  return {
+    ...template,
+    start: "2026-08-24",
+    end: "2026-08-28",
+    hoursPerShift: 8.5,
+    headcount: 1,
+    perDiemPeople: 1,
+    nightHeadcount: 1,
+    nightPerDiemPeople: 0,
+    days: [false, true, true, true, true, true, false],
+    shift: "Days" as const,
+  };
+}
+
+describe("extra range description is a label only", () => {
+  it("locks the reason list and saves custom Other text", () => {
+    assert.deepEqual([...RANGE_DESCRIPTION_REASONS], [
+      "Hiring progression",
+      "Training",
+      "Onboarding/Learning",
+    ]);
+    assert.equal(RANGE_DESCRIPTION_OTHER, "Other");
+    assert.equal(isListedRangeDescription("Onboarding/Learning"), true);
+    assert.equal(rangeDescriptionChoice("Onboarding/Learning"), "Onboarding/Learning");
+    assert.equal(rangeDescriptionChoice("come back after sit-out"), RANGE_DESCRIPTION_OTHER);
+    assert.equal(rangeDescriptionLabel("  Training  "), "Training");
+    assert.equal(rangeDescriptionChoice(""), "");
+    assert.equal(rangeDescriptionChoice("", true), RANGE_DESCRIPTION_OTHER);
+  });
+
+  it("first range without a description still totals 268 ST / 76 OT / 24 DT / 36 PD", () => {
+    const phases = defaultPhases();
+    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    assert.equal(row.ranges.every((range) => !range.description), true);
+    const hours = crewHours(row);
+    assert.equal(splitKey(hours), "268/76/24/36/368");
+    const unlabeled = {
+      ...row,
+      ranges: row.ranges.map(({ description: _drop, ...range }) => range),
+    };
+    assert.equal(splitKey(crewHours(unlabeled)), "268/76/24/36/368");
+  });
+
+  it("extra range still starts empty so hours do not copy from the first range", () => {
+    const phases = defaultPhases();
+    const oil = phases.find((row) => row.id === "oil-out");
+    assert.ok(oil);
+    const row = assignCraftPosition(blankCraftRow(), "Pipefitter Journeyman", phases);
+    const first = row.ranges.find((range) => range.phaseId === "oil-out");
+    assert.ok(first);
+    const before = crewHours(row);
+    const extra = extraRangeFromPhase(oil, first);
+    assert.equal(extra.start, "");
+    assert.equal(extra.end, "");
+    assert.equal(extra.hoursPerShift, 0);
+    assert.equal(extra.description, "");
+    row.ranges.push(extra);
+    assert.equal(splitKey(crewHours(row)), splitKey(before));
+  });
+
+  it("setting a description on an extra range does not change ST/OT/DT/PD", () => {
+    const phases = defaultPhases();
+    const pre = phases.find((row) => row.id === "pre");
+    assert.ok(pre);
+    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const first = row.ranges.find((range) => range.phaseId === "pre");
+    assert.ok(first);
+    const extra = insidePreComeback(extraRangeFromPhase(pre, first));
+    assert.equal(extraRangeIsValid(extra, first, pre), true);
+    const unlabeled = { ...row, ranges: [...row.ranges, extra] };
+    const listed = { ...row, ranges: [...row.ranges, { ...extra, description: "Onboarding/Learning" }] };
+    const custom = { ...row, ranges: [...row.ranges, { ...extra, description: "sit out, then come back" }] };
+    const unlabeledHours = crewHours(unlabeled);
+    assert.equal(splitKey(unlabeledHours), "308/78.5/24/41/410.5");
+    assert.equal(splitKey(crewHours(listed)), splitKey(unlabeledHours));
+    assert.equal(splitKey(crewHours(custom)), splitKey(unlabeledHours));
+    const extraSplit = computeRowHours({ ...row, ranges: [extra] }, WOOD.site, WOOD.client);
+    assert.equal(splitKey(extraSplit), "40/2.5/0/5/42.5");
+    assert.equal(
+      splitKey(computeRowHours({ ...row, ranges: [{ ...extra, description: "Training" }] }, WOOD.site, WOOD.client)),
+      "40/2.5/0/5/42.5",
+    );
+    const listedCost = shahanCrewCostAmount(listed.position, crewHours(listed));
+    assert.equal(shahanCrewCostAmount(unlabeled.position, unlabeledHours), listedCost);
+  });
+
+  it("empty extra does not double-count; overlapping dates inside the first range still bill twice", () => {
+    const phases = defaultPhases();
+    const pre = phases.find((row) => row.id === "pre");
+    assert.ok(pre);
+    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const first = row.ranges.find((range) => range.phaseId === "pre");
+    assert.ok(first);
+    const before = crewHours(row);
+    const empty = extraRangeFromPhase(pre, first);
+    empty.description = "Hiring progression";
+    assert.equal(empty.start, "");
+    assert.equal(extraRangeIsValid(empty, first, pre), true);
+    assert.equal(phaseRangesOverlap([first, empty], "pre"), false);
+    assert.equal(splitKey(crewHours({ ...row, ranges: [...row.ranges, empty] })), splitKey(before));
+
+    const extra = insidePreComeback(empty);
+    extra.description = "Hiring progression";
+    assert.equal(extraRangeIsValid(extra, first, pre), true);
+    assert.equal(phaseRangesOverlap([first, extra], "pre"), true);
+    const added = crewHours({ ...row, ranges: [...row.ranges, extra] });
+    assert.equal(added.st, before.st + 40);
+    assert.equal(added.ot, before.ot + 2.5);
+    assert.equal(added.dt, before.dt);
+    assert.equal(added.pd, before.pd + 5);
+    assert.equal(added.hours, before.hours + 42.5);
+
+    const overlap = { ...extra, start: first.start, end: first.end, hoursPerShift: first.hoursPerShift };
+    assert.equal(phaseRangesOverlap([first, overlap], "pre"), true);
+    const doubled = crewHours({ ...row, ranges: [...row.ranges, overlap] });
+    const firstOnly = computeRowHours({ ...row, ranges: [first] }, WOOD.site, WOOD.client);
+    assert.equal(doubled.st, before.st + firstOnly.st);
+    assert.equal(doubled.ot, before.ot + firstOnly.ot);
+    assert.equal(doubled.dt, before.dt + firstOnly.dt);
+    assert.equal(doubled.pd, before.pd + firstOnly.pd);
+    assert.ok(doubled.hours > before.hours);
+  });
+
+  it("extra range start before first.start or end after first.end is invalid and clamps", () => {
+    const phases = defaultPhases();
+    const pre = phases.find((row) => row.id === "pre");
+    assert.ok(pre);
+    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const first = row.ranges.find((range) => range.phaseId === "pre");
+    assert.ok(first);
+    const envelope = extraRangeEnvelope(first, pre);
+    assert.deepEqual(envelope, { minStart: "2026-08-21", maxEnd: "2026-09-03" });
+    const early = { ...insidePreComeback(extraRangeFromPhase(pre, first)), start: "2026-08-20" };
+    const late = { ...insidePreComeback(extraRangeFromPhase(pre, first)), end: "2026-09-04" };
+    const after = { ...insidePreComeback(extraRangeFromPhase(pre, first)), start: "2027-02-01", end: "2027-02-28" };
+    assert.equal(extraRangeIsValid(early, first, pre), false);
+    assert.equal(extraRangeIsValid(late, first, pre), false);
+    assert.equal(extraRangeIsValid(after, first, pre), false);
+    assert.equal(clampExtraRangeDates(early, envelope).start, "2026-08-21");
+    assert.equal(clampExtraRangeDates(late, envelope).end, "2026-09-03");
+    const clampedAfter = clampExtraRangeDates(after, envelope);
+    assert.equal(clampedAfter.start, "2026-08-21");
+    assert.equal(clampedAfter.end, "2026-09-03");
+    assert.equal(extraRangeIsValid(insidePreComeback(extraRangeFromPhase(pre, first)), first, pre), true);
+
+    const widerFirst = { ...first, start: "2026-08-01", end: "2026-09-15" };
+    const intersected = extraRangeEnvelope(widerFirst, pre);
+    assert.deepEqual(intersected, { minStart: "2026-08-21", maxEnd: "2026-09-03" });
+
+    row.ranges.push(after);
+    const synced = applyExtraRangeEnvelopes(syncCraftRows([row], phases)[0].ranges, phases);
+    const extras = synced.filter((range) => range.phaseId === "pre");
+    assert.equal(extras.length, 2);
+    assert.equal(extras[1].start >= extras[0].start, true);
+    assert.equal(extras[1].end <= extras[0].end, true);
+  });
+
+  it("keeps the description through sync and Duplicate, and Remove drops that stretch", () => {
+    const phases = defaultPhases();
+    const pre = phases.find((row) => row.id === "pre");
+    assert.ok(pre);
+    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const extra = insidePreComeback(extraRangeFromPhase(pre, row.ranges.find((range) => range.phaseId === "pre")));
+    extra.description = "Onboarding/Learning";
+    row.ranges.push(extra);
+    const synced = syncCraftRows([row], phases)[0];
+    const pres = synced.ranges.filter((range) => range.phaseId === "pre");
+    assert.equal(pres.length, 2);
+    assert.equal(pres[1].description, "Onboarding/Learning");
+    assert.equal(pres[1].start, "2026-08-24");
+    assert.equal(pres[1].end, "2026-08-28");
+    const copy = duplicateCraftRow(synced);
+    assert.equal(copy.ranges.filter((range) => range.phaseId === "pre")[1]?.description, "Onboarding/Learning");
+    assert.equal(splitKey(crewHours(copy)), splitKey(crewHours(synced)));
+    const removed = { ...synced, ranges: synced.ranges.filter((range) => range.id !== pres[1].id) };
+    assert.equal(removed.ranges.filter((range) => range.phaseId === "pre").length, 1);
+    assert.equal(splitKey(crewHours(removed)), "268/76/24/36/368");
+  });
+
+  it("Staff through Support share the Description control and extra-range envelope on CrewPhaseCards", () => {
+    const cards = readFileSync(fileURLToPath(new URL("../components/CrewPhaseCards.tsx", import.meta.url)), "utf8");
+    assert.match(cards, /Description/);
+    assert.match(cards, /Hiring progression/);
+    assert.match(cards, /Onboarding\/Learning/);
+    assert.match(cards, /RANGE_DESCRIPTION_OTHER/);
+    assert.match(cards, /showDescription/);
+    assert.match(cards, /line-chip/);
+    assert.match(cards, /extraRangeEnvelope/);
+    assert.match(cards, /min=\{envelope\?\.minStart\}/);
+    assert.match(cards, /max=\{envelope\?\.maxEnd\}/);
+    const field = readFileSync(fileURLToPath(new URL("../components/DateField.tsx", import.meta.url)), "utf8");
+    assert.match(field, /min=\{min \|\| undefined\}/);
+    assert.match(field, /max=\{max \|\| undefined\}/);
+    const grid = readFileSync(fileURLToPath(new URL("../components/CraftLaborGrid.tsx", import.meta.url)), "utf8");
+    const support = readFileSync(fileURLToPath(new URL("../components/SupportCrewCard.tsx", import.meta.url)), "utf8");
+    assert.match(grid, /CrewPhaseCards/);
+    assert.match(support, /CrewPhaseCards/);
+    assert.match(grid, /applyExtraRangeEnvelopes/);
+    assert.match(support, /applyExtraRangeEnvelopes/);
   });
 });

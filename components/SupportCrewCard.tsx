@@ -9,6 +9,7 @@ import { useEstimatePackage } from "@/components/EstimatePackage";
 import { CREW_LANES } from "@/lib/crew-lanes";
 import {
   addSupportLine,
+  applyExtraRangeEnvelopes,
   assignSupportBilledAs,
   assignSupportDuty,
   clampPerDiem,
@@ -112,11 +113,14 @@ export function SupportCrewCard({
         if (hydrated.id !== rowId) return hydrated;
         return {
           ...hydrated,
-          ranges: hydrated.ranges.map((range) => {
-            if (range.id !== rangeId) return range;
-            const next = { ...range, ...patch };
-            return clampPerDiem(next, next.shift ?? hydrated.shift);
-          }),
+          ranges: applyExtraRangeEnvelopes(
+            hydrated.ranges.map((range) => {
+              if (range.id !== rangeId) return range;
+              const next = { ...range, ...patch };
+              return clampPerDiem(next, next.shift ?? hydrated.shift);
+            }),
+            phases,
+          ),
         };
       }),
     );

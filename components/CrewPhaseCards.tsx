@@ -1,20 +1,29 @@
 "use client";
 
+import { useState } from "react";
 import { DateField } from "@/components/DateField";
 import { GripToPan } from "@/components/GripToPan";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import {
   CRAFT_SHIFTS,
+  RANGE_DESCRIPTION_OTHER,
+  RANGE_DESCRIPTION_REASONS,
   WEEKDAYS,
+  clampExtraRangeDates,
   clampPerDiem,
+  extraRangeEnvelope,
   extraRangeFromPhase,
+  extraSharesFirstEnvelope,
   nextUnitId,
   phaseRangesOverlap,
   nightPerDiemCap,
   perDiemCap,
+  rangeDescriptionChoice,
+  rangeDescriptionLabel,
   type CalendarRange,
   type CraftRow,
   type CraftShift,
+  type ExtraRangeEnvelope,
 } from "@/lib/craft-labor";
 import { computeRangeHours } from "@/lib/hours-clock";
 import {
@@ -105,6 +114,30 @@ function PhaseWindowCard({
 }) {
   const off = ranges.length === 0 && !phase.on;
   const overlap = phaseRangesOverlap(ranges, phase.id);
+  const first = ranges[0];
+  const envelope = extraRangeEnvelope(first, phase);
+
+  function patchRange(range: CalendarRange, index: number, patch: Partial<CalendarRange>) {
+    if (index === 0) {
+      onPatchRange(range.id, patch);
+      if (patch.start === undefined && patch.end === undefined) return;
+      const nextFirst = { ...range, ...patch };
+      const nextEnvelope = extraRangeEnvelope(nextFirst, phase);
+      for (const extra of ranges.slice(1)) {
+        if (!extraSharesFirstEnvelope(extra, nextFirst)) continue;
+        const clamped = clampExtraRangeDates(extra, nextEnvelope);
+        if (clamped.start !== extra.start || clamped.end !== extra.end) {
+          onPatchRange(extra.id, { start: clamped.start, end: clamped.end });
+        }
+      }
+      return;
+    }
+    if (first && extraSharesFirstEnvelope(range, first)) {
+      onPatchRange(range.id, clampExtraRangeDates({ ...range, ...patch }, envelope));
+      return;
+    }
+    onPatchRange(range.id, patch);
+  }
 
   return (
     <article className={`crew-phase-card ${off ? "is-off" : ""}`}>
@@ -123,8 +156,10 @@ function PhaseWindowCard({
                 client={client}
                 phaseOtAfter8={phase.otAfter8}
                 canRemove={index > 0}
+                showDescription
+                envelope={index > 0 && first && extraSharesFirstEnvelope(range, first) ? envelope : null}
                 units={units}
-                onPatch={(patch) => onPatchRange(range.id, patch)}
+                onPatch={(patch) => patchRange(range, index, patch)}
                 onRemove={() => onRemoveRange(range.id)}
               />
             ))}
@@ -161,6 +196,8 @@ function CalendarPattern({
   client,
   phaseOtAfter8,
   canRemove,
+  showDescription,
+  envelope,
   units,
   onPatch,
   onRemove,
@@ -171,6 +208,8 @@ function CalendarPattern({
   client: string;
   phaseOtAfter8: boolean;
   canRemove: boolean;
+  showDescription: boolean;
+  envelope: ExtraRangeEnvelope | null;
   units: JobUnit[];
   onPatch: (patch: Partial<CalendarRange>) => void;
   onRemove: () => void;
@@ -210,16 +249,28 @@ function CalendarPattern({
     });
   }
 
+  const label = rangeDescriptionLabel(range.description);
+
   return (
     <div className="calendar-pattern space-y-2">
-      {canRemove ? (
-        <div className="flex justify-end">
-          <button type="button" onClick={onRemove} className="text-xs text-[#5b6f73] underline">
-            Remove range
-          </button>
+      {canRemove || label ? (
+        <div className="flex items-center justify-between gap-2">
+          {label ? (
+            <span className="line-chip px-2 py-0.5 text-xs" title="Range description">
+              {label}
+            </span>
+          ) : (
+            <span />
+          )}
+          {canRemove ? (
+            <button type="button" onClick={onRemove} className="text-xs text-[#5b6f73] underline">
+              Remove range
+            </button>
+          ) : null}
         </div>
       ) : null}
       <p className="text-xs text-[#163038]">Headcount × shift hours on each selected weekday in the range.</p>
+      {showDescription ? <RangeDescriptionField value={range.description} onChange={(description) => onPatch({ description })} /> : null}
       {units.length > 0 ? (
         <label className="text-xs">
           Unit
@@ -247,6 +298,8 @@ function CalendarPattern({
           Start
           <DateField
             value={range.start}
+            min={envelope?.minStart}
+            max={envelope?.maxEnd}
             className="mt-1"
             aria-label="Start"
             onChange={(start) => onPatch({ start })}
@@ -256,6 +309,8 @@ function CalendarPattern({
           End
           <DateField
             value={range.end}
+            min={envelope?.minStart}
+            max={envelope?.maxEnd}
             className="mt-1"
             aria-label="End"
             onChange={(end) => onPatch({ end: end < range.start ? range.start : end })}
@@ -391,6 +446,58 @@ function CalendarPattern({
       <p className="text-[11px] text-[#5b6f73]">
         {split.st} ST · {split.ot} OT · {split.dt} DT · {split.pd} PD
       </p>
+    </div>
+  );
+}
+
+function RangeDescriptionField({
+  value,
+  onChange,
+}: {
+  value?: string;
+  onChange: (description: string) => void;
+}) {
+  const [wantOther, setWantOther] = useState(false);
+  const choice = rangeDescriptionChoice(value, wantOther);
+  const custom = choice === RANGE_DESCRIPTION_OTHER;
+
+  return (
+    <div className="space-y-1">
+      <label className="text-xs">
+        Description
+        <select
+          value={choice}
+          aria-label="Description"
+          onChange={(event) => {
+            const next = event.target.value;
+            if (next === RANGE_DESCRIPTION_OTHER) {
+              setWantOther(true);
+              if (rangeDescriptionChoice(value) !== RANGE_DESCRIPTION_OTHER) onChange("");
+              return;
+            }
+            setWantOther(false);
+            onChange(next);
+          }}
+          className="paper-field mt-1"
+        >
+          <option value="">Select a reason</option>
+          {RANGE_DESCRIPTION_REASONS.map((reason) => (
+            <option key={reason} value={reason}>
+              {reason}
+            </option>
+          ))}
+          <option value={RANGE_DESCRIPTION_OTHER}>{RANGE_DESCRIPTION_OTHER}</option>
+        </select>
+      </label>
+      {custom ? (
+        <input
+          value={value ?? ""}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Your own words"
+          aria-label="Custom description"
+          className="paper-field w-full"
+        />
+      ) : null}
     </div>
   );
 }
