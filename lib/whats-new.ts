@@ -1,24 +1,23 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.31.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.31";
+export const DESK_VERSION = "1.30.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.30";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.31";
+export const DESK_THREAD_ID = "th-desk-v1.30";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.31",
-  "• Job setup calendars stay on the start dates after you set a phase stop.",
+  "Hit Squad Project Controls V1.30",
+  "• Inbox: sent messages no longer appear twice.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.31",
-  "• Job setup calendars stay on the start dates after you set a phase stop.",
-  "• Cause: later START DateFields used startLocked (only the first ON phase start was enabled), so after Mechanical stop cascaded later starts the picker chrome was omitted and the inputs were disabled.",
+  "Hit Squad Project Controls V1.30",
+  "• Inbox: sent messages no longer appear twice. A local send and the 4s poll copy of the same message no longer stack as two bubbles.",
 ].join("\n");
 
-/** Same as the live V1.31 note. Kept so older imports still resolve. */
+/** Same as the live V1.30 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;
