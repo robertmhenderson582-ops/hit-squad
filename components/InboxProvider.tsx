@@ -5,6 +5,7 @@ import { playInboxChime, unlockInboxAudio } from "@/lib/chime";
 import {
   appendInboxMessage,
   contactsFor,
+  makeMessage,
   omitHiddenPersonThreads,
   previewOf,
   readInboxHides,
