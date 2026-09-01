@@ -295,7 +295,12 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       void deskFetch("/api/desk/inbox", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ personId: active.personId, text: trimmed, photo: photo ?? null }),
+        body: JSON.stringify({
+          personId: active.personId,
+          text: trimmed,
+          photo: photo ?? null,
+          messageId: pending.id,
+        }),
       })
         .then(async (response) => {
           if (!response.ok) throw new Error("send-failed");

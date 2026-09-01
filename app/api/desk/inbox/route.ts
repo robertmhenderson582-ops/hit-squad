@@ -41,6 +41,7 @@ export async function POST(request: Request) {
     personId?: string;
     text?: string;
     photo?: string | null;
+    messageId?: string;
     readPersonId?: string;
     hideMessageId?: string;
     hidePersonId?: string;
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
     toEmail: recipient.email,
     text: body.text,
     photo: body.photo,
+    id: body.messageId,
   });
   if (!posted.ok) return NextResponse.json({ error: posted.error }, { status: posted.status });
   return NextResponse.json({

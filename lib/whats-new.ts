@@ -1,24 +1,23 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.29.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.29";
+export const DESK_VERSION = "1.30.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.30";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.29";
+export const DESK_THREAD_ID = "th-desk-v1.30";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.29",
-  "• Inbox: a message you send actually shows up for the other person. Deletes stay gone.",
+  "Hit Squad Project Controls V1.30",
+  "• Inbox: sent messages no longer appear twice.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.29",
-  "• Inbox: a message you send actually shows up for the other person. Deletes stay gone.",
-  "• Settings → Security password change now sticks.",
+  "Hit Squad Project Controls V1.30",
+  "• Inbox: sent messages no longer appear twice. A local send and the 4s poll copy of the same message no longer stack as two bubbles.",
 ].join("\n");
 
-/** Same as the live V1.29 note. Kept so older imports still resolve. */
+/** Same as the live V1.30 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;
