@@ -20,12 +20,16 @@ export function DateField({
   onChange,
   disabled,
   className,
+  min,
+  max,
   "aria-label": ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
   className?: string;
+  min?: string;
+  max?: string;
   "aria-label"?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -36,6 +40,8 @@ export function DateField({
         ref={inputRef}
         type="date"
         value={value}
+        min={min || undefined}
+        max={max || undefined}
         disabled={disabled}
         aria-label={ariaLabel}
         onChange={(event) => onChange(event.target.value)}

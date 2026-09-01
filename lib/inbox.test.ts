@@ -77,7 +77,7 @@ describe("inbox demo wipe", () => {
     const stored = persisted.threads ?? [];
     assert.equal(stored.some((thread) => (DEMO_IDS as readonly string[]).includes(thread.id)), false);
     assert.equal(stored.length, 1);
-    assert.equal(stored[0].id, "th-desk-v1.30");
+    assert.equal(stored[0].id, "th-desk-v1.31");
   });
 
   it("tester empty store stays empty (never had the demo threads)", () => {
@@ -88,7 +88,7 @@ describe("inbox demo wipe", () => {
     const note = deskWhatsNewThread(true);
     const cleaned = stripDemoThreads([...ownerDemoThreads(), note]);
     assert.equal(cleaned.length, 1);
-    assert.equal(cleaned[0].id, "th-desk-v1.30");
+    assert.equal(cleaned[0].id, "th-desk-v1.31");
     assert.equal(stripDemoThreads([note]).length, 1);
   });
 
@@ -121,19 +121,19 @@ describe("inbox demo wipe", () => {
     assert.deepEqual(omitHiddenPersonThreads([note, leftover], hides.personIds), [note]);
   });
 
-  it("Desk note stays V1.30 and tester-safe", () => {
-    assert.equal(DESK_VERSION, "1.30.0");
+  it("Desk note stays V1.31 and tester-safe", () => {
+    assert.equal(DESK_VERSION, "1.31.0");
     const tester = applyWhatsNew([deskWhatsNewThread(false)], "tester-note", false, "nathanboyte@gmail.com");
     assert.equal(tester.length, 1);
-    assert.equal(tester[0].id, "th-desk-v1.30");
+    assert.equal(tester[0].id, "th-desk-v1.31");
     const testerBody = tester[0].messages.map((message) => message.text).join(" ");
-    assert.match(testerBody, /V1\.30/);
-    assert.match(testerBody, /sent messages no longer appear twice/);
+    assert.match(testerBody, /V1\.31/);
+    assert.match(testerBody, /labeled/);
     assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Madison|Joseph|Stephanie|password|security/i);
     const owner = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
-    assert.equal(owner[0].id, "th-desk-v1.30");
+    assert.equal(owner[0].id, "th-desk-v1.31");
     const ownerBody = owner[0].messages.map((message) => message.text).join(" ");
-    assert.match(ownerBody, /sent messages no longer appear twice/);
-    assert.match(ownerBody, /poll/);
+    assert.match(ownerBody, /Description/);
+    assert.match(ownerBody, /clamp/);
   });
 });

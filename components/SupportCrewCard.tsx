@@ -9,9 +9,11 @@ import { useEstimatePackage } from "@/components/EstimatePackage";
 import { CREW_LANES } from "@/lib/crew-lanes";
 import {
   addSupportLine,
+  applyExtraRangeEnvelopes,
   assignSupportBilledAs,
   assignSupportDuty,
   clampPerDiem,
+  setPhaseOff,
   duplicateSupportLine,
   hydrateSupportLine,
   syncSupportRows,
@@ -112,11 +114,14 @@ export function SupportCrewCard({
         if (hydrated.id !== rowId) return hydrated;
         return {
           ...hydrated,
-          ranges: hydrated.ranges.map((range) => {
-            if (range.id !== rangeId) return range;
-            const next = { ...range, ...patch };
-            return clampPerDiem(next, next.shift ?? hydrated.shift);
-          }),
+          ranges: applyExtraRangeEnvelopes(
+            hydrated.ranges.map((range) => {
+              if (range.id !== rangeId) return range;
+              const next = { ...range, ...patch };
+              return clampPerDiem(next, next.shift ?? hydrated.shift);
+            }),
+            phases,
+          ),
         };
       }),
     );
@@ -202,6 +207,9 @@ export function SupportCrewCard({
                   onRemoveRange={(rangeId) =>
                     patchRow(row.id, { ...row, ranges: row.ranges.filter((range) => range.id !== rangeId) })
                   }
+                  onSetPhaseOff={(phaseId, off) =>
+                    patchRow(row.id, { ...row, ranges: setPhaseOff(row.ranges, phaseId, off) })
+                  }
                   onDuplicate={() => duplicatePosition(row)}
                   onRemove={() => void remove(row)}
                 />
@@ -242,6 +250,7 @@ function SupportAccordionRow({
   onPatchRange,
   onAddRange,
   onRemoveRange,
+  onSetPhaseOff,
   onDuplicate,
   onRemove,
 }: {
@@ -255,6 +264,7 @@ function SupportAccordionRow({
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
   onAddRange: (range: CalendarRange) => void;
   onRemoveRange: (rangeId: string) => void;
+  onSetPhaseOff: (phaseId: string, off: boolean) => void;
   onDuplicate: () => void;
   onRemove: () => void;
 }) {
@@ -369,6 +379,7 @@ function SupportAccordionRow({
               onPatchRange={onPatchRange}
               onAddRange={onAddRange}
               onRemoveRange={onRemoveRange}
+              onSetPhaseOff={onSetPhaseOff}
             />
           </td>
         </tr>

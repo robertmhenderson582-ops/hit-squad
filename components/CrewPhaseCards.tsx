@@ -1,22 +1,33 @@
 "use client";
 
+import { useState } from "react";
 import { DateField } from "@/components/DateField";
+import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { GripToPan } from "@/components/GripToPan";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import {
   CRAFT_SHIFTS,
+  RANGE_DESCRIPTION_OTHER,
+  RANGE_DESCRIPTION_REASONS,
   WEEKDAYS,
+  clampExtraRangeDates,
   clampPerDiem,
+  extraRangeEnvelope,
   extraRangeFromPhase,
+  extraSharesFirstEnvelope,
   nextUnitId,
+  phaseIsOff,
   phaseRangesOverlap,
   nightPerDiemCap,
   perDiemCap,
+  rangeDescriptionChoice,
+  rangeDescriptionLabel,
   type CalendarRange,
   type CraftRow,
   type CraftShift,
+  type ExtraRangeEnvelope,
 } from "@/lib/craft-labor";
-import { computeRangeHours } from "@/lib/hours-clock";
+import { computeRangeHours, computeRowHours } from "@/lib/hours-clock";
 import {
   PHASE_IDS,
   PHASE_NAMES,
@@ -34,6 +45,7 @@ export function CrewPhaseCards({
   onPatchRange,
   onAddRange,
   onRemoveRange,
+  onSetPhaseOff,
 }: {
   row: CraftRow;
   site: string;
@@ -41,6 +53,7 @@ export function CrewPhaseCards({
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
   onAddRange: (range: CalendarRange) => void;
   onRemoveRange: (rangeId: string) => void;
+  onSetPhaseOff: (phaseId: string, off: boolean) => void;
 }) {
   const pack = useEstimatePackage();
   const multi = Boolean(pack.schedule.multiUnits);
@@ -69,6 +82,7 @@ export function CrewPhaseCards({
               onPatchRange={onPatchRange}
               onAddRange={() => onAddRange(extraRangeFromPhase(source, ranges[0], nextId))}
               onRemoveRange={onRemoveRange}
+              onSetPhaseOff={onSetPhaseOff}
             />
           );
         })}
@@ -91,6 +105,7 @@ function PhaseWindowCard({
   onPatchRange,
   onAddRange,
   onRemoveRange,
+  onSetPhaseOff,
   units,
 }: {
   phase: PhaseRow;
@@ -101,17 +116,71 @@ function PhaseWindowCard({
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
   onAddRange: () => void;
   onRemoveRange: (rangeId: string) => void;
+  onSetPhaseOff: (phaseId: string, off: boolean) => void;
   units: JobUnit[];
 }) {
-  const off = ranges.length === 0 && !phase.on;
+  const confirmRemove = useConfirmRemove();
+  const jobOff = ranges.length === 0 && !phase.on;
+  const killed = phaseIsOff(ranges, phase.id);
+  const off = jobOff || killed;
   const overlap = phaseRangesOverlap(ranges, phase.id);
+  const first = ranges[0];
+  const envelope = extraRangeEnvelope(first, phase);
+  const phaseName = PHASE_NAMES[phase.id as PhaseId];
+
+  async function turnOff() {
+    const billed = computeRowHours({ ...row, ranges: ranges.filter((range) => !range.off) }, site, client);
+    if (billed.hours > 0) {
+      const ok = await confirmRemove(
+        `${phaseName} hours leave this position only. Restore brings them back. Job setup stays on.`,
+        { title: "Turn off this phase on this position?", confirmLabel: "Turn off" },
+      );
+      if (!ok) return;
+    }
+    onSetPhaseOff(phase.id, true);
+  }
+
+  function patchRange(range: CalendarRange, index: number, patch: Partial<CalendarRange>) {
+    if (index === 0) {
+      onPatchRange(range.id, patch);
+      if (patch.start === undefined && patch.end === undefined) return;
+      const nextFirst = { ...range, ...patch };
+      const nextEnvelope = extraRangeEnvelope(nextFirst, phase);
+      for (const extra of ranges.slice(1)) {
+        if (!extraSharesFirstEnvelope(extra, nextFirst)) continue;
+        const clamped = clampExtraRangeDates(extra, nextEnvelope);
+        if (clamped.start !== extra.start || clamped.end !== extra.end) {
+          onPatchRange(extra.id, { start: clamped.start, end: clamped.end });
+        }
+      }
+      return;
+    }
+    if (first && extraSharesFirstEnvelope(range, first)) {
+      onPatchRange(range.id, clampExtraRangeDates({ ...range, ...patch }, envelope));
+      return;
+    }
+    onPatchRange(range.id, patch);
+  }
 
   return (
     <article className={`crew-phase-card ${off ? "is-off" : ""}`}>
-      <p className={`crew-phase-bar phase-name ${PHASE_TONES[phase.id as PhaseId]}`}>{PHASE_NAMES[phase.id]}</p>
+      <p className={`crew-phase-bar phase-name ${PHASE_TONES[phase.id as PhaseId]}`}>{phaseName}</p>
       <div className="space-y-3 px-3 py-3">
-        {off ? (
+        {jobOff ? (
           <p className="text-xs text-[#5b6f73]">Off — dates stay locked. Turn it on in Job setup.</p>
+        ) : killed ? (
+          <div>
+            <p className="text-xs text-[#5b6f73]">
+              Off on this position. Hours stay saved and do not bill. Other positions and Job setup stay as they are.
+            </p>
+            <button
+              type="button"
+              onClick={() => onSetPhaseOff(phase.id, false)}
+              className="mt-2 text-sm text-steel underline underline-offset-2"
+            >
+              Restore
+            </button>
+          </div>
         ) : (
           <>
             {ranges.map((range, index) => (
@@ -123,8 +192,10 @@ function PhaseWindowCard({
                 client={client}
                 phaseOtAfter8={phase.otAfter8}
                 canRemove={index > 0}
+                showDescription
+                envelope={index > 0 && first && extraSharesFirstEnvelope(range, first) ? envelope : null}
                 units={units}
-                onPatch={(patch) => onPatchRange(range.id, patch)}
+                onPatch={(patch) => patchRange(range, index, patch)}
                 onRemove={() => onRemoveRange(range.id)}
               />
             ))}
@@ -146,6 +217,14 @@ function PhaseWindowCard({
                   the first.
                 </p>
               ) : null}
+              <button
+                type="button"
+                onClick={() => void turnOff()}
+                title="Turn this phase off on this position only."
+                className="mt-2 text-xs text-[#5b6f73] underline"
+              >
+                Off this position
+              </button>
             </div>
           </>
         )}
@@ -161,6 +240,8 @@ function CalendarPattern({
   client,
   phaseOtAfter8,
   canRemove,
+  showDescription,
+  envelope,
   units,
   onPatch,
   onRemove,
@@ -171,6 +252,8 @@ function CalendarPattern({
   client: string;
   phaseOtAfter8: boolean;
   canRemove: boolean;
+  showDescription: boolean;
+  envelope: ExtraRangeEnvelope | null;
   units: JobUnit[];
   onPatch: (patch: Partial<CalendarRange>) => void;
   onRemove: () => void;
@@ -210,16 +293,28 @@ function CalendarPattern({
     });
   }
 
+  const label = rangeDescriptionLabel(range.description);
+
   return (
     <div className="calendar-pattern space-y-2">
-      {canRemove ? (
-        <div className="flex justify-end">
-          <button type="button" onClick={onRemove} className="text-xs text-[#5b6f73] underline">
-            Remove range
-          </button>
+      {canRemove || label ? (
+        <div className="flex items-center justify-between gap-2">
+          {label ? (
+            <span className="line-chip px-2 py-0.5 text-xs" title="Range description">
+              {label}
+            </span>
+          ) : (
+            <span />
+          )}
+          {canRemove ? (
+            <button type="button" onClick={onRemove} className="text-xs text-[#5b6f73] underline">
+              Remove range
+            </button>
+          ) : null}
         </div>
       ) : null}
       <p className="text-xs text-[#163038]">Headcount × shift hours on each selected weekday in the range.</p>
+      {showDescription ? <RangeDescriptionField value={range.description} onChange={(description) => onPatch({ description })} /> : null}
       {units.length > 0 ? (
         <label className="text-xs">
           Unit
@@ -247,6 +342,8 @@ function CalendarPattern({
           Start
           <DateField
             value={range.start}
+            min={envelope?.minStart}
+            max={envelope?.maxEnd}
             className="mt-1"
             aria-label="Start"
             onChange={(start) => onPatch({ start })}
@@ -256,6 +353,8 @@ function CalendarPattern({
           End
           <DateField
             value={range.end}
+            min={envelope?.minStart}
+            max={envelope?.maxEnd}
             className="mt-1"
             aria-label="End"
             onChange={(end) => onPatch({ end: end < range.start ? range.start : end })}
@@ -391,6 +490,58 @@ function CalendarPattern({
       <p className="text-[11px] text-[#5b6f73]">
         {split.st} ST · {split.ot} OT · {split.dt} DT · {split.pd} PD
       </p>
+    </div>
+  );
+}
+
+function RangeDescriptionField({
+  value,
+  onChange,
+}: {
+  value?: string;
+  onChange: (description: string) => void;
+}) {
+  const [wantOther, setWantOther] = useState(false);
+  const choice = rangeDescriptionChoice(value, wantOther);
+  const custom = choice === RANGE_DESCRIPTION_OTHER;
+
+  return (
+    <div className="space-y-1">
+      <label className="text-xs">
+        Description
+        <select
+          value={choice}
+          aria-label="Description"
+          onChange={(event) => {
+            const next = event.target.value;
+            if (next === RANGE_DESCRIPTION_OTHER) {
+              setWantOther(true);
+              if (rangeDescriptionChoice(value) !== RANGE_DESCRIPTION_OTHER) onChange("");
+              return;
+            }
+            setWantOther(false);
+            onChange(next);
+          }}
+          className="paper-field mt-1"
+        >
+          <option value="">Select a reason</option>
+          {RANGE_DESCRIPTION_REASONS.map((reason) => (
+            <option key={reason} value={reason}>
+              {reason}
+            </option>
+          ))}
+          <option value={RANGE_DESCRIPTION_OTHER}>{RANGE_DESCRIPTION_OTHER}</option>
+        </select>
+      </label>
+      {custom ? (
+        <input
+          value={value ?? ""}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Your own words"
+          aria-label="Custom description"
+          className="paper-field w-full"
+        />
+      ) : null}
     </div>
   );
 }

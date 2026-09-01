@@ -24,6 +24,17 @@ export const CRAFT_SHIFTS = ["Days", "Nights", "Days & nights"] as const;
 
 export type CraftShift = (typeof CRAFT_SHIFTS)[number];
 
+/** Locked labels for an extra stretch on the same phase. Other is free text. */
+export const RANGE_DESCRIPTION_REASONS = [
+  "Hiring progression",
+  "Training",
+  "Onboarding/Learning",
+] as const;
+
+export const RANGE_DESCRIPTION_OTHER = "Other";
+
+export type RangeDescriptionReason = (typeof RANGE_DESCRIPTION_REASONS)[number];
+
 export type CalendarRange = {
   id: string;
   start: string;
@@ -39,7 +50,127 @@ export type CalendarRange = {
   shift?: CraftShift;
   skipDates?: string[];
   unitId?: string;
+  /** Label only. Never feeds ST / OT / DT / PD / hours / cost. */
+  description?: string;
+  /** Off on this position only. Dates stay saved. Hours do not bill. */
+  off?: boolean;
 };
+
+export function rangeIsOff(range: Pick<CalendarRange, "off">): boolean {
+  return Boolean(range.off);
+}
+
+export function phaseIsOff(ranges: CalendarRange[], phaseId: string): boolean {
+  const list = ranges.filter((range) => range.phaseId === phaseId);
+  return list.length > 0 && list.every((range) => range.off);
+}
+
+/** Mark every range on that phase, including extras, so killed hours cannot orphan. */
+export function setPhaseOff(ranges: CalendarRange[], phaseId: string, off: boolean): CalendarRange[] {
+  return ranges.map((range) => (range.phaseId === phaseId ? { ...range, off } : range));
+}
+
+export function rangeDescriptionLabel(description?: string): string {
+  return description?.trim() ?? "";
+}
+
+export function isListedRangeDescription(description?: string): boolean {
+  return (RANGE_DESCRIPTION_REASONS as readonly string[]).includes(rangeDescriptionLabel(description));
+}
+
+export function rangeDescriptionChoice(description?: string, wantOther = false): string {
+  const label = rangeDescriptionLabel(description);
+  if (isListedRangeDescription(label)) return label;
+  if (label || wantOther) return RANGE_DESCRIPTION_OTHER;
+  return "";
+}
+
+export type ExtraRangeEnvelope = {
+  minStart: string;
+  maxEnd: string;
+};
+
+function laterYmd(a: string, b: string) {
+  if (!a) return b;
+  if (!b) return a;
+  return a > b ? a : b;
+}
+
+function earlierYmd(a: string, b: string) {
+  if (!a) return b;
+  if (!b) return a;
+  return a < b ? a : b;
+}
+
+/** First crew range on the phase, intersected with Job setup when that range is bound. */
+export function extraRangeEnvelope(
+  first?: Pick<CalendarRange, "start" | "end" | "phaseId"> | null,
+  phase?: Pick<PhaseRow, "id" | "start" | "stop"> | null,
+): ExtraRangeEnvelope | null {
+  let minStart = first?.start ?? "";
+  let maxEnd = first?.end ?? "";
+  const bound = Boolean(phase && first?.phaseId && first.phaseId === phase.id);
+  if (bound) {
+    minStart = laterYmd(minStart, phase?.start ?? "");
+    maxEnd = earlierYmd(maxEnd, phase?.stop ?? "");
+  }
+  if (!minStart && !maxEnd) return null;
+  if (minStart && maxEnd && minStart > maxEnd) return { minStart, maxEnd: minStart };
+  return { minStart, maxEnd };
+}
+
+export function extraRangeFitsEnvelope(
+  extra: Pick<CalendarRange, "start" | "end">,
+  envelope: ExtraRangeEnvelope | null,
+): boolean {
+  if (!envelope) return true;
+  if (!extra.start && !extra.end) return true;
+  if (extra.start && envelope.minStart && extra.start < envelope.minStart) return false;
+  if (extra.end && envelope.maxEnd && extra.end > envelope.maxEnd) return false;
+  return true;
+}
+
+export function extraRangeIsValid(
+  extra: Pick<CalendarRange, "start" | "end">,
+  first?: Pick<CalendarRange, "start" | "end" | "phaseId"> | null,
+  phase?: Pick<PhaseRow, "id" | "start" | "stop"> | null,
+): boolean {
+  return extraRangeFitsEnvelope(extra, extraRangeEnvelope(first, phase));
+}
+
+export function clampExtraRangeDates<T extends Pick<CalendarRange, "start" | "end">>(
+  extra: T,
+  envelope: ExtraRangeEnvelope | null,
+): T {
+  if (!envelope) return extra;
+  let start = extra.start;
+  let end = extra.end;
+  if (start) {
+    if (envelope.minStart && start < envelope.minStart) start = envelope.minStart;
+    if (envelope.maxEnd && start > envelope.maxEnd) start = envelope.maxEnd;
+  }
+  if (end) {
+    if (envelope.maxEnd && end > envelope.maxEnd) end = envelope.maxEnd;
+    if (envelope.minStart && end < envelope.minStart) end = envelope.minStart;
+  }
+  if (start && end && end < start) end = start;
+  return { ...extra, start, end };
+}
+
+export function extraSharesFirstEnvelope(extra: Pick<CalendarRange, "unitId">, first: Pick<CalendarRange, "unitId">) {
+  if (extra.unitId && first.unitId && extra.unitId !== first.unitId) return false;
+  return true;
+}
+
+export function applyExtraRangeEnvelopes(ranges: CalendarRange[], phases: PhaseRow[] = []): CalendarRange[] {
+  return ranges.map((range) => {
+    if (!range.phaseId) return range;
+    const first = ranges.find((item) => item.phaseId === range.phaseId);
+    if (!first || first.id === range.id || !extraSharesFirstEnvelope(range, first)) return range;
+    const phase = phases.find((item) => item.id === range.phaseId);
+    return clampExtraRangeDates(range, extraRangeEnvelope(first, phase));
+  });
+}
 
 export type CraftRow = {
   id: string;
@@ -132,6 +263,8 @@ export function cloneCraftRow(row: CraftRow): CraftRow {
       otAfter8: range.otAfter8,
       shift: range.shift,
       skipDates: range.skipDates ? [...range.skipDates] : [],
+      description: range.description,
+      off: range.off,
     })),
   };
 }
@@ -192,6 +325,8 @@ export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange, unitId?: str
     shift: prev?.shift ?? "Days",
     skipDates: prev?.skipDates ? [...prev.skipDates] : [...(seed.skipDates ?? [])],
     unitId: unitId ?? prev?.unitId,
+    description: prev?.description,
+    off: prev?.off,
   };
 }
 
@@ -211,6 +346,8 @@ export function extraRangeFromPhase(phase: PhaseRow, template?: CalendarRange, u
     skipDates: newUnit ? [...(base.skipDates ?? [])] : [],
     days: template?.days ? [...template.days] : [...base.days],
     unitId: newUnit ? unitId : template?.unitId,
+    description: "",
+    off: template?.off,
   };
 }
 
@@ -257,6 +394,12 @@ export function rangesFromPhases(
         next.start = prev.start;
         next.end = prev.end;
         next.hoursPerShift = prev.hoursPerShift;
+        next.description = prev.description;
+        next.off = prev.off;
+        const first = prior[0];
+        if (first && extraSharesFirstEnvelope(next, first)) {
+          return clampExtraRangeDates(next, extraRangeEnvelope(first, source));
+        }
         return next;
       }
       if (multiUnits && next.unitId) {
@@ -269,7 +412,7 @@ export function rangesFromPhases(
       return next;
     });
   });
-  return [...owned, ...extras];
+  return applyExtraRangeEnvelopes([...owned, ...extras], phases);
 }
 
 export function craftRowFromPhases(phases: PhaseRow[], units: JobUnit[] = [], multiUnits = false): CraftRow {

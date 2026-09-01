@@ -130,6 +130,7 @@ function allCraftRows(crew: StaffingCrewInput): CraftRow[] {
 }
 
 function rangeCovers(range: CalendarRange, ymd: string): boolean {
+  if (range.off) return false;
   if (!range.start || !range.end) return false;
   if (ymd < range.start || ymd > range.end) return false;
   if (range.skipDates?.includes(ymd)) return false;

@@ -8,7 +8,9 @@ import {
   LISTED_POSITIONS,
   assignCraftPosition,
   blankCraftRow,
+  applyExtraRangeEnvelopes,
   clampPerDiem,
+  setPhaseOff,
   duplicateCraftRow,
   type CalendarRange,
   type CraftRow,
@@ -85,11 +87,14 @@ export function CraftLaborGrid({
         if (row.id !== rowId) return row;
         return {
           ...row,
-          ranges: row.ranges.map((range) => {
-            if (range.id !== rangeId) return range;
-            const next = { ...range, ...patch };
-            return clampPerDiem(next, next.shift ?? row.shift);
-          }),
+          ranges: applyExtraRangeEnvelopes(
+            row.ranges.map((range) => {
+              if (range.id !== rangeId) return range;
+              const next = { ...range, ...patch };
+              return clampPerDiem(next, next.shift ?? row.shift);
+            }),
+            pack.schedule.phases,
+          ),
         };
       }),
     );
@@ -203,6 +208,13 @@ export function CraftLaborGrid({
                       ),
                     )
                   }
+                  onSetPhaseOff={(phaseId, off) =>
+                    onRows((current) =>
+                      current.map((item) =>
+                        item.id === row.id ? { ...item, ranges: setPhaseOff(item.ranges, phaseId, off) } : item,
+                      ),
+                    )
+                  }
                   onDuplicate={() => duplicatePosition(row.id)}
                   onRemove={() => void removePosition(row)}
                   catalog={positions}
@@ -243,6 +255,7 @@ function CraftAccordionRow({
   onPatchRange,
   onAddRange,
   onRemoveRange,
+  onSetPhaseOff,
   onDuplicate,
   onRemove,
   catalog,
@@ -257,6 +270,7 @@ function CraftAccordionRow({
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
   onAddRange: (range: CalendarRange) => void;
   onRemoveRange: (rangeId: string) => void;
+  onSetPhaseOff: (phaseId: string, off: boolean) => void;
   onDuplicate: () => void;
   onRemove: () => void;
   catalog?: readonly string[];
@@ -404,6 +418,7 @@ function CraftAccordionRow({
               onPatchRange={onPatchRange}
               onAddRange={onAddRange}
               onRemoveRange={onRemoveRange}
+              onSetPhaseOff={onSetPhaseOff}
             />
           </td>
         </tr>

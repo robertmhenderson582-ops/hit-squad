@@ -5,7 +5,7 @@ import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { CrewPhaseCards } from "@/components/CrewPhaseCards";
 import { GripToPan } from "@/components/GripToPan";
 import { useEstimatePackage } from "@/components/EstimatePackage";
-import { clampPerDiem, type CalendarRange } from "@/lib/craft-labor";
+import { applyExtraRangeEnvelopes, clampPerDiem, setPhaseOff, type CalendarRange } from "@/lib/craft-labor";
 import {
   AFFILIATE_LABEL,
   SUB_CARD_KINDS,
@@ -601,11 +601,14 @@ function SubVendorCard({
         if (row.id !== rowId) return row;
         return {
           ...row,
-          ranges: row.ranges.map((range) => {
-            if (range.id !== rangeId) return range;
-            const next = { ...range, ...patch };
-            return clampPerDiem(next, next.shift ?? row.shift);
-          }),
+          ranges: applyExtraRangeEnvelopes(
+            row.ranges.map((range) => {
+              if (range.id !== rangeId) return range;
+              const next = { ...range, ...patch };
+              return clampPerDiem(next, next.shift ?? row.shift);
+            }),
+            pack.schedule.phases,
+          ),
         };
       }),
     });
@@ -726,6 +729,9 @@ function SubVendorCard({
                             onAddRange={(range) => patchLabor(index, { ...row, ranges: [...row.ranges, range] })}
                             onRemoveRange={(rangeId) =>
                               patchLabor(index, { ...row, ranges: row.ranges.filter((range) => range.id !== rangeId) })
+                            }
+                            onSetPhaseOff={(phaseId, off) =>
+                              patchLabor(index, { ...row, ranges: setPhaseOff(row.ranges, phaseId, off) })
                             }
                             onRemove={() =>
                               void confirmRemove(row.position || "this position", {
@@ -906,6 +912,7 @@ function SubLaborRow({
   onPatchRange,
   onAddRange,
   onRemoveRange,
+  onSetPhaseOff,
   onRemove,
 }: {
   row: SubLaborPosition;
@@ -919,6 +926,7 @@ function SubLaborRow({
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
   onAddRange: (range: CalendarRange) => void;
   onRemoveRange: (rangeId: string) => void;
+  onSetPhaseOff: (phaseId: string, off: boolean) => void;
   onRemove: () => void;
 }) {
   return (
@@ -987,6 +995,7 @@ function SubLaborRow({
               onPatchRange={onPatchRange}
               onAddRange={onAddRange}
               onRemoveRange={onRemoveRange}
+              onSetPhaseOff={onSetPhaseOff}
             />
           </td>
         </tr>
