@@ -12,8 +12,14 @@ import {
   catalogVisibleTo,
   companiesForScope,
   inferCompanyId,
+  assignmentChoices,
+  isStandaloneId,
+  peopleLane,
+  samePeopleLane,
   seedCompanyForEmail,
   seedCompanyMap,
+  STANDALONE_ID,
+  STANDALONE_NAME,
 } from "./companies.ts";
 import {
   addCompany,
@@ -124,6 +130,8 @@ describe("assign and visibility", () => {
     assert.equal(canSeeCompany(johnHenry, LUCKY13_ID), true);
     assert.equal(canSeeCompany(johnHenry, "madison"), false);
     assert.equal(canSeeCompany(nathan, LUCKY13_ID), false);
+    assert.equal(canSeeCompany(john, "madison"), true);
+    assert.equal(canSeeCompany(john, "cbi"), false);
     assert.deepEqual(
       companiesForScope(johnHenry).map((row) => row.id),
       [LUCKY13_ID],
@@ -223,5 +231,35 @@ describe("assign and visibility", () => {
     assert.equal(listed.some((row) => row.id === "madison"), true);
     assert.equal(await assignedCompany(JOSEPH_EMAIL), added.company.id);
     assert.equal(await assignedCompany(JAMES_EMAIL), "cbi");
+  });
+});
+
+describe("standalone door vs company people", () => {
+  it("keeps Standalone off the company catalog and splits people lanes", () => {
+    assert.equal(isStandaloneId(STANDALONE_ID), true);
+    assert.equal(peopleLane(STANDALONE_ID), "standalone");
+    assert.equal(peopleLane("madison"), "company");
+    assert.equal(samePeopleLane("madison", "cbi"), true);
+    assert.equal(samePeopleLane("madison", STANDALONE_ID), false);
+    assert.equal(COMPANIES.some((row) => row.id === STANDALONE_ID), false);
+    assert.deepEqual(
+      assignmentChoices().map((row) => row.id).slice(-1),
+      [STANDALONE_ID],
+    );
+    assert.equal(assignmentChoices().find((row) => row.id === STANDALONE_ID)?.name, STANDALONE_NAME);
+    const solo = { isOwner: false, email: "added.standalone@example.com", companyId: STANDALONE_ID };
+    assert.deepEqual(companiesForScope(solo).map((row) => row.id), []);
+    assert.equal(canSeeCompany(solo, "madison"), false);
+    assert.equal(canSeeCompany(solo, STANDALONE_ID), false);
+    assert.equal(canSeeCompany(owner, STANDALONE_ID), false);
+    assert.equal(canSeeCompany(owner, "madison"), true);
+  });
+
+  it("lets the owner assign Standalone without adding it as a company", async () => {
+    await setAssignedCompany(JOSEPH_EMAIL, STANDALONE_ID);
+    assert.equal(await assignedCompany(JOSEPH_EMAIL), STANDALONE_ID);
+    const blocked = await addCompany(STANDALONE_NAME);
+    assert.equal("error" in blocked, true);
+    assert.equal((await listCompanies()).some((row) => row.id === STANDALONE_ID), false);
   });
 });

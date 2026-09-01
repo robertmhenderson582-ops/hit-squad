@@ -16,5 +16,9 @@ export async function scopedDeskUser(session: PublicUser, request: Request): Pro
 }
 
 export async function hydratedHandoffExtras() {
-  return (await testerPeople()).map((row) => ({ name: row.name, email: row.email }));
+  return (await testerPeople()).map((row) => ({
+    name: row.name,
+    email: row.email,
+    companyId: row.companyId,
+  }));
 }

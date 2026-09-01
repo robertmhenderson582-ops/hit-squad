@@ -1,3 +1,4 @@
+import { companyIdForEmail, peopleLane, type CompanyId } from "./companies.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { normalizeEmails, ownerVaultEmail, type ScopeUser } from "./estimate-scope.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
@@ -5,6 +6,7 @@ import { TESTER_SEATS } from "./tester-seats.ts";
 export type HandoffSeat = {
   name: string;
   email: string;
+  companyId?: CompanyId;
 };
 
 export const TRANSFER_WRITE_ERROR = "Could not turn that job over. The job is still on your desk.";
@@ -76,9 +78,31 @@ export function handoffSeats(extras: HandoffSeat[] = []): HandoffSeat[] {
   return rows;
 }
 
-export function handoffTargetsFor(user: ScopeUser, extras: HandoffSeat[] = []): HandoffSeat[] {
+function assignmentMap(extras: HandoffSeat[] = []): Record<string, string> {
+  const next: Record<string, string> = {};
+  for (const seat of TESTER_SEATS) next[seat.email] = seat.company;
+  for (const seat of extras) {
+    const email = seat.email.trim().toLowerCase();
+    if (email && seat.companyId) next[email] = seat.companyId;
+  }
+  return next;
+}
+
+export function handoffTargetsFor(
+  user: ScopeUser,
+  extras: HandoffSeat[] = [],
+  assignments?: Record<string, string>,
+): HandoffSeat[] {
   const email = user.email.trim().toLowerCase();
-  return handoffSeats(extras).filter((seat) => seat.email !== email);
+  const map = { ...assignmentMap(extras), ...(assignments ?? {}) };
+  const lane = peopleLane(companyIdForEmail(email, map));
+  const owner = ownerVaultEmail();
+  return handoffSeats(extras).filter((seat) => {
+    if (seat.email === email) return false;
+    if (user.role === "owner") return true;
+    if (seat.email === owner) return true;
+    return peopleLane(companyIdForEmail(seat.email, map)) === lane;
+  });
 }
 
 export function findHandoffSeat(email: string, extras: HandoffSeat[] = []): HandoffSeat | undefined {

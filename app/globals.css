@@ -1313,8 +1313,8 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   margin-left: 0.4rem;
   justify-content: center;
   border-radius: 999px;
-  background: #f4f1e8;
-  color: #8a3d12;
+  background: #d7f4f7;
+  color: #0f5f6d;
   font-size: 0.75rem;
   font-weight: 600;
   padding: 0 0.3rem;
@@ -1334,9 +1334,19 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   }
 }
 
+@keyframes teal-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(62, 198, 212, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(62, 198, 212, 0);
+  }
+}
+
 .inbox-fab-pulse {
-  animation: rust-pulse 1.4s ease-out infinite;
-  background: #b74120;
+  animation: teal-pulse 1.4s ease-out infinite;
+  background: #0f5f6d;
 }
 
 .inbox-toast,
@@ -1490,11 +1500,11 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 
 .inbox-header-badge {
   border-radius: 999px;
-  background: #b74120;
+  background: #0f5f6d;
   color: #fff;
   padding: 0.35rem 0.75rem;
   font-size: 0.8rem;
-  animation: rust-pulse 1.4s ease-out infinite;
+  animation: teal-pulse 1.4s ease-out infinite;
 }
 
 .photo-scrim {

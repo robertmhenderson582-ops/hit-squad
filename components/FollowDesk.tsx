@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { NOVUS_EMAIL } from "@/lib/desk-role";
-import { personFromLensId } from "@/lib/desk-people";
+import { peopleByLane, personFromLensId } from "@/lib/desk-people";
 import { canFollowSeatId, followSeatFromEmail } from "@/lib/follow";
 import { type FollowSeat } from "@/lib/owner-desk";
 
@@ -18,7 +18,8 @@ type LiveSeat = {
 function screenOf(path: string) {
   if (path === "/") return "Home";
   if (path.startsWith("/estimates")) return "Estimates";
-  if (path.startsWith("/jobs")) return "Jobs";
+  if (path.startsWith("/jobs") || path.startsWith("/sites")) return "Jobs";
+  if (path.startsWith("/standalone")) return "Standalone";
   if (path.startsWith("/settings")) return "Settings";
   return path.replace(/^\//, "") || "Home";
 }
@@ -68,6 +69,7 @@ export function FollowDesk() {
         id: row.id,
         name: row.name,
         email: row.email,
+        companyId: row.companyId,
         live: Boolean(ping?.live),
         path: ping?.path ?? "",
         lastAt: ping?.lastAt ?? 0,
@@ -102,8 +104,16 @@ export function FollowDesk() {
       </section>
 
       <section className="plant-card px-5 py-5">
-        <div className="space-y-2">
-          {people.map((row) => (
+        <div className="space-y-5">
+          {(["company", "standalone"] as const).map((lane) => {
+            const rows = peopleByLane(people)[lane];
+            if (!rows.length) return null;
+            return (
+              <div key={lane} className="space-y-2">
+                <p className="font-mono text-[10px] tracking-[0.2em] text-steel">
+                  {lane === "company" ? "COMPANY" : "STANDALONE"}
+                </p>
+                {rows.map((row) => (
             <article
               key={row.id}
               className={`flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3 ${
@@ -139,7 +149,10 @@ export function FollowDesk() {
                 </button>
               ) : null}
             </article>
-          ))}
+                ))}
+              </div>
+            );
+          })}
         </div>
         <div className="mt-4">
           <button

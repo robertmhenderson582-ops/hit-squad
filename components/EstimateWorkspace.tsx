@@ -8,7 +8,6 @@ import { HomeCue } from "@/components/HomeCue";
 import { DeskBanners } from "@/components/DeskBanners";
 import { useDisplay } from "@/components/DisplayProvider";
 import { ShareTurnover } from "@/components/ShareTurnover";
-import { InboxBadge } from "@/components/InboxBadge";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
@@ -114,7 +113,6 @@ export function EstimateWorkspace({
             <p className="truncate text-sm text-white/70">{crumb}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <InboxBadge />
             <ThemeFlip />
             <ShareTurnover title={name || crumb} packId={packageId} />
             {ACTIONS.map((action) => (
@@ -166,9 +164,9 @@ export function EstimateWorkspace({
             ) : null}
             <button
               type="button"
-              onClick={() => router.push("/estimates")}
+              onClick={() => router.push("/jobs")}
               className="rounded border border-white/20 px-3 py-1.5 text-white/90"
-              title="Close this sheet and go back to Estimates. Does not close out the job."
+              title="Close this sheet and go back to Jobs. Does not close out the job."
             >
               Close
             </button>
@@ -179,6 +177,7 @@ export function EstimateWorkspace({
             <button
               key={item.id}
               type="button"
+              title={item.label}
               onClick={() => {
                 onTab(item.id);
                 if (item.id === "crew") noteFeatureTrail("Crew");
@@ -215,7 +214,7 @@ export function EstimateWorkspace({
           <div className="estimate-modal px-6 py-5">
             <h2 className="font-display text-2xl text-[#163038]">Close out</h2>
             <p className="mt-2 text-sm text-[#5b6f73]">
-              {name || crumb} leaves Home. Nothing is deleted. Closed out sits collapsed at the
+              {name || crumb} leaves the company desk. Nothing is deleted. Closed out sits collapsed at the
               bottom with Reopen / View. A copy starts open.
             </p>
             <div className="mt-5 flex justify-end gap-3">
@@ -227,7 +226,7 @@ export function EstimateWorkspace({
                 onClick={() => {
                   closePackage({ id: packageId, title: name || crumb, kind: "estimate" });
                   setConfirmClose(false);
-                  router.push("/estimates");
+                  router.push("/jobs");
                 }}
                 className="rounded-lg bg-steel px-4 py-2 text-white"
               >
