@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
-import { makeThread, reconcileInboxDesk, type InboxThread } from "./inbox.ts";
+import {
+  appendInboxMessage,
+  makeMessage,
+  makeThread,
+  reconcileInboxDesk,
+  rollbackInboxSend,
+  type InboxThread,
+} from "./inbox.ts";
 import { DESK_PERSON_ID } from "./whats-new.ts";
 
 const NATHAN = {
@@ -85,5 +94,52 @@ describe("inbox compose stays on the thread", () => {
     assert.equal(next.threads.some((thread) => thread.id === created.id), false);
     assert.equal(next.threads.find((thread) => thread.personId === NATHAN.id)?.messages[0]?.text, "Hi");
     assert.equal(next.threads.some((thread) => thread.personId === DESK_PERSON_ID), true);
+  });
+
+  it("keeps both sides of the same person thread when the poll has the peer reply", () => {
+    const created = makeThread(NATHAN);
+    const outbound = makeMessage({ from: "self", author: "Robert", text: "Owner outbound", photo: null });
+    const local = [DESK, { ...created, messages: [outbound] }];
+    const remote = [
+      circleThread(NATHAN, {
+        messages: [{ id: "im-nathan", from: "them", author: "Nathan Boyte", text: "Nathan reply", photo: null, sentAt: "z", readAt: null }],
+      }),
+    ];
+    const next = reconcileInboxDesk(local, remote, created.id);
+    assert.equal(next.activeId, remote[0].id);
+    const nathan = next.threads.find((thread) => thread.personId === NATHAN.id);
+    assert.ok(nathan);
+    assert.equal(nathan.messages.some((message) => message.text === "Owner outbound"), true);
+    assert.equal(nathan.messages.some((message) => message.text === "Nathan reply"), true);
+  });
+
+  it("does not resurrect a deleted message from the remote poll", () => {
+    const created = makeThread(NATHAN);
+    const remote = [
+      circleThread(NATHAN, {
+        messages: [{ id: "im-gone", from: "self", author: "Robert", text: "Deleted", photo: null, sentAt: "", readAt: null }],
+      }),
+    ];
+    const next = reconcileInboxDesk([DESK, created], remote, created.id, { hiddenMessageIds: ["im-gone"] });
+    assert.equal(next.threads.find((thread) => thread.personId === NATHAN.id)?.messages.length, 0);
+  });
+
+  it("provider posts a hide and rolls back a failed send", () => {
+    const source = readFileSync(fileURLToPath(new URL("../components/InboxProvider.tsx", import.meta.url)), "utf8");
+    assert.match(source, /hideMessageId/);
+    assert.match(source, /hidePersonId/);
+    assert.match(source, /emptyInbox: true/);
+    assert.match(source, /rollbackInboxSend/);
+    assert.match(source, /Message did not send/);
+  });
+
+  it("failed send drops the local-only delivered row", () => {
+    const created = makeThread(NATHAN);
+    const pending = makeMessage({ from: "self", author: "Robert", text: "Did not land", photo: null });
+    const sent = appendInboxMessage([created], created.id, pending);
+    assert.equal(sent[0].messages.some((message) => message.id === pending.id), true);
+    const rolled = rollbackInboxSend(sent, created.id, pending.id);
+    assert.equal(rolled[0].messages.some((message) => message.id === pending.id), false);
+    assert.equal(rolled[0].messages.length, 0);
   });
 });

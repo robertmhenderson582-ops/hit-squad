@@ -173,6 +173,42 @@ export function contactsFor(ownerChrome: boolean, email = ""): InboxPerson[] {
   return [OWNER_CONTACT];
 }
 
+export function appendInboxMessage(threads: InboxThread[], threadId: string, message: InboxMessage): InboxThread[] {
+  return threads.map((thread) =>
+    thread.id === threadId ? { ...thread, messages: [...thread.messages, message] } : thread,
+  );
+}
+
+export function rollbackInboxSend(threads: InboxThread[], threadId: string, messageId: string): InboxThread[] {
+  return threads.map((thread) =>
+    thread.id === threadId
+      ? { ...thread, messages: thread.messages.filter((message) => message.id !== messageId) }
+      : thread,
+  );
+}
+
+function mergePeerThread(
+  local: InboxThread | undefined,
+  remote: InboxThread,
+  hiddenMessageIds: Set<string>,
+): InboxThread {
+  const map = new Map<string, InboxMessage>();
+  if (local) {
+    for (const row of local.messages) {
+      if (!hiddenMessageIds.has(row.id)) map.set(row.id, row);
+    }
+  }
+  for (const row of remote.messages) {
+    if (hiddenMessageIds.has(row.id)) {
+      map.delete(row.id);
+      continue;
+    }
+    map.set(row.id, row);
+  }
+  const messages = [...map.values()].sort((a, b) => a.sentAt.localeCompare(b.sentAt) || a.id.localeCompare(b.id));
+  return { ...remote, messages };
+}
+
 /**
  * Merge a server poll into the open desk without kicking compose home.
  * Desk-bot stays local. Remote peers win when the person already exists
@@ -180,19 +216,36 @@ export function contactsFor(ownerChrome: boolean, email = ""): InboxPerson[] {
  * not on the server yet, so it must survive the poll. If the server later
  * returns that same person under a stable id, remap activeId so the
  * textarea stays on that conversation.
+ * Hidden ids stay gone even if a poll still has the vault copy.
  */
 export function reconcileInboxDesk(
   local: InboxThread[],
   remote: InboxThread[],
   activeId: string | null,
+  opts?: { hiddenMessageIds?: Iterable<string>; hiddenPersonIds?: Iterable<string> },
 ): { threads: InboxThread[]; activeId: string | null } {
+  const hiddenMessageIds = new Set(opts?.hiddenMessageIds ?? []);
+  const hiddenPersonIds = new Set(opts?.hiddenPersonIds ?? []);
   const desk = local.filter((thread) => thread.personId === DESK_PERSON_ID);
-  const remotePeers = remote.filter((thread) => thread.personId !== DESK_PERSON_ID);
-  const remotePersonIds = new Set(remotePeers.map((thread) => thread.personId));
-  const localOnlyPeers = local.filter(
-    (thread) => thread.personId !== DESK_PERSON_ID && !remotePersonIds.has(thread.personId),
+  const remotePeers = remote.filter(
+    (thread) => thread.personId !== DESK_PERSON_ID && !hiddenPersonIds.has(thread.personId),
   );
-  const threads = [...desk, ...remotePeers, ...localOnlyPeers];
+  const remotePersonIds = new Set(remotePeers.map((thread) => thread.personId));
+  const localByPerson = new Map(
+    local
+      .filter((thread) => thread.personId !== DESK_PERSON_ID)
+      .map((thread) => [thread.personId, thread] as const),
+  );
+  const mergedRemote = remotePeers.map((thread) =>
+    mergePeerThread(localByPerson.get(thread.personId), thread, hiddenMessageIds),
+  );
+  const localOnlyPeers = local
+    .filter((thread) => thread.personId !== DESK_PERSON_ID && !remotePersonIds.has(thread.personId))
+    .map((thread) => ({
+      ...thread,
+      messages: thread.messages.filter((message) => !hiddenMessageIds.has(message.id)),
+    }));
+  const threads = [...desk, ...mergedRemote, ...localOnlyPeers];
 
   if (!activeId) return { threads, activeId: null };
   if (threads.some((thread) => thread.id === activeId)) return { threads, activeId };
