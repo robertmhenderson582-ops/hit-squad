@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   addSupportLine,
   assignCraftPosition,
@@ -10,6 +12,8 @@ import {
   cloneCraftRow,
   cloneSupportLine,
   craftRowFromPhases,
+  duplicateCraftRow,
+  duplicateSupportLine,
   extraRangeFromPhase,
   hydrateSupportLine,
   nextUnitId,
@@ -20,6 +24,13 @@ import {
 } from "./craft-labor.ts";
 import { computeRowHours } from "./hours-clock.ts";
 import { addUnit, defaultPhaseSchedule, defaultPhases, setMultiUnits } from "./phase-schedule.ts";
+import { shahanCrewCostAmount } from "./shahan-wood-river.ts";
+
+const WOOD = { site: "Wood River — Roxana, IL", client: "Phillips 66" };
+
+function crewHours(row: Parameters<typeof computeRowHours>[0]) {
+  return computeRowHours(row, WOOD.site, WOOD.client);
+}
 
 describe("crew ranges are per position", () => {
   it("gives each new position its own five phase ranges with unique ids", () => {
@@ -315,5 +326,122 @@ describe("support position calendars", () => {
       direct.ranges.map((range) => range.phaseId),
     );
     assert.equal(next.ranges.length, 5);
+  });
+});
+
+describe("duplicate position keeps the same ST/OT/DT/PD/cost", () => {
+  it("proves re-seeding from Job setup drifts ST hours off a customized source", () => {
+    const phases = defaultPhases();
+    const source = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    source.ranges = source.ranges.map((range, index) =>
+      index === 0
+        ? { ...range, hoursPerShift: 12, otAfter8: true, skipDates: ["2026-08-23"] }
+        : range,
+    );
+    const sourceHours = crewHours(source);
+    assert.ok(sourceHours.hours > 0);
+    assert.ok(sourceHours.st > 0);
+
+    const reseeds = assignCraftPosition(blankCraftRow(), source.position, phases);
+    const reseedHours = crewHours(reseeds);
+    assert.notEqual(
+      `${reseedHours.st}/${reseedHours.ot}/${reseedHours.dt}/${reseedHours.pd}`,
+      `${sourceHours.st}/${sourceHours.ot}/${sourceHours.dt}/${sourceHours.pd}`,
+      "assigning the title again from Job setup must not be what Duplicate does",
+    );
+    assert.notEqual(reseedHours.st, sourceHours.st);
+  });
+
+  it("duplicate of a filled craft row keeps ST/OT/DT/PD, book cost, and the name", () => {
+    const phases = defaultPhases();
+    const source = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    source.ranges = source.ranges.map((range, index) =>
+      index === 0
+        ? { ...range, hoursPerShift: 12, otAfter8: true, skipDates: ["2026-08-23"] }
+        : range,
+    );
+    const sourceHours = crewHours(source);
+    const sourceCost = shahanCrewCostAmount(source.position, sourceHours);
+    assert.ok(sourceCost > 0);
+
+    const copy = duplicateCraftRow(source);
+    const copyHours = crewHours(copy);
+    assert.equal(copy.id === source.id, false);
+    assert.equal(copy.position, "Boilermaker Journeyman");
+    assert.equal(copyHours.st, sourceHours.st);
+    assert.equal(copyHours.ot, sourceHours.ot);
+    assert.equal(copyHours.dt, sourceHours.dt);
+    assert.equal(copyHours.pd, sourceHours.pd);
+    assert.equal(copyHours.hours, sourceHours.hours);
+    assert.equal(shahanCrewCostAmount(copy.position, copyHours), sourceCost);
+    assert.equal(copy.ranges[0].hoursPerShift, 12);
+    assert.equal(copy.ranges[0].otAfter8, true);
+    assert.deepEqual(copy.ranges[0].skipDates, ["2026-08-23"]);
+    assert.equal(copy.ranges[0].id === source.ranges[0].id, false);
+  });
+
+  it("duplicate of a named staff row stays named and keeps the staff ST split", () => {
+    const phases = defaultPhases();
+    const source = assignCraftPosition(blankCraftRow(), "Asst Superintendent 01", phases);
+    const staffHours = computeRowHours(source, "", "");
+    const staffCost = shahanCrewCostAmount(source.position, staffHours);
+    assert.ok(staffHours.st > 0);
+    assert.ok(staffCost > 0);
+
+    const copy = duplicateCraftRow(source);
+    assert.equal(copy.position, "Asst Superintendent 01");
+    const copyHours = computeRowHours(copy, "", "");
+    assert.equal(copyHours.st, staffHours.st);
+    assert.equal(copyHours.ot, staffHours.ot);
+    assert.equal(copyHours.dt, staffHours.dt);
+    assert.equal(copyHours.pd, staffHours.pd);
+    assert.equal(shahanCrewCostAmount(copy.position, copyHours), staffCost);
+
+    const asCraft = { ...copy, position: "Boilermaker Journeyman" };
+    const craftHours = computeRowHours(asCraft, "", "");
+    assert.notEqual(craftHours.st, staffHours.st, "losing the staff title changes ST on the customer clock");
+    assert.equal(computeRowHours({ ...copy, position: "" }, "", "").hours, 0);
+  });
+
+  it("does not leave phantom hours on an unnamed Select position copy", () => {
+    const phases = defaultPhases();
+    const named = assignCraftPosition(blankCraftRow(), "Pipefitter Journeyman", phases);
+    const ghost = { ...named, position: "" };
+    assert.ok(ghost.ranges.length > 0);
+    assert.equal(crewHours(ghost).hours, 0);
+    const copy = duplicateCraftRow(ghost);
+    assert.equal(copy.position, "");
+    assert.equal(copy.ranges.length, 0);
+    assert.equal(crewHours(copy).hours, 0);
+  });
+
+  it("duplicate Support keeps Position, Billed as, and the same hours/cost", () => {
+    const phases = defaultPhases();
+    const row = assignSupportBilledAs(
+      assignSupportDuty(addSupportLine(phases), "Tool Room Attendant", phases),
+      "Boilermaker Journeyman",
+      phases,
+    );
+    const hours = crewHours(row);
+    const cost = shahanCrewCostAmount(row.billedAs, hours);
+    assert.ok(hours.st > 0);
+    assert.ok(cost > 0);
+    const copy = duplicateSupportLine(row);
+    assert.equal(copy.position, "Tool Room Attendant");
+    assert.equal(copy.billedAs, "Boilermaker Journeyman");
+    const copyHours = crewHours(copy);
+    assert.equal(copyHours.st, hours.st);
+    assert.equal(copyHours.ot, hours.ot);
+    assert.equal(copyHours.dt, hours.dt);
+    assert.equal(copyHours.pd, hours.pd);
+    assert.equal(shahanCrewCostAmount(copy.billedAs, copyHours), cost);
+  });
+
+  it("crew Duplicate copies the source row — it does not assign a fresh Job setup calendar", () => {
+    const grid = readFileSync(fileURLToPath(new URL("../components/CraftLaborGrid.tsx", import.meta.url)), "utf8");
+    assert.match(grid, /duplicateCraftRow/);
+    assert.equal(grid.includes("assignCraftPosition(blankCraftRow()"), false);
+    const support = readFileSync(fileURLToPath(new URL("../components/SupportCrewCard.tsx", import.meta.url)), "utf8");
+    assert.match(support, /duplicateSupportLine/);
   });
 });

@@ -12,7 +12,7 @@ import {
   assignSupportBilledAs,
   assignSupportDuty,
   clampPerDiem,
-  cloneSupportLine,
+  duplicateSupportLine,
   hydrateSupportLine,
   syncSupportRows,
   type CalendarRange,
@@ -123,11 +123,12 @@ export function SupportCrewCard({
   }
 
   function duplicatePosition(row: SupportLine) {
-    const copy = cloneSupportLine(row);
+    const source = rows.find((item) => item.id === row.id) ?? row;
+    const copy = duplicateSupportLine(source);
     onRows((current) => {
-      const index = current.findIndex((item) => item.id === row.id);
+      const index = current.findIndex((item) => item.id === source.id);
       const next = [...current];
-      next.splice(index + 1, 0, copy);
+      next.splice(index < 0 ? current.length : index + 1, 0, copy);
       return next;
     });
     setOpenId(copy.id);

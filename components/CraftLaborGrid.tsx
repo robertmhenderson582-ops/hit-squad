@@ -9,7 +9,7 @@ import {
   assignCraftPosition,
   blankCraftRow,
   clampPerDiem,
-  cloneCraftRow,
+  duplicateCraftRow,
   type CalendarRange,
   type CraftRow,
 } from "@/lib/craft-labor";
@@ -121,12 +121,14 @@ export function CraftLaborGrid({
     setOpenId((current) => (current === row.id ? null : current));
   }
 
-  function duplicatePosition(row: CraftRow) {
-    const copy = cloneCraftRow(row);
+  function duplicatePosition(rowId: string) {
+    const source = rows.find((item) => item.id === rowId);
+    if (!source) return;
+    const copy = duplicateCraftRow(source);
     onRows((current) => {
-      const index = current.findIndex((item) => item.id === row.id);
+      const index = current.findIndex((item) => item.id === source.id);
       const next = [...current];
-      next.splice(index + 1, 0, copy);
+      next.splice(index < 0 ? current.length : index + 1, 0, copy);
       return next;
     });
   }
@@ -201,7 +203,7 @@ export function CraftLaborGrid({
                       ),
                     )
                   }
-                  onDuplicate={() => duplicatePosition(row)}
+                  onDuplicate={() => duplicatePosition(row.id)}
                   onRemove={() => void removePosition(row)}
                   catalog={positions}
                 />
