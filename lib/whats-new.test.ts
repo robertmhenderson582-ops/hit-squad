@@ -88,7 +88,8 @@ describe("inbox what's-new", () => {
       assert.equal(testerCopyIsSafe(word), false, word);
     }
 
-    const first = applyWhatsNew([], "tester-joseph-new", false);
+    assert.deepEqual(applyWhatsNew([], "tester-joseph-new", false, "josephmhenderson2002@gmail.com"), []);
+    const first = applyWhatsNew([], "tester-nathan-new", false, "nathanboyte@gmail.com");
     assert.equal(first.length, 1);
     assert.equal(first[0].personId, DESK_PERSON_ID);
     assert.equal(first[0].id, DESK_THREAD_ID);
@@ -125,12 +126,13 @@ describe("inbox what's-new", () => {
         ],
       },
     ];
-    const next = applyWhatsNew(prior, "tester-joseph-append", false);
+    const next = applyWhatsNew(prior, "tester-nathan-append", false, "nathanboyte@gmail.com");
     assert.equal(next.length, 1);
     assert.equal(next[0].messages.length, 2);
     assert.equal(next[0].messages[1]?.text, TESTER_WHATS_NEW);
     assert.equal(next[0].unread, 1);
-    assert.equal(applyWhatsNew(next, "tester-joseph-append", false)[0].messages.length, 2);
+    assert.equal(applyWhatsNew(next, "tester-nathan-append", false, "nathanboyte@gmail.com")[0].messages.length, 2);
+    assert.deepEqual(applyWhatsNew(prior, "tester-joseph-append", false, "josephmhenderson2002@gmail.com"), prior);
   });
 
   it("posts the V1.27 Inbox note for testers and owner", () => {
@@ -151,7 +153,7 @@ describe("inbox what's-new", () => {
       ),
       false,
     );
-    const live = applyWhatsNew([], "tester-v127-live", false);
+    const live = applyWhatsNew([], "tester-v127-live", false, "nathanboyte@gmail.com");
     assert.equal(live[0].id, "th-desk-v1.27");
     assert.equal(live[0].messages[0]?.text, TESTER_WHATS_NEW);
     const owner = applyWhatsNew([], "owner-v127-live", true);

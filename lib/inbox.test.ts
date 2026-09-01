@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { DESK_VERSION, applyWhatsNew, deskWhatsNewThread } from "./whats-new.ts";
 import {
   OWNER_CONTACTS,
+  contactsFor,
   ownerDemoThreads,
   readThreads,
   storeKey,
@@ -50,6 +51,13 @@ describe("inbox demo wipe", () => {
       OWNER_CONTACTS.some((person) => /James|Mark|Joseph/.test(person.name)),
       false,
     );
+    const ownerPeople = contactsFor(true, "robertmhenderson582@gmail.com");
+    assert.equal(ownerPeople.length, 5);
+    assert.equal(ownerPeople.some((person) => person.name === "Nathan Boyte"), true);
+    assert.equal(ownerPeople.some((person) => /Joseph|James|Mark/.test(person.name)), false);
+    const nathanPeople = contactsFor(false, "nathanboyte@gmail.com");
+    assert.equal(nathanPeople.some((person) => person.id === "owner"), true);
+    assert.equal(nathanPeople.some((person) => person.id === "tester-joseph"), false);
   });
 
   it("stored demo threads are stripped and the cleaned list is persisted", () => {

@@ -23,11 +23,37 @@ export function hasBuildDesk(user?: { role?: string } | null): boolean {
   return isOwner(user) || isOperator(user);
 }
 
+/** Owner / Novus Rate builder only. Testers never get the builder — including Joseph. */
 export function canUseRateBuilder(user?: { email?: string; role?: string } | null): boolean {
   if (!user) return false;
   if (isJosephEmail(user.email)) return false;
-  if (isTester(user)) return testerByEmail(user.email || "")?.rateBuilder !== false;
-  return true;
+  if (isTester(user)) return false;
+  return hasBuildDesk(user);
+}
+
+/** Nathan / John Beech roster label is "PM / estimator". Owner and Novus sit above that. */
+export function isProjectManager(user?: { email?: string; role?: string } | null): boolean {
+  if (!user?.email) return false;
+  const email = user.email.trim().toLowerCase();
+  const roster = VISUAL_ROSTER.find((row) => row.email === email);
+  return Boolean(roster?.permission.includes("PM"));
+}
+
+export function isProjectManagerOrAbove(user?: { email?: string; role?: string } | null): boolean {
+  if (!user) return false;
+  if (hasBuildDesk(user)) return true;
+  return isProjectManager(user);
+}
+
+/** Read-only wage lookup for the assigned company/site. Not the Rate builder. */
+export function canLookupRates(user?: { email?: string; role?: string } | null): boolean {
+  if (!user) return false;
+  if (isJosephEmail(user.email)) return false;
+  return isProjectManagerOrAbove(user);
+}
+
+export function canOpenRates(user?: { email?: string; role?: string } | null): boolean {
+  return canLookupRates(user) || canUseRateBuilder(user);
 }
 
 export function canUseViewAs(user?: { email?: string; role?: string } | null): boolean {

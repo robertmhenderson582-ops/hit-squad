@@ -18,13 +18,13 @@ import { useDeskBoard } from "@/components/useDeskBoard";
 import { boundOtLabel } from "@/lib/hours-clock";
 import { estimateStorageKey } from "@/lib/estimate-open";
 import { findLocalPack, localPackToEstimate } from "@/lib/local-estimates";
-import type { EstimateStatus } from "@/components/EstimateWorkspace";
+import { readEstimateStatus, writeEstimateStatus, type EstimateStatus } from "@/lib/estimate-status";
 
 export function EstimateDetail({ estimateId }: { estimateId: string }) {
   const alias = useAlias();
   const { board, error } = useDeskBoard();
   const [tab, setTab] = useState<EstimateTab>("summary");
-  const [status, setStatus] = useState<EstimateStatus>("Estimate");
+  const [status, setStatus] = useState<EstimateStatus>(() => readEstimateStatus(estimateId));
   const local = findLocalPack(estimateId);
   const estimate = board?.estimates.find((row) => row.id === estimateId) ?? (local ? localPackToEstimate(local) : undefined);
   const site = board?.sites.find((row) => row.id === estimate?.siteId);
@@ -76,6 +76,11 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
             code={estimate.code}
             window={estimate.window}
             existingClient
+            status={status}
+            onStatus={(next) => {
+              setStatus(next);
+              writeEstimateStatus(estimateId, next);
+            }}
           >
             {status !== "Estimate" ? (
               <>

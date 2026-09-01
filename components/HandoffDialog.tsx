@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ModalPortal } from "@/components/ModalPortal";
 import { deskFetch } from "@/lib/estimate-vault-client";
 import type { HandoffSeat } from "@/lib/handoff";
 
@@ -59,6 +60,7 @@ export function HandoffDialog({
   const selected = people.find((row) => row.email === email);
 
   return (
+    <ModalPortal>
     <div className="modal-scrim" role="dialog" aria-modal="true">
       <div className="estimate-modal px-6 py-5">
         <h2 className="font-display text-2xl text-[#163038]">{heading}</h2>
@@ -120,5 +122,6 @@ export function HandoffDialog({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

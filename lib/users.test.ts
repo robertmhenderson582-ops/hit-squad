@@ -10,7 +10,7 @@ import { hasForbiddenSeed } from "./tester-seats.ts";
 import { JOSEPH_EMAIL, SHANE_EMAIL, TESTER_SEATS } from "./tester-seats.ts";
 import { assignedCompany, resetCompanyAssignmentsForTests } from "./companies-store.ts";
 import { lensPeopleFromSeats } from "./desk-people.ts";
-import { canUseRateBuilder, canUseViewAs } from "./desk-role.ts";
+import { canLookupRates, canUseRateBuilder, canUseViewAs } from "./desk-role.ts";
 import { memoryDrive } from "./drive-estimates.ts";
 import {
   claimFirstPassword,
@@ -346,7 +346,8 @@ test("owner can add a tester login that must change password on first sign-in", 
   assert.match(user.id, /^custom-/);
   assert.equal(TESTER_SEATS.some((row) => row.email === ADDED), false);
   assert.equal(await assignedCompany(ADDED), "hitsquad");
-  assert.equal(canUseRateBuilder(user), true);
+  assert.equal(canUseRateBuilder(user), false);
+  assert.equal(canLookupRates(user), false);
   assert.equal(canUseViewAs(user), false);
   assert.equal(canUseRateBuilder({ email: JOSEPH_EMAIL, role: "tester" }), false);
 
@@ -455,7 +456,8 @@ test("owner-added vault seats can include Ben Peffley; git seed still cannot", a
   assert.equal(user.role, "tester");
   assert.equal(user.mustChangePassword, true);
   assert.equal(await assignedCompany(email), "hitsquad");
-  assert.equal(canUseRateBuilder(user), true);
+  assert.equal(canUseRateBuilder(user), false);
+  assert.equal(canLookupRates(user), false);
   assert.equal(canUseViewAs(user), false);
 
   const ok = loginOutcome({ email, password: ISSUED });

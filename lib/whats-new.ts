@@ -1,4 +1,5 @@
-import type { InboxMessage, InboxThread } from "./inbox";
+import { canReceiveDeskBot } from "./inbox-circle.ts";
+import type { InboxMessage, InboxThread } from "./inbox.ts";
 
 export const DESK_VERSION = "1.27.0";
 export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.27";
@@ -81,7 +82,9 @@ export function applyWhatsNew(
   threads: InboxThread[],
   seat: string,
   ownerChrome: boolean,
+  email?: string,
 ): InboxThread[] {
+  if (email !== undefined && !canReceiveDeskBot({ email })) return threads;
   if (!seat || hasSeenWhatsNew(seat)) return threads;
   markWhatsNewSeen(seat);
   const text = whatsNewCopy(ownerChrome);

@@ -10,8 +10,9 @@ import { unlockInboxAudio } from "@/lib/chime";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { InboxPanel } from "@/components/InboxPanel";
 import { useInbox } from "@/components/InboxProvider";
-import { useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { canUseInbox, canUseSuggestionBox } from "@/lib/inbox-circle";
 
 type Draft = {
   kind: TicketKind;
@@ -48,7 +49,10 @@ function announceTicketsChanged() {
 export function DeskFabs() {
   const { status, user } = useSession();
   const desk = useOwnerDesk();
+  const lens = useLensUser();
   const inbox = useInbox();
+  const showInbox = canUseInbox(lens);
+  const showTickets = canUseSuggestionBox(lens);
   const [ticketOpen, setTicketOpen] = useState(false);
   const [hiddenForShot, setHiddenForShot] = useState(false);
   const [markupSrc, setMarkupSrc] = useState<string | null>(null);
@@ -192,7 +196,7 @@ export function DeskFabs() {
       {inbox.toast ? <div className="inbox-toast">{inbox.toast}</div> : null}
       {note && !showTicket && !markupSrc ? <p className="fab-note">{note}</p> : null}
 
-      {inbox.open ? (
+      {showInbox && inbox.open ? (
         <section className="inbox-card" role="dialog" aria-label="Inbox" data-capture="ignore">
           <div className="flex shrink-0 justify-end">
             <button
@@ -213,7 +217,7 @@ export function DeskFabs() {
         </section>
       ) : null}
 
-      {showTicket ? (
+      {showTickets && showTicket ? (
         <div
           className="ticket-scrim"
           role="presentation"
@@ -224,7 +228,7 @@ export function DeskFabs() {
         />
       ) : null}
 
-      {showTicket ? (
+      {showTickets && showTicket ? (
         <section
           className="ticket-card"
           role="dialog"
@@ -321,6 +325,7 @@ export function DeskFabs() {
         </section>
       ) : null}
 
+      {showInbox ? (
       <button
         type="button"
         onClick={() => {
@@ -334,6 +339,8 @@ export function DeskFabs() {
         Inbox
         {inbox.unread > 0 ? <span className="inbox-count">{inbox.unread}</span> : null}
       </button>
+      ) : null}
+      {showTickets ? (
       <button
         type="button"
         onClick={() => {
@@ -345,6 +352,7 @@ export function DeskFabs() {
       >
         Suggestion Box
       </button>
+      ) : null}
     </div>
     {markupSrc ? (
       <CaptureMarkup

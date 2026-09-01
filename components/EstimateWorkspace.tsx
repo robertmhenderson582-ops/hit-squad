@@ -14,13 +14,15 @@ import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { RfqPreview } from "@/components/RfqPreview";
 import { EstimateTotalRail } from "@/components/EstimateTotalRail";
+import { ModalPortal } from "@/components/ModalPortal";
 import { RatesDesk } from "@/components/RatesDesk";
 import { WOOD_RIVER_SITE_ID } from "@/lib/rate-books";
 import { isWoodRiverSite } from "@/lib/shahan-wood-river";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
+import type { EstimateStatus } from "@/lib/estimate-status";
 import type { StaffingLine } from "@/lib/types";
 
-export type EstimateStatus = "Estimate" | "Submitted" | "Awarded";
+export type { EstimateStatus };
 
 const TABS = [
   { id: "summary", label: "Job setup", icon: "📄" },
@@ -56,9 +58,9 @@ export function EstimateWorkspace({
   total,
   packageId,
   staffing,
-  status = "Estimate",
-  onStatus,
-  statusLocked = false,
+  status: _status = "Estimate",
+  onStatus: _onStatus,
+  statusLocked: _statusLocked = false,
   children,
 }: {
   crumb: string;
@@ -112,31 +114,6 @@ export function EstimateWorkspace({
             <p className="truncate text-sm text-white/70">{crumb}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {(["Estimate", "Submitted", "Awarded"] as const).map((item) => {
-                const locked = statusLocked && item !== "Estimate";
-                const active = status === item;
-                return (
-                  <button
-                    key={item}
-                    type="button"
-                    disabled={locked}
-                    title={locked ? "New sheet stays Estimate" : undefined}
-                    onClick={() => {
-                      if (locked) return;
-                      onStatus?.(item);
-                    }}
-                    className={`rounded-full px-3 py-1 text-xs ${
-                      active
-                        ? "bg-white text-[#0b3a43]"
-                        : "border border-white/25 text-white/80"
-                    } ${locked ? "cursor-not-allowed opacity-50" : ""}`}
-                  >
-                    {item}
-                  </button>
-                );
-              })}
-            </div>
             <InboxBadge />
             <ThemeFlip />
             <ShareTurnover title={name || crumb} packId={packageId} />
@@ -233,6 +210,7 @@ export function EstimateWorkspace({
         <EstimateTotalRail client={jobClient || client} site={jobSite || site} />
       </div>
       {confirmClose && packageId ? (
+        <ModalPortal>
         <div className="modal-scrim" role="dialog" aria-modal="true">
           <div className="estimate-modal px-6 py-5">
             <h2 className="font-display text-2xl text-[#163038]">Close out</h2>
@@ -258,6 +236,7 @@ export function EstimateWorkspace({
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </div>
   );

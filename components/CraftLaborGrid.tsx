@@ -22,7 +22,7 @@ import {
 import { CrewPhaseCards } from "@/components/CrewPhaseCards";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { defaultLaborClass, type LaborClass } from "@/lib/labor-class";
-import { formatShahanCrewCost, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
+import { formatDeskDollars, formatShahanCrewCost, shahanCrewCostAmount, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
 
 const HEADERS = ["POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST"];
 
@@ -57,6 +57,9 @@ export function CraftLaborGrid({
         return {
           ...row,
           ...hours,
+          costAmount: shahanCrewCostAmount(title, hours, {
+            laborClass: row.laborClassOverride ?? defaultLaborClass(title),
+          }),
           cost: formatShahanCrewCost(title, hours, {
             laborClass: row.laborClassOverride ?? defaultLaborClass(title),
           }),
@@ -66,6 +69,11 @@ export function CraftLaborGrid({
   );
 
   const totals = useMemo(() => sumSplits(computed), [computed]);
+  const costTotal = useMemo(
+    () => Math.round(computed.reduce((sum, row) => sum + row.costAmount, 0) * 100) / 100,
+    [computed],
+  );
+  const costLabel = formatDeskDollars(costTotal);
 
   function patchRow(id: string, patch: Partial<CraftRow>) {
     onRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -130,7 +138,8 @@ export function CraftLaborGrid({
           <h2 className="font-display text-2xl font-semibold text-[#163038]">{title}</h2>
           <p className="text-sm text-[#5b6f73]">
             {totals.hours.toLocaleString()} hrs · {totals.st.toLocaleString()} ST · {totals.ot.toLocaleString()} OT ·{" "}
-            {totals.dt.toLocaleString()} DT
+            {totals.dt.toLocaleString()} DT · {totals.pd.toLocaleString()} PD
+            {costLabel ? ` · ${costLabel}` : ""}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -199,6 +208,22 @@ export function CraftLaborGrid({
               );
             })}
           </tbody>
+          {computed.length ? (
+            <tfoot>
+              <tr className="border-t-2 border-steel">
+                <td className="px-2 py-3 text-sm font-semibold text-[#163038]">Grand total</td>
+                <td className="px-2 py-3" />
+                <td className="px-2 py-3" />
+                <td className="hud-readout px-2 py-3">{totals.st.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-3">{totals.ot.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-3">{totals.dt.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-3">{totals.pd.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-3">{totals.hours.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-3 font-semibold">{costLabel || "—"}</td>
+                <td className="px-2 py-3" />
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </GripToPan>
     </section>
