@@ -10,6 +10,7 @@ import {
   blankCraftRow,
   applyExtraRangeEnvelopes,
   clampPerDiem,
+  setPhaseOff,
   duplicateCraftRow,
   type CalendarRange,
   type CraftRow,
@@ -207,6 +208,13 @@ export function CraftLaborGrid({
                       ),
                     )
                   }
+                  onSetPhaseOff={(phaseId, off) =>
+                    onRows((current) =>
+                      current.map((item) =>
+                        item.id === row.id ? { ...item, ranges: setPhaseOff(item.ranges, phaseId, off) } : item,
+                      ),
+                    )
+                  }
                   onDuplicate={() => duplicatePosition(row.id)}
                   onRemove={() => void removePosition(row)}
                   catalog={positions}
@@ -247,6 +255,7 @@ function CraftAccordionRow({
   onPatchRange,
   onAddRange,
   onRemoveRange,
+  onSetPhaseOff,
   onDuplicate,
   onRemove,
   catalog,
@@ -261,6 +270,7 @@ function CraftAccordionRow({
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
   onAddRange: (range: CalendarRange) => void;
   onRemoveRange: (rangeId: string) => void;
+  onSetPhaseOff: (phaseId: string, off: boolean) => void;
   onDuplicate: () => void;
   onRemove: () => void;
   catalog?: readonly string[];
@@ -408,6 +418,7 @@ function CraftAccordionRow({
               onPatchRange={onPatchRange}
               onAddRange={onAddRange}
               onRemoveRange={onRemoveRange}
+              onSetPhaseOff={onSetPhaseOff}
             />
           </td>
         </tr>

@@ -13,6 +13,7 @@ import {
   assignSupportBilledAs,
   assignSupportDuty,
   clampPerDiem,
+  setPhaseOff,
   duplicateSupportLine,
   hydrateSupportLine,
   syncSupportRows,
@@ -206,6 +207,9 @@ export function SupportCrewCard({
                   onRemoveRange={(rangeId) =>
                     patchRow(row.id, { ...row, ranges: row.ranges.filter((range) => range.id !== rangeId) })
                   }
+                  onSetPhaseOff={(phaseId, off) =>
+                    patchRow(row.id, { ...row, ranges: setPhaseOff(row.ranges, phaseId, off) })
+                  }
                   onDuplicate={() => duplicatePosition(row)}
                   onRemove={() => void remove(row)}
                 />
@@ -246,6 +250,7 @@ function SupportAccordionRow({
   onPatchRange,
   onAddRange,
   onRemoveRange,
+  onSetPhaseOff,
   onDuplicate,
   onRemove,
 }: {
@@ -259,6 +264,7 @@ function SupportAccordionRow({
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
   onAddRange: (range: CalendarRange) => void;
   onRemoveRange: (rangeId: string) => void;
+  onSetPhaseOff: (phaseId: string, off: boolean) => void;
   onDuplicate: () => void;
   onRemove: () => void;
 }) {
@@ -373,6 +379,7 @@ function SupportAccordionRow({
               onPatchRange={onPatchRange}
               onAddRange={onAddRange}
               onRemoveRange={onRemoveRange}
+              onSetPhaseOff={onSetPhaseOff}
             />
           </td>
         </tr>

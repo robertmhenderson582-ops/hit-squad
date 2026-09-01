@@ -384,6 +384,8 @@ export function normalizeCalendarRange(raw: Partial<CalendarRange> | null | unde
     shift: raw?.shift === "Nights" || raw?.shift === "Days & nights" ? raw.shift : raw?.shift === "Days" ? "Days" : undefined,
     skipDates: Array.isArray(raw?.skipDates) ? raw.skipDates.filter((item): item is string => typeof item === "string") : [],
     unitId: typeof raw?.unitId === "string" && raw.unitId ? raw.unitId : undefined,
+    description: typeof raw?.description === "string" ? raw.description : undefined,
+    off: raw?.off ? true : undefined,
   };
 }
 

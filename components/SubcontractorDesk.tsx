@@ -5,7 +5,7 @@ import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { CrewPhaseCards } from "@/components/CrewPhaseCards";
 import { GripToPan } from "@/components/GripToPan";
 import { useEstimatePackage } from "@/components/EstimatePackage";
-import { applyExtraRangeEnvelopes, clampPerDiem, type CalendarRange } from "@/lib/craft-labor";
+import { applyExtraRangeEnvelopes, clampPerDiem, setPhaseOff, type CalendarRange } from "@/lib/craft-labor";
 import {
   AFFILIATE_LABEL,
   SUB_CARD_KINDS,
@@ -730,6 +730,9 @@ function SubVendorCard({
                             onRemoveRange={(rangeId) =>
                               patchLabor(index, { ...row, ranges: row.ranges.filter((range) => range.id !== rangeId) })
                             }
+                            onSetPhaseOff={(phaseId, off) =>
+                              patchLabor(index, { ...row, ranges: setPhaseOff(row.ranges, phaseId, off) })
+                            }
                             onRemove={() =>
                               void confirmRemove(row.position || "this position", {
                                 title: "Remove this position?",
@@ -909,6 +912,7 @@ function SubLaborRow({
   onPatchRange,
   onAddRange,
   onRemoveRange,
+  onSetPhaseOff,
   onRemove,
 }: {
   row: SubLaborPosition;
@@ -922,6 +926,7 @@ function SubLaborRow({
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
   onAddRange: (range: CalendarRange) => void;
   onRemoveRange: (rangeId: string) => void;
+  onSetPhaseOff: (phaseId: string, off: boolean) => void;
   onRemove: () => void;
 }) {
   return (
@@ -990,6 +995,7 @@ function SubLaborRow({
               onPatchRange={onPatchRange}
               onAddRange={onAddRange}
               onRemoveRange={onRemoveRange}
+              onSetPhaseOff={onSetPhaseOff}
             />
           </td>
         </tr>

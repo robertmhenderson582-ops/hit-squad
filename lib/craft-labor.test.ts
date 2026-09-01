@@ -19,6 +19,8 @@ import {
   extraRangeEnvelope,
   extraRangeFromPhase,
   extraRangeIsValid,
+  phaseIsOff,
+  setPhaseOff,
   hydrateSupportLine,
   isListedRangeDescription,
   nextUnitId,
@@ -669,5 +671,118 @@ describe("extra range description is a label only", () => {
     assert.match(support, /CrewPhaseCards/);
     assert.match(grid, /applyExtraRangeEnvelopes/);
     assert.match(support, /applyExtraRangeEnvelopes/);
+    assert.match(cards, /Off this position/);
+    assert.match(cards, /Restore/);
+    assert.match(cards, /onSetPhaseOff/);
+    assert.match(grid, /setPhaseOff/);
+    assert.match(support, /setPhaseOff/);
+  });
+});
+
+describe("per-position phase off preserves hours", () => {
+  it("killing an empty Post leaves Mechanical hours; Post bills 0", () => {
+    const phases = defaultPhases();
+    assert.equal(phases.find((row) => row.id === "post")?.on, true);
+    const clerk = assignCraftPosition(blankCraftRow(), "Project Controls", phases);
+    const other = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    clerk.ranges = clerk.ranges.map((range) =>
+      range.phaseId === "post" ? { ...range, start: "", end: "", hoursPerShift: 0 } : range,
+    );
+    const before = crewHours(clerk);
+    const mech = computeRowHours(
+      { ...clerk, ranges: clerk.ranges.filter((range) => range.phaseId === "mech") },
+      WOOD.site,
+      WOOD.client,
+    );
+    assert.ok(mech.hours > 0);
+    const postBefore = computeRowHours(
+      { ...clerk, ranges: clerk.ranges.filter((range) => range.phaseId === "post") },
+      WOOD.site,
+      WOOD.client,
+    );
+    assert.equal(postBefore.hours, 0);
+
+    clerk.ranges = setPhaseOff(clerk.ranges, "post", true);
+    assert.equal(phaseIsOff(clerk.ranges, "post"), true);
+    assert.equal(phaseIsOff(clerk.ranges, "mech"), false);
+    const after = crewHours(clerk);
+    assert.equal(splitKey(after), splitKey(before));
+    assert.equal(
+      splitKey(computeRowHours({ ...clerk, ranges: clerk.ranges.filter((range) => range.phaseId === "mech") }, WOOD.site, WOOD.client)),
+      splitKey(mech),
+    );
+    assert.equal(
+      computeRowHours({ ...clerk, ranges: clerk.ranges.filter((range) => range.phaseId === "post" && !range.off) }, WOOD.site, WOOD.client)
+        .hours,
+      0,
+    );
+
+    const otherAfter = crewHours(other);
+    assert.ok(otherAfter.hours > 0);
+    assert.equal(phaseIsOff(other.ranges, "post"), false);
+    const otherPost = computeRowHours(
+      { ...other, ranges: other.ranges.filter((range) => range.phaseId === "post") },
+      WOOD.site,
+      WOOD.client,
+    );
+    assert.equal(otherPost.hours, 48);
+    assert.equal(phases.find((row) => row.id === "post")?.on, true);
+  });
+
+  it("killing Mechanical drops those hours; Restore brings the same ST/OT/DT/PD back", () => {
+    const phases = defaultPhases();
+    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const full = crewHours(row);
+    const mech = computeRowHours(
+      { ...row, ranges: row.ranges.filter((range) => range.phaseId === "mech") },
+      WOOD.site,
+      WOOD.client,
+    );
+    assert.equal(splitKey(mech), "80/40/0/12/120");
+    assert.equal(splitKey(full), "268/76/24/36/368");
+
+    const killed = { ...row, ranges: setPhaseOff(row.ranges, "mech", true) };
+    const dropped = crewHours(killed);
+    assert.equal(dropped.st, full.st - 80);
+    assert.equal(dropped.ot, full.ot - 40);
+    assert.equal(dropped.dt, full.dt);
+    assert.equal(dropped.pd, full.pd - 12);
+    assert.equal(dropped.hours, full.hours - 120);
+    assert.equal(killed.ranges.filter((range) => range.phaseId === "mech").every((range) => range.off), true);
+    assert.equal(killed.ranges.filter((range) => range.phaseId === "mech")[0]?.hoursPerShift, 10);
+
+    const restored = { ...killed, ranges: setPhaseOff(killed.ranges, "mech", false) };
+    assert.equal(splitKey(crewHours(restored)), splitKey(full));
+    assert.equal(phaseIsOff(restored.ranges, "mech"), false);
+
+    const synced = syncCraftRows([killed], phases)[0];
+    assert.equal(phaseIsOff(synced.ranges, "mech"), true);
+    assert.equal(splitKey(crewHours(synced)), splitKey(dropped));
+    assert.equal(splitKey(crewHours({ ...synced, ranges: setPhaseOff(synced.ranges, "mech", false) })), splitKey(full));
+  });
+
+  it("extras on a killed phase go with it and do not orphan hours", () => {
+    const phases = defaultPhases();
+    const pre = phases.find((row) => row.id === "pre");
+    assert.ok(pre);
+    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const first = row.ranges.find((range) => range.phaseId === "pre");
+    const extra = insidePreComeback(extraRangeFromPhase(pre, first));
+    extra.description = "Onboarding/Learning";
+    row.ranges.push(extra);
+    const withExtra = crewHours(row);
+    assert.equal(splitKey(withExtra), "308/78.5/24/41/410.5");
+    const withoutPre = computeRowHours(
+      { ...row, ranges: row.ranges.filter((range) => range.phaseId !== "pre") },
+      WOOD.site,
+      WOOD.client,
+    );
+    row.ranges = setPhaseOff(row.ranges, "pre", true);
+    assert.equal(row.ranges.filter((range) => range.phaseId === "pre").every((range) => range.off), true);
+    assert.equal(row.ranges.filter((range) => range.phaseId === "pre").length, 2);
+    assert.equal(splitKey(crewHours(row)), splitKey(withoutPre));
+    row.ranges = setPhaseOff(row.ranges, "pre", false);
+    assert.equal(splitKey(crewHours(row)), splitKey(withExtra));
+    assert.equal(row.ranges.filter((range) => range.phaseId === "pre")[1]?.description, "Onboarding/Learning");
   });
 });

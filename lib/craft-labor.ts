@@ -52,7 +52,23 @@ export type CalendarRange = {
   unitId?: string;
   /** Label only. Never feeds ST / OT / DT / PD / hours / cost. */
   description?: string;
+  /** Off on this position only. Dates stay saved. Hours do not bill. */
+  off?: boolean;
 };
+
+export function rangeIsOff(range: Pick<CalendarRange, "off">): boolean {
+  return Boolean(range.off);
+}
+
+export function phaseIsOff(ranges: CalendarRange[], phaseId: string): boolean {
+  const list = ranges.filter((range) => range.phaseId === phaseId);
+  return list.length > 0 && list.every((range) => range.off);
+}
+
+/** Mark every range on that phase, including extras, so killed hours cannot orphan. */
+export function setPhaseOff(ranges: CalendarRange[], phaseId: string, off: boolean): CalendarRange[] {
+  return ranges.map((range) => (range.phaseId === phaseId ? { ...range, off } : range));
+}
 
 export function rangeDescriptionLabel(description?: string): string {
   return description?.trim() ?? "";
@@ -248,6 +264,7 @@ export function cloneCraftRow(row: CraftRow): CraftRow {
       shift: range.shift,
       skipDates: range.skipDates ? [...range.skipDates] : [],
       description: range.description,
+      off: range.off,
     })),
   };
 }
@@ -309,6 +326,7 @@ export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange, unitId?: str
     skipDates: prev?.skipDates ? [...prev.skipDates] : [...(seed.skipDates ?? [])],
     unitId: unitId ?? prev?.unitId,
     description: prev?.description,
+    off: prev?.off,
   };
 }
 
@@ -329,6 +347,7 @@ export function extraRangeFromPhase(phase: PhaseRow, template?: CalendarRange, u
     days: template?.days ? [...template.days] : [...base.days],
     unitId: newUnit ? unitId : template?.unitId,
     description: "",
+    off: template?.off,
   };
 }
 
@@ -376,6 +395,7 @@ export function rangesFromPhases(
         next.end = prev.end;
         next.hoursPerShift = prev.hoursPerShift;
         next.description = prev.description;
+        next.off = prev.off;
         const first = prior[0];
         if (first && extraSharesFirstEnvelope(next, first)) {
           return clampExtraRangeDates(next, extraRangeEnvelope(first, source));

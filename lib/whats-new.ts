@@ -10,11 +10,13 @@ export const DESK_PERSON_ID = "desk";
 export const TESTER_WHATS_NEW = [
   "Hit Squad Project Controls V1.31",
   "• Extra Crew date ranges can be labeled (hiring progression, training, onboarding, or your own words). Hours do not change. Extra dates stay inside the first stretch on that phase.",
+  "• You can turn off a phase on one Crew position. Job setup stays on. Hours are saved; Restore brings them back.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
   "Hit Squad Project Controls V1.31",
   "• Extra Crew date ranges have a Description field: Hiring progression, Training, Onboarding/Learning, or Other free text. Description does not change ST / OT / DT / PD / hours / cost. Extra Start/End clamp to the first range on that phase (intersection with Job setup phase dates when the card is bound).",
+  "• Per-position phase Off preserves dates and hours (off flag). Job setup stays on. Restore returns the same ST / OT / DT / PD. Confirm when that phase has hours.",
 ].join("\n");
 
 /** Same as the live V1.31 note. Kept so older imports still resolve. */

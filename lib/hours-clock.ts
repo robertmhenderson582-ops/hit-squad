@@ -319,6 +319,7 @@ export function computeRowHours(
       otAfter8?: boolean;
       shift?: "Days" | "Nights" | "Days & nights";
       skipDates?: string[];
+      off?: boolean;
     }[];
   },
   site = "",
@@ -330,7 +331,9 @@ export function computeRowHours(
     return { st: 0, ot: 0, dt: 0, pd: 0, hours: 0, workedDays: 0 };
   }
   return sumSplits(
-    row.ranges.map((range) =>
+    row.ranges
+      .filter((range) => !range.off)
+      .map((range) =>
       computeRangeHours({
         position: row.position,
         site,

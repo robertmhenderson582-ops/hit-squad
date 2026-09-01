@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DateField } from "@/components/DateField";
+import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { GripToPan } from "@/components/GripToPan";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import {
@@ -15,6 +16,7 @@ import {
   extraRangeFromPhase,
   extraSharesFirstEnvelope,
   nextUnitId,
+  phaseIsOff,
   phaseRangesOverlap,
   nightPerDiemCap,
   perDiemCap,
@@ -25,7 +27,7 @@ import {
   type CraftShift,
   type ExtraRangeEnvelope,
 } from "@/lib/craft-labor";
-import { computeRangeHours } from "@/lib/hours-clock";
+import { computeRangeHours, computeRowHours } from "@/lib/hours-clock";
 import {
   PHASE_IDS,
   PHASE_NAMES,
@@ -43,6 +45,7 @@ export function CrewPhaseCards({
   onPatchRange,
   onAddRange,
   onRemoveRange,
+  onSetPhaseOff,
 }: {
   row: CraftRow;
   site: string;
@@ -50,6 +53,7 @@ export function CrewPhaseCards({
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
   onAddRange: (range: CalendarRange) => void;
   onRemoveRange: (rangeId: string) => void;
+  onSetPhaseOff: (phaseId: string, off: boolean) => void;
 }) {
   const pack = useEstimatePackage();
   const multi = Boolean(pack.schedule.multiUnits);
@@ -78,6 +82,7 @@ export function CrewPhaseCards({
               onPatchRange={onPatchRange}
               onAddRange={() => onAddRange(extraRangeFromPhase(source, ranges[0], nextId))}
               onRemoveRange={onRemoveRange}
+              onSetPhaseOff={onSetPhaseOff}
             />
           );
         })}
@@ -100,6 +105,7 @@ function PhaseWindowCard({
   onPatchRange,
   onAddRange,
   onRemoveRange,
+  onSetPhaseOff,
   units,
 }: {
   phase: PhaseRow;
@@ -110,12 +116,29 @@ function PhaseWindowCard({
   onPatchRange: (rangeId: string, patch: Partial<CalendarRange>) => void;
   onAddRange: () => void;
   onRemoveRange: (rangeId: string) => void;
+  onSetPhaseOff: (phaseId: string, off: boolean) => void;
   units: JobUnit[];
 }) {
-  const off = ranges.length === 0 && !phase.on;
+  const confirmRemove = useConfirmRemove();
+  const jobOff = ranges.length === 0 && !phase.on;
+  const killed = phaseIsOff(ranges, phase.id);
+  const off = jobOff || killed;
   const overlap = phaseRangesOverlap(ranges, phase.id);
   const first = ranges[0];
   const envelope = extraRangeEnvelope(first, phase);
+  const phaseName = PHASE_NAMES[phase.id as PhaseId];
+
+  async function turnOff() {
+    const billed = computeRowHours({ ...row, ranges: ranges.filter((range) => !range.off) }, site, client);
+    if (billed.hours > 0) {
+      const ok = await confirmRemove(
+        `${phaseName} hours leave this position only. Restore brings them back. Job setup stays on.`,
+        { title: "Turn off this phase on this position?", confirmLabel: "Turn off" },
+      );
+      if (!ok) return;
+    }
+    onSetPhaseOff(phase.id, true);
+  }
 
   function patchRange(range: CalendarRange, index: number, patch: Partial<CalendarRange>) {
     if (index === 0) {
@@ -141,10 +164,23 @@ function PhaseWindowCard({
 
   return (
     <article className={`crew-phase-card ${off ? "is-off" : ""}`}>
-      <p className={`crew-phase-bar phase-name ${PHASE_TONES[phase.id as PhaseId]}`}>{PHASE_NAMES[phase.id]}</p>
+      <p className={`crew-phase-bar phase-name ${PHASE_TONES[phase.id as PhaseId]}`}>{phaseName}</p>
       <div className="space-y-3 px-3 py-3">
-        {off ? (
+        {jobOff ? (
           <p className="text-xs text-[#5b6f73]">Off — dates stay locked. Turn it on in Job setup.</p>
+        ) : killed ? (
+          <div>
+            <p className="text-xs text-[#5b6f73]">
+              Off on this position. Hours stay saved and do not bill. Other positions and Job setup stay as they are.
+            </p>
+            <button
+              type="button"
+              onClick={() => onSetPhaseOff(phase.id, false)}
+              className="mt-2 text-sm text-steel underline underline-offset-2"
+            >
+              Restore
+            </button>
+          </div>
         ) : (
           <>
             {ranges.map((range, index) => (
@@ -181,6 +217,14 @@ function PhaseWindowCard({
                   the first.
                 </p>
               ) : null}
+              <button
+                type="button"
+                onClick={() => void turnOff()}
+                title="Turn this phase off on this position only."
+                className="mt-2 text-xs text-[#5b6f73] underline"
+              >
+                Off this position
+              </button>
             </div>
           </>
         )}
