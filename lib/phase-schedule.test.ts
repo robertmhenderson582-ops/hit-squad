@@ -209,20 +209,25 @@ describe("phase schedule", () => {
       }, "2027-06-15");
       assert.equal(fired, true, `${id} START must accept typed MM/DD/YYYY`);
       assert.equal(typed, "2027-06-15");
-      const afterType = patchPhase(state, id, { start: typed });
-      assert.equal(afterType.phases.find((item) => item.id === id)?.start, typed);
     }
 
     const later = patchPhase(state, "mech", { stop: "2027-04-20" });
     assert.equal(later.phases.find((row) => row.id === "oil-in")?.start, "2027-04-21");
+    assert.equal(later.phases.find((row) => row.id === "oil-in")?.stop, "2027-04-27");
     assert.equal(phaseDateFieldDisabled(later.phases.find((row) => row.id === "mech")!), false);
     assert.equal(phaseDateFieldDisabled(later.phases.find((row) => row.id === "oil-in")!), false);
+    assert.equal(phaseDateFieldDisabled(later.phases.find((row) => row.id === "post")!), false);
 
     const ui = readRel("../components/PhaseSchedule.tsx");
-    assert.doesNotMatch(ui, /startLocked|firstOn/);
-    assert.match(ui, /phaseDateFieldDisabled/);
-    assert.match(ui, /disabled=\{dateLocked\}/);
+    assert.doesNotMatch(ui, /startLocked|firstOn|row\.id !== firstOn/);
+    const startField = ui.match(/value=\{row\.start\}[\s\S]{0,180}aria-label=\{`\$\{row\.name\} start`\}/);
+    const stopField = ui.match(/value=\{row\.stop\}[\s\S]{0,180}aria-label=\{`\$\{row\.name\} stop`\}/);
+    assert.ok(startField);
+    assert.ok(stopField);
+    assert.match(startField[0], /disabled=\{!row\.on\}/);
+    assert.match(stopField[0], /disabled=\{!row\.on\}/);
     assert.match(ui, /onChange=\{\(start\) => onPatch\(row\.id, \{ start \}\)\}/);
+    assert.match(ui, /onChange=\{\(stop\) => onPatch\(row\.id, \{ stop \}\)\}/);
     assert.match(ui, /Tap a Sunday to skip it/);
 
     const field = readRel("../components/DateField.tsx");

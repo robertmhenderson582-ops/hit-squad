@@ -353,32 +353,9 @@ export function cascadePhases(phases: PhaseRow[]): PhaseRow[] {
   });
 }
 
-/** START and STOP stay typable/pickable whenever the phase is ON. Cascade still packs later rows. */
+/** START uses the same ON-only lock as STOP. Cascade still packs later starts from a stop change. */
 export function phaseDateFieldDisabled(row: Pick<PhaseRow, "on">): boolean {
   return !row.on;
-}
-
-/** Keep the anchored row as patched; pack only later ON phases from its stop. */
-export function cascadeFromPhase(phases: PhaseRow[], anchorId: PhaseId): PhaseRow[] {
-  const anchor = phases.findIndex((row) => row.id === anchorId);
-  let prevOnStop: string | null = null;
-  return phases.map((row, index) => {
-    if (index <= anchor) {
-      if (row.on) prevOnStop = row.stop;
-      return row;
-    }
-    if (!row.on) return row;
-    const length = lengthOf(row);
-    let start = row.start;
-    let stop = row.stop;
-    if (prevOnStop) {
-      start = addDays(prevOnStop, 1);
-      stop = addDays(start, length - 1);
-    }
-    if (stop < start) stop = start;
-    prevOnStop = stop;
-    return { ...row, start, stop };
-  });
 }
 
 export function setProjectStart(state: PhaseScheduleState, projectStart: string): PhaseScheduleState {
@@ -400,7 +377,7 @@ export function patchPhase(state: PhaseScheduleState, id: PhaseId, patch: Partia
     next.hoursPerDay = Math.max(0, next.hoursPerDay);
     return next;
   });
-  const packed = Object.hasOwn(patch, "start") ? cascadeFromPhase(phases, id) : cascadePhases(phases);
+  const packed = cascadePhases(phases);
   const pre = packed.find((row) => row.id === "pre");
   return {
     ...state,
