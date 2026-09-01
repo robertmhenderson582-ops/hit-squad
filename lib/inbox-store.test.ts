@@ -3,22 +3,47 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
+import { INBOX_VAULT_KIND, INBOX_VAULT_NAME, readVaultJson } from "./drive-data.ts";
+import { memoryDrive } from "./drive-estimates.ts";
 import { JOSEPH_EMAIL } from "./tester-seats.ts";
 import {
   forgetInboxCacheForTests,
+  hideInboxFor,
   listInboxFor,
+  mergeInboxMessages,
   postInboxMessage,
   resetInboxStoreForTests,
+  staleWarmInboxInstanceForTests,
+  useInboxVaultForTests,
+  type StoredInboxMessage,
 } from "./inbox-store.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-inbox-"));
+const OWNER = "robertmhenderson582@gmail.com";
+const NATHAN = "nathanboyte@gmail.com";
 
 afterEach(() => {
   forgetInboxCacheForTests();
   resetInboxStoreForTests();
 });
 
-describe("inbox store", () => {
+function row(id: string, extra?: Partial<StoredInboxMessage>): StoredInboxMessage {
+  return {
+    id,
+    threadKey: `${NATHAN}|${OWNER}`,
+    fromEmail: OWNER,
+    fromName: "Robert Henderson",
+    toEmail: NATHAN,
+    text: id,
+    photo: null,
+    sentAt: "2026-09-01T00:00:00",
+    readBy: [OWNER],
+    hiddenBy: [],
+    ...extra,
+  };
+}
+
+describe("inbox store", { concurrency: 1 }, () => {
   it("lets the six see each other's messages and keeps Joseph out", async () => {
     resetInboxStoreForTests(join(dir, "inbox.json"));
     const posted = await postInboxMessage({
@@ -47,4 +72,188 @@ describe("inbox store", () => {
     assert.equal(steal.status, 403);
     assert.deepEqual(await listInboxFor(JOSEPH_EMAIL), []);
   });
+
+  it("two posts from different hydrate resets keep both messages in the vault", async () => {
+    const drive = memoryDrive();
+    resetInboxStoreForTests(join(dir, "wipe.json"));
+    useInboxVaultForTests(drive);
+
+    const ownerPost = await postInboxMessage({
+      fromEmail: OWNER,
+      fromName: "Robert Henderson",
+      toEmail: NATHAN,
+      text: "Owner to Nathan",
+    });
+    assert.equal(ownerPost.ok, true);
+
+    staleWarmInboxInstanceForTests();
+
+    const nathanPost = await postInboxMessage({
+      fromEmail: NATHAN,
+      fromName: "Nathan Boyte",
+      toEmail: OWNER,
+      text: "Nathan to owner",
+    });
+    assert.equal(nathanPost.ok, true);
+
+    const vault = await readVaultMessages(drive);
+    assert.equal(vault.some((message) => message.text === "Owner to Nathan"), true);
+    assert.equal(vault.some((message) => message.text === "Nathan to owner"), true);
+    assert.equal(vault.length, 2);
+  });
+
+  it("a GET after another instance's POST sees the new row", async () => {
+    const drive = memoryDrive();
+    resetInboxStoreForTests(join(dir, "fresh-get.json"));
+    useInboxVaultForTests(drive);
+
+    await postInboxMessage({
+      fromEmail: OWNER,
+      fromName: "Robert Henderson",
+      toEmail: NATHAN,
+      text: "Landed on vault",
+    });
+
+    staleWarmInboxInstanceForTests();
+    const nathan = await listInboxFor(NATHAN);
+    const fromRobert = nathan.find((thread) => thread.personId === "owner");
+    assert.ok(fromRobert);
+    assert.equal(fromRobert.messages.some((message) => message.text === "Landed on vault"), true);
+    assert.equal(fromRobert.messages[0]?.from, "them");
+  });
+
+  it("owner → Nathan is on Nathan's Inbox as from them", async () => {
+    resetInboxStoreForTests(join(dir, "owner-to-nathan.json"));
+    const posted = await postInboxMessage({
+      fromEmail: OWNER,
+      fromName: "Robert Henderson",
+      toEmail: NATHAN,
+      text: "Hi Nathan",
+    });
+    assert.equal(posted.ok, true);
+    const nathan = await listInboxFor(NATHAN);
+    const thread = nathan.find((row) => row.personId === "owner");
+    assert.ok(thread);
+    assert.equal(thread.messages.some((message) => message.from === "them" && message.text === "Hi Nathan"), true);
+    assert.equal(thread.messages.some((message) => message.author === "Robert Henderson"), true);
+  });
+
+  it("Nathan → owner is on the owner Inbox as from them", async () => {
+    resetInboxStoreForTests(join(dir, "nathan-to-owner.json"));
+    const posted = await postInboxMessage({
+      fromEmail: NATHAN,
+      fromName: "Nathan Boyte",
+      toEmail: OWNER,
+      text: "Hi Robert",
+    });
+    assert.equal(posted.ok, true);
+    const owner = await listInboxFor(OWNER);
+    const thread = owner.find((row) => row.personId === "tester-nathan");
+    assert.ok(thread);
+    assert.equal(thread.messages.some((message) => message.from === "them" && message.text === "Hi Robert"), true);
+  });
+
+  it("delete hides the message for that person only and a later list stays gone", async () => {
+    resetInboxStoreForTests(join(dir, "hide.json"));
+    const posted = await postInboxMessage({
+      fromEmail: OWNER,
+      fromName: "Robert Henderson",
+      toEmail: NATHAN,
+      text: "Please delete me",
+    });
+    assert.equal(posted.ok, true);
+    if (!posted.ok) return;
+    const messageId = posted.threads
+      .find((thread) => thread.personId === "tester-nathan")
+      ?.messages.find((message) => message.text === "Please delete me")?.id;
+    assert.ok(messageId);
+
+    await hideInboxFor(OWNER, { messageId });
+    const ownerAfter = await listInboxFor(OWNER);
+    assert.equal(
+      ownerAfter.some((thread) => thread.messages.some((message) => message.id === messageId)),
+      false,
+    );
+
+    staleWarmInboxInstanceForTests();
+    const ownerAgain = await listInboxFor(OWNER);
+    assert.equal(
+      ownerAgain.some((thread) => thread.messages.some((message) => message.id === messageId)),
+      false,
+    );
+
+    const nathan = await listInboxFor(NATHAN);
+    assert.equal(
+      nathan.some((thread) => thread.messages.some((message) => message.id === messageId && message.from === "them")),
+      true,
+    );
+  });
+
+  it("View as Nathan delete is Nathan's hide, not an unsend from the owner", async () => {
+    resetInboxStoreForTests(join(dir, "nathan-hide.json"));
+    const posted = await postInboxMessage({
+      fromEmail: OWNER,
+      fromName: "Robert Henderson",
+      toEmail: NATHAN,
+      text: "Nathan can hide this",
+    });
+    assert.equal(posted.ok, true);
+    if (!posted.ok) return;
+    const messageId = posted.threads
+      .find((thread) => thread.personId === "tester-nathan")
+      ?.messages.find((message) => message.text === "Nathan can hide this")?.id;
+    assert.ok(messageId);
+
+    await hideInboxFor(NATHAN, { messageId });
+    staleWarmInboxInstanceForTests();
+    assert.equal(
+      (await listInboxFor(NATHAN)).some((thread) => thread.messages.some((message) => message.id === messageId)),
+      false,
+    );
+    assert.equal(
+      (await listInboxFor(OWNER)).some((thread) => thread.messages.some((message) => message.id === messageId)),
+      true,
+    );
+  });
+
+  it("clear conversation hides that thread for the viewer only", async () => {
+    resetInboxStoreForTests(join(dir, "clear.json"));
+    const posted = await postInboxMessage({
+      fromEmail: OWNER,
+      fromName: "Robert Henderson",
+      toEmail: NATHAN,
+      text: "Clear this thread",
+    });
+    assert.equal(posted.ok, true);
+    await hideInboxFor(OWNER, { personId: "tester-nathan" });
+    staleWarmInboxInstanceForTests();
+    assert.equal((await listInboxFor(OWNER)).some((thread) => thread.personId === "tester-nathan"), false);
+    assert.equal(
+      (await listInboxFor(NATHAN)).some((thread) => thread.messages.some((message) => message.text === "Clear this thread")),
+      true,
+    );
+  });
+
+  it("union by id does not let a stale list wipe a vault hide or a sibling message", () => {
+    const first = row("im-1", { text: "first" });
+    const second = row("im-2", { text: "second", fromEmail: NATHAN, fromName: "Nathan Boyte", toEmail: OWNER });
+    const hidden = row("im-1", { text: "first", hiddenBy: [OWNER] });
+    const merged = mergeInboxMessages([first], [second, { ...first, hiddenBy: [] }]);
+    assert.equal(merged.length, 2);
+    const afterHide = mergeInboxMessages(merged, [hidden]);
+    assert.equal(afterHide.find((item) => item.id === "im-1")?.hiddenBy.includes(OWNER), true);
+    assert.equal(afterHide.some((item) => item.id === "im-2"), true);
+    const staleWrite = mergeInboxMessages(afterHide, [second]);
+    assert.equal(staleWrite.find((item) => item.id === "im-1")?.hiddenBy.includes(OWNER), true);
+    assert.equal(staleWrite.length, 2);
+  });
 });
+
+async function readVaultMessages(drive: ReturnType<typeof memoryDrive>) {
+  const raw = await readVaultJson<{ messages?: Array<{ id: string; text: string }> }>(
+    drive,
+    INBOX_VAULT_NAME,
+    INBOX_VAULT_KIND,
+  );
+  return raw?.messages ?? [];
+}

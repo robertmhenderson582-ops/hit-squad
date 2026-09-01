@@ -3,7 +3,14 @@ import { readSession } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { canUseInbox, inboxCircleById, inboxCirclePerson } from "@/lib/inbox-circle";
-import { inboxPeopleFor, inboxStoreKind, listInboxFor, markInboxThreadRead, postInboxMessage } from "@/lib/inbox-store";
+import {
+  hideInboxFor,
+  inboxPeopleFor,
+  inboxStoreKind,
+  listInboxFor,
+  markInboxThreadRead,
+  postInboxMessage,
+} from "@/lib/inbox-store";
 
 export const dynamic = "force-dynamic";
 
@@ -35,11 +42,33 @@ export async function POST(request: Request) {
     text?: string;
     photo?: string | null;
     readPersonId?: string;
+    hideMessageId?: string;
+    hidePersonId?: string;
+    hidePersonIds?: string[];
+    emptyInbox?: boolean;
   };
 
   if (typeof body.readPersonId === "string" && body.readPersonId.trim()) {
     return NextResponse.json({
       threads: await markInboxThreadRead(user.email, body.readPersonId.trim()),
+      contacts: inboxPeopleFor(user.email),
+      store: inboxStoreKind(),
+    });
+  }
+
+  if (
+    typeof body.hideMessageId === "string" ||
+    typeof body.hidePersonId === "string" ||
+    Array.isArray(body.hidePersonIds) ||
+    body.emptyInbox === true
+  ) {
+    return NextResponse.json({
+      threads: await hideInboxFor(user.email, {
+        messageId: body.hideMessageId,
+        personId: body.hidePersonId,
+        personIds: body.hidePersonIds,
+        empty: body.emptyInbox === true,
+      }),
       contacts: inboxPeopleFor(user.email),
       store: inboxStoreKind(),
     });

@@ -21,13 +21,13 @@ export type StoredInboxMessage = {
   photo: string | null;
   sentAt: string;
   readBy: string[];
+  hiddenBy: string[];
 };
 
 type InboxFile = { messages?: StoredInboxMessage[] };
 
 let cache: StoredInboxMessage[] | null = null;
 let loadedFrom: string | null = null;
-let hydrated = false;
 let injectedAdapter: DriveAdapter | null | undefined;
 
 export function inboxStoreKind() {
@@ -38,6 +38,10 @@ export function inboxStorePath() {
   if (process.env.INBOX_STORE_PATH) return process.env.INBOX_STORE_PATH;
   if (process.env.VERCEL) return "/tmp/hit-squad-inbox.json";
   return join(process.cwd(), "data", "inbox.json");
+}
+
+function circleEmails(list: string[]): string[] {
+  return [...new Set(list.map((item) => normalizeInboxEmail(String(item))).filter((item) => isInboxCircleEmail(item)))];
 }
 
 export function parseInboxFile(raw: unknown): StoredInboxMessage[] {
@@ -59,12 +63,34 @@ export function parseInboxFile(raw: unknown): StoredInboxMessage[] {
       text: typeof row.text === "string" ? row.text : "",
       photo: typeof row.photo === "string" && row.photo.startsWith("data:") ? row.photo : null,
       sentAt: typeof row.sentAt === "string" ? row.sentAt : "",
-      readBy: Array.isArray(row.readBy)
-        ? row.readBy.map((item) => normalizeInboxEmail(String(item))).filter(Boolean)
-        : [],
+      readBy: Array.isArray(row.readBy) ? circleEmails(row.readBy.map(String)) : [],
+      hiddenBy: Array.isArray(row.hiddenBy) ? circleEmails(row.hiddenBy.map(String)) : [],
     });
   }
   return messages;
+}
+
+function richerInboxMessage(left: StoredInboxMessage, right: StoredInboxMessage): StoredInboxMessage {
+  return {
+    ...left,
+    ...right,
+    photo: right.photo || left.photo,
+    text: right.text || left.text,
+    fromName: right.fromName || left.fromName,
+    readBy: circleEmails([...left.readBy, ...right.readBy]),
+    hiddenBy: circleEmails([...left.hiddenBy, ...right.hiddenBy]),
+  };
+}
+
+/** Union by id. Vault rows land first, incoming rows stay, same-id keeps the richer hide/read marks. */
+export function mergeInboxMessages(vault: StoredInboxMessage[], incoming: StoredInboxMessage[]): StoredInboxMessage[] {
+  const map = new Map<string, StoredInboxMessage>();
+  for (const row of vault) map.set(row.id, row);
+  for (const row of incoming) {
+    const existing = map.get(row.id);
+    map.set(row.id, existing ? richerInboxMessage(existing, row) : row);
+  }
+  return [...map.values()].sort((a, b) => a.sentAt.localeCompare(b.sentAt) || a.id.localeCompare(b.id));
 }
 
 function readCache(): StoredInboxMessage[] {
@@ -98,26 +124,55 @@ function resolveAdapter(): DriveAdapter | null {
   return drive.configured ? drive : null;
 }
 
-async function persist(messages: StoredInboxMessage[]) {
-  writeCache(messages);
+function readDiskMessages(): StoredInboxMessage[] {
+  try {
+    return parseInboxFile(JSON.parse(readFileSync(inboxStorePath(), "utf8")));
+  } catch {
+    return [];
+  }
+}
+
+async function readVaultMessages(): Promise<StoredInboxMessage[]> {
   const drive = resolveAdapter();
-  if (drive) await writeVaultJson(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND, { messages });
+  if (!drive) return [];
+  try {
+    return parseInboxFile(await readVaultJson(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND));
+  } catch {
+    return [];
+  }
+}
+
+async function persist(messages: StoredInboxMessage[]): Promise<StoredInboxMessage[]> {
+  const drive = resolveAdapter();
+  if (drive) {
+    const merged = mergeInboxMessages(await readVaultMessages(), messages);
+    writeCache(merged);
+    await writeVaultJson(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND, { messages: merged });
+    return merged;
+  }
+  const merged = mergeInboxMessages(readDiskMessages(), messages);
+  writeCache(merged);
+  return merged;
 }
 
 export async function hydrateInboxStore(): Promise<StoredInboxMessage[]> {
-  if (hydrated) return readCache();
   const cached = readCache();
   const drive = resolveAdapter();
   if (drive) {
     try {
-      const vault = parseInboxFile(await readVaultJson(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND));
-      if (vault.length) writeCache(vault);
-      else if (cached.length) await writeVaultJson(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND, { messages: cached });
+      const vault = await readVaultMessages();
+      const merged = mergeInboxMessages(vault, cached);
+      writeCache(merged);
+      if (!vault.length && cached.length) {
+        await writeVaultJson(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND, { messages: merged });
+      }
     } catch {
       // Keep the local cache.
     }
+    return readCache();
   }
-  hydrated = true;
+  const merged = mergeInboxMessages(readDiskMessages(), cached);
+  writeCache(merged);
   return readCache();
 }
 
@@ -130,6 +185,7 @@ export function threadsForInboxEmail(email: string, messages: StoredInboxMessage
   if (!isInboxCircleEmail(me)) return [];
   const grouped = new Map<string, StoredInboxMessage[]>();
   for (const message of messages) {
+    if (message.hiddenBy.includes(me)) continue;
     if (message.fromEmail !== me && message.toEmail !== me) continue;
     const list = grouped.get(message.threadKey) ?? [];
     list.push(message);
@@ -195,19 +251,67 @@ export async function postInboxMessage(input: {
     photo,
   });
   const messages = await hydrateInboxStore();
-  messages.push({
-    id: local.id,
-    threadKey: inboxThreadKey(fromEmail, toEmail),
-    fromEmail,
-    fromName: local.author,
-    toEmail,
-    text,
-    photo,
-    sentAt: local.sentAt,
-    readBy: [fromEmail],
-  });
-  await persist(messages);
-  return { ok: true, threads: threadsForInboxEmail(fromEmail, messages) };
+  const next = await persist([
+    ...messages,
+    {
+      id: local.id,
+      threadKey: inboxThreadKey(fromEmail, toEmail),
+      fromEmail,
+      fromName: local.author,
+      toEmail,
+      text,
+      photo,
+      sentAt: local.sentAt,
+      readBy: [fromEmail],
+      hiddenBy: [],
+    },
+  ]);
+  return { ok: true, threads: threadsForInboxEmail(fromEmail, next) };
+}
+
+function hideRowsFor(messages: StoredInboxMessage[], me: string, match: (row: StoredInboxMessage) => boolean) {
+  let changed = false;
+  for (const row of messages) {
+    if (!match(row) || row.hiddenBy.includes(me)) continue;
+    row.hiddenBy.push(me);
+    changed = true;
+  }
+  return changed;
+}
+
+export async function hideInboxFor(
+  email: string,
+  input: { messageId?: string; personId?: string; personIds?: string[]; empty?: boolean },
+): Promise<InboxThread[]> {
+  const me = normalizeInboxEmail(email);
+  if (!isInboxCircleEmail(me)) return [];
+  const messages = await hydrateInboxStore();
+  let changed = false;
+  if (input.empty) {
+    changed = hideRowsFor(messages, me, (row) => row.fromEmail === me || row.toEmail === me);
+  } else if (typeof input.messageId === "string" && input.messageId.trim()) {
+    const id = input.messageId.trim();
+    changed = hideRowsFor(messages, me, (row) => row.id === id && (row.fromEmail === me || row.toEmail === me));
+  } else {
+    const personIds = [
+      ...(typeof input.personId === "string" && input.personId.trim() ? [input.personId.trim()] : []),
+      ...(Array.isArray(input.personIds) ? input.personIds.map((id) => String(id).trim()).filter(Boolean) : []),
+    ];
+    const peers = new Set(
+      personIds
+        .map((id) => inboxContactsFor(me).find((row) => row.id === id)?.email)
+        .filter((value): value is string => Boolean(value)),
+    );
+    if (peers.size) {
+      changed = hideRowsFor(
+        messages,
+        me,
+        (row) => (row.fromEmail === me || row.toEmail === me) && peers.has(otherEmail(row, me)),
+      );
+    }
+  }
+  const next = changed ? await persist(messages) : messages;
+  return threadsForInboxEmail(me, next);
 }
 
 export async function markInboxThreadRead(email: string, personId: string): Promise<InboxThread[]> {
@@ -223,8 +327,8 @@ export async function markInboxThreadRead(email: string, personId: string): Prom
     row.readBy.push(me);
     changed = true;
   }
-  if (changed) await persist(messages);
-  return threadsForInboxEmail(me, messages);
+  const next = changed ? await persist(messages) : messages;
+  return threadsForInboxEmail(me, next);
 }
 
 export function inboxPeopleFor(email: string): InboxPerson[] {
@@ -238,7 +342,6 @@ export function inboxPeopleFor(email: string): InboxPerson[] {
 export function resetInboxStoreForTests(path?: string) {
   cache = null;
   loadedFrom = null;
-  hydrated = false;
   injectedAdapter = undefined;
   if (path) process.env.INBOX_STORE_PATH = path;
   else delete process.env.INBOX_STORE_PATH;
@@ -247,14 +350,18 @@ export function resetInboxStoreForTests(path?: string) {
 export function forgetInboxCacheForTests() {
   cache = null;
   loadedFrom = null;
-  hydrated = false;
   const file = inboxStorePath();
   if (existsSync(file)) unlinkSync(file);
 }
 
+/** Warm empty instance: process cache is stale, vault/file is not wiped. */
+export function staleWarmInboxInstanceForTests() {
+  cache = [];
+  loadedFrom = inboxStorePath();
+}
+
 export function useInboxVaultForTests(adapter: DriveAdapter | null) {
   injectedAdapter = adapter;
-  hydrated = false;
   cache = null;
   loadedFrom = null;
 }
