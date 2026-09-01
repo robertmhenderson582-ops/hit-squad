@@ -10,11 +10,13 @@ export const DESK_PERSON_ID = "desk";
 export const TESTER_WHATS_NEW = [
   "Hit Squad Project Controls V1.32",
   "• Oil Out, Mechanical, and Oil In default to Days & Nights.",
+  "• Extra Crew dates can sit anywhere in that phase (ramp-down 8 then 7). Description includes Ramp-down.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
   "Hit Squad Project Controls V1.32",
   "• Oil Out, Mechanical Window, and Oil In default Shift to Days & nights on new Crew positions and first ranges. Pre-Turnaround and Post stay Days (days-only phases). Existing saved Shift=Days is left as-is.",
+  "• Extra ranges clamp to the Job setup phase window, not the first range. First range Start/End can shorten inside the phase (ramp-down 8 then 7). Description preset Ramp-down.",
 ].join("\n");
 
 /** Same as the live V1.32 note. Kept so older imports still resolve. */

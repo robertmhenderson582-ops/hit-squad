@@ -59,10 +59,14 @@ describe("inbox what's-new", () => {
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
     assert.match(TESTER_WHATS_NEW, /Oil Out/);
     assert.match(TESTER_WHATS_NEW, /Days & Nights/);
+    assert.match(TESTER_WHATS_NEW, /Ramp-down/);
+    assert.match(TESTER_WHATS_NEW, /ramp-down 8 then 7/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|testers|Follow|apcontrolsllc|seat|James|CBI|View as/i.test(TESTER_WHATS_NEW), false);
     assert.match(OWNER_WHATS_NEW, /Days & nights/);
     assert.match(OWNER_WHATS_NEW, /default/);
+    assert.match(OWNER_WHATS_NEW, /first range/);
+    assert.match(OWNER_WHATS_NEW, /Ramp-down/);
     assert.equal(/View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
       /password|passwords|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
@@ -144,7 +148,9 @@ describe("inbox what's-new", () => {
     assert.equal(OWNER_NEXT_SHIP_DRAFT, OWNER_WHATS_NEW);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
     assert.match(OWNER_WHATS_NEW, /default/);
+    assert.match(OWNER_WHATS_NEW, /Job setup phase/);
     assert.match(TESTER_WHATS_NEW, /Days & Nights/);
+    assert.match(TESTER_WHATS_NEW, /Ramp-down/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|Follow|apcontrolsllc|seat|security|vault|other users|James|CBI|Stephanie|View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(

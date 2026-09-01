@@ -129,11 +129,13 @@ describe("inbox demo wipe", () => {
     const testerBody = tester[0].messages.map((message) => message.text).join(" ");
     assert.match(testerBody, /V1\.32/);
     assert.match(testerBody, /Days & Nights/);
+    assert.match(testerBody, /Ramp-down/);
     assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Madison|Joseph|Stephanie|password|security/i);
     const owner = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
     assert.equal(owner[0].id, "th-desk-v1.32");
     const ownerBody = owner[0].messages.map((message) => message.text).join(" ");
     assert.match(ownerBody, /Days & nights/);
-    assert.match(ownerBody, /default/);
+    assert.match(ownerBody, /first range/);
+    assert.match(ownerBody, /Ramp-down/);
   });
 });

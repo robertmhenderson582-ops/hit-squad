@@ -568,9 +568,11 @@ describe("extra range description is a label only", () => {
   it("locks the reason list and saves custom Other text", () => {
     assert.deepEqual([...RANGE_DESCRIPTION_REASONS], [
       "Hiring progression",
+      "Ramp-down",
       "Training",
       "Onboarding/Learning",
     ]);
+    assert.equal(isListedRangeDescription("Ramp-down"), true);
     assert.equal(RANGE_DESCRIPTION_OTHER, "Other");
     assert.equal(isListedRangeDescription("Onboarding/Learning"), true);
     assert.equal(rangeDescriptionChoice("Onboarding/Learning"), "Onboarding/Learning");
@@ -699,7 +701,7 @@ describe("extra range description is a label only", () => {
     assert.ok(doubled.hours > before.hours);
   });
 
-  it("extra range start before first.start or end after first.end is invalid and clamps", () => {
+  it("extra range cannot leave Job setup phase dates, but can sit past the first range", () => {
     const phases = defaultPhases();
     const pre = phases.find((row) => row.id === "pre");
     assert.ok(pre);
@@ -722,16 +724,80 @@ describe("extra range description is a label only", () => {
     assert.equal(extraRangeIsValid(clampedAfter, first, pre), true);
     assert.equal(extraRangeIsValid(insidePreComeback(extraRangeFromPhase(pre, first)), first, pre), true);
 
-    const widerFirst = { ...first, start: "2026-08-01", end: "2026-09-15" };
-    const intersected = extraRangeEnvelope(widerFirst, pre);
-    assert.deepEqual(intersected, { minStart: "2026-08-21", maxEnd: "2026-09-03" });
+    const shortFirst = { ...first, end: "2026-08-25" };
+    const pastFirst = { start: "2026-08-26", end: "2026-09-03" };
+    assert.ok(shortFirst.end < pre.stop);
+    assert.ok(pastFirst.start > shortFirst.end);
+    assert.equal(extraRangeIsValid(pastFirst, shortFirst, pre), true);
+    assert.deepEqual(clampExtraRangeDates(pastFirst, extraRangeEnvelope(shortFirst, pre)), pastFirst);
+    assert.deepEqual(extraRangeEnvelope({ ...first, start: "2026-08-01", end: "2026-09-15" }, pre), envelope);
 
-    row.ranges.push(after);
+    row.ranges = row.ranges.map((range) => (range.phaseId === "pre" ? shortFirst : range));
+    row.ranges.push({ ...extraRangeFromPhase(pre, shortFirst), ...pastFirst, hoursPerShift: 8 });
     const synced = applyExtraRangeEnvelopes(syncCraftRows([row], phases)[0].ranges, phases);
     const extras = synced.filter((range) => range.phaseId === "pre");
     assert.equal(extras.length, 2);
-    assert.equal(extras[1].start >= extras[0].start, true);
-    assert.equal(extras[1].end <= extras[0].end, true);
+    assert.equal(extras[0].end, "2026-08-25");
+    assert.equal(extras[1].start, "2026-08-26");
+    assert.equal(extras[1].end, "2026-09-03");
+    assert.ok(extras[1].start > extras[0].end);
+  });
+
+  it("Mechanical ramp-down 8 then 7 is sequential hours, not a double-count", () => {
+    const phases = defaultPhases();
+    const mech = phases.find((row) => row.id === "mech");
+    assert.ok(mech);
+    const row = daysOnly(assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases));
+    const first = row.ranges.find((range) => range.phaseId === "mech");
+    assert.ok(first);
+    first.start = mech.start;
+    first.end = "2026-09-12";
+    first.headcount = 8;
+    first.perDiemPeople = 8;
+    first.description = "Hiring progression";
+    assert.ok(first.end < mech.stop);
+
+    const extra = extraRangeFromPhase(mech, first);
+    extra.start = "2026-09-13";
+    extra.end = mech.stop;
+    extra.hoursPerShift = first.hoursPerShift;
+    extra.headcount = 7;
+    extra.perDiemPeople = 7;
+    extra.nightHeadcount = 7;
+    extra.nightPerDiemPeople = 0;
+    extra.days = [...first.days];
+    extra.shift = "Days";
+    extra.description = "Ramp-down";
+    assert.ok(extra.start > first.end);
+    assert.equal(extra.end, mech.stop);
+    assert.equal(extraRangeIsValid(extra, first, mech), true);
+    assert.equal(phaseRangesOverlap([first, extra], "mech"), false);
+
+    const outside = { ...extra, start: "2026-09-06", end: "2026-09-10" };
+    assert.equal(extraRangeIsValid(outside, first, mech), false);
+    const pastPhase = { ...extra, start: "2026-09-14", end: "2026-09-21" };
+    assert.equal(extraRangeIsValid(pastPhase, first, mech), false);
+
+    row.ranges = row.ranges.map((range) => (range.phaseId === "mech" ? first : range));
+    row.ranges.push(extra);
+    const combined = crewHours({ ...row, ranges: [first, extra] });
+    const eight = computeRowHours({ ...row, ranges: [first] }, WOOD.site, WOOD.client);
+    const seven = computeRowHours({ ...row, ranges: [extra] }, WOOD.site, WOOD.client);
+    assert.ok(eight.hours > 0);
+    assert.ok(seven.hours > 0);
+    assert.equal(combined.st, eight.st + seven.st);
+    assert.equal(combined.ot, eight.ot + seven.ot);
+    assert.equal(combined.dt, eight.dt + seven.dt);
+    assert.equal(combined.pd, eight.pd + seven.pd);
+    assert.equal(combined.hours, eight.hours + seven.hours);
+    assert.equal(splitKey(crewHours({ ...row, ranges: [{ ...first, description: "Ramp-down" }, extra] })), splitKey(combined));
+
+    const synced = syncCraftRows([{ ...row, ranges: row.ranges }], phases)[0];
+    const mechs = synced.ranges.filter((range) => range.phaseId === "mech");
+    assert.equal(mechs[0]?.end, "2026-09-12");
+    assert.equal(mechs[1]?.start, "2026-09-13");
+    assert.equal(mechs[1]?.end, mech.stop);
+    assert.equal(mechs[1]?.description, "Ramp-down");
   });
 
   it("keeps the description through sync and Duplicate, and Remove drops that stretch", () => {
@@ -763,6 +829,7 @@ describe("extra range description is a label only", () => {
     assert.match(cards, /RANGE_DESCRIPTION_OTHER/);
     const labor = readFileSync(fileURLToPath(new URL("./craft-labor.ts", import.meta.url)), "utf8");
     assert.match(labor, /Hiring progression/);
+    assert.match(labor, /Ramp-down/);
     assert.match(labor, /Onboarding\/Learning/);
     assert.match(cards, /showDescription/);
     assert.match(cards, /line-chip/);
