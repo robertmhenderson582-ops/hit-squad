@@ -42,6 +42,12 @@ describe("estimate status", () => {
     const setup = readFileSync(fileURLToPath(new URL("../components/JobSetupCard.tsx", import.meta.url)), "utf8");
     assert.match(setup, /STATUS/);
     assert.match(setup, /Project Manager or above/);
+    assert.match(setup, /ESTIMATE NAME/);
+    assert.match(setup, /onName/);
+    assert.match(setup, /setPackTitle/);
+    assert.match(setup, /AFE \/ TA NAME/);
+    assert.match(setup, /CLIENT[\s\S]{0,120}readOnly/);
+    assert.equal(/ESTIMATE NAME[\s\S]{0,80}readOnly/.test(setup), false);
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
     assert.doesNotMatch(workspace, /\(\["Estimate", "Submitted", "Awarded"\]/);
     assert.equal(isProjectManager({ email: "nathanboyte@gmail.com", role: "tester" }), true);

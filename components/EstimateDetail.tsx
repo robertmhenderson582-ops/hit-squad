@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
 import { ChangeOrderPacket } from "@/components/ChangeOrderPacket";
@@ -33,6 +33,11 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
     () => board?.staffing.filter((row) => row.estimateId === estimateId) ?? [],
     [board, estimateId],
   );
+  const [title, setTitle] = useState(estimate?.title || local?.title || "");
+
+  useEffect(() => {
+    setTitle(estimate?.title || local?.title || "");
+  }, [estimateId]);
 
   if (error && !estimate) return <p className="p-6 text-amber-flare">{error}</p>;
   if (!board && !estimate) return <p className="p-6 font-mono text-xs tracking-[0.2em] text-steel">LOADING PACKAGE</p>;
@@ -47,17 +52,19 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
     );
   }
 
+  const shown = title || estimate.title;
+
   return (
     <EstimatePackageProvider estimateKey={estimateStorageKey(estimate.id)}>
     <EstimateWorkspace
-      crumb={`${alias(siteName)} / ${estimate.title}`}
+      crumb={`${alias(siteName)} / ${shown}`}
       tab={tab}
       onTab={setTab}
       client={alias(estimate.client)}
       site={alias(siteName)}
       jobClient={estimate.client}
       jobSite={siteName}
-      name={estimate.title}
+      name={shown}
       total={estimate.total}
       packageId={estimate.id}
       staffing={staffing}
@@ -70,7 +77,8 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
             type={estimate.type}
             client={alias(estimate.client)}
             site={siteName}
-            name={estimate.title}
+            name={shown}
+            onName={setTitle}
             otRule={alias(boundOtLabel(siteName, estimate.client, site?.code))}
             author={estimate.estimator}
             code={estimate.code}
@@ -104,11 +112,11 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       ) : null}
 
       {tab === "crew" ? (
-        <EstimateWorkbook client={estimate.client} site={siteName} name={estimate.title} />
+        <EstimateWorkbook client={estimate.client} site={siteName} name={shown} />
       ) : null}
 
       {tab === "staffing" ? (
-        <StaffingPlanDesk client={estimate.client} site={siteName} name={estimate.title} />
+        <StaffingPlanDesk client={estimate.client} site={siteName} name={shown} />
       ) : null}
 
       {tab === "equipment" ? <EquipmentDesk /> : null}

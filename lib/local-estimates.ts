@@ -10,6 +10,7 @@ import type { EstimateRecord, ForgebookBoard, JobRecord } from "./types.ts";
 
 export const PACK_INDEX_KEY = "hs_pack_index_v1";
 export const PACK_STORE_PREFIX = "hs_pack_v1:";
+export const PACK_TITLE_MAX = 80;
 
 const STORE_PREFIXES = [
   CREW_STORE_PREFIX,
@@ -111,6 +112,35 @@ function readIndex(store: StorageLike): LocalPack[] {
 
 function writeIndex(store: StorageLike, rows: LocalPack[]) {
   writeStoreJson(store, PACK_INDEX_KEY, rows);
+}
+
+/** Trim and cap. Empty is rejected — do not invent a job name. */
+export function normalizePackTitle(value: string): string | null {
+  const title = value.replace(/\s+/g, " ").trim();
+  if (!title) return null;
+  return title.slice(0, PACK_TITLE_MAX);
+}
+
+export function renameLocalPackTitle(
+  packId: string,
+  title: string,
+  store: StorageLike | null = typeof window === "undefined" ? null : window.localStorage,
+): LocalPack | null {
+  const next = normalizePackTitle(title);
+  if (!next || !store || !packId.startsWith("new-")) return null;
+  const current = findLocalPack(packId, store);
+  return rememberLocalPack(
+    {
+      packId,
+      title: next,
+      client: current?.client || "",
+      site: current?.site || "",
+      size: current?.size,
+      ownerEmail: current?.ownerEmail,
+      estimator: current?.estimator,
+    },
+    store,
+  );
 }
 
 function upsertIndex(store: StorageLike, next: LocalPack) {

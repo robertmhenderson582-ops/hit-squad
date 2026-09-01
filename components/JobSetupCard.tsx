@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CreatedBy } from "@/components/CreatedBy";
 import { useAlias, useLensUser } from "@/components/OwnerDeskContext";
 import {
@@ -18,6 +18,7 @@ import {
   readEquipmentSheet,
   writeEquipmentSheet,
 } from "@/lib/equipment-sheet";
+import { PACK_TITLE_MAX, normalizePackTitle } from "@/lib/local-estimates";
 import {
   SHAHAN_BOOK_LABEL,
   SHAHAN_CRAFT_PD,
@@ -33,6 +34,7 @@ export function JobSetupCard({
   client,
   site,
   name,
+  onName,
   otRule,
   author,
   code,
@@ -47,6 +49,7 @@ export function JobSetupCard({
   client: string;
   site?: string;
   name: string;
+  onName?: (next: string) => void;
   otRule: string;
   author?: string;
   code?: string;
@@ -64,6 +67,24 @@ export function JobSetupCard({
   const [rateStatus, setRateStatus] = useState("");
   const [confirmRates, setConfirmRates] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<EstimateStatus | null>(null);
+  const [estimateName, setEstimateName] = useState(name);
+
+  useEffect(() => {
+    setEstimateName(name);
+  }, [name]);
+
+  function commitEstimateName(raw: string) {
+    const next = normalizePackTitle(raw);
+    if (!next) {
+      setEstimateName(name);
+      return;
+    }
+    setEstimateName(next);
+    if (next === name) return;
+    const saved = pack.setPackTitle(next);
+    if (saved) onName?.(saved);
+    else setEstimateName(name);
+  }
   const offer = offerRateBookForSite(site || "");
   const canAward = isProjectManagerOrAbove(lens);
 
@@ -192,7 +213,14 @@ export function JobSetupCard({
       </label>
       <label className="mt-4 block">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">ESTIMATE NAME</span>
-        <input readOnly value={name} className="paper-field mt-2" />
+        <input
+          value={estimateName}
+          maxLength={PACK_TITLE_MAX}
+          required
+          className="paper-field mt-2"
+          onChange={(event) => setEstimateName(event.target.value)}
+          onBlur={() => commitEstimateName(estimateName)}
+        />
       </label>
       <div className="mt-4">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">PROJECT START</span>
