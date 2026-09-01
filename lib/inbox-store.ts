@@ -9,7 +9,7 @@ import {
   isInboxCircleEmail,
   normalizeInboxEmail,
 } from "./inbox-circle.ts";
-import { makeMessage, type InboxMessage, type InboxPerson, type InboxThread } from "./inbox.ts";
+import { acceptedInboxMessageId, makeMessage, type InboxMessage, type InboxPerson, type InboxThread } from "./inbox.ts";
 
 export type StoredInboxMessage = {
   id: string;
@@ -230,6 +230,7 @@ export async function postInboxMessage(input: {
   toEmail: string;
   text?: string;
   photo?: string | null;
+  id?: string;
 }): Promise<{ ok: true; threads: InboxThread[] } | { ok: false; status: number; error: string }> {
   const fromEmail = normalizeInboxEmail(input.fromEmail);
   const toEmail = normalizeInboxEmail(input.toEmail);
@@ -250,11 +251,15 @@ export async function postInboxMessage(input: {
     text,
     photo,
   });
+  const id = acceptedInboxMessageId(input.id) || local.id;
   const messages = await hydrateInboxStore();
+  if (messages.some((row) => row.id === id)) {
+    return { ok: true, threads: threadsForInboxEmail(fromEmail, messages) };
+  }
   const next = await persist([
     ...messages,
     {
-      id: local.id,
+      id,
       threadKey: inboxThreadKey(fromEmail, toEmail),
       fromEmail,
       fromName: local.author,

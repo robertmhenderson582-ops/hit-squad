@@ -258,23 +258,34 @@ export function rollbackInboxSend(threads: InboxThread[], threadId: string, mess
   );
 }
 
+/** Same send painted twice: optimistic local id plus a vault/poll copy with a new id. */
+export function sameInboxSend(left: InboxMessage, right: InboxMessage) {
+  return left.from === right.from && left.text === right.text && (left.photo || "") === (right.photo || "");
+}
+
+export function acceptedInboxMessageId(value?: string | null) {
+  if (typeof value !== "string") return "";
+  const id = value.trim();
+  return /^im-[A-Za-z0-9-]{4,80}$/.test(id) ? id : "";
+}
+
 function mergePeerThread(
   local: InboxThread | undefined,
   remote: InboxThread,
   hiddenMessageIds: Set<string>,
 ): InboxThread {
   const map = new Map<string, InboxMessage>();
+  for (const row of remote.messages) {
+    if (hiddenMessageIds.has(row.id)) continue;
+    map.set(row.id, row);
+  }
   if (local) {
     for (const row of local.messages) {
-      if (!hiddenMessageIds.has(row.id)) map.set(row.id, row);
+      if (hiddenMessageIds.has(row.id)) continue;
+      if (map.has(row.id)) continue;
+      if ([...map.values()].some((item) => sameInboxSend(item, row))) continue;
+      map.set(row.id, row);
     }
-  }
-  for (const row of remote.messages) {
-    if (hiddenMessageIds.has(row.id)) {
-      map.delete(row.id);
-      continue;
-    }
-    map.set(row.id, row);
   }
   const messages = [...map.values()].sort((a, b) => a.sentAt.localeCompare(b.sentAt) || a.id.localeCompare(b.id));
   return { ...remote, messages };

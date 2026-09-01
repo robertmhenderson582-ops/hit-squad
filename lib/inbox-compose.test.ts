@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  acceptedInboxMessageId,
   appendInboxMessage,
   makeMessage,
   makeThread,
@@ -179,6 +180,74 @@ describe("inbox compose stays on the thread", () => {
     assert.equal(next.threads.find((thread) => thread.personId === NATHAN.id)?.messages.length, 0);
   });
 
+  it("one send cannot paint two same-body same-sender bubbles after poll merge", () => {
+    const created = makeThread(NATHAN);
+    const pending = makeMessage({ from: "self", author: "Robert Henderson", text: "Testing", photo: null });
+    const vault = {
+      id: "im-vault-testing",
+      from: "self" as const,
+      author: "Robert Henderson",
+      text: "Testing",
+      photo: null,
+      sentAt: pending.sentAt,
+      readAt: null,
+    };
+    const local = [DESK, { ...created, messages: [pending] }];
+    const remote = [circleThread(NATHAN, { messages: [vault] })];
+
+    const afterSend = reconcileInboxDesk(local, remote, created.id);
+    const thread = afterSend.threads.find((row) => row.personId === NATHAN.id);
+    assert.ok(thread);
+    const testing = thread.messages.filter((message) => message.from === "self" && message.text === "Testing");
+    assert.equal(testing.length, 1);
+    assert.equal(testing[0]?.id, vault.id);
+    assert.equal(thread.messages.some((message) => message.id === pending.id), false);
+
+    const afterPoll = reconcileInboxDesk(afterSend.threads, remote, afterSend.activeId);
+    const again = afterPoll.threads.find((row) => row.personId === NATHAN.id);
+    assert.ok(again);
+    assert.equal(again.messages.filter((message) => message.from === "self" && message.text === "Testing").length, 1);
+    assert.equal(afterPoll.activeId, remote[0].id);
+  });
+
+  it("hard refresh of a doubled local thread still paints one after poll", () => {
+    const pending = {
+      id: "im-local-testing",
+      from: "self" as const,
+      author: "Robert Henderson",
+      text: "Testing",
+      photo: null,
+      sentAt: "a",
+      readAt: null,
+    };
+    const vault = { ...pending, id: "im-vault-testing", sentAt: "b" };
+    const stored = circleThread(NATHAN, { messages: [pending, vault] });
+    const remote = [circleThread(NATHAN, { messages: [vault] })];
+    const next = reconcileInboxDesk([DESK, stored], remote, stored.id);
+    const thread = next.threads.find((row) => row.personId === NATHAN.id);
+    assert.ok(thread);
+    assert.equal(thread.messages.filter((message) => message.from === "self" && message.text === "Testing").length, 1);
+    assert.equal(thread.messages[0]?.id, vault.id);
+  });
+
+  it("two real sends of the same body stay two bubbles", () => {
+    const first = {
+      id: "im-testing-1",
+      from: "self" as const,
+      author: "Robert Henderson",
+      text: "Testing",
+      photo: null,
+      sentAt: "a",
+      readAt: null,
+    };
+    const second = { ...first, id: "im-testing-2", sentAt: "b" };
+    const remote = [circleThread(NATHAN, { messages: [first, second] })];
+    const next = reconcileInboxDesk([DESK, makeThread(NATHAN)], remote, remote[0].id);
+    const thread = next.threads.find((row) => row.personId === NATHAN.id);
+    assert.ok(thread);
+    assert.equal(thread.messages.filter((message) => message.text === "Testing").length, 2);
+  });
+
   it("provider posts a hide and rolls back a failed send", () => {
     const source = readFileSync(fileURLToPath(new URL("../components/InboxProvider.tsx", import.meta.url)), "utf8");
     assert.match(source, /hideMessageId/);
@@ -189,7 +258,16 @@ describe("inbox compose stays on the thread", () => {
     assert.match(source, /startInboxThread/);
     assert.match(source, /writeInboxHides/);
     assert.match(source, /omitHiddenPersonThreads/);
+    assert.match(source, /messageId: pending\.id/);
     assert.doesNotMatch(source, /\.then\(\(\) => \{\s*hiddenPersonIdsRef\.current\.delete/);
+  });
+
+  it("accepts the optimistic im- id and rejects junk", () => {
+    const pending = makeMessage({ from: "self", author: "Robert", text: "Testing", photo: null });
+    assert.equal(acceptedInboxMessageId(pending.id), pending.id);
+    assert.equal(acceptedInboxMessageId("im-client-testing"), "im-client-testing");
+    assert.equal(acceptedInboxMessageId("not-a-message"), "");
+    assert.equal(acceptedInboxMessageId("../etc/passwd"), "");
   });
 
   it("failed send drops the local-only delivered row", () => {

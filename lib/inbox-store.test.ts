@@ -264,6 +264,43 @@ describe("inbox store", { concurrency: 1 }, () => {
     );
   });
 
+  it("one owner send is one bubble for Robert and one copy for Wendell", async () => {
+    resetInboxStoreForTests(join(dir, "one-send.json"));
+    const posted = await postInboxMessage({
+      fromEmail: OWNER,
+      fromName: "Robert Henderson",
+      toEmail: "wlanderno@yahoo.com",
+      text: "Testing",
+      id: "im-client-testing",
+    });
+    assert.equal(posted.ok, true);
+    if (!posted.ok) return;
+    const ownerThread = posted.threads.find((thread) => thread.personId === "tester-wendell");
+    assert.ok(ownerThread);
+    assert.equal(ownerThread.messages.filter((message) => message.from === "self" && message.text === "Testing").length, 1);
+    assert.equal(ownerThread.messages[0]?.id, "im-client-testing");
+
+    const again = await postInboxMessage({
+      fromEmail: OWNER,
+      fromName: "Robert Henderson",
+      toEmail: "wlanderno@yahoo.com",
+      text: "Testing",
+      id: "im-client-testing",
+    });
+    assert.equal(again.ok, true);
+    if (!again.ok) return;
+    const still = again.threads.find((thread) => thread.personId === "tester-wendell");
+    assert.ok(still);
+    assert.equal(still.messages.filter((message) => message.text === "Testing").length, 1);
+
+    const wendell = await listInboxFor("wlanderno@yahoo.com");
+    const fromRobert = wendell.find((thread) => thread.personId === "owner");
+    assert.ok(fromRobert);
+    assert.equal(fromRobert.messages.filter((message) => message.from === "them" && message.text === "Testing").length, 1);
+    assert.equal(fromRobert.messages[0]?.id, "im-client-testing");
+    assert.equal(fromRobert.messages[0]?.author, "Robert Henderson");
+  });
+
   it("union by id does not let a stale list wipe a vault hide or a sibling message", () => {
     const first = row("im-1", { text: "first" });
     const second = row("im-2", { text: "second", fromEmail: NATHAN, fromName: "Nathan Boyte", toEmail: OWNER });
