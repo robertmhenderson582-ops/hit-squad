@@ -142,17 +142,8 @@ function PhaseWindowCard({
 
   function patchRange(range: CalendarRange, index: number, patch: Partial<CalendarRange>) {
     if (index === 0) {
-      onPatchRange(range.id, patch);
-      if (patch.start === undefined && patch.end === undefined) return;
-      const nextFirst = { ...range, ...patch };
-      const nextEnvelope = extraRangeEnvelope(nextFirst, phase);
-      for (const extra of ranges.slice(1)) {
-        if (!extraSharesFirstEnvelope(extra, nextFirst)) continue;
-        const clamped = clampExtraRangeDates(extra, nextEnvelope);
-        if (clamped.start !== extra.start || clamped.end !== extra.end) {
-          onPatchRange(extra.id, { start: clamped.start, end: clamped.end });
-        }
-      }
+      const next = { ...range, ...patch };
+      onPatchRange(range.id, patch.start !== undefined || patch.end !== undefined ? clampExtraRangeDates(next, envelope) : patch);
       return;
     }
     if (first && extraSharesFirstEnvelope(range, first)) {
@@ -193,7 +184,7 @@ function PhaseWindowCard({
                 phaseOtAfter8={phase.otAfter8}
                 canRemove={index > 0}
                 showDescription
-                envelope={index > 0 && first && extraSharesFirstEnvelope(range, first) ? envelope : null}
+                envelope={envelope}
                 units={units}
                 onPatch={(patch) => patchRange(range, index, patch)}
                 onRemove={() => onRemoveRange(range.id)}

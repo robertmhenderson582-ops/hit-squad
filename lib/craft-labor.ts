@@ -24,9 +24,16 @@ export const CRAFT_SHIFTS = ["Days", "Nights", "Days & nights"] as const;
 
 export type CraftShift = (typeof CRAFT_SHIFTS)[number];
 
+/** Oil Out / Mechanical / Oil In open on both shifts. Pre and Post stay Days. */
+export function defaultShiftForPhase(phaseId?: string): CraftShift {
+  if (phaseId === "oil-out" || phaseId === "mech" || phaseId === "oil-in") return "Days & nights";
+  return "Days";
+}
+
 /** Locked labels for an extra stretch on the same phase. Other is free text. */
 export const RANGE_DESCRIPTION_REASONS = [
   "Hiring progression",
+  "Ramp-down",
   "Training",
   "Onboarding/Learning",
 ] as const;
@@ -90,30 +97,15 @@ export type ExtraRangeEnvelope = {
   maxEnd: string;
 };
 
-function laterYmd(a: string, b: string) {
-  if (!a) return b;
-  if (!b) return a;
-  return a > b ? a : b;
-}
-
-function earlierYmd(a: string, b: string) {
-  if (!a) return b;
-  if (!b) return a;
-  return a < b ? a : b;
-}
-
-/** First crew range on the phase, intersected with Job setup when that range is bound. */
+/** Job setup phase window when the card is bound. Do not clamp extras to the first range. */
 export function extraRangeEnvelope(
   first?: Pick<CalendarRange, "start" | "end" | "phaseId"> | null,
   phase?: Pick<PhaseRow, "id" | "start" | "stop"> | null,
 ): ExtraRangeEnvelope | null {
-  let minStart = first?.start ?? "";
-  let maxEnd = first?.end ?? "";
-  const bound = Boolean(phase && first?.phaseId && first.phaseId === phase.id);
-  if (bound) {
-    minStart = laterYmd(minStart, phase?.start ?? "");
-    maxEnd = earlierYmd(maxEnd, phase?.stop ?? "");
-  }
+  const bound = Boolean(phase && (!first?.phaseId || first.phaseId === phase.id));
+  if (!bound) return null;
+  const minStart = phase?.start ?? "";
+  const maxEnd = phase?.stop ?? "";
   if (!minStart && !maxEnd) return null;
   if (minStart && maxEnd && minStart > maxEnd) return { minStart, maxEnd: minStart };
   return { minStart, maxEnd };
@@ -166,9 +158,10 @@ export function applyExtraRangeEnvelopes(ranges: CalendarRange[], phases: PhaseR
   return ranges.map((range) => {
     if (!range.phaseId) return range;
     const first = ranges.find((item) => item.phaseId === range.phaseId);
-    if (!first || first.id === range.id || !extraSharesFirstEnvelope(range, first)) return range;
     const phase = phases.find((item) => item.id === range.phaseId);
-    return clampExtraRangeDates(range, extraRangeEnvelope(first, phase));
+    if (!phase) return range;
+    if (first && range.id !== first.id && !extraSharesFirstEnvelope(range, first)) return range;
+    return clampExtraRangeDates(range, extraRangeEnvelope(first ?? range, phase));
   });
 }
 
@@ -310,11 +303,15 @@ export function clampPerDiem(range: CalendarRange, _shift?: CraftShift): Calenda
 
 export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange, unitId?: string): CalendarRange {
   const seed = rangeSeedsFromPhases([row])[0];
+  const dates = clampExtraRangeDates(
+    { start: prev?.start || seed.start, end: prev?.end || seed.end },
+    { minStart: seed.start, maxEnd: seed.end },
+  );
   return {
     id: prev?.id && prev.phaseId === seed.phaseId ? prev.id : uid("rg"),
     phaseId: seed.phaseId,
-    start: seed.start,
-    end: seed.end,
+    start: dates.start,
+    end: dates.end,
     headcount: prev?.headcount ?? 1,
     nightHeadcount: prev?.nightHeadcount ?? 1,
     hoursPerShift: prev && Number.isFinite(prev.hoursPerShift) ? prev.hoursPerShift : seed.hoursPerShift,
@@ -322,7 +319,8 @@ export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange, unitId?: str
     nightPerDiemPeople: prev?.nightPerDiemPeople ?? 1,
     days: seed.days,
     otAfter8: seed.otAfter8,
-    shift: prev?.shift ?? "Days",
+    // Existing ranges keep their saved Shift (missing Shift stays Days). New cards use the phase default.
+    shift: prev ? (prev.shift ?? "Days") : defaultShiftForPhase(row.id),
     skipDates: prev?.skipDates ? [...prev.skipDates] : [...(seed.skipDates ?? [])],
     unitId: unitId ?? prev?.unitId,
     description: prev?.description,
@@ -348,6 +346,7 @@ export function extraRangeFromPhase(phase: PhaseRow, template?: CalendarRange, u
     unitId: newUnit ? unitId : template?.unitId,
     description: "",
     off: template?.off,
+    shift: template?.shift ?? defaultShiftForPhase(phase.id),
   };
 }
 
@@ -402,14 +401,14 @@ export function rangesFromPhases(
         }
         return next;
       }
-      if (multiUnits && next.unitId) {
+      if (multiUnits && next.unitId && !prev.start && !prev.end) {
         const tagged = units.find((unit) => unit.id === next.unitId)?.phases.find((item) => item.id === id);
         if (tagged) {
           next.start = tagged.start;
           next.end = tagged.stop;
         }
       }
-      return next;
+      return clampExtraRangeDates(next, extraRangeEnvelope(next, source));
     });
   });
   return applyExtraRangeEnvelopes([...owned, ...extras], phases);

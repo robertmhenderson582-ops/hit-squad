@@ -320,6 +320,7 @@ export function computeRowHours(
       shift?: "Days" | "Nights" | "Days & nights";
       skipDates?: string[];
       off?: boolean;
+      description?: string;
     }[];
   },
   site = "",
