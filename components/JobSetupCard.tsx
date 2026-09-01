@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { CreatedBy } from "@/components/CreatedBy";
-import { useAlias } from "@/components/OwnerDeskContext";
+import { useAlias, useLensUser } from "@/components/OwnerDeskContext";
+import {
+  ESTIMATE_STATUSES,
+  needsStatusConfirm,
+  statusConfirmCopy,
+  type EstimateStatus,
+} from "@/lib/estimate-status";
+import { isProjectManagerOrAbove } from "@/lib/desk-role";
 import { DateField } from "@/components/DateField";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { displayEstimateType, ESTIMATE_TYPES, type EstimateType } from "@/lib/estimate-type";
@@ -31,6 +38,9 @@ export function JobSetupCard({
   code,
   window,
   existingClient = false,
+  status = "Estimate",
+  onStatus,
+  statusLocked = false,
   children,
 }: {
   type: string;
@@ -42,14 +52,31 @@ export function JobSetupCard({
   code?: string;
   window?: string;
   existingClient?: boolean;
+  status?: EstimateStatus;
+  onStatus?: (next: EstimateStatus) => void;
+  statusLocked?: boolean;
   children?: React.ReactNode;
 }) {
   const pack = useEstimatePackage();
   const alias = useAlias();
+  const lens = useLensUser();
   const [estimateType, setEstimateType] = useState<EstimateType>(displayEstimateType(type));
   const [rateStatus, setRateStatus] = useState("");
   const [confirmRates, setConfirmRates] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<EstimateStatus | null>(null);
   const offer = offerRateBookForSite(site || "");
+  const canAward = isProjectManagerOrAbove(lens);
+
+  function requestStatus(next: EstimateStatus) {
+    if (statusLocked && next !== "Estimate") return;
+    if (next !== "Estimate" && !canAward) return;
+    if (next === status) return;
+    if (needsStatusConfirm(status, next)) {
+      setPendingStatus(next);
+      return;
+    }
+    onStatus?.(next);
+  }
 
   function requestUpdateRates() {
     if (!offer.ok) {
@@ -74,6 +101,62 @@ export function JobSetupCard({
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-3xl font-semibold text-[#163038]">Job setup</h1>
         {author ? <CreatedBy author={author} /> : null}
+      </div>
+      <div className="mt-5">
+        <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">STATUS</span>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {ESTIMATE_STATUSES.map((item) => {
+            const locked = (statusLocked && item !== "Estimate") || (item !== "Estimate" && !canAward);
+            const active = status === item;
+            return (
+              <button
+                key={item}
+                type="button"
+                disabled={locked}
+                title={
+                  statusLocked && item !== "Estimate"
+                    ? "New sheet stays Estimate"
+                    : item !== "Estimate" && !canAward
+                      ? "Project Manager or above can set Submitted or Awarded"
+                      : undefined
+                }
+                onClick={() => requestStatus(item)}
+                className={`rounded-full px-3 py-1.5 text-sm ${
+                  active ? "bg-steel text-white" : "border border-steel text-steel"
+                } ${locked ? "cursor-not-allowed opacity-50" : ""}`}
+              >
+                {item}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-1 text-xs text-[#5b6f73]">
+          Estimate, Submitted, Awarded. Project Manager or above sets Submitted or Awarded.
+        </p>
+        {pendingStatus ? (
+          <div className="mt-3 rounded-lg border border-[#c5d4d4] bg-white px-3 py-3">
+            <p className="text-sm text-[#163038]">{statusConfirmCopy(status, pendingStatus)}</p>
+            <div className="mt-3 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingStatus(null)}
+                className="rounded-lg border border-steel px-4 py-2 text-steel"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onStatus?.(pendingStatus);
+                  setPendingStatus(null);
+                }}
+                className="rounded-lg bg-steel px-4 py-2 text-white"
+              >
+                Change status
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
       <div className="mt-5 flex flex-wrap gap-2">
         {existingClient ? (

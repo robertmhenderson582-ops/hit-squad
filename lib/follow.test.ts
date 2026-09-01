@@ -3,13 +3,18 @@ import { test } from "node:test";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { canFollowSeatId, followLandPath, followSeatFromEmail } from "./follow.ts";
 
-test("only visual testers are followable — never owner or Novus", () => {
+test("seeded testers and vault extras are followable — never owner or Novus", () => {
+  const extra = { id: "custom-added-tester", email: "added.tester@example.com", name: "Added Tester" };
   assert.equal(canFollowSeatId("nathan"), true);
   assert.equal(canFollowSeatId("mark"), true);
+  assert.equal(canFollowSeatId("tester-shane"), true);
+  assert.equal(canFollowSeatId("custom-added-tester"), true);
   assert.equal(canFollowSeatId("owner"), false);
+  assert.equal(canFollowSeatId("novus"), false);
   assert.equal(canFollowSeatId("operator-novus"), false);
   assert.equal(followSeatFromEmail("nathanboyte@gmail.com"), "nathan");
   assert.equal(followSeatFromEmail("  Marks544@yahoo.com  "), "mark");
+  assert.equal(followSeatFromEmail(extra.email, [extra]), extra.id);
   assert.equal(followSeatFromEmail(NOVUS_EMAIL), undefined);
   assert.equal(followSeatFromEmail("robertmhenderson582@gmail.com"), undefined);
   assert.equal(followSeatFromEmail(""), undefined);

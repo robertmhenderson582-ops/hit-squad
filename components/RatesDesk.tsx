@@ -35,6 +35,7 @@ export function RatesDesk({
 } = {}) {
   const lens = useLensUser();
   const alias = useAlias();
+  const builder = canUseRateBuilder(lens);
   const scope = companyScopeFor(lens);
   const companies = companiesWithRateChrome(scope);
   const [companyId, setCompanyId] = useState<CompanyId>(
@@ -85,7 +86,9 @@ export function RatesDesk({
       <section className="plant-card px-5 py-5">
         <h2 className="font-display text-2xl text-[#163038]">Rate books</h2>
         <p className="mt-1 text-sm text-[#5b6f73]">
-          Company, then site, then the book. A job can override one craft. Archive hides a book you added.
+          {builder
+            ? "Company, then site, then the book. A job can override one craft. Archive hides a book you added."
+            : "Look up wage rates for the company and site on this desk. Read-only."}
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {companies.map((company) => (
@@ -153,7 +156,7 @@ export function RatesDesk({
               <h3 className="text-lg font-semibold text-[#163038]">{alias(book?.source === "shahan" ? "Working crafts" : book?.label || "Working book")}</h3>
               <p className="mt-1 text-sm text-[#5b6f73]">{alias(selectedSite.name)}</p>
             </div>
-            {book && canArchiveRateBook(book) ? (
+            {builder && book && canArchiveRateBook(book) ? (
               <button
                 type="button"
                 className="rounded-lg border border-steel px-3 py-1.5 text-sm text-steel"
@@ -200,6 +203,7 @@ export function RatesDesk({
                 <p className="text-sm text-[#163038]">
                   {alias(row.jobTitle || row.jobId || "Job")} · {row.crafts.map((craft) => craft.craft).join(", ")}
                 </p>
+                {builder ? (
                 <button
                   type="button"
                   className="text-sm text-steel underline"
@@ -210,6 +214,7 @@ export function RatesDesk({
                 >
                   Clear override
                 </button>
+                ) : null}
               </li>
             ))}
           </ul>

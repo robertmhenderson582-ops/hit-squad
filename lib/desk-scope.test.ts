@@ -268,4 +268,14 @@ describe("owner View as desk scope", () => {
       [],
     );
   });
+
+  it("views as a vault extra when the catalog includes them", () => {
+    const extra = { id: "custom-added-tester", email: "added.tester@example.com", name: "Added Tester" };
+    assert.equal(viewAsSeatFromValue(extra.id), extra.id);
+    assert.equal(viewAsSeatFromValue("operator-novus"), null);
+    const lens = deskScopeUser(owner, extra.id, null, [extra]);
+    assert.equal(lens.email, extra.email);
+    assert.equal(lens.name, extra.name);
+    assert.equal(deskScopeUser(joseph, extra.id, null, [extra]).email, joseph.email);
+  });
 });

@@ -1,8 +1,10 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useDeskPeople } from "@/components/useDeskPeople";
 import { useSession } from "@/components/SessionProvider";
 import { aliasText, shouldApplyAliases } from "@/lib/catalog-aliases";
+import type { DeskPerson } from "@/lib/desk-people";
 import { activeLensSeat, canUseFollow, canUseViewAs, deskLensKey, hasBuildDesk, isTester, lensUser, testerFromViewAs, viewingAsOther } from "@/lib/desk-role";
 import { hydrateFromVault, setVaultViewAs } from "@/lib/estimate-vault-client";
 import {
@@ -90,6 +92,7 @@ type OwnerDeskState = {
   viewSite: string;
   republish: RepublishState | null;
   lensReady: boolean;
+  people: DeskPerson[];
   setAliasesOn: (on: boolean) => void;
   setFollowSeat: (seat: FollowSeat, land?: string) => void;
   setViewAs: (seat: ViewAsSeat) => void;
@@ -128,6 +131,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
   const [viewSite, setViewSite] = useState("Wood River — Roxana, IL");
   const [republish, setRepublish] = useState<RepublishState | null>(null);
   const [lensReady, setLensReady] = useState(!hasBuildDesk(user));
+  const people = useDeskPeople();
 
   useLayoutEffect(() => {
     if (tester || !hasBuildDesk(user)) {
@@ -192,7 +196,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       .catch(() => setLensReady(true));
   }, [tester, user]);
 
-  const viewedSeat = hasBuildDesk(user) && viewingAsOther(viewAs) ? testerFromViewAs(viewAs) : undefined;
+  const viewedSeat = hasBuildDesk(user) && viewingAsOther(viewAs) ? testerFromViewAs(viewAs, people) : undefined;
   const aliasSeat = viewedSeat
     ? viewedSeat.aliased
       ? "aliased"
@@ -279,6 +283,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       viewSite,
       republish,
       lensReady,
+      people,
       setAliasesOn,
       setFollowSeat,
       setViewAs,
@@ -286,7 +291,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       alias,
       applyingAliases,
     }),
-    [aliasesOn, followSeat, viewAs, viewResponsibility, viewSite, republish, lensReady, setAliasesOn, setFollowSeat, setViewAs, setViewLens, alias, applyingAliases],
+    [aliasesOn, followSeat, viewAs, viewResponsibility, viewSite, republish, lensReady, people, setAliasesOn, setFollowSeat, setViewAs, setViewLens, alias, applyingAliases],
   );
 
   return <OwnerDeskContext.Provider value={value}>{children}</OwnerDeskContext.Provider>;
@@ -306,10 +311,11 @@ export function useLensUser() {
   const desk = useOwnerDesk();
   const viewAs = desk?.viewAs;
   const followSeat = desk?.followSeat;
+  const people = desk?.people;
   const userKey = deskLensKey(user);
   const userRef = useRef(user);
   userRef.current = user;
-  return useMemo(() => lensUser(userRef.current, viewAs, followSeat), [userKey, viewAs, followSeat]);
+  return useMemo(() => lensUser(userRef.current, viewAs, followSeat, people), [userKey, viewAs, followSeat, people]);
 }
 
 export function useDeskLens() {
@@ -317,11 +323,12 @@ export function useDeskLens() {
   const desk = useOwnerDesk();
   const viewAs = desk?.viewAs;
   const followSeat = desk?.followSeat;
+  const people = desk?.people;
   const userKey = deskLensKey(user);
   const userRef = useRef(user);
   userRef.current = user;
   const seat = activeLensSeat(viewAs, followSeat);
-  const lens = useMemo(() => lensUser(userRef.current, viewAs, followSeat), [userKey, viewAs, followSeat]);
+  const lens = useMemo(() => lensUser(userRef.current, viewAs, followSeat, people), [userKey, viewAs, followSeat, people]);
   const lensKey = deskLensKey(lens);
   return useMemo(
     () => ({

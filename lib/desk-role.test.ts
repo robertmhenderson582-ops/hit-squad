@@ -3,8 +3,11 @@ import { test } from "node:test";
 import {
   buildDeskChrome,
   canUseFollow,
+  canLookupRates,
+  canOpenRates,
   canUseRateBuilder,
   canUseViewAs,
+  isProjectManagerOrAbove,
   hasBuildDesk,
   isOwnerLoginEmail,
   deskLensKey,
@@ -14,7 +17,7 @@ import {
   OWNER_LOGIN_EMAIL,
   pageAllowedForSeat,
 } from "./desk-role.ts";
-import { preferredViewAs, VISUAL_ROSTER } from "./owner-desk.ts";
+import { isFollowSeat, isViewAsSeat, preferredViewAs, VISUAL_ROSTER } from "./owner-desk.ts";
 import { JOSEPH_EMAIL, testerByEmail } from "./tester-seats.ts";
 
 test("owner login email never matches a first-login create seat", () => {
@@ -34,6 +37,11 @@ test("Novus is never a visual tester peer", () => {
     VISUAL_ROSTER.some((row) => String(row.id) === NOVUS_ID),
     false,
   );
+  assert.equal(isViewAsSeat("custom-added-tester"), true);
+  assert.equal(isFollowSeat("tester-shane"), true);
+  assert.equal(isViewAsSeat("operator-novus"), false);
+  assert.equal(isViewAsSeat("novus"), false);
+  assert.equal(isFollowSeat("owner"), true);
 });
 
 test("operator has build desk; testers do not", () => {
@@ -49,10 +57,16 @@ test("operator has build desk; testers do not", () => {
 
 test("Joseph has View as and no Rate builder", () => {
   const joseph = { role: "tester", email: JOSEPH_EMAIL };
+  const nathan = { role: "tester", email: "nathanboyte@gmail.com" };
   assert.equal(canUseViewAs(joseph), true);
   assert.equal(canUseRateBuilder(joseph), false);
-  assert.equal(canUseViewAs({ role: "tester", email: "nathanboyte@gmail.com" }), false);
-  assert.equal(canUseRateBuilder({ role: "tester", email: "nathanboyte@gmail.com" }), true);
+  assert.equal(canLookupRates(joseph), false);
+  assert.equal(canUseViewAs(nathan), false);
+  assert.equal(canUseRateBuilder(nathan), false);
+  assert.equal(canLookupRates(nathan), true);
+  assert.equal(canOpenRates(nathan), true);
+  assert.equal(isProjectManagerOrAbove(nathan), true);
+  assert.equal(isProjectManagerOrAbove(joseph), false);
 });
 
 test("View as lens matches the selected seat, not the signed-in owner", () => {
@@ -61,7 +75,8 @@ test("View as lens matches the selected seat, not the signed-in owner", () => {
   assert.equal(mark?.email, "marks544@yahoo.com");
   assert.equal(mark?.role, "tester");
   assert.equal(canUseViewAs(mark), false);
-  assert.equal(canUseRateBuilder(mark), true);
+  assert.equal(canUseRateBuilder(mark), false);
+  assert.equal(canLookupRates(mark), false);
   assert.equal(pageAllowedForSeat(mark, { buildDesk: true }), false);
   assert.equal(pageAllowedForSeat(owner, { buildDesk: true }), true);
 
@@ -104,7 +119,9 @@ test("every View-as seat matches that tester, including Settings flags", () => {
     assert.equal(lens?.email, row.email, row.id);
     assert.equal(lens?.name, def.name, row.id);
     assert.equal(lens?.role, "tester", row.id);
-    assert.equal(canUseRateBuilder(lens), def.rateBuilder, row.id);
+    assert.equal(canUseRateBuilder(lens), false, row.id);
+    assert.equal(canLookupRates(lens), /PM/.test(row.permission), row.id);
+    assert.equal(canOpenRates(lens), /PM/.test(row.permission), row.id);
     assert.equal(canUseViewAs(lens), def.viewAs, row.id);
     assert.equal(pageAllowedForSeat(lens, { buildDesk: true }), false, row.id);
     assert.equal(pageAllowedForSeat(lens, { ownerOnly: true }), false, row.id);
@@ -122,6 +139,25 @@ test("every View-as seat matches that tester, including Settings flags", () => {
   assert.equal(preferredViewAs("owner", "mark"), "owner");
   assert.equal(preferredViewAs(undefined, "cody"), "cody");
   assert.equal(preferredViewAs(undefined, undefined), "owner");
+});
+
+test("View as a vault extra uses that person, not the owner", () => {
+  const owner = {
+    id: "owner-robert-henderson",
+    email: "robertmhenderson582@gmail.com",
+    name: "Robert Henderson",
+    role: "owner" as const,
+  };
+  const extra = { id: "custom-added-tester", email: "added.tester@example.com", name: "Added Tester" };
+  const lens = lensUser(owner, extra.id, null, [extra]);
+  assert.equal(lens?.email, extra.email);
+  assert.equal(lens?.name, extra.name);
+  assert.equal(lens?.role, "tester");
+  assert.equal(canUseRateBuilder(lens), false);
+  assert.equal(canLookupRates(lens), false);
+  assert.equal(canUseViewAs(lens), false);
+  assert.equal(pageAllowedForSeat(lens, { buildDesk: true }), false);
+  assert.equal(lensUser(owner, "operator-novus", null, [extra])?.email, owner.email);
 });
 
 test("Follow applies the desk lens and wins over View as", () => {

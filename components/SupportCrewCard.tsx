@@ -12,7 +12,7 @@ import {
   assignSupportBilledAs,
   assignSupportDuty,
   clampPerDiem,
-  cloneSupportLine,
+  duplicateSupportLine,
   hydrateSupportLine,
   syncSupportRows,
   type CalendarRange,
@@ -20,7 +20,7 @@ import {
 } from "@/lib/craft-labor";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import { defaultLaborClass } from "@/lib/labor-class";
-import { formatShahanCrewCost, shahanCrewTitle, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
+import { formatDeskDollars, formatShahanCrewCost, shahanCrewCostAmount, shahanCrewTitle, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
 
 export type { SupportLine };
 
@@ -54,11 +54,21 @@ export function SupportCrewCard({
         const hours = computeRowHours(row, site, client, pack.crew.otAfter8);
         const title = shahanCrewTitle(row);
         const opts = { laborClass: row.laborClassOverride ?? defaultLaborClass(title) };
-        return { ...row, ...hours, cost: formatShahanCrewCost(title, hours, opts) };
+        return {
+          ...row,
+          ...hours,
+          costAmount: shahanCrewCostAmount(title, hours, opts),
+          cost: formatShahanCrewCost(title, hours, opts),
+        };
       }),
     [client, lines, pack.crew.otAfter8, site],
   );
   const totals = useMemo(() => sumSplits(computed), [computed]);
+  const costTotal = useMemo(
+    () => Math.round(computed.reduce((sum, row) => sum + row.costAmount, 0) * 100) / 100,
+    [computed],
+  );
+  const costLabel = formatDeskDollars(costTotal);
 
   useEffect(() => {
     if (!needsPhaseSeed) return;
@@ -113,11 +123,12 @@ export function SupportCrewCard({
   }
 
   function duplicatePosition(row: SupportLine) {
-    const copy = cloneSupportLine(row);
+    const source = rows.find((item) => item.id === row.id) ?? row;
+    const copy = duplicateSupportLine(source);
     onRows((current) => {
-      const index = current.findIndex((item) => item.id === row.id);
+      const index = current.findIndex((item) => item.id === source.id);
       const next = [...current];
-      next.splice(index + 1, 0, copy);
+      next.splice(index < 0 ? current.length : index + 1, 0, copy);
       return next;
     });
     setOpenId(copy.id);
@@ -143,7 +154,8 @@ export function SupportCrewCard({
           <h2 className="font-display text-2xl font-semibold text-[#163038]">Support</h2>
           <p className="text-sm text-[#5b6f73]">
             {totals.hours.toLocaleString()} hrs · {totals.st.toLocaleString()} ST · {totals.ot.toLocaleString()} OT ·{" "}
-            {totals.dt.toLocaleString()} DT
+            {totals.dt.toLocaleString()} DT · {totals.pd.toLocaleString()} PD
+            {costLabel ? ` · ${costLabel}` : ""}
           </p>
         </div>
         <button type="button" onClick={addPosition} className="rounded-lg bg-steel px-3 py-2 text-sm text-white">
@@ -196,6 +208,23 @@ export function SupportCrewCard({
               );
             })}
           </tbody>
+          {computed.length ? (
+            <tfoot>
+              <tr className="border-t-2 border-steel">
+                <td className="px-2 py-3 text-sm font-semibold text-[#163038]">Grand total</td>
+                <td className="px-2 py-3" />
+                <td className="px-2 py-3" />
+                <td className="px-2 py-3" />
+                <td className="hud-readout px-2 py-3">{totals.st.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-3">{totals.ot.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-3">{totals.dt.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-3">{totals.pd.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-3">{totals.hours.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-3 font-semibold">{costLabel || "—"}</td>
+                <td className="px-2 py-3" />
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </GripToPan>
     </section>

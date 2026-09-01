@@ -112,17 +112,47 @@ export function cloneCraftRow(row: CraftRow): CraftRow {
   return {
     ...row,
     id: uid("cr"),
+    position: row.position,
+    shift: row.shift,
+    clockOverride: row.clockOverride,
+    laborClassOverride: row.laborClassOverride,
     ranges: row.ranges.map((range) => ({
       ...range,
       id: uid("rg"),
+      phaseId: range.phaseId,
+      unitId: range.unitId,
+      start: range.start,
+      end: range.end,
+      headcount: range.headcount,
+      nightHeadcount: range.nightHeadcount,
+      hoursPerShift: range.hoursPerShift,
+      perDiemPeople: range.perDiemPeople,
+      nightPerDiemPeople: range.nightPerDiemPeople,
       days: [...range.days],
+      otAfter8: range.otAfter8,
+      shift: range.shift,
       skipDates: range.skipDates ? [...range.skipDates] : [],
     })),
   };
 }
 
+/** Copy a crew row. Do not re-seed from Job setup — that mints a different ST/OT/DT split. */
+export function duplicateCraftRow(row: CraftRow): CraftRow {
+  const title = row.position.trim();
+  const copy = cloneCraftRow(row);
+  if (!title) {
+    return { ...copy, position: "", ranges: [] };
+  }
+  return { ...copy, position: title };
+}
+
 export function cloneSupportLine(row: SupportLine): SupportLine {
   const copy = cloneCraftRow(row);
+  return { ...copy, id: uid("sup"), billedAs: row.billedAs };
+}
+
+export function duplicateSupportLine(row: SupportLine): SupportLine {
+  const copy = duplicateCraftRow(row);
   return { ...copy, id: uid("sup"), billedAs: row.billedAs };
 }
 

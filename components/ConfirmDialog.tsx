@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useState } from "react";
+import { ModalPortal } from "@/components/ModalPortal";
 import { useDisplay } from "@/components/DisplayProvider";
 
 type ConfirmOptions = {
@@ -47,6 +48,7 @@ export function ConfirmDialogProvider({ children }: { children: React.ReactNode 
     <ConfirmContext.Provider value={confirmRemove}>
       {children}
       {request ? (
+        <ModalPortal>
         <div className="modal-scrim">
           <div className="estimate-modal px-6 py-5">
             <h2 className="font-display text-2xl text-[#163038]">{request.title}</h2>
@@ -61,6 +63,7 @@ export function ConfirmDialogProvider({ children }: { children: React.ReactNode 
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </ConfirmContext.Provider>
   );

@@ -72,15 +72,18 @@ export function UsersAdmin() {
           >
             Owner
           </button>
-          <button
-            type="button"
-            onClick={() => desk.setViewAs("joseph")}
-            className={`rounded-lg px-4 py-2 text-sm ${
-              desk.viewAs === "joseph" ? "bg-steel text-white" : "border border-steel text-steel"
-            }`}
-          >
-            Joseph (later)
-          </button>
+          {desk.people.map((row) => (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => desk.setViewAs(row.id)}
+              className={`rounded-lg px-4 py-2 text-sm ${
+                desk.viewAs === row.id ? "bg-steel text-white" : "border border-steel text-steel"
+              }`}
+            >
+              {row.name}
+            </button>
+          ))}
         </div>
       </section>
 
@@ -101,20 +104,23 @@ export function UsersAdmin() {
               </tr>
             </thead>
             <tbody>
-              {VISUAL_ROSTER.map((row) => (
+              {(desk.people.length ? desk.people : VISUAL_ROSTER).map((row) => {
+                const visual = VISUAL_ROSTER.find((seat) => seat.id === row.id);
+                return (
                 <tr key={row.id} className="border-t border-[#d5e0de]">
                   <td className="px-2 py-2">{row.name}</td>
                   <td className="px-2 py-2">{row.email}</td>
-                  <td className="px-2 py-2">{row.permission}</td>
+                  <td className="px-2 py-2">{visual?.permission ?? "Login seat"}</td>
                   <td className="px-2 py-2">
-                    {row.shop === "madison"
+                    {visual?.shop === "madison"
                       ? "Madison · real names"
-                      : ["wendell", "benny", "chance"].includes(row.id)
+                      : visual && ["wendell", "benny", "chance"].includes(visual.id)
                         ? "Field · real names"
                         : "Field · aliases"}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

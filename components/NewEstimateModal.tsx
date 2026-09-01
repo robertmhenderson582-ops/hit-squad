@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ModalPortal } from "@/components/ModalPortal";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
 import { defaultEstimateName, isDefaultEstimateName, startJobEventLabel } from "@/lib/job-event";
@@ -85,6 +86,7 @@ export function NewEstimateModal({
   }
 
   return (
+    <ModalPortal>
     <div
       className="modal-scrim"
       role="dialog"
@@ -229,5 +231,6 @@ export function NewEstimateModal({
         </div>
       </form>
     </div>
+    </ModalPortal>
   );
 }

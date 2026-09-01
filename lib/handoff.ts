@@ -61,23 +61,31 @@ export function handoffMarkText(
   return null;
 }
 
-export function handoffSeats(): HandoffSeat[] {
+export function handoffSeats(extras: HandoffSeat[] = []): HandoffSeat[] {
   const ownerEmail = ownerVaultEmail();
   const owner: HandoffSeat = { name: "Robert Henderson", email: ownerEmail };
   const testers = TESTER_SEATS.map((seat) => ({ name: seat.name, email: seat.email }));
-  return [owner, ...testers].filter((seat) => seat.email !== NOVUS_EMAIL);
+  const seen = new Set<string>();
+  const rows: HandoffSeat[] = [];
+  for (const seat of [owner, ...testers, ...extras]) {
+    const email = seat.email.trim().toLowerCase();
+    if (!email || email === NOVUS_EMAIL || seen.has(email)) continue;
+    seen.add(email);
+    rows.push({ name: seat.name, email });
+  }
+  return rows;
 }
 
-export function handoffTargetsFor(user: ScopeUser): HandoffSeat[] {
+export function handoffTargetsFor(user: ScopeUser, extras: HandoffSeat[] = []): HandoffSeat[] {
   const email = user.email.trim().toLowerCase();
-  return handoffSeats().filter((seat) => seat.email !== email);
+  return handoffSeats(extras).filter((seat) => seat.email !== email);
 }
 
-export function findHandoffSeat(email: string): HandoffSeat | undefined {
+export function findHandoffSeat(email: string, extras: HandoffSeat[] = []): HandoffSeat | undefined {
   const needle = email.trim().toLowerCase();
-  return handoffSeats().find((seat) => seat.email === needle);
+  return handoffSeats(extras).find((seat) => seat.email === needle);
 }
 
-export function isHandoffEmail(email: string) {
-  return Boolean(findHandoffSeat(email));
+export function isHandoffEmail(email: string, extras: HandoffSeat[] = []) {
+  return Boolean(findHandoffSeat(email, extras));
 }

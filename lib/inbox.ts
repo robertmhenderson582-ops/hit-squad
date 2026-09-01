@@ -1,3 +1,5 @@
+import { inboxContactsFor, isInboxCircleEmail } from "./inbox-circle.ts";
+
 export const INBOX_STORE_PREFIX = "hs_inbox_v1:";
 export const OWNER_CONTACT = {
   id: "owner",
@@ -11,7 +13,7 @@ export type InboxPerson = {
   company: string;
 };
 
-/** Grok-era demo people. Not real seats. Compose stays empty until a real list exists. */
+/** Grok-era demo people. Not real seats. Compose uses inboxContactsFor. */
 export const OWNER_CONTACTS: InboxPerson[] = [];
 
 export const DEMO_THREAD_IDS = ["th-james", "th-mark", "th-joseph"] as const;
@@ -158,7 +160,14 @@ export function makeMessage(input: {
   };
 }
 
-export function contactsFor(ownerChrome: boolean): InboxPerson[] {
+export function contactsFor(ownerChrome: boolean, email = ""): InboxPerson[] {
+  if (isInboxCircleEmail(email)) {
+    return inboxContactsFor(email).map((row) => ({
+      id: row.id,
+      name: row.name,
+      company: row.company,
+    }));
+  }
   if (ownerChrome) return OWNER_CONTACTS;
   return [OWNER_CONTACT];
 }

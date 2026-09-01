@@ -120,6 +120,8 @@ function NewEstimateDesk({
             otRule={alias(otRule)}
             author={user?.name}
             existingClient={existingClient}
+            status="Estimate"
+            statusLocked
           />
           <PhaseSchedule />
         </div>

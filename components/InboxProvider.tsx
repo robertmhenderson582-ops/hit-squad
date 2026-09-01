@@ -13,11 +13,13 @@ import {
   type InboxPerson,
   type InboxThread,
 } from "@/lib/inbox";
-import { applyWhatsNew } from "@/lib/whats-new";
+import { canReceiveDeskBot, canUseInbox } from "@/lib/inbox-circle";
+import { applyWhatsNew, DESK_PERSON_ID } from "@/lib/whats-new";
 import { useDisplay } from "@/components/DisplayProvider";
-import { useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { buildDeskChrome, isTester } from "@/lib/desk-role";
+import { deskFetch } from "@/lib/estimate-vault-client";
 
 type InboxState = {
   open: boolean;
@@ -49,9 +51,16 @@ type InboxState = {
 
 const InboxContext = createContext<InboxState | null>(null);
 
+function mergeDesk(local: InboxThread[], remote: InboxThread[]) {
+  const desk = local.filter((thread) => thread.personId === DESK_PERSON_ID);
+  const peers = remote.filter((thread) => thread.personId !== DESK_PERSON_ID);
+  return [...desk, ...peers];
+}
+
 export function InboxProvider({ children }: { children: React.ReactNode }) {
   const { user, status } = useSession();
   const desk = useOwnerDesk();
+  const lens = useLensUser();
   const { prefs } = useDisplay();
   const ownerChrome = buildDeskChrome(user, desk?.viewAs, desk?.followSeat);
   const watched = desk?.followSeat && desk.followSeat !== "owner" ? desk.followSeat : undefined;
@@ -61,6 +70,8 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
     : ownerChrome
     ? user?.id || "owner"
     : watched || viewed || user?.id || user?.email || "tester";
+  const inboxEmail = lens?.email || user?.email || "";
+  const inboxOn = canUseInbox({ email: inboxEmail });
 
   const [open, setOpen] = useState(false);
   const [composing, setComposing] = useState(false);
@@ -70,18 +81,43 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
 
+  const loadRemote = useCallback(async () => {
+    if (!inboxOn) return [] as InboxThread[];
+    const response = await deskFetch("/api/desk/inbox");
+    if (!response.ok) return [];
+    const data = (await response.json().catch(() => ({}))) as { threads?: InboxThread[] };
+    return Array.isArray(data.threads) ? data.threads : [];
+  }, [inboxOn]);
+
   useEffect(() => {
     if (status !== "authenticated" || !user) {
       setThreads([]);
       setReady(false);
       return;
     }
-    setThreads(applyWhatsNew(readThreads(seat, ownerChrome), seat, ownerChrome));
+    const local = canReceiveDeskBot({ email: inboxEmail })
+      ? applyWhatsNew(readThreads(seat, ownerChrome), seat, ownerChrome, inboxEmail)
+      : readThreads(seat, ownerChrome).filter((thread) => thread.personId !== DESK_PERSON_ID);
+    setThreads(local);
     setActiveId(null);
     setSelectedIds([]);
     setComposing(false);
     setReady(true);
-  }, [ownerChrome, seat, status, user]);
+    if (!inboxOn) return;
+    void loadRemote().then((remote) => {
+      setThreads((current) => mergeDesk(current, remote));
+    });
+  }, [inboxEmail, inboxOn, loadRemote, ownerChrome, seat, status, user]);
+
+  useEffect(() => {
+    if (!ready || !inboxOn) return;
+    const id = window.setInterval(() => {
+      void loadRemote().then((remote) => {
+        setThreads((current) => mergeDesk(current, remote));
+      });
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [inboxOn, loadRemote, ready]);
 
   useEffect(() => {
     if (!ready || status !== "authenticated" || !user) return;
@@ -89,7 +125,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   }, [ready, seat, status, threads, user]);
 
   const unread = unreadCount(threads);
-  const contacts = useMemo(() => contactsFor(ownerChrome), [ownerChrome]);
+  const contacts = useMemo(() => contactsFor(ownerChrome, inboxEmail), [inboxEmail, ownerChrome]);
 
   const announce = useCallback(
     (preview: string) => {
@@ -113,9 +149,10 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const openInbox = useCallback(() => {
+    if (!inboxOn) return;
     unlockInboxAudio();
     setOpen(true);
-  }, []);
+  }, [inboxOn]);
 
   const closeInbox = useCallback(() => {
     setOpen(false);
@@ -123,27 +160,12 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const startDraft = useCallback(() => {
+    if (!inboxOn) return;
     unlockInboxAudio();
-    if (!ownerChrome) {
-      const owner = contacts[0];
-      persist((current) => {
-        const existing = current.find((thread) => thread.personId === owner.id);
-        if (existing) {
-          setActiveId(existing.id);
-          return current;
-        }
-        const created = makeThread(owner);
-        setActiveId(created.id);
-        return [created, ...current];
-      });
-      setComposing(false);
-      setOpen(true);
-      return;
-    }
     setComposing(true);
     setActiveId(null);
     setOpen(true);
-  }, [contacts, ownerChrome, persist]);
+  }, [inboxOn]);
 
   const startThread = useCallback(
     (person: InboxPerson) => {
@@ -168,6 +190,19 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
     persist((current) =>
       current.map((thread) => {
         if (thread.id !== id) return thread;
+        if (thread.personId !== DESK_PERSON_ID && inboxOn) {
+          void deskFetch("/api/desk/inbox", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ readPersonId: thread.personId }),
+          }).then((response) => {
+            if (!response.ok) return;
+            return response.json() as Promise<{ threads?: InboxThread[] }>;
+          }).then((data) => {
+            if (!data?.threads) return;
+            setThreads((existing) => mergeDesk(existing, data.threads ?? []));
+          });
+        }
         return {
           ...thread,
           unread: 0,
@@ -177,13 +212,14 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
         };
       }),
     );
-  }, [persist]);
+  }, [inboxOn, persist]);
 
   const sendMessage = useCallback(
     (text: string, photo?: string | null) => {
       if (!activeId) return;
       const trimmed = text.trim();
       if (!trimmed && !photo) return;
+      const active = threads.find((thread) => thread.id === activeId);
       persist((current) =>
         current.map((thread) =>
           thread.id === activeId
@@ -193,7 +229,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
                   ...thread.messages,
                   makeMessage({
                     from: "self",
-                    author: user?.name || "You",
+                    author: lens?.name || user?.name || "You",
                     text: trimmed,
                     photo,
                   }),
@@ -202,8 +238,21 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
             : thread,
         ),
       );
+      if (active && active.personId !== DESK_PERSON_ID && inboxOn) {
+        void deskFetch("/api/desk/inbox", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ personId: active.personId, text: trimmed, photo: photo ?? null }),
+        }).then((response) => {
+          if (!response.ok) return;
+          return response.json() as Promise<{ threads?: InboxThread[] }>;
+        }).then((data) => {
+          if (!data?.threads) return;
+          setThreads((current) => mergeDesk(current, data.threads ?? []));
+        });
+      }
     },
-    [activeId, persist, user?.name],
+    [activeId, inboxOn, lens?.name, persist, threads, user?.name],
   );
 
   const value = useMemo<InboxState>(
@@ -248,7 +297,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
         setActiveId((current) => (current && selectedIds.includes(current) ? null : current));
       },
       emptyInbox: () => {
-        persist([]);
+        persist((current) => current.filter((thread) => thread.personId === DESK_PERSON_ID));
         setSelectedIds([]);
         setActiveId(null);
       },

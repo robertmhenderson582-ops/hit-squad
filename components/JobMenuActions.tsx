@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { HandoffDialog } from "@/components/HandoffDialog";
+import { ModalPortal } from "@/components/ModalPortal";
 import { useDeskLens } from "@/components/OwnerDeskContext";
+import { useHandoffPeople } from "@/components/useDeskPeople";
 import {
   applyReturnLocally,
   applyTransferLocally,
@@ -39,8 +41,10 @@ export function JobMenuActions({
   onChange?: () => void;
 }) {
   const { lens, seat } = useDeskLens();
+  const extras = useHandoffPeople();
   const [handoff, setHandoff] = useState<"share" | "unshare" | "turnover" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const vaultId = vaultPackIdOf(id, packId);
   const item = { id, title, packId: vaultId || packId };
@@ -49,7 +53,7 @@ export function JobMenuActions({
   const sharedEmails = pack ? packSharedEmails(pack) : [];
   const canShare = Boolean(deskUser && pack && canSharePack(deskUser, pack));
   const canReturn = Boolean(deskUser && pack && canReturnPack(deskUser, pack));
-  const sharedWith = sharedEmails.map((email) => findHandoffSeat(email)).filter(Boolean) as HandoffSeat[];
+  const sharedWith = sharedEmails.map((email) => findHandoffSeat(email, extras) ?? { name: email, email }) as HandoffSeat[];
 
   async function refresh() {
     onChange?.();
@@ -80,9 +84,7 @@ export function JobMenuActions({
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              archiveMenuItem(item);
-              if (vaultId) void archiveVaultPack(vaultId, true);
-              void refresh();
+              setConfirmArchive(true);
             }}
           >
             ARCHIVE
@@ -227,40 +229,75 @@ export function JobMenuActions({
           return null;
         }}
       />
-      {confirmDelete ? (
-        <div className="modal-scrim" role="dialog" aria-modal="true">
-          <div className="estimate-modal px-6 py-5">
-            <h2 className="font-display text-2xl text-[#163038]">Delete this job?</h2>
-            <p className="mt-2 text-sm text-[#5b6f73]">
-              {title} leaves your Jobs list. This only removes your copy. It does not take anyone
-              else&apos;s work.
-            </p>
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(false)}
-                className="rounded-lg border border-steel px-4 py-2 text-steel"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  deleteMenuItem(item);
-                  if (vaultId) {
-                    void deleteVaultPack(vaultId);
-                    deleteLocalPack(vaultId);
-                  }
-                  setConfirmDelete(false);
-                  void refresh();
-                }}
-                className="rounded-lg bg-steel px-4 py-2 text-white"
-              >
-                Delete
-              </button>
+      {confirmArchive ? (
+        <ModalPortal>
+          <div className="modal-scrim" role="dialog" aria-modal="true">
+            <div className="estimate-modal px-6 py-5">
+              <h2 className="font-display text-2xl text-[#163038]">Archive this job?</h2>
+              <p className="mt-2 text-sm text-[#5b6f73]">
+                {title} leaves the live list. Find it under Archived. Restore puts it back.
+              </p>
+              <div className="mt-5 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmArchive(false)}
+                  className="rounded-lg border border-steel px-4 py-2 text-steel"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    archiveMenuItem(item);
+                    if (vaultId) void archiveVaultPack(vaultId, true);
+                    setConfirmArchive(false);
+                    void refresh();
+                  }}
+                  className="rounded-lg bg-steel px-4 py-2 text-white"
+                >
+                  Archive
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
+      ) : null}
+      {confirmDelete ? (
+        <ModalPortal>
+          <div className="modal-scrim" role="dialog" aria-modal="true">
+            <div className="estimate-modal px-6 py-5">
+              <h2 className="font-display text-2xl text-[#163038]">Delete this job?</h2>
+              <p className="mt-2 text-sm text-[#5b6f73]">
+                {title} leaves your Jobs list. This only removes your copy. It does not take anyone
+                else&apos;s work.
+              </p>
+              <div className="mt-5 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  className="rounded-lg border border-steel px-4 py-2 text-steel"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    deleteMenuItem(item);
+                    if (vaultId) {
+                      void deleteVaultPack(vaultId);
+                      deleteLocalPack(vaultId);
+                    }
+                    setConfirmDelete(false);
+                    void refresh();
+                  }}
+                  className="rounded-lg bg-steel px-4 py-2 text-white"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
       ) : null}
     </div>
   );

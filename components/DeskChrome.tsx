@@ -16,7 +16,7 @@ import { noteSessionEnd } from "@/components/FeatureTrail";
 import { FUTURE_MODULES } from "@/components/FutureModulesDesk";
 import { useLensUser } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { canUseRateBuilder, isOperator, isTester } from "@/lib/desk-role";
+import { canOpenRates, isOperator, isTester } from "@/lib/desk-role";
 
 const NAV: { href: string; label: string; modules?: boolean }[] = [
   { href: "/jobs", label: "Jobs" },
@@ -64,7 +64,7 @@ function ChromeInner({
   const rail = (active: boolean) =>
     paper ? `rounded px-3 py-2 ${active ? "paper-rail-active" : "paper-rail"}` : `hud-rail px-3 py-2 ${active ? "hud-rail-active" : ""}`;
 
-  const links = NAV.filter((item) => item.href !== "/rates" || canUseRateBuilder(lens)).map((item) => {
+  const links = NAV.filter((item) => item.href !== "/rates" || canOpenRates(lens)).map((item) => {
     const active = navActive(pathname, item.href, item.modules);
     if (item.modules) {
       return (

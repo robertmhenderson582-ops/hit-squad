@@ -11,7 +11,9 @@ import { estimateForJob, estimateHref, estimatesForPlant } from "@/lib/estimate-
 import { readClosed } from "@/lib/desk-closeout";
 import { ChangeOrderDesk } from "@/components/ChangeOrderDesk";
 import { StatusStamp } from "@/components/StatusStamp";
-import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
+import { useAlias, useDeskLens, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useSession } from "@/components/SessionProvider";
+import { hasBuildDesk } from "@/lib/desk-role";
 import { companyScopeFor } from "@/lib/companies";
 import { visibleDeskPacks } from "@/lib/estimate-scope";
 import { VIEW_RESPONSIBILITIES, VISUAL_ROSTER } from "@/lib/owner-desk";
@@ -76,7 +78,10 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const plant = PLANTS[slug] ?? PLANTS["wood-river"];
   const { openNewEstimate } = useEstimateModal();
   const alias = useAlias();
+  const { user } = useSession();
+  const desk = useOwnerDesk();
   const { lens, viewingAs, lensKey } = useDeskLens();
+  const people = hasBuildDesk(user) ? desk?.people ?? [] : VISUAL_ROSTER;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -250,7 +255,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
                 <select className="paper-field mt-1">
                   <option value="">Not assigned</option>
                   <option value="anonymous">Anonymous (this shop)</option>
-                  {VISUAL_ROSTER.map((row) => (
+                  {people.map((row) => (
                     <option key={row.id} value={row.id}>
                       {row.name}
                     </option>

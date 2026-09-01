@@ -1,4 +1,5 @@
 import type { AliasSeat } from "@/lib/catalog-aliases";
+import { testerByEmail, TESTER_SEATS } from "./tester-seats.ts";
 
 export type VisualSeat = {
   id: "wendell" | "benny" | "chance" | "nathan" | "john" | "joseph" | "mark" | "cody" | "bill" | "james";
@@ -21,7 +22,7 @@ export const VISUAL_ROSTER: VisualSeat[] = [
   { id: "james", name: "James Cain", email: "jameshcainjr@gmail.com", permission: "Staff", shop: "field" },
 ];
 
-export type FollowSeat = VisualSeat["id"] | "owner";
+export type FollowSeat = string;
 export type ViewAsSeat = FollowSeat;
 export type ViewResponsibility =
   | "Project manager"
@@ -62,7 +63,11 @@ export const FOLLOW_SEATS: FollowSeat[] = [
 ];
 
 export function isFollowSeat(value: unknown): value is FollowSeat {
-  return typeof value === "string" && (FOLLOW_SEATS as string[]).includes(value);
+  if (typeof value !== "string" || !value.trim()) return false;
+  if (value === "owner") return true;
+  if (value === "novus" || value === "operator-novus" || value.startsWith("operator-")) return false;
+  if ((FOLLOW_SEATS as string[]).includes(value)) return true;
+  return value.startsWith("custom-") || value.startsWith("tester-");
 }
 
 export function isViewAsSeat(value: unknown): value is ViewAsSeat {
@@ -82,9 +87,10 @@ export function preferredFollowSeat(stored: FollowSeat | undefined, server?: Fol
 
 export function aliasLensFor(seat: FollowSeat): AliasSeat {
   if (seat === "owner") return "owner";
-  if (seat === "nathan" || seat === "john" || seat === "wendell" || seat === "benny" || seat === "chance") {
-    return "real";
-  }
+  const visual = VISUAL_ROSTER.find((row) => row.id === seat);
+  if (visual) return testerByEmail(visual.email)?.aliased ? "aliased" : "real";
+  const seeded = TESTER_SEATS.find((row) => row.id === seat);
+  if (seeded) return seeded.aliased ? "aliased" : "real";
   return "aliased";
 }
 
@@ -120,7 +126,11 @@ export const VIEW_AS_HIDDEN_SETTINGS = [
   "/settings/checks",
 ] as const;
 
-export function seatLabel(seat: FollowSeat): string {
+export function seatLabel(seat: FollowSeat, people: Array<{ id: string; name: string }> = []): string {
   if (seat === "owner") return "Robert (owner)";
-  return VISUAL_ROSTER.find((row) => row.id === seat)?.name ?? seat;
+  return (
+    VISUAL_ROSTER.find((row) => row.id === seat)?.name ??
+    people.find((row) => row.id === seat)?.name ??
+    seat
+  );
 }

@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { NOVUS_EMAIL } from "@/lib/desk-role";
-import { canFollowSeatId } from "@/lib/follow";
-import { VISUAL_ROSTER, type FollowSeat } from "@/lib/owner-desk";
+import { personFromLensId } from "@/lib/desk-people";
+import { canFollowSeatId, followSeatFromEmail } from "@/lib/follow";
+import { type FollowSeat } from "@/lib/owner-desk";
 
 type LiveSeat = {
   email: string;
@@ -47,20 +48,21 @@ export function FollowDesk() {
 
   if (!desk) return <p className="mt-4 text-[#5b6f73]">Owner and Operator desk only.</p>;
 
+  const catalog = desk.people;
   const watching = desk.followSeat !== "owner";
-  const subject = VISUAL_ROSTER.find((row) => row.id === desk.followSeat);
+  const subject = personFromLensId(desk.followSeat, catalog);
   const applyFollow = desk.setFollowSeat;
   function startFollow(id: FollowSeat, path: string) {
     if (!canFollowSeatId(id)) return;
     applyFollow(id, path);
   }
 
-  const known = new Set(VISUAL_ROSTER.map((row) => row.email.toLowerCase()));
+  const known = new Set(catalog.map((row) => row.email.toLowerCase()));
   const extras = seats.filter(
     (seat) => !known.has(seat.email.toLowerCase()) && seat.email.toLowerCase() !== NOVUS_EMAIL,
   );
   const people = [
-    ...VISUAL_ROSTER.map((row) => {
+    ...catalog.map((row) => {
       const ping = seats.find((seat) => seat.email.toLowerCase() === row.email.toLowerCase());
       return {
         id: row.id,
@@ -69,18 +71,21 @@ export function FollowDesk() {
         live: Boolean(ping?.live),
         path: ping?.path ?? "",
         lastAt: ping?.lastAt ?? 0,
-        followable: true as const,
+        followable: canFollowSeatId(row.id),
       };
     }),
-    ...extras.map((seat) => ({
-      id: seat.email,
-      name: seat.name,
-      email: seat.email,
-      live: seat.live,
-      path: seat.path,
-      lastAt: seat.lastAt,
-      followable: false as const,
-    })),
+    ...extras.map((seat) => {
+      const id = followSeatFromEmail(seat.email, catalog) || seat.email;
+      return {
+        id,
+        name: seat.name,
+        email: seat.email,
+        live: seat.live,
+        path: seat.path,
+        lastAt: seat.lastAt,
+        followable: canFollowSeatId(id),
+      };
+    }),
   ].sort((a, b) => Number(b.live) - Number(a.live) || b.lastAt - a.lastAt);
 
   return (

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
 import { hasBuildDesk } from "@/lib/desk-role";
-import { deskUserFromRequest } from "@/lib/desk-scope";
+import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { emailOwnerTicket } from "@/lib/ticket-mail";
 import {
   addStoredTicket,
@@ -23,7 +23,7 @@ async function scoped(user: { role: string; email: string }) {
 export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  return NextResponse.json({ tickets: await scoped(deskUserFromRequest(user, request)), store: ticketStoreKind() });
+  return NextResponse.json({ tickets: await scoped(await scopedDeskUser(user, request)), store: ticketStoreKind() });
 }
 
 export async function POST(request: Request) {

@@ -60,7 +60,11 @@ export function InboxPanel({ compact = false }: { compact?: boolean }) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className={`font-semibold text-[#163038] ${compact ? "text-2xl" : "font-display text-3xl"}`}>Inbox</h2>
-            <p className="mt-1 text-sm text-[#5b6f73]">Testers do not see each other.</p>
+            <p className="mt-1 text-sm text-[#5b6f73]">
+              {inbox.contacts.length
+                ? "Robert, Nathan, Benny, Shane, Wendell, and Chance can write each other here."
+                : "Inbox is those six only."}
+            </p>
           </div>
           <button type="button" onClick={inbox.startDraft} className="inbox-new">
             + New
@@ -86,12 +90,12 @@ export function InboxPanel({ compact = false }: { compact?: boolean }) {
             </button>
           </div>
         )}
-        <p className="mt-1 text-xs text-[#5b6f73]">Select all is this desk only — testers stay on their own threads.</p>
+        <p className="mt-1 text-xs text-[#5b6f73]">Select all is this desk only. Nothing is emailed.</p>
 
         {inbox.composing ? (
           <div className="mt-4 rounded-xl bg-[#f4f1e8] px-3 py-3">
             <p className="text-sm text-[#163038]">
-              {inbox.ownerChrome ? "Pick a person. Testers never share a thread." : "Write the owner. Teammates only if they share your company."}
+              Pick a person. Inbox is those six only.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               {inbox.contacts.map((person) => (

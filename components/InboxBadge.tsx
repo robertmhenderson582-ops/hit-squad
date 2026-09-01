@@ -1,10 +1,13 @@
 "use client";
 
 import { useInbox } from "@/components/InboxProvider";
+import { useLensUser } from "@/components/OwnerDeskContext";
+import { canUseInbox } from "@/lib/inbox-circle";
 
 export function InboxBadge() {
   const inbox = useInbox();
-  if (inbox.unread <= 0) return null;
+  const lens = useLensUser();
+  if (!canUseInbox(lens) || inbox.unread <= 0) return null;
   return (
     <button
       type="button"
