@@ -2,6 +2,7 @@
 
 import { useAlias, useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { hasBuildDesk } from "@/lib/desk-role";
+import { peopleByLane } from "@/lib/desk-people";
 import { VIEW_RESPONSIBILITIES, VIEW_SITES, type ViewAsSeat, type ViewResponsibility } from "@/lib/owner-desk";
 import { isJosephEmail } from "@/lib/tester-seats";
 
@@ -22,24 +23,39 @@ export function ViewAsDesk() {
           : "See that person's desk: their jobs, modules, and empty states. You stay signed in. An amber Viewing as bar with Exit stays on the desk. Users, Follow, Activity, vault, republish, branding, and Checks hide while viewing as. This does not seed logins."}
       </p>
       {buildDesk ? (
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => desk.setViewAs("owner")}
-          className={`rounded-lg px-4 py-2 text-sm ${desk.viewAs === "owner" ? "bg-steel text-white" : "border border-steel text-steel"}`}
-        >
-          Owner
-        </button>
-        {desk.people.map((row) => (
+      <div className="mt-4 space-y-4">
+        <div className="flex flex-wrap gap-2">
           <button
-            key={row.id}
             type="button"
-            onClick={() => desk.setViewAs(row.id as ViewAsSeat)}
-            className={`rounded-lg px-4 py-2 text-sm ${desk.viewAs === row.id ? "bg-steel text-white" : "border border-steel text-steel"}`}
+            onClick={() => desk.setViewAs("owner")}
+            className={`rounded-lg px-4 py-2 text-sm ${desk.viewAs === "owner" ? "bg-steel text-white" : "border border-steel text-steel"}`}
           >
-            {row.name}
+            Owner
           </button>
-        ))}
+        </div>
+        {(["company", "standalone"] as const).map((lane) => {
+          const rows = peopleByLane(desk.people)[lane];
+          if (!rows.length) return null;
+          return (
+            <div key={lane}>
+              <p className="font-mono text-[10px] tracking-[0.2em] text-steel">
+                {lane === "company" ? "COMPANY" : "STANDALONE"}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {rows.map((row) => (
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() => desk.setViewAs(row.id as ViewAsSeat)}
+                    className={`rounded-lg px-4 py-2 text-sm ${desk.viewAs === row.id ? "bg-steel text-white" : "border border-steel text-steel"}`}
+                  >
+                    {row.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
       ) : null}
       <label className="mt-4 block">

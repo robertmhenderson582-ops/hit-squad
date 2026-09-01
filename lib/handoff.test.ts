@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
+import { STANDALONE_ID } from "./companies.ts";
 import { JAMES_EMAIL, JOHN_HENRY_EMAIL, JOSEPH_EMAIL, SHANE_EMAIL } from "./tester-seats.ts";
 import {
   findHandoffSeat,
@@ -78,5 +79,21 @@ describe("handoff seats", () => {
     };
     assert.equal(handoffMarkText(transferredThenShared, "nathanboyte@gmail.com"), "Shared with Robert Henderson.");
     assert.equal(handoffMarkText(transferredThenShared, OWNER_LOGIN_EMAIL), "Shared / from Nathan Boyte.");
+  });
+
+  it("keeps company people and standalone people on separate handoff lists", () => {
+    const extra = { name: "Solo Tester", email: "solo.tester@example.com", companyId: STANDALONE_ID };
+    const assignments = { [extra.email]: STANDALONE_ID };
+    const nathan = handoffTargetsFor({ email: "nathanboyte@gmail.com", role: "tester" }, [extra], assignments);
+    assert.equal(nathan.some((row) => row.email === extra.email), false);
+    assert.equal(nathan.some((row) => row.email === OWNER_LOGIN_EMAIL), true);
+    assert.equal(nathan.some((row) => row.email === JOSEPH_EMAIL), true);
+    const solo = handoffTargetsFor({ email: extra.email, role: "tester" }, [extra], assignments);
+    assert.equal(solo.some((row) => row.email === "nathanboyte@gmail.com"), false);
+    assert.equal(solo.some((row) => row.email === JOSEPH_EMAIL), false);
+    assert.equal(solo.some((row) => row.email === OWNER_LOGIN_EMAIL), true);
+    const ownerList = handoffTargetsFor({ email: OWNER_LOGIN_EMAIL, role: "owner" }, [extra], assignments);
+    assert.equal(ownerList.some((row) => row.email === extra.email), true);
+    assert.equal(ownerList.some((row) => row.email === "nathanboyte@gmail.com"), true);
   });
 });

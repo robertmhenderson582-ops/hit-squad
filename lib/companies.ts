@@ -12,7 +12,11 @@ export type Company = {
 export const LUCKY13_ID = "lucky13";
 export const LUCKY13_NAME = "Lucky 13 Welding & Fabrication";
 
-/** Seed catalog. Owner can add more; those persist separately. */
+/** Quiet one-off lane. Not a client company and not a second product. */
+export const STANDALONE_ID = "standalone";
+export const STANDALONE_NAME = "Standalone";
+
+/** Seed catalog. Owner can add more; those persist separately. Standalone is not a company row. */
 export const COMPANIES: Company[] = [
   { id: "hitsquad", name: "Hit Squad" },
   { id: "madison", name: "Madison" },
@@ -43,7 +47,25 @@ export function isCompanyId(value: string): value is CompanyId {
   return COMPANY_ID_RE.test(value.trim());
 }
 
+export function isStandaloneId(id?: string | null): boolean {
+  return (id ?? "").trim().toLowerCase() === STANDALONE_ID;
+}
+
+export function peopleLane(companyId?: string | null): "company" | "standalone" {
+  return isStandaloneId(companyId) ? "standalone" : "company";
+}
+
+export function samePeopleLane(a?: string | null, b?: string | null): boolean {
+  return peopleLane(a) === peopleLane(b);
+}
+
+export function assignmentChoices(catalog: Company[] = COMPANIES): Company[] {
+  const rows = catalog.filter((row) => !isStandaloneId(row.id));
+  return [...rows, { id: STANDALONE_ID, name: STANDALONE_NAME }];
+}
+
 export function companyName(id: CompanyId, catalog: Company[] = COMPANIES): string {
+  if (isStandaloneId(id)) return STANDALONE_NAME;
   return catalog.find((row) => row.id === id)?.name ?? id;
 }
 
@@ -51,7 +73,7 @@ export function mergeCompanies(extra: Company[] = []): Company[] {
   const seen = new Set<string>();
   const next: Company[] = [];
   for (const row of [...COMPANIES, ...extra]) {
-    if (!row?.id || !row?.name || !isCompanyId(row.id) || seen.has(row.id)) continue;
+    if (!row?.id || !row?.name || !isCompanyId(row.id) || isStandaloneId(row.id) || seen.has(row.id)) continue;
     seen.add(row.id);
     next.push({ id: row.id, name: row.name });
   }
@@ -64,6 +86,14 @@ export function seedCompanyForEmail(email: string): CompanyId {
   if (key === OWNER_LOGIN_EMAIL) return "hitsquad";
   if (key === NOVUS_EMAIL) return "hitsquad";
   return testerByEmail(key)?.company ?? "hitsquad";
+}
+
+/** Seed or override map. Owner stays company-desk; standalone is never inferred from a name. */
+export function companyIdForEmail(email: string, assignments: Record<string, string> = {}): CompanyId {
+  const key = email.trim().toLowerCase();
+  const assigned = assignments[key];
+  if (assigned && (isCompanyId(assigned) || isStandaloneId(assigned))) return assigned;
+  return seedCompanyForEmail(key);
 }
 
 export function companyScopeFor(user?: { email?: string; role?: string } | null, companyId?: CompanyId): CompanyScope | undefined {
@@ -81,13 +111,17 @@ export function assignedCompanyId(scope?: CompanyScope | null): CompanyId {
 }
 
 export function companiesForScope(scope?: CompanyScope | null, catalog: Company[] = COMPANIES): Company[] {
-  if (!scope || scope.isOwner) return catalog;
+  const rows = catalog.filter((row) => !isStandaloneId(row.id));
+  if (!scope || scope.isOwner) return rows;
   const id = assignedCompanyId(scope);
-  return catalog.filter((row) => row.id === id);
+  if (isStandaloneId(id)) return [];
+  return rows.filter((row) => row.id === id);
 }
 
 export function canSeeCompany(scope: CompanyScope | null | undefined, companyId: CompanyId): boolean {
+  if (isStandaloneId(companyId)) return false;
   if (!scope || scope.isOwner) return true;
+  if (isStandaloneId(assignedCompanyId(scope))) return false;
   return assignedCompanyId(scope) === companyId;
 }
 

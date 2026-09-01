@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
+import { STANDALONE_ID } from "./companies.ts";
 import {
   followIdFromEmail,
   lensIdForSeat,
   lensPeopleFromSeats,
   mergeDeskPeople,
+  peopleByLane,
   personFromLensId,
   seededDeskPeople,
 } from "./desk-people.ts";
@@ -56,4 +58,17 @@ test("seeded first paint lists testers and merge adds vault extras", () => {
   assert.equal(merged.some((row) => row.email === EXTRA.email && row.id === EXTRA.id), true);
   assert.equal(merged.some((row) => row.email === NOVUS_EMAIL), false);
   assert.equal(TESTER_SEATS.some((row) => /peffley/i.test(row.email) || /peffley/i.test(row.name)), false);
+});
+
+test("company people and standalone people stay on separate lists", () => {
+  const solo = { id: "solo-1", email: "solo.tester@example.com", name: "Solo Tester", role: "tester", companyId: STANDALONE_ID };
+  const people = lensPeopleFromSeats([
+    ...TESTER_SEATS.map((seat) => ({ id: seat.id, email: seat.email, name: seat.name, role: "tester", companyId: seat.company })),
+    solo,
+  ]);
+  const lanes = peopleByLane(people);
+  assert.equal(lanes.company.some((row) => row.email === "nathanboyte@gmail.com"), true);
+  assert.equal(lanes.company.some((row) => row.email === solo.email), false);
+  assert.equal(lanes.standalone.some((row) => row.email === solo.email), true);
+  assert.equal(lanes.standalone.some((row) => row.email === "nathanboyte@gmail.com"), false);
 });

@@ -5,7 +5,7 @@ import { PasswordField } from "@/components/PasswordField";
 import { PresencePulse } from "@/components/PresencePulse";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { COMPANIES, companyName, type Company, type CompanyId } from "@/lib/companies";
+import { COMPANIES, assignmentChoices, companyName, type Company, type CompanyId } from "@/lib/companies";
 import { canUseFollow, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
 import { lensPeopleFromSeats } from "@/lib/desk-people";
 import { followSeatFromEmail } from "@/lib/follow";
@@ -217,7 +217,7 @@ export function ManageUsersDesk() {
                         className="paper-field"
                         aria-label={`Company for ${row.name}`}
                       >
-                        {companies.map((company) => (
+                        {assignmentChoices(companies).map((company) => (
                           <option key={company.id} value={company.id}>
                             {company.name}
                           </option>
@@ -334,7 +334,7 @@ export function ManageUsersDesk() {
                   className="paper-field mt-1"
                   aria-label="Company for the new user"
                 >
-                  {companies.map((company) => (
+                  {assignmentChoices(companies).map((company) => (
                     <option key={company.id} value={company.id}>
                       {company.name}
                     </option>

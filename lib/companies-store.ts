@@ -2,8 +2,11 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "
 import { dirname, join } from "node:path";
 
 import {
+  STANDALONE_ID,
+  STANDALONE_NAME,
   companyIdFromName,
   isCompanyId,
+  isStandaloneId,
   mergeCompanies,
   seedCompanyForEmail,
   type Company,
@@ -113,6 +116,7 @@ export async function listCompanies(): Promise<Company[]> {
 }
 
 export async function isKnownCompany(id: string): Promise<boolean> {
+  if (id === STANDALONE_ID) return true;
   return (await listCompanies()).some((row) => row.id === id);
 }
 
@@ -133,11 +137,14 @@ export async function addCompany(name: string): Promise<{ ok: true; company: Com
   const trimmed = name.trim().replace(/\s+/g, " ");
   if (trimmed.length < 2) return { error: "Type a company name." };
   if (trimmed.length > 80) return { error: "That name is too long." };
+  if (trimmed.toLowerCase() === STANDALONE_NAME.toLowerCase() || companyIdFromName(trimmed) === STANDALONE_ID) {
+    return { error: "Standalone is a door, not a company." };
+  }
   const existing = await listCompanies();
   const sameName = existing.find((row) => row.name.toLowerCase() === trimmed.toLowerCase());
   if (sameName) return { ok: true, company: sameName };
   let id = companyIdFromName(trimmed);
-  if (!isCompanyId(id)) return { error: "Type a company name." };
+  if (!isCompanyId(id) || isStandaloneId(id)) return { error: "Type a company name." };
   if (existing.some((row) => row.id === id)) {
     let n = 2;
     while (existing.some((row) => row.id === `${id}${n}`)) n += 1;

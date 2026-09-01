@@ -10,7 +10,8 @@ type Seat = { name: string; path: string; lastAt: number; live: boolean };
 function screenOf(path: string) {
   if (path === "/") return "Home";
   if (path.startsWith("/estimates")) return "Estimates";
-  if (path.startsWith("/jobs")) return "Jobs";
+  if (path.startsWith("/jobs") || path.startsWith("/sites")) return "Jobs";
+  if (path.startsWith("/standalone")) return "Standalone";
   if (path.startsWith("/settings")) return "Settings";
   return path.replace(/^\//, "") || "Home";
 }

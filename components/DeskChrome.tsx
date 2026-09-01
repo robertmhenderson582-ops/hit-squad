@@ -17,17 +17,9 @@ import { FUTURE_MODULES } from "@/components/FutureModulesDesk";
 import { useLensUser } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { canOpenRates, isOperator, isTester } from "@/lib/desk-role";
+import { DESK_NAV } from "@/lib/desk-nav";
 
-const NAV: { href: string; label: string; modules?: boolean }[] = [
-  { href: "/jobs", label: "Jobs" },
-  { href: "/sites", label: "Sites" },
-  { href: "/estimates", label: "Estimates" },
-  { href: "/change-orders", label: "Change orders" },
-  { href: "/modules", label: "Future Modules", modules: true },
-  { href: "/rates", label: "Rates" },
-  { href: "/cost", label: "Cost / PPR" },
-  { href: "/settings", label: "Settings" },
-];
+const NAV = DESK_NAV;
 
 const MODULE_HREFS = ["/modules", ...FUTURE_MODULES.map((item) => item.href)];
 
