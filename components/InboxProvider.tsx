@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { playInboxChime, unlockInboxAudio } from "@/lib/chime";
 import {
   contactsFor,
@@ -8,6 +8,7 @@ import {
   makeThread,
   previewOf,
   readThreads,
+  reconcileInboxDesk,
   unreadCount,
   writeThreads,
   type InboxPerson,
@@ -51,12 +52,6 @@ type InboxState = {
 
 const InboxContext = createContext<InboxState | null>(null);
 
-function mergeDesk(local: InboxThread[], remote: InboxThread[]) {
-  const desk = local.filter((thread) => thread.personId === DESK_PERSON_ID);
-  const peers = remote.filter((thread) => thread.personId !== DESK_PERSON_ID);
-  return [...desk, ...peers];
-}
-
 export function InboxProvider({ children }: { children: React.ReactNode }) {
   const { user, status } = useSession();
   const desk = useOwnerDesk();
@@ -80,6 +75,21 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
+  const activeIdRef = useRef<string | null>(null);
+  const identityRef = useRef<string | null>(null);
+  const identityKey = `${inboxEmail}|${ownerChrome}|${seat}|${user?.email ?? ""}`;
+  activeIdRef.current = activeId;
+
+  const applyRemote = useCallback((remote: InboxThread[]) => {
+    setThreads((current) => {
+      const next = reconcileInboxDesk(current, remote, activeIdRef.current);
+      if (next.activeId !== activeIdRef.current) {
+        activeIdRef.current = next.activeId;
+        setActiveId(next.activeId);
+      }
+      return next.threads;
+    });
+  }, []);
 
   const loadRemote = useCallback(async () => {
     if (!inboxOn) return [] as InboxThread[];
@@ -93,31 +103,36 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
     if (status !== "authenticated" || !user) {
       setThreads([]);
       setReady(false);
+      identityRef.current = null;
       return;
     }
-    const local = canReceiveDeskBot({ email: inboxEmail })
-      ? applyWhatsNew(readThreads(seat, ownerChrome), seat, ownerChrome, inboxEmail)
-      : readThreads(seat, ownerChrome).filter((thread) => thread.personId !== DESK_PERSON_ID);
-    setThreads(local);
-    setActiveId(null);
-    setSelectedIds([]);
-    setComposing(false);
+    const identityChanged = identityRef.current !== identityKey;
+    identityRef.current = identityKey;
+    if (identityChanged) {
+      const local = canReceiveDeskBot({ email: inboxEmail })
+        ? applyWhatsNew(readThreads(seat, ownerChrome), seat, ownerChrome, inboxEmail)
+        : readThreads(seat, ownerChrome).filter((thread) => thread.personId !== DESK_PERSON_ID);
+      setThreads(local);
+      setActiveId(null);
+      setSelectedIds([]);
+      setComposing(false);
+    }
     setReady(true);
     if (!inboxOn) return;
     void loadRemote().then((remote) => {
-      setThreads((current) => mergeDesk(current, remote));
+      applyRemote(remote);
     });
-  }, [inboxEmail, inboxOn, loadRemote, ownerChrome, seat, status, user]);
+  }, [applyRemote, identityKey, inboxEmail, inboxOn, loadRemote, ownerChrome, seat, status, user]);
 
   useEffect(() => {
     if (!ready || !inboxOn) return;
     const id = window.setInterval(() => {
       void loadRemote().then((remote) => {
-        setThreads((current) => mergeDesk(current, remote));
+        applyRemote(remote);
       });
     }, 4000);
     return () => window.clearInterval(id);
-  }, [inboxOn, loadRemote, ready]);
+  }, [applyRemote, inboxOn, loadRemote, ready]);
 
   useEffect(() => {
     if (!ready || status !== "authenticated" || !user) return;
@@ -200,7 +215,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
             return response.json() as Promise<{ threads?: InboxThread[] }>;
           }).then((data) => {
             if (!data?.threads) return;
-            setThreads((existing) => mergeDesk(existing, data.threads ?? []));
+            applyRemote(data.threads ?? []);
           });
         }
         return {
@@ -212,7 +227,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
         };
       }),
     );
-  }, [inboxOn, persist]);
+  }, [applyRemote, inboxOn, persist]);
 
   const sendMessage = useCallback(
     (text: string, photo?: string | null) => {
@@ -248,11 +263,11 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
           return response.json() as Promise<{ threads?: InboxThread[] }>;
         }).then((data) => {
           if (!data?.threads) return;
-          setThreads((current) => mergeDesk(current, data.threads ?? []));
+          applyRemote(data.threads ?? []);
         });
       }
     },
-    [activeId, inboxOn, lens?.name, persist, threads, user?.name],
+    [activeId, applyRemote, inboxOn, lens?.name, persist, threads, user?.name],
   );
 
   const value = useMemo<InboxState>(

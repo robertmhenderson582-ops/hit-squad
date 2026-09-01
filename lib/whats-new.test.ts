@@ -52,20 +52,15 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
-    assert.equal(DESK_VERSION, "1.28.0");
-    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.28");
-    assert.equal(DESK_THREAD_ID, "th-desk-v1.28");
+    assert.equal(DESK_VERSION, "1.28.1");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.28.1");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.28.1");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Duplicate a Crew position keeps the same hours and the same title/);
-    assert.match(TESTER_WHATS_NEW, /Archive and Delete on estimate cards work/);
-    assert.match(TESTER_WHATS_NEW, /Job status \(Estimate \/ Submitted \/ Awarded\)/);
-    assert.match(TESTER_WHATS_NEW, /Project Managers can look up wage rates/);
-    assert.match(TESTER_WHATS_NEW, /Crew cards show a grand total at the bottom/);
-    assert.match(TESTER_WHATS_NEW, /Nathan, Benny, Shane, Wendell, and Chance/);
+    assert.match(TESTER_WHATS_NEW, /compose stays open when you type/);
+    assert.match(TESTER_WHATS_NEW, /message Nathan without getting kicked to Inbox home/);
     assert.equal(/Joseph|testers|Follow|apcontrolsllc|seat|James|CBI|View as/i.test(TESTER_WHATS_NEW), false);
-    assert.match(OWNER_WHATS_NEW, /People you add now show on View as \/ Follow/);
-    assert.match(OWNER_WHATS_NEW, /Duplicate a Crew position keeps the same hours and the same title/);
+    assert.match(OWNER_WHATS_NEW, /compose stays open when you type/);
     assert.equal(/View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
       /password|passwords|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
@@ -107,7 +102,7 @@ describe("inbox what's-new", () => {
 
   it("appends V1.28 onto an existing Hit Squad desk thread after V1.27", () => {
     assert.equal(seenKey("tester-x", "1.27.0"), `${WHATS_NEW_MARK_PREFIX}1.27.0:tester-x`);
-    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.28.0:tester-x`);
+    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.28.1:tester-x`);
     assert.notEqual(seenKey("tester-x", "1.26.0"), seenKey("tester-x"));
 
     const prior = [
@@ -139,17 +134,15 @@ describe("inbox what's-new", () => {
     assert.deepEqual(applyWhatsNew(prior, "tester-joseph-append", false, "josephmhenderson2002@gmail.com"), prior);
   });
 
-  it("posts the V1.28 Inbox note for testers and owner", () => {
-    assert.equal(DESK_VERSION, "1.28.0");
+  it("posts the V1.28.1 Inbox compose note for testers and owner", () => {
+    assert.equal(DESK_VERSION, "1.28.1");
     assert.equal(NEXT_SHIP_VERSION, DESK_VERSION);
     assert.equal(NEXT_SHIP_VERSION_LABEL, DESK_VERSION_LABEL);
     assert.equal(TESTER_NEXT_SHIP_DRAFT, TESTER_WHATS_NEW);
     assert.equal(OWNER_NEXT_SHIP_DRAFT, OWNER_WHATS_NEW);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(OWNER_WHATS_NEW, /People you add now show on View as \/ Follow/);
-    assert.match(OWNER_WHATS_NEW, /Duplicate a Crew position keeps the same hours and the same title/);
-    assert.match(TESTER_WHATS_NEW, /Duplicate a Crew position keeps the same hours and the same title/);
-    assert.match(TESTER_WHATS_NEW, /Nathan, Benny, Shane, Wendell, and Chance/);
+    assert.match(OWNER_WHATS_NEW, /compose stays open when you type/);
+    assert.match(TESTER_WHATS_NEW, /message Nathan without getting kicked to Inbox home/);
     assert.equal(/Joseph|Follow|apcontrolsllc|seat|security|vault|other users|James|CBI|Stephanie|View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
       /password|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
@@ -158,7 +151,7 @@ describe("inbox what's-new", () => {
       false,
     );
     const live = applyWhatsNew([], "tester-v128-live", false, "nathanboyte@gmail.com");
-    assert.equal(live[0].id, "th-desk-v1.28");
+    assert.equal(live[0].id, "th-desk-v1.28.1");
     assert.equal(live[0].messages[0]?.text, TESTER_WHATS_NEW);
     const owner = applyWhatsNew([], "owner-v128-live", true);
     assert.equal(owner[0].messages[0]?.text, OWNER_WHATS_NEW);
