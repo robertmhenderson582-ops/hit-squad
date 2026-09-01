@@ -73,7 +73,7 @@ describe("inbox demo wipe", () => {
     const stored = persisted.threads ?? [];
     assert.equal(stored.some((thread) => (DEMO_IDS as readonly string[]).includes(thread.id)), false);
     assert.equal(stored.length, 1);
-    assert.equal(stored[0].id, "th-desk-v1.27");
+    assert.equal(stored[0].id, "th-desk-v1.28");
   });
 
   it("tester empty store stays empty (never had the demo threads)", () => {
@@ -84,18 +84,19 @@ describe("inbox demo wipe", () => {
     const note = deskWhatsNewThread(true);
     const cleaned = stripDemoThreads([...ownerDemoThreads(), note]);
     assert.equal(cleaned.length, 1);
-    assert.equal(cleaned[0].id, "th-desk-v1.27");
+    assert.equal(cleaned[0].id, "th-desk-v1.28");
     assert.equal(stripDemoThreads([note]).length, 1);
   });
 
-  it("Desk note stays V1.27 and tester-safe", () => {
-    assert.equal(DESK_VERSION, "1.27.0");
+  it("Desk note stays V1.28 and tester-safe", () => {
+    assert.equal(DESK_VERSION, "1.28.0");
     const threads = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
     assert.equal(threads.length, 1);
-    assert.equal(threads[0].id, "th-desk-v1.27");
+    assert.equal(threads[0].id, "th-desk-v1.28");
     const body = threads[0].messages.map((message) => message.text).join(" ");
-    assert.match(body, /V1\.27/);
-    assert.match(body, /Add user on Users creates a login/);
-    assert.doesNotMatch(body, /View as|vault|Drive|seats?|James|CBI|Madison|Nathan|Joseph|Stephanie/i);
+    assert.match(body, /V1\.28/);
+    assert.match(body, /Duplicate a Crew position keeps the same hours and the same title/);
+    assert.match(body, /People you add now show on View as \/ Follow/);
+    assert.doesNotMatch(body, /vault|Drive|seats?|James|CBI|Madison|Joseph|Stephanie|password/i);
   });
 });
