@@ -73,7 +73,7 @@ describe("inbox demo wipe", () => {
     const stored = persisted.threads ?? [];
     assert.equal(stored.some((thread) => (DEMO_IDS as readonly string[]).includes(thread.id)), false);
     assert.equal(stored.length, 1);
-    assert.equal(stored[0].id, "th-desk-v1.28.1");
+    assert.equal(stored[0].id, "th-desk-v1.29");
   });
 
   it("tester empty store stays empty (never had the demo threads)", () => {
@@ -84,19 +84,23 @@ describe("inbox demo wipe", () => {
     const note = deskWhatsNewThread(true);
     const cleaned = stripDemoThreads([...ownerDemoThreads(), note]);
     assert.equal(cleaned.length, 1);
-    assert.equal(cleaned[0].id, "th-desk-v1.28.1");
+    assert.equal(cleaned[0].id, "th-desk-v1.29");
     assert.equal(stripDemoThreads([note]).length, 1);
   });
 
-  it("Desk note stays V1.28.1 and tester-safe", () => {
-    assert.equal(DESK_VERSION, "1.28.1");
-    const threads = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
-    assert.equal(threads.length, 1);
-    assert.equal(threads[0].id, "th-desk-v1.28.1");
-    const body = threads[0].messages.map((message) => message.text).join(" ");
-    assert.match(body, /V1\.28\.1/);
-    assert.match(body, /compose stays open when you type/);
-    assert.match(body, /message Nathan without getting kicked to Inbox home/);
-    assert.doesNotMatch(body, /vault|Drive|seats?|James|CBI|Madison|Joseph|Stephanie|password/i);
+  it("Desk note stays V1.29 and tester-safe", () => {
+    assert.equal(DESK_VERSION, "1.29.0");
+    const tester = applyWhatsNew([deskWhatsNewThread(false)], "tester-note", false, "nathanboyte@gmail.com");
+    assert.equal(tester.length, 1);
+    assert.equal(tester[0].id, "th-desk-v1.29");
+    const testerBody = tester[0].messages.map((message) => message.text).join(" ");
+    assert.match(testerBody, /V1\.29/);
+    assert.match(testerBody, /a message you send actually shows up for the other person/);
+    assert.match(testerBody, /Deletes stay gone/);
+    assert.doesNotMatch(testerBody, /vault|Drive|seats?|James|CBI|Madison|Joseph|Stephanie|password|security/i);
+    const owner = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
+    assert.equal(owner[0].id, "th-desk-v1.29");
+    const ownerBody = owner[0].messages.map((message) => message.text).join(" ");
+    assert.match(ownerBody, /Settings → Security password change now sticks/);
   });
 });

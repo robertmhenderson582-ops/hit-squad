@@ -11,6 +11,7 @@ import { JOSEPH_EMAIL, SHANE_EMAIL, TESTER_SEATS } from "./tester-seats.ts";
 import { assignedCompany, resetCompanyAssignmentsForTests } from "./companies-store.ts";
 import { lensPeopleFromSeats } from "./desk-people.ts";
 import { canLookupRates, canUseRateBuilder, canUseViewAs } from "./desk-role.ts";
+import { SEATS_VAULT_KIND, SEATS_VAULT_NAME, writeVaultJson } from "./drive-data.ts";
 import { memoryDrive } from "./drive-estimates.ts";
 import {
   claimFirstPassword,
@@ -24,6 +25,7 @@ import {
   loginOutcome,
   listSeatRows,
   parseExtraSeats,
+  parseSeatHashes,
   resetUsersForTests,
   restoreSeatHash,
   seatHashClaimFor,
@@ -472,6 +474,102 @@ test("owner-added vault seats can include Ben Peffley; git seed still cannot", a
   assert.equal(persisted.includes(ISSUED), false);
   assert.match(persisted, /bpeffley@roadrunner\.com/);
   assert.match(persisted, /"extras"/);
+});
+
+test("owner setOwnPassword then login works after persist and hydrate", async () => {
+  const boot = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET });
+  assert.equal(boot.status, "authenticated");
+  if (boot.status === "authenticated") {
+    assert.equal(boot.user.role, "owner");
+    assert.equal(boot.user.mustChangePassword, false);
+  }
+
+  const missingCurrent = setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
+  assert.equal("error" in missingCurrent, true);
+  if ("error" in missingCurrent) {
+    assert.equal(missingCurrent.status, 400);
+  }
+
+  const wrongCurrent = setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OTHER);
+  assert.equal("error" in wrongCurrent, true);
+  if ("error" in wrongCurrent) {
+    assert.equal(wrongCurrent.status, 401);
+  }
+
+  const short = setOwnPassword(OWNER_LOGIN_EMAIL, SHORT, OWNER_SECRET);
+  assert.equal("error" in short, true);
+
+  const changed = setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OWNER_SECRET);
+  assert.equal("ok" in changed, true);
+  const now = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN });
+  assert.equal(now.status, "authenticated");
+  if (now.status === "authenticated") {
+    assert.equal(now.user.role, "owner");
+  }
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+
+  resetUsersForTests();
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+
+  const persisted = JSON.parse(readFileSync(seatFile, "utf8")) as { hashes?: Record<string, { passwordHash?: string }> };
+  const ownerRow = persisted.hashes?.[OWNER_LOGIN_EMAIL];
+  assert.ok(ownerRow?.passwordHash);
+  assert.match(ownerRow.passwordHash, /^\$2[abxy]\$/);
+  assert.equal(JSON.stringify(persisted).includes(CHOSEN), false);
+  assert.equal(JSON.stringify(persisted).includes(OWNER_SECRET), false);
+  const parsed = parseSeatHashes(persisted);
+  assert.equal(parsed[OWNER_LOGIN_EMAIL]?.passwordHash, ownerRow.passwordHash);
+
+  const drive = memoryDrive();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  const again = setOwnPassword(OWNER_LOGIN_EMAIL, OTHER, CHOSEN);
+  assert.equal("ok" in again, true);
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OTHER }).status, "authenticated");
+  await flushSeatVault();
+  forgetSeatCacheForTests();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OTHER }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "error");
+  const vaultRaw = [...drive.files.values()].map((row) => row.content).join();
+  assert.equal(vaultRaw.includes(OTHER), false);
+  assert.equal(vaultRaw.includes(OWNER_SECRET), false);
+  assert.match(vaultRaw, /robertmhenderson582@gmail.com/i);
+});
+
+test("OWNER_PASSWORD is the login only when no owner hash is stored", async () => {
+  const drive = memoryDrive();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "authenticated");
+  const vaultRaw = [...drive.files.values()].map((row) => row.content).join();
+  assert.equal(vaultRaw.includes(OWNER_LOGIN_EMAIL), false);
+  assert.equal(vaultRaw.includes(OWNER_SECRET), false);
+
+  const created = loginOutcome({
+    email: TESTER,
+    newPassword: CHOSEN,
+    confirmPassword: CHOSEN,
+  });
+  assert.equal(created.status, "authenticated");
+  const testerHash = findUserByEmail(TESTER)?.passwordHash;
+  assert.ok(testerHash);
+  await flushSeatVault();
+  await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, {
+    hashes: { [TESTER]: { passwordHash: testerHash, mustChangePassword: false } },
+    extras: [],
+  });
+  forgetSeatCacheForTests();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  assert.equal(loginOutcome({ email: TESTER, password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "authenticated");
+  const seats = [...drive.files.values()].find((row) => row.file.name === SEATS_VAULT_NAME);
+  assert.ok(seats);
+  assert.equal(JSON.parse(seats.content).hashes?.[OWNER_LOGIN_EMAIL], undefined);
 });
 
 test("parseExtraSeats skips owner, Novus, and seeded testers", () => {

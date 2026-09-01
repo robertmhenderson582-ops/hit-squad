@@ -1,23 +1,24 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.28.1";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.28.1";
+export const DESK_VERSION = "1.29.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.29";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.28.1";
+export const DESK_THREAD_ID = "th-desk-v1.29";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.28.1",
-  "• Inbox: compose stays open when you type. You can message Nathan without getting kicked to Inbox home.",
+  "Hit Squad Project Controls V1.29",
+  "• Inbox: a message you send actually shows up for the other person. Deletes stay gone.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.28.1",
-  "• Inbox: compose stays open when you type. You can message Nathan without getting kicked to Inbox home.",
+  "Hit Squad Project Controls V1.29",
+  "• Inbox: a message you send actually shows up for the other person. Deletes stay gone.",
+  "• Settings → Security password change now sticks.",
 ].join("\n");
 
-/** Same as the live V1.28 note. Kept so older imports still resolve. */
+/** Same as the live V1.29 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;

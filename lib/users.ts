@@ -49,7 +49,7 @@ export function parseSeatHashes(raw: unknown): NonNullable<SeatFile["hashes"]> {
   const hashes: NonNullable<SeatFile["hashes"]> = {};
   for (const [email, row] of Object.entries(parsed.hashes ?? {})) {
     const key = email.trim().toLowerCase();
-    if (!key || key === ownerEmail()) continue;
+    if (!key) continue;
     if (!row || typeof row !== "object" || typeof row.passwordHash !== "string") continue;
     if (!BCRYPT_HASH.test(row.passwordHash)) continue;
     hashes[key] = {
@@ -132,7 +132,7 @@ function writeSeatFile(file: { hashes: NonNullable<SeatFile["hashes"]>; extras: 
 function hashesFromUsers(users: StoredUser[]) {
   const hashes: NonNullable<SeatFile["hashes"]> = {};
   for (const user of users) {
-    if (!user.passwordHash || user.role === "owner") continue;
+    if (!user.passwordHash) continue;
     hashes[user.email] = {
       passwordHash: user.passwordHash,
       mustChangePassword: Boolean(user.mustChangePassword),
@@ -185,18 +185,25 @@ export async function flushSeatVault() {
   await pendingVault;
 }
 
-function seedUsers(): StoredUser[] {
+function ownerPasswordHash(persisted: NonNullable<SeatFile["hashes"]>, email: string) {
+  const saved = persisted[email]?.passwordHash;
+  if (saved) return saved;
   const ownerPassword = process.env.OWNER_PASSWORD;
   if (!ownerPassword) {
     throw new Error("OWNER_PASSWORD must be set at runtime.");
   }
+  return bcrypt.hashSync(ownerPassword, 12);
+}
+
+function seedUsers(): StoredUser[] {
   const persisted = loadPersisted();
+  const email = (process.env.OWNER_EMAIL || OWNER_LOGIN_EMAIL).toLowerCase();
   const owner: StoredUser = {
     id: "owner-robert-henderson",
-    email: (process.env.OWNER_EMAIL || OWNER_LOGIN_EMAIL).toLowerCase(),
+    email,
     name: process.env.OWNER_NAME || "Robert Henderson",
     role: "owner",
-    passwordHash: bcrypt.hashSync(ownerPassword, 12),
+    passwordHash: ownerPasswordHash(persisted, email),
   };
   const novusSaved = persisted[NOVUS_EMAIL];
   const novus: StoredUser = {
