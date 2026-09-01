@@ -130,6 +130,8 @@ describe("assign and visibility", () => {
     assert.equal(canSeeCompany(johnHenry, LUCKY13_ID), true);
     assert.equal(canSeeCompany(johnHenry, "madison"), false);
     assert.equal(canSeeCompany(nathan, LUCKY13_ID), false);
+    assert.equal(canSeeCompany(john, "madison"), true);
+    assert.equal(canSeeCompany(john, "cbi"), false);
     assert.deepEqual(
       companiesForScope(johnHenry).map((row) => row.id),
       [LUCKY13_ID],

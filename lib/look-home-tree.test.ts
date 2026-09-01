@@ -10,9 +10,8 @@ describe("home tree look batch", () => {
     assert.equal(/InboxBadge/.test(workspace), false);
     assert.match(workspace, /title=\{item\.label\}/);
     assert.match(css, /teal-pulse/);
-    assert.match(css, /\.inbox-fab-pulse[\s\S]*background: #0f5f6d/);
-    assert.equal(/\.inbox-fab-pulse[\s\S]*background: #b74120/.test(css), false);
-    assert.equal(/\.inbox-header-badge[\s\S]*background: #b74120/.test(css), false);
-    assert.match(css, /\.trial-banner[\s\S]*#e38b2a/);
+    assert.match(css, /\.inbox-fab-pulse \{\n  animation: teal-pulse 1\.4s ease-out infinite;\n  background: #0f5f6d;/);
+    assert.match(css, /\.inbox-header-badge \{\n  border-radius: 999px;\n  background: #0f5f6d;/);
+    assert.match(css, /\.trial-banner \{[\s\S]*#e38b2a/);
   });
 });
