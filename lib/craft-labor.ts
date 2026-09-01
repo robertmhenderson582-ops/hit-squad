@@ -24,6 +24,12 @@ export const CRAFT_SHIFTS = ["Days", "Nights", "Days & nights"] as const;
 
 export type CraftShift = (typeof CRAFT_SHIFTS)[number];
 
+/** Oil Out / Mechanical / Oil In open on both shifts. Pre and Post stay Days. */
+export function defaultShiftForPhase(phaseId?: string): CraftShift {
+  if (phaseId === "oil-out" || phaseId === "mech" || phaseId === "oil-in") return "Days & nights";
+  return "Days";
+}
+
 /** Locked labels for an extra stretch on the same phase. Other is free text. */
 export const RANGE_DESCRIPTION_REASONS = [
   "Hiring progression",
@@ -322,7 +328,8 @@ export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange, unitId?: str
     nightPerDiemPeople: prev?.nightPerDiemPeople ?? 1,
     days: seed.days,
     otAfter8: seed.otAfter8,
-    shift: prev?.shift ?? "Days",
+    // Existing ranges keep their saved Shift (missing Shift stays Days). New cards use the phase default.
+    shift: prev ? (prev.shift ?? "Days") : defaultShiftForPhase(row.id),
     skipDates: prev?.skipDates ? [...prev.skipDates] : [...(seed.skipDates ?? [])],
     unitId: unitId ?? prev?.unitId,
     description: prev?.description,
@@ -348,6 +355,7 @@ export function extraRangeFromPhase(phase: PhaseRow, template?: CalendarRange, u
     unitId: newUnit ? unitId : template?.unitId,
     description: "",
     off: template?.off,
+    shift: template?.shift ?? defaultShiftForPhase(phase.id),
   };
 }
 

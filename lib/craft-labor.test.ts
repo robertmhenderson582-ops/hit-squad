@@ -11,7 +11,9 @@ import {
   blankSupportLine,
   cloneCraftRow,
   cloneSupportLine,
+  CRAFT_SHIFTS,
   craftRowFromPhases,
+  defaultShiftForPhase,
   duplicateCraftRow,
   duplicateSupportLine,
   applyExtraRangeEnvelopes,
@@ -59,6 +61,84 @@ describe("crew ranges are per position", () => {
     assert.equal(firstIds.size, 5);
     assert.equal(secondIds.size, 5);
     for (const id of firstIds) assert.equal(secondIds.has(id), false);
+  });
+
+  it("Oil Out, Mechanical, and Oil In default Shift to Days & nights; Pre and Post stay Days", () => {
+    assert.deepEqual([...CRAFT_SHIFTS], ["Days", "Nights", "Days & nights"]);
+    assert.equal(defaultShiftForPhase("oil-out"), "Days & nights");
+    assert.equal(defaultShiftForPhase("mech"), "Days & nights");
+    assert.equal(defaultShiftForPhase("oil-in"), "Days & nights");
+    assert.equal(defaultShiftForPhase("pre"), "Days");
+    assert.equal(defaultShiftForPhase("post"), "Days");
+    assert.equal(defaultShiftForPhase(undefined), "Days");
+
+    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", defaultPhases());
+    assert.equal(row.shift, "Days");
+    assert.deepEqual(
+      Object.fromEntries(row.ranges.map((range) => [range.phaseId, range.shift])),
+      {
+        pre: "Days",
+        "oil-out": "Days & nights",
+        mech: "Days & nights",
+        "oil-in": "Days & nights",
+        post: "Days",
+      },
+    );
+
+    const support = addSupportLine(defaultPhases());
+    assert.equal(support.ranges.find((range) => range.phaseId === "oil-out")?.shift, "Days & nights");
+    assert.equal(support.ranges.find((range) => range.phaseId === "pre")?.shift, "Days");
+
+    const extraOil = extraRangeFromPhase(
+      defaultPhases().find((phase) => phase.id === "oil-out")!,
+      row.ranges.find((range) => range.phaseId === "oil-out"),
+    );
+    assert.equal(extraOil.shift, "Days & nights");
+    const extraPre = extraRangeFromPhase(
+      defaultPhases().find((phase) => phase.id === "pre")!,
+      row.ranges.find((range) => range.phaseId === "pre"),
+    );
+    assert.equal(extraPre.shift, "Days");
+
+    const cards = readFileSync(fileURLToPath(new URL("../components/CrewPhaseCards.tsx", import.meta.url)), "utf8");
+    assert.match(cards, /CRAFT_SHIFTS\.map/);
+    const job = readFileSync(fileURLToPath(new URL("../components/PhaseSchedule.tsx", import.meta.url)), "utf8");
+    assert.equal(/Shift/.test(job), false);
+  });
+
+  it("changing Shift on a range still sticks through sync", () => {
+    const phases = defaultPhases();
+    const row = assignCraftPosition(blankCraftRow(), "Pipefitter Journeyman", phases);
+    row.ranges = row.ranges.map((range) =>
+      range.phaseId === "oil-out" ? { ...range, shift: "Days" } : range.phaseId === "mech" ? { ...range, shift: "Nights" } : range,
+    );
+    const synced = syncCraftRows([row], phases)[0];
+    assert.equal(synced.ranges.find((range) => range.phaseId === "oil-out")?.shift, "Days");
+    assert.equal(synced.ranges.find((range) => range.phaseId === "mech")?.shift, "Nights");
+    assert.equal(synced.ranges.find((range) => range.phaseId === "oil-in")?.shift, "Days & nights");
+    assert.equal(synced.ranges.find((range) => range.phaseId === "pre")?.shift, "Days");
+  });
+
+  it("existing estimates with Shift=Days stay Days — no silent flip", () => {
+    const phases = defaultPhases();
+    const saved = craftRowFromPhases(phases);
+    saved.position = "Boilermaker Journeyman";
+    saved.ranges = saved.ranges.map((range) => ({ ...range, shift: "Days" as const }));
+    const synced = syncCraftRows([saved], phases)[0];
+    assert.equal(
+      synced.ranges.every((range) => range.shift === "Days"),
+      true,
+    );
+
+    const missingShift = {
+      ...saved,
+      ranges: saved.ranges.map(({ shift: _drop, ...range }) => range),
+    };
+    const revived = syncCraftRows([missingShift], phases)[0];
+    assert.equal(
+      revived.ranges.every((range) => range.shift === "Days"),
+      true,
+    );
   });
 
   it("keeps one position's shift and headcount when another position is synced", () => {
@@ -461,6 +541,14 @@ function splitKey(hours: { st: number; ot: number; dt: number; pd: number; hours
   return `${hours.st}/${hours.ot}/${hours.dt}/${hours.pd}/${hours.hours}`;
 }
 
+/** V1.31 Description / Off math was measured on Days. Pin so those numbers stay the same. */
+function daysOnly<T extends { ranges: Array<{ shift?: string }> }>(row: T): T {
+  return {
+    ...row,
+    ranges: row.ranges.map((range) => ({ ...range, shift: "Days" as const })),
+  };
+}
+
 function insidePreComeback(template: ReturnType<typeof extraRangeFromPhase>) {
   return {
     ...template,
@@ -494,7 +582,7 @@ describe("extra range description is a label only", () => {
 
   it("first range without a description still totals 268 ST / 76 OT / 24 DT / 36 PD", () => {
     const phases = defaultPhases();
-    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const row = daysOnly(assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases));
     assert.equal(row.ranges.every((range) => !range.description), true);
     const hours = crewHours(row);
     assert.equal(splitKey(hours), "268/76/24/36/368");
@@ -526,7 +614,7 @@ describe("extra range description is a label only", () => {
     const phases = defaultPhases();
     const pre = phases.find((row) => row.id === "pre");
     assert.ok(pre);
-    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const row = daysOnly(assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases));
     const first = row.ranges.find((range) => range.phaseId === "pre");
     assert.ok(first);
     const extra = insidePreComeback(extraRangeFromPhase(pre, first));
@@ -546,6 +634,25 @@ describe("extra range description is a label only", () => {
     );
     const listedCost = shahanCrewCostAmount(listed.position, crewHours(listed));
     assert.equal(shahanCrewCostAmount(unlabeled.position, unlabeledHours), listedCost);
+  });
+
+  it("description still does not change math on the Days & nights default", () => {
+    const phases = defaultPhases();
+    const oil = phases.find((row) => row.id === "oil-out");
+    assert.ok(oil);
+    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    assert.equal(row.ranges.find((range) => range.phaseId === "oil-out")?.shift, "Days & nights");
+    const first = row.ranges.find((range) => range.phaseId === "oil-out");
+    assert.ok(first);
+    const extra = extraRangeFromPhase(oil, first);
+    extra.start = first.start;
+    extra.end = first.end;
+    extra.hoursPerShift = 0;
+    extra.description = "";
+    const unlabeled = { ...row, ranges: [...row.ranges, extra] };
+    const labeled = { ...row, ranges: [...row.ranges, { ...extra, description: "Training" }] };
+    assert.equal(splitKey(crewHours(labeled)), splitKey(crewHours(unlabeled)));
+    assert.equal(splitKey(crewHours(row)), splitKey(crewHours({ ...row, ranges: row.ranges.map((range) => ({ ...range, description: "Hiring progression" })) })));
   });
 
   it("empty extra does not double-count; overlapping dates inside the first range still bill twice", () => {
@@ -631,7 +738,7 @@ describe("extra range description is a label only", () => {
     const phases = defaultPhases();
     const pre = phases.find((row) => row.id === "pre");
     assert.ok(pre);
-    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const row = daysOnly(assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases));
     const extra = insidePreComeback(extraRangeFromPhase(pre, row.ranges.find((range) => range.phaseId === "pre")));
     extra.description = "Onboarding/Learning";
     row.ranges.push(extra);
@@ -683,8 +790,8 @@ describe("per-position phase off preserves hours", () => {
   it("killing an empty Post leaves Mechanical hours; Post bills 0", () => {
     const phases = defaultPhases();
     assert.equal(phases.find((row) => row.id === "post")?.on, true);
-    const clerk = assignCraftPosition(blankCraftRow(), "Project Controls", phases);
-    const other = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const clerk = daysOnly(assignCraftPosition(blankCraftRow(), "Project Controls", phases));
+    const other = daysOnly(assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases));
     clerk.ranges = clerk.ranges.map((range) =>
       range.phaseId === "post" ? { ...range, start: "", end: "", hoursPerShift: 0 } : range,
     );
@@ -731,7 +838,7 @@ describe("per-position phase off preserves hours", () => {
 
   it("killing Mechanical drops those hours; Restore brings the same ST/OT/DT/PD back", () => {
     const phases = defaultPhases();
-    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const row = daysOnly(assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases));
     const full = crewHours(row);
     const mech = computeRowHours(
       { ...row, ranges: row.ranges.filter((range) => range.phaseId === "mech") },
@@ -765,7 +872,7 @@ describe("per-position phase off preserves hours", () => {
     const phases = defaultPhases();
     const pre = phases.find((row) => row.id === "pre");
     assert.ok(pre);
-    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const row = daysOnly(assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases));
     const first = row.ranges.find((range) => range.phaseId === "pre");
     const extra = insidePreComeback(extraRangeFromPhase(pre, first));
     extra.description = "Onboarding/Learning";
@@ -784,5 +891,28 @@ describe("per-position phase off preserves hours", () => {
     row.ranges = setPhaseOff(row.ranges, "pre", false);
     assert.equal(splitKey(crewHours(row)), splitKey(withExtra));
     assert.equal(row.ranges.filter((range) => range.phaseId === "pre")[1]?.description, "Onboarding/Learning");
+  });
+
+  it("Off this position still zeros and restores a Days & nights Mechanical range", () => {
+    const phases = defaultPhases();
+    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    assert.equal(row.ranges.find((range) => range.phaseId === "mech")?.shift, "Days & nights");
+    const full = crewHours(row);
+    const mech = computeRowHours(
+      { ...row, ranges: row.ranges.filter((range) => range.phaseId === "mech") },
+      WOOD.site,
+      WOOD.client,
+    );
+    assert.ok(mech.hours > 0);
+    const killed = { ...row, ranges: setPhaseOff(row.ranges, "mech", true) };
+    const dropped = crewHours(killed);
+    assert.equal(dropped.st, full.st - mech.st);
+    assert.equal(dropped.ot, full.ot - mech.ot);
+    assert.equal(dropped.dt, full.dt - mech.dt);
+    assert.equal(dropped.pd, full.pd - mech.pd);
+    assert.equal(dropped.hours, full.hours - mech.hours);
+    const restored = { ...killed, ranges: setPhaseOff(killed.ranges, "mech", false) };
+    assert.equal(splitKey(crewHours(restored)), splitKey(full));
+    assert.equal(phaseIsOff(syncCraftRows([killed], phases)[0].ranges, "mech"), true);
   });
 });
