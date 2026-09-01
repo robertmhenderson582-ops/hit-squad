@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   const response = NextResponse.json({
     ok: true,
     user: publicUser,
-    note: "Password changed on this desk process. Never logged.",
+    note: "Password changed.",
   });
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
   const claim = seatHashClaimFor(publicUser.email);

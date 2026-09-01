@@ -9,8 +9,11 @@ import {
   mergeLocalBoard,
   mergeLocalEstimates,
   mergeLocalJobs,
+  normalizePackTitle,
   packIdFromStoreKey,
+  PACK_TITLE_MAX,
   rememberLocalPack,
+  renameLocalPackTitle,
   scanStoredPackIds,
   siteIdFromSite,
   storageKeyForPack,
@@ -137,6 +140,36 @@ describe("local estimate packs", () => {
       ["new-cat2pit"],
     );
     assert.equal(listed[0].title, "Cat 2 Pit Stop");
+  });
+
+  it("renames the pack title from Job setup onto the card and rejects an empty name", () => {
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-nathan-tm",
+        title: "Working estimate",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+      },
+      store,
+    );
+    assert.equal(normalizePackTitle("   "), null);
+    assert.equal(normalizePackTitle(""), null);
+    assert.equal(renameLocalPackTitle("new-nathan-tm", "   ", store), null);
+    assert.equal(listLocalPacks(store)[0].title, "Working estimate");
+
+    const renamed = renameLocalPackTitle("new-nathan-tm", "  Nathan T&M book  ", store);
+    assert.equal(renamed?.title, "Nathan T&M book");
+    const listed = listLocalPacks(store);
+    assert.equal(listed[0].title, "Nathan T&M book");
+    assert.equal(localPackToEstimate(listed[0]).title, "Nathan T&M book");
+    assert.equal(mergeLocalJobs([], listed)[0]?.title, "Nathan T&M book");
+    assert.equal(mergeLocalEstimates([], listed)[0]?.title, "Nathan T&M book");
+
+    const long = "N".repeat(PACK_TITLE_MAX + 20);
+    assert.equal(normalizePackTitle(long)?.length, PACK_TITLE_MAX);
+    assert.equal(renameLocalPackTitle("new-nathan-tm", long, store)?.title.length, PACK_TITLE_MAX);
+    assert.equal(renameLocalPackTitle("est-u3", "Nope", store), null);
   });
 
   it("clears leftover transfer marks when a returned pack is applied", () => {

@@ -36,7 +36,7 @@ export function SecurityDesk() {
     const data = await response.json();
     setCurrent("");
     setNext("");
-    setMessage(data.error || data.note || "Password updated on this desk process.");
+    setMessage(data.error || data.note || "Password changed.");
   }
 
   return (
@@ -44,8 +44,8 @@ export function SecurityDesk() {
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Security</h2>
         <p className="mt-2 text-sm text-[#5b6f73]">
-          Change password (current + new). Google/X accounts are not on this host so everyone with a
-          password can change it.
+          Change password (current + new, 8+). The new password stays in effect after you sign in
+          again.
         </p>
         <form onSubmit={onSubmit} className="mt-4 grid gap-3 sm:grid-cols-2">
           <PasswordField
@@ -53,12 +53,14 @@ export function SecurityDesk() {
             autoComplete="current-password"
             value={current}
             onChange={setCurrent}
+            required
           />
           <PasswordField
             label="New password"
             autoComplete="new-password"
             value={next}
             onChange={setNext}
+            required
             minLength={8}
           />
           <button type="submit" className="rounded-lg bg-steel px-4 py-2 text-white sm:col-span-2">

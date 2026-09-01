@@ -21,7 +21,7 @@ import { boundOtLabel } from "@/lib/hours-clock";
 import { newEstimateKey, newEstimatePackId } from "@/lib/estimate-open";
 import { defaultEstimateName } from "@/lib/job-event";
 import { hydrateFromVault, flushVaultUpsert, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
-import { rememberLocalPack } from "@/lib/local-estimates";
+import { findLocalPack, rememberLocalPack } from "@/lib/local-estimates";
 
 export function NewEstimateForm() {
   const params = useSearchParams();
@@ -44,9 +44,10 @@ export function NewEstimateForm() {
   useEffect(() => {
     if (!pack || size === "shop") return;
     void hydrateFromVault(undefined, { viewAs: seat }).then(() => {
+      const existing = findLocalPack(pack);
       rememberLocalPack({
         packId: pack,
-        title: name,
+        title: existing?.title || name,
         client,
         site,
         size: size ?? undefined,
@@ -89,6 +90,7 @@ function NewEstimateDesk({
   const alias = useAlias();
   const { user } = useSession();
   const [tab, setTab] = useState<EstimateTab>("summary");
+  const [title, setTitle] = useState(name);
   const plant = site.split("—")[0]?.trim() || site;
   const otRule = boundOtLabel(site, client);
 
@@ -98,14 +100,14 @@ function NewEstimateDesk({
   return (
     <EstimatePackageProvider estimateKey={estimateKey}>
     <EstimateWorkspace
-      crumb={`${alias(plant)} / ${name}`}
+      crumb={`${alias(plant)} / ${title}`}
       tab={tab}
       onTab={setTab}
       client={alias(client)}
       site={alias(site)}
       jobClient={client}
       jobSite={site}
-      name={name}
+      name={title}
       packageId={pack}
       status="Estimate"
       statusLocked
@@ -116,7 +118,8 @@ function NewEstimateDesk({
             type="T&M"
             client={alias(client)}
             site={site}
-            name={name}
+            name={title}
+            onName={setTitle}
             otRule={alias(otRule)}
             author={user?.name}
             existingClient={existingClient}
@@ -127,8 +130,8 @@ function NewEstimateDesk({
         </div>
       ) : null}
       {tab === "activities" ? <WorkActivitiesDesk client={client} site={site} /> : null}
-      {tab === "crew" ? <EstimateWorkbook client={client} site={site} name={name} /> : null}
-      {tab === "staffing" ? <StaffingPlanDesk client={client} site={site} name={name} /> : null}
+      {tab === "crew" ? <EstimateWorkbook client={client} site={site} name={title} /> : null}
+      {tab === "staffing" ? <StaffingPlanDesk client={client} site={site} name={title} /> : null}
       {tab === "equipment" ? <EquipmentDesk /> : null}
       {tab === "subs" ? <SubcontractorDesk client={client} site={site} /> : null}
       {tab === "costs" ? <OtherCostDesk client={client} site={site} /> : null}

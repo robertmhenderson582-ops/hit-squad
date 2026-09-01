@@ -216,6 +216,36 @@ describe("inbox store", { concurrency: 1 }, () => {
     );
   });
 
+  it("deleting a thread stays gone on list/poll; the other person still has it", async () => {
+    resetInboxStoreForTests(join(dir, "delete-thread.json"));
+    const posted = await postInboxMessage({
+      fromEmail: OWNER,
+      fromName: "Robert Henderson",
+      toEmail: NATHAN,
+      text: "Thread to delete",
+    });
+    assert.equal(posted.ok, true);
+    if (!posted.ok) return;
+    assert.equal(posted.threads.some((thread) => thread.personId === "tester-nathan"), true);
+
+    const ownerHidden = await hideInboxFor(OWNER, { personId: "tester-nathan" });
+    assert.equal(ownerHidden.some((thread) => thread.personId === "tester-nathan"), false);
+    assert.equal(
+      ownerHidden.some((thread) => thread.messages.some((message) => message.text === "Thread to delete")),
+      false,
+    );
+
+    staleWarmInboxInstanceForTests();
+    const ownerPoll = await listInboxFor(OWNER);
+    assert.equal(ownerPoll.some((thread) => thread.personId === "tester-nathan"), false);
+    assert.deepEqual(ownerPoll, []);
+
+    const nathan = await listInboxFor(NATHAN);
+    const stillThere = nathan.find((thread) => thread.personId === "owner");
+    assert.ok(stillThere);
+    assert.equal(stillThere.messages.some((message) => message.text === "Thread to delete"), true);
+  });
+
   it("clear conversation hides that thread for the viewer only", async () => {
     resetInboxStoreForTests(join(dir, "clear.json"));
     const posted = await postInboxMessage({

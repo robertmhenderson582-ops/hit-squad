@@ -30,7 +30,7 @@ import {
 } from "@/lib/phase-schedule";
 import { emptyJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
 import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
-import { packIdFromStoreKey, touchLocalPack } from "@/lib/local-estimates";
+import { packIdFromStoreKey, renameLocalPackTitle, touchLocalPack } from "@/lib/local-estimates";
 import { hydrateFromVault, flushVaultUpsert, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
 import { persistCrewTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
@@ -55,6 +55,7 @@ type EstimatePackageApi = {
   pickOt: (id: PhaseId, pick: PhaseOtPick) => void;
   setCrew: (next: CrewState | ((current: CrewState) => CrewState)) => void;
   setJobMeta: (next: JobMeta | ((current: JobMeta) => JobMeta)) => void;
+  setPackTitle: (title: string) => string | null;
   setActivities: (next: WorkActivity[] | ((current: WorkActivity[]) => WorkActivity[])) => void;
   addCraftRow: () => CraftRow;
   setMultiUnitsOn: (on: boolean) => void;
@@ -272,6 +273,17 @@ export function EstimatePackageProvider({
       setJobMeta(next) {
         setJobMetaState((current) => (typeof next === "function" ? next(current) : next));
       },
+      setPackTitle(title) {
+        const packId = packIdFromStoreKey(estimateKey);
+        if (!packId) return null;
+        const renamed = renameLocalPackTitle(packId, title);
+        if (renamed) {
+          touchLocalPack(packId);
+          scheduleVaultUpsert(packId);
+          return renamed.title;
+        }
+        return null;
+      },
       setActivities(next) {
         setActivitiesState((current) => (typeof next === "function" ? next(current) : next));
       },
@@ -299,6 +311,9 @@ export function useEstimatePackage() {
       pickOt() {},
       setCrew() {},
       setJobMeta() {},
+      setPackTitle() {
+        return null;
+      },
       setActivities() {},
       addCraftRow: () => blankCraftRow(),
       setMultiUnitsOn() {},

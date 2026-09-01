@@ -6,12 +6,15 @@ import {
   appendInboxMessage,
   contactsFor,
   makeMessage,
-  makeThread,
+  omitHiddenPersonThreads,
   previewOf,
+  readInboxHides,
   readThreads,
   reconcileInboxDesk,
   rollbackInboxSend,
+  startInboxThread,
   unreadCount,
+  writeInboxHides,
   writeThreads,
   type InboxPerson,
   type InboxThread,
@@ -119,11 +122,13 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
     const identityChanged = identityRef.current !== identityKey;
     identityRef.current = identityKey;
     if (identityChanged) {
-      hiddenMessageIdsRef.current = new Set();
-      hiddenPersonIdsRef.current = new Set();
+      const hides = readInboxHides(seat);
+      hiddenMessageIdsRef.current = new Set(hides.messageIds);
+      hiddenPersonIdsRef.current = new Set(hides.personIds);
+      const stored = omitHiddenPersonThreads(readThreads(seat, ownerChrome), hides.personIds);
       const local = canReceiveDeskBot({ email: inboxEmail })
-        ? applyWhatsNew(readThreads(seat, ownerChrome), seat, ownerChrome, inboxEmail)
-        : readThreads(seat, ownerChrome).filter((thread) => thread.personId !== DESK_PERSON_ID);
+        ? applyWhatsNew(stored, seat, ownerChrome, inboxEmail)
+        : stored.filter((thread) => thread.personId !== DESK_PERSON_ID);
       setThreads(local);
       setActiveId(null);
       setSelectedIds([]);
@@ -179,6 +184,13 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const persistHides = useCallback(() => {
+    writeInboxHides(seat, {
+      personIds: [...hiddenPersonIdsRef.current],
+      messageIds: [...hiddenMessageIdsRef.current],
+    });
+  }, [seat]);
+
   const flashToast = useCallback((text: string) => {
     setToast(text);
     window.setTimeout(() => setToast(null), 4200);
@@ -221,16 +233,13 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   const startThread = useCallback(
     (person: InboxPerson) => {
       persist((current) => {
-        const existing = current.find((thread) => thread.personId === person.id);
-        if (existing) {
-          activeIdRef.current = existing.id;
-          setActiveId(existing.id);
-          return current;
-        }
-        const created = makeThread(person);
-        activeIdRef.current = created.id;
-        setActiveId(created.id);
-        return [created, ...current];
+        const next = startInboxThread(current, person, {
+          hiddenPersonIds: hiddenPersonIdsRef.current,
+          hiddenMessageIds: hiddenMessageIdsRef.current,
+        });
+        activeIdRef.current = next.activeId;
+        setActiveId(next.activeId);
+        return next.threads;
       });
       setComposing(false);
     },
@@ -293,28 +302,32 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
           const data = (await response.json().catch(() => ({}))) as { threads?: InboxThread[] };
           if (!Array.isArray(data.threads)) throw new Error("send-failed");
           applyRemote(data.threads);
+          hiddenPersonIdsRef.current.delete(active.personId);
+          persistHides();
         })
         .catch(() => {
           persist((current) => rollbackInboxSend(current, threadId, pending.id));
           flashToast("Message did not send. Try again.");
         });
     },
-    [applyRemote, flashToast, inboxOn, lens?.name, persist, user?.name],
+    [applyRemote, flashToast, inboxOn, lens?.name, persist, persistHides, user?.name],
   );
 
   const deleteMessage = useCallback(
     (threadId: string, messageId: string) => {
       hiddenMessageIdsRef.current.add(messageId);
       persist((current) => rollbackInboxSend(current, threadId, messageId));
+      persistHides();
       const thread = threadsRef.current.find((row) => row.id === threadId);
       if (!thread || thread.personId === DESK_PERSON_ID || !inboxOn) return;
       void postInboxHide({ hideMessageId: messageId }).catch(() => {
         hiddenMessageIdsRef.current.delete(messageId);
+        persistHides();
         flashToast("Could not delete. Try again.");
         void loadRemote().then(applyRemote);
       });
     },
-    [applyRemote, flashToast, inboxOn, loadRemote, persist, postInboxHide],
+    [applyRemote, flashToast, inboxOn, loadRemote, persist, persistHides, postInboxHide],
   );
 
   const clearConversation = useCallback(
@@ -327,19 +340,17 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       persist((current) =>
         current.map((row) => (row.id === threadId ? { ...row, messages: [], unread: 0 } : row)),
       );
+      persistHides();
       if (!thread || thread.personId === DESK_PERSON_ID || !inboxOn) return;
-      void postInboxHide({ hidePersonId: thread.personId })
-        .then(() => {
-          hiddenPersonIdsRef.current.delete(thread.personId);
-        })
-        .catch(() => {
-          hiddenPersonIdsRef.current.delete(thread.personId);
-          for (const message of thread.messages) hiddenMessageIdsRef.current.delete(message.id);
-          flashToast("Could not delete. Try again.");
-          void loadRemote().then(applyRemote);
-        });
+      void postInboxHide({ hidePersonId: thread.personId }).catch(() => {
+        hiddenPersonIdsRef.current.delete(thread.personId);
+        for (const message of thread.messages) hiddenMessageIdsRef.current.delete(message.id);
+        persistHides();
+        flashToast("Could not delete. Try again.");
+        void loadRemote().then(applyRemote);
+      });
     },
-    [applyRemote, flashToast, inboxOn, loadRemote, persist, postInboxHide],
+    [applyRemote, flashToast, inboxOn, loadRemote, persist, persistHides, postInboxHide],
   );
 
   const deleteSelected = useCallback(() => {
@@ -353,22 +364,20 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       if (thread.personId !== DESK_PERSON_ID) hiddenPersonIdsRef.current.add(thread.personId);
     }
     persist((current) => current.filter((thread) => !ids.includes(thread.id)));
+    persistHides();
     setSelectedIds([]);
     setActiveId((current) => (current && ids.includes(current) ? null : current));
     if (!inboxOn || !personIds.length) return;
-    void postInboxHide({ hidePersonIds: personIds })
-      .then(() => {
-        for (const id of personIds) hiddenPersonIdsRef.current.delete(id);
-      })
-      .catch(() => {
-        for (const id of personIds) hiddenPersonIdsRef.current.delete(id);
-        for (const thread of selected) {
-          for (const message of thread.messages) hiddenMessageIdsRef.current.delete(message.id);
-        }
-        flashToast("Could not delete. Try again.");
-        void loadRemote().then(applyRemote);
-      });
-  }, [applyRemote, flashToast, inboxOn, loadRemote, persist, postInboxHide, selectedIds]);
+    void postInboxHide({ hidePersonIds: personIds }).catch(() => {
+      for (const id of personIds) hiddenPersonIdsRef.current.delete(id);
+      for (const thread of selected) {
+        for (const message of thread.messages) hiddenMessageIdsRef.current.delete(message.id);
+      }
+      persistHides();
+      flashToast("Could not delete. Try again.");
+      void loadRemote().then(applyRemote);
+    });
+  }, [applyRemote, flashToast, inboxOn, loadRemote, persist, persistHides, postInboxHide, selectedIds]);
 
   const emptyInbox = useCallback(() => {
     const peers = threadsRef.current.filter((thread) => thread.personId !== DESK_PERSON_ID);
@@ -377,22 +386,20 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       hiddenPersonIdsRef.current.add(thread.personId);
     }
     persist((current) => current.filter((thread) => thread.personId === DESK_PERSON_ID));
+    persistHides();
     setSelectedIds([]);
     setActiveId(null);
     if (!inboxOn) return;
-    void postInboxHide({ emptyInbox: true })
-      .then(() => {
-        for (const thread of peers) hiddenPersonIdsRef.current.delete(thread.personId);
-      })
-      .catch(() => {
-        for (const thread of peers) {
-          hiddenPersonIdsRef.current.delete(thread.personId);
-          for (const message of thread.messages) hiddenMessageIdsRef.current.delete(message.id);
-        }
-        flashToast("Could not delete. Try again.");
-        void loadRemote().then(applyRemote);
-      });
-  }, [applyRemote, flashToast, inboxOn, loadRemote, persist, postInboxHide]);
+    void postInboxHide({ emptyInbox: true }).catch(() => {
+      for (const thread of peers) {
+        hiddenPersonIdsRef.current.delete(thread.personId);
+        for (const message of thread.messages) hiddenMessageIdsRef.current.delete(message.id);
+      }
+      persistHides();
+      flashToast("Could not delete. Try again.");
+      void loadRemote().then(applyRemote);
+    });
+  }, [applyRemote, flashToast, inboxOn, loadRemote, persist, persistHides, postInboxHide]);
 
   const value = useMemo<InboxState>(
     () => ({

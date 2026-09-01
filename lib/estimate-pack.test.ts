@@ -24,7 +24,7 @@ import {
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
 import { estimateMarkupDollars, estimateTotalBreakdown } from "./estimate-total.ts";
-import { rememberLocalPack, type StorageLike } from "./local-estimates.ts";
+import { rememberLocalPack, renameLocalPackTitle, type StorageLike } from "./local-estimates.ts";
 
 function memoryStore(seed: Record<string, string> = {}): StorageLike {
   const data = { ...seed };
@@ -104,6 +104,30 @@ describe("estimate pack snapshot", () => {
     assert.equal(crewHasRows(pack.crew), true);
     assert.equal(packHasWork(pack), true);
     assert.equal(pack.ownerEmail, "robertmhenderson582@gmail.com");
+  });
+
+  it("renames pack title from Job setup and keeps it on a pack round-trip", () => {
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-nathan-tm",
+        title: "Working estimate",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+      },
+      store,
+    );
+    const renamed = renameLocalPackTitle("new-nathan-tm", "Nathan T&M book", store);
+    assert.equal(renamed?.title, "Nathan T&M book");
+    const collected = collectPack(store, "new-nathan-tm", "nathanboyte@gmail.com");
+    assert.equal(collected?.title, "Nathan T&M book");
+
+    const other = memoryStore();
+    applyPackToStore(other, collected!);
+    const again = collectPack(other, "new-nathan-tm");
+    assert.equal(again?.title, "Nathan T&M book");
+    assert.equal(again?.client, "Phillips 66");
+    assert.equal(again?.site, "Wood River — Roxana, IL");
   });
 
   it("keeps a newer local pack and never replaces it with an empty vault", () => {

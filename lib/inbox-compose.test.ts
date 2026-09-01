@@ -9,6 +9,7 @@ import {
   makeThread,
   reconcileInboxDesk,
   rollbackInboxSend,
+  startInboxThread,
   type InboxThread,
 } from "./inbox.ts";
 import { DESK_PERSON_ID } from "./whats-new.ts";
@@ -113,6 +114,60 @@ describe("inbox compose stays on the thread", () => {
     assert.equal(nathan.messages.some((message) => message.text === "Nathan reply"), true);
   });
 
+  it("New after deleting a thread is empty and does not reattach vault messages", () => {
+    const old = {
+      id: "im-old",
+      from: "self" as const,
+      author: "Robert",
+      text: "Deleted thread body",
+      photo: null,
+      sentAt: "",
+      readAt: null,
+    };
+    const vault = circleThread(NATHAN, { messages: [old] });
+    const afterDelete = reconcileInboxDesk([DESK], [vault], null, {
+      hiddenPersonIds: [NATHAN.id],
+      hiddenMessageIds: [old.id],
+    });
+    assert.equal(afterDelete.threads.some((thread) => thread.personId === NATHAN.id), false);
+    assert.equal(
+      afterDelete.threads.some((thread) => thread.messages.some((message) => message.text === old.text)),
+      false,
+    );
+
+    const started = startInboxThread(afterDelete.threads, NATHAN, {
+      hiddenPersonIds: [NATHAN.id],
+      hiddenMessageIds: [old.id],
+    });
+    const compose = started.threads.find((thread) => thread.personId === NATHAN.id);
+    assert.ok(compose);
+    assert.equal(compose.messages.length, 0);
+    assert.equal(started.activeId, compose.id);
+    assert.notEqual(started.activeId, vault.id);
+
+    const leftover = startInboxThread([DESK, vault], NATHAN, {
+      hiddenPersonIds: [NATHAN.id],
+      hiddenMessageIds: [old.id],
+    });
+    const fresh = leftover.threads.find((thread) => thread.personId === NATHAN.id);
+    assert.ok(fresh);
+    assert.equal(fresh.messages.length, 0);
+    assert.notEqual(fresh.id, vault.id);
+
+    const afterNew = reconcileInboxDesk(started.threads, [vault], started.activeId, {
+      hiddenPersonIds: [NATHAN.id],
+      hiddenMessageIds: [old.id],
+    });
+    const still = afterNew.threads.find((thread) => thread.personId === NATHAN.id);
+    assert.ok(still);
+    assert.equal(still.messages.length, 0);
+    assert.equal(afterNew.activeId, still.id);
+    assert.equal(
+      afterNew.threads.some((thread) => thread.messages.some((message) => message.id === old.id)),
+      false,
+    );
+  });
+
   it("does not resurrect a deleted message from the remote poll", () => {
     const created = makeThread(NATHAN);
     const remote = [
@@ -131,6 +186,10 @@ describe("inbox compose stays on the thread", () => {
     assert.match(source, /emptyInbox: true/);
     assert.match(source, /rollbackInboxSend/);
     assert.match(source, /Message did not send/);
+    assert.match(source, /startInboxThread/);
+    assert.match(source, /writeInboxHides/);
+    assert.match(source, /omitHiddenPersonThreads/);
+    assert.doesNotMatch(source, /\.then\(\(\) => \{\s*hiddenPersonIdsRef\.current\.delete/);
   });
 
   it("failed send drops the local-only delivered row", () => {
