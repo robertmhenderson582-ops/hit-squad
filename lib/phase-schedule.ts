@@ -353,11 +353,6 @@ export function cascadePhases(phases: PhaseRow[]): PhaseRow[] {
   });
 }
 
-/** START uses the same ON-only lock as STOP. Cascade still packs later starts from a stop change. */
-export function phaseDateFieldDisabled(row: Pick<PhaseRow, "on">): boolean {
-  return !row.on;
-}
-
 export function setProjectStart(state: PhaseScheduleState, projectStart: string): PhaseScheduleState {
   const start = parseYmd(projectStart) ? projectStart : state.projectStart;
   const phases = state.phases.map((row) => {
