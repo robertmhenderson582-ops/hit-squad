@@ -2,6 +2,7 @@ import { inboxContactsFor, isInboxCircleEmail } from "./inbox-circle.ts";
 import { DESK_PERSON_ID } from "./whats-new.ts";
 
 export const INBOX_STORE_PREFIX = "hs_inbox_v1:";
+export const INBOX_HIDES_PREFIX = "hs_inbox_hides_v1:";
 export const OWNER_CONTACT = {
   id: "owner",
   name: "Robert Henderson",
@@ -101,6 +102,76 @@ export function ownerDemoThreads(): InboxThread[] {
 
 export function storeKey(seat: string) {
   return `${INBOX_STORE_PREFIX}${seat}`;
+}
+
+export function hidesKey(seat: string) {
+  return `${INBOX_HIDES_PREFIX}${seat}`;
+}
+
+export type InboxHides = { personIds: string[]; messageIds: string[] };
+
+function stringIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((id): id is string => typeof id === "string" && Boolean(id.trim())))];
+}
+
+export function readInboxHides(seat: string): InboxHides {
+  if (typeof window === "undefined") return { personIds: [], messageIds: [] };
+  try {
+    const raw = window.localStorage.getItem(hidesKey(seat));
+    if (!raw) return { personIds: [], messageIds: [] };
+    const parsed = JSON.parse(raw) as Partial<InboxHides>;
+    return {
+      personIds: stringIds(parsed.personIds).filter((id) => id !== DESK_PERSON_ID),
+      messageIds: stringIds(parsed.messageIds),
+    };
+  } catch {
+    return { personIds: [], messageIds: [] };
+  }
+}
+
+export function writeInboxHides(seat: string, hides: InboxHides) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    hidesKey(seat),
+    JSON.stringify({
+      personIds: stringIds(hides.personIds).filter((id) => id !== DESK_PERSON_ID),
+      messageIds: stringIds(hides.messageIds),
+    }),
+  );
+}
+
+export function omitHiddenPersonThreads(threads: InboxThread[], hiddenPersonIds: Iterable<string>): InboxThread[] {
+  const hidden = new Set(hiddenPersonIds);
+  return threads.filter((thread) => thread.personId === DESK_PERSON_ID || !hidden.has(thread.personId));
+}
+
+/** Open a person. A deleted thread for that seat stays gone — New is an empty compose. */
+export function startInboxThread(
+  threads: InboxThread[],
+  person: InboxPerson,
+  opts?: { hiddenPersonIds?: Iterable<string>; hiddenMessageIds?: Iterable<string> },
+): { threads: InboxThread[]; activeId: string } {
+  const hiddenPeople = new Set(opts?.hiddenPersonIds ?? []);
+  const hiddenMessages = new Set(opts?.hiddenMessageIds ?? []);
+  const existing = threads.find((thread) => thread.personId === person.id);
+  const visible = existing?.messages.filter((message) => !hiddenMessages.has(message.id)) ?? [];
+  if (existing && !hiddenPeople.has(person.id)) {
+    return { threads, activeId: existing.id };
+  }
+  if (existing && hiddenPeople.has(person.id) && visible.length > 0) {
+    return {
+      threads: threads.map((thread) =>
+        thread.personId === person.id ? { ...thread, messages: visible, unread: 0 } : thread,
+      ),
+      activeId: existing.id,
+    };
+  }
+  const created = makeThread(person);
+  return {
+    threads: [created, ...threads.filter((thread) => thread.personId !== person.id)],
+    activeId: created.id,
+  };
 }
 
 export function readThreads(seat: string, _ownerChrome: boolean): InboxThread[] {
@@ -217,6 +288,8 @@ function mergePeerThread(
  * returns that same person under a stable id, remap activeId so the
  * textarea stays on that conversation.
  * Hidden ids stay gone even if a poll still has the vault copy.
+ * A deleted thread stays off this seat: New/startThread must not remap
+ * onto the vault conversation for that person.
  */
 export function reconcileInboxDesk(
   local: InboxThread[],
@@ -227,9 +300,11 @@ export function reconcileInboxDesk(
   const hiddenMessageIds = new Set(opts?.hiddenMessageIds ?? []);
   const hiddenPersonIds = new Set(opts?.hiddenPersonIds ?? []);
   const desk = local.filter((thread) => thread.personId === DESK_PERSON_ID);
-  const remotePeers = remote.filter(
-    (thread) => thread.personId !== DESK_PERSON_ID && !hiddenPersonIds.has(thread.personId),
-  );
+  const remotePeers = remote.filter((thread) => {
+    if (thread.personId === DESK_PERSON_ID) return false;
+    if (!hiddenPersonIds.has(thread.personId)) return true;
+    return thread.messages.some((message) => !hiddenMessageIds.has(message.id));
+  });
   const remotePersonIds = new Set(remotePeers.map((thread) => thread.personId));
   const localByPerson = new Map(
     local
@@ -243,6 +318,7 @@ export function reconcileInboxDesk(
     .filter((thread) => thread.personId !== DESK_PERSON_ID && !remotePersonIds.has(thread.personId))
     .map((thread) => ({
       ...thread,
+      unread: hiddenPersonIds.has(thread.personId) ? 0 : thread.unread,
       messages: thread.messages.filter((message) => !hiddenMessageIds.has(message.id)),
     }));
   const threads = [...desk, ...mergedRemote, ...localOnlyPeers];
@@ -252,6 +328,10 @@ export function reconcileInboxDesk(
 
   const lost = local.find((thread) => thread.id === activeId);
   if (!lost) return { threads, activeId: null };
+  if (hiddenPersonIds.has(lost.personId) && !remotePersonIds.has(lost.personId)) {
+    const compose = threads.find((thread) => thread.personId === lost.personId && thread.messages.length === 0);
+    return { threads, activeId: compose?.id ?? null };
+  }
   const remapped = threads.find((thread) => thread.personId === lost.personId);
   return { threads, activeId: remapped?.id ?? null };
 }

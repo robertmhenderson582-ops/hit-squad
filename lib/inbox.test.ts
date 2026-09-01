@@ -5,10 +5,14 @@ import { DESK_VERSION, applyWhatsNew, deskWhatsNewThread } from "./whats-new.ts"
 import {
   OWNER_CONTACTS,
   contactsFor,
+  hidesKey,
+  omitHiddenPersonThreads,
   ownerDemoThreads,
+  readInboxHides,
   readThreads,
   storeKey,
   stripDemoThreads,
+  writeInboxHides,
   writeThreads,
   type InboxThread,
 } from "./inbox.ts";
@@ -86,6 +90,35 @@ describe("inbox demo wipe", () => {
     assert.equal(cleaned.length, 1);
     assert.equal(cleaned[0].id, "th-desk-v1.29");
     assert.equal(stripDemoThreads([note]).length, 1);
+  });
+
+  it("deleted-thread hides survive refresh and omit leftover local rows", () => {
+    writeInboxHides("owner", { personIds: ["tester-nathan", "desk"], messageIds: ["im-old"] });
+    assert.equal(hidesKey("owner"), "hs_inbox_hides_v1:owner");
+    const hides = readInboxHides("owner");
+    assert.deepEqual(hides.personIds, ["tester-nathan"]);
+    assert.deepEqual(hides.messageIds, ["im-old"]);
+
+    const leftover: InboxThread = {
+      id: "th-circle-tester-nathan",
+      personId: "tester-nathan",
+      name: "Nathan Boyte",
+      company: "Madison",
+      unread: 1,
+      messages: [
+        {
+          id: "im-old",
+          from: "self",
+          author: "Robert",
+          text: "Should not come back",
+          photo: null,
+          sentAt: "",
+          readAt: null,
+        },
+      ],
+    };
+    const note = deskWhatsNewThread(true);
+    assert.deepEqual(omitHiddenPersonThreads([note, leftover], hides.personIds), [note]);
   });
 
   it("Desk note stays V1.29 and tester-safe", () => {
