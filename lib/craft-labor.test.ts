@@ -572,7 +572,14 @@ describe("extra range description is a label only", () => {
     assert.equal(added.pd, before.pd + 5);
     assert.equal(added.hours, before.hours + 42.5);
 
-    const overlap = { ...extra, start: first.start, end: first.end, hoursPerShift: first.hoursPerShift };
+    const overlap = {
+      ...extra,
+      start: first.start,
+      end: first.end,
+      hoursPerShift: first.hoursPerShift,
+      days: [...first.days],
+      skipDates: first.skipDates ? [...first.skipDates] : [],
+    };
     assert.equal(phaseRangesOverlap([first, overlap], "pre"), true);
     const doubled = crewHours({ ...row, ranges: [...row.ranges, overlap] });
     const firstOnly = computeRowHours({ ...row, ranges: [first] }, WOOD.site, WOOD.client);
@@ -601,8 +608,9 @@ describe("extra range description is a label only", () => {
     assert.equal(clampExtraRangeDates(early, envelope).start, "2026-08-21");
     assert.equal(clampExtraRangeDates(late, envelope).end, "2026-09-03");
     const clampedAfter = clampExtraRangeDates(after, envelope);
-    assert.equal(clampedAfter.start, "2026-08-21");
+    assert.equal(clampedAfter.start, "2026-09-03");
     assert.equal(clampedAfter.end, "2026-09-03");
+    assert.equal(extraRangeIsValid(clampedAfter, first, pre), true);
     assert.equal(extraRangeIsValid(insidePreComeback(extraRangeFromPhase(pre, first)), first, pre), true);
 
     const widerFirst = { ...first, start: "2026-08-01", end: "2026-09-15" };
@@ -642,9 +650,11 @@ describe("extra range description is a label only", () => {
   it("Staff through Support share the Description control and extra-range envelope on CrewPhaseCards", () => {
     const cards = readFileSync(fileURLToPath(new URL("../components/CrewPhaseCards.tsx", import.meta.url)), "utf8");
     assert.match(cards, /Description/);
-    assert.match(cards, /Hiring progression/);
-    assert.match(cards, /Onboarding\/Learning/);
+    assert.match(cards, /RANGE_DESCRIPTION_REASONS/);
     assert.match(cards, /RANGE_DESCRIPTION_OTHER/);
+    const labor = readFileSync(fileURLToPath(new URL("./craft-labor.ts", import.meta.url)), "utf8");
+    assert.match(labor, /Hiring progression/);
+    assert.match(labor, /Onboarding\/Learning/);
     assert.match(cards, /showDescription/);
     assert.match(cards, /line-chip/);
     assert.match(cards, /extraRangeEnvelope/);
