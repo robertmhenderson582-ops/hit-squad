@@ -7,10 +7,15 @@ import {
   formatDeskDollars,
   shahanEquipmentByFuel,
 } from "@/lib/shahan-wood-river";
+import { EAST_COAST_OT_NOTE, LABOR_SHEET_COLUMNS } from "@/lib/rate-builder";
+
+/** Yates labor sheet: CRAFT / POSITION, BASE WAGE (BW), BILLED ST, BILLED OT, BILLED DT, PD. */
 import {
   WOOD_RIVER_SITE_ID,
   bookForSiteId,
   formatBaseWage,
+  formatBilledDt,
+  formatBilledOt,
   formatBilledSt,
   isWoodRiverBook,
   wageCatalogByGroup,
@@ -72,8 +77,8 @@ export function RateBuilder({ siteId = WOOD_RIVER_SITE_ID }: { siteId?: string }
   const alias = useAlias();
   const book = bookForSiteId(siteId);
   if (!book) return null;
-  const labeled = wageLookupLabels(book.wageCatalog);
-  const groups = wageCatalogByGroup(book.wageCatalog).map((group) => ({
+  const labeled = wageLookupLabels(book.catalog);
+  const groups = wageCatalogByGroup(book.catalog).map((group) => ({
     ...group,
     rows: labeled.filter((item) => group.rows.includes(item.row)),
   }));
@@ -85,6 +90,9 @@ export function RateBuilder({ siteId = WOOD_RIVER_SITE_ID }: { siteId?: string }
       <section className="plant-card px-5 py-5">
         <h2 className="font-display text-2xl font-semibold text-[#163038]">{alias(book.wageLabel || book.bookLabel)}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">{alias(wageLookupNote(book))}</p>
+        {book.wageCoast === "east" ? (
+          <p className="mt-2 text-sm text-[#5b6f73]">{EAST_COAST_OT_NOTE}</p>
+        ) : null}
       </section>
 
       {groups.map((group) => (
@@ -94,7 +102,7 @@ export function RateBuilder({ siteId = WOOD_RIVER_SITE_ID }: { siteId?: string }
             <table className="min-w-full text-left text-sm">
               <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
                 <tr>
-                  {["CRAFT", "BASE WAGE", "BILLED ST", "PD"].map((header) => (
+                  {LABOR_SHEET_COLUMNS.map((header) => (
                     <th key={header} className="px-2 py-2">
                       {header}
                     </th>
@@ -104,7 +112,7 @@ export function RateBuilder({ siteId = WOOD_RIVER_SITE_ID }: { siteId?: string }
               <tbody>
                 {group.rows.length === 0 ? (
                   <tr className="border-t border-[#d5e0de]">
-                    <td colSpan={4} className="px-2 py-4 text-sm text-[#5b6f73]">
+                    <td colSpan={LABOR_SHEET_COLUMNS.length} className="px-2 py-4 text-sm text-[#5b6f73]">
                       No Shahan rows in this group yet.
                     </td>
                   </tr>
@@ -114,6 +122,8 @@ export function RateBuilder({ siteId = WOOD_RIVER_SITE_ID }: { siteId?: string }
                       <td className="px-2 py-2">{item.label}</td>
                       <td className="px-2 py-2 font-semibold">{formatBaseWage(item.row, book) || "—"}</td>
                       <td className="px-2 py-2 font-semibold">{formatBilledSt(item.row)}</td>
+                      <td className="px-2 py-2 font-semibold">{formatBilledOt(item.row)}</td>
+                      <td className="px-2 py-2 font-semibold">{formatBilledDt(item.row)}</td>
                       <td className="px-2 py-2 font-semibold">{rateCell(item.row.pd)}</td>
                     </tr>
                   ))

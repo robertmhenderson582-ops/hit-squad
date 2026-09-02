@@ -10,7 +10,7 @@ import { BAYWAY_WAGE, MONROE_WAGE, WOOD_RIVER_WAGE, YATES_WAGE } from "./comp-wa
 import { catalogSites } from "./desk-data.ts";
 import { matchCatalogSite } from "./job-tree.ts";
 import { siteIdFromSite, type StorageLike } from "./local-estimates.ts";
-import { compositeRates } from "./rate-builder.ts";
+import { craftBillingRates } from "./rate-builder.ts";
 import { hasSiteBook, resolvedCrafts, siteBookFor, siteCompanyId } from "./rate-books.ts";
 import { BAYWAY_BOOK_ID, BAYWAY_BOOK_LABEL, BAYWAY_CRAFT_PD, BAYWAY_LABOR, BAYWAY_MARKUP, BAYWAY_PLANT, BAYWAY_STAFF_PD } from "./shahan-bayway.ts";
 import { FERNDALE_BOOK_ID, FERNDALE_BOOK_LABEL, FERNDALE_CRAFT_PD, FERNDALE_LABOR, FERNDALE_MARKUP, FERNDALE_PLANT, FERNDALE_STAFF_PD } from "./shahan-ferndale.ts";
@@ -289,11 +289,23 @@ export function formatBaseWage(row: ShahanLaborRow, book: WageBook): string {
   return NO_COMP_WAGE_MESSAGE;
 }
 
-export function formatBilledSt(row: ShahanLaborRow): string {
-  if (typeof row.st === "number" && Number.isFinite(row.st) && row.st > 0) {
-    return formatDeskDollars(row.st);
+export function formatBilledRate(value: number | null | undefined): string {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return formatDeskDollars(value);
   }
   return "—";
+}
+
+export function formatBilledSt(row: ShahanLaborRow): string {
+  return formatBilledRate(row.st);
+}
+
+export function formatBilledOt(row: ShahanLaborRow): string {
+  return formatBilledRate(row.ot);
+}
+
+export function formatBilledDt(row: ShahanLaborRow): string {
+  return formatBilledRate(row.dt);
 }
 
 export function wageLookupNote(book: WageBook): string {
@@ -369,7 +381,7 @@ function builderPositions(companyId: CompanyId, siteId: string, store?: StorageL
   return resolvedCrafts(companyId, siteId, undefined, store)
     .filter((craft) => craft.craft.trim())
     .map((craft) => {
-      const rates = compositeRates(craft);
+      const rates = craftBillingRates(craft);
       return {
         id: craft.id,
         title: craft.craft,

@@ -23,7 +23,7 @@ export function hasBuildDesk(user?: { role?: string } | null): boolean {
   return isOwner(user) || isOperator(user);
 }
 
-/** Owner / Novus Rate builder, plus Joseph’s full desk. Other testers stay off the builder. */
+/** Owner, Novus, and rates seats (Joseph’s full desk). Other testers stay off the builder. */
 export function canUseRateBuilder(user?: { email?: string; role?: string } | null): boolean {
   if (!user) return false;
   if (isJosephEmail(user.email)) return true;

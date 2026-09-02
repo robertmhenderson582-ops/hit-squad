@@ -15,9 +15,11 @@ import { ChangeOrderPacket } from "@/components/ChangeOrderPacket";
 import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { OrgChartDesk } from "@/components/OrgChartDesk";
+import { NoRatesNotice } from "@/components/NoRatesNotice";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { ShopRigSheet } from "@/components/ShopRigSheet";
+import { newEstimateNeedsRatesNotice } from "@/lib/estimate-rates-gate";
 import { boundOtLabel } from "@/lib/hours-clock";
 import { newEstimateKey, newEstimatePackId } from "@/lib/estimate-open";
 import { defaultEstimateName } from "@/lib/job-event";
@@ -90,10 +92,13 @@ function NewEstimateDesk({
 }) {
   const alias = useAlias();
   const { user } = useSession();
+  const { lens } = useDeskLens();
   const [tab, setTab] = useState<EstimateTab>("summary");
   const [title, setTitle] = useState(name);
+  const [ratesTick, setRatesTick] = useState(0);
   const plant = site.split("—")[0]?.trim() || site;
   const otRule = boundOtLabel(site, client);
+  const needsRates = size !== "shop" && newEstimateNeedsRatesNotice(lens || user) && ratesTick >= 0;
 
   const existingClient = size !== "other";
   const estimateKey = newEstimateKey(pack);
@@ -115,6 +120,7 @@ function NewEstimateDesk({
     >
       {tab === "summary" ? (
         <div className="space-y-5">
+          {needsRates ? <NoRatesNotice user={lens || user} onImported={() => setRatesTick((value) => value + 1)} /> : null}
           <JobSetupCard
             type="T&M"
             client={alias(client)}

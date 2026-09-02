@@ -25,7 +25,7 @@ import {
   writeRateCompanyOpen,
 } from "@/lib/rate-books";
 import { formatDeskDollars } from "@/lib/shahan-wood-river";
-import { compositeRates } from "@/lib/rate-builder";
+import { craftBillingRates, craftPdAmount, LABOR_SHEET_COLUMNS } from "@/lib/rate-builder";
 import { bookForSiteId } from "@/lib/wage-lookup";
 
 export function RatesDesk({
@@ -195,21 +195,38 @@ export function RatesDesk({
               </button>
             ) : null}
           </div>
-          <ul className="mt-4 space-y-2">
-            {builderCrafts.map((craft) => {
-              const rates = compositeRates(craft);
-              return (
-                <li key={craft.id} className="rounded-lg border border-[#d5e0de] px-3 py-3">
-                  <p className="font-semibold text-[#163038]">{craft.craft}</p>
-                  {craft.local ? <p className="text-sm text-[#5b6f73]">{craft.local}</p> : null}
-                  <p className="hud-readout mt-2 text-sm">
-                    ST {formatDeskDollars(rates.st) || "$0.00"} · OT {formatDeskDollars(rates.ot) || "$0.00"} · DT{" "}
-                    {formatDeskDollars(rates.dt) || "$0.00"}
-                  </p>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
+                <tr>
+                  {LABOR_SHEET_COLUMNS.map((header) => (
+                    <th key={header} className="px-2 py-2">
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {builderCrafts.map((craft) => {
+                  const rates = craftBillingRates(craft);
+                  const pd = craftPdAmount(craft);
+                  return (
+                    <tr key={craft.id} className="border-t border-[#d5e0de]">
+                      <td className="px-2 py-2">
+                        <p className="font-semibold text-[#163038]">{craft.craft}</p>
+                        {craft.local ? <p className="text-sm text-[#5b6f73]">{craft.local}</p> : null}
+                      </td>
+                      <td className="px-2 py-2 font-semibold">{formatDeskDollars(craft.baseSt) || "—"}</td>
+                      <td className="px-2 py-2 font-semibold">{formatDeskDollars(rates.st) || "—"}</td>
+                      <td className="px-2 py-2 font-semibold">{formatDeskDollars(rates.ot) || "—"}</td>
+                      <td className="px-2 py-2 font-semibold">{formatDeskDollars(rates.dt) || "—"}</td>
+                      <td className="px-2 py-2 font-semibold">{pd ? formatDeskDollars(pd) : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </section>
       ) : null}
 

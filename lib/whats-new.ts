@@ -1,27 +1,26 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.43.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.43";
+export const DESK_VERSION = "1.44.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.44";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.43";
+export const DESK_THREAD_ID = "th-desk-v1.44";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.43",
-  "• Estimates have an Org chart tab. Name Staff and General Foreman if you want — unnamed still show as the position. Foreman shows as a number unless you name one.",
-  "• The full desk is open for estimating, Rates, Jobs, HSE, and Quality. Owner stays the owner.",
+  "Hit Squad Project Controls V1.44",
+  "• Rate builder looks like the labor rate sheet — craft, base wage, billed ST / OT / DT, and PD.",
+  "• New Estimate tells you if the company has no rates. You can upload billing rates or build them in Rate builder.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.43",
-  "• Estimates have an Org chart tab from Crew Staff / General Foreman / Foreman. Direct Craft and Support stay off the chart.",
-  "• Names are optional. Unnamed Staff and GF still show as the position title. Foreman is a number unless named. Days and nights can take two names.",
-  "• Moving boxes is visual only. Crew dollars, billing, and headcount stay put. The header uses the same company logo field as the Company Desk door when one is on file.",
-  "• Joseph Henderson can use the full desk, including Org chart, Rates, and Rate builder. Inbox stays the six. Owner stays the only owner.",
+  "Hit Squad Project Controls V1.44",
+  "• Rate builder labor table matches the Yates-style sheet: craft/position, COMP BW, billed ST / OT / DT, and the Shahan PD fringe. Billed ST stays the crew-costing dollar. East Coast stays OT 1.5, not DT after 12.",
+  "• Joseph Henderson can open Rate builder. Owner stays the only owner.",
+  "• New Estimate tells a company with no saved rates they can upload billing rates or use Rate builder. Madison books already on the desk do not lock the owner out.",
 ].join("\n");
 
-/** Same as the live V1.43 note. Kept so older imports still resolve. */
+/** Same as the live V1.44 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;
