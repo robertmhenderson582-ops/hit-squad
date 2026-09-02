@@ -85,7 +85,8 @@ describe("rate book nest", () => {
     assert.equal(visibleRateBooks(johnHenry, books).some((row) => row.id === SHAHAN_BOOK_ID), false);
     assert.equal(canArchiveRateBook(book), false);
     const ratesDesk = readFileSync(fileURLToPath(new URL("../components/RatesDesk.tsx", import.meta.url)), "utf8");
-    assert.match(ratesDesk, /Rate books/);
+    assert.doesNotMatch(ratesDesk, /Rate books/);
+    assert.doesNotMatch(ratesDesk, /Look up wage rates/);
     assert.match(ratesDesk, /No book yet/);
     assert.match(ratesDesk, /aria-expanded=\{sitesOpen\}/);
     assert.match(ratesDesk, /writeRateCompanyOpen/);
