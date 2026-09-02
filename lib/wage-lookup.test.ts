@@ -12,7 +12,6 @@ import {
   lookupShahanLabor,
   SHAHAN_LABOR,
   SHAHAN_NO_BOOK_MESSAGE,
-  NO_COMP_WAGE_MESSAGE,
 } from "./shahan-wood-river.ts";
 import { YATES_LABOR } from "./shahan-yates.ts";
 import {
