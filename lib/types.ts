@@ -41,7 +41,7 @@ export type SiteRecord = {
   code: string;
   name: string;
   client: string;
-  family: "Georgia Power" | "Phillips 66";
+  family: "Georgia Power" | "Phillips 66" | "Monroe Energy";
   city: string;
   openJobs: number;
   plant: string;

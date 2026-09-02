@@ -18,7 +18,7 @@ import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu"
 export function EstimateBoard() {
   const alias = useAlias();
   const { user } = useSession();
-  const { lens, viewingAs } = useDeskLens();
+  const { lens, seat, viewingAs } = useDeskLens();
   const { openNewEstimate } = useEstimateModal();
   const { board, error, companyId } = useDeskBoard();
   const scope = companyScopeFor(lens, companyId);
@@ -28,7 +28,7 @@ export function EstimateBoard() {
   useEffect(() => {
     setClosed(readClosed().filter((item) => item.kind === "estimate"));
   }, [tick]);
-  const menu = menuForViewedDesk(viewingAs);
+  const menu = menuForViewedDesk(viewingAs, undefined, seat);
   const rows = (board?.estimates ?? []).filter(
     (row) => !closed.some((item) => item.id === row.id) && isActiveMenuItem(row, menu),
   );

@@ -28,11 +28,11 @@ function siteCountLine(site: SiteRecord, tally = plantJobTally()) {
 
 export function SitesDesk() {
   const { board, error, companyId } = useDeskBoard();
-  const { lens, viewingAs } = useDeskLens();
+  const { lens, seat, viewingAs } = useDeskLens();
   const scope = companyScopeFor(lens, companyId);
-  const menu = menuForViewedDesk(viewingAs);
+  const menu = menuForViewedDesk(viewingAs, undefined, seat);
   const tally = plantJobTally(
-    jobsOnDesk([], visibleDeskPacks(lens, viewingAs, undefined, scope), viewingAs, scope).filter((job) =>
+    jobsOnDesk([], visibleDeskPacks(lens, viewingAs, undefined, scope), viewingAs, scope, menu).filter((job) =>
       isActiveMenuItem(job, menu),
     ),
   );
@@ -46,6 +46,7 @@ export function SitesDesk() {
   const noneOpen = all.every((site) => site.openJobs === 0);
   const georgia = showMadison ? visible.filter((site) => site.family === "Georgia Power") : [];
   const p66 = showMadison ? visible.filter((site) => site.family === "Phillips 66") : [];
+  const monroe = showMadison ? visible.filter((site) => site.family === "Monroe Energy") : [];
 
   return (
     <div className={`${night ? "instrument-desk" : "paper-desk"} -mx-3 mt-5 rounded-sm px-4 py-6 sm:-mx-4 sm:px-6`}>
@@ -80,6 +81,22 @@ export function SitesDesk() {
           <p className="mt-10 text-xs font-semibold tracking-[0.22em] text-[#5b6f73]">{alias("Phillips 66").toUpperCase()}</p>
           <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {p66.map((site) => (
+              <Link key={site.id} href={`/jobs/${slugFor(site)}`} className="site-plate plant-card block px-5 py-5">
+                <p className="text-xl font-semibold text-[#163038]">{alias(site.name)}</p>
+                <p className="mt-1 text-sm text-[#5b6f73]">
+                  {alias(site.city)} · {siteCountLine(site, tally)}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {monroe.length ? (
+        <>
+          <p className="mt-10 text-xs font-semibold tracking-[0.22em] text-[#5b6f73]">{alias("Monroe Energy").toUpperCase()}</p>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {monroe.map((site) => (
               <Link key={site.id} href={`/jobs/${slugFor(site)}`} className="site-plate plant-card block px-5 py-5">
                 <p className="text-xl font-semibold text-[#163038]">{alias(site.name)}</p>
                 <p className="mt-1 text-sm text-[#5b6f73]">

@@ -134,8 +134,10 @@ describe("Wood River third-party rental catalog", () => {
     const desk = readFileSync(DESK_PATH, "utf8");
     assert.match(desk, /CatalogPick/);
     assert.match(desk, /thirdPartyRentalDescriptions/);
+    assert.match(desk, /\/api\/desk\/rates\/third-party/);
     assert.match(desk, /applyThirdPartyCatalogItem/);
     assert.match(desk, /applyThirdPartyCatalogPeriod/);
+    assert.match(desk, /catalog/);
     assert.match(desk, /Third-party rental uses the Wood River third-party table/);
     assert.match(desk, /Large tools stay Shahan COMP/);
     assert.match(desk, /thirdPartyMarkedUp/);

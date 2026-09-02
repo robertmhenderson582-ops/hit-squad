@@ -40,8 +40,9 @@ export function JobMenuActions({
   archived?: boolean;
   onChange?: () => void;
 }) {
-  const { lens, seat } = useDeskLens();
+  const { lens, seat, viewingAs } = useDeskLens();
   const extras = useHandoffPeople();
+  const menuSeat = viewingAs ? seat : undefined;
   const [handoff, setHandoff] = useState<"share" | "unshare" | "turnover" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -68,7 +69,7 @@ export function JobMenuActions({
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            unarchiveMenuItem(item);
+            unarchiveMenuItem(item, undefined, menuSeat);
             if (vaultId) void archiveVaultPack(vaultId, false);
             void refresh();
           }}
@@ -248,7 +249,7 @@ export function JobMenuActions({
                 <button
                   type="button"
                   onClick={() => {
-                    archiveMenuItem(item);
+                    archiveMenuItem(item, undefined, menuSeat);
                     if (vaultId) void archiveVaultPack(vaultId, true);
                     setConfirmArchive(false);
                     void refresh();
@@ -282,7 +283,7 @@ export function JobMenuActions({
                 <button
                   type="button"
                   onClick={() => {
-                    deleteMenuItem(item);
+                    deleteMenuItem(item, undefined, menuSeat);
                     if (vaultId) {
                       void deleteVaultPack(vaultId);
                       deleteLocalPack(vaultId);

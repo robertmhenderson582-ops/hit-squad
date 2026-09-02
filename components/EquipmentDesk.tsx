@@ -32,12 +32,15 @@ import {
   shahanEquipmentRows,
   shahanPeriodRate,
 } from "@/lib/shahan-wood-river";
+import { deskFetch } from "@/lib/estimate-vault-client";
 import {
+  WOOD_RIVER_THIRD_PARTY_RENTAL,
   applyThirdPartyCatalogItem,
   applyThirdPartyCatalogPeriod,
   lookupThirdPartyRental,
   thirdPartyRentalDescriptions,
   thirdPartyRentalPeriodRate,
+  type ThirdPartyRentalRow,
 } from "@/lib/third-party-rental";
 
 const LISTED_EQUIPMENT = shahanEquipmentRows(SHAHAN_EQUIPMENT).map((row, index) => ({
@@ -46,7 +49,6 @@ const LISTED_EQUIPMENT = shahanEquipmentRows(SHAHAN_EQUIPMENT).map((row, index) 
 }));
 const WET_ITEMS = LISTED_EQUIPMENT.filter((entry) => entry.row.wet);
 const DRY_ITEMS = LISTED_EQUIPMENT.filter((entry) => !entry.row.wet);
-const THIRD_PARTY_ITEMS = thirdPartyRentalDescriptions();
 
 function money(value: number) {
   return value ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
@@ -73,8 +75,24 @@ export function EquipmentDesk() {
   const pack = useEstimatePackage();
   const confirmRemove = useConfirmRemove();
   const [sheet, setSheet] = useState<EquipmentSheet>(emptyEquipmentSheet);
+  const [catalog, setCatalog] = useState<ThirdPartyRentalRow[]>(() => [...WOOD_RIVER_THIRD_PARTY_RENTAL]);
   const totals = equipmentTotals(sheet);
   const window = useMemo(() => jobSetupWindow(pack.schedule.phases), [pack.schedule.phases]);
+  const thirdPartyItems = useMemo(() => thirdPartyRentalDescriptions(catalog), [catalog]);
+
+  useEffect(() => {
+    let cancelled = false;
+    deskFetch("/api/desk/rates/third-party")
+      .then(async (response) => {
+        const data = await response.json();
+        if (cancelled || !response.ok || !Array.isArray(data.catalog)) return;
+        setCatalog(data.catalog);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const stored = readEquipmentSheet(pack.estimateKey);
@@ -337,18 +355,18 @@ export function EquipmentDesk() {
                 </tr>
               ) : (
                 sheet.thirdParty.map((line, index) => {
-                  const listed = lookupThirdPartyRental(line.item);
+                  const listed = lookupThirdPartyRental(line.item, catalog);
                   return (
                     <tr key={line.id} className="border-t border-[#d5e0de] align-top">
                     <td className="px-2 py-2">
                       <CatalogPick
                         value={line.item}
-                        options={THIRD_PARTY_ITEMS}
+                        options={thirdPartyItems}
                         placeholder="Pick a listed item"
                         allowCustom
                         onChange={(item) => {
                           const next = sheet.thirdParty.slice();
-                          next[index] = applyThirdPartyCatalogItem(line, item);
+                          next[index] = applyThirdPartyCatalogItem(line, item, catalog);
                           persist({ ...sheet, thirdParty: next });
                         }}
                       />
@@ -369,6 +387,7 @@ export function EquipmentDesk() {
                           next[index] = applyThirdPartyCatalogPeriod(
                             line,
                             event.target.value as ThirdPartyPeriod,
+                            catalog,
                           );
                           persist({ ...sheet, thirdParty: next });
                         }}

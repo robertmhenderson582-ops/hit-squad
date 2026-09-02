@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { archiveMenuItem, deleteMenuItem, menuForViewedDesk, menuStatus } from "./job-menu.ts";
 import {
   deskForUser,
   jobByCode,
@@ -11,6 +12,7 @@ import {
   plantTabFromQuery,
   seedJobs,
 } from "./jobs.ts";
+import type { StorageLike } from "./local-estimates.ts";
 
 describe("desk counts", () => {
   it("counts real estimates, not every open job", () => {
@@ -73,5 +75,48 @@ describe("desk counts", () => {
     assert.ok(cat2Job);
     assert.equal(packForJob(cat2Job, [cat2])?.packId, "new-mtaajdwa-f7539");
     assert.equal(packForJob({ id: "job-8841" }, [cat2]), undefined);
+  });
+
+  it("view-as Nathan delete of HS-8622 stays gone after a seed reload; estimate delete and archive still work", () => {
+    const data: Record<string, string> = {};
+    const store: StorageLike = {
+      getItem(key) {
+        return data[key] ?? null;
+      },
+      setItem(key, value) {
+        data[key] = value;
+      },
+      removeItem(key) {
+        delete data[key];
+      },
+    };
+    const cat2 = {
+      packId: "new-mtaajdwa-f7539",
+      key: "new:new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    const nathan = { isOwner: false, email: "nathanboyte@gmail.com", companyId: "madison" as const };
+    const seeds = deskForUser("tester-nathan", nathan).jobs;
+    assert.equal(seeds.some((job) => job.code === "HS-8622"), true);
+    deleteMenuItem({ id: "job-8622", title: "Pre-outage HSE walkdown — flare / piperack" }, store, "nathan");
+    const afterPoll = jobsOnDesk(seeds, [cat2], true, nathan, menuForViewedDesk(true, store, "nathan"));
+    assert.equal(afterPoll.some((job) => job.code === "HS-8622" || job.id === "job-8622"), false);
+    assert.equal(afterPoll.some((job) => job.title.includes("CAT 2")), true);
+
+    archiveMenuItem({ id: `job-${cat2.packId}`, packId: cat2.packId, title: cat2.title }, store, "nathan");
+    assert.equal(
+      menuStatus({ id: `job-${cat2.packId}`, packId: cat2.packId }, menuForViewedDesk(true, store, "nathan")),
+      "archived",
+    );
+
+    deleteMenuItem({ id: "job-8902", title: "Coker drum valve package — time & material" }, store);
+    const ownerJobs = jobsOnDesk(seedJobs(), [], false, undefined, menuForViewedDesk(false, store));
+    assert.equal(ownerJobs.some((job) => job.id === "job-8902"), false);
+    assert.equal(ownerJobs.some((job) => job.code === "TA-8841"), true);
   });
 });

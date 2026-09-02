@@ -14,7 +14,7 @@ const ESTIMATES = [
     id: "est-coker",
     title: "Coker drum valve package — T&M",
     unit: "Coker",
-    siteId: "site-coker-pad",
+    siteId: "site-madison",
   },
   {
     id: "est-tower",
@@ -26,7 +26,6 @@ const ESTIMATES = [
 
 const SITES = [
   { id: "site-madison", name: "Wood River", city: "Roxana, IL" },
-  { id: "site-coker-pad", name: "Coker pad / drum alley", city: "Roxana, IL" },
   { id: "site-rodeo", name: "Rodeo", city: "Rodeo, CA" },
 ] as SiteRecord[];
 

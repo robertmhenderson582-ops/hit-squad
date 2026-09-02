@@ -12,6 +12,8 @@ import {
   SETTINGS_VAULT_NAME,
   TICKETS_VAULT_KIND,
   TICKETS_VAULT_NAME,
+  RATES_VAULT_KIND,
+  RATES_VAULT_NAME,
   readVaultJson,
   writeVaultJson,
 } from "./drive-data.ts";
@@ -44,5 +46,13 @@ describe("vault named json", () => {
     assert.equal(Boolean(seats?.hashes["nathanboyte@gmail.com"]?.passwordHash), true);
     assert.equal(settings?.aliasesOn, true);
     assert.equal(await readVaultJson(drive, ACTIVITY_VAULT_NAME, ACTIVITY_VAULT_KIND), null);
+  });
+
+  it("keeps rates.json apart from tickets and companies", async () => {
+    const drive = memoryDrive();
+    await writeVaultJson(drive, RATES_VAULT_NAME, RATES_VAULT_KIND, { catalog: [{ description: "Skip Pan", monthly: 847 }] });
+    const rates = await readVaultJson<{ catalog: Array<{ description: string }> }>(drive, RATES_VAULT_NAME, RATES_VAULT_KIND);
+    assert.equal(rates?.catalog[0].description, "Skip Pan");
+    assert.equal(await readVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND), null);
   });
 });

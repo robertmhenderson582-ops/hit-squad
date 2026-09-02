@@ -95,6 +95,39 @@ export const WOOD_RIVER_THIRD_PARTY_RENTAL: ThirdPartyRentalRow[] = [
   { description: "Spider box / 220 Vote cords", daily: 0, weekly: 0, monthly: 75, freight: 150 },
 ];
 
+function parseMoney(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const next = Number(value);
+  return Number.isFinite(next) ? next : null;
+}
+
+export function parseThirdPartyRow(raw: unknown): ThirdPartyRentalRow | null {
+  if (!raw || typeof raw !== "object") return null;
+  const next = raw as Record<string, unknown>;
+  if (typeof next.description !== "string" || !next.description.trim()) return null;
+  const freight = Number(next.freight);
+  return {
+    description: next.description.trim(),
+    daily: parseMoney(next.daily),
+    weekly: parseMoney(next.weekly),
+    monthly: parseMoney(next.monthly),
+    freight: Number.isFinite(freight) ? freight : 0,
+  };
+}
+
+export function parseThirdPartyCatalog(raw: unknown): ThirdPartyRentalRow[] {
+  const list = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === "object" && Array.isArray((raw as { catalog?: unknown }).catalog)
+      ? ((raw as { catalog: unknown[] }).catalog ?? [])
+      : [];
+  return list.map(parseThirdPartyRow).filter((row): row is ThirdPartyRentalRow => Boolean(row));
+}
+
+export function blankThirdPartyRow(): ThirdPartyRentalRow {
+  return { description: "New rental", daily: null, weekly: null, monthly: null, freight: 0 };
+}
+
 export function thirdPartyRentalDescriptions(
   catalog: readonly ThirdPartyRentalRow[] = WOOD_RIVER_THIRD_PARTY_RENTAL,
 ): string[] {

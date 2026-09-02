@@ -2,6 +2,7 @@ import { catalogVisibleTo, type CompanyScope } from "./companies.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { boardForUser } from "./desk-data.ts";
 import { mergeLocalJobs, type LocalPack } from "./local-estimates.ts";
+import { omitDeletedJobs, type JobMenuState } from "./job-menu.ts";
 import type { DeskBoard, JobRecord } from "./types.ts";
 
 const JOBS: JobRecord[] = [
@@ -90,13 +91,18 @@ export function jobsOnDesk(
   packs: LocalPack[],
   viewingAs: boolean,
   scope?: CompanyScope | null,
+  menu?: JobMenuState | null,
 ) {
   const fromServer = serverJobs ?? [];
   const nextPacks = [...packs, ...dummyPacksForUser(scope).filter((pack) => !packs.some((row) => row.packId === pack.packId))];
-  if (viewingAs) return mergeLocalJobs(fromServer, nextPacks);
-  const seeds = visibleSeedJobs(scope);
-  const seen = new Set(fromServer.map((job) => job.id));
-  return mergeLocalJobs([...seeds.filter((job) => !seen.has(job.id)), ...fromServer], nextPacks);
+  const merged = viewingAs
+    ? mergeLocalJobs(fromServer, nextPacks)
+    : (() => {
+        const seeds = visibleSeedJobs(scope);
+        const seen = new Set(fromServer.map((job) => job.id));
+        return mergeLocalJobs([...seeds.filter((job) => !seen.has(job.id)), ...fromServer], nextPacks);
+      })();
+  return menu ? omitDeletedJobs(merged, menu) : merged;
 }
 
 export function plantJobTally(jobs: JobRecord[] = JOBS) {

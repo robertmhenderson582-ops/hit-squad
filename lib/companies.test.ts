@@ -140,6 +140,8 @@ describe("assign and visibility", () => {
 
   it("hides Madison catalog from James and Hit Squad testers, and hides CBI from Madison", () => {
     assert.equal(inferCompanyId("Madison / P66"), "madison");
+    assert.equal(inferCompanyId("Monroe Energy"), "madison");
+    assert.equal(inferCompanyId("Trainer, PA"), "madison");
     assert.equal(inferCompanyId("CBI"), "cbi");
     assert.equal(catalogVisibleTo(nathan, "Madison / P66", "TA-8841"), true);
     assert.equal(catalogVisibleTo(james, "Madison / P66", "TA-8841"), false);
@@ -185,6 +187,8 @@ describe("assign and visibility", () => {
 
     const madisonBoard = boardForUser("tester-nathan", nathan);
     assert.equal(madisonBoard.sites.some((site) => site.name === "Wood River"), true);
+    assert.equal(madisonBoard.sites.some((site) => site.name === "Monroe Energy"), true);
+    assert.equal(madisonBoard.sites.some((site) => /coker pad/i.test(site.name)), false);
     const jamesBoard = boardForUser("tester-james", james);
     assert.equal(jamesBoard.sites.length, 0);
     assert.equal(jamesBoard.estimates.length, 0);

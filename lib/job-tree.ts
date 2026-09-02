@@ -51,10 +51,8 @@ export function sitesForCompany(companyId: CompanyId, sites: SiteRecord[] = cata
 export function matchCatalogSite(text: string, sites: SiteRecord[] = catalogSites()) {
   const hay = norm(text);
   if (!hay) return undefined;
-  const coker = sites.find((site) => site.id === "site-coker-pad");
-  if (coker && /\bcoker\b/.test(hay)) return coker;
   const woodRiver = sites.find((site) => site.id === "site-madison");
-  if (woodRiver && /wood river|roxana|cat 2|mtaajd|unit 3/.test(hay)) return woodRiver;
+  if (woodRiver && /wood river|roxana|cat 2|mtaajd|unit 3|\bcoker\b/.test(hay)) return woodRiver;
   return sites.find((site) => {
     const name = norm(site.name);
     const city = norm((site.city || "").split(",")[0] || "");
@@ -120,6 +118,7 @@ export function jobTree(input: {
   const sites = input.sites ?? catalogSites();
   const packs = input.packs ?? [];
   const companies = companiesForScope(input.scope, input.catalog);
+  const ownerSeesAll = !input.scope || input.scope.isOwner;
   const buckets = new Map<string, JobTreeCompany>();
 
   for (const company of companies) {
@@ -129,14 +128,17 @@ export function jobTree(input: {
     buckets.set(company.id, {
       id: company.id,
       name: company.name,
-      sites: catalog.map((site) => ({
-        id: site.id,
-        name: site.name,
-        city: site.city,
-        client: site.client,
-        assigned: site.openJobs > 0,
-        jobs: [],
-      })),
+      // Testers: do not pre-list every catalog plant. Sites appear when this seat has jobs.
+      sites: ownerSeesAll
+        ? catalog.map((site) => ({
+            id: site.id,
+            name: site.name,
+            city: site.city,
+            client: site.client,
+            assigned: site.openJobs > 0,
+            jobs: [],
+          }))
+        : [],
     });
   }
 
@@ -215,8 +217,11 @@ export function jobTree(input: {
 
   for (const company of buckets.values()) {
     const hasWork = company.sites.some((site) => site.jobs.length);
-    if (!hasWork && !company.sites.some((site) => site.id === UNASSIGNED_SITE_ID)) {
+    if (ownerSeesAll && !hasWork && !company.sites.some((site) => site.id === UNASSIGNED_SITE_ID)) {
       company.sites.push(emptyUnassigned());
+    }
+    if (!ownerSeesAll) {
+      company.sites = company.sites.filter((site) => site.jobs.length > 0);
     }
     for (const site of company.sites) {
       if (!site.jobs.length) site.assigned = false;
@@ -224,5 +229,23 @@ export function jobTree(input: {
   }
 
   return companies.map((company) => buckets.get(company.id)).filter((row): row is JobTreeCompany => Boolean(row));
+}
+
+/** Catalog sites this seat actually has work on. Empty placeholders are not assigned. */
+export function assignedSiteIds(input: {
+  scope?: CompanyScope | null;
+  jobs: JobRecord[];
+  sites?: SiteRecord[];
+  packs?: LocalPack[];
+  catalog?: Company[];
+  companyId?: CompanyId;
+}): string[] {
+  const tree = jobTree(input);
+  const rows = input.companyId ? tree.filter((row) => row.id === input.companyId) : tree;
+  return rows.flatMap((company) =>
+    company.sites
+      .filter((site) => site.jobs.length > 0 && site.id !== UNASSIGNED_SITE_ID)
+      .map((site) => site.id),
+  );
 }
 

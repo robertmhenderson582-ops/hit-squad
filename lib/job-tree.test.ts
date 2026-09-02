@@ -6,6 +6,7 @@ import { catalogEstimates } from "./desk-data.ts";
 import { jobsOnDesk, seedJobs } from "./jobs.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import {
+  assignedSiteIds,
   companyIdForJob,
   defaultOpenCompanyId,
   jobEstimateHref,
@@ -42,8 +43,11 @@ describe("job tree", () => {
     assert.equal(defaultOpenCompanyId([{ id: "cbi" }]), "cbi");
     assert.equal(sitesForCompany("madison").some((site) => site.id === "site-madison"), true);
     assert.equal(sitesForCompany("madison").some((site) => site.id === "site-yates"), true);
+    assert.equal(sitesForCompany("madison").some((site) => site.id === "site-monroe" && site.name === "Monroe Energy"), true);
+    assert.equal(sitesForCompany("madison").some((site) => /coker pad/i.test(site.name)), false);
     assert.equal(sitesForCompany("cbi").length, 0);
     assert.equal(matchCatalogSite("Madison CAT 2 Wood River — Roxana, IL")?.id, "site-madison");
+    assert.equal(matchCatalogSite("Coker drum valve package — T&M")?.id, "site-madison");
   });
 
   it("lets the owner see every company and testers only the one they are on", () => {
@@ -57,15 +61,30 @@ describe("job tree", () => {
     assert.equal(wood?.assigned, true);
     assert.equal(wood?.jobs.some((job) => job.id === "job-new-mtaajdwa-f7539"), true);
     assert.equal(madison?.sites.some((site) => site.id === "site-yates" && !site.assigned && !site.jobs.length), true);
+    assert.equal(madison?.sites.some((site) => site.id === "site-monroe" && site.name === "Monroe Energy" && !site.jobs.length), true);
+    assert.equal(madison?.sites.some((site) => /coker pad/i.test(site.name)), false);
     assert.equal(ownerTree.find((row) => row.id === LUCKY13_ID)?.sites.some((site) => site.id === UNASSIGNED_SITE_ID), true);
 
-    const nathanTree = jobTree({ scope: nathan, jobs: jobsOnDesk([], [cat2], false, nathan), packs: [cat2] });
+    const nathanJobs = jobsOnDesk([], [cat2], true, nathan);
+    const nathanTree = jobTree({ scope: nathan, jobs: nathanJobs, packs: [cat2] });
     assert.deepEqual(nathanTree.map((row) => row.id), ["madison"]);
     assert.equal(nathanTree[0]?.sites.some((site) => site.id === "site-madison" && site.jobs.some((job) => job.title.includes("CAT 2"))), true);
+    assert.equal(nathanTree[0]?.sites.some((site) => site.id === "site-madison" && site.assigned), true);
+    assert.equal(
+      nathanTree[0]?.sites.some((site) =>
+        /yates|rodeo|bayway|ferndale|billings|coker pad/i.test(site.name) && !site.jobs.length,
+      ),
+      false,
+    );
+    assert.equal(nathanTree[0]?.sites.some((site) => !site.jobs.length), false);
+    assert.deepEqual(assignedSiteIds({ scope: nathan, jobs: nathanJobs, packs: [cat2], companyId: "madison" }), [
+      "site-madison",
+    ]);
     assert.equal(nathanTree.some((row) => row.id === "cbi"), false);
 
-    const beechTree = jobTree({ scope: johnBeech, jobs: jobsOnDesk([], [], false, johnBeech), packs: [] });
+    const beechTree = jobTree({ scope: johnBeech, jobs: jobsOnDesk([], [], true, johnBeech), packs: [] });
     assert.deepEqual(beechTree.map((row) => row.id), ["madison"]);
+    assert.equal(beechTree[0]?.sites.some((site) => !site.jobs.length), false);
 
     const jamesJobs = jobsOnDesk([], dummyPacksForUser(james), false, james);
     const jamesTree = jobTree({ scope: james, jobs: jamesJobs, packs: dummyPacksForUser(james) });
@@ -77,10 +96,12 @@ describe("job tree", () => {
     const josephTree = jobTree({ scope: joseph, jobs: jobsOnDesk([], [], false, joseph), packs: [] });
     assert.deepEqual(josephTree.map((row) => row.id), ["hitsquad"]);
     assert.equal(josephTree[0]?.sites.some((site) => /yates|wood river/i.test(site.name) && site.id !== UNASSIGNED_SITE_ID), false);
+    assert.equal(josephTree[0]?.sites.some((site) => !site.jobs.length), false);
 
     const henryTree = jobTree({ scope: johnHenry, jobs: jobsOnDesk([], [], false, johnHenry), packs: [] });
     assert.deepEqual(henryTree.map((row) => row.id), [LUCKY13_ID]);
-    assert.equal(henryTree[0]?.sites.every((site) => !site.assigned || site.id === UNASSIGNED_SITE_ID), true);
+    assert.equal(henryTree[0]?.sites.every((site) => site.jobs.length > 0), true);
+    assert.equal(henryTree[0]?.sites.some((site) => !site.jobs.length), false);
   });
 
   it("opens a job card onto that job's estimate without changing Cat 2 identity", () => {
