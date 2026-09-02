@@ -11,12 +11,17 @@ import { ShareTurnover } from "@/components/ShareTurnover";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
-import { RfqPreview } from "@/components/RfqPreview";
 import { EstimateTotalRail } from "@/components/EstimateTotalRail";
 import { ModalPortal } from "@/components/ModalPortal";
 import { WageLookupDesk } from "@/components/WageLookupDesk";
+import { useEstimatePackage } from "@/components/EstimatePackage";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
+import { readEquipmentSheet } from "@/lib/equipment-sheet";
+import { ESTIMATE_EXPORT_ERROR, estimateToXlsx, estimateXlsxFilename } from "@/lib/estimate-xlsx";
 import type { EstimateStatus } from "@/lib/estimate-status";
+import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
+import { readSubSheet } from "@/lib/subcontractor";
+import { downloadXlsx } from "@/lib/xlsx-minimal";
 import type { StaffingLine } from "@/lib/types";
 
 export type { EstimateStatus };
@@ -53,9 +58,7 @@ export function EstimateWorkspace({
   jobClient,
   jobSite,
   name,
-  total,
   packageId,
-  staffing,
   status: _status = "Estimate",
   onStatus: _onStatus,
   statusLocked: _statusLocked = false,
@@ -78,24 +81,43 @@ export function EstimateWorkspace({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [rfq, setRfq] = useState(false);
+  const pack = useEstimatePackage();
+  const [exportError, setExportError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
   const { resolvedTheme } = useDisplay();
   const paper = resolvedTheme === "day";
   const closed = packageId ? isClosed(packageId) : false;
+  const boundClient = jobClient || client || "";
+  const boundSite = jobSite || site || "";
+
+  function exportWorkbook() {
+    setExportError("");
+    try {
+      const bytes = estimateToXlsx({
+        title: name || crumb,
+        client: boundClient,
+        site: boundSite,
+        crew: pack.crew,
+        schedule: pack.schedule,
+        orgChart: pack.orgChart,
+        jobMeta: pack.jobMeta,
+        equipment: readEquipmentSheet(pack.estimateKey),
+        otherCost: syncOtherCostTravel(readOtherCost(pack.estimateKey), pack.crew, {
+          staffPerMile: pack.jobMeta.staffMileageRate,
+          craftPerMile: pack.jobMeta.craftMileageRate,
+        }),
+        subcontractor: readSubSheet(pack.estimateKey),
+      });
+      if (!bytes.byteLength) throw new Error("empty-workbook");
+      downloadXlsx(estimateXlsxFilename({ site: boundSite, title: name || crumb }), bytes);
+    } catch {
+      setExportError(ESTIMATE_EXPORT_ERROR);
+    }
+  }
 
   return (
     <div className={paper ? "desk-day min-h-screen overflow-x-hidden bg-[#d8e4e2]" : "industrial-root"} data-capture-root>
       <FieldTrialBanner />
-      {rfq ? (
-        <RfqPreview
-          client={client || crumb}
-          name={name || crumb}
-          total={total}
-          staffing={staffing}
-          onClose={() => setRfq(false)}
-        />
-      ) : null}
       <header className={paper ? "est-chrome" : "est-chrome hud-bezel"}>
         <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
@@ -120,7 +142,7 @@ export function EstimateWorkspace({
                 type="button"
                 title={
                   action.id === "export"
-                    ? "Export RFQ preview"
+                    ? "Export Excel workbook"
                     : action.id === "print"
                       ? "Print this estimate"
                       : action.id === "duplicate"
@@ -131,7 +153,7 @@ export function EstimateWorkspace({
                 }
                 onClick={() => {
                   if (action.id === "export") {
-                    setRfq(true);
+                    exportWorkbook();
                     noteFeatureTrail("export");
                   }
                   if (action.id === "print") {
@@ -194,6 +216,11 @@ export function EstimateWorkspace({
             </button>
           ))}
         </nav>
+        {exportError ? (
+          <p className="px-4 pb-3 text-sm text-[#f3c6a5]" role="alert">
+            {exportError}
+          </p>
+        ) : null}
       </header>
       <div className={`${paper ? "paper-desk desk-day" : "instrument-desk desk-night"} est-desk-body min-h-[70vh] px-4 py-6`}>
         <DeskBanners />
