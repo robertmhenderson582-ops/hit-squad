@@ -171,7 +171,7 @@ test("labor hours times typed ST/OT/DT rates", () => {
     ],
   };
   const dollars = subLaborCost(welder, "Wood River Refinery", "Phillips 66");
-  assert.equal(dollars, 10 * 85);
+  assert.equal(dollars, 8 * 85 + 2 * 127.5);
   assert.equal(dollars > 0, true);
 });
 
@@ -251,9 +251,9 @@ test("vendor cards roll labor and equipment into Subcontractor, not Crew or Equi
   };
   const labor = subLaborCost(card.labor[0], "Wood River Refinery", "Phillips 66");
   const equipment = subEquipAmount(card.equipment[0]);
-  assert.equal(labor, 800);
+  assert.equal(labor, 880);
   assert.equal(equipment, 1250);
-  assert.equal(subCardTotal(card, { site: "Wood River Refinery", client: "Phillips 66" }), 2050);
+  assert.equal(subCardTotal(card, { site: "Wood River Refinery", client: "Phillips 66" }), 2130);
 
   const store = memoryStore();
   writeSubSheet(
@@ -271,7 +271,7 @@ test("vendor cards roll labor and equipment into Subcontractor, not Crew or Equi
   assert.equal(saved.cards[0].labor[0].ranges[0].hoursPerShift, 10);
   assert.equal(saved.cards[0].equipment[0].qty, 3);
   const total = subcontractorTotal(saved, { site: "Wood River Refinery", client: "Phillips 66" });
-  assert.equal(total, 170 + 2050);
+  assert.equal(total, 170 + 2130);
 
   const rail = estimateTotalBreakdown({
     labor: 9000,
@@ -280,10 +280,10 @@ test("vendor cards roll labor and equipment into Subcontractor, not Crew or Equi
     subcontractor: total,
     hours: 40,
   });
-  assert.equal(rail.lines.find((line) => line.id === "subcontractor")?.amount, 2220);
+  assert.equal(rail.lines.find((line) => line.id === "subcontractor")?.amount, 2300);
   assert.equal(rail.lines.find((line) => line.id === "labor")?.amount, 9000);
   assert.equal(rail.lines.find((line) => line.id === "equipment")?.amount, 500);
-  assert.equal(rail.total, 9000 + 500 + 250 + 2220);
+  assert.equal(rail.total, 9000 + 500 + 250 + 2300);
 });
 
 test("old sheets without cards keep their lines; normalize does not wipe qty or dates", () => {
@@ -435,26 +435,26 @@ test("affiliate flag persists on vendor cards and one-off rows", () => {
 
 test("JVIC labor card stays in Subcontractor and does not raise 6.5% markup", () => {
   const card = dayLaborCard("JVIC", true);
-  assert.equal(subLaborCost(card.labor[0], WR.site, WR.client), 800);
+  assert.equal(subLaborCost(card.labor[0], WR.site, WR.client), 880);
   const sheet = normalizeSubSheet({ cards: [card] });
-  assert.equal(subcontractorTotal(sheet, WR), 800);
+  assert.equal(subcontractorTotal(sheet, WR), 880);
   assert.equal(subcontractorMarkupBase(sheet, WR), 0);
   assert.equal(estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(sheet, WR) }), 0);
   const rail = estimateTotalBreakdown({
     subcontractor: subcontractorTotal(sheet, WR),
     markup: estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(sheet, WR) }),
   });
-  assert.equal(rail.lines.find((line) => line.id === "subcontractor")?.amount, 800);
+  assert.equal(rail.lines.find((line) => line.id === "subcontractor")?.amount, 880);
   assert.equal(rail.lines.some((line) => line.id === "markup"), false);
-  assert.equal(rail.total, 800);
+  assert.equal(rail.total, 880);
 });
 
 test("a normal vendor card still gets the 6.5% markup", () => {
   const card = dayLaborCard("Apex Insulation", false);
   const sheet = normalizeSubSheet({ cards: [card] });
-  assert.equal(subcontractorTotal(sheet, WR), 800);
-  assert.equal(subcontractorMarkupBase(sheet, WR), 800);
-  assert.equal(estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(sheet, WR) }), 52);
+  assert.equal(subcontractorTotal(sheet, WR), 880);
+  assert.equal(subcontractorMarkupBase(sheet, WR), 880);
+  assert.equal(estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(sheet, WR) }), 57.2);
   assert.equal(ESTIMATE_MARKUP_RATE, 0.065);
 });
 
@@ -467,15 +467,15 @@ test("mixed sheet marks up only the non-affiliate part; third-party and misc sta
     cards: [dayLaborCard("JVIC", true), dayLaborCard("Field Co", false, 100)],
   });
   const field = subLaborCost(sheet.cards[1].labor[0], WR.site, WR.client);
-  assert.equal(field, 1000);
-  assert.equal(subcontractorTotal(sheet, WR), 1000 + 4000 + 800 + 1000);
-  assert.equal(subcontractorMarkupBase(sheet, WR), 1000 + 1000);
+  assert.equal(field, 1040);
+  assert.equal(subcontractorTotal(sheet, WR), 1000 + 4000 + 880 + 1040);
+  assert.equal(subcontractorMarkupBase(sheet, WR), 1000 + 1040);
   const markup = estimateMarkupDollars({
     subcontractor: subcontractorMarkupBase(sheet, WR),
     thirdParty: 200,
     misc: 50,
   });
-  assert.equal(markup, 146.25);
+  assert.equal(markup, 148.85);
   assert.equal(
     estimateMarkupDollars({ subcontractor: 2000, thirdParty: 200, misc: 50 }),
     146.25,
@@ -486,9 +486,9 @@ test("unchecking JVIC puts those dollars back in the 6.5% markup", () => {
   const checked = normalizeSubSheet({ cards: [dayLaborCard("JVIC", true)] });
   assert.equal(estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(checked, WR) }), 0);
   const unchecked = normalizeSubSheet({ cards: [dayLaborCard("JVIC", false)] });
-  assert.equal(subcontractorTotal(unchecked, WR), 800);
-  assert.equal(subcontractorMarkupBase(unchecked, WR), 800);
-  assert.equal(estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(unchecked, WR) }), 52);
+  assert.equal(subcontractorTotal(unchecked, WR), 880);
+  assert.equal(subcontractorMarkupBase(unchecked, WR), 880);
+  assert.equal(estimateMarkupDollars({ subcontractor: subcontractorMarkupBase(unchecked, WR) }), 57.2);
 });
 
 test("one-off affiliate stays in Subcontractor and skips 6.5% markup until unchecked", () => {

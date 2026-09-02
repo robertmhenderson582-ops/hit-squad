@@ -256,9 +256,9 @@ describe("East Coast CBA craft OT after 8", () => {
     start: "2027-03-15",
     end: "2027-03-15",
     hoursPerShift: 10,
-    days: [false, true, true, true, true, true, false],
+    days: [false, true, true, true, true, true, false] as boolean[],
     headcount: 1,
-  } as const;
+  };
 
   it("Boilermaker Journeyman Mechanical 10h weekday is 8 ST + 2 OT, not 10 ST", () => {
     const result = computeRangeHours({

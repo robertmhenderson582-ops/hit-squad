@@ -9,7 +9,7 @@ export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
   "Hit Squad Project Controls V1.34",
-  "• Craft hours are time-and-a-half after 8 on Oil Out / Mechanical / Oil In. Pre and Post follow Job setup.",
+  "• Craft hours are time-and-a-half after 8 on Oil Out / Mechanical / Oil In. Pre and Post use Job setup.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [

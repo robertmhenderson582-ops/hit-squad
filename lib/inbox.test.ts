@@ -129,7 +129,7 @@ describe("inbox demo wipe", () => {
     const testerBody = tester[0].messages.map((message) => message.text).join(" ");
     assert.match(testerBody, /V1\.34/);
     assert.match(testerBody, /time-and-a-half after 8/);
-    assert.match(testerBody, /Job setup/);
+    assert.match(testerBody, /use Job setup/);
     assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Madison|Joseph|Stephanie|password|security/i);
     const owner = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
     assert.equal(owner[0].id, "th-desk-v1.34");

@@ -584,7 +584,7 @@ describe("extra range description is a label only", () => {
     assert.equal(rangeDescriptionChoice("", true), RANGE_DESCRIPTION_OTHER);
   });
 
-  it("first range without a description still totals 268 ST / 76 OT / 24 DT / 36 PD", () => {
+  it("first range without a description still totals 264 ST / 80 OT / 24 DT / 36 PD", () => {
     const phases = defaultPhases();
     const row = daysOnly(assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases));
     assert.equal(row.ranges.every((range) => !range.description), true);
