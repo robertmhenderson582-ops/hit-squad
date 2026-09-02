@@ -1,23 +1,23 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.34.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.34";
+export const DESK_VERSION = "1.35.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.35";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.34";
+export const DESK_THREAD_ID = "th-desk-v1.35";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.34",
-  "• Craft hours are time-and-a-half after 8 on Oil Out / Mechanical / Oil In. Saturday is all overtime for craft. Pre and Post use Job setup.",
+  "Hit Squad Project Controls V1.35",
+  "• Saturday is all overtime for craft. Craft hours are still time-and-a-half after 8 on Oil Out / Mechanical / Oil In.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.34",
-  "• East Coast CBA craft (GF, Foreman, Direct Craft, Support billed as craft) is OT after 8 on Oil Out / Mechanical / Oil In. Saturday is all OT for craft. Pre and Post follow the Job setup 4×10 / 5×8 picker — weekday all-ST stays; Saturday if worked is still all OT. Staff / Supervision keep weekday ST to 10 and the staff Saturday clock unless Use COMP clock is on.",
+  "Hit Squad Project Controls V1.35",
+  "• Saturday is all OT for craft. East Coast CBA craft is still OT after 8 on Oil Out / Mechanical / Oil In. PRE/POST weekday all-ST stays. Staff Saturday is unchanged. East Coast is not DT after 12.",
 ].join("\n");
 
-/** Same as the live V1.34 note. Kept so older imports still resolve. */
+/** Same as the live V1.35 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;
