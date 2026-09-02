@@ -3,6 +3,7 @@ import type { LaborClass } from "./labor-class";
 import {
   PHASE_IDS,
   phaseForRange,
+  rangeSeedFromPhase,
   rangeSeedsFromPhases,
   type JobUnit,
   type PhaseRow,
@@ -328,6 +329,23 @@ export function rangeFromPhase(row: PhaseRow, prev?: CalendarRange, unitId?: str
   };
 }
 
+/** Job setup Hrs/Day, then first-range Hours/shift, then 0. Do not use a Crew override on the first range when Hrs/Day is set. */
+export function extraHoursFromJobSetup(phase: PhaseRow, template?: CalendarRange): number {
+  const job = Number(phase.hoursPerDay);
+  if (Number.isFinite(job) && job > 0) return job;
+  const first = template?.hoursPerShift;
+  if (typeof first === "number" && Number.isFinite(first)) return first;
+  return 0;
+}
+
+/** Job setup Days/WK chips, then first-range days if Job setup has no workdays. */
+export function extraDaysFromJobSetup(phase: PhaseRow, template?: CalendarRange): boolean[] {
+  const jobDays = rangeSeedFromPhase(phase).days;
+  if (jobDays.some(Boolean)) return [...jobDays];
+  if (template?.days?.some(Boolean)) return [...template.days];
+  return [...jobDays];
+}
+
 export function extraRangeFromPhase(phase: PhaseRow, template?: CalendarRange, unitId?: string): CalendarRange {
   const base = rangeFromPhase(phase, template, unitId);
   const newUnit = Boolean(unitId && unitId !== template?.unitId);
@@ -336,13 +354,13 @@ export function extraRangeFromPhase(phase: PhaseRow, template?: CalendarRange, u
     id: uid("rg"),
     start: newUnit ? phase.start : "",
     end: newUnit ? phase.stop : "",
-    hoursPerShift: newUnit ? base.hoursPerShift : 0,
+    hoursPerShift: extraHoursFromJobSetup(phase, template),
     headcount: newUnit ? (template?.headcount ?? 1) : 1,
     nightHeadcount: newUnit ? (template?.nightHeadcount ?? 1) : 1,
     perDiemPeople: newUnit ? (template?.perDiemPeople ?? 1) : 0,
     nightPerDiemPeople: newUnit ? (template?.nightPerDiemPeople ?? 1) : 0,
     skipDates: newUnit ? [...(base.skipDates ?? [])] : [],
-    days: template?.days ? [...template.days] : [...base.days],
+    days: extraDaysFromJobSetup(phase, template),
     unitId: newUnit ? unitId : template?.unitId,
     description: "",
     off: template?.off,
