@@ -98,30 +98,23 @@ export function RatesDesk({
 
   return (
     <div className="space-y-5">
-      <section className="plant-card px-5 py-5">
-        <h2 className="font-display text-2xl text-[#163038]">Rate books</h2>
-        <p className="mt-1 text-sm text-[#5b6f73]">
-          {builder
-            ? "Company, then site, then the book. A job can override one craft. Archive hides a book you added."
-            : "Look up wage rates for the company and site on this desk. Read-only."}
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {companies.map((company) => (
-            <button
-              key={company.id}
-              type="button"
-              className={`rounded-full px-3 py-1.5 text-sm ${
-                company.id === companyId ? "bg-steel text-white" : "border border-steel text-steel"
-              }`}
-              onClick={() => openCompanyLookup(company.id)}
-            >
-              {alias(company.name)}
-            </button>
-          ))}
-        </div>
-      </section>
-
       <section className={night ? "steel-plate paper-grain" : "plant-card"}>
+        {companies.length > 1 ? (
+          <div className="flex flex-wrap gap-2 px-5 pt-4">
+            {companies.map((company) => (
+              <button
+                key={company.id}
+                type="button"
+                className={`rounded-full px-3 py-1.5 text-sm ${
+                  company.id === companyId ? "bg-steel text-white" : "border border-steel text-steel"
+                }`}
+                onClick={() => openCompanyLookup(company.id)}
+              >
+                {alias(company.name)}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <button
           type="button"
           className={`flex w-full items-center justify-between gap-3 px-5 py-4 text-left ${

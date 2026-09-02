@@ -14,8 +14,7 @@ import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { RfqPreview } from "@/components/RfqPreview";
 import { EstimateTotalRail } from "@/components/EstimateTotalRail";
 import { ModalPortal } from "@/components/ModalPortal";
-import { RatesDesk } from "@/components/RatesDesk";
-import { siteIdForJobSite } from "@/lib/wage-lookup";
+import { WageLookupDesk } from "@/components/WageLookupDesk";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
 import type { EstimateStatus } from "@/lib/estimate-status";
 import type { StaffingLine } from "@/lib/types";
@@ -31,7 +30,7 @@ const TABS = [
   { id: "subs", label: "Subcontractor", icon: "▣" },
   { id: "costs", label: "Other Cost", icon: "▤" },
   { id: "change-orders", label: "Change orders", icon: "⚖" },
-  { id: "rates", label: "Rates", icon: "％" },
+  { id: "wage-lookup", label: "Wage lookup", icon: "＄" },
 ] as const;
 
 const ACTIONS = [
@@ -197,14 +196,8 @@ export function EstimateWorkspace({
       </header>
       <div className={`${paper ? "paper-desk desk-day" : "instrument-desk desk-night"} est-desk-body min-h-[70vh] px-4 py-6`}>
         <DeskBanners />
-        {tab === "rates" ? (
-          <RatesDesk
-            initialSiteId={siteIdForJobSite(jobSite || site) ?? undefined}
-            initialJobId={packageId}
-            initialJobTitle={name}
-          />
-        ) : null}
-        {tab === "rates" ? null : children}
+        {tab === "wage-lookup" ? <WageLookupDesk client={jobClient || client} site={jobSite || site} /> : null}
+        {tab === "wage-lookup" ? null : children}
         <EstimateTotalRail client={jobClient || client} site={jobSite || site} />
       </div>
       {confirmClose && packageId ? (

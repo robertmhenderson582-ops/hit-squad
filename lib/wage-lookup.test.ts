@@ -4,6 +4,9 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { BAYWAY_WAGE, MONROE_WAGE, WOOD_RIVER_WAGE, YATES_WAGE } from "./comp-wages.ts";
+import { newBuiltCraft } from "./rate-builder.ts";
+import { BILLINGS_SITE_ID, saveCraftToLevel } from "./rate-books.ts";
+import type { StorageLike } from "./local-estimates.ts";
 import { BAYWAY_LABOR } from "./shahan-bayway.ts";
 import { FERNDALE_LABOR } from "./shahan-ferndale.ts";
 import { MONROE_LABOR } from "./shahan-monroe.ts";
@@ -22,17 +25,38 @@ import {
   FERNDALE_EXHIBIT_REV,
   RODEO_EXHIBIT_REV,
   WAGE_BOOKS,
+  WAGE_LOOKUP_EMPTY,
   WEST_COAST_AMENDMENT,
   WEST_COAST_COMP,
   WEST_COAST_PCA,
   bookForSite,
   catalogForSite,
+  estimateRateContext,
   formatBaseWage,
   formatBilledSt,
+  formatWageRate,
+  lookupWageRate,
   offerRateBookForSite,
+  wageLookupBook,
   wageLookupLabels,
   wageLookupNote,
+  wageLookupPositions,
 } from "./wage-lookup.ts";
+
+function memoryStore(seed: Record<string, string> = {}): StorageLike {
+  const data = { ...seed };
+  return {
+    getItem(key) {
+      return key in data ? data[key] : null;
+    },
+    setItem(key, value) {
+      data[key] = value;
+    },
+    removeItem(key) {
+      delete data[key];
+    },
+  };
+}
 
 function dollars(row: { st?: number | null; ot?: number | null; dt?: number | null; pd?: number | null; baseSt?: number | null } | null) {
   return { baseSt: row?.baseSt ?? null, st: row?.st ?? null, ot: row?.ot ?? null, dt: row?.dt ?? null, pd: row?.pd ?? null };
@@ -232,5 +256,82 @@ describe("wage lookup plants", () => {
       const keys = book.wageCatalog.map((row) => `${book.plant}\t${row.group}\t${row.craftName}`);
       assert.equal(keys.length, new Set(keys).size, book.plant);
     }
+  });
+});
+
+describe("estimate wage lookup tab", () => {
+  it("puts Wage lookup on the estimate and keeps Rate builder on Rates", () => {
+    const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
+    const desk = readFileSync(fileURLToPath(new URL("../components/WageLookupDesk.tsx", import.meta.url)), "utf8");
+    const ratesDesk = readFileSync(fileURLToPath(new URL("../components/RatesDesk.tsx", import.meta.url)), "utf8");
+    assert.match(workspace, /label: "Wage lookup"/);
+    assert.match(workspace, /id: "wage-lookup"/);
+    assert.match(workspace, /WageLookupDesk/);
+    assert.doesNotMatch(workspace, /RatesDesk/);
+    assert.match(desk, /Wage lookup/);
+    assert.match(desk, /<select/);
+    assert.match(desk, /No book yet/);
+    assert.doesNotMatch(desk, /setCrew|writeStoredRateBooks|saveCraftToLevel/);
+    assert.doesNotMatch(ratesDesk, /Rate books/);
+    assert.doesNotMatch(ratesDesk, /Look up wage rates/);
+    assert.match(ratesDesk, /ThirdPartyRentalDesk/);
+    assert.match(ratesDesk, /RateBuilderCard/);
+    assert.match(ratesDesk, /No book yet/);
+  });
+
+  it("lists unique COMP wages for a Wood River estimate", () => {
+    const ctx = estimateRateContext("Wood River — Roxana, IL", "Phillips 66");
+    assert.equal(ctx.siteId, "site-madison");
+    assert.equal(ctx.companyId, "madison");
+    const book = wageLookupBook("Wood River — Roxana, IL", "Phillips 66");
+    assert.ok(book);
+    assert.equal(book.source, "plant");
+    assert.equal(book.positions.length, WOOD_RIVER_WAGE.length);
+    const journeyman = book.positions.find((row) => row.title === "BOILERMAKER JOURNEYMAN");
+    assert.ok(journeyman);
+    assert.equal(journeyman.baseSt, 45.6);
+    assert.equal(journeyman.st, 108.38);
+    const picked = lookupWageRate("Wood River", "Phillips 66", journeyman.id);
+    assert.equal(picked?.baseSt, 45.6);
+    assert.match(formatWageRate(journeyman), /\$45\.60/);
+    assert.match(formatWageRate(journeyman), /\$108\.38/);
+    assert.equal(
+      wageLookupPositions("Wood River — Roxana, IL", "Phillips 66").some((row) => row.id === journeyman.id),
+      true,
+    );
+  });
+
+  it("shows No book yet only for Billings", () => {
+    assert.equal(wageLookupBook("Billings"), null);
+    assert.deepEqual(wageLookupPositions("Billings"), []);
+    assert.ok(wageLookupBook("Yates", "Georgia Power"));
+    assert.ok(wageLookupBook("Rodeo", "Phillips 66"));
+    assert.ok(wageLookupBook("Bayway", "Phillips 66"));
+    const desk = readFileSync(fileURLToPath(new URL("../components/WageLookupDesk.tsx", import.meta.url)), "utf8");
+    assert.match(desk, new RegExp(WAGE_LOOKUP_EMPTY));
+  });
+
+  it("reads a saved builder book on Billings and does not invent dollars", () => {
+    const store = memoryStore();
+    saveCraftToLevel(
+      {
+        companyId: "madison",
+        siteId: BILLINGS_SITE_ID,
+        label: "Billings working",
+        craft: newBuiltCraft({ craft: "Operator", baseSt: 38 }),
+        level: "site",
+      },
+      store,
+    );
+    const book = wageLookupBook("Billings", "Phillips 66", store);
+    assert.ok(book);
+    assert.equal(book.source, "builder");
+    const operator = book.positions.find((row) => row.title === "Operator");
+    assert.ok(operator);
+    assert.equal(operator.baseSt, 38);
+    assert.equal(operator.st, 38);
+    assert.equal(operator.ot, 57);
+    assert.equal(operator.dt, 76);
+    assert.equal(wageLookupBook("Billings", "Phillips 66"), null);
   });
 });

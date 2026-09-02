@@ -5,7 +5,13 @@
  * on Monroe / Yates). Never treat billed ST as wage.
  */
 
+import { inferCompanyIdFromParts, type CompanyId } from "./companies.ts";
 import { BAYWAY_WAGE, MONROE_WAGE, WOOD_RIVER_WAGE, YATES_WAGE } from "./comp-wages.ts";
+import { catalogSites } from "./desk-data.ts";
+import { matchCatalogSite } from "./job-tree.ts";
+import { siteIdFromSite, type StorageLike } from "./local-estimates.ts";
+import { compositeRates } from "./rate-builder.ts";
+import { hasSiteBook, resolvedCrafts, siteBookFor, siteCompanyId } from "./rate-books.ts";
 import { BAYWAY_BOOK_ID, BAYWAY_BOOK_LABEL, BAYWAY_CRAFT_PD, BAYWAY_LABOR, BAYWAY_MARKUP, BAYWAY_PLANT, BAYWAY_STAFF_PD } from "./shahan-bayway.ts";
 import { FERNDALE_BOOK_ID, FERNDALE_BOOK_LABEL, FERNDALE_CRAFT_PD, FERNDALE_LABOR, FERNDALE_MARKUP, FERNDALE_PLANT, FERNDALE_STAFF_PD } from "./shahan-ferndale.ts";
 import { MONROE_BOOK_ID, MONROE_BOOK_LABEL, MONROE_CRAFT_PD, MONROE_LABOR, MONROE_MARKUP, MONROE_PLANT, MONROE_STAFF_PD } from "./shahan-monroe.ts";
@@ -309,4 +315,114 @@ export function wageLookupNote(book: WageBook): string {
 
 export function isWoodRiverBook(book: Pick<WageBook, "siteId" | "bookId">): boolean {
   return book.siteId === WOOD_RIVER_SITE_ID || book.bookId === SHAHAN_BOOK_ID;
+}
+
+export const WAGE_LOOKUP_EMPTY = "No book yet";
+
+export type WageLookupPosition = {
+  id: string;
+  title: string;
+  group?: string;
+  baseSt: number | null;
+  st: number | null;
+  ot: number | null;
+  dt: number | null;
+};
+
+export type WageLookupBook = {
+  companyId: CompanyId;
+  siteId: string;
+  siteName: string;
+  label: string;
+  source: "plant" | "builder";
+  positions: WageLookupPosition[];
+};
+
+export function estimateRateContext(
+  site = "",
+  client = "",
+): { companyId: CompanyId; siteId: string; siteName: string } {
+  const matched = matchCatalogSite([site, client].filter(Boolean).join(" "));
+  const siteId = matched?.id || siteIdFromSite(site, client);
+  const catalog = catalogSites().find((row) => row.id === siteId);
+  const companyId = catalog ? siteCompanyId(catalog) : inferCompanyIdFromParts(client, site);
+  return {
+    companyId,
+    siteId,
+    siteName: catalog?.name || site || "Site",
+  };
+}
+
+function plantPositions(plant: WageBook): WageLookupPosition[] {
+  return wageLookupLabels(plant.wageCatalog).map((item) => ({
+    id: `plant:${item.index}:${item.row.craftName}`,
+    title: item.label,
+    group: item.row.group,
+    baseSt: item.row.baseSt ?? null,
+    st: item.row.st ?? null,
+    ot: item.row.ot ?? null,
+    dt: item.row.dt ?? null,
+  }));
+}
+
+function builderPositions(companyId: CompanyId, siteId: string, store?: StorageLike | null): WageLookupPosition[] {
+  return resolvedCrafts(companyId, siteId, undefined, store)
+    .filter((craft) => craft.craft.trim())
+    .map((craft) => {
+      const rates = compositeRates(craft);
+      return {
+        id: craft.id,
+        title: craft.craft,
+        baseSt: craft.baseSt ?? null,
+        st: rates.st,
+        ot: rates.ot,
+        dt: rates.dt,
+      };
+    });
+}
+
+export function wageLookupBook(site = "", client = "", store?: StorageLike | null): WageLookupBook | null {
+  const ctx = estimateRateContext(site, client);
+  const plant = bookForSite(site) || bookForSite(client) || bookForSiteId(ctx.siteId);
+  if (plant?.wageCatalog.length) {
+    return {
+      ...ctx,
+      label: plant.wageLabel || plant.bookLabel,
+      source: "plant",
+      positions: plantPositions(plant),
+    };
+  }
+  const saved = siteBookFor(ctx.companyId, ctx.siteId, store);
+  if (!saved || !hasSiteBook(ctx.companyId, ctx.siteId, store)) return null;
+  const positions = builderPositions(ctx.companyId, ctx.siteId, store);
+  if (!positions.length) return null;
+  return {
+    ...ctx,
+    label: saved.label,
+    source: "builder",
+    positions,
+  };
+}
+
+export function wageLookupPositions(site = "", client = "", store?: StorageLike | null) {
+  return wageLookupBook(site, client, store)?.positions ?? [];
+}
+
+export function lookupWageRate(
+  site = "",
+  client = "",
+  positionId = "",
+  store?: StorageLike | null,
+): WageLookupPosition | null {
+  if (!positionId) return null;
+  return wageLookupPositions(site, client, store).find((row) => row.id === positionId) ?? null;
+}
+
+export function formatWageRate(row: Pick<WageLookupPosition, "baseSt" | "st" | "ot" | "dt">) {
+  const cell = (value: number | null | undefined) =>
+    typeof value === "number" && Number.isFinite(value) && value > 0 ? formatDeskDollars(value) : "—";
+  if (typeof row.baseSt === "number" && Number.isFinite(row.baseSt) && row.baseSt > 0) {
+    return `Base wage ${cell(row.baseSt)} · Billed ST ${cell(row.st)}`;
+  }
+  return `ST ${cell(row.st)} · OT ${cell(row.ot)} · DT ${cell(row.dt)}`;
 }

@@ -57,7 +57,8 @@ describe("inbox what's-new", () => {
     assert.equal(DESK_THREAD_ID, "th-desk-v1.40");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Wage lookup now shows Comp base wage, not billed rate/);
+    assert.match(TESTER_WHATS_NEW, /Wage lookup now shows COMP\/C-1 Base wage/);
+    assert.match(TESTER_WHATS_NEW, /Crew dollars still billed ST\/OT\/DT/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|testers|Follow|apcontrolsllc|seat|James|CBI|View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
@@ -153,7 +154,8 @@ describe("inbox what's-new", () => {
     assert.match(OWNER_WHATS_NEW, /CW35353/);
     assert.match(OWNER_WHATS_NEW, /Rate builder/);
     assert.match(OWNER_WHATS_NEW, /Billings/);
-    assert.match(TESTER_WHATS_NEW, /Wage lookup now shows Comp base wage, not billed rate/);
+    assert.match(TESTER_WHATS_NEW, /Wage lookup now shows COMP\/C-1 Base wage/);
+    assert.match(TESTER_WHATS_NEW, /Crew dollars still billed ST\/OT\/DT/);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|Follow|apcontrolsllc|seat|security|vault|other users|James|CBI|Stephanie|View as/i.test(TESTER_WHATS_NEW), false);

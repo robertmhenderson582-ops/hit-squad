@@ -128,13 +128,14 @@ describe("inbox demo wipe", () => {
     assert.equal(tester[0].id, "th-desk-v1.40");
     const testerBody = tester[0].messages.map((message) => message.text).join(" ");
     assert.match(testerBody, /V1\.40/);
-    assert.match(testerBody, /Wage lookup now shows Comp base wage, not billed rate/);
+    assert.match(testerBody, /Wage lookup now shows COMP\/C-1 Base wage/);
+    assert.match(testerBody, /Crew dollars still billed ST\/OT\/DT/);
     assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Joseph|Stephanie|password|security|View as/i);
     assert.doesNotMatch(testerBody, /Robert, Nathan, Benny, Shane, Wendell, and Chance/);
     const owner = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
     assert.equal(owner[0].id, "th-desk-v1.40");
     const ownerBody = owner[0].messages.map((message) => message.text).join(" ");
-    assert.match(ownerBody, /Comp base wage/);
+    assert.match(ownerBody, /COMP\/C-1 Base wage/);
     assert.match(ownerBody, /Monroe Energy/);
     assert.match(ownerBody, /Billings/);
   });
