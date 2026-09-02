@@ -90,9 +90,21 @@ export function blankLargeTool(window: { start?: string; end?: string } = {}): L
 
 export function blankThirdParty(window: { start?: string; end?: string } = {}): ThirdPartyLine {
   return seedLineDates(
-    { id: uid("tp"), item: "", period: "daily", rate: 0, freight: 0, qty: 1, start: "", end: "" },
+    { id: uid("tp"), item: "", period: "monthly", rate: 0, freight: 0, qty: 1, start: "", end: "" },
     window,
   );
+}
+
+/** Drop one line. The other card and remaining rows stay. Empty after the last line is allowed. */
+export function removeEquipmentLine(
+  sheet: EquipmentSheet,
+  kind: "largeTools" | "thirdParty",
+  id: string,
+): EquipmentSheet {
+  return {
+    ...sheet,
+    [kind]: sheet[kind].filter((line) => line.id !== id),
+  };
 }
 
 function addCalendarMonths(date: Date, months: number) {
