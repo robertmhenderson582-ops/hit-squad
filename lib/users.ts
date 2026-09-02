@@ -26,6 +26,7 @@ type SeatFile = {
   hashes?: Record<string, SeatHashRow>;
   extras?: ExtraSeat[];
 };
+type SeatStoreFile = { hashes: NonNullable<SeatFile["hashes"]>; extras: ExtraSeat[] };
 
 let cachedUsers: StoredUser[] | null = null;
 let hydrated = false;
@@ -64,8 +65,26 @@ function hasHashes(hashes: NonNullable<SeatFile["hashes"]>) {
   return Object.keys(hashes).length > 0;
 }
 
-function hasSeatData(file: { hashes: NonNullable<SeatFile["hashes"]>; extras: ExtraSeat[] }) {
+function hasSeatData(file: SeatStoreFile) {
   return hasHashes(file.hashes) || file.extras.length > 0;
+}
+
+/** Vault overlays local, but an owner hash on disk is never dropped if the vault omitted it. */
+function mergeSeatFiles(local: SeatStoreFile, vault: SeatStoreFile): SeatStoreFile {
+  const hashes = { ...local.hashes, ...vault.hashes };
+  const owner = ownerEmail();
+  if (local.hashes[owner] && !vault.hashes[owner]) {
+    hashes[owner] = local.hashes[owner];
+  }
+  const extrasByEmail = new Map<string, ExtraSeat>();
+  for (const extra of local.extras) extrasByEmail.set(extra.email, extra);
+  for (const extra of vault.extras) extrasByEmail.set(extra.email, extra);
+  return { hashes, extras: [...extrasByEmail.values()] };
+}
+
+function seatFileHasLocalOnly(merged: SeatStoreFile, vault: SeatStoreFile) {
+  if (Object.keys(merged.hashes).some((email) => !vault.hashes[email])) return true;
+  return merged.extras.some((extra) => !vault.extras.some((row) => row.email === extra.email));
 }
 
 export function parseExtraSeats(raw: unknown): ExtraSeat[] {
@@ -92,7 +111,7 @@ function reservedEmails() {
   return new Set<string>([ownerEmail(), NOVUS_EMAIL, ...TESTER_SEATS.map((seat) => seat.email)]);
 }
 
-function loadSeatFile(): { hashes: NonNullable<SeatFile["hashes"]>; extras: ExtraSeat[] } {
+function loadSeatFile(): SeatStoreFile {
   try {
     const raw = JSON.parse(readFileSync(seatPasswordPath(), "utf8"));
     return { hashes: parseSeatHashes(raw), extras: parseExtraSeats(raw) };
@@ -117,7 +136,7 @@ function extrasFromUsers(users: StoredUser[]): ExtraSeat[] {
   return extras;
 }
 
-function writeSeatFile(file: { hashes: NonNullable<SeatFile["hashes"]>; extras: ExtraSeat[] }) {
+function writeSeatFile(file: SeatStoreFile) {
   try {
     const path = seatPasswordPath();
     mkdirSync(dirname(path), { recursive: true });
@@ -169,9 +188,14 @@ export async function hydrateSeatStore() {
     try {
       const raw = await readVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
       const vault = { hashes: parseSeatHashes(raw), extras: parseExtraSeats(raw) };
-      if (hasSeatData(vault)) writeSeatFile(vault);
-      else if (hasSeatData(cached)) {
-        await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, cached);
+      if (hasSeatData(vault) || hasSeatData(cached)) {
+        const merged = mergeSeatFiles(cached, vault);
+        writeSeatFile(merged);
+        if (hasSeatData(vault) && seatFileHasLocalOnly(merged, vault)) {
+          await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, merged);
+        } else if (!hasSeatData(vault) && hasSeatData(cached)) {
+          await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, cached);
+        }
       }
     } catch {
       // Keep the local cache. Cookie restoreSeatHash remains a fallback.
@@ -244,7 +268,10 @@ function seedUsers(): StoredUser[] {
 }
 
 function ownerUsers(): StoredUser[] {
-  if (!cachedUsers) cachedUsers = seedUsers();
+  if (!cachedUsers) {
+    cachedUsers = seedUsers();
+    persistHashes(cachedUsers);
+  }
   return cachedUsers;
 }
 
