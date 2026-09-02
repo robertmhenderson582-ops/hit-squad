@@ -62,8 +62,11 @@ describe("seat vs clock override", () => {
     const craftNote = clockNote("General Foreman", "Wood River", "Phillips 66");
     assert.match(staffNote, /staff clock/i);
     assert.match(staffNote, /weekday ST to 10/);
+    assert.equal(/Saturday all OT/.test(staffNote), false);
     assert.match(craftNote, /East Coast/);
-    assert.match(craftNote, /OT after 8/);
+    assert.match(craftNote, /weekday ST to 8/);
+    assert.match(craftNote, /Saturday all OT/);
+    assert.match(craftNote, /not DT after 12/);
     assert.equal(/weekday ST to 10/.test(craftNote), false);
     assert.equal(eastCoastCraftOtAfter8("mech", false), true);
     assert.equal(eastCoastCraftOtAfter8("oil-out", false), true);
@@ -423,6 +426,147 @@ describe("East Coast CBA craft OT after 8", () => {
     assert.equal(week.ot, 20);
     assert.equal(week.dt, 0);
     assert.equal(week.hours, 60);
+    const saturday = week.days.find((day) => day.weekday === 6);
+    assert.equal(saturday?.st, 0);
+    assert.equal(saturday?.ot, 10);
+    assert.equal(saturday?.dt, 0);
+  });
+
+  it("CBA craft Saturday 10h Days is 0 ST / 10 OT / 0 DT; weekday 10h is still 8 ST / 2 OT", () => {
+    const saturday = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Boilermaker Journeyman",
+      phaseId: "mech",
+      start: "2027-03-20",
+      end: "2027-03-20",
+      hoursPerShift: 10,
+      days: [false, false, false, false, false, false, true],
+    });
+    assert.equal(saturday.days[0]?.weekday, 6);
+    assert.equal(saturday.st, 0);
+    assert.equal(saturday.ot, 10);
+    assert.equal(saturday.dt, 0);
+    assert.equal(saturday.hours, 10);
+    assert.notEqual(saturday.st, 8);
+    assert.notEqual(saturday.ot, 2);
+
+    const weekdayTen = computeRangeHours({
+      ...WOOD_RIVER,
+      ...weekday,
+      position: "Boilermaker Journeyman",
+      phaseId: "mech",
+      otAfter8: false,
+    });
+    assert.equal(weekdayTen.st, 8);
+    assert.equal(weekdayTen.ot, 2);
+    assert.equal(weekdayTen.dt, 0);
+  });
+
+  it("Staff Saturday does not become all OT — staff keeps ST to 10", () => {
+    const staffSat = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Analyst Cost 01",
+      phaseId: "mech",
+      start: "2027-03-20",
+      end: "2027-03-20",
+      hoursPerShift: 10,
+      days: [false, false, false, false, false, false, true],
+    });
+    assert.equal(staffSat.days[0]?.weekday, 6);
+    assert.equal(staffSat.st, 10);
+    assert.equal(staffSat.ot, 0);
+    assert.equal(staffSat.dt, 0);
+
+    const staffLong = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Superintendent",
+      phaseId: "oil-out",
+      start: "2027-03-20",
+      end: "2027-03-20",
+      hoursPerShift: 13,
+      days: [false, false, false, false, false, false, true],
+    });
+    assert.equal(staffLong.st, 10);
+    assert.equal(staffLong.ot, 3);
+    assert.equal(staffLong.dt, 0);
+  });
+
+  it("PRE 8h Mon–Fri all-ST is unchanged; PRE Saturday hours are all OT", () => {
+    const weekdays = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Boilermaker Journeyman",
+      phaseId: "pre",
+      otAfter8: false,
+      start: "2027-03-15",
+      end: "2027-03-19",
+      hoursPerShift: 8,
+      days: [false, true, true, true, true, true, false],
+    });
+    assert.equal(weekdays.st, 40);
+    assert.equal(weekdays.ot, 0);
+    assert.equal(weekdays.dt, 0);
+    assert.equal(weekdays.hours, 40);
+
+    const withSaturday = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Pipefitter Journeyman",
+      phaseId: "pre",
+      otAfter8: false,
+      start: "2027-03-15",
+      end: "2027-03-20",
+      hoursPerShift: 8,
+      days: [false, true, true, true, true, true, true],
+    });
+    assert.equal(withSaturday.st, 40);
+    assert.equal(withSaturday.ot, 8);
+    assert.equal(withSaturday.dt, 0);
+    const saturday = withSaturday.days.find((day) => day.weekday === 6);
+    assert.equal(saturday?.st, 0);
+    assert.equal(saturday?.ot, 8);
+    assert.equal(saturday?.dt, 0);
+
+    const satOnlyPre = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Foreman",
+      phaseId: "post",
+      otAfter8: false,
+      start: "2027-03-20",
+      end: "2027-03-20",
+      hoursPerShift: 10,
+      days: [false, false, false, false, false, false, true],
+    });
+    assert.equal(satOnlyPre.st, 0);
+    assert.equal(satOnlyPre.ot, 10);
+    assert.equal(satOnlyPre.dt, 0);
+  });
+
+  it("Merit on staff Saturday stays staff; Use COMP clock Saturday is all OT", () => {
+    const meritStaff = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Merit welder",
+      phaseId: "mech",
+      start: "2027-03-20",
+      end: "2027-03-20",
+      hoursPerShift: 10,
+      days: [false, false, false, false, false, false, true],
+    });
+    assert.equal(meritStaff.st, 10);
+    assert.equal(meritStaff.ot, 0);
+
+    const meritComp = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Merit welder",
+      phaseId: "pre",
+      otAfter8: false,
+      clockOverride: "comp",
+      start: "2027-03-20",
+      end: "2027-03-20",
+      hoursPerShift: 10,
+      days: [false, false, false, false, false, false, true],
+    });
+    assert.equal(meritComp.st, 0);
+    assert.equal(meritComp.ot, 10);
+    assert.equal(meritComp.dt, 0);
   });
 
   it("description still does not change math; Days & nights dual count is unchanged", () => {

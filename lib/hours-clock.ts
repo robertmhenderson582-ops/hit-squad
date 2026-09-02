@@ -138,10 +138,12 @@ export function clockNote(
 ): string {
   const clock = runningClock(clockTitle(position, billedAs), site, client, override, plantCode);
   if (clock === "staff") return "Staff clock · Sunday DT · weekday ST to 10 · weekly 40 · no DT after 12 · no 7th-day";
-  if (clock === "east-coast") return "East Coast COMP · Sunday DT · OT after 8 · weekly 40 · not DT after 12";
+  if (clock === "east-coast") {
+    return "East Coast COMP · weekday ST to 8 · Saturday all OT · Sunday DT · weekly 40 · not DT after 12";
+  }
   if (clock === "ca-daily") return "CA daily COMP · 8 / 12 / 7th-day · DT after 12 only on CA";
   if (clock === "yates") return "Yates COMP · weekday 8 ST + OT · Saturday OT · Sunday DT";
-  return "Customer rule · weekly 40 · Sunday DT · no DT after 12";
+  return "Customer rule · weekday ST to 8 · Saturday all OT · Sunday DT · weekly 40 · no DT after 12";
 }
 
 function dailySplit(
@@ -166,8 +168,10 @@ function dailySplit(
 
   if (dow === 0) return { st: 0, ot: 0, dt: hours };
 
+  // CBA craft (Excel WEEKDAY=7): every Saturday hour is OT. Not DT. Staff keeps its own Saturday clock.
+  if (dow === 6 && clock !== "staff") return { st: 0, ot: hours, dt: 0 };
+
   if (clock === "yates") {
-    if (dow === 6) return { st: 0, ot: hours, dt: 0 };
     const st = Math.min(8, hours);
     return { st, ot: Math.max(0, hours - st), dt: 0 };
   }

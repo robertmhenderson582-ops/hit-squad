@@ -306,7 +306,10 @@ function CalendarPattern({
           ) : null}
         </div>
       ) : null}
-      <p className="text-xs text-[#163038]">Headcount × shift hours on each selected weekday in the range.</p>
+      <p className="text-xs text-[#163038]">
+        Headcount × shift hours on each selected workday. Craft weekday ST to 8; Saturday all OT. Staff weekday ST to
+        10. Not DT after 12 on East Coast.
+      </p>
       {showDescription ? <RangeDescriptionField value={range.description} onChange={(description) => onPatch({ description })} /> : null}
       {units.length > 0 ? (
         <label className="text-xs">

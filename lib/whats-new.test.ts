@@ -58,10 +58,12 @@ describe("inbox what's-new", () => {
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
     assert.match(TESTER_WHATS_NEW, /time-and-a-half after 8/);
+    assert.match(TESTER_WHATS_NEW, /Saturday is all overtime/);
     assert.match(TESTER_WHATS_NEW, /Job setup/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|testers|Follow|apcontrolsllc|seat|James|CBI|View as/i.test(TESTER_WHATS_NEW), false);
     assert.match(OWNER_WHATS_NEW, /CBA/);
+    assert.match(OWNER_WHATS_NEW, /Saturday is all OT/);
     assert.match(OWNER_WHATS_NEW, /Job setup/);
     assert.match(OWNER_WHATS_NEW, /Staff/);
     assert.equal(/View as/i.test(TESTER_WHATS_NEW), false);
@@ -145,8 +147,10 @@ describe("inbox what's-new", () => {
     assert.equal(OWNER_NEXT_SHIP_DRAFT, OWNER_WHATS_NEW);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
     assert.match(OWNER_WHATS_NEW, /CBA/);
+    assert.match(OWNER_WHATS_NEW, /Saturday is all OT/);
     assert.match(OWNER_WHATS_NEW, /Job setup/);
     assert.match(TESTER_WHATS_NEW, /time-and-a-half after 8/);
+    assert.match(TESTER_WHATS_NEW, /Saturday is all overtime/);
     assert.match(TESTER_WHATS_NEW, /Job setup/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|Follow|apcontrolsllc|seat|security|vault|other users|James|CBI|Stephanie|View as/i.test(TESTER_WHATS_NEW), false);

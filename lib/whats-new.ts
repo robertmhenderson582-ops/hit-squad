@@ -9,12 +9,12 @@ export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
   "Hit Squad Project Controls V1.34",
-  "• Craft hours are time-and-a-half after 8 on Oil Out / Mechanical / Oil In. Pre and Post use Job setup.",
+  "• Craft hours are time-and-a-half after 8 on Oil Out / Mechanical / Oil In. Saturday is all overtime for craft. Pre and Post use Job setup.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
   "Hit Squad Project Controls V1.34",
-  "• East Coast CBA craft (GF, Foreman, Direct Craft, Support billed as craft) is OT after 8 on Oil Out / Mechanical / Oil In. Pre and Post follow the Job setup 4×10 / 5×8 picker. Staff / Supervision keep weekday ST to 10 unless Use COMP clock is on.",
+  "• East Coast CBA craft (GF, Foreman, Direct Craft, Support billed as craft) is OT after 8 on Oil Out / Mechanical / Oil In. Saturday is all OT for craft. Pre and Post follow the Job setup 4×10 / 5×8 picker — weekday all-ST stays; Saturday if worked is still all OT. Staff / Supervision keep weekday ST to 10 and the staff Saturday clock unless Use COMP clock is on.",
 ].join("\n");
 
 /** Same as the live V1.34 note. Kept so older imports still resolve. */
