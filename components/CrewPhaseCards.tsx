@@ -15,7 +15,12 @@ import {
   extraRangeEnvelope,
   extraRangeFromPhase,
   extraSharesFirstEnvelope,
+  hoursFromShiftChoice,
   nextUnitId,
+  parseShiftHours,
+  SHIFT_HOUR_PRESETS,
+  SHIFT_HOURS_CUSTOM,
+  shiftHoursChoice,
   phaseIsOff,
   phaseRangesOverlap,
   nightPerDiemCap,
@@ -374,16 +379,7 @@ function CalendarPattern({
             ))}
           </select>
         </label>
-        <label className="text-xs">
-          Hours / shift
-          <input
-            type="number"
-            min={0}
-            value={range.hoursPerShift}
-            onChange={(event) => onPatch({ hoursPerShift: Math.max(0, Number(event.target.value) || 0) })}
-            className="paper-field mt-1"
-          />
-        </label>
+        <HoursPerShiftField value={range.hoursPerShift} onChange={(hoursPerShift) => onPatch({ hoursPerShift })} />
         <label className="text-xs">
           {two ? "Days headcount" : "Headcount"}
           <input
@@ -486,6 +482,57 @@ function CalendarPattern({
       <p className="text-[11px] text-[#5b6f73]">
         {split.st} ST · {split.ot} OT · {split.dt} DT · {split.pd} PD
       </p>
+    </div>
+  );
+}
+
+function HoursPerShiftField({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (hours: number) => void;
+}) {
+  const [wantCustom, setWantCustom] = useState(false);
+  const choice = shiftHoursChoice(value, wantCustom);
+  const custom = choice === SHIFT_HOURS_CUSTOM;
+
+  return (
+    <div className="space-y-1">
+      <label className="text-xs">
+        Hours / shift
+        <select
+          value={choice}
+          aria-label="Hours / shift"
+          onChange={(event) => {
+            const next = event.target.value;
+            if (next === SHIFT_HOURS_CUSTOM) {
+              setWantCustom(true);
+              return;
+            }
+            setWantCustom(false);
+            onChange(hoursFromShiftChoice(next, value));
+          }}
+          className="paper-field mt-1"
+        >
+          {SHIFT_HOUR_PRESETS.map((hours) => (
+            <option key={hours} value={String(hours)}>
+              {hours}
+            </option>
+          ))}
+          <option value={SHIFT_HOURS_CUSTOM}>{SHIFT_HOURS_CUSTOM}</option>
+        </select>
+      </label>
+      {custom ? (
+        <input
+          type="number"
+          min={0}
+          value={value}
+          onChange={(event) => onChange(parseShiftHours(event.target.value))}
+          aria-label="Custom hours / shift"
+          className="paper-field w-full"
+        />
+      ) : null}
     </div>
   );
 }

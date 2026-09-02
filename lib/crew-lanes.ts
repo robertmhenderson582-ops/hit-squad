@@ -6,6 +6,25 @@ import {
   SHAHAN_SUPPORT_TITLES,
 } from "./shahan-wood-river.ts";
 
+/** Working Foreman first, then Direct Craft. No GF / Staff. Order kept so Foreman titles stay easy to find. */
+export function supportBilledAsTitles(
+  foreman: readonly string[] = SHAHAN_FOREMAN_TITLES,
+  craft: readonly string[] = SHAHAN_CRAFT_TITLES,
+): string[] {
+  const blocked = new Set<string>([...SHAHAN_GENERAL_FOREMAN_TITLES, ...SHAHAN_STAFF_TITLES]);
+  const seen = new Set<string>();
+  const next: string[] = [];
+  for (const title of [...foreman, ...craft]) {
+    const trimmed = title.trim();
+    if (!trimmed || blocked.has(trimmed) || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    next.push(trimmed);
+  }
+  return next;
+}
+
+export const SUPPORT_BILLED_AS_TITLES = supportBilledAsTitles();
+
 export const CREW_LANES = [
   {
     id: "staff",
@@ -34,7 +53,7 @@ export const CREW_LANES = [
   {
     id: "support",
     title: "Support",
-    note: "Position is the duty. Billed as is the craft rate.",
+    note: "Position is the duty. Billed as is the craft or working-foreman rate. Direct Craft and Foreman cards stay their own cards.",
     positions: SHAHAN_SUPPORT_TITLES,
   },
 ] as const;
