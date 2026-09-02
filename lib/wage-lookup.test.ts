@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { BAYWAY_LABOR } from "./shahan-bayway.ts";
 import { FERNDALE_LABOR } from "./shahan-ferndale.ts";
 import { MONROE_LABOR } from "./shahan-monroe.ts";
-import { RODEO_LABOR } from "./shahan-rodeo.ts";
+import { RODEO_LABOR, RODEO_MARKUP } from "./shahan-rodeo.ts";
 import {
   lookupShahanLabor,
   SHAHAN_LABOR,
@@ -81,11 +82,40 @@ describe("wage lookup plants", () => {
     assert.equal(baywayBm?.st, 125.3);
     assert.equal(BAYWAY_LABOR.at(-1)?.craftName, "Laborer Union Rep");
 
+    assert.equal(RODEO_MARKUP, 0.06);
     const rodeoLead = RODEO_LABOR[0];
     assert.deepEqual(dollars(rodeoLead), { baseSt: 104, st: 184.94, ot: 258.15, dt: 331.36, pd: 155 });
-    assert.equal(RODEO_LABOR.some((row) => row.craftName.startsWith("N ") || row.craftName.startsWith("N  ")), true);
+    assert.equal(RODEO_LABOR.filter((row) => /^N {1,2}/.test(row.craftName)).length, 119);
     assert.equal(RODEO_LABOR.some((row) => /IRONWORKER/.test(row.craftName)), true);
-    assert.equal(RODEO_LABOR.filter((row) => row.st === 0 && /DISCONTINUED/.test(row.craftName)).length >= 2, true);
+    assert.deepEqual(
+      RODEO_LABOR.filter((row) => row.st === 0 && /DISCONTINUED/.test(row.craftName)).map((row) => row.craftName),
+      [
+        "BM APPRENTICE 95% (DISCONTINUED)",
+        "BM APPRENTICE 70% (DISCONTINUED)",
+        "N BM APPRENTICE 95% (DISCONTINUED)",
+        "N BM APPRENTICE 70% (DISCONTINUED)",
+      ],
+    );
+    assert.equal(RODEO_LABOR.find((row) => row.craftName === "BM LEAD QA-QC 01  ")?.st, 148.35);
+    assert.equal(RODEO_LABOR.find((row) => row.craftName === "IRONWORKER JOURNEYMAN ")?.st, 124.06);
+    assert.equal(RODEO_LABOR.find((row) => row.craftName === "N  SUBCONTRACT 01")?.st, 97.6);
+    assert.equal(RODEO_LABOR.find((row) => row.craftName === "N PF  PLANNER ESTIMATOR 01")?.st, 163.9);
+    assert.equal(RODEO_LABOR.find((row) => row.craftName === "PIPEFITER GENERAL FOREMAN 01")?.group, "Direct Craft");
+    assert.equal(RODEO_LABOR.find((row) => row.craftName === "N PIPEFITER GENERAL FOREMAN 01")?.group, "Management");
+    assert.deepEqual(dollars(RODEO_LABOR.find((row) => row.craftName === "N IRONWORKER GENERAL FOREMAN")!), {
+      baseSt: null,
+      st: 142.31,
+      ot: 183.11,
+      dt: 123.91,
+      pd: 155,
+    });
+    assert.deepEqual(dollars(RODEO_LABOR.at(-1)!), { baseSt: null, st: 141.18, ot: 178.11, dt: 215.04, pd: 145 });
+    const billedTsv = RODEO_LABOR.map((row) => [row.craftName, row.group, row.st, row.ot, row.dt, row.pd].join("\t")).join("\n") + "\n";
+    assert.equal(createHash("sha256").update(billedTsv).digest("hex"), "0293d4156f3551cd90f6076924e9d4fa0e63c69348d19ca19936076f63059f36");
+    assert.equal(SHAHAN_LABOR[0].craftName, "Lead Site Boilermaker 01");
+    assert.equal(SHAHAN_LABOR[0].st, 141.9);
+    assert.equal(SHAHAN_LABOR.at(-1)?.craftName, "COORDINATOR QA-QC 2");
+    assert.equal(SHAHAN_LABOR.at(-1)?.st, 96.78);
 
     const ferndaleLead = FERNDALE_LABOR[0];
     assert.deepEqual(dollars(ferndaleLead), { baseSt: 80, st: 120.17, ot: null, dt: null, pd: null });
