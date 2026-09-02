@@ -7,6 +7,8 @@ export type { CompanyId } from "./tester-seats.ts";
 export type Company = {
   id: CompanyId;
   name: string;
+  /** Root-relative, http(s), or data-image URL already on file. Never invented. */
+  logo?: string;
 };
 
 export const LUCKY13_ID = "lucky13";
@@ -69,15 +71,45 @@ export function companyName(id: CompanyId, catalog: Company[] = COMPANIES): stri
   return catalog.find((row) => row.id === id)?.name ?? id;
 }
 
+export function companyLogoSrc(value?: string | null): string | null {
+  const raw = (value ?? "").trim();
+  if (!raw) return null;
+  if (raw.startsWith("/") && !raw.startsWith("//") && !raw.includes("\\")) return raw;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(raw)) return raw;
+  return null;
+}
+
+export function withCompanyLogo(row: Company): Company {
+  const logo = companyLogoSrc(row.logo);
+  return logo ? { id: row.id, name: row.name, logo } : { id: row.id, name: row.name };
+}
+
 export function mergeCompanies(extra: Company[] = []): Company[] {
-  const seen = new Set<string>();
-  const next: Company[] = [];
+  const seen = new Map<string, Company>();
   for (const row of [...COMPANIES, ...extra]) {
-    if (!row?.id || !row?.name || !isCompanyId(row.id) || isStandaloneId(row.id) || seen.has(row.id)) continue;
-    seen.add(row.id);
-    next.push({ id: row.id, name: row.name });
+    if (!row?.id || !row?.name || !isCompanyId(row.id) || isStandaloneId(row.id)) continue;
+    const next = withCompanyLogo(row);
+    const prev = seen.get(row.id);
+    if (prev) {
+      if (next.logo && !prev.logo) seen.set(row.id, { ...prev, logo: next.logo });
+      continue;
+    }
+    seen.set(row.id, next);
   }
-  return next;
+  return [...seen.values()];
+}
+
+/** Assigned contractor only — not every company an owner can see. */
+export function assignedCompaniesForId(assignedId?: CompanyId | null, catalog: Company[] = COMPANIES): Company[] {
+  if (!assignedId || isStandaloneId(assignedId)) return [];
+  return catalog.filter((row) => row.id === assignedId && !isStandaloneId(row.id)).map(withCompanyLogo);
+}
+
+/** Exactly one assigned company with a logo on file. Otherwise keep the text door. */
+export function companyDeskLogoSrc(companies: Array<{ logo?: string | null }> = []): string | null {
+  const logos = companies.map((row) => companyLogoSrc(row.logo)).filter((src): src is string => Boolean(src));
+  return logos.length === 1 ? logos[0] : null;
 }
 
 export function seedCompanyForEmail(email: string): CompanyId {
