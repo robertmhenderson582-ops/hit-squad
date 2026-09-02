@@ -179,7 +179,7 @@ test("10s are 8 ST + 2 OT; 12s are 8+4; East Coast never DT after 12", () => {
   assert.equal(twelves[0]?.dt, 0);
 });
 
-test("Sat expands to OT after weekly 40; Sunday is DT", () => {
+test("Saturday is all OT for craft; Sunday is DT", () => {
   const rows = peopleFromJob(
     [
       {
@@ -199,7 +199,9 @@ test("Sat expands to OT after weekly 40; Sunday is DT", () => {
     WOOD,
     P66,
   );
+  assert.equal(rows[0]?.week.sa.st, 0);
   assert.equal(rows[0]?.week.sa.ot, 10);
+  assert.equal(rows[0]?.week.sa.dt, 0);
   assert.equal(rows[0]?.week.su.dt, 10);
   assert.equal(rows[0]?.dt, 10);
 });

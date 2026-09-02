@@ -157,7 +157,7 @@ export function CraftLaborGrid({
       </div>
       <p className="mt-2 text-xs text-[#5b6f73]">
         {note ||
-          "Hours follow the position clock and Job setup. Craft on East Coast is OT after 8 on Oil Out / Mechanical / Oil In. Pre and Post follow Job setup. Weekly 40 still sits on top."}
+          "Hours follow the position clock and Job setup. Craft weekday ST to 8 (OT after 8 on Oil Out / Mechanical / Oil In). Saturday is all OT for craft. Pre and Post weekday hours follow Job setup. Staff weekday ST to 10. Weekly 40 still sits on top. East Coast is not DT after 12."}
       </p>
       <GripToPan className="mt-4">
         <table className="min-w-[960px] text-left text-sm">

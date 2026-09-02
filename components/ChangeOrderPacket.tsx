@@ -305,9 +305,9 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
         <section className="plant-card px-5 py-5">
           <h2 className="text-2xl font-semibold text-[#163038]">Estimate</h2>
           <p className="mt-1 text-sm text-[#5b6f73]">
-            Staff Day / Night and Craft Day / Night from this job’s hours. Craft 10s = 8+2. 12s = 8+4.
-            Saturday OT / Sunday DT when those days are on. PT = DT. East Coast still does not turn
-            12s into DT. Mileage Yes is a flat ${MILEAGE_YES_FLAT}, not times headcount. Dollars stay
+            Staff Day / Night and Craft Day / Night from this job’s hours. Craft weekday 10s = 8+2. 12s = 8+4.
+            Saturday is all OT for craft. Sunday DT when that day is on. PT = DT. East Coast still does not
+            turn 12s into DT. Mileage Yes is a flat ${MILEAGE_YES_FLAT}, not times headcount. Dollars stay
             off a Monroe / Bayway / Rodeo rate tab.
           </p>
           <button
