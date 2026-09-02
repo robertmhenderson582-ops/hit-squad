@@ -1,35 +1,26 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.38.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.38";
+export const DESK_VERSION = "1.40.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.40";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.38";
+export const DESK_THREAD_ID = "th-desk-v1.40";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.38",
-  "• You can delete HSE sample cards on JOBS the same way as estimates.",
-  "• Jobs only shows sites assigned to you.",
-  "• Company cards on Rates can collapse.",
-  "• Rate books Madison opens the wage lookup for that company (Wood River Shahan book today).",
-  "• Rates lists Madison plants including Monroe Energy.",
-  "• Rates shows the Wood River third-party rental list. People who update rates can edit those dollars when vendors change them.",
+  "Hit Squad Project Controls V1.40",
+  "• Wage lookup now shows Comp base wage, not billed rate.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.38",
-  "• You can delete HSE sample cards on JOBS the same way as estimates.",
-  "• Jobs only shows sites assigned to you — testers do not see empty unassigned plant rows.",
-  "• View as Nathan: DELETE on HS-8622 (Pre-outage HSE walkdown) stays gone after refresh.",
-  "• View as Nathan hides unassigned plants on JOBS (Yates / Rodeo / Bayway / Ferndale / Billings). Rates still lists every Madison plant, including Monroe Energy.",
-  "• Coker pad / drum alley is a Wood River work area, not its own site.",
-  "• Company cards on Rates can collapse. Selected Wood River book stays when the Madison sites card is closed.",
-  "• Rate books Madison opens the Wood River Shahan book, not Yates No book yet — including View as Nathan. No empty No book yet detail card under the list.",
-  "• Third-party rental on Rates is editable and persists in the Rates vault. Equipment reads the live list.",
+  "Hit Squad Project Controls V1.40",
+  "• Wage lookup now shows Comp base wage, not billed rate.",
+  "• Wood River and Bayway use East Coast Comp Amendment 11 PCA0001103. Rodeo and Ferndale use West Coast Comp Amendment 8 PCA0001100, effective 2026-09-01.",
+  "• Monroe Energy and Yates stay on Shahan Base ST where sheeted, else No COMP book yet.",
+  "• Crew costing still uses billed ST / OT / DT. Billings is still No book yet.",
 ].join("\n");
 
-/** Same as the live V1.38 note. Kept so older imports still resolve. */
+/** Same as the live V1.40 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;

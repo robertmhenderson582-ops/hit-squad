@@ -67,7 +67,7 @@ describe("rate book nest", () => {
     assert.equal(book.label, SHAHAN_BOOK_LABEL);
     assert.equal(siteCompanyId(catalogSites().find((row) => row.id === WOOD_RIVER_SITE_ID)!), "madison");
     assert.equal(hasSiteBook("madison", WOOD_RIVER_SITE_ID), true);
-    assert.equal(hasSiteBook("madison", YATES_SITE_ID), false);
+    assert.equal(hasSiteBook("madison", YATES_SITE_ID), true);
     assert.equal(rateSitesForCompany("madison").some((row) => row.id === WOOD_RIVER_SITE_ID), true);
     assert.equal(rateSitesForCompany("madison").some((row) => row.id === YATES_SITE_ID), true);
     assert.equal(rateSitesForCompany("cbi").length, 0);
@@ -196,8 +196,8 @@ describe("rate book nest", () => {
     );
     assert.equal(nathanSites.some((row) => row.name === "Monroe Energy"), true);
     assert.equal(nathanSites.some((row) => /coker pad/i.test(row.name)), false);
-    assert.equal(preferredRateSiteId("madison", nathanSites), WOOD_RIVER_SITE_ID);
-    assert.equal(preferredRateSiteId("madison", [{ id: YATES_SITE_ID }, { id: WOOD_RIVER_SITE_ID }]), WOOD_RIVER_SITE_ID);
+    assert.equal(preferredRateSiteId("madison", nathanSites), YATES_SITE_ID);
+    assert.equal(preferredRateSiteId("madison", [{ id: YATES_SITE_ID }, { id: WOOD_RIVER_SITE_ID }]), YATES_SITE_ID);
     assert.equal(preferredRateSiteId("madison", []), WOOD_RIVER_SITE_ID);
 
     const jamesSites = visibleRateSites(james, "cbi");

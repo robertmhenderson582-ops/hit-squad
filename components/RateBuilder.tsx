@@ -3,17 +3,20 @@
 import { SubcontractorRateBook } from "@/components/SubcontractorDesk";
 import { useAlias } from "@/components/OwnerDeskContext";
 import {
-  SHAHAN_BOOK_LABEL,
-  SHAHAN_CRAFT_PD,
   SHAHAN_EQUIPMENT,
-  SHAHAN_LABOR,
-  SHAHAN_OT_MULTIPLIER,
-  SHAHAN_PT_MULTIPLIER,
-  SHAHAN_STAFF_PD,
   formatDeskDollars,
   shahanEquipmentByFuel,
   shahanLaborByGroup,
 } from "@/lib/shahan-wood-river";
+import {
+  WOOD_RIVER_SITE_ID,
+  bookForSiteId,
+  formatBaseWage,
+  formatBilledSt,
+  isWoodRiverBook,
+  wageLookupLabels,
+  wageLookupNote,
+} from "@/lib/wage-lookup";
 
 function rateCell(value: number | null) {
   return value && value > 0 ? formatDeskDollars(value) : "—";
@@ -65,21 +68,23 @@ function EquipmentTable({
   );
 }
 
-export function RateBuilder() {
+export function RateBuilder({ siteId = WOOD_RIVER_SITE_ID }: { siteId?: string } = {}) {
   const alias = useAlias();
-  const groups = shahanLaborByGroup(SHAHAN_LABOR);
+  const book = bookForSiteId(siteId);
+  if (!book) return null;
+  const labeled = wageLookupLabels(book.catalog);
+  const groups = shahanLaborByGroup(book.catalog).map((group) => ({
+    ...group,
+    rows: labeled.filter((item) => group.rows.includes(item.row)),
+  }));
   const equipment = shahanEquipmentByFuel(SHAHAN_EQUIPMENT);
+  const woodRiver = isWoodRiverBook(book);
 
   return (
     <div className="space-y-5">
       <section className="plant-card px-5 py-5">
-        <h2 className="font-display text-2xl font-semibold text-[#163038]">{alias(SHAHAN_BOOK_LABEL)}</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">
-          Debbie Shahan TM OCIP book for P66 Wood River. Crew Cost uses these ST / OT / DT bill
-          rates when a row title matches. PT Bill Rate maps to DT. OT × {SHAHAN_OT_MULTIPLIER}. PT ×{" "}
-          {SHAHAN_PT_MULTIPLIER}. Staff PD ${SHAHAN_STAFF_PD} / day. Craft PD ${SHAHAN_CRAFT_PD} /
-          day. East Coast weekly-40 / Sunday DT — not DT after 12.
-        </p>
+        <h2 className="font-display text-2xl font-semibold text-[#163038]">{alias(book.bookLabel)}</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">{alias(wageLookupNote(book))}</p>
       </section>
 
       {groups.map((group) => (
@@ -89,7 +94,7 @@ export function RateBuilder() {
             <table className="min-w-full text-left text-sm">
               <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
                 <tr>
-                  {["CRAFT", "ST", "OT", "DT", "PD"].map((header) => (
+                  {["CRAFT", "BASE WAGE", "BILLED ST", "PD"].map((header) => (
                     <th key={header} className="px-2 py-2">
                       {header}
                     </th>
@@ -99,18 +104,17 @@ export function RateBuilder() {
               <tbody>
                 {group.rows.length === 0 ? (
                   <tr className="border-t border-[#d5e0de]">
-                    <td colSpan={5} className="px-2 py-4 text-sm text-[#5b6f73]">
+                    <td colSpan={4} className="px-2 py-4 text-sm text-[#5b6f73]">
                       No Shahan rows in this group yet.
                     </td>
                   </tr>
                 ) : (
-                  group.rows.map((row, index) => (
-                    <tr key={`${group.group}:${index}:${row.craftName}`} className="border-t border-[#d5e0de]">
-                      <td className="px-2 py-2">{row.craftName}</td>
-                      <td className="px-2 py-2 font-semibold">{rateCell(row.st)}</td>
-                      <td className="px-2 py-2 font-semibold">{rateCell(row.ot)}</td>
-                      <td className="px-2 py-2 font-semibold">{rateCell(row.dt)}</td>
-                      <td className="px-2 py-2 font-semibold">{rateCell(row.pd)}</td>
+                  group.rows.map((item) => (
+                    <tr key={`${group.group}:${item.index}:${item.row.craftName}`} className="border-t border-[#d5e0de]">
+                      <td className="px-2 py-2">{item.label}</td>
+                      <td className="px-2 py-2 font-semibold">{formatBaseWage(item.row, book) || "—"}</td>
+                      <td className="px-2 py-2 font-semibold">{formatBilledSt(item.row)}</td>
+                      <td className="px-2 py-2 font-semibold">{rateCell(item.row.pd)}</td>
                     </tr>
                   ))
                 )}
@@ -120,9 +124,9 @@ export function RateBuilder() {
         </section>
       ))}
 
-      <EquipmentTable rows={equipment.wet} caption="Equipment — with fuel (wet)" />
-      <EquipmentTable rows={equipment.dry} caption="Equipment — without fuel (dry)" />
-      <SubcontractorRateBook />
+      {woodRiver ? <EquipmentTable rows={equipment.wet} caption="Equipment — with fuel (wet)" /> : null}
+      {woodRiver ? <EquipmentTable rows={equipment.dry} caption="Equipment — without fuel (dry)" /> : null}
+      {woodRiver ? <SubcontractorRateBook /> : null}
     </div>
   );
 }

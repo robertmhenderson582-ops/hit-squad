@@ -15,8 +15,7 @@ import { RfqPreview } from "@/components/RfqPreview";
 import { EstimateTotalRail } from "@/components/EstimateTotalRail";
 import { ModalPortal } from "@/components/ModalPortal";
 import { RatesDesk } from "@/components/RatesDesk";
-import { WOOD_RIVER_SITE_ID } from "@/lib/rate-books";
-import { isWoodRiverSite } from "@/lib/shahan-wood-river";
+import { siteIdForJobSite } from "@/lib/wage-lookup";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
 import type { EstimateStatus } from "@/lib/estimate-status";
 import type { StaffingLine } from "@/lib/types";
@@ -200,7 +199,7 @@ export function EstimateWorkspace({
         <DeskBanners />
         {tab === "rates" ? (
           <RatesDesk
-            initialSiteId={isWoodRiverSite(jobSite || site) ? WOOD_RIVER_SITE_ID : undefined}
+            initialSiteId={siteIdForJobSite(jobSite || site) ?? undefined}
             initialJobId={packageId}
             initialJobTitle={name}
           />

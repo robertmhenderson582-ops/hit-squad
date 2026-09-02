@@ -23,6 +23,7 @@ import {
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import { defaultLaborClass } from "@/lib/labor-class";
 import { formatDeskDollars, formatShahanCrewCost, shahanCrewCostAmount, shahanCrewTitle, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
+import { wageLookupOpts } from "@/lib/wage-lookup";
 
 export type { SupportLine };
 
@@ -54,7 +55,7 @@ export function SupportCrewCard({
       lines.map((row) => {
         const hours = computeRowHours(row, site, client, pack.crew.otAfter8);
         const title = shahanCrewTitle(row);
-        const opts = { laborClass: row.laborClassOverride ?? defaultLaborClass(title) };
+        const opts = wageLookupOpts(site, { laborClass: row.laborClassOverride ?? defaultLaborClass(title) });
         return {
           ...row,
           ...hours,

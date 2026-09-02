@@ -14,7 +14,6 @@ import {
   SHAHAN_LABOR,
   SHAHAN_LABOR_FIXTURE,
   SHAHAN_NO_RATE_LABEL,
-  SHAHAN_ONLY_BOOK_MESSAGE,
   SHAHAN_STAFF_PD,
   SHAHAN_STAFF_TITLES,
   SHAHAN_WET_EQUIPMENT_HEADER,
@@ -220,18 +219,19 @@ describe("Shahan TM OCIP — Wood River", () => {
     assert.equal(fuel.dry.filter((row) => row.description.trim() === "TRUCK RIG WELDER").length, 1);
     assert.equal(SHAHAN_EQUIPMENT.filter((row) => row.description === "EXTRACTOR BUNDLE AERIAL <21FT REQUIRES OPERATOR").length, 2);
     const rateTab = readFileSync(fileURLToPath(new URL("../components/RateBuilder.tsx", import.meta.url)), "utf8");
-    assert.match(rateTab, /SHAHAN_BOOK_LABEL/);
+    assert.match(rateTab, /BASE WAGE/);
+    assert.match(rateTab, /BILLED ST/);
     assert.match(rateTab, /with fuel \(wet\)/);
     assert.match(rateTab, /without fuel \(dry\)/);
     assert.equal(/useDeskBoard|field-trial|Nathan CAT|RRFF official/i.test(rateTab), false);
     const equipmentDesk = readFileSync(fileURLToPath(new URL("../components/EquipmentDesk.tsx", import.meta.url)), "utf8");
     assert.match(equipmentDesk, /With fuel \(wet\)/);
     assert.match(equipmentDesk, /Without fuel \(dry\)/);
-    assert.equal(/East Coast COMP|dry, w\/o fuel|B2_COAST|billableB2Items/i.test(equipmentDesk), false);
+    assert.equal(/dry, w\/o fuel|B2_COAST|billableB2Items/i.test(equipmentDesk), false);
     const jobSetup = readFileSync(fileURLToPath(new URL("../components/JobSetupCard.tsx", import.meta.url)), "utf8");
     assert.match(jobSetup, /Update rates/);
     assert.match(jobSetup, /offerRateBookForSite/);
-    assert.match(jobSetup, /applyShahanJobRates/);
+    assert.match(jobSetup, /applyPlantJobRates/);
     const supportCard = readFileSync(fileURLToPath(new URL("../components/SupportCrewCard.tsx", import.meta.url)), "utf8");
     assert.match(supportCard, /shahanCrewTitle/);
     assert.match(supportCard, /formatShahanCrewCost/);
@@ -343,9 +343,9 @@ describe("Shahan TM OCIP — Wood River", () => {
 
   it("Update rates sets Wood River PD 140/130, binds the book, and does not wipe hours", () => {
     const bayway = offerRateBookForSite("Bayway");
-    assert.equal(bayway.ok, false);
-    assert.equal(bayway.ok ? "" : bayway.message, SHAHAN_ONLY_BOOK_MESSAGE);
-    assert.equal(offerRateBookForSite("Yates — Newnan, GA").ok, false);
+    assert.equal(bayway.ok, true);
+    assert.equal(offerRateBookForSite("Yates — Newnan, GA").ok, true);
+    assert.equal(offerRateBookForSite("Billings").ok, false);
     const wood = offerRateBookForSite("Wood River — Roxana, IL");
     assert.equal(wood.ok, true);
     if (!wood.ok) throw new Error("expected Wood River book");

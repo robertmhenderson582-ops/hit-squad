@@ -24,8 +24,9 @@ import {
   visibleRateSites,
   writeRateCompanyOpen,
 } from "@/lib/rate-books";
-import { formatDeskDollars, SHAHAN_BOOK_LABEL } from "@/lib/shahan-wood-river";
+import { formatDeskDollars } from "@/lib/shahan-wood-river";
 import { compositeRates } from "@/lib/rate-builder";
+import { bookForSiteId } from "@/lib/wage-lookup";
 
 export function RatesDesk({
   initialCompanyId,
@@ -88,7 +89,8 @@ export function RatesDesk({
   const overrides = currentSiteId ? jobOverrides(companyId, currentSiteId) : [];
   const builderCrafts = currentSiteId ? resolvedCrafts(companyId, currentSiteId) : [];
   const rateJobs = currentSiteId ? jobsForRateSite(currentSiteId) : [];
-  const woodRiverLookup = companyId === "madison" && currentSiteId === WOOD_RIVER_SITE_ID;
+  const wageBook = currentSiteId && companyId === "madison" ? bookForSiteId(currentSiteId) : null;
+  const woodRiverLookup = Boolean(wageBook && currentSiteId === WOOD_RIVER_SITE_ID);
 
   function refresh() {
     setTick((value) => value + 1);
@@ -161,8 +163,8 @@ export function RatesDesk({
                           {alias(site.client)} · {alias(site.city)}
                         </p>
                         <p className="mt-1 text-sm text-[#5b6f73]">
-                          {site.id === WOOD_RIVER_SITE_ID && companyId === "madison"
-                            ? alias(SHAHAN_BOOK_LABEL)
+                          {companyId === "madison" && bookForSiteId(site.id)
+                            ? alias(bookForSiteId(site.id)!.bookLabel)
                             : hasBook
                               ? alias(siteBookFor(companyId, site.id)?.label || "Book")
                               : "No book yet"}
@@ -177,7 +179,7 @@ export function RatesDesk({
         ) : null}
       </section>
 
-      {woodRiverLookup ? <RateBuilder /> : null}
+      {wageBook ? <RateBuilder siteId={wageBook.siteId} /> : null}
       {woodRiverLookup ? <ThirdPartyRentalDesk editable={builder} /> : null}
 
       {selectedSite && loaded && builderCrafts.length ? (

@@ -11,14 +11,19 @@ import type { StorageLike } from "./local-estimates.ts";
 import { newBuiltCraft, type BuiltCraft } from "./rate-builder.ts";
 import { SHAHAN_BOOK_ID, SHAHAN_BOOK_LABEL } from "./shahan-wood-river.ts";
 import type { SiteRecord } from "./types.ts";
+import { WAGE_BOOKS } from "./wage-lookup.ts";
 
 export const RATE_BOOKS_KEY = "hs_rate_books_v1";
 export const RATE_COMPANY_OPEN_KEY = "hs_rate_company_open_v1";
 export const WOOD_RIVER_SITE_ID = "site-madison";
 export const YATES_SITE_ID = "site-yates";
+export const RODEO_SITE_ID = "site-rodeo";
+export const BAYWAY_SITE_ID = "site-bayway";
+export const FERNDALE_SITE_ID = "site-ferndale";
+export const BILLINGS_SITE_ID = "site-billings";
 export const MONROE_SITE_ID = "site-monroe";
 export const MADISON_RATE_PLANTS = ["Yates", "Rodeo", "Bayway", "Ferndale", "Wood River", "Billings", "Monroe Energy"] as const;
-export const EMPTY_MADISON_PLANTS = ["Yates", "Rodeo", "Bayway", "Ferndale", "Billings", "Monroe Energy"] as const;
+export const EMPTY_MADISON_PLANTS = ["Billings"] as const;
 
 export type RateBookLevel = "company" | "site" | "job";
 
@@ -54,7 +59,14 @@ export function woodRiverBook(): RateBookRecord {
 }
 
 export function seededRateBooks(): RateBookRecord[] {
-  return [woodRiverBook()];
+  return WAGE_BOOKS.map((book) => ({
+    id: book.bookId,
+    companyId: "madison" as const,
+    siteId: book.siteId,
+    label: book.bookLabel,
+    source: "shahan" as const,
+    crafts: [],
+  }));
 }
 
 export function siteCompanyId(site: Pick<SiteRecord, "client" | "name" | "family" | "city">): CompanyId {
@@ -332,7 +344,8 @@ export function clearJobOverride(
 }
 
 export function archiveRateBook(bookId: string, store?: StorageLike | null): RateBookRecord | null {
-  if (bookId === SHAHAN_BOOK_ID) return woodRiverBook();
+  const seeded = seededRateBooks().find((book) => book.id === bookId);
+  if (seeded) return seeded;
   const stored = readStoredRateBooks(store);
   const current = stored.find((book) => book.id === bookId);
   if (!current) return null;

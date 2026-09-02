@@ -8,6 +8,7 @@ import { estimateMarkupDollars, estimateTotalBreakdown } from "@/lib/estimate-to
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import { otherCostTotals, readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
 import { laborDollarsFromCrew, perDiemDollarsFromCrew } from "@/lib/shahan-wood-river";
+import { wageLookupOpts } from "@/lib/wage-lookup";
 import { onEstimateSheets } from "@/lib/sheet-events";
 import { readSubSheet, subcontractorMarkupBase, subcontractorTotal } from "@/lib/subcontractor";
 
@@ -55,7 +56,7 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     const sheet = readSubSheet(pack.estimateKey);
     const subcontractor = subcontractorTotal(sheet, subCtx);
     return estimateTotalBreakdown({
-      labor: laborDollarsFromCrew(pack.crew, site, client),
+      labor: laborDollarsFromCrew(pack.crew, site, client, wageLookupOpts(site)),
       equipment: tools + thirdCost,
       subcontractor,
       markup: estimateMarkupDollars({
