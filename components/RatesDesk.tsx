@@ -54,7 +54,7 @@ export function RatesDesk({
         : companies[0]?.id || "hitsquad",
   );
   const [siteId, setSiteId] = useState(initialSiteId || WOOD_RIVER_SITE_ID);
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     if (!companies.some((row) => row.id === companyId)) {

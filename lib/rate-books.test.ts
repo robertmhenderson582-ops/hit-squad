@@ -188,7 +188,8 @@ describe("rate book nest", () => {
     );
 
     const nathanJobs = jobsOnDesk([], [cat2], true, nathan);
-    const nathanSites = visibleRateSites(nathan, "madison", nathanJobs, [cat2]);
+    assert.equal(nathanJobs.some((job) => job.title.includes("CAT 2")), true);
+    const nathanSites = visibleRateSites(nathan, "madison");
     assert.deepEqual(
       nathanSites.map((row) => row.name),
       [...MADISON_RATE_PLANTS],
@@ -199,9 +200,9 @@ describe("rate book nest", () => {
     assert.equal(preferredRateSiteId("madison", [{ id: YATES_SITE_ID }, { id: WOOD_RIVER_SITE_ID }]), WOOD_RIVER_SITE_ID);
     assert.equal(preferredRateSiteId("madison", []), WOOD_RIVER_SITE_ID);
 
-    const jamesSites = visibleRateSites(james, "cbi", jobsOnDesk([], [], true, james), []);
+    const jamesSites = visibleRateSites(james, "cbi");
     assert.equal(jamesSites.length, 0);
-    assert.equal(visibleRateSites(james, "madison", [], []).length, 0);
+    assert.equal(visibleRateSites(james, "madison").length, 0);
   });
 
   it("collapses a company card and remembers it per seat without losing the selected site id", () => {

@@ -7,10 +7,10 @@ import {
   type CompanyScope,
 } from "./companies.ts";
 import { catalogEstimates, catalogSites } from "./desk-data.ts";
-import type { LocalPack, StorageLike } from "./local-estimates.ts";
+import type { StorageLike } from "./local-estimates.ts";
 import { newBuiltCraft, type BuiltCraft } from "./rate-builder.ts";
 import { SHAHAN_BOOK_ID, SHAHAN_BOOK_LABEL } from "./shahan-wood-river.ts";
-import type { JobRecord, SiteRecord } from "./types.ts";
+import type { SiteRecord } from "./types.ts";
 
 export const RATE_BOOKS_KEY = "hs_rate_books_v1";
 export const RATE_COMPANY_OPEN_KEY = "hs_rate_company_open_v1";
@@ -69,8 +69,6 @@ export function rateSitesForCompany(companyId: CompanyId, sites: SiteRecord[] = 
 export function visibleRateSites(
   scope: CompanyScope | null | undefined,
   companyId: CompanyId,
-  _jobs: JobRecord[] = [],
-  _packs: LocalPack[] = [],
   sites: SiteRecord[] = catalogSites(),
 ): SiteRecord[] {
   if (scope && !scope.isOwner && !canSeeCompany(scope, companyId)) return [];
