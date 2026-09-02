@@ -5,6 +5,8 @@
  *
  * Titles + dollars only. Not Shahan COMP wet/dry large tools.
  * Not COE Rental. Skip Empty / Need Quote crane-tech rows.
+ * Plus Spider box / 220 Vote cords from the Equipment Rental job sheet
+ * (typed job line, not Rate Tables). Daily/weekly were not on that sheet.
  * Books stay in Drive. Never commit the xlsx / P66 / Madison workbooks.
  */
 
@@ -89,6 +91,8 @@ export const WOOD_RIVER_THIRD_PARTY_RENTAL: ThirdPartyRentalRow[] = [
   { description: "30 ton Beam trolleys", daily: 0, weekly: 660, monthly: 1980, freight: 0 },
   { description: "ice machine", daily: 25, weekly: 100, monthly: 400, freight: 25 },
   { description: "rad gun", daily: 100, weekly: 500, monthly: 2000, freight: 0 },
+  // Equipment Rental job line (not Rate Tables). Daily/weekly unknown — do not invent.
+  { description: "Spider box / 220 Vote cords", daily: 0, weekly: 0, monthly: 75, freight: 150 },
 ];
 
 export function thirdPartyRentalDescriptions(

@@ -25,8 +25,8 @@ function row(description: string) {
 }
 
 describe("Wood River third-party rental catalog", () => {
-  it("has 68 sheet items with verbatim titles and table dollars — not job-used overrides", () => {
-    assert.equal(WOOD_RIVER_THIRD_PARTY_RENTAL.length, 68);
+  it("has 69 sheet items with verbatim titles and table dollars — not job-used overrides", () => {
+    assert.equal(WOOD_RIVER_THIRD_PARTY_RENTAL.length, 69);
     assert.deepEqual(thirdPartyRentalDescriptions(), WOOD_RIVER_THIRD_PARTY_RENTAL.map((item) => item.description));
     const pulse = row("6 pack Stick/Tig / Mig pulse");
     assert.equal(pulse.monthly, 1225);
@@ -54,6 +54,13 @@ describe("Wood River third-party rental catalog", () => {
     assert.equal(row("25 ton shackels").description, "25 ton shackels");
     assert.equal(row("Air blower 20\" Pnematic").description, "Air blower 20\" Pnematic");
     assert.equal(row("1.5 ton air hoist  , 50ft load").description, "1.5 ton air hoist  , 50ft load");
+    const spider = row("Spider box / 220 Vote cords");
+    assert.equal(spider.description, "Spider box / 220 Vote cords");
+    assert.equal(spider.monthly, 75);
+    assert.equal(spider.freight, 150);
+    assert.equal(spider.daily, 0);
+    assert.equal(spider.weekly, 0);
+    assert.notEqual(spider.daily, 15);
     const source = readFileSync(CATALOG_PATH, "utf8");
     assert.equal(/1830/.test(source), false);
     assert.equal(/cost\s*plus/i.test(source), false);
@@ -78,6 +85,13 @@ describe("Wood River third-party rental catalog", () => {
     assert.equal(guns.period, "monthly");
     assert.equal(guns.rate, 225);
     assert.equal(applyThirdPartyCatalogPeriod(guns, "daily").rate, 0);
+    const spider = applyThirdPartyCatalogItem(blankThirdParty(), "Spider box / 220 Vote cords");
+    assert.equal(spider.item, "Spider box / 220 Vote cords");
+    assert.equal(spider.period, "monthly");
+    assert.equal(spider.rate, 75);
+    assert.equal(spider.freight, 150);
+    assert.equal(applyThirdPartyCatalogPeriod(spider, "daily").rate, 0);
+    assert.equal(applyThirdPartyCatalogPeriod(spider, "weekly").rate, 0);
   });
 
   it("defaults new-line period to monthly when that rate exists, else weekly, else daily", () => {

@@ -1,28 +1,24 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.36.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.36";
+export const DESK_VERSION = "1.37.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.37";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.36";
+export const DESK_THREAD_ID = "th-desk-v1.37";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.36",
-  "• Hours/shift on Crew phase cards is 8 / 10 / 12 / Custom, and extra ranges still pull Job setup hours.",
-  "• Support Billed as includes working Foreman rates.",
-  "• Third-party rental dropdowns use the Wood River third-party table rates.",
+  "Hit Squad Project Controls V1.37",
+  "• Third-party rental dropdown now includes Spider box / 220 Vote cords.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.36",
-  "• Hours/shift on Crew phase cards is 8 / 10 / 12 / Custom, and extra ranges still pull Job setup hours.",
-  "• Support Billed as includes working Foreman rates. GF is not on Support Billed as.",
-  "• Third-party rental dropdowns use the Wood River third-party table rates. Third-party markup % is unchanged.",
-  "• Staff Saturday is unchanged. East Coast is not DT after 12.",
+  "Hit Squad Project Controls V1.37",
+  "• Third-party rental dropdown now includes Spider box / 220 Vote cords.",
+  "• Monthly $75 freight $150 from Equipment Rental (not Rate Tables). Daily/weekly not on that sheet so 0.",
 ].join("\n");
 
-/** Same as the live V1.36 note. Kept so older imports still resolve. */
+/** Same as the live V1.37 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;
