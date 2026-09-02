@@ -23,6 +23,7 @@ import {
   isRateCompanyOpen,
   rateBookVisibleTo,
   rateCompanyOpenKey,
+  companyHasEstablishedRates,
   preferredRateSiteId,
   rateSitesForCompany,
   resolvedCrafts,
@@ -69,6 +70,9 @@ describe("rate book nest", () => {
     assert.equal(siteCompanyId(catalogSites().find((row) => row.id === WOOD_RIVER_SITE_ID)!), "madison");
     assert.equal(hasSiteBook("madison", WOOD_RIVER_SITE_ID), true);
     assert.equal(hasSiteBook("madison", YATES_SITE_ID), true);
+    assert.equal(companyHasEstablishedRates("madison"), true);
+    assert.equal(companyHasEstablishedRates("hitsquad"), false);
+    assert.equal(companyHasEstablishedRates("cbi"), false);
     assert.equal(rateSitesForCompany("madison").some((row) => row.id === WOOD_RIVER_SITE_ID), true);
     assert.equal(rateSitesForCompany("madison").some((row) => row.id === YATES_SITE_ID), true);
     assert.equal(rateSitesForCompany("cbi").length, 0);
@@ -100,7 +104,7 @@ describe("rate book nest", () => {
     assert.equal(/40-col|exhibit B-1|Cassidy|COMP workbook/i.test(ratesDesk), false);
     const card = readFileSync(fileURLToPath(new URL("../components/RateBuilderCard.tsx", import.meta.url)), "utf8");
     assert.match(card, /Rate builder/);
-    assert.match(card, /COMPOSITE ST/);
+    assert.match(card, /BILLED ST/);
     assert.match(card, /Save to this site/);
     assert.match(card, /Save to this job only/);
     assert.match(card, /Save as company default/);

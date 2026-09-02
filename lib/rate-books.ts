@@ -8,7 +8,7 @@ import {
 } from "./companies.ts";
 import { catalogEstimates, catalogSites } from "./desk-data.ts";
 import type { StorageLike } from "./local-estimates.ts";
-import { newBuiltCraft, type BuiltCraft } from "./rate-builder.ts";
+import { newBuiltCraft, parseRateBuilderSheet, type BuiltCraft } from "./rate-builder.ts";
 import { SHAHAN_BOOK_ID, SHAHAN_BOOK_LABEL } from "./shahan-wood-river.ts";
 import type { SiteRecord } from "./types.ts";
 import { WAGE_BOOKS } from "./wage-lookup.ts";
@@ -362,4 +362,43 @@ export function jobsForRateSite(siteId: string): Array<{ id: string; title: stri
   return catalogEstimates()
     .filter((row) => row.siteId === siteId)
     .map((row) => ({ id: row.id, title: row.title }));
+}
+
+function bookHasCrafts(book: RateBookRecord) {
+  return book.crafts.some((craft) => craft.craft.trim());
+}
+
+/** Madison plant books count. Other companies need a saved Rate builder book. */
+export function companyHasEstablishedRates(companyId: CompanyId, store?: StorageLike | null): boolean {
+  if (seededRateBooks().some((book) => book.companyId === companyId)) return true;
+  return readStoredRateBooks(store).some(
+    (book) => book.companyId === companyId && !book.archived && bookHasCrafts(book),
+  );
+}
+
+export function importRateBuilderSheetToCompany(
+  input: {
+    companyId: CompanyId;
+    siteId?: string;
+    label?: string;
+    text: string;
+    level?: RateBookLevel;
+  },
+  store?: StorageLike | null,
+): { crafts: BuiltCraft[]; book: RateBookRecord | null } {
+  const crafts = parseRateBuilderSheet(input.text);
+  let book: RateBookRecord | null = null;
+  for (const craft of crafts) {
+    book = saveCraftToLevel(
+      {
+        companyId: input.companyId,
+        siteId: input.siteId,
+        label: input.label,
+        craft,
+        level: input.level ?? "company",
+      },
+      store,
+    );
+  }
+  return { crafts, book };
 }

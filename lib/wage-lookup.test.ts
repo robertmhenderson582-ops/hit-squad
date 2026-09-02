@@ -243,8 +243,11 @@ describe("wage lookup plants", () => {
     assert.equal(leads[1].row.baseSt, 65);
     assert.equal(leads[1].row.st, 148.59);
     const crew = readFileSync(fileURLToPath(new URL("../components/RateBuilder.tsx", import.meta.url)), "utf8");
+    assert.match(crew, /LABOR_SHEET_COLUMNS/);
     assert.match(crew, /BASE WAGE/);
     assert.match(crew, /BILLED ST/);
+    assert.match(crew, /BILLED OT/);
+    assert.match(crew, /BILLED DT/);
     assert.match(crew, /wageCatalogByGroup/);
     assert.match(crew, /book\.wageCatalog/);
     assert.doesNotMatch(crew, /setCrew|rematchCrewToShahan/);

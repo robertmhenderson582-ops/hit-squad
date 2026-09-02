@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  EAST_COAST_OT_NOTE,
   FRINGE_METHODS,
+  LABOR_SHEET_COLUMNS,
+  LABOR_SHEET_FRINGE,
+  RATE_OT_MULTIPLIER,
+  craftBillingRates,
   compositeRates,
   newBuiltCraft,
   newFringeRow,
+  parseRateBuilderSheet,
 } from "./rate-builder.ts";
 
 describe("rate builder fringe stack", () => {
@@ -56,5 +62,40 @@ describe("rate builder fringe stack", () => {
     assert.equal(next.st, 46);
     assert.equal(next.ot, 60);
     assert.equal(next.dt, 80);
+  });
+});
+
+describe("Yates-style labor sheet", () => {
+  it("keeps East Coast OT 1.5 and maps a sheet without treating billed ST as BW", () => {
+    assert.equal(RATE_OT_MULTIPLIER, 1.5);
+    assert.match(EAST_COAST_OT_NOTE, /OT 1\.5/);
+    assert.match(EAST_COAST_OT_NOTE, /Not DT after 12/);
+    assert.deepEqual(LABOR_SHEET_COLUMNS, [
+      "CRAFT / POSITION",
+      "BASE WAGE (BW)",
+      "BILLED ST",
+      "BILLED OT",
+      "BILLED DT",
+      "PD",
+    ]);
+    const rows = parseRateBuilderSheet(
+      [
+        "Craft / Position,Base Rate,ST Billable,Billed OT,Billed DT,PD",
+        "Pipefitter Journeyman,48.50,108.38,152.65,196.12,130",
+      ].join("\n"),
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].craft, "Pipefitter Journeyman");
+    assert.equal(rows[0].baseSt, 48.5);
+    assert.equal(rows[0].billedSt, 108.38);
+    assert.equal(rows[0].billedOt, 152.65);
+    assert.equal(rows[0].billedDt, 196.12);
+    assert.equal(rows[0].fringes[0]?.name, LABOR_SHEET_FRINGE);
+    assert.equal(rows[0].fringes[0]?.amount, 130);
+    const billed = craftBillingRates(rows[0]);
+    assert.equal(billed.st, 108.38);
+    assert.notEqual(rows[0].baseSt, rows[0].billedSt);
+    assert.equal(parseRateBuilderSheet("ST Billable,Craft\n99,Helper")[0]?.baseSt, 0);
+    assert.equal(parseRateBuilderSheet("ST Billable,Craft\n99,Helper")[0]?.billedSt, 99);
   });
 });

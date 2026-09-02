@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { isOwner } from "@/lib/desk-role";
 import {
+  EAST_COAST_OT_NOTE,
   FRINGE_METHODS,
   FRINGE_METHOD_LABEL,
   compositeRates,
@@ -10,7 +11,7 @@ import {
   newFringeRow,
   type FringeMethod,
 } from "@/lib/rate-builder";
-import { saveCraftToLevel, type RateBookLevel } from "@/lib/rate-books";
+import { importRateBuilderSheetToCompany, saveCraftToLevel, type RateBookLevel } from "@/lib/rate-books";
 import type { CompanyId } from "@/lib/companies";
 import type { PublicUser } from "@/lib/types";
 function money(amount: number) {
@@ -115,7 +116,8 @@ export function RateBuilderCard({
     <section className="plant-card px-5 py-5">
       <h2 className="font-display text-2xl text-[#163038]">Rate builder</h2>
       <p className="mt-1 text-sm text-[#5b6f73]">
-        One craft. Stack fringes the way the book pays them. Live ST / OT / DT updates as you type.
+        Labor sheet: craft / position, base wage (BW), billed ST / OT / DT, and PD. Live billed ST / OT / DT
+        update as you type. {EAST_COAST_OT_NOTE}
       </p>
       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
         <div>
@@ -148,7 +150,7 @@ export function RateBuilderCard({
           <input className={`${fieldClass()} mt-1`} value={local} onChange={(event) => setLocal(event.target.value)} />
         </label>
         <label className="text-sm">
-          <span className="font-mono text-[10px] tracking-[0.2em] text-[#5b6f73]">BASE ST WAGE</span>
+          <span className="font-mono text-[10px] tracking-[0.2em] text-[#5b6f73]">BASE WAGE (BW)</span>
           <input
             className={`${fieldClass()} mt-1`}
             type="number"
@@ -229,18 +231,50 @@ export function RateBuilderCard({
       </div>
       <div className="hud-readout mt-5 grid gap-3 rounded-lg border border-[#c5d4d4] px-4 py-3 sm:grid-cols-3">
         <div>
-          <p className="font-mono text-[10px] tracking-[0.2em] text-[#5b6f73]">COMPOSITE ST</p>
+          <p className="font-mono text-[10px] tracking-[0.2em] text-[#5b6f73]">BILLED ST</p>
           <p className="mt-1 font-mono text-xl">{money(readout.st)}</p>
         </div>
         <div>
-          <p className="font-mono text-[10px] tracking-[0.2em] text-[#5b6f73]">COMPOSITE OT</p>
+          <p className="font-mono text-[10px] tracking-[0.2em] text-[#5b6f73]">BILLED OT</p>
           <p className="mt-1 font-mono text-xl">{money(readout.ot)}</p>
         </div>
         <div>
-          <p className="font-mono text-[10px] tracking-[0.2em] text-[#5b6f73]">COMPOSITE DT</p>
+          <p className="font-mono text-[10px] tracking-[0.2em] text-[#5b6f73]">BILLED DT</p>
           <p className="mt-1 font-mono text-xl">{money(readout.dt)}</p>
         </div>
       </div>
+      <label className="mt-4 block text-sm">
+        <span className="font-mono text-[10px] tracking-[0.2em] text-[#5b6f73]">UPLOAD BILLING RATES</span>
+        <input
+          className={`${fieldClass()} mt-1`}
+          type="file"
+          accept=".csv,.tsv,.txt"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (!file) return;
+            if (/\.xlsx|\.xlsm|\.xls|\.pdf$/i.test(file.name)) {
+              setNote("Use a CSV or TSV sheet that maps to the Rate builder rows, or build rates here.");
+              return;
+            }
+            void file.text().then((text) => {
+              const imported = importRateBuilderSheetToCompany({
+                companyId,
+                siteId,
+                label: bookLabel,
+                text,
+                level: owner ? "company" : siteId ? "site" : "company",
+              });
+              if (!imported.crafts.length) {
+                setNote("No Rate builder rows in that sheet. Columns are craft / position, base wage (BW), billed ST / OT / DT, and PD.");
+                return;
+              }
+              setNote(`Imported ${imported.crafts.length} Rate builder row${imported.crafts.length === 1 ? "" : "s"}.`);
+              onSaved();
+            });
+          }}
+        />
+      </label>
       {jobs.length ? (
         <label className="mt-4 block text-sm">
           <span className="font-mono text-[10px] tracking-[0.2em] text-[#5b6f73]">JOB</span>

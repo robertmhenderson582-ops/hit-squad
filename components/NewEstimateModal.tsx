@@ -3,7 +3,9 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ModalPortal } from "@/components/ModalPortal";
-import { useAlias } from "@/components/OwnerDeskContext";
+import { NoRatesNotice } from "@/components/NoRatesNotice";
+import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
+import { newEstimateNeedsRatesNotice } from "@/lib/estimate-rates-gate";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
 import { defaultEstimateName, isDefaultEstimateName, startJobEventLabel } from "@/lib/job-event";
 import { newEstimatePackId } from "@/lib/estimate-open";
@@ -36,6 +38,8 @@ export function NewEstimateModal({
 }) {
   const router = useRouter();
   const alias = useAlias();
+  const { lens } = useDeskLens();
+  const [ratesTick, setRatesTick] = useState(0);
   const knownPlant = Boolean(preset.knownPlant && preset.client);
   const startSize: EstimateSize = preset.size || "outage";
   const startClient =
@@ -48,6 +52,7 @@ export function NewEstimateModal({
   const [name, setName] = useState(defaultEstimateName(startClient, startSite, startSize));
   const rule = boundOtLabel(site, client);
   const eastCoast = siteClockFromText(site, client) === "east-coast";
+  const needsRates = size !== "shop" && newEstimateNeedsRatesNotice(lens) && ratesTick >= 0;
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -117,6 +122,11 @@ export function NewEstimateModal({
             ×
           </button>
         </div>
+        {needsRates ? (
+          <div className="mt-4">
+            <NoRatesNotice user={lens} onImported={() => setRatesTick((value) => value + 1)} />
+          </div>
+        ) : null}
         <p className="mt-3 text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">JOB / EVENT</p>
         <p className="mt-1 text-xs text-[#5b6f73]">
           This is the job kind — Turnaround on Phillips 66, Outage on a powerhouse. Shop / rig stays
