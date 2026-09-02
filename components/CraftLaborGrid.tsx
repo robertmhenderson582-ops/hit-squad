@@ -157,7 +157,7 @@ export function CraftLaborGrid({
       </div>
       <p className="mt-2 text-xs text-[#5b6f73]">
         {note ||
-          "Hours follow the position clock and Job setup. Weekly 40 still sits on top. Default is ST to 10 on East Coast / staff."}
+          "Hours follow the position clock and Job setup. Craft on East Coast is OT after 8 on Oil Out / Mechanical / Oil In. Pre and Post follow Job setup. Weekly 40 still sits on top."}
       </p>
       <GripToPan className="mt-4">
         <table className="min-w-[960px] text-left text-sm">
@@ -394,7 +394,16 @@ function CraftAccordionRow({
       {open ? (
         <tr>
           <td colSpan={10} className="bg-[#f4f1e8] px-4 py-4">
-            <p className="text-xs text-[#163038]">{clockNote(row.position, site, client, row.clockOverride ?? "auto")}</p>
+            <p className="text-xs text-[#163038]">
+              {clockNote(
+                row.position,
+                site,
+                client,
+                row.clockOverride ?? "auto",
+                "",
+                "billedAs" in row ? String(row.billedAs || "") : "",
+              )}
+            </p>
             <label className="mt-2 flex items-center gap-2 text-sm text-[#163038]">
               <input
                 type="checkbox"

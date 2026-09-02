@@ -52,18 +52,18 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
-    assert.equal(DESK_VERSION, "1.33.0");
-    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.33");
-    assert.equal(DESK_THREAD_ID, "th-desk-v1.33");
+    assert.equal(DESK_VERSION, "1.34.0");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.34");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.34");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Hours\/shift/);
+    assert.match(TESTER_WHATS_NEW, /time-and-a-half after 8/);
     assert.match(TESTER_WHATS_NEW, /Job setup/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|testers|Follow|apcontrolsllc|seat|James|CBI|View as/i.test(TESTER_WHATS_NEW), false);
-    assert.match(OWNER_WHATS_NEW, /Hrs\/Day/);
+    assert.match(OWNER_WHATS_NEW, /CBA/);
     assert.match(OWNER_WHATS_NEW, /Job setup/);
-    assert.match(OWNER_WHATS_NEW, /first range/);
+    assert.match(OWNER_WHATS_NEW, /Staff/);
     assert.equal(/View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
       /password|passwords|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
@@ -103,24 +103,24 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.33 onto an existing Hit Squad desk thread after V1.32", () => {
-    assert.equal(seenKey("tester-x", "1.32.0"), `${WHATS_NEW_MARK_PREFIX}1.32.0:tester-x`);
-    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.33.0:tester-x`);
-    assert.notEqual(seenKey("tester-x", "1.32.0"), seenKey("tester-x"));
+  it("appends V1.34 onto an existing Hit Squad desk thread after V1.33", () => {
+    assert.equal(seenKey("tester-x", "1.33.0"), `${WHATS_NEW_MARK_PREFIX}1.33.0:tester-x`);
+    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.34.0:tester-x`);
+    assert.notEqual(seenKey("tester-x", "1.33.0"), seenKey("tester-x"));
 
     const prior = [
       {
-        id: "th-desk-v1.32",
+        id: "th-desk-v1.33",
         personId: DESK_PERSON_ID,
         name: "Hit Squad",
         company: "Project Controls",
         unread: 0,
         messages: [
           {
-            id: "im-desk-1.32.0",
+            id: "im-desk-1.33.0",
             from: "them" as const,
             author: "Desk",
-            text: "Hit Squad Project Controls V1.32",
+            text: "Hit Squad Project Controls V1.33",
             photo: null,
             sentAt: "",
             readAt: "seen",
@@ -137,16 +137,16 @@ describe("inbox what's-new", () => {
     assert.deepEqual(applyWhatsNew(prior, "tester-joseph-append", false, "josephmhenderson2002@gmail.com"), prior);
   });
 
-  it("posts the V1.33 Inbox note for testers and owner", () => {
-    assert.equal(DESK_VERSION, "1.33.0");
+  it("posts the V1.34 Inbox note for testers and owner", () => {
+    assert.equal(DESK_VERSION, "1.34.0");
     assert.equal(NEXT_SHIP_VERSION, DESK_VERSION);
     assert.equal(NEXT_SHIP_VERSION_LABEL, DESK_VERSION_LABEL);
     assert.equal(TESTER_NEXT_SHIP_DRAFT, TESTER_WHATS_NEW);
     assert.equal(OWNER_NEXT_SHIP_DRAFT, OWNER_WHATS_NEW);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(OWNER_WHATS_NEW, /Hrs\/Day/);
+    assert.match(OWNER_WHATS_NEW, /CBA/);
     assert.match(OWNER_WHATS_NEW, /Job setup/);
-    assert.match(TESTER_WHATS_NEW, /Hours\/shift/);
+    assert.match(TESTER_WHATS_NEW, /time-and-a-half after 8/);
     assert.match(TESTER_WHATS_NEW, /Job setup/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|Follow|apcontrolsllc|seat|security|vault|other users|James|CBI|Stephanie|View as/i.test(TESTER_WHATS_NEW), false);
@@ -156,8 +156,8 @@ describe("inbox what's-new", () => {
       ),
       false,
     );
-    const live = applyWhatsNew([], "tester-v133-live", false, "nathanboyte@gmail.com");
-    assert.equal(live[0].id, "th-desk-v1.33");
+    const live = applyWhatsNew([], "tester-v134-live", false, "nathanboyte@gmail.com");
+    assert.equal(live[0].id, "th-desk-v1.34");
     assert.equal(live[0].messages[0]?.text, TESTER_WHATS_NEW);
     const owner = applyWhatsNew([], "owner-v133-live", true);
     assert.equal(owner[0].messages[0]?.text, OWNER_WHATS_NEW);

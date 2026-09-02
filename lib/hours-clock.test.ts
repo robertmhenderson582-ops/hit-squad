@@ -4,6 +4,8 @@ import {
   boundOtLabel,
   clockNote,
   computeRangeHours,
+  computeRowHours,
+  eastCoastCraftOtAfter8,
   runningClock,
   seatKind,
   siteClockFromText,
@@ -56,8 +58,20 @@ describe("seat vs clock override", () => {
     assert.equal(runningClock("Superintendent General PF 01", "Wood River", "Phillips 66", "auto"), "staff");
     assert.equal(runningClock("Superintendent General PF 01", "Wood River", "Phillips 66", "comp"), "east-coast");
     assert.equal(runningClock("Boilermaker BM", "Wood River", "Phillips 66", "staff"), "staff");
-    assert.match(clockNote("Analyst Cost 01", "Wood River", "Phillips 66"), /staff clock/i);
-    assert.match(clockNote("General Foreman", "Wood River", "Phillips 66"), /East Coast/);
+    const staffNote = clockNote("Analyst Cost 01", "Wood River", "Phillips 66");
+    const craftNote = clockNote("General Foreman", "Wood River", "Phillips 66");
+    assert.match(staffNote, /staff clock/i);
+    assert.match(staffNote, /weekday ST to 10/);
+    assert.match(craftNote, /East Coast/);
+    assert.match(craftNote, /OT after 8/);
+    assert.equal(/weekday ST to 10/.test(craftNote), false);
+    assert.equal(eastCoastCraftOtAfter8("mech", false), true);
+    assert.equal(eastCoastCraftOtAfter8("oil-out", false), true);
+    assert.equal(eastCoastCraftOtAfter8("oil-in", false), true);
+    assert.equal(eastCoastCraftOtAfter8("pre", false), false);
+    assert.equal(eastCoastCraftOtAfter8("pre", true), true);
+    assert.equal(eastCoastCraftOtAfter8("post", false), false);
+    assert.equal(eastCoastCraftOtAfter8(undefined, false), true);
   });
 });
 
@@ -115,7 +129,7 @@ describe("CAT 2 Wood River hour cases", () => {
     assert.equal(result.dt, 0);
   });
 
-  it("D) East Coast GF/craft 13h weekday = 10 ST + 3 OT, never 1 DT after 12", () => {
+  it("D) East Coast GF/craft 13h weekday = 8 ST + 5 OT, never 1 DT after 12", () => {
     const result = computeRangeHours({
       ...WOOD_RIVER,
       position: "General Foreman",
@@ -125,12 +139,12 @@ describe("CAT 2 Wood River hour cases", () => {
       days: [false, true, true, true, true, true, false],
       headcount: 1,
     });
-    assert.equal(result.st, 10);
-    assert.equal(result.ot, 3);
+    assert.equal(result.st, 8);
+    assert.equal(result.ot, 5);
     assert.equal(result.dt, 0);
     assert.deepEqual(sumSplits([result]), {
-      st: 10,
-      ot: 3,
+      st: 8,
+      ot: 5,
       dt: 0,
       pd: 0,
       hours: 13,
@@ -219,7 +233,7 @@ describe("CAT 2 Wood River hour cases", () => {
     assert.notEqual(result.ot, 40);
   });
 
-  it("Days & nights keeps East Coast clocks per crew — 13h weekday is 20 ST + 6 OT, never DT after 12", () => {
+  it("Days & nights keeps East Coast clocks per crew — 13h weekday is 16 ST + 10 OT, never DT after 12", () => {
     const result = computeRangeHours({
       ...WOOD_RIVER,
       position: "General Foreman",
@@ -231,8 +245,235 @@ describe("CAT 2 Wood River hour cases", () => {
       headcount: 1,
       nightHeadcount: 1,
     });
-    assert.equal(result.st, 20);
-    assert.equal(result.ot, 6);
+    assert.equal(result.st, 16);
+    assert.equal(result.ot, 10);
     assert.equal(result.dt, 0);
+  });
+});
+
+describe("East Coast CBA craft OT after 8", () => {
+  const weekday = {
+    start: "2027-03-15",
+    end: "2027-03-15",
+    hoursPerShift: 10,
+    days: [false, true, true, true, true, true, false],
+    headcount: 1,
+  } as const;
+
+  it("Boilermaker Journeyman Mechanical 10h weekday is 8 ST + 2 OT, not 10 ST", () => {
+    const result = computeRangeHours({
+      ...WOOD_RIVER,
+      ...weekday,
+      position: "Boilermaker Journeyman",
+      phaseId: "mech",
+      otAfter8: false,
+    });
+    assert.equal(result.st, 8);
+    assert.equal(result.ot, 2);
+    assert.equal(result.dt, 0);
+    assert.notEqual(result.st, 10);
+    assert.notEqual(result.ot, 0);
+  });
+
+  it("same person Pre Job setup all-ST 8h Mon–Fri is all ST (1920 / 0 on the Wood River card)", () => {
+    const result = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Boilermaker Journeyman",
+      phaseId: "pre",
+      otAfter8: false,
+      start: "2027-01-18",
+      end: "2027-02-28",
+      hoursPerShift: 8,
+      days: [false, true, true, true, true, true, false],
+      headcount: 8,
+      perDiemPeople: 6,
+    });
+    assert.equal(result.workedDays, 30);
+    assert.equal(result.st, 1920);
+    assert.equal(result.ot, 0);
+    assert.equal(result.dt, 0);
+    assert.equal(result.pd, 180);
+    assert.equal(result.hours, 1920);
+  });
+
+  it("same person Pre Job setup OT-after-8 10h is 8 ST + 2 OT", () => {
+    const result = computeRangeHours({
+      ...WOOD_RIVER,
+      ...weekday,
+      position: "Boilermaker Journeyman",
+      phaseId: "pre",
+      otAfter8: true,
+    });
+    assert.equal(result.st, 8);
+    assert.equal(result.ot, 2);
+    assert.equal(result.dt, 0);
+  });
+
+  it("Pre / Post all-ST 10h stays 10 ST; 12h stays ST except Sunday / weekly 40", () => {
+    const ten = computeRangeHours({
+      ...WOOD_RIVER,
+      ...weekday,
+      position: "Boilermaker Journeyman",
+      phaseId: "pre",
+      otAfter8: false,
+    });
+    assert.equal(ten.st, 10);
+    assert.equal(ten.ot, 0);
+    const twelve = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Boilermaker Journeyman",
+      phaseId: "post",
+      otAfter8: false,
+      start: "2027-03-15",
+      end: "2027-03-15",
+      hoursPerShift: 12,
+      days: [false, true, true, true, true, true, false],
+    });
+    assert.equal(twelve.st, 12);
+    assert.equal(twelve.ot, 0);
+    assert.equal(twelve.dt, 0);
+  });
+
+  it("Pipefitter Journeyman and Support billed as Boilermaker Journeyman use the same CBA split", () => {
+    const pipe = computeRangeHours({
+      ...WOOD_RIVER,
+      ...weekday,
+      position: "Pipefitter Journeyman",
+      phaseId: "oil-out",
+    });
+    const support = computeRowHours(
+      {
+        position: "Fire Watch",
+        billedAs: "Boilermaker Journeyman",
+        ranges: [
+          {
+            start: weekday.start,
+            end: weekday.end,
+            hoursPerShift: 10,
+            headcount: 1,
+            nightHeadcount: 1,
+            perDiemPeople: 0,
+            days: [...weekday.days],
+            phaseId: "oil-in",
+            otAfter8: false,
+          },
+        ],
+      },
+      WOOD_RIVER.site,
+      WOOD_RIVER.client,
+    );
+    assert.equal(pipe.st, 8);
+    assert.equal(pipe.ot, 2);
+    assert.equal(support.st, 8);
+    assert.equal(support.ot, 2);
+  });
+
+  it("Superintendent / Analyst Cost keep ST to 10 unless Use COMP clock", () => {
+    const superStaff = computeRangeHours({
+      ...WOOD_RIVER,
+      ...weekday,
+      position: "Superintendent",
+      phaseId: "mech",
+    });
+    const analyst = computeRangeHours({
+      ...WOOD_RIVER,
+      ...weekday,
+      position: "Analyst Cost 01",
+      phaseId: "oil-out",
+    });
+    const superComp = computeRangeHours({
+      ...WOOD_RIVER,
+      ...weekday,
+      position: "Superintendent General PF 01",
+      phaseId: "mech",
+      clockOverride: "comp",
+    });
+    assert.equal(superStaff.st, 10);
+    assert.equal(superStaff.ot, 0);
+    assert.equal(analyst.st, 10);
+    assert.equal(analyst.ot, 0);
+    assert.equal(superComp.st, 8);
+    assert.equal(superComp.ot, 2);
+  });
+
+  it("Sunday is still all DT; weekly 40 still sits on leftover ST", () => {
+    const sunday = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Boilermaker Journeyman",
+      phaseId: "mech",
+      start: "2027-03-14",
+      end: "2027-03-14",
+      hoursPerShift: 10,
+      days: [true, false, false, false, false, false, false],
+    });
+    assert.equal(sunday.dt, 10);
+    assert.equal(sunday.st, 0);
+    assert.equal(sunday.ot, 0);
+
+    const week = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Boilermaker Journeyman",
+      phaseId: "mech",
+      start: "2027-03-15",
+      end: "2027-03-20",
+      hoursPerShift: 10,
+      days: [false, true, true, true, true, true, true],
+    });
+    assert.equal(week.st, 40);
+    assert.equal(week.ot, 20);
+    assert.equal(week.dt, 0);
+    assert.equal(week.hours, 60);
+  });
+
+  it("description still does not change math; Days & nights dual count is unchanged", () => {
+    const oilIn = {
+      ...WOOD_RIVER,
+      position: "Boilermaker Journeyman",
+      phaseId: "oil-in",
+      start: "2027-04-18",
+      end: "2027-04-19",
+      hoursPerShift: 10,
+      days: [true, true, true, true, true, true, true],
+      shift: "Days & nights" as const,
+      headcount: 6,
+      nightHeadcount: 4,
+      perDiemPeople: 6,
+      nightPerDiemPeople: 4,
+      skipDates: ["2027-04-18"],
+    };
+    const result = computeRangeHours(oilIn);
+    assert.equal(result.st, 80);
+    assert.equal(result.ot, 20);
+    assert.equal(result.dt, 0);
+    assert.equal(result.pd, 10);
+    assert.equal(result.hours, 100);
+    const labeled = computeRowHours(
+      {
+        position: "Boilermaker Journeyman",
+        ranges: [
+          {
+            start: oilIn.start,
+            end: oilIn.end,
+            hoursPerShift: 10,
+            headcount: 6,
+            nightHeadcount: 4,
+            perDiemPeople: 6,
+            nightPerDiemPeople: 4,
+            days: [...oilIn.days],
+            phaseId: "oil-in",
+            shift: "Days & nights",
+            skipDates: ["2027-04-18"],
+            description: "Hiring progression",
+          },
+        ],
+      },
+      WOOD_RIVER.site,
+      WOOD_RIVER.client,
+    );
+    assert.equal(labeled.st, result.st);
+    assert.equal(labeled.ot, result.ot);
+    assert.equal(labeled.dt, result.dt);
+    assert.equal(labeled.pd, result.pd);
+    assert.equal(labeled.hours, result.hours);
   });
 });

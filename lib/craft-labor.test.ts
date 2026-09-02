@@ -589,12 +589,12 @@ describe("extra range description is a label only", () => {
     const row = daysOnly(assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases));
     assert.equal(row.ranges.every((range) => !range.description), true);
     const hours = crewHours(row);
-    assert.equal(splitKey(hours), "268/76/24/36/368");
+    assert.equal(splitKey(hours), "264/80/24/36/368");
     const unlabeled = {
       ...row,
       ranges: row.ranges.map(({ description: _drop, ...range }) => range),
     };
-    assert.equal(splitKey(crewHours(unlabeled)), "268/76/24/36/368");
+    assert.equal(splitKey(crewHours(unlabeled)), "264/80/24/36/368");
   });
 
   it("extra range still starts empty so hours do not copy from the first range", () => {
@@ -627,7 +627,7 @@ describe("extra range description is a label only", () => {
     const listed = { ...row, ranges: [...row.ranges, { ...extra, description: "Onboarding/Learning" }] };
     const custom = { ...row, ranges: [...row.ranges, { ...extra, description: "sit out, then come back" }] };
     const unlabeledHours = crewHours(unlabeled);
-    assert.equal(splitKey(unlabeledHours), "308/78.5/24/41/410.5");
+    assert.equal(splitKey(unlabeledHours), "304/82.5/24/41/410.5");
     assert.equal(splitKey(crewHours(listed)), splitKey(unlabeledHours));
     assert.equal(splitKey(crewHours(custom)), splitKey(unlabeledHours));
     const extraSplit = computeRowHours({ ...row, ranges: [extra] }, WOOD.site, WOOD.client);
@@ -821,7 +821,7 @@ describe("extra range description is a label only", () => {
     assert.equal(splitKey(crewHours(copy)), splitKey(crewHours(synced)));
     const removed = { ...synced, ranges: synced.ranges.filter((range) => range.id !== pres[1].id) };
     assert.equal(removed.ranges.filter((range) => range.phaseId === "pre").length, 1);
-    assert.equal(splitKey(crewHours(removed)), "268/76/24/36/368");
+    assert.equal(splitKey(crewHours(removed)), "264/80/24/36/368");
   });
 
   it("Staff through Support share the Description control and extra-range envelope on CrewPhaseCards", () => {
@@ -1025,7 +1025,7 @@ describe("per-position phase off preserves hours", () => {
       WOOD.client,
     );
     assert.equal(splitKey(mech), "80/40/0/12/120");
-    assert.equal(splitKey(full), "268/76/24/36/368");
+    assert.equal(splitKey(full), "264/80/24/36/368");
 
     const killed = { ...row, ranges: setPhaseOff(row.ranges, "mech", true) };
     const dropped = crewHours(killed);
@@ -1057,7 +1057,7 @@ describe("per-position phase off preserves hours", () => {
     extra.description = "Onboarding/Learning";
     row.ranges.push(extra);
     const withExtra = crewHours(row);
-    assert.equal(splitKey(withExtra), "308/78.5/24/41/410.5");
+    assert.equal(splitKey(withExtra), "304/82.5/24/41/410.5");
     const withoutPre = computeRowHours(
       { ...row, ranges: row.ranges.filter((range) => range.phaseId !== "pre") },
       WOOD.site,

@@ -77,7 +77,7 @@ describe("inbox demo wipe", () => {
     const stored = persisted.threads ?? [];
     assert.equal(stored.some((thread) => (DEMO_IDS as readonly string[]).includes(thread.id)), false);
     assert.equal(stored.length, 1);
-    assert.equal(stored[0].id, "th-desk-v1.33");
+    assert.equal(stored[0].id, "th-desk-v1.34");
   });
 
   it("tester empty store stays empty (never had the demo threads)", () => {
@@ -88,7 +88,7 @@ describe("inbox demo wipe", () => {
     const note = deskWhatsNewThread(true);
     const cleaned = stripDemoThreads([...ownerDemoThreads(), note]);
     assert.equal(cleaned.length, 1);
-    assert.equal(cleaned[0].id, "th-desk-v1.33");
+    assert.equal(cleaned[0].id, "th-desk-v1.34");
     assert.equal(stripDemoThreads([note]).length, 1);
   });
 
@@ -121,21 +121,21 @@ describe("inbox demo wipe", () => {
     assert.deepEqual(omitHiddenPersonThreads([note, leftover], hides.personIds), [note]);
   });
 
-  it("Desk note stays V1.33 and tester-safe", () => {
-    assert.equal(DESK_VERSION, "1.33.0");
+  it("Desk note stays V1.34 and tester-safe", () => {
+    assert.equal(DESK_VERSION, "1.34.0");
     const tester = applyWhatsNew([deskWhatsNewThread(false)], "tester-note", false, "nathanboyte@gmail.com");
     assert.equal(tester.length, 1);
-    assert.equal(tester[0].id, "th-desk-v1.33");
+    assert.equal(tester[0].id, "th-desk-v1.34");
     const testerBody = tester[0].messages.map((message) => message.text).join(" ");
-    assert.match(testerBody, /V1\.33/);
-    assert.match(testerBody, /Hours\/shift/);
+    assert.match(testerBody, /V1\.34/);
+    assert.match(testerBody, /time-and-a-half after 8/);
     assert.match(testerBody, /Job setup/);
     assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Madison|Joseph|Stephanie|password|security/i);
     const owner = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
-    assert.equal(owner[0].id, "th-desk-v1.33");
+    assert.equal(owner[0].id, "th-desk-v1.34");
     const ownerBody = owner[0].messages.map((message) => message.text).join(" ");
-    assert.match(ownerBody, /Hrs\/Day/);
+    assert.match(ownerBody, /CBA/);
     assert.match(ownerBody, /Job setup/);
-    assert.match(ownerBody, /first range/);
+    assert.match(ownerBody, /Staff/);
   });
 });
