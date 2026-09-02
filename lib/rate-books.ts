@@ -7,7 +7,6 @@ import {
   type CompanyScope,
 } from "./companies.ts";
 import { catalogEstimates, catalogSites } from "./desk-data.ts";
-import { assignedSiteIds } from "./job-tree.ts";
 import type { LocalPack, StorageLike } from "./local-estimates.ts";
 import { newBuiltCraft, type BuiltCraft } from "./rate-builder.ts";
 import { SHAHAN_BOOK_ID, SHAHAN_BOOK_LABEL } from "./shahan-wood-river.ts";
@@ -17,7 +16,9 @@ export const RATE_BOOKS_KEY = "hs_rate_books_v1";
 export const RATE_COMPANY_OPEN_KEY = "hs_rate_company_open_v1";
 export const WOOD_RIVER_SITE_ID = "site-madison";
 export const YATES_SITE_ID = "site-yates";
-export const EMPTY_MADISON_PLANTS = ["Yates", "Rodeo", "Bayway", "Ferndale", "Billings", "Coker pad / drum alley"] as const;
+export const MONROE_SITE_ID = "site-monroe";
+export const MADISON_RATE_PLANTS = ["Yates", "Rodeo", "Bayway", "Ferndale", "Wood River", "Billings", "Monroe Energy"] as const;
+export const EMPTY_MADISON_PLANTS = ["Yates", "Rodeo", "Bayway", "Ferndale", "Billings", "Monroe Energy"] as const;
 
 export type RateBookLevel = "company" | "site" | "job";
 
@@ -64,18 +65,16 @@ export function rateSitesForCompany(companyId: CompanyId, sites: SiteRecord[] = 
   return sites.filter((site) => siteCompanyId(site) === companyId);
 }
 
-/** Owner sees every catalog plant. Testers only see sites that have their jobs. */
+/** Rates lists the company plant catalog. Jobs assignment does not hide plants here. */
 export function visibleRateSites(
   scope: CompanyScope | null | undefined,
   companyId: CompanyId,
-  jobs: JobRecord[] = [],
-  packs: LocalPack[] = [],
+  _jobs: JobRecord[] = [],
+  _packs: LocalPack[] = [],
   sites: SiteRecord[] = catalogSites(),
 ): SiteRecord[] {
-  const catalog = rateSitesForCompany(companyId, sites);
-  if (!scope || scope.isOwner) return catalog;
-  const assigned = new Set(assignedSiteIds({ scope, jobs, packs, companyId, sites }));
-  return catalog.filter((site) => assigned.has(site.id));
+  if (scope && !scope.isOwner && !canSeeCompany(scope, companyId)) return [];
+  return rateSitesForCompany(companyId, sites);
 }
 
 export function rateCompanyOpenKey(seat?: string | null) {
@@ -207,6 +206,18 @@ export function siteBookFor(companyId: CompanyId, siteId: string, store?: Storag
 
 export function hasSiteBook(companyId: CompanyId, siteId: string, store?: StorageLike | null) {
   return Boolean(siteBookFor(companyId, siteId, store));
+}
+
+/** Wage lookup lands on a site that actually has a book. First catalog row is often empty. */
+export function preferredRateSiteId(
+  companyId: CompanyId,
+  sites: Array<{ id: string }>,
+  store?: StorageLike | null,
+) {
+  const withBook = sites.find((site) => hasSiteBook(companyId, site.id, store));
+  if (withBook) return withBook.id;
+  if (companyId === "madison") return WOOD_RIVER_SITE_ID;
+  return sites[0]?.id || "";
 }
 
 export function mergeCrafts(...lists: Array<BuiltCraft[] | undefined>): BuiltCraft[] {

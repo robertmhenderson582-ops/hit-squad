@@ -131,12 +131,16 @@ describe("inbox demo wipe", () => {
     assert.match(testerBody, /You can delete HSE sample cards on JOBS the same way as estimates/);
     assert.match(testerBody, /Jobs only shows sites assigned to you/);
     assert.match(testerBody, /Company cards on Rates can collapse/);
-    assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Madison|Joseph|Stephanie|password|security|View as/i);
+    assert.match(testerBody, /Rate books Madison opens the wage lookup/);
+    assert.match(testerBody, /Rates lists Madison plants including Monroe Energy/);
+    assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Joseph|Stephanie|password|security|View as/i);
+    assert.doesNotMatch(testerBody, /Robert, Nathan, Benny, Shane, Wendell, and Chance/);
     const owner = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
     assert.equal(owner[0].id, "th-desk-v1.38");
     const ownerBody = owner[0].messages.map((message) => message.text).join(" ");
     assert.match(ownerBody, /HS-8622/);
     assert.match(ownerBody, /View as Nathan/);
     assert.match(ownerBody, /Company cards on Rates can collapse/);
+    assert.match(ownerBody, /Monroe Energy/);
   });
 });

@@ -135,7 +135,7 @@ export function inferCompanyId(text: string | undefined | null): CompanyId {
   const t = (text ?? "").toLowerCase();
   if (/lucky\s*13/.test(t)) return LUCKY13_ID;
   if (/\bcbi\b/.test(t)) return "cbi";
-  if (/\bmadison\b|\bp66\b|phillips 66|wood river|\byates\b|georgia power/.test(t)) {
+  if (/\bmadison\b|\bp66\b|phillips 66|wood river|\byates\b|georgia power|monroe energy|\bmonroe\b|\btrainer\b/.test(t)) {
     return "madison";
   }
   return "hitsquad";

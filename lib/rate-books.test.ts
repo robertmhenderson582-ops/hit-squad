@@ -9,6 +9,8 @@ import { newBuiltCraft } from "./rate-builder.ts";
 import { jobsOnDesk } from "./jobs.ts";
 import {
   EMPTY_MADISON_PLANTS,
+  MADISON_RATE_PLANTS,
+  MONROE_SITE_ID,
   RATE_COMPANY_OPEN_KEY,
   WOOD_RIVER_SITE_ID,
   YATES_SITE_ID,
@@ -20,6 +22,7 @@ import {
   isRateCompanyOpen,
   rateBookVisibleTo,
   rateCompanyOpenKey,
+  preferredRateSiteId,
   rateSitesForCompany,
   resolvedCrafts,
   saveCraftToLevel,
@@ -87,6 +90,10 @@ describe("rate book nest", () => {
     assert.match(ratesDesk, /aria-expanded=\{sitesOpen\}/);
     assert.match(ratesDesk, /writeRateCompanyOpen/);
     assert.match(ratesDesk, /visibleRateSites/);
+    assert.match(ratesDesk, /openCompanyLookup/);
+    assert.match(ratesDesk, /preferredRateSiteId/);
+    assert.match(ratesDesk, /ThirdPartyRentalDesk/);
+    assert.doesNotMatch(ratesDesk, /selectedSite && !loaded/);
     assert.match(ratesDesk, /RateBuilderCard/);
     assert.equal(/40-col|exhibit B-1|Cassidy|COMP workbook/i.test(ratesDesk), false);
     const card = readFileSync(fileURLToPath(new URL("../components/RateBuilderCard.tsx", import.meta.url)), "utf8");
@@ -155,7 +162,7 @@ describe("rate book nest", () => {
     assert.equal(hasSiteBook("madison", WOOD_RIVER_SITE_ID, store), true);
   });
 
-  it("hides empty unassigned Madison plants from testers and keeps Wood River when they have jobs", () => {
+  it("lists every Madison plant on Rates, including empty books and Monroe Energy", () => {
     const cat2 = {
       packId: "new-mtaajdwa-f7539",
       key: "new:new-mtaajdwa-f7539",
@@ -167,8 +174,14 @@ describe("rate book nest", () => {
       updatedAt: 2,
     };
     const ownerSites = visibleRateSites(owner, "madison");
+    assert.deepEqual(
+      ownerSites.map((row) => row.name),
+      [...MADISON_RATE_PLANTS],
+    );
     assert.equal(ownerSites.some((row) => row.id === YATES_SITE_ID), true);
     assert.equal(ownerSites.some((row) => row.id === WOOD_RIVER_SITE_ID), true);
+    assert.equal(ownerSites.some((row) => row.id === MONROE_SITE_ID), true);
+    assert.equal(ownerSites.some((row) => /coker pad/i.test(row.name)), false);
     assert.equal(
       EMPTY_MADISON_PLANTS.every((name) => ownerSites.some((row) => row.name === name)),
       true,
@@ -177,13 +190,14 @@ describe("rate book nest", () => {
     const nathanJobs = jobsOnDesk([], [cat2], true, nathan);
     const nathanSites = visibleRateSites(nathan, "madison", nathanJobs, [cat2]);
     assert.deepEqual(
-      nathanSites.map((row) => row.id),
-      [WOOD_RIVER_SITE_ID],
+      nathanSites.map((row) => row.name),
+      [...MADISON_RATE_PLANTS],
     );
-    assert.equal(
-      nathanSites.some((row) => EMPTY_MADISON_PLANTS.includes(row.name as (typeof EMPTY_MADISON_PLANTS)[number])),
-      false,
-    );
+    assert.equal(nathanSites.some((row) => row.name === "Monroe Energy"), true);
+    assert.equal(nathanSites.some((row) => /coker pad/i.test(row.name)), false);
+    assert.equal(preferredRateSiteId("madison", nathanSites), WOOD_RIVER_SITE_ID);
+    assert.equal(preferredRateSiteId("madison", [{ id: YATES_SITE_ID }, { id: WOOD_RIVER_SITE_ID }]), WOOD_RIVER_SITE_ID);
+    assert.equal(preferredRateSiteId("madison", []), WOOD_RIVER_SITE_ID);
 
     const jamesSites = visibleRateSites(james, "cbi", jobsOnDesk([], [], true, james), []);
     assert.equal(jamesSites.length, 0);

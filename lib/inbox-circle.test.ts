@@ -53,6 +53,10 @@ describe("inbox circle", () => {
     assert.match(fabs, /showInbox/);
     const panel = readFileSync(fileURLToPath(new URL("../components/InboxPanel.tsx", import.meta.url)), "utf8");
     assert.match(panel, /those six only/);
+    assert.match(panel, />Inbox</);
+    assert.match(panel, /inbox-new/);
+    assert.doesNotMatch(panel, /can write each other here/);
+    assert.doesNotMatch(panel, /Robert, Nathan, Benny, Shane, Wendell, and Chance/);
     assert.doesNotMatch(panel, /Testers do not see each other/);
   });
 });

@@ -58,14 +58,7 @@ export function InboxPanel({ compact = false }: { compact?: boolean }) {
     <div className={compact ? "flex min-h-0 flex-1 flex-col overflow-hidden" : ""}>
       <div className={compact ? "shrink-0" : ""}>
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className={`font-semibold text-[#163038] ${compact ? "text-2xl" : "font-display text-3xl"}`}>Inbox</h2>
-            <p className="mt-1 text-sm text-[#5b6f73]">
-              {inbox.contacts.length
-                ? "Robert, Nathan, Benny, Shane, Wendell, and Chance can write each other here."
-                : "Inbox is those six only."}
-            </p>
-          </div>
+          <h2 className={`font-semibold text-[#163038] ${compact ? "text-2xl" : "font-display text-3xl"}`}>Inbox</h2>
           <button type="button" onClick={inbox.startDraft} className="inbox-new">
             + New
           </button>

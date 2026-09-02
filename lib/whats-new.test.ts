@@ -60,11 +60,17 @@ describe("inbox what's-new", () => {
     assert.match(TESTER_WHATS_NEW, /You can delete HSE sample cards on JOBS the same way as estimates/);
     assert.match(TESTER_WHATS_NEW, /Jobs only shows sites assigned to you/);
     assert.match(TESTER_WHATS_NEW, /Company cards on Rates can collapse/);
+    assert.match(TESTER_WHATS_NEW, /Rate books Madison opens the wage lookup/);
+    assert.match(TESTER_WHATS_NEW, /Rates lists Madison plants including Monroe Energy/);
+    assert.match(TESTER_WHATS_NEW, /Wood River third-party rental list/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|testers|Follow|apcontrolsllc|seat|James|CBI|View as/i.test(TESTER_WHATS_NEW), false);
+    assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
     assert.match(OWNER_WHATS_NEW, /HS-8622/);
     assert.match(OWNER_WHATS_NEW, /View as Nathan/);
-    assert.match(OWNER_WHATS_NEW, /Yates \/ Rodeo \/ Bayway \/ Ferndale \/ Billings \/ Coker pad/);
+    assert.match(OWNER_WHATS_NEW, /Yates \/ Rodeo \/ Bayway \/ Ferndale \/ Billings/);
+    assert.match(OWNER_WHATS_NEW, /Monroe Energy/);
+    assert.doesNotMatch(OWNER_WHATS_NEW, /hides Yates \/ Rodeo \/ Bayway \/ Ferndale \/ Billings \/ Coker pad/);
     assert.match(OWNER_WHATS_NEW, /Company cards on Rates can collapse/);
     assert.equal(/View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
@@ -148,13 +154,18 @@ describe("inbox what's-new", () => {
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
     assert.match(OWNER_WHATS_NEW, /HS-8622/);
     assert.match(OWNER_WHATS_NEW, /View as Nathan/);
-    assert.match(OWNER_WHATS_NEW, /Yates \/ Rodeo \/ Bayway \/ Ferndale \/ Billings \/ Coker pad/);
+    assert.match(OWNER_WHATS_NEW, /Yates \/ Rodeo \/ Bayway \/ Ferndale \/ Billings/);
+    assert.match(OWNER_WHATS_NEW, /Monroe Energy/);
     assert.match(OWNER_WHATS_NEW, /Company cards on Rates can collapse/);
     assert.match(TESTER_WHATS_NEW, /You can delete HSE sample cards on JOBS the same way as estimates/);
     assert.match(TESTER_WHATS_NEW, /Jobs only shows sites assigned to you/);
     assert.match(TESTER_WHATS_NEW, /Company cards on Rates can collapse/);
+    assert.match(TESTER_WHATS_NEW, /Rate books Madison opens the wage lookup/);
+    assert.match(TESTER_WHATS_NEW, /Rates lists Madison plants including Monroe Energy/);
+    assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|Follow|apcontrolsllc|seat|security|vault|other users|James|CBI|Stephanie|View as/i.test(TESTER_WHATS_NEW), false);
+    assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
       /password|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
         TESTER_WHATS_NEW,

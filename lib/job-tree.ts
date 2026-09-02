@@ -51,10 +51,8 @@ export function sitesForCompany(companyId: CompanyId, sites: SiteRecord[] = cata
 export function matchCatalogSite(text: string, sites: SiteRecord[] = catalogSites()) {
   const hay = norm(text);
   if (!hay) return undefined;
-  const coker = sites.find((site) => site.id === "site-coker-pad");
-  if (coker && /\bcoker\b/.test(hay)) return coker;
   const woodRiver = sites.find((site) => site.id === "site-madison");
-  if (woodRiver && /wood river|roxana|cat 2|mtaajd|unit 3/.test(hay)) return woodRiver;
+  if (woodRiver && /wood river|roxana|cat 2|mtaajd|unit 3|\bcoker\b/.test(hay)) return woodRiver;
   return sites.find((site) => {
     const name = norm(site.name);
     const city = norm((site.city || "").split(",")[0] || "");

@@ -12,6 +12,9 @@ export const TESTER_WHATS_NEW = [
   "• You can delete HSE sample cards on JOBS the same way as estimates.",
   "• Jobs only shows sites assigned to you.",
   "• Company cards on Rates can collapse.",
+  "• Rate books Madison opens the wage lookup for that company (Wood River Shahan book today).",
+  "• Rates lists Madison plants including Monroe Energy.",
+  "• Rates shows the Wood River third-party rental list. People who update rates can edit those dollars when vendors change them.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
@@ -19,8 +22,11 @@ export const OWNER_WHATS_NEW = [
   "• You can delete HSE sample cards on JOBS the same way as estimates.",
   "• Jobs only shows sites assigned to you — testers do not see empty unassigned plant rows.",
   "• View as Nathan: DELETE on HS-8622 (Pre-outage HSE walkdown) stays gone after refresh.",
-  "• View as Nathan hides Yates / Rodeo / Bayway / Ferndale / Billings / Coker pad when those plants are unassigned.",
+  "• View as Nathan hides unassigned plants on JOBS (Yates / Rodeo / Bayway / Ferndale / Billings). Rates still lists every Madison plant, including Monroe Energy.",
+  "• Coker pad / drum alley is a Wood River work area, not its own site.",
   "• Company cards on Rates can collapse. Selected Wood River book stays when the Madison sites card is closed.",
+  "• Rate books Madison opens the Wood River Shahan book, not Yates No book yet — including View as Nathan. No empty No book yet detail card under the list.",
+  "• Third-party rental on Rates is editable and persists in the Rates vault. Equipment reads the live list.",
 ].join("\n");
 
 /** Same as the live V1.38 note. Kept so older imports still resolve. */

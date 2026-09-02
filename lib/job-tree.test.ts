@@ -43,8 +43,11 @@ describe("job tree", () => {
     assert.equal(defaultOpenCompanyId([{ id: "cbi" }]), "cbi");
     assert.equal(sitesForCompany("madison").some((site) => site.id === "site-madison"), true);
     assert.equal(sitesForCompany("madison").some((site) => site.id === "site-yates"), true);
+    assert.equal(sitesForCompany("madison").some((site) => site.id === "site-monroe" && site.name === "Monroe Energy"), true);
+    assert.equal(sitesForCompany("madison").some((site) => /coker pad/i.test(site.name)), false);
     assert.equal(sitesForCompany("cbi").length, 0);
     assert.equal(matchCatalogSite("Madison CAT 2 Wood River — Roxana, IL")?.id, "site-madison");
+    assert.equal(matchCatalogSite("Coker drum valve package — T&M")?.id, "site-madison");
   });
 
   it("lets the owner see every company and testers only the one they are on", () => {
@@ -58,6 +61,8 @@ describe("job tree", () => {
     assert.equal(wood?.assigned, true);
     assert.equal(wood?.jobs.some((job) => job.id === "job-new-mtaajdwa-f7539"), true);
     assert.equal(madison?.sites.some((site) => site.id === "site-yates" && !site.assigned && !site.jobs.length), true);
+    assert.equal(madison?.sites.some((site) => site.id === "site-monroe" && site.name === "Monroe Energy" && !site.jobs.length), true);
+    assert.equal(madison?.sites.some((site) => /coker pad/i.test(site.name)), false);
     assert.equal(ownerTree.find((row) => row.id === LUCKY13_ID)?.sites.some((site) => site.id === UNASSIGNED_SITE_ID), true);
 
     const nathanJobs = jobsOnDesk([], [cat2], true, nathan);
