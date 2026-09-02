@@ -1,7 +1,7 @@
 /**
  * Debbie Shahan TM OCIP — Yates (Georgia Power).
  * Markup materials/rentals/subs 0.10.
- * No East/West COMP PDF yet. Base wage is Shahan Base ST where sheeted.
+ * Wage lookup Base wage is the Yates Rate builder Base Rate, not COMP and not this billed ST.
  * Books stay in Drive. Never commit the xlsx / xlsm / PDF.
  */
 

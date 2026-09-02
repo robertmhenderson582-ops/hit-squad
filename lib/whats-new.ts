@@ -15,8 +15,8 @@ export const TESTER_WHATS_NEW = [
 export const OWNER_WHATS_NEW = [
   "Hit Squad Project Controls V1.40",
   "• Wage lookup now shows Comp base wage, not billed rate.",
-  "• Wood River and Bayway use East Coast Comp Amendment 11 PCA0001103. Rodeo and Ferndale use West Coast Comp Amendment 8 PCA0001100, effective 2026-09-01.",
-  "• Monroe Energy and Yates stay on Shahan Base ST where sheeted, else No COMP book yet.",
+  "• Wood River and Bayway use East Coast Comp Amendment 11 PCA0001103. Rodeo and Ferndale use West Coast Comp Amendment 8 PCA0001100 samples until the unique TSV lands.",
+  "• Monroe Energy uses CW35353 Exhibit C-1. Yates uses Rate builder Base Rate, not Comp.",
   "• Crew costing still uses billed ST / OT / DT. Billings is still No book yet.",
 ].join("\n");
 

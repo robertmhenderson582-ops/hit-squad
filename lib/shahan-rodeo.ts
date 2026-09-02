@@ -61,7 +61,7 @@ export const RODEO_LABOR: ShahanLaborRow[] = [
   { craftName: "BOILERMAKER GENERAL FOREMAN 01", group: "Management", baseSt: null, st: 153.81, ot: 211.94, dt: 270.07, pd: 155 },
   { craftName: "BOILERMAKER FOREMAN 01", group: "Direct Craft", baseSt: null, st: 146.35, ot: 200.9, dt: 255.44, pd: 145 },
   { craftName: "BOILERMAKER FOREMAN ASST 01", group: "Direct Craft", baseSt: null, st: 142.63, ot: 195.38, dt: 248.13, pd: 145 },
-  { craftName: "BOILERMAKER JOURNEYMAN", group: "Direct Craft", baseSt: null, st: 138.9, ot: 189.86, dt: 240.82, pd: 145 },
+  { craftName: "BOILERMAKER JOURNEYMAN", group: "Direct Craft", baseSt: 64.18, st: 138.9, ot: 189.86, dt: 240.82, pd: 145, wageSource: "comp" },
   { craftName: "BOILERMAKER TUBE WELDER", group: "Direct Craft", baseSt: null, st: 144.88, ot: 198.72, dt: 252.55, pd: 145 },
   { craftName: "BM TOOL ROOM ATTENDANT", group: "Direct Craft", baseSt: null, st: 138.9, ot: 189.86, dt: 240.82, pd: 145 },
   { craftName: "BM MATERIAL COORDINATOR", group: "Direct Craft", baseSt: null, st: 138.9, ot: 189.86, dt: 240.82, pd: 145 },

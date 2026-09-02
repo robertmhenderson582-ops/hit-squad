@@ -5,6 +5,7 @@
  * on Monroe / Yates). Never treat billed ST as wage.
  */
 
+import { BAYWAY_WAGE, MONROE_WAGE, WOOD_RIVER_WAGE, YATES_WAGE } from "./comp-wages.ts";
 import { BAYWAY_BOOK_ID, BAYWAY_BOOK_LABEL, BAYWAY_CRAFT_PD, BAYWAY_LABOR, BAYWAY_MARKUP, BAYWAY_PLANT, BAYWAY_STAFF_PD } from "./shahan-bayway.ts";
 import { FERNDALE_BOOK_ID, FERNDALE_BOOK_LABEL, FERNDALE_CRAFT_PD, FERNDALE_LABOR, FERNDALE_MARKUP, FERNDALE_PLANT, FERNDALE_STAFF_PD } from "./shahan-ferndale.ts";
 import { MONROE_BOOK_ID, MONROE_BOOK_LABEL, MONROE_CRAFT_PD, MONROE_LABOR, MONROE_MARKUP, MONROE_PLANT, MONROE_STAFF_PD } from "./shahan-monroe.ts";
@@ -42,19 +43,28 @@ export const RODEO_EXHIBIT_REV = "Rev 7-1-26";
 export const FERNDALE_EXHIBIT_REV = "Rev 6-1-26";
 export const EAST_COAST_COMP = "East Coast COMP Amendment 11 PCA0001103";
 export const WEST_COAST_COMP = "West Coast COMP Amendment 8 PCA0001100";
+export const MONROE_CONTRACT = "CW35353";
+export const MONROE_EXHIBIT = "C-1 V2.15";
+export const MONROE_EFFECTIVE = "2026-07-01";
+export const YATES_WAGE_LABEL = "Yates Rate builder — Base Rate";
+export const MONROE_WAGE_LABEL = "CW35353 Exhibit C-1 — Monroe Energy";
 
 export type WageCoast = "east" | "west" | null;
+export type WageKind = "comp-east" | "comp-west" | "c1" | "workbook" | null;
 
 export type WageBook = {
   bookId: string;
   bookLabel: string;
+  wageLabel?: string;
   plant: string;
   siteId: string;
   catalog: ShahanLaborRow[];
+  wageCatalog: ShahanLaborRow[];
   staffPd: number;
   craftPd: number;
   markup: number | null;
   wageCoast: WageCoast;
+  wageKind: WageKind;
   pca: string | null;
   amendment: number | null;
   effective: string | null;
@@ -68,10 +78,13 @@ export const WAGE_BOOKS: WageBook[] = [
     plant: YATES_PLANT,
     siteId: YATES_SITE_ID,
     catalog: YATES_LABOR,
+    wageCatalog: YATES_WAGE,
+    wageLabel: YATES_WAGE_LABEL,
     staffPd: YATES_STAFF_PD,
     craftPd: YATES_CRAFT_PD,
     markup: YATES_MARKUP,
     wageCoast: null,
+    wageKind: "workbook",
     pca: null,
     amendment: null,
     effective: null,
@@ -83,10 +96,13 @@ export const WAGE_BOOKS: WageBook[] = [
     plant: RODEO_PLANT,
     siteId: RODEO_SITE_ID,
     catalog: RODEO_LABOR,
+    wageCatalog: RODEO_LABOR.filter((row) => row.wageSource === "comp"),
+    wageLabel: "Rodeo COMP West B-1 (Amendment 8) · samples",
     staffPd: RODEO_STAFF_PD,
     craftPd: RODEO_CRAFT_PD,
     markup: RODEO_MARKUP,
     wageCoast: "west",
+    wageKind: "comp-west",
     pca: WEST_COAST_PCA,
     amendment: WEST_COAST_AMENDMENT,
     effective: COMP_EFFECTIVE,
@@ -98,10 +114,12 @@ export const WAGE_BOOKS: WageBook[] = [
     plant: BAYWAY_PLANT,
     siteId: BAYWAY_SITE_ID,
     catalog: BAYWAY_LABOR,
+    wageCatalog: BAYWAY_WAGE,
     staffPd: BAYWAY_STAFF_PD,
     craftPd: BAYWAY_CRAFT_PD,
     markup: BAYWAY_MARKUP,
     wageCoast: "east",
+    wageKind: "comp-east",
     pca: EAST_COAST_PCA,
     amendment: EAST_COAST_AMENDMENT,
     effective: COMP_EFFECTIVE,
@@ -113,10 +131,13 @@ export const WAGE_BOOKS: WageBook[] = [
     plant: FERNDALE_PLANT,
     siteId: FERNDALE_SITE_ID,
     catalog: FERNDALE_LABOR,
+    wageCatalog: FERNDALE_LABOR,
+    wageLabel: "Ferndale COMP West B-1 (Amendment 8) · samples",
     staffPd: FERNDALE_STAFF_PD,
     craftPd: FERNDALE_CRAFT_PD,
     markup: FERNDALE_MARKUP,
     wageCoast: "west",
+    wageKind: "comp-west",
     pca: WEST_COAST_PCA,
     amendment: WEST_COAST_AMENDMENT,
     effective: COMP_EFFECTIVE,
@@ -128,10 +149,12 @@ export const WAGE_BOOKS: WageBook[] = [
     plant: SHAHAN_PLANT,
     siteId: WOOD_RIVER_SITE_ID,
     catalog: SHAHAN_LABOR,
+    wageCatalog: WOOD_RIVER_WAGE,
     staffPd: SHAHAN_STAFF_PD,
     craftPd: SHAHAN_CRAFT_PD,
     markup: null,
     wageCoast: "east",
+    wageKind: "comp-east",
     pca: EAST_COAST_PCA,
     amendment: EAST_COAST_AMENDMENT,
     effective: COMP_EFFECTIVE,
@@ -140,17 +163,20 @@ export const WAGE_BOOKS: WageBook[] = [
   {
     bookId: MONROE_BOOK_ID,
     bookLabel: MONROE_BOOK_LABEL,
+    wageLabel: MONROE_WAGE_LABEL,
     plant: MONROE_PLANT,
     siteId: MONROE_SITE_ID,
     catalog: MONROE_LABOR,
+    wageCatalog: MONROE_WAGE,
     staffPd: MONROE_STAFF_PD,
     craftPd: MONROE_CRAFT_PD,
     markup: MONROE_MARKUP,
     wageCoast: null,
-    pca: null,
+    wageKind: "c1",
+    pca: MONROE_CONTRACT,
     amendment: null,
-    effective: null,
-    exhibitRev: null,
+    effective: MONROE_EFFECTIVE,
+    exhibitRev: MONROE_EXHIBIT,
   },
 ];
 
@@ -220,6 +246,18 @@ export type WageLookupLabel = {
   index: number;
 };
 
+/** Wage lookup sections use the unique book's own group labels. */
+export function wageCatalogByGroup(catalog: ShahanLaborRow[]): { group: string; rows: ShahanLaborRow[] }[] {
+  const grouped = new Map<string, ShahanLaborRow[]>();
+  for (const row of catalog) {
+    const key = row.group || "OTHER";
+    const list = grouped.get(key) ?? [];
+    list.push(row);
+    grouped.set(key, list);
+  }
+  return [...grouped.entries()].map(([group, rows]) => ({ group, rows }));
+}
+
 /** Keep duplicate titles. Append group when present; else craft order. */
 export function wageLookupLabels(catalog: ShahanLaborRow[]): WageLookupLabel[] {
   const titleCounts = new Map<string, number>();
@@ -241,7 +279,7 @@ export function formatBaseWage(row: ShahanLaborRow, book: WageBook): string {
   if (typeof row.baseSt === "number" && Number.isFinite(row.baseSt) && row.baseSt > 0) {
     return formatDeskDollars(row.baseSt);
   }
-  if (book.wageCoast) return "";
+  if (book.wageKind === "comp-east" || book.wageKind === "comp-west" || book.wageKind === "c1") return "";
   return NO_COMP_WAGE_MESSAGE;
 }
 
@@ -253,12 +291,18 @@ export function formatBilledSt(row: ShahanLaborRow): string {
 }
 
 export function wageLookupNote(book: WageBook): string {
-  if (book.wageCoast === "east") {
+  if (book.wageKind === "comp-east") {
     return `${EAST_COAST_COMP}, effective ${COMP_EFFECTIVE}. Base wage is Exhibit B-1 BW on the ST row. Billed ST is the composite — not the wage.`;
   }
-  if (book.wageCoast === "west") {
+  if (book.wageKind === "comp-west") {
     const exhibit = book.exhibitRev ? ` ${book.plant} (${book.exhibitRev})` : "";
-    return `${WEST_COAST_COMP}, effective ${COMP_EFFECTIVE}. Replaces Exhibit B-1 for${exhibit} only. Base wage is Exhibit B-1 BW on the ST row. Billed ST is the composite — not the wage.`;
+    return `${WEST_COAST_COMP}, effective ${COMP_EFFECTIVE}. Replaces Exhibit B-1 for${exhibit} only. Unique night-sheet rows are still extracting. Base wage is Exhibit B-1 BW on the ST row. Billed ST is the composite — not the wage.`;
+  }
+  if (book.wageKind === "c1") {
+    return `Monroe Energy ${MONROE_CONTRACT} Exhibit ${MONROE_EXHIBIT}, Trainer, effective ${MONROE_EFFECTIVE}. Base wage is C-1 BW. Billed ST is the composite — not the wage.`;
+  }
+  if (book.wageKind === "workbook") {
+    return "Yates Labor Ratebuilder Base Rate. Not COMP and not Shahan billed ST. Billed ST is the sheet ST Billable.";
   }
   return "No COMP PDF for this plant yet. Base wage is Shahan Base ST where sheeted, otherwise No COMP book yet. Billed ST is not the wage.";
 }

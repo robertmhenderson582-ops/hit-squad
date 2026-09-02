@@ -6,7 +6,6 @@ import {
   SHAHAN_EQUIPMENT,
   formatDeskDollars,
   shahanEquipmentByFuel,
-  shahanLaborByGroup,
 } from "@/lib/shahan-wood-river";
 import {
   WOOD_RIVER_SITE_ID,
@@ -14,6 +13,7 @@ import {
   formatBaseWage,
   formatBilledSt,
   isWoodRiverBook,
+  wageCatalogByGroup,
   wageLookupLabels,
   wageLookupNote,
 } from "@/lib/wage-lookup";
@@ -72,8 +72,8 @@ export function RateBuilder({ siteId = WOOD_RIVER_SITE_ID }: { siteId?: string }
   const alias = useAlias();
   const book = bookForSiteId(siteId);
   if (!book) return null;
-  const labeled = wageLookupLabels(book.catalog);
-  const groups = shahanLaborByGroup(book.catalog).map((group) => ({
+  const labeled = wageLookupLabels(book.wageCatalog);
+  const groups = wageCatalogByGroup(book.wageCatalog).map((group) => ({
     ...group,
     rows: labeled.filter((item) => group.rows.includes(item.row)),
   }));
@@ -83,7 +83,7 @@ export function RateBuilder({ siteId = WOOD_RIVER_SITE_ID }: { siteId?: string }
   return (
     <div className="space-y-5">
       <section className="plant-card px-5 py-5">
-        <h2 className="font-display text-2xl font-semibold text-[#163038]">{alias(book.bookLabel)}</h2>
+        <h2 className="font-display text-2xl font-semibold text-[#163038]">{alias(book.wageLabel || book.bookLabel)}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">{alias(wageLookupNote(book))}</p>
       </section>
 

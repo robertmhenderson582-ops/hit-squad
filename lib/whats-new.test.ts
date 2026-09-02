@@ -64,6 +64,8 @@ describe("inbox what's-new", () => {
     assert.match(OWNER_WHATS_NEW, /East Coast Comp Amendment 11 PCA0001103/);
     assert.match(OWNER_WHATS_NEW, /West Coast Comp Amendment 8 PCA0001100/);
     assert.match(OWNER_WHATS_NEW, /Monroe Energy/);
+    assert.match(OWNER_WHATS_NEW, /CW35353/);
+    assert.match(OWNER_WHATS_NEW, /Rate builder/);
     assert.match(OWNER_WHATS_NEW, /Billings/);
     assert.equal(/View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
@@ -148,6 +150,8 @@ describe("inbox what's-new", () => {
     assert.match(OWNER_WHATS_NEW, /East Coast Comp Amendment 11 PCA0001103/);
     assert.match(OWNER_WHATS_NEW, /West Coast Comp Amendment 8 PCA0001100/);
     assert.match(OWNER_WHATS_NEW, /Monroe Energy/);
+    assert.match(OWNER_WHATS_NEW, /CW35353/);
+    assert.match(OWNER_WHATS_NEW, /Rate builder/);
     assert.match(OWNER_WHATS_NEW, /Billings/);
     assert.match(TESTER_WHATS_NEW, /Wage lookup now shows Comp base wage, not billed rate/);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);

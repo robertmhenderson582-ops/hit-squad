@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import { BAYWAY_WAGE, MONROE_WAGE, WOOD_RIVER_WAGE, YATES_WAGE } from "./comp-wages.ts";
 import { BAYWAY_LABOR } from "./shahan-bayway.ts";
 import { FERNDALE_LABOR } from "./shahan-ferndale.ts";
 import { MONROE_LABOR } from "./shahan-monroe.ts";
@@ -67,16 +68,19 @@ describe("wage lookup plants", () => {
     assert.deepEqual(dollars(yatesPm), { baseSt: 95, st: 162.18, ot: 222.14, dt: 282.11, pd: 150 });
 
     const monroeBm = MONROE_LABOR.find((row) => row.craftName === "BOILERMAKER, JOURNEYMAN");
-    assert.deepEqual(dollars(monroeBm!), { baseSt: null, st: 126.05, ot: 174.15, dt: 222.25, pd: 150 });
+    assert.deepEqual(dollars(monroeBm!), { baseSt: 58, st: 126.05, ot: 174.15, dt: 222.25, pd: 150 });
+    assert.equal(MONROE_LABOR.find((row) => row.craftName === "SITE-LEAD 01")?.baseSt, 100.02);
+    assert.equal(MONROE_LABOR.find((row) => row.craftName === "LEAD, SITE (BM) 1")?.baseSt, null);
     assert.equal(MONROE_LABOR[0].baseSt, 68);
     assert.equal(MONROE_LABOR[0].st, 140.47);
     assert.equal(MONROE_LABOR[0].group.endsWith(" "), true);
 
     const baywayFirst = BAYWAY_LABOR[0];
     assert.equal(baywayFirst.craftName, "Site Lead 01");
-    assert.deepEqual(dollars(baywayFirst), { baseSt: null, st: 148.59, ot: 206.54, dt: 264.49, pd: 150 });
+    assert.deepEqual(dollars(baywayFirst), { baseSt: 65, st: 148.59, ot: 206.54, dt: 264.49, pd: 150 });
     const baywayComp = BAYWAY_LABOR.find((row) => row.craftName === "Site Lead 01" && row.st === 138.07);
     assert.equal(baywayComp?.baseSt, 90);
+    assert.equal(BAYWAY_LABOR.find((row) => row.craftName === "Site Lead 02")?.baseSt, 88);
     const baywayBm = BAYWAY_LABOR.find((row) => row.craftName === "Boilermaker Journeyman 01");
     assert.equal(baywayBm?.baseSt, 48.7);
     assert.equal(baywayBm?.st, 125.3);
@@ -138,14 +142,28 @@ describe("wage lookup plants", () => {
     assert.equal(bookForSite("Bayway")?.wageCoast, "east");
     assert.equal(bookForSite("Ferndale")?.wageCoast, "west");
     assert.equal(bookForSite("Yates")?.wageCoast, null);
-    assert.equal(formatBaseWage(MONROE_LABOR[3], bookForSite("Monroe Energy")!), NO_COMP_WAGE_MESSAGE);
-    assert.equal(formatBaseWage(BAYWAY_LABOR[0], bookForSite("Bayway")!), "");
+    assert.equal(formatBaseWage(MONROE_LABOR.find((row) => row.craftName === "LEAD, SITE (BM) 1")!, bookForSite("Monroe Energy")!), "");
+    assert.equal(formatBaseWage(BAYWAY_LABOR[0], bookForSite("Bayway")!), "$65.00");
+    assert.equal(BAYWAY_WAGE.length, 107);
+    assert.equal(WOOD_RIVER_WAGE.length, 158);
+    assert.equal(MONROE_WAGE.length, 56);
+    assert.equal(YATES_WAGE.length, 56);
+    assert.equal(bookForSite("Bayway")?.wageCatalog.length, 107);
+    assert.equal(bookForSite("Wood River")?.wageCatalog.length, 158);
+    assert.equal(catalogForSite("Bayway")?.length, 110);
+    assert.equal(catalogForSite("Wood River — Roxana, IL")?.length, 159);
+    assert.equal(YATES_WAGE[0].st, 159.3275);
+    assert.equal(YATES_LABOR[0].st, 162.18);
+    assert.equal(YATES_WAGE[0].baseSt, 95);
+    assert.equal(RODEO_LABOR.find((row) => row.craftName === "BOILERMAKER JOURNEYMAN")?.baseSt, 64.18);
     assert.equal(bookForSite("Rodeo")?.pca, WEST_COAST_PCA);
     assert.equal(bookForSite("Ferndale")?.pca, WEST_COAST_PCA);
     assert.equal(bookForSite("Bayway")?.pca, EAST_COAST_PCA);
     assert.equal(bookForSite("Wood River")?.pca, EAST_COAST_PCA);
     assert.equal(bookForSite("Yates")?.pca, null);
-    assert.equal(bookForSite("Monroe Energy")?.pca, null);
+    assert.equal(bookForSite("Monroe Energy")?.pca, "CW35353");
+    assert.equal(bookForSite("Rodeo")?.wageCatalog.length, 2);
+    assert.equal(bookForSite("Ferndale")?.wageCatalog.length, 2);
   });
 
   it("keeps East Coast PCA0001103 and West Coast PCA0001100 on separate books", () => {
@@ -179,9 +197,11 @@ describe("wage lookup plants", () => {
     assert.match(wageLookupNote(ferndale), /Ferndale \(Rev 6-1-26\) only/);
     assert.match(EAST_COAST_COMP, /PCA0001103/);
     assert.match(WEST_COAST_COMP, /PCA0001100/);
-    assert.equal(rodeo.catalog.filter((row) => row.wageSource === "comp").length, 1);
+    assert.equal(rodeo.catalog.filter((row) => row.wageSource === "comp").length, 2);
     assert.equal(rodeo.catalog[0].baseSt, 104);
     assert.equal(rodeo.catalog[0].baseSt === 110, false);
+    assert.equal(bookForSite("Monroe Energy")?.pca, "CW35353");
+    assert.equal(bookForSite("Yates")?.wageKind, "workbook");
     assert.equal(ferndale.catalog.length, 2);
     assert.deepEqual(
       ferndale.catalog.map((row) => row.baseSt),
@@ -190,17 +210,28 @@ describe("wage lookup plants", () => {
   });
 
   it("disambiguates duplicate Bayway titles without rewriting Crew", () => {
-    const labels = wageLookupLabels(BAYWAY_LABOR);
-    const leads = labels.filter((item) => item.row.craftName === "Site Lead 01");
+    const labels = wageLookupLabels(BAYWAY_WAGE);
+    const leads = labels.filter((item) => item.row.craftName === "SITE LEAD 01");
     assert.equal(leads.length, 2);
-    assert.equal(leads[0].label, "Site Lead 01 (1)");
-    assert.equal(leads[1].label, "Site Lead 01 (2)");
-    assert.equal(leads[0].row.st, 148.59);
-    assert.equal(leads[1].row.st, 138.07);
+    assert.equal(leads[0].label, "SITE LEAD 01 (MERIT STAFF)");
+    assert.equal(leads[1].label, "SITE LEAD 01 (BM STAFF)");
+    assert.equal(leads[0].row.baseSt, 90);
+    assert.equal(leads[0].row.st, 138.07);
+    assert.equal(leads[1].row.baseSt, 65);
+    assert.equal(leads[1].row.st, 148.59);
     const crew = readFileSync(fileURLToPath(new URL("../components/RateBuilder.tsx", import.meta.url)), "utf8");
     assert.match(crew, /BASE WAGE/);
     assert.match(crew, /BILLED ST/);
+    assert.match(crew, /wageCatalogByGroup/);
+    assert.match(crew, /book\.wageCatalog/);
     assert.doesNotMatch(crew, /setCrew|rematchCrewToShahan/);
     assert.equal(/\[\"CRAFT\", \"ST\", \"OT\", \"DT\", \"PD\"\]/.test(crew), false);
+  });
+
+  it("keeps unique wage-catalog keys as plant group plus name", () => {
+    for (const book of WAGE_BOOKS) {
+      const keys = book.wageCatalog.map((row) => `${book.plant}\t${row.group}\t${row.craftName}`);
+      assert.equal(keys.length, new Set(keys).size, book.plant);
+    }
   });
 });
