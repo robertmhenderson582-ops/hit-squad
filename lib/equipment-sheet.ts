@@ -90,7 +90,7 @@ export function blankLargeTool(window: { start?: string; end?: string } = {}): L
 
 export function blankThirdParty(window: { start?: string; end?: string } = {}): ThirdPartyLine {
   return seedLineDates(
-    { id: uid("tp"), item: "", period: "daily", rate: 0, freight: 0, qty: 1, start: "", end: "" },
+    { id: uid("tp"), item: "", period: "monthly", rate: 0, freight: 0, qty: 1, start: "", end: "" },
     window,
   );
 }
