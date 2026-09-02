@@ -10,6 +10,7 @@ import { OtherCostDesk } from "@/components/OtherCostDesk";
 import { SubcontractorDesk } from "@/components/SubcontractorDesk";
 import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
+import { OrgChartDesk } from "@/components/OrgChartDesk";
 import { EstimatePackageProvider } from "@/components/EstimatePackage";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
@@ -113,6 +114,10 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
 
       {tab === "crew" ? (
         <EstimateWorkbook client={estimate.client} site={siteName} name={shown} />
+      ) : null}
+
+      {tab === "org-chart" ? (
+        <OrgChartDesk client={estimate.client} site={siteName} name={shown} />
       ) : null}
 
       {tab === "staffing" ? (

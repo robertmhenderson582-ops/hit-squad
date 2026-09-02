@@ -34,6 +34,7 @@ import { packIdFromStoreKey, renameLocalPackTitle, touchLocalPack } from "@/lib/
 import { hydrateFromVault, flushVaultUpsert, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
 import { persistCrewTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
+import { emptyOrgChart, readOrgChart, writeOrgChart, type OrgChartState } from "@/lib/org-chart";
 
 type CrewState = {
   staff: CraftRow[];
@@ -50,10 +51,12 @@ type EstimatePackageApi = {
   crew: CrewState;
   jobMeta: JobMeta;
   activities: WorkActivity[];
+  orgChart: OrgChartState;
   setProjectStartDate: (start: string) => void;
   patch: (id: PhaseId, next: Partial<PhaseRow>) => void;
   pickOt: (id: PhaseId, pick: PhaseOtPick) => void;
   setCrew: (next: CrewState | ((current: CrewState) => CrewState)) => void;
+  setOrgChart: (next: OrgChartState | ((current: OrgChartState) => OrgChartState)) => void;
   setJobMeta: (next: JobMeta | ((current: JobMeta) => JobMeta)) => void;
   setPackTitle: (title: string) => string | null;
   setActivities: (next: WorkActivity[] | ((current: WorkActivity[]) => WorkActivity[])) => void;
@@ -123,6 +126,7 @@ export function EstimatePackageProvider({
 }) {
   const [schedule, setSchedule] = useState<PhaseScheduleState>(() => readSchedule(estimateKey));
   const [crew, setCrewState] = useState<CrewState>(() => syncCrew(readCrew(estimateKey), readSchedule(estimateKey)));
+  const [orgChart, setOrgChartState] = useState<OrgChartState>(() => readOrgChart(estimateKey));
   const [jobMeta, setJobMetaState] = useState<JobMeta>(() => readJobMeta(estimateKey));
   const [activities, setActivitiesState] = useState<WorkActivity[]>(() => readActivities(estimateKey) ?? []);
   const [ready, setReady] = useState(false);
@@ -137,6 +141,7 @@ export function EstimatePackageProvider({
       const next = readSchedule(estimateKey);
       setSchedule(next);
       setCrewState(syncCrew(readCrew(estimateKey), next));
+      setOrgChartState(readOrgChart(estimateKey));
       setJobMetaState(readJobMeta(estimateKey));
       setActivitiesState(readActivities(estimateKey) ?? []);
       setReady(true);
@@ -173,6 +178,16 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
+    writeOrgChart(estimateKey, orgChart);
+    const packId = packIdFromStoreKey(estimateKey);
+    if (packId) {
+      touchLocalPack(packId);
+      scheduleVaultUpsert(packId);
+    }
+  }, [estimateKey, orgChart, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
     writeJobMeta(estimateKey, jobMeta);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
@@ -206,6 +221,7 @@ export function EstimatePackageProvider({
       estimateKey,
       schedule,
       crew,
+      orgChart,
       jobMeta,
       activities,
       setProjectStartDate(start) {
@@ -270,6 +286,9 @@ export function EstimatePackageProvider({
       setCrew(next) {
         setCrewState((current) => (typeof next === "function" ? next(current) : next));
       },
+      setOrgChart(next) {
+        setOrgChartState((current) => (typeof next === "function" ? next(current) : next));
+      },
       setJobMeta(next) {
         setJobMetaState((current) => (typeof next === "function" ? next(current) : next));
       },
@@ -291,7 +310,7 @@ export function EstimatePackageProvider({
         return blankCraftRow();
       },
     }),
-    [activities, crew, estimateKey, jobMeta, schedule],
+    [activities, crew, estimateKey, jobMeta, orgChart, schedule],
   );
 
   return <EstimatePackageContext.Provider value={api}>{children}</EstimatePackageContext.Provider>;
@@ -304,12 +323,14 @@ export function useEstimatePackage() {
       estimateKey: "",
       schedule: defaultPhaseSchedule(),
       crew: emptyCrew(),
+      orgChart: emptyOrgChart(),
       jobMeta: emptyJobMeta(),
       activities: [],
       setProjectStartDate() {},
       patch() {},
       pickOt() {},
       setCrew() {},
+      setOrgChart() {},
       setJobMeta() {},
       setPackTitle() {
         return null;

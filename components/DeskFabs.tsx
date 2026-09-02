@@ -10,7 +10,7 @@ import { unlockInboxAudio } from "@/lib/chime";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { InboxPanel } from "@/components/InboxPanel";
 import { useInbox } from "@/components/InboxProvider";
-import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useLensUser } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { canUseInbox, canUseSuggestionBox } from "@/lib/inbox-circle";
 
@@ -48,7 +48,6 @@ function announceTicketsChanged() {
 
 export function DeskFabs() {
   const { status, user } = useSession();
-  const desk = useOwnerDesk();
   const lens = useLensUser();
   const inbox = useInbox();
   const showInbox = canUseInbox(lens);
@@ -61,8 +60,6 @@ export function DeskFabs() {
   const [note, setNote] = useState<string | null>(null);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const drag = useRef<{ ox: number; oy: number; sx: number; sy: number } | null>(null);
-  const joseph = desk?.viewAs === "joseph" || user?.name === "Joseph Henderson";
-
   useEffect(() => {
     if (status === "authenticated") {
       const next = readDraft();
@@ -295,11 +292,6 @@ export function DeskFabs() {
             </div>
           ) : null}
           {note ? <p className="ticket-inline-note mt-2 text-xs text-[#5b6f73]">{note}</p> : null}
-          {joseph ? (
-            <p className="mt-2 text-xs text-[#5b6f73]">
-              Submit emails robertmhenderson582@gmail.com. Mail is not sent from this trial.
-            </p>
-          ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={() => void capture()} className="rounded-lg border border-steel px-3 py-2 text-sm text-steel">
               Capture screen

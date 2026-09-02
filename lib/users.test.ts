@@ -352,7 +352,7 @@ test("owner can add a tester login that must change password on first sign-in", 
   assert.equal(canUseRateBuilder(user), false);
   assert.equal(canLookupRates(user), false);
   assert.equal(canUseViewAs(user), false);
-  assert.equal(canUseRateBuilder({ email: JOSEPH_EMAIL, role: "tester" }), false);
+  assert.equal(canUseRateBuilder({ email: JOSEPH_EMAIL, role: "tester" }), true);
 
   const rows = await listSeatRows();
   assert.equal(rows.some((row) => row.email === ADDED && row.passwordIssued && row.companyId === "hitsquad"), true);

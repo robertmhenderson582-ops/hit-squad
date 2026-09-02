@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { assignedCompany, companyDeskLogoForEmail } from "@/lib/companies-store";
+import { assignedCompaniesForEmail, assignedCompany, companyDeskLogoForEmail } from "@/lib/companies-store";
 import { cookieValue } from "@/lib/http";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { deskForUser } from "@/lib/jobs";
@@ -14,12 +14,14 @@ export async function GET(request: Request) {
   }
   const deskUser = await scopedDeskUser(user, request);
   const companyId = await assignedCompany(deskUser.email);
+  const assigned = await assignedCompaniesForEmail(deskUser.email);
   const scope = { isOwner: deskUser.role === "owner", email: deskUser.email, companyId };
 
   return NextResponse.json({
     user: { id: deskUser.id, email: deskUser.email, name: deskUser.name },
     desk: deskForUser(deskUser.id, scope),
     companyId,
+    companyName: assigned[0]?.name ?? "",
     companyDeskLogo: await companyDeskLogoForEmail(deskUser.email),
   });
 }

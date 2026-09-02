@@ -21,7 +21,6 @@ export function QualityDesk() {
   const owner = useOwnerDesk();
   const [client, setClient] = useState<(typeof CLIENTS)[number]>("Phillips 66");
   const chance = owner?.viewAs === "chance";
-  const joseph = owner?.viewAs === "joseph";
 
   return (
     <div className="mt-4 space-y-5">
@@ -33,9 +32,6 @@ export function QualityDesk() {
         <p className="plant-card px-4 py-3 text-sm">
           Chance — this is your Quality home. Empty on purpose. You are the lead.
         </p>
-      ) : null}
-      {joseph ? (
-        <p className="plant-card px-4 py-3 text-sm">Joseph chrome — look only. Empty board.</p>
       ) : null}
       <label className="block max-w-sm text-sm">
         Client folder

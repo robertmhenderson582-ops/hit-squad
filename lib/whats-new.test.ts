@@ -52,19 +52,23 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
-    assert.equal(DESK_VERSION, "1.42.0");
-    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.42");
-    assert.equal(DESK_THREAD_ID, "th-desk-v1.42");
+    assert.equal(DESK_VERSION, "1.43.0");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.43");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.43");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Sign-in stays on this desk after a restart/);
-    assert.match(TESTER_WHATS_NEW, /Owner stays the owner/);
+    assert.match(TESTER_WHATS_NEW, /Org chart/);
+    assert.match(TESTER_WHATS_NEW, /unnamed still show as the position/);
+    assert.match(TESTER_WHATS_NEW, /Foreman shows as a number unless you name one/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|testers|Follow|apcontrolsllc|seat|James|CBI|View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
-    assert.match(OWNER_WHATS_NEW, /Sign-in stays on this desk after a restart/);
-    assert.match(OWNER_WHATS_NEW, /Owner sign-in is kept with the desk/);
-    assert.match(OWNER_WHATS_NEW, /Tester sign-ins stay/);
+    assert.match(OWNER_WHATS_NEW, /Org chart/);
+    assert.match(OWNER_WHATS_NEW, /Direct Craft and Support stay off the chart/);
+    assert.match(OWNER_WHATS_NEW, /Crew dollars, billing, and headcount stay put/);
+    assert.match(OWNER_WHATS_NEW, /Joseph Henderson can use the full desk/);
+    assert.match(OWNER_WHATS_NEW, /Owner stays the only owner/);
+    assert.match(TESTER_WHATS_NEW, /Owner stays the owner/);
     assert.equal(/View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
       /password|passwords|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
@@ -104,9 +108,9 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.42 onto an existing Hit Squad desk thread after V1.38", () => {
+  it("appends V1.43 onto an existing Hit Squad desk thread after V1.38", () => {
     assert.equal(seenKey("tester-x", "1.38.0"), `${WHATS_NEW_MARK_PREFIX}1.38.0:tester-x`);
-    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.42.0:tester-x`);
+    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.43.0:tester-x`);
     assert.notEqual(seenKey("tester-x", "1.38.0"), seenKey("tester-x"));
 
     const prior = [
@@ -138,17 +142,20 @@ describe("inbox what's-new", () => {
     assert.deepEqual(applyWhatsNew(prior, "tester-joseph-append", false, "josephmhenderson2002@gmail.com"), prior);
   });
 
-  it("posts the V1.42 Inbox note for testers and owner", () => {
-    assert.equal(DESK_VERSION, "1.42.0");
+  it("posts the V1.43 Inbox note for testers and owner", () => {
+    assert.equal(DESK_VERSION, "1.43.0");
     assert.equal(NEXT_SHIP_VERSION, DESK_VERSION);
     assert.equal(NEXT_SHIP_VERSION_LABEL, DESK_VERSION_LABEL);
     assert.equal(TESTER_NEXT_SHIP_DRAFT, TESTER_WHATS_NEW);
     assert.equal(OWNER_NEXT_SHIP_DRAFT, OWNER_WHATS_NEW);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(OWNER_WHATS_NEW, /Sign-in stays on this desk after a restart/);
-    assert.match(OWNER_WHATS_NEW, /Owner sign-in is kept with the desk/);
-    assert.match(OWNER_WHATS_NEW, /Tester sign-ins stay/);
-    assert.match(TESTER_WHATS_NEW, /Sign-in stays on this desk after a restart/);
+    assert.match(OWNER_WHATS_NEW, /Org chart/);
+    assert.match(OWNER_WHATS_NEW, /Direct Craft and Support stay off the chart/);
+    assert.match(OWNER_WHATS_NEW, /Crew dollars, billing, and headcount stay put/);
+    assert.match(OWNER_WHATS_NEW, /Joseph Henderson can use the full desk/);
+    assert.match(OWNER_WHATS_NEW, /Owner stays the only owner/);
+    assert.match(TESTER_WHATS_NEW, /Org chart/);
+    assert.match(TESTER_WHATS_NEW, /Foreman shows as a number unless you name one/);
     assert.match(TESTER_WHATS_NEW, /Owner stays the owner/);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
@@ -160,10 +167,10 @@ describe("inbox what's-new", () => {
       ),
       false,
     );
-    const live = applyWhatsNew([], "tester-v142-live", false, "nathanboyte@gmail.com");
-    assert.equal(live[0].id, "th-desk-v1.42");
+    const live = applyWhatsNew([], "tester-v143-live", false, "nathanboyte@gmail.com");
+    assert.equal(live[0].id, "th-desk-v1.43");
     assert.equal(live[0].messages[0]?.text, TESTER_WHATS_NEW);
-    const owner = applyWhatsNew([], "owner-v142-live", true);
+    const owner = applyWhatsNew([], "owner-v143-live", true);
     assert.equal(owner[0].messages[0]?.text, OWNER_WHATS_NEW);
   });
 });

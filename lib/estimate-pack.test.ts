@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CREW_STORE_PREFIX, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
+import { ORG_CHART_STORE_PREFIX } from "./org-chart.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { newEstimateKey } from "./estimate-open.ts";
@@ -375,6 +376,41 @@ describe("estimate pack snapshot", () => {
     assert.equal(cards[0]?.labor[0]?.ranges[0]?.start, "2026-09-14");
     assert.equal(cards[0]?.equipment[0]?.qty, 3);
     assert.ok(store.getItem(`${SUB_STORE_PREFIX}${key}`));
+  });
+
+  it("round-trips Org chart names without rewriting Crew", () => {
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-orgchart",
+        title: "Org chart pack",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+      },
+      store,
+    );
+    const key = newEstimateKey("new-orgchart");
+    store.setItem(`${CREW_STORE_PREFIX}${key}`, JSON.stringify({
+      staff: [{ id: "st-1", position: "Superintendent", ranges: [{ headcount: 1 }] }],
+      generalForeman: [{ id: "gf-1", position: "General Foreman BM", ranges: [{ headcount: 1 }] }],
+      foreman: [{ id: "fm-1", position: "Foreman PF", ranges: [{ headcount: 3 }] }],
+      direct: [{ id: "bm-1", position: "Boilermaker", ranges: [{ headcount: 8 }] }],
+    }));
+    store.setItem(`${ORG_CHART_STORE_PREFIX}${key}`, JSON.stringify({
+      names: { "st-1": { days: "Lee" } },
+      parents: { "fm-1:days": "st-1:days" },
+    }));
+    const pack = collectPack(store, "new-orgchart");
+    assert.equal((pack?.orgChart as { names: { "st-1": { days: string } } }).names["st-1"].days, "Lee");
+    assert.equal((pack?.crew as { direct: Array<{ position: string }> }).direct[0]?.position, "Boilermaker");
+    assert.equal((pack?.crew as { foreman: Array<{ ranges: Array<{ headcount: number }> }> }).foreman[0]?.ranges[0]?.headcount, 3);
+
+    const other = memoryStore();
+    applyPackToStore(other, pack!);
+    const again = collectPack(other, "new-orgchart");
+    assert.equal((again?.orgChart as { names: { "st-1": { days: string } } }).names["st-1"].days, "Lee");
+    assert.equal((again?.crew as { direct: Array<{ position: string }> }).direct[0]?.position, "Boilermaker");
+    assert.equal((again?.crew as { foreman: Array<{ ranges: Array<{ headcount: number }> }> }).foreman[0]?.ranges[0]?.headcount, 3);
   });
 
   it("debounces repeat upserts onto one later call", async () => {

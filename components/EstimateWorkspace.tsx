@@ -25,6 +25,7 @@ const TABS = [
   { id: "summary", label: "Job setup", icon: "📄" },
   { id: "activities", label: "Activities", icon: "∿" },
   { id: "crew", label: "Crew", icon: "⛑" },
+  { id: "org-chart", label: "Org chart", icon: "⬡" },
   { id: "staffing", label: "Staffing", icon: "▦" },
   { id: "equipment", label: "Equipment", icon: "⛟" },
   { id: "subs", label: "Subcontractor", icon: "▣" },
