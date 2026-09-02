@@ -1,24 +1,27 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.42.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.42";
+export const DESK_VERSION = "1.43.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.43";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.42";
+export const DESK_THREAD_ID = "th-desk-v1.43";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.42",
-  "• Sign-in stays on this desk after a restart. Owner stays the owner.",
+  "Hit Squad Project Controls V1.43",
+  "• Estimates have an Org chart tab. Name Staff and General Foreman if you want — unnamed still show as the position. Foreman shows as a number unless you name one.",
+  "• The full desk is open for estimating, Rates, Jobs, HSE, and Quality. Owner stays the owner.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.42",
-  "• Sign-in stays on this desk after a restart. Owner stays the owner.",
-  "• Owner sign-in is kept with the desk so a restart cannot drop it. Tester sign-ins stay.",
+  "Hit Squad Project Controls V1.43",
+  "• Estimates have an Org chart tab from Crew Staff / General Foreman / Foreman. Direct Craft and Support stay off the chart.",
+  "• Names are optional. Unnamed Staff and GF still show as the position title. Foreman is a number unless named. Days and nights can take two names.",
+  "• Moving boxes is visual only. Crew dollars, billing, and headcount stay put. The header uses the same company logo field as the Company Desk door when one is on file.",
+  "• Joseph Henderson can use the full desk, including Org chart, Rates, and Rate builder. Inbox stays the six. Owner stays the only owner.",
 ].join("\n");
 
-/** Same as the live V1.42 note. Kept so older imports still resolve. */
+/** Same as the live V1.43 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;

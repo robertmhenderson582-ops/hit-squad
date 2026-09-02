@@ -48,10 +48,10 @@ describe("third-party rental vault", () => {
     assert.notEqual(listed.find((row) => row.description === "Skip Pan")?.monthly, WOOD_RIVER_THIRD_PARTY_RENTAL.find((row) => row.description === "Skip Pan")?.monthly);
   });
 
-  it("Rate builder write gate stays owner/Novus; testers including Joseph cannot edit", () => {
+  it("Rate builder write gate stays owner/Novus plus Joseph; other testers cannot edit", () => {
     assert.equal(canUseRateBuilder({ email: "robertmhenderson582@gmail.com", role: "owner" }), true);
     assert.equal(canUseRateBuilder({ email: "nathanboyte@gmail.com", role: "tester" }), false);
-    assert.equal(canUseRateBuilder({ email: JOSEPH_EMAIL, role: "tester" }), false);
+    assert.equal(canUseRateBuilder({ email: JOSEPH_EMAIL, role: "tester" }), true);
     const route = readFileSync(fileURLToPath(new URL("../app/api/desk/rates/third-party/route.ts", import.meta.url)), "utf8");
     assert.match(route, /canUseRateBuilder/);
     assert.match(route, /listThirdPartyCatalog/);

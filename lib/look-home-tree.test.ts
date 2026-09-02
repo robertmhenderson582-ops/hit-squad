@@ -19,5 +19,8 @@ describe("home tree look batch", () => {
     const home = readFileSync(fileURLToPath(new URL("../components/DeskHome.tsx", import.meta.url)), "utf8");
     assert.match(home, /company-desk-logo-door/);
     assert.match(home, /door\.key === "company"/);
+    assert.match(css, /\.org-chart-desk \{/);
+    assert.match(css, /\.org-chart-card \{/);
+    assert.match(css, /\.org-chart-logo img \{/);
   });
 });

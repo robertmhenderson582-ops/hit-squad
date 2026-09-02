@@ -14,6 +14,7 @@ import { SubcontractorDesk } from "@/components/SubcontractorDesk";
 import { ChangeOrderPacket } from "@/components/ChangeOrderPacket";
 import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
+import { OrgChartDesk } from "@/components/OrgChartDesk";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { ShopRigSheet } from "@/components/ShopRigSheet";
@@ -131,6 +132,7 @@ function NewEstimateDesk({
       ) : null}
       {tab === "activities" ? <WorkActivitiesDesk client={client} site={site} /> : null}
       {tab === "crew" ? <EstimateWorkbook client={client} site={site} name={title} /> : null}
+      {tab === "org-chart" ? <OrgChartDesk client={client} site={site} name={title} /> : null}
       {tab === "staffing" ? <StaffingPlanDesk client={client} site={site} name={title} /> : null}
       {tab === "equipment" ? <EquipmentDesk /> : null}
       {tab === "subs" ? <SubcontractorDesk client={client} site={site} /> : null}

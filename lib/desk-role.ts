@@ -23,10 +23,10 @@ export function hasBuildDesk(user?: { role?: string } | null): boolean {
   return isOwner(user) || isOperator(user);
 }
 
-/** Owner / Novus Rate builder only. Testers never get the builder — including Joseph. */
+/** Owner / Novus Rate builder, plus Joseph’s full desk. Other testers stay off the builder. */
 export function canUseRateBuilder(user?: { email?: string; role?: string } | null): boolean {
   if (!user) return false;
-  if (isJosephEmail(user.email)) return false;
+  if (isJosephEmail(user.email)) return true;
   if (isTester(user)) return false;
   return hasBuildDesk(user);
 }
@@ -48,7 +48,6 @@ export function isProjectManagerOrAbove(user?: { email?: string; role?: string }
 /** Read-only wage lookup for the assigned company/site. Not the Rate builder. */
 export function canLookupRates(user?: { email?: string; role?: string } | null): boolean {
   if (!user) return false;
-  if (isJosephEmail(user.email)) return false;
   return isProjectManagerOrAbove(user);
 }
 

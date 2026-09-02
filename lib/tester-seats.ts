@@ -119,7 +119,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     email: "josephmhenderson2002@gmail.com",
     name: "Joseph Henderson",
     aliased: true,
-    rateBuilder: false,
+    rateBuilder: true,
     viewAs: true,
     shop: "field",
     company: "hitsquad",

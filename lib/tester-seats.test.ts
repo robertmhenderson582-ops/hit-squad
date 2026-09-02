@@ -90,7 +90,7 @@ test("alias flags and tools match the seat list", () => {
   for (const email of aliased) {
     assert.equal(testerByEmail(email)?.aliased, true, email);
   }
-  assert.equal(testerByEmail(JOSEPH_EMAIL)?.rateBuilder, false);
+  assert.equal(testerByEmail(JOSEPH_EMAIL)?.rateBuilder, true);
   assert.equal(testerByEmail(JOSEPH_EMAIL)?.viewAs, true);
   assert.deepEqual(
     TESTER_SEATS.filter((row) => row.viewAs).map((row) => row.email),

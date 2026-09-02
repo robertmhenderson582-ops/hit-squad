@@ -36,8 +36,10 @@ describe("home doors", () => {
     assert.match(home, /aria-label=\{door\.label\}/);
     assert.equal(/Wage lookup|Rate builder|Rodeo|COMP catalogs/i.test(home), false);
     assert.match(jobsApi, /companyDeskLogoForEmail/);
+    assert.match(jobsApi, /assignedCompaniesForEmail/);
     assert.match(jobsApi, /scopedDeskUser/);
     assert.match(jobsApi, /companyDeskLogo:/);
+    assert.match(jobsApi, /companyName:/);
   });
 
   it("shows the Company Desk logo only when exactly one assigned company has one on file", () => {

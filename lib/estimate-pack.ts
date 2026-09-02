@@ -16,6 +16,7 @@ import {
 } from "./local-estimates.ts";
 import { CREW_STORE_PREFIX, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
 import { JOB_META_PREFIX } from "./staffing-plan.ts";
+import { ORG_CHART_STORE_PREFIX } from "./org-chart.ts";
 
 export type EstimatePackSnapshot = {
   packId: string;
@@ -36,6 +37,7 @@ export type EstimatePackSnapshot = {
   transferredFromName?: string;
   schedule?: unknown;
   crew?: unknown;
+  orgChart?: unknown;
   jobMeta?: unknown;
   activities?: unknown;
   equipment?: unknown;
@@ -250,6 +252,7 @@ export function pickPack(
   return {
     ...newer,
     crew: crewHasRows(newer.crew) ? newer.crew : older.crew ?? newer.crew,
+    orgChart: newer.orgChart ?? older.orgChart,
     schedule: scheduleHasWork(newer.schedule) ? newer.schedule : older.schedule ?? newer.schedule,
     jobMeta: newer.jobMeta ?? older.jobMeta,
     activities: newer.activities ?? older.activities,
@@ -287,6 +290,7 @@ export function publicPack(pack: EstimatePackSnapshot): EstimatePackSnapshot {
     transferredFromName: pack.transferredFromName,
     schedule: pack.schedule,
     crew: pack.crew,
+    orgChart: pack.orgChart,
     jobMeta: pack.jobMeta,
     activities: pack.activities,
     equipment: pack.equipment,
@@ -329,6 +333,7 @@ export function collectPack(
     transferredFromName: identity.transferredFromName,
     schedule: readStoreJson(store, `${PHASE_STORE_PREFIX}${key}`) ?? undefined,
     crew: readStoreJson(store, `${CREW_STORE_PREFIX}${key}`) ?? undefined,
+    orgChart: readStoreJson(store, `${ORG_CHART_STORE_PREFIX}${key}`) ?? undefined,
     jobMeta: readStoreJson(store, `${JOB_META_PREFIX}${key}`) ?? undefined,
     activities: readStoreJson(store, `${ACTIVITY_STORE_PREFIX}${key}`) ?? undefined,
     equipment: readStoreJson(store, `${EQUIPMENT_STORE_PREFIX}${key}`) ?? undefined,
@@ -362,6 +367,7 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
   const key = storageKeyForPack(pack.packId);
   if (pack.schedule != null) writeStoreJson(store, `${PHASE_STORE_PREFIX}${key}`, pack.schedule);
   if (pack.crew != null) writeStoreJson(store, `${CREW_STORE_PREFIX}${key}`, pack.crew);
+  if (pack.orgChart != null) writeStoreJson(store, `${ORG_CHART_STORE_PREFIX}${key}`, pack.orgChart);
   if (pack.jobMeta != null) writeStoreJson(store, `${JOB_META_PREFIX}${key}`, pack.jobMeta);
   if (pack.activities != null) writeStoreJson(store, `${ACTIVITY_STORE_PREFIX}${key}`, pack.activities);
   writeSheetIfRicher(store, `${EQUIPMENT_STORE_PREFIX}${key}`, pack.equipment, equipmentHasWork);
@@ -419,6 +425,7 @@ export function parseIncomingPack(input: unknown): { ok: true; pack: EstimatePac
     transferredFromName: typeof row?.transferredFromName === "string" ? row.transferredFromName : undefined,
     schedule: row?.schedule,
       crew: row?.crew,
+      orgChart: row?.orgChart,
       jobMeta: row?.jobMeta,
       activities: row?.activities,
       equipment: row?.equipment,

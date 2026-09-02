@@ -6,6 +6,7 @@ import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { CREW_STORE_PREFIX, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
 import { SUB_STORE_PREFIX } from "./subcontractor.ts";
 import { JOB_META_PREFIX } from "./staffing-plan.ts";
+import { ORG_CHART_STORE_PREFIX } from "./org-chart.ts";
 import type { EstimateRecord, ForgebookBoard, JobRecord } from "./types.ts";
 
 export const PACK_INDEX_KEY = "hs_pack_index_v1";
@@ -16,6 +17,7 @@ const STORE_PREFIXES = [
   CREW_STORE_PREFIX,
   PHASE_STORE_PREFIX,
   JOB_META_PREFIX,
+  ORG_CHART_STORE_PREFIX,
   ACTIVITY_STORE_PREFIX,
   EQUIPMENT_STORE_PREFIX,
   OTHER_COST_STORE_PREFIX,

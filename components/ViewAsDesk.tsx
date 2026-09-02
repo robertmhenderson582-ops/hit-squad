@@ -19,7 +19,7 @@ export function ViewAsDesk() {
       <h2 className="text-2xl font-semibold text-[#163038]">View as</h2>
       <p className="mt-2 text-sm text-[#5b6f73]">
         {joseph
-          ? "Look & feel lens on this device only. Responsibility and site change what you see. Other people stay off this page."
+          ? "Responsibility and site change what you see on this device. Other people stay off this page."
           : "See that person's desk: their jobs, modules, and empty states. You stay signed in. An amber Viewing as bar with Exit stays on the desk. Users, Follow, Activity, vault, republish, branding, and Checks hide while viewing as. This does not seed logins."}
       </p>
       {buildDesk ? (

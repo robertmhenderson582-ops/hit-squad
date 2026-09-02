@@ -52,7 +52,7 @@ describe("estimate status", () => {
     assert.doesNotMatch(workspace, /\(\["Estimate", "Submitted", "Awarded"\]/);
     assert.equal(isProjectManager({ email: "nathanboyte@gmail.com", role: "tester" }), true);
     assert.equal(isProjectManagerOrAbove({ email: "robertmhenderson582@gmail.com", role: "owner" }), true);
-    assert.equal(isProjectManagerOrAbove({ email: "josephmhenderson2002@gmail.com", role: "tester" }), false);
+    assert.equal(isProjectManagerOrAbove({ email: "josephmhenderson2002@gmail.com", role: "tester" }), true);
     assert.equal(canLookupRates({ email: "nathanboyte@gmail.com", role: "tester" }), true);
     assert.equal(canUseRateBuilder({ email: "nathanboyte@gmail.com", role: "tester" }), false);
   });
