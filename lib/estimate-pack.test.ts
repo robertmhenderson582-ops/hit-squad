@@ -12,7 +12,9 @@ import {
   collectPack,
   crewHasRows,
   estimateFileName,
+  equipmentHasWork,
   mergeVaultIntoLocal,
+  otherCostHasWork,
   packHasWork,
   parseIncomingPack,
   collapsePacksById,
@@ -22,6 +24,7 @@ import {
   responseLeaksDrive,
   scheduleOnce,
   slugify,
+  subcontractorHasWork,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
 import { estimateMarkupDollars, estimateTotalBreakdown } from "./estimate-total.ts";
@@ -45,6 +48,126 @@ function memoryStore(seed: Record<string, string> = {}): StorageLike {
     key(index) {
       return Object.keys(data)[index] ?? null;
     },
+  };
+}
+
+const AROMATICS_ID = "new-mtj7bvtk-akmei";
+
+function nRows(count: number, prefix: string) {
+  return Array.from({ length: count }, (_, index) => ({ id: `${prefix}-${index + 1}` }));
+}
+
+function defaultOtherCost() {
+  return {
+    perDiemRate: 0,
+    travel: [
+      { id: "travel-staff", kind: "staff", travelers: 0, miles: 0, perMile: 0 },
+      { id: "travel-craft", kind: "craft", travelers: 0, miles: 0, perMile: 0 },
+    ],
+    misc: [
+      { id: "mc-seed-1", item: "Alloy rod", qty: 1, each: 0 },
+      { id: "mc-seed-2", item: "Steel", qty: 1, each: 0 },
+    ],
+  };
+}
+
+function aromaticsSheets() {
+  const thirdParty = [
+    {
+      id: "tp-1",
+      item: "6 pack Stick/Tig / Mig pulse",
+      period: "monthly",
+      rate: 1225,
+      qty: 12,
+      freight: 50,
+    },
+    ...Array.from({ length: 27 }, (_, index) => ({
+      id: `tp-${index + 2}`,
+      item: `Third-party ${index + 2}`,
+      period: "monthly",
+      rate: 1,
+      qty: 1,
+      freight: 0,
+    })),
+    { id: "tp-29", item: "", period: "monthly", rate: 0, qty: 0, freight: 0 },
+    { id: "tp-30", item: "", period: "monthly", rate: 0, qty: 0, freight: 0 },
+  ];
+  return {
+    equipment: {
+      largeTools: [
+        { id: "lt-1", itemId: "wet:8:truck-crew", qty: 1 },
+        { id: "lt-2", itemId: "dry:36:trailer-trailer-40ft", qty: 4 },
+        { id: "lt-3", itemId: "dry:37:trailer-tower-tray-hardware-consignment-cost-plus-6", qty: 1 },
+      ],
+      thirdParty,
+    },
+    otherCost: {
+      perDiemRate: 0,
+      travel: [
+        { id: "travel-staff", kind: "staff", travelers: 39, miles: 1700, perMile: 0.76 },
+        { id: "travel-craft", kind: "craft", travelers: 100, miles: 800, perMile: 0.76 },
+      ],
+      misc: [
+        { id: "mc-1", item: "Alloy rod", qty: 65, each: 1000 },
+        { id: "mc-2", item: "Steel", qty: 25, each: 1000 },
+        { id: "mc-3", item: "Grinding wheels", qty: 1000, each: 75 },
+        { id: "mc-4", item: "Weld/cut gas", qty: 1000, each: 75 },
+        { id: "mc-5", item: "Fire blanket", qty: 150, each: 250 },
+        { id: "mc-6", item: "Anti-seize", qty: 1000, each: 72 },
+      ],
+    },
+    subcontractor: {
+      lines: [],
+      cards: [
+        { id: "sc-1", vendor: "JVIC Tensioning/Torquing/Machining/Bundle Equipment and Labor" },
+        { id: "sc-2", vendor: "Hartford" },
+        { id: "sc-3", vendor: "JVIC Engineering" },
+        { id: "sc-4", vendor: "Logistics Trucking INplant" },
+      ],
+    },
+    crew: {
+      staff: nRows(15, "st"),
+      generalForeman: nRows(1, "gf"),
+      foreman: nRows(2, "fm"),
+      direct: nRows(2, "dr"),
+      support: nRows(7, "su"),
+    },
+  };
+}
+
+function aromatics(over: Partial<EstimatePackSnapshot> = {}): EstimatePackSnapshot {
+  const sheets = aromaticsSheets();
+  return {
+    packId: AROMATICS_ID,
+    key: `new:${AROMATICS_ID}`,
+    title: "2027 Aromatics Turnaround",
+    client: "Phillips 66",
+    site: "Wood River — Roxana, IL",
+    siteId: "site-madison",
+    createdAt: 100,
+    updatedAt: 400,
+    ownerEmail: "nathanboyte@gmail.com",
+    sharedWith: ["robertmhenderson582@gmail.com"],
+    transferredFrom: "robertmhenderson582@gmail.com",
+    transferredTo: "nathanboyte@gmail.com",
+    ...sheets,
+    ...over,
+  };
+}
+
+function thinAromaticsStub(over: Partial<EstimatePackSnapshot> = {}): EstimatePackSnapshot {
+  return {
+    packId: AROMATICS_ID,
+    key: `new:${AROMATICS_ID}`,
+    title: "2027 Aromatics Turnaround",
+    client: "Phillips 66",
+    site: "Wood River — Roxana, IL",
+    siteId: "site-madison",
+    createdAt: 50,
+    updatedAt: 9000,
+    ownerEmail: "robertmhenderson582@gmail.com",
+    crew: { staff: [], generalForeman: [], foreman: [], direct: [], support: [] },
+    ...over,
   };
 }
 
@@ -420,5 +543,75 @@ describe("estimate pack snapshot", () => {
     schedule("new-cat2pit", () => hits.push("b"));
     await new Promise((resolve) => setTimeout(resolve, 40));
     assert.deepEqual(hits, ["b"]);
+  });
+
+  it("default Other Cost travel and catalog seeds do not count as work", () => {
+    assert.equal(otherCostHasWork(defaultOtherCost()), false);
+    assert.equal(otherCostHasWork(aromaticsSheets().otherCost), true);
+    assert.equal(equipmentHasWork({ largeTools: [], thirdParty: [] }), false);
+    assert.equal(equipmentHasWork(aromaticsSheets().equipment), true);
+    assert.equal(subcontractorHasWork({ lines: [], cards: [] }), false);
+    assert.equal(subcontractorHasWork(aromaticsSheets().subcontractor), true);
+  });
+
+  it("a thin same-packId leftover and empty local defaults cannot wipe 2027 Aromatics vault sheets", () => {
+    const leftover = thinAromaticsStub();
+    const vault = aromatics();
+    assert.equal(preferCanonicalPack(leftover, vault).ownerEmail, "nathanboyte@gmail.com");
+    assert.equal(collapsePacksById([leftover, vault]).length, 1);
+    const collapsed = collapsePacksById([leftover, vault])[0];
+    assert.equal(((collapsed?.equipment as { largeTools: unknown[] }).largeTools || []).length, 3);
+    assert.equal(((collapsed?.equipment as { thirdParty: unknown[] }).thirdParty || []).length, 30);
+    assert.equal(((collapsed?.subcontractor as { cards: unknown[] }).cards || []).length, 4);
+    assert.equal(((collapsed?.otherCost as { misc: unknown[] }).misc || []).length, 6);
+
+    const localNewer = aromatics({
+      updatedAt: 12_000,
+      ownerEmail: "robertmhenderson582@gmail.com",
+      transferredFrom: undefined,
+      equipment: { largeTools: [], thirdParty: [] },
+      otherCost: defaultOtherCost(),
+      subcontractor: { lines: [], cards: [] },
+    });
+    const picked = pickPack(localNewer, vault);
+    assert.equal(((picked?.equipment as { largeTools: unknown[] }).largeTools || []).length, 3);
+    assert.equal(((picked?.equipment as { thirdParty: unknown[] }).thirdParty || []).length, 30);
+    assert.equal(((picked?.subcontractor as { cards: unknown[] }).cards || []).length, 4);
+    const travel = (picked?.otherCost as { travel: Array<{ travelers: number; miles: number }> }).travel;
+    assert.equal(travel.some((row) => row.travelers === 39 && row.miles === 1700), true);
+    assert.equal(travel.some((row) => row.travelers === 100 && row.miles === 800), true);
+    assert.equal(((picked?.otherCost as { misc: unknown[] }).misc || []).length, 6);
+    assert.equal((picked?.crew as { staff: unknown[] }).staff.length, 15);
+
+    const empty = memoryStore();
+    assert.equal(mergeVaultIntoLocal(empty, vault), "vault");
+    const fromEmpty = collectPack(empty, AROMATICS_ID);
+    assert.equal(((fromEmpty?.equipment as { largeTools: unknown[] }).largeTools || []).length, 3);
+    assert.equal(((fromEmpty?.subcontractor as { cards: unknown[] }).cards || []).length, 4);
+    assert.equal(((fromEmpty?.otherCost as { misc: unknown[] }).misc || []).length, 6);
+
+    const seeded = memoryStore();
+    rememberLocalPack(
+      {
+        packId: AROMATICS_ID,
+        title: "2027 Aromatics Turnaround",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: "robertmhenderson582@gmail.com",
+      },
+      seeded,
+    );
+    const key = newEstimateKey(AROMATICS_ID);
+    seeded.setItem(`${EQUIPMENT_STORE_PREFIX}${key}`, JSON.stringify({ largeTools: [], thirdParty: [] }));
+    seeded.setItem(`${OTHER_COST_STORE_PREFIX}${key}`, JSON.stringify(defaultOtherCost()));
+    seeded.setItem(`${SUB_STORE_PREFIX}${key}`, JSON.stringify({ lines: [], cards: [] }));
+    mergeVaultIntoLocal(seeded, vault);
+    const restored = collectPack(seeded, AROMATICS_ID);
+    assert.equal(((restored?.equipment as { largeTools: unknown[] }).largeTools || []).length, 3);
+    assert.equal(((restored?.equipment as { thirdParty: unknown[] }).thirdParty || []).length, 30);
+    assert.equal(((restored?.subcontractor as { cards: unknown[] }).cards || []).length, 4);
+    assert.equal(((restored?.otherCost as { misc: Array<{ qty: number; each: number }> }).misc || []).some((row) => row.qty === 65 && row.each === 1000), true);
+    assert.equal((restored?.crew as { support: unknown[] }).support.length, 7);
+    assert.equal(restored?.ownerEmail, "nathanboyte@gmail.com");
   });
 });

@@ -52,6 +52,7 @@ type EstimatePackageApi = {
   jobMeta: JobMeta;
   activities: WorkActivity[];
   orgChart: OrgChartState;
+  vaultSaveError: string;
   setProjectStartDate: (start: string) => void;
   patch: (id: PhaseId, next: Partial<PhaseRow>) => void;
   pickOt: (id: PhaseId, pick: PhaseOtPick) => void;
@@ -130,6 +131,7 @@ export function EstimatePackageProvider({
   const [jobMeta, setJobMetaState] = useState<JobMeta>(() => readJobMeta(estimateKey));
   const [activities, setActivitiesState] = useState<WorkActivity[]>(() => readActivities(estimateKey) ?? []);
   const [ready, setReady] = useState(false);
+  const [vaultSaveError, setVaultSaveError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -145,7 +147,13 @@ export function EstimatePackageProvider({
       setJobMetaState(readJobMeta(estimateKey));
       setActivitiesState(readActivities(estimateKey) ?? []);
       setReady(true);
-      if (packId) void flushVaultUpsert(packId);
+      if (packId) {
+        void flushVaultUpsert(packId).then((result) => {
+          if (cancelled) return;
+          if (!result.ok && "error" in result && result.error) setVaultSaveError(result.error);
+          else setVaultSaveError("");
+        });
+      }
     });
     return () => {
       cancelled = true;
@@ -222,6 +230,7 @@ export function EstimatePackageProvider({
       schedule,
       crew,
       orgChart,
+      vaultSaveError,
       jobMeta,
       activities,
       setProjectStartDate(start) {
@@ -310,7 +319,7 @@ export function EstimatePackageProvider({
         return blankCraftRow();
       },
     }),
-    [activities, crew, estimateKey, jobMeta, orgChart, schedule],
+    [activities, crew, estimateKey, jobMeta, orgChart, schedule, vaultSaveError],
   );
 
   return <EstimatePackageContext.Provider value={api}>{children}</EstimatePackageContext.Provider>;
@@ -324,6 +333,7 @@ export function useEstimatePackage() {
       schedule: defaultPhaseSchedule(),
       crew: emptyCrew(),
       orgChart: emptyOrgChart(),
+      vaultSaveError: "",
       jobMeta: emptyJobMeta(),
       activities: [],
       setProjectStartDate() {},

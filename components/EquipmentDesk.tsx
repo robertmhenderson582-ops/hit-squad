@@ -33,6 +33,7 @@ import {
   shahanPeriodRate,
 } from "@/lib/shahan-wood-river";
 import { deskFetch } from "@/lib/estimate-vault-client";
+import { onEstimateSheets } from "@/lib/sheet-events";
 import {
   WOOD_RIVER_THIRD_PARTY_RENTAL,
   applyThirdPartyCatalogItem,
@@ -95,12 +96,16 @@ export function EquipmentDesk() {
   }, []);
 
   useEffect(() => {
-    const stored = readEquipmentSheet(pack.estimateKey);
-    const seeded = seedEmptyEquipmentWindow(stored, window);
-    setSheet(seeded);
-    if (JSON.stringify(stored) !== JSON.stringify(seeded)) {
-      writeEquipmentSheet(pack.estimateKey, seeded);
+    function load() {
+      const stored = readEquipmentSheet(pack.estimateKey);
+      const seeded = seedEmptyEquipmentWindow(stored, window);
+      setSheet(seeded);
+      if (JSON.stringify(stored) !== JSON.stringify(seeded)) {
+        writeEquipmentSheet(pack.estimateKey, seeded);
+      }
     }
+    load();
+    return onEstimateSheets(load);
   }, [pack.estimateKey, window.start, window.end]);
 
   function persist(next: EquipmentSheet) {

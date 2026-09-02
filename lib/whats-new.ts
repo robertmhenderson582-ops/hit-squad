@@ -1,25 +1,25 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.46.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.46";
+export const DESK_VERSION = "1.47.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.47";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.46";
+export const DESK_THREAD_ID = "th-desk-v1.47";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.46",
-  "• Completed estimates can export an Excel workbook. Open it and check the formulas for hours, rates, OT/DT, PD, equipment, and totals.",
+  "Hit Squad Project Controls V1.47",
+  "• Equipment, Subcontractor, and Other Cost come back from the saved job after refresh — 2027 Aromatics and any other estimate.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.46",
-  "• Completed estimates export an Excel workbook produced by Hit Squad Project Controls. Summary money SUMs from the crew, equipment, travel, and misc sheets. Formulas stay live.",
-  "• The same Export follows that estimate's site, clock, and rates. Empty sheets stay off. No invented dollars.",
+  "Hit Squad Project Controls V1.47",
+  "• Equipment, Subcontractor, and Other Cost come back from the saved job after refresh — 2027 Aromatics and any other estimate.",
+  "• Empty local tabs no longer replace the saved sheets. Completed estimates still export the V1.46 Excel workbook with live formulas.",
   "• Joseph Henderson can use the full desk except owner lockout, including Export. Inbox stays the six. Owner stays the only owner.",
 ].join("\n");
 
-/** Same as the live V1.46 note. Kept so older imports still resolve. */
+/** Same as the live V1.47 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;

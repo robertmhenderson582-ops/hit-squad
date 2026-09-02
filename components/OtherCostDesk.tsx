@@ -20,6 +20,7 @@ import {
   type TravelLine,
 } from "@/lib/other-cost";
 import { perDiemDaysFromCrew, perDiemDollarsFromCrew } from "@/lib/shahan-wood-river";
+import { onEstimateSheets } from "@/lib/sheet-events";
 
 function money(value: number) {
   return value ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
@@ -40,15 +41,19 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
   );
 
   useEffect(() => {
-    const stored = readOtherCost(pack.estimateKey);
-    const next = syncOtherCostTravel(stored, pack.crew, {
-      staffPerMile: pack.jobMeta.staffMileageRate,
-      craftPerMile: pack.jobMeta.craftMileageRate,
-    });
-    setSheet(next);
-    if (JSON.stringify(stored.travel) !== JSON.stringify(next.travel)) {
-      writeOtherCost(pack.estimateKey, next);
+    function load() {
+      const stored = readOtherCost(pack.estimateKey);
+      const next = syncOtherCostTravel(stored, pack.crew, {
+        staffPerMile: pack.jobMeta.staffMileageRate,
+        craftPerMile: pack.jobMeta.craftMileageRate,
+      });
+      setSheet(next);
+      if (JSON.stringify(stored.travel) !== JSON.stringify(next.travel)) {
+        writeOtherCost(pack.estimateKey, next);
+      }
     }
+    load();
+    return onEstimateSheets(load);
   }, [pack.crew, pack.estimateKey, pack.jobMeta.craftMileageRate, pack.jobMeta.staffMileageRate]);
 
   function persist(next: OtherCostSheet) {

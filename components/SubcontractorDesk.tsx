@@ -48,6 +48,7 @@ import {
   type SubSheet,
   type SubUnit,
 } from "@/lib/subcontractor";
+import { onEstimateSheets } from "@/lib/sheet-events";
 
 function money(value: number) {
   return value ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
@@ -247,16 +248,20 @@ export function SubcontractorDesk({ site = "", client = "" }: { site?: string; c
   const total = subcontractorTotal(sheet, ctx);
 
   useEffect(() => {
-    const next = syncSubSheet(
-      readSubSheet(pack.estimateKey),
-      pack.schedule.phases,
-      pack.schedule.units ?? [],
-      Boolean(pack.schedule.multiUnits),
-    );
-    setSheet(next);
-    setOpenIds(next.lines.filter((line) => !line.vendor && !line.scope && !line.rate).map((line) => line.id));
-    setOpenCardIds(next.cards.filter((card) => !card.vendor).map((card) => card.id));
-    setBook(readSubBook());
+    function load() {
+      const next = syncSubSheet(
+        readSubSheet(pack.estimateKey),
+        pack.schedule.phases,
+        pack.schedule.units ?? [],
+        Boolean(pack.schedule.multiUnits),
+      );
+      setSheet(next);
+      setOpenIds(next.lines.filter((line) => !line.vendor && !line.scope && !line.rate).map((line) => line.id));
+      setOpenCardIds(next.cards.filter((card) => !card.vendor).map((card) => card.id));
+      setBook(readSubBook());
+    }
+    load();
+    return onEstimateSheets(load);
   }, [pack.estimateKey, pack.schedule.multiUnits, pack.schedule.phases, pack.schedule.units]);
 
   function persist(next: SubSheet) {

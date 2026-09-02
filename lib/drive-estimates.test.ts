@@ -13,11 +13,12 @@ import {
   overwriteEstimateInDrive,
   parseOAuthClient,
   parseServiceAccount,
+  readDrivePack,
   resetDriveTokenCache,
   resolveEstimatesFolder,
   upsertEstimateInDrive,
 } from "./drive-estimates.ts";
-import { estimateFileName, publicPack, responseLeaksDrive, type EstimatePackSnapshot } from "./estimate-pack.ts";
+import { estimateFileName, parseIncomingPack, publicPack, responseLeaksDrive, type EstimatePackSnapshot } from "./estimate-pack.ts";
 
 function cat2(over: Partial<EstimatePackSnapshot> = {}): EstimatePackSnapshot {
   return {
@@ -171,5 +172,95 @@ describe("drive estimate upsert", () => {
     const removed = await deleteEstimateInDrive(drive, "new-cat2pit", "nathanboyte@gmail.com", "folder");
     assert.equal(removed, true);
     assert.equal(drive.files.size, 0);
+  });
+
+  it("same packId leftover cannot win hydrate or list over the richer transferred copy", async () => {
+    const drive = memoryDrive();
+    const packId = "new-mtj7bvtk-akmei";
+    const leftover = {
+      packId,
+      key: `new:${packId}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 9000,
+      ownerEmail: "robertmhenderson582@gmail.com",
+      crew: { staff: [], support: [] },
+    };
+    const working = {
+      ...leftover,
+      updatedAt: 400,
+      ownerEmail: "nathanboyte@gmail.com",
+      sharedWith: ["robertmhenderson582@gmail.com"],
+      transferredFrom: "robertmhenderson582@gmail.com",
+      transferredTo: "nathanboyte@gmail.com",
+      equipment: {
+        largeTools: [
+          { id: "lt-1", itemId: "wet:8:truck-crew", qty: 1 },
+          { id: "lt-2", itemId: "dry:36:trailer-trailer-40ft", qty: 4 },
+          { id: "lt-3", itemId: "dry:37:trailer-tower-tray-hardware-consignment-cost-plus-6", qty: 1 },
+        ],
+        thirdParty: Array.from({ length: 30 }, (_, index) => ({
+          id: `tp-${index + 1}`,
+          item: index < 28 ? (index === 0 ? "6 pack Stick/Tig / Mig pulse" : `Third-party ${index + 1}`) : "",
+          rate: index < 28 ? (index === 0 ? 1225 : 1) : 0,
+          qty: index < 28 ? (index === 0 ? 12 : 1) : 0,
+          freight: index === 0 ? 50 : 0,
+        })),
+      },
+      otherCost: {
+        travel: [
+          { id: "travel-staff", travelers: 39, miles: 1700, perMile: 0.76 },
+          { id: "travel-craft", travelers: 100, miles: 800, perMile: 0.76 },
+        ],
+        misc: [
+          { id: "mc-1", item: "Alloy rod", qty: 65, each: 1000 },
+          { id: "mc-2", item: "Steel", qty: 25, each: 1000 },
+        ],
+      },
+      subcontractor: {
+        cards: [
+          { id: "sc-1", vendor: "JVIC Tensioning/Torquing/Machining/Bundle Equipment and Labor" },
+          { id: "sc-2", vendor: "Hartford" },
+          { id: "sc-3", vendor: "JVIC Engineering" },
+          { id: "sc-4", vendor: "Logistics Trucking INplant" },
+        ],
+      },
+      crew: {
+        staff: Array.from({ length: 15 }, (_, index) => ({ id: `st-${index + 1}` })),
+        generalForeman: [{ id: "gf-1" }],
+        foreman: [{ id: "fm-1" }, { id: "fm-2" }],
+        direct: [{ id: "dr-1" }, { id: "dr-2" }],
+        support: Array.from({ length: 7 }, (_, index) => ({ id: `su-${index + 1}` })),
+      },
+    };
+    await drive.createJson("folder", "wood-river-2027-aromatics-turnaround.json", JSON.stringify(leftover), {
+      packId,
+      ownerEmail: leftover.ownerEmail,
+    });
+    await drive.createJson("folder", "wood-river-2027-aromatics-turnaround.json", JSON.stringify(working), {
+      packId,
+      ownerEmail: working.ownerEmail,
+    });
+    assert.equal(drive.files.size, 2);
+
+    const ownerLookup = await findDrivePackFile(drive, "folder", packId, leftover.ownerEmail);
+    assert.ok(ownerLookup);
+    const ownerPack = parseIncomingPack(JSON.parse(await drive.readJson(ownerLookup.id)));
+    assert.equal(ownerPack.ok, true);
+    if (ownerPack.ok) {
+      assert.equal(ownerPack.pack.ownerEmail, "nathanboyte@gmail.com");
+      assert.equal(((ownerPack.pack.equipment as { largeTools: unknown[] }).largeTools || []).length, 3);
+      assert.equal(((ownerPack.pack.subcontractor as { cards: unknown[] }).cards || []).length, 4);
+    }
+    const asRobert = await readDrivePack(drive, packId, leftover.ownerEmail, "folder");
+    assert.equal(asRobert?.ownerEmail, "nathanboyte@gmail.com");
+    assert.equal(((asRobert?.equipment as { thirdParty: unknown[] }).thirdParty || []).length, 30);
+    const listed = await listDrivePacks(drive, "folder");
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0]?.ownerEmail, "nathanboyte@gmail.com");
+    assert.equal(((listed[0]?.otherCost as { travel: Array<{ travelers: number }> }).travel || []).some((row) => row.travelers === 39), true);
   });
 });
