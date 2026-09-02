@@ -172,10 +172,44 @@ export function buildSheetXml(cells: SheetCell[], merges: string[] = []): string
   );
 }
 
-export function buildXlsx(sheetName: string, cells: SheetCell[], merges: string[] = []): Uint8Array {
+export type WorkbookSheet = {
+  name: string;
+  cells: SheetCell[];
+  merges?: string[];
+};
+
+export function buildWorkbook(sheets: WorkbookSheet[]): Uint8Array {
+  const list = sheets.filter((sheet) => sheet.name.trim());
+  if (!list.length) throw new Error("empty-workbook");
   const enc = new TextEncoder();
-  const sheet = buildSheetXml(cells, merges);
-  const safeName = xmlEscape(sheetName.slice(0, 31) || "Sheet1");
+  const used = new Set<string>();
+  const named = list.map((sheet, index) => {
+    const raw = xmlEscape((sheet.name || `Sheet${index + 1}`).slice(0, 31));
+    let name = raw;
+    let n = 2;
+    while (used.has(name.toLowerCase())) {
+      const suffix = `-${n}`;
+      name = `${raw.slice(0, Math.max(1, 31 - suffix.length))}${suffix}`;
+      n += 1;
+    }
+    used.add(name.toLowerCase());
+    return { ...sheet, safeName: name };
+  });
+  const overrides = named
+    .map(
+      (_, index) =>
+        `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
+    )
+    .join("");
+  const sheetIndex = named
+    .map((sheet, index) => `<sheet name="${sheet.safeName}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`)
+    .join("");
+  const rels = named
+    .map(
+      (_, index) =>
+        `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`,
+    )
+    .join("");
   return zipStore([
     {
       name: "[Content_Types].xml",
@@ -185,7 +219,7 @@ export function buildXlsx(sheetName: string, cells: SheetCell[], merges: string[
           `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
           `<Default Extension="xml" ContentType="application/xml"/>` +
           `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>` +
-          `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
+          overrides +
           `</Types>`,
       ),
     },
@@ -203,20 +237,27 @@ export function buildXlsx(sheetName: string, cells: SheetCell[], merges: string[
       data: enc.encode(
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
           `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
-          `<sheets><sheet name="${safeName}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+          `<sheets>${sheetIndex}</sheets></workbook>`,
       ),
     },
     {
       name: "xl/_rels/workbook.xml.rels",
       data: enc.encode(
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-          `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-          `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>` +
+          `<Relationships xmlns="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+          rels +
           `</Relationships>`,
       ),
     },
-    { name: "xl/worksheets/sheet1.xml", data: enc.encode(sheet) },
+    ...named.map((sheet, index) => ({
+      name: `xl/worksheets/sheet${index + 1}.xml`,
+      data: enc.encode(buildSheetXml(sheet.cells, sheet.merges ?? [])),
+    })),
   ]);
+}
+
+export function buildXlsx(sheetName: string, cells: SheetCell[], merges: string[] = []): Uint8Array {
+  return buildWorkbook([{ name: sheetName, cells, merges }]);
 }
 
 export function downloadXlsx(filename: string, bytes: Uint8Array) {

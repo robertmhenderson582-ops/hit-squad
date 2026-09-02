@@ -1,29 +1,25 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.45.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.45";
+export const DESK_VERSION = "1.46.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.46";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.45";
+export const DESK_THREAD_ID = "th-desk-v1.46";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.45",
-  "• Suggestion Box and Inbox messages now save.",
-  "• Inbox photos attach with the message.",
-  "• Quality Save reaches the owner.",
+  "Hit Squad Project Controls V1.46",
+  "• Completed estimates can export an Excel workbook. Open it and check the formulas for hours, rates, OT/DT, PD, equipment, and totals.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.45",
-  "• Suggestion Box and Inbox posts from the six persist. Hydrate merges incoming rows and will not drop tester tickets or messages.",
-  "• Novus is a two-way Inbox contact for the six. Not a login.",
-  "• Inbox photos attach with the message and persist. A failed attach shows an error.",
-  "• Quality and HSE Save writes the brief and dropped files so the owner can open them. Submit brief can still zip locally. A failed write shows an error.",
-  "• Joseph Henderson keeps the full desk except owner lockout. Owner stays the only owner. Inbox stays the six.",
+  "Hit Squad Project Controls V1.46",
+  "• Completed estimates export an Excel workbook produced by Hit Squad Project Controls. Summary money SUMs from the crew, equipment, travel, and misc sheets. Formulas stay live.",
+  "• The same Export follows that estimate's site, clock, and rates. Empty sheets stay off. No invented dollars.",
+  "• Joseph Henderson can use the full desk except owner lockout, including Export. Inbox stays the six. Owner stays the only owner.",
 ].join("\n");
 
-/** Same as the live V1.45 note. Kept so older imports still resolve. */
+/** Same as the live V1.46 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;

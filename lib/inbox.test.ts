@@ -78,7 +78,7 @@ describe("inbox demo wipe", () => {
     const stored = persisted.threads ?? [];
     assert.equal(stored.some((thread) => (DEMO_IDS as readonly string[]).includes(thread.id)), false);
     assert.equal(stored.length, 1);
-    assert.equal(stored[0].id, "th-desk-v1.45");
+    assert.equal(stored[0].id, "th-desk-v1.46");
   });
 
   it("tester empty store stays empty (never had the demo threads)", () => {
@@ -89,7 +89,7 @@ describe("inbox demo wipe", () => {
     const note = deskWhatsNewThread(true);
     const cleaned = stripDemoThreads([...ownerDemoThreads(), note]);
     assert.equal(cleaned.length, 1);
-    assert.equal(cleaned[0].id, "th-desk-v1.45");
+    assert.equal(cleaned[0].id, "th-desk-v1.46");
     assert.equal(stripDemoThreads([note]).length, 1);
   });
 
@@ -122,25 +122,23 @@ describe("inbox demo wipe", () => {
     assert.deepEqual(omitHiddenPersonThreads([note, leftover], hides.personIds), [note]);
   });
 
-  it("Desk note stays V1.45 and tester-safe", () => {
-    assert.equal(DESK_VERSION, "1.45.0");
+  it("Desk note stays V1.46 and tester-safe", () => {
+    assert.equal(DESK_VERSION, "1.46.0");
     const tester = applyWhatsNew([deskWhatsNewThread(false)], "tester-note", false, "nathanboyte@gmail.com");
     assert.equal(tester.length, 1);
-    assert.equal(tester[0].id, "th-desk-v1.45");
+    assert.equal(tester[0].id, "th-desk-v1.46");
     const testerBody = tester[0].messages.map((message) => message.text).join(" ");
-    assert.match(testerBody, /V1\.45/);
-    assert.match(testerBody, /Suggestion Box and Inbox messages now save/);
-    assert.match(testerBody, /Inbox photos attach with the message/);
-    assert.match(testerBody, /Quality Save reaches the owner/);
+    assert.match(testerBody, /V1\.46/);
+    assert.match(testerBody, /Excel workbook/);
+    assert.match(testerBody, /formulas/);
     assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Joseph|Stephanie|password|security|View as|Novus/i);
     assert.doesNotMatch(testerBody, /Robert, Nathan, Benny, Shane, Wendell, and Chance/);
     const owner = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
-    assert.equal(owner[0].id, "th-desk-v1.45");
+    assert.equal(owner[0].id, "th-desk-v1.46");
     const ownerBody = owner[0].messages.map((message) => message.text).join(" ");
-    assert.match(ownerBody, /Suggestion Box and Inbox posts from the six persist/);
-    assert.match(ownerBody, /Novus is a two-way Inbox contact/);
-    assert.match(ownerBody, /Not a login/);
-    assert.match(ownerBody, /Joseph Henderson keeps the full desk except owner lockout/);
+    assert.match(ownerBody, /Excel workbook/);
+    assert.match(ownerBody, /produced by Hit Squad Project Controls/i);
+    assert.match(ownerBody, /Joseph Henderson can use the full desk/);
     assert.match(ownerBody, /Owner stays the only owner/);
   });
 });
