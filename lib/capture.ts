@@ -150,6 +150,15 @@ export async function burnCaption(dataUrl: string, caption: string): Promise<str
   return canvas.toDataURL("image/jpeg", 0.82);
 }
 
+export async function attachInboxPhoto(dataUrl: string): Promise<string> {
+  if (!dataUrl.startsWith("data:image/")) throw new Error("attach");
+  const compact = await compressCapture(dataUrl, 1280, 0.7);
+  if (compact.startsWith("data:image/") && compact.length <= 900_000) return compact;
+  const smaller = await compressCapture(dataUrl, 960, 0.45);
+  if (smaller.startsWith("data:image/") && smaller.length <= 900_000) return smaller;
+  throw new Error("attach");
+}
+
 export async function compressCapture(dataUrl: string, maxEdge = 1280, quality = 0.7): Promise<string> {
   if (!dataUrl.startsWith("data:image/")) return dataUrl;
   try {

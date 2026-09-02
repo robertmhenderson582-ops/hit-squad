@@ -56,8 +56,9 @@ describe("inbox demo wipe", () => {
       false,
     );
     const ownerPeople = contactsFor(true, "robertmhenderson582@gmail.com");
-    assert.equal(ownerPeople.length, 5);
+    assert.equal(ownerPeople.length, 6);
     assert.equal(ownerPeople.some((person) => person.name === "Nathan Boyte"), true);
+    assert.equal(ownerPeople.some((person) => person.id === "novus" && person.name === "Novus"), true);
     assert.equal(ownerPeople.some((person) => /Joseph|James|Mark/.test(person.name)), false);
     const nathanPeople = contactsFor(false, "nathanboyte@gmail.com");
     assert.equal(nathanPeople.some((person) => person.id === "owner"), true);
@@ -77,7 +78,7 @@ describe("inbox demo wipe", () => {
     const stored = persisted.threads ?? [];
     assert.equal(stored.some((thread) => (DEMO_IDS as readonly string[]).includes(thread.id)), false);
     assert.equal(stored.length, 1);
-    assert.equal(stored[0].id, "th-desk-v1.44");
+    assert.equal(stored[0].id, "th-desk-v1.45");
   });
 
   it("tester empty store stays empty (never had the demo threads)", () => {
@@ -88,7 +89,7 @@ describe("inbox demo wipe", () => {
     const note = deskWhatsNewThread(true);
     const cleaned = stripDemoThreads([...ownerDemoThreads(), note]);
     assert.equal(cleaned.length, 1);
-    assert.equal(cleaned[0].id, "th-desk-v1.44");
+    assert.equal(cleaned[0].id, "th-desk-v1.45");
     assert.equal(stripDemoThreads([note]).length, 1);
   });
 
@@ -121,22 +122,25 @@ describe("inbox demo wipe", () => {
     assert.deepEqual(omitHiddenPersonThreads([note, leftover], hides.personIds), [note]);
   });
 
-  it("Desk note stays V1.44 and tester-safe", () => {
-    assert.equal(DESK_VERSION, "1.44.0");
+  it("Desk note stays V1.45 and tester-safe", () => {
+    assert.equal(DESK_VERSION, "1.45.0");
     const tester = applyWhatsNew([deskWhatsNewThread(false)], "tester-note", false, "nathanboyte@gmail.com");
     assert.equal(tester.length, 1);
-    assert.equal(tester[0].id, "th-desk-v1.44");
+    assert.equal(tester[0].id, "th-desk-v1.45");
     const testerBody = tester[0].messages.map((message) => message.text).join(" ");
-    assert.match(testerBody, /V1\.44/);
-    assert.match(testerBody, /labor rate sheet/);
-    assert.match(testerBody, /New Estimate tells you if the company has no rates/);
-    assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Joseph|Stephanie|password|security|View as/i);
+    assert.match(testerBody, /V1\.45/);
+    assert.match(testerBody, /Suggestion Box and Inbox messages now save/);
+    assert.match(testerBody, /Inbox photos attach with the message/);
+    assert.match(testerBody, /Quality Save reaches the owner/);
+    assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Joseph|Stephanie|password|security|View as|Novus/i);
     assert.doesNotMatch(testerBody, /Robert, Nathan, Benny, Shane, Wendell, and Chance/);
     const owner = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
-    assert.equal(owner[0].id, "th-desk-v1.44");
+    assert.equal(owner[0].id, "th-desk-v1.45");
     const ownerBody = owner[0].messages.map((message) => message.text).join(" ");
-    assert.match(ownerBody, /Yates-style sheet/);
-    assert.match(ownerBody, /Joseph Henderson can open Rate builder/);
+    assert.match(ownerBody, /Suggestion Box and Inbox posts from the six persist/);
+    assert.match(ownerBody, /Novus is a two-way Inbox contact/);
+    assert.match(ownerBody, /Not a login/);
+    assert.match(ownerBody, /Joseph Henderson keeps the full desk except owner lockout/);
     assert.match(ownerBody, /Owner stays the only owner/);
   });
 });

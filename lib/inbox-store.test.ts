@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { INBOX_VAULT_KIND, INBOX_VAULT_NAME, readVaultJson } from "./drive-data.ts";
 import { memoryDrive } from "./drive-estimates.ts";
+import { NOVUS_INBOX_EMAIL } from "./inbox-circle.ts";
+import { acceptedInboxPhoto } from "./inbox.ts";
 import { JOSEPH_EMAIL } from "./tester-seats.ts";
 import {
   forgetInboxCacheForTests,
@@ -314,10 +316,82 @@ describe("inbox store", { concurrency: 1 }, () => {
     assert.equal(staleWrite.find((item) => item.id === "im-1")?.hiddenBy.includes(OWNER), true);
     assert.equal(staleWrite.length, 2);
   });
+
+  it("Chance can compose to Novus and the photo persists in the vault", async () => {
+    const drive = memoryDrive();
+    resetInboxStoreForTests(join(dir, "chance-novus.json"));
+    useInboxVaultForTests(drive);
+    const photo = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+    const posted = await postInboxMessage({
+      fromEmail: "chancec318@yahoo.com",
+      fromName: "Chance Middlebrooks",
+      toEmail: NOVUS_INBOX_EMAIL,
+      text: "Screenshot",
+      photo,
+    });
+    assert.equal(posted.ok, true);
+    if (!posted.ok) return;
+    const novus = posted.threads.find((thread) => thread.personId === "novus");
+    assert.ok(novus);
+    assert.equal(novus.name, "Novus");
+    assert.equal(novus.messages.some((message) => message.photo === photo && message.text === "Screenshot"), true);
+
+    staleWarmInboxInstanceForTests();
+    const again = await listInboxFor("chancec318@yahoo.com");
+    const thread = again.find((row) => row.personId === "novus");
+    assert.ok(thread);
+    assert.equal(thread.messages.some((message) => message.photo === photo), true);
+
+    const vault = await readVaultMessages(drive);
+    assert.equal(vault.some((message) => message.fromEmail === "chancec318@yahoo.com" && message.toEmail === NOVUS_INBOX_EMAIL && message.photo === photo), true);
+
+    const bad = await postInboxMessage({
+      fromEmail: "chancec318@yahoo.com",
+      fromName: "Chance Middlebrooks",
+      toEmail: NOVUS_INBOX_EMAIL,
+      photo: "not-an-image",
+    });
+    assert.equal(bad.ok, false);
+    if (bad.ok) return;
+    assert.equal(bad.status, 400);
+    assert.match(bad.error, /attach/i);
+    assert.equal(acceptedInboxPhoto("not-an-image"), null);
+    assert.equal(acceptedInboxPhoto(photo), photo);
+  });
+
+  it("a failed Drive write throws on Inbox persist", async () => {
+    resetInboxStoreForTests(join(dir, "inbox-fail.json"));
+    useInboxVaultForTests({
+      configured: true,
+      async listJson() {
+        return [];
+      },
+      async readJson() {
+        return "{}";
+      },
+      async createJson() {
+        throw new Error("update");
+      },
+      async updateJson() {
+        throw new Error("update");
+      },
+      async deleteJson() {},
+    });
+    await assert.rejects(
+      () =>
+        postInboxMessage({
+          fromEmail: "chancec318@yahoo.com",
+          fromName: "Chance Middlebrooks",
+          toEmail: OWNER,
+          text: "Must not look saved",
+        }),
+      /update/,
+    );
+  });
 });
 
 async function readVaultMessages(drive: ReturnType<typeof memoryDrive>) {
-  const raw = await readVaultJson<{ messages?: Array<{ id: string; text: string }> }>(
+  const raw = await readVaultJson<{ messages?: Array<{ id: string; text: string; fromEmail?: string; toEmail?: string; photo?: string | null }> }>(
     drive,
     INBOX_VAULT_NAME,
     INBOX_VAULT_KIND,

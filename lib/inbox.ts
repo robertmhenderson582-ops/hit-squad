@@ -269,6 +269,15 @@ export function acceptedInboxMessageId(value?: string | null) {
   return /^im-[A-Za-z0-9-]{4,80}$/.test(id) ? id : "";
 }
 
+/** Inbox photos are data-URL images. Empty or non-image payloads do not attach. */
+export function acceptedInboxPhoto(value?: string | null) {
+  if (typeof value !== "string") return null;
+  const photo = value.trim();
+  if (!photo.startsWith("data:image/") || !photo.includes(";base64,")) return null;
+  if (photo.length < 32) return null;
+  return photo;
+}
+
 function mergePeerThread(
   local: InboxThread | undefined,
   remote: InboxThread,

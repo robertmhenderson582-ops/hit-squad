@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
+import { DRIVE_WRITE_ERROR } from "@/lib/drive-data";
 import { cookieValue } from "@/lib/http";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { canUseInbox, inboxCircleById, inboxCirclePerson } from "@/lib/inbox-circle";
@@ -49,30 +50,34 @@ export async function POST(request: Request) {
     emptyInbox?: boolean;
   };
 
-  if (typeof body.readPersonId === "string" && body.readPersonId.trim()) {
-    return NextResponse.json({
-      threads: await markInboxThreadRead(user.email, body.readPersonId.trim()),
-      contacts: inboxPeopleFor(user.email),
-      store: inboxStoreKind(),
-    });
-  }
+  try {
+    if (typeof body.readPersonId === "string" && body.readPersonId.trim()) {
+      return NextResponse.json({
+        threads: await markInboxThreadRead(user.email, body.readPersonId.trim()),
+        contacts: inboxPeopleFor(user.email),
+        store: inboxStoreKind(),
+      });
+    }
 
-  if (
-    typeof body.hideMessageId === "string" ||
-    typeof body.hidePersonId === "string" ||
-    Array.isArray(body.hidePersonIds) ||
-    body.emptyInbox === true
-  ) {
-    return NextResponse.json({
-      threads: await hideInboxFor(user.email, {
-        messageId: body.hideMessageId,
-        personId: body.hidePersonId,
-        personIds: body.hidePersonIds,
-        empty: body.emptyInbox === true,
-      }),
-      contacts: inboxPeopleFor(user.email),
-      store: inboxStoreKind(),
-    });
+    if (
+      typeof body.hideMessageId === "string" ||
+      typeof body.hidePersonId === "string" ||
+      Array.isArray(body.hidePersonIds) ||
+      body.emptyInbox === true
+    ) {
+      return NextResponse.json({
+        threads: await hideInboxFor(user.email, {
+          messageId: body.hideMessageId,
+          personId: body.hidePersonId,
+          personIds: body.hidePersonIds,
+          empty: body.emptyInbox === true,
+        }),
+        contacts: inboxPeopleFor(user.email),
+        store: inboxStoreKind(),
+      });
+    }
+  } catch {
+    return NextResponse.json({ error: DRIVE_WRITE_ERROR }, { status: 503 });
   }
 
   const recipient =
@@ -82,18 +87,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Pick a person." }, { status: 400 });
   }
 
-  const posted = await postInboxMessage({
-    fromEmail: user.email,
-    fromName: user.name,
-    toEmail: recipient.email,
-    text: body.text,
-    photo: body.photo,
-    id: body.messageId,
-  });
-  if (!posted.ok) return NextResponse.json({ error: posted.error }, { status: posted.status });
-  return NextResponse.json({
-    threads: posted.threads,
-    contacts: inboxPeopleFor(user.email),
-    store: inboxStoreKind(),
-  });
+  try {
+    const posted = await postInboxMessage({
+      fromEmail: user.email,
+      fromName: user.name,
+      toEmail: recipient.email,
+      text: body.text,
+      photo: body.photo,
+      id: body.messageId,
+    });
+    if (!posted.ok) return NextResponse.json({ error: posted.error }, { status: posted.status });
+    return NextResponse.json({
+      threads: posted.threads,
+      contacts: inboxPeopleFor(user.email),
+      store: inboxStoreKind(),
+    });
+  } catch {
+    return NextResponse.json({ error: DRIVE_WRITE_ERROR }, { status: 503 });
+  }
 }

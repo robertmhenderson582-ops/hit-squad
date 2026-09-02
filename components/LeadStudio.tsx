@@ -2,7 +2,9 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
-import { fileToLead, leadToBytes, readBrief, writeBrief, type LeadFile } from "@/lib/lead-briefs";
+import { useSession } from "@/components/SessionProvider";
+import { hasBuildDesk } from "@/lib/desk-role";
+import { fileToLead, leadToBytes, readBrief, writeBrief, type LeadFile, type PublicLeadBrief } from "@/lib/lead-briefs";
 import { buildZip } from "@/lib/zip";
 
 const JOBS = [
@@ -16,10 +18,14 @@ type Screen = "welcome" | Job;
 
 export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "quality" }) {
   const [screen, setScreen] = useState<Screen>("welcome");
+  const { user } = useSession();
+  const canSeeAll = hasBuildDesk(user);
   const [describe, setDescribe] = useState("");
   const [files, setFiles] = useState<LeadFile[]>([]);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedBriefs, setSavedBriefs] = useState<PublicLeadBrief[]>([]);
 
   useEffect(() => {
     const brief = readBrief(kind);
@@ -27,6 +33,20 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
     setFiles(brief.files);
     setSavedAt(brief.savedAt);
   }, [kind]);
+
+  useEffect(() => {
+    void fetch(`/api/desk/briefs?kind=${kind}`, { credentials: "include" })
+      .then(async (response) => {
+        const data = (await response.json().catch(() => ({}))) as { briefs?: PublicLeadBrief[] };
+        if (!response.ok || !Array.isArray(data.briefs)) return;
+        if (canSeeAll) setSavedBriefs(data.briefs);
+        const mine = user?.email
+          ? data.briefs.find((row) => row.who === user.email.trim().toLowerCase())
+          : data.briefs[0];
+        if (mine?.savedAt) setSavedAt(mine.savedAt);
+      })
+      .catch(() => undefined);
+  }, [canSeeAll, kind, user?.email]);
 
   function persist(next: { describe?: string; files?: LeadFile[]; savedAt?: string | null }) {
     const brief = {
@@ -37,19 +57,65 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
     writeBrief(kind, brief);
   }
 
-  function onSave(event: FormEvent) {
+  async function onSave(event: FormEvent) {
     event.preventDefault();
-    const stamp = new Date().toLocaleString("en-GB", { hour12: false });
+    setSaving(true);
+    setNote(null);
+    try {
+      await saveToOwner({ describe, files });
+      setNote("Saved. Owner can open the brief and files. Empty board stays empty.");
+    } catch (error) {
+      setNote(error instanceof Error && error.message ? error.message : "Could not save. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveToOwner(next: { describe?: string; files?: LeadFile[] }) {
+    const body = {
+      kind,
+      describe: next.describe ?? describe,
+      files: next.files ?? files,
+    };
+    writeBrief(kind, { ...body, savedAt: savedAt });
+    const response = await fetch("/api/desk/briefs", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      brief?: PublicLeadBrief;
+    };
+    if (!response.ok) {
+      throw new Error(typeof data.error === "string" && data.error ? data.error : "Could not save. Try again.");
+    }
+    const stamp = data.brief?.savedAt || new Date().toLocaleString("en-GB", { hour12: false });
     setSavedAt(stamp);
-    persist({ savedAt: stamp });
-    setNote("Saved on this desk. Owner can open the brief and files. Empty board stays empty.");
+    persist({ describe: body.describe, files: body.files, savedAt: stamp });
+    const saved = data.brief;
+    if (saved) {
+      setSavedBriefs((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
+    }
+    return stamp;
   }
 
   async function onFiles(list: FileList | null) {
-    const next = await Promise.all(Array.from(list ?? []).map(fileToLead));
-    setFiles(next);
-    persist({ files: next });
-    if (next.length) noteFeatureTrail("import");
+    setSaving(true);
+    setNote(null);
+    try {
+      const next = await Promise.all(Array.from(list ?? []).map(fileToLead));
+      setFiles(next);
+      persist({ files: next });
+      if (next.length) noteFeatureTrail("import");
+      await saveToOwner({ files: next });
+      setNote("Saved. Owner can open the brief and files. Empty board stays empty.");
+    } catch (error) {
+      setNote(error instanceof Error && error.message ? error.message : "Could not save. Try again.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function submitBrief() {
@@ -138,21 +204,32 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
           <label className="block">
             <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">DROP FORMS</span>
             <p className="mt-1 text-sm text-[#5b6f73]">PDF, Excel, Word, or pictures.</p>
-            <input
-              type="file"
-              multiple
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt"
+            <div
               className="paper-field mt-2"
-              onChange={(event) => onFiles(event.target.files)}
-            />
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                void onFiles(event.dataTransfer.files);
+              }}
+            >
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt"
+                className="w-full"
+                disabled={saving}
+                onChange={(event) => void onFiles(event.target.files)}
+              />
+            </div>
             {files.length ? <p className="mt-1 text-xs text-[#5b6f73]">{files.map((file) => file.name).join(" · ")}</p> : null}
+            {saving ? <p className="mt-1 text-xs text-[#5b6f73]">Saving…</p> : null}
           </label>
         ) : null}
         {screen === "save" ? (
           <div className="space-y-3">
             <p className="text-sm text-[#5b6f73]">
-              Save keeps the brief on this desk. Submit brief packs write-up + attachments into a zip
-              (brief.md + forms). Mail is not sent.
+              Save sends the brief and files so the owner can open them. Submit brief still downloads
+              a zip (brief.md + forms). Mail is not sent.
             </p>
             <p className="text-sm">
               {describe ? describe : "No description yet."}
@@ -161,9 +238,21 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
               {files.length ? files.map((file) => file.name).join(" · ") : "No forms yet."}
               {savedAt ? ` · Saved ${savedAt}` : ""}
             </p>
+            {canSeeAll && savedBriefs.length ? (
+              <div className="space-y-2 rounded-lg border border-[#d5e0de] px-3 py-3">
+                <p className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">SAVED BRIEFS</p>
+                {savedBriefs.map((brief) => (
+                  <p key={brief.id} className="text-sm text-[#5b6f73]">
+                    {brief.whoName}: {brief.describe || "No description yet."}
+                    {brief.files.length ? ` · ${brief.files.map((file) => file.name).join(" · ")}` : ""}
+                    {brief.savedAt ? ` · Saved ${brief.savedAt}` : ""}
+                  </p>
+                ))}
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
-              <button type="submit" className="rounded-lg bg-steel px-4 py-2 text-white">
-                Save
+              <button type="submit" disabled={saving} className="rounded-lg bg-steel px-4 py-2 text-white disabled:opacity-60">
+                {saving ? "Saving…" : "Save"}
               </button>
               <button type="button" onClick={submitBrief} className="rounded-lg border border-steel px-4 py-2 text-steel">
                 Submit brief

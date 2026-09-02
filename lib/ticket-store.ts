@@ -77,10 +77,64 @@ function resolveAdapter(): DriveAdapter | null {
   return drive.configured ? drive : null;
 }
 
-async function persist(tickets: DeskTicket[]) {
-  writeCache(tickets);
+function richerTicket(left: DeskTicket, right: DeskTicket): DeskTicket {
+  return {
+    ...left,
+    ...right,
+    capture: right.capture || left.capture,
+    note: right.note || left.note,
+    notifyFix: right.notifyFix ?? left.notifyFix,
+    later: Boolean(right.later || left.later),
+    done: Boolean(right.done || left.done),
+  };
+}
+
+/** Union by id. Vault rows land first, incoming rows stay, same-id keeps the richer row. */
+export function mergeStoredTickets(vault: DeskTicket[], incoming: DeskTicket[]): DeskTicket[] {
+  const map = new Map<string, DeskTicket>();
+  for (const row of vault) map.set(row.id, row);
+  for (const row of incoming) {
+    const existing = map.get(row.id);
+    map.set(row.id, existing ? richerTicket(existing, row) : row);
+  }
+  return [...map.values()].sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+}
+
+function ticketNeedsVaultWrite(vault: DeskTicket[], merged: DeskTicket[]) {
+  if (merged.length !== vault.length) return true;
+  const byId = new Map(vault.map((row) => [row.id, row]));
+  return merged.some((row) => {
+    const existing = byId.get(row.id);
+    return !existing || Boolean(row.capture && !existing.capture) || Boolean(row.note && !existing.note);
+  });
+}
+
+function readDiskTickets(): DeskTicket[] {
+  try {
+    return parseTicketFile(JSON.parse(readFileSync(ticketStorePath(), "utf8")));
+  } catch {
+    return [];
+  }
+}
+
+async function readVaultTickets(): Promise<DeskTicket[]> {
   const drive = resolveAdapter();
-  if (drive) await writeVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, { tickets });
+  if (!drive) return [];
+  return parseTicketFile(await readVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND));
+}
+
+async function persist(tickets: DeskTicket[], opts?: { removedIds?: string[] }): Promise<DeskTicket[]> {
+  const removed = new Set(opts?.removedIds ?? []);
+  const drive = resolveAdapter();
+  if (drive) {
+    const merged = mergeStoredTickets(await readVaultTickets(), tickets).filter((row) => !removed.has(row.id));
+    writeCache(merged);
+    await writeVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, { tickets: merged });
+    return merged;
+  }
+  const merged = mergeStoredTickets(readDiskTickets(), tickets).filter((row) => !removed.has(row.id));
+  writeCache(merged);
+  return merged;
 }
 
 export async function hydrateTicketStore(): Promise<DeskTicket[]> {
@@ -89,11 +143,14 @@ export async function hydrateTicketStore(): Promise<DeskTicket[]> {
   const drive = resolveAdapter();
   if (drive) {
     try {
-      const vault = parseTicketFile(await readVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND));
-      if (vault.length) writeCache(vault);
-      else if (cached.length) await writeVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, { tickets: cached });
+      const vault = await readVaultTickets();
+      const merged = mergeStoredTickets(vault, cached);
+      writeCache(merged);
+      if (ticketNeedsVaultWrite(vault, merged)) {
+        await writeVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, { tickets: merged });
+      }
     } catch {
-      // Keep the local cache.
+      // Keep the local cache. Never replace a richer set with a thinner vault read.
     }
   }
   hydrated = true;
@@ -124,8 +181,8 @@ export async function addStoredTicket(entry: DeskTicket): Promise<DeskTicket> {
   } else {
     tickets.unshift(next);
   }
-  await persist(tickets);
-  return index >= 0 ? tickets[index] : next;
+  const saved = await persist(tickets);
+  return saved.find((row) => row.id === next.id) ?? (index >= 0 ? tickets[index] : next);
 }
 
 export async function patchStoredTicket(
@@ -136,8 +193,8 @@ export async function patchStoredTicket(
   const row = tickets.find((item) => item.id === id);
   if (!row) return null;
   Object.assign(row, patch);
-  await persist(tickets);
-  return row;
+  const saved = await persist(tickets);
+  return saved.find((item) => item.id === id) ?? row;
 }
 
 export async function removeStoredTicket(id: string) {
@@ -145,11 +202,16 @@ export async function removeStoredTicket(id: string) {
   const index = tickets.findIndex((item) => item.id === id);
   if (index < 0) return;
   tickets.splice(index, 1);
-  await persist(tickets);
+  await persist(tickets, { removedIds: [id] });
 }
 
 export async function removeStoredDoneTickets() {
-  await persist((await hydrateTicketStore()).filter((row) => !row.done));
+  const tickets = await hydrateTicketStore();
+  const removedIds = tickets.filter((row) => row.done).map((row) => row.id);
+  await persist(
+    tickets.filter((row) => !row.done),
+    { removedIds },
+  );
 }
 
 export function resetTicketStoreForTests(path?: string) {
@@ -167,6 +229,13 @@ export function forgetTicketCacheForTests() {
   hydrated = false;
   const file = ticketStorePath();
   if (existsSync(file)) unlinkSync(file);
+}
+
+/** Warm empty instance: process cache is stale, vault/file is not wiped. */
+export function staleWarmTicketInstanceForTests() {
+  cache = [];
+  loadedFrom = ticketStorePath();
+  hydrated = true;
 }
 
 export function useTicketVaultForTests(adapter: DriveAdapter | null) {

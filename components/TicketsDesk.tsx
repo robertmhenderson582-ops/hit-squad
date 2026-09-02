@@ -81,7 +81,10 @@ export function TicketsDesk() {
     });
     const data = await response.json().catch(() => ({}));
     if (response.ok) refresh((data.tickets ?? []) as DeskTicket[]);
-    else if (mine) refresh();
+    else {
+      setError(typeof data.error === "string" && data.error ? data.error : "Could not save. Try again.");
+      if (mine) refresh();
+    }
   }
 
   async function remove(id: string, label: string) {
@@ -95,7 +98,10 @@ export function TicketsDesk() {
     });
     const data = await response.json().catch(() => ({}));
     if (response.ok) refresh((data.tickets ?? []) as DeskTicket[]);
-    else if (mine) refresh();
+    else {
+      setError(typeof data.error === "string" && data.error ? data.error : "Could not save. Try again.");
+      if (mine) refresh();
+    }
   }
 
   async function removeDone() {
@@ -111,7 +117,10 @@ export function TicketsDesk() {
     });
     const data = await response.json().catch(() => ({}));
     if (response.ok) refresh((data.tickets ?? []) as DeskTicket[]);
-    else if (mine) refresh();
+    else {
+      setError(typeof data.error === "string" && data.error ? data.error : "Could not save. Try again.");
+      if (mine) refresh();
+    }
   }
 
   async function copyShot(row: DeskTicket) {

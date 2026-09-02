@@ -1,5 +1,15 @@
 export type LeadFile = { name: string; type: string; data: string };
 export type LeadBrief = { describe: string; files: LeadFile[]; savedAt: string | null };
+export type PublicLeadFile = { name: string; type: string };
+export type PublicLeadBrief = {
+  id: string;
+  kind: "quality" | "hse";
+  who: string;
+  whoName: string;
+  describe: string;
+  files: PublicLeadFile[];
+  savedAt: string;
+};
 
 export function briefKey(kind: string) {
   return `hs_lead_${kind}`;

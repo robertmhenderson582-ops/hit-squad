@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { playInboxChime, unlockInboxAudio } from "@/lib/chime";
 import {
+  acceptedInboxPhoto,
   appendInboxMessage,
   contactsFor,
   makeMessage,
@@ -45,7 +46,7 @@ type InboxState = {
   startThread: (person: InboxPerson) => void;
   openThread: (id: string) => void;
   closeThread: () => void;
-  sendMessage: (text: string, photo?: string | null) => void;
+  sendMessage: (text: string, photo?: string | null) => Promise<boolean>;
   deleteMessage: (threadId: string, messageId: string) => void;
   clearConversation: (threadId: string) => void;
   toggleSelect: (id: string) => void;
@@ -277,43 +278,49 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   }, [applyRemote, inboxOn, persist]);
 
   const sendMessage = useCallback(
-    (text: string, photo?: string | null) => {
+    async (text: string, photo?: string | null) => {
       const threadId = activeIdRef.current;
-      if (!threadId) return;
+      if (!threadId) return false;
       const trimmed = text.trim();
-      if (!trimmed && !photo) return;
+      const attached = photo ? acceptedInboxPhoto(photo) : null;
+      if (photo && !attached) {
+        flashToast("Could not attach. Try again.");
+        return false;
+      }
+      if (!trimmed && !attached) return false;
       const active = threadsRef.current.find((thread) => thread.id === threadId);
-      if (!active) return;
+      if (!active) return false;
       const pending = makeMessage({
         from: "self",
         author: lens?.name || user?.name || "You",
         text: trimmed,
-        photo,
+        photo: attached,
       });
       persist((current) => appendInboxMessage(current, threadId, pending));
-      if (active.personId === DESK_PERSON_ID || !inboxOn) return;
-      void deskFetch("/api/desk/inbox", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          personId: active.personId,
-          text: trimmed,
-          photo: photo ?? null,
-          messageId: pending.id,
-        }),
-      })
-        .then(async (response) => {
-          if (!response.ok) throw new Error("send-failed");
-          const data = (await response.json().catch(() => ({}))) as { threads?: InboxThread[] };
-          if (!Array.isArray(data.threads)) throw new Error("send-failed");
-          applyRemote(data.threads);
-          hiddenPersonIdsRef.current.delete(active.personId);
-          persistHides();
-        })
-        .catch(() => {
-          persist((current) => rollbackInboxSend(current, threadId, pending.id));
-          flashToast("Message did not send. Try again.");
+      if (active.personId === DESK_PERSON_ID || !inboxOn) return true;
+      try {
+        const response = await deskFetch("/api/desk/inbox", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            personId: active.personId,
+            text: trimmed,
+            photo: attached,
+            messageId: pending.id,
+          }),
         });
+        if (!response.ok) throw new Error("send-failed");
+        const data = (await response.json().catch(() => ({}))) as { threads?: InboxThread[]; error?: string };
+        if (!Array.isArray(data.threads)) throw new Error("send-failed");
+        applyRemote(data.threads);
+        hiddenPersonIdsRef.current.delete(active.personId);
+        persistHides();
+        return true;
+      } catch {
+        persist((current) => rollbackInboxSend(current, threadId, pending.id));
+        flashToast(attached ? "Could not attach. Try again." : "Message did not send. Try again.");
+        return false;
+      }
     },
     [applyRemote, flashToast, inboxOn, lens?.name, persist, persistHides, user?.name],
   );
