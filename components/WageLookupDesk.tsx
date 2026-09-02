@@ -3,12 +3,7 @@
 import { useMemo, useState } from "react";
 import { useDisplay } from "@/components/DisplayProvider";
 import { useAlias } from "@/components/OwnerDeskContext";
-import {
-  WAGE_LOOKUP_EMPTY,
-  formatWageRate,
-  lookupWageRate,
-  wageLookupBook,
-} from "@/lib/wage-lookup";
+import { formatWageRate, lookupWageRate, wageLookupBook } from "@/lib/wage-lookup";
 
 export function WageLookupDesk({ client, site }: { client?: string; site?: string }) {
   const alias = useAlias();
@@ -54,7 +49,7 @@ export function WageLookupDesk({ client, site }: { client?: string; site?: strin
             )}
           </>
         ) : (
-          <p className="mt-3 text-sm text-[#5b6f73]">{WAGE_LOOKUP_EMPTY}</p>
+          <p className="mt-3 text-sm text-[#5b6f73]">No book yet</p>
         )}
       </div>
     </section>
