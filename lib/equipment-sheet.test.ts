@@ -9,6 +9,7 @@ import {
   equipmentTotals,
   jobSetupWindow,
   largeToolAmount,
+  removeEquipmentLine,
   seedEmptyEquipmentWindow,
   seedLineDates,
   thirdPartyCost,
@@ -197,4 +198,36 @@ test("Start/End bill inclusive periods; empty dates stay 1 so totals do not drop
   assert.equal(thirdPartyCost(rental), 100 * 2 * 2 + 25);
   assert.equal(thirdPartyMarkedUp(rental), 450.5);
   assert.equal(thirdPartyCost({ ...rental, start: "", end: "" }), 225);
+});
+
+test("removing one large-tool line leaves the others; last line may empty the card", () => {
+  const keep = { ...blankLargeTool(), id: "lt-keep", itemId: "air-mover", qty: 2 };
+  const drop = { ...blankLargeTool(), id: "lt-drop", itemId: "rad-gun-torque", qty: 1 };
+  const rental = { ...blankThirdParty(), id: "tp-keep", item: "Skip Pan", rate: 847 };
+  const sheet = { largeTools: [keep, drop], thirdParty: [rental] };
+  const next = removeEquipmentLine(sheet, "largeTools", "lt-drop");
+  assert.deepEqual(next.largeTools.map((line) => line.id), ["lt-keep"]);
+  assert.equal(next.largeTools[0]?.qty, 2);
+  assert.equal(next.thirdParty.length, 1);
+  assert.equal(next.thirdParty[0]?.item, "Skip Pan");
+  assert.equal(next.thirdParty[0]?.rate, 847);
+  const empty = removeEquipmentLine(next, "largeTools", "lt-keep");
+  assert.deepEqual(empty.largeTools, []);
+  assert.equal(empty.thirdParty[0]?.id, "tp-keep");
+});
+
+test("removing one third-party line leaves the others; last line may empty the card", () => {
+  const tool = { ...blankLargeTool(), id: "lt-keep", itemId: "air-mover" };
+  const keep = { ...blankThirdParty(), id: "tp-keep", item: "Skip Pan", rate: 847, freight: 100 };
+  const drop = { ...blankThirdParty(), id: "tp-drop", item: "Sissor Lift", rate: 417, freight: 250 };
+  const sheet = { largeTools: [tool], thirdParty: [keep, drop] };
+  const next = removeEquipmentLine(sheet, "thirdParty", "tp-drop");
+  assert.deepEqual(next.thirdParty.map((line) => line.id), ["tp-keep"]);
+  assert.equal(next.thirdParty[0]?.item, "Skip Pan");
+  assert.equal(next.thirdParty[0]?.rate, 847);
+  assert.equal(next.largeTools.length, 1);
+  assert.equal(next.largeTools[0]?.itemId, "air-mover");
+  const empty = removeEquipmentLine(next, "thirdParty", "tp-keep");
+  assert.deepEqual(empty.thirdParty, []);
+  assert.equal(empty.largeTools[0]?.id, "lt-keep");
 });

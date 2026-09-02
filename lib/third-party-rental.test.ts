@@ -125,6 +125,11 @@ describe("Wood River third-party rental catalog", () => {
     assert.match(desk, /Third-party rental uses the Wood River third-party table/);
     assert.match(desk, /Large tools stay Shahan COMP/);
     assert.match(desk, /thirdPartyMarkedUp/);
+    assert.match(desk, /useConfirmRemove/);
+    assert.match(desk, /removeEquipmentLine/);
+    assert.match(desk, /trash-btn/);
+    assert.match(desk, /\+ Add large tool/);
+    assert.match(desk, /\+ Add rental/);
     assert.equal(/No COMP rental book/.test(desk), false);
     assert.equal(/Third-party rental is typed/.test(desk), false);
     const listed = execSync('git ls-files "*.xlsx" "*.xlsm" "*.xls" "*.pdf"', { encoding: "utf8" }).trim();

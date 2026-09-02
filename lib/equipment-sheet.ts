@@ -95,6 +95,18 @@ export function blankThirdParty(window: { start?: string; end?: string } = {}): 
   );
 }
 
+/** Drop one line. The other card and remaining rows stay. Empty after the last line is allowed. */
+export function removeEquipmentLine(
+  sheet: EquipmentSheet,
+  kind: "largeTools" | "thirdParty",
+  id: string,
+): EquipmentSheet {
+  return {
+    ...sheet,
+    [kind]: sheet[kind].filter((line) => line.id !== id),
+  };
+}
+
 function addCalendarMonths(date: Date, months: number) {
   const next = new Date(date.getFullYear(), date.getMonth() + months, 1);
   const last = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();

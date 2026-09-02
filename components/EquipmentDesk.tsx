@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CatalogPick } from "@/components/CatalogPick";
+import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { DateField } from "@/components/DateField";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { B2_PERIODS, type B2Period } from "@/lib/b2-east-coast";
@@ -13,6 +14,7 @@ import {
   jobSetupWindow,
   largeToolAmount,
   readEquipmentSheet,
+  removeEquipmentLine,
   seedEmptyEquipmentWindow,
   thirdPartyCost,
   thirdPartyMarkedUp,
@@ -69,6 +71,7 @@ const RENTAL_HEADERS = ["ITEM", "PERIOD", "RATE", "QTY", "START", "END", "FREIGH
 
 export function EquipmentDesk() {
   const pack = useEstimatePackage();
+  const confirmRemove = useConfirmRemove();
   const [sheet, setSheet] = useState<EquipmentSheet>(emptyEquipmentSheet);
   const totals = equipmentTotals(sheet);
   const window = useMemo(() => jobSetupWindow(pack.schedule.phases), [pack.schedule.phases]);
@@ -85,6 +88,14 @@ export function EquipmentDesk() {
   function persist(next: EquipmentSheet) {
     setSheet(next);
     writeEquipmentSheet(pack.estimateKey, next);
+  }
+
+  function dropLine(kind: "largeTools" | "thirdParty", id: string) {
+    setSheet((current) => {
+      const next = removeEquipmentLine(current, kind, id);
+      writeEquipmentSheet(pack.estimateKey, next);
+      return next;
+    });
   }
 
   return (
@@ -116,12 +127,15 @@ export function EquipmentDesk() {
                     {header}
                   </th>
                 ))}
+                <th className="px-2 py-2">
+                  <span className="sr-only">Remove</span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {sheet.largeTools.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-2 py-4 text-[#5b6f73]">
+                  <td colSpan={13} className="px-2 py-4 text-[#5b6f73]">
                     No large tools on this package.
                   </td>
                 </tr>
@@ -256,6 +270,24 @@ export function EquipmentDesk() {
                           money(largeToolAmount(line))
                         )}
                       </td>
+                      <td className="px-2 py-2">
+                        <button
+                          type="button"
+                          className="trash-btn"
+                          title="Remove large tool"
+                          aria-label="Remove large tool"
+                          onClick={() =>
+                            void confirmRemove(item?.description || "this large tool", {
+                              title: "Remove this large tool?",
+                              confirmLabel: "Remove",
+                            }).then((ok) => {
+                              if (ok) dropLine("largeTools", line.id);
+                            })
+                          }
+                        >
+                          ⌫
+                        </button>
+                      </td>
                     </tr>
                   );
                 })
@@ -291,12 +323,15 @@ export function EquipmentDesk() {
                     {header}
                   </th>
                 ))}
+                <th className="px-2 py-2">
+                  <span className="sr-only">Remove</span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {sheet.thirdParty.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-2 py-4 text-[#5b6f73]">
+                  <td colSpan={9} className="px-2 py-4 text-[#5b6f73]">
                     No third-party rentals.
                   </td>
                 </tr>
@@ -411,6 +446,24 @@ export function EquipmentDesk() {
                     <td className="px-2 py-2 text-sm text-[#5b6f73]">
                       <span className="block font-semibold text-[#163038]">{money(thirdPartyMarkedUp(line))}</span>
                       <span className="block text-xs">Cost {money(thirdPartyCost(line))} · after 6%</span>
+                    </td>
+                    <td className="px-2 py-2">
+                      <button
+                        type="button"
+                        className="trash-btn"
+                        title="Remove rental"
+                        aria-label="Remove rental"
+                        onClick={() =>
+                          void confirmRemove(line.item || "this rental", {
+                            title: "Remove this rental?",
+                            confirmLabel: "Remove",
+                          }).then((ok) => {
+                            if (ok) dropLine("thirdParty", line.id);
+                          })
+                        }
+                      >
+                        ⌫
+                      </button>
                     </td>
                     </tr>
                   );
