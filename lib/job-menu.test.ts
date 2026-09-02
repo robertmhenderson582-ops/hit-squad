@@ -78,7 +78,7 @@ describe("job menu archive and delete", () => {
     assert.equal(menuStatus(hse, viewed), "deleted");
     assert.equal(isActiveMenuItem(hse, viewed), false);
     assert.equal(isActiveMenuItem(cat2, viewed), true);
-    assert.equal(omitDeletedJobs([hse, cat2], viewed).map((row) => row.id), ["job-new-mtaajdwa-f7539"]);
+    assert.deepEqual(omitDeletedJobs([hse, cat2], viewed).map((row) => row.id), ["job-new-mtaajdwa-f7539"]);
     assert.equal(menuStatus(hse, menuForViewedDesk(true, store, "nathan")), "deleted");
     assert.equal(isActiveMenuItem(hse, menuForViewedDesk(false, store)), true);
     archiveMenuItem(cat2, store, "nathan");
