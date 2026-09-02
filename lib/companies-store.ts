@@ -4,7 +4,10 @@ import { dirname, join } from "node:path";
 import {
   STANDALONE_ID,
   STANDALONE_NAME,
+  assignedCompaniesForId,
+  companyDeskLogoSrc,
   companyIdFromName,
+  companyLogoSrc,
   isCompanyId,
   isStandaloneId,
   mergeCompanies,
@@ -39,7 +42,12 @@ export function parseAssignmentFile(raw: unknown): AssignmentFile {
   const companies: Company[] = [];
   for (const row of parsed.companies ?? []) {
     if (row && isCompanyId(row.id) && typeof row.name === "string" && row.name.trim()) {
-      companies.push({ id: row.id, name: row.name.trim() });
+      const logo = companyLogoSrc(typeof row.logo === "string" ? row.logo : null);
+      companies.push({
+        id: row.id,
+        name: row.name.trim(),
+        ...(logo ? { logo } : {}),
+      });
     }
   }
   return { assignments, companies };
@@ -125,6 +133,15 @@ export async function assignedCompany(email: string): Promise<CompanyId> {
   const key = email.trim().toLowerCase();
   const data = await hydrateCompanyStore();
   return data.assignments[key] ?? seedCompanyForEmail(key);
+}
+
+/** Assigned companies for this email only — never the owner's full catalog. */
+export async function assignedCompaniesForEmail(email: string): Promise<Company[]> {
+  return assignedCompaniesForId(await assignedCompany(email), await listCompanies());
+}
+
+export async function companyDeskLogoForEmail(email: string): Promise<string | null> {
+  return companyDeskLogoSrc(await assignedCompaniesForEmail(email));
 }
 
 export async function setAssignedCompany(email: string, companyId: CompanyId) {

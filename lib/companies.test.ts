@@ -8,12 +8,15 @@ import {
   COMPANIES,
   LUCKY13_ID,
   LUCKY13_NAME,
+  assignedCompaniesForId,
   canSeeCompany,
   catalogVisibleTo,
   companiesForScope,
+  companyDeskLogoSrc,
   inferCompanyId,
   assignmentChoices,
   isStandaloneId,
+  mergeCompanies,
   peopleLane,
   samePeopleLane,
   seedCompanyForEmail,
@@ -23,17 +26,22 @@ import {
 } from "./companies.ts";
 import {
   addCompany,
+  assignedCompaniesForEmail,
   assignedCompany,
+  companyDeskLogoForEmail,
   forgetCompanyCacheForTests,
   listCompanies,
+  parseAssignmentFile,
   resetCompanyAssignmentsForTests,
   setAssignedCompany,
   useCompanyVaultForTests,
+  useMemoryCompanyAssignments,
 } from "./companies-store.ts";
 import { memoryDrive } from "./drive-estimates.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { boardForUser } from "./desk-data.ts";
+import { COMPANIES_VAULT_KIND, COMPANIES_VAULT_NAME, writeVaultJson } from "./drive-data.ts";
 import { jobsOnDesk, seedJobs, visibleSeedJobs } from "./jobs.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { JAMES_EMAIL, JOHN_BEECH_EMAIL, JOHN_HENRY_EMAIL, JOSEPH_EMAIL, TESTER_SEATS } from "./tester-seats.ts";
@@ -235,6 +243,50 @@ describe("assign and visibility", () => {
     assert.equal(listed.some((row) => row.id === "madison"), true);
     assert.equal(await assignedCompany(JOSEPH_EMAIL), added.company.id);
     assert.equal(await assignedCompany(JAMES_EMAIL), "cbi");
+  });
+});
+
+describe("company desk logo on file", () => {
+  it("keeps a vault logo on Madison and does not invent one", async () => {
+    assert.equal(COMPANIES.every((row) => !row.logo), true);
+    const parsed = parseAssignmentFile({
+      assignments: { "nathanboyte@gmail.com": "madison" },
+      companies: [
+        { id: "madison", name: "Madison", logo: "/madison.png" },
+        { id: "cbi", name: "CBI", logo: "javascript:alert(1)" },
+      ],
+    });
+    assert.equal(parsed.companies.find((row) => row.id === "madison")?.logo, "/madison.png");
+    assert.equal(parsed.companies.find((row) => row.id === "cbi")?.logo, undefined);
+
+    const merged = mergeCompanies(parsed.companies);
+    assert.equal(merged.find((row) => row.id === "madison")?.logo, "/madison.png");
+    assert.equal(merged.find((row) => row.id === "hitsquad")?.logo, undefined);
+    assert.equal(companyDeskLogoSrc(assignedCompaniesForId("madison", merged)), "/madison.png");
+    assert.equal(companyDeskLogoSrc(assignedCompaniesForId("hitsquad", merged)), null);
+    assert.equal(
+      companyDeskLogoSrc([
+        { logo: "/madison.png" },
+        { logo: "/cbi.png" },
+      ]),
+      null,
+    );
+
+    useMemoryCompanyAssignments();
+    assert.equal(await assignedCompany("nathanboyte@gmail.com"), "madison");
+    assert.deepEqual((await assignedCompaniesForEmail("nathanboyte@gmail.com")).map((row) => row.id), ["madison"]);
+    assert.equal(await companyDeskLogoForEmail("nathanboyte@gmail.com"), null);
+
+    const drive = memoryDrive();
+    await writeVaultJson(drive, COMPANIES_VAULT_NAME, COMPANIES_VAULT_KIND, {
+      assignments: { "nathanboyte@gmail.com": "madison" },
+      companies: [{ id: "madison", name: "Madison", logo: "/madison.png" }],
+    });
+    forgetCompanyCacheForTests();
+    useCompanyVaultForTests(drive);
+    assert.equal((await listCompanies()).find((row) => row.id === "madison")?.logo, "/madison.png");
+    assert.equal(await companyDeskLogoForEmail("nathanboyte@gmail.com"), "/madison.png");
+    assert.equal(await companyDeskLogoForEmail(OWNER_LOGIN_EMAIL), null);
   });
 });
 

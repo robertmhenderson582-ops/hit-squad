@@ -1,26 +1,24 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.40.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.40";
+export const DESK_VERSION = "1.41.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.41";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.40";
+export const DESK_THREAD_ID = "th-desk-v1.41";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.40",
-  "• Wage lookup now shows COMP/C-1 Base wage. Crew dollars still billed ST/OT/DT.",
+  "Hit Squad Project Controls V1.41",
+  "• Company Desk on home shows your company logo when one is on file.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.40",
-  "• Wage lookup is a tab on the estimate. It shows COMP/C-1 Base wage, not billed rate.",
-  "• Wood River and Bayway use East Coast Comp Amendment 11 PCA0001103. Rodeo and Ferndale use West Coast Comp Amendment 8 PCA0001100 samples until the unique TSV lands.",
-  "• Monroe Energy uses CW35353 Exhibit C-1. Yates uses Rate builder Base Rate, not Comp.",
-  "• Crew costing still uses billed ST / OT / DT. Billings is still No book yet.",
+  "Hit Squad Project Controls V1.41",
+  "• Company Desk on home shows your company logo when one is on file.",
+  "• If more than one assigned company has a logo, or none does, the text door stays. Standalone is unchanged.",
 ].join("\n");
 
-/** Same as the live V1.40 note. Kept so older imports still resolve. */
+/** Same as the live V1.41 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;

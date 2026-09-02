@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { assignedCompany } from "@/lib/companies-store";
+import { assignedCompany, companyDeskLogoForEmail } from "@/lib/companies-store";
 import { cookieValue } from "@/lib/http";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { deskForUser } from "@/lib/jobs";
@@ -20,5 +20,6 @@ export async function GET(request: Request) {
     user: { id: deskUser.id, email: deskUser.email, name: deskUser.name },
     desk: deskForUser(deskUser.id, scope),
     companyId,
+    companyDeskLogo: await companyDeskLogoForEmail(deskUser.email),
   });
 }
