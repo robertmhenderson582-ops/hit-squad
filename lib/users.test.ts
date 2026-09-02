@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
+import bcrypt from "bcryptjs";
 import { readSeatClaim, signSeatClaim } from "./auth.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
@@ -545,8 +546,9 @@ test("OWNER_PASSWORD is the login only when no owner hash is stored", async () =
   useSeatVaultForTests(drive);
   await hydrateSeatStore();
   assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "authenticated");
+  await flushSeatVault();
   const vaultRaw = [...drive.files.values()].map((row) => row.content).join();
-  assert.equal(vaultRaw.includes(OWNER_LOGIN_EMAIL), false);
+  assert.match(vaultRaw, /robertmhenderson582@gmail.com/i);
   assert.equal(vaultRaw.includes(OWNER_SECRET), false);
 
   const created = loginOutcome({
@@ -567,9 +569,85 @@ test("OWNER_PASSWORD is the login only when no owner hash is stored", async () =
   await hydrateSeatStore();
   assert.equal(loginOutcome({ email: TESTER, password: CHOSEN }).status, "authenticated");
   assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "authenticated");
+  await flushSeatVault();
   const seats = [...drive.files.values()].find((row) => row.file.name === SEATS_VAULT_NAME);
   assert.ok(seats);
-  assert.equal(JSON.parse(seats.content).hashes?.[OWNER_LOGIN_EMAIL], undefined);
+  const persisted = JSON.parse(seats.content) as { hashes?: Record<string, { passwordHash?: string }> };
+  assert.ok(persisted.hashes?.[OWNER_LOGIN_EMAIL]?.passwordHash);
+  assert.ok(persisted.hashes?.[TESTER]?.passwordHash);
+  assert.equal(JSON.stringify(persisted).includes(OWNER_SECRET), false);
+});
+
+test("hydrate merge keeps a local owner hash when the vault is testers-only and writes it back", async () => {
+  const ownerHash = bcrypt.hashSync(CHOSEN, 12);
+  const testerHash = bcrypt.hashSync(ISSUED, 12);
+  writeFileSync(
+    seatFile,
+    `${JSON.stringify({
+      hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: ownerHash, mustChangePassword: false } },
+      extras: [],
+    })}\n`,
+  );
+  const drive = memoryDrive();
+  await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, {
+    hashes: { [TESTER]: { passwordHash: testerHash, mustChangePassword: false } },
+    extras: [],
+  });
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+
+  const local = JSON.parse(readFileSync(seatFile, "utf8")) as { hashes?: Record<string, { passwordHash?: string }> };
+  assert.equal(local.hashes?.[OWNER_LOGIN_EMAIL]?.passwordHash, ownerHash);
+  assert.equal(local.hashes?.[TESTER]?.passwordHash, testerHash);
+
+  const seats = [...drive.files.values()].find((row) => row.file.name === SEATS_VAULT_NAME);
+  assert.ok(seats);
+  const vault = JSON.parse(seats.content) as { hashes?: Record<string, { passwordHash?: string }> };
+  assert.equal(vault.hashes?.[OWNER_LOGIN_EMAIL]?.passwordHash, ownerHash);
+  assert.equal(vault.hashes?.[TESTER]?.passwordHash, testerHash);
+  assert.equal(JSON.stringify(vault).includes(CHOSEN), false);
+  assert.equal(JSON.stringify(vault).includes(ISSUED), false);
+
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  assert.equal(loginOutcome({ email: TESTER, password: ISSUED }).status, "authenticated");
+});
+
+test("cold start with testers-only vault signs in with OWNER_PASSWORD then a Settings change survives", async () => {
+  const testerHash = bcrypt.hashSync(ISSUED, 12);
+  const drive = memoryDrive();
+  await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, {
+    hashes: { [TESTER]: { passwordHash: testerHash, mustChangePassword: false } },
+    extras: [],
+  });
+  forgetSeatCacheForTests();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  assert.equal(existsSync(seatFile), true);
+  const afterHydrate = JSON.parse(readFileSync(seatFile, "utf8")) as { hashes?: Record<string, unknown> };
+  assert.equal(afterHydrate.hashes?.[OWNER_LOGIN_EMAIL], undefined);
+  assert.ok(afterHydrate.hashes?.[TESTER]);
+
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "authenticated");
+  assert.equal(loginOutcome({ email: TESTER, password: ISSUED }).status, "authenticated");
+  await flushSeatVault();
+
+  const afterSeed = [...drive.files.values()].find((row) => row.file.name === SEATS_VAULT_NAME);
+  assert.ok(afterSeed);
+  const seeded = JSON.parse(afterSeed.content) as { hashes?: Record<string, { passwordHash?: string }> };
+  assert.ok(seeded.hashes?.[OWNER_LOGIN_EMAIL]?.passwordHash);
+  assert.ok(seeded.hashes?.[TESTER]?.passwordHash);
+  assert.equal(JSON.stringify(seeded).includes(OWNER_SECRET), false);
+
+  const changed = setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OWNER_SECRET);
+  assert.equal("ok" in changed, true);
+  await flushSeatVault();
+  forgetSeatCacheForTests();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  assert.equal(loginOutcome({ email: TESTER, password: ISSUED }).status, "authenticated");
 });
 
 test("parseExtraSeats skips owner, Novus, and seeded testers", () => {

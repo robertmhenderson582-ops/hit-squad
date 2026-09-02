@@ -1,24 +1,24 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.41.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.41";
+export const DESK_VERSION = "1.42.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.42";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.41";
+export const DESK_THREAD_ID = "th-desk-v1.42";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.41",
-  "• Company Desk on home shows your company logo when one is on file.",
+  "Hit Squad Project Controls V1.42",
+  "• Sign-in stays on this desk after a restart. Owner stays the owner.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.41",
-  "• Company Desk on home shows your company logo when one is on file.",
-  "• If more than one assigned company has a logo, or none does, the text door stays. Standalone is unchanged.",
+  "Hit Squad Project Controls V1.42",
+  "• Sign-in stays on this desk after a restart. Owner stays the owner.",
+  "• Owner sign-in is kept with the desk so a restart cannot drop it. Tester sign-ins stay.",
 ].join("\n");
 
-/** Same as the live V1.41 note. Kept so older imports still resolve. */
+/** Same as the live V1.42 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;
