@@ -77,7 +77,7 @@ describe("inbox demo wipe", () => {
     const stored = persisted.threads ?? [];
     assert.equal(stored.some((thread) => (DEMO_IDS as readonly string[]).includes(thread.id)), false);
     assert.equal(stored.length, 1);
-    assert.equal(stored[0].id, "th-desk-v1.37");
+    assert.equal(stored[0].id, "th-desk-v1.38");
   });
 
   it("tester empty store stays empty (never had the demo threads)", () => {
@@ -88,7 +88,7 @@ describe("inbox demo wipe", () => {
     const note = deskWhatsNewThread(true);
     const cleaned = stripDemoThreads([...ownerDemoThreads(), note]);
     assert.equal(cleaned.length, 1);
-    assert.equal(cleaned[0].id, "th-desk-v1.37");
+    assert.equal(cleaned[0].id, "th-desk-v1.38");
     assert.equal(stripDemoThreads([note]).length, 1);
   });
 
@@ -121,21 +121,22 @@ describe("inbox demo wipe", () => {
     assert.deepEqual(omitHiddenPersonThreads([note, leftover], hides.personIds), [note]);
   });
 
-  it("Desk note stays V1.37 and tester-safe", () => {
-    assert.equal(DESK_VERSION, "1.37.0");
+  it("Desk note stays V1.38 and tester-safe", () => {
+    assert.equal(DESK_VERSION, "1.38.0");
     const tester = applyWhatsNew([deskWhatsNewThread(false)], "tester-note", false, "nathanboyte@gmail.com");
     assert.equal(tester.length, 1);
-    assert.equal(tester[0].id, "th-desk-v1.37");
+    assert.equal(tester[0].id, "th-desk-v1.38");
     const testerBody = tester[0].messages.map((message) => message.text).join(" ");
-    assert.match(testerBody, /V1\.37/);
-    assert.match(testerBody, /Third-party rental dropdown now includes Spider box \/ 220 Vote cords/);
-    assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Madison|Joseph|Stephanie|password|security/i);
+    assert.match(testerBody, /V1\.38/);
+    assert.match(testerBody, /You can delete HSE sample cards on JOBS the same way as estimates/);
+    assert.match(testerBody, /Jobs only shows sites assigned to you/);
+    assert.match(testerBody, /Company cards on Rates can collapse/);
+    assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Madison|Joseph|Stephanie|password|security|View as/i);
     const owner = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
-    assert.equal(owner[0].id, "th-desk-v1.37");
+    assert.equal(owner[0].id, "th-desk-v1.38");
     const ownerBody = owner[0].messages.map((message) => message.text).join(" ");
-    assert.match(ownerBody, /Spider box \/ 220 Vote cords/);
-    assert.match(ownerBody, /Monthly \$75 freight \$150/);
-    assert.match(ownerBody, /Equipment Rental \(not Rate Tables\)/);
-    assert.match(ownerBody, /Daily\/weekly not on that sheet so 0/);
+    assert.match(ownerBody, /HS-8622/);
+    assert.match(ownerBody, /View as Nathan/);
+    assert.match(ownerBody, /Company cards on Rates can collapse/);
   });
 });

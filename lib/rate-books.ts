@@ -7,14 +7,17 @@ import {
   type CompanyScope,
 } from "./companies.ts";
 import { catalogEstimates, catalogSites } from "./desk-data.ts";
-import type { StorageLike } from "./local-estimates.ts";
+import { assignedSiteIds } from "./job-tree.ts";
+import type { LocalPack, StorageLike } from "./local-estimates.ts";
 import { newBuiltCraft, type BuiltCraft } from "./rate-builder.ts";
 import { SHAHAN_BOOK_ID, SHAHAN_BOOK_LABEL } from "./shahan-wood-river.ts";
-import type { SiteRecord } from "./types.ts";
+import type { JobRecord, SiteRecord } from "./types.ts";
 
 export const RATE_BOOKS_KEY = "hs_rate_books_v1";
+export const RATE_COMPANY_OPEN_KEY = "hs_rate_company_open_v1";
 export const WOOD_RIVER_SITE_ID = "site-madison";
 export const YATES_SITE_ID = "site-yates";
+export const EMPTY_MADISON_PLANTS = ["Yates", "Rodeo", "Bayway", "Ferndale", "Billings", "Coker pad / drum alley"] as const;
 
 export type RateBookLevel = "company" | "site" | "job";
 
@@ -59,6 +62,60 @@ export function siteCompanyId(site: Pick<SiteRecord, "client" | "name" | "family
 
 export function rateSitesForCompany(companyId: CompanyId, sites: SiteRecord[] = catalogSites()): SiteRecord[] {
   return sites.filter((site) => siteCompanyId(site) === companyId);
+}
+
+/** Owner sees every catalog plant. Testers only see sites that have their jobs. */
+export function visibleRateSites(
+  scope: CompanyScope | null | undefined,
+  companyId: CompanyId,
+  jobs: JobRecord[] = [],
+  packs: LocalPack[] = [],
+  sites: SiteRecord[] = catalogSites(),
+): SiteRecord[] {
+  const catalog = rateSitesForCompany(companyId, sites);
+  if (!scope || scope.isOwner) return catalog;
+  const assigned = new Set(assignedSiteIds({ scope, jobs, packs, companyId, sites }));
+  return catalog.filter((site) => assigned.has(site.id));
+}
+
+export function rateCompanyOpenKey(seat?: string | null) {
+  const id = (seat || "").trim();
+  if (!id || id === "owner") return RATE_COMPANY_OPEN_KEY;
+  return `${RATE_COMPANY_OPEN_KEY}:${id}`;
+}
+
+export function readRateCompanyOpen(store?: StorageLike | null, seat?: string | null): Record<string, boolean> {
+  const target = asStore(store);
+  if (!target) return {};
+  try {
+    const parsed = JSON.parse(target.getItem(rateCompanyOpenKey(seat)) || "{}") as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const next: Record<string, boolean> = {};
+    for (const [id, open] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof open === "boolean") next[id] = open;
+    }
+    return next;
+  } catch {
+    return {};
+  }
+}
+
+export function writeRateCompanyOpen(
+  companyId: CompanyId,
+  open: boolean,
+  store?: StorageLike | null,
+  seat?: string | null,
+) {
+  const target = asStore(store);
+  const next = { ...readRateCompanyOpen(store, seat), [companyId]: open };
+  if (target) target.setItem(rateCompanyOpenKey(seat), JSON.stringify(next));
+  return next;
+}
+
+/** Default expanded. Remembered per company for that seat. */
+export function isRateCompanyOpen(companyId: CompanyId, store?: StorageLike | null, seat?: string | null) {
+  const saved = readRateCompanyOpen(store, seat)[companyId];
+  return saved !== false;
 }
 
 export function rateBookVisibleTo(scope: CompanyScope | null | undefined, book: Pick<RateBookRecord, "companyId">) {

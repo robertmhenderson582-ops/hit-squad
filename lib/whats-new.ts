@@ -1,24 +1,29 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.37.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.37";
+export const DESK_VERSION = "1.38.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.38";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.37";
+export const DESK_THREAD_ID = "th-desk-v1.38";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.37",
-  "• Third-party rental dropdown now includes Spider box / 220 Vote cords.",
+  "Hit Squad Project Controls V1.38",
+  "• You can delete HSE sample cards on JOBS the same way as estimates.",
+  "• Jobs only shows sites assigned to you.",
+  "• Company cards on Rates can collapse.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.37",
-  "• Third-party rental dropdown now includes Spider box / 220 Vote cords.",
-  "• Monthly $75 freight $150 from Equipment Rental (not Rate Tables). Daily/weekly not on that sheet so 0.",
+  "Hit Squad Project Controls V1.38",
+  "• You can delete HSE sample cards on JOBS the same way as estimates.",
+  "• Jobs only shows sites assigned to you — testers do not see empty unassigned plant rows.",
+  "• View as Nathan: DELETE on HS-8622 (Pre-outage HSE walkdown) stays gone after refresh.",
+  "• View as Nathan hides Yates / Rodeo / Bayway / Ferndale / Billings / Coker pad when those plants are unassigned.",
+  "• Company cards on Rates can collapse. Selected Wood River book stays when the Madison sites card is closed.",
 ].join("\n");
 
-/** Same as the live V1.37 note. Kept so older imports still resolve. */
+/** Same as the live V1.38 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;

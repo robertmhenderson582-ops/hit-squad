@@ -6,7 +6,10 @@ import { companyScopeFor } from "./companies.ts";
 import { catalogSites } from "./desk-data.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { newBuiltCraft } from "./rate-builder.ts";
+import { jobsOnDesk } from "./jobs.ts";
 import {
+  EMPTY_MADISON_PLANTS,
+  RATE_COMPANY_OPEN_KEY,
   WOOD_RIVER_SITE_ID,
   YATES_SITE_ID,
   allRateBooks,
@@ -14,14 +17,18 @@ import {
   canArchiveRateBook,
   clearJobOverride,
   hasSiteBook,
+  isRateCompanyOpen,
   rateBookVisibleTo,
+  rateCompanyOpenKey,
   rateSitesForCompany,
   resolvedCrafts,
   saveCraftToLevel,
   siteBookFor,
   siteCompanyId,
   visibleRateBooks,
+  visibleRateSites,
   woodRiverBook,
+  writeRateCompanyOpen,
 } from "./rate-books.ts";
 import { SHAHAN_BOOK_ID, SHAHAN_BOOK_LABEL } from "./shahan-wood-river.ts";
 import { JAMES_EMAIL, JOHN_HENRY_EMAIL, JOSEPH_EMAIL } from "./tester-seats.ts";
@@ -77,6 +84,9 @@ describe("rate book nest", () => {
     const ratesDesk = readFileSync(fileURLToPath(new URL("../components/RatesDesk.tsx", import.meta.url)), "utf8");
     assert.match(ratesDesk, /Rate books/);
     assert.match(ratesDesk, /No book yet/);
+    assert.match(ratesDesk, /aria-expanded=\{sitesOpen\}/);
+    assert.match(ratesDesk, /writeRateCompanyOpen/);
+    assert.match(ratesDesk, /visibleRateSites/);
     assert.match(ratesDesk, /RateBuilderCard/);
     assert.equal(/40-col|exhibit B-1|Cassidy|COMP workbook/i.test(ratesDesk), false);
     const card = readFileSync(fileURLToPath(new URL("../components/RateBuilderCard.tsx", import.meta.url)), "utf8");
@@ -143,5 +153,57 @@ describe("rate book nest", () => {
     assert.equal(allRateBooks(store).some((row) => row.id === saved.id && row.archived), true);
     assert.equal(archiveRateBook(SHAHAN_BOOK_ID, store)?.source, "shahan");
     assert.equal(hasSiteBook("madison", WOOD_RIVER_SITE_ID, store), true);
+  });
+
+  it("hides empty unassigned Madison plants from testers and keeps Wood River when they have jobs", () => {
+    const cat2 = {
+      packId: "new-mtaajdwa-f7539",
+      key: "new:new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    const ownerSites = visibleRateSites(owner, "madison");
+    assert.equal(ownerSites.some((row) => row.id === YATES_SITE_ID), true);
+    assert.equal(ownerSites.some((row) => row.id === WOOD_RIVER_SITE_ID), true);
+    assert.equal(
+      EMPTY_MADISON_PLANTS.every((name) => ownerSites.some((row) => row.name === name)),
+      true,
+    );
+
+    const nathanJobs = jobsOnDesk([], [cat2], true, nathan);
+    const nathanSites = visibleRateSites(nathan, "madison", nathanJobs, [cat2]);
+    assert.deepEqual(
+      nathanSites.map((row) => row.id),
+      [WOOD_RIVER_SITE_ID],
+    );
+    assert.equal(
+      nathanSites.some((row) => EMPTY_MADISON_PLANTS.includes(row.name as (typeof EMPTY_MADISON_PLANTS)[number])),
+      false,
+    );
+
+    const jamesSites = visibleRateSites(james, "cbi", jobsOnDesk([], [], true, james), []);
+    assert.equal(jamesSites.length, 0);
+    assert.equal(visibleRateSites(james, "madison", [], []).length, 0);
+  });
+
+  it("collapses a company card and remembers it per seat without losing the selected site id", () => {
+    const store = memoryStore();
+    assert.equal(isRateCompanyOpen("madison", store), true);
+    assert.equal(isRateCompanyOpen("madison", store, "nathan"), true);
+    writeRateCompanyOpen("madison", false, store, "nathan");
+    assert.equal(isRateCompanyOpen("madison", store, "nathan"), false);
+    assert.equal(isRateCompanyOpen("madison", store), true);
+    assert.equal(rateCompanyOpenKey("nathan"), `${RATE_COMPANY_OPEN_KEY}:nathan`);
+    writeRateCompanyOpen("madison", true, store, "nathan");
+    assert.equal(isRateCompanyOpen("madison", store, "nathan"), true);
+    const ratesDesk = readFileSync(fileURLToPath(new URL("../components/RatesDesk.tsx", import.meta.url)), "utf8");
+    assert.match(ratesDesk, /aria-expanded=\{sitesOpen\}/);
+    assert.match(ratesDesk, /setSiteId\(site\.id\)/);
+    assert.match(ratesDesk, /WOOD_RIVER_SITE_ID/);
+    assert.equal(/rate-builder nest|CBA fringe/i.test(ratesDesk), false);
   });
 });

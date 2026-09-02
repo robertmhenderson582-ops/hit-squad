@@ -5,8 +5,10 @@ import {
   clearTransferredMenuItem,
   deleteMenuItem,
   isActiveMenuItem,
+  jobMenuKey,
   menuForViewedDesk,
   menuStatus,
+  omitDeletedJobs,
   packsMissingFromVault,
   readJobMenu,
   recordTransferredMenuItem,
@@ -64,6 +66,24 @@ describe("job menu archive and delete", () => {
     clearTransferredMenuItem({ id: "new-cat2pit" }, store);
     assert.equal(readJobMenu(store).transferred.length, 0);
     assert.equal(isActiveMenuItem({ id: "new-cat2pit" }, readJobMenu(store)), true);
+  });
+
+  it("deletes HS-8622 on the viewed Nathan desk and keeps it gone after a re-read", () => {
+    const store = memoryStore();
+    const hse = { id: "job-8622", title: "Pre-outage HSE walkdown — flare / piperack" };
+    const cat2 = { id: "job-new-mtaajdwa-f7539", packId: "new-mtaajdwa-f7539", title: "Madison CAT 2 (Pit Stop)" };
+    deleteMenuItem(hse, store, "nathan");
+    const viewed = menuForViewedDesk(true, store, "nathan");
+    assert.equal(jobMenuKey("nathan"), "hs_job_menu_v1:nathan");
+    assert.equal(menuStatus(hse, viewed), "deleted");
+    assert.equal(isActiveMenuItem(hse, viewed), false);
+    assert.equal(isActiveMenuItem(cat2, viewed), true);
+    assert.equal(omitDeletedJobs([hse, cat2], viewed).map((row) => row.id), ["job-new-mtaajdwa-f7539"]);
+    assert.equal(menuStatus(hse, menuForViewedDesk(true, store, "nathan")), "deleted");
+    assert.equal(isActiveMenuItem(hse, menuForViewedDesk(false, store)), true);
+    archiveMenuItem(cat2, store, "nathan");
+    assert.equal(menuStatus(cat2, menuForViewedDesk(true, store, "nathan")), "archived");
+    assert.equal(isActiveMenuItem(cat2, menuForViewedDesk(false, store)), true);
   });
 
   it("evicts packs that left this desk on the vault list", () => {

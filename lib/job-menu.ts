@@ -3,6 +3,13 @@ import { isLocalPackId, type StorageLike } from "./local-estimates.ts";
 export const JOB_MENU_KEY = "hs_job_menu_v1";
 export const VAULT_SEEN_KEY = "hs_vault_seen_v1";
 
+/** Owner keeps the bare key. View as / Follow uses that person's copy. */
+export function jobMenuKey(seat?: string | null) {
+  const id = (seat || "").trim();
+  if (!id || id === "owner") return JOB_MENU_KEY;
+  return `${JOB_MENU_KEY}:${id}`;
+}
+
 export type TransferredJob = {
   id: string;
   title: string;
@@ -36,11 +43,11 @@ export function emptyJobMenu(): JobMenuState {
   return { archived: [], deleted: [], transferred: [] };
 }
 
-export function readJobMenu(store?: StorageLike | null): JobMenuState {
+export function readJobMenu(store?: StorageLike | null, seat?: string | null): JobMenuState {
   const target = asStore(store);
   if (!target) return emptyJobMenu();
   try {
-    const raw = target.getItem(JOB_MENU_KEY);
+    const raw = target.getItem(jobMenuKey(seat));
     if (!raw) return emptyJobMenu();
     const parsed = JSON.parse(raw) as Partial<JobMenuState>;
     return {
@@ -58,10 +65,10 @@ export function readJobMenu(store?: StorageLike | null): JobMenuState {
   }
 }
 
-export function writeJobMenu(next: JobMenuState, store?: StorageLike | null) {
+export function writeJobMenu(next: JobMenuState, store?: StorageLike | null, seat?: string | null) {
   const target = asStore(store);
   if (!target) return next;
-  target.setItem(JOB_MENU_KEY, JSON.stringify(next));
+  target.setItem(jobMenuKey(seat), JSON.stringify(next));
   return next;
 }
 
@@ -91,25 +98,34 @@ export function isActiveMenuItem(item: MenuItem, menu: JobMenuState = readJobMen
   return menuStatus(item, menu) === null;
 }
 
-/** Owner Transferred notes stay on the owner desk. View as uses the other person's jobs. */
-export function menuForViewedDesk(viewingAs: boolean, store?: StorageLike | null): JobMenuState {
+/**
+ * View as is a real desk: archive / delete apply to that seat's copy.
+ * Owner Transferred notes stay on the owner key — they do not leak onto the viewed seat.
+ */
+export function menuForViewedDesk(
+  viewingAs: boolean,
+  store?: StorageLike | null,
+  seat?: string | null,
+): JobMenuState {
   if (!viewingAs) return readJobMenu(store);
-  return emptyJobMenu();
+  const id = (seat || "").trim();
+  if (!id || id === "owner") return emptyJobMenu();
+  return readJobMenu(store, id);
 }
 
-export function archiveMenuItem(item: MenuItem, store?: StorageLike | null) {
-  const menu = readJobMenu(store);
+export function archiveMenuItem(item: MenuItem, store?: StorageLike | null, seat?: string | null) {
+  const menu = readJobMenu(store, seat);
   const keys = keysForItem(item);
   const next: JobMenuState = {
     archived: unique([...menu.archived, ...keys]),
     deleted: menu.deleted.filter((id) => !keys.includes(id)),
     transferred: menu.transferred.filter((row) => !keys.includes(row.id)),
   };
-  return writeJobMenu(next, store);
+  return writeJobMenu(next, store, seat);
 }
 
-export function unarchiveMenuItem(item: MenuItem, store?: StorageLike | null) {
-  const menu = readJobMenu(store);
+export function unarchiveMenuItem(item: MenuItem, store?: StorageLike | null, seat?: string | null) {
+  const menu = readJobMenu(store, seat);
   const keys = keysForItem(item);
   return writeJobMenu(
     {
@@ -117,22 +133,23 @@ export function unarchiveMenuItem(item: MenuItem, store?: StorageLike | null) {
       archived: menu.archived.filter((id) => !keys.includes(id)),
     },
     store,
+    seat,
   );
 }
 
-export function deleteMenuItem(item: MenuItem, store?: StorageLike | null) {
-  const menu = readJobMenu(store);
+export function deleteMenuItem(item: MenuItem, store?: StorageLike | null, seat?: string | null) {
+  const menu = readJobMenu(store, seat);
   const keys = keysForItem(item);
   const next: JobMenuState = {
     archived: menu.archived.filter((id) => !keys.includes(id)),
     deleted: unique([...menu.deleted, ...keys]),
     transferred: menu.transferred.filter((row) => !keys.includes(row.id)),
   };
-  return writeJobMenu(next, store);
+  return writeJobMenu(next, store, seat);
 }
 
-export function clearTransferredMenuItem(item: MenuItem, store?: StorageLike | null) {
-  const menu = readJobMenu(store);
+export function clearTransferredMenuItem(item: MenuItem, store?: StorageLike | null, seat?: string | null) {
+  const menu = readJobMenu(store, seat);
   const keys = keysForItem(item);
   return writeJobMenu(
     {
@@ -140,11 +157,16 @@ export function clearTransferredMenuItem(item: MenuItem, store?: StorageLike | n
       transferred: menu.transferred.filter((row) => !keys.includes(row.id)),
     },
     store,
+    seat,
   );
 }
 
-export function recordTransferredMenuItem(item: MenuItem & { toName: string }, store?: StorageLike | null) {
-  const menu = readJobMenu(store);
+export function recordTransferredMenuItem(
+  item: MenuItem & { toName: string },
+  store?: StorageLike | null,
+  seat?: string | null,
+) {
+  const menu = readJobMenu(store, seat);
   const keys = keysForItem(item);
   const next: JobMenuState = {
     archived: menu.archived.filter((id) => !keys.includes(id)),
@@ -154,7 +176,12 @@ export function recordTransferredMenuItem(item: MenuItem & { toName: string }, s
       ...menu.transferred.filter((row) => !keys.includes(row.id)),
     ],
   };
-  return writeJobMenu(next, store);
+  return writeJobMenu(next, store, seat);
+}
+
+/** Deleted sample / seed ids stay off this seat after a reload or poll. */
+export function omitDeletedJobs<T extends MenuItem>(jobs: T[], menu: JobMenuState): T[] {
+  return jobs.filter((job) => menuStatus(job, menu) !== "deleted");
 }
 
 export function readVaultSeen(store?: StorageLike | null): string[] {
