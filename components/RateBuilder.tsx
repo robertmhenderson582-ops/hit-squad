@@ -8,6 +8,8 @@ import {
   shahanEquipmentByFuel,
 } from "@/lib/shahan-wood-river";
 import { EAST_COAST_OT_NOTE, LABOR_SHEET_COLUMNS } from "@/lib/rate-builder";
+
+/** Yates labor sheet: CRAFT / POSITION, BASE WAGE (BW), BILLED ST, BILLED OT, BILLED DT, PD. */
 import {
   WOOD_RIVER_SITE_ID,
   bookForSiteId,
