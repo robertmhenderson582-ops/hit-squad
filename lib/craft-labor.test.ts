@@ -45,7 +45,7 @@ import {
 } from "./craft-labor.ts";
 import { computeRowHours } from "./hours-clock.ts";
 import { addUnit, defaultPhaseSchedule, defaultPhases, maskForPhaseDays, setMultiUnits } from "./phase-schedule.ts";
-import { shahanCrewCostAmount } from "./shahan-wood-river.ts";
+import { shahanCrewCostAmount, shahanCrewTitle } from "./shahan-wood-river.ts";
 
 const WOOD = { site: "Wood River — Roxana, IL", client: "Phillips 66" };
 
@@ -347,6 +347,15 @@ describe("support position calendars", () => {
     assert.equal(titled.position, "Tool Room Attendant");
     assert.equal(titled.billedAs, "Boilermaker Journeyman");
     assert.equal(titled.ranges.find((range) => range.phaseId === "pre")?.start, phases[0].start);
+
+    const billedForeman = assignSupportBilledAs(titled, "Boilermaker Foreman", phases);
+    assert.equal(billedForeman.position, "Tool Room Attendant");
+    assert.equal(billedForeman.billedAs, "Boilermaker Foreman");
+    assert.equal(shahanCrewTitle(billedForeman), "Boilermaker Foreman");
+    const journeymanCost = shahanCrewCostAmount("Boilermaker Journeyman", crewHours(titled));
+    const foremanCost = shahanCrewCostAmount(shahanCrewTitle(billedForeman), crewHours(billedForeman));
+    assert.ok(foremanCost > 0);
+    assert.notEqual(foremanCost, journeymanCost);
   });
 
   it("Hours / shift stays a per-position override above the Job setup seed", () => {

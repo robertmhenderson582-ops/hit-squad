@@ -6,7 +6,7 @@ import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { CrewPhaseCards } from "@/components/CrewPhaseCards";
 import { GripToPan } from "@/components/GripToPan";
 import { useEstimatePackage } from "@/components/EstimatePackage";
-import { CREW_LANES } from "@/lib/crew-lanes";
+import { CREW_LANES, SUPPORT_BILLED_AS_TITLES } from "@/lib/crew-lanes";
 import {
   addSupportLine,
   applyExtraRangeEnvelopes,
@@ -27,7 +27,6 @@ import { formatDeskDollars, formatShahanCrewCost, shahanCrewCostAmount, shahanCr
 export type { SupportLine };
 
 const SUPPORT_LANE = CREW_LANES.find((lane) => lane.id === "support");
-const DIRECT_LANE = CREW_LANES.find((lane) => lane.id === "direct");
 const HEADERS = ["POSITION", "BILLED AS", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST"];
 
 export function SupportCrewCard({
@@ -168,7 +167,7 @@ export function SupportCrewCard({
         </button>
       </div>
       <p className="mt-2 text-xs text-[#5b6f73]">
-        Position is the duty. Billed as is the craft rate. Direct Craft stays on its own card.
+        Position is the duty. Billed as is the craft or working-foreman rate. Direct Craft and Foreman cards stay their own cards.
       </p>
       <GripToPan className="mt-4">
         <table className="min-w-[1100px] text-left text-sm">
@@ -320,7 +319,7 @@ function SupportAccordionRow({
         <td className="px-2 py-2">
           <CatalogPick
             value={row.billedAs}
-            options={DIRECT_LANE?.positions ?? []}
+            options={SUPPORT_BILLED_AS_TITLES}
             placeholder="Select billed as"
             onChange={onAssignBilledAs}
             allowCustom

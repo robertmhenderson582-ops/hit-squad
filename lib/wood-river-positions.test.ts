@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { CRAFT_POSITIONS, STAFF_POSITIONS, SUPPORT_DUTIES } from "./craft-labor.ts";
-import { CREW_LANES } from "./crew-lanes.ts";
+import { CREW_LANES, SUPPORT_BILLED_AS_TITLES, supportBilledAsTitles } from "./crew-lanes.ts";
 import {
   SHAHAN_CRAFT_TITLES,
   SHAHAN_FOREMAN_TITLES,
@@ -76,6 +76,25 @@ describe("Shahan Crew pickers", () => {
     assert.deepEqual([...STAFF_POSITIONS], SHAHAN_STAFF_TITLES);
     assert.deepEqual([...CRAFT_POSITIONS], SHAHAN_CRAFT_TITLES);
     assert.deepEqual([...SUPPORT_DUTIES], SHAHAN_SUPPORT_TITLES);
+  });
+
+  it("Support Billed as is working Foreman plus Direct Craft — not GF or Staff", () => {
+    assert.equal(SUPPORT_BILLED_AS_TITLES.includes("Boilermaker Foreman"), true);
+    assert.equal(SUPPORT_BILLED_AS_TITLES.some((title) => title.includes("Laborer Foreman")), true);
+    assert.equal(SUPPORT_BILLED_AS_TITLES.includes("Boilermaker Journeyman"), true);
+    assert.equal(SUPPORT_BILLED_AS_TITLES.includes("Boilermaker General Foreman"), false);
+    assert.equal(SUPPORT_BILLED_AS_TITLES.includes("Pipefitter General Foreman"), false);
+    assert.equal(SUPPORT_BILLED_AS_TITLES.includes("Lead Site Boilermaker 01"), false);
+    assert.deepEqual(SUPPORT_BILLED_AS_TITLES.slice(0, SHAHAN_FOREMAN_TITLES.length), [...SHAHAN_FOREMAN_TITLES]);
+    assert.equal(supportBilledAsTitles(["Boilermaker Foreman"], ["Boilermaker Journeyman", "Boilermaker Foreman"])[0], "Boilermaker Foreman");
+    assert.deepEqual(lane("support").positions, SHAHAN_SUPPORT_TITLES);
+    const card = readFileSync(new URL("../components/SupportCrewCard.tsx", import.meta.url), "utf8");
+    assert.match(card, /SUPPORT_BILLED_AS_TITLES/);
+    assert.match(card, /SUPPORT_LANE\?\.positions/);
+    assert.equal(/DIRECT_LANE/.test(card), false);
+    assert.match(card, /working-foreman rate/);
+    assert.match(lane("support").note, /working-foreman rate/);
+    assert.match(lane("support").note, /Direct Craft and Foreman cards stay their own cards/);
   });
 
   it("does not keep Nathan Merit 01 names as first-class picker options", () => {

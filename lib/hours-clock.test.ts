@@ -369,6 +369,44 @@ describe("East Coast CBA craft OT after 8", () => {
     assert.equal(pipe.ot, 2);
     assert.equal(support.st, 8);
     assert.equal(support.ot, 2);
+
+    const supportForeman = computeRowHours(
+      {
+        position: "Fire Watch",
+        billedAs: "Boilermaker Foreman",
+        ranges: [
+          {
+            start: weekday.start,
+            end: weekday.end,
+            hoursPerShift: 10,
+            headcount: 1,
+            nightHeadcount: 1,
+            perDiemPeople: 0,
+            days: [...weekday.days],
+            phaseId: "oil-in",
+            otAfter8: false,
+          },
+        ],
+      },
+      WOOD_RIVER.site,
+      WOOD_RIVER.client,
+    );
+    assert.equal(runningClock("Boilermaker Foreman", WOOD_RIVER.site, WOOD_RIVER.client, "auto"), "east-coast");
+    assert.equal(supportForeman.st, 8);
+    assert.equal(supportForeman.ot, 2);
+    const sat = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Fire Watch",
+      billedAs: "Boilermaker Foreman",
+      phaseId: "mech",
+      start: "2027-03-20",
+      end: "2027-03-20",
+      hoursPerShift: 10,
+      days: [false, false, false, false, false, false, true],
+    });
+    assert.equal(sat.st, 0);
+    assert.equal(sat.ot, 10);
+    assert.equal(sat.dt, 0);
   });
 
   it("Superintendent / Analyst Cost keep ST to 10 unless Use COMP clock", () => {
