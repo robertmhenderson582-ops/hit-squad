@@ -94,11 +94,9 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
     const stamp = data.brief?.savedAt || new Date().toLocaleString("en-GB", { hour12: false });
     setSavedAt(stamp);
     persist({ describe: body.describe, files: body.files, savedAt: stamp });
-    if (data.brief) {
-      setSavedBriefs((current) => {
-        const rest = current.filter((row) => row.id !== data.brief?.id);
-        return [data.brief, ...rest];
-      });
+    const saved = data.brief;
+    if (saved) {
+      setSavedBriefs((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
     }
     return stamp;
   }
