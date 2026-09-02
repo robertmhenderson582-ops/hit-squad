@@ -158,9 +158,10 @@ test("aliased Mark never sees the East Coast PCA lock; real Nathan still does", 
   assert.equal(aliasText("PCA0001100", true, "aliased"), "Pacific");
   assert.equal(aliasText("West Coast (PCA0001100)", true, "real"), "West Coast (PCA0001100)");
 
-  const ratesBlurb = "Pull the live book for this site. Wood River is the only loaded book. Hours, headcount, dates, qty, freight, and typed third-party stay.";
+  const ratesBlurb = "Pull the live book for this site. Wood River, Yates, Rodeo, Bayway, Ferndale, and Monroe Energy books are loaded. Hours, headcount, dates, qty, freight, and typed third-party stay.";
   const markRates = aliasText(ratesBlurb, true, "aliased");
-  assert.match(markRates, /Midwest is the only loaded book/);
+  assert.match(markRates, /Midwest/);
+  assert.match(markRates, /books are loaded/);
   assert.equal(/Wood River/i.test(markRates), false);
   assert.equal(aliasText(ratesBlurb, true, "real"), ratesBlurb);
   assert.match(aliasText("Only Wood River is loaded.", true, "aliased"), /Only Midwest is loaded/);

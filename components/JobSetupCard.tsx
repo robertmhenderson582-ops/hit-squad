@@ -20,14 +20,12 @@ import {
 } from "@/lib/equipment-sheet";
 import { PACK_TITLE_MAX, normalizePackTitle } from "@/lib/local-estimates";
 import {
+  SHAHAN_BOOK_ID,
   SHAHAN_BOOK_LABEL,
-  SHAHAN_CRAFT_PD,
-  SHAHAN_STAFF_PD,
-  applyShahanJobRates,
-  offerRateBookForSite,
   rematchCrewToShahan,
   rematchEquipmentSheetToShahan,
 } from "@/lib/shahan-wood-river";
+import { applyPlantJobRates, offerRateBookForSite } from "@/lib/wage-lookup";
 
 export function JobSetupCard({
   type,
@@ -109,12 +107,16 @@ export function JobSetupCard({
     setConfirmRates(true);
   }
 
-  function applyWoodRiverRates() {
-    pack.setJobMeta((current) => applyShahanJobRates(current));
-    pack.setCrew((current) => rematchCrewToShahan(current));
-    writeEquipmentSheet(pack.estimateKey, rematchEquipmentSheetToShahan(readEquipmentSheet(pack.estimateKey)));
+  function applyPlantRates() {
+    if (!offer.ok) return;
+    const book = offer.book;
+    pack.setJobMeta((current) => applyPlantJobRates(current, book));
+    pack.setCrew((current) => rematchCrewToShahan(current, { catalog: book.catalog }));
+    if (book.bookId === SHAHAN_BOOK_ID) {
+      writeEquipmentSheet(pack.estimateKey, rematchEquipmentSheetToShahan(readEquipmentSheet(pack.estimateKey)));
+    }
     setConfirmRates(false);
-    setRateStatus(`${SHAHAN_BOOK_LABEL} is on this estimate. Staff PD $${SHAHAN_STAFF_PD}. Craft PD $${SHAHAN_CRAFT_PD}.`);
+    setRateStatus(`${book.bookLabel} is on this estimate. Staff PD $${book.staffPd}. Craft PD $${book.craftPd}.`);
   }
 
   return (
@@ -272,7 +274,7 @@ export function JobSetupCard({
             <h2 className="text-sm font-semibold tracking-[0.12em] text-[#5b6f73]">UPDATE RATES</h2>
             <p className="mt-1 text-sm text-[#163038]">
               {alias(
-                "Pull the live book for this site. Wood River is the only loaded book. Hours, headcount, dates, qty, freight, and typed third-party stay.",
+                "Pull the live book for this site. Wood River, Yates, Rodeo, Bayway, Ferndale, and Monroe Energy books are loaded. Hours, headcount, dates, qty, freight, and typed third-party stay.",
               )}
             </p>
           </div>
@@ -283,8 +285,8 @@ export function JobSetupCard({
         {confirmRates && offer.ok ? (
           <div className="mt-3 rounded-lg border border-[#c5d4d4] bg-white px-3 py-3">
             <p className="text-sm text-[#163038]">
-              Pull {alias(offer.bookLabel)}? Staff PD ${SHAHAN_STAFF_PD} and Craft PD ${SHAHAN_CRAFT_PD}.
-              Crew titles rematch when they are in the book. Unmatched titles stay and show No rate.
+              Pull {alias(offer.bookLabel)}? Staff PD ${offer.book.staffPd} and Craft PD ${offer.book.craftPd}.
+              Crew titles rematch when they are in the book. Unmatched titles stay and show No rate. The Rates dropdown does not rewrite Crew.
             </p>
             <div className="mt-3 flex justify-end gap-3">
               <button
@@ -294,7 +296,7 @@ export function JobSetupCard({
               >
                 Cancel
               </button>
-              <button type="button" onClick={applyWoodRiverRates} className="rounded-lg bg-steel px-4 py-2 text-white">
+              <button type="button" onClick={applyPlantRates} className="rounded-lg bg-steel px-4 py-2 text-white">
                 Pull {alias(offer.bookLabel)}
               </button>
             </div>
@@ -302,7 +304,9 @@ export function JobSetupCard({
         ) : null}
         {rateStatus ? <p className="mt-2 text-sm text-[#163038]">{rateStatus}</p> : null}
         {pack.jobMeta.rateBook ? (
-          <p className="mt-2 text-xs text-[#5b6f73]">Rate book on this estimate: {alias(SHAHAN_BOOK_LABEL)}.</p>
+          <p className="mt-2 text-xs text-[#5b6f73]">
+            Rate book on this estimate: {alias(offer.ok ? offer.bookLabel : SHAHAN_BOOK_LABEL)}.
+          </p>
         ) : null}
       </div>
       <div className="mt-6 grid gap-3 sm:grid-cols-2">

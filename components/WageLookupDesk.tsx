@@ -23,7 +23,7 @@ export function WageLookupDesk({ client, site }: { client?: string; site?: strin
         {book ? (
           <>
             <p className="mt-3 text-sm text-[#5b6f73]">
-              {alias(book.label)} · {alias(book.siteName)}. Pick a position to see the book wage. This does not
+              {alias(book.label)} · {alias(book.siteName)}. Pick a position to see Base wage. This does not
               change Crew.
             </p>
             <label className="block">
@@ -45,7 +45,7 @@ export function WageLookupDesk({ client, site }: { client?: string; site?: strin
             {selected ? (
               <p className="hud-readout text-sm">{formatWageRate(selected)}</p>
             ) : (
-              <p className="text-sm text-[#5b6f73]">Select a position to see ST / OT / DT.</p>
+              <p className="text-sm text-[#5b6f73]">Select a position to see Base wage.</p>
             )}
           </>
         ) : (

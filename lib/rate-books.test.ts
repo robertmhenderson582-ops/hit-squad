@@ -8,6 +8,7 @@ import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { newBuiltCraft } from "./rate-builder.ts";
 import { jobsOnDesk } from "./jobs.ts";
 import {
+  BILLINGS_SITE_ID,
   EMPTY_MADISON_PLANTS,
   MADISON_RATE_PLANTS,
   MONROE_SITE_ID,
@@ -67,7 +68,7 @@ describe("rate book nest", () => {
     assert.equal(book.label, SHAHAN_BOOK_LABEL);
     assert.equal(siteCompanyId(catalogSites().find((row) => row.id === WOOD_RIVER_SITE_ID)!), "madison");
     assert.equal(hasSiteBook("madison", WOOD_RIVER_SITE_ID), true);
-    assert.equal(hasSiteBook("madison", YATES_SITE_ID), false);
+    assert.equal(hasSiteBook("madison", YATES_SITE_ID), true);
     assert.equal(rateSitesForCompany("madison").some((row) => row.id === WOOD_RIVER_SITE_ID), true);
     assert.equal(rateSitesForCompany("madison").some((row) => row.id === YATES_SITE_ID), true);
     assert.equal(rateSitesForCompany("cbi").length, 0);
@@ -147,17 +148,18 @@ describe("rate book nest", () => {
     const saved = saveCraftToLevel(
       {
         companyId: "madison",
-        siteId: YATES_SITE_ID,
-        label: "Yates working",
+        siteId: BILLINGS_SITE_ID,
+        label: "Billings working",
         craft: newBuiltCraft({ craft: "Operator", baseSt: 38 }),
         level: "site",
       },
       store,
     );
-    assert.equal(hasSiteBook("madison", YATES_SITE_ID, store), true);
+    assert.equal(hasSiteBook("madison", BILLINGS_SITE_ID, store), true);
     const archived = archiveRateBook(saved.id, store);
     assert.equal(archived?.archived, true);
-    assert.equal(hasSiteBook("madison", YATES_SITE_ID, store), false);
+    assert.equal(hasSiteBook("madison", BILLINGS_SITE_ID, store), false);
+    assert.equal(hasSiteBook("madison", YATES_SITE_ID, store), true);
     assert.equal(allRateBooks(store).some((row) => row.id === saved.id && row.archived), true);
     assert.equal(archiveRateBook(SHAHAN_BOOK_ID, store)?.source, "shahan");
     assert.equal(hasSiteBook("madison", WOOD_RIVER_SITE_ID, store), true);
@@ -197,8 +199,8 @@ describe("rate book nest", () => {
     );
     assert.equal(nathanSites.some((row) => row.name === "Monroe Energy"), true);
     assert.equal(nathanSites.some((row) => /coker pad/i.test(row.name)), false);
-    assert.equal(preferredRateSiteId("madison", nathanSites), WOOD_RIVER_SITE_ID);
-    assert.equal(preferredRateSiteId("madison", [{ id: YATES_SITE_ID }, { id: WOOD_RIVER_SITE_ID }]), WOOD_RIVER_SITE_ID);
+    assert.equal(preferredRateSiteId("madison", nathanSites), YATES_SITE_ID);
+    assert.equal(preferredRateSiteId("madison", [{ id: YATES_SITE_ID }, { id: WOOD_RIVER_SITE_ID }]), YATES_SITE_ID);
     assert.equal(preferredRateSiteId("madison", []), WOOD_RIVER_SITE_ID);
 
     const jamesSites = visibleRateSites(james, "cbi");

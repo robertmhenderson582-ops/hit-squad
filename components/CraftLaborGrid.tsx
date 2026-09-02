@@ -25,6 +25,7 @@ import { CrewPhaseCards } from "@/components/CrewPhaseCards";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { defaultLaborClass, type LaborClass } from "@/lib/labor-class";
 import { formatDeskDollars, formatShahanCrewCost, shahanCrewCostAmount, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
+import { wageLookupOpts } from "@/lib/wage-lookup";
 
 const HEADERS = ["POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST"];
 
@@ -59,12 +60,12 @@ export function CraftLaborGrid({
         return {
           ...row,
           ...hours,
-          costAmount: shahanCrewCostAmount(title, hours, {
+          costAmount: shahanCrewCostAmount(title, hours, wageLookupOpts(site, {
             laborClass: row.laborClassOverride ?? defaultLaborClass(title),
-          }),
-          cost: formatShahanCrewCost(title, hours, {
+          })),
+          cost: formatShahanCrewCost(title, hours, wageLookupOpts(site, {
             laborClass: row.laborClassOverride ?? defaultLaborClass(title),
-          }),
+          })),
         };
       }),
     [client, pack.crew.otAfter8, rows, site],
