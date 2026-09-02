@@ -19,6 +19,8 @@ import {
   applyExtraRangeEnvelopes,
   clampExtraRangeDates,
   extraRangeEnvelope,
+  extraDaysFromJobSetup,
+  extraHoursFromJobSetup,
   extraRangeFromPhase,
   extraRangeIsValid,
   phaseIsOff,
@@ -36,7 +38,7 @@ import {
   syncSupportRows,
 } from "./craft-labor.ts";
 import { computeRowHours } from "./hours-clock.ts";
-import { addUnit, defaultPhaseSchedule, defaultPhases, setMultiUnits } from "./phase-schedule.ts";
+import { addUnit, defaultPhaseSchedule, defaultPhases, maskForPhaseDays, setMultiUnits } from "./phase-schedule.ts";
 import { shahanCrewCostAmount } from "./shahan-wood-river.ts";
 
 const WOOD = { site: "Wood River — Roxana, IL", client: "Phillips 66" };
@@ -263,7 +265,7 @@ describe("crew ranges are per position", () => {
     const extra = extraRangeFromPhase(oil, first);
     assert.equal(extra.start, "");
     assert.equal(extra.end, "");
-    assert.equal(extra.hoursPerShift, 0);
+    assert.equal(extra.hoursPerShift, oil.hoursPerDay);
     assert.equal(phaseRangesOverlap([first, extra], "oil-out"), false);
     extra.start = first.start;
     extra.end = first.end;
@@ -286,7 +288,7 @@ describe("crew ranges are per position", () => {
     const extra = extraRangeFromPhase(pre, first);
     assert.equal(extra.start, "");
     assert.equal(extra.end, "");
-    assert.equal(extra.hoursPerShift, 0);
+    assert.equal(extra.hoursPerShift, pre.hoursPerDay);
     assert.notEqual(
       `${extra.start}→${extra.end}×${extra.hoursPerShift}×${extra.headcount}`,
       "2026-08-21→2026-09-03×10×1",
@@ -298,7 +300,7 @@ describe("crew ranges are per position", () => {
     assert.equal(pres.length, 2);
     assert.equal(pres[1].start, "");
     assert.equal(pres[1].end, "");
-    assert.equal(pres[1].hoursPerShift, 0);
+    assert.equal(pres[1].hoursPerShift, pre.hoursPerDay);
     assert.equal(phaseRangesOverlap(pres, "pre"), false);
     const after = computeRowHours(synced, "Wood River — Roxana, IL", "Phillips 66");
     assert.equal(after.hours, before.hours);
@@ -606,7 +608,7 @@ describe("extra range description is a label only", () => {
     const extra = extraRangeFromPhase(oil, first);
     assert.equal(extra.start, "");
     assert.equal(extra.end, "");
-    assert.equal(extra.hoursPerShift, 0);
+    assert.equal(extra.hoursPerShift, oil.hoursPerDay);
     assert.equal(extra.description, "");
     row.ranges.push(extra);
     assert.equal(splitKey(crewHours(row)), splitKey(before));
@@ -850,6 +852,116 @@ describe("extra range description is a label only", () => {
     assert.match(cards, /onSetPhaseOff/);
     assert.match(grid, /setPhaseOff/);
     assert.match(support, /setPhaseOff/);
+  });
+});
+
+describe("extra Crew ranges default Hours/shift from Job setup", () => {
+  it("Mechanical Hrs/Day 10 and Pre Hrs/Day 8 open extras at those hours", () => {
+    const phases = defaultPhases().map((row) => (row.id === "pre" ? { ...row, hoursPerDay: 8 } : row));
+    const mech = phases.find((row) => row.id === "mech");
+    const pre = phases.find((row) => row.id === "pre");
+    assert.ok(mech);
+    assert.ok(pre);
+    assert.equal(mech.hoursPerDay, 10);
+    assert.equal(pre.hoursPerDay, 8);
+    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const firstMech = row.ranges.find((range) => range.phaseId === "mech");
+    const firstPre = row.ranges.find((range) => range.phaseId === "pre");
+    assert.ok(firstMech);
+    assert.ok(firstPre);
+    firstMech.hoursPerShift = 13;
+    firstPre.hoursPerShift = 12;
+    const extraMech = extraRangeFromPhase(mech, firstMech);
+    const extraPre = extraRangeFromPhase(pre, firstPre);
+    assert.equal(extraHoursFromJobSetup(mech, firstMech), 10);
+    assert.equal(extraHoursFromJobSetup(pre, firstPre), 8);
+    assert.equal(extraMech.hoursPerShift, 10);
+    assert.equal(extraPre.hoursPerShift, 8);
+    assert.equal(extraMech.start, "");
+    assert.equal(extraMech.end, "");
+    assert.equal(extraPre.start, "");
+    assert.equal(extraPre.end, "");
+    assert.equal(extraMech.headcount, 1);
+    assert.equal(extraMech.description, "");
+    assert.deepEqual(extraMech.days, maskForPhaseDays(mech.daysPerWeek));
+    assert.deepEqual(extraPre.days, maskForPhaseDays(pre.daysPerWeek));
+    assert.deepEqual(extraDaysFromJobSetup(mech, { ...firstMech, days: [false, false, false, false, false, false, false] }), maskForPhaseDays(mech.daysPerWeek));
+    assert.equal(extraMech.shift, firstMech.shift);
+    assert.equal(extraPre.shift, firstPre.shift);
+  });
+
+  it("empty Job setup Hrs/Day falls back to the first range, then 0", () => {
+    const phases = defaultPhases();
+    const mech = phases.find((row) => row.id === "mech");
+    assert.ok(mech);
+    const row = assignCraftPosition(blankCraftRow(), "Pipefitter Journeyman", phases);
+    const first = row.ranges.find((range) => range.phaseId === "mech");
+    assert.ok(first);
+    first.hoursPerShift = 12;
+    const emptyJob = { ...mech, hoursPerDay: 0 };
+    assert.equal(extraRangeFromPhase(emptyJob, first).hoursPerShift, 12);
+    assert.equal(extraHoursFromJobSetup(emptyJob, first), 12);
+    assert.equal(extraRangeFromPhase({ ...mech, hoursPerDay: 0 }).hoursPerShift, 0);
+    const noDays = { ...mech, daysPerWeek: 0 };
+    assert.deepEqual(extraDaysFromJobSetup(noDays, first), [...first.days]);
+    assert.deepEqual(extraDaysFromJobSetup({ ...mech, daysPerWeek: 0 }), maskForPhaseDays(0));
+  });
+
+  it("changing Job setup Hrs/Day does not rewrite an extra he already saved", () => {
+    const phases = defaultPhases();
+    const mech = phases.find((row) => row.id === "mech");
+    assert.ok(mech);
+    const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases);
+    const first = row.ranges.find((range) => range.phaseId === "mech");
+    assert.ok(first);
+    const typedZero = extraRangeFromPhase(mech, first);
+    typedZero.hoursPerShift = 0;
+    typedZero.start = "2026-09-13";
+    typedZero.end = mech.stop;
+    const typedTen = extraRangeFromPhase(mech, first);
+    typedTen.hoursPerShift = 10;
+    typedTen.start = "2026-09-13";
+    typedTen.end = mech.stop;
+    const raised = phases.map((row) => (row.id === "mech" ? { ...row, hoursPerDay: 12 } : row));
+    const keptZero = syncCraftRows([{ ...row, ranges: [...row.ranges, typedZero] }], raised)[0];
+    const keptTen = syncCraftRows([{ ...row, ranges: [...row.ranges, typedTen] }], raised)[0];
+    assert.equal(keptZero.ranges.filter((range) => range.phaseId === "mech")[1]?.hoursPerShift, 0);
+    assert.equal(keptTen.ranges.filter((range) => range.phaseId === "mech")[1]?.hoursPerShift, 10);
+    assert.equal(keptZero.ranges.filter((range) => range.phaseId === "mech")[0]?.hoursPerShift, first.hoursPerShift);
+  });
+
+  it("description still does not change math; extra can sit past the first range inside the phase", () => {
+    const phases = defaultPhases();
+    const mech = phases.find((row) => row.id === "mech");
+    assert.ok(mech);
+    const row = daysOnly(assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", phases));
+    const first = row.ranges.find((range) => range.phaseId === "mech");
+    assert.ok(first);
+    first.end = "2026-09-12";
+    first.headcount = 8;
+    first.perDiemPeople = 8;
+    const extra = extraRangeFromPhase(mech, first);
+    assert.equal(extra.hoursPerShift, 10);
+    extra.start = "2026-09-13";
+    extra.end = mech.stop;
+    extra.headcount = 7;
+    extra.perDiemPeople = 7;
+    extra.nightHeadcount = 7;
+    extra.nightPerDiemPeople = 0;
+    extra.shift = "Days";
+    extra.description = "Ramp-down";
+    assert.ok(extra.start > first.end);
+    assert.equal(extra.end, mech.stop);
+    assert.equal(extraRangeIsValid(extra, first, mech), true);
+    assert.equal(phaseRangesOverlap([first, extra], "mech"), false);
+    const unlabeled = { ...row, ranges: [first, { ...extra, description: "" }] };
+    const labeled = { ...row, ranges: [first, extra] };
+    assert.equal(splitKey(crewHours(labeled)), splitKey(crewHours(unlabeled)));
+    const combined = crewHours(labeled);
+    const eight = computeRowHours({ ...row, ranges: [first] }, WOOD.site, WOOD.client);
+    const seven = computeRowHours({ ...row, ranges: [extra] }, WOOD.site, WOOD.client);
+    assert.ok(seven.hours > 0);
+    assert.equal(combined.hours, eight.hours + seven.hours);
   });
 });
 
