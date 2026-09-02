@@ -221,6 +221,8 @@ describe("Shahan TM OCIP — Wood River", () => {
     const rateTab = readFileSync(fileURLToPath(new URL("../components/RateBuilder.tsx", import.meta.url)), "utf8");
     assert.match(rateTab, /BASE WAGE/);
     assert.match(rateTab, /BILLED ST/);
+    assert.match(rateTab, /BILLED OT/);
+    assert.match(rateTab, /book\.catalog/);
     assert.match(rateTab, /with fuel \(wet\)/);
     assert.match(rateTab, /without fuel \(dry\)/);
     assert.equal(/useDeskBoard|field-trial|Nathan CAT|RRFF official/i.test(rateTab), false);

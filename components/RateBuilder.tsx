@@ -77,8 +77,8 @@ export function RateBuilder({ siteId = WOOD_RIVER_SITE_ID }: { siteId?: string }
   const alias = useAlias();
   const book = bookForSiteId(siteId);
   if (!book) return null;
-  const labeled = wageLookupLabels(book.wageCatalog);
-  const groups = wageCatalogByGroup(book.wageCatalog).map((group) => ({
+  const labeled = wageLookupLabels(book.catalog);
+  const groups = wageCatalogByGroup(book.catalog).map((group) => ({
     ...group,
     rows: labeled.filter((item) => group.rows.includes(item.row)),
   }));

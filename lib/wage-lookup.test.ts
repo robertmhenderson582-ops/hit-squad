@@ -249,7 +249,7 @@ describe("wage lookup plants", () => {
     assert.match(crew, /BILLED OT/);
     assert.match(crew, /BILLED DT/);
     assert.match(crew, /wageCatalogByGroup/);
-    assert.match(crew, /book\.wageCatalog/);
+    assert.match(crew, /book\.catalog/);
     assert.doesNotMatch(crew, /setCrew|rematchCrewToShahan/);
     assert.equal(/\[\"CRAFT\", \"ST\", \"OT\", \"DT\", \"PD\"\]/.test(crew), false);
   });
