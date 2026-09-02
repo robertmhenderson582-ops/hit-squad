@@ -23,16 +23,22 @@ import {
   extraHoursFromJobSetup,
   extraRangeFromPhase,
   extraRangeIsValid,
+  hoursFromShiftChoice,
   phaseIsOff,
   setPhaseOff,
   hydrateSupportLine,
   isListedRangeDescription,
+  isShiftHourPreset,
   nextUnitId,
+  parseShiftHours,
   phaseRangesOverlap,
   RANGE_DESCRIPTION_OTHER,
   RANGE_DESCRIPTION_REASONS,
   rangeDescriptionChoice,
   rangeDescriptionLabel,
+  SHIFT_HOUR_PRESETS,
+  SHIFT_HOURS_CUSTOM,
+  shiftHoursChoice,
   rangesFromPhases,
   syncCraftRows,
   syncSupportRows,
@@ -888,6 +894,11 @@ describe("extra Crew ranges default Hours/shift from Job setup", () => {
     assert.deepEqual(extraDaysFromJobSetup(mech, { ...firstMech, days: [false, false, false, false, false, false, false] }), maskForPhaseDays(mech.daysPerWeek));
     assert.equal(extraMech.shift, firstMech.shift);
     assert.equal(extraPre.shift, firstPre.shift);
+    assert.equal(shiftHoursChoice(extraMech.hoursPerShift), "10");
+    assert.equal(shiftHoursChoice(extraPre.hoursPerShift), "8");
+    const customNine = extraRangeFromPhase({ ...mech, hoursPerDay: 9 }, firstMech);
+    assert.equal(customNine.hoursPerShift, 9);
+    assert.equal(shiftHoursChoice(customNine.hoursPerShift), SHIFT_HOURS_CUSTOM);
   });
 
   it("empty Job setup Hrs/Day falls back to the first range, then 0", () => {
@@ -1093,5 +1104,53 @@ describe("per-position phase off preserves hours", () => {
     const restored = { ...killed, ranges: setPhaseOff(killed.ranges, "mech", false) };
     assert.equal(splitKey(crewHours(restored)), splitKey(full));
     assert.equal(phaseIsOff(syncCraftRows([killed], phases)[0].ranges, "mech"), true);
+  });
+});
+
+describe("Hours/shift 8/10/12/Custom picker", () => {
+  it("8, 10, and 12 select those options; any other number is Custom", () => {
+    assert.deepEqual([...SHIFT_HOUR_PRESETS], [8, 10, 12]);
+    assert.equal(SHIFT_HOURS_CUSTOM, "Custom");
+    assert.equal(isShiftHourPreset(8), true);
+    assert.equal(isShiftHourPreset(10), true);
+    assert.equal(isShiftHourPreset(12), true);
+    assert.equal(isShiftHourPreset(9), false);
+    assert.equal(isShiftHourPreset(0), false);
+    assert.equal(shiftHoursChoice(8), "8");
+    assert.equal(shiftHoursChoice(10), "10");
+    assert.equal(shiftHoursChoice(12), "12");
+    assert.equal(shiftHoursChoice(9), SHIFT_HOURS_CUSTOM);
+    assert.equal(shiftHoursChoice(11), SHIFT_HOURS_CUSTOM);
+    assert.equal(shiftHoursChoice(0), SHIFT_HOURS_CUSTOM);
+    assert.equal(shiftHoursChoice(13), SHIFT_HOURS_CUSTOM);
+    assert.equal(shiftHoursChoice(10, true), SHIFT_HOURS_CUSTOM);
+  });
+
+  it("dropdown 8/10/12 writes that number; Custom 9 writes 9", () => {
+    assert.equal(hoursFromShiftChoice("8", 10), 8);
+    assert.equal(hoursFromShiftChoice("10", 12), 10);
+    assert.equal(hoursFromShiftChoice("12", 8), 12);
+    assert.equal(hoursFromShiftChoice(SHIFT_HOURS_CUSTOM, 10), 10);
+    assert.equal(parseShiftHours("9"), 9);
+    assert.equal(parseShiftHours("0"), 0);
+    assert.equal(parseShiftHours(""), 0);
+    assert.equal(parseShiftHours("abc"), 0);
+    assert.equal(parseShiftHours("-3"), 0);
+  });
+
+  it("Crew phase cards use the picker on every Hours/shift slot; Job setup stays a number", () => {
+    const cards = readFileSync(fileURLToPath(new URL("../components/CrewPhaseCards.tsx", import.meta.url)), "utf8");
+    assert.match(cards, /Hours \/ shift/);
+    assert.match(cards, /HoursPerShiftField/);
+    assert.match(cards, /SHIFT_HOUR_PRESETS\.map/);
+    assert.match(cards, /SHIFT_HOURS_CUSTOM/);
+    assert.match(cards, /shiftHoursChoice/);
+    assert.match(cards, /parseShiftHours/);
+    assert.match(cards, /extraRangeFromPhase\(source, ranges\[0\], nextId\)/);
+    assert.equal(/hoursPerShift: Math.max\(0, Number\(event\.target\.value\)/.test(cards), false);
+    const job = readFileSync(fileURLToPath(new URL("../components/PhaseSchedule.tsx", import.meta.url)), "utf8");
+    assert.match(job, /hoursPerDay/);
+    assert.equal(/SHIFT_HOUR_PRESETS/.test(job), false);
+    assert.equal(/Hours \/ shift/.test(job), false);
   });
 });

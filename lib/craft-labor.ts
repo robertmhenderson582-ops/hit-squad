@@ -93,6 +93,35 @@ export function rangeDescriptionChoice(description?: string, wantOther = false):
   return "";
 }
 
+/** Typical Hours/shift slots. Any other number (9, 11, 0, …) is Custom. */
+export const SHIFT_HOUR_PRESETS = [8, 10, 12] as const;
+export const SHIFT_HOURS_CUSTOM = "Custom";
+
+export type ShiftHourPreset = (typeof SHIFT_HOUR_PRESETS)[number];
+
+export function isShiftHourPreset(hours: number): hours is ShiftHourPreset {
+  return (SHIFT_HOUR_PRESETS as readonly number[]).includes(hours);
+}
+
+export function shiftHoursChoice(hours: number, wantCustom = false): string {
+  if (wantCustom) return SHIFT_HOURS_CUSTOM;
+  if (isShiftHourPreset(hours)) return String(hours);
+  return SHIFT_HOURS_CUSTOM;
+}
+
+/** Typed Custom hours. Empty / invalid / negative → 0. */
+export function parseShiftHours(raw: string): number {
+  return Math.max(0, Number(raw) || 0);
+}
+
+/** Dropdown 8 / 10 / 12 writes that number. Custom keeps the current hours until they type. */
+export function hoursFromShiftChoice(choice: string, current: number): number {
+  if (choice === SHIFT_HOURS_CUSTOM) return current;
+  const n = Number(choice);
+  if (isShiftHourPreset(n)) return n;
+  return parseShiftHours(choice);
+}
+
 export type ExtraRangeEnvelope = {
   minStart: string;
   maxEnd: string;
