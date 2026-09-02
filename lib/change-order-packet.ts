@@ -104,6 +104,7 @@ export type FcrJobRow = {
     nightPerDiemPeople?: number;
     days: boolean[];
     otAfter8?: boolean;
+    phaseId?: string;
     shift?: "Days" | "Nights" | "Days & nights";
     skipDates?: string[];
   }[];
@@ -228,6 +229,7 @@ function weekFromRanges(
       days: range.days,
       perDiemPeople: night ? range.nightPerDiemPeople ?? 0 : range.perDiemPeople,
       otAfter8: range.otAfter8 ?? crewOtAfter8,
+      phaseId: range.phaseId,
       clockOverride: row.clockOverride ?? "auto",
       skipDates: range.skipDates,
     });

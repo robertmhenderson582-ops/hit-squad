@@ -27,6 +27,8 @@ export type ComputeRangeInput = {
   perDiemPeople?: number;
   nightPerDiemPeople?: number;
   otAfter8?: boolean;
+  phaseId?: string;
+  billedAs?: string;
   clockOverride?: ClockOverride;
   skipDates?: string[];
 };
@@ -116,16 +118,27 @@ export function runningClock(
   return seatKind(position) === "staff" ? "staff" : siteClock;
 }
 
+export function clockTitle(position: string, billedAs = ""): string {
+  return billedAs.trim() || position;
+}
+
+/** Pre / Post follow Job setup. Oil Out / Mechanical / Oil In (and unbound ranges) are always OT after 8. */
+export function eastCoastCraftOtAfter8(phaseId?: string, jobOtAfter8 = false): boolean {
+  if (phaseId === "pre" || phaseId === "post") return Boolean(jobOtAfter8);
+  return true;
+}
+
 export function clockNote(
   position: string,
   site: string,
   client: string,
   override: ClockOverride = "auto",
   plantCode = "",
+  billedAs = "",
 ): string {
-  const clock = runningClock(position, site, client, override, plantCode);
+  const clock = runningClock(clockTitle(position, billedAs), site, client, override, plantCode);
   if (clock === "staff") return "Staff clock · Sunday DT · weekday ST to 10 · weekly 40 · no DT after 12 · no 7th-day";
-  if (clock === "east-coast") return "East Coast COMP · Sunday DT · weekday ST to 10 · weekly 40 · not DT after 12";
+  if (clock === "east-coast") return "East Coast COMP · Sunday DT · OT after 8 · weekly 40 · not DT after 12";
   if (clock === "ca-daily") return "CA daily COMP · 8 / 12 / 7th-day · DT after 12 only on CA";
   if (clock === "yates") return "Yates COMP · weekday 8 ST + OT · Saturday OT · Sunday DT";
   return "Customer rule · weekly 40 · Sunday DT · no DT after 12";
@@ -159,11 +172,19 @@ function dailySplit(
     return { st, ot: Math.max(0, hours - st), dt: 0 };
   }
 
-  const cap = otAfter8 || clock === "customer" ? 8 : 10;
-  const stCap = clock === "customer" && !otAfter8 ? 8 : cap;
-  const staffOrEast = clock === "staff" || clock === "east-coast";
-  const dailySt = staffOrEast ? (otAfter8 ? 8 : 10) : stCap;
-  const st = Math.min(dailySt, hours);
+  if (clock === "east-coast") {
+    if (!otAfter8) return { st: hours, ot: 0, dt: 0 };
+    const st = Math.min(8, hours);
+    return { st, ot: Math.max(0, hours - st), dt: 0 };
+  }
+
+  if (clock === "staff") {
+    const dailySt = otAfter8 ? 8 : 10;
+    const st = Math.min(dailySt, hours);
+    return { st, ot: Math.max(0, hours - st), dt: 0 };
+  }
+
+  const st = Math.min(8, hours);
   return { st, ot: Math.max(0, hours - st), dt: 0 };
 }
 
@@ -243,14 +264,16 @@ export function computeRangeHours(input: ComputeRangeInput): RangeHours {
 
   const daysMask = input.days ?? [false, true, true, true, true, true, true];
   const head = Math.max(1, input.headcount ?? 1);
+  const title = clockTitle(input.position, input.billedAs);
   const clock = runningClock(
-    input.position,
+    title,
     input.site ?? "",
     input.client ?? "",
     input.clockOverride ?? "auto",
     input.plantCode ?? "",
   );
-  const otAfter8 = Boolean(input.otAfter8);
+  const flagged = Boolean(input.otAfter8);
+  const otAfter8 = clock === "east-coast" ? eastCoastCraftOtAfter8(input.phaseId, flagged) : flagged;
   const dates = eachDate(input.start, input.end);
   const raw: { key: string; date: string; weekday: number; st: number; ot: number; dt: number }[] = [];
   let workedDays = 0;
@@ -305,6 +328,7 @@ export function computeRangeHours(input: ComputeRangeInput): RangeHours {
 export function computeRowHours(
   row: {
     position: string;
+    billedAs?: string;
     shift?: "Days" | "Nights" | "Days & nights";
     clockOverride?: ClockOverride;
     ranges: {
@@ -317,6 +341,7 @@ export function computeRowHours(
       nightPerDiemPeople?: number;
       days: boolean[];
       otAfter8?: boolean;
+      phaseId?: string;
       shift?: "Days" | "Nights" | "Days & nights";
       skipDates?: string[];
       off?: boolean;
@@ -337,6 +362,7 @@ export function computeRowHours(
       .map((range) =>
       computeRangeHours({
         position: row.position,
+        billedAs: row.billedAs,
         site,
         client,
         plantCode,
@@ -350,6 +376,7 @@ export function computeRowHours(
         perDiemPeople: range.perDiemPeople,
         nightPerDiemPeople: range.nightPerDiemPeople,
         otAfter8: range.otAfter8 ?? crewOtAfter8,
+        phaseId: range.phaseId,
         clockOverride: row.clockOverride ?? "auto",
         skipDates: range.skipDates,
       }),

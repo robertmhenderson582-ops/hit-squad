@@ -267,6 +267,8 @@ function CalendarPattern({
     perDiemPeople: range.perDiemPeople,
     nightPerDiemPeople: range.nightPerDiemPeople,
     otAfter8: range.otAfter8 ?? phaseOtAfter8,
+    phaseId: range.phaseId,
+    billedAs: "billedAs" in row ? String(row.billedAs || "") : undefined,
     clockOverride: row.clockOverride,
     skipDates: range.skipDates,
   });

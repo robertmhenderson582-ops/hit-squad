@@ -139,7 +139,7 @@ test("people land on Staff/Craft Day/Night from this job", () => {
   assert.equal(rows[0]?.daysPd, 5);
 });
 
-test("10s are Mon–Fri ST; 12s are 10+2; East Coast never DT after 12", () => {
+test("10s are 8 ST + 2 OT; 12s are 8+4; East Coast never DT after 12", () => {
   const tens = peopleFromJob(
     [
       {
@@ -152,9 +152,11 @@ test("10s are Mon–Fri ST; 12s are 10+2; East Coast never DT after 12", () => {
     WOOD,
     P66,
   );
-  assert.equal(tens[0]?.week.mo.st, 10);
-  assert.equal(tens[0]?.week.th.st, 10);
-  assert.equal(tens[0]?.week.fr.ot, 10);
+  assert.equal(tens[0]?.week.mo.st, 8);
+  assert.equal(tens[0]?.week.mo.ot, 2);
+  assert.equal(tens[0]?.week.th.st, 8);
+  assert.equal(tens[0]?.week.fr.st, 8);
+  assert.equal(tens[0]?.week.fr.ot, 2);
   assert.equal(tens[0]?.week.sa.st + tens[0]?.week.sa.ot + tens[0]?.week.sa.dt, 0);
   assert.equal(tens[0]?.st, 40);
   assert.equal(tens[0]?.ot, 10);
@@ -171,8 +173,8 @@ test("10s are Mon–Fri ST; 12s are 10+2; East Coast never DT after 12", () => {
     WOOD,
     P66,
   );
-  assert.equal(twelves[0]?.week.mo.st, 10);
-  assert.equal(twelves[0]?.week.mo.ot, 2);
+  assert.equal(twelves[0]?.week.mo.st, 8);
+  assert.equal(twelves[0]?.week.mo.ot, 4);
   assert.equal(twelves[0]?.week.mo.dt, 0);
   assert.equal(twelves[0]?.dt, 0);
 });
@@ -229,8 +231,10 @@ test("Days & nights splits into Day and Night blocks from this job", () => {
   assert.equal(rows.length, 2);
   assert.equal(rows[0]?.block, "Craft Day");
   assert.equal(rows[1]?.block, "Craft Night");
-  assert.equal(rows[0]?.week.mo.st, 10);
-  assert.equal(rows[1]?.week.mo.st, 10);
+  assert.equal(rows[0]?.week.mo.st, 8);
+  assert.equal(rows[0]?.week.mo.ot, 2);
+  assert.equal(rows[1]?.week.mo.st, 8);
+  assert.equal(rows[1]?.week.mo.ot, 2);
 });
 
 test("summary uses this job hours and PD, not a shipped rate tab", () => {

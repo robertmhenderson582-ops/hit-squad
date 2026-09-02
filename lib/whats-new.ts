@@ -1,24 +1,23 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.33.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.33";
+export const DESK_VERSION = "1.34.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.34";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.33";
+export const DESK_THREAD_ID = "th-desk-v1.34";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.33",
-  "• Extra Crew date ranges open with Hours/shift from Job setup.",
+  "Hit Squad Project Controls V1.34",
+  "• Craft hours are time-and-a-half after 8 on Oil Out / Mechanical / Oil In. Pre and Post use Job setup.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.33",
-  "• Extra Crew date ranges default Hours/shift from that phase's Job setup Hrs/Day — not a Crew override on the first range. If Hrs/Day is empty, fall back to the first range Hours/shift, then 0. Newly added extras only; a saved extra keeps the Hours/shift he typed, including 0.",
-  "• Extra workdays copy Job setup Days/WK when the extra would otherwise start empty. Dates, headcount, and Description are not copied. Extra ranges still start empty and still clamp to the Job setup phase window.",
+  "Hit Squad Project Controls V1.34",
+  "• East Coast CBA craft (GF, Foreman, Direct Craft, Support billed as craft) is OT after 8 on Oil Out / Mechanical / Oil In. Pre and Post follow the Job setup 4×10 / 5×8 picker. Staff / Supervision keep weekday ST to 10 unless Use COMP clock is on.",
 ].join("\n");
 
-/** Same as the live V1.33 note. Kept so older imports still resolve. */
+/** Same as the live V1.34 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;
