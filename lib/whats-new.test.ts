@@ -52,22 +52,22 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
-    assert.equal(DESK_VERSION, "1.44.0");
-    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.44");
-    assert.equal(DESK_THREAD_ID, "th-desk-v1.44");
+    assert.equal(DESK_VERSION, "1.45.0");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.45");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.45");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /labor rate sheet/);
-    assert.match(TESTER_WHATS_NEW, /New Estimate tells you if the company has no rates/);
-    assert.match(TESTER_WHATS_NEW, /Rate builder/);
+    assert.match(TESTER_WHATS_NEW, /Suggestion Box and Inbox messages now save/);
+    assert.match(TESTER_WHATS_NEW, /Inbox photos attach with the message/);
+    assert.match(TESTER_WHATS_NEW, /Quality Save reaches the owner/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|testers|Follow|apcontrolsllc|seat|James|CBI|View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
-    assert.match(OWNER_WHATS_NEW, /Yates-style sheet/);
-    assert.match(OWNER_WHATS_NEW, /Joseph Henderson can open Rate builder/);
+    assert.match(OWNER_WHATS_NEW, /Suggestion Box and Inbox posts from the six persist/);
+    assert.match(OWNER_WHATS_NEW, /Novus is a two-way Inbox contact/);
+    assert.match(OWNER_WHATS_NEW, /Not a login/);
+    assert.match(OWNER_WHATS_NEW, /Joseph Henderson keeps the full desk except owner lockout/);
     assert.match(OWNER_WHATS_NEW, /Owner stays the only owner/);
-    assert.match(OWNER_WHATS_NEW, /do not lock the owner out/);
-    assert.match(TESTER_WHATS_NEW, /no rates/);
     assert.equal(/View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
       /password|passwords|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
@@ -107,9 +107,9 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.44 onto an existing Hit Squad desk thread after V1.38", () => {
+  it("appends V1.45 onto an existing Hit Squad desk thread after V1.38", () => {
     assert.equal(seenKey("tester-x", "1.38.0"), `${WHATS_NEW_MARK_PREFIX}1.38.0:tester-x`);
-    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.44.0:tester-x`);
+    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.45.0:tester-x`);
     assert.notEqual(seenKey("tester-x", "1.38.0"), seenKey("tester-x"));
 
     const prior = [
@@ -141,19 +141,19 @@ describe("inbox what's-new", () => {
     assert.deepEqual(applyWhatsNew(prior, "tester-joseph-append", false, "josephmhenderson2002@gmail.com"), prior);
   });
 
-  it("posts the V1.44 Inbox note for testers and owner", () => {
-    assert.equal(DESK_VERSION, "1.44.0");
+  it("posts the V1.45 Inbox note for testers and owner", () => {
+    assert.equal(DESK_VERSION, "1.45.0");
     assert.equal(NEXT_SHIP_VERSION, DESK_VERSION);
     assert.equal(NEXT_SHIP_VERSION_LABEL, DESK_VERSION_LABEL);
     assert.equal(TESTER_NEXT_SHIP_DRAFT, TESTER_WHATS_NEW);
     assert.equal(OWNER_NEXT_SHIP_DRAFT, OWNER_WHATS_NEW);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(OWNER_WHATS_NEW, /Yates-style sheet/);
-    assert.match(OWNER_WHATS_NEW, /Joseph Henderson can open Rate builder/);
+    assert.match(OWNER_WHATS_NEW, /Novus is a two-way Inbox contact/);
+    assert.match(OWNER_WHATS_NEW, /Joseph Henderson keeps the full desk except owner lockout/);
     assert.match(OWNER_WHATS_NEW, /Owner stays the only owner/);
-    assert.match(TESTER_WHATS_NEW, /labor rate sheet/);
-    assert.match(TESTER_WHATS_NEW, /New Estimate tells you if the company has no rates/);
-    assert.match(TESTER_WHATS_NEW, /Rate builder/);
+    assert.match(TESTER_WHATS_NEW, /Suggestion Box and Inbox messages now save/);
+    assert.match(TESTER_WHATS_NEW, /Inbox photos attach with the message/);
+    assert.match(TESTER_WHATS_NEW, /Quality Save reaches the owner/);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|Follow|apcontrolsllc|seat|security|vault|other users|James|CBI|Stephanie|View as/i.test(TESTER_WHATS_NEW), false);
@@ -164,10 +164,10 @@ describe("inbox what's-new", () => {
       ),
       false,
     );
-    const live = applyWhatsNew([], "tester-v144-live", false, "nathanboyte@gmail.com");
-    assert.equal(live[0].id, "th-desk-v1.44");
+    const live = applyWhatsNew([], "tester-v145-live", false, "nathanboyte@gmail.com");
+    assert.equal(live[0].id, "th-desk-v1.45");
     assert.equal(live[0].messages[0]?.text, TESTER_WHATS_NEW);
-    const owner = applyWhatsNew([], "owner-v144-live", true);
+    const owner = applyWhatsNew([], "owner-v145-live", true);
     assert.equal(owner[0].messages[0]?.text, OWNER_WHATS_NEW);
   });
 });

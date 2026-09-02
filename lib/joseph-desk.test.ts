@@ -83,6 +83,7 @@ describe("Joseph full desk", () => {
         "shane@apcontrolsllc.com",
         "wlanderno@yahoo.com",
         "chancec318@yahoo.com",
+        "novus@hitsquad.local",
       ],
     );
     const rows = [

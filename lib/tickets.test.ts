@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -8,10 +8,13 @@ import {
   addStoredTicket,
   forgetTicketCacheForTests,
   listStoredTickets,
+  mergeStoredTickets,
   resetTicketStoreForTests,
+  staleWarmTicketInstanceForTests,
   ticketStoreKind,
   useTicketVaultForTests,
 } from "./ticket-store.ts";
+import { TICKETS_VAULT_KIND, TICKETS_VAULT_NAME, readVaultJson } from "./drive-data.ts";
 import { makeTicket } from "./tickets.ts";
 import { memoryDrive } from "./drive-estimates.ts";
 
@@ -123,4 +126,130 @@ describe("ticket file store", { concurrency: 1 }, () => {
     assert.equal(again[0].who, "josephmhenderson2002@gmail.com");
     assert.equal((await listStoredTickets("marks544@yahoo.com")).length, 0);
   });
+
+  it("two posts from different hydrate resets keep tester tickets in the vault", async () => {
+    const drive = memoryDrive();
+    resetTicketStoreForTests(join(dir, "wipe.json"));
+    useTicketVaultForTests(drive);
+    const owner = await addStoredTicket(
+      makeTicket({
+        kind: "Broke",
+        note: "Owner row",
+        capture: null,
+        later: false,
+        who: "robertmhenderson582@gmail.com",
+      }),
+    );
+    staleWarmTicketInstanceForTests();
+    const chance = await addStoredTicket(
+      makeTicket({
+        kind: "better way",
+        note: "Chance ticket",
+        capture: null,
+        later: false,
+        who: "chancec318@yahoo.com",
+      }),
+    );
+    const vault = await readVaultTickets(drive);
+    assert.equal(vault.some((row) => row.id === owner.id), true);
+    assert.equal(vault.some((row) => row.id === chance.id && row.who === "chancec318@yahoo.com"), true);
+    assert.equal((await listStoredTickets("chancec318@yahoo.com")).length, 1);
+    assert.equal((await listStoredTickets("chancec318@yahoo.com"))[0]?.note, "Chance ticket");
+    assert.equal((await listStoredTickets()).length, 2);
+  });
+
+  it("hydrate merge does not replace a richer cache with a thinner vault", async () => {
+    const drive = memoryDrive();
+    const keep = join(dir, "richer.json");
+    resetTicketStoreForTests(keep);
+    useTicketVaultForTests(drive);
+    const owner = await addStoredTicket(
+      makeTicket({
+        kind: "Broke",
+        note: "vault owner",
+        capture: null,
+        later: false,
+        who: "robertmhenderson582@gmail.com",
+      }),
+    );
+    const chance = makeTicket({
+      kind: "missing",
+      note: "cache only Chance",
+      capture: null,
+      later: false,
+      who: "chancec318@yahoo.com",
+    });
+    writeFileSync(keep, JSON.stringify({ tickets: [chance] }, null, 2));
+    resetTicketStoreForTests(keep);
+    useTicketVaultForTests(drive);
+    const listed = await listStoredTickets();
+    assert.equal(listed.some((row) => row.id === owner.id), true);
+    assert.equal(listed.some((row) => row.id === chance.id && row.who === "chancec318@yahoo.com"), true);
+    const vault = await readVaultTickets(drive);
+    assert.equal(vault.some((row) => row.id === chance.id), true);
+  });
+
+  it("union by id does not let a stale list wipe a tester ticket", () => {
+    const owner = makeTicket({
+      id: "tkt-owner",
+      kind: "Broke",
+      note: "owner",
+      capture: null,
+      later: false,
+      who: "robertmhenderson582@gmail.com",
+    });
+    const chance = makeTicket({
+      id: "tkt-chance",
+      kind: "missing",
+      note: "chance",
+      capture: null,
+      later: false,
+      who: "chancec318@yahoo.com",
+    });
+    const merged = mergeStoredTickets([owner, chance], [owner]);
+    assert.equal(merged.length, 2);
+    assert.equal(merged.some((row) => row.id === "tkt-chance"), true);
+  });
+
+  it("a failed Drive write throws", async () => {
+    resetTicketStoreForTests(join(dir, "fail.json"));
+    useTicketVaultForTests({
+      configured: true,
+      async listJson() {
+        return [];
+      },
+      async readJson() {
+        return "{}";
+      },
+      async createJson() {
+        throw new Error("update");
+      },
+      async updateJson() {
+        throw new Error("update");
+      },
+      async deleteJson() {},
+    });
+    await assert.rejects(
+      () =>
+        addStoredTicket(
+          makeTicket({
+            kind: "Broke",
+            note: "must not look saved",
+            capture: null,
+            later: false,
+            who: "chancec318@yahoo.com",
+          }),
+        ),
+      /update/,
+    );
+  });
 });
+
+async function readVaultTickets(drive: ReturnType<typeof memoryDrive>) {
+  const raw = await readVaultJson<{ tickets?: Array<{ id: string; who?: string; note?: string }> }>(
+    drive,
+    TICKETS_VAULT_NAME,
+    TICKETS_VAULT_KIND,
+  );
+  return raw?.tickets ?? [];
+}

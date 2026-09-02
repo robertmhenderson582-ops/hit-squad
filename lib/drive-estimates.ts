@@ -12,6 +12,7 @@ export type DriveFile = {
   id: string;
   name: string;
   properties?: Record<string, string>;
+  modifiedTime?: string;
 };
 
 export type DriveAdapter = {
@@ -224,15 +225,23 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
   return {
     configured: true,
     async listJson(folderId) {
-      const q = `'${folderId}' in parents and trashed=false and mimeType='application/json'`;
-      const url = new URL("https://www.googleapis.com/drive/v3/files");
-      url.searchParams.set("q", q);
-      url.searchParams.set("fields", "files(id,name,properties,modifiedTime)");
-      url.searchParams.set("pageSize", "100");
-      url.searchParams.set("spaces", "drive");
-      const response = await fetch(url, { headers: await authHeaders() });
-      const data = (await response.json()) as { files?: DriveFile[] };
-      return Array.isArray(data.files) ? data.files : [];
+      const files: DriveFile[] = [];
+      let pageToken = "";
+      do {
+        const q = `'${folderId}' in parents and trashed=false and mimeType='application/json'`;
+        const url = new URL("https://www.googleapis.com/drive/v3/files");
+        url.searchParams.set("q", q);
+        url.searchParams.set("fields", "nextPageToken,files(id,name,properties,modifiedTime)");
+        url.searchParams.set("pageSize", "100");
+        url.searchParams.set("spaces", "drive");
+        if (pageToken) url.searchParams.set("pageToken", pageToken);
+        const response = await fetch(url, { headers: await authHeaders() });
+        const data = (await response.json()) as { files?: DriveFile[]; nextPageToken?: string; error?: unknown };
+        if (!response.ok) throw new Error(driveApiError(data, "list"));
+        if (Array.isArray(data.files)) files.push(...data.files);
+        pageToken = typeof data.nextPageToken === "string" ? data.nextPageToken : "";
+      } while (pageToken);
+      return files;
     },
     async readJson(fileId) {
       const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {

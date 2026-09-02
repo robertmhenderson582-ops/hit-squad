@@ -14,6 +14,11 @@ import {
   TICKETS_VAULT_NAME,
   RATES_VAULT_KIND,
   RATES_VAULT_NAME,
+  QUALITY_BRIEFS_VAULT_KIND,
+  QUALITY_BRIEFS_VAULT_NAME,
+  INBOX_VAULT_KIND,
+  INBOX_VAULT_NAME,
+  findVaultJsonFile,
   readVaultJson,
   writeVaultJson,
 } from "./drive-data.ts";
@@ -54,5 +59,29 @@ describe("vault named json", () => {
     const rates = await readVaultJson<{ catalog: Array<{ description: string }> }>(drive, RATES_VAULT_NAME, RATES_VAULT_KIND);
     assert.equal(rates?.catalog[0].description, "Skip Pan");
     assert.equal(await readVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND), null);
+  });
+
+  it("keeps quality briefs apart from tickets and prefers the newest inbox.json", async () => {
+    const drive = memoryDrive();
+    await writeVaultJson(drive, QUALITY_BRIEFS_VAULT_NAME, QUALITY_BRIEFS_VAULT_KIND, {
+      briefs: [{ id: "brief-quality-chancec318@yahoo.com", who: "chancec318@yahoo.com" }],
+    });
+    const briefs = await readVaultJson<{ briefs: Array<{ id: string }> }>(
+      drive,
+      QUALITY_BRIEFS_VAULT_NAME,
+      QUALITY_BRIEFS_VAULT_KIND,
+    );
+    assert.equal(briefs?.briefs[0].id, "brief-quality-chancec318@yahoo.com");
+    assert.equal(await readVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND), null);
+
+    await drive.createJson("folder", INBOX_VAULT_NAME, JSON.stringify({ messages: [{ id: "old" }] }), {
+      kind: INBOX_VAULT_KIND,
+    });
+    const newer = await drive.createJson("folder", INBOX_VAULT_NAME, JSON.stringify({ messages: [{ id: "new" }] }), {
+      kind: INBOX_VAULT_KIND,
+    });
+    drive.files.get(newer.id)!.file.modifiedTime = "2026-09-02T21:00:00.000Z";
+    const found = await findVaultJsonFile(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND);
+    assert.equal(found?.id, newer.id);
   });
 });

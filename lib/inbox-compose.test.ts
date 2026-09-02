@@ -27,6 +27,12 @@ const BENNY = {
   company: "Hit Squad",
 } as const;
 
+const NOVUS = {
+  id: "novus",
+  name: "Novus",
+  company: "Hit Squad",
+} as const;
+
 const DESK: InboxThread = {
   id: "th-desk-v1.28",
   personId: DESK_PERSON_ID,
@@ -68,6 +74,21 @@ describe("inbox compose stays on the thread", () => {
     assert.ok(nathan);
     assert.equal(nathan.id, created.id);
     assert.equal(nathan.messages.length, 0);
+  });
+
+  it("Chance New/compose to Novus stays on that thread", () => {
+    const created = makeThread(NOVUS);
+    const next = reconcileInboxDesk([created], [], created.id);
+    assert.equal(next.activeId, created.id);
+    assert.equal(next.threads.some((thread) => thread.personId === "novus" && thread.name === "Novus"), true);
+    const started = startInboxThread(next.threads, NOVUS);
+    assert.equal(started.activeId, created.id);
+    const pending = makeMessage({ from: "self", author: "Chance Middlebrooks", text: "Hi Novus", photo: "data:image/jpeg;base64,/9j/4AAQSkZJRg==" });
+    const sent = appendInboxMessage(started.threads, started.activeId, pending);
+    assert.equal(
+      sent.find((thread) => thread.personId === "novus")?.messages.some((message) => message.photo && message.text === "Hi Novus"),
+      true,
+    );
   });
 
   it("select anyone in the six, type, poll without that person keeps compose", () => {

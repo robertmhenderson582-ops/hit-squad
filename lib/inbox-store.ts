@@ -9,7 +9,14 @@ import {
   isInboxCircleEmail,
   normalizeInboxEmail,
 } from "./inbox-circle.ts";
-import { acceptedInboxMessageId, makeMessage, type InboxMessage, type InboxPerson, type InboxThread } from "./inbox.ts";
+import {
+  acceptedInboxMessageId,
+  acceptedInboxPhoto,
+  makeMessage,
+  type InboxMessage,
+  type InboxPerson,
+  type InboxThread,
+} from "./inbox.ts";
 
 export type StoredInboxMessage = {
   id: string;
@@ -61,7 +68,7 @@ export function parseInboxFile(raw: unknown): StoredInboxMessage[] {
       fromName: typeof row.fromName === "string" && row.fromName.trim() ? row.fromName.trim() : fromEmail,
       toEmail,
       text: typeof row.text === "string" ? row.text : "",
-      photo: typeof row.photo === "string" && row.photo.startsWith("data:") ? row.photo : null,
+      photo: acceptedInboxPhoto(row.photo),
       sentAt: typeof row.sentAt === "string" ? row.sentAt : "",
       readBy: Array.isArray(row.readBy) ? circleEmails(row.readBy.map(String)) : [],
       hiddenBy: Array.isArray(row.hiddenBy) ? circleEmails(row.hiddenBy.map(String)) : [],
@@ -135,11 +142,22 @@ function readDiskMessages(): StoredInboxMessage[] {
 async function readVaultMessages(): Promise<StoredInboxMessage[]> {
   const drive = resolveAdapter();
   if (!drive) return [];
-  try {
-    return parseInboxFile(await readVaultJson(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND));
-  } catch {
-    return [];
-  }
+  return parseInboxFile(await readVaultJson(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND));
+}
+
+function inboxNeedsVaultWrite(vault: StoredInboxMessage[], merged: StoredInboxMessage[]) {
+  if (merged.length !== vault.length) return true;
+  const byId = new Map(vault.map((row) => [row.id, row]));
+  return merged.some((row) => {
+    const existing = byId.get(row.id);
+    return (
+      !existing ||
+      row.hiddenBy.length > existing.hiddenBy.length ||
+      row.readBy.length > existing.readBy.length ||
+      Boolean(row.photo && !existing.photo) ||
+      Boolean(row.text && !existing.text)
+    );
+  });
 }
 
 async function persist(messages: StoredInboxMessage[]): Promise<StoredInboxMessage[]> {
@@ -163,11 +181,11 @@ export async function hydrateInboxStore(): Promise<StoredInboxMessage[]> {
       const vault = await readVaultMessages();
       const merged = mergeInboxMessages(vault, cached);
       writeCache(merged);
-      if (!vault.length && cached.length) {
+      if (inboxNeedsVaultWrite(vault, merged)) {
         await writeVaultJson(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND, { messages: merged });
       }
     } catch {
-      // Keep the local cache.
+      // Keep the local cache. Never replace a richer set with a thinner vault read.
     }
     return readCache();
   }
@@ -241,7 +259,10 @@ export async function postInboxMessage(input: {
     return { ok: false, status: 400, error: "Pick a person." };
   }
   const text = typeof input.text === "string" ? input.text.trim() : "";
-  const photo = typeof input.photo === "string" && input.photo.startsWith("data:") ? input.photo : null;
+  const photo = acceptedInboxPhoto(input.photo);
+  if (input.photo && !photo) {
+    return { ok: false, status: 400, error: "Could not attach. Try again." };
+  }
   if (!text && !photo) {
     return { ok: false, status: 400, error: "Write a message." };
   }
@@ -254,7 +275,8 @@ export async function postInboxMessage(input: {
   const id = acceptedInboxMessageId(input.id) || local.id;
   const messages = await hydrateInboxStore();
   if (messages.some((row) => row.id === id)) {
-    return { ok: true, threads: threadsForInboxEmail(fromEmail, messages) };
+    const next = await persist(messages);
+    return { ok: true, threads: threadsForInboxEmail(fromEmail, next) };
   }
   const next = await persist([
     ...messages,

@@ -1,26 +1,29 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.44.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.44";
+export const DESK_VERSION = "1.45.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.45";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.44";
+export const DESK_THREAD_ID = "th-desk-v1.45";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.44",
-  "• Rate builder looks like the labor rate sheet — craft, base wage, billed ST / OT / DT, and PD.",
-  "• New Estimate tells you if the company has no rates. You can upload billing rates or build them in Rate builder.",
+  "Hit Squad Project Controls V1.45",
+  "• Suggestion Box and Inbox messages now save.",
+  "• Inbox photos attach with the message.",
+  "• Quality Save reaches the owner.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.44",
-  "• Rate builder labor table matches the Yates-style sheet: craft/position, COMP BW, billed ST / OT / DT, and the Shahan PD fringe. Billed ST stays the crew-costing dollar. East Coast stays OT 1.5, not DT after 12.",
-  "• Joseph Henderson can open Rate builder. Owner stays the only owner.",
-  "• New Estimate tells a company with no saved rates they can upload billing rates or use Rate builder. Madison books already on the desk do not lock the owner out.",
+  "Hit Squad Project Controls V1.45",
+  "• Suggestion Box and Inbox posts from the six persist. Hydrate merges incoming rows and will not drop tester tickets or messages.",
+  "• Novus is a two-way Inbox contact for the six. Not a login.",
+  "• Inbox photos attach with the message and persist. A failed attach shows an error.",
+  "• Quality and HSE Save writes the brief and dropped files so the owner can open them. Submit brief can still zip locally. A failed write shows an error.",
+  "• Joseph Henderson keeps the full desk except owner lockout. Owner stays the only owner. Inbox stays the six.",
 ].join("\n");
 
-/** Same as the live V1.44 note. Kept so older imports still resolve. */
+/** Same as the live V1.45 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;

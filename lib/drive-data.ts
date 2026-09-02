@@ -7,6 +7,8 @@ export const SEATS_VAULT_NAME = "seats.json";
 export const SETTINGS_VAULT_NAME = "settings.json";
 export const INBOX_VAULT_NAME = "inbox.json";
 export const RATES_VAULT_NAME = "rates.json";
+export const QUALITY_BRIEFS_VAULT_NAME = "quality-briefs.json";
+export const HSE_BRIEFS_VAULT_NAME = "hse-briefs.json";
 export const COMPANIES_VAULT_KIND = "companies";
 export const ACTIVITY_VAULT_KIND = "activity";
 export const TICKETS_VAULT_KIND = "tickets";
@@ -14,6 +16,16 @@ export const SEATS_VAULT_KIND = "seats";
 export const SETTINGS_VAULT_KIND = "settings";
 export const INBOX_VAULT_KIND = "inbox";
 export const RATES_VAULT_KIND = "rates";
+export const QUALITY_BRIEFS_VAULT_KIND = "quality-briefs";
+export const HSE_BRIEFS_VAULT_KIND = "hse-briefs";
+
+export const DRIVE_WRITE_ERROR = "Could not save. Try again.";
+
+export function briefsVault(kind: "quality" | "hse") {
+  return kind === "hse"
+    ? { name: HSE_BRIEFS_VAULT_NAME, kind: HSE_BRIEFS_VAULT_KIND }
+    : { name: QUALITY_BRIEFS_VAULT_NAME, kind: QUALITY_BRIEFS_VAULT_KIND };
+}
 
 /** Owner Data room when set. Estimates room is the writable fallback already shared with the desk. */
 export function dataFolderId(env: Record<string, string | undefined> = process.env) {
@@ -32,7 +44,12 @@ function matchesVaultFile(file: DriveFile, name: string, kind: string) {
 export async function findVaultJsonFile(adapter: DriveAdapter, name: string, kind: string, folderId = dataFolderId()) {
   if (!adapter.configured) return null;
   const files = await adapter.listJson(folderId);
-  return files.find((file) => matchesVaultFile(file, name, kind)) ?? null;
+  const matches = files.filter((file) => matchesVaultFile(file, name, kind));
+  if (!matches.length) return null;
+  return (
+    [...matches].sort((left, right) => (right.modifiedTime || "").localeCompare(left.modifiedTime || ""))[0] ??
+    matches[0]
+  );
 }
 
 export async function readVaultJson<T>(
@@ -43,11 +60,7 @@ export async function readVaultJson<T>(
 ): Promise<T | null> {
   const file = await findVaultJsonFile(adapter, name, kind, folderId);
   if (!file) return null;
-  try {
-    return JSON.parse(await adapter.readJson(file.id)) as T;
-  } catch {
-    return null;
-  }
+  return JSON.parse(await adapter.readJson(file.id)) as T;
 }
 
 export async function writeVaultJson(

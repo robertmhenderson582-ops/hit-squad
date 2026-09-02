@@ -14,4 +14,11 @@ data/
 **/*B-1*.xlsx
 **/*B-2*.xlsx
 **/*COMP*.pdf
+# Quality / HSE / client books — never commit tester or owner PDFs / xlsx
+**/*Quality*.pdf
+**/*Quality*.xlsx
+**/*Madison*.pdf
+**/*Madison*.xlsx
+**/*P66*.pdf
+**/*P66*.xlsx
 tsconfig.tsbuildinfo

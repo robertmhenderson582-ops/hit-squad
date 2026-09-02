@@ -9,6 +9,10 @@ export type InboxCirclePerson = {
   company: string;
 };
 
+/** Desk-bot Inbox identity. Not a login seat. Not the Novus operator. */
+export const NOVUS_INBOX_ID = "novus";
+export const NOVUS_INBOX_EMAIL = "novus@hitsquad.local";
+
 /** In-program Inbox + Suggestion Box + Desk bot. Not the rest of the testers. */
 export const INBOX_CIRCLE: InboxCirclePerson[] = [
   { id: "owner", email: OWNER_LOGIN_EMAIL, name: "Robert Henderson", company: "Hit Squad" },
@@ -17,6 +21,7 @@ export const INBOX_CIRCLE: InboxCirclePerson[] = [
   { id: "tester-shane", email: "shane@apcontrolsllc.com", name: "Shane Smith", company: "Hit Squad" },
   { id: "tester-wendell", email: "wlanderno@yahoo.com", name: "Wendell Landerno", company: "Hit Squad" },
   { id: "tester-chance", email: "chancec318@yahoo.com", name: "Chance Middlebrooks", company: "Hit Squad" },
+  { id: NOVUS_INBOX_ID, email: NOVUS_INBOX_EMAIL, name: "Novus", company: "Hit Squad" },
 ];
 
 export function normalizeInboxEmail(email = "") {
@@ -38,16 +43,22 @@ export function inboxCircleById(id = "") {
   return INBOX_CIRCLE.find((row) => row.id === id);
 }
 
+export function isNovusInboxEmail(email = "") {
+  return normalizeInboxEmail(email) === NOVUS_INBOX_EMAIL;
+}
+
 export function canUseInbox(user?: { email?: string } | null): boolean {
-  return isInboxCircleEmail(user?.email);
+  const email = normalizeInboxEmail(user?.email);
+  if (!email || isNovusInboxEmail(email) || email === NOVUS_EMAIL) return false;
+  return isInboxCircleEmail(email);
 }
 
 export function canUseSuggestionBox(user?: { email?: string } | null): boolean {
-  return isInboxCircleEmail(user?.email);
+  return canUseInbox(user);
 }
 
 export function canReceiveDeskBot(user?: { email?: string } | null): boolean {
-  return isInboxCircleEmail(user?.email);
+  return canUseInbox(user);
 }
 
 export function inboxContactsFor(email = ""): InboxCirclePerson[] {

@@ -119,7 +119,7 @@ export function DeskFabs() {
     setDraft(EMPTY_DRAFT);
     setSavedDraft(false);
     setTicketOpen(false);
-    setNote("Saved to Tickets. Not Inbox.");
+    setNote(null);
     noteFeatureTrail("ticket");
 
     try {
@@ -137,7 +137,7 @@ export function DeskFabs() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setNote("Saved on this device. Tickets list has it.");
+        setNote(typeof data.error === "string" && data.error ? data.error : "Could not save. Try again.");
         return;
       }
       const serverTicket = data.ticket as DeskTicket | undefined;
@@ -147,8 +147,9 @@ export function DeskFabs() {
         mergeTickets(serverList, [serverTicket ?? filed, ...readTicketCache(email)]),
       );
       announceTicketsChanged();
+      setNote("Saved to Tickets. Not Inbox.");
     } catch {
-      setNote("Saved on this device. Tickets list has it.");
+      setNote("Could not save. Try again.");
     }
   }
 

@@ -4,6 +4,7 @@ import { useRef, useState, type RefObject } from "react";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { PhotoViewer } from "@/components/PhotoViewer";
 import { useInbox } from "@/components/InboxProvider";
+import { attachInboxPhoto, compressCapture, shootViewport } from "@/lib/capture";
 
 export function InboxPanel({ compact = false }: { compact?: boolean }) {
   const inbox = useInbox();
@@ -11,6 +12,8 @@ export function InboxPanel({ compact = false }: { compact?: boolean }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
+  const [attachNote, setAttachNote] = useState<string | null>(null);
+  const [attaching, setAttaching] = useState(false);
 
   const active = inbox.threads.find((thread) => thread.id === inbox.activeId) ?? null;
 
@@ -48,10 +51,60 @@ export function InboxPanel({ compact = false }: { compact?: boolean }) {
     }
   }
 
-  function send() {
-    inbox.sendMessage(draft, photo);
+  async function attachFromFile(file: File | undefined) {
+    if (!file) return;
+    setAttaching(true);
+    setAttachNote(null);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === "string") resolve(reader.result);
+          else reject(new Error("attach"));
+        };
+        reader.onerror = () => reject(new Error("attach"));
+        reader.readAsDataURL(file);
+      });
+      setPhoto(await attachInboxPhoto(dataUrl));
+    } catch {
+      setPhoto(null);
+      setAttachNote("Could not attach. Try again.");
+    } finally {
+      setAttaching(false);
+    }
+  }
+
+  async function captureScreen() {
+    setAttaching(true);
+    setAttachNote(null);
+    try {
+      const shot = await Promise.race([
+        shootViewport(),
+        new Promise<string>((resolve) => window.setTimeout(() => resolve(""), 20000)),
+      ]);
+      if (!shot) {
+        setAttachNote("Could not attach. Try again.");
+        return;
+      }
+      const compact = await compressCapture(shot);
+      setPhoto(await attachInboxPhoto(compact));
+    } catch {
+      setPhoto(null);
+      setAttachNote("Could not attach. Try again.");
+    } finally {
+      setAttaching(false);
+    }
+  }
+
+  async function send() {
+    const ok = await inbox.sendMessage(draft, photo);
+    if (!ok) {
+      if (photo) setAttachNote("Could not attach. Try again.");
+      return;
+    }
     setDraft("");
     setPhoto(null);
+    setAttachNote(null);
   }
 
   return (
@@ -115,10 +168,14 @@ export function InboxPanel({ compact = false }: { compact?: boolean }) {
           thread={active}
           draft={draft}
           photo={photo}
+          attachNote={attachNote}
+          attaching={attaching}
           fileRef={fileRef}
           onDraft={setDraft}
           onPhoto={setPhoto}
-          onSend={send}
+          onAttachFile={(file) => void attachFromFile(file)}
+          onCapture={() => void captureScreen()}
+          onSend={() => void send()}
           onBack={inbox.closeThread}
           onClear={() => void clearThread(active.id, active.name)}
           onRemoveMessage={(id, label) => void removeMessage(active.id, id, label)}
@@ -157,9 +214,13 @@ function Conversation({
   thread,
   draft,
   photo,
+  attachNote,
+  attaching,
   fileRef,
   onDraft,
   onPhoto,
+  onAttachFile,
+  onCapture,
   onSend,
   onBack,
   onClear,
@@ -169,9 +230,13 @@ function Conversation({
   thread: { id: string; name: string; messages: import("@/lib/inbox").InboxMessage[] };
   draft: string;
   photo: string | null;
+  attachNote: string | null;
+  attaching: boolean;
   fileRef: RefObject<HTMLInputElement | null>;
   onDraft: (value: string) => void;
   onPhoto: (value: string | null) => void;
+  onAttachFile: (file: File | undefined) => void;
+  onCapture: () => void;
   onSend: () => void;
   onBack: () => void;
   onClear: () => void;
@@ -237,6 +302,7 @@ function Conversation({
           </button>
         </p>
       ) : null}
+      {attachNote ? <p className="mt-2 text-xs text-[#b74120]">{attachNote}</p> : null}
       <textarea
         value={draft}
         onChange={(event) => onDraft(event.target.value)}
@@ -251,10 +317,13 @@ function Conversation({
         placeholder="Message · Enter sends · Shift+Enter newline"
       />
       <div className="mt-2 flex flex-wrap gap-2">
-        <button type="button" onClick={() => fileRef.current?.click()} className="rounded-lg border border-steel px-3 py-2 text-sm text-steel">
+        <button type="button" onClick={onCapture} disabled={attaching} className="rounded-lg border border-steel px-3 py-2 text-sm text-steel disabled:opacity-60">
+          Capture screen
+        </button>
+        <button type="button" onClick={() => fileRef.current?.click()} disabled={attaching} className="rounded-lg border border-steel px-3 py-2 text-sm text-steel disabled:opacity-60">
           Attach photo
         </button>
-        <button type="button" onClick={onSend} className="rounded-lg bg-steel px-3 py-2 text-sm text-white">
+        <button type="button" onClick={onSend} disabled={attaching} className="rounded-lg bg-steel px-3 py-2 text-sm text-white disabled:opacity-60">
           Send
         </button>
       </div>
@@ -266,10 +335,7 @@ function Conversation({
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = "";
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = () => onPhoto(typeof reader.result === "string" ? reader.result : null);
-          reader.readAsDataURL(file);
+          onAttachFile(file);
         }}
       />
       {view ? <PhotoViewer src={view} onClose={() => setView(null)} /> : null}
