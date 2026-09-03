@@ -17,7 +17,7 @@ import {
 import { computeRowHours } from "./hours-clock.ts";
 import { lookupShahanLabor, shahanCrewCostAmount } from "./shahan-wood-river.ts";
 import { wageLookupOpts } from "./wage-lookup.ts";
-import { buildSheetXml, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
+import { buildSheetXml, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
 function craft(
   id: string,
@@ -314,5 +314,59 @@ describe("estimate excel export", () => {
     const empty = buildEstimateWorkbook({ title: "Blank", site: "Yates", client: "Georgia Power" });
     assert.deepEqual(empty.map((sheet) => sheet.name), [ESTIMATE_XLSX_SHEETS.summary]);
     assert.equal(empty[0].cells.some((cell) => cell.type === "formula" || (cell.type === "number" && cell.ref === "B8")), true);
+  });
+
+  it("writes an Excel-strict package for the O&M sub sheet, inch-quotes, and > text", () => {
+    const input = {
+      ...woodRiverFixture(),
+      equipment: {
+        largeTools: [],
+        thirdParty: [
+          ...(woodRiverFixture().equipment.thirdParty ?? []),
+          {
+            id: "tp-2",
+            item: '20" clam shell',
+            period: "daily" as const,
+            rate: 50,
+            freight: 0,
+            qty: 1,
+            start: "2026-09-01",
+            end: "2026-09-01",
+          },
+        ],
+      },
+      otherCost: {
+        ...woodRiverFixture().otherCost,
+        misc: [{ id: "mc-1", item: "Alloy rod", description: "Stainless > 2\"", qty: 2, each: 25 }],
+      },
+      subcontractor: {
+        lines: [{ id: "sub-1", vendor: "O&M Crane", scope: "crane lift", qty: 1, unit: "LS" as const, rate: 1000, affiliate: false }],
+        cards: [],
+      },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const subName = excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub);
+    assert.equal(subName, "OM Crane Subcontractor");
+    assert.equal(sheets.some((sheet) => sheet.name === subName), true);
+    assert.equal(sheets.some((sheet) => sheet.name.includes("&")), false);
+    const summary = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary);
+    const subFormula = summary?.cells.find((cell) => cell.type === "formula" && String(cell.value).includes(subName));
+    assert.ok(subFormula);
+    assert.equal(String(subFormula.value).includes("&amp;"), false);
+    assert.equal(sheetRef(ESTIMATE_XLSX_SHEETS.sub, "H11"), `'${subName}'!H11`);
+
+    const bytes = estimateToXlsx(input);
+    const asText = new TextDecoder().decode(bytes);
+    assert.notEqual(bytes[12] | (bytes[13] << 8), 0);
+    assert.match(asText, /xl\/styles\.xml/);
+    assert.match(asText, /officeDocument\/2006\/relationships\/styles/);
+    assert.match(asText, /OM Crane Subcontractor/);
+    assert.equal(/O&amp;M Crane Subcontractor/.test(asText), false);
+    assert.match(asText, /20" clam shell/);
+    assert.equal(asText.includes("&quot;"), false);
+    assert.match(asText, /Stainless &gt; 2"/);
+    const { evalAt } = evaluateWorkbook(sheets);
+    const subTotal = evalAt(subName, "H8");
+    assert.equal(subTotal, 1000 * 1.065);
   });
 });

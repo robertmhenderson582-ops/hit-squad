@@ -24,7 +24,7 @@ import { PHASE_NAMES, type PhaseId, type PhaseScheduleState } from "./phase-sche
 import { lookupShahanEquipment, lookupShahanLabor, shahanCrewTitle, type JobRates, type ShahanLaborRow } from "./shahan-wood-river.ts";
 import { emptySubSheet, lineAmount, subCardTotal, type SubSheet } from "./subcontractor.ts";
 import { bookForSite, wageLookupOpts } from "./wage-lookup.ts";
-import { buildWorkbook, colLetter, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
+import { buildWorkbook, colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
 export const ESTIMATE_EXPORT_ERROR = "Could not export. Try again.";
 export const ESTIMATE_EXPORT_PRODUCER = "Produced by Hit Squad Project Controls";
@@ -87,7 +87,11 @@ function quoteSheet(name: string) {
 }
 
 export function sheetRef(sheet: string, ref: string) {
-  return `${quoteSheet(sheet)}!${ref}`;
+  return `${quoteSheet(excelSafeSheetName(sheet))}!${ref}`;
+}
+
+function xlsxName(name: string) {
+  return excelSafeSheetName(name);
 }
 
 export function estimateXlsxFilename(input: { site?: string; title?: string } = {}) {
@@ -539,7 +543,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
   const cells = headerCells(input);
   pushText(cells, "A6", "Line");
   pushText(cells, "B6", "Amount");
-  const byName = new Map(built.map((sheet) => [sheet.name, sheet]));
+  const byName = new Map(built.map((sheet) => [xlsxName(sheet.name), sheet]));
   const moneyRefs: string[] = [];
   let row = 7;
 
@@ -551,7 +555,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
   ];
   const laborRefs: string[] = [];
   for (const [label, name] of laborSheets) {
-    const sheet = byName.get(name);
+    const sheet = byName.get(xlsxName(name));
     if (!sheet?.laborTotal) continue;
     const ref = addSummaryLine(cells, row, label, sheetRef(name, sheet.laborTotal));
     if (ref) laborRefs.push(ref);
@@ -565,7 +569,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
 
   const pdRefs = laborSheets
     .map(([, name]) => {
-      const sheet = byName.get(name);
+      const sheet = byName.get(xlsxName(name));
       return sheet?.pdTotal ? sheetRef(name, sheet.pdTotal) : "";
     })
     .filter(Boolean);
@@ -585,7 +589,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     ["Subcontractor", ESTIMATE_XLSX_SHEETS.sub],
   ];
   for (const [label, name] of extra) {
-    const sheet = byName.get(name);
+    const sheet = byName.get(xlsxName(name));
     if (!sheet?.sheetTotal) continue;
     const ref = addSummaryLine(cells, row, label, sheetRef(name, sheet.sheetTotal));
     if (ref) moneyRefs.push(ref);
@@ -640,10 +644,10 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   );
   const misc = buildMiscSheet(input);
   const sub = buildSubSheet(input);
-  const body = [org, slicer, staff, foremen, direct, support, rental, tension, crane, sub, coe, staffTravel, misc, rates].filter(
-    (sheet): sheet is BuiltSheet => Boolean(sheet),
-  );
-  return [buildSummary(input, body), ...body];
+  const body = [org, slicer, staff, foremen, direct, support, rental, tension, crane, sub, coe, staffTravel, misc, rates]
+    .filter((sheet): sheet is BuiltSheet => Boolean(sheet))
+    .map((sheet) => ({ ...sheet, name: xlsxName(sheet.name) }));
+  return [{ ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) }, ...body];
 }
 
 export function estimateToXlsx(input: EstimateXlsxInput = {}): Uint8Array {
