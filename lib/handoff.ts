@@ -1,6 +1,7 @@
 import { companyIdForEmail, peopleLane, type CompanyId } from "./companies.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { normalizeEmails, ownerVaultEmail, type ScopeUser } from "./estimate-scope.ts";
+import { canonicalEmail, isSamePerson } from "./identity.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
 
 export type HandoffSeat = {
@@ -23,20 +24,24 @@ export function sharedWithNames(emails: string[]) {
     .filter(Boolean);
 }
 
+function personKey(value = "") {
+  return canonicalEmail(value) || value.trim().toLowerCase();
+}
+
 export function packTransferredToYou(
   pack: { ownerEmail?: string; transferredFrom?: string; transferredTo?: string },
   email = "",
 ) {
-  const me = email.trim().toLowerCase();
-  const owner = (pack.ownerEmail || "").trim().toLowerCase();
-  const to = (pack.transferredTo || "").trim().toLowerCase();
+  const me = personKey(email);
+  const owner = personKey(pack.ownerEmail);
+  const to = personKey(pack.transferredTo);
   return Boolean(me && pack.transferredFrom && owner === me && (to === me || !to));
 }
 
 export function packSharedWithYou(pack: { ownerEmail?: string; sharedWith?: string[] }, email = "") {
-  const me = email.trim().toLowerCase();
-  const owner = (pack.ownerEmail || "").trim().toLowerCase();
-  return Boolean(me && owner && owner !== me && normalizeEmails(pack.sharedWith).includes(me));
+  const me = personKey(email);
+  const owner = personKey(pack.ownerEmail);
+  return Boolean(me && owner && owner !== me && normalizeEmails(pack.sharedWith).some((row) => personKey(row) === me));
 }
 
 export function handoffMarkText(
@@ -54,14 +59,14 @@ export function handoffMarkText(
     const from = findHandoffSeat(pack.ownerEmail || "")?.name || "the owner";
     return `Shared / from ${from}.`;
   }
-  if (names.length && pack.ownerEmail?.trim().toLowerCase() === email.trim().toLowerCase()) {
+  if (names.length && isSamePerson(pack.ownerEmail, email)) {
     return `Shared with ${names.join(", ")}.`;
   }
   if (packTransferredToYou(pack, email)) {
     return `Transferred to you from ${transferredFromLabel(pack)}.`;
   }
-  const ownerEmail = (pack.ownerEmail || "").trim().toLowerCase();
-  const me = email.trim().toLowerCase();
+  const ownerEmail = personKey(pack.ownerEmail);
+  const me = personKey(email);
   if (ownerEmail && me && ownerEmail !== me) {
     const desk = findHandoffSeat(pack.ownerEmail || "")?.name;
     if (desk) return `${desk}'s desk.`;
@@ -112,8 +117,9 @@ export function handoffTargetsFor(
 }
 
 export function findHandoffSeat(email: string, extras: HandoffSeat[] = []): HandoffSeat | undefined {
-  const needle = email.trim().toLowerCase();
-  return handoffSeats(extras).find((seat) => seat.email === needle);
+  const needle = personKey(email);
+  if (!needle) return undefined;
+  return handoffSeats(extras).find((seat) => personKey(seat.email) === needle || isSamePerson(seat.email, email));
 }
 
 export function isHandoffEmail(email: string, extras: HandoffSeat[] = []) {

@@ -1,6 +1,7 @@
 import { isOwner } from "./desk-role.ts";
 import { localPackVisibleTo, ownerVaultEmail, visibleDeskPacks, type ScopeUser } from "./estimate-scope.ts";
-import { mergeHisWoodRiverCards } from "./his-wood-river.ts";
+import { applyHisIdentity, hisMatchForPack, mergeHisWoodRiverCards, shouldPaintHisCards } from "./his-wood-river.ts";
+import { isSamePerson } from "./identity.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
@@ -75,11 +76,12 @@ export function findDeskPack(packId: string, seat?: string | null, store?: Stora
   const id = (packId || "").trim();
   if (!id) return null;
   const local = listLocalPacks(store).find((row) => row.packId === id);
-  if (local) return local;
+  if (local) return hisMatchForPack(local) ? applyHisIdentity(local) : local;
   const ownerHit = readOwnerPacks(store).find((row) => row.packId === id);
-  if (ownerHit) return ownerHit;
+  if (ownerHit) return hisMatchForPack(ownerHit) ? applyHisIdentity(ownerHit) : ownerHit;
   if (!seat) return null;
-  return readLensPacks(seat, store).find((row) => row.packId === id) ?? null;
+  const lens = readLensPacks(seat, store).find((row) => row.packId === id) ?? null;
+  return lens && hisMatchForPack(lens) ? applyHisIdentity(lens) : lens;
 }
 
 export function readLensPacks(seat: string, store?: StorageLike | null): LocalPack[] {
@@ -133,7 +135,7 @@ function namedDeskTitle(pack?: LocalPack | null) {
 function preferDeskPack(current: LocalPack, next: LocalPack): LocalPack {
   const newer = (next.updatedAt || 0) >= (current.updatedAt || 0) ? next : current;
   const older = newer === next ? current : next;
-  return {
+  const merged: LocalPack = {
     ...older,
     ...newer,
     title: namedDeskTitle(newer) ? newer.title : older.title,
@@ -148,6 +150,8 @@ function preferDeskPack(current: LocalPack, next: LocalPack): LocalPack {
     transferredToName: newer.transferredToName || older.transferredToName,
     updatedAt: Math.max(current.updatedAt || 0, next.updatedAt || 0),
   };
+  const his = hisMatchForPack(merged) || hisMatchForPack(current) || hisMatchForPack(next);
+  return his ? applyHisIdentity(merged, his) : merged;
 }
 
 function mergeDeskPacks(...lists: LocalPack[][]): LocalPack[] {
@@ -164,10 +168,9 @@ function mergeDeskPacks(...lists: LocalPack[][]): LocalPack[] {
 
 export function ownerShouldSeePack(user: ScopeUser, pack: LocalPack) {
   if (isOwner(user)) return true;
-  const email = user.email.trim().toLowerCase();
   if (localPackVisibleTo(user, pack)) return true;
-  const from = (pack.transferredFrom || "").trim().toLowerCase();
-  return from === email || from === ownerVaultEmail();
+  const from = pack.transferredFrom || "";
+  return isSamePerson(from, user.email) || isSamePerson(from, ownerVaultEmail());
 }
 
 /** Owner-owned or transferred-from-owner cards. A shared-only leftover is not enough to paint Wood River. */
@@ -177,10 +180,14 @@ export function ownerDeskHasImmediateWork(
 ) {
   const owner = user ?? { email: ownerVaultEmail(), role: "owner" as const };
   return packsForViewedDesk(owner, false, null, store).some((pack) => {
-    const ownerEmail = (pack.ownerEmail || "").trim().toLowerCase();
-    const from = (pack.transferredFrom || "").trim().toLowerCase();
-    const email = owner.email.trim().toLowerCase();
-    return !ownerEmail || ownerEmail === email || from === email || from === ownerVaultEmail();
+    const ownerEmail = pack.ownerEmail || "";
+    const from = pack.transferredFrom || "";
+    return (
+      !ownerEmail ||
+      isSamePerson(ownerEmail, owner.email) ||
+      isSamePerson(from, owner.email) ||
+      isSamePerson(from, ownerVaultEmail())
+    );
   });
 }
 
@@ -207,13 +214,13 @@ export function packsForViewedDesk(
   const extras = [readOwnerPacks(store)];
   if (user) extras.push(localPacksOwnerShouldSee(user, store), lensPacksOwnerShouldSee(user, store));
   const merged = mergeDeskPacks(live, ...extras);
-  if (user && isOwner(user)) return mergeHisWoodRiverCards(merged);
+  if (shouldPaintHisCards(user)) return mergeHisWoodRiverCards(merged);
   return merged;
 }
 
-export function snapshotOwnerDesk(user?: ScopeUser | null, store?: StorageLike | null) {
+export function snapshotOwnerDesk(_user?: ScopeUser | null, store?: StorageLike | null) {
   const target = asStore(store);
   if (!target) return;
-  const owner = user ?? { email: ownerVaultEmail(), role: "owner" as const };
+  const owner = { email: ownerVaultEmail(), role: "owner" as const };
   writeOwnerPacks(mergeDeskPacks(readOwnerPacks(target), packsForViewedDesk(owner, false, null, target)), target);
 }

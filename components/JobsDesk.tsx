@@ -17,7 +17,7 @@ import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu"
 import { ensureCbiDummyPack, shouldSeedCbiDummy } from "@/lib/cbi-dummy";
 import { catalogSites } from "@/lib/desk-data";
 import { companyScopeFor, isStandaloneId, type CompanyId } from "@/lib/companies";
-import { jobsOnDesk, packForJob } from "@/lib/jobs";
+import { jobsOnDesk, packForJob, seedJobsAllowed } from "@/lib/jobs";
 import { defaultOpenCompanyId, jobTree } from "@/lib/job-tree";
 import type { JobRecord } from "@/lib/types";
 
@@ -80,7 +80,7 @@ export function JobsDesk() {
   const scope = companyScopeFor(lens, companyId);
   const deskPacks = packsForViewedDesk(lens, viewingAs, seat);
   const jobs = jobsOnDesk(serverJobs, deskPacks, viewingAs, scope, menu, {
-    includeSeeds: true,
+    includeSeeds: seedJobsAllowed(scope),
   });
   void packTick;
   const active = jobs.filter((job) => isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed));

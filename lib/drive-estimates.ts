@@ -7,7 +7,7 @@ import {
   publicPack,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
-import { hisFileForPackId, hisKnownEstimateFiles } from "./his-wood-river.ts";
+import { applyHisIdentity, hisFileForPackId, hisKnownEstimateFiles, hisMatchForPack, NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
 import { canonicalEmail } from "./identity.ts";
 
 export type DriveFile = {
@@ -423,7 +423,8 @@ function reclaimListedPack(pack: EstimatePackSnapshot): EstimatePackSnapshot {
   const sharedWith = Array.isArray(pack.sharedWith)
     ? pack.sharedWith.map((email) => canonicalEmail(email) || email)
     : pack.sharedWith;
-  return publicPack({ ...pack, ownerEmail, sharedWith });
+  const next = publicPack({ ...pack, ownerEmail, sharedWith });
+  return hisMatchForPack(next) ? publicPack(applyHisIdentity(next)) : next;
 }
 
 async function listedOrKnownFiles(adapter: DriveAdapter, folderId: string): Promise<DriveFile[]> {
@@ -581,7 +582,9 @@ export async function upsertEstimateInDrive(
     } catch {
       // keep tagged owner
     }
-    if (currentOwner && currentOwner !== ownerEmail) {
+    const hisRestore =
+      hisMatchForPack(pack) && ownerEmail === NATHAN_DESK_EMAIL;
+    if (currentOwner && currentOwner !== ownerEmail && !hisRestore) {
       throw new Error("PACK_OWNED_ELSEWHERE");
     }
     return writePackFile(adapter, pack, target, byId);

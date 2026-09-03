@@ -1,10 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { localPackToJob } from "./local-estimates.ts";
+import { localPackToJob, rememberLocalPack } from "./local-estimates.ts";
 import { localPackVisibleTo } from "./estimate-scope.ts";
-import { packsForViewedDesk } from "./lens-packs.ts";
+import { packsForViewedDesk, writeLensPacks } from "./lens-packs.ts";
 import { jobsOnDesk } from "./jobs.ts";
 import type { StorageLike } from "./local-estimates.ts";
+import { companyScopeFor } from "./companies.ts";
+import { handoffMarkText } from "./handoff.ts";
+import { jobTree } from "./job-tree.ts";
+import { JAMES_EMAIL } from "./tester-seats.ts";
 import {
   HIS_AROMATICS_FILE_ID,
   HIS_AROMATICS_PACK_ID,
@@ -14,8 +18,10 @@ import {
   HIS_TM_FILE_ID,
   HIS_TM_PACK_ID,
   NATHAN_DESK_EMAIL,
+  applyHisIdentity,
   hisFileForPackId,
   hisKnownEstimateFiles,
+  hisMatchForPack,
   hisWoodRiverCards,
   mergeHisWoodRiverCards,
 } from "./his-wood-river.ts";
@@ -85,6 +91,71 @@ test("empty leftover cannot drop HIS cards already on the desk", () => {
   assert.ok(merged.some((row) => row.packId === HIS_CAT2_PACK_ID));
   assert.ok(merged.some((row) => row.packId === HIS_TM_PACK_ID));
   assert.equal(merged.filter((row) => row.title === "2027 Aromatics Turnaround").length, 1);
+});
+
+test("James sample on Wood River does not steal Nathan T&M or hide Aromatics and CAT", () => {
+  const store = memoryStore();
+  rememberLocalPack(
+    {
+      packId: "new-mtkigb-james",
+      title: "New Turnaround estimate",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      ownerEmail: JAMES_EMAIL,
+    },
+    store,
+  );
+  rememberLocalPack(
+    {
+      packId: HIS_TM_PACK_ID,
+      title: "Wood River / T&M 2027-01 to 06",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      ownerEmail: JAMES_EMAIL,
+    },
+    store,
+  );
+  writeLensPacks(
+    "james",
+    [
+      {
+        packId: "new-mtkigb-james",
+        key: "new:new-mtkigb-james",
+        title: "New Turnaround estimate",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        siteId: "site-madison",
+        createdAt: 20,
+        updatedAt: 21,
+        ownerEmail: JAMES_EMAIL,
+      },
+    ],
+    store,
+  );
+
+  const painted = packsForViewedDesk(owner, false, null, store);
+  const tm = painted.find((row) => row.title === "Wood River / T&M 2027-01 to 06");
+  const jamesSample = painted.find((row) => row.packId === "new-mtkigb-james");
+  assert.equal(hisMatchForPack(jamesSample), null);
+  assert.equal(localPackToJob(jamesSample!).code, "EST-MTKIGB");
+  assert.equal(tm?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.deepEqual(tm?.sharedWith ?? [], []);
+  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(handoffMarkText(jamesSample!, owner.email), "James Cain's desk.");
+  assert.ok(painted.some((row) => row.packId === HIS_AROMATICS_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
+  assert.ok(painted.some((row) => row.packId === HIS_CAT2_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
+  assert.equal(painted.filter((row) => row.title === "Wood River / T&M 2027-01 to 06").length, 1);
+  assert.equal(applyHisIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: JAMES_EMAIL }).ownerEmail, NATHAN_DESK_EMAIL);
+
+  const jobs = jobsOnDesk(undefined, painted, false, companyScopeFor(owner), undefined, { includeSeeds: false });
+  const tree = jobTree({ scope: { isOwner: true, email: owner.email, companyId: "hitsquad" }, jobs, packs: painted });
+  const wood = tree.find((row) => row.id === "madison")?.sites.find((site) => site.id === "site-madison");
+  const cbi = tree.find((row) => row.id === "cbi");
+  assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), true);
+  assert.equal(wood?.jobs.some((job) => job.title === "New Turnaround estimate"), false);
+  assert.equal(cbi?.sites.some((site) => site.jobs.some((job) => job.title === "New Turnaround estimate")), true);
 });
 
 test("vault T&M with a longer packId replaces the paint card instead of duplicating", () => {

@@ -4,12 +4,15 @@ import {
   companiesForScope,
   inferCompanyIdFromParts,
   isStandaloneId,
+  seedCompanyForEmail,
   type Company,
   type CompanyId,
   type CompanyScope,
 } from "./companies.ts";
 import { catalogSites } from "./desk-data.ts";
 import { estimateForJob, estimateHref } from "./estimate-open.ts";
+import { isHisWoodRiverJob, isHisWoodRiverPack } from "./his-wood-river.ts";
+import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 import { packForJob } from "./jobs.ts";
 import type { LocalPack } from "./local-estimates.ts";
 import type { EstimateRecord, JobRecord, SiteRecord } from "./types.ts";
@@ -61,12 +64,27 @@ export function matchCatalogSite(text: string, sites: SiteRecord[] = catalogSite
   });
 }
 
+function packOwnerHomeCompany(email?: string): CompanyId | null {
+  const key = canonicalEmail(email) || (email || "").trim().toLowerCase();
+  if (!key || isOwnerIdentity(key)) return null;
+  return seedCompanyForEmail(key);
+}
+
 export function companyIdForJob(
   job: JobRecord,
   scope?: CompanyScope | null,
-  pack?: Pick<LocalPack, "client" | "site" | "siteId">,
+  pack?: Pick<LocalPack, "client" | "site" | "siteId" | "ownerEmail" | "packId" | "title">,
 ) {
+  if (isHisWoodRiverPack(pack) || isHisWoodRiverJob(job)) {
+    return canSeeCompany(scope, "madison") ? "madison" : assignedCompanyId(scope);
+  }
   const inferred = inferCompanyIdFromParts(pack?.client, pack?.site, job.client, job.title, job.code);
+  const home = packOwnerHomeCompany(pack?.ownerEmail);
+  // CBI-only (and other non-Madison) seats cannot stand in for Madison Wood River.
+  if (home && home !== inferred && inferred === "madison") {
+    if (canSeeCompany(scope, home)) return home;
+    return assignedCompanyId(scope);
+  }
   if (canSeeCompany(scope, inferred)) return inferred;
   return assignedCompanyId(scope);
 }

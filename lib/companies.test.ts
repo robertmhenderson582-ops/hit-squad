@@ -173,7 +173,8 @@ describe("assign and visibility", () => {
     assert.equal(henrySeeds.length, 0);
 
     const ownerJobs = jobsOnDesk([], [], false, owner);
-    assert.equal(ownerJobs.length, seedJobs().length);
+    assert.equal(ownerJobs.length, 0);
+    assert.equal(ownerJobs.some((job) => job.id === "job-8841"), false);
 
     const jamesDesk = jobsOnDesk([], [], false, james);
     assert.equal(jamesDesk.some((job) => job.code === "TA-8841"), false);

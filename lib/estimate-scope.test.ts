@@ -55,6 +55,15 @@ describe("estimate vault scope", () => {
     assert.equal(packOwnerEmailForWrite(novus, OWNER_LOGIN_EMAIL), OWNER_LOGIN_EMAIL);
     assert.equal(packOwnerEmailForWrite(tester, OWNER_LOGIN_EMAIL), tester.email);
     assert.equal(packOwnerEmailForWrite(owner, tester.email), tester.email);
+    assert.equal(packOwnerEmailForWrite(owner, "Robert Henderson"), OWNER_LOGIN_EMAIL);
+    assert.equal(
+      packOwnerEmailForWrite(
+        { email: "jameshcainjr@gmail.com", role: "tester" },
+        "jameshcainjr@gmail.com",
+        { packId: "new-mtj5d6", title: "Wood River / T&M 2027-01 to 06", site: "Wood River — Roxana, IL" },
+      ),
+      "nathanboyte@gmail.com",
+    );
     assert.equal(canWritePack(tester, ownerPack), false);
     assert.equal(canWritePack(tester, testerPack), true);
     assert.equal(canWritePack(novus, ownerPack), true);
@@ -119,11 +128,8 @@ describe("estimate vault scope", () => {
       },
       store,
     );
-    assert.deepEqual(
-      visibleDeskPacks(owner, false, store).map((row) => row.packId),
-      ["new-tester1"],
-    );
-    assert.equal(visibleDeskPacks(owner, false, store)[0]?.ownerEmail, tester.email);
+    assert.equal(visibleDeskPacks(owner, false, store).some((row) => row.packId === "new-tester1"), true);
+    assert.equal(visibleDeskPacks(owner, false, store).find((row) => row.packId === "new-tester1")?.ownerEmail, tester.email);
     rememberLocalPack(
       {
         packId: "new-tester1",
@@ -136,11 +142,8 @@ describe("estimate vault scope", () => {
       },
       store,
     );
-    assert.deepEqual(
-      visibleDeskPacks(owner, false, store).map((row) => row.packId),
-      ["new-tester1"],
-    );
-    assert.equal(visibleDeskPacks(owner, false, store)[0]?.ownerEmail, tester.email);
+    assert.equal(visibleDeskPacks(owner, false, store).some((row) => row.packId === "new-tester1"), true);
+    assert.equal(visibleDeskPacks(owner, false, store).find((row) => row.packId === "new-tester1")?.ownerEmail, tester.email);
   });
 
   it("keeps unstamped local work on the owner desk and hides it from testers", () => {
@@ -188,18 +191,17 @@ describe("estimate vault scope", () => {
       },
       store,
     );
-    assert.deepEqual(
-      visibleDeskPacks(owner, false, store).map((row) => row.packId).sort(),
-      ["new-archived1", "new-owner1"],
-    );
+    const ownerIds = visibleDeskPacks(owner, false, store).map((row) => row.packId);
+    assert.equal(ownerIds.includes("new-archived1"), true);
+    assert.equal(ownerIds.includes("new-owner1"), true);
     assert.deepEqual(
       visibleDeskPacks(tester, true, store).map((row) => row.packId),
       [],
     );
-    assert.deepEqual(
-      visibleDeskPacks(tester, false, store).map((row) => row.packId),
-      ["new-archived1"],
-    );
+    const nathanLive = visibleDeskPacks(tester, false, store).map((row) => row.packId);
+    assert.equal(nathanLive.includes("new-archived1"), true);
+    assert.equal(nathanLive.includes("new-mtj7bvtk-akmei"), true);
+    assert.equal(nathanLive.includes("new-owner1"), false);
   });
 
   it("lists transferred-from-owner packs on the owner desk without leftover write", () => {
