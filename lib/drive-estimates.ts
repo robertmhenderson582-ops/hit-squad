@@ -51,6 +51,8 @@ type CachedToken = { value: string; exp: number };
 
 let cachedSaToken: CachedToken | null = null;
 const cachedOAuthTokens = new Map<string, CachedToken>();
+/** Once OAuth refresh or a Drive call fails, stay on the service account for this isolate. */
+let oauthDriveFailedOver = false;
 
 /** Owner Estimates room. Live packs only. Never Workbooks / Nathan. */
 export const ESTIMATES_ROOM_ID = "1y6Q3TOnpXzV-Y1oeqjjrHfSXt9hcIrgW";
@@ -117,6 +119,7 @@ export function driveStoreKind(env: Record<string, string | undefined> = process
 export function resetDriveTokenCache() {
   cachedSaToken = null;
   cachedOAuthTokens.clear();
+  oauthDriveFailedOver = false;
 }
 
 export function memoryDrive(): DriveAdapter & { files: Map<string, { file: DriveFile; content: string }> } {
@@ -353,10 +356,46 @@ function unconfiguredDrive(): DriveAdapter {
   };
 }
 
+function logOauthDriveFallback() {
+  // Static text only — never tokens, client secrets, refresh tokens, or SA JSON.
+  console.warn("drive: OAuth failed; falling back to service account");
+}
+
+function withServiceAccountFallback(primary: DriveAdapter, secondary: DriveAdapter): DriveAdapter {
+  async function run<T>(op: (drive: DriveAdapter) => Promise<T>): Promise<T> {
+    if (oauthDriveFailedOver) return op(secondary);
+    try {
+      return await op(primary);
+    } catch {
+      oauthDriveFailedOver = true;
+      logOauthDriveFallback();
+      return op(secondary);
+    }
+  }
+  return {
+    configured: true,
+    listJson: (folderId) => run((drive) => drive.listJson(folderId)),
+    listAccessibleJson: (name) =>
+      run((drive) => (drive.listAccessibleJson ? drive.listAccessibleJson(name) : drive.listJson(""))),
+    readJson: (fileId) => run((drive) => drive.readJson(fileId)),
+    createJson: (folderId, name, content, properties) =>
+      run((drive) => drive.createJson(folderId, name, content, properties)),
+    updateJson: (fileId, content, name, properties) =>
+      run((drive) => drive.updateJson(fileId, content, name, properties)),
+    deleteJson: (fileId) => run((drive) => drive.deleteJson(fileId)),
+  };
+}
+
 export function driveAdapter(env: Record<string, string | undefined> = process.env): DriveAdapter {
   const oauth = parseOAuthClient(env);
-  if (oauth) return googleDriveAdapter(() => oauthAccessToken(oauth));
   const account = parseServiceAccount(env);
+  if (oauth && account) {
+    return withServiceAccountFallback(
+      googleDriveAdapter(() => oauthAccessToken(oauth)),
+      googleDriveAdapter(() => googleAccessToken(account)),
+    );
+  }
+  if (oauth) return googleDriveAdapter(() => oauthAccessToken(oauth));
   if (account) return googleDriveAdapter(() => googleAccessToken(account));
   return unconfiguredDrive();
 }
