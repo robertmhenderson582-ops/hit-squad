@@ -42,7 +42,7 @@ import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { boardForUser } from "./desk-data.ts";
 import { COMPANIES_VAULT_KIND, COMPANIES_VAULT_NAME, writeVaultJson } from "./drive-data.ts";
-import { jobsOnDesk, seedJobs, visibleSeedJobs } from "./jobs.ts";
+import { jobsOnDesk, visibleSeedJobs } from "./jobs.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { JAMES_EMAIL, JOHN_BEECH_EMAIL, JOHN_HENRY_EMAIL, JOSEPH_EMAIL, TESTER_SEATS } from "./tester-seats.ts";
 
