@@ -1,6 +1,6 @@
 "use client";
 
-import { FieldBlock, FieldMark } from "@/components/FieldMark";
+import { FieldBlock } from "@/components/FieldMark";
 import {
   QUALITY_FORM_FIELDS,
   QUALITY_FORM_ROW_FIELDS,

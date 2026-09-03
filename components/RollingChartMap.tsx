@@ -4,32 +4,44 @@ import { useMemo, useState } from "react";
 import { FieldBlock } from "@/components/FieldMark";
 import {
   CIRCUIT_HINT,
+  HOLE_KINDS,
   ROLL_STEPS,
   ROLLING_SHEETS,
   SIDE_WALL_HINT,
   SIDE_WALLS,
   TUBE_HINT,
+  TUBE_OD_CHOICES,
   WALL_BAND_HINTS,
+  WALL_BAND_LABEL,
+  axisLabel,
   chartSetupReady,
   drumTubeKey,
   emptyRollingChart,
   emptyRollingTube,
+  effectiveDrumHoleId,
+  formatIdealTubeId,
   formatWallReduction,
   hydrateRollingChart,
   lastMarkedStep,
   liveCircuitCount,
   liveSideCount,
   liveTubesPerCircuit,
+  parseTubeKey,
   readRollingTube,
   rollingProgression,
   sideWallTubeKey,
   stepCount,
+  tubeCellMark,
   wallReductionBand,
+  wallReductionVsIdeal,
+  type HoleKind,
   type RollStepId,
   type RollingChartState,
   type RollingSheetId,
   type RollingTube,
   type SideWall,
+  type SideWallMode,
+  type TubeOdChoice,
   type WallBand,
 } from "@/lib/rolling-chart";
 
@@ -44,7 +56,8 @@ const STEP_COLORS: Record<RollStepId, string> = {
 
 const BAND_COLORS: Record<WallBand, string> = {
   under: "#c9a227",
-  pass: "#1f7a3a",
+  "low-ok": "#7a8a2a",
+  target: "#1f7a3a",
   over: "#b74120",
 };
 
@@ -52,19 +65,31 @@ function tubeStyle(state: RollingChartState, tube: RollingTube, selected: boolea
   const band = wallReductionBand(
     tube.actualTubeId,
     state.averageTubeId,
-    state.averageTubeOd,
+    state.averageTubeOd || state.tubeOd,
     state.wallBandLow,
     state.wallBandHigh,
+    state.wallBandIdeal || state.idealPercentageRoll,
   );
   const last = lastMarkedStep(tube);
-  const fill = band ? BAND_COLORS[band] : last ? STEP_COLORS[last] : "#fbf8f0";
-  const color = band || last ? "#fff" : "#163038";
+  const fill = tube.holeKind
+    ? "#d8d0c0"
+    : band
+      ? BAND_COLORS[band]
+      : last
+        ? STEP_COLORS[last]
+        : "#fbf8f0";
+  const color = tube.holeKind ? "#163038" : band || last ? "#fff" : "#163038";
   return {
     background: fill,
     color,
-    outline: selected ? "3px solid #e38b2a" : "1px solid #163038",
+    outline: selected ? "3px solid #e38b2a" : "2px solid #163038",
     outlineOffset: selected ? "1px" : "0",
   };
+}
+
+function asSideMode(value: string): SideWallMode {
+  if (value === "none" || value === "left" || value === "right" || value === "both") return value;
+  return "both";
 }
 
 export function RollingChartMap({
@@ -78,13 +103,17 @@ export function RollingChartMap({
   const [sheet, setSheet] = useState<RollingSheetId>("steam");
   const [picked, setPicked] = useState<string | null>(null);
   const [circuitPage, setCircuitPage] = useState(1);
+  const [jump, setJump] = useState("");
+  const [zoom, setZoom] = useState(1);
   const circuits = liveCircuitCount(state);
   const tubes = liveTubesPerCircuit(state);
   const ready = chartSetupReady(state);
   const current = ROLLING_SHEETS.find((item) => item.id === sheet) ?? ROLLING_SHEETS[0];
   const pickedTube = picked ? readRollingTube(state, picked) : emptyRollingTube();
+  const pickedMeta = picked ? parseTubeKey(picked) : null;
   const progression = useMemo(() => rollingProgression(state), [state]);
   const page = Math.min(Math.max(1, circuitPage), Math.max(1, circuits));
+  const cellPx = Math.max(28, Math.round(40 * zoom));
 
   function write(next: RollingChartState) {
     onChange(hydrateRollingChart(next));
@@ -100,10 +129,12 @@ export function RollingChartMap({
       steps: { ...currentTube.steps, ...next.steps },
       actualTubeId: next.actualTubeId !== undefined ? next.actualTubeId : currentTube.actualTubeId,
       drumHoleId: next.drumHoleId !== undefined ? next.drumHoleId : currentTube.drumHoleId,
+      holeKind: next.holeKind !== undefined ? next.holeKind : currentTube.holeKind,
     };
     const tubesMap = { ...state.tubes };
-    if (!stepCount(merged) && !merged.actualTubeId.trim() && !merged.drumHoleId.trim()) delete tubesMap[key];
-    else tubesMap[key] = merged;
+    if (!stepCount(merged) && !merged.actualTubeId.trim() && !merged.drumHoleId.trim() && !merged.holeKind) {
+      delete tubesMap[key];
+    } else tubesMap[key] = merged;
     write({ ...state, tubes: tubesMap });
   }
 
@@ -112,16 +143,42 @@ export function RollingChartMap({
     patchTube(key, { steps: { ...currentTube.steps, [id]: on } });
   }
 
+  function goCircuit(next: number) {
+    const clamped = Math.min(circuits, Math.max(1, next));
+    setCircuitPage(clamped);
+    setJump(String(clamped));
+  }
+
   const wall = picked
-    ? formatWallReduction(pickedTube.actualTubeId, state.averageTubeId, state.averageTubeOd)
+    ? formatWallReduction(pickedTube.actualTubeId, state.averageTubeId, state.averageTubeOd || state.tubeOd)
     : "";
+  const vsIdeal = picked
+    ? wallReductionVsIdeal(
+        pickedTube.actualTubeId,
+        state.averageTubeId,
+        state.averageTubeOd || state.tubeOd,
+        state.idealPercentageRoll || state.wallBandIdeal,
+      )
+    : null;
+  const band = picked
+    ? wallReductionBand(
+        pickedTube.actualTubeId,
+        state.averageTubeId,
+        state.averageTubeOd || state.tubeOd,
+        state.wallBandLow,
+        state.wallBandHigh,
+        state.wallBandIdeal || state.idealPercentageRoll,
+      )
+    : null;
+  const idealId = picked ? formatIdealTubeId(pickedTube, state) : "";
+  const drumHole = picked ? effectiveDrumHoleId(pickedTube, state) : "";
 
   return (
     <div className="plant-card mt-6 px-4 py-4">
       <h2 className="font-display text-xl text-[#163038]">Rolling chart</h2>
       <p className="mt-2 text-sm text-[#163038]">
-        Generating-bank tool. Set up this bank first. A row is a generating-bank circuit. Marks stay
-        sparse — shrinking a count hides tubes; bumping it back restores them.
+        Generating-bank tool. A row is a generating-bank circuit. Tube numbers run along the drum.
+        Steam and mud are two joints on the same tube ID. Side walls are their own one-row maps.
       </p>
 
       <section className="mt-4 rounded-sm border border-[#c5d4d4] bg-[#fbf8f0] px-3 py-3">
@@ -135,7 +192,7 @@ export function RollingChartMap({
             <input
               className="paper-field mt-1"
               inputMode="numeric"
-              placeholder={`example ${CIRCUIT_HINT}`}
+              placeholder={`example ${CIRCUIT_HINT} · package 8–20 · power 16–36`}
               value={state.circuits}
               onChange={(event) => patchInputs({ circuits: event.target.value })}
             />
@@ -173,9 +230,11 @@ export function RollingChartMap({
             <select
               className="paper-field mt-1"
               value={state.sideWalls}
-              onChange={(event) => patchInputs({ sideWalls: event.target.value === "none" ? "none" : "left-right" })}
+              onChange={(event) => patchInputs({ sideWalls: asSideMode(event.target.value) })}
             >
-              <option value="left-right">Left + right</option>
+              <option value="both">Both</option>
+              <option value="left">Left</option>
+              <option value="right">Right</option>
               <option value="none">None</option>
             </select>
           </FieldBlock>
@@ -197,14 +256,36 @@ export function RollingChartMap({
               onChange={(event) => patchInputs({ rightTubeCount: event.target.value })}
             />
           </FieldBlock>
-          <FieldBlock label="Ideal % roll">
-            <input className="paper-field mt-1" value={state.idealPercentageRoll} onChange={(event) => patchInputs({ idealPercentageRoll: event.target.value })} />
+          <FieldBlock label="Tube OD">
+            <select
+              className="paper-field mt-1"
+              value={state.tubeOd}
+              onChange={(event) => patchInputs({ tubeOd: event.target.value as TubeOdChoice })}
+            >
+              <option value="">Blank</option>
+              {TUBE_OD_CHOICES.map((od) => (
+                <option key={od} value={od}>
+                  {od}
+                </option>
+              ))}
+            </select>
+          </FieldBlock>
+          <FieldBlock label="Wall (BWG or inches)">
+            <input className="paper-field mt-1" value={state.tubeWall} onChange={(event) => patchInputs({ tubeWall: event.target.value })} />
           </FieldBlock>
           <FieldBlock label="Average Tube ID">
             <input className="paper-field mt-1" value={state.averageTubeId} onChange={(event) => patchInputs({ averageTubeId: event.target.value })} />
           </FieldBlock>
           <FieldBlock label="Average Tube OD">
             <input className="paper-field mt-1" value={state.averageTubeOd} onChange={(event) => patchInputs({ averageTubeOd: event.target.value })} />
+          </FieldBlock>
+          <FieldBlock label="Target WR %">
+            <input
+              className="paper-field mt-1"
+              placeholder={WALL_BAND_HINTS.ideal}
+              value={state.idealPercentageRoll}
+              onChange={(event) => patchInputs({ idealPercentageRoll: event.target.value })}
+            />
           </FieldBlock>
           <FieldBlock label="Wall-reduction low">
             <input className="paper-field mt-1" placeholder={WALL_BAND_HINTS.low} value={state.wallBandLow} onChange={(event) => patchInputs({ wallBandLow: event.target.value })} />
@@ -214,6 +295,15 @@ export function RollingChartMap({
           </FieldBlock>
           <FieldBlock label="Wall-reduction high">
             <input className="paper-field mt-1" placeholder={WALL_BAND_HINTS.high} value={state.wallBandHigh} onChange={(event) => patchInputs({ wallBandHigh: event.target.value })} />
+          </FieldBlock>
+          <FieldBlock label="Tube 1 at">
+            <input className="paper-field mt-1" value={state.tube1At} onChange={(event) => patchInputs({ tube1At: event.target.value })} />
+          </FieldBlock>
+          <FieldBlock label="Furnace side">
+            <input className="paper-field mt-1" value={state.furnaceSide} onChange={(event) => patchInputs({ furnaceSide: event.target.value })} />
+          </FieldBlock>
+          <FieldBlock label="Manway">
+            <input className="paper-field mt-1" value={state.manway} onChange={(event) => patchInputs({ manway: event.target.value })} />
           </FieldBlock>
         </div>
       </section>
@@ -238,24 +328,33 @@ export function RollingChartMap({
       <p className="mt-2 text-sm font-semibold text-[#163038]">{current.title}</p>
       {current.tracking !== current.title ? <p className="text-sm text-[#163038]">{current.tracking}</p> : null}
 
-      <ol className="mt-3 grid gap-2 sm:grid-cols-2">
+      <ol className="sticky top-0 z-10 mt-3 grid gap-2 bg-[#fbf8f0] py-2 sm:grid-cols-2">
         {ROLL_STEPS.map((step) => (
           <li key={step.id} className="flex items-center gap-2 text-sm text-[#163038]">
-            <span className="inline-block h-5 w-5 shrink-0 border border-[#163038]" style={{ background: STEP_COLORS[step.id] }} />
+            <span
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center border-2 border-[#163038] text-xs font-bold text-white"
+              style={{ background: STEP_COLORS[step.id] }}
+            >
+              {step.mark}
+            </span>
             {step.label}
           </li>
         ))}
         <li className="flex items-center gap-2 text-sm text-[#163038]">
-          <span className="inline-block h-5 w-5 shrink-0 border border-[#163038] bg-[#c9a227]" />
-          Wall reduction under (Actual ID only)
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center border-2 border-[#163038] bg-[#c9a227] text-xs font-bold text-white">U</span>
+          UNDER — re-roll (Actual ID only)
         </li>
         <li className="flex items-center gap-2 text-sm text-[#163038]">
-          <span className="inline-block h-5 w-5 shrink-0 border border-[#163038] bg-[#1f7a3a]" />
-          Wall reduction pass (Actual ID only)
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center border-2 border-[#163038] bg-[#7a8a2a] text-xs font-bold text-white">L</span>
+          Low-ok 10–12% (Actual ID only)
         </li>
         <li className="flex items-center gap-2 text-sm text-[#163038]">
-          <span className="inline-block h-5 w-5 shrink-0 border border-[#163038] bg-[#b74120]" />
-          Wall reduction over (Actual ID only)
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center border-2 border-[#163038] bg-[#1f7a3a] text-xs font-bold text-white">T</span>
+          Target 12–14% (Actual ID only)
+        </li>
+        <li className="flex items-center gap-2 text-sm text-[#163038]">
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center border-2 border-[#163038] bg-[#b74120] text-xs font-bold text-white">O</span>
+          OVER — inspect, do not auto-scrap
         </li>
       </ol>
 
@@ -273,7 +372,7 @@ export function RollingChartMap({
                 type="button"
                 className="rounded-sm border border-steel px-3 py-2 text-sm text-steel"
                 disabled={page <= 1}
-                onClick={() => setCircuitPage((n) => Math.max(1, n - 1))}
+                onClick={() => goCircuit(page - 1)}
               >
                 Previous circuit
               </button>
@@ -284,31 +383,77 @@ export function RollingChartMap({
                 type="button"
                 className="rounded-sm border border-steel px-3 py-2 text-sm text-steel"
                 disabled={page >= circuits}
-                onClick={() => setCircuitPage((n) => Math.min(circuits, n + 1))}
+                onClick={() => goCircuit(page + 1)}
               >
                 Next circuit
               </button>
+              <label className="flex items-center gap-2 text-sm text-[#163038]">
+                Jump to circuit
+                <input
+                  className="paper-field w-20"
+                  inputMode="numeric"
+                  value={jump}
+                  onChange={(event) => setJump(event.target.value)}
+                  onBlur={() => {
+                    const next = Number(jump);
+                    if (Number.isInteger(next)) goCircuit(next);
+                  }}
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[#163038]">
+                Zoom
+                <input
+                  type="range"
+                  min="0.8"
+                  max="1.6"
+                  step="0.1"
+                  value={zoom}
+                  onChange={(event) => setZoom(Number(event.target.value))}
+                />
+              </label>
             </div>
-            <p className="mt-2 text-sm text-[#163038]">Tubes on this circuit. Tap a cell — large enough for a phone.</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {Array.from({ length: tubes }, (_, index) => {
-                const tube = index + 1;
-                const key = drumTubeKey(sheet, page, tube);
-                const mark = readRollingTube(state, key);
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    title={`Circuit ${page} tube ${tube}`}
-                    aria-label={`Circuit ${page} tube ${tube}`}
-                    onClick={() => setPicked(key)}
-                    className="tube-cell"
-                    style={tubeStyle(state, mark, picked === key)}
-                  >
-                    {tube}
-                  </button>
-                );
-              })}
+            <p className="mt-2 text-sm text-[#163038]">
+              Circuit {page}. Tube numbers along the drum. Every fifth tube is labeled. Selected stays labeled.
+            </p>
+            <div className="mt-2 overflow-x-auto">
+              <div className="flex items-end gap-1" style={{ minWidth: tubes * (cellPx + 8) }}>
+                <span className="w-10 shrink-0 text-xs font-bold text-[#163038]">C{page}</span>
+                {Array.from({ length: tubes }, (_, index) => {
+                  const tube = index + 1;
+                  const key = drumTubeKey(sheet, page, tube);
+                  return (
+                    <span
+                      key={`axis-${tube}`}
+                      className="text-center text-xs font-bold text-[#163038]"
+                      style={{ width: cellPx, minWidth: cellPx }}
+                    >
+                      {axisLabel(tube, picked === key)}
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="mt-1 flex items-center gap-1" style={{ minWidth: tubes * (cellPx + 8) }}>
+                <span className="w-10 shrink-0 text-xs font-bold text-[#163038]">{page}</span>
+                {Array.from({ length: tubes }, (_, index) => {
+                  const tube = index + 1;
+                  const key = drumTubeKey(sheet, page, tube);
+                  const mark = readRollingTube(state, key);
+                  const selected = picked === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      title={`Circuit ${page} tube ${tube}`}
+                      aria-label={`Circuit ${page} tube ${tube}`}
+                      onClick={() => setPicked(key)}
+                      className="tube-cell"
+                      style={{ ...tubeStyle(state, mark, selected), width: cellPx, minWidth: cellPx, minHeight: cellPx }}
+                    >
+                      {tubeCellMark(state, mark) || (selected || tube % 5 === 0 ? String(tube) : "")}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         ) : (
@@ -320,32 +465,51 @@ export function RollingChartMap({
         state.sideWalls === "none" ? (
           <p className="mt-4 text-sm font-semibold text-[#163038]">Side walls are off in setup.</p>
         ) : (
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 space-y-6">
+            <p className="text-sm text-[#163038]">Side walls are separate one-row maps. They are not extra bank circuits.</p>
             {SIDE_WALLS.map((side) => {
               const count = liveSideCount(state, side);
               if (!count) return null;
               return (
-                <div key={side}>
-                  <p className="text-sm font-semibold text-[#163038]">{side === "LEFT" ? "Left" : "Right"}</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {Array.from({ length: count }, (_, index) => {
-                      const tube = index + 1;
-                      const key = sideWallTubeKey(side as SideWall, tube);
-                      const mark = readRollingTube(state, key);
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          title={`${side} tube ${tube}`}
-                          aria-label={`${side} tube ${tube}`}
-                          onClick={() => setPicked(key)}
-                          className="tube-cell"
-                          style={tubeStyle(state, mark, picked === key)}
-                        >
-                          {tube}
-                        </button>
-                      );
-                    })}
+                <div key={side} className="rounded-sm border-2 border-[#163038] bg-[#f4efe3] px-3 py-3">
+                  <p className="text-sm font-semibold text-[#163038]">{side === "LEFT" ? "Left side wall" : "Right side wall"}</p>
+                  <div className="mt-2 overflow-x-auto">
+                    <div className="flex items-end gap-1">
+                      {Array.from({ length: count }, (_, index) => {
+                        const tube = index + 1;
+                        const key = sideWallTubeKey(side as SideWall, tube);
+                        return (
+                          <span
+                            key={`side-axis-${side}-${tube}`}
+                            className="text-center text-xs font-bold text-[#163038]"
+                            style={{ width: cellPx, minWidth: cellPx }}
+                          >
+                            {axisLabel(tube, picked === key)}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {Array.from({ length: count }, (_, index) => {
+                        const tube = index + 1;
+                        const key = sideWallTubeKey(side as SideWall, tube);
+                        const mark = readRollingTube(state, key);
+                        const selected = picked === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            title={`${side} tube ${tube}`}
+                            aria-label={`${side} tube ${tube}`}
+                            onClick={() => setPicked(key)}
+                            className="tube-cell"
+                            style={{ ...tubeStyle(state, mark, selected), width: cellPx, minWidth: cellPx, minHeight: cellPx }}
+                          >
+                            {tubeCellMark(state, mark) || (selected || tube % 5 === 0 ? String(tube) : "")}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               );
@@ -356,7 +520,7 @@ export function RollingChartMap({
 
       {sheet === "productivity" ? (
         <div className="mt-4 space-y-4">
-          <p className="text-sm text-[#163038]">Step counts and percent complete from Yes marks. No invented hours.</p>
+          <p className="text-sm text-[#163038]">Step counts and percent complete from Yes marks. Skip / plug / dummy holes stay out of the total. No invented hours.</p>
           {progression.map((row) => (
             <div key={row.sheet}>
               <p className="text-sm font-semibold text-[#163038]">
@@ -388,7 +552,11 @@ export function RollingChartMap({
 
       {picked && sheet !== "productivity" ? (
         <div className="mt-4 rounded-sm border border-[#163038] bg-[#fbf8f0] px-3 py-3">
-          <p className="text-sm font-semibold text-[#163038]">Tube {picked.replace(/^(steam|mud|sidewalls):/, "")}</p>
+          <p className="text-sm font-semibold text-[#163038]">
+            {pickedMeta?.sheet === "sidewalls"
+              ? `${pickedMeta.side === "LEFT" ? "Left" : "Right"} side wall · tube ${pickedMeta.tube}`
+              : `${pickedMeta?.sheet === "steam" ? "Steam" : "Mud"} drum · circuit ${pickedMeta?.circuit} · tube ${pickedMeta?.tube}`}
+          </p>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {ROLL_STEPS.map((step) => (
               <label key={step.id} className="flex items-center gap-2 text-sm text-[#163038]">
@@ -397,17 +565,34 @@ export function RollingChartMap({
                   checked={Boolean(pickedTube.steps[step.id])}
                   onChange={(event) => toggleStep(picked, step.id, event.target.checked)}
                 />
-                {step.label}
+                {step.mark} · {step.label}
               </label>
             ))}
           </div>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <FieldBlock label="Hole kind">
+              <select
+                className="paper-field mt-1"
+                value={pickedTube.holeKind}
+                onChange={(event) => patchTube(picked, { holeKind: event.target.value as HoleKind })}
+              >
+                {HOLE_KINDS.map((kind) => (
+                  <option key={kind || "tube"} value={kind}>
+                    {kind || "Tube"}
+                  </option>
+                ))}
+              </select>
+            </FieldBlock>
             <FieldBlock label="Drum hole ID">
               <input
                 className="paper-field mt-1"
                 value={pickedTube.drumHoleId}
+                placeholder={drumHole && drumHole !== pickedTube.drumHoleId ? `job default ${drumHole}` : ""}
                 onChange={(event) => patchTube(picked, { drumHoleId: event.target.value })}
               />
+            </FieldBlock>
+            <FieldBlock label="Ideal ID">
+              <input className="paper-field mt-1" readOnly value={idealId} placeholder="Empty until drum hole and tube dims" />
             </FieldBlock>
             <FieldBlock label="Actual Tube ID">
               <input
@@ -418,6 +603,17 @@ export function RollingChartMap({
             </FieldBlock>
             <FieldBlock label="Wall reduction %">
               <input className="paper-field mt-1" readOnly value={wall} placeholder="Empty until Actual Tube ID and averages" />
+            </FieldBlock>
+            <FieldBlock label="WR vs target">
+              <input
+                className="paper-field mt-1"
+                readOnly
+                value={vsIdeal == null ? "" : String(vsIdeal)}
+                placeholder="Empty until Actual Tube ID"
+              />
+            </FieldBlock>
+            <FieldBlock label="WR band">
+              <input className="paper-field mt-1" readOnly value={band ? WALL_BAND_LABEL[band] : ""} placeholder="Empty until Actual Tube ID" />
             </FieldBlock>
           </div>
         </div>

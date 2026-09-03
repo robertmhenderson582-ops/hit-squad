@@ -1,7 +1,12 @@
 export const CIRCUIT_HINT = 24;
 export const TUBE_HINT = 76;
 export const SIDE_WALL_HINT = 22;
+export const CIRCUIT_MAX = 48;
+export const TUBE_MAX = 120;
+export const SIDE_WALL_MAX = 80;
 export const WALL_BAND_HINTS = { low: "10", ideal: "12", high: "14" } as const;
+export const TUBE_OD_CHOICES = ["2.0", "2.5", "3.0"] as const;
+export const HOLE_KINDS = ["", "skip", "plug", "dummy"] as const;
 
 /** Typical generating-bank hints. Setup owns the live count — these are not a lock. */
 export const CIRCUIT_COUNT = CIRCUIT_HINT;
@@ -10,17 +15,19 @@ export const SIDE_WALL_TUBE_COUNT = SIDE_WALL_HINT;
 export const SIDE_WALLS = ["LEFT", "RIGHT"] as const;
 
 export const ROLL_STEPS = [
-  { id: "stub-removed", label: "Tube Stub Removed" },
-  { id: "hole-cleaned", label: "Drum Hole Cleaned" },
-  { id: "hole-marked", label: "Drum Hole Marked For Repair" },
-  { id: "hole-repaired", label: "Drum Hole Repaired" },
-  { id: "tube-installed", label: "Tube Installed" },
-  { id: "final-roll", label: "Tube Final Roll" },
+  { id: "stub-removed", label: "Tube Stub Removed", mark: "S" },
+  { id: "hole-cleaned", label: "Drum Hole Cleaned", mark: "C" },
+  { id: "hole-marked", label: "Drum Hole Marked For Repair", mark: "M" },
+  { id: "hole-repaired", label: "Drum Hole Repaired", mark: "R" },
+  { id: "tube-installed", label: "Tube Installed", mark: "I" },
+  { id: "final-roll", label: "Tube Final Roll", mark: "F" },
 ] as const;
 
 export type RollStepId = (typeof ROLL_STEPS)[number]["id"];
 export type SideWall = (typeof SIDE_WALLS)[number];
-export type SideWallMode = "none" | "left-right";
+export type SideWallMode = "none" | "left" | "right" | "both";
+export type HoleKind = (typeof HOLE_KINDS)[number];
+export type TubeOdChoice = "" | (typeof TUBE_OD_CHOICES)[number];
 export type RollingSheetId = "steam" | "mud" | "sidewalls" | "productivity";
 
 export const ROLLING_SHEETS = [
@@ -54,6 +61,7 @@ export type RollingTube = {
   steps: Partial<Record<RollStepId, boolean>>;
   actualTubeId: string;
   drumHoleId: string;
+  holeKind: HoleKind;
 };
 
 export type RollingChartState = {
@@ -68,9 +76,14 @@ export type RollingChartState = {
   idealPercentageRoll: string;
   averageTubeId: string;
   averageTubeOd: string;
+  tubeOd: TubeOdChoice;
+  tubeWall: string;
   wallBandLow: string;
   wallBandIdeal: string;
   wallBandHigh: string;
+  tube1At: string;
+  furnaceSide: string;
+  manway: string;
   tubes: Record<string, RollingTube>;
 };
 
@@ -81,21 +94,40 @@ export function emptyRollingChart(): RollingChartState {
     tubesPerCircuit: "",
     steamDrum: true,
     mudDrum: true,
-    sideWalls: "left-right",
+    sideWalls: "both",
     leftTubeCount: "",
     rightTubeCount: "",
     idealPercentageRoll: "",
     averageTubeId: "",
     averageTubeOd: "",
+    tubeOd: "",
+    tubeWall: "",
     wallBandLow: "",
     wallBandIdeal: "",
     wallBandHigh: "",
+    tube1At: "",
+    furnaceSide: "",
+    manway: "",
     tubes: {},
   };
 }
 
 function asString(value: unknown) {
   return typeof value === "string" ? value : value != null && typeof value !== "object" ? String(value) : "";
+}
+
+function asHoleKind(value: unknown): HoleKind {
+  return value === "skip" || value === "plug" || value === "dummy" ? value : "";
+}
+
+function asTubeOd(value: unknown): TubeOdChoice {
+  return value === "2.0" || value === "2.5" || value === "3.0" ? value : "";
+}
+
+function asSideWalls(value: unknown): SideWallMode {
+  if (value === "none" || value === "left" || value === "right" || value === "both") return value;
+  if (value === "left-right") return "both";
+  return "both";
 }
 
 export function hydrateRollingChart(
@@ -106,32 +138,42 @@ export function hydrateRollingChart(
   const tubes: Record<string, RollingTube> = {};
   for (const [key, value] of Object.entries(incoming)) {
     if (!value || typeof value !== "object") continue;
-    const item = value as { steps?: Record<string, unknown>; actualTubeId?: unknown; drumHoleId?: unknown };
+    const item = value as {
+      steps?: Record<string, unknown>;
+      actualTubeId?: unknown;
+      drumHoleId?: unknown;
+      holeKind?: unknown;
+    };
     const steps: Partial<Record<RollStepId, boolean>> = {};
     for (const step of ROLL_STEPS) {
       if (item.steps?.[step.id] === true) steps[step.id] = true;
     }
     const actualTubeId = typeof item.actualTubeId === "string" ? item.actualTubeId : "";
     const drumHoleId = typeof item.drumHoleId === "string" ? item.drumHoleId : "";
-    if (!Object.keys(steps).length && !actualTubeId.trim() && !drumHoleId.trim()) continue;
-    tubes[key] = { steps, actualTubeId, drumHoleId };
+    const holeKind = asHoleKind(item.holeKind);
+    if (!Object.keys(steps).length && !actualTubeId.trim() && !drumHoleId.trim() && !holeKind) continue;
+    tubes[key] = { steps, actualTubeId, drumHoleId, holeKind };
   }
-  const sideWalls = row.sideWalls === "none" || row.sideWalls === "left-right" ? row.sideWalls : "left-right";
   return {
     bankName: asString(row.bankName),
     circuits: asString(row.circuits),
     tubesPerCircuit: asString(row.tubesPerCircuit),
     steamDrum: row.steamDrum !== false,
     mudDrum: row.mudDrum !== false,
-    sideWalls,
+    sideWalls: asSideWalls(row.sideWalls),
     leftTubeCount: asString(row.leftTubeCount),
     rightTubeCount: asString(row.rightTubeCount),
     idealPercentageRoll: asString(row.idealPercentageRoll),
     averageTubeId: asString(row.averageTubeId),
     averageTubeOd: asString(row.averageTubeOd),
+    tubeOd: asTubeOd(row.tubeOd),
+    tubeWall: asString(row.tubeWall),
     wallBandLow: asString(row.wallBandLow),
     wallBandIdeal: asString(row.wallBandIdeal),
     wallBandHigh: asString(row.wallBandHigh),
+    tube1At: asString(row.tube1At),
+    furnaceSide: asString(row.furnaceSide),
+    manway: asString(row.manway),
     tubes,
   };
 }
@@ -144,20 +186,22 @@ export function parseSetupCount(raw: string, max = 200): number | null {
   return value;
 }
 
-/** Empty until set. Typical 1–40. Hint 24, not a lock. */
+/** Empty until set. Typical 1–48. Hint 24, not a lock. */
 export function liveCircuitCount(state: RollingChartState) {
-  return parseSetupCount(state.circuits, 40) ?? 0;
+  return parseSetupCount(state.circuits, CIRCUIT_MAX) ?? 0;
 }
 
 /** Empty until set. Typical 1–120. Hint 76. */
 export function liveTubesPerCircuit(state: RollingChartState) {
-  return parseSetupCount(state.tubesPerCircuit, 120) ?? 0;
+  return parseSetupCount(state.tubesPerCircuit, TUBE_MAX) ?? 0;
 }
 
 export function liveSideCount(state: RollingChartState, side: SideWall) {
   if (state.sideWalls === "none") return 0;
+  if (state.sideWalls === "left" && side === "RIGHT") return 0;
+  if (state.sideWalls === "right" && side === "LEFT") return 0;
   const raw = side === "LEFT" ? state.leftTubeCount : state.rightTubeCount;
-  return parseSetupCount(raw, 120) ?? 0;
+  return parseSetupCount(raw, SIDE_WALL_MAX) ?? 0;
 }
 
 export function chartSetupReady(state: RollingChartState) {
@@ -166,7 +210,7 @@ export function chartSetupReady(state: RollingChartState) {
   const sides = liveSideCount(state, "LEFT") + liveSideCount(state, "RIGHT");
   return (state.steamDrum || state.mudDrum) && circuits > 0 && tubes > 0
     ? true
-    : state.sideWalls === "left-right" && sides > 0;
+    : state.sideWalls !== "none" && sides > 0;
 }
 
 export function drumTubeKey(sheet: "steam" | "mud", circuit: number, tube: number) {
@@ -178,11 +222,12 @@ export function sideWallTubeKey(side: SideWall, tube: number) {
 }
 
 export function emptyRollingTube(): RollingTube {
-  return { steps: {}, actualTubeId: "", drumHoleId: "" };
+  return { steps: {}, actualTubeId: "", drumHoleId: "", holeKind: "" };
 }
 
 export function readRollingTube(state: RollingChartState, key: string): RollingTube {
-  return state.tubes[key] ?? emptyRollingTube();
+  const tube = state.tubes[key];
+  return tube ? { ...emptyRollingTube(), ...tube, holeKind: asHoleKind(tube.holeKind) } : emptyRollingTube();
 }
 
 export function stepCount(tube: RollingTube) {
@@ -195,6 +240,26 @@ export function lastMarkedStep(tube: RollingTube): RollStepId | null {
     if (tube.steps[step.id]) last = step.id;
   }
   return last;
+}
+
+export function stepMark(step: RollStepId | null) {
+  return ROLL_STEPS.find((item) => item.id === step)?.mark ?? "";
+}
+
+export function jobTubeOd(state: RollingChartState) {
+  return state.averageTubeOd.trim() || state.tubeOd;
+}
+
+export function defaultHoleId(od: string) {
+  const value = Number(od);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return String(Math.round((value + 1 / 32) * 10000) / 10000);
+}
+
+/** Per-hole Drum ID after clean/repair overrides the job default (OD + 1/32). */
+export function effectiveDrumHoleId(tube: RollingTube, state: RollingChartState) {
+  if (tube.drumHoleId.trim()) return tube.drumHoleId.trim();
+  return defaultHoleId(jobTubeOd(state));
 }
 
 /** Empty Actual Tube ID stays empty — no workbook formula noise. */
@@ -214,7 +279,50 @@ export function formatWallReduction(actualId: string, avgId: string, avgOd: stri
   return pct == null ? "" : `${pct}`;
 }
 
-export type WallBand = "under" | "pass" | "over";
+export function targetWallReduction(state: RollingChartState) {
+  const typed = Number((state.idealPercentageRoll || state.wallBandIdeal).trim() || WALL_BAND_HINTS.ideal);
+  return Number.isFinite(typed) ? typed : Number(WALL_BAND_HINTS.ideal);
+}
+
+/** Ideal ID only when a drum hole and tube dims exist. Never invent from an empty Actual ID. */
+export function idealTubeId(tube: RollingTube, state: RollingChartState): number | null {
+  if (!effectiveDrumHoleId(tube, state)) return null;
+  const id = Number(state.averageTubeId);
+  const od = Number(jobTubeOd(state));
+  if (!Number.isFinite(id) || !Number.isFinite(od)) return null;
+  const span = od - id;
+  if (span <= 0) return null;
+  return Math.round((id + (targetWallReduction(state) / 100) * span) * 10000) / 10000;
+}
+
+export function formatIdealTubeId(tube: RollingTube, state: RollingChartState) {
+  const value = idealTubeId(tube, state);
+  return value == null ? "" : String(value);
+}
+
+export function wallReductionVsIdeal(actualId: string, avgId: string, avgOd: string, target: string): number | null {
+  const pct = wallReductionPct(actualId, avgId, avgOd);
+  if (pct == null) return null;
+  const goal = Number(target.trim() || WALL_BAND_HINTS.ideal);
+  if (!Number.isFinite(goal)) return null;
+  return Math.round((pct - goal) * 100) / 100;
+}
+
+export type WallBand = "under" | "low-ok" | "target" | "over";
+
+export const WALL_BAND_MARK: Record<WallBand, string> = {
+  under: "U",
+  "low-ok": "L",
+  target: "T",
+  over: "O",
+};
+
+export const WALL_BAND_LABEL: Record<WallBand, string> = {
+  under: "UNDER — re-roll",
+  "low-ok": "Low-ok",
+  target: "Target",
+  over: "OVER — inspect, do not auto-scrap",
+};
 
 export function wallReductionBand(
   actualId: string,
@@ -222,15 +330,50 @@ export function wallReductionBand(
   avgOd: string,
   low: string,
   high: string,
+  ideal = "",
 ): WallBand | null {
   const pct = wallReductionPct(actualId, avgId, avgOd);
   if (pct == null) return null;
   const lo = Number(low.trim() || WALL_BAND_HINTS.low);
+  const mid = Number(ideal.trim() || WALL_BAND_HINTS.ideal);
   const hi = Number(high.trim() || WALL_BAND_HINTS.high);
-  if (!Number.isFinite(lo) || !Number.isFinite(hi)) return null;
+  if (!Number.isFinite(lo) || !Number.isFinite(mid) || !Number.isFinite(hi)) return null;
   if (pct < lo) return "under";
-  if (pct > hi) return "over";
-  return "pass";
+  if (pct < mid) return "low-ok";
+  if (pct <= hi) return "target";
+  return "over";
+}
+
+export function tubeCellMark(state: RollingChartState, tube: RollingTube) {
+  if (tube.holeKind === "skip") return "X";
+  if (tube.holeKind === "plug") return "P";
+  if (tube.holeKind === "dummy") return "D";
+  const band = wallReductionBand(
+    tube.actualTubeId,
+    state.averageTubeId,
+    jobTubeOd(state),
+    state.wallBandLow,
+    state.wallBandHigh,
+    state.wallBandIdeal || state.idealPercentageRoll,
+  );
+  if (band) return WALL_BAND_MARK[band];
+  return stepMark(lastMarkedStep(tube));
+}
+
+export function parseTubeKey(key: string) {
+  const drum = /^(steam|mud):(\d+):(\d+)$/.exec(key);
+  if (drum) {
+    return { sheet: drum[1] as "steam" | "mud", circuit: Number(drum[2]), tube: Number(drum[3]), side: null as SideWall | null };
+  }
+  const side = /^sidewalls:(LEFT|RIGHT):(\d+)$/.exec(key);
+  if (side) {
+    return { sheet: "sidewalls" as const, circuit: null as number | null, tube: Number(side[2]), side: side[1] as SideWall };
+  }
+  return null;
+}
+
+export function axisLabel(n: number, selected: boolean) {
+  return selected || n === 1 || n % 5 === 0 ? String(n) : "";
 }
 
 export function drumKeys(state: RollingChartState, sheet: "steam" | "mud") {
@@ -281,19 +424,25 @@ export type SheetProgress = {
   steps: Record<RollStepId, number>;
 };
 
+function countableTube(state: RollingChartState, key: string) {
+  const tube = readRollingTube(state, key);
+  return !tube.holeKind;
+}
+
 function countSheet(
   state: RollingChartState,
   sheet: Exclude<RollingSheetId, "productivity">,
   keys: string[],
 ): SheetProgress {
   const steps = Object.fromEntries(ROLL_STEPS.map((step) => [step.id, 0])) as Record<RollStepId, number>;
-  for (const key of keys) {
+  const live = keys.filter((key) => countableTube(state, key));
+  for (const key of live) {
     const tube = readRollingTube(state, key);
     for (const step of ROLL_STEPS) {
       if (tube.steps[step.id]) steps[step.id] += 1;
     }
   }
-  return { sheet, total: keys.length, steps };
+  return { sheet, total: live.length, steps };
 }
 
 /** Live progression from Yes marks. No invented hours. Geometry from setup, not hardcoded 24×76. */
