@@ -141,7 +141,7 @@ export function visibleDeskPacks(
     localPacksForUser(user, listLocalPacks(store)).filter((pack) => !viewingAs || !pack.archived),
     next,
   );
-  if (!viewingAs && shouldPaintHisCards(user)) return mergeHisWoodRiverCards(packs);
+  if (shouldPaintHisCards(user)) return mergeHisWoodRiverCards(packs);
   return packs;
 }
 

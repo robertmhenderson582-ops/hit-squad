@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { jobsOnDesk, seedJobs } from "./jobs.ts";
 import {
@@ -59,12 +61,14 @@ test("Follow first paint uses the last hydrated Nathan packs, not owner seed job
   assert.equal(readLensPacks("nathan", store)[0]?.transferredFromName, "Robert Henderson");
 
   const packs = packsForViewedDesk(nathan, true, "nathan", store);
-  assert.equal(packs.length, 1);
-  assert.equal(packs[0]?.title, "Madison CAT 2 (Pit Stop)");
-  const jobs = jobsOnDesk([], packs, true);
-  assert.equal(jobs.length, 1);
-  assert.equal(jobs[0]?.title, "Madison CAT 2 (Pit Stop)");
-  assert.equal(jobs.some((job) => job.id === "job-8841"), false);
+  assert.equal(packs.some((pack) => pack.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(packs.some((pack) => pack.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(packs.some((pack) => pack.title === "Wood River / T&M 2027-01 to 06"), true);
+  const jobs = jobsOnDesk([], packs, true, { isOwner: false, email: nathan.email, companyId: "madison" });
+  assert.equal(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(jobs.some((job) => job.code === "EST-MTJ5D6"), true);
+  assert.equal(jobs.some((job) => job.id === "job-8841" || job.code === "HS-8622"), false);
   assert.notEqual(jobs.length, seedJobs().length);
 });
 
@@ -74,8 +78,10 @@ test("leftover owner flush does not wipe the Follow seat snapshot", () => {
   writeLensPacks("nathan", [snapshotLensPack(cat2)], store);
   deleteLocalPack("new-mtaajdwa-f7539", store);
   const live = packsForViewedDesk(nathan, true, "nathan", store);
-  assert.equal(live[0]?.packId, "new-mtaajdwa-f7539");
-  assert.equal(live[0]?.transferredFrom, "robertmhenderson582@gmail.com");
+  const cat = live.find((row) => row.packId === "new-mtaajdwa-f7539");
+  assert.equal(cat?.packId, "new-mtaajdwa-f7539");
+  assert.equal(cat?.transferredFrom, "robertmhenderson582@gmail.com");
+  assert.equal(live.some((row) => row.title === "Wood River / T&M 2027-01 to 06"), true);
 
   const ownerDesk = packsForViewedDesk(owner, false, null, store);
   assert.equal(ownerDesk.some((pack) => pack.packId === "new-mtaajdwa-f7539"), true);
@@ -304,4 +310,7 @@ test("signed-in leftover wipe rewrites v1 Jobs keys only and keeps session marks
   assert.equal(readOwnerPacks(store).find((row) => row.title === "Wood River / T&M 2027-01 to 06")?.ownerEmail, NATHAN_DESK_EMAIL);
   assert.ok(ownerDesk.some((pack) => pack.title === "2027 Aromatics Turnaround"));
   assert.ok(ownerDesk.some((pack) => pack.title === "Madison CAT 2 (Pit Stop)"));
+
+  const source = readFileSync(fileURLToPath(new URL("./lens-packs.ts", import.meta.url)), "utf8");
+  assert.match(source, /if \(viewingAs\) \{[\s\S]*shouldPaintHisCards\(user\)[\s\S]*mergeHisWoodRiverCards/);
 });

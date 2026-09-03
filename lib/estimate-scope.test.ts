@@ -202,10 +202,12 @@ describe("estimate vault scope", () => {
     const ownerIds = visibleDeskPacks(owner, false, store).map((row) => row.packId);
     assert.equal(ownerIds.includes("new-archived1"), true);
     assert.equal(ownerIds.includes("new-owner1"), true);
-    assert.deepEqual(
-      visibleDeskPacks(tester, true, store).map((row) => row.packId),
-      [],
-    );
+    const viewedAsNathan = visibleDeskPacks(tester, true, store).map((row) => row.packId);
+    assert.equal(viewedAsNathan.includes("new-archived1"), false);
+    assert.equal(viewedAsNathan.includes("new-owner1"), false);
+    assert.equal(viewedAsNathan.includes("new-mtj7bvtk-akmei"), true);
+    assert.equal(viewedAsNathan.includes("new-mtaajdwa-f7539"), true);
+    assert.equal(viewedAsNathan.includes("new-mtj5d6"), true);
     const nathanLive = visibleDeskPacks(tester, false, store).map((row) => row.packId);
     assert.equal(nathanLive.includes("new-archived1"), true);
     assert.equal(nathanLive.includes("new-mtj7bvtk-akmei"), true);

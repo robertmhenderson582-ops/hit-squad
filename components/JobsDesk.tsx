@@ -13,7 +13,7 @@ import { estimateForJob } from "@/lib/estimate-open";
 import { packsForViewedDesk, snapshotOwnerDesk } from "@/lib/lens-packs";
 import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
-import { isHisProtectedMenuItem } from "@/lib/his-wood-river";
+import { isHisProtectedMenuItem, shouldPaintHisCards } from "@/lib/his-wood-river";
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
 import { ensureCbiDummyPack, shouldSeedCbiDummy } from "@/lib/cbi-dummy";
 import { catalogSites } from "@/lib/desk-data";
@@ -86,7 +86,7 @@ export function JobsDesk() {
   void packTick;
   const active = jobs.filter((job) => {
     const pack = packForJob(job, deskPacks);
-    if (!viewingAs && isHisProtectedMenuItem({ id: job.id, packId: pack?.packId, title: job.title })) {
+    if (shouldPaintHisCards(lens) && isHisProtectedMenuItem({ id: job.id, packId: pack?.packId, title: job.title })) {
       return !jobLooksClosed(job, closed);
     }
     return isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed);

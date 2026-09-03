@@ -120,12 +120,17 @@ describe("desk counts", () => {
 
     const desk = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
     assert.match(desk, /seedJobsAllowed\(scope\)/);
+    assert.match(desk, /shouldPaintHisCards\(lens\)/);
     assert.doesNotMatch(desk, /includeSeeds: true/);
     assert.doesNotMatch(desk, /holdPartialTree \? null/);
     assert.match(desk, /JobTreeDesk/);
+
+    assert.deepEqual(deskForUser("tester-nathan", nathanScope).jobs, []);
+    assert.deepEqual(deskForUser("tester-john-beech", beechScope).jobs, []);
+    assert.deepEqual(deskForUser("owner-robert-henderson", ownerScope).jobs, []);
   });
 
-  it("view-as Nathan delete of HS-8622 stays gone after a seed reload; estimate delete and archive still work", () => {
+  it("view-as Nathan never paints leaked catalog seeds; estimate delete and archive still work", () => {
     const data: Record<string, string> = {};
     const store: StorageLike = {
       getItem(key) {
@@ -149,11 +154,15 @@ describe("desk counts", () => {
       updatedAt: 2,
     };
     const nathan = { isOwner: false, email: "nathanboyte@gmail.com", companyId: "madison" as const };
-    const seeds = deskForUser("tester-nathan", nathan).jobs;
-    assert.equal(seeds.some((job) => job.code === "HS-8622"), true);
+    const leaked = seedJobs();
+    assert.equal(leaked.some((job) => job.code === "HS-8622"), true);
+    assert.equal(deskForUser("tester-nathan", nathan).jobs.some((job) => job.code === "HS-8622"), false);
     deleteMenuItem({ id: "job-8622", title: "Pre-outage HSE walkdown — flare / piperack" }, store, "nathan");
-    const afterPoll = jobsOnDesk(seeds, [cat2], true, nathan, menuForViewedDesk(true, store, "nathan"));
-    assert.equal(afterPoll.some((job) => job.code === "HS-8622" || job.id === "job-8622"), false);
+    const afterPoll = jobsOnDesk(leaked, [cat2], true, nathan, menuForViewedDesk(true, store, "nathan"));
+    assert.equal(
+      afterPoll.some((job) => ["HS-8622", "TA-8841", "TM-8902", "ES-8710"].includes(job.code)),
+      false,
+    );
     assert.equal(afterPoll.some((job) => job.title.includes("CAT 2")), true);
 
     archiveMenuItem({ id: `job-${cat2.packId}`, packId: cat2.packId, title: cat2.title }, store, "nathan");

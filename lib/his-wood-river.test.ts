@@ -12,7 +12,7 @@ import {
   writeLensPacks,
   writeOwnerPacks,
 } from "./lens-packs.ts";
-import { jobsOnDesk } from "./jobs.ts";
+import { jobsOnDesk, seedJobs } from "./jobs.ts";
 import type { StorageLike } from "./local-estimates.ts";
 import { companyScopeFor } from "./companies.ts";
 import { handoffMarkText } from "./handoff.ts";
@@ -657,4 +657,144 @@ test("James CBI sample EST-MTKIGB stays off Wood River after production leftover
   assert.equal(sample?.ownerEmail, JAMES_EMAIL);
   assert.equal(handoffMarkText(sample!, owner.email), "James Cain's desk.");
   assert.equal(wood?.jobs.some((job) => job.code === "EST-MTKIGB"), false);
+});
+
+const nathan = { email: NATHAN_DESK_EMAIL, role: "tester" as const };
+const james = { email: JAMES_EMAIL, role: "tester" as const };
+const SEED_CODES = ["HS-8622", "TA-8841", "TM-8902", "ES-8710"];
+
+function assertHisWoodRiverDesk(
+  painted: ReturnType<typeof packsForViewedDesk>,
+  viewingAs: boolean,
+  scopeUser: { email: string; role: "owner" | "tester" },
+) {
+  const scope = companyScopeFor(scopeUser);
+  const jobs = jobsOnDesk(seedJobs(), painted, viewingAs, scope, undefined, {
+    includeSeeds: false,
+  });
+  const tree = jobTree({ scope, jobs, packs: painted });
+  const wood = tree.find((row) => row.id === "madison")?.sites.find((site) => site.id === "site-madison");
+  const unassigned = tree
+    .find((row) => row.id === "madison")
+    ?.sites.find((site) => site.id === "site-unassigned");
+  assert.equal(jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(jobs.some((job) => job.code === "EST-MTJ5D6" || job.title === "Wood River / T&M 2027-01 to 06"), true);
+  assert.equal(jobs.some((job) => SEED_CODES.includes(job.code)), false);
+  assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6" || job.title === "Wood River / T&M 2027-01 to 06"), true);
+  assert.equal(unassigned?.jobs.some((job) => job.code === "HS-8622") ?? false, false);
+  const aromatics = painted.find((row) => row.title === "2027 Aromatics Turnaround");
+  const cat = painted.find((row) => row.title === "Madison CAT 2 (Pit Stop)");
+  const tm = painted.find((row) => row.title === "Wood River / T&M 2027-01 to 06");
+  assert.equal(handoffMarkText(aromatics!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(handoffMarkText(cat!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+  return { jobs, tree, wood };
+}
+
+test("View as Nathan paints three HIS Wood River jobs and no catalog seeds", () => {
+  const store = memoryStore();
+  rememberLocalPack(
+    {
+      packId: HIS_AROMATICS_PACK_ID,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      ownerEmail: NATHAN_DESK_EMAIL,
+    },
+    store,
+  );
+  rememberLocalPack(
+    {
+      packId: HIS_CAT2_PACK_ID,
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      ownerEmail: NATHAN_DESK_EMAIL,
+    },
+    store,
+  );
+  const painted = packsForViewedDesk(nathan, true, "nathan", store);
+  assertHisWoodRiverDesk(painted, true, nathan);
+});
+
+test("Nathan login paints the same three HIS Wood River jobs and no catalog seeds", () => {
+  const store = memoryStore();
+  const painted = packsForViewedDesk(nathan, false, null, store);
+  assertHisWoodRiverDesk(painted, false, nathan);
+});
+
+test("owner Back-to-me Jobs shows the three HIS cards as Nathan's desk and no seeds", () => {
+  const store = memoryStore();
+  const painted = packsForViewedDesk(owner, false, null, store);
+  assertHisWoodRiverDesk(painted, false, owner);
+});
+
+test("James CBI sample EST-MTKIGB stays under CBI and View as James does not paint HIS cards", () => {
+  const store = memoryStore();
+  rememberLocalPack(
+    {
+      packId: "new-mtkigb-james",
+      title: "New Turnaround estimate",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      ownerEmail: JAMES_EMAIL,
+    },
+    store,
+  );
+  const jamesDesk = packsForViewedDesk(james, true, "james", store);
+  assert.equal(jamesDesk.some((row) => row.title === "2027 Aromatics Turnaround"), false);
+  assert.equal(jamesDesk.some((row) => row.title === "Madison CAT 2 (Pit Stop)"), false);
+  assert.equal(jamesDesk.some((row) => row.title === "Wood River / T&M 2027-01 to 06"), false);
+  assert.equal(shouldPaintHisCards(james), false);
+
+  const ownerDesk = packsForViewedDesk(owner, false, null, store);
+  const jobs = jobsOnDesk(undefined, ownerDesk, false, companyScopeFor(owner), undefined, { includeSeeds: false });
+  const tree = jobTree({ scope: { isOwner: true, email: owner.email, companyId: "hitsquad" }, jobs, packs: ownerDesk });
+  const wood = tree.find((row) => row.id === "madison")?.sites.find((site) => site.id === "site-madison");
+  const cbi = tree.find((row) => row.id === "cbi");
+  assert.equal(localPackToJob(ownerDesk.find((row) => row.packId === "new-mtkigb-james")!).code, "EST-MTKIGB");
+  assert.equal(wood?.jobs.some((job) => job.code === "EST-MTKIGB"), false);
+  assert.equal(cbi?.sites.some((site) => site.jobs.some((job) => job.code === "EST-MTKIGB")), true);
+});
+
+test("live Aromatics and CAT leftovers are not replaced by identity-only stubs", () => {
+  const store = memoryStore();
+  rememberLocalPack(
+    {
+      packId: HIS_AROMATICS_PACK_ID,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      size: "live-aromatics-crew",
+      ownerEmail: NATHAN_DESK_EMAIL,
+    },
+    store,
+  );
+  rememberLocalPack(
+    {
+      packId: HIS_CAT2_PACK_ID,
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      size: "live-cat-crew",
+      ownerEmail: NATHAN_DESK_EMAIL,
+    },
+    store,
+  );
+  const viewed = packsForViewedDesk(nathan, true, "nathan", store);
+  const own = packsForViewedDesk(nathan, false, null, store);
+  const ownerDesk = packsForViewedDesk(owner, false, null, store);
+  for (const painted of [viewed, own, ownerDesk]) {
+    const aromatics = painted.find((row) => row.title === "2027 Aromatics Turnaround");
+    const cat = painted.find((row) => row.title === "Madison CAT 2 (Pit Stop)");
+    assert.equal(aromatics?.packId, HIS_AROMATICS_PACK_ID);
+    assert.equal(cat?.packId, HIS_CAT2_PACK_ID);
+    assert.equal(aromatics?.size, "live-aromatics-crew");
+    assert.equal(cat?.size, "live-cat-crew");
+    assert.equal(painted.filter((row) => row.title === "2027 Aromatics Turnaround").length, 1);
+    assert.equal(painted.filter((row) => row.title === "Madison CAT 2 (Pit Stop)").length, 1);
+  }
 });
