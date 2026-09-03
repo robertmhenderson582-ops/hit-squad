@@ -1,7 +1,8 @@
 import { companyIdForEmail, peopleLane, type CompanyId } from "./companies.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { normalizeEmails, ownerVaultEmail, type ScopeUser } from "./estimate-scope.ts";
-import { canonicalEmail, isSamePerson } from "./identity.ts";
+import { isHisWoodRiverPack, NATHAN_DESK_EMAIL, NATHAN_DESK_NAME } from "./his-wood-river.ts";
+import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
 
 export type HandoffSeat = {
@@ -46,14 +47,28 @@ export function packSharedWithYou(pack: { ownerEmail?: string; sharedWith?: stri
 
 export function handoffMarkText(
   pack: {
+    packId?: string;
+    title?: string;
+    client?: string;
+    site?: string;
+    siteId?: string;
     ownerEmail?: string;
     sharedWith?: string[];
     transferredFrom?: string;
     transferredTo?: string;
     transferredFromName?: string;
+    transferredToName?: string;
   },
   email = "",
 ) {
+  if (isHisWoodRiverPack(pack) && !isOwnerIdentity(pack.ownerEmail)) {
+    const owner = personKey(pack.ownerEmail);
+    const nathan = personKey(NATHAN_DESK_EMAIL);
+    const me = personKey(email);
+    if (owner && nathan && owner !== nathan && me && me !== nathan && !packSharedWithYou(pack, email)) {
+      return `${NATHAN_DESK_NAME}'s desk.`;
+    }
+  }
   const names = sharedWithNames(normalizeEmails(pack.sharedWith));
   if (packSharedWithYou(pack, email)) {
     const from = findHandoffSeat(pack.ownerEmail || "")?.name || "the owner";

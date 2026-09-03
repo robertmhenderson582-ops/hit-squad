@@ -26,6 +26,10 @@ import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { SUB_STORE_PREFIX } from "./subcontractor.ts";
 import { newEstimateKey } from "./estimate-open.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
+import { companyScopeFor } from "./companies.ts";
+import { jobTree } from "./job-tree.ts";
+import { JAMES_EMAIL } from "./tester-seats.ts";
+import { NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
 
 function memoryStore(seed: Record<string, string> = {}): StorageLike {
   const data = { ...seed };
@@ -319,8 +323,10 @@ describe("local transfer commit", () => {
       assert.deepEqual(packs[0]?.sharedWith, [OWNER_LOGIN_EMAIL]);
       assert.equal(findLocalPack("new-mtaajdwa-f7539", store)?.ownerEmail, "nathanboyte@gmail.com");
       assert.equal(
-        visibleDeskPacks({ email: OWNER_LOGIN_EMAIL, role: "owner" }, false, store)[0]?.packId,
-        "new-mtaajdwa-f7539",
+        visibleDeskPacks({ email: OWNER_LOGIN_EMAIL, role: "owner" }, false, store).some(
+          (row) => row.packId === "new-mtaajdwa-f7539",
+        ),
+        true,
       );
     } finally {
       globalThis.fetch = previous;
@@ -848,6 +854,52 @@ describe("local transfer commit", () => {
       assert.deepEqual(seats, ["owner"]);
       await flushLocalPacksToVault(store, { viewAs: "nathan" });
       assert.deepEqual(seats, ["owner"]);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("leftover T&M hydrate restamps Nathan and keeps Aromatics and CAT", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          persisted: true,
+          packs: [
+            {
+              packId: "new-MTJ5D6-live",
+              key: "new:new-MTJ5D6-live",
+              title: "Wood River / T&M 2027-01 to 06",
+              client: "",
+              site: "",
+              siteId: "",
+              createdAt: 4,
+              updatedAt: 5,
+              ownerEmail: JAMES_EMAIL,
+              transferredToName: "James Cain",
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    try {
+      await hydrateFromVault(store);
+      const owner = { email: OWNER_LOGIN_EMAIL, role: "owner" as const };
+      const desk = packsForViewedDesk(owner, false, null, store);
+      const tm = desk.find((row) => row.title === "Wood River / T&M 2027-01 to 06");
+      assert.equal(tm?.ownerEmail, NATHAN_DESK_EMAIL);
+      assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+      assert.equal(desk.filter((row) => row.title === "Wood River / T&M 2027-01 to 06").length, 1);
+      const jobs = jobsOnDesk(undefined, desk, false, companyScopeFor(owner), undefined, { includeSeeds: false });
+      const tree = jobTree({ scope: { isOwner: true, email: owner.email, companyId: "hitsquad" }, jobs, packs: desk });
+      const wood = tree.find((row) => row.id === "madison")?.sites.find((site) => site.id === "site-madison");
+      assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+      assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+      assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), true);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();

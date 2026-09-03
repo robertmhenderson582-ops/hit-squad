@@ -23,7 +23,10 @@ import {
   hisKnownEstimateFiles,
   hisMatchForPack,
   hisWoodRiverCards,
+  jobCodeFromPackId,
   mergeHisWoodRiverCards,
+  persistHisWoodRiverCards,
+  shouldPaintHisCards,
 } from "./his-wood-river.ts";
 
 const owner = { email: "robertmhenderson582@gmail.com", role: "owner" as const };
@@ -176,4 +179,73 @@ test("vault T&M with a longer packId replaces the paint card instead of duplicat
   assert.equal(merged.find((row) => row.title === vault.title)?.packId, vault.packId);
   assert.ok(merged.some((row) => row.packId === HIS_AROMATICS_PACK_ID));
   assert.ok(merged.some((row) => row.packId === HIS_CAT2_PACK_ID));
+});
+
+test("live leftover T&M matches without an exact new-mtj5d6 packId or a site", () => {
+  assert.equal(jobCodeFromPackId("new-MTJ5D6"), "EST-MTJ5D6");
+  assert.equal(jobCodeFromPackId("new-MTJ5D6-live"), "EST-MTJ5D6");
+  assert.equal(hisFileForPackId("new-MTJ5D6")?.fileId, HIS_TM_FILE_ID);
+  assert.equal(hisFileForPackId("new-MTJ5D6-live")?.fileId, HIS_TM_FILE_ID);
+  assert.equal(hisMatchForPack({ packId: "new-MTJ5D6-live", ownerEmail: JAMES_EMAIL })?.fileId, HIS_TM_FILE_ID);
+  assert.equal(
+    hisMatchForPack({ packId: "new-other", title: "Wood River / T&M 2027-01 to 06", ownerEmail: JAMES_EMAIL })?.fileId,
+    HIS_TM_FILE_ID,
+  );
+  assert.equal(hisMatchForPack({ packId: "new-mtkigb-james", title: "New Turnaround estimate", ownerEmail: JAMES_EMAIL }), null);
+  assert.equal(shouldPaintHisCards({ email: "Robert Henderson" }), true);
+  assert.equal(shouldPaintHisCards({ email: owner.email }), true);
+});
+
+test("leftover T&M occupying the slot still keeps Aromatics and CAT on Nathan's desk", () => {
+  const leftover = {
+    packId: "new-MTJ5D6-live",
+    key: "new:new-MTJ5D6-live",
+    title: "Wood River / T&M 2027-01 to 06",
+    client: "",
+    site: "",
+    siteId: "",
+    createdAt: 4,
+    updatedAt: 5,
+    ownerEmail: JAMES_EMAIL,
+    transferredToName: "James Cain",
+    estimator: "James Cain",
+  };
+  const painted = mergeHisWoodRiverCards([leftover]);
+  const tm = painted.find((row) => row.title === leftover.title);
+  assert.equal(painted.filter((row) => row.title === leftover.title).length, 1);
+  assert.equal(tm?.packId, leftover.packId);
+  assert.equal(tm?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(tm?.transferredToName, undefined);
+  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+  assert.ok(painted.some((row) => row.packId === HIS_AROMATICS_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
+  assert.ok(painted.some((row) => row.packId === HIS_CAT2_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
+  assert.equal(applyHisIdentity(leftover).ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(handoffMarkText(applyHisIdentity({ ...leftover, ownerEmail: JAMES_EMAIL }), owner.email), "Nathan Boyte's desk.");
+});
+
+test("after leftover hydrate, persisted HIS extras still name Nathan's desk", () => {
+  const store = memoryStore();
+  rememberLocalPack(
+    {
+      packId: "new-MTJ5D6-live",
+      title: "Wood River / T&M 2027-01 to 06",
+      client: "",
+      site: "",
+      ownerEmail: JAMES_EMAIL,
+      transferredToName: "James Cain",
+    },
+    store,
+  );
+  const persisted = persistHisWoodRiverCards(store);
+  const desk = packsForViewedDesk(owner, false, null, store);
+  const jobs = jobsOnDesk(undefined, desk, false, companyScopeFor(owner), undefined, { includeSeeds: false });
+  const tree = jobTree({ scope: { isOwner: true, email: owner.email, companyId: "hitsquad" }, jobs, packs: desk });
+  const wood = tree.find((row) => row.id === "madison")?.sites.find((site) => site.id === "site-madison");
+  assert.equal(persisted.some((row) => row.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(desk.filter((row) => row.title === "Wood River / T&M 2027-01 to 06").length, 1);
+  assert.equal(desk.find((row) => row.title === "Wood River / T&M 2027-01 to 06")?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(handoffMarkText(desk.find((row) => row.title === "Wood River / T&M 2027-01 to 06")!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), true);
 });

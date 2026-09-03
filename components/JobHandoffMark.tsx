@@ -3,6 +3,11 @@
 import { handoffMarkText, packTransferredToYou } from "@/lib/handoff";
 
 export type HandoffPack = {
+  packId?: string;
+  title?: string;
+  client?: string;
+  site?: string;
+  siteId?: string;
   ownerEmail?: string;
   sharedWith?: string[];
   transferredFrom?: string;
