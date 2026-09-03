@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { archiveMenuItem, deleteMenuItem, menuForViewedDesk, menuStatus } from "./job-menu.ts";
 import {
@@ -105,6 +107,11 @@ describe("desk counts", () => {
     assert.ok(cat2Job);
     assert.equal(packForJob(cat2Job, [cat2])?.packId, "new-mtaajdwa-f7539");
     assert.equal(packForJob({ id: "job-8841" }, [cat2]), undefined);
+
+    const desk = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
+    assert.match(desk, /includeSeeds: true/);
+    assert.doesNotMatch(desk, /holdPartialTree \? null/);
+    assert.match(desk, /JobTreeDesk/);
   });
 
   it("view-as Nathan delete of HS-8622 stays gone after a seed reload; estimate delete and archive still work", () => {

@@ -103,14 +103,18 @@ async function persist(data: AssignmentFile) {
 
 export async function hydrateCompanyStore(): Promise<AssignmentFile> {
   if (memoryOverride) return readCache();
-  if (hydrated) return readCache();
   const cache = readCache();
   const drive = resolveAdapter();
   if (drive) {
     try {
-      const vault = parseAssignmentFile(await readVaultJson(drive, COMPANIES_VAULT_NAME, COMPANIES_VAULT_KIND));
+      const raw = await readVaultJson(drive, COMPANIES_VAULT_NAME, COMPANIES_VAULT_KIND);
+      const vault = parseAssignmentFile(raw);
       if (hasDeskData(vault)) writeCache(vault);
-      else if (hasDeskData(cache)) await writeVaultJson(drive, COMPANIES_VAULT_NAME, COMPANIES_VAULT_KIND, cache);
+      else if (hasDeskData(cache) && raw == null) {
+        await writeVaultJson(drive, COMPANIES_VAULT_NAME, COMPANIES_VAULT_KIND, cache);
+      } else if (raw != null) {
+        writeCache(vault);
+      }
     } catch {
       // Keep the local cache. A failed vault read must not wipe assignments.
     }

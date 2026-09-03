@@ -14,6 +14,7 @@ import {
   listThirdPartyCatalog,
   resetThirdPartyStoreForTests,
   saveThirdPartyCatalog,
+  deleteThirdPartyRow,
   useThirdPartyVaultForTests,
 } from "./third-party-rental-store.ts";
 
@@ -46,6 +47,20 @@ describe("third-party rental vault", () => {
     assert.equal(listed.find((row) => row.description === "Skip Pan")?.monthly, 900);
     assert.equal(listed.find((row) => row.description === "Spider box / 220 Vote cords")?.freight, 150);
     assert.notEqual(listed.find((row) => row.description === "Skip Pan")?.monthly, WOOD_RIVER_THIRD_PARTY_RENTAL.find((row) => row.description === "Skip Pan")?.monthly);
+  });
+
+  it("a deleted catalog row stays gone after cache wipe", async () => {
+    const drive = memoryDrive();
+    useThirdPartyVaultForTests(drive);
+    const seeded = await listThirdPartyCatalog();
+    const skipIndex = seeded.findIndex((row) => row.description === "Skip Pan");
+    assert.ok(skipIndex >= 0);
+    await deleteThirdPartyRow(skipIndex);
+    forgetThirdPartyCacheForTests();
+    useThirdPartyVaultForTests(drive);
+    const listed = await listThirdPartyCatalog();
+    assert.equal(listed.some((row) => row.description === "Skip Pan"), false);
+    assert.equal(listed.length, seeded.length - 1);
   });
 
   it("Rate builder write gate stays owner/Novus plus Joseph; other testers cannot edit", () => {

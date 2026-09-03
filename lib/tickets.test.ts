@@ -9,6 +9,7 @@ import {
   forgetTicketCacheForTests,
   listStoredTickets,
   mergeStoredTickets,
+  removeStoredTicket,
   resetTicketStoreForTests,
   staleWarmTicketInstanceForTests,
   ticketStoreKind,
@@ -209,6 +210,45 @@ describe("ticket file store", { concurrency: 1 }, () => {
     const merged = mergeStoredTickets([owner, chance], [owner]);
     assert.equal(merged.length, 2);
     assert.equal(merged.some((row) => row.id === "tkt-chance"), true);
+  });
+
+  it("a deleted ticket stays gone after cache wipe and a stale cache merge", async () => {
+    const drive = memoryDrive();
+    resetTicketStoreForTests(join(dir, "delete.json"));
+    useTicketVaultForTests(drive);
+    const keep = await addStoredTicket(
+      makeTicket({
+        kind: "Broke",
+        note: "keep me",
+        capture: null,
+        later: false,
+        who: "robertmhenderson582@gmail.com",
+      }),
+    );
+    const gone = await addStoredTicket(
+      makeTicket({
+        kind: "missing",
+        note: "delete me",
+        capture: null,
+        later: false,
+        who: "robertmhenderson582@gmail.com",
+      }),
+    );
+    await removeStoredTicket(gone.id);
+    assert.equal((await listStoredTickets()).some((row) => row.id === gone.id), false);
+
+    forgetTicketCacheForTests();
+    useTicketVaultForTests(drive);
+    const afterWipe = await listStoredTickets();
+    assert.equal(afterWipe.some((row) => row.id === keep.id), true);
+    assert.equal(afterWipe.some((row) => row.id === gone.id), false);
+
+    writeFileSync(join(dir, "delete.json"), JSON.stringify({ tickets: [keep, gone] }, null, 2));
+    resetTicketStoreForTests(join(dir, "delete.json"));
+    useTicketVaultForTests(drive);
+    const afterPoison = await listStoredTickets();
+    assert.equal(afterPoison.some((row) => row.id === keep.id), true);
+    assert.equal(afterPoison.some((row) => row.id === gone.id), false);
   });
 
   it("a failed Drive write throws", async () => {

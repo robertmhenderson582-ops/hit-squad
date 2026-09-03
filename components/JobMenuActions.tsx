@@ -283,13 +283,15 @@ export function JobMenuActions({
                 <button
                   type="button"
                   onClick={() => {
-                    deleteMenuItem(item, undefined, menuSeat);
-                    if (vaultId) {
-                      void deleteVaultPack(vaultId);
-                      deleteLocalPack(vaultId);
-                    }
-                    setConfirmDelete(false);
-                    void refresh();
+                    void (async () => {
+                      deleteMenuItem(item, undefined, menuSeat);
+                      if (vaultId) {
+                        await deleteVaultPack(vaultId);
+                        deleteLocalPack(vaultId);
+                      }
+                      setConfirmDelete(false);
+                      void refresh();
+                    })();
                   }}
                   className="rounded-lg bg-steel px-4 py-2 text-white"
                 >

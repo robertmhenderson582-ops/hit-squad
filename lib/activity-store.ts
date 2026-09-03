@@ -17,16 +17,22 @@ export type ActivityRow = {
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const ACTIVITY_KEEP_MS = 30 * DAY_MS;
 
-type ActivityFile = { rows?: ActivityRow[] };
+type ActivityFile = { rows?: ActivityRow[]; removedIds?: string[] };
 
 let memoryOverride: ActivityRow[] | null = null;
-let hydrated = false;
+let memoryRemoved: string[] | null = null;
 let injectedAdapter: DriveAdapter | null | undefined;
 
 export function activityStorePath(): string {
   if (process.env.ACTIVITY_STORE_PATH) return process.env.ACTIVITY_STORE_PATH;
   if (process.env.VERCEL) return "/tmp/hit-squad-activity.json";
   return join(process.cwd(), "data", "activity.json");
+}
+
+function parseRemovedIds(raw: unknown): string[] {
+  const parsed = raw && typeof raw === "object" ? (raw as ActivityFile) : {};
+  if (!Array.isArray(parsed.removedIds)) return [];
+  return [...new Set(parsed.removedIds.filter((id): id is string => typeof id === "string" && Boolean(id.trim())))];
 }
 
 export function parseActivityRows(raw: unknown): ActivityRow[] {
@@ -52,24 +58,42 @@ function stampRow(kind: ActivityKind, who: string, detail: string, at = Date.now
   return { id: `act-${at}-${Math.random().toString(36).slice(2, 7)}`, at, kind, who, detail };
 }
 
-function readCache(): ActivityRow[] {
-  if (memoryOverride) return [...memoryOverride];
+export function mergeActivityRows(vault: ActivityRow[], incoming: ActivityRow[]): ActivityRow[] {
+  const map = new Map<string, ActivityRow>();
+  for (const row of vault) map.set(row.id, row);
+  for (const row of incoming) {
+    if (!map.has(row.id)) map.set(row.id, row);
+  }
+  return pruneRows([...map.values()]);
+}
+
+function readFileRaw(): unknown {
   try {
-    return parseActivityRows(JSON.parse(readFileSync(activityStorePath(), "utf8")));
+    return JSON.parse(readFileSync(activityStorePath(), "utf8"));
   } catch {
-    return [];
+    return null;
   }
 }
 
-function writeCache(rows: ActivityRow[]) {
+function readCache(): { rows: ActivityRow[]; removedIds: string[] } {
+  if (memoryOverride) {
+    return { rows: [...memoryOverride], removedIds: [...(memoryRemoved ?? [])] };
+  }
+  const raw = readFileRaw();
+  return { rows: parseActivityRows(raw), removedIds: parseRemovedIds(raw) };
+}
+
+function writeCache(rows: ActivityRow[], removedIds: string[]) {
   const next = pruneRows(rows);
+  const tombstones = [...new Set(removedIds)].filter((id) => !next.some((row) => row.id === id));
   if (memoryOverride) {
     memoryOverride = [...next];
+    memoryRemoved = tombstones;
     return;
   }
   const path = activityStorePath();
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify({ rows: next }, null, 2) + "\n", "utf8");
+  writeFileSync(path, JSON.stringify({ rows: next, removedIds: tombstones }, null, 2) + "\n", "utf8");
 }
 
 function resolveAdapter(): DriveAdapter | null {
@@ -79,29 +103,62 @@ function resolveAdapter(): DriveAdapter | null {
   return drive.configured ? drive : null;
 }
 
-async function persist(rows: ActivityRow[]) {
-  const next = pruneRows(rows);
-  writeCache(next);
+async function readVaultFile(): Promise<{ rows: ActivityRow[]; removedIds: string[] } | null> {
   const drive = resolveAdapter();
-  if (drive) await writeVaultJson(drive, ACTIVITY_VAULT_NAME, ACTIVITY_VAULT_KIND, { rows: next });
+  if (!drive) return null;
+  const raw = await readVaultJson(drive, ACTIVITY_VAULT_NAME, ACTIVITY_VAULT_KIND);
+  if (raw == null) return null;
+  return { rows: parseActivityRows(raw), removedIds: parseRemovedIds(raw) };
+}
+
+async function persist(rows: ActivityRow[], opts?: { removedIds?: string[]; replace?: boolean }) {
+  const extraRemoved = opts?.removedIds ?? [];
+  const drive = resolveAdapter();
+  const cache = readCache();
+  const vault = drive ? await readVaultFile() : null;
+  const baseRows = opts?.replace ? pruneRows(rows) : mergeActivityRows(vault?.rows ?? cache.rows, rows);
+  const removed = new Set([...(vault?.removedIds ?? []), ...cache.removedIds, ...extraRemoved]);
+  if (opts?.replace) {
+    for (const row of vault?.rows ?? cache.rows) removed.add(row.id);
+    for (const row of rows) removed.delete(row.id);
+  }
+  const next = baseRows.filter((row) => !removed.has(row.id));
+  const tombstones = [...removed].filter((id) => !next.some((row) => row.id === id));
+  if (drive) {
+    await writeVaultJson(drive, ACTIVITY_VAULT_NAME, ACTIVITY_VAULT_KIND, { rows: next, removedIds: tombstones });
+  }
+  writeCache(next, tombstones);
 }
 
 export async function hydrateActivityStore(): Promise<ActivityRow[]> {
-  if (memoryOverride) return readCache();
-  if (hydrated) return readCache();
+  if (memoryOverride) return readCache().rows;
   const cache = readCache();
   const drive = resolveAdapter();
   if (drive) {
     try {
-      const vault = parseActivityRows(await readVaultJson(drive, ACTIVITY_VAULT_NAME, ACTIVITY_VAULT_KIND));
-      if (vault.length) writeCache(vault);
-      else if (cache.length) await writeVaultJson(drive, ACTIVITY_VAULT_NAME, ACTIVITY_VAULT_KIND, { rows: cache });
+      const vault = await readVaultFile();
+      if (vault) {
+        const removed = new Set([...vault.removedIds, ...cache.removedIds]);
+        const seedFromCache = vault.rows.length > 0 || removed.size > 0;
+        const merged = mergeActivityRows(vault.rows, seedFromCache ? cache.rows : []).filter((row) => !removed.has(row.id));
+        writeCache(merged, [...removed]);
+        if (merged.length !== vault.rows.length || vault.removedIds.length !== removed.size) {
+          await writeVaultJson(drive, ACTIVITY_VAULT_NAME, ACTIVITY_VAULT_KIND, {
+            rows: merged,
+            removedIds: [...removed].filter((id) => !merged.some((row) => row.id === id)),
+          });
+        }
+      } else if (cache.rows.length || cache.removedIds.length) {
+        await writeVaultJson(drive, ACTIVITY_VAULT_NAME, ACTIVITY_VAULT_KIND, {
+          rows: cache.rows,
+          removedIds: cache.removedIds,
+        });
+      }
     } catch {
-      // Keep the local cache.
+      // Keep the local cache. A failed vault read must not wipe the ledger.
     }
   }
-  hydrated = true;
-  return readCache();
+  return readCache().rows;
 }
 
 export async function listActivity(): Promise<ActivityRow[]> {
@@ -119,38 +176,42 @@ export async function addActivity(row: Omit<ActivityRow, "id" | "at"> & { at?: n
 
 export async function removeActivity(id: string) {
   const rows = (await hydrateActivityStore()).filter((row) => row.id !== id);
-  await persist(rows);
+  await persist(rows, { removedIds: [id] });
 }
 
 export async function removeActivityOlderThan(days: number) {
   const cutoff = Date.now() - days * DAY_MS;
-  const rows = (await hydrateActivityStore()).filter((row) => row.at >= cutoff);
-  await persist(rows);
+  const current = await hydrateActivityStore();
+  const removedIds = current.filter((row) => row.at < cutoff).map((row) => row.id);
+  await persist(
+    current.filter((row) => row.at >= cutoff),
+    { removedIds },
+  );
 }
 
 export async function clearActivity() {
-  await persist([]);
+  await persist([], { replace: true });
 }
 
 export function resetActivityStoreForTests() {
   memoryOverride = null;
-  hydrated = false;
+  memoryRemoved = null;
   injectedAdapter = undefined;
   const path = activityStorePath();
   if (process.env.ACTIVITY_STORE_PATH && existsSync(path)) {
-    writeFileSync(path, JSON.stringify({ rows: [] }, null, 2) + "\n", "utf8");
+    writeFileSync(path, JSON.stringify({ rows: [], removedIds: [] }, null, 2) + "\n", "utf8");
   }
 }
 
 export function forgetActivityCacheForTests() {
   memoryOverride = null;
-  hydrated = false;
+  memoryRemoved = null;
   const path = activityStorePath();
   if (existsSync(path)) unlinkSync(path);
 }
 
 export function useActivityVaultForTests(adapter: DriveAdapter | null) {
   injectedAdapter = adapter;
-  hydrated = false;
   memoryOverride = null;
+  memoryRemoved = null;
 }

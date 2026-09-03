@@ -10,7 +10,7 @@ import { useDisplay } from "@/components/DisplayProvider";
 import { useEstimateModal } from "@/components/EstimateModalContext";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob } from "@/lib/estimate-open";
-import { ownerDeskHasImmediateWork, packsForViewedDesk, snapshotOwnerDesk } from "@/lib/lens-packs";
+import { packsForViewedDesk, snapshotOwnerDesk } from "@/lib/lens-packs";
 import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
@@ -79,8 +79,6 @@ export function JobsDesk() {
   const closed = readClosed();
   const scope = companyScopeFor(lens, companyId);
   const deskPacks = packsForViewedDesk(lens, viewingAs, seat);
-  const immediateOwnerWork = ownerDeskHasImmediateWork(lens);
-  const holdPartialTree = Boolean(lensReady && !viewingAs && hydrating && !immediateOwnerWork);
   const jobs = jobsOnDesk(serverJobs, deskPacks, viewingAs, scope, menu, {
     includeSeeds: true,
   });
@@ -126,17 +124,10 @@ export function JobsDesk() {
         )}
       </div>
       {error ? <p className="mt-3 text-amber-flare">{error}</p> : null}
-      {hydrating || holdPartialTree ? (
-        <div className="mt-4 space-y-2" aria-live="polite">
-          <p className="text-sm font-semibold text-[#163038]">Refreshing jobs on this desk…</p>
-          {holdPartialTree || !deskPacks.length ? (
-            <div className="space-y-2">
-              <div className="h-12 rounded-sm bg-[#d8e0e0]" />
-              <div className="h-12 rounded-sm bg-[#d8e0e0]" />
-              <div className="h-12 rounded-sm bg-[#d8e0e0]" />
-            </div>
-          ) : null}
-        </div>
+      {hydrating ? (
+        <p className="mt-4 text-sm font-semibold text-[#163038]" aria-live="polite">
+          Refreshing jobs on this desk…
+        </p>
       ) : null}
       {standaloneLane ? (
         <p className="mt-6 text-sm text-[#5b6f73]">
@@ -146,7 +137,7 @@ export function JobsDesk() {
           </Link>
           .
         </p>
-      ) : holdPartialTree ? null : (
+      ) : (
         <JobTreeDesk
           tree={tree}
           estimates={estimates}
