@@ -104,6 +104,12 @@ describe("Quality and HSE leave Job setup", () => {
     assert.match(detail, /QualityDay1Card/);
     assert.match(detail, /RollingChartMap/);
     assert.match(detail, /HseDay1Card/);
+    const fresh = source("../components/NewEstimateForm.tsx");
+    assert.match(fresh, /QualityDay1Card/);
+    assert.match(fresh, /RollingChartMap/);
+    assert.match(fresh, /HseDay1Card/);
+    assert.match(fresh, /onOpenQuality/);
+    assert.match(fresh, /onOpenHse/);
     assert.doesNotMatch(quality, /1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|quality-briefs\.json|owner vault/i);
     assert.doesNotMatch(qualityCard, /1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|1y6Q3TOnpXzV/);
     assert.doesNotMatch(hse, /1zYl2dEvW21|hse-briefs\.json|29\.1|sling form/i);
@@ -136,6 +142,9 @@ describe("Quality and HSE leave Job setup", () => {
     assert.match(frame, /pickOpenJob/);
     assert.doesNotMatch(frame, /awardedLocalJobs\(/);
     assert.doesNotMatch(frame, /awardedBoardJobs\(/);
+    const modules = source("../components/FutureModulesDesk.tsx");
+    assert.doesNotMatch(modules, /Opens when a job is awarded/);
+    assert.match(modules, /Fillable on the selected job/);
   });
 
   it("does not put generating-bank or QC/HSE books in git", () => {
