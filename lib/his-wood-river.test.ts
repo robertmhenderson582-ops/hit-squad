@@ -278,8 +278,12 @@ test("stale HIS leftover is James or any non-Nathan non-owner identity", () => {
   );
   assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: "bccamp2@gmail.com" }), true);
   assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: NATHAN_DESK_EMAIL }), false);
-  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: owner.email }), true);
+  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: owner.email }), false);
   assert.equal(isStaleHisLeftoverIdentity({ packId: "EST-MTJ5D6", ownerEmail: JAMES_EMAIL, transferredToName: "James Cain" }), true);
+  assert.equal(
+    isStaleHisLeftoverIdentity({ packId: "EST-MTJ5D6", ownerEmail: owner.email, transferredToName: "James Cain" }),
+    true,
+  );
   assert.equal(isStaleHisLeftoverIdentity({ packId: "new-mtkigb-james", ownerEmail: JAMES_EMAIL, title: "New Turnaround estimate" }), false);
 });
 

@@ -1,4 +1,5 @@
 import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
+import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import { listLocalPacks, rememberLocalPack, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
@@ -161,11 +162,17 @@ export function isHisWoodRiverJob(job?: { title?: string; code?: string } | null
 export function isHisProtectedMenuItem(item?: { id?: string; packId?: string; title?: string } | null) {
   if (!item) return false;
   const rawId = (item.id || "").trim();
-  const packId = (item.packId || (rawId.startsWith("job-") ? rawId.slice(4) : rawId)).trim();
-  if (hisMatchForPack({ packId, title: item.title })) return true;
-  if (rawId && hisMatchForPack({ packId: rawId, title: item.title })) return true;
-  if (isHisWoodRiverJob({ title: item.title, code: rawId }) || isHisWoodRiverJob({ title: item.title, code: packId })) {
-    return true;
+  const rawPack = (item.packId || "").trim();
+  const candidates = [
+    rawPack,
+    rawId,
+    rawId.startsWith("job-") ? rawId.slice(4) : "",
+    rawPack.startsWith("job-") ? rawPack.slice(4) : "",
+    item.title,
+  ].filter((value): value is string => Boolean(value && value.trim()));
+  for (const candidate of candidates) {
+    if (hisMatchForPack({ packId: candidate, title: item.title || candidate })) return true;
+    if (isHisWoodRiverJob({ title: item.title || candidate, code: candidate })) return true;
   }
   return false;
 }
@@ -176,8 +183,17 @@ export function shouldPaintHisCards(user?: { email?: string; role?: string } | n
   return canonicalEmail(user.email) === NATHAN_DESK_EMAIL;
 }
 
-/** HIS jobs live on Nathan's desk. Owner OPEN/edits by role, not by owning the pack. */
-function hisDeskOwnerEmail(_existing?: string) {
+/** Nathan unless the owner already holds the pack with no James / foreign leftover stamp. */
+function hisDeskOwnerEmail(pack: HisIdentityPack) {
+  const current = hisOwnerKey(pack.ownerEmail);
+  if (current === NATHAN_DESK_EMAIL) return NATHAN_DESK_EMAIL;
+  if (
+    isOwnerIdentity(current) &&
+    !isForeignHisIdentity(pack.transferredTo) &&
+    !isForeignHisIdentity(pack.transferredToName)
+  ) {
+    return OWNER_LOGIN_EMAIL;
+  }
   return NATHAN_DESK_EMAIL;
 }
 
@@ -204,14 +220,17 @@ function hisOwnerKey(value?: string) {
 }
 
 function shouldClearHisStamp(value?: string) {
-  return isForeignHisIdentity(value) || isOwnerIdentity(value);
+  return isForeignHisIdentity(value);
 }
 
-/** Leftover HIS row that is not stamped Nathan — James, Benny, owner, or empty. */
+/** Leftover HIS row whose ownerEmail / transferredTo is James or any non-Nathan non-owner. */
 export function isStaleHisLeftoverIdentity(pack?: HisIdentityPack | null) {
   if (!pack || !hisMatchForPack(pack)) return false;
-  if (hisOwnerKey(pack.ownerEmail) !== NATHAN_DESK_EMAIL) return true;
-  return shouldClearHisStamp(pack.transferredTo) || shouldClearHisStamp(pack.transferredToName);
+  return (
+    isForeignHisIdentity(pack.ownerEmail) ||
+    isForeignHisIdentity(pack.transferredTo) ||
+    isForeignHisIdentity(pack.transferredToName)
+  );
 }
 
 export function leftoverHasStaleHisIdentity(packs: HisIdentityPack[]): boolean {
@@ -228,22 +247,26 @@ export function markLeftoverGen(store?: StorageLike | null) {
   store.setItem(HIS_LEFTOVER_GEN_KEY, HIS_LEFTOVER_GEN);
 }
 
-/** Restore Nathan identity. Owner OPEN/edits by role — never own the HIS pack. No share rows, no dollars. */
+/** Restore Nathan identity when leftover still names James / Benny. Owner OPEN/edits by role. No share rows, no dollars. */
 export function applyHisIdentity<T extends HisIdentityPack>(pack: T, his?: HisWoodRiverFile | null): T {
   const row = his ?? hisMatchForPack(pack);
   if (!row) return pack;
-  return {
+  const ownerEmail = hisDeskOwnerEmail(pack);
+  const next: T = {
     ...pack,
     title: row.title,
     client: row.client,
     site: row.site,
     siteId: row.siteId,
-    ownerEmail: hisDeskOwnerEmail(pack.ownerEmail),
+    ownerEmail,
+  };
+  return {
+    ...next,
     estimator: shouldClearHisStamp(pack.estimator) ? NATHAN_DESK_NAME : pack.estimator,
     transferredTo: shouldClearHisStamp(pack.transferredTo) ? undefined : pack.transferredTo,
     transferredToName: shouldClearHisStamp(pack.transferredToName) ? undefined : pack.transferredToName,
-    transferredFrom: isJamesStamp(pack.transferredFrom) || isOwnerIdentity(pack.transferredFrom) ? undefined : pack.transferredFrom,
-    transferredFromName: isJamesStamp(pack.transferredFromName) || isOwnerIdentity(pack.transferredFromName) ? undefined : pack.transferredFromName,
+    transferredFrom: isJamesStamp(pack.transferredFrom) ? undefined : pack.transferredFrom,
+    transferredFromName: isJamesStamp(pack.transferredFromName) ? undefined : pack.transferredFromName,
     sharedWith: Array.isArray(pack.sharedWith)
       ? pack.sharedWith.filter((email) => !isForeignHisIdentity(email))
       : pack.sharedWith,
@@ -289,8 +312,27 @@ export function mergeHisWoodRiverCards(packs: LocalPack[]): LocalPack[] {
     const his = hisMatchForPack(pack);
     return his ? applyHisIdentity(pack, his) : pack;
   });
-  const extras = hisWoodRiverCards().filter((row) => !hisCardAlreadyPresent(next, row));
-  return [...next, ...extras];
+  const others: LocalPack[] = [];
+  const byHis = new Map<string, LocalPack>();
+  for (const pack of next) {
+    const his = hisMatchForPack(pack);
+    if (!his) {
+      others.push(pack);
+      continue;
+    }
+    const current = byHis.get(his.fileId);
+    if (!current) {
+      byHis.set(his.fileId, pack);
+      continue;
+    }
+    const seed = his.packId ? normPackId(his.packId) : "";
+    const currentIsSeed = Boolean(seed && normPackId(current.packId) === seed);
+    const nextIsLeftover = Boolean(seed && normPackId(pack.packId) !== seed);
+    if (currentIsSeed && nextIsLeftover) byHis.set(his.fileId, pack);
+  }
+  const kept = [...others, ...byHis.values()];
+  const extras = hisWoodRiverCards().filter((row) => !hisCardAlreadyPresent(kept, row));
+  return [...kept, ...extras];
 }
 
 /** Rewrite stale local HIS leftover rows in place. Does not add extras or clear other keys. */

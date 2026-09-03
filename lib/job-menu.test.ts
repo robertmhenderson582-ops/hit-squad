@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   archiveMenuItem,
+  clearHisJobMenuLeftover,
   clearTransferredMenuItem,
   deleteMenuItem,
   isActiveMenuItem,
@@ -86,7 +87,7 @@ describe("job menu archive and delete", () => {
     assert.equal(isActiveMenuItem(cat2, menuForViewedDesk(false, store)), true);
   });
 
-  it("does not let leftover archive or delete hide HIS Wood River cards", () => {
+  it("rewrites owner job-menu leftover so HIS cards stay listed", () => {
     const store = memoryStore();
     const aromatics = { id: "job-new-mtj7bvtk-akmei", packId: "new-mtj7bvtk-akmei", title: "2027 Aromatics Turnaround" };
     const cat2 = { id: "job-new-mtaajdwa-f7539", packId: "new-mtaajdwa-f7539", title: "Madison CAT 2 (Pit Stop)" };
@@ -94,14 +95,11 @@ describe("job menu archive and delete", () => {
     deleteMenuItem(aromatics, store);
     archiveMenuItem(cat2, store);
     deleteMenuItem(tm, store);
+    clearHisJobMenuLeftover(store);
     const menu = readJobMenu(store);
-    assert.equal(menuStatus(aromatics, menu), null);
-    assert.equal(menuStatus(cat2, menu), null);
-    assert.equal(menuStatus(tm, menu), null);
-    assert.equal(isActiveMenuItem(aromatics, menu), true);
-    assert.equal(isActiveMenuItem(cat2, menu), true);
-    assert.equal(isActiveMenuItem(tm, menu), true);
-    assert.deepEqual(omitDeletedJobs([aromatics, cat2, tm], menu).map((row) => row.id), [
+    assert.equal(menu.deleted.length, 0);
+    assert.equal(menu.archived.length, 0);
+    assert.deepEqual(omitDeletedJobs([aromatics, cat2, tm], menu, true).map((row) => row.id), [
       aromatics.id,
       cat2.id,
       tm.id,

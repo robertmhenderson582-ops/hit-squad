@@ -89,7 +89,6 @@ function touches(item: MenuItem, ids: string[]) {
 }
 
 export function menuStatus(item: MenuItem, menu: JobMenuState = readJobMenu()): "archived" | "deleted" | "transferred" | null {
-  if (isHisProtectedMenuItem(item)) return null;
   if (touches(item, menu.deleted)) return "deleted";
   if (touches(item, menu.transferred.map((row) => row.id))) return "transferred";
   if (touches(item, menu.archived)) return "archived";
@@ -197,8 +196,11 @@ export function recordTransferredMenuItem(
 }
 
 /** Deleted sample / seed ids stay off this seat after a reload or poll. */
-export function omitDeletedJobs<T extends MenuItem>(jobs: T[], menu: JobMenuState): T[] {
-  return jobs.filter((job) => menuStatus(job, menu) !== "deleted");
+export function omitDeletedJobs<T extends MenuItem>(jobs: T[], menu: JobMenuState, keepHis = false): T[] {
+  return jobs.filter((job) => {
+    if (keepHis && isHisProtectedMenuItem(job)) return true;
+    return menuStatus(job, menu) !== "deleted";
+  });
 }
 
 export function readVaultSeen(store?: StorageLike | null): string[] {
