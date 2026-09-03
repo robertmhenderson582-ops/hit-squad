@@ -6,7 +6,7 @@ import { PasswordField } from "@/components/PasswordField";
 import { useSession } from "@/components/SessionProvider";
 import { isOwnerLoginEmail } from "@/lib/owner-login";
 
-type Gate = "identify" | "create" | "password";
+type Gate = "identify" | "create" | "password" | "recover";
 
 export function LoginForm() {
   const router = useRouter();
@@ -175,15 +175,55 @@ export function LoginForm() {
           </>
         ) : null}
 
-        {gate === "password" ? (
-          <PasswordField
-            label="PASSWORD"
-            variant="night"
-            autoComplete="current-password"
-            value={password}
-            onChange={setPassword}
-            required
-          />
+        {gate === "password" || gate === "recover" ? (
+          <>
+            {gate === "recover" ? (
+              <p className="text-sm leading-6 text-paper-cream/90">
+                Use the one-time recovery password issued for this seat, then change it in Settings.
+                The owner issues tester recovery from Settings → Users. This is not a temp-password
+                create screen.
+              </p>
+            ) : null}
+            <PasswordField
+              label={gate === "recover" ? "RECOVERY PASSWORD" : "PASSWORD"}
+              variant="night"
+              autoComplete="current-password"
+              value={password}
+              onChange={setPassword}
+              required
+            />
+            {gate === "password" ? (
+              <button
+                type="button"
+                className="font-mono text-[10px] tracking-[0.18em] text-steel-glow underline"
+                onClick={() => setGate("recover")}
+              >
+                Need to get back in?
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="font-mono text-[10px] tracking-[0.18em] text-steel-glow underline"
+                onClick={() => setGate("password")}
+              >
+                Back to password
+              </button>
+            )}
+          </>
+        ) : gate === "identify" ? (
+          <button
+            type="button"
+            className="font-mono text-[10px] tracking-[0.18em] text-steel-glow underline"
+            onClick={() => {
+              if (!email.trim()) {
+                setLocalError("Type the email first.");
+                return;
+              }
+              setGate("recover");
+            }}
+          >
+            Need to get back in?
+          </button>
         ) : null}
       </div>
 
@@ -198,7 +238,7 @@ export function LoginForm() {
         disabled={!acknowledged || submitting}
         className="w-full bg-steel px-4 py-3 font-display text-lg tracking-[0.24em] text-paper-cream disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {submitting ? "CHECKING SESSION" : gate === "identify" ? "CONTINUE" : "ENTER THE DESK"}
+        {submitting ? "CHECKING SESSION" : gate === "identify" ? "CONTINUE" : gate === "recover" ? "RECOVER THE DESK" : "ENTER THE DESK"}
       </button>
     </form>
   );
