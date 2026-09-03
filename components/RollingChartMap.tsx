@@ -113,7 +113,7 @@ export function RollingChartMap({
   const pickedMeta = picked ? parseTubeKey(picked) : null;
   const progression = useMemo(() => rollingProgression(state), [state]);
   const page = Math.min(Math.max(1, circuitPage), Math.max(1, circuits));
-  const cellPx = Math.max(28, Math.round(40 * zoom));
+  const cellPx = Math.max(32, Math.round(44 * zoom));
 
   function write(next: RollingChartState) {
     onChange(hydrateRollingChart(next));
@@ -421,7 +421,7 @@ export function RollingChartMap({
                     <div
                       key={circuit}
                       id={`rolling-circuit-${circuit}`}
-                      className={`flex items-center gap-1 py-0.5 ${focused ? "bg-[#efe6d4]" : ""}`}
+                      className={`flex flex-nowrap items-center gap-1 py-0.5 ${focused ? "bg-[#efe6d4]" : ""}`}
                     >
                       <span className="sticky left-0 z-[1] w-10 shrink-0 bg-[#fbf8f0] text-xs font-bold text-[#163038]">
                         {axisLabel(circuit, focused || pickedMeta?.circuit === circuit)}
@@ -442,7 +442,13 @@ export function RollingChartMap({
                               setCircuitPage(circuit);
                             }}
                             className="tube-cell"
-                            style={{ ...tubeStyle(state, mark, selected), width: cellPx, minWidth: cellPx, minHeight: cellPx }}
+                            style={{
+                              ...tubeStyle(state, mark, selected),
+                              width: cellPx,
+                              minWidth: cellPx,
+                              minHeight: cellPx,
+                              flexShrink: 0,
+                            }}
                           >
                             {tubeCellMark(state, mark) || (selected ? String(tube) : "")}
                           </button>
@@ -501,7 +507,13 @@ export function RollingChartMap({
                             aria-label={`${side} tube ${tube}`}
                             onClick={() => setPicked(key)}
                             className="tube-cell"
-                            style={{ ...tubeStyle(state, mark, selected), width: cellPx, minWidth: cellPx, minHeight: cellPx }}
+                            style={{
+                              ...tubeStyle(state, mark, selected),
+                              width: cellPx,
+                              minWidth: cellPx,
+                              minHeight: cellPx,
+                              flexShrink: 0,
+                            }}
                           >
                             {tubeCellMark(state, mark) || (selected || tube % 5 === 0 ? String(tube) : "")}
                           </button>
