@@ -5,6 +5,7 @@ import { assignedCompany, isKnownCompany, setAssignedCompany } from "./companies
 import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
 import { SEATS_VAULT_KIND, SEATS_VAULT_NAME, readVaultJson, writeVaultJson } from "./drive-data.ts";
 import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
+import { canonicalEmail, identityBucket, isOwnerAliasSeat, isOwnerIdentity, resolveIdentity } from "./identity.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
 import type { PublicUser, SeatHashClaim } from "./types.ts";
@@ -13,6 +14,7 @@ export type { SeatHashClaim };
 
 type StoredUser = PublicUser & {
   passwordHash?: string;
+  previousHashes?: string[];
 };
 
 export type ExtraSeat = {
@@ -21,7 +23,7 @@ export type ExtraSeat = {
   name: string;
 };
 
-type SeatHashRow = { passwordHash?: string; mustChangePassword?: boolean };
+type SeatHashRow = { passwordHash?: string; mustChangePassword?: boolean; previousHashes?: string[] };
 type SeatFile = {
   hashes?: Record<string, SeatHashRow>;
   extras?: ExtraSeat[];
@@ -53,12 +55,54 @@ export function parseSeatHashes(raw: unknown): NonNullable<SeatFile["hashes"]> {
     if (!key) continue;
     if (!row || typeof row !== "object" || typeof row.passwordHash !== "string") continue;
     if (!BCRYPT_HASH.test(row.passwordHash)) continue;
+    const previous = Array.isArray(row.previousHashes)
+      ? row.previousHashes.filter((hash): hash is string => typeof hash === "string" && BCRYPT_HASH.test(hash))
+      : [];
     hashes[key] = {
       passwordHash: row.passwordHash,
       mustChangePassword: Boolean(row.mustChangePassword),
+      previousHashes: uniqueHashes(previous, row.passwordHash),
     };
   }
-  return hashes;
+  return collapseSeatHashes(hashes);
+}
+
+function uniqueHashes(hashes: string[], skip?: string) {
+  return [...new Set(hashes.filter((hash) => hash && hash !== skip))];
+}
+
+function hashRowCandidates(row?: SeatHashRow | null) {
+  if (!row?.passwordHash) return [];
+  return [row.passwordHash, ...(row.previousHashes ?? [])].filter((hash) => BCRYPT_HASH.test(hash));
+}
+
+/** One key per person. Alias keys (local-part, display name) fold onto normalized email. */
+export function collapseSeatHashes(hashes: NonNullable<SeatFile["hashes"]>): NonNullable<SeatFile["hashes"]> {
+  const groups = new Map<string, { key: string; entries: { key: string; row: SeatHashRow }[] }>();
+  for (const [key, row] of Object.entries(hashes)) {
+    const bucket = identityBucket(key) || key;
+    const destKey = canonicalEmail(key) || key;
+    const current = groups.get(bucket);
+    if (!current) groups.set(bucket, { key: destKey, entries: [{ key, row }] });
+    else {
+      if (canonicalEmail(key)) current.key = destKey;
+      current.entries.push({ key, row });
+    }
+  }
+  const next: NonNullable<SeatFile["hashes"]> = {};
+  for (const { key, entries } of groups.values()) {
+    const candidates = uniqueHashes(entries.flatMap((entry) => hashRowCandidates(entry.row)));
+    const mustChange = entries.some((entry) => entry.row.mustChangePassword);
+    const preferred = entries.find((entry) => canonicalEmail(entry.key) === key || entry.key === key) ?? entries[0];
+    const primary = preferred?.row.passwordHash || candidates[0];
+    if (!primary) continue;
+    next[key] = {
+      passwordHash: primary,
+      mustChangePassword: mustChange,
+      previousHashes: uniqueHashes(candidates, primary),
+    };
+  }
+  return next;
 }
 
 function hasHashes(hashes: NonNullable<SeatFile["hashes"]>) {
@@ -69,17 +113,32 @@ function hasSeatData(file: SeatStoreFile) {
   return hasHashes(file.hashes) || file.extras.length > 0;
 }
 
-/** Vault overlays local, but an owner hash on disk is never dropped if the vault omitted it. */
+function mergeHashRows(left?: SeatHashRow, right?: SeatHashRow): SeatHashRow | undefined {
+  if (!left) return right;
+  if (!right) return left;
+  const candidates = uniqueHashes([...hashRowCandidates(left), ...hashRowCandidates(right)]);
+  const primary = left.passwordHash || right.passwordHash || candidates[0];
+  if (!primary) return undefined;
+  return {
+    passwordHash: primary,
+    mustChangePassword: Boolean(left.mustChangePassword || right.mustChangePassword),
+    previousHashes: uniqueHashes(candidates, primary),
+  };
+}
+
+/** Vault overlays local keys, but every owner/alias credential is kept as a login candidate. */
 function mergeSeatFiles(local: SeatStoreFile, vault: SeatStoreFile): SeatStoreFile {
-  const hashes = { ...local.hashes, ...vault.hashes };
-  const owner = ownerEmail();
-  if (local.hashes[owner] && !vault.hashes[owner]) {
-    hashes[owner] = local.hashes[owner];
+  const hashes: NonNullable<SeatFile["hashes"]> = { ...local.hashes };
+  for (const [key, vaultRow] of Object.entries(vault.hashes)) {
+    const merged = mergeHashRows(hashes[key], vaultRow);
+    if (merged) hashes[key] = merged;
   }
   const extrasByEmail = new Map<string, ExtraSeat>();
-  for (const extra of local.extras) extrasByEmail.set(extra.email, extra);
-  for (const extra of vault.extras) extrasByEmail.set(extra.email, extra);
-  return { hashes, extras: [...extrasByEmail.values()] };
+  for (const extra of [...local.extras, ...vault.extras]) {
+    if (isOwnerAliasSeat(extra) || resolveIdentity(extra.email) || resolveIdentity(extra.id)) continue;
+    extrasByEmail.set(identityBucket(extra.email) || extra.email, extra);
+  }
+  return { hashes: collapseSeatHashes(hashes), extras: [...extrasByEmail.values()] };
 }
 
 function seatFileHasLocalOnly(merged: SeatStoreFile, vault: SeatStoreFile) {
@@ -98,11 +157,24 @@ export function parseExtraSeats(raw: unknown): ExtraSeat[] {
     const name = typeof row.name === "string" ? row.name.trim().replace(/\s+/g, " ") : "";
     const id = typeof row.id === "string" ? row.id.trim() : "";
     if (!email || !name || !id) continue;
-    if (!email.includes("@") || reserved.has(email) || seen.has(email) || seen.has(id)) continue;
+    const bucket = identityBucket(email);
+    if (
+      !email.includes("@") ||
+      reserved.has(email) ||
+      isOwnerAliasSeat({ id, email }) ||
+      resolveIdentity(email) ||
+      resolveIdentity(id) ||
+      seen.has(email) ||
+      seen.has(id) ||
+      seen.has(bucket)
+    ) {
+      continue;
+    }
     if (name.length < 2 || name.length > 80) continue;
     extras.push({ id, email, name });
     seen.add(email);
     seen.add(id);
+    seen.add(bucket);
   }
   return extras;
 }
@@ -155,6 +227,7 @@ function hashesFromUsers(users: StoredUser[]) {
     hashes[user.email] = {
       passwordHash: user.passwordHash,
       mustChangePassword: Boolean(user.mustChangePassword),
+      previousHashes: uniqueHashes(user.previousHashes || [], user.passwordHash),
     };
   }
   return hashes;
@@ -167,21 +240,70 @@ function resolveAdapter(): DriveAdapter | null {
   return drive.configured ? drive : null;
 }
 
-function persistHashes(users: StoredUser[]) {
-  const hashes = hashesFromUsers(users);
+function persistHashes(users: StoredUser[], opts?: { replaceEmails?: string[] }) {
   const extras = extrasFromUsers(users);
+  const hashes = collapseSeatHashes(hashesFromUsers(users));
   writeSeatFile({ hashes, extras });
+  applyHashesToUsers(users, hashes);
+  const replace = new Set(
+    (opts?.replaceEmails ?? [])
+      .map((email) => canonicalEmail(email) || email.trim().toLowerCase())
+      .filter(Boolean),
+  );
   const drive = resolveAdapter();
   if (drive) {
     pendingVault = pendingVault
-      .then(() => writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, { hashes, extras }))
+      .then(async () => {
+        const raw = await readVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
+        const vaultHashes = parseSeatHashes(raw);
+        const vaultExtras = parseExtraSeats(raw);
+        const combined: NonNullable<SeatFile["hashes"]> = { ...vaultHashes };
+        for (const key of Object.keys(combined)) {
+          const email = canonicalEmail(key);
+          if (email && email !== key) {
+            const folded = mergeHashRows(combined[email], combined[key]);
+            if (folded) combined[email] = folded;
+            delete combined[key];
+          }
+        }
+        for (const [email, row] of Object.entries(hashes)) {
+          if (replace.has(email)) {
+            combined[email] = row;
+            for (const key of Object.keys(combined)) {
+              if (key !== email && identityBucket(key) === identityBucket(email)) delete combined[key];
+            }
+          } else {
+            const merged = mergeHashRows(combined[email], row);
+            if (merged) combined[email] = merged;
+          }
+        }
+        const collapsed = collapseSeatHashes(combined);
+        const extrasByEmail = new Map<string, ExtraSeat>();
+        for (const extra of [...vaultExtras, ...extras]) {
+          if (isOwnerAliasSeat(extra) || resolveIdentity(extra.email) || resolveIdentity(extra.id)) continue;
+          extrasByEmail.set(identityBucket(extra.email) || extra.email, extra);
+        }
+        const next = { hashes: collapsed, extras: [...extrasByEmail.values()] };
+        await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, next);
+        writeSeatFile(next);
+        applyHashesToUsers(users, collapsed);
+      })
       .then(() => undefined)
       .catch(() => undefined);
   }
 }
 
+function applyHashesToUsers(users: StoredUser[], hashes: NonNullable<SeatFile["hashes"]>) {
+  for (const user of users) {
+    const row = hashes[user.email] || hashes[identityBucket(user.email)];
+    if (!row?.passwordHash) continue;
+    user.passwordHash = row.passwordHash;
+    user.previousHashes = row.previousHashes;
+    user.mustChangePassword = Boolean(row.mustChangePassword);
+  }
+}
+
 export async function hydrateSeatStore() {
-  if (hydrated) return;
   const cached = loadSeatFile();
   const drive = resolveAdapter();
   if (drive) {
@@ -209,8 +331,18 @@ export async function flushSeatVault() {
   await pendingVault;
 }
 
+function ownerHashRow(persisted: NonNullable<SeatFile["hashes"]>, email: string) {
+  const direct = persisted[email];
+  if (direct?.passwordHash) return direct;
+  const bucket = identityBucket(email);
+  for (const [key, row] of Object.entries(persisted)) {
+    if (identityBucket(key) === bucket && row.passwordHash) return row;
+  }
+  return undefined;
+}
+
 function ownerPasswordHash(persisted: NonNullable<SeatFile["hashes"]>, email: string) {
-  const saved = persisted[email]?.passwordHash;
+  const saved = ownerHashRow(persisted, email)?.passwordHash;
   if (saved) return saved;
   const ownerPassword = process.env.OWNER_PASSWORD;
   if (!ownerPassword) {
@@ -222,12 +354,14 @@ function ownerPasswordHash(persisted: NonNullable<SeatFile["hashes"]>, email: st
 function seedUsers(): StoredUser[] {
   const persisted = loadPersisted();
   const email = (process.env.OWNER_EMAIL || OWNER_LOGIN_EMAIL).toLowerCase();
+  const ownerRow = ownerHashRow(persisted, email);
   const owner: StoredUser = {
     id: "owner-robert-henderson",
     email,
     name: process.env.OWNER_NAME || "Robert Henderson",
     role: "owner",
     passwordHash: ownerPasswordHash(persisted, email),
+    previousHashes: ownerRow?.previousHashes,
   };
   const novusSaved = persisted[NOVUS_EMAIL];
   const novus: StoredUser = {
@@ -251,7 +385,7 @@ function seedUsers(): StoredUser[] {
   });
   const known = new Set<string>([owner.email, novus.email, ...testers.map((seat) => seat.email)]);
   const extras: StoredUser[] = loadSeatFile().extras
-    .filter((seat) => !known.has(seat.email))
+    .filter((seat) => !known.has(seat.email) && !isOwnerAliasSeat(seat) && !resolveIdentity(seat.email) && !resolveIdentity(seat.id))
     .map((seat) => {
       const saved = persisted[seat.email];
       known.add(seat.email);
@@ -286,7 +420,14 @@ export function toPublicUser(user: StoredUser): PublicUser {
 }
 
 export function findUserByEmail(email: string): StoredUser | undefined {
-  return ownerUsers().find((user) => user.email === email.trim().toLowerCase());
+  const wanted = (canonicalEmail(email) || email.trim().toLowerCase()).trim();
+  if (!wanted) return undefined;
+  const person = resolveIdentity(email);
+  return ownerUsers().find((user) => {
+    if (user.email === wanted || user.id === wanted) return true;
+    if (person && (user.email === person.email || user.id === person.id)) return true;
+    return identityBucket(user.email) === identityBucket(email);
+  });
 }
 
 export function findUserById(id: string): StoredUser | undefined {
@@ -296,8 +437,20 @@ export function findUserById(id: string): StoredUser | undefined {
 export const GENERIC_SIGNIN_ERROR = "Sign-in failed. Check the email and password.";
 
 export function verifyPassword(user: StoredUser, password: string): boolean {
-  if (!user.passwordHash) return false;
-  return bcrypt.compareSync(password, user.passwordHash);
+  if (!password) return false;
+  const hashes = [user.passwordHash, ...(user.previousHashes ?? [])].filter((hash): hash is string => Boolean(hash));
+  for (const hash of hashes) {
+    if (!BCRYPT_HASH.test(hash)) continue;
+    if (bcrypt.compareSync(password, hash)) {
+      if (hash !== user.passwordHash) {
+        user.previousHashes = uniqueHashes(hashes, hash);
+        user.passwordHash = hash;
+        persistHashes(ownerUsers());
+      }
+      return true;
+    }
+  }
+  return false;
 }
 
 export function seatNeedsPasswordCreate(email: string): boolean {
@@ -343,7 +496,7 @@ export function claimFirstPassword(
   if (password !== confirm) return { error: "New password and confirm did not match.", status: 400 };
   user.passwordHash = bcrypt.hashSync(password, 12);
   user.mustChangePassword = false;
-  persistHashes(ownerUsers());
+  persistHashes(ownerUsers(), { replaceEmails: [user.email] });
   return { ok: true };
 }
 
@@ -400,7 +553,7 @@ export function issueSeatPassword(email: string, password: string): { ok: true }
   if (user.role === "owner") return { error: "Owner password is not issued from this form." };
   user.passwordHash = bcrypt.hashSync(password, 12);
   user.mustChangePassword = true;
-  persistHashes(ownerUsers());
+  persistHashes(ownerUsers(), { replaceEmails: [user.email] });
   return { ok: true };
 }
 
@@ -437,14 +590,20 @@ export async function createSeat(input: {
   if (name.length > 80) return { error: "That name is too long." };
   if (!EMAIL_RE.test(email)) return { error: "Type a real email." };
   if (password.length < 8) return { error: "Password must be 8+." };
-  if (email === ownerEmail()) return { error: "Owner stays the only owner." };
-  if (email === NOVUS_EMAIL) return { error: "Novus is not added from this form." };
+  const named = resolveIdentity(name);
+  if (email === ownerEmail() || isOwnerIdentity(email) || named?.role === "owner") return { error: "Owner stays the only owner." };
+  if (email === NOVUS_EMAIL || named?.role === "operator" || resolveIdentity(email)?.role === "operator") {
+    return { error: "Novus is not added from this form." };
+  }
+  if (named || resolveIdentity(email)) return { error: "That email already has a seat." };
   // Git-seed forbids (peffley, etc.) apply to TESTER_SEATS only — not this vault path.
   if (!(await isKnownCompany(companyId))) return { error: "Pick a company on this desk." };
 
   await hydrateSeatStore();
   const users = ownerUsers();
-  if (users.some((user) => user.email === email)) return { error: "That email already has a seat." };
+  if (users.some((user) => user.email === email || identityBucket(user.email) === identityBucket(email))) {
+    return { error: "That email already has a seat." };
+  }
 
   const user: StoredUser = {
     id: extraSeatId(email, new Set(users.map((row) => row.id))),
@@ -486,15 +645,21 @@ export function setOwnPassword(
   if (!user) return { error: "That seat is not on this desk.", status: 404 };
   if (user.mustChangePassword) {
     user.passwordHash = bcrypt.hashSync(next, 12);
+    user.previousHashes = [];
     user.mustChangePassword = false;
-    persistHashes(ownerUsers());
+    persistHashes(ownerUsers(), { replaceEmails: [user.email] });
     return { ok: true };
   }
   if (!current) return { error: "Current and new password are required.", status: 400 };
   if (!verifyPassword(user, current)) return { error: "Current password did not match.", status: 401 };
   user.passwordHash = bcrypt.hashSync(next, 12);
-  persistHashes(ownerUsers());
+  user.previousHashes = [];
+  persistHashes(ownerUsers(), { replaceEmails: [user.email] });
   return { ok: true };
+}
+
+export function ownerSeatCount() {
+  return ownerUsers().filter((user) => user.role === "owner" || isOwnerIdentity(user.email) || isOwnerIdentity(user.id)).length;
 }
 
 export function resetUsersForTests() {

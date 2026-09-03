@@ -34,7 +34,11 @@ import {
   setOwnPassword,
   useSeatVaultForTests,
   verifyPassword,
+  collapseSeatHashes,
+  listBuildSeats,
+  ownerSeatCount,
 } from "./users.ts";
+import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 
 const OWNER_SECRET = "owner-seat-secret-xx";
 const CHOSEN = "chosen-seat-secret";
@@ -54,14 +58,15 @@ process.env.SEAT_PASSWORD_PATH = seatFile;
 process.env.COMPANY_ASSIGNMENT_PATH = companyFile;
 process.env.AUTH_SECRET = "test-auth-secret-16chars";
 
-function wipePersisted() {
+async function wipePersisted() {
+  await flushSeatVault();
   if (existsSync(seatFile)) unlinkSync(seatFile);
   resetUsersForTests();
   resetCompanyAssignmentsForTests();
 }
 
-beforeEach(() => {
-  wipePersisted();
+beforeEach(async () => {
+  await wipePersisted();
 });
 
 after(() => {
@@ -657,8 +662,141 @@ test("parseExtraSeats skips owner, Novus, and seeded testers", () => {
       { id: "custom-owner", email: OWNER_LOGIN_EMAIL, name: "Nope" },
       { id: "custom-novus", email: NOVUS_EMAIL, name: "Nope" },
       { id: "custom-nathan", email: TESTER, name: "Nope" },
+      { id: "owner-robert-henderson", email: "alias.owner@example.com", name: "Nope" },
+      { id: "custom-local", email: "robertmhenderson582@gmail.com", name: "robertmhenderson582" },
       { id: "", email: "bad@example.com", name: "Nope" },
     ],
   });
   assert.deepEqual(extras, [{ id: "custom-ok", email: ADDED, name: "Added Tester" }]);
+});
+
+test("setOwnPassword then authenticate resolves one owner record from any alias", () => {
+  const changed = setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OWNER_SECRET);
+  assert.equal("ok" in changed, true);
+
+  for (const raw of [OWNER_LOGIN_EMAIL, "  RobertMHenderson582@Gmail.com ", "robertmhenderson582", "Robert Henderson"]) {
+    const outcome = loginOutcome({ email: raw, password: CHOSEN });
+    assert.equal(outcome.status, "authenticated", raw);
+    if (outcome.status === "authenticated") {
+      assert.equal(outcome.user.email, OWNER_LOGIN_EMAIL);
+      assert.equal(outcome.user.id, "owner-robert-henderson");
+      assert.equal(outcome.user.role, "owner");
+    }
+    assert.equal(findUserByEmail(raw)?.email, OWNER_LOGIN_EMAIL, raw);
+  }
+
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  assert.equal(ownerSeatCount(), 1);
+  assert.equal(listBuildSeats().filter((row) => row.role === "owner").length, 1);
+  assert.equal(listBuildSeats().filter((row) => isOwnerIdentity(row.email) || isOwnerIdentity(row.id)).length, 1);
+});
+
+test("split owner hash keys collapse onto normalized email and both credentials stay valid until Settings replace", () => {
+  const settingsHash = bcrypt.hashSync(CHOSEN, 12);
+  const resetHash = bcrypt.hashSync(OWNER_SECRET, 12);
+  writeFileSync(
+    seatFile,
+    `${JSON.stringify({
+      hashes: {
+        robertmhenderson582: { passwordHash: settingsHash, mustChangePassword: false },
+        [OWNER_LOGIN_EMAIL]: { passwordHash: resetHash, mustChangePassword: false },
+      },
+      extras: [{ id: "custom-robert", email: OWNER_LOGIN_EMAIL, name: "robertmhenderson582" }],
+    })}\n`,
+  );
+  resetUsersForTests();
+
+  const collapsed = collapseSeatHashes(
+    parseSeatHashes({
+      hashes: {
+        robertmhenderson582: { passwordHash: settingsHash },
+        [OWNER_LOGIN_EMAIL]: { passwordHash: resetHash },
+      },
+    }),
+  );
+  assert.deepEqual(Object.keys(collapsed), [OWNER_LOGIN_EMAIL]);
+  assert.equal(canonicalEmail("robertmhenderson582"), OWNER_LOGIN_EMAIL);
+
+  const viaSettings = loginOutcome({ email: "robertmhenderson582", password: CHOSEN });
+  assert.equal(viaSettings.status, "authenticated");
+  if (viaSettings.status === "authenticated") {
+    assert.equal(viaSettings.user.email, OWNER_LOGIN_EMAIL);
+    assert.equal(viaSettings.user.id, "owner-robert-henderson");
+  }
+  assert.equal(loginOutcome({ email: "Robert Henderson", password: OWNER_SECRET }).status, "authenticated");
+  assert.equal(ownerSeatCount(), 1);
+  assert.equal(parseExtraSeats(JSON.parse(readFileSync(seatFile, "utf8"))).length, 0);
+
+  const replaced = setOwnPassword(OWNER_LOGIN_EMAIL, OTHER, CHOSEN);
+  assert.equal("ok" in replaced, true);
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OTHER }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "error");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  assert.equal(ownerSeatCount(), 1);
+});
+
+test("stale vault owner hash does not drop a local Settings password", async () => {
+  const settingsHash = bcrypt.hashSync(CHOSEN, 12);
+  const staleHash = bcrypt.hashSync(OWNER_SECRET, 12);
+  writeFileSync(
+    seatFile,
+    `${JSON.stringify({
+      hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: settingsHash, mustChangePassword: false } },
+      extras: [],
+    })}\n`,
+  );
+  const drive = memoryDrive();
+  await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, {
+    hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: staleHash, mustChangePassword: false } },
+    extras: [],
+  });
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "authenticated");
+  assert.equal(ownerSeatCount(), 1);
+});
+
+test("a later tester persist from a stale instance cannot clobber the Settings hash", async () => {
+  const settingsHash = bcrypt.hashSync(CHOSEN, 12);
+  const staleHash = bcrypt.hashSync(OWNER_SECRET, 12);
+  writeFileSync(
+    seatFile,
+    `${JSON.stringify({
+      hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: staleHash, mustChangePassword: false } },
+      extras: [],
+    })}\n`,
+  );
+  const drive = memoryDrive();
+  await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, {
+    hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: settingsHash, mustChangePassword: false } },
+    extras: [],
+  });
+  useSeatVaultForTests(drive);
+
+  const created = loginOutcome({
+    email: TESTER,
+    newPassword: ISSUED,
+    confirmPassword: ISSUED,
+  });
+  assert.equal(created.status, "authenticated");
+  await flushSeatVault();
+  forgetSeatCacheForTests();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(ownerSeatCount(), 1);
+});
+
+test("createSeat cannot mint a second owner or a known person", async () => {
+  assert.equal("error" in (await createSeat({ name: "Robert", email: "  RobertMHenderson582@Gmail.com ", password: ISSUED })), true);
+  assert.equal("error" in (await createSeat({ name: "Robert Henderson", email: "other.robert@example.com", password: ISSUED })), true);
+  assert.equal("error" in (await createSeat({ name: "Novus", email: NOVUS_EMAIL, password: ISSUED })), true);
+  assert.equal("error" in (await createSeat({ name: "Nathan Boyte", email: TESTER, password: ISSUED })), true);
+  assert.equal("error" in (await createSeat({ name: "Nathan Boyte", email: "nathan.other@example.com", password: ISSUED })), true);
+  assert.equal(ownerSeatCount(), 1);
+  assert.equal(findUserByEmail("other.robert@example.com"), undefined);
+  assert.equal(findUserByEmail("nathan.other@example.com"), undefined);
 });
