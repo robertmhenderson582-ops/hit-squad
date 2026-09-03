@@ -92,10 +92,12 @@ export function jobsOnDesk(
   viewingAs: boolean,
   scope?: CompanyScope | null,
   menu?: JobMenuState | null,
+  opts?: { includeSeeds?: boolean },
 ) {
   const fromServer = serverJobs ?? [];
   const nextPacks = [...packs, ...dummyPacksForUser(scope).filter((pack) => !packs.some((row) => row.packId === pack.packId))];
-  const merged = viewingAs
+  const includeSeeds = opts?.includeSeeds ?? true;
+  const merged = viewingAs || !includeSeeds
     ? mergeLocalJobs(fromServer, nextPacks)
     : (() => {
         const seeds = visibleSeedJobs(scope);

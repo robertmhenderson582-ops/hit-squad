@@ -1,4 +1,4 @@
-import { emptyHseDay1, hydrateHseDay1, type HseDay1 } from "./hse-day1.ts";
+import { emptyHseDay1, hydrateHseDay1, HSE_PACKAGE_SLOTS, hseSlotMarked, type HseDay1 } from "./hse-day1.ts";
 import {
   clientFolderId,
   emptyRegisterRow,
@@ -13,81 +13,91 @@ export const HSE_EXECUTE_LANES = [
   {
     id: "incidents",
     title: "Incidents / near misses",
+    group: "observations",
     fields: [
-      { id: "when", label: "WHEN", kind: "date" },
-      { id: "site", label: "SITE", kind: "text" },
-      { id: "note", label: "NOTE", kind: "text" },
-      { id: "status", label: "STATUS", kind: "text" },
+      { id: "when", label: "Date", kind: "date" },
+      { id: "site", label: "Area", kind: "text" },
+      { id: "note", label: "What happened", kind: "text" },
+      { id: "action", label: "Action", kind: "text" },
+      { id: "status", label: "Status", kind: "text" },
     ],
   },
   {
     id: "observations",
     title: "Observations",
+    group: "observations",
     fields: [
-      { id: "when", label: "WHEN", kind: "date" },
-      { id: "site", label: "SITE", kind: "text" },
-      { id: "note", label: "NOTE", kind: "text" },
-      { id: "status", label: "STATUS", kind: "text" },
+      { id: "when", label: "Date", kind: "date" },
+      { id: "site", label: "Area", kind: "text" },
+      { id: "note", label: "Observation", kind: "text" },
+      { id: "action", label: "Action", kind: "text" },
+      { id: "status", label: "Status", kind: "text" },
     ],
   },
   {
     id: "hot-work",
     title: "Permits — Hot work",
+    group: "permits",
     fields: [
-      { id: "permit", label: "PERMIT", kind: "text" },
-      { id: "area", label: "AREA", kind: "text" },
-      { id: "window", label: "WINDOW", kind: "text" },
-      { id: "status", label: "STATUS", kind: "text" },
+      { id: "permit", label: "Permit", kind: "text" },
+      { id: "area", label: "Area", kind: "text" },
+      { id: "window", label: "Window", kind: "text" },
+      { id: "status", label: "Status", kind: "text" },
     ],
   },
   {
     id: "confined",
     title: "Permits — Confined space",
+    group: "permits",
     fields: [
-      { id: "permit", label: "PERMIT", kind: "text" },
-      { id: "area", label: "AREA", kind: "text" },
-      { id: "window", label: "WINDOW", kind: "text" },
-      { id: "status", label: "STATUS", kind: "text" },
+      { id: "permit", label: "Permit", kind: "text" },
+      { id: "area", label: "Area", kind: "text" },
+      { id: "window", label: "Window", kind: "text" },
+      { id: "status", label: "Status", kind: "text" },
     ],
   },
   {
     id: "loto",
     title: "Permits — LOTO",
+    group: "permits",
     fields: [
-      { id: "permit", label: "PERMIT", kind: "text" },
-      { id: "area", label: "AREA", kind: "text" },
-      { id: "window", label: "WINDOW", kind: "text" },
-      { id: "status", label: "STATUS", kind: "text" },
+      { id: "permit", label: "Permit", kind: "text" },
+      { id: "area", label: "Area", kind: "text" },
+      { id: "window", label: "Window", kind: "text" },
+      { id: "status", label: "Status", kind: "text" },
     ],
   },
   {
     id: "excavation",
     title: "Permits — Excavation",
+    group: "permits",
     fields: [
-      { id: "permit", label: "PERMIT", kind: "text" },
-      { id: "area", label: "AREA", kind: "text" },
-      { id: "window", label: "WINDOW", kind: "text" },
-      { id: "status", label: "STATUS", kind: "text" },
+      { id: "permit", label: "Permit", kind: "text" },
+      { id: "area", label: "Area", kind: "text" },
+      { id: "window", label: "Window", kind: "text" },
+      { id: "status", label: "Status", kind: "text" },
     ],
   },
   {
     id: "jsa",
     title: "JSA",
+    group: "talks",
     fields: [
-      { id: "task", label: "TASK", kind: "text" },
-      { id: "crew", label: "CREW", kind: "text" },
-      { id: "date", label: "DATE", kind: "date" },
-      { id: "status", label: "STATUS", kind: "text" },
+      { id: "task", label: "Task", kind: "text" },
+      { id: "crew", label: "Crew", kind: "text" },
+      { id: "date", label: "Date", kind: "date" },
+      { id: "status", label: "Status", kind: "text" },
     ],
   },
   {
     id: "toolbox",
     title: "Toolbox talks",
+    group: "talks",
     fields: [
-      { id: "topic", label: "TOPIC", kind: "text" },
-      { id: "crew", label: "CREW", kind: "text" },
-      { id: "date", label: "DATE", kind: "date" },
-      { id: "status", label: "STATUS", kind: "text" },
+      { id: "topic", label: "Topic", kind: "text" },
+      { id: "crew", label: "Crew", kind: "text" },
+      { id: "date", label: "Date", kind: "date" },
+      { id: "status", label: "Status", kind: "text" },
     ],
   },
 ] as const;
@@ -196,4 +206,21 @@ export function removeHseLaneRow(state: HseModuleState, lane: HseLaneId, id: str
       [lane]: state.lanes[lane].filter((row) => row.id !== id),
     },
   };
+}
+
+export function hseBoardCounts(state: HseModuleState): Record<HseLaneId, number> {
+  const counts = {} as Record<HseLaneId, number>;
+  for (const lane of HSE_EXECUTE_LANES) {
+    counts[lane.id] = state.lanes[lane.id].filter((row) =>
+      Object.values(row.cells).some((value) => String(value || "").trim()),
+    ).length;
+  }
+  return counts;
+}
+
+export function hseDay1CompleteCount(day1: HseDay1) {
+  return HSE_PACKAGE_SLOTS.filter((slot) => {
+    const row = day1.slots[slot.id];
+    return row && (hseSlotMarked(row.status) || row.note.trim() || row.date.trim());
+  }).length;
 }

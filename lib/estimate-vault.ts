@@ -4,11 +4,11 @@ import {
   canSharePack,
   canTransferPack,
   canWritePack,
+  listedDeskPacks,
   ownerVaultEmail,
   packOwnerEmailForWrite,
   packSharedEmails,
   packVisibleTo,
-  visiblePacks,
   type ScopeUser,
 } from "./estimate-scope.ts";
 import { hydratedHandoffExtras } from "./desk-scope-server.ts";
@@ -43,7 +43,7 @@ export async function listVisiblePacks(user: ScopeUser, adapter?: DriveAdapter) 
   const drive = estimateVaultAdapter(adapter);
   const store = drive.configured ? "drive" : driveStoreKind();
   if (!drive.configured) return { packs: [] as EstimatePackSnapshot[], store };
-  const packs = visiblePacks(user, await listDrivePacks(drive)).map(publicPack);
+  const packs = listedDeskPacks(user, await listDrivePacks(drive)).map(publicPack);
   return { packs, store };
 }
 

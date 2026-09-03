@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { describe, it } from "node:test";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import ExcelJS from "exceljs";
+import { describe, it } from "node:test";
 import type { CraftRow } from "./craft-labor.ts";
 import {
   buildEstimateWorkbook,
@@ -19,6 +22,17 @@ import { defaultLaborClass } from "./labor-class.ts";
 import { lookupShahanLabor, SHAHAN_NO_RATE_LABEL, shahanCrewCostAmount } from "./shahan-wood-river.ts";
 import { wageLookupOpts } from "./wage-lookup.ts";
 import { buildSheetXml, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
+
+function zipParts(bytes: Uint8Array): string[] {
+  const dir = mkdtempSync(join(tmpdir(), "est-xlsx-"));
+  const file = join(dir, "book.xlsx");
+  writeFileSync(file, bytes);
+  const listing = execSync(`unzip -l "${file}"`, { encoding: "utf8" });
+  return listing
+    .split("\n")
+    .map((line) => line.trim().split(/\s+/).pop() ?? "")
+    .filter((part) => part.includes(".xml") || part.includes(".rels"));
+}
 
 function craft(
   id: string,
@@ -214,7 +228,7 @@ function evaluateWorkbook(sheets: WorkbookSheet[]) {
 }
 
 describe("estimate excel export", () => {
-  it("writes live formulas and Summary money equals sheet rollups", () => {
+  it("writes live formulas and Summary money equals sheet rollups", async () => {
     const input = woodRiverFixture();
     const sheets = buildEstimateWorkbook(input);
     const names = sheets.map((sheet) => sheet.name);
@@ -238,13 +252,15 @@ describe("estimate excel export", () => {
     const direct = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.direct);
     assert.ok(summary && staff && direct);
     assert.equal(summary.cells.find((cell) => cell.ref === "A1")?.value, ESTIMATE_EXPORT_BRAND);
+    assert.equal(summary?.cells.find((cell) => cell.ref === "A5")?.value?.toString().startsWith("Produced"), true);
     assert.equal(summary.cells.find((cell) => cell.ref === "A2")?.value, ESTIMATE_EXPORT_PRODUCER);
     assert.match(String(staff.cells.find((cell) => cell.ref === "K7")?.value), /^C7\*G7$/);
     assert.match(String(staff.cells.find((cell) => cell.ref === "G7")?.value), /Rate Tables/);
     assert.match(String(staff.cells.find((cell) => cell.ref === "O8")?.value), /^SUM\(O7:O7\)$/);
-    const summaryFormulas = summary.cells.filter((cell) => cell.type === "formula");
-    assert.equal(summaryFormulas.length > 0, true);
-    assert.equal(summary.cells.some((cell) => cell.ref.startsWith("B") && cell.type === "number" && cell.value > 0), false);
+    assert.equal(summary.cells.some((cell) => cell.ref === "A7" && cell.value === "Staff labor $"), true);
+    assert.equal(summary.cells.some((cell) => cell.ref.startsWith("A") && cell.value === "Hours"), true);
+    assert.equal(summary.cells.find((cell) => cell.ref === "B6")?.value, "Amount $");
+    assert.equal(staff.cells.find((cell) => cell.ref === "O6")?.value, "Total $");
 
     const { evalAt } = evaluateWorkbook(sheets);
     const amountAt = (label: string) => {
@@ -259,7 +275,7 @@ describe("estimate excel export", () => {
     const rental = evalAt(ESTIMATE_XLSX_SHEETS.rental, "H8");
     const travel = evalAt(ESTIMATE_XLSX_SHEETS.travel, "E8");
     const misc = evalAt(ESTIMATE_XLSX_SHEETS.misc, "E8");
-    const grand = amountAt("ESTIMATE TOTAL");
+    const grand = amountAt("ESTIMATE TOTAL $");
     assert.equal(staffLabor > 0, true);
     assert.equal(directLabor > 0, true);
     assert.equal(Math.round((staffLabor + directLabor + staffPd + directPd + rental + travel + misc) * 100) / 100, Math.round(grand * 100) / 100);
@@ -278,14 +294,37 @@ describe("estimate excel export", () => {
 
     const xml = buildSheetXml(staff.cells);
     assert.match(xml, /<f>/);
-    const bytes = estimateToXlsx(input);
+    const bytes = await estimateToXlsx(input);
     assert.equal(bytes[0], 0x50);
     assert.equal(bytes[1], 0x4b);
-    const asText = new TextDecoder().decode(bytes);
-    assert.match(asText, /Produced by Hit Squad Project Controls/);
-    assert.match(asText, /Summary Page/);
-    assert.match(asText, /<f>/);
-    assert.equal(/nathan|cat 2 pit stop/i.test(asText), false);
+    const parts = zipParts(bytes);
+    assert.equal(parts.some((part) => part.endsWith("xl/theme/theme1.xml")), true);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const summarySheet = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
+    assert.ok(summarySheet);
+    assert.match(String(summarySheet.getCell("A2").value ?? ""), /Produced by Hit Squad Project Controls/);
+    assert.equal(wb.worksheets.some((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.summary), true);
+    assert.equal(/nathan|cat 2 pit stop/i.test(JSON.stringify(wb.model)), false);
+
+    const staffSheet = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    assert.ok(staffSheet && summarySheet);
+    assert.equal(staffSheet.getCell("C7").numFmt, "#,##0.0");
+    assert.equal(staffSheet.getCell("K7").numFmt, "$#,##0.00");
+    assert.equal(staffSheet.getCell("G7").numFmt, "$#,##0.00");
+    assert.equal(staffSheet.getCell("B7").numFmt, "#,##0");
+    assert.equal(staffSheet.getCell("F7").numFmt, "#,##0.0");
+    let hoursRow = 0;
+    let totalRow = 0;
+    summarySheet.eachRow((row, rowNumber) => {
+      const label = String(row.getCell(1).value ?? "");
+      if (label === "Hours") hoursRow = rowNumber;
+      if (label === "ESTIMATE TOTAL $") totalRow = rowNumber;
+    });
+    assert.equal(hoursRow > 0, true);
+    assert.equal(totalRow > hoursRow, true);
+    assert.equal(summarySheet.getCell(`B${hoursRow}`).numFmt, "#,##0.0");
+    assert.equal(summarySheet.getCell(`B${totalRow}`).numFmt, "$#,##0.00");
   });
 
   it("uses that job's clock and rates, not a Wood River or Nathan gate", () => {
@@ -324,7 +363,7 @@ describe("estimate excel export", () => {
     assert.equal(empty[0].cells.some((cell) => cell.type === "formula" || (cell.type === "number" && cell.ref === "B8")), true);
   });
 
-  it("writes an Excel-strict package for the O&M sub sheet, inch-quotes, and > text", () => {
+  it("writes an Excel-365-safe package for the O&M sub sheet, inch-quotes, and > text", async () => {
     const input = {
       ...woodRiverFixture(),
       equipment: {
@@ -363,16 +402,23 @@ describe("estimate excel export", () => {
     assert.equal(String(subFormula.value).includes("&amp;"), false);
     assert.equal(sheetRef(ESTIMATE_XLSX_SHEETS.sub, "H11"), `'${subName}'!H11`);
 
-    const bytes = estimateToXlsx(input);
-    const asText = new TextDecoder().decode(bytes);
-    assert.notEqual(bytes[12] | (bytes[13] << 8), 0);
-    assert.match(asText, /xl\/styles\.xml/);
-    assert.match(asText, /officeDocument\/2006\/relationships\/styles/);
-    assert.match(asText, /OM Crane Subcontractor/);
-    assert.equal(/O&amp;M Crane Subcontractor/.test(asText), false);
-    assert.match(asText, /20" clam shell/);
-    assert.equal(asText.includes("&quot;"), false);
-    assert.match(asText, /Stainless &gt; 2"/);
+    const bytes = await estimateToXlsx(input);
+    const parts = zipParts(bytes);
+    assert.equal(parts.some((part) => part.endsWith("xl/theme/theme1.xml")), true);
+    assert.equal(parts.some((part) => part.endsWith("xl/sharedStrings.xml")), true);
+    assert.equal(parts.some((part) => part.endsWith("xl/styles.xml")), true);
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const sub = wb.getWorksheet(subName);
+    assert.ok(sub);
+    assert.equal(String(sub.getCell("A7").value), "O&M Crane");
+    const rental = wb.getWorksheet(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.rental));
+    assert.ok(rental);
+    assert.equal(String(rental.getCell("A8").value), '20" clam shell');
+    const misc = wb.getWorksheet(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.misc));
+    assert.ok(misc);
+    assert.match(String(misc.getCell("B7").value), /Stainless > 2"/);
     const { evalAt } = evaluateWorkbook(sheets);
     const subTotal = evalAt(subName, "H8");
     assert.equal(subTotal, 1000 * 1.065);

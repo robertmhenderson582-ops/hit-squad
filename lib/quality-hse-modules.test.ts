@@ -123,11 +123,18 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.match(hse, /HseDay1Card/);
     assert.match(hse, /HSE_EXECUTE_LANES/);
     assert.match(qualityCard, /QUALITY_PACKAGE_FORMS/);
-    assert.match(qualityCard, /INSPECTION PLAN \/ ITP/);
-    assert.match(qualityCard, /WELD MAP/);
-    assert.match(qualityCard, /TRAVELER COUNT/);
+    assert.match(qualityCard, /Inspection plan \/ ITP/);
+    assert.match(qualityCard, /Weld map/);
+    assert.match(qualityCard, /Traveler count/);
+    assert.match(qualityCard, /QualityFormScreens/);
+    assert.doesNotMatch(qualityCard, />FILL<|>COUNT</);
     assert.match(hseCard, /HSE_PACKAGE_SLOTS/);
     assert.match(hseCard, /paper-field/);
+    assert.match(hseCard, /field-register-table/);
+    assert.match(hseCard, /Status/);
+    assert.match(hseCard, /Date/);
+    assert.match(hseCard, /Note/);
+    assert.doesNotMatch(hseCard, /type="checkbox"/);
   });
 
   it("fails if Chance’s Quality studio or named forms are missing", () => {
@@ -156,6 +163,11 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.match(rollingLib, /Steam Drum Rolling Chart/);
     assert.match(rollingLib, /Generating Bank Retube Progression Chart/);
     assert.match(rolling, /ROLLING_SHEETS/);
+    assert.match(rolling, /Setup/);
+    assert.match(rolling, /Bank name/);
+    assert.match(rolling, /Circuits/);
+    assert.match(rollingLib, /CIRCUIT_HINT/);
+    assert.doesNotMatch(rolling, /h-3 w-3/);
     assert.doesNotMatch(rolling, /elevation/i);
     assert.doesNotMatch(quality, /1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|quality-briefs\.json|owner vault/i);
     assert.doesNotMatch(qualityCard, /1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|1y6Q3TOnpXzV/);

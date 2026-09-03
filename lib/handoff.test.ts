@@ -68,7 +68,11 @@ describe("handoff seats", () => {
     assert.equal(handoffMarkText(transferred, "nathanboyte@gmail.com"), "Transferred to you from Robert Henderson.");
     assert.equal(handoffMarkText(shared, "nathanboyte@gmail.com"), "Shared / from Robert Henderson.");
     assert.equal(handoffMarkText(shared, OWNER_LOGIN_EMAIL), "Shared with Nathan Boyte.");
-    assert.equal(handoffMarkText(shared, JOSEPH_EMAIL), null);
+    assert.equal(handoffMarkText(shared, JOSEPH_EMAIL), "Robert Henderson's desk.");
+    assert.equal(
+      handoffMarkText({ ownerEmail: "nathanboyte@gmail.com" }, OWNER_LOGIN_EMAIL),
+      "Nathan Boyte's desk.",
+    );
     const sharedToOwner = { ownerEmail: "nathanboyte@gmail.com", sharedWith: [OWNER_LOGIN_EMAIL] };
     assert.equal(packSharedWithYou(sharedToOwner, OWNER_LOGIN_EMAIL), true);
     assert.equal(packSharedWithYou(sharedToOwner, "nathanboyte@gmail.com"), false);

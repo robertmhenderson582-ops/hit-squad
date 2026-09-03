@@ -3,11 +3,16 @@ import { describe, it } from "node:test";
 import { companyScopeFor } from "./companies.ts";
 import { QUALITY_BRIEFS_VAULT_NAME } from "./drive-data.ts";
 import {
+  QUALITY_FORM_FIELDS,
   QUALITY_PACKAGE_FORMS,
+  addQualityFormRow,
   canSeeMadisonManuals,
   emptyQualityDay1,
   hydrateQualityDay1,
+  patchQualityFormFields,
+  patchQualityFormRow,
   publicQualityDrops,
+  qualityFormRecord,
   qualityNotify,
   qualityPackageForSeat,
   qualitySurfaceLeaks,
@@ -47,29 +52,37 @@ describe("Quality Day-1 seat leaks", () => {
 });
 
 describe("Quality Day-1 named package", () => {
-  it("hosts Chance’s eight named forms and keeps prior Day-1 answers", () => {
+  it("hosts Chance’s eight named forms and persists typed form objects", () => {
     assert.deepEqual(
       QUALITY_PACKAGE_FORMS.map((item) => item.id),
       ["2.7.1", "2.7.11", "2.7.17", "2.7.19", "2.7.22", "2.7.34", "2.7.5", "nde-req"],
     );
     assert.equal(QUALITY_PACKAGE_FORMS.length, 8);
     assert.equal(QUALITY_PACKAGE_FORMS.some((item) => /2\.7\.29|2\.7\.3\b|sling/i.test(item.id + item.label)), false);
-    const kept = hydrateQualityDay1({
+    assert.equal(QUALITY_FORM_FIELDS["2.7.1"].some((field) => field.id === "testPressure"), true);
+    let pack = hydrateQualityDay1({
       inspectionPlan: true,
       weldMap: true,
       travelerCount: "4",
-      forms: { "2.7.1": { marked: true, fill: "on job", count: "2" } },
+      forms: { "2.7.1": { fields: { job: "WR-1", testPressure: "150" }, rows: [] } },
     });
+    pack = patchQualityFormFields(pack, "2.7.1", "testMedium", "water");
+    pack = addQualityFormRow(pack, "2.7.1");
+    const gaugeId = qualityFormRecord(pack, "2.7.1").rows[0].id;
+    pack = patchQualityFormRow(pack, "2.7.1", gaugeId, "gaugeId", "G-4");
+    const kept = hydrateQualityDay1(pack);
     assert.equal(kept.inspectionPlan, true);
     assert.equal(kept.weldMap, true);
     assert.equal(kept.travelerCount, "4");
-    assert.equal(kept.forms["2.7.1"]?.marked, true);
-    assert.equal(kept.forms["2.7.1"]?.fill, "on job");
-    assert.equal(kept.forms["2.7.1"]?.count, "2");
+    assert.equal(kept.forms["2.7.1"]?.fields.job, "WR-1");
+    assert.equal(kept.forms["2.7.1"]?.fields.testPressure, "150");
+    assert.equal(kept.forms["2.7.1"]?.fields.testMedium, "water");
+    assert.equal(kept.forms["2.7.1"]?.rows[0]?.cells.gaugeId, "G-4");
     const joseph = { email: JOSEPH_EMAIL, role: "tester" };
     const surface = qualityPackageForSeat(kept, joseph, companyScopeFor(joseph));
     assert.equal(surface.forms.some((item) => item.label.includes("Pressure Test Record")), true);
     assert.equal(surface.forms.some((item) => item.label.includes("NDE req spreadsheet")), true);
+    assert.equal(surface.forms.find((item) => item.id === "2.7.1")?.fields.testPressure, "150");
     assert.deepEqual(surface.manuals, []);
   });
 });

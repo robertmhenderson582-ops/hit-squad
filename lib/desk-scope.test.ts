@@ -87,12 +87,13 @@ describe("owner View as desk scope", () => {
     );
     assert.equal(nathanList.packs[0]?.title, "Madison CAT 2 (Pit Stop)");
     assert.deepEqual(
-      ownerList.packs.map((row) => row.packId),
-      ["new-robert1"],
+      ownerList.packs.map((row) => row.packId).sort(),
+      ["new-mtaajdwa-f7539", "new-robert1"],
     );
+    assert.equal(ownerList.packs.find((row) => row.packId === "new-mtaajdwa-f7539")?.ownerEmail, nathan.email);
     assert.deepEqual(
-      exited.packs.map((row) => row.packId),
-      ["new-robert1"],
+      exited.packs.map((row) => row.packId).sort(),
+      ["new-mtaajdwa-f7539", "new-robert1"],
     );
     assert.equal(
       nathanList.packs.some((row) => row.ownerEmail === OWNER_LOGIN_EMAIL),
@@ -138,7 +139,9 @@ describe("owner View as desk scope", () => {
     assert.equal(viewed.packs[0]?.title, "Madison CAT 2 (Pit Stop)");
     assert.equal(handoffMarkText(viewed.packs[0], nathan.email), "Transferred to you from Robert Henderson.");
     assert.equal(canReturnPack(asNathan, viewed.packs[0]!), true);
-    assert.deepEqual(ownerDesk.packs.map((row) => row.packId), []);
+    assert.deepEqual(ownerDesk.packs.map((row) => row.packId), ["new-mtaajdwa-f7539"]);
+    assert.equal(ownerDesk.packs[0]?.ownerEmail, nathan.email);
+    assert.equal(ownerDesk.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);
   });
 
   it("lists a tester-owned pack on the owner desk after View as Nathan shares it back", async () => {
@@ -170,7 +173,11 @@ describe("owner View as desk scope", () => {
     const unshared = await unshareVisiblePack(asNathan, "new-mtaajdwa-f7539", owner.email, drive);
     assert.equal(unshared.ok, true);
     const ownerAfter = await listVisiblePacks(deskScopeUser(owner, null), drive);
-    assert.equal(ownerAfter.packs.some((row) => row.packId === "new-mtaajdwa-f7539"), false);
+    assert.equal(ownerAfter.packs.some((row) => row.packId === "new-mtaajdwa-f7539"), true);
+    assert.equal(
+      handoffMarkText(ownerAfter.packs.find((row) => row.packId === "new-mtaajdwa-f7539")!, owner.email),
+      "Nathan Boyte's desk.",
+    );
     assert.equal((await listVisiblePacks(asNathan, drive)).packs[0]?.ownerEmail, nathan.email);
   });
 
@@ -249,7 +256,7 @@ describe("owner View as desk scope", () => {
     );
   });
 
-  it("keeps local leftover owner work off Nathan's desk and Nathan's pack off the owner list", () => {
+  it("keeps local leftover owner work off Nathan's desk; owner still sees Nathan's pack", () => {
     const packs = [
       { packId: "new-robert1", ownerEmail: OWNER_LOGIN_EMAIL },
       { packId: "new-mtaajdwa-f7539", ownerEmail: nathan.email },
@@ -261,7 +268,7 @@ describe("owner View as desk scope", () => {
     );
     assert.deepEqual(
       localPacksForUser(deskScopeUser(owner, "owner"), packs).map((row) => row.packId),
-      ["new-robert1", "new-unstamped"],
+      ["new-robert1", "new-mtaajdwa-f7539", "new-unstamped"],
     );
     assert.deepEqual(
       localPacksForUser(deskScopeUser(joseph, "nathan"), packs).map((row) => row.packId),

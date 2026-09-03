@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,12 +8,15 @@ import { after, beforeEach, describe, it } from "node:test";
 import { activityWhoNames, filterActivityByWho } from "./activity-filter.ts";
 import {
   addActivity,
+  clearActivity,
   forgetActivityCacheForTests,
   listActivity,
+  removeActivity,
   resetActivityStoreForTests,
   useActivityVaultForTests,
   type ActivityRow,
 } from "./activity-store.ts";
+import { ACTIVITY_VAULT_KIND, ACTIVITY_VAULT_NAME, readVaultJson, writeVaultJson } from "./drive-data.ts";
 import { memoryDrive } from "./drive-estimates.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-activity-"));
@@ -50,6 +53,83 @@ describe("activity vault persist", () => {
     assert.equal(listed.length, 1);
     assert.equal(listed[0].id, row.id);
     assert.equal(listed[0].detail, "Owner desk · sign-in ok");
+  });
+
+  it("a delete stays gone after cache wipe, a stale cache file, and a warm rehydrate", async () => {
+    const drive = memoryDrive();
+    useActivityVaultForTests(drive);
+    const keep = await addActivity({
+      kind: "sign-in",
+      who: "Robert Henderson",
+      detail: "Owner desk · sign-in ok",
+    });
+    const gone = await addActivity({
+      kind: "session",
+      who: "Robert Henderson",
+      detail: "Owner desk · signed out",
+    });
+    await removeActivity(gone.id);
+    assert.equal((await listActivity()).some((row) => row.id === gone.id), false);
+
+    forgetActivityCacheForTests();
+    useActivityVaultForTests(drive);
+    const afterWipe = await listActivity();
+    assert.equal(afterWipe.length, 1);
+    assert.equal(afterWipe[0].id, keep.id);
+    assert.equal(afterWipe.some((row) => row.id === gone.id), false);
+
+    writeFileSync(
+      process.env.ACTIVITY_STORE_PATH!,
+      JSON.stringify({ rows: [keep, gone], removedIds: [] }, null, 2) + "\n",
+    );
+    useActivityVaultForTests(drive);
+    const afterPoison = await listActivity();
+    assert.equal(afterPoison.length, 1);
+    assert.equal(afterPoison[0].id, keep.id);
+    assert.equal(afterPoison.some((row) => row.id === gone.id), false);
+  });
+
+  it("clear log writes an empty vault and does not re-seed from a leftover cache", async () => {
+    const drive = memoryDrive();
+    useActivityVaultForTests(drive);
+    const stale = await addActivity({
+      kind: "feature",
+      who: "Robert Henderson",
+      detail: "Opened Activity",
+    });
+    await clearActivity();
+    assert.deepEqual(await listActivity(), []);
+
+    writeFileSync(
+      process.env.ACTIVITY_STORE_PATH!,
+      JSON.stringify({ rows: [stale], removedIds: [] }, null, 2) + "\n",
+    );
+    useActivityVaultForTests(drive);
+    assert.deepEqual(await listActivity(), []);
+    const vault = await readVaultJson<{ rows?: ActivityRow[] }>(drive, ACTIVITY_VAULT_NAME, ACTIVITY_VAULT_KIND);
+    assert.equal((vault?.rows ?? []).length, 0);
+  });
+
+  it("empty vault document is a real empty ledger, not a missing file to seed", async () => {
+    const drive = memoryDrive();
+    useActivityVaultForTests(drive);
+    await writeVaultJson(drive, ACTIVITY_VAULT_NAME, ACTIVITY_VAULT_KIND, { rows: [], removedIds: [] });
+    writeFileSync(
+      process.env.ACTIVITY_STORE_PATH!,
+      JSON.stringify({
+        rows: [
+          {
+            id: "act-stale",
+            at: Date.now(),
+            kind: "sign-in",
+            who: "Robert Henderson",
+            detail: "should not come back",
+          },
+        ],
+      }) + "\n",
+    );
+    useActivityVaultForTests(drive);
+    assert.deepEqual(await listActivity(), []);
   });
 });
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { NOVUS_EMAIL } from "./desk-role.ts";
+import { canTransferPack, canWritePack } from "./estimate-scope.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { JOSEPH_EMAIL, SHANE_EMAIL } from "./tester-seats.ts";
 import { memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
@@ -110,7 +111,9 @@ describe("estimate vault service", () => {
     const josephList = await listVisiblePacks(joseph, drive);
     const shaneList = await listVisiblePacks(shane, drive);
     const novusList = await listVisiblePacks(novus, drive);
-    assert.deepEqual(ownerList.packs.map((row) => row.packId), []);
+    assert.deepEqual(ownerList.packs.map((row) => row.packId), ["new-cat2pit"]);
+    assert.equal(ownerList.packs[0]?.ownerEmail, tester.email);
+    assert.equal(ownerList.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);
     assert.equal(nathanList.packs[0]?.title, "Cat 2 Pit Stop");
     assert.equal(nathanList.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);
     assert.equal(nathanList.packs[0]?.transferredFromName, "Robert Henderson");
@@ -165,7 +168,8 @@ describe("estimate vault service", () => {
     const shaneList = await listVisiblePacks(shane, drive);
     const novusList = await listVisiblePacks(novus, drive);
     assert.equal(nathanList.packs[0]?.title, "Cat 2 Pit Stop");
-    assert.deepEqual(ownerList.packs, []);
+    assert.deepEqual(ownerList.packs.map((row) => row.packId), ["new-cat2pit"]);
+    assert.equal(ownerList.packs[0]?.ownerEmail, tester.email);
     assert.deepEqual(josephList.packs, []);
     assert.deepEqual(shaneList.packs, []);
     assert.deepEqual(novusList.packs, []);
@@ -247,7 +251,7 @@ describe("estimate vault service", () => {
     assert.equal((await listVisiblePacks(owner, drive)).packs[0]?.ownerEmail, OWNER_LOGIN_EMAIL);
   });
 
-  it("shares a tester-owned pack to the owner without taking ownership; unshare hides it", async () => {
+  it("shares a tester-owned pack to the owner without taking ownership; unshare keeps owner visibility", async () => {
     const drive = memoryDrive();
     const nathanPack = cat2({ packId: "new-nathan1", title: "Nathan trial", ownerEmail: tester.email });
     const saved = await upsertVisiblePack(tester, nathanPack, drive);
@@ -270,7 +274,8 @@ describe("estimate vault service", () => {
     const unshared = await unshareVisiblePack(tester, "new-nathan1", owner.email, drive);
     assert.equal(unshared.ok, true);
     if (unshared.ok) assert.equal(unshared.pack.ownerEmail, tester.email);
-    assert.equal((await listVisiblePacks(owner, drive)).packs.some((row) => row.packId === "new-nathan1"), false);
+    assert.equal((await listVisiblePacks(owner, drive)).packs.some((row) => row.packId === "new-nathan1"), true);
+    assert.equal((await listVisiblePacks(owner, drive)).packs.find((row) => row.packId === "new-nathan1")?.ownerEmail, tester.email);
     assert.equal((await listVisiblePacks(tester, drive)).packs[0]?.ownerEmail, tester.email);
   });
 
@@ -401,13 +406,15 @@ describe("estimate vault service", () => {
       }),
       drive,
     );
-    assert.equal(undo.ok, false);
-    if (!undo.ok) assert.equal(undo.status, 404);
+    assert.equal(undo.ok, true);
     assert.equal(drive.files.size, 1);
 
     const ownerList = await listVisiblePacks(owner, drive);
     const nathanList = await listVisiblePacks(tester, drive);
-    assert.deepEqual(ownerList.packs.map((row) => row.packId), []);
+    assert.deepEqual(ownerList.packs.map((row) => row.packId), ["new-cat2pit"]);
+    assert.equal(ownerList.packs[0]?.ownerEmail, tester.email);
+    assert.equal(canWritePack(owner, ownerList.packs[0]!), true);
+    assert.equal(canTransferPack(owner, ownerList.packs[0]!), false);
     assert.equal(nathanList.packs[0]?.ownerEmail, tester.email);
     assert.equal(nathanList.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);
     assert.equal(nathanList.packs[0]?.title, "Cat 2 Pit Stop");
@@ -512,7 +519,8 @@ describe("estimate vault service", () => {
 
     const ownerList = await listVisiblePacks(owner, drive);
     const nathanList = await listVisiblePacks(tester, drive);
-    assert.deepEqual(ownerList.packs.map((row) => row.packId), []);
+    assert.deepEqual(ownerList.packs.map((row) => row.packId), ["new-cat2pit"]);
+    assert.equal(ownerList.packs[0]?.ownerEmail, tester.email);
     assert.equal(nathanList.packs.length, 1);
     assert.equal(nathanList.packs[0]?.ownerEmail, tester.email);
     assert.equal(nathanList.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);

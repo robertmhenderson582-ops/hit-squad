@@ -554,6 +554,15 @@ describe("estimate pack snapshot", () => {
     assert.equal(subcontractorHasWork(aromaticsSheets().subcontractor), true);
   });
 
+  it("a thin title-only vault stub cannot wipe local Aromatics sheets", () => {
+    const local = aromatics();
+    const stub = thinAromaticsStub({ updatedAt: 99_000 });
+    const picked = pickPack(local, stub);
+    assert.equal(((picked?.equipment as { largeTools: unknown[] }).largeTools || []).length, 3);
+    assert.equal((picked?.crew as { staff: unknown[] }).staff.length, 15);
+    assert.equal(picked?.title, "2027 Aromatics Turnaround");
+  });
+
   it("a thin same-packId leftover and empty local defaults cannot wipe 2027 Aromatics vault sheets", () => {
     const leftover = thinAromaticsStub();
     const vault = aromatics();

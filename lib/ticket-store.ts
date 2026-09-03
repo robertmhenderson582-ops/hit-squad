@@ -6,11 +6,11 @@ import { isTicketKind, type DeskTicket } from "./tickets.ts";
 
 export const OWNER_TICKET_EMAIL = "robertmhenderson582@gmail.com";
 
-type TicketFile = { tickets?: DeskTicket[] };
+type TicketFile = { tickets?: DeskTicket[]; removedIds?: string[] };
 
 let cache: DeskTicket[] | null = null;
+let removedCache: string[] = [];
 let loadedFrom: string | null = null;
-let hydrated = false;
 let injectedAdapter: DriveAdapter | null | undefined;
 
 export function ticketStoreKind() {
@@ -46,25 +46,35 @@ export function parseTicketFile(raw: unknown): DeskTicket[] {
   return tickets;
 }
 
+function parseTicketRemovedIds(raw: unknown): string[] {
+  const parsed = raw && typeof raw === "object" ? (raw as TicketFile) : {};
+  if (!Array.isArray(parsed.removedIds)) return [];
+  return [...new Set(parsed.removedIds.filter((id): id is string => typeof id === "string" && Boolean(id.trim())))];
+}
+
 function readCache(): DeskTicket[] {
   const file = ticketStorePath();
   if (cache && loadedFrom === file) return cache;
   try {
-    cache = parseTicketFile(JSON.parse(readFileSync(file, "utf8")));
+    const raw = JSON.parse(readFileSync(file, "utf8"));
+    cache = parseTicketFile(raw);
+    removedCache = parseTicketRemovedIds(raw);
   } catch {
     cache = [];
+    removedCache = [];
   }
   loadedFrom = file;
   return cache;
 }
 
-function writeCache(tickets: DeskTicket[]) {
+function writeCache(tickets: DeskTicket[], removedIds: string[] = removedCache) {
   cache = tickets;
+  removedCache = [...new Set(removedIds)].filter((id) => !tickets.some((row) => row.id === id));
   const file = ticketStorePath();
   loadedFrom = file;
   try {
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify({ tickets }, null, 2) + "\n", "utf8");
+    writeFileSync(file, JSON.stringify({ tickets, removedIds: removedCache }, null, 2) + "\n", "utf8");
   } catch {
     // Best-effort only. A failed write must not wipe the previous file.
   }
@@ -109,51 +119,73 @@ function ticketNeedsVaultWrite(vault: DeskTicket[], merged: DeskTicket[]) {
   });
 }
 
-function readDiskTickets(): DeskTicket[] {
+function readDiskRaw(): unknown {
   try {
-    return parseTicketFile(JSON.parse(readFileSync(ticketStorePath(), "utf8")));
+    return JSON.parse(readFileSync(ticketStorePath(), "utf8"));
   } catch {
-    return [];
+    return null;
   }
 }
 
-async function readVaultTickets(): Promise<DeskTicket[]> {
+function readDiskTickets(): DeskTicket[] {
+  return parseTicketFile(readDiskRaw());
+}
+
+async function readVaultFile(): Promise<{ tickets: DeskTicket[]; removedIds: string[] } | null> {
   const drive = resolveAdapter();
-  if (!drive) return [];
-  return parseTicketFile(await readVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND));
+  if (!drive) return null;
+  const raw = await readVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND);
+  if (raw == null) return null;
+  return { tickets: parseTicketFile(raw), removedIds: parseTicketRemovedIds(raw) };
 }
 
 async function persist(tickets: DeskTicket[], opts?: { removedIds?: string[] }): Promise<DeskTicket[]> {
-  const removed = new Set(opts?.removedIds ?? []);
+  const extraRemoved = opts?.removedIds ?? [];
   const drive = resolveAdapter();
+  const vault = drive ? await readVaultFile() : null;
+  const disk = readDiskRaw();
+  const removed = new Set([
+    ...(vault?.removedIds ?? []),
+    ...parseTicketRemovedIds(disk),
+    ...removedCache,
+    ...extraRemoved,
+  ]);
+  const merged = mergeStoredTickets(vault?.tickets ?? readDiskTickets(), tickets).filter((row) => !removed.has(row.id));
+  const tombstones = [...removed].filter((id) => !merged.some((row) => row.id === id));
   if (drive) {
-    const merged = mergeStoredTickets(await readVaultTickets(), tickets).filter((row) => !removed.has(row.id));
-    writeCache(merged);
-    await writeVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, { tickets: merged });
-    return merged;
+    await writeVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, { tickets: merged, removedIds: tombstones });
   }
-  const merged = mergeStoredTickets(readDiskTickets(), tickets).filter((row) => !removed.has(row.id));
-  writeCache(merged);
+  writeCache(merged, tombstones);
   return merged;
 }
 
 export async function hydrateTicketStore(): Promise<DeskTicket[]> {
-  if (hydrated) return readCache();
   const cached = readCache();
   const drive = resolveAdapter();
   if (drive) {
     try {
-      const vault = await readVaultTickets();
-      const merged = mergeStoredTickets(vault, cached);
-      writeCache(merged);
-      if (ticketNeedsVaultWrite(vault, merged)) {
-        await writeVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, { tickets: merged });
+      const vault = await readVaultFile();
+      if (vault) {
+        const removed = new Set([...vault.removedIds, ...removedCache]);
+        const seedFromCache = vault.tickets.length > 0 || removed.size > 0;
+        const merged = mergeStoredTickets(vault.tickets, seedFromCache ? cached : []).filter((row) => !removed.has(row.id));
+        writeCache(merged, [...removed]);
+        if (ticketNeedsVaultWrite(vault.tickets, merged) || vault.removedIds.length !== removed.size) {
+          await writeVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, {
+            tickets: merged,
+            removedIds: [...removed].filter((id) => !merged.some((row) => row.id === id)),
+          });
+        }
+      } else if (cached.length || removedCache.length) {
+        await writeVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, {
+          tickets: cached,
+          removedIds: removedCache,
+        });
       }
     } catch {
       // Keep the local cache. Never replace a richer set with a thinner vault read.
     }
   }
-  hydrated = true;
   return readCache();
 }
 
@@ -216,8 +248,8 @@ export async function removeStoredDoneTickets() {
 
 export function resetTicketStoreForTests(path?: string) {
   cache = null;
+  removedCache = [];
   loadedFrom = null;
-  hydrated = false;
   injectedAdapter = undefined;
   if (path) process.env.TICKET_STORE_PATH = path;
   else delete process.env.TICKET_STORE_PATH;
@@ -225,8 +257,8 @@ export function resetTicketStoreForTests(path?: string) {
 
 export function forgetTicketCacheForTests() {
   cache = null;
+  removedCache = [];
   loadedFrom = null;
-  hydrated = false;
   const file = ticketStorePath();
   if (existsSync(file)) unlinkSync(file);
 }
@@ -234,13 +266,13 @@ export function forgetTicketCacheForTests() {
 /** Warm empty instance: process cache is stale, vault/file is not wiped. */
 export function staleWarmTicketInstanceForTests() {
   cache = [];
+  removedCache = [];
   loadedFrom = ticketStorePath();
-  hydrated = true;
 }
 
 export function useTicketVaultForTests(adapter: DriveAdapter | null) {
   injectedAdapter = adapter;
-  hydrated = false;
   cache = null;
+  removedCache = [];
   loadedFrom = null;
 }

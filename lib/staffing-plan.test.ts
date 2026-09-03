@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import ExcelJS from "exceljs";
 import { describe, it } from "node:test";
 import type { CraftRow } from "./craft-labor.ts";
 import {
@@ -268,7 +269,7 @@ describe("generate staffing from crew + phases", () => {
 });
 
 describe("P66 staffing xlsx", () => {
-  it("writes contractor 50413486, blank empty crafts, and SUM totals", () => {
+  it("writes contractor 50413486, blank empty crafts, and SUM totals", async () => {
     const plan = generateStaffingPlan({
       site: "Wood River — Roxana, IL",
       phases: [MECH],
@@ -304,12 +305,20 @@ describe("P66 staffing xlsx", () => {
     assert.match(xml, /<f>SUM\(/);
     assert.equal(xml.includes("<v>0</v>"), false);
     assert.equal(exportStaffingRows(plan).some((row) => row.code === "901"), true);
-    const bytes = staffingPlanToXlsx(plan, { projectName: "CAT 2", afeName: "U250 Coker North", area: "Coker" });
+    const bytes = await staffingPlanToXlsx(plan, { projectName: "CAT 2", afeName: "U250 Coker North", area: "Coker" });
     assert.equal(bytes[0], 0x50);
     assert.equal(bytes[1], 0x4b);
-    const asText = new TextDecoder().decode(bytes);
-    assert.match(asText, /50413486/);
-    assert.match(asText, /SUM\(/);
-    assert.equal(asText.includes("<v>0</v>"), false);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    assert.equal(wb.worksheets.length, 1);
+    const sheet = wb.getWorksheet("Staffing Plan");
+    assert.ok(sheet);
+    let foundContractor = false;
+    sheet.eachRow((row) => {
+      row.eachCell((cell) => {
+        if (String(cell.value ?? "").includes("50413486")) foundContractor = true;
+      });
+    });
+    assert.equal(foundContractor, true);
   });
 });

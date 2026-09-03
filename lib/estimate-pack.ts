@@ -193,8 +193,26 @@ function writeSheetIfRicher(
   writeStoreJson(store, key, incoming);
 }
 
+export function packHasSheets(pack: EstimatePackSnapshot | null | undefined) {
+  if (!pack?.packId) return false;
+  return (
+    crewHasRows(pack.crew) ||
+    scheduleHasWork(pack.schedule) ||
+    equipmentHasWork(pack.equipment) ||
+    otherCostHasWork(pack.otherCost) ||
+    subcontractorHasWork(pack.subcontractor) ||
+    fcrHasWork(pack.fcr) ||
+    (Array.isArray(pack.activities) &&
+      pack.activities.some((row) => {
+        const item = asRecord(row);
+        return Boolean(item && (item.name || Number(item.hours) > 0));
+      }))
+  );
+}
+
 export function packHasWork(pack: EstimatePackSnapshot | null | undefined) {
   if (!pack?.packId) return false;
+  if (packHasSheets(pack)) return true;
   if (pack.title && pack.title.trim() && pack.title !== "Working estimate") return true;
   if (crewHasRows(pack.crew)) return true;
   if (scheduleHasWork(pack.schedule)) return true;
@@ -265,7 +283,7 @@ export function pickPack(
         local.ownerEmail &&
         vault.ownerEmail.trim().toLowerCase() !== local.ownerEmail.trim().toLowerCase(),
     );
-  if (!packHasWork(vault) && packHasWork(local) && !vaultMoved) {
+  if (!packHasSheets(vault) && packHasSheets(local)) {
     return {
       ...local,
       ownerEmail: vault.ownerEmail || local.ownerEmail,

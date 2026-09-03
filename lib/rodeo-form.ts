@@ -215,16 +215,16 @@ export function rodeoFillMap(input: {
   return { cells, lines };
 }
 
-export function rodeoFormToXlsx(input: {
+export async function rodeoFormToXlsx(input: {
   form: RodeoFormState;
   crew: RodeoCrew;
   site?: string;
   client?: string;
   title?: string;
   opts?: ShahanLookupOpts;
-}): Uint8Array {
+}): Promise<Uint8Array> {
   const { cells } = rodeoFillMap(input);
-  const bytes = buildXlsx("Rodeo form", cells);
+  const bytes = await buildXlsx("Rodeo form", cells);
   if (!bytes.byteLength) throw new Error("empty-rodeo-form");
   return bytes;
 }

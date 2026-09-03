@@ -32,7 +32,7 @@ describe("HSE module store", () => {
     state = {
       ...state,
       plant: "Wood River",
-      day1: { slots: { orientation: "done" } },
+      day1: { slots: { orientation: { marked: true, note: "done" } } },
     };
     state = addHseLaneRow(state, "incidents");
     const id = state.lanes.incidents[0].id;
@@ -40,7 +40,8 @@ describe("HSE module store", () => {
     writeHseModule("Ironwood", state, store);
     const read = readHseModule("phillips-66", store);
     assert.equal(read.plant, "Wood River");
-    assert.equal(read.day1.slots.orientation, "done");
+    assert.equal(read.day1.slots.orientation?.note, "done");
+    assert.equal(read.day1.slots.orientation?.marked, true);
     assert.equal(read.lanes.incidents[0]?.cells.note, "near miss");
   });
 });

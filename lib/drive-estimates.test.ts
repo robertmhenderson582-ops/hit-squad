@@ -403,4 +403,103 @@ describe("drive estimate upsert", () => {
     assert.equal(listed[0]?.ownerEmail, "nathanboyte@gmail.com");
     assert.equal(((listed[0]?.otherCost as { travel: Array<{ travelers: number }> }).travel || []).some((row) => row.travelers === 39), true);
   });
+
+  it("skips the known thin Drive stub so it cannot overlay Aromatics", async () => {
+    const { isThinDriveStub, THIN_DRIVE_STUB_IDS } = await import("./drive-estimates.ts");
+    assert.equal(isThinDriveStub("1AEf_Shk8SEvMsdGodNSpaNgUCytXSLZ9"), true);
+    assert.equal(THIN_DRIVE_STUB_IDS.has("1AEf_Shk8SEvMsdGodNSpaNgUCytXSLZ9"), true);
+    const drive = memoryDrive();
+    const packId = "new-mtj7bvtk-akmei";
+    const stub = {
+      packId,
+      key: `new:${packId}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 9000,
+      ownerEmail: "robertmhenderson582@gmail.com",
+      crew: { staff: [], support: [] },
+    };
+    const working = {
+      ...stub,
+      updatedAt: 400,
+      ownerEmail: "nathanboyte@gmail.com",
+      equipment: { largeTools: [{ id: "lt-1", itemId: "wet:8:truck-crew", qty: 1 }], thirdParty: [] },
+      crew: { staff: [{ id: "st-1" }], support: [] },
+    };
+    drive.files.set("1AEf_Shk8SEvMsdGodNSpaNgUCytXSLZ9", {
+      file: {
+        id: "1AEf_Shk8SEvMsdGodNSpaNgUCytXSLZ9",
+        name: "wood-river-2027-aromatics-turnaround.json",
+        properties: { packId, ownerEmail: stub.ownerEmail },
+      },
+      content: JSON.stringify(stub),
+    });
+    await drive.createJson("folder", "wood-river-2027-aromatics-turnaround.json", JSON.stringify(working), {
+      packId,
+      ownerEmail: working.ownerEmail,
+    });
+    const listed = await listDrivePacks(drive, "folder");
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0]?.ownerEmail, "nathanboyte@gmail.com");
+    assert.equal(((listed[0]?.equipment as { largeTools: unknown[] }).largeTools || []).length, 1);
+  });
+
+  it("still reads known HIS files when the Estimates folder list fails", async () => {
+    const drive = memoryDrive();
+    const packId = "new-mtj7bvtk-akmei";
+    const working = {
+      packId,
+      key: `new:${packId}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 400,
+      ownerEmail: "nathanboyte@gmail.com",
+    };
+    drive.files.set("1KLhPczzj-BHMqT8uOI5VxUkSJUagj7rz", {
+      file: {
+        id: "1KLhPczzj-BHMqT8uOI5VxUkSJUagj7rz",
+        name: "wood-river-2027-aromatics-turnaround.json",
+        properties: { packId, ownerEmail: working.ownerEmail },
+      },
+      content: JSON.stringify(working),
+    });
+    drive.listJson = async () => {
+      throw new Error("403");
+    };
+    const listed = await listDrivePacks(drive, "folder");
+    assert.equal(listed.some((pack) => pack.packId === packId), true);
+    assert.equal(listed.find((pack) => pack.packId === packId)?.ownerEmail, "nathanboyte@gmail.com");
+  });
+
+  it("pins Aromatics writes to the known file id instead of minting a stub", async () => {
+    const drive = memoryDrive();
+    const packId = "new-mtj7bvtk-akmei";
+    const pack = {
+      packId,
+      key: `new:${packId}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 400,
+      ownerEmail: "nathanboyte@gmail.com",
+      sharedWith: ["robertmhenderson582@gmail.com"],
+    };
+    drive.listJson = async () => {
+      throw new Error("403");
+    };
+    const saved = await upsertEstimateInDrive(drive, pack, "folder");
+    assert.equal(saved.id, "1KLhPczzj-BHMqT8uOI5VxUkSJUagj7rz");
+    assert.equal(drive.files.has("1AEf_Shk8SEvMsdGodNSpaNgUCytXSLZ9"), false);
+    const parsed = JSON.parse(await drive.readJson(saved.id));
+    assert.deepEqual(parsed.sharedWith, ["robertmhenderson582@gmail.com"]);
+    assert.equal(parsed.ownerEmail, "nathanboyte@gmail.com");
+  });
 });

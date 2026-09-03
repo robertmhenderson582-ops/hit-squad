@@ -157,6 +157,7 @@ export function EstimatePackageProvider({
     });
     return () => {
       cancelled = true;
+      if (packId) void flushVaultUpsert(packId);
     };
   }, [estimateKey]);
 

@@ -17,7 +17,7 @@ import { visibleDeskPacks } from "./estimate-scope.ts";
 import { jobsOnDesk } from "./jobs.ts";
 import { packsMissingFromVault, writeVaultSeen } from "./job-menu.ts";
 import { handoffMarkText, TRANSFER_WRITE_ERROR } from "./handoff.ts";
-import { readLensPacks, snapshotLensPack, writeLensPacks } from "./lens-packs.ts";
+import { packsForViewedDesk, readLensPacks, snapshotLensPack, writeLensPacks } from "./lens-packs.ts";
 import { deleteLocalPack, findLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-menu.ts";
 import { applyPackToStore, collectPack } from "./estimate-pack.ts";
@@ -328,7 +328,7 @@ describe("local transfer commit", () => {
     }
   });
 
-  it("share to the owner keeps Nathan as owner and unshare hides it from the owner desk", async () => {
+  it("share to the owner keeps Nathan as owner; unshare drops the share mark but owner still sees it", async () => {
     resetVaultHydrateForTests();
     const store = memoryStore();
     rememberLocalPack(
@@ -384,7 +384,7 @@ describe("local transfer commit", () => {
         visibleDeskPacks({ email: OWNER_LOGIN_EMAIL, role: "owner" }, false, store).some(
           (row) => row.packId === "new-nathan1",
         ),
-        false,
+        true,
       );
     } finally {
       globalThis.fetch = previous;
@@ -450,7 +450,7 @@ describe("local transfer commit", () => {
     }
   });
 
-  it("turns a leftover owner copy into a Transferred note when the vault no longer lists it", async () => {
+  it("empty vault leftover cannot drop existing owner packs", async () => {
     resetVaultHydrateForTests();
     const store = memoryStore();
     rememberLocalPack(
@@ -463,7 +463,17 @@ describe("local transfer commit", () => {
       },
       store,
     );
-    writeVaultSeen(["new-mtaajdwa-f7539"], store);
+    rememberLocalPack(
+      {
+        packId: "new-aromatics-2027",
+        title: "2027 Aromatics Turnaround",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: "robertmhenderson582@gmail.com",
+      },
+      store,
+    );
+    writeVaultSeen(["new-mtaajdwa-f7539", "new-aromatics-2027"], store);
     const previous = globalThis.fetch;
     globalThis.fetch = (async () => {
       return new Response(JSON.stringify({ persisted: true, packs: [] }), {
@@ -474,9 +484,14 @@ describe("local transfer commit", () => {
     try {
       const packs = await hydrateFromVault(store);
       assert.deepEqual(packs, []);
-      assert.equal(findLocalPack("new-mtaajdwa-f7539", store), null);
-      assert.equal(readJobMenu(store).transferred[0]?.title, "Madison CAT 2 (Pit Stop)");
-      assert.equal(isActiveMenuItem({ id: "new-mtaajdwa-f7539", packId: "new-mtaajdwa-f7539" }, readJobMenu(store)), false);
+      assert.equal(findLocalPack("new-mtaajdwa-f7539", store)?.title, "Madison CAT 2 (Pit Stop)");
+      assert.equal(findLocalPack("new-aromatics-2027", store)?.title, "2027 Aromatics Turnaround");
+      assert.equal(readJobMenu(store).transferred.length, 0);
+      const owner = { email: OWNER_LOGIN_EMAIL, role: "owner" as const };
+      const desk = packsForViewedDesk(owner, false, null, store);
+      const jobs = jobsOnDesk(undefined, desk, false);
+      assert.equal(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+      assert.equal(jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { archiveMenuItem, deleteMenuItem, menuForViewedDesk, menuStatus } from "./job-menu.ts";
 import {
@@ -35,6 +37,36 @@ describe("desk counts", () => {
     assert.equal(jobPlantHref("TA-8841", "Estimates"), "/jobs/wood-river?job=TA-8841&tab=estimates");
     assert.equal(plantTabFromQuery("change-orders"), "Change orders");
     assert.equal(jobByCode("NO-SUCH"), undefined);
+  });
+
+  it("owner first paint includes local and snapshot packs without waiting a vault tick", () => {
+    const aromatics = {
+      packId: "new-aromatics-2027",
+      key: "new:new-aromatics-2027",
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+      ownerEmail: "robertmhenderson582@gmail.com",
+    };
+    const cat = {
+      packId: "new-mtaajdwa-f7539",
+      key: "new:new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    const firstPaint = jobsOnDesk(undefined, [aromatics, cat], false);
+    assert.equal(firstPaint.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+    assert.equal(firstPaint.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+    const held = jobsOnDesk(undefined, [aromatics, cat], false, undefined, undefined, { includeSeeds: false });
+    assert.equal(held.some((job) => job.id === "job-8841"), false);
+    assert.equal(held.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   });
 
   it("keeps owner seed jobs after header nav and hides them while following", () => {
@@ -75,6 +107,11 @@ describe("desk counts", () => {
     assert.ok(cat2Job);
     assert.equal(packForJob(cat2Job, [cat2])?.packId, "new-mtaajdwa-f7539");
     assert.equal(packForJob({ id: "job-8841" }, [cat2]), undefined);
+
+    const desk = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
+    assert.match(desk, /includeSeeds: true/);
+    assert.doesNotMatch(desk, /holdPartialTree \? null/);
+    assert.match(desk, /JobTreeDesk/);
   });
 
   it("view-as Nathan delete of HS-8622 stays gone after a seed reload; estimate delete and archive still work", () => {

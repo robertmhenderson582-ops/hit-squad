@@ -39,8 +39,8 @@ export function StaffingPlanDesk({
   const rows = visibleStaffingRows(plan, showFull);
   const coastLabel = plan.coast === "west" ? "West Coast (John)" : "East Coast (Nathan)";
 
-  function exportPlan() {
-    const bytes = staffingPlanToXlsx(plan, {
+  async function exportPlan() {
+    const bytes = await staffingPlanToXlsx(plan, {
       projectName: name || "Staffing Plan",
       afeName: pack.jobMeta.afeName,
       area: pack.jobMeta.area,

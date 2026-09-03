@@ -60,6 +60,12 @@ export function handoffMarkText(
   if (packTransferredToYou(pack, email)) {
     return `Transferred to you from ${transferredFromLabel(pack)}.`;
   }
+  const ownerEmail = (pack.ownerEmail || "").trim().toLowerCase();
+  const me = email.trim().toLowerCase();
+  if (ownerEmail && me && ownerEmail !== me) {
+    const desk = findHandoffSeat(pack.ownerEmail || "")?.name;
+    if (desk) return `${desk}'s desk.`;
+  }
   return null;
 }
 

@@ -37,10 +37,10 @@ export function RodeoFormDesk({
     }));
   }
 
-  function fillForm() {
+  async function fillForm() {
     setError("");
     try {
-      const bytes = rodeoFormToXlsx({
+      const bytes = await rodeoFormToXlsx({
         form,
         crew: pack.crew,
         site,

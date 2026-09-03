@@ -3,8 +3,8 @@
 import Link from "next/link";
 
 export const FUTURE_MODULES = [
-  { href: "/hse", name: "HSE", note: "Independent site safety module. Fillable slots and execute lanes." },
-  { href: "/quality", name: "Quality", note: "Independent Quality studio. Board, registers, named forms, rolling chart." },
+  { href: "/hse", name: "HSE", note: "Independent site safety module. Mark the package. Type talks, permits, and observations." },
+  { href: "/quality", name: "Quality", note: "Independent Quality studio. Fillable forms, working boards, rolling-chart setup then map." },
   { href: "/accounting", name: "Accounting", note: "not open for trial yet." },
   { href: "/payroll", name: "Payroll", note: "not open for trial yet." },
   { href: "/team", name: "Team", note: "not open for trial yet." },

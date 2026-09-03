@@ -364,7 +364,7 @@ export function staffingExportCells(plan: StaffingPlan, meta: StaffingExportMeta
   return { cells, merges };
 }
 
-export function staffingPlanToXlsx(plan: StaffingPlan, meta: StaffingExportMeta): Uint8Array {
+export async function staffingPlanToXlsx(plan: StaffingPlan, meta: StaffingExportMeta): Promise<Uint8Array> {
   const { cells, merges } = staffingExportCells(plan, meta);
   return buildXlsx("Staffing Plan", cells, merges);
 }

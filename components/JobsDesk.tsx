@@ -10,7 +10,7 @@ import { useDisplay } from "@/components/DisplayProvider";
 import { useEstimateModal } from "@/components/EstimateModalContext";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob } from "@/lib/estimate-open";
-import { packsForViewedDesk } from "@/lib/lens-packs";
+import { packsForViewedDesk, snapshotOwnerDesk } from "@/lib/lens-packs";
 import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
@@ -35,19 +35,29 @@ export function JobsDesk() {
   const [tick, setTick] = useState(0);
   const [packTick, setPackTick] = useState(0);
   const [openCompanyId, setOpenCompanyId] = useState<string | null>(null);
+  const [hydrating, setHydrating] = useState(true);
+
+  useEffect(() => {
+    snapshotOwnerDesk(lens);
+  }, [lens, viewingAs, packTick]);
 
   useEffect(() => {
     if (!lensReady) return;
     let cancelled = false;
+    setHydrating(true);
     (async () => {
       const jobsReq = deskFetch("/api/desk/jobs", viewAsInit(seat));
       void hydrateFromVault(undefined, { viewAs: seat })
         .then(async () => {
           if (cancelled) return;
           await flushLocalPacksToVault(undefined, { viewAs: seat });
+          snapshotOwnerDesk(lens);
           if (!cancelled) setPackTick((value) => value + 1);
         })
-        .catch(() => undefined);
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled) setHydrating(false);
+        });
       const response = await jobsReq;
       const data = await response.json();
       if (cancelled) return;
@@ -63,13 +73,15 @@ export function JobsDesk() {
     return () => {
       cancelled = true;
     };
-  }, [lensKey, lensReady, seat, tick, viewingAs]);
+  }, [lensKey, lensReady, seat, tick, viewingAs, lens]);
 
   const menu = menuForViewedDesk(viewingAs, undefined, seat);
   const closed = readClosed();
   const scope = companyScopeFor(lens, companyId);
   const deskPacks = packsForViewedDesk(lens, viewingAs, seat);
-  const jobs = jobsOnDesk(serverJobs, deskPacks, viewingAs, scope, menu);
+  const jobs = jobsOnDesk(serverJobs, deskPacks, viewingAs, scope, menu, {
+    includeSeeds: true,
+  });
   void packTick;
   const active = jobs.filter((job) => isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed));
   const archived = jobs.filter((job) => menuStatus(job, menu) === "archived");
@@ -96,7 +108,7 @@ export function JobsDesk() {
   return (
     <div className={`${night ? "instrument-desk" : "paper-desk"} -mx-3 mt-4 rounded-sm px-4 py-5 sm:-mx-4 sm:px-6`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
+        <p className="max-w-3xl text-sm leading-6 text-[#163038]">
           {standaloneLane
             ? "This seat is on Standalone. Company jobs stay on the company door."
             : "Company, then site, then the job. Open a card to open that estimate. Archive hides a job. Delete removes your copy after you confirm."}
@@ -112,6 +124,11 @@ export function JobsDesk() {
         )}
       </div>
       {error ? <p className="mt-3 text-amber-flare">{error}</p> : null}
+      {hydrating ? (
+        <p className="mt-4 text-sm font-semibold text-[#163038]" aria-live="polite">
+          Refreshing jobs on this desk…
+        </p>
+      ) : null}
       {standaloneLane ? (
         <p className="mt-6 text-sm text-[#5b6f73]">
           One-off estimates, the change-order log, and tools that are not tied to a client site live on{" "}

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldMark } from "@/components/FieldMark";
 import type { ModuleRegisterRow } from "@/lib/quality-hse-modules";
 
 export type RegisterField = { id: string; label: string; kind: "text" | "date" };
@@ -7,6 +8,7 @@ export type RegisterField = { id: string; label: string; kind: "text" | "date" }
 export function ModuleRegister({
   id,
   title,
+  note,
   fields,
   rows,
   onAdd,
@@ -15,6 +17,7 @@ export function ModuleRegister({
 }: {
   id: string;
   title: string;
+  note?: string;
   fields: readonly RegisterField[];
   rows: ModuleRegisterRow[];
   onAdd: () => void;
@@ -24,18 +27,21 @@ export function ModuleRegister({
   return (
     <section id={id} className="plant-card scroll-mt-24 px-4 py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <h3 className="font-display text-lg tracking-wide">{title}</h3>
-        <button type="button" onClick={onAdd} className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white">
+        <div>
+          <h3 className="font-display text-lg text-[#163038]">{title}</h3>
+          {note ? <p className="mt-1 text-sm text-[#163038]">{note}</p> : null}
+        </div>
+        <button type="button" onClick={onAdd} className="rounded-sm bg-steel px-3 py-1.5 text-sm text-white">
           + Add row
         </button>
       </div>
       <div className="mt-3 overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
-          <thead className="font-mono text-[10px] tracking-[0.16em] text-[#5b6f73]">
+        <table className="field-register-table min-w-full text-left">
+          <thead>
             <tr>
               {fields.map((field) => (
                 <th key={field.id} className="whitespace-nowrap px-2 py-2">
-                  {field.label}
+                  <FieldMark>{field.label}</FieldMark>
                 </th>
               ))}
               <th className="px-2 py-2">
@@ -45,26 +51,27 @@ export function ModuleRegister({
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr className="border-t border-[#d5e0de]">
-                <td colSpan={fields.length + 1} className="px-2 py-5 text-sm text-[#5b6f73]">
-                  Empty. Add a row to type a date or count.
+              <tr className="border-t border-[#c5d4d4]">
+                <td colSpan={fields.length + 1} className="px-2 py-5 text-sm text-[#163038]">
+                  Empty. Add a row to type.
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
-                <tr key={row.id} className="border-t border-[#d5e0de]">
+                <tr key={row.id} className="border-t border-[#c5d4d4]">
                   {fields.map((field) => (
                     <td key={field.id} className="px-2 py-2">
                       <input
                         className="paper-field"
                         type={field.kind === "date" ? "date" : "text"}
                         value={row.cells[field.id] || ""}
+                        aria-label={field.label}
                         onChange={(event) => onPatch(row.id, field.id, event.target.value)}
                       />
                     </td>
                   ))}
                   <td className="px-2 py-2">
-                    <button type="button" onClick={() => onRemove(row.id)} className="text-sm text-[#5b6f73] underline">
+                    <button type="button" onClick={() => onRemove(row.id)} className="text-sm text-steel underline">
                       Remove
                     </button>
                   </td>

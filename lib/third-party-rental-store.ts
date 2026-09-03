@@ -65,13 +65,12 @@ async function persist(rows: ThirdPartyRentalRow[]) {
 
 export async function hydrateThirdPartyStore(): Promise<ThirdPartyRentalRow[]> {
   if (memoryOverride) return readCache();
-  if (hydrated) return listFromCache();
   const cache = readCache();
   const drive = resolveAdapter();
   if (drive) {
     try {
-      const vault = parseThirdPartyCatalog(await readVaultJson(drive, RATES_VAULT_NAME, RATES_VAULT_KIND, ratesFolderId()));
-      if (vault.length) writeCache(vault);
+      const raw = await readVaultJson(drive, RATES_VAULT_NAME, RATES_VAULT_KIND, ratesFolderId());
+      if (raw != null) writeCache(parseThirdPartyCatalog(raw as RatesFile));
       else if (cache.length) await writeVaultJson(drive, RATES_VAULT_NAME, RATES_VAULT_KIND, { catalog: cache }, ratesFolderId());
     } catch {
       // Keep the local cache.
