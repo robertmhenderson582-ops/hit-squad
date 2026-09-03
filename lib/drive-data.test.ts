@@ -158,5 +158,35 @@ describe("vault named json", () => {
       SEATS_VAULT_KIND,
     );
     assert.equal(seats?.hashes["robertmhenderson582@gmail.com"]?.mustChangePassword, false);
+
+    let created = 0;
+    const unreadKnownId: DriveAdapter = {
+      configured: true,
+      async listJson() {
+        throw new Error("The user does not have sufficient permissions for this file.");
+      },
+      async listAccessibleJson() {
+        throw new Error("shared-with-me list failed");
+      },
+      async readJson() {
+        throw new Error("read");
+      },
+      async createJson() {
+        created += 1;
+        throw new Error("createJson must not run when seats.json id is known");
+      },
+      updateJson: (fileId, content, name, properties) => inner.updateJson(fileId, content, name, properties),
+      deleteJson: (fileId) => inner.deleteJson(fileId),
+    };
+    const unreadFound = await findVaultJsonFile(unreadKnownId, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
+    assert.equal(unreadFound?.id, SEATS_VAULT_FILE_ID);
+    await writeVaultJson(unreadKnownId, SEATS_VAULT_NAME, SEATS_VAULT_KIND, {
+      hashes: { "robertmhenderson582@gmail.com": { mustChangePassword: false } },
+    });
+    assert.equal(created, 0);
+    const afterUnread = JSON.parse(await inner.readJson(SEATS_VAULT_FILE_ID)) as {
+      hashes: Record<string, { mustChangePassword?: boolean }>;
+    };
+    assert.equal(afterUnread.hashes["robertmhenderson582@gmail.com"]?.mustChangePassword, false);
   });
 });

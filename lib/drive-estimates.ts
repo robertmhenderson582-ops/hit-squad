@@ -144,11 +144,11 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
     },
     async updateJson(fileId, content, name, properties) {
       const row = files.get(fileId);
-      if (!row) throw new Error("missing");
       const file: DriveFile = {
-        ...row.file,
-        name: name || row.file.name,
-        properties: properties || row.file.properties,
+        id: fileId,
+        name: name || row?.file.name || fileId,
+        properties: properties || row?.file.properties,
+        modifiedTime: row?.file.modifiedTime,
       };
       files.set(fileId, { file, content });
       return file;
@@ -225,22 +225,39 @@ function escapeDriveQueryValue(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
+function driveApiUrl(path: string, params?: Record<string, string>) {
+  const url = new URL(path, "https://www.googleapis.com/");
+  url.searchParams.set("supportsAllDrives", "true");
+  for (const [key, value] of Object.entries(params || {})) {
+    url.searchParams.set(key, value);
+  }
+  return url;
+}
+
 function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter {
   async function authHeaders(extra?: Record<string, string>) {
     const token = await getAccessToken();
     return { authorization: `Bearer ${token}`, ...extra };
   }
 
-  async function listByQuery(q: string) {
+  async function listByQuery(q: string, opts?: { accessible?: boolean }) {
     const files: DriveFile[] = [];
     let pageToken = "";
     do {
-      const url = new URL("https://www.googleapis.com/drive/v3/files");
-      url.searchParams.set("q", q);
-      url.searchParams.set("fields", "nextPageToken,files(id,name,properties,modifiedTime)");
-      url.searchParams.set("pageSize", "100");
-      url.searchParams.set("spaces", "drive");
-      if (pageToken) url.searchParams.set("pageToken", pageToken);
+      const params: Record<string, string> = {
+        q,
+        fields: "nextPageToken,files(id,name,properties,modifiedTime)",
+        pageSize: "100",
+        includeItemsFromAllDrives: "true",
+      };
+      if (opts?.accessible) {
+        // Shared-with-me files live outside the SA My Drive. Do not set spaces=drive.
+        params.corpora = "user";
+      } else {
+        params.spaces = "drive";
+      }
+      if (pageToken) params.pageToken = pageToken;
+      const url = driveApiUrl("/drive/v3/files", params);
       const response = await fetch(url, { headers: await authHeaders() });
       const data = (await response.json()) as { files?: DriveFile[]; nextPageToken?: string; error?: unknown };
       if (!response.ok) throw new Error(driveApiError(data, "list"));
@@ -257,10 +274,10 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
     },
     async listAccessibleJson(name) {
       const named = name ? `name='${escapeDriveQueryValue(name)}' and ` : "";
-      return listByQuery(`${named}trashed=false and mimeType='application/json'`);
+      return listByQuery(`${named}trashed=false and mimeType='application/json'`, { accessible: true });
     },
     async readJson(fileId) {
-      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { alt: "media" }), {
         headers: await authHeaders(),
       });
       if (!response.ok) throw new Error("read");
@@ -270,7 +287,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       const boundary = `hs_pack_${Date.now()}`;
       const meta = { name, parents: [folderId], mimeType: "application/json", properties };
       const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
-      const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+      const response = await fetch(driveApiUrl("/upload/drive/v3/files", { uploadType: "multipart" }), {
         method: "POST",
         headers: await authHeaders({ "content-type": `multipart/related; boundary=${boundary}` }),
         body,
@@ -280,7 +297,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       return { id: file.id, name: file.name || name, properties };
     },
     async updateJson(fileId, content, name, properties) {
-      const upload = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+      const upload = await fetch(driveApiUrl(`/upload/drive/v3/files/${fileId}`, { uploadType: "media" }), {
         method: "PATCH",
         headers: await authHeaders({ "content-type": "application/json" }),
         body: content,
@@ -290,7 +307,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
         throw new Error(driveApiError(payload, "update"));
       }
       if (name || properties) {
-        await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+        await fetch(driveApiUrl(`/drive/v3/files/${fileId}`), {
           method: "PATCH",
           headers: await authHeaders({ "content-type": "application/json" }),
           body: JSON.stringify({ name, properties }),
@@ -299,7 +316,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       return { id: fileId, name: name || fileId, properties };
     },
     async deleteJson(fileId) {
-      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+      const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`), {
         method: "PATCH",
         headers: await authHeaders({ "content-type": "application/json" }),
         body: JSON.stringify({ trashed: true }),
