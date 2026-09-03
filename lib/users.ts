@@ -719,7 +719,10 @@ export async function setOwnPassword(
   return confirmOwnPasswordWrite(user, next);
 }
 
-async function confirmOwnPasswordWrite(user: StoredUser, next: string) {
+async function confirmOwnPasswordWrite(
+  user: StoredUser,
+  next: string,
+): Promise<{ ok: true; email: string } | { error: string; status: number }> {
   user.passwordHash = bcrypt.hashSync(next, 12);
   user.previousHashes = [];
   user.recoveryHash = undefined;
