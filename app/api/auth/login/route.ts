@@ -9,7 +9,14 @@ import {
   signSession,
 } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
-import { flushSeatVault, hydrateSeatStore, loginOutcome, restoreSeatHash, seatHashClaimFor } from "@/lib/users";
+import {
+  flushSeatVault,
+  hydrateSeatStore,
+  loginOutcome,
+  persistExistingOwnerHash,
+  restoreSeatHash,
+  seatHashClaimFor,
+} from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +44,13 @@ export async function POST(request: Request) {
 
   const email = typeof body.email === "string" ? body.email : "";
   await hydrateSeatStore();
-  restoreSeatHash(email, await readSeatClaim(cookieValue(request, SEAT_CLAIM_COOKIE)));
+  const claim = await readSeatClaim(cookieValue(request, SEAT_CLAIM_COOKIE));
+  restoreSeatHash(email, claim);
+  try {
+    await persistExistingOwnerHash({ email, claim });
+  } catch {
+    // Keep sign-in. Vault retry is best-effort.
+  }
 
   const outcome = loginOutcome({
     email,

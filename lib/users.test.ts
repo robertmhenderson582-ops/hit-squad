@@ -41,6 +41,7 @@ import {
   collapseSeatHashes,
   listBuildSeats,
   ownerSeatCount,
+  persistExistingOwnerHash,
 } from "./users.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 
@@ -1229,4 +1230,123 @@ test("confirmOwnPasswordWrite succeeds when listJson and readJson throw and seat
   );
   useSeatVaultForTests(drive);
   await assertPasswordSaveAgainstUnlistableFolder(drive);
+});
+
+test("persistExistingOwnerHash writes the local owner hash to seats.json and leaves testers", async () => {
+  const ownerHash = bcrypt.hashSync(CHOSEN, 12);
+  const testerHash = bcrypt.hashSync(ISSUED, 12);
+  writeFileSync(
+    seatFile,
+    `${JSON.stringify({
+      hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: ownerHash, mustChangePassword: false } },
+      extras: [],
+    })}\n`,
+  );
+  const drive = memoryDrive();
+  drive.files.set(SEATS_VAULT_FILE_ID, {
+    file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+    content: `${JSON.stringify({
+      hashes: { [TESTER]: { passwordHash: testerHash, mustChangePassword: false } },
+      extras: [],
+    })}\n`,
+  });
+  useSeatVaultForTests(drive);
+  const persisted = await persistExistingOwnerHash({ email: OWNER_LOGIN_EMAIL });
+  assert.equal(persisted, true);
+  await flushSeatVault();
+
+  const vault = JSON.parse(await drive.readJson(SEATS_VAULT_FILE_ID)) as {
+    hashes?: Record<string, { passwordHash?: string; mustChangePassword?: boolean }>;
+  };
+  assert.equal(vault.hashes?.[OWNER_LOGIN_EMAIL]?.passwordHash, ownerHash);
+  assert.equal(vault.hashes?.[OWNER_LOGIN_EMAIL]?.mustChangePassword, false);
+  assert.equal(vault.hashes?.[TESTER]?.passwordHash, testerHash);
+  assert.equal(JSON.stringify(vault).includes(CHOSEN), false);
+  assert.equal(JSON.stringify(vault).includes(ISSUED), false);
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: TESTER, password: ISSUED }).status, "authenticated");
+});
+
+test("persistExistingOwnerHash restores the owner cookie hash onto Drive without a new password", async () => {
+  const ownerHash = bcrypt.hashSync(CHOSEN, 12);
+  const claim = { email: OWNER_LOGIN_EMAIL, passwordHash: ownerHash, mustChangePassword: false };
+  const drive = memoryDrive();
+  drive.files.set(SEATS_VAULT_FILE_ID, {
+    file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+    content: `${JSON.stringify({ hashes: {}, extras: [] })}\n`,
+  });
+  useSeatVaultForTests(drive);
+  const persisted = await persistExistingOwnerHash({ claim, email: OWNER_LOGIN_EMAIL });
+  assert.equal(persisted, true);
+  await flushSeatVault();
+  const vault = JSON.parse(await drive.readJson(SEATS_VAULT_FILE_ID)) as {
+    hashes?: Record<string, { passwordHash?: string; mustChangePassword?: boolean }>;
+  };
+  assert.equal(vault.hashes?.[OWNER_LOGIN_EMAIL]?.passwordHash, ownerHash);
+  assert.equal(vault.hashes?.[OWNER_LOGIN_EMAIL]?.mustChangePassword, false);
+  assert.equal(JSON.stringify(vault).includes(CHOSEN), false);
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+});
+
+test("forced local owner hash is retried onto Drive once the adapter can write", async () => {
+  const inner = memoryDrive();
+  inner.files.set(SEATS_VAULT_FILE_ID, {
+    file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+    content: `${JSON.stringify({ hashes: {}, extras: [] })}\n`,
+  });
+  useSeatVaultForTests({
+    configured: true,
+    listJson: () => inner.listJson("folder"),
+    readJson: (fileId) => inner.readJson(fileId),
+    async createJson() {
+      throw new Error("drive write failed");
+    },
+    async updateJson() {
+      throw new Error("drive write failed");
+    },
+    deleteJson: (fileId) => inner.deleteJson(fileId),
+  });
+  const stored = findUserByEmail(OWNER_LOGIN_EMAIL);
+  assert.ok(stored);
+  stored.mustChangePassword = true;
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
+  assert.equal("ok" in changed, true);
+  const local = parseSeatHashes(JSON.parse(readFileSync(seatFile, "utf8")));
+  assert.ok(local[OWNER_LOGIN_EMAIL]?.passwordHash);
+  assert.equal(local[OWNER_LOGIN_EMAIL]?.mustChangePassword, false);
+  const before = JSON.parse(await inner.readJson(SEATS_VAULT_FILE_ID)) as { hashes?: Record<string, unknown> };
+  assert.equal(before.hashes?.[OWNER_LOGIN_EMAIL], undefined);
+
+  useSeatVaultForTests(inner);
+  const retried = await persistExistingOwnerHash({ email: OWNER_LOGIN_EMAIL });
+  assert.equal(retried, true);
+  await flushSeatVault();
+  const vault = JSON.parse(await inner.readJson(SEATS_VAULT_FILE_ID)) as {
+    hashes?: Record<string, { mustChangePassword?: boolean }>;
+  };
+  assert.equal(Boolean(vault.hashes?.[OWNER_LOGIN_EMAIL]), true);
+  assert.equal(vault.hashes?.[OWNER_LOGIN_EMAIL]?.mustChangePassword, false);
+  assert.equal(JSON.stringify(vault).includes(CHOSEN), false);
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+});
+
+test("persistExistingOwnerHash does not write the env owner seed as a Settings password", async () => {
+  const drive = memoryDrive();
+  drive.files.set(SEATS_VAULT_FILE_ID, {
+    file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+    content: `${JSON.stringify({ hashes: {}, extras: [] })}\n`,
+  });
+  useSeatVaultForTests(drive);
+  const skipped = await persistExistingOwnerHash({ email: OWNER_LOGIN_EMAIL });
+  assert.equal(skipped, false);
+  const vault = JSON.parse(await drive.readJson(SEATS_VAULT_FILE_ID)) as { hashes?: Record<string, unknown> };
+  assert.equal(vault.hashes?.[OWNER_LOGIN_EMAIL], undefined);
+  assert.equal(JSON.stringify(vault).includes(OWNER_SECRET), false);
+});
+
+test("session GET persists the owner hash without rewriting cookies", () => {
+  const route = readFileSync(fileURLToPath(new URL("../app/api/auth/session/route.ts", import.meta.url)), "utf8");
+  assert.match(route, /persistExistingOwnerHash/);
+  assert.match(route, /readSeatClaim/);
+  assert.equal(/cookies\.(set|delete)/.test(route), false);
 });
