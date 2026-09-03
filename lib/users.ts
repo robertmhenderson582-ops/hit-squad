@@ -4,7 +4,14 @@ import { dirname, join } from "node:path";
 import bcrypt from "bcryptjs";
 import { assignedCompany, isKnownCompany, setAssignedCompany } from "./companies-store.ts";
 import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
-import { SEATS_VAULT_KIND, SEATS_VAULT_NAME, readVaultJson, resetVaultFileIdsForTests, writeVaultJson } from "./drive-data.ts";
+import {
+  SEATS_VAULT_FILE_ID,
+  SEATS_VAULT_KIND,
+  SEATS_VAULT_NAME,
+  readVaultJson,
+  resetVaultFileIdsForTests,
+  writeVaultJson,
+} from "./drive-data.ts";
 import { vaultDriveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import { canonicalEmail, identityBucket, isOwnerAliasSeat, isOwnerIdentity, resolveIdentity } from "./identity.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
@@ -383,9 +390,32 @@ export async function hydrateSeatStore() {
   cachedUsers = null;
 }
 
+const SEATS_WRITE_ATTEMPTS = 4;
+
+async function ownerHashLandedInVault(): Promise<boolean> {
+  const drive = resolveAdapter();
+  if (!drive) return true;
+  const local = ownerHashRow(loadPersisted(), ownerEmail());
+  if (!local?.passwordHash) return false;
+  try {
+    const raw = readFileSync(seatPasswordPath(), "utf8");
+    if (drive.confirmWrite && (await drive.confirmWrite(SEATS_VAULT_FILE_ID, raw))) return true;
+  } catch {
+    // Confirm by reading seats.json when the local snapshot is missing.
+  }
+  try {
+    const raw = await readVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
+    const vault = ownerHashRow(parseSeatHashes(raw), ownerEmail());
+    return Boolean(vault?.passwordHash === local.passwordHash && !vault.mustChangePassword);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Push the owner hash already on /tmp or hs_seat_claim into seats.json.
- * Does not invent a password. Does not overwrite tester hashes.
+ * Retries until md5 / modifiedTime confirms. Does not invent a password.
+ * Does not overwrite tester hashes.
  */
 export async function persistExistingOwnerHash(input?: {
   claim?: SeatHashClaim | null;
@@ -416,9 +446,19 @@ export async function persistExistingOwnerHash(input?: {
     return false;
   }
   user.mustChangePassword = false;
-  persistHashes(ownerUsers(), { replaceEmails: [ownerEmail()], confirm: true });
-  await flushSeatVault();
-  return true;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < SEATS_WRITE_ATTEMPTS; attempt++) {
+    persistHashes(ownerUsers(), { replaceEmails: [ownerEmail()], confirm: true });
+    try {
+      await flushSeatVault();
+      if (await ownerHashLandedInVault()) return true;
+    } catch (error) {
+      lastError = error;
+    }
+    pendingVault = Promise.resolve();
+  }
+  if (lastError) throw lastError;
+  throw new Error("seats vault write not confirmed");
 }
 
 export async function flushSeatVault() {

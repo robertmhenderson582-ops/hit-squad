@@ -29,7 +29,7 @@ import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { companyScopeFor } from "./companies.ts";
 import { jobTree } from "./job-tree.ts";
 import { JAMES_EMAIL } from "./tester-seats.ts";
-import { NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
+import { HIS_LEFTOVER_GEN, NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
 
 function memoryStore(seed: Record<string, string> = {}): StorageLike {
   const data = { ...seed };
@@ -900,7 +900,7 @@ describe("local transfer commit", () => {
       assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
       assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
       assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), true);
-      assert.equal(store.getItem("hs_his_leftover_gen"), "2");
+      assert.equal(store.getItem("hs_his_leftover_gen"), HIS_LEFTOVER_GEN);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();

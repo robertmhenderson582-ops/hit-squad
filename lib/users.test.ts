@@ -1344,9 +1344,50 @@ test("persistExistingOwnerHash does not write the env owner seed as a Settings p
   assert.equal(JSON.stringify(vault).includes(OWNER_SECRET), false);
 });
 
+test("persistExistingOwnerHash retries until seats.json write confirms", async () => {
+  const ownerHash = bcrypt.hashSync(CHOSEN, 12);
+  writeFileSync(
+    seatFile,
+    `${JSON.stringify({
+      hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: ownerHash, mustChangePassword: false } },
+      extras: [],
+    })}\n`,
+  );
+  const inner = memoryDrive();
+  inner.files.set(SEATS_VAULT_FILE_ID, {
+    file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+    content: `${JSON.stringify({ hashes: {}, extras: [] })}\n`,
+  });
+  let confirms = 0;
+  useSeatVaultForTests({
+    configured: true,
+    listJson: (folderId) => inner.listJson(folderId),
+    readJson: (fileId) => inner.readJson(fileId),
+    createJson: (folderId, name, content, properties) => inner.createJson(folderId, name, content, properties),
+    updateJson: (fileId, content, name, properties) => inner.updateJson(fileId, content, name, properties),
+    deleteJson: (fileId) => inner.deleteJson(fileId),
+    async confirmWrite(fileId, content) {
+      confirms += 1;
+      if (confirms < 3) return false;
+      return inner.confirmWrite!(fileId, content);
+    },
+  });
+  const persisted = await persistExistingOwnerHash({ email: OWNER_LOGIN_EMAIL });
+  assert.equal(persisted, true);
+  assert.ok(confirms >= 3);
+  const vault = JSON.parse(await inner.readJson(SEATS_VAULT_FILE_ID)) as {
+    hashes?: Record<string, { passwordHash?: string; mustChangePassword?: boolean }>;
+  };
+  assert.equal(vault.hashes?.[OWNER_LOGIN_EMAIL]?.passwordHash, ownerHash);
+  assert.equal(vault.hashes?.[OWNER_LOGIN_EMAIL]?.mustChangePassword, false);
+  assert.ok(inner.files.get(SEATS_VAULT_FILE_ID)?.file.modifiedTime);
+  assert.equal(JSON.stringify(vault).includes(CHOSEN), false);
+});
+
 test("session GET persists the owner hash without rewriting cookies", () => {
   const route = readFileSync(fileURLToPath(new URL("../app/api/auth/session/route.ts", import.meta.url)), "utf8");
   assert.match(route, /persistExistingOwnerHash/);
   assert.match(route, /readSeatClaim/);
+  assert.match(route, /SESSION_PERSIST_ATTEMPTS/);
   assert.equal(/cookies\.(set|delete)/.test(route), false);
 });

@@ -146,7 +146,7 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
     },
     async createJson(_folderId, name, content, properties) {
       n += 1;
-      const file: DriveFile = { id: `file-${n}`, name, properties };
+      const file: DriveFile = { id: `file-${n}`, name, properties, modifiedTime: new Date().toISOString() };
       files.set(file.id, { file, content });
       return file;
     },
@@ -156,7 +156,7 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
         id: fileId,
         name: name || row?.file.name || fileId,
         properties: properties || row?.file.properties,
-        modifiedTime: row?.file.modifiedTime,
+        modifiedTime: new Date().toISOString(),
       };
       files.set(fileId, { file, content });
       return file;
@@ -308,15 +308,22 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       return { id: file.id, name: file.name || name, properties };
     },
     async updateJson(fileId, content, name, properties) {
-      const upload = await fetch(driveApiUrl(`/upload/drive/v3/files/${fileId}`, { uploadType: "media" }), {
-        method: "PATCH",
-        headers: await authHeaders({ "content-type": "application/json" }),
-        body: content,
-      });
+      const upload = await fetch(
+        driveApiUrl(`/upload/drive/v3/files/${fileId}`, {
+          uploadType: "media",
+          fields: "id,name,md5Checksum,modifiedTime",
+        }),
+        {
+          method: "PATCH",
+          headers: await authHeaders({ "content-type": "application/json" }),
+          body: content,
+        },
+      );
       if (!upload.ok) {
         const payload = await upload.json().catch(() => null);
         throw new Error(driveApiError(payload, "update"));
       }
+      const uploaded = (await upload.json().catch(() => null)) as DriveFile & { md5Checksum?: string } | null;
       if (name || properties) {
         await fetch(driveApiUrl(`/drive/v3/files/${fileId}`), {
           method: "PATCH",
@@ -324,7 +331,12 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
           body: JSON.stringify({ name, properties }),
         });
       }
-      return { id: fileId, name: name || fileId, properties };
+      return {
+        id: fileId,
+        name: name || uploaded?.name || fileId,
+        properties,
+        modifiedTime: uploaded?.modifiedTime,
+      };
     },
     async deleteJson(fileId) {
       const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`), {
@@ -346,14 +358,16 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
 async function confirmDriveWrite(getAccessToken: () => Promise<string>, fileId: string, content: string) {
   try {
     const token = await getAccessToken();
-    const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { fields: "id,md5Checksum" }), {
+    const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { fields: "id,md5Checksum,modifiedTime" }), {
       headers: { authorization: `Bearer ${token}` },
     });
     if (!response.ok) return false;
-    const data = (await response.json()) as { id?: string; md5Checksum?: string };
+    const data = (await response.json()) as { id?: string; md5Checksum?: string; modifiedTime?: string };
     if (!data.id) return false;
-    if (!data.md5Checksum) return true;
-    return data.md5Checksum.toLowerCase() === createHash("md5").update(content).digest("hex");
+    if (data.md5Checksum) {
+      return data.md5Checksum.toLowerCase() === createHash("md5").update(content).digest("hex");
+    }
+    return Boolean(data.modifiedTime);
   } catch {
     return false;
   }
@@ -466,7 +480,9 @@ function withVaultWritePreference(sa: DriveAdapter, oauth: DriveAdapter): DriveA
       // SA threw — try OAuth without abandoning later SA writes.
     }
     logVaultSaFallback();
-    return op(oauth);
+    const written = await op(oauth);
+    if (await writeConfirmed(oauth, fileId || written.id, content)) return written;
+    throw new Error("vault write not confirmed");
   }
   return {
     configured: true,
@@ -482,11 +498,36 @@ function withVaultWritePreference(sa: DriveAdapter, oauth: DriveAdapter): DriveA
         // SA cannot create in an owner-only folder — try OAuth.
       }
       logVaultSaFallback();
-      return oauth.createJson(folderId, name, content, properties);
+      const written = await oauth.createJson(folderId, name, content, properties);
+      if (await writeConfirmed(oauth, written.id, content)) return written;
+      throw new Error("vault write not confirmed");
     },
     updateJson: (fileId, content, name, properties) =>
       writePreferSa(fileId, content, (drive) => drive.updateJson(fileId, content, name, properties)),
     deleteJson: (fileId) => preferSa((drive) => drive.deleteJson(fileId)),
+    confirmWrite: async (fileId, content) =>
+      (await writeConfirmed(sa, fileId, content)) || writeConfirmed(oauth, fileId, content),
+  };
+}
+
+function withConfirmedWrites(drive: DriveAdapter): DriveAdapter {
+  return {
+    ...drive,
+    async createJson(folderId, name, content, properties) {
+      const written = await drive.createJson(folderId, name, content, properties);
+      if (!(await writeConfirmed(drive, written.id, content))) {
+        throw new Error("vault write not confirmed");
+      }
+      return written;
+    },
+    async updateJson(fileId, content, name, properties) {
+      const written = await drive.updateJson(fileId, content, name, properties);
+      if (!(await writeConfirmed(drive, fileId, content))) {
+        throw new Error("vault write not confirmed");
+      }
+      return written;
+    },
+    confirmWrite: (fileId, content) => writeConfirmed(drive, fileId, content),
   };
 }
 
@@ -514,8 +555,8 @@ export function vaultDriveAdapter(env: Record<string, string | undefined> = proc
       googleDriveAdapter(() => oauthAccessToken(oauth)),
     );
   }
-  if (account) return googleDriveAdapter(() => googleAccessToken(account));
-  if (oauth) return googleDriveAdapter(() => oauthAccessToken(oauth));
+  if (account) return withConfirmedWrites(googleDriveAdapter(() => googleAccessToken(account)));
+  if (oauth) return withConfirmedWrites(googleDriveAdapter(() => oauthAccessToken(oauth)));
   return unconfiguredDrive();
 }
 

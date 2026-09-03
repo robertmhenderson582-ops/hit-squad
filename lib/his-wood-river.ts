@@ -160,7 +160,7 @@ function hisDeskOwnerEmail(existing?: string) {
   return NATHAN_DESK_EMAIL;
 }
 
-export const HIS_LEFTOVER_GEN = "2";
+export const HIS_LEFTOVER_GEN = "3";
 export const HIS_LEFTOVER_GEN_KEY = "hs_his_leftover_gen";
 
 function isJamesStamp(value?: string) {
@@ -186,6 +186,10 @@ export function isStaleHisLeftoverIdentity(pack?: HisIdentityPack | null) {
     isForeignHisIdentity(pack.transferredTo) ||
     isForeignHisIdentity(pack.transferredToName)
   );
+}
+
+export function leftoverHasStaleHisIdentity(packs: HisIdentityPack[]): boolean {
+  return packs.some((pack) => isStaleHisLeftoverIdentity(pack));
 }
 
 export function leftoverGenIsCurrent(store?: StorageLike | null) {

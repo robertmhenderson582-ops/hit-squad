@@ -6,17 +6,29 @@ import { hydrateSeatStore, persistExistingOwnerHash } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
+const SESSION_PERSIST_ATTEMPTS = 4;
+
 export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (user) {
     try {
       await hydrateSeatStore();
-      await persistExistingOwnerHash({
-        email: user.email,
-        claim: await readSeatClaim(cookieValue(request, SEAT_CLAIM_COOKIE)),
-      });
+      const claim = await readSeatClaim(cookieValue(request, SEAT_CLAIM_COOKIE));
+      for (let attempt = 0; attempt < SESSION_PERSIST_ATTEMPTS; attempt++) {
+        try {
+          const landed = await persistExistingOwnerHash({
+            email: user.email,
+            claim,
+          });
+          if (landed) break;
+          // false means skipped (no owner hash / env seed). Do not keep PATCHing.
+          break;
+        } catch {
+          if (attempt === SESSION_PERSIST_ATTEMPTS - 1) break;
+        }
+      }
     } catch {
-      // Keep the signed-in session. Vault retry is best-effort.
+      // Keep the signed-in session. Vault retry already exhausted.
     }
   }
   return NextResponse.json(
