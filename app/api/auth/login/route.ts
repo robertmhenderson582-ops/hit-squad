@@ -44,10 +44,10 @@ export async function POST(request: Request) {
 
   const email = typeof body.email === "string" ? body.email : "";
   await hydrateSeatStore();
-  const claim = await readSeatClaim(cookieValue(request, SEAT_CLAIM_COOKIE));
-  restoreSeatHash(email, claim);
+  const incomingClaim = await readSeatClaim(cookieValue(request, SEAT_CLAIM_COOKIE));
+  restoreSeatHash(email, incomingClaim);
   try {
-    await persistExistingOwnerHash({ email, claim });
+    await persistExistingOwnerHash({ email, claim: incomingClaim });
   } catch {
     // Keep sign-in. Vault retry is best-effort.
   }
