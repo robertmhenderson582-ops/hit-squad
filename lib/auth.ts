@@ -6,7 +6,7 @@ export type { SeatHashClaim };
 export const SESSION_COOKIE = "hs_session";
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
 
-/** Survives logout. Restores a tester hash after a Vercel /tmp cold start. */
+/** Survives logout. Restores a tester or owner hash after a Vercel /tmp cold start. */
 export const SEAT_CLAIM_COOKIE = "hs_seat_claim";
 export const SEAT_CLAIM_MAX_AGE = 60 * 60 * 24 * 365;
 

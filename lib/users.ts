@@ -561,7 +561,7 @@ export function seatNeedsPasswordCreate(email: string): boolean {
 
 export function seatHashClaimFor(email: string): SeatHashClaim | null {
   const user = findUserByEmail(email);
-  if (!user || user.role === "owner" || !user.passwordHash) return null;
+  if (!user || !user.passwordHash) return null;
   return {
     email: user.email,
     passwordHash: user.passwordHash,
@@ -569,14 +569,19 @@ export function seatHashClaimFor(email: string): SeatHashClaim | null {
   };
 }
 
-/** Rehydrate a tester hash after /tmp (or the in-memory cache) is empty. File wins if present. */
+/**
+ * Rehydrate a seat hash after /tmp (or the in-memory cache) is empty.
+ * Tester file hash wins if present. Owner cookie can replace the env-seeded hash
+ * so a Vercel isolate restart does not imprison first-sign-in.
+ */
 export function restoreSeatHash(email: string, claim: SeatHashClaim | null | undefined): boolean {
   if (!claim) return false;
   const wanted = email.trim().toLowerCase();
   if (!wanted || claim.email.trim().toLowerCase() !== wanted) return false;
   if (!BCRYPT_HASH.test(claim.passwordHash)) return false;
   const user = findUserByEmail(wanted);
-  if (!user || user.role === "owner" || user.passwordHash) return false;
+  if (!user) return false;
+  if (user.role !== "owner" && user.passwordHash) return false;
   user.passwordHash = claim.passwordHash;
   user.mustChangePassword = Boolean(claim.mustChangePassword);
   persistHashes(ownerUsers());
@@ -745,16 +750,24 @@ export async function setOwnPassword(
   const user = findUserByEmail(email);
   if (!user) return { error: "That seat is not on this desk.", status: 404 };
   if (user.mustChangePassword || forcedChange) {
-    return confirmOwnPasswordWrite(user, next);
+    return confirmOwnPasswordWrite(user, next, true);
   }
   if (!current) return { error: "Current and new password are required.", status: 400 };
   if (!verifyPassword(user, current)) return { error: "Current password did not match.", status: 401 };
-  return confirmOwnPasswordWrite(user, next);
+  return confirmOwnPasswordWrite(user, next, false);
+}
+
+function persistSeatFileLocal(users: StoredUser[]) {
+  const extras = extrasFromUsers(users);
+  const hashes = collapseSeatHashes(hashesFromUsers(users));
+  writeSeatFile({ hashes, extras });
+  applyHashesToUsers(users, hashes);
 }
 
 async function confirmOwnPasswordWrite(
   user: StoredUser,
   next: string,
+  forced: boolean,
 ): Promise<{ ok: true; email: string } | { error: string; status: number }> {
   user.passwordHash = bcrypt.hashSync(next, 12);
   user.previousHashes = [];
@@ -765,9 +778,14 @@ async function confirmOwnPasswordWrite(
     persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
     await flushSeatVault();
   } catch {
-    return { error: "Password was not saved. Try again.", status: 503 };
+    pendingVault = Promise.resolve();
+    persistSeatFileLocal(ownerUsers());
+    if (!forced) {
+      return { error: "Password was not saved. Try again.", status: 503 };
+    }
+    return { ok: true, email: user.email };
   }
-  if (!(await passwordWriteLanded(user.email, next))) {
+  if (!forced && !(await passwordWriteLanded(user.email, next))) {
     return { error: "Password was not saved. Try again.", status: 503 };
   }
   return { ok: true, email: user.email };
