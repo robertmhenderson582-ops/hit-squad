@@ -13,6 +13,7 @@ import { estimateForJob } from "@/lib/estimate-open";
 import { packsForViewedDesk, snapshotOwnerDesk } from "@/lib/lens-packs";
 import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
+import { isHisProtectedMenuItem } from "@/lib/his-wood-river";
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
 import { ensureCbiDummyPack, shouldSeedCbiDummy } from "@/lib/cbi-dummy";
 import { catalogSites } from "@/lib/desk-data";
@@ -75,15 +76,21 @@ export function JobsDesk() {
     };
   }, [lensKey, lensReady, seat, tick, viewingAs, lens]);
 
-  const menu = menuForViewedDesk(viewingAs, undefined, seat);
   const closed = readClosed();
   const scope = companyScopeFor(lens, companyId);
   const deskPacks = packsForViewedDesk(lens, viewingAs, seat);
+  const menu = menuForViewedDesk(viewingAs, undefined, seat);
   const jobs = jobsOnDesk(serverJobs, deskPacks, viewingAs, scope, menu, {
     includeSeeds: seedJobsAllowed(scope),
   });
   void packTick;
-  const active = jobs.filter((job) => isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed));
+  const active = jobs.filter((job) => {
+    const pack = packForJob(job, deskPacks);
+    if (!viewingAs && isHisProtectedMenuItem({ id: job.id, packId: pack?.packId, title: job.title })) {
+      return !jobLooksClosed(job, closed);
+    }
+    return isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed);
+  });
   const archived = jobs.filter((job) => menuStatus(job, menu) === "archived");
   const transferred = menu.transferred;
   const standaloneLane = isStandaloneId(scope?.companyId);

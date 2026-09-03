@@ -114,7 +114,7 @@ export function jobsOnDesk(
         const seen = new Set(fromServer.map((job) => job.id));
         return mergeLocalJobs([...seeds.filter((job) => !seen.has(job.id)), ...fromServer], nextPacks);
       })();
-  return menu ? omitDeletedJobs(merged, menu) : merged;
+  return menu ? omitDeletedJobs(merged, menu, !viewingAs) : merged;
 }
 
 export function plantJobTally(jobs: JobRecord[] = JOBS) {

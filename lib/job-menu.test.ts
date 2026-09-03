@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   archiveMenuItem,
+  clearHisJobMenuLeftover,
   clearTransferredMenuItem,
   deleteMenuItem,
   isActiveMenuItem,
@@ -84,6 +85,25 @@ describe("job menu archive and delete", () => {
     archiveMenuItem(cat2, store, "nathan");
     assert.equal(menuStatus(cat2, menuForViewedDesk(true, store, "nathan")), "archived");
     assert.equal(isActiveMenuItem(cat2, menuForViewedDesk(false, store)), true);
+  });
+
+  it("rewrites owner job-menu leftover so HIS cards stay listed", () => {
+    const store = memoryStore();
+    const aromatics = { id: "job-new-mtj7bvtk-akmei", packId: "new-mtj7bvtk-akmei", title: "2027 Aromatics Turnaround" };
+    const cat2 = { id: "job-new-mtaajdwa-f7539", packId: "new-mtaajdwa-f7539", title: "Madison CAT 2 (Pit Stop)" };
+    const tm = { id: "job-EST-MTJ5D6", packId: "EST-MTJ5D6", title: "Wood River / T&M 2027-01 to 06" };
+    deleteMenuItem(aromatics, store);
+    archiveMenuItem(cat2, store);
+    deleteMenuItem(tm, store);
+    clearHisJobMenuLeftover(store);
+    const menu = readJobMenu(store);
+    assert.equal(menu.deleted.length, 0);
+    assert.equal(menu.archived.length, 0);
+    assert.deepEqual(omitDeletedJobs([aromatics, cat2, tm], menu, true).map((row) => row.id), [
+      aromatics.id,
+      cat2.id,
+      tm.id,
+    ]);
   });
 
   it("evicts packs that left this desk on the vault list", () => {

@@ -249,6 +249,7 @@ test("signed-in leftover wipe rewrites v1 Jobs keys only and keeps session marks
   assert.equal(LENS_PACKS_KEY, LENS_PACKS_LEGACY_KEY);
   assert.equal(OWNER_PACKS_KEY, OWNER_PACKS_LEGACY_KEY);
   assert.equal(isJobsLeftoverKey(LENS_PACKS_KEY), true);
+  assert.equal(isJobsLeftoverKey("hs_job_menu_v1"), true);
   assert.equal(isJobsLeftoverKey("hs_whats_new:1.51.1:owner"), false);
   assert.equal(isJobsLeftoverKey("hs_session"), false);
 

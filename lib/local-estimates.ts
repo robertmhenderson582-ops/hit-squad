@@ -302,12 +302,14 @@ export function deleteLocalPack(
 }
 
 export function localPackToEstimate(pack: LocalPack, ownerId = "owner-robert-henderson"): EstimateRecord {
-  const short = pack.packId.replace(/^new-/, "").slice(0, 6).toUpperCase();
+  const raw = (pack.packId || "").trim();
+  const coded = raw.toUpperCase().match(/EST-([A-Z0-9]{6})/);
+  const code = coded ? `EST-${coded[1]}` : `EST-${raw.replace(/^new-/i, "").slice(0, 6).toUpperCase()}`;
   return {
     id: pack.packId,
     ownerId,
     siteId: pack.siteId,
-    code: `EST-${short}`,
+    code,
     title: pack.title,
     client: pack.client,
     unit: pack.site.split("—")[0]?.trim() || pack.site,
