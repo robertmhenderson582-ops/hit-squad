@@ -328,7 +328,7 @@ describe("local transfer commit", () => {
     }
   });
 
-  it("share to the owner keeps Nathan as owner and unshare hides it from the owner desk", async () => {
+  it("share to the owner keeps Nathan as owner; unshare drops the share mark but owner still sees it", async () => {
     resetVaultHydrateForTests();
     const store = memoryStore();
     rememberLocalPack(
@@ -384,7 +384,7 @@ describe("local transfer commit", () => {
         visibleDeskPacks({ email: OWNER_LOGIN_EMAIL, role: "owner" }, false, store).some(
           (row) => row.packId === "new-nathan1",
         ),
-        false,
+        true,
       );
     } finally {
       globalThis.fetch = previous;
