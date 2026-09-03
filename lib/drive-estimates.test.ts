@@ -233,6 +233,13 @@ describe("drive estimate upsert", () => {
           headers: { "content-type": "application/json" },
         });
       }
+      if (url.includes("/drive/v3/files/") && method === "PATCH") {
+        assert.equal(headers.get("authorization"), "Bearer ya29.test-sa");
+        return new Response(JSON.stringify({ id: "1d3lzLDxCPwC963fdplsnwYgrDEanohZc", name: "seats.json" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
       if (url.includes("/drive/v3/files/") && method === "GET" && url.includes("fields=")) {
         assert.equal(headers.get("authorization"), "Bearer ya29.test-sa");
         return new Response(JSON.stringify({ id: "1d3lzLDxCPwC963fdplsnwYgrDEanohZc", md5Checksum: md5 }), {
