@@ -123,22 +123,62 @@ function allLensPacks(store?: StorageLike | null): LocalPack[] {
   return Object.values(readAll(target)).flat();
 }
 
+function namedDeskTitle(pack?: LocalPack | null) {
+  const title = (pack?.title || "").trim();
+  return Boolean(title && title !== "Working estimate");
+}
+
+function preferDeskPack(current: LocalPack, next: LocalPack): LocalPack {
+  const newer = (next.updatedAt || 0) >= (current.updatedAt || 0) ? next : current;
+  const older = newer === next ? current : next;
+  return {
+    ...older,
+    ...newer,
+    title: namedDeskTitle(newer) ? newer.title : older.title,
+    site: newer.site || older.site,
+    siteId: newer.siteId || older.siteId,
+    client: newer.client || older.client,
+    ownerEmail: newer.ownerEmail || older.ownerEmail,
+    sharedWith: newer.sharedWith?.length ? newer.sharedWith : older.sharedWith,
+    transferredFrom: newer.transferredFrom || older.transferredFrom,
+    transferredFromName: newer.transferredFromName || older.transferredFromName,
+    transferredTo: newer.transferredTo || older.transferredTo,
+    transferredToName: newer.transferredToName || older.transferredToName,
+    updatedAt: Math.max(current.updatedAt || 0, next.updatedAt || 0),
+  };
+}
+
 function mergeDeskPacks(...lists: LocalPack[][]): LocalPack[] {
   const map = new Map<string, LocalPack>();
   for (const list of lists) {
     for (const pack of list) {
       if (!pack?.packId) continue;
       const current = map.get(pack.packId);
-      if (!current || (pack.updatedAt || 0) >= (current.updatedAt || 0)) map.set(pack.packId, pack);
+      map.set(pack.packId, current ? preferDeskPack(current, pack) : pack);
     }
   }
   return [...map.values()];
 }
 
-function ownerShouldSeePack(user: ScopeUser, pack: LocalPack) {
+export function ownerShouldSeePack(user: ScopeUser, pack: LocalPack) {
   const email = user.email.trim().toLowerCase();
   if (localPackVisibleTo(user, pack)) return true;
-  return (pack.transferredFrom || "").trim().toLowerCase() === email;
+  const from = (pack.transferredFrom || "").trim().toLowerCase();
+  return from === email || from === ownerVaultEmail();
+}
+
+/** Owner-owned or transferred-from-owner cards. A shared-only leftover is not enough to paint Wood River. */
+export function ownerDeskHasImmediateWork(
+  user?: ScopeUser | null,
+  store?: StorageLike | null,
+) {
+  const owner = user ?? { email: ownerVaultEmail(), role: "owner" as const };
+  return packsForViewedDesk(owner, false, null, store).some((pack) => {
+    const ownerEmail = (pack.ownerEmail || "").trim().toLowerCase();
+    const from = (pack.transferredFrom || "").trim().toLowerCase();
+    const email = owner.email.trim().toLowerCase();
+    return !ownerEmail || ownerEmail === email || from === email || from === ownerVaultEmail();
+  });
 }
 
 function lensPacksOwnerShouldSee(user: ScopeUser, store?: StorageLike | null): LocalPack[] {

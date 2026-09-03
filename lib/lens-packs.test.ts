@@ -4,12 +4,14 @@ import { jobsOnDesk, seedJobs } from "./jobs.ts";
 import {
   LENS_PACKS_KEY,
   findDeskPack,
+  ownerDeskHasImmediateWork,
   packsForViewedDesk,
   readLensPacks,
   snapshotLensPack,
   writeLensPacks,
   writeOwnerPacks,
 } from "./lens-packs.ts";
+import { jobTree } from "./job-tree.ts";
 import { deleteLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 
 function memoryStore(seed: Record<string, string> = {}): StorageLike {
@@ -143,4 +145,76 @@ test("owner Back-to-me Jobs includes a pack Nathan shared with the owner", () =>
   assert.equal(ownerDesk.find((pack) => pack.packId === "new-mtaajdwa-f7539")?.ownerEmail, nathan.email);
   const jobs = jobsOnDesk([], ownerDesk, false);
   assert.equal(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+});
+
+test("owner first paint includes local and vault packs without waiting a tick", () => {
+  const store = memoryStore();
+  const aromatics = {
+    packId: "new-aromatics-2027",
+    key: "new:new-aromatics-2027",
+    title: "2027 Aromatics Turnaround",
+    client: "Phillips 66",
+    site: "Wood River — Roxana, IL",
+    siteId: "site-madison",
+    createdAt: 1,
+    updatedAt: 2,
+    ownerEmail: nathan.email,
+    transferredFrom: owner.email,
+    transferredFromName: "Robert Henderson",
+    transferredTo: nathan.email,
+  };
+  const shared = {
+    packId: "new-mtj5d6",
+    key: "new:new-mtj5d6",
+    title: "Wood River / T&M 2027-01 to 06",
+    client: "Phillips 66",
+    site: "Wood River — Roxana, IL",
+    siteId: "site-madison",
+    createdAt: 1,
+    updatedAt: 2,
+    ownerEmail: nathan.email,
+    sharedWith: [owner.email],
+  };
+  rememberLocalPack(shared, store);
+  writeLensPacks("nathan", [snapshotLensPack(aromatics), snapshotLensPack(cat2)], store);
+  const ownerDesk = packsForViewedDesk(owner, false, null, store);
+  assert.equal(ownerDeskHasImmediateWork(owner, store), true);
+  assert.equal(ownerDesk.some((pack) => pack.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(ownerDesk.some((pack) => pack.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(ownerDesk.some((pack) => pack.title === "Wood River / T&M 2027-01 to 06"), true);
+  const jobs = jobsOnDesk(undefined, ownerDesk, false);
+  assert.equal(jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  const tree = jobTree({ scope: { isOwner: true, email: owner.email, companyId: "hitsquad" }, jobs, packs: ownerDesk });
+  const wood = tree.find((row) => row.id === "madison")?.sites.find((site) => site.id === "site-madison");
+  assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(wood?.jobs.some((job) => job.title === "Wood River / T&M 2027-01 to 06"), true);
+});
+
+test("empty vault leftover cannot drop existing packs from the Jobs tree", () => {
+  const store = memoryStore();
+  rememberLocalPack(
+    {
+      packId: "new-aromatics-2027",
+      key: "new:new-aromatics-2027",
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+      ownerEmail: owner.email,
+    },
+    store,
+  );
+  writeOwnerPacks([snapshotLensPack(cat2)], store);
+  const ownerDesk = packsForViewedDesk(owner, false, null, store);
+  const afterEmptyVault = packsForViewedDesk(owner, false, null, store);
+  assert.equal(afterEmptyVault.some((pack) => pack.packId === "new-aromatics-2027"), true);
+  assert.equal(afterEmptyVault.some((pack) => pack.packId === "new-mtaajdwa-f7539"), true);
+  const jobs = jobsOnDesk([], afterEmptyVault, false);
+  assert.equal(jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(jobsOnDesk([], ownerDesk, false).length, jobs.length);
 });

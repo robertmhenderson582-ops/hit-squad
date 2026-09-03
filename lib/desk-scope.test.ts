@@ -87,12 +87,13 @@ describe("owner View as desk scope", () => {
     );
     assert.equal(nathanList.packs[0]?.title, "Madison CAT 2 (Pit Stop)");
     assert.deepEqual(
-      ownerList.packs.map((row) => row.packId),
-      ["new-robert1"],
+      ownerList.packs.map((row) => row.packId).sort(),
+      ["new-mtaajdwa-f7539", "new-robert1"],
     );
+    assert.equal(ownerList.packs.find((row) => row.packId === "new-mtaajdwa-f7539")?.ownerEmail, nathan.email);
     assert.deepEqual(
-      exited.packs.map((row) => row.packId),
-      ["new-robert1"],
+      exited.packs.map((row) => row.packId).sort(),
+      ["new-mtaajdwa-f7539", "new-robert1"],
     );
     assert.equal(
       nathanList.packs.some((row) => row.ownerEmail === OWNER_LOGIN_EMAIL),
@@ -138,7 +139,9 @@ describe("owner View as desk scope", () => {
     assert.equal(viewed.packs[0]?.title, "Madison CAT 2 (Pit Stop)");
     assert.equal(handoffMarkText(viewed.packs[0], nathan.email), "Transferred to you from Robert Henderson.");
     assert.equal(canReturnPack(asNathan, viewed.packs[0]!), true);
-    assert.deepEqual(ownerDesk.packs.map((row) => row.packId), []);
+    assert.deepEqual(ownerDesk.packs.map((row) => row.packId), ["new-mtaajdwa-f7539"]);
+    assert.equal(ownerDesk.packs[0]?.ownerEmail, nathan.email);
+    assert.equal(ownerDesk.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);
   });
 
   it("lists a tester-owned pack on the owner desk after View as Nathan shares it back", async () => {

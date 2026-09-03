@@ -62,6 +62,9 @@ describe("desk counts", () => {
     const firstPaint = jobsOnDesk(undefined, [aromatics, cat], false);
     assert.equal(firstPaint.some((job) => job.title === "2027 Aromatics Turnaround"), true);
     assert.equal(firstPaint.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+    const held = jobsOnDesk(undefined, [aromatics, cat], false, undefined, undefined, { includeSeeds: false });
+    assert.equal(held.some((job) => job.id === "job-8841"), false);
+    assert.equal(held.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   });
 
   it("keeps owner seed jobs after header nav and hides them while following", () => {

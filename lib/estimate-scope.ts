@@ -1,6 +1,6 @@
 import { companyScopeFor, type CompanyScope } from "./companies.ts";
 import { dummyPacksForUser, mergeDummyPacks } from "./cbi-dummy.ts";
-import { hasBuildDesk, isTester } from "./desk-role.ts";
+import { hasBuildDesk, isOwner, isTester } from "./desk-role.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import type { PublicUser } from "./types.ts";
@@ -47,6 +47,23 @@ export function packVisibleTo(user: ScopeUser, pack: ScopedPack) {
   if (isTester(user)) return false;
   if (hasBuildDesk(user)) return isOwnerVaultEmail(ownerEmail);
   return false;
+}
+
+function transferredFromOwner(user: ScopeUser, pack: ScopedPack) {
+  const from = (pack.transferredFrom || "").trim().toLowerCase();
+  if (!from) return false;
+  return from === user.email.trim().toLowerCase() || isOwnerVaultEmail(from);
+}
+
+/** Owner Company cards. Does not grant leftover write — use packVisibleTo for writes. */
+export function packListedOnOwnerDesk(user: ScopeUser, pack: ScopedPack) {
+  if (packVisibleTo(user, pack)) return true;
+  return isOwner(user) && transferredFromOwner(user, pack);
+}
+
+export function listedDeskPacks<T extends ScopedPack>(user: ScopeUser, packs: T[]) {
+  if (isTester(user)) return visiblePacks(user, packs);
+  return packs.filter((pack) => packListedOnOwnerDesk(user, pack));
 }
 
 export function isPackOwner(user: ScopeUser, pack: { ownerEmail?: string }) {

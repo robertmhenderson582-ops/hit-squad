@@ -10,7 +10,7 @@ import { useDisplay } from "@/components/DisplayProvider";
 import { useEstimateModal } from "@/components/EstimateModalContext";
 import { jobLooksClosed, readClosed } from "@/lib/desk-closeout";
 import { estimateForJob } from "@/lib/estimate-open";
-import { packsForViewedDesk, snapshotOwnerDesk } from "@/lib/lens-packs";
+import { ownerDeskHasImmediateWork, packsForViewedDesk, snapshotOwnerDesk } from "@/lib/lens-packs";
 import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
@@ -35,10 +35,10 @@ export function JobsDesk() {
   const [tick, setTick] = useState(0);
   const [packTick, setPackTick] = useState(0);
   const [openCompanyId, setOpenCompanyId] = useState<string | null>(null);
-  const [hydrating, setHydrating] = useState(false);
+  const [hydrating, setHydrating] = useState(true);
 
   useEffect(() => {
-    if (!viewingAs && lens) snapshotOwnerDesk(lens);
+    snapshotOwnerDesk(lens);
   }, [lens, viewingAs, packTick]);
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export function JobsDesk() {
         .then(async () => {
           if (cancelled) return;
           await flushLocalPacksToVault(undefined, { viewAs: seat });
-          if (!viewingAs && lens) snapshotOwnerDesk(lens);
+          snapshotOwnerDesk(lens);
           if (!cancelled) setPackTick((value) => value + 1);
         })
         .catch(() => undefined)
@@ -79,7 +79,11 @@ export function JobsDesk() {
   const closed = readClosed();
   const scope = companyScopeFor(lens, companyId);
   const deskPacks = packsForViewedDesk(lens, viewingAs, seat);
-  const jobs = jobsOnDesk(serverJobs, deskPacks, viewingAs, scope, menu);
+  const immediateOwnerWork = ownerDeskHasImmediateWork(lens);
+  const holdPartialTree = Boolean(lensReady && !viewingAs && hydrating && !immediateOwnerWork);
+  const jobs = jobsOnDesk(serverJobs, deskPacks, viewingAs, scope, menu, {
+    includeSeeds: !holdPartialTree,
+  });
   void packTick;
   const active = jobs.filter((job) => isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed));
   const archived = jobs.filter((job) => menuStatus(job, menu) === "archived");
@@ -122,10 +126,10 @@ export function JobsDesk() {
         )}
       </div>
       {error ? <p className="mt-3 text-amber-flare">{error}</p> : null}
-      {hydrating ? (
+      {hydrating || holdPartialTree ? (
         <div className="mt-4 space-y-2" aria-live="polite">
           <p className="text-sm font-semibold text-[#163038]">Refreshing jobs on this desk…</p>
-          {!deskPacks.length ? (
+          {holdPartialTree || !deskPacks.length ? (
             <div className="space-y-2">
               <div className="h-12 rounded-sm bg-[#d8e0e0]" />
               <div className="h-12 rounded-sm bg-[#d8e0e0]" />
@@ -142,7 +146,7 @@ export function JobsDesk() {
           </Link>
           .
         </p>
-      ) : (
+      ) : holdPartialTree ? null : (
         <JobTreeDesk
           tree={tree}
           estimates={estimates}

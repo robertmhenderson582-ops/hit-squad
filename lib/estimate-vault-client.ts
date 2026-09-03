@@ -125,7 +125,9 @@ export async function hydrateFromVault(
       if (data.persisted && !viewingAs) {
         const deskEmail = ownerVaultEmail();
         const namedLocal = listLocalPacks(target).filter((pack) => (pack.title || "").trim());
-        const vaultThin = packs.length === 0 || packs.length < namedLocal.length;
+        const vaultIds = new Set(packs.map((pack) => pack.packId));
+        const missingNamed = namedLocal.filter((pack) => !vaultIds.has(pack.packId));
+        const vaultThin = packs.length === 0 || missingNamed.length > 0 || packs.length < namedLocal.length;
         if (!vaultThin) {
           for (const packId of packsMissingFromVault(packs.map((pack) => pack.packId), target)) {
             const leftover = findLocalPack(packId, target);

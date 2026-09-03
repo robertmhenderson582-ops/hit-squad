@@ -8,9 +8,11 @@ import {
   canTransferPack,
   canWritePack,
   isOwnerVaultEmail,
+  listedDeskPacks,
   packOwnerEmailForWrite,
   localPacksForUser,
   localPackVisibleTo,
+  packListedOnOwnerDesk,
   packVisibleTo,
   visibleDeskPacks,
   visiblePacks,
@@ -193,6 +195,26 @@ describe("estimate vault scope", () => {
     assert.deepEqual(
       visibleDeskPacks(tester, false, store).map((row) => row.packId),
       ["new-archived1"],
+    );
+  });
+
+  it("lists transferred-from-owner packs on the owner desk without leftover write", () => {
+    const handed = {
+      ...testerPack,
+      transferredFrom: OWNER_LOGIN_EMAIL,
+      transferredTo: tester.email,
+    };
+    assert.equal(packVisibleTo(owner, handed), false);
+    assert.equal(packListedOnOwnerDesk(owner, handed), true);
+    assert.equal(canWritePack(owner, handed), false);
+    assert.equal(packListedOnOwnerDesk(novus, handed), false);
+    assert.deepEqual(
+      listedDeskPacks(owner, [ownerPack, handed, markPack]).map((row) => row.packId),
+      ["new-cat2pit", "new-tester1"],
+    );
+    assert.deepEqual(
+      listedDeskPacks(tester, [ownerPack, handed, markPack]).map((row) => row.packId),
+      ["new-tester1"],
     );
   });
 });
