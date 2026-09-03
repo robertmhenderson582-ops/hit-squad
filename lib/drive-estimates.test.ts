@@ -446,4 +446,60 @@ describe("drive estimate upsert", () => {
     assert.equal(listed[0]?.ownerEmail, "nathanboyte@gmail.com");
     assert.equal(((listed[0]?.equipment as { largeTools: unknown[] }).largeTools || []).length, 1);
   });
+
+  it("still reads known HIS files when the Estimates folder list fails", async () => {
+    const drive = memoryDrive();
+    const packId = "new-mtj7bvtk-akmei";
+    const working = {
+      packId,
+      key: `new:${packId}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 400,
+      ownerEmail: "nathanboyte@gmail.com",
+    };
+    drive.files.set("1KLhPczzj-BHMqT8uOI5VxUkSJUagj7rz", {
+      file: {
+        id: "1KLhPczzj-BHMqT8uOI5VxUkSJUagj7rz",
+        name: "wood-river-2027-aromatics-turnaround.json",
+        properties: { packId, ownerEmail: working.ownerEmail },
+      },
+      content: JSON.stringify(working),
+    });
+    drive.listJson = async () => {
+      throw new Error("403");
+    };
+    const listed = await listDrivePacks(drive, "folder");
+    assert.equal(listed.some((pack) => pack.packId === packId), true);
+    assert.equal(listed.find((pack) => pack.packId === packId)?.ownerEmail, "nathanboyte@gmail.com");
+  });
+
+  it("pins Aromatics writes to the known file id instead of minting a stub", async () => {
+    const drive = memoryDrive();
+    const packId = "new-mtj7bvtk-akmei";
+    const pack = {
+      packId,
+      key: `new:${packId}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 400,
+      ownerEmail: "nathanboyte@gmail.com",
+      sharedWith: ["robertmhenderson582@gmail.com"],
+    };
+    drive.listJson = async () => {
+      throw new Error("403");
+    };
+    const saved = await upsertEstimateInDrive(drive, pack, "folder");
+    assert.equal(saved.id, "1KLhPczzj-BHMqT8uOI5VxUkSJUagj7rz");
+    assert.equal(drive.files.has("1AEf_Shk8SEvMsdGodNSpaNgUCytXSLZ9"), false);
+    const parsed = JSON.parse(await drive.readJson(saved.id));
+    assert.deepEqual(parsed.sharedWith, ["robertmhenderson582@gmail.com"]);
+    assert.equal(parsed.ownerEmail, "nathanboyte@gmail.com");
+  });
 });

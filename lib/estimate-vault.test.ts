@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { NOVUS_EMAIL } from "./desk-role.ts";
-import { canWritePack } from "./estimate-scope.ts";
+import { canTransferPack, canWritePack } from "./estimate-scope.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { JOSEPH_EMAIL, SHANE_EMAIL } from "./tester-seats.ts";
 import { memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
@@ -405,15 +405,15 @@ describe("estimate vault service", () => {
       }),
       drive,
     );
-    assert.equal(undo.ok, false);
-    if (!undo.ok) assert.equal(undo.status, 404);
+    assert.equal(undo.ok, true);
     assert.equal(drive.files.size, 1);
 
     const ownerList = await listVisiblePacks(owner, drive);
     const nathanList = await listVisiblePacks(tester, drive);
     assert.deepEqual(ownerList.packs.map((row) => row.packId), ["new-cat2pit"]);
     assert.equal(ownerList.packs[0]?.ownerEmail, tester.email);
-    assert.equal(canWritePack(owner, ownerList.packs[0]!), false);
+    assert.equal(canWritePack(owner, ownerList.packs[0]!), true);
+    assert.equal(canTransferPack(owner, ownerList.packs[0]!), false);
     assert.equal(nathanList.packs[0]?.ownerEmail, tester.email);
     assert.equal(nathanList.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);
     assert.equal(nathanList.packs[0]?.title, "Cat 2 Pit Stop");

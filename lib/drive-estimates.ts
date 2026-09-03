@@ -7,6 +7,8 @@ import {
   publicPack,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
+import { hisFileForPackId, hisKnownEstimateFiles } from "./his-wood-river.ts";
+import { canonicalEmail } from "./identity.ts";
 
 export type DriveFile = {
   id: string;
@@ -412,7 +414,32 @@ function fileMatchesPack(file: DriveFile, packId: string, ownerEmail: string) {
 }
 
 function packOwnerEmail(file: DriveFile, pack: EstimatePackSnapshot) {
-  return (pack.ownerEmail || file.properties?.ownerEmail || "").trim().toLowerCase();
+  const raw = pack.ownerEmail || file.properties?.ownerEmail || "";
+  return canonicalEmail(raw) || raw.trim().toLowerCase();
+}
+
+function reclaimListedPack(pack: EstimatePackSnapshot): EstimatePackSnapshot {
+  const ownerEmail = canonicalEmail(pack.ownerEmail) || pack.ownerEmail;
+  const sharedWith = Array.isArray(pack.sharedWith)
+    ? pack.sharedWith.map((email) => canonicalEmail(email) || email)
+    : pack.sharedWith;
+  return publicPack({ ...pack, ownerEmail, sharedWith });
+}
+
+async function listedOrKnownFiles(adapter: DriveAdapter, folderId: string): Promise<DriveFile[]> {
+  let files: DriveFile[] = [];
+  try {
+    files = await adapter.listJson(folderId);
+  } catch {
+    files = [];
+  }
+  const seen = new Set(files.map((file) => file.id));
+  for (const known of hisKnownEstimateFiles()) {
+    if (isThinDriveStub(known.fileId) || seen.has(known.fileId)) continue;
+    files.push({ id: known.fileId, name: known.fileName, properties: known.packId ? { packId: known.packId } : undefined });
+    seen.add(known.fileId);
+  }
+  return files;
 }
 
 function pickCanonicalMatch(matches: { file: DriveFile; pack: EstimatePackSnapshot }[]) {
@@ -420,7 +447,11 @@ function pickCanonicalMatch(matches: { file: DriveFile; pack: EstimatePackSnapsh
 }
 
 async function packFilesForId(adapter: DriveAdapter, folderId: string, packId: string) {
-  const files = await adapter.listJson(folderId);
+  const files = await listedOrKnownFiles(adapter, folderId);
+  const known = hisFileForPackId(packId);
+  if (known && !files.some((file) => file.id === known.fileId) && !isThinDriveStub(known.fileId)) {
+    files.push({ id: known.fileId, name: known.fileName, properties: { packId } });
+  }
   const tagged = files.filter((file) => file.properties?.packId === packId && !isThinDriveStub(file.id));
   const scan = tagged.length ? tagged : files.filter((file) => !isThinDriveStub(file.id));
   const matches: { file: DriveFile; pack: EstimatePackSnapshot }[] = [];
@@ -485,6 +516,16 @@ export async function deleteEstimateInDrive(
   return true;
 }
 
+function knownHisFile(packId: string): DriveFile | null {
+  const known = hisFileForPackId(packId);
+  if (!known || isThinDriveStub(known.fileId)) return null;
+  return {
+    id: known.fileId,
+    name: known.fileName,
+    properties: known.packId ? { packId: known.packId } : undefined,
+  };
+}
+
 async function writePackFile(
   adapter: DriveAdapter,
   pack: EstimatePackSnapshot,
@@ -494,9 +535,11 @@ async function writePackFile(
   const ownerEmail = pack.ownerEmail.trim().toLowerCase();
   const payload = JSON.stringify(publicPack({ ...pack, ownerEmail }), null, 2);
   const properties = { packId: pack.packId, ownerEmail };
-  if (existing) {
+  const target =
+    existing && !isThinDriveStub(existing.id) ? existing : knownHisFile(pack.packId);
+  if (target) {
     const name = estimateFileName(pack);
-    return adapter.updateJson(existing.id, payload, name === existing.name ? existing.name : name, properties);
+    return adapter.updateJson(target.id, payload, name === target.name ? target.name : name, properties);
   }
   const taken = (await adapter.listJson(folderId)).map((file) => file.name);
   const name = estimateFileName(pack, taken);
@@ -511,12 +554,15 @@ async function existingPackFile(
 ) {
   try {
     const byId = await findDrivePackByPackId(adapter, folderId, packId);
-    if (byId) return byId;
-    if (ownerEmail) return await findDrivePackFile(adapter, folderId, packId, ownerEmail);
-    return null;
+    if (byId && !isThinDriveStub(byId.id)) return byId;
+    if (ownerEmail) {
+      const owned = await findDrivePackFile(adapter, folderId, packId, ownerEmail);
+      if (owned && !isThinDriveStub(owned.id)) return owned;
+    }
   } catch {
-    return null;
+    // list/read failed — still pin known HIS files so share cannot mint a stub
   }
+  return knownHisFile(packId);
 }
 
 export async function upsertEstimateInDrive(
@@ -555,13 +601,13 @@ export async function overwriteEstimateInDrive(
 }
 
 export async function listDrivePacks(adapter: DriveAdapter, folderId = estimatesFolderId()) {
-  const files = await adapter.listJson(resolveEstimatesFolder(folderId));
+  const files = await listedOrKnownFiles(adapter, resolveEstimatesFolder(folderId));
   const packs: EstimatePackSnapshot[] = [];
   for (const file of files) {
     if (isThinDriveStub(file.id)) continue;
     try {
       const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
-      if (parsed.ok) packs.push(publicPack(parsed.pack));
+      if (parsed.ok) packs.push(reclaimListedPack(parsed.pack));
     } catch {
       // skip
     }

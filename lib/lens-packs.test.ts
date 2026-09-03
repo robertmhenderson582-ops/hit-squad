@@ -192,6 +192,24 @@ test("owner first paint includes local and vault packs without waiting a tick", 
   assert.equal(wood?.jobs.some((job) => job.title === "Wood River / T&M 2027-01 to 06"), true);
 });
 
+test("owner first paint with empty local still has Wood River HIS cards", () => {
+  const store = memoryStore();
+  const ownerDesk = packsForViewedDesk(owner, false, null, store);
+  assert.equal(ownerDesk.some((pack) => pack.packId === "new-mtj7bvtk-akmei"), true);
+  assert.equal(ownerDesk.some((pack) => pack.packId === "new-mtaajdwa-f7539"), true);
+  assert.equal(ownerDesk.some((pack) => pack.title === "Wood River / T&M 2027-01 to 06"), true);
+  assert.equal(ownerDesk.find((pack) => pack.packId === "new-mtj7bvtk-akmei")?.ownerEmail, nathan.email);
+  const jobs = jobsOnDesk(undefined, ownerDesk, false);
+  assert.equal(jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(jobs.some((job) => job.code === "EST-MTJ5D6"), true);
+  const tree = jobTree({ scope: { isOwner: true, email: owner.email, companyId: "hitsquad" }, jobs, packs: ownerDesk });
+  const wood = tree.find((row) => row.id === "madison")?.sites.find((site) => site.id === "site-madison");
+  assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), true);
+});
+
 test("empty vault leftover cannot drop existing packs from the Jobs tree", () => {
   const store = memoryStore();
   rememberLocalPack(

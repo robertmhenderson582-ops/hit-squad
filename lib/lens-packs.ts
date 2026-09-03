@@ -1,4 +1,6 @@
+import { isOwner } from "./desk-role.ts";
 import { localPackVisibleTo, ownerVaultEmail, visibleDeskPacks, type ScopeUser } from "./estimate-scope.ts";
+import { mergeHisWoodRiverCards } from "./his-wood-river.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
@@ -161,6 +163,7 @@ function mergeDeskPacks(...lists: LocalPack[][]): LocalPack[] {
 }
 
 export function ownerShouldSeePack(user: ScopeUser, pack: LocalPack) {
+  if (isOwner(user)) return true;
   const email = user.email.trim().toLowerCase();
   if (localPackVisibleTo(user, pack)) return true;
   const from = (pack.transferredFrom || "").trim().toLowerCase();
@@ -203,7 +206,9 @@ export function packsForViewedDesk(
   }
   const extras = [readOwnerPacks(store)];
   if (user) extras.push(localPacksOwnerShouldSee(user, store), lensPacksOwnerShouldSee(user, store));
-  return mergeDeskPacks(live, ...extras);
+  const merged = mergeDeskPacks(live, ...extras);
+  if (user && isOwner(user)) return mergeHisWoodRiverCards(merged);
+  return merged;
 }
 
 export function snapshotOwnerDesk(user?: ScopeUser | null, store?: StorageLike | null) {

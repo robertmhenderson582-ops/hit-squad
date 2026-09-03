@@ -33,6 +33,8 @@ describe("estimate vault scope", () => {
     assert.equal(isOwnerVaultEmail(OWNER_LOGIN_EMAIL), true);
     assert.equal(isOwnerVaultEmail(NOVUS_EMAIL), false);
     assert.equal(packVisibleTo(owner, ownerPack), true);
+    assert.equal(packVisibleTo(owner, testerPack), true);
+    assert.equal(packVisibleTo(owner, { ownerEmail: "Robert Henderson", packId: "new-orphan" }), true);
     assert.equal(packVisibleTo(novus, ownerPack), true);
     assert.equal(packVisibleTo(tester, ownerPack), false);
     assert.equal(packVisibleTo(tester, testerPack), true);
@@ -56,8 +58,9 @@ describe("estimate vault scope", () => {
     assert.equal(canWritePack(tester, ownerPack), false);
     assert.equal(canWritePack(tester, testerPack), true);
     assert.equal(canWritePack(novus, ownerPack), true);
-    assert.equal(canWritePack(owner, testerPack), false);
+    assert.equal(canWritePack(owner, testerPack), true);
     assert.equal(canWritePack(novus, testerPack), false);
+    assert.equal(canTransferPack(owner, testerPack), false);
   });
 
   it("lets the current owner turn a pack over; Joseph and Shane cannot take it", () => {
@@ -82,9 +85,9 @@ describe("estimate vault scope", () => {
     assert.equal(canReturnPack(owner, ownerPack), false);
   });
 
-  it("shows a tester-owned pack on the owner desk after it is shared with the owner", () => {
+  it("shows a tester-owned pack on the owner desk by role, not only after a share row", () => {
     const shared = { ...testerPack, sharedWith: [OWNER_LOGIN_EMAIL] };
-    assert.equal(localPackVisibleTo(owner, testerPack), false);
+    assert.equal(localPackVisibleTo(owner, testerPack), true);
     assert.equal(localPackVisibleTo(owner, shared), true);
     assert.equal(packVisibleTo(owner, shared), true);
     assert.equal(canWritePack(owner, shared), true);
@@ -135,8 +138,9 @@ describe("estimate vault scope", () => {
     );
     assert.deepEqual(
       visibleDeskPacks(owner, false, store).map((row) => row.packId),
-      [],
+      ["new-tester1"],
     );
+    assert.equal(visibleDeskPacks(owner, false, store)[0]?.ownerEmail, tester.email);
   });
 
   it("keeps unstamped local work on the owner desk and hides it from testers", () => {
@@ -185,8 +189,8 @@ describe("estimate vault scope", () => {
       store,
     );
     assert.deepEqual(
-      visibleDeskPacks(owner, false, store).map((row) => row.packId),
-      ["new-owner1"],
+      visibleDeskPacks(owner, false, store).map((row) => row.packId).sort(),
+      ["new-archived1", "new-owner1"],
     );
     assert.deepEqual(
       visibleDeskPacks(tester, true, store).map((row) => row.packId),
@@ -204,13 +208,14 @@ describe("estimate vault scope", () => {
       transferredFrom: OWNER_LOGIN_EMAIL,
       transferredTo: tester.email,
     };
-    assert.equal(packVisibleTo(owner, handed), false);
+    assert.equal(packVisibleTo(owner, handed), true);
     assert.equal(packListedOnOwnerDesk(owner, handed), true);
-    assert.equal(canWritePack(owner, handed), false);
+    assert.equal(canWritePack(owner, handed), true);
+    assert.equal(canTransferPack(owner, handed), false);
     assert.equal(packListedOnOwnerDesk(novus, handed), false);
     assert.deepEqual(
       listedDeskPacks(owner, [ownerPack, handed, markPack]).map((row) => row.packId),
-      ["new-cat2pit", "new-tester1"],
+      ["new-cat2pit", "new-tester1", "new-mark1"],
     );
     assert.deepEqual(
       listedDeskPacks(tester, [ownerPack, handed, markPack]).map((row) => row.packId),
