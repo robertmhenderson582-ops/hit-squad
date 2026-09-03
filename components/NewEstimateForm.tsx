@@ -15,6 +15,7 @@ import { ChangeOrderPacket } from "@/components/ChangeOrderPacket";
 import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { OrgChartDesk } from "@/components/OrgChartDesk";
+import { RodeoFormDesk } from "@/components/RodeoFormDesk";
 import { NoRatesNotice } from "@/components/NoRatesNotice";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
@@ -144,6 +145,7 @@ function NewEstimateDesk({
       {tab === "subs" ? <SubcontractorDesk client={client} site={site} /> : null}
       {tab === "costs" ? <OtherCostDesk client={client} site={site} /> : null}
       {tab === "change-orders" ? <ChangeOrderPacket client={client} site={site} /> : null}
+      {tab === "rodeo" ? <RodeoFormDesk client={client} site={site} name={title} /> : null}
     </EstimateWorkspace>
     </EstimatePackageProvider>
   );

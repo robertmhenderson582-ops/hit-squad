@@ -23,6 +23,7 @@ import {
   orgChartHeaderFromAssigned,
   orgChartHasWork,
   peakShiftCount,
+  positionShiftFromCards,
   pruneOrgChart,
   readOrgChart,
   setOrgChartName,
@@ -117,7 +118,7 @@ describe("org chart sources", () => {
     assert.equal(staff?.name, "");
   });
 
-  it("shows Foreman as a number unless they name one", () => {
+  it("shows Foreman as proposed headcount only — no name", () => {
     const unnamed = orgChartBoxes(crew, emptyOrgChart()).find((item) => item.rowId === "fm-1");
     assert.equal(unnamed?.kind, "count");
     assert.equal(unnamed?.count, 3);
@@ -125,9 +126,23 @@ describe("org chart sources", () => {
 
     const named = orgChartBoxes(crew, setOrgChartName(emptyOrgChart(), "fm-1", "days", "Ray Hall"));
     const box = named.find((item) => item.rowId === "fm-1");
-    assert.equal(box?.kind, "named");
-    assert.equal(orgChartBoxLabel(box!), "Ray Hall");
+    assert.equal(box?.kind, "count");
+    assert.equal(orgChartBoxLabel(box!), "3");
     assert.equal(box?.position, "Foreman PF");
+  });
+
+  it("treats Days & Nights as two counterparts even without names", () => {
+    const unnamed = orgChartBoxes(crew, emptyOrgChart()).filter((item) => item.rowId === "gf-1");
+    assert.equal(unnamed.length, 2);
+    assert.equal(unnamed[0]?.shift, "Days");
+    assert.equal(unnamed[1]?.shift, "Nights");
+    assert.notEqual(unnamed.length, 1);
+    assert.equal(shouldSplitShifts(crewSourceForOrgChart(crew)[1]!, {}), true);
+    const fromCard = positionShiftFromCards({
+      shift: "Days",
+      ranges: [{ shift: "Days & nights" }, { shift: "Days" }],
+    });
+    assert.equal(fromCard, "Days & nights");
   });
 
   it("uses two names for days and nights on the same position", () => {
@@ -188,8 +203,9 @@ describe("org chart hierarchy is visual only", () => {
     const forest = orgChartForest(boxes);
     assert.equal(forest.length, 1);
     assert.equal(forest[0]?.rowId, "st-1");
-    assert.equal(forest[0]?.children[0]?.rowId, "gf-1");
-    assert.equal(forest[0]?.children[0]?.children[0]?.rowId, "fm-1");
+    const gfKids = forest[0]?.children.filter((child) => child.rowId === "gf-1") ?? [];
+    assert.equal(gfKids.length, 2);
+    assert.equal(gfKids.some((child) => child.children.some((kid) => kid.rowId === "fm-1")), true);
     assert.equal(defaultParentId({ lane: "staff" } as never, []), ORG_COMPANY_PARENT);
   });
 });

@@ -26,8 +26,10 @@ import { useEstimatePackage } from "@/components/EstimatePackage";
 import { defaultLaborClass, type LaborClass } from "@/lib/labor-class";
 import { formatDeskDollars, formatShahanCrewCost, shahanCrewCostAmount, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
 import { wageLookupOpts } from "@/lib/wage-lookup";
+import { dayNightHours, perDiemDollarsForRow, perDiemRateForLane } from "@/lib/crew-pack";
+import { canNameOrgLane, nameSlot, setOrgChartContact, setOrgChartName } from "@/lib/org-chart";
 
-const HEADERS = ["POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST"];
+const HEADERS = ["POSITION", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "PD $", "HOURS", "COST"];
 
 export function CraftLaborGrid({
   rows,
@@ -38,6 +40,7 @@ export function CraftLaborGrid({
   note,
   positions,
   newRow,
+  laneId = "direct",
 }: {
   rows: CraftRow[];
   onRows: (next: CraftRow[] | ((current: CraftRow[]) => CraftRow[])) => void;
@@ -47,6 +50,7 @@ export function CraftLaborGrid({
   note?: string;
   positions?: readonly string[];
   newRow?: () => CraftRow;
+  laneId?: "staff" | "general-foreman" | "foreman" | "direct" | "support";
 }) {
   const confirmRemove = useConfirmRemove();
   const pack = useEstimatePackage();
@@ -77,6 +81,10 @@ export function CraftLaborGrid({
     [computed],
   );
   const costLabel = formatDeskDollars(costTotal);
+  const pdRate = perDiemRateForLane(laneId, pack.jobMeta);
+  const pdTotal = computed.reduce((sum, row) => sum + perDiemDollarsForRow(row.pd, pdRate), 0);
+  const pdLabel = formatDeskDollars(pdTotal);
+  const namedLane = laneId === "staff" ? "staff" : laneId === "general-foreman" ? "generalForeman" : null;
 
   function patchRow(id: string, patch: Partial<CraftRow>) {
     onRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -147,6 +155,7 @@ export function CraftLaborGrid({
           <p className="text-sm text-[#5b6f73]">
             {totals.hours.toLocaleString()} hrs · {totals.st.toLocaleString()} ST · {totals.ot.toLocaleString()} OT ·{" "}
             {totals.dt.toLocaleString()} DT · {totals.pd.toLocaleString()} PD
+            {pdLabel ? ` · ${pdLabel} PD` : ""}
             {costLabel ? ` · ${costLabel}` : ""}
           </p>
         </div>
@@ -175,7 +184,7 @@ export function CraftLaborGrid({
           <tbody>
             {computed.length === 0 ? (
               <tr className="border-t border-[#d5e0de]">
-                <td colSpan={10} className="px-2 py-6 text-sm text-[#5b6f73]">
+                <td colSpan={11} className="px-2 py-6 text-sm text-[#5b6f73]">
                   No positions yet. Add a position to start — nothing is prefilled.
                 </td>
               </tr>
@@ -219,6 +228,8 @@ export function CraftLaborGrid({
                   onDuplicate={() => duplicatePosition(row.id)}
                   onRemove={() => void removePosition(row)}
                   catalog={positions}
+                  namedLane={namedLane}
+                  pdRate={pdRate}
                 />
               );
             })}
@@ -233,6 +244,7 @@ export function CraftLaborGrid({
                 <td className="hud-readout px-2 py-3">{totals.ot.toLocaleString()}</td>
                 <td className="hud-readout px-2 py-3">{totals.dt.toLocaleString()}</td>
                 <td className="hud-readout px-2 py-3">{totals.pd.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-3">{pdLabel || "—"}</td>
                 <td className="hud-readout px-2 py-3">{totals.hours.toLocaleString()}</td>
                 <td className="hud-readout px-2 py-3 font-semibold">{costLabel || "—"}</td>
                 <td className="px-2 py-3" />
@@ -260,6 +272,8 @@ function CraftAccordionRow({
   onDuplicate,
   onRemove,
   catalog,
+  namedLane,
+  pdRate,
 }: {
   row: CraftRow;
   site: string;
@@ -275,7 +289,10 @@ function CraftAccordionRow({
   onDuplicate: () => void;
   onRemove: () => void;
   catalog?: readonly string[];
+  namedLane: "staff" | "generalForeman" | null;
+  pdRate: number;
 }) {
+  const pack = useEstimatePackage();
   const options = catalog && catalog.length > 0 ? catalog : LISTED_POSITIONS;
   const naturalClass = defaultLaborClass(row.position);
   const laborClass = row.laborClassOverride ?? naturalClass;
@@ -359,6 +376,7 @@ function CraftAccordionRow({
         <td className="hud-readout px-2 py-2">{row.ot.toLocaleString()}</td>
         <td className="hud-readout px-2 py-2">{row.dt.toLocaleString()}</td>
         <td className="hud-readout px-2 py-2">{row.pd}</td>
+        <td className="hud-readout px-2 py-2">{formatDeskDollars(perDiemDollarsForRow(row.pd, pdRate)) || "—"}</td>
         <td className="hud-readout px-2 py-2">{row.hours.toLocaleString()}</td>
         <td className="hud-readout px-2 py-2 font-semibold">
           {row.cost ? (
@@ -394,7 +412,7 @@ function CraftAccordionRow({
       </tr>
       {open ? (
         <tr>
-          <td colSpan={10} className="bg-[#f4f1e8] px-4 py-4">
+          <td colSpan={11} className="bg-[#f4f1e8] px-4 py-4">
             <p className="text-xs text-[#163038]">
               {clockNote(
                 row.position,
@@ -421,6 +439,10 @@ function CraftAccordionRow({
               Uncheck returns to auto. Union/Merit is a label only — a union superintendent still uses the
               staff split unless Use COMP clock is on.
             </p>
+            {namedLane && canNameOrgLane(namedLane) ? (
+              <StaffGfNames rowId={row.id} />
+            ) : null}
+            <DayNightHoursLine row={row} site={site} client={client} otAfter8={pack.crew.otAfter8} />
             <CrewPhaseCards
               row={row}
               site={site}
@@ -434,5 +456,95 @@ function CraftAccordionRow({
         </tr>
       ) : null}
     </>
+  );
+}
+
+function StaffGfNames({ rowId }: { rowId: string }) {
+  const pack = useEstimatePackage();
+  const slot = nameSlot(pack.orgChart, rowId);
+  const dual = pack.crew.staff.concat(pack.crew.generalForeman).some((row) => {
+    if (row.id !== rowId) return false;
+    return (row.ranges ?? []).some((range) => !range.off && (range.shift ?? row.shift) === "Days & nights")
+      || row.shift === "Days & nights";
+  });
+  return (
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      <label className="text-xs">
+        {dual ? "Days name" : "Name (optional)"}
+        <input
+          className="paper-field mt-1"
+          value={slot.days || ""}
+          placeholder="Does not change billing"
+          onChange={(event) => pack.setOrgChart((current) => setOrgChartName(current, rowId, "days", event.target.value))}
+        />
+      </label>
+      {dual ? (
+        <label className="text-xs">
+          Nights name
+          <input
+            className="paper-field mt-1"
+            value={slot.nights || ""}
+            placeholder="Does not change billing"
+            onChange={(event) => pack.setOrgChart((current) => setOrgChartName(current, rowId, "nights", event.target.value))}
+          />
+        </label>
+      ) : null}
+      <label className="text-xs">
+        {dual ? "Days email" : "Email (optional)"}
+        <input
+          className="paper-field mt-1"
+          value={slot.daysEmail || ""}
+          onChange={(event) => pack.setOrgChart((current) => setOrgChartContact(current, rowId, "days", "email", event.target.value))}
+        />
+      </label>
+      <label className="text-xs">
+        {dual ? "Days phone" : "Phone (optional)"}
+        <input
+          className="paper-field mt-1"
+          value={slot.daysPhone || ""}
+          onChange={(event) => pack.setOrgChart((current) => setOrgChartContact(current, rowId, "days", "phone", event.target.value))}
+        />
+      </label>
+      {dual ? (
+        <>
+          <label className="text-xs">
+            Nights email
+            <input
+              className="paper-field mt-1"
+              value={slot.nightsEmail || ""}
+              onChange={(event) => pack.setOrgChart((current) => setOrgChartContact(current, rowId, "nights", "email", event.target.value))}
+            />
+          </label>
+          <label className="text-xs">
+            Nights phone
+            <input
+              className="paper-field mt-1"
+              value={slot.nightsPhone || ""}
+              onChange={(event) => pack.setOrgChart((current) => setOrgChartContact(current, rowId, "nights", "phone", event.target.value))}
+            />
+          </label>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function DayNightHoursLine({
+  row,
+  site,
+  client,
+  otAfter8,
+}: {
+  row: CraftRow;
+  site: string;
+  client: string;
+  otAfter8: boolean;
+}) {
+  const split = dayNightHours(row, site, client, otAfter8);
+  if (!split.day.hours && !split.night.hours) return null;
+  return (
+    <p className="mt-2 text-xs text-[#5b6f73]">
+      Day hours {split.day.hours.toLocaleString()} · Night hours {split.night.hours.toLocaleString()}
+    </p>
   );
 }

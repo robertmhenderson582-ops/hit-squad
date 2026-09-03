@@ -49,6 +49,8 @@ export type CalendarRange = {
   end: string;
   headcount: number;
   nightHeadcount: number;
+  sundayHeadcount?: number;
+  nightSundayHeadcount?: number;
   hoursPerShift: number;
   perDiemPeople: number;
   nightPerDiemPeople?: number;
@@ -279,6 +281,8 @@ export function cloneCraftRow(row: CraftRow): CraftRow {
       end: range.end,
       headcount: range.headcount,
       nightHeadcount: range.nightHeadcount,
+      sundayHeadcount: range.sundayHeadcount,
+      nightSundayHeadcount: range.nightSundayHeadcount,
       hoursPerShift: range.hoursPerShift,
       perDiemPeople: range.perDiemPeople,
       nightPerDiemPeople: range.nightPerDiemPeople,

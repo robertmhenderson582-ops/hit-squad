@@ -42,6 +42,11 @@ export function moneyLines(candidates: EstimateTotalLine[]): EstimateTotalLine[]
   return candidates.filter((line) => line.amount > 0);
 }
 
+/** Contingency / CBA / M.O.R.E. — M.O.R.E. can be a credit. */
+export function signedMoneyLines(candidates: EstimateTotalLine[]): EstimateTotalLine[] {
+  return candidates.filter((line) => line.amount !== 0);
+}
+
 /** Base for the locked rail markup. Crew, Staff, owned tools, per diem, and travel stay out. */
 export function markupBase(input: { subcontractor?: number; thirdParty?: number; misc?: number }) {
   return (
@@ -63,6 +68,7 @@ export function estimateTotalBreakdown(input: {
   hours?: number;
   client?: string;
   site?: string;
+  extras?: EstimateTotalLine[];
 }): EstimateTotalBreakdown {
   const base = moneyLines([
     { id: "labor", label: "Labor", amount: parseDeskDollars(input.labor) },
@@ -72,9 +78,10 @@ export function estimateTotalBreakdown(input: {
     { id: "change-orders", label: "Change orders", amount: parseDeskDollars(input.changeOrders) },
     { id: "markup", label: ESTIMATE_MARKUP_LABEL, amount: parseDeskDollars(input.markup) },
   ]);
-  const subtotal = base.reduce((sum, line) => sum + line.amount, 0);
-  const risk = Math.round(subtotal * buildersRiskPct(input.client, input.site) * 100) / 100;
-  const lines = risk > 0 ? [...base, { id: "risk", label: "Builder's risk", amount: risk }] : base;
+  const extras = signedMoneyLines(input.extras ?? []);
+  const subtotal = [...base, ...extras].reduce((sum, line) => sum + line.amount, 0);
+  const risk = Math.round(Math.max(0, subtotal) * buildersRiskPct(input.client, input.site) * 100) / 100;
+  const lines = risk > 0 ? [...base, ...extras, { id: "risk", label: "Builder's risk", amount: risk }] : [...base, ...extras];
   return {
     lines,
     hours: Math.max(0, input.hours ?? 0),

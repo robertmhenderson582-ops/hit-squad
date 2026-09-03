@@ -23,12 +23,13 @@ import {
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import { defaultLaborClass } from "@/lib/labor-class";
 import { formatDeskDollars, formatShahanCrewCost, shahanCrewCostAmount, shahanCrewTitle, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
+import { dayNightHours, perDiemDollarsForRow, perDiemRateForLane } from "@/lib/crew-pack";
 import { wageLookupOpts } from "@/lib/wage-lookup";
 
 export type { SupportLine };
 
 const SUPPORT_LANE = CREW_LANES.find((lane) => lane.id === "support");
-const HEADERS = ["POSITION", "BILLED AS", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "HOURS", "COST"];
+const HEADERS = ["POSITION", "BILLED AS", "SHIFT", "MODE", "ST", "OT", "DT", "PD DAYS", "PD $", "HOURS", "COST"];
 
 export function SupportCrewCard({
   rows,
@@ -71,6 +72,9 @@ export function SupportCrewCard({
     [computed],
   );
   const costLabel = formatDeskDollars(costTotal);
+  const pdRate = perDiemRateForLane("support", pack.jobMeta);
+  const pdTotal = computed.reduce((sum, row) => sum + perDiemDollarsForRow(row.pd, pdRate), 0);
+  const pdLabel = formatDeskDollars(pdTotal);
 
   useEffect(() => {
     if (!needsPhaseSeed) return;
@@ -160,6 +164,7 @@ export function SupportCrewCard({
           <p className="text-sm text-[#5b6f73]">
             {totals.hours.toLocaleString()} hrs · {totals.st.toLocaleString()} ST · {totals.ot.toLocaleString()} OT ·{" "}
             {totals.dt.toLocaleString()} DT · {totals.pd.toLocaleString()} PD
+            {pdLabel ? ` · ${pdLabel} PD` : ""}
             {costLabel ? ` · ${costLabel}` : ""}
           </p>
         </div>
@@ -185,7 +190,7 @@ export function SupportCrewCard({
           <tbody>
             {computed.length === 0 ? (
               <tr className="border-t border-[#d5e0de]">
-                <td colSpan={11} className="px-2 py-6 text-sm text-[#5b6f73]">
+                <td colSpan={12} className="px-2 py-6 text-sm text-[#5b6f73]">
                   No support positions yet.
                 </td>
               </tr>
@@ -212,6 +217,7 @@ export function SupportCrewCard({
                   }
                   onDuplicate={() => duplicatePosition(row)}
                   onRemove={() => void remove(row)}
+                  pdRate={pdRate}
                 />
               );
             })}
@@ -227,6 +233,7 @@ export function SupportCrewCard({
                 <td className="hud-readout px-2 py-3">{totals.ot.toLocaleString()}</td>
                 <td className="hud-readout px-2 py-3">{totals.dt.toLocaleString()}</td>
                 <td className="hud-readout px-2 py-3">{totals.pd.toLocaleString()}</td>
+                <td className="hud-readout px-2 py-3">{pdLabel || "—"}</td>
                 <td className="hud-readout px-2 py-3">{totals.hours.toLocaleString()}</td>
                 <td className="hud-readout px-2 py-3 font-semibold">{costLabel || "—"}</td>
                 <td className="px-2 py-3" />
@@ -253,6 +260,7 @@ function SupportAccordionRow({
   onSetPhaseOff,
   onDuplicate,
   onRemove,
+  pdRate,
 }: {
   row: SupportLine;
   site: string;
@@ -267,6 +275,7 @@ function SupportAccordionRow({
   onSetPhaseOff: (phaseId: string, off: boolean) => void;
   onDuplicate: () => void;
   onRemove: () => void;
+  pdRate: number;
 }) {
   const billedTitle = shahanCrewTitle(row);
   const noRate = shahanTitleHasNoRate(billedTitle, {
@@ -336,6 +345,7 @@ function SupportAccordionRow({
         <td className="hud-readout px-2 py-2">{row.ot.toLocaleString()}</td>
         <td className="hud-readout px-2 py-2">{row.dt.toLocaleString()}</td>
         <td className="hud-readout px-2 py-2">{row.pd}</td>
+        <td className="hud-readout px-2 py-2">{formatDeskDollars(perDiemDollarsForRow(row.pd, pdRate)) || "—"}</td>
         <td className="hud-readout px-2 py-2">{row.hours.toLocaleString()}</td>
         <td className="hud-readout px-2 py-2 font-semibold">
           {row.cost ? (
@@ -371,7 +381,8 @@ function SupportAccordionRow({
       </tr>
       {open ? (
         <tr>
-          <td colSpan={11} className="bg-[#f4f1e8] px-4 py-4">
+          <td colSpan={12} className="bg-[#f4f1e8] px-4 py-4">
+            <SupportDayNightHours row={row} site={site} client={client} />
             <CrewPhaseCards
               row={row}
               site={site}
@@ -385,5 +396,24 @@ function SupportAccordionRow({
         </tr>
       ) : null}
     </>
+  );
+}
+
+function SupportDayNightHours({
+  row,
+  site,
+  client,
+}: {
+  row: SupportLine;
+  site: string;
+  client: string;
+}) {
+  const pack = useEstimatePackage();
+  const split = dayNightHours(row, site, client, pack.crew.otAfter8);
+  if (!split.day.hours && !split.night.hours) return null;
+  return (
+    <p className="mb-2 text-xs text-[#5b6f73]">
+      Day hours {split.day.hours.toLocaleString()} · Night hours {split.night.hours.toLocaleString()}
+    </p>
   );
 }

@@ -20,13 +20,14 @@ import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { ESTIMATE_EXPORT_ERROR, estimateToXlsx, estimateXlsxFilename } from "@/lib/estimate-xlsx";
 import type { EstimateStatus } from "@/lib/estimate-status";
 import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
+import { RODEO_TAB_ID, RODEO_TAB_LABEL, showsRodeoTab } from "@/lib/rodeo-form";
 import { readSubSheet } from "@/lib/subcontractor";
 import { downloadXlsx } from "@/lib/xlsx-minimal";
 import type { StaffingLine } from "@/lib/types";
 
 export type { EstimateStatus };
 
-const TABS = [
+export const BASE_ESTIMATE_TABS = [
   { id: "summary", label: "Job setup", icon: "📄" },
   { id: "activities", label: "Activities", icon: "∿" },
   { id: "crew", label: "Crew", icon: "⛑" },
@@ -39,6 +40,17 @@ const TABS = [
   { id: "wage-lookup", label: "Wage lookup", icon: "＄" },
 ] as const;
 
+export type EstimateTab = (typeof BASE_ESTIMATE_TABS)[number]["id"] | typeof RODEO_TAB_ID;
+
+export function estimateTabsForSite(site = "", client = "") {
+  const tabs: Array<{ id: EstimateTab; label: string; icon: string }> = [...BASE_ESTIMATE_TABS];
+  if (showsRodeoTab(site, client)) {
+    const idx = tabs.findIndex((item) => item.id === "wage-lookup");
+    tabs.splice(idx < 0 ? tabs.length : idx, 0, { id: RODEO_TAB_ID, label: RODEO_TAB_LABEL, icon: "📋" });
+  }
+  return tabs;
+}
+
 const ACTIONS = [
   { id: "team", label: "Team" },
   { id: "undo", label: "Undo" },
@@ -46,8 +58,6 @@ const ACTIONS = [
   { id: "print", label: "Print" },
   { id: "duplicate", label: "Duplicate" },
 ] as const;
-
-export type EstimateTab = (typeof TABS)[number]["id"];
 
 export function EstimateWorkspace({
   crumb,
@@ -89,6 +99,7 @@ export function EstimateWorkspace({
   const closed = packageId ? isClosed(packageId) : false;
   const boundClient = jobClient || client || "";
   const boundSite = jobSite || site || "";
+  const tabs = estimateTabsForSite(boundSite, boundClient);
 
   function exportWorkbook() {
     setExportError("");
@@ -194,7 +205,7 @@ export function EstimateWorkspace({
           </div>
         </div>
         <nav className="flex flex-wrap gap-1 px-3 pb-2">
-          {TABS.map((item) => (
+          {tabs.map((item) => (
             <button
               key={item.id}
               type="button"

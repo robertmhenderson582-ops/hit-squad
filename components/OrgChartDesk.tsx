@@ -15,6 +15,8 @@ import {
   orgChartBoxes,
   orgChartForest,
   parentChoices,
+  canNameOrgLane,
+  setOrgChartContact,
   setOrgChartName,
   setOrgChartParent,
   type OrgChartBox,
@@ -97,8 +99,8 @@ export function OrgChartDesk({
 
       {boxes.length === 0 ? (
         <p className="px-5 py-6 text-sm text-[#5b6f73]">
-          Add Staff, General Foreman, or Foreman on the Crew tab. Names are optional. Direct Craft and
-          Support stay off this chart.
+          Add Staff, General Foreman, or Foreman on the Crew tab. Names are optional on Staff and GF.
+          Foreman is proposed headcount only. Direct Craft and Support stay off this chart.
         </p>
       ) : (
         <>
@@ -121,6 +123,9 @@ export function OrgChartDesk({
                   state={pack.orgChart}
                   night={night}
                   onName={(half, value) => patchChart((current) => setOrgChartName(current, box.rowId, half, value))}
+                  onContact={(half, field, value) =>
+                    patchChart((current) => setOrgChartContact(current, box.rowId, half, field, value))
+                  }
                   onParent={(parentId) => patchChart((current) => setOrgChartParent(current, box.id, parentId))}
                 />
               ))}
@@ -169,6 +174,7 @@ function OrgNameRow({
   state,
   night,
   onName,
+  onContact,
   onParent,
 }: {
   box: OrgChartBox;
@@ -176,6 +182,7 @@ function OrgNameRow({
   state: OrgChartState;
   night: boolean;
   onName: (half: "days" | "nights", value: string) => void;
+  onContact: (half: "days" | "nights", field: "email" | "phone", value: string) => void;
   onParent: (parentId: string) => void;
 }) {
   const slot = nameSlot(state, box.rowId);
@@ -189,13 +196,33 @@ function OrgNameRow({
       <li className="org-chart-name-row">
         <div>
           <p className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">{box.position.toUpperCase()} · NIGHTS</p>
-          <input
-            className={`${field} mt-2 w-full`}
-            value={slot.nights || ""}
-            placeholder="Name (optional)"
-            aria-label={`${box.position} nights name`}
-            onChange={(event) => onName("nights", event.target.value)}
-          />
+          {canNameOrgLane(box.lane) ? (
+            <>
+              <input
+                className={`${field} mt-2 w-full`}
+                value={slot.nights || ""}
+                placeholder="Name (optional)"
+                aria-label={`${box.position} nights name`}
+                onChange={(event) => onName("nights", event.target.value)}
+              />
+              <input
+                className={`${field} mt-2 w-full`}
+                value={slot.nightsEmail || ""}
+                placeholder="Email (optional)"
+                aria-label={`${box.position} nights email`}
+                onChange={(event) => onContact("nights", "email", event.target.value)}
+              />
+              <input
+                className={`${field} mt-2 w-full`}
+                value={slot.nightsPhone || ""}
+                placeholder="Phone (optional)"
+                aria-label={`${box.position} nights phone`}
+                onChange={(event) => onContact("nights", "phone", event.target.value)}
+              />
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-[#5b6f73]">Proposed headcount {box.count}. No name on Foreman.</p>
+          )}
         </div>
         <label className="block">
           <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">REPORTS TO</span>
@@ -224,22 +251,58 @@ function OrgNameRow({
           {box.position.toUpperCase()}
           {dual ? " · DAYS" : box.shift === "Nights" ? " · NIGHTS" : ""}
         </p>
-        <input
-          className={`${field} mt-2 w-full`}
-          value={(half === "nights" ? slot.nights : slot.days) || ""}
-          placeholder={box.lane === "foreman" ? "Name (optional — otherwise a number)" : "Name (optional)"}
-          aria-label={`${box.position} name`}
-          onChange={(event) => onName(half, event.target.value)}
-        />
-        {dual && box.shift === "Days & nights" ? (
-          <input
-            className={`${field} mt-2 w-full`}
-            value={slot.nights || ""}
-            placeholder="Nights name (optional)"
-            aria-label={`${box.position} nights name`}
-            onChange={(event) => onName("nights", event.target.value)}
-          />
-        ) : null}
+        {canNameOrgLane(box.lane) ? (
+          <>
+            <input
+              className={`${field} mt-2 w-full`}
+              value={(half === "nights" ? slot.nights : slot.days) || ""}
+              placeholder="Name (optional)"
+              aria-label={`${box.position} name`}
+              onChange={(event) => onName(half, event.target.value)}
+            />
+            <input
+              className={`${field} mt-2 w-full`}
+              value={(half === "nights" ? slot.nightsEmail : slot.daysEmail) || ""}
+              placeholder="Email (optional)"
+              aria-label={`${box.position} email`}
+              onChange={(event) => onContact(half, "email", event.target.value)}
+            />
+            <input
+              className={`${field} mt-2 w-full`}
+              value={(half === "nights" ? slot.nightsPhone : slot.daysPhone) || ""}
+              placeholder="Phone (optional)"
+              aria-label={`${box.position} phone`}
+              onChange={(event) => onContact(half, "phone", event.target.value)}
+            />
+            {dual && box.shift === "Days & nights" ? (
+              <>
+                <input
+                  className={`${field} mt-2 w-full`}
+                  value={slot.nights || ""}
+                  placeholder="Nights name (optional)"
+                  aria-label={`${box.position} nights name`}
+                  onChange={(event) => onName("nights", event.target.value)}
+                />
+                <input
+                  className={`${field} mt-2 w-full`}
+                  value={slot.nightsEmail || ""}
+                  placeholder="Nights email (optional)"
+                  aria-label={`${box.position} nights email`}
+                  onChange={(event) => onContact("nights", "email", event.target.value)}
+                />
+                <input
+                  className={`${field} mt-2 w-full`}
+                  value={slot.nightsPhone || ""}
+                  placeholder="Nights phone (optional)"
+                  aria-label={`${box.position} nights phone`}
+                  onChange={(event) => onContact("nights", "phone", event.target.value)}
+                />
+              </>
+            ) : null}
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-[#5b6f73]">Proposed headcount {box.count}. No name on Foreman.</p>
+        )}
       </div>
       <label className="block">
         <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">REPORTS TO</span>
