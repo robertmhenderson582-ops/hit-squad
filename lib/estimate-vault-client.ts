@@ -178,10 +178,14 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
       lastBody.set(packId, body);
       return { ok: true as const };
     }
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    return {
+      ok: false as const,
+      error: typeof data.error === "string" && data.error.trim() ? data.error : "Could not store that package.",
+    };
   } catch {
-    // local copy stays; next open/save retries
+    return { ok: false as const, error: "Could not store that package." };
   }
-  return { ok: false as const };
 }
 
 function ownedByThisVault(pack: { ownerEmail?: string }, deskEmail = ownerVaultEmail()) {

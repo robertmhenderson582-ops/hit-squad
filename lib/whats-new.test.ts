@@ -52,19 +52,19 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
-    assert.equal(DESK_VERSION, "1.46.0");
-    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.46");
-    assert.equal(DESK_THREAD_ID, "th-desk-v1.46");
+    assert.equal(DESK_VERSION, "1.47.0");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.47");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.47");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Excel workbook/);
-    assert.match(TESTER_WHATS_NEW, /formulas/);
-    assert.match(TESTER_WHATS_NEW, /hours, rates, OT\/DT, PD/);
+    assert.match(TESTER_WHATS_NEW, /Equipment, Subcontractor, and Other Cost/);
+    assert.match(TESTER_WHATS_NEW, /2027 Aromatics/);
+    assert.match(TESTER_WHATS_NEW, /saved job after refresh/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|testers|Follow|apcontrolsllc|seat|James|CBI|View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
+    assert.match(OWNER_WHATS_NEW, /Equipment, Subcontractor, and Other Cost/);
     assert.match(OWNER_WHATS_NEW, /Excel workbook/);
-    assert.match(OWNER_WHATS_NEW, /Produced by Hit Squad Project Controls|produced by Hit Squad Project Controls/);
     assert.match(OWNER_WHATS_NEW, /Joseph Henderson can use the full desk/);
     assert.match(OWNER_WHATS_NEW, /Owner stays the only owner/);
     assert.equal(/View as/i.test(TESTER_WHATS_NEW), false);
@@ -106,9 +106,9 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.46 onto an existing Hit Squad desk thread after V1.38", () => {
+  it("appends V1.47 onto an existing Hit Squad desk thread after V1.38", () => {
     assert.equal(seenKey("tester-x", "1.38.0"), `${WHATS_NEW_MARK_PREFIX}1.38.0:tester-x`);
-    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.46.0:tester-x`);
+    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.47.0:tester-x`);
     assert.notEqual(seenKey("tester-x", "1.38.0"), seenKey("tester-x"));
 
     const prior = [
@@ -140,8 +140,8 @@ describe("inbox what's-new", () => {
     assert.deepEqual(applyWhatsNew(prior, "tester-joseph-append", false, "josephmhenderson2002@gmail.com"), prior);
   });
 
-  it("posts the V1.46 Inbox note for testers and owner", () => {
-    assert.equal(DESK_VERSION, "1.46.0");
+  it("posts the V1.47 Inbox note for testers and owner", () => {
+    assert.equal(DESK_VERSION, "1.47.0");
     assert.equal(NEXT_SHIP_VERSION, DESK_VERSION);
     assert.equal(NEXT_SHIP_VERSION_LABEL, DESK_VERSION_LABEL);
     assert.equal(TESTER_NEXT_SHIP_DRAFT, TESTER_WHATS_NEW);
@@ -150,8 +150,8 @@ describe("inbox what's-new", () => {
     assert.match(OWNER_WHATS_NEW, /Excel workbook/);
     assert.match(OWNER_WHATS_NEW, /Joseph Henderson can use the full desk/);
     assert.match(OWNER_WHATS_NEW, /Owner stays the only owner/);
-    assert.match(TESTER_WHATS_NEW, /Excel workbook/);
-    assert.match(TESTER_WHATS_NEW, /formulas/);
+    assert.match(TESTER_WHATS_NEW, /Equipment, Subcontractor, and Other Cost/);
+    assert.match(TESTER_WHATS_NEW, /2027 Aromatics/);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|Follow|apcontrolsllc|seat|security|vault|other users|James|CBI|Stephanie|View as/i.test(TESTER_WHATS_NEW), false);
@@ -162,10 +162,10 @@ describe("inbox what's-new", () => {
       ),
       false,
     );
-    const live = applyWhatsNew([], "tester-v146-live", false, "nathanboyte@gmail.com");
-    assert.equal(live[0].id, "th-desk-v1.46");
+    const live = applyWhatsNew([], "tester-v147-live", false, "nathanboyte@gmail.com");
+    assert.equal(live[0].id, "th-desk-v1.47");
     assert.equal(live[0].messages[0]?.text, TESTER_WHATS_NEW);
-    const owner = applyWhatsNew([], "owner-v146-live", true);
+    const owner = applyWhatsNew([], "owner-v147-live", true);
     assert.equal(owner[0].messages[0]?.text, OWNER_WHATS_NEW);
   });
 });

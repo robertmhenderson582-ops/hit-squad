@@ -2,6 +2,7 @@ import { ACTIVITY_STORE_PREFIX } from "./work-activities.ts";
 import { FCR_STORE_PREFIX } from "./change-order-packet.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
+import { notifyEstimateSheets } from "./sheet-events.ts";
 import { SUB_STORE_PREFIX } from "./subcontractor.ts";
 import {
   findLocalPack,
@@ -100,18 +101,34 @@ export function equipmentHasWork(value: unknown) {
   return Boolean(arrayLen(row.largeTools) || arrayLen(row.thirdParty));
 }
 
+function travelHasMoney(travel: unknown) {
+  if (!Array.isArray(travel)) return false;
+  return travel.some((line) => {
+    const item = asRecord(line);
+    if (!item) return false;
+    const travelers = Number(item.travelers) || 0;
+    const miles = Number(item.miles) || 0;
+    const perMile = Number(item.perMile) || 0;
+    return travelers > 0 && miles > 0 && perMile > 0;
+  });
+}
+
 function miscHasMoney(misc: unknown) {
   if (!Array.isArray(misc)) return false;
   return misc.some((line) => {
     const item = asRecord(line);
-    return Boolean(item && (Number(item.qty) > 0 || Number(item.each) > 0 || Number(item.amount) > 0));
+    if (!item) return false;
+    const qty = Number(item.qty) || 0;
+    const each = Number(item.each) || 0;
+    const amount = Number(item.amount) || 0;
+    return amount > 0 || (qty > 0 && each > 0);
   });
 }
 
 export function otherCostHasWork(value: unknown) {
   const other = asRecord(value);
   if (!other) return false;
-  return Boolean(arrayLen(other.travel) || Number(other.perDiemRate) > 0 || miscHasMoney(other.misc));
+  return Boolean(travelHasMoney(other.travel) || Number(other.perDiemRate) > 0 || miscHasMoney(other.misc));
 }
 
 export function subcontractorHasWork(value: unknown) {
@@ -146,8 +163,8 @@ function pickOtherCost(newer: unknown, older: unknown) {
   return {
     ...prev,
     ...next,
-    travel: arrayLen(next.travel) ? next.travel : prev.travel,
-    misc: miscHasMoney(next.misc) ? next.misc : prev.misc,
+    travel: travelHasMoney(next.travel) ? next.travel : prev.travel ?? next.travel,
+    misc: miscHasMoney(next.misc) ? next.misc : prev.misc ?? next.misc,
     perDiemRate: Number(next.perDiemRate) > 0 ? next.perDiemRate : prev.perDiemRate,
   };
 }
@@ -198,7 +215,16 @@ export function packWasTransferred(pack: Pick<EstimatePackSnapshot, "transferred
   return Boolean((pack.transferredFrom || "").trim());
 }
 
-/** Same packId: a transferred working copy beats a newer leftover owner stamp. */
+function packSheetScore(pack: EstimatePackSnapshot) {
+  return (
+    (equipmentHasWork(pack.equipment) ? 1 : 0) +
+    (otherCostHasWork(pack.otherCost) ? 1 : 0) +
+    (subcontractorHasWork(pack.subcontractor) ? 1 : 0) +
+    (crewHasRows(pack.crew) ? 1 : 0)
+  );
+}
+
+/** Same packId: transferred / richer working copy beats a thinner leftover. */
 export function preferCanonicalPack(a: EstimatePackSnapshot, b: EstimatePackSnapshot): EstimatePackSnapshot {
   const aMoved = packWasTransferred(a);
   const bMoved = packWasTransferred(b);
@@ -211,6 +237,9 @@ export function preferCanonicalPack(a: EstimatePackSnapshot, b: EstimatePackSnap
     if (aTo === aOwner && bTo !== bOwner) return a;
     if (bTo === bOwner && aTo !== aOwner) return b;
   }
+  const aScore = packSheetScore(a);
+  const bScore = packSheetScore(b);
+  if (aScore !== bScore) return aScore > bScore ? a : b;
   return (a.updatedAt || 0) >= (b.updatedAt || 0) ? a : b;
 }
 
@@ -380,13 +409,13 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
   }
   writeSheetIfRicher(store, `${SUB_STORE_PREFIX}${key}`, pack.subcontractor, subcontractorHasWork);
   writeSheetIfRicher(store, `${FCR_STORE_PREFIX}${key}`, pack.fcr, fcrHasWork);
+  notifyEstimateSheets();
 }
 
 export function mergeVaultIntoLocal(store: StorageLike, vault: EstimatePackSnapshot) {
   const local = collectPack(store, vault.packId, vault.ownerEmail);
   const winner = pickPack(local, vault);
   if (!winner) return "skip" as const;
-  if (winner === local) return "local" as const;
   applyPackToStore(store, winner);
   return local ? ("local" as const) : ("vault" as const);
 }

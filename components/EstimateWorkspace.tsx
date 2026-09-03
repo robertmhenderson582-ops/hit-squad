@@ -216,9 +216,9 @@ export function EstimateWorkspace({
             </button>
           ))}
         </nav>
-        {exportError ? (
+        {exportError || pack.vaultSaveError ? (
           <p className="px-4 pb-3 text-sm text-[#f3c6a5]" role="alert">
-            {exportError}
+            {exportError || pack.vaultSaveError}
           </p>
         ) : null}
       </header>

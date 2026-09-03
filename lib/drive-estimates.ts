@@ -329,28 +329,15 @@ function fileMatchesPack(file: DriveFile, packId: string, ownerEmail: string) {
   return file.properties?.packId === packId && file.properties?.ownerEmail === ownerEmail;
 }
 
-export async function findDrivePackFile(
-  adapter: DriveAdapter,
-  folderId: string,
-  packId: string,
-  ownerEmail: string,
-) {
-  const files = await adapter.listJson(folderId);
-  const tagged = files.find((file) => fileMatchesPack(file, packId, ownerEmail));
-  if (tagged) return tagged;
-  for (const file of files) {
-    try {
-      const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
-      if (!parsed.ok) continue;
-      if (parsed.pack.packId === packId && parsed.pack.ownerEmail === ownerEmail) return file;
-    } catch {
-      // skip unreadable rows
-    }
-  }
-  return null;
+function packOwnerEmail(file: DriveFile, pack: EstimatePackSnapshot) {
+  return (pack.ownerEmail || file.properties?.ownerEmail || "").trim().toLowerCase();
 }
 
-export async function findDrivePackByPackId(adapter: DriveAdapter, folderId: string, packId: string) {
+function pickCanonicalMatch(matches: { file: DriveFile; pack: EstimatePackSnapshot }[]) {
+  return matches.reduce((best, row) => (preferCanonicalPack(best.pack, row.pack) === row.pack ? row : best));
+}
+
+async function packFilesForId(adapter: DriveAdapter, folderId: string, packId: string) {
   const files = await adapter.listJson(folderId);
   const tagged = files.filter((file) => file.properties?.packId === packId);
   const scan = tagged.length ? tagged : files;
@@ -363,8 +350,32 @@ export async function findDrivePackByPackId(adapter: DriveAdapter, folderId: str
       // skip unreadable rows
     }
   }
+  return { files, tagged, matches };
+}
+
+export async function findDrivePackFile(
+  adapter: DriveAdapter,
+  folderId: string,
+  packId: string,
+  ownerEmail: string,
+) {
+  const wanted = ownerEmail.trim().toLowerCase();
+  const { files, matches } = await packFilesForId(adapter, folderId, packId);
+  if (!matches.length) {
+    return files.find((file) => fileMatchesPack(file, packId, ownerEmail)) ?? null;
+  }
+  const winner = pickCanonicalMatch(matches);
+  const ownerMatches = matches.filter((row) => packOwnerEmail(row.file, row.pack) === wanted);
+  if (!ownerMatches.length) return null;
+  const ownerBest = pickCanonicalMatch(ownerMatches);
+  if (preferCanonicalPack(ownerBest.pack, winner.pack) === winner.pack) return winner.file;
+  return ownerBest.file;
+}
+
+export async function findDrivePackByPackId(adapter: DriveAdapter, folderId: string, packId: string) {
+  const { tagged, matches } = await packFilesForId(adapter, folderId, packId);
   if (!matches.length) return tagged[0] ?? null;
-  return matches.reduce((best, row) => (preferCanonicalPack(best.pack, row.pack) === row.pack ? row : best)).file;
+  return pickCanonicalMatch(matches).file;
 }
 
 export async function readDrivePackById(

@@ -413,6 +413,83 @@ describe("estimate vault service", () => {
     assert.equal(nathanList.packs[0]?.title, "Cat 2 Pit Stop");
   });
 
+  it("lists and hydrates the richer 2027 Aromatics copy when a thin same-packId leftover remains", async () => {
+    const drive = memoryDrive();
+    const packId = "new-mtj7bvtk-akmei";
+    await drive.createJson(
+      "folder",
+      "wood-river-2027-aromatics-turnaround.json",
+      JSON.stringify({
+        packId,
+        key: `new:${packId}`,
+        title: "2027 Aromatics Turnaround",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        siteId: "site-madison",
+        createdAt: 50,
+        updatedAt: Date.now(),
+        ownerEmail: OWNER_LOGIN_EMAIL,
+        crew: { staff: [], support: [] },
+      }),
+      { packId, ownerEmail: OWNER_LOGIN_EMAIL },
+    );
+    await drive.createJson(
+      "folder",
+      "wood-river-2027-aromatics-turnaround.json",
+      JSON.stringify({
+        packId,
+        key: `new:${packId}`,
+        title: "2027 Aromatics Turnaround",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        siteId: "site-madison",
+        createdAt: 50,
+        updatedAt: 400,
+        ownerEmail: tester.email,
+        sharedWith: [OWNER_LOGIN_EMAIL],
+        transferredFrom: OWNER_LOGIN_EMAIL,
+        transferredTo: tester.email,
+        equipment: { largeTools: [{ id: "lt-1", itemId: "wet:8:truck-crew", qty: 1 }], thirdParty: [{ id: "tp-1", item: "6 pack Stick/Tig / Mig pulse", rate: 1225, qty: 12, freight: 50 }] },
+        otherCost: { travel: [{ id: "travel-staff", travelers: 39, miles: 1700, perMile: 0.76 }], misc: [{ id: "mc-1", item: "Alloy rod", qty: 65, each: 1000 }] },
+        subcontractor: { cards: [{ id: "sc-1", vendor: "JVIC Tensioning/Torquing/Machining/Bundle Equipment and Labor" }] },
+        crew: { staff: Array.from({ length: 15 }, (_, index) => ({ id: `st-${index + 1}` })), support: [{ id: "su-1" }] },
+      }),
+      { packId, ownerEmail: tester.email },
+    );
+    const ownerList = await listVisiblePacks(owner, drive);
+    const nathanList = await listVisiblePacks(tester, drive);
+    assert.equal(ownerList.packs.length, 1);
+    assert.equal(nathanList.packs.length, 1);
+    assert.equal(ownerList.packs[0]?.ownerEmail, tester.email);
+    assert.equal(((ownerList.packs[0]?.equipment as { largeTools: unknown[] }).largeTools || []).length, 1);
+    assert.equal(((nathanList.packs[0]?.subcontractor as { cards: unknown[] }).cards || []).length, 1);
+    const leftoverFlush = await upsertVisiblePack(
+      owner,
+      {
+        packId,
+        key: `new:${packId}`,
+        title: "2027 Aromatics Turnaround",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        siteId: "site-madison",
+        createdAt: 50,
+        updatedAt: Date.now() + 5_000,
+        ownerEmail: OWNER_LOGIN_EMAIL,
+        equipment: { largeTools: [], thirdParty: [] },
+        otherCost: { travel: [{ id: "travel-staff", travelers: 0, miles: 0, perMile: 0 }, { id: "travel-craft", travelers: 0, miles: 0, perMile: 0 }], misc: [{ id: "mc-seed", item: "Alloy rod", qty: 1, each: 0 }] },
+        subcontractor: { lines: [], cards: [] },
+      },
+      drive,
+    );
+    assert.equal(leftoverFlush.ok, true);
+    if (leftoverFlush.ok) {
+      assert.equal(leftoverFlush.pack.ownerEmail, tester.email);
+      assert.equal(((leftoverFlush.pack.equipment as { largeTools: unknown[] }).largeTools || []).length, 1);
+      assert.equal(((leftoverFlush.pack.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
+      assert.equal(((leftoverFlush.pack.subcontractor as { cards: unknown[] }).cards || []).length, 1);
+    }
+  });
+
   it("ignores a newer leftover Drive file and keeps the transferred copy", async () => {
     const drive = memoryDrive();
     await upsertVisiblePack(owner, cat2(), drive);

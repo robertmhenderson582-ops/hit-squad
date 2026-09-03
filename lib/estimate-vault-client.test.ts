@@ -21,6 +21,10 @@ import { readLensPacks, snapshotLensPack, writeLensPacks } from "./lens-packs.ts
 import { deleteLocalPack, findLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-menu.ts";
 import { applyPackToStore, collectPack } from "./estimate-pack.ts";
+import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
+import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
+import { SUB_STORE_PREFIX } from "./subcontractor.ts";
+import { newEstimateKey } from "./estimate-open.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 
 function memoryStore(seed: Record<string, string> = {}): StorageLike {
@@ -681,6 +685,130 @@ describe("local transfer commit", () => {
         handoffMarkText(readLensPacks("nathan", store)[0]!, "nathanboyte@gmail.com"),
         "Shared with Robert Henderson.",
       );
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("hydrates 2027 Aromatics equipment, sub, and otherCost from the richer vault onto empty local defaults", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const packId = "new-mtj7bvtk-akmei";
+    const key = newEstimateKey(packId);
+    rememberLocalPack(
+      {
+        packId,
+        title: "2027 Aromatics Turnaround",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: OWNER_LOGIN_EMAIL,
+      },
+      store,
+    );
+    store.setItem(`${EQUIPMENT_STORE_PREFIX}${key}`, JSON.stringify({ largeTools: [], thirdParty: [] }));
+    store.setItem(
+      `${OTHER_COST_STORE_PREFIX}${key}`,
+      JSON.stringify({
+        travel: [
+          { id: "travel-staff", travelers: 0, miles: 0, perMile: 0 },
+          { id: "travel-craft", travelers: 0, miles: 0, perMile: 0 },
+        ],
+        misc: [{ id: "mc-seed", item: "Alloy rod", qty: 1, each: 0 }],
+      }),
+    );
+    store.setItem(`${SUB_STORE_PREFIX}${key}`, JSON.stringify({ lines: [], cards: [] }));
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          persisted: true,
+          packs: [
+            {
+              packId,
+              key,
+              title: "2027 Aromatics Turnaround",
+              client: "Phillips 66",
+              site: "Wood River — Roxana, IL",
+              siteId: "site-madison",
+              createdAt: 1,
+              updatedAt: 400,
+              ownerEmail: "nathanboyte@gmail.com",
+              sharedWith: [OWNER_LOGIN_EMAIL],
+              transferredFrom: OWNER_LOGIN_EMAIL,
+              transferredTo: "nathanboyte@gmail.com",
+              equipment: {
+                largeTools: [{ id: "lt-1", itemId: "wet:8:truck-crew", qty: 1 }],
+                thirdParty: [{ id: "tp-1", item: "6 pack Stick/Tig / Mig pulse", rate: 1225, qty: 12, freight: 50 }],
+              },
+              otherCost: {
+                travel: [
+                  { id: "travel-staff", travelers: 39, miles: 1700, perMile: 0.76 },
+                  { id: "travel-craft", travelers: 100, miles: 800, perMile: 0.76 },
+                ],
+                misc: [{ id: "mc-1", item: "Alloy rod", qty: 65, each: 1000 }],
+              },
+              subcontractor: {
+                cards: [{ id: "sc-1", vendor: "JVIC Tensioning/Torquing/Machining/Bundle Equipment and Labor" }],
+              },
+              crew: { staff: Array.from({ length: 15 }, (_, index) => ({ id: `st-${index + 1}` })) },
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    try {
+      const packs = await hydrateFromVault(store);
+      assert.equal(packs[0]?.packId, packId);
+      const local = collectPack(store, packId);
+      assert.equal(((local?.equipment as { largeTools: unknown[] }).largeTools || []).length, 1);
+      assert.equal(((local?.equipment as { thirdParty: unknown[] }).thirdParty || []).length, 1);
+      assert.equal(((local?.subcontractor as { cards: unknown[] }).cards || []).length, 1);
+      assert.equal(((local?.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
+      assert.equal((local?.crew as { staff: unknown[] }).staff.length, 15);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("collects equipment, sub, and otherCost on upsert and a failed Drive write errors", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const packId = "new-mtj7bvtk-akmei";
+    applyPackToStore(store, {
+      packId,
+      key: `new:${packId}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+      ownerEmail: OWNER_LOGIN_EMAIL,
+      equipment: { largeTools: [{ id: "lt-1", itemId: "wet:8:truck-crew", qty: 1 }], thirdParty: [] },
+      otherCost: { travel: [{ id: "travel-staff", travelers: 39, miles: 1700, perMile: 0.76 }], misc: [{ id: "mc-1", item: "Alloy rod", qty: 65, each: 1000 }] },
+      subcontractor: { cards: [{ id: "sc-1", vendor: "Hartford" }] },
+      crew: { staff: [{ id: "st-1" }] },
+    });
+    const bodies: Array<{ pack?: { equipment?: { largeTools?: unknown[] }; otherCost?: { misc?: unknown[] }; subcontractor?: { cards?: unknown[] } } }> = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const raw = typeof init?.body === "string" ? init.body : "";
+      if (raw) bodies.push(JSON.parse(raw) as (typeof bodies)[number]);
+      return new Response(JSON.stringify({ error: "Could not store that package." }), {
+        status: 502,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      const result = await flushVaultUpsert(packId, store);
+      assert.equal(result.ok, false);
+      assert.equal("error" in result && result.error, "Could not store that package.");
+      assert.equal((bodies[0]?.pack?.equipment?.largeTools || []).length, 1);
+      assert.equal((bodies[0]?.pack?.otherCost?.misc || []).length, 1);
+      assert.equal((bodies[0]?.pack?.subcontractor?.cards || []).length, 1);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();
