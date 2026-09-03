@@ -13,6 +13,7 @@ import {
   madisonManualLabel,
   publicQualityDrops,
   type QualityDay1,
+  type QualityFormId,
 } from "@/lib/quality-day1";
 import type { PublicLeadBrief } from "@/lib/lead-briefs";
 
@@ -31,6 +32,7 @@ export function QualityDay1Card({
 }) {
   const { user } = useSession();
   const packState = hydrateQualityDay1(value);
+  const [openForm, setOpenForm] = useState<QualityFormId | "">("2.7.1");
   const [drops, setDrops] = useState<Array<{ name: string; files: string[] }>>([]);
   const manuals = canSeeMadisonManuals(user, companyScopeFor(user));
 
@@ -100,8 +102,8 @@ export function QualityDay1Card({
           onChange={(event) => onWorkNames(event.target.value)}
         />
       </FieldBlock>
-      <QualityFormJump />
-      <QualityFormScreens value={packState} onChange={onChange} />
+      <QualityFormJump activeId={openForm} onPick={(id) => setOpenForm(id)} />
+      <QualityFormScreens value={packState} onChange={onChange} openForm={openForm} onOpenForm={setOpenForm} />
       {drops.length ? (
         <ul className="mt-3 space-y-1 text-sm text-[#163038]">
           {drops.map((drop) => (

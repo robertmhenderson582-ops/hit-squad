@@ -36,7 +36,7 @@ export function ModuleRegister({
         </button>
       </div>
       <div className="mt-3 overflow-x-auto">
-        <table className="min-w-full text-left text-sm text-[#163038]">
+        <table className="field-register-table min-w-full text-left">
           <thead>
             <tr>
               {fields.map((field) => (

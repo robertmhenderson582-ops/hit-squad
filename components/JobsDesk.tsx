@@ -82,7 +82,7 @@ export function JobsDesk() {
   const immediateOwnerWork = ownerDeskHasImmediateWork(lens);
   const holdPartialTree = Boolean(lensReady && !viewingAs && hydrating && !immediateOwnerWork);
   const jobs = jobsOnDesk(serverJobs, deskPacks, viewingAs, scope, menu, {
-    includeSeeds: !holdPartialTree,
+    includeSeeds: true,
   });
   void packTick;
   const active = jobs.filter((job) => isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed));

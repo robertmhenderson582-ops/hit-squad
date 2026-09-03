@@ -103,7 +103,7 @@ export function RollingChartMap({
   const [picked, setPicked] = useState<string | null>(null);
   const [circuitPage, setCircuitPage] = useState(1);
   const [jump, setJump] = useState("");
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(1.2);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const circuits = liveCircuitCount(state);
   const tubes = liveTubesPerCircuit(state);
@@ -113,7 +113,8 @@ export function RollingChartMap({
   const pickedMeta = picked ? parseTubeKey(picked) : null;
   const progression = useMemo(() => rollingProgression(state), [state]);
   const page = Math.min(Math.max(1, circuitPage), Math.max(1, circuits));
-  const cellPx = Math.max(32, Math.round(44 * zoom));
+  const cellPx = Math.max(40, Math.round(48 * zoom));
+  const bankLabel = state.bankName.trim() || "Generating bank";
 
   function write(next: RollingChartState) {
     onChange(hydrateRollingChart(next));
@@ -164,15 +165,15 @@ export function RollingChartMap({
 
   return (
     <div className="plant-card mt-6 px-4 py-4">
-      <h2 className="font-display text-xl text-[#163038]">Rolling chart</h2>
-      <p className="mt-2 text-sm text-[#163038]">
-        Generating-bank tool. A row is a generating-bank circuit. Tube numbers run along the drum.
-        Steam and mud are two joints on the same tube ID. Side walls are their own one-row maps.
+      <h2 className="font-display text-xl text-[#163038]">Rolling chart — {bankLabel}</h2>
+      <p className="mt-2 text-base text-[#163038]">
+        Generating-bank tool for <span className="font-semibold">{bankLabel}</span>. A row is a generating-bank circuit.
+        Tube numbers run along the drum. Steam and mud are two joints on the same tube ID. Side walls are their own one-row maps.
       </p>
 
       <section className="mt-4 rounded-sm border border-[#c5d4d4] bg-[#fbf8f0] px-3 py-3">
-        <h3 className="font-display text-lg text-[#163038]">Setup</h3>
-        <p className="mt-1 text-sm text-[#163038]">Required before the map is useful. Persist with the chart.</p>
+        <h3 className="font-display text-lg text-[#163038]">Setup — {bankLabel}</h3>
+        <p className="mt-1 text-base text-[#163038]">Required before the map is useful. Persist with the chart.</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <FieldBlock label="Bank name">
             <input className="paper-field mt-1" value={state.bankName} onChange={(event) => patchInputs({ bankName: event.target.value })} />
@@ -305,8 +306,8 @@ export function RollingChartMap({
           </button>
         ))}
       </div>
-      <p className="mt-2 text-sm font-semibold text-[#163038]">{current.title}</p>
-      {current.tracking !== current.title ? <p className="text-sm text-[#163038]">{current.tracking}</p> : null}
+      <p className="mt-2 text-base font-semibold text-[#163038]">{current.title}</p>
+      {current.tracking !== current.title ? <p className="text-base text-[#163038]">{current.tracking}</p> : null}
 
       <ol className="sticky top-0 z-10 mt-3 grid gap-2 bg-[#fbf8f0] py-2 sm:grid-cols-2">
         {ROLL_STEPS.map((step) => (
@@ -414,49 +415,43 @@ export function RollingChartMap({
                     );
                   })}
                 </div>
-                {Array.from({ length: circuits }, (_, circuitIndex) => {
-                  const circuit = circuitIndex + 1;
-                  const focused = circuit === page;
-                  return (
-                    <div
-                      key={circuit}
-                      id={`rolling-circuit-${circuit}`}
-                      className={`flex flex-nowrap items-center gap-1 py-0.5 ${focused ? "bg-[#efe6d4]" : ""}`}
-                    >
-                      <span className="sticky left-0 z-[1] w-10 shrink-0 bg-[#fbf8f0] text-xs font-bold text-[#163038]">
-                        {axisLabel(circuit, focused || pickedMeta?.circuit === circuit)}
-                      </span>
-                      {Array.from({ length: tubes }, (_, tubeIndex) => {
-                        const tube = tubeIndex + 1;
-                        const key = drumTubeKey(sheet, circuit, tube);
-                        const mark = readRollingTube(state, key);
-                        const selected = picked === key;
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            title={`Circuit ${circuit} tube ${tube}`}
-                            aria-label={`Circuit ${circuit} tube ${tube}`}
-                            onClick={() => {
-                              setPicked(key);
-                              setCircuitPage(circuit);
-                            }}
-                            className="tube-cell"
-                            style={{
-                              ...tubeStyle(state, mark, selected),
-                              width: cellPx,
-                              minWidth: cellPx,
-                              minHeight: cellPx,
-                              flexShrink: 0,
-                            }}
-                          >
-                            {tubeCellMark(state, mark) || (selected ? String(tube) : "")}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+                <div
+                  id={`rolling-circuit-${page}`}
+                  className="flex flex-nowrap items-center gap-1 bg-[#efe6d4] py-0.5"
+                >
+                  <span className="sticky left-0 z-[1] w-10 shrink-0 bg-[#fbf8f0] text-sm font-bold text-[#163038]">
+                    {axisLabel(page, true || pickedMeta?.circuit === page)}
+                  </span>
+                  {Array.from({ length: tubes }, (_, tubeIndex) => {
+                    const tube = tubeIndex + 1;
+                    const key = drumTubeKey(sheet, page, tube);
+                    const mark = readRollingTube(state, key);
+                    const selected = picked === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        title={`Circuit ${page} tube ${tube}`}
+                        aria-label={`Circuit ${page} tube ${tube}`}
+                        onClick={() => {
+                          setPicked(key);
+                          setCircuitPage(page);
+                        }}
+                        className="tube-cell"
+                        style={{
+                          ...tubeStyle(state, mark, selected),
+                          width: cellPx,
+                          minWidth: cellPx,
+                          minHeight: cellPx,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {tubeCellMark(state, mark) ||
+                          axisLabel(tube, selected || pickedMeta?.tube === tube || tube % 5 === 0)}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>

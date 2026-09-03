@@ -88,7 +88,15 @@ export const QUALITY_FORM_ROW_FIELDS: Record<QualityFormId, readonly QualityFiel
     { id: "rev", label: "Rev" },
     { id: "copies", label: "Copies" },
   ],
-  "2.7.17": [],
+  "2.7.17": [
+    { id: "item", label: "Item / tag" },
+    { id: "description", label: "Description" },
+    { id: "qty", label: "Qty" },
+    { id: "issuedTo", label: "Issued to" },
+    { id: "dateOut", label: "Date out", kind: "date" },
+    { id: "dateIn", label: "Date in", kind: "date" },
+    { id: "status", label: "Status" },
+  ],
   "2.7.19": [
     { id: "flangeId", label: "Flange / joint ID" },
     { id: "location", label: "Location" },
@@ -124,6 +132,7 @@ export const QUALITY_FORM_ROW_FIELDS: Record<QualityFormId, readonly QualityFiel
 export const QUALITY_FORM_ROW_HINT: Partial<Record<QualityFormId, string>> = {
   "2.7.1": "Gauges used on this test. Add a row per gauge.",
   "2.7.11": "Documents on this transmittal.",
+  "2.7.17": "ROD line items. Add a row per item issued.",
   "2.7.19": "Live flange log. Same rows as the Connections board — this is the source of truth. xlsx stays in the vault.",
   "2.7.34": "Typed sign-off rows. Quality / craft / client — names and dates, not e-sign.",
   "2.7.5": "Punch items. Leave the item blank if there is no number yet — do not invent punch numbers.",

@@ -14,6 +14,8 @@ import {
   HSE_EXECUTE_LANES,
   addHseLaneRow,
   emptyHseModule,
+  hseBoardCounts,
+  hseDay1CompleteCount,
   patchHseLaneRow,
   readHseModule,
   removeHseLaneRow,
@@ -36,6 +38,8 @@ export function HseDesk() {
   const assigned = owner?.viewAs === "wendell" || owner?.viewAs === "benny";
   const manuals = canSeeMadisonSafetyManuals(user, companyScopeFor(user));
   const roster = canSeeHesRoster(user);
+  const counts = hseBoardCounts(module);
+  const day1Done = hseDay1CompleteCount(module.day1);
 
   useEffect(() => {
     setModule(readHseModule(folder));
@@ -63,24 +67,53 @@ export function HseDesk() {
       </FieldBlock>
       <LeadStudio title="HSE lead studio" kind="hse" />
       {assigned ? (
-        <p className="plant-card px-4 py-3 text-sm text-[#163038]">
-          This is your HSE desk. Mark the package, then type talks, permits, and observations. Drops you
+        <p className="plant-card px-4 py-3 text-base text-[#163038]">
+          This is your HSE desk. Fill the package table, then type talks, permits, and observations. Drops you
           save stay on this desk.
         </p>
       ) : null}
-      {manuals ? <p className="text-sm text-[#163038]">Madison Safety Manual / HES SOPs</p> : null}
-      {roster ? <p className="text-sm text-[#163038]">HES Reporting roster stays owner-only.</p> : null}
-      <HseDay1Card
-        value={module.day1}
-        plant={module.plant}
-        onChange={(day1) => persist({ ...module, day1 })}
-        onPlant={(plant) => persist({ ...module, plant })}
-      />
+      {manuals ? <p className="text-base text-[#163038]">Madison Safety Manual / HES SOPs</p> : null}
+      {roster ? <p className="text-base text-[#163038]">HES Reporting roster stays owner-only.</p> : null}
+
+      <section className="plant-card px-4 py-4">
+        <h2 className="font-display text-xl text-[#163038]">BOARD</h2>
+        <p className="mt-1 text-base text-[#163038]">Open counts. Click a tile to jump to that lane.</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <button
+            type="button"
+            onClick={() => document.getElementById("hse-day1")?.scrollIntoView({ behavior: "smooth" })}
+            className="rounded-sm border border-[#c5d4d4] bg-[#fbf8f0] px-4 py-3 text-left"
+          >
+            <p className="text-sm font-semibold text-[#163038]">Day-1 package</p>
+            <p className="mt-2 font-display text-3xl text-[#163038]">{day1Done}</p>
+          </button>
+          {HSE_EXECUTE_LANES.map((lane) => (
+            <button
+              key={lane.id}
+              type="button"
+              onClick={() => document.getElementById(`hse-${lane.id}`)?.scrollIntoView({ behavior: "smooth" })}
+              className="rounded-sm border border-[#c5d4d4] bg-[#fbf8f0] px-4 py-3 text-left"
+            >
+              <p className="text-sm font-semibold text-[#163038]">{lane.title}</p>
+              <p className="mt-2 font-display text-3xl text-[#163038]">{counts[lane.id]}</p>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <div id="hse-day1">
+        <HseDay1Card
+          value={module.day1}
+          plant={module.plant}
+          onChange={(day1) => persist({ ...module, day1 })}
+          onPlant={(plant) => persist({ ...module, plant })}
+        />
+      </div>
       {LANE_GROUPS.map((group) => (
         <section key={group.id} className="space-y-3">
           <div className="px-1">
             <h2 className="font-display text-xl text-[#163038]">{group.title}</h2>
-            <p className="mt-1 text-sm text-[#163038]">{group.note}</p>
+            <p className="mt-1 text-base text-[#163038]">{group.note}</p>
           </div>
           {HSE_EXECUTE_LANES.filter((lane) => lane.group === group.id).map((lane) => (
             <ModuleRegister

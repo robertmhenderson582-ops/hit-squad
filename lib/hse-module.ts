@@ -1,4 +1,4 @@
-import { emptyHseDay1, hydrateHseDay1, type HseDay1 } from "./hse-day1.ts";
+import { emptyHseDay1, hydrateHseDay1, HSE_PACKAGE_SLOTS, hseSlotMarked, type HseDay1 } from "./hse-day1.ts";
 import {
   clientFolderId,
   emptyRegisterRow,
@@ -206,4 +206,21 @@ export function removeHseLaneRow(state: HseModuleState, lane: HseLaneId, id: str
       [lane]: state.lanes[lane].filter((row) => row.id !== id),
     },
   };
+}
+
+export function hseBoardCounts(state: HseModuleState): Record<HseLaneId, number> {
+  const counts = {} as Record<HseLaneId, number>;
+  for (const lane of HSE_EXECUTE_LANES) {
+    counts[lane.id] = state.lanes[lane.id].filter((row) =>
+      Object.values(row.cells).some((value) => String(value || "").trim()),
+    ).length;
+  }
+  return counts;
+}
+
+export function hseDay1CompleteCount(day1: HseDay1) {
+  return HSE_PACKAGE_SLOTS.filter((slot) => {
+    const row = day1.slots[slot.id];
+    return row && (hseSlotMarked(row.status) || row.note.trim() || row.date.trim());
+  }).length;
 }

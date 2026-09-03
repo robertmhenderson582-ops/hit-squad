@@ -130,7 +130,11 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.doesNotMatch(qualityCard, />FILL<|>COUNT</);
     assert.match(hseCard, /HSE_PACKAGE_SLOTS/);
     assert.match(hseCard, /paper-field/);
-    assert.match(hseCard, /checkbox/);
+    assert.match(hseCard, /field-register-table/);
+    assert.match(hseCard, /Status/);
+    assert.match(hseCard, /Date/);
+    assert.match(hseCard, /Note/);
+    assert.doesNotMatch(hseCard, /type="checkbox"/);
   });
 
   it("fails if Chance’s Quality studio or named forms are missing", () => {
