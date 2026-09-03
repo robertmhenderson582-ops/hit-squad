@@ -26,8 +26,7 @@ import {
   rematchEquipmentSheetToShahan,
 } from "@/lib/shahan-wood-river";
 import { applyPlantJobRates, offerRateBookForSite } from "@/lib/wage-lookup";
-import { QualityDay1Card } from "@/components/QualityDay1Card";
-import { HseDay1Card } from "@/components/HseDay1Card";
+import { HSE_TAB_LABEL, QUALITY_TAB_LABEL, showsQualityHseModules } from "@/lib/quality-hse-modules";
 import {
   CBA_INCREASE_LABEL,
   EQUIPMENT_CONTINGENCY_LABEL,
@@ -50,6 +49,8 @@ export function JobSetupCard({
   status = "Estimate",
   onStatus,
   statusLocked = false,
+  onOpenQuality,
+  onOpenHse,
   children,
 }: {
   type: string;
@@ -65,6 +66,8 @@ export function JobSetupCard({
   status?: EstimateStatus;
   onStatus?: (next: EstimateStatus) => void;
   statusLocked?: boolean;
+  onOpenQuality?: () => void;
+  onOpenHse?: () => void;
   children?: React.ReactNode;
 }) {
   const pack = useEstimatePackage();
@@ -472,8 +475,20 @@ export function JobSetupCard({
           </p>
         </label>
       </div>
-      <QualityDay1Card status={status} />
-      <HseDay1Card status={status} site={site} client={client} />
+      {showsQualityHseModules(status) ? (
+        <p className="mt-6 flex flex-wrap gap-3 text-sm">
+          {onOpenQuality ? (
+            <button type="button" onClick={onOpenQuality} className="text-steel underline">
+              {QUALITY_TAB_LABEL}
+            </button>
+          ) : null}
+          {onOpenHse ? (
+            <button type="button" onClick={onOpenHse} className="text-steel underline">
+              {HSE_TAB_LABEL}
+            </button>
+          ) : null}
+        </p>
+      ) : null}
     </section>
   );
 }

@@ -1,24 +1,24 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.48.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.48";
+export const DESK_VERSION = "1.49.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.49";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.48";
+export const DESK_THREAD_ID = "th-desk-v1.49";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.48",
-  "• Org chart shows night counterparts; Rodeo estimates get a Rodeo form tab; Crew shows PD $ and names; Job setup has contingency, CBA increase, and M.O.R.E.; Quality and HSE Day-1 checklists on the job.",
+  "Hit Squad Project Controls V1.49",
+  "• Quality and HSE moved off Job setup onto their own modules.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.48",
-  "• Org chart shows night counterparts; Rodeo estimates get a Rodeo form tab; Crew shows PD $ and names; Job setup has contingency, CBA increase, and M.O.R.E.; Quality and HSE Day-1 checklists on the job.",
+  "Hit Squad Project Controls V1.49",
+  "• Quality and HSE moved off Job setup onto their own modules.",
   "• Persist and Excel export stay. Madison manuals stay Madison-only.",
 ].join("\n");
 
-/** Same as the live V1.48 note. Kept so older imports still resolve. */
+/** Same as the live V1.49 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;

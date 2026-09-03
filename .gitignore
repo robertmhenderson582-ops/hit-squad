@@ -21,4 +21,9 @@ data/
 **/*Madison*.xlsx
 **/*P66*.pdf
 **/*P66*.xlsx
+# Generating-bank / rolling-chart source books — never commit
+**/*.xlsb
+**/*generating-bank*.xlsx
+**/*generating-bank*.xls
+**/*Rolling*Chart*.xlsx
 tsconfig.tsbuildinfo
