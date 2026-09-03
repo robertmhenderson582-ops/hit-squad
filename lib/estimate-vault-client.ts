@@ -18,7 +18,7 @@ import {
   writeVaultSeen,
   type MenuItem,
 } from "./job-menu.ts";
-import { findDeskPack, readLensPacks, snapshotLensPack, writeLensPacks } from "./lens-packs.ts";
+import { findDeskPack, readLensPacks, snapshotLensPack, snapshotOwnerDesk, writeLensPacks } from "./lens-packs.ts";
 import {
   deleteLocalPack,
   findLocalPack,
@@ -99,6 +99,7 @@ export async function hydrateFromVault(
     const packs = await hydratePromise;
     for (const pack of packs) mergeVaultIntoLocal(target, pack);
     if (seat !== "owner") writeLensPacks(seat, packs.map(snapshotLensPack), target);
+    else snapshotOwnerDesk({ email: ownerVaultEmail(), role: "owner" }, target);
     return packs;
   }
   hydrateSeat = seat;
@@ -123,26 +124,33 @@ export async function hydrateFromVault(
       }
       if (data.persisted && !viewingAs) {
         const deskEmail = ownerVaultEmail();
-        for (const packId of packsMissingFromVault(packs.map((pack) => pack.packId), target)) {
-          const leftover = findLocalPack(packId, target);
-          if (leftover && !isLeftoverOwnerCopy(leftover, deskEmail)) continue;
-          if (leftover && menuStatus({ id: packId, packId }, readJobMenu(target)) !== "transferred") {
-            recordTransferredMenuItem(
-              {
-                id: packId,
-                title: leftover.title,
-                packId,
-                toName: leftover.transferredToName || "the other desk",
-              },
-              target,
-            );
+        const namedLocal = listLocalPacks(target).filter((pack) => (pack.title || "").trim());
+        const vaultThin = packs.length === 0 || packs.length < namedLocal.length;
+        if (!vaultThin) {
+          for (const packId of packsMissingFromVault(packs.map((pack) => pack.packId), target)) {
+            const leftover = findLocalPack(packId, target);
+            if (leftover && !isLeftoverOwnerCopy(leftover, deskEmail)) continue;
+            if (leftover && menuStatus({ id: packId, packId }, readJobMenu(target)) !== "transferred") {
+              recordTransferredMenuItem(
+                {
+                  id: packId,
+                  title: leftover.title,
+                  packId,
+                  toName: leftover.transferredToName || "the other desk",
+                },
+                target,
+              );
+            }
+            deleteLocalPack(packId, target);
           }
-          deleteLocalPack(packId, target);
+          writeVaultSeen(
+            packs.map((pack) => pack.packId),
+            target,
+          );
         }
-        writeVaultSeen(
-          packs.map((pack) => pack.packId),
-          target,
-        );
+        snapshotOwnerDesk({ email: deskEmail, role: "owner" }, target);
+      } else if (!viewingAs) {
+        snapshotOwnerDesk({ email: ownerVaultEmail(), role: "owner" }, target);
       }
       return packs;
     } catch {

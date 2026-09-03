@@ -317,6 +317,13 @@ function unconfiguredDrive(): DriveAdapter {
   };
 }
 
+/** Thin Drive leftover. Never let this file overlay a richer Aromatics / CAT copy. */
+export const THIN_DRIVE_STUB_IDS = new Set(["1AEf_Shk8SEvMsdGodNSpaNgUCytXSLZ9"]);
+
+export function isThinDriveStub(fileId?: string | null) {
+  return Boolean(fileId && THIN_DRIVE_STUB_IDS.has(fileId));
+}
+
 export function driveAdapter(env: Record<string, string | undefined> = process.env): DriveAdapter {
   const oauth = parseOAuthClient(env);
   if (oauth) return googleDriveAdapter(() => oauthAccessToken(oauth));
@@ -339,10 +346,11 @@ function pickCanonicalMatch(matches: { file: DriveFile; pack: EstimatePackSnapsh
 
 async function packFilesForId(adapter: DriveAdapter, folderId: string, packId: string) {
   const files = await adapter.listJson(folderId);
-  const tagged = files.filter((file) => file.properties?.packId === packId);
-  const scan = tagged.length ? tagged : files;
+  const tagged = files.filter((file) => file.properties?.packId === packId && !isThinDriveStub(file.id));
+  const scan = tagged.length ? tagged : files.filter((file) => !isThinDriveStub(file.id));
   const matches: { file: DriveFile; pack: EstimatePackSnapshot }[] = [];
   for (const file of scan) {
+    if (isThinDriveStub(file.id)) continue;
     try {
       const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
       if (parsed.ok && parsed.pack.packId === packId) matches.push({ file, pack: parsed.pack });
@@ -350,7 +358,7 @@ async function packFilesForId(adapter: DriveAdapter, folderId: string, packId: s
       // skip unreadable rows
     }
   }
-  return { files, tagged, matches };
+  return { files: files.filter((file) => !isThinDriveStub(file.id)), tagged, matches };
 }
 
 export async function findDrivePackFile(
@@ -475,6 +483,7 @@ export async function listDrivePacks(adapter: DriveAdapter, folderId = estimates
   const files = await adapter.listJson(resolveEstimatesFolder(folderId));
   const packs: EstimatePackSnapshot[] = [];
   for (const file of files) {
+    if (isThinDriveStub(file.id)) continue;
     try {
       const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
       if (parsed.ok) packs.push(publicPack(parsed.pack));

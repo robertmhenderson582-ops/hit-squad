@@ -8,6 +8,7 @@ import {
   readLensPacks,
   snapshotLensPack,
   writeLensPacks,
+  writeOwnerPacks,
 } from "./lens-packs.ts";
 import { deleteLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 
@@ -69,7 +70,53 @@ test("leftover owner flush does not wipe the Follow seat snapshot", () => {
   assert.equal(live[0]?.transferredFrom, "robertmhenderson582@gmail.com");
 
   const ownerDesk = packsForViewedDesk(owner, false, null, store);
-  assert.equal(ownerDesk.some((pack) => pack.packId === "new-mtaajdwa-f7539"), false);
+  assert.equal(ownerDesk.some((pack) => pack.packId === "new-mtaajdwa-f7539"), true);
+});
+
+test("owner first paint uses the last snapshot even before the lens user is ready", () => {
+  const store = memoryStore();
+  writeOwnerPacks(
+    [
+      snapshotLensPack({
+        packId: "new-aromatics-2027",
+        key: "new:new-aromatics-2027",
+        title: "2027 Aromatics Turnaround",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        siteId: "site-madison",
+        createdAt: 1,
+        updatedAt: 2,
+        ownerEmail: owner.email,
+      }),
+      snapshotLensPack(cat2),
+    ],
+    store,
+  );
+  const beforeLens = packsForViewedDesk(null, false, null, store);
+  assert.equal(beforeLens.some((pack) => pack.packId === "new-aromatics-2027"), true);
+  assert.equal(beforeLens.some((pack) => pack.packId === "new-mtaajdwa-f7539"), true);
+});
+
+test("owner first paint includes local, last snapshot, and lens packs without waiting a tick", () => {
+  const store = memoryStore();
+  const aromatics = {
+    packId: "new-aromatics-2027",
+    key: "new:new-aromatics-2027",
+    title: "2027 Aromatics Turnaround",
+    client: "Phillips 66",
+    site: "Wood River — Roxana, IL",
+    siteId: "site-madison",
+    createdAt: 1,
+    updatedAt: 2,
+    ownerEmail: owner.email,
+  };
+  rememberLocalPack(aromatics, store);
+  writeOwnerPacks([snapshotLensPack(cat2)], store);
+  writeLensPacks("nathan", [snapshotLensPack({ ...cat2, sharedWith: [owner.email] })], store);
+  const ownerDesk = packsForViewedDesk(owner, false, null, store);
+  assert.equal(ownerDesk.some((pack) => pack.packId === "new-aromatics-2027"), true);
+  assert.equal(ownerDesk.some((pack) => pack.packId === "new-mtaajdwa-f7539"), true);
+  assert.equal(ownerDesk.some((pack) => pack.title === "Madison CAT 2 (Pit Stop)"), true);
 });
 
 test("findDeskPack reads live local first, then the View as snapshot", () => {

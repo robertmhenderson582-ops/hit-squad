@@ -37,6 +37,33 @@ describe("desk counts", () => {
     assert.equal(jobByCode("NO-SUCH"), undefined);
   });
 
+  it("owner first paint includes local and snapshot packs without waiting a vault tick", () => {
+    const aromatics = {
+      packId: "new-aromatics-2027",
+      key: "new:new-aromatics-2027",
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+      ownerEmail: "robertmhenderson582@gmail.com",
+    };
+    const cat = {
+      packId: "new-mtaajdwa-f7539",
+      key: "new:new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    const firstPaint = jobsOnDesk(undefined, [aromatics, cat], false);
+    assert.equal(firstPaint.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+    assert.equal(firstPaint.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  });
+
   it("keeps owner seed jobs after header nav and hides them while following", () => {
     const cat2 = {
       packId: "new-mtaajdwa-f7539",
