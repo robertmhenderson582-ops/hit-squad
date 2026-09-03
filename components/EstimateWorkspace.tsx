@@ -102,10 +102,10 @@ export function EstimateWorkspace({
   const boundSite = jobSite || site || "";
   const tabs = estimateTabsForSite(boundSite, boundClient, status);
 
-  function exportWorkbook() {
+  async function exportWorkbook() {
     setExportError("");
     try {
-      const bytes = estimateToXlsx({
+      const bytes = await estimateToXlsx({
         title: name || crumb,
         client: boundClient,
         site: boundSite,

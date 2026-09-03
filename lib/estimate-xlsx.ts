@@ -183,6 +183,11 @@ function rateCraftLabel(key: RateKey, keys: RateKey[]) {
   return collisions ? `${key.title} · ${key.laborClass}` : key.title;
 }
 
+function exportProducedLabel(when = new Date()): string {
+  const stamp = when.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  return `Produced ${stamp}`;
+}
+
 function headerCells(input: EstimateXlsxInput): SheetCell[] {
   const clock = boundOtLabel(input.site ?? "", input.client ?? "", input.plantCode ?? "");
   const who = [input.client, input.site, clock].filter((part) => String(part || "").trim()).join("  ·  ");
@@ -191,6 +196,7 @@ function headerCells(input: EstimateXlsxInput): SheetCell[] {
     { ref: "A2", type: "text", value: ESTIMATE_EXPORT_PRODUCER },
     { ref: "A3", type: "text", value: (input.title || "").trim() || "Estimate" },
     { ref: "A4", type: "text", value: who },
+    { ref: "A5", type: "text", value: exportProducedLabel() },
   ];
 }
 
@@ -643,7 +649,12 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
   if (moneyRefs.length) pushFormula(cells, `B${totalRow}`, `SUM(${moneyRefs.join(",")})`);
   else pushNum(cells, `B${totalRow}`, 0);
 
-  return { name: ESTIMATE_XLSX_SHEETS.summary, cells, sheetTotal: `B${totalRow}` };
+  return {
+    name: ESTIMATE_XLSX_SHEETS.summary,
+    cells,
+    sheetTotal: `B${totalRow}`,
+    merges: ["A1:B1", "A3:B3"],
+  };
 }
 
 export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSheet[] {
@@ -692,10 +703,10 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   return [{ ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) }, ...body];
 }
 
-export function estimateToXlsx(input: EstimateXlsxInput = {}): Uint8Array {
+export async function estimateToXlsx(input: EstimateXlsxInput = {}): Promise<Uint8Array> {
   const sheets = buildEstimateWorkbook(input);
   if (!sheets.length) throw new Error("empty-workbook");
-  const bytes = buildWorkbook(sheets);
+  const bytes = await buildWorkbook(sheets);
   if (!bytes.byteLength) throw new Error("empty-workbook");
   return bytes;
 }

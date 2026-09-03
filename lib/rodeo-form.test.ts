@@ -64,10 +64,10 @@ describe("Rodeo hinge remap", () => {
     assert.equal(lines[0]?.compositeRate, compositeRate(lines[0]!.dollars, lines[0]!.hours));
   });
 
-  it("strips the plant name Rodeo from UNIT and errors instead of a silent empty file", () => {
+  it("strips the plant name Rodeo from UNIT and errors instead of a silent empty file", async () => {
     assert.equal(sanitizeRodeoUnit("Rodeo"), "");
     assert.equal(sanitizeRodeoUnit("CAT"), "CAT");
-    const bytes = rodeoFormToXlsx({
+    const bytes = await rodeoFormToXlsx({
       form: { tarUnit: "Rodeo", contractor: "Hit Squad", block: "A" },
       crew: {},
       site: "Rodeo — Rodeo, CA",
