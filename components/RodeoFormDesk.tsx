@@ -13,6 +13,7 @@ import {
   sanitizeRodeoUnit,
 } from "@/lib/rodeo-form";
 import { downloadXlsx } from "@/lib/xlsx-minimal";
+import { wageLookupOpts } from "@/lib/wage-lookup";
 
 export function RodeoFormDesk({
   client = "",
@@ -26,7 +27,7 @@ export function RodeoFormDesk({
   const pack = useEstimatePackage();
   const form = hydrateRodeoForm(pack.jobMeta.rodeoForm);
   const [error, setError] = useState("");
-  const lines = rodeoLaborLines(pack.crew, site, client);
+  const lines = rodeoLaborLines(pack.crew, site, client, wageLookupOpts(site));
   const totals = rodeoBucketTotals(lines);
 
   function patchForm(patch: Partial<typeof form>) {
@@ -45,6 +46,7 @@ export function RodeoFormDesk({
         site,
         client,
         title: name,
+        opts: wageLookupOpts(site),
       });
       if (!bytes.byteLength) throw new Error("empty-rodeo-form");
       downloadXlsx(rodeoFormFilename(name), bytes);

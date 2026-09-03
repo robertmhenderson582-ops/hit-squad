@@ -60,7 +60,7 @@ export function HseDay1Card({
         .map((row) => row.position)
         .filter(Boolean),
       equipment: [
-        ...equipment.largeTools.map((row) => row.item),
+        ...equipment.largeTools.map((row) => row.itemId),
         ...equipment.thirdParty.map((row) => row.item),
       ].filter(Boolean),
       subs: [...subs.cards.map((card) => card.vendor), ...subs.lines.map((line) => line.vendor)].filter(Boolean),

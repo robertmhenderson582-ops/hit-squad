@@ -1,7 +1,6 @@
 import { computeRangeHours, type HoursSplit } from "./hours-clock.ts";
 import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
 import {
-  lookupShahanLabor,
   shahanCrewCostAmount,
   shahanCrewTitle,
   type ShahanLookupOpts,
@@ -158,17 +157,6 @@ export function subsContingencyDollars(vendorCardsAndOneOffs: number, pct: numbe
 
 function emptySplit(): HoursSplit {
   return { st: 0, ot: 0, dt: 0, pd: 0, hours: 0, workedDays: 0 };
-}
-
-function addSplit(left: HoursSplit, right: Pick<HoursSplit, "st" | "ot" | "dt">): HoursSplit {
-  return {
-    st: left.st + right.st,
-    ot: left.ot + right.ot,
-    dt: left.dt + right.dt,
-    pd: left.pd,
-    hours: left.hours + right.st + right.ot + right.dt,
-    workedDays: left.workedDays,
-  };
 }
 
 function splitHoursOnDate(

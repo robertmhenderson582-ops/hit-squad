@@ -1,8 +1,7 @@
 import { computeRowHours } from "./hours-clock.ts";
-import { shahanCrewCostAmount, shahanCrewTitle } from "./shahan-wood-river.ts";
+import { shahanCrewCostAmount, shahanCrewTitle, type ShahanLookupOpts } from "./shahan-wood-river.ts";
 import { defaultLaborClass } from "./labor-class.ts";
 import { buildXlsx, type SheetCell } from "./xlsx-minimal.ts";
-import { wageLookupOpts } from "./wage-lookup.ts";
 
 export const RODEO_TAB_ID = "rodeo";
 export const RODEO_TAB_LABEL = "Rodeo";
@@ -122,6 +121,7 @@ export function rodeoLaborLines(
   crew: RodeoCrew,
   site = "",
   client = "",
+  opts: ShahanLookupOpts = {},
 ): RodeoLaborLine[] {
   const lanes: Array<["staff" | "generalForeman" | "foreman" | "direct" | "support", RodeoCrewRow[] | undefined]> = [
     ["staff", crew.staff],
@@ -137,7 +137,7 @@ export function rodeoLaborLines(
       const hours = computeRowHours(row, site, client, crew.otAfter8);
       const title = shahanCrewTitle(row);
       const dollars = shahanCrewCostAmount(title, hours, {
-        ...wageLookupOpts(site),
+        ...opts,
         laborClass: row.laborClassOverride ?? defaultLaborClass(title),
       });
       lines.push({
@@ -177,9 +177,10 @@ export function rodeoFillMap(input: {
   site?: string;
   client?: string;
   title?: string;
+  opts?: ShahanLookupOpts;
 }): { cells: SheetCell[]; lines: RodeoLaborLine[] } {
   const form = hydrateRodeoForm(input.form);
-  const lines = rodeoLaborLines(input.crew, input.site, input.client);
+  const lines = rodeoLaborLines(input.crew, input.site, input.client, input.opts);
   const totals = rodeoBucketTotals(lines);
   const cells: SheetCell[] = [
     { ref: "A1", type: "text", value: "HIT SQUAD / PROJECT CONTROLS" },
@@ -220,6 +221,7 @@ export function rodeoFormToXlsx(input: {
   site?: string;
   client?: string;
   title?: string;
+  opts?: ShahanLookupOpts;
 }): Uint8Array {
   const { cells } = rodeoFillMap(input);
   const bytes = buildXlsx("Rodeo form", cells);

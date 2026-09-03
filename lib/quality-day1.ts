@@ -1,6 +1,5 @@
 import { canSeeCompany, companyScopeFor, type CompanyScope } from "./companies.ts";
 import { hasBuildDesk, isOwner } from "./desk-role.ts";
-import { QUALITY_BRIEFS_VAULT_NAME, QUALITY_BRIEFS_VAULT_KIND } from "./drive-data.ts";
 import type { PublicLeadBrief } from "./lead-briefs.ts";
 import { PHASE_IDS, PHASE_NAMES, type PhaseRow } from "./phase-schedule.ts";
 
@@ -88,6 +87,6 @@ export function qualityPackageForSeat(
 }
 
 export const QUALITY_VAULT_NAMES = {
-  file: QUALITY_BRIEFS_VAULT_NAME,
-  kind: QUALITY_BRIEFS_VAULT_KIND,
+  file: "quality-briefs.json",
+  kind: "quality-briefs",
 };
