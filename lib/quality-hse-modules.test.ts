@@ -51,6 +51,7 @@ describe("Quality and HSE leave Job setup", () => {
   it("fails if Quality/HSE modules are missing that body", () => {
     const quality = source("../components/QualityDesk.tsx");
     const qualityCard = source("../components/QualityDay1Card.tsx");
+    const qualityLib = source("./quality-day1.ts");
     const rolling = source("../components/RollingChartMap.tsx");
     const hse = source("../components/HseDesk.tsx");
     const hseCard = source("../components/HseDay1Card.tsx");
@@ -58,17 +59,22 @@ describe("Quality and HSE leave Job setup", () => {
     assert.match(quality, /QualityDay1Card/);
     assert.match(quality, /RollingChartMap/);
     assert.match(quality, /QUALITY_PACKAGE_FORMS/);
-    assert.match(qualityCard, /2\.7\.1 Madison Pressure Test Record Rev 2/);
-    assert.match(qualityCard, /NDE req spreadsheet/);
+    assert.match(qualityLib, /2\.7\.1 Madison Pressure Test Record Rev 2/);
+    assert.match(qualityLib, /NDE req spreadsheet/);
     assert.match(qualityCard, /QUALITY_PACKAGE_FORMS/);
-    assert.match(rolling, /Steam Drum Rolling Chart/);
-    assert.match(rolling, /Generating Bank Retube Progression Chart/);
+    const rollingLib = source("./rolling-chart.ts");
+    assert.match(rollingLib, /Steam Drum Rolling Chart/);
+    assert.match(rollingLib, /Generating Bank Retube Progression Chart/);
+    assert.match(rollingLib, /Tube Final Roll/);
+    assert.match(rolling, /ROLLING_SHEETS/);
     assert.match(rolling, /Tube Final Roll/);
     assert.doesNotMatch(rolling, /elevation/i);
+    const hseLib = source("./hse-day1.ts");
     assert.match(hse, /HseDay1Card/);
     assert.match(hse, /HSE_PACKAGE_SLOTS/);
     assert.match(hseCard, /HSE_PACKAGE_SLOTS/);
-    assert.match(hseCard, /Site orientation/);
+    assert.match(hseLib, /Site orientation/);
+    assert.match(hseLib, /HSE_PACKAGE_SLOTS/);
     assert.match(detail, /QualityDay1Card/);
     assert.match(detail, /RollingChartMap/);
     assert.match(detail, /HseDay1Card/);
