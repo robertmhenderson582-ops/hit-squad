@@ -31,7 +31,13 @@ export function packOwnerEmailForWrite(
   existing?: string,
   pack?: { packId?: string; title?: string; client?: string; site?: string; siteId?: string },
 ) {
-  if (hisMatchForPack({ ...pack, ownerEmail: existing })) return NATHAN_DESK_EMAIL;
+  if (hisMatchForPack({ ...pack, ownerEmail: existing })) {
+    const current = canonicalEmail(existing) || (existing || "").trim().toLowerCase();
+    if (current === NATHAN_DESK_EMAIL || isOwnerIdentity(current)) {
+      return isOwnerIdentity(current) ? ownerVaultEmail() : NATHAN_DESK_EMAIL;
+    }
+    return NATHAN_DESK_EMAIL;
+  }
   if (isTester(user)) return user.email.trim().toLowerCase();
   const current = (existing || "").trim();
   if (current && (isOwnerVaultEmail(current) || isSamePerson(current, user.email))) {

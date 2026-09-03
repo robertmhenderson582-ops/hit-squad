@@ -57,6 +57,14 @@ describe("estimate vault scope", () => {
     assert.equal(packOwnerEmailForWrite(owner, tester.email), tester.email);
     assert.equal(packOwnerEmailForWrite(owner, "Robert Henderson"), OWNER_LOGIN_EMAIL);
     assert.equal(
+      packOwnerEmailForWrite(owner, OWNER_LOGIN_EMAIL, {
+        packId: "new-mtaajdwa-f7539",
+        title: "Madison CAT 2 (Pit Stop)",
+        site: "Wood River — Roxana, IL",
+      }),
+      OWNER_LOGIN_EMAIL,
+    );
+    assert.equal(
       packOwnerEmailForWrite(
         { email: "jameshcainjr@gmail.com", role: "tester" },
         "jameshcainjr@gmail.com",

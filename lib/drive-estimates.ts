@@ -8,7 +8,7 @@ import {
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
 import { applyHisIdentity, hisFileForPackId, hisKnownEstimateFiles, hisMatchForPack, NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
-import { canonicalEmail } from "./identity.ts";
+import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 
 export type DriveFile = {
   id: string;
@@ -583,7 +583,11 @@ export async function upsertEstimateInDrive(
       // keep tagged owner
     }
     const hisRestore =
-      hisMatchForPack(pack) && ownerEmail === NATHAN_DESK_EMAIL;
+      hisMatchForPack(pack) &&
+      ownerEmail === NATHAN_DESK_EMAIL &&
+      Boolean(currentOwner) &&
+      currentOwner !== NATHAN_DESK_EMAIL &&
+      !isOwnerIdentity(currentOwner);
     if (currentOwner && currentOwner !== ownerEmail && !hisRestore) {
       throw new Error("PACK_OWNED_ELSEWHERE");
     }

@@ -1,4 +1,5 @@
-import { canonicalEmail } from "./identity.ts";
+import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
+import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import type { LocalPack } from "./local-estimates.ts";
 
@@ -120,7 +121,14 @@ export function shouldPaintHisCards(user?: { email?: string; role?: string } | n
   return canonicalEmail(user.email) === NATHAN_DESK_EMAIL;
 }
 
-/** Restore Nathan identity. Does not add share rows or invent dollars. */
+function hisDeskOwnerEmail(existing?: string) {
+  const current = canonicalEmail(existing) || (existing || "").trim().toLowerCase();
+  if (current === NATHAN_DESK_EMAIL) return NATHAN_DESK_EMAIL;
+  if (isOwnerIdentity(current)) return OWNER_LOGIN_EMAIL;
+  return NATHAN_DESK_EMAIL;
+}
+
+/** Restore Nathan identity unless the owner already holds the pack. No share rows, no dollars. */
 export function applyHisIdentity<T extends HisIdentityPack>(pack: T, his?: HisWoodRiverFile | null): T {
   const row = his ?? hisMatchForPack(pack);
   if (!row) return pack;
@@ -130,7 +138,7 @@ export function applyHisIdentity<T extends HisIdentityPack>(pack: T, his?: HisWo
     client: row.client,
     site: row.site,
     siteId: row.siteId,
-    ownerEmail: NATHAN_DESK_EMAIL,
+    ownerEmail: hisDeskOwnerEmail(pack.ownerEmail),
   };
 }
 
