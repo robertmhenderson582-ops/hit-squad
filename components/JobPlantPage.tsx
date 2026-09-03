@@ -18,7 +18,7 @@ import { companyScopeFor } from "@/lib/companies";
 import { visibleDeskPacks } from "@/lib/estimate-scope";
 import { VIEW_RESPONSIBILITIES, VISUAL_ROSTER } from "@/lib/owner-desk";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
-import { jobByCode, plantJobTally, plantJobsLine, plantTabFromQuery, plantTabQuery, visibleSeedJobs, type PlantTab } from "@/lib/jobs";
+import { jobByCode, plantJobTally, plantJobsLine, plantTabFromQuery, plantTabQuery, seedJobsAllowed, visibleSeedJobs, type PlantTab } from "@/lib/jobs";
 import { listLocalPacks, localPackToJob } from "@/lib/local-estimates";
 
 const PLANTS: Record<string, { client: string; folder: string; name: string; city: string; plant: string; site: string }> = {
@@ -107,7 +107,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
     plant.name,
     plant.city,
   );
-  const tally = plantJobTally([...(viewingAs ? [] : visibleSeedJobs(scope)), ...localJobs]);
+  const tally = plantJobTally([...(viewingAs || !seedJobsAllowed(scope) ? [] : visibleSeedJobs(scope)), ...localJobs]);
   const openedEstimate = openedJob ? estimateForJob(openedJob, board?.estimates ?? []) : undefined;
 
   function setTab(next: PlantTab) {

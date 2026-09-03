@@ -223,6 +223,7 @@ export function bustHisLeftoverOnce(store?: StorageLike | null) {
   const ownerRows = rewriteHisLeftoverList(readOwnerPacks(target));
   writeOwnerPacks(ownerRows, target);
   clearHisJobMenuLeftover(target);
+  clearHisJobMenuLeftover(target, "nathan");
   markLeftoverGen(target);
 }
 
@@ -270,8 +271,10 @@ export function packsForViewedDesk(
   if (target) bustHisLeftoverOnce(target);
   const live = visibleDeskPacks(user, viewingAs, store);
   if (viewingAs) {
-    if (live.length || !seat) return live;
-    return readLensPacks(seat, store);
+    const next = seat ? mergeDeskPacks(live, readLensPacks(seat, store)) : live;
+    // View as Nathan still injects HIS Wood River cards. James / CBI stay off this merge.
+    if (shouldPaintHisCards(user)) return mergeHisWoodRiverCards(next);
+    return next;
   }
   const extras = [readOwnerPacks(store)];
   if (user) extras.push(localPacksOwnerShouldSee(user, store), lensPacksOwnerShouldSee(user, store));

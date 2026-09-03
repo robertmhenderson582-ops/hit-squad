@@ -1,6 +1,7 @@
 import { catalogVisibleTo, type CompanyScope } from "./companies.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { boardForUser } from "./desk-data.ts";
+import { shouldPaintHisCards } from "./his-wood-river.ts";
 import { isOwnerIdentity } from "./identity.ts";
 import { mergeLocalJobs, type LocalPack } from "./local-estimates.ts";
 import { omitDeletedJobs, type JobMenuState } from "./job-menu.ts";
@@ -87,6 +88,12 @@ export function seedJobsAllowed(scope?: CompanyScope | null) {
   return email !== "nathanboyte@gmail.com" && email !== JOHN_BEECH_EMAIL;
 }
 
+function isCatalogSeedJob(job: Pick<JobRecord, "id" | "code">) {
+  return seedJobs().some(
+    (seed) => seed.id === job.id || seed.code.toUpperCase() === (job.code || "").trim().toUpperCase(),
+  );
+}
+
 /** Owner/Sites seed jobs stay on the signed-in desk. Follow / View as uses that person's packs only. */
 export function packForJob<T extends { packId: string }>(
   job: { id: string },
@@ -104,9 +111,10 @@ export function jobsOnDesk(
   menu?: JobMenuState | null,
   opts?: { includeSeeds?: boolean },
 ) {
-  const fromServer = serverJobs ?? [];
-  const nextPacks = [...packs, ...dummyPacksForUser(scope).filter((pack) => !packs.some((row) => row.packId === pack.packId))];
   const includeSeeds = opts?.includeSeeds ?? seedJobsAllowed(scope);
+  // API / leftover catalog samples must not reappear on owner, Nathan, or John Beech.
+  const fromServer = (serverJobs ?? []).filter((job) => includeSeeds || !isCatalogSeedJob(job));
+  const nextPacks = [...packs, ...dummyPacksForUser(scope).filter((pack) => !packs.some((row) => row.packId === pack.packId))];
   const merged = viewingAs || !includeSeeds
     ? mergeLocalJobs(fromServer, nextPacks)
     : (() => {
@@ -114,7 +122,10 @@ export function jobsOnDesk(
         const seen = new Set(fromServer.map((job) => job.id));
         return mergeLocalJobs([...seeds.filter((job) => !seen.has(job.id)), ...fromServer], nextPacks);
       })();
-  return menu ? omitDeletedJobs(merged, menu, !viewingAs) : merged;
+  const keepHis =
+    !viewingAs ||
+    shouldPaintHisCards(scope ? { email: scope.email, role: scope.isOwner ? "owner" : undefined } : null);
+  return menu ? omitDeletedJobs(merged, menu, keepHis) : merged;
 }
 
 export function plantJobTally(jobs: JobRecord[] = JOBS) {
@@ -159,8 +170,9 @@ export function jobPlantHref(code: string, tab?: PlantTab | string | null) {
 }
 
 export function deskForUser(userId: string, scope?: CompanyScope | null): DeskBoard {
-  const jobs =
-    userId === "owner-robert-henderson" || scope?.isOwner
+  const jobs = !seedJobsAllowed(scope)
+    ? []
+    : userId === "owner-robert-henderson" || scope?.isOwner
       ? JOBS
       : visibleSeedJobs(scope);
   return {
