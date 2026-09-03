@@ -21,6 +21,15 @@ export const HSE_BRIEFS_VAULT_KIND = "hse-briefs";
 
 export const DRIVE_WRITE_ERROR = "Could not save. Try again.";
 
+/** Production seats.json. Shared with the vault SA; the Estimates parent folder is not. */
+export const SEATS_VAULT_FILE_ID = "1d3lzLDxCPwC963fdplsnwYgrDEanohZc";
+
+const KNOWN_VAULT_FILE_IDS: Record<string, string> = {
+  [SEATS_VAULT_NAME]: SEATS_VAULT_FILE_ID,
+};
+
+const rememberedVaultFileIds = new Map<string, string>();
+
 export function briefsVault(kind: "quality" | "hse") {
   return kind === "hse"
     ? { name: HSE_BRIEFS_VAULT_NAME, kind: HSE_BRIEFS_VAULT_KIND }
@@ -41,15 +50,75 @@ function matchesVaultFile(file: DriveFile, name: string, kind: string) {
   return file.properties?.kind === kind || file.name === name;
 }
 
-export async function findVaultJsonFile(adapter: DriveAdapter, name: string, kind: string, folderId = dataFolderId()) {
-  if (!adapter.configured) return null;
-  const files = await adapter.listJson(folderId);
+function vaultFileKey(name: string, kind: string) {
+  return `${kind}:${name}`;
+}
+
+function vaultEnvFileId(name: string, env: Record<string, string | undefined> = process.env) {
+  const slug = name.replace(/\.json$/i, "").replace(/[^A-Za-z0-9]+/g, "_").toUpperCase();
+  return env[`DRIVE_${slug}_FILE_ID`]?.trim() || "";
+}
+
+export function rememberVaultFileId(name: string, kind: string, id: string) {
+  if (id) rememberedVaultFileIds.set(vaultFileKey(name, kind), id);
+}
+
+export function resetVaultFileIdsForTests() {
+  rememberedVaultFileIds.clear();
+}
+
+function pickNewestMatch(files: DriveFile[], name: string, kind: string) {
   const matches = files.filter((file) => matchesVaultFile(file, name, kind));
   if (!matches.length) return null;
   return (
     [...matches].sort((left, right) => (right.modifiedTime || "").localeCompare(left.modifiedTime || ""))[0] ??
     matches[0]
   );
+}
+
+async function listFolderJson(adapter: DriveAdapter, folderId: string) {
+  try {
+    return await adapter.listJson(folderId);
+  } catch {
+    return [];
+  }
+}
+
+async function listAccessibleVaultJson(adapter: DriveAdapter, name: string) {
+  if (!adapter.listAccessibleJson) return [];
+  try {
+    return await adapter.listAccessibleJson(name);
+  } catch {
+    return [];
+  }
+}
+
+async function fileFromStoredId(adapter: DriveAdapter, name: string, kind: string) {
+  const id =
+    rememberedVaultFileIds.get(vaultFileKey(name, kind)) || vaultEnvFileId(name) || KNOWN_VAULT_FILE_IDS[name] || "";
+  if (!id) return null;
+  try {
+    await adapter.readJson(id);
+  } catch {
+    return null;
+  }
+  rememberVaultFileId(name, kind, id);
+  return { id, name, properties: { kind } };
+}
+
+export async function findVaultJsonFile(adapter: DriveAdapter, name: string, kind: string, folderId = dataFolderId()) {
+  if (!adapter.configured) return null;
+  const fromFolder = pickNewestMatch(await listFolderJson(adapter, folderId), name, kind);
+  if (fromFolder) {
+    rememberVaultFileId(name, kind, fromFolder.id);
+    return fromFolder;
+  }
+  const fromAccessible = pickNewestMatch(await listAccessibleVaultJson(adapter, name), name, kind);
+  if (fromAccessible) {
+    rememberVaultFileId(name, kind, fromAccessible.id);
+    return fromAccessible;
+  }
+  return fileFromStoredId(adapter, name, kind);
 }
 
 export async function readVaultJson<T>(
@@ -73,6 +142,9 @@ export async function writeVaultJson(
   const payload = `${JSON.stringify(data, null, 2)}\n`;
   const properties = { kind };
   const existing = await findVaultJsonFile(adapter, name, kind, folderId);
-  if (existing) return adapter.updateJson(existing.id, payload, name, properties);
-  return adapter.createJson(folderId, name, payload, properties);
+  const written = existing
+    ? await adapter.updateJson(existing.id, payload, name, properties)
+    : await adapter.createJson(folderId, name, payload, properties);
+  if (written?.id) rememberVaultFileId(name, kind, written.id);
+  return written;
 }

@@ -13,8 +13,8 @@ import { JOSEPH_EMAIL, SHANE_EMAIL, TESTER_SEATS } from "./tester-seats.ts";
 import { assignedCompany, resetCompanyAssignmentsForTests } from "./companies-store.ts";
 import { lensPeopleFromSeats } from "./desk-people.ts";
 import { canLookupRates, canUseRateBuilder, canUseViewAs } from "./desk-role.ts";
-import { SEATS_VAULT_KIND, SEATS_VAULT_NAME, writeVaultJson } from "./drive-data.ts";
-import { memoryDrive } from "./drive-estimates.ts";
+import { SEATS_VAULT_FILE_ID, SEATS_VAULT_KIND, SEATS_VAULT_NAME, writeVaultJson } from "./drive-data.ts";
+import { memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
 import {
   claimFirstPassword,
   createSeat,
@@ -63,7 +63,11 @@ process.env.COMPANY_ASSIGNMENT_PATH = companyFile;
 process.env.AUTH_SECRET = "test-auth-secret-16chars";
 
 async function wipePersisted() {
-  await flushSeatVault();
+  try {
+    await flushSeatVault();
+  } catch {
+    // A prior confirm write may have rejected; drop that adapter before the next test.
+  }
   if (existsSync(seatFile)) unlinkSync(seatFile);
   resetUsersForTests();
   resetCompanyAssignmentsForTests();
@@ -1072,4 +1076,68 @@ test("confirmOwnPasswordWrite still 503s when writeVaultJson throws", async () =
     assert.equal(changed.status, 503);
     assert.equal(changed.error, "Password was not saved. Try again.");
   }
+});
+
+function unlistableSeatsDrive(listJson: DriveAdapter["listJson"]) {
+  const inner = memoryDrive();
+  inner.files.set(SEATS_VAULT_FILE_ID, {
+    file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+    content: `${JSON.stringify({ hashes: {}, extras: [] })}\n`,
+  });
+  const drive: DriveAdapter & { files: typeof inner.files; updatedIds: string[] } = {
+    configured: true,
+    files: inner.files,
+    updatedIds: [],
+    listJson,
+    async listAccessibleJson() {
+      return [];
+    },
+    readJson: (fileId) => inner.readJson(fileId),
+    async createJson() {
+      throw new Error("createJson must not run when seats.json is reachable by id");
+    },
+    async updateJson(fileId, content, name, properties) {
+      drive.updatedIds.push(fileId);
+      return inner.updateJson(fileId, content, name, properties);
+    },
+    deleteJson: (fileId) => inner.deleteJson(fileId),
+  };
+  return drive;
+}
+
+async function assertPasswordSaveAgainstUnlistableFolder(listJson: DriveAdapter["listJson"]) {
+  const drive = unlistableSeatsDrive(listJson);
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  const stored = findUserByEmail(OWNER_LOGIN_EMAIL);
+  assert.ok(stored);
+  stored.mustChangePassword = true;
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
+  assert.equal("ok" in changed, true);
+  if ("error" in changed) {
+    assert.equal(changed.error, "expected ok when updateJson of seats.json succeeded");
+    return;
+  }
+  assert.ok(drive.updatedIds.length >= 1);
+  assert.equal(
+    drive.updatedIds.every((id) => id === SEATS_VAULT_FILE_ID),
+    true,
+  );
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  assert.equal(ownerSeatCount(), 1);
+  const vaultRaw = [...drive.files.values()].map((row) => row.content).join();
+  assert.match(vaultRaw, /robertmhenderson582@gmail.com/i);
+  assert.equal(vaultRaw.includes(CHOSEN), false);
+  assert.equal(vaultRaw.includes(OWNER_SECRET), false);
+}
+
+test("confirmOwnPasswordWrite succeeds when listJson throws and seats.json is updated by id", async () => {
+  await assertPasswordSaveAgainstUnlistableFolder(async () => {
+    throw new Error("The user does not have sufficient permissions for this file.");
+  });
+});
+
+test("confirmOwnPasswordWrite succeeds when listJson is empty and seats.json is updated by id", async () => {
+  await assertPasswordSaveAgainstUnlistableFolder(async () => []);
 });

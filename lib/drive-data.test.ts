@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { beforeEach, describe, it } from "node:test";
 
 import {
   ACTIVITY_VAULT_KIND,
   ACTIVITY_VAULT_NAME,
   COMPANIES_VAULT_KIND,
   COMPANIES_VAULT_NAME,
+  SEATS_VAULT_FILE_ID,
   SEATS_VAULT_KIND,
   SEATS_VAULT_NAME,
   SETTINGS_VAULT_KIND,
@@ -20,11 +21,16 @@ import {
   INBOX_VAULT_NAME,
   findVaultJsonFile,
   readVaultJson,
+  resetVaultFileIdsForTests,
   writeVaultJson,
 } from "./drive-data.ts";
-import { memoryDrive } from "./drive-estimates.ts";
+import { memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
 
 describe("vault named json", () => {
+  beforeEach(() => {
+    resetVaultFileIdsForTests();
+  });
+
   it("writes and reads companies.json without inventing hall dollars", async () => {
     const drive = memoryDrive();
     const payload = { assignments: { "josephmhenderson2002@gmail.com": "acme" }, companies: [{ id: "acme", name: "Acme" }] };
@@ -83,5 +89,74 @@ describe("vault named json", () => {
     drive.files.get(newer.id)!.file.modifiedTime = "2026-09-02T21:00:00.000Z";
     const found = await findVaultJsonFile(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND);
     assert.equal(found?.id, newer.id);
+  });
+
+  it("updates vault JSON by accessible name or stored id when the parent folder cannot be listed", async () => {
+    resetVaultFileIdsForTests();
+    const inner = memoryDrive();
+    await writeVaultJson(inner, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, { tickets: [{ id: "t-keep" }] });
+    await writeVaultJson(inner, COMPANIES_VAULT_NAME, COMPANIES_VAULT_KIND, { companies: [{ id: "acme" }] });
+    inner.files.set(SEATS_VAULT_FILE_ID, {
+      file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+      content: `${JSON.stringify({ hashes: {}, extras: [] })}\n`,
+    });
+
+    async function throughUnlistable(listJson: DriveAdapter["listJson"]) {
+      const drive: DriveAdapter = {
+        configured: true,
+        listJson,
+        listAccessibleJson: (name) => inner.listAccessibleJson!(name),
+        readJson: (fileId) => inner.readJson(fileId),
+        async createJson() {
+          throw new Error("createJson must not run when the vault file already exists");
+        },
+        updateJson: (fileId, content, name, properties) => inner.updateJson(fileId, content, name, properties),
+        deleteJson: (fileId) => inner.deleteJson(fileId),
+      };
+      await writeVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, { tickets: [{ id: "t-updated" }] });
+      await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, { hashes: { "robertmhenderson582@gmail.com": {} } });
+      const tickets = await readVaultJson<{ tickets: Array<{ id: string }> }>(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND);
+      const seats = await readVaultJson<{ hashes: Record<string, unknown> }>(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
+      const companies = await readVaultJson<{ companies: Array<{ id: string }> }>(
+        drive,
+        COMPANIES_VAULT_NAME,
+        COMPANIES_VAULT_KIND,
+      );
+      assert.equal(tickets?.tickets[0].id, "t-updated");
+      assert.equal(Boolean(seats?.hashes["robertmhenderson582@gmail.com"]), true);
+      assert.equal(companies?.companies[0].id, "acme");
+    }
+
+    await throughUnlistable(async () => {
+      throw new Error("The user does not have sufficient permissions for this file.");
+    });
+    await throughUnlistable(async () => []);
+
+    const byStoredIdOnly: DriveAdapter = {
+      configured: true,
+      async listJson() {
+        return [];
+      },
+      async listAccessibleJson() {
+        return [];
+      },
+      readJson: (fileId) => inner.readJson(fileId),
+      async createJson() {
+        throw new Error("createJson must not run when seats.json is reachable by id");
+      },
+      updateJson: (fileId, content, name, properties) => inner.updateJson(fileId, content, name, properties),
+      deleteJson: (fileId) => inner.deleteJson(fileId),
+    };
+    const found = await findVaultJsonFile(byStoredIdOnly, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
+    assert.equal(found?.id, SEATS_VAULT_FILE_ID);
+    await writeVaultJson(byStoredIdOnly, SEATS_VAULT_NAME, SEATS_VAULT_KIND, {
+      hashes: { "robertmhenderson582@gmail.com": { mustChangePassword: false } },
+    });
+    const seats = await readVaultJson<{ hashes: Record<string, { mustChangePassword?: boolean }> }>(
+      byStoredIdOnly,
+      SEATS_VAULT_NAME,
+      SEATS_VAULT_KIND,
+    );
+    assert.equal(seats?.hashes["robertmhenderson582@gmail.com"]?.mustChangePassword, false);
   });
 });
