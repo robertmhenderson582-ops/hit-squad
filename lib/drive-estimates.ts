@@ -144,11 +144,11 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
     },
     async updateJson(fileId, content, name, properties) {
       const row = files.get(fileId);
-      if (!row) throw new Error("missing");
       const file: DriveFile = {
-        ...row.file,
-        name: name || row.file.name,
-        properties: properties || row.file.properties,
+        id: fileId,
+        name: name || row?.file.name || fileId,
+        properties: properties || row?.file.properties,
+        modifiedTime: row?.file.modifiedTime,
       };
       files.set(fileId, { file, content });
       return file;
