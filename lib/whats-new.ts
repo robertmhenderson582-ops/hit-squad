@@ -11,14 +11,14 @@ export const TESTER_WHATS_NEW = [
   "Hit Squad Project Controls V1.51.1",
   "• Quality and HSE are readable field modules with fillable forms.",
   "• Rolling chart: set up the bank, then mark tubes on the map.",
-  "• Company Jobs shows each job on the desk that owns it.",
+  "• Company Jobs cards name the desk that owns each job.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
   "Hit Squad Project Controls V1.51.1",
   "• Quality and HSE are readable field modules with fillable forms.",
   "• Rolling chart: set up the bank, then mark tubes on the map.",
-  "• Company Jobs shows each job on the desk that owns it.",
+  "• Company Jobs cards name the desk that owns each job.",
   "• Persist and Excel export stay. Madison manuals stay Madison-only.",
 ].join("\n");
 

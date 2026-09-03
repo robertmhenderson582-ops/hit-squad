@@ -6,7 +6,7 @@ import {
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
 import { ownerVaultEmail, packSharedEmails } from "./estimate-scope.ts";
-import { applyHisIdentity, hisMatchForPack } from "./his-wood-river.ts";
+import { applyHisIdentity, hisFileForPackId, hisMatchForPack, persistHisWoodRiverCards } from "./his-wood-river.ts";
 import { canonicalEmail, isSamePerson } from "./identity.ts";
 import { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import {
@@ -101,7 +101,10 @@ export async function hydrateFromVault(
     const packs = await hydratePromise;
     for (const pack of packs) mergeVaultIntoLocal(target, hisMatchForPack(pack) ? applyHisIdentity(pack) : pack);
     if (seat !== "owner") writeLensPacks(seat, packs.map((pack) => snapshotLensPack(hisMatchForPack(pack) ? applyHisIdentity(pack) : pack)), target);
-    else snapshotOwnerDesk({ email: ownerVaultEmail(), role: "owner" }, target);
+    else {
+      persistHisWoodRiverCards(target);
+      snapshotOwnerDesk({ email: ownerVaultEmail(), role: "owner" }, target);
+    }
     return packs;
   }
   hydrateSeat = seat;
@@ -124,16 +127,18 @@ export async function hydrateFromVault(
           }
         }
       }
+      if (!viewingAs) persistHisWoodRiverCards(target);
       if (data.persisted && !viewingAs) {
         const deskEmail = ownerVaultEmail();
         const namedLocal = listLocalPacks(target).filter((pack) => (pack.title || "").trim());
         const vaultIds = new Set(packs.map((pack) => pack.packId));
-        const missingNamed = namedLocal.filter((pack) => !vaultIds.has(pack.packId));
+        const missingNamed = namedLocal.filter((pack) => !vaultIds.has(pack.packId) && !hisMatchForPack(pack));
         const vaultThin = packs.length === 0 || missingNamed.length > 0 || packs.length < namedLocal.length;
         if (!vaultThin) {
           for (const packId of packsMissingFromVault(packs.map((pack) => pack.packId), target)) {
+            if (hisFileForPackId(packId) || hisMatchForPack({ packId })) continue;
             const leftover = findLocalPack(packId, target);
-            if (leftover && !isLeftoverOwnerCopy(leftover, deskEmail)) continue;
+            if (leftover && (hisMatchForPack(leftover) || !isLeftoverOwnerCopy(leftover, deskEmail))) continue;
             if (leftover && menuStatus({ id: packId, packId }, readJobMenu(target)) !== "transferred") {
               recordTransferredMenuItem(
                 {

@@ -75,6 +75,18 @@ describe("handoff seats", () => {
       handoffMarkText({ ownerEmail: "nathanboyte@gmail.com" }, OWNER_LOGIN_EMAIL),
       "Nathan Boyte's desk.",
     );
+    assert.equal(
+      handoffMarkText(
+        {
+          packId: "new-MTJ5D6-live",
+          title: "Wood River / T&M 2027-01 to 06",
+          ownerEmail: JAMES_EMAIL,
+          transferredToName: "James Cain",
+        },
+        OWNER_LOGIN_EMAIL,
+      ),
+      "Nathan Boyte's desk.",
+    );
     const sharedToOwner = { ownerEmail: "nathanboyte@gmail.com", sharedWith: [OWNER_LOGIN_EMAIL] };
     assert.equal(packSharedWithYou(sharedToOwner, OWNER_LOGIN_EMAIL), true);
     assert.equal(packSharedWithYou(sharedToOwner, "nathanboyte@gmail.com"), false);

@@ -1,10 +1,12 @@
-import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
+import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
-import type { LocalPack } from "./local-estimates.ts";
+import { listLocalPacks, rememberLocalPack, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
 /** Nathan’s Wood River HIS cards. Identity only — no dollars, no sheet contents. */
 export const NATHAN_DESK_EMAIL = "nathanboyte@gmail.com";
+export const NATHAN_DESK_NAME = "Nathan Boyte";
+const JAMES_DESK_EMAIL = "jameshcainjr@gmail.com";
 
 export type HisWoodRiverFile = {
   packId?: string;
@@ -24,6 +26,13 @@ export type HisIdentityPack = {
   site?: string;
   siteId?: string;
   ownerEmail?: string;
+  fileId?: string;
+  estimator?: string;
+  transferredTo?: string;
+  transferredToName?: string;
+  transferredFrom?: string;
+  transferredFromName?: string;
+  sharedWith?: string[];
 };
 
 /** Live Drive files. Never the thin Aromatics stub. Snapshots folder is frozen and omitted. */
@@ -74,34 +83,57 @@ export function hisKnownEstimateFiles() {
   return HIS_WOOD_RIVER_FILES.filter((row) => row.fileId !== HIS_AROMATICS_STUB_ID);
 }
 
+function normPackId(value = "") {
+  return value.trim().toLowerCase();
+}
+
+/** EST-MTJ5D6 comes from the first six chars after `new-`, any casing. */
+export function jobCodeFromPackId(packId = "") {
+  const id = packId.trim();
+  if (!id) return "";
+  return `EST-${id.replace(/^new-/i, "").slice(0, 6).toUpperCase()}`;
+}
+
 export function hisFileForPackId(packId: string) {
   const id = (packId || "").trim();
   if (!id) return null;
-  const exact = hisKnownEstimateFiles().find((row) => row.packId && row.packId === id);
+  const needle = normPackId(id);
+  const exact = hisKnownEstimateFiles().find((row) => row.packId && normPackId(row.packId) === needle);
   if (exact) return exact;
-  // Vault copy may be longer than the EST-MTJ5D6 paint id. Still the same T&M file.
-  if (id.startsWith(HIS_TM_PACK_ID)) {
+  const byPrefix = hisKnownEstimateFiles().find(
+    (row) => row.packId && needle.startsWith(normPackId(row.packId)) && normPackId(row.packId).length >= HIS_TM_PACK_ID.length,
+  );
+  if (byPrefix) return byPrefix;
+  // Live leftover may be new-MTJ5D6-… — job code still EST-MTJ5D6.
+  if (jobCodeFromPackId(id) === "EST-MTJ5D6") {
     return hisKnownEstimateFiles().find((row) => row.fileId === HIS_TM_FILE_ID) ?? null;
   }
   return null;
 }
 
 export function hisFileByDriveId(fileId: string) {
-  return hisKnownEstimateFiles().find((row) => row.fileId === fileId) ?? null;
+  const id = (fileId || "").trim();
+  if (!id) return null;
+  return hisKnownEstimateFiles().find((row) => row.fileId === id) ?? null;
 }
 
-function woodRiverSite(pack: HisIdentityPack) {
-  return /wood river|roxana|site-madison/i.test(`${pack.site || ""} ${pack.siteId || ""} ${pack.client || ""}`);
+function hisTitleKey(value = "") {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 /** Known Nathan Wood River jobs only. "New Turnaround estimate" is never a match. */
 export function hisMatchForPack(pack?: HisIdentityPack | null) {
   if (!pack) return null;
+  if (pack.fileId) {
+    const byFile = hisFileByDriveId(pack.fileId);
+    if (byFile) return byFile;
+  }
   const byId = pack.packId ? hisFileForPackId(pack.packId) : null;
   if (byId) return byId;
-  const title = (pack.title || "").trim();
-  if (!title || !woodRiverSite(pack)) return null;
-  return hisKnownEstimateFiles().find((row) => row.title === title) ?? null;
+  const title = hisTitleKey(pack.title);
+  if (!title) return null;
+  // Exact HIS title is enough. Leftover T&M often has an empty site until rememberLocalPack defaults it.
+  return hisKnownEstimateFiles().find((row) => hisTitleKey(row.title) === title) ?? null;
 }
 
 export function isHisWoodRiverPack(pack?: HisIdentityPack | null) {
@@ -111,13 +143,13 @@ export function isHisWoodRiverPack(pack?: HisIdentityPack | null) {
 export function isHisWoodRiverJob(job?: { title?: string; code?: string } | null) {
   if (!job) return false;
   if ((job.code || "").trim().toUpperCase() === "EST-MTJ5D6") return true;
-  const title = (job.title || "").trim();
-  return Boolean(title && hisKnownEstimateFiles().some((row) => row.title === title));
+  const title = hisTitleKey(job.title);
+  return Boolean(title && hisKnownEstimateFiles().some((row) => hisTitleKey(row.title) === title));
 }
 
 export function shouldPaintHisCards(user?: { email?: string; role?: string } | null) {
   if (!user) return true;
-  if (user.role === "owner") return true;
+  if (user.role === "owner" || isOwnerIdentity(user.email)) return true;
   return canonicalEmail(user.email) === NATHAN_DESK_EMAIL;
 }
 
@@ -128,17 +160,35 @@ function hisDeskOwnerEmail(existing?: string) {
   return NATHAN_DESK_EMAIL;
 }
 
+function isJamesStamp(value?: string) {
+  const key = canonicalEmail(value) || (value || "").trim().toLowerCase();
+  if (!key) return false;
+  return key === JAMES_DESK_EMAIL || isSamePerson(value, JAMES_DESK_EMAIL) || /james cain/i.test(value || "");
+}
+
 /** Restore Nathan identity unless the owner already holds the pack. No share rows, no dollars. */
 export function applyHisIdentity<T extends HisIdentityPack>(pack: T, his?: HisWoodRiverFile | null): T {
   const row = his ?? hisMatchForPack(pack);
   if (!row) return pack;
-  return {
+  const ownerEmail = hisDeskOwnerEmail(pack.ownerEmail);
+  const next: T = {
     ...pack,
     title: row.title,
     client: row.client,
     site: row.site,
     siteId: row.siteId,
-    ownerEmail: hisDeskOwnerEmail(pack.ownerEmail),
+    ownerEmail,
+  };
+  if (ownerEmail !== NATHAN_DESK_EMAIL) return next;
+  // Leftover may keep James on transferredToName / estimator while ownerEmail is restamped.
+  return {
+    ...next,
+    estimator: isJamesStamp(pack.estimator) ? NATHAN_DESK_NAME : pack.estimator,
+    transferredTo: isJamesStamp(pack.transferredTo) ? undefined : pack.transferredTo,
+    transferredToName: isJamesStamp(pack.transferredToName) ? undefined : pack.transferredToName,
+    transferredFrom: isJamesStamp(pack.transferredFrom) ? undefined : pack.transferredFrom,
+    transferredFromName: isJamesStamp(pack.transferredFromName) ? undefined : pack.transferredFromName,
+    sharedWith: Array.isArray(pack.sharedWith) ? pack.sharedWith.filter((email) => !isJamesStamp(email)) : pack.sharedWith,
   };
 }
 
@@ -165,14 +215,17 @@ export function hisWoodRiverCards(): LocalPack[] {
 
 function hisCardAlreadyPresent(packs: LocalPack[], card: LocalPack) {
   return packs.some((row) => {
-    if (row.packId === card.packId) return true;
+    if (normPackId(row.packId) === normPackId(card.packId)) return true;
     const match = hisMatchForPack(row);
-    if (match && match.packId === card.packId) return true;
-    return row.title === card.title && (row.siteId === card.siteId || row.site === card.site);
+    if (match && match.packId && normPackId(match.packId) === normPackId(card.packId)) return true;
+    if (jobCodeFromPackId(row.packId) === jobCodeFromPackId(card.packId) && jobCodeFromPackId(card.packId) === "EST-MTJ5D6") {
+      return true;
+    }
+    return hisTitleKey(row.title) === hisTitleKey(card.title);
   });
 }
 
-/** Identity cards only when the desk does not already have that job (by packId or title). */
+/** Identity cards only when the desk does not already have that job (by packId, job code, or title). */
 export function mergeHisWoodRiverCards(packs: LocalPack[]): LocalPack[] {
   const next = packs.map((pack) => {
     const his = hisMatchForPack(pack);
@@ -180,6 +233,35 @@ export function mergeHisWoodRiverCards(packs: LocalPack[]): LocalPack[] {
   });
   const extras = hisWoodRiverCards().filter((row) => !hisCardAlreadyPresent(next, row));
   return [...next, ...extras];
+}
+
+/** After leftover hydrate, restamp matches and keep Aromatics / CAT / T&M on the desk. Identity only. */
+export function persistHisWoodRiverCards(store?: StorageLike | null): LocalPack[] {
+  if (!store) return [];
+  const painted = mergeHisWoodRiverCards(listLocalPacks(store));
+  for (const pack of painted) {
+    if (!hisMatchForPack(pack)) continue;
+    rememberLocalPack(
+      {
+        packId: pack.packId,
+        title: pack.title,
+        client: pack.client,
+        site: pack.site,
+        size: pack.size,
+        ownerEmail: pack.ownerEmail,
+        archived: pack.archived,
+        estimator: pack.estimator,
+        sharedWith: pack.sharedWith,
+        transferredFrom: pack.transferredFrom,
+        transferredTo: pack.transferredTo,
+        transferredToName: pack.transferredToName,
+        transferredFromName: pack.transferredFromName,
+        replaceHandoff: true,
+      },
+      store,
+    );
+  }
+  return mergeHisWoodRiverCards(listLocalPacks(store));
 }
 
 export function hisCardToSnapshot(row: HisWoodRiverFile & { packId: string }): EstimatePackSnapshot {
