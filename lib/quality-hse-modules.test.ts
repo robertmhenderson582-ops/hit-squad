@@ -3,6 +3,8 @@ import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import { qualityNotify } from "./quality-day1.ts";
+import { hseNotify } from "./hse-day1.ts";
 import {
   CLIENT_FOLDERS,
   clientFolderId,
@@ -40,7 +42,27 @@ const JOB_SETUP_BODY =
 const DEAD_NAME_LIST =
   /QualityFormRoster|QUALITY_PACKAGE_FORMS\.map|<ul[\s\S]{0,80}HSE_PACKAGE_SLOTS|HSE_PACKAGE_SLOTS\.map/;
 
-describe("Quality and HSE stay off the estimate", () => {
+describe("Quality and HSE have no estimate interaction", () => {
+  it("keeps the Awarded notify hinge in code and does not fire it", () => {
+    assert.equal(qualityNotify("Awarded"), true);
+    assert.equal(qualityNotify("Estimate"), false);
+    assert.equal(qualityNotify("Submitted"), false);
+    assert.equal(hseNotify("Awarded"), true);
+    assert.equal(hseNotify("Estimate"), false);
+    const workspace = source("../components/EstimateWorkspace.tsx");
+    const setup = source("../components/JobSetupCard.tsx");
+    const quality = source("../components/QualityDesk.tsx");
+    const hse = source("../components/HseDesk.tsx");
+    assert.doesNotMatch(workspace, /qualityNotify|hseNotify/);
+    assert.doesNotMatch(setup, /qualityNotify|hseNotify|onOpenQuality|onOpenHse/);
+    assert.doesNotMatch(quality, /qualityNotify|qualityLive/);
+    assert.doesNotMatch(hse, /hseNotify/);
+    assert.match(source("./quality-hse-modules.ts"), /No interaction with the estimate/);
+    const modules = source("../components/FutureModulesDesk.tsx");
+    assert.match(modules, /No estimate interaction unless a lead/);
+    assert.match(modules, /Quality and HSE are fillable modules/);
+  });
+
   it("fails if Job setup still renders Quality/HSE body or doors", () => {
     const setup = source("../components/JobSetupCard.tsx");
     assert.doesNotMatch(setup, JOB_SETUP_BODY);

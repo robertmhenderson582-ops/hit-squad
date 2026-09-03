@@ -76,10 +76,12 @@ export function qualityWorkNames(phases: PhaseRow[] = []) {
   return PHASE_IDS.filter((id) => phases.some((phase) => phase.id === id && phase.on)).map((id) => PHASE_NAMES[id]);
 }
 
+/** Awarded / live hinge. Kept for a later lead ask. V1.50 does not fire this interaction. */
 export function qualityLive(status = "") {
   return status === "Awarded" || status === "Submitted" || status === "Estimate";
 }
 
+/** Estimate → Quality notify hinge. Kept inactive. Do not delete. */
 export function qualityNotify(status = "") {
   return status === "Awarded";
 }

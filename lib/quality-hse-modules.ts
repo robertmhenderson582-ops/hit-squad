@@ -7,7 +7,10 @@ export const QUALITY_TAB_LABEL = "Quality";
 export const HSE_TAB_ID = "hse";
 export const HSE_TAB_LABEL = "HSE";
 
-/** Quality and HSE are independent modules. They never appear on the estimate. */
+/**
+ * Independent fillable modules. No interaction with the estimate unless a lead later asks.
+ * This hinge stays in code and stays off — it does not stop Chance, Wendell, or Benny from filling /quality and /hse.
+ */
 export function showsQualityHseModules(status = "") {
   void status;
   return false;

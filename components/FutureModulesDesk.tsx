@@ -17,8 +17,9 @@ export function FutureModulesDesk() {
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Future modules</h2>
         <p className="mt-2 text-sm text-[#5b6f73]">
-          HSE, Quality, Accounting, Payroll, Team, and Scheduling are not peer header links. They live here.
-          Chrome only — no invented boards, no Checks numbers, no clocks.
+          Quality and HSE are fillable modules on their own desks. No estimate interaction unless a lead
+          later asks. Accounting, Payroll, Team, and Scheduling stay chrome only — no invented boards, no
+          Checks numbers, no clocks.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {FUTURE_MODULES.map((item) => (

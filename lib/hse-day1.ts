@@ -47,6 +47,7 @@ export function hydrateHseDay1(raw: Partial<HseDay1> | Record<string, unknown> |
   return { slots };
 }
 
+/** Estimate → HSE notify hinge. Kept inactive. Do not delete. */
 export function hseNotify(status = "") {
   return status === "Awarded";
 }
