@@ -148,6 +148,7 @@ export function hydrateRollingChart(
     for (const step of ROLL_STEPS) {
       if (item.steps?.[step.id] === true) steps[step.id] = true;
     }
+    if (steps["hole-repaired"] && !steps["hole-marked"]) delete steps["hole-repaired"];
     const actualTubeId = typeof item.actualTubeId === "string" ? item.actualTubeId : "";
     const drumHoleId = typeof item.drumHoleId === "string" ? item.drumHoleId : "";
     const holeKind = asHoleKind(item.holeKind);
@@ -234,9 +235,27 @@ export function stepCount(tube: RollingTube) {
   return ROLL_STEPS.filter((step) => tube.steps[step.id]).length;
 }
 
+/** Repair exists only after Marked For Repair. Productivity Yes/No is the step mark. */
+export function applyRollSteps(
+  steps: Partial<Record<RollStepId, boolean>>,
+  id: RollStepId,
+  on: boolean,
+): Partial<Record<RollStepId, boolean>> {
+  const next: Partial<Record<RollStepId, boolean>> = { ...steps, [id]: on };
+  if (id === "hole-marked" && !on) delete next["hole-repaired"];
+  if (next["hole-repaired"] && !next["hole-marked"]) delete next["hole-repaired"];
+  if (!on) delete next[id];
+  return next;
+}
+
+export function canMarkRepair(tube: RollingTube) {
+  return Boolean(tube.steps["hole-marked"]);
+}
+
 export function lastMarkedStep(tube: RollingTube): RollStepId | null {
   let last: RollStepId | null = null;
   for (const step of ROLL_STEPS) {
+    if (step.id === "hole-repaired" && !tube.steps["hole-marked"]) continue;
     if (tube.steps[step.id]) last = step.id;
   }
   return last;
@@ -246,8 +265,51 @@ export function stepMark(step: RollStepId | null) {
   return ROLL_STEPS.find((item) => item.id === step)?.mark ?? "";
 }
 
+/** BWG decimal inches. Typed BWG or a decimal/fraction wall. */
+export const BWG_INCHES: Record<string, number> = {
+  "7": 0.18,
+  "8": 0.165,
+  "9": 0.148,
+  "10": 0.134,
+  "11": 0.12,
+  "12": 0.109,
+  "13": 0.095,
+  "14": 0.083,
+};
+
+export function parseWallInches(raw: string): number | null {
+  const text = raw.trim().toLowerCase().replace(/bwg/g, "").replace(/\s+/g, "");
+  if (!text) return null;
+  if (BWG_INCHES[text]) return BWG_INCHES[text];
+  const fraction = /^(\d+)\/(\d+)$/.exec(text);
+  if (fraction) {
+    const value = Number(fraction[1]) / Number(fraction[2]);
+    return Number.isFinite(value) && value > 0 && value < 2 ? value : null;
+  }
+  const value = Number(text);
+  return Number.isFinite(value) && value > 0 && value < 2 ? value : null;
+}
+
 export function jobTubeOd(state: RollingChartState) {
   return state.averageTubeOd.trim() || state.tubeOd;
+}
+
+/** Tube ID from the typed average, or OD minus two walls. Empty stays empty. */
+export function derivedTubeId(state: RollingChartState): number | null {
+  if (state.averageTubeId.trim()) {
+    const value = Number(state.averageTubeId);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+  const od = Number(jobTubeOd(state));
+  const wall = parseWallInches(state.tubeWall);
+  if (!Number.isFinite(od) || od <= 0 || wall == null) return null;
+  const id = od - 2 * wall;
+  return id > 0 ? Math.round(id * 10000) / 10000 : null;
+}
+
+export function jobTubeId(state: RollingChartState) {
+  const value = derivedTubeId(state);
+  return value == null ? "" : String(value);
 }
 
 export function defaultHoleId(od: string) {
@@ -262,7 +324,7 @@ export function effectiveDrumHoleId(tube: RollingTube, state: RollingChartState)
   return defaultHoleId(jobTubeOd(state));
 }
 
-/** Empty Actual Tube ID stays empty — no workbook formula noise. */
+/** Empty Actual Tube ID stays empty — no workbook formula noise, never 0 / -0.26 / #VALUE. */
 export function wallReductionPct(actualId: string, avgId: string, avgOd: string): number | null {
   if (!actualId.trim()) return null;
   const actual = Number(actualId);
@@ -271,7 +333,13 @@ export function wallReductionPct(actualId: string, avgId: string, avgOd: string)
   if (!Number.isFinite(actual) || !Number.isFinite(id) || !Number.isFinite(od)) return null;
   const span = od - id;
   if (span <= 0) return null;
-  return Math.round(((actual - id) / span) * 10000) / 100;
+  const pct = ((actual - id) / span) * 100;
+  if (!Number.isFinite(pct)) return null;
+  return Math.round(pct * 100) / 100;
+}
+
+export function wallReductionForTube(tube: RollingTube, state: RollingChartState): number | null {
+  return wallReductionPct(tube.actualTubeId, jobTubeId(state), jobTubeOd(state));
 }
 
 export function formatWallReduction(actualId: string, avgId: string, avgOd: string) {
@@ -287,9 +355,9 @@ export function targetWallReduction(state: RollingChartState) {
 /** Ideal ID only when a drum hole and tube dims exist. Never invent from an empty Actual ID. */
 export function idealTubeId(tube: RollingTube, state: RollingChartState): number | null {
   if (!effectiveDrumHoleId(tube, state)) return null;
-  const id = Number(state.averageTubeId);
+  const id = derivedTubeId(state);
   const od = Number(jobTubeOd(state));
-  if (!Number.isFinite(id) || !Number.isFinite(od)) return null;
+  if (id == null || !Number.isFinite(od)) return null;
   const span = od - id;
   if (span <= 0) return null;
   return Math.round((id + (targetWallReduction(state) / 100) * span) * 10000) / 10000;
@@ -344,18 +412,26 @@ export function wallReductionBand(
   return "over";
 }
 
-export function tubeCellMark(state: RollingChartState, tube: RollingTube) {
-  if (tube.holeKind === "skip") return "X";
-  if (tube.holeKind === "plug") return "P";
-  if (tube.holeKind === "dummy") return "D";
-  const band = wallReductionBand(
+export function wallReductionVsIdealForTube(tube: RollingTube, state: RollingChartState): number | null {
+  return wallReductionVsIdeal(tube.actualTubeId, jobTubeId(state), jobTubeOd(state), state.idealPercentageRoll || state.wallBandIdeal);
+}
+
+export function wallReductionBandForTube(tube: RollingTube, state: RollingChartState): WallBand | null {
+  return wallReductionBand(
     tube.actualTubeId,
-    state.averageTubeId,
+    jobTubeId(state),
     jobTubeOd(state),
     state.wallBandLow,
     state.wallBandHigh,
     state.wallBandIdeal || state.idealPercentageRoll,
   );
+}
+
+export function tubeCellMark(state: RollingChartState, tube: RollingTube) {
+  if (tube.holeKind === "skip") return "X";
+  if (tube.holeKind === "plug") return "P";
+  if (tube.holeKind === "dummy") return "D";
+  const band = wallReductionBandForTube(tube, state);
   if (band) return WALL_BAND_MARK[band];
   return stepMark(lastMarkedStep(tube));
 }
@@ -456,4 +532,18 @@ export function rollingProgression(state: RollingChartState): SheetProgress[] {
 
 export function rollingHasElevationField() {
   return false;
+}
+
+export type DrumMode = "both" | "steam" | "mud";
+
+export function drumMode(state: RollingChartState): DrumMode {
+  if (state.steamDrum && !state.mudDrum) return "steam";
+  if (!state.steamDrum && state.mudDrum) return "mud";
+  return "both";
+}
+
+export function drumsFromMode(mode: string): { steamDrum: boolean; mudDrum: boolean } {
+  if (mode === "steam") return { steamDrum: true, mudDrum: false };
+  if (mode === "mud") return { steamDrum: false, mudDrum: true };
+  return { steamDrum: true, mudDrum: true };
 }

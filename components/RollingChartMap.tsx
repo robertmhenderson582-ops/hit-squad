@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { FieldBlock } from "@/components/FieldMark";
 import {
   CIRCUIT_HINT,
@@ -13,15 +13,20 @@ import {
   TUBE_OD_CHOICES,
   WALL_BAND_HINTS,
   WALL_BAND_LABEL,
+  applyRollSteps,
   axisLabel,
+  canMarkRepair,
   chartSetupReady,
+  defaultHoleId,
+  drumMode,
   drumTubeKey,
+  drumsFromMode,
   emptyRollingChart,
   emptyRollingTube,
   effectiveDrumHoleId,
   formatIdealTubeId,
-  formatWallReduction,
   hydrateRollingChart,
+  jobTubeOd,
   lastMarkedStep,
   liveCircuitCount,
   liveSideCount,
@@ -32,8 +37,9 @@ import {
   sideWallTubeKey,
   stepCount,
   tubeCellMark,
-  wallReductionBand,
-  wallReductionVsIdeal,
+  wallReductionBandForTube,
+  wallReductionForTube,
+  wallReductionVsIdealForTube,
   type HoleKind,
   type RollStepId,
   type RollingChartState,
@@ -62,14 +68,7 @@ const BAND_COLORS: Record<WallBand, string> = {
 };
 
 function tubeStyle(state: RollingChartState, tube: RollingTube, selected: boolean): React.CSSProperties {
-  const band = wallReductionBand(
-    tube.actualTubeId,
-    state.averageTubeId,
-    state.averageTubeOd || state.tubeOd,
-    state.wallBandLow,
-    state.wallBandHigh,
-    state.wallBandIdeal || state.idealPercentageRoll,
-  );
+  const band = wallReductionBandForTube(tube, state);
   const last = lastMarkedStep(tube);
   const fill = tube.holeKind
     ? "#d8d0c0"
@@ -105,6 +104,7 @@ export function RollingChartMap({
   const [circuitPage, setCircuitPage] = useState(1);
   const [jump, setJump] = useState("");
   const [zoom, setZoom] = useState(1);
+  const mapRef = useRef<HTMLDivElement | null>(null);
   const circuits = liveCircuitCount(state);
   const tubes = liveTubesPerCircuit(state);
   const ready = chartSetupReady(state);
@@ -140,36 +140,25 @@ export function RollingChartMap({
 
   function toggleStep(key: string, id: RollStepId, on: boolean) {
     const currentTube = readRollingTube(state, key);
-    patchTube(key, { steps: { ...currentTube.steps, [id]: on } });
+    if (id === "hole-repaired" && on && !canMarkRepair(currentTube)) return;
+    patchTube(key, { steps: applyRollSteps(currentTube.steps, id, on) });
   }
 
   function goCircuit(next: number) {
     const clamped = Math.min(circuits, Math.max(1, next));
     setCircuitPage(clamped);
     setJump(String(clamped));
+    requestAnimationFrame(() => {
+      mapRef.current?.querySelector(`#rolling-circuit-${clamped}`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
   }
 
-  const wall = picked
-    ? formatWallReduction(pickedTube.actualTubeId, state.averageTubeId, state.averageTubeOd || state.tubeOd)
-    : "";
-  const vsIdeal = picked
-    ? wallReductionVsIdeal(
-        pickedTube.actualTubeId,
-        state.averageTubeId,
-        state.averageTubeOd || state.tubeOd,
-        state.idealPercentageRoll || state.wallBandIdeal,
-      )
-    : null;
-  const band = picked
-    ? wallReductionBand(
-        pickedTube.actualTubeId,
-        state.averageTubeId,
-        state.averageTubeOd || state.tubeOd,
-        state.wallBandLow,
-        state.wallBandHigh,
-        state.wallBandIdeal || state.idealPercentageRoll,
-      )
-    : null;
+  const wr = picked ? wallReductionForTube(pickedTube, state) : null;
+  const wall = wr == null ? "" : String(wr);
+  const vsIdeal = picked ? wallReductionVsIdealForTube(pickedTube, state) : null;
+  const band = picked ? wallReductionBandForTube(pickedTube, state) : null;
+  const qaOpen = Boolean(pickedTube.steps["final-roll"]);
+  const holeMeasured = Boolean(pickedTube.steps["hole-cleaned"] || pickedTube.steps["hole-repaired"] || pickedTube.drumHoleId.trim());
   const idealId = picked ? formatIdealTubeId(pickedTube, state) : "";
   const drumHole = picked ? effectiveDrumHoleId(pickedTube, state) : "";
 
@@ -206,24 +195,15 @@ export function RollingChartMap({
               onChange={(event) => patchInputs({ tubesPerCircuit: event.target.value })}
             />
           </FieldBlock>
-          <FieldBlock label="Steam drum">
+          <FieldBlock label="Drums">
             <select
               className="paper-field mt-1"
-              value={state.steamDrum ? "on" : "off"}
-              onChange={(event) => patchInputs({ steamDrum: event.target.value === "on" })}
+              value={drumMode(state)}
+              onChange={(event) => patchInputs(drumsFromMode(event.target.value))}
             >
-              <option value="on">On</option>
-              <option value="off">Off</option>
-            </select>
-          </FieldBlock>
-          <FieldBlock label="Mud drum">
-            <select
-              className="paper-field mt-1"
-              value={state.mudDrum ? "on" : "off"}
-              onChange={(event) => patchInputs({ mudDrum: event.target.value === "on" })}
-            >
-              <option value="on">On</option>
-              <option value="off">Off</option>
+              <option value="both">Both</option>
+              <option value="steam">Steam</option>
+              <option value="mud">Mud</option>
             </select>
           </FieldBlock>
           <FieldBlock label="Side walls">
@@ -413,44 +393,62 @@ export function RollingChartMap({
               </label>
             </div>
             <p className="mt-2 text-sm text-[#163038]">
-              Circuit {page}. Tube numbers along the drum. Every fifth tube is labeled. Selected stays labeled.
+              One row is one generating-bank circuit. Tube numbers run along the drum. Every fifth
+              circuit and tube is labeled. Selected stays labeled. Steam and mud are two joints on
+              the same tube ID.
             </p>
-            <div className="mt-2 overflow-x-auto">
-              <div className="flex items-end gap-1" style={{ minWidth: tubes * (cellPx + 8) }}>
-                <span className="w-10 shrink-0 text-xs font-bold text-[#163038]">C{page}</span>
-                {Array.from({ length: tubes }, (_, index) => {
-                  const tube = index + 1;
-                  const key = drumTubeKey(sheet, page, tube);
+            <div ref={mapRef} className="mt-2 max-h-[min(70vh,36rem)] overflow-auto">
+              <div style={{ minWidth: 44 + tubes * (cellPx + 4) }}>
+                <div className="sticky top-0 z-[1] flex items-end gap-1 bg-[#fbf8f0] pb-1">
+                  <span className="sticky left-0 z-[2] w-10 shrink-0 bg-[#fbf8f0] text-xs font-bold text-[#163038]">C#</span>
+                  {Array.from({ length: tubes }, (_, index) => {
+                    const tube = index + 1;
+                    return (
+                      <span
+                        key={`axis-${tube}`}
+                        className="text-center text-xs font-bold text-[#163038]"
+                        style={{ width: cellPx, minWidth: cellPx }}
+                      >
+                        {axisLabel(tube, pickedMeta?.tube === tube)}
+                      </span>
+                    );
+                  })}
+                </div>
+                {Array.from({ length: circuits }, (_, circuitIndex) => {
+                  const circuit = circuitIndex + 1;
+                  const focused = circuit === page;
                   return (
-                    <span
-                      key={`axis-${tube}`}
-                      className="text-center text-xs font-bold text-[#163038]"
-                      style={{ width: cellPx, minWidth: cellPx }}
+                    <div
+                      key={circuit}
+                      id={`rolling-circuit-${circuit}`}
+                      className={`flex items-center gap-1 py-0.5 ${focused ? "bg-[#efe6d4]" : ""}`}
                     >
-                      {axisLabel(tube, picked === key)}
-                    </span>
-                  );
-                })}
-              </div>
-              <div className="mt-1 flex items-center gap-1" style={{ minWidth: tubes * (cellPx + 8) }}>
-                <span className="w-10 shrink-0 text-xs font-bold text-[#163038]">{page}</span>
-                {Array.from({ length: tubes }, (_, index) => {
-                  const tube = index + 1;
-                  const key = drumTubeKey(sheet, page, tube);
-                  const mark = readRollingTube(state, key);
-                  const selected = picked === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      title={`Circuit ${page} tube ${tube}`}
-                      aria-label={`Circuit ${page} tube ${tube}`}
-                      onClick={() => setPicked(key)}
-                      className="tube-cell"
-                      style={{ ...tubeStyle(state, mark, selected), width: cellPx, minWidth: cellPx, minHeight: cellPx }}
-                    >
-                      {tubeCellMark(state, mark) || (selected || tube % 5 === 0 ? String(tube) : "")}
-                    </button>
+                      <span className="sticky left-0 z-[1] w-10 shrink-0 bg-[#fbf8f0] text-xs font-bold text-[#163038]">
+                        {axisLabel(circuit, focused || pickedMeta?.circuit === circuit)}
+                      </span>
+                      {Array.from({ length: tubes }, (_, tubeIndex) => {
+                        const tube = tubeIndex + 1;
+                        const key = drumTubeKey(sheet, circuit, tube);
+                        const mark = readRollingTube(state, key);
+                        const selected = picked === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            title={`Circuit ${circuit} tube ${tube}`}
+                            aria-label={`Circuit ${circuit} tube ${tube}`}
+                            onClick={() => {
+                              setPicked(key);
+                              setCircuitPage(circuit);
+                            }}
+                            className="tube-cell"
+                            style={{ ...tubeStyle(state, mark, selected), width: cellPx, minWidth: cellPx, minHeight: cellPx }}
+                          >
+                            {tubeCellMark(state, mark) || (selected ? String(tube) : "")}
+                          </button>
+                        );
+                      })}
+                    </div>
                   );
                 })}
               </div>
@@ -558,17 +556,27 @@ export function RollingChartMap({
               : `${pickedMeta?.sheet === "steam" ? "Steam" : "Mud"} drum · circuit ${pickedMeta?.circuit} · tube ${pickedMeta?.tube}`}
           </p>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {ROLL_STEPS.map((step) => (
-              <label key={step.id} className="flex items-center gap-2 text-sm text-[#163038]">
-                <input
-                  type="checkbox"
-                  checked={Boolean(pickedTube.steps[step.id])}
-                  onChange={(event) => toggleStep(picked, step.id, event.target.checked)}
-                />
-                {step.mark} · {step.label}
-              </label>
-            ))}
+            {ROLL_STEPS.map((step) => {
+              const repairLocked = step.id === "hole-repaired" && !canMarkRepair(pickedTube);
+              return (
+                <label key={step.id} className="flex items-center justify-between gap-2 text-sm text-[#163038]">
+                  <span>
+                    {step.mark} · {step.label}
+                  </span>
+                  <select
+                    className="paper-field w-24"
+                    disabled={repairLocked}
+                    value={pickedTube.steps[step.id] ? "yes" : "no"}
+                    onChange={(event) => toggleStep(picked, step.id, event.target.value === "yes")}
+                  >
+                    <option value="no">No</option>
+                    <option value="yes">Yes</option>
+                  </select>
+                </label>
+              );
+            })}
           </div>
+          <p className="mt-2 text-sm text-[#163038]">Productivity Yes/No is the count. Repair stays off until Marked For Repair.</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <FieldBlock label="Hole kind">
               <select
@@ -583,38 +591,54 @@ export function RollingChartMap({
                 ))}
               </select>
             </FieldBlock>
-            <FieldBlock label="Drum hole ID">
-              <input
-                className="paper-field mt-1"
-                value={pickedTube.drumHoleId}
-                placeholder={drumHole && drumHole !== pickedTube.drumHoleId ? `job default ${drumHole}` : ""}
-                onChange={(event) => patchTube(picked, { drumHoleId: event.target.value })}
-              />
-            </FieldBlock>
+            {holeMeasured ? (
+              <FieldBlock label="Drum ID">
+                <input
+                  className="paper-field mt-1"
+                  value={pickedTube.drumHoleId}
+                  placeholder={
+                    drumHole && drumHole !== pickedTube.drumHoleId.trim()
+                      ? `job default ${drumHole}`
+                      : jobTubeOd(state)
+                        ? `job default ${defaultHoleId(jobTubeOd(state))}`
+                        : ""
+                  }
+                  onChange={(event) => patchTube(picked, { drumHoleId: event.target.value })}
+                />
+              </FieldBlock>
+            ) : (
+              <p className="text-sm text-[#163038]">Drum ID sits after Hole Cleaned or Hole Repaired. Old drums vary — a per-hole ID overrides the job default (OD + 1/32).</p>
+            )}
             <FieldBlock label="Ideal ID">
-              <input className="paper-field mt-1" readOnly value={idealId} placeholder="Empty until drum hole and tube dims" />
+              <input className="paper-field mt-1" readOnly value={idealId} placeholder="Empty until Drum ID and tube dims" />
             </FieldBlock>
-            <FieldBlock label="Actual Tube ID">
-              <input
-                className="paper-field mt-1"
-                value={pickedTube.actualTubeId}
-                onChange={(event) => patchTube(picked, { actualTubeId: event.target.value })}
-              />
-            </FieldBlock>
-            <FieldBlock label="Wall reduction %">
-              <input className="paper-field mt-1" readOnly value={wall} placeholder="Empty until Actual Tube ID and averages" />
-            </FieldBlock>
-            <FieldBlock label="WR vs target">
-              <input
-                className="paper-field mt-1"
-                readOnly
-                value={vsIdeal == null ? "" : String(vsIdeal)}
-                placeholder="Empty until Actual Tube ID"
-              />
-            </FieldBlock>
-            <FieldBlock label="WR band">
-              <input className="paper-field mt-1" readOnly value={band ? WALL_BAND_LABEL[band] : ""} placeholder="Empty until Actual Tube ID" />
-            </FieldBlock>
+            {qaOpen ? (
+              <>
+                <FieldBlock label="Actual Tube ID">
+                  <input
+                    className="paper-field mt-1"
+                    value={pickedTube.actualTubeId}
+                    onChange={(event) => patchTube(picked, { actualTubeId: event.target.value })}
+                  />
+                </FieldBlock>
+                <FieldBlock label="Wall reduction %">
+                  <input className="paper-field mt-1" readOnly value={wall} placeholder="Empty until Actual Tube ID" />
+                </FieldBlock>
+                <FieldBlock label="WR vs target">
+                  <input
+                    className="paper-field mt-1"
+                    readOnly
+                    value={vsIdeal == null ? "" : String(vsIdeal)}
+                    placeholder="Empty until Actual Tube ID"
+                  />
+                </FieldBlock>
+                <FieldBlock label="WR band">
+                  <input className="paper-field mt-1" readOnly value={band ? WALL_BAND_LABEL[band] : ""} placeholder="Empty until Actual Tube ID" />
+                </FieldBlock>
+              </>
+            ) : (
+              <p className="text-sm text-[#163038]">Drum ID, Ideal ID, Actual ID, and WR% attach to Final Roll. Empty Actual Tube ID stays empty.</p>
+            )}
           </div>
         </div>
       ) : null}

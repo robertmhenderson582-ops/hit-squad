@@ -32,6 +32,10 @@ import {
   sideWallKeys,
   sideWallTubeKey,
   wallReductionBand,
+  applyRollSteps,
+  derivedTubeId,
+  parseWallInches,
+  wallReductionForTube,
   wallReductionPct,
   wallReductionVsIdeal,
 } from "./rolling-chart.ts";
@@ -152,5 +156,60 @@ describe("rolling QA", () => {
     assert.equal(liveCircuitCount(maxed), 48);
     assert.equal(liveTubesPerCircuit(maxed), 120);
     assert.equal(liveCircuitCount(hydrateRollingChart({ circuits: "49" })), 0);
+  });
+
+  it("never invents WR% or vs-ideal from a blank Actual Tube ID", () => {
+    const dims = { id: "1.500", od: "2.000" };
+    for (const actual of ["", "  ", "\t", "n/a", "#VALUE!", "VALUE"]) {
+      assert.equal(wallReductionPct(actual, dims.id, dims.od), null, actual);
+      assert.equal(formatWallReduction(actual, dims.id, dims.od), "", actual);
+      assert.equal(wallReductionVsIdeal(actual, dims.id, dims.od, "12"), null, actual);
+      assert.equal(wallReductionBand(actual, dims.id, dims.od, "10", "14"), null, actual);
+    }
+    const blank = wallReductionForTube(emptyRollingTube(), {
+      ...emptyRollingChart(),
+      averageTubeId: "1.500",
+      averageTubeOd: "2.000",
+    });
+    assert.equal(blank, null);
+    assert.notEqual(String(blank), "0");
+    assert.notEqual(formatWallReduction("", "1.500", "2.000"), "0");
+    assert.notEqual(formatWallReduction("", "1.500", "2.000"), "-0.26");
+    assert.equal(formatWallReduction("", "1.500", "2.000").includes("VALUE"), false);
+    assert.equal(wallReductionPct("1.500", "1.500", "2.000"), 0);
+    assert.equal(wallReductionBand("1.545", "1.500", "2.000", "10", "14", "12"), "under");
+    assert.equal(wallReductionBand("1.575", "1.500", "2.000", "10", "14", "12"), "over");
+  });
+
+  it("derives tube ID from OD and BWG wall, and drops repair unless marked", () => {
+    assert.equal(parseWallInches("12 BWG"), 0.109);
+    assert.equal(parseWallInches("0.120"), 0.12);
+    assert.equal(derivedTubeId({ ...emptyRollingChart(), tubeOd: "2.5", tubeWall: "12" }), 2.282);
+    assert.equal(derivedTubeId(emptyRollingChart()), null);
+    const hole = { ...emptyRollingTube(), drumHoleId: "2.5313" };
+    assert.equal(
+      formatIdealTubeId(hole, { ...emptyRollingChart(), tubeOd: "2.5", tubeWall: "12", idealPercentageRoll: "12" }),
+      "2.3082",
+    );
+    assert.equal(formatIdealTubeId(emptyRollingTube(), emptyRollingChart()), "");
+    assert.equal(formatIdealTubeId(emptyRollingTube(), { ...emptyRollingChart(), tubeWall: "12" }), "");
+    const repaired = hydrateRollingChart({
+      tubes: { "steam:1:1": { steps: { "hole-repaired": true }, actualTubeId: "" } },
+    });
+    assert.equal(repaired.tubes["steam:1:1"]?.steps["hole-repaired"], undefined);
+    const marked = applyRollSteps({ "hole-marked": true }, "hole-repaired", true);
+    assert.equal(marked["hole-repaired"], true);
+    const unmarked = applyRollSteps({ "hole-marked": true, "hole-repaired": true }, "hole-marked", false);
+    assert.equal(unmarked["hole-repaired"], undefined);
+    const skipped = hydrateRollingChart({
+      circuits: "2",
+      tubesPerCircuit: "2",
+      mudDrum: false,
+      sideWalls: "none",
+      tubes: { "steam:1:1": { holeKind: "skip", steps: { "final-roll": true }, actualTubeId: "" } },
+    });
+    assert.equal(rollingProgression(skipped)[0]?.total, 3);
+    assert.equal(rollingProgression(skipped)[0]?.steps["final-roll"], 0);
+    assert.equal(liveCircuitCount(hydrateRollingChart({ circuits: "36" })), 36);
   });
 });
