@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import bcrypt from "bcryptjs";
 import { assignedCompany, isKnownCompany, setAssignedCompany } from "./companies-store.ts";
 import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
-import { SEATS_VAULT_KIND, SEATS_VAULT_NAME, readVaultJson, writeVaultJson } from "./drive-data.ts";
+import { SEATS_VAULT_KIND, SEATS_VAULT_NAME, readVaultJson, resetVaultFileIdsForTests, writeVaultJson } from "./drive-data.ts";
 import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import { canonicalEmail, identityBucket, isOwnerAliasSeat, isOwnerIdentity, resolveIdentity } from "./identity.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
@@ -798,6 +798,7 @@ export function resetUsersForTests() {
   injectedAdapter = undefined;
   pendingVault = Promise.resolve();
   confirmedVaultWrites.clear();
+  resetVaultFileIdsForTests();
 }
 
 export function forgetSeatCacheForTests() {

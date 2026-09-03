@@ -18,6 +18,8 @@ export type DriveFile = {
 export type DriveAdapter = {
   configured: boolean;
   listJson(folderId: string): Promise<DriveFile[]>;
+  /** JSON the account can already open, without listing a parent folder. */
+  listAccessibleJson?(name?: string): Promise<DriveFile[]>;
   readJson(fileId: string): Promise<string>;
   createJson(
     folderId: string,
@@ -126,6 +128,9 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
     async listJson() {
       return [...files.values()].map((row) => row.file);
     },
+    async listAccessibleJson(name) {
+      return [...files.values()].map((row) => row.file).filter((file) => !name || file.name === name);
+    },
     async readJson(fileId) {
       const row = files.get(fileId);
       if (!row) throw new Error("missing");
@@ -216,32 +221,43 @@ function driveApiError(payload: unknown, fallback: string) {
   return fallback;
 }
 
+function escapeDriveQueryValue(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
 function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter {
   async function authHeaders(extra?: Record<string, string>) {
     const token = await getAccessToken();
     return { authorization: `Bearer ${token}`, ...extra };
   }
 
+  async function listByQuery(q: string) {
+    const files: DriveFile[] = [];
+    let pageToken = "";
+    do {
+      const url = new URL("https://www.googleapis.com/drive/v3/files");
+      url.searchParams.set("q", q);
+      url.searchParams.set("fields", "nextPageToken,files(id,name,properties,modifiedTime)");
+      url.searchParams.set("pageSize", "100");
+      url.searchParams.set("spaces", "drive");
+      if (pageToken) url.searchParams.set("pageToken", pageToken);
+      const response = await fetch(url, { headers: await authHeaders() });
+      const data = (await response.json()) as { files?: DriveFile[]; nextPageToken?: string; error?: unknown };
+      if (!response.ok) throw new Error(driveApiError(data, "list"));
+      if (Array.isArray(data.files)) files.push(...data.files);
+      pageToken = typeof data.nextPageToken === "string" ? data.nextPageToken : "";
+    } while (pageToken);
+    return files;
+  }
+
   return {
     configured: true,
     async listJson(folderId) {
-      const files: DriveFile[] = [];
-      let pageToken = "";
-      do {
-        const q = `'${folderId}' in parents and trashed=false and mimeType='application/json'`;
-        const url = new URL("https://www.googleapis.com/drive/v3/files");
-        url.searchParams.set("q", q);
-        url.searchParams.set("fields", "nextPageToken,files(id,name,properties,modifiedTime)");
-        url.searchParams.set("pageSize", "100");
-        url.searchParams.set("spaces", "drive");
-        if (pageToken) url.searchParams.set("pageToken", pageToken);
-        const response = await fetch(url, { headers: await authHeaders() });
-        const data = (await response.json()) as { files?: DriveFile[]; nextPageToken?: string; error?: unknown };
-        if (!response.ok) throw new Error(driveApiError(data, "list"));
-        if (Array.isArray(data.files)) files.push(...data.files);
-        pageToken = typeof data.nextPageToken === "string" ? data.nextPageToken : "";
-      } while (pageToken);
-      return files;
+      return listByQuery(`'${escapeDriveQueryValue(folderId)}' in parents and trashed=false and mimeType='application/json'`);
+    },
+    async listAccessibleJson(name) {
+      const named = name ? `name='${escapeDriveQueryValue(name)}' and ` : "";
+      return listByQuery(`${named}trashed=false and mimeType='application/json'`);
     },
     async readJson(fileId) {
       const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
@@ -300,6 +316,9 @@ function unconfiguredDrive(): DriveAdapter {
   return {
     configured: false,
     async listJson() {
+      return [];
+    },
+    async listAccessibleJson() {
       return [];
     },
     async readJson() {
