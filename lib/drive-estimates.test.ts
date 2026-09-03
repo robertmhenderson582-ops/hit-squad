@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync } from "node:crypto";
 import { describe, it } from "node:test";
 import {
   ESTIMATES_ROOM_ID,
@@ -113,6 +114,145 @@ describe("drive estimate upsert", () => {
       assert.equal(calls[1].auth, "Bearer ya29.test-oauth");
       await adapter.createJson("folder", "second.json", "{}", { packId: "new-second", ownerEmail: "nathanboyte@gmail.com" });
       assert.equal(calls.filter((call) => call.url === "https://oauth2.googleapis.com/token").length, 1);
+      assert.match(calls[1].url, /supportsAllDrives=true/);
+    } finally {
+      globalThis.fetch = previous;
+      resetDriveTokenCache();
+    }
+  });
+
+  it("falls back to the service account when OAuth token refresh fails", async () => {
+    resetDriveTokenCache();
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const env = {
+      ...oauthEnv,
+      GOOGLE_CLIENT_EMAIL: "vault@hitsquad.iam.gserviceaccount.com",
+      GOOGLE_PRIVATE_KEY: pem,
+    };
+    const calls: Array<{ url: string; method: string; auth: string; grant?: string }> = [];
+    const warnings: string[] = [];
+    const previous = globalThis.fetch;
+    const warn = console.warn;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || "GET").toUpperCase();
+      const headers = new Headers(init?.headers);
+      const body = typeof init?.body === "string" ? init.body : init?.body instanceof URLSearchParams ? init.body.toString() : "";
+      const params = body ? new URLSearchParams(body) : null;
+      calls.push({ url, method, auth: headers.get("authorization") || "", grant: params?.get("grant_type") || undefined });
+      if (url.startsWith("https://oauth2.googleapis.com/token")) {
+        if (params?.get("grant_type") === "refresh_token") {
+          return new Response(JSON.stringify({ error: "invalid_grant" }), {
+            status: 400,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        assert.equal(params?.get("grant_type"), "urn:ietf:params:oauth-2.0:grant-type:jwt-bearer");
+        return new Response(JSON.stringify({ access_token: "ya29.test-sa", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/drive/v3/files/") && method === "PATCH") {
+        assert.equal(headers.get("authorization"), "Bearer ya29.test-sa");
+        return new Response(JSON.stringify({ id: "1d3lzLDxCPwC963fdplsnwYgrDEanohZc", name: "seats.json" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error(`unexpected fetch ${method} ${url}`);
+    }) as typeof fetch;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+    try {
+      const adapter = driveAdapter(env);
+      const file = await adapter.updateJson("1d3lzLDxCPwC963fdplsnwYgrDEanohZc", '{"hashes":{}}', "seats.json");
+      assert.equal(file.id, "1d3lzLDxCPwC963fdplsnwYgrDEanohZc");
+      assert.equal(calls.some((call) => call.grant === "refresh_token"), true);
+      assert.equal(calls.some((call) => call.grant === "urn:ietf:params:oauth-2.0:grant-type:jwt-bearer"), true);
+      assert.equal(
+        calls.some((call) => call.url.includes("/upload/drive/v3/files/") && call.auth === "Bearer ya29.test-sa"),
+        true,
+      );
+      assert.equal(
+        calls.some((call) => call.url.includes("/upload/drive/v3/files/") && call.auth === "Bearer ya29.test-oauth"),
+        false,
+      );
+      assert.equal(warnings.some((line) => line.includes("falling back to service account")), true);
+      assert.equal(warnings.every((line) => !line.includes("test-oauth-refresh-token")), true);
+      assert.equal(warnings.every((line) => !line.includes("test-oauth-client-secret")), true);
+      assert.equal(warnings.every((line) => !line.includes(pem)), true);
+      assert.equal(warnings.every((line) => !line.includes("ya29.")), true);
+    } finally {
+      globalThis.fetch = previous;
+      console.warn = warn;
+      resetDriveTokenCache();
+    }
+  });
+
+  it("lists shared-with-me JSON and reads/updates files with all-drives flags", async () => {
+    resetDriveTokenCache();
+    const calls: string[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || "GET").toUpperCase();
+      calls.push(`${method} ${url}`);
+      if (url.startsWith("https://oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.test-oauth", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/drive/v3/files") && !url.includes("upload") && method === "GET" && !url.includes("alt=media")) {
+        const parsed = new URL(url);
+        assert.equal(parsed.searchParams.get("supportsAllDrives"), "true");
+        assert.equal(parsed.searchParams.get("includeItemsFromAllDrives"), "true");
+        if (parsed.searchParams.get("q")?.includes("name='seats.json'")) {
+          assert.equal(parsed.searchParams.get("spaces"), null);
+          assert.equal(parsed.searchParams.get("corpora"), "user");
+        } else {
+          assert.equal(parsed.searchParams.get("spaces"), "drive");
+        }
+        return new Response(JSON.stringify({ files: [{ id: "1d3lzLDxCPwC963fdplsnwYgrDEanohZc", name: "seats.json" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("alt=media")) {
+        assert.match(url, /supportsAllDrives=true/);
+        return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/upload/drive/v3/files/") && method === "PATCH") {
+        assert.match(url, /supportsAllDrives=true/);
+        return new Response(JSON.stringify({ id: "file-1" }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/drive/v3/files/") && method === "PATCH") {
+        assert.match(url, /supportsAllDrives=true/);
+        return new Response(JSON.stringify({ id: "file-1" }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch ${method} ${url}`);
+    }) as typeof fetch;
+    try {
+      const adapter = driveAdapter(oauthEnv);
+      const accessible = await adapter.listAccessibleJson("seats.json");
+      assert.equal(accessible[0]?.id, "1d3lzLDxCPwC963fdplsnwYgrDEanohZc");
+      await adapter.listJson("1y6Q3TOnpXzV-Y1oeqjjrHfSXt9hcIrgW");
+      await adapter.readJson("1d3lzLDxCPwC963fdplsnwYgrDEanohZc");
+      await adapter.updateJson("1d3lzLDxCPwC963fdplsnwYgrDEanohZc", "{}", "seats.json", { kind: "seats" });
+      await adapter.deleteJson("1d3lzLDxCPwC963fdplsnwYgrDEanohZc");
+      assert.equal(
+        calls.some((call) => call.includes("listAccessible") || (call.includes("name='seats.json'") && call.includes("spaces=drive"))),
+        false,
+      );
+      assert.equal(
+        calls.filter((call) => call.includes("/drive/v3/files") || call.includes("/upload/drive/v3/files")).every((call) =>
+          call.includes("supportsAllDrives=true"),
+        ),
+        true,
+      );
     } finally {
       globalThis.fetch = previous;
       resetDriveTokenCache();

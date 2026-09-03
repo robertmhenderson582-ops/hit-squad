@@ -9,7 +9,14 @@ import {
   signSession,
 } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
-import { findUserByEmail, flushSeatVault, hydrateSeatStore, seatHashClaimFor, setOwnPassword, toPublicUser } from "@/lib/users";
+import {
+  findSeatForSession,
+  flushSeatVault,
+  hydrateSeatStore,
+  seatHashClaimFor,
+  setOwnPassword,
+  toPublicUser,
+} from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -22,13 +29,16 @@ export async function POST(request: Request) {
   const current = typeof body.current === "string" ? body.current : "";
 
   await hydrateSeatStore();
-  const result = setOwnPassword(session.email, next, current || undefined);
+  const seat = findSeatForSession(session);
+  if (!seat) return NextResponse.json({ error: "That seat is not on this desk." }, { status: 404 });
+
+  const result = await setOwnPassword(seat.email, next, current || undefined, Boolean(session.mustChangePassword));
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
   await flushSeatVault();
 
-  const stored = findUserByEmail(session.email);
+  const stored = findSeatForSession({ id: seat.id, email: result.email });
   if (!stored) return NextResponse.json({ error: "That seat is not on this desk." }, { status: 404 });
   const publicUser = toPublicUser(stored);
   const token = await signSession(publicUser);

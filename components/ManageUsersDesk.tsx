@@ -37,6 +37,7 @@ export function ManageUsersDesk() {
   const [issuePassword, setIssuePassword] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [seatNote, setSeatNote] = useState<string | null>(null);
+  const [recoveryOnce, setRecoveryOnce] = useState<string | null>(null);
   const [open, setOpen] = useState({ seats: true, add: true, roster: false });
 
   async function loadSeats() {
@@ -127,6 +128,26 @@ export function ManageUsersDesk() {
     setSeats(data.seats ?? []);
     if (Array.isArray(data.companies)) setCompanies(data.companies);
     setSeatNote("Password issued on this desk. Don’t send. First sign-in must change it.");
+    setRecoveryOnce(null);
+  }
+
+  async function onRecoverSeat() {
+    setSeatNote(null);
+    setRecoveryOnce(null);
+    const response = await fetch("/api/desk/seats", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: issueEmail, recover: true }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok || typeof data.password !== "string") {
+      setSeatNote(data.error || "Recovery was not saved.");
+      return;
+    }
+    setSeats(data.seats ?? []);
+    setRecoveryOnce(data.password);
+    setSeatNote(`One-time recovery for ${data.email}. Copy it now. It is not emailed.`);
   }
 
   async function onAdd(event: FormEvent) {
@@ -285,13 +306,12 @@ export function ManageUsersDesk() {
                 onChange={(event) => setIssueEmail(event.target.value)}
                 className="paper-field mt-1"
               >
-                {seats
-                  .filter((row) => row.role !== "owner")
-                  .map((row) => (
-                    <option key={row.id} value={row.email}>
-                      {row.name} · {row.email}
-                    </option>
-                  ))}
+                {seats.map((row) => (
+                  <option key={row.id} value={row.email}>
+                    {row.name} · {row.email}
+                    {row.role === "owner" ? " · recovery only" : ""}
+                  </option>
+                ))}
               </select>
             </label>
             <PasswordField
@@ -305,11 +325,23 @@ export function ManageUsersDesk() {
             <button type="submit" className="rounded-lg bg-steel px-4 py-2 text-white sm:col-span-2">
               Issue password (Don’t send)
             </button>
+            <button
+              type="button"
+              onClick={() => void onRecoverSeat()}
+              className="rounded-lg border border-steel px-4 py-2 text-steel sm:col-span-2"
+            >
+              Issue one-time recovery
+            </button>
           </form>
         ) : (
           <p className="mt-4 text-sm text-[#5b6f73]">Only the owner can issue this password.</p>
         )}
-        {seatNote ? <p className="mt-3 text-sm text-[#5b6f73]">{seatNote}</p> : null}
+        {seatNote ? <p className="mt-3 text-sm text-[#163038]">{seatNote}</p> : null}
+        {recoveryOnce ? (
+          <p className="mt-2 break-all rounded-sm border border-[#163038] bg-[#fbf8f0] px-3 py-2 font-mono text-sm text-[#163038]">
+            {recoveryOnce}
+          </p>
+        ) : null}
       </Collapsible>
 
       {owner ? (

@@ -34,9 +34,13 @@ export function SecurityDesk() {
       body: JSON.stringify({ current, next }),
     });
     const data = await response.json();
+    if (!response.ok || !data.ok) {
+      setMessage(data.error || "Password was not saved.");
+      return;
+    }
     setCurrent("");
     setNext("");
-    setMessage(data.error || data.note || "Password changed.");
+    setMessage(data.note || "Password changed.");
   }
 
   return (

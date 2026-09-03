@@ -18,6 +18,8 @@ export type DriveFile = {
 export type DriveAdapter = {
   configured: boolean;
   listJson(folderId: string): Promise<DriveFile[]>;
+  /** JSON the account can already open, without listing a parent folder. */
+  listAccessibleJson?(name?: string): Promise<DriveFile[]>;
   readJson(fileId: string): Promise<string>;
   createJson(
     folderId: string,
@@ -49,6 +51,8 @@ type CachedToken = { value: string; exp: number };
 
 let cachedSaToken: CachedToken | null = null;
 const cachedOAuthTokens = new Map<string, CachedToken>();
+/** Once OAuth refresh or a Drive call fails, stay on the service account for this isolate. */
+let oauthDriveFailedOver = false;
 
 /** Owner Estimates room. Live packs only. Never Workbooks / Nathan. */
 export const ESTIMATES_ROOM_ID = "1y6Q3TOnpXzV-Y1oeqjjrHfSXt9hcIrgW";
@@ -115,6 +119,7 @@ export function driveStoreKind(env: Record<string, string | undefined> = process
 export function resetDriveTokenCache() {
   cachedSaToken = null;
   cachedOAuthTokens.clear();
+  oauthDriveFailedOver = false;
 }
 
 export function memoryDrive(): DriveAdapter & { files: Map<string, { file: DriveFile; content: string }> } {
@@ -125,6 +130,9 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
     files,
     async listJson() {
       return [...files.values()].map((row) => row.file);
+    },
+    async listAccessibleJson(name) {
+      return [...files.values()].map((row) => row.file).filter((file) => !name || file.name === name);
     },
     async readJson(fileId) {
       const row = files.get(fileId);
@@ -139,11 +147,11 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
     },
     async updateJson(fileId, content, name, properties) {
       const row = files.get(fileId);
-      if (!row) throw new Error("missing");
       const file: DriveFile = {
-        ...row.file,
-        name: name || row.file.name,
-        properties: properties || row.file.properties,
+        id: fileId,
+        name: name || row?.file.name || fileId,
+        properties: properties || row?.file.properties,
+        modifiedTime: row?.file.modifiedTime,
       };
       files.set(fileId, { file, content });
       return file;
@@ -216,35 +224,63 @@ function driveApiError(payload: unknown, fallback: string) {
   return fallback;
 }
 
+function escapeDriveQueryValue(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function driveApiUrl(path: string, params?: Record<string, string>) {
+  const url = new URL(path, "https://www.googleapis.com/");
+  url.searchParams.set("supportsAllDrives", "true");
+  for (const [key, value] of Object.entries(params || {})) {
+    url.searchParams.set(key, value);
+  }
+  return url;
+}
+
 function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter {
   async function authHeaders(extra?: Record<string, string>) {
     const token = await getAccessToken();
     return { authorization: `Bearer ${token}`, ...extra };
   }
 
+  async function listByQuery(q: string, opts?: { accessible?: boolean }) {
+    const files: DriveFile[] = [];
+    let pageToken = "";
+    do {
+      const params: Record<string, string> = {
+        q,
+        fields: "nextPageToken,files(id,name,properties,modifiedTime)",
+        pageSize: "100",
+        includeItemsFromAllDrives: "true",
+      };
+      if (opts?.accessible) {
+        // Shared-with-me files live outside the SA My Drive. Do not set spaces=drive.
+        params.corpora = "user";
+      } else {
+        params.spaces = "drive";
+      }
+      if (pageToken) params.pageToken = pageToken;
+      const url = driveApiUrl("/drive/v3/files", params);
+      const response = await fetch(url, { headers: await authHeaders() });
+      const data = (await response.json()) as { files?: DriveFile[]; nextPageToken?: string; error?: unknown };
+      if (!response.ok) throw new Error(driveApiError(data, "list"));
+      if (Array.isArray(data.files)) files.push(...data.files);
+      pageToken = typeof data.nextPageToken === "string" ? data.nextPageToken : "";
+    } while (pageToken);
+    return files;
+  }
+
   return {
     configured: true,
     async listJson(folderId) {
-      const files: DriveFile[] = [];
-      let pageToken = "";
-      do {
-        const q = `'${folderId}' in parents and trashed=false and mimeType='application/json'`;
-        const url = new URL("https://www.googleapis.com/drive/v3/files");
-        url.searchParams.set("q", q);
-        url.searchParams.set("fields", "nextPageToken,files(id,name,properties,modifiedTime)");
-        url.searchParams.set("pageSize", "100");
-        url.searchParams.set("spaces", "drive");
-        if (pageToken) url.searchParams.set("pageToken", pageToken);
-        const response = await fetch(url, { headers: await authHeaders() });
-        const data = (await response.json()) as { files?: DriveFile[]; nextPageToken?: string; error?: unknown };
-        if (!response.ok) throw new Error(driveApiError(data, "list"));
-        if (Array.isArray(data.files)) files.push(...data.files);
-        pageToken = typeof data.nextPageToken === "string" ? data.nextPageToken : "";
-      } while (pageToken);
-      return files;
+      return listByQuery(`'${escapeDriveQueryValue(folderId)}' in parents and trashed=false and mimeType='application/json'`);
+    },
+    async listAccessibleJson(name) {
+      const named = name ? `name='${escapeDriveQueryValue(name)}' and ` : "";
+      return listByQuery(`${named}trashed=false and mimeType='application/json'`, { accessible: true });
     },
     async readJson(fileId) {
-      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { alt: "media" }), {
         headers: await authHeaders(),
       });
       if (!response.ok) throw new Error("read");
@@ -254,7 +290,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       const boundary = `hs_pack_${Date.now()}`;
       const meta = { name, parents: [folderId], mimeType: "application/json", properties };
       const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
-      const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+      const response = await fetch(driveApiUrl("/upload/drive/v3/files", { uploadType: "multipart" }), {
         method: "POST",
         headers: await authHeaders({ "content-type": `multipart/related; boundary=${boundary}` }),
         body,
@@ -264,7 +300,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       return { id: file.id, name: file.name || name, properties };
     },
     async updateJson(fileId, content, name, properties) {
-      const upload = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+      const upload = await fetch(driveApiUrl(`/upload/drive/v3/files/${fileId}`, { uploadType: "media" }), {
         method: "PATCH",
         headers: await authHeaders({ "content-type": "application/json" }),
         body: content,
@@ -274,7 +310,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
         throw new Error(driveApiError(payload, "update"));
       }
       if (name || properties) {
-        await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+        await fetch(driveApiUrl(`/drive/v3/files/${fileId}`), {
           method: "PATCH",
           headers: await authHeaders({ "content-type": "application/json" }),
           body: JSON.stringify({ name, properties }),
@@ -283,7 +319,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       return { id: fileId, name: name || fileId, properties };
     },
     async deleteJson(fileId) {
-      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+      const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`), {
         method: "PATCH",
         headers: await authHeaders({ "content-type": "application/json" }),
         body: JSON.stringify({ trashed: true }),
@@ -300,6 +336,9 @@ function unconfiguredDrive(): DriveAdapter {
   return {
     configured: false,
     async listJson() {
+      return [];
+    },
+    async listAccessibleJson() {
       return [];
     },
     async readJson() {
@@ -324,10 +363,46 @@ export function isThinDriveStub(fileId?: string | null) {
   return Boolean(fileId && THIN_DRIVE_STUB_IDS.has(fileId));
 }
 
+function logOauthDriveFallback() {
+  // Static text only — never tokens, client secrets, refresh tokens, or SA JSON.
+  console.warn("drive: OAuth failed; falling back to service account");
+}
+
+function withServiceAccountFallback(primary: DriveAdapter, secondary: DriveAdapter): DriveAdapter {
+  async function run<T>(op: (drive: DriveAdapter) => Promise<T>): Promise<T> {
+    if (oauthDriveFailedOver) return op(secondary);
+    try {
+      return await op(primary);
+    } catch {
+      oauthDriveFailedOver = true;
+      logOauthDriveFallback();
+      return op(secondary);
+    }
+  }
+  return {
+    configured: true,
+    listJson: (folderId) => run((drive) => drive.listJson(folderId)),
+    listAccessibleJson: (name) =>
+      run((drive) => (drive.listAccessibleJson ? drive.listAccessibleJson(name) : drive.listJson(""))),
+    readJson: (fileId) => run((drive) => drive.readJson(fileId)),
+    createJson: (folderId, name, content, properties) =>
+      run((drive) => drive.createJson(folderId, name, content, properties)),
+    updateJson: (fileId, content, name, properties) =>
+      run((drive) => drive.updateJson(fileId, content, name, properties)),
+    deleteJson: (fileId) => run((drive) => drive.deleteJson(fileId)),
+  };
+}
+
 export function driveAdapter(env: Record<string, string | undefined> = process.env): DriveAdapter {
   const oauth = parseOAuthClient(env);
-  if (oauth) return googleDriveAdapter(() => oauthAccessToken(oauth));
   const account = parseServiceAccount(env);
+  if (oauth && account) {
+    return withServiceAccountFallback(
+      googleDriveAdapter(() => oauthAccessToken(oauth)),
+      googleDriveAdapter(() => googleAccessToken(account)),
+    );
+  }
+  if (oauth) return googleDriveAdapter(() => oauthAccessToken(oauth));
   if (account) return googleDriveAdapter(() => googleAccessToken(account));
   return unconfiguredDrive();
 }

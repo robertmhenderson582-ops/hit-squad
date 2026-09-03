@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { after, beforeEach, test } from "node:test";
 import bcrypt from "bcryptjs";
-import { readSeatClaim, signSeatClaim } from "./auth.ts";
+import { readSeatClaim, readSession, signSeatClaim, signSession } from "./auth.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { hasForbiddenSeed } from "./tester-seats.ts";
@@ -12,16 +13,18 @@ import { JOSEPH_EMAIL, SHANE_EMAIL, TESTER_SEATS } from "./tester-seats.ts";
 import { assignedCompany, resetCompanyAssignmentsForTests } from "./companies-store.ts";
 import { lensPeopleFromSeats } from "./desk-people.ts";
 import { canLookupRates, canUseRateBuilder, canUseViewAs } from "./desk-role.ts";
-import { SEATS_VAULT_KIND, SEATS_VAULT_NAME, writeVaultJson } from "./drive-data.ts";
-import { memoryDrive } from "./drive-estimates.ts";
+import { SEATS_VAULT_FILE_ID, SEATS_VAULT_KIND, SEATS_VAULT_NAME, writeVaultJson } from "./drive-data.ts";
+import { memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
 import {
   claimFirstPassword,
   createSeat,
+  findSeatForSession,
   findUserByEmail,
   flushSeatVault,
   forgetSeatCacheForTests,
   GENERIC_SIGNIN_ERROR,
   hydrateSeatStore,
+  issueRecoveryPassword,
   issueSeatPassword,
   loginOutcome,
   listSeatRows,
@@ -32,9 +35,14 @@ import {
   seatHashClaimFor,
   seatNeedsPasswordCreate,
   setOwnPassword,
+  toPublicUser,
   useSeatVaultForTests,
   verifyPassword,
+  collapseSeatHashes,
+  listBuildSeats,
+  ownerSeatCount,
 } from "./users.ts";
+import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 
 const OWNER_SECRET = "owner-seat-secret-xx";
 const CHOSEN = "chosen-seat-secret";
@@ -54,14 +62,19 @@ process.env.SEAT_PASSWORD_PATH = seatFile;
 process.env.COMPANY_ASSIGNMENT_PATH = companyFile;
 process.env.AUTH_SECRET = "test-auth-secret-16chars";
 
-function wipePersisted() {
+async function wipePersisted() {
+  try {
+    await flushSeatVault();
+  } catch {
+    // A prior confirm write may have rejected; drop that adapter before the next test.
+  }
   if (existsSync(seatFile)) unlinkSync(seatFile);
   resetUsersForTests();
   resetCompanyAssignmentsForTests();
 }
 
-beforeEach(() => {
-  wipePersisted();
+beforeEach(async () => {
+  await wipePersisted();
 });
 
 after(() => {
@@ -119,7 +132,7 @@ test("Shane Smith is a tester seat that must create a password on first visit", 
   assert.equal(findUserByEmail("beechj@madisonltd.com"), undefined);
 });
 
-test("unissued invited email plus ack creates a password and session user", () => {
+test("unissued invited email plus ack creates a password and session user", async () => {
   assert.equal(seatNeedsPasswordCreate(TESTER), true);
   assert.equal(loginOutcome({ email: TESTER }).status, "needsCreate");
 
@@ -155,7 +168,7 @@ test("unissued invited email plus ack creates a password and session user", () =
   assert.equal(persisted.includes(OWNER_SECRET), false);
   assert.match(persisted, /"passwordHash"/);
 
-  const changed = setOwnPassword(TESTER, OTHER, CHOSEN);
+  const changed = await setOwnPassword(TESTER, OTHER, CHOSEN);
   assert.equal("ok" in changed, true);
   assert.equal(verifyPassword(findUserByEmail(TESTER)!, OTHER), true);
 });
@@ -272,14 +285,13 @@ test("claimed hash still needsPassword after the seat file is wiped when the bro
   resetUsersForTests();
   assert.equal(loginOutcome({ email: TESTER }).status, "needsPassword");
 
-  assert.equal(seatHashClaimFor(OWNER_LOGIN_EMAIL), null);
-  assert.equal(
-    restoreSeatHash(OWNER_LOGIN_EMAIL, {
-      email: OWNER_LOGIN_EMAIL,
-      passwordHash: claim.passwordHash,
-    }),
-    false,
-  );
+  const ownerClaim = seatHashClaimFor(OWNER_LOGIN_EMAIL);
+  assert.ok(ownerClaim);
+  assert.equal(ownerClaim.email, OWNER_LOGIN_EMAIL);
+  assert.match(ownerClaim.passwordHash, /^\$2[abxy]\$/);
+  assert.equal(ownerClaim.passwordHash.includes(OWNER_SECRET), false);
+  assert.equal(ownerClaim.passwordHash.includes(CHOSEN), false);
+  assert.equal(restoreSeatHash(OWNER_LOGIN_EMAIL, { email: TESTER, passwordHash: claim.passwordHash }), false);
   assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL }).status, "needsPassword");
   const owner = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET });
   assert.equal(owner.status, "authenticated");
@@ -368,7 +380,7 @@ test("owner can add a tester login that must change password on first sign-in", 
     assert.equal(ok.user.role, "tester");
   }
 
-  const changed = setOwnPassword(ADDED, CHOSEN);
+  const changed = await setOwnPassword(ADDED, CHOSEN);
   assert.equal("ok" in changed, true);
   const again = loginOutcome({ email: ADDED, password: CHOSEN });
   assert.equal(again.status, "authenticated");
@@ -485,22 +497,22 @@ test("owner setOwnPassword then login works after persist and hydrate", async ()
     assert.equal(boot.user.mustChangePassword, false);
   }
 
-  const missingCurrent = setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
+  const missingCurrent = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
   assert.equal("error" in missingCurrent, true);
   if ("error" in missingCurrent) {
     assert.equal(missingCurrent.status, 400);
   }
 
-  const wrongCurrent = setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OTHER);
+  const wrongCurrent = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OTHER);
   assert.equal("error" in wrongCurrent, true);
   if ("error" in wrongCurrent) {
     assert.equal(wrongCurrent.status, 401);
   }
 
-  const short = setOwnPassword(OWNER_LOGIN_EMAIL, SHORT, OWNER_SECRET);
+  const short = await setOwnPassword(OWNER_LOGIN_EMAIL, SHORT, OWNER_SECRET);
   assert.equal("error" in short, true);
 
-  const changed = setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OWNER_SECRET);
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OWNER_SECRET);
   assert.equal("ok" in changed, true);
   const now = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN });
   assert.equal(now.status, "authenticated");
@@ -525,7 +537,7 @@ test("owner setOwnPassword then login works after persist and hydrate", async ()
   const drive = memoryDrive();
   useSeatVaultForTests(drive);
   await hydrateSeatStore();
-  const again = setOwnPassword(OWNER_LOGIN_EMAIL, OTHER, CHOSEN);
+  const again = await setOwnPassword(OWNER_LOGIN_EMAIL, OTHER, CHOSEN);
   assert.equal("ok" in again, true);
   assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OTHER }).status, "authenticated");
   await flushSeatVault();
@@ -639,7 +651,7 @@ test("cold start with testers-only vault signs in with OWNER_PASSWORD then a Set
   assert.ok(seeded.hashes?.[TESTER]?.passwordHash);
   assert.equal(JSON.stringify(seeded).includes(OWNER_SECRET), false);
 
-  const changed = setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OWNER_SECRET);
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OWNER_SECRET);
   assert.equal("ok" in changed, true);
   await flushSeatVault();
   forgetSeatCacheForTests();
@@ -657,8 +669,564 @@ test("parseExtraSeats skips owner, Novus, and seeded testers", () => {
       { id: "custom-owner", email: OWNER_LOGIN_EMAIL, name: "Nope" },
       { id: "custom-novus", email: NOVUS_EMAIL, name: "Nope" },
       { id: "custom-nathan", email: TESTER, name: "Nope" },
+      { id: "owner-robert-henderson", email: "alias.owner@example.com", name: "Nope" },
+      { id: "custom-local", email: "robertmhenderson582@gmail.com", name: "robertmhenderson582" },
       { id: "", email: "bad@example.com", name: "Nope" },
     ],
   });
   assert.deepEqual(extras, [{ id: "custom-ok", email: ADDED, name: "Added Tester" }]);
+});
+
+test("setOwnPassword then authenticate resolves one owner record from any alias", async () => {
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OWNER_SECRET);
+  assert.equal("ok" in changed, true);
+
+  for (const raw of [OWNER_LOGIN_EMAIL, "  RobertMHenderson582@Gmail.com ", "robertmhenderson582", "Robert Henderson"]) {
+    const outcome = loginOutcome({ email: raw, password: CHOSEN });
+    assert.equal(outcome.status, "authenticated", raw);
+    if (outcome.status === "authenticated") {
+      assert.equal(outcome.user.email, OWNER_LOGIN_EMAIL);
+      assert.equal(outcome.user.id, "owner-robert-henderson");
+      assert.equal(outcome.user.role, "owner");
+    }
+    assert.equal(findUserByEmail(raw)?.email, OWNER_LOGIN_EMAIL, raw);
+  }
+
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  assert.equal(ownerSeatCount(), 1);
+  assert.equal(listBuildSeats().filter((row) => row.role === "owner").length, 1);
+  assert.equal(listBuildSeats().filter((row) => isOwnerIdentity(row.email) || isOwnerIdentity(row.id)).length, 1);
+});
+
+test("split owner hash keys collapse onto normalized email and both credentials stay valid until Settings replace", async () => {
+  const settingsHash = bcrypt.hashSync(CHOSEN, 12);
+  const resetHash = bcrypt.hashSync(OWNER_SECRET, 12);
+  writeFileSync(
+    seatFile,
+    `${JSON.stringify({
+      hashes: {
+        robertmhenderson582: { passwordHash: settingsHash, mustChangePassword: false },
+        [OWNER_LOGIN_EMAIL]: { passwordHash: resetHash, mustChangePassword: false },
+      },
+      extras: [{ id: "custom-robert", email: OWNER_LOGIN_EMAIL, name: "robertmhenderson582" }],
+    })}\n`,
+  );
+  resetUsersForTests();
+
+  const collapsed = collapseSeatHashes(
+    parseSeatHashes({
+      hashes: {
+        robertmhenderson582: { passwordHash: settingsHash },
+        [OWNER_LOGIN_EMAIL]: { passwordHash: resetHash },
+      },
+    }),
+  );
+  assert.deepEqual(Object.keys(collapsed), [OWNER_LOGIN_EMAIL]);
+  assert.equal(canonicalEmail("robertmhenderson582"), OWNER_LOGIN_EMAIL);
+
+  const viaSettings = loginOutcome({ email: "robertmhenderson582", password: CHOSEN });
+  assert.equal(viaSettings.status, "authenticated");
+  if (viaSettings.status === "authenticated") {
+    assert.equal(viaSettings.user.email, OWNER_LOGIN_EMAIL);
+    assert.equal(viaSettings.user.id, "owner-robert-henderson");
+  }
+  assert.equal(loginOutcome({ email: "Robert Henderson", password: OWNER_SECRET }).status, "authenticated");
+  assert.equal(ownerSeatCount(), 1);
+  assert.equal(parseExtraSeats(JSON.parse(readFileSync(seatFile, "utf8"))).length, 0);
+
+  const replaced = await setOwnPassword(OWNER_LOGIN_EMAIL, OTHER, CHOSEN);
+  assert.equal("ok" in replaced, true);
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OTHER }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "error");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  assert.equal(ownerSeatCount(), 1);
+});
+
+test("stale vault owner hash does not drop a local Settings password", async () => {
+  const settingsHash = bcrypt.hashSync(CHOSEN, 12);
+  const staleHash = bcrypt.hashSync(OWNER_SECRET, 12);
+  writeFileSync(
+    seatFile,
+    `${JSON.stringify({
+      hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: settingsHash, mustChangePassword: false } },
+      extras: [],
+    })}\n`,
+  );
+  const drive = memoryDrive();
+  await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, {
+    hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: staleHash, mustChangePassword: false } },
+    extras: [],
+  });
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "authenticated");
+  assert.equal(ownerSeatCount(), 1);
+});
+
+test("a later tester persist from a stale instance cannot clobber the Settings hash", async () => {
+  const settingsHash = bcrypt.hashSync(CHOSEN, 12);
+  const staleHash = bcrypt.hashSync(OWNER_SECRET, 12);
+  writeFileSync(
+    seatFile,
+    `${JSON.stringify({
+      hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: staleHash, mustChangePassword: false } },
+      extras: [],
+    })}\n`,
+  );
+  const drive = memoryDrive();
+  await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, {
+    hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: settingsHash, mustChangePassword: false } },
+    extras: [],
+  });
+  useSeatVaultForTests(drive);
+
+  const created = loginOutcome({
+    email: TESTER,
+    newPassword: ISSUED,
+    confirmPassword: ISSUED,
+  });
+  assert.equal(created.status, "authenticated");
+  await flushSeatVault();
+  forgetSeatCacheForTests();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(ownerSeatCount(), 1);
+});
+
+test("createSeat cannot mint a second owner or a known person", async () => {
+  assert.equal("error" in (await createSeat({ name: "Robert", email: "  RobertMHenderson582@Gmail.com ", password: ISSUED })), true);
+  assert.equal("error" in (await createSeat({ name: "Robert Henderson", email: "other.robert@example.com", password: ISSUED })), true);
+  assert.equal("error" in (await createSeat({ name: "Novus", email: NOVUS_EMAIL, password: ISSUED })), true);
+  assert.equal("error" in (await createSeat({ name: "Nathan Boyte", email: TESTER, password: ISSUED })), true);
+  assert.equal("error" in (await createSeat({ name: "Nathan Boyte", email: "nathan.other@example.com", password: ISSUED })), true);
+  assert.equal(ownerSeatCount(), 1);
+  assert.equal(findUserByEmail("other.robert@example.com"), undefined);
+  assert.equal(findUserByEmail("nathan.other@example.com"), undefined);
+});
+
+test("Settings password change then cold start accepts only the new password", async () => {
+  const signedIn = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET });
+  assert.equal(signedIn.status, "authenticated");
+
+  const sessionSeat = findSeatForSession({ id: "owner-robert-henderson", email: "Robert Henderson" });
+  assert.ok(sessionSeat);
+  assert.equal(sessionSeat.email, OWNER_LOGIN_EMAIL);
+
+  const changed = await setOwnPassword(sessionSeat.email, CHOSEN, OWNER_SECRET);
+  assert.equal("ok" in changed, true);
+  if (!("ok" in changed)) return;
+  assert.equal(changed.email, OWNER_LOGIN_EMAIL);
+
+  resetUsersForTests();
+  await hydrateSeatStore();
+
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: "Robert Henderson", password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+});
+
+test("Settings password change is confirmed on the vault before success and survives a wiped local file", async () => {
+  const drive = memoryDrive();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "authenticated");
+
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OWNER_SECRET);
+  assert.equal("ok" in changed, true);
+
+  forgetSeatCacheForTests();
+  resetUsersForTests();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  const vaultRaw = [...drive.files.values()].map((row) => row.content).join();
+  assert.equal(vaultRaw.includes(CHOSEN), false);
+  assert.equal(vaultRaw.includes(OWNER_SECRET), false);
+});
+
+test("issued recovery survives cold start, is one-time, and then Settings replace is required", async () => {
+  const created = loginOutcome({
+    email: TESTER,
+    newPassword: CHOSEN,
+    confirmPassword: CHOSEN,
+  });
+  assert.equal(created.status, "authenticated");
+
+  const issued = await issueRecoveryPassword(TESTER);
+  assert.equal("ok" in issued, true);
+  if (!("ok" in issued)) return;
+  assert.equal(issued.email, TESTER);
+  assert.ok(issued.password.length >= 16);
+  assert.equal(JSON.stringify(issued).includes(CHOSEN), false);
+
+  resetUsersForTests();
+  await hydrateSeatStore();
+
+  const recovered = loginOutcome({ email: TESTER, password: issued.password });
+  assert.equal(recovered.status, "authenticated");
+  if (recovered.status === "authenticated") {
+    assert.equal(recovered.user.mustChangePassword, true);
+  }
+
+  resetUsersForTests();
+  assert.equal(loginOutcome({ email: TESTER, password: issued.password }).status, "error");
+  assert.equal(loginOutcome({ email: TESTER, password: CHOSEN }).status, "authenticated");
+
+  const changed = await setOwnPassword(TESTER, OTHER, CHOSEN);
+  assert.equal("ok" in changed, true);
+  resetUsersForTests();
+  await hydrateSeatStore();
+  assert.equal(loginOutcome({ email: TESTER, password: OTHER }).status, "authenticated");
+  assert.equal(loginOutcome({ email: TESTER, password: CHOSEN }).status, "error");
+  assert.equal(loginOutcome({ email: TESTER, password: issued.password }).status, "error");
+});
+
+test("owner env recovery signs in without depending on a stored hash", async () => {
+  process.env.OWNER_RECOVERY_PASSWORD = "env-recovery-secret-xx";
+  try {
+    const recovered = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: "env-recovery-secret-xx" });
+    assert.equal(recovered.status, "authenticated");
+    if (recovered.status === "authenticated") {
+      assert.equal(recovered.user.mustChangePassword, true);
+      assert.equal(recovered.user.email, OWNER_LOGIN_EMAIL);
+    }
+
+    const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
+    assert.equal("ok" in changed, true);
+    resetUsersForTests();
+    await hydrateSeatStore();
+    assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+    assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  } finally {
+    delete process.env.OWNER_RECOVERY_PASSWORD;
+  }
+});
+
+test("owner env recovery forced change accepts next without current after hydrate", async () => {
+  const recovery = "env-recovery-secret-xx";
+  process.env.OWNER_RECOVERY_PASSWORD = recovery;
+  try {
+    const recovered = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: recovery });
+    assert.equal(recovered.status, "authenticated");
+    if (recovered.status !== "authenticated") return;
+    assert.equal(recovered.user.mustChangePassword, true);
+    assert.equal(recovered.user.email, OWNER_LOGIN_EMAIL);
+    assert.equal(ownerSeatCount(), 1);
+
+    const persisted = parseSeatHashes(JSON.parse(readFileSync(seatFile, "utf8")));
+    assert.equal(persisted[OWNER_LOGIN_EMAIL]?.mustChangePassword, true);
+
+    const stillRecovery = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: recovery });
+    assert.equal(stillRecovery.status, "authenticated");
+    if (stillRecovery.status === "authenticated") {
+      assert.equal(stillRecovery.user.mustChangePassword, true);
+    }
+
+    const token = await signSession(recovered.user);
+    const session = await readSession(token);
+    assert.equal(session?.mustChangePassword, true);
+    assert.equal(session?.email, OWNER_LOGIN_EMAIL);
+
+    resetUsersForTests();
+    await hydrateSeatStore();
+    const stored = findUserByEmail(OWNER_LOGIN_EMAIL);
+    assert.ok(stored);
+    assert.equal(stored.mustChangePassword, true);
+
+    stored.mustChangePassword = false;
+    const missing = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
+    assert.equal("error" in missing, true);
+    if ("error" in missing) {
+      assert.equal(missing.error, "Current and new password are required.");
+      assert.equal(missing.status, 400);
+    }
+
+    const seat = findSeatForSession(session!);
+    assert.ok(seat);
+    assert.equal(seat.email, OWNER_LOGIN_EMAIL);
+    const changed = await setOwnPassword(seat.email, CHOSEN, undefined, session?.mustChangePassword);
+    assert.equal("ok" in changed, true);
+
+    const publicUser = toPublicUser(findSeatForSession({ id: seat.id, email: changed.ok ? changed.email : seat.email })!);
+    const nextToken = await signSession(publicUser);
+    assert.equal((await readSession(nextToken))?.mustChangePassword, false);
+
+    const chosenLogin = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN });
+    assert.equal(chosenLogin.status, "authenticated");
+    if (chosenLogin.status === "authenticated") {
+      assert.equal(chosenLogin.user.mustChangePassword, false);
+    }
+
+    const settingsStillNeedsCurrent = await setOwnPassword(OWNER_LOGIN_EMAIL, OTHER);
+    assert.equal("error" in settingsStillNeedsCurrent, true);
+    if ("error" in settingsStillNeedsCurrent) {
+      assert.equal(settingsStillNeedsCurrent.error, "Current and new password are required.");
+    }
+
+    const envStillWorks = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: recovery });
+    assert.equal(envStillWorks.status, "authenticated");
+    if (envStillWorks.status === "authenticated") {
+      assert.equal(envStillWorks.user.mustChangePassword, true);
+    }
+
+    const route = readFileSync(fileURLToPath(new URL("../app/api/desk/password/route.ts", import.meta.url)), "utf8");
+    assert.match(route, /setOwnPassword\(seat\.email, next, current \|\| undefined, Boolean\(session\.mustChangePassword\)\)/);
+    assert.equal(/passwordWriteLanded/.test(route), false);
+    assert.equal(JSON.stringify(recovered).includes(recovery), false);
+    assert.equal(JSON.stringify(publicUser).includes(CHOSEN), false);
+    assert.equal(ownerSeatCount(), 1);
+  } finally {
+    delete process.env.OWNER_RECOVERY_PASSWORD;
+  }
+});
+
+test("owner never receives a temp-password create prompt", () => {
+  assert.equal(seatNeedsPasswordCreate(OWNER_LOGIN_EMAIL), false);
+  assert.equal(seatNeedsPasswordCreate("Robert Henderson"), false);
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL }).status, "needsPassword");
+  assert.equal("error" in claimFirstPassword(OWNER_LOGIN_EMAIL, CHOSEN, CHOSEN), true);
+  assert.equal(
+    loginOutcome({ email: OWNER_LOGIN_EMAIL, newPassword: CHOSEN, confirmPassword: CHOSEN }).status,
+    "error",
+  );
+});
+
+function driveWithOneStaleReadAfterWrite() {
+  const inner = memoryDrive();
+  const stale = new Map<string, string>();
+  return {
+    configured: true as const,
+    files: inner.files,
+    listJson: (folderId: string) => inner.listJson(folderId),
+    async readJson(fileId: string) {
+      const prior = stale.get(fileId);
+      if (prior !== undefined) {
+        stale.delete(fileId);
+        return prior;
+      }
+      return inner.readJson(fileId);
+    },
+    createJson: inner.createJson.bind(inner),
+    async updateJson(fileId: string, content: string, name?: string, properties?: Record<string, string>) {
+      const row = inner.files.get(fileId);
+      if (row) stale.set(fileId, row.content);
+      return inner.updateJson(fileId, content, name, properties);
+    },
+    deleteJson: inner.deleteJson.bind(inner),
+  };
+}
+
+test("stale Drive read after confirmOwnPasswordWrite does not 503 when the write already succeeded", async () => {
+  const drive = driveWithOneStaleReadAfterWrite();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "authenticated");
+  await flushSeatVault();
+
+  const stored = findUserByEmail(OWNER_LOGIN_EMAIL);
+  assert.ok(stored);
+  stored.mustChangePassword = true;
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
+  assert.equal("ok" in changed, true);
+  if ("error" in changed) {
+    assert.equal(changed.error, "expected ok after a successful vault write");
+    return;
+  }
+
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  assert.equal(ownerSeatCount(), 1);
+
+  const settingsStillNeedsCurrent = await setOwnPassword(OWNER_LOGIN_EMAIL, OTHER);
+  assert.equal("error" in settingsStillNeedsCurrent, true);
+  if ("error" in settingsStillNeedsCurrent) {
+    assert.equal(settingsStillNeedsCurrent.error, "Current and new password are required.");
+  }
+
+  const vaultRaw = [...drive.files.values()].map((row) => row.content).join();
+  assert.equal(vaultRaw.includes(CHOSEN), false);
+  assert.equal(vaultRaw.includes(OWNER_SECRET), false);
+  assert.match(vaultRaw, /robertmhenderson582@gmail.com/i);
+});
+
+test("forced setOwnPassword still ok when Drive confirm throws or Drive is unconfigured", async () => {
+  const inner = memoryDrive();
+  useSeatVaultForTests({
+    configured: true,
+    listJson: (folderId) => inner.listJson(folderId),
+    readJson: (fileId) => inner.readJson(fileId),
+    async createJson() {
+      throw new Error("drive write failed");
+    },
+    async updateJson() {
+      throw new Error("drive write failed");
+    },
+    deleteJson: (fileId) => inner.deleteJson(fileId),
+  });
+
+  const stored = findUserByEmail(OWNER_LOGIN_EMAIL);
+  assert.ok(stored);
+  stored.mustChangePassword = true;
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
+  assert.equal("ok" in changed, true);
+  if ("error" in changed) {
+    assert.equal(changed.error, "expected ok for forced first-sign-in when Drive confirm throws");
+    return;
+  }
+
+  const publicUser = toPublicUser(findUserByEmail(OWNER_LOGIN_EMAIL)!);
+  const nextToken = await signSession(publicUser);
+  assert.equal((await readSession(nextToken))?.mustChangePassword, false);
+
+  const persisted = parseSeatHashes(JSON.parse(readFileSync(seatFile, "utf8")));
+  assert.equal(persisted[OWNER_LOGIN_EMAIL]?.mustChangePassword, false);
+  assert.ok(persisted[OWNER_LOGIN_EMAIL]?.passwordHash);
+
+  const claim = seatHashClaimFor(OWNER_LOGIN_EMAIL);
+  assert.ok(claim);
+  assert.equal(claim.email, OWNER_LOGIN_EMAIL);
+  assert.match(claim.passwordHash, /^\$2[abxy]\$/);
+  assert.equal(claim.mustChangePassword, false);
+  assert.equal(claim.passwordHash.includes(CHOSEN), false);
+  assert.equal(claim.passwordHash.includes(OWNER_SECRET), false);
+
+  unlinkSync(seatFile);
+  resetUsersForTests();
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "error");
+  assert.equal(restoreSeatHash(OWNER_LOGIN_EMAIL, claim), true);
+  const restored = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN });
+  assert.equal(restored.status, "authenticated");
+  if (restored.status === "authenticated") {
+    assert.equal(restored.user.mustChangePassword, false);
+    assert.equal(restored.user.email, OWNER_LOGIN_EMAIL);
+    assert.equal(restored.user.role, "owner");
+  }
+  assert.equal(ownerSeatCount(), 1);
+
+  await wipePersisted();
+  useSeatVaultForTests(null);
+  const unconfiguredSeat = findUserByEmail(OWNER_LOGIN_EMAIL);
+  assert.ok(unconfiguredSeat);
+  unconfiguredSeat.mustChangePassword = true;
+  const unconfigured = await setOwnPassword(OWNER_LOGIN_EMAIL, OTHER);
+  assert.equal("ok" in unconfigured, true);
+  const again = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OTHER });
+  assert.equal(again.status, "authenticated");
+  if (again.status === "authenticated") {
+    assert.equal(again.user.mustChangePassword, false);
+  }
+  assert.equal(JSON.stringify(claim).includes(CHOSEN), false);
+  assert.equal(JSON.stringify(claim).includes(OWNER_SECRET), false);
+});
+
+test("confirmOwnPasswordWrite still 503s when writeVaultJson throws", async () => {
+  const inner = memoryDrive();
+  useSeatVaultForTests({
+    configured: true,
+    listJson: (folderId) => inner.listJson(folderId),
+    readJson: (fileId) => inner.readJson(fileId),
+    async createJson() {
+      throw new Error("drive write failed");
+    },
+    async updateJson() {
+      throw new Error("drive write failed");
+    },
+    deleteJson: (fileId) => inner.deleteJson(fileId),
+  });
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OWNER_SECRET);
+  assert.equal("error" in changed, true);
+  if ("error" in changed) {
+    assert.equal(changed.status, 503);
+    assert.equal(changed.error, "Password was not saved. Try again.");
+  }
+});
+
+function unlistableSeatsDrive(listJson: DriveAdapter["listJson"], readJson?: DriveAdapter["readJson"]) {
+  const inner = memoryDrive();
+  inner.files.set(SEATS_VAULT_FILE_ID, {
+    file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+    content: `${JSON.stringify({ hashes: {}, extras: [] })}\n`,
+  });
+  const drive: DriveAdapter & { files: typeof inner.files; updatedIds: string[]; created: number } = {
+    configured: true,
+    files: inner.files,
+    updatedIds: [],
+    created: 0,
+    listJson,
+    async listAccessibleJson() {
+      throw new Error("shared-with-me list failed");
+    },
+    readJson: readJson ?? ((fileId) => inner.readJson(fileId)),
+    async createJson() {
+      drive.created += 1;
+      throw new Error("createJson must not run when seats.json is reachable by id");
+    },
+    async updateJson(fileId, content, name, properties) {
+      drive.updatedIds.push(fileId);
+      return inner.updateJson(fileId, content, name, properties);
+    },
+    deleteJson: (fileId) => inner.deleteJson(fileId),
+  };
+  return drive;
+}
+
+async function assertPasswordSaveAgainstUnlistableFolder(
+  drive: ReturnType<typeof unlistableSeatsDrive>,
+) {
+  await hydrateSeatStore();
+  const stored = findUserByEmail(OWNER_LOGIN_EMAIL);
+  assert.ok(stored);
+  stored.mustChangePassword = true;
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
+  assert.equal("ok" in changed, true);
+  if ("error" in changed) {
+    assert.equal(changed.error, "expected ok when updateJson of seats.json succeeded");
+    return;
+  }
+  assert.equal(drive.created, 0);
+  assert.ok(drive.updatedIds.length >= 1);
+  assert.equal(
+    drive.updatedIds.every((id) => id === SEATS_VAULT_FILE_ID),
+    true,
+  );
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  assert.equal(ownerSeatCount(), 1);
+  const vaultRaw = [...drive.files.values()].map((row) => row.content).join();
+  assert.match(vaultRaw, /robertmhenderson582@gmail.com/i);
+  assert.equal(vaultRaw.includes(CHOSEN), false);
+  assert.equal(vaultRaw.includes(OWNER_SECRET), false);
+}
+
+test("confirmOwnPasswordWrite succeeds when listJson throws and seats.json is updated by id", async () => {
+  const drive = unlistableSeatsDrive(async () => {
+    throw new Error("The user does not have sufficient permissions for this file.");
+  });
+  useSeatVaultForTests(drive);
+  await assertPasswordSaveAgainstUnlistableFolder(drive);
+});
+
+test("confirmOwnPasswordWrite succeeds when listJson is empty and seats.json is updated by id", async () => {
+  const drive = unlistableSeatsDrive(async () => []);
+  useSeatVaultForTests(drive);
+  await assertPasswordSaveAgainstUnlistableFolder(drive);
+});
+
+test("confirmOwnPasswordWrite succeeds when listJson and readJson throw and seats.json is updated by known id", async () => {
+  const drive = unlistableSeatsDrive(
+    async () => {
+      throw new Error("The user does not have sufficient permissions for this file.");
+    },
+    async () => {
+      throw new Error("read");
+    },
+  );
+  useSeatVaultForTests(drive);
+  await assertPasswordSaveAgainstUnlistableFolder(drive);
 });
