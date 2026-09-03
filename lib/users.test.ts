@@ -1078,22 +1078,24 @@ test("confirmOwnPasswordWrite still 503s when writeVaultJson throws", async () =
   }
 });
 
-function unlistableSeatsDrive(listJson: DriveAdapter["listJson"]) {
+function unlistableSeatsDrive(listJson: DriveAdapter["listJson"], readJson?: DriveAdapter["readJson"]) {
   const inner = memoryDrive();
   inner.files.set(SEATS_VAULT_FILE_ID, {
     file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
     content: `${JSON.stringify({ hashes: {}, extras: [] })}\n`,
   });
-  const drive: DriveAdapter & { files: typeof inner.files; updatedIds: string[] } = {
+  const drive: DriveAdapter & { files: typeof inner.files; updatedIds: string[]; created: number } = {
     configured: true,
     files: inner.files,
     updatedIds: [],
+    created: 0,
     listJson,
     async listAccessibleJson() {
-      return [];
+      throw new Error("shared-with-me list failed");
     },
-    readJson: (fileId) => inner.readJson(fileId),
+    readJson: readJson ?? ((fileId) => inner.readJson(fileId)),
     async createJson() {
+      drive.created += 1;
       throw new Error("createJson must not run when seats.json is reachable by id");
     },
     async updateJson(fileId, content, name, properties) {
@@ -1118,6 +1120,7 @@ async function assertPasswordSaveAgainstUnlistableFolder(
     assert.equal(changed.error, "expected ok when updateJson of seats.json succeeded");
     return;
   }
+  assert.equal(drive.created, 0);
   assert.ok(drive.updatedIds.length >= 1);
   assert.equal(
     drive.updatedIds.every((id) => id === SEATS_VAULT_FILE_ID),
@@ -1142,6 +1145,19 @@ test("confirmOwnPasswordWrite succeeds when listJson throws and seats.json is up
 
 test("confirmOwnPasswordWrite succeeds when listJson is empty and seats.json is updated by id", async () => {
   const drive = unlistableSeatsDrive(async () => []);
+  useSeatVaultForTests(drive);
+  await assertPasswordSaveAgainstUnlistableFolder(drive);
+});
+
+test("confirmOwnPasswordWrite succeeds when listJson and readJson throw and seats.json is updated by known id", async () => {
+  const drive = unlistableSeatsDrive(
+    async () => {
+      throw new Error("The user does not have sufficient permissions for this file.");
+    },
+    async () => {
+      throw new Error("read");
+    },
+  );
   useSeatVaultForTests(drive);
   await assertPasswordSaveAgainstUnlistableFolder(drive);
 });

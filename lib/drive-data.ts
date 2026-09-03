@@ -94,13 +94,18 @@ async function listAccessibleVaultJson(adapter: DriveAdapter, name: string) {
 }
 
 async function fileFromStoredId(adapter: DriveAdapter, name: string, kind: string) {
-  const id =
-    rememberedVaultFileIds.get(vaultFileKey(name, kind)) || vaultEnvFileId(name) || KNOWN_VAULT_FILE_IDS[name] || "";
+  const envId = vaultEnvFileId(name);
+  const knownId = KNOWN_VAULT_FILE_IDS[name] || "";
+  const id = rememberedVaultFileIds.get(vaultFileKey(name, kind)) || envId || knownId;
   if (!id) return null;
-  try {
-    await adapter.readJson(id);
-  } catch {
-    return null;
+  // SEATS_VAULT_FILE_ID / DRIVE_SEATS_FILE_ID: PATCH by id even if GET media throws.
+  // Never fall through to createJson in the unlistable Estimates folder.
+  if (!(envId || knownId)) {
+    try {
+      await adapter.readJson(id);
+    } catch {
+      return null;
+    }
   }
   rememberVaultFileId(name, kind, id);
   return { id, name, properties: { kind } };

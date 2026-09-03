@@ -290,7 +290,13 @@ function persistHashes(users: StoredUser[], opts?: { replaceEmails?: string[]; c
   if (drive) {
     const write = pendingVault
       .then(async () => {
-        const raw = await readVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
+        let raw: unknown = null;
+        try {
+          raw = await readVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
+        } catch {
+          // Known seats.json id is still updated when GET media throws. 503 only if updateJson throws.
+          raw = null;
+        }
         const vaultHashes = parseSeatHashes(raw);
         const vaultExtras = parseExtraSeats(raw);
         const combined: NonNullable<SeatFile["hashes"]> = { ...vaultHashes };
