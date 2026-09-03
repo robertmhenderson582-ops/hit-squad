@@ -2,7 +2,7 @@ import { canSeeCompany, companyScopeFor, type CompanyScope } from "./companies.t
 import { hasBuildDesk, isOwner } from "./desk-role.ts";
 import type { PublicLeadBrief } from "./lead-briefs.ts";
 import { PHASE_IDS, PHASE_NAMES, type PhaseRow } from "./phase-schedule.ts";
-import { emptyRegisterRow, hydrateRegisterRows, type ModuleRegisterRow } from "./quality-hse-modules.ts";
+import { emptyRegisterRow, hydrateRegisterRows, type ModuleRegisterRow } from "./register-rows.ts";
 
 export const QUALITY_DAY1_LABEL = "Quality Day-1";
 export const QUALITY_LIVE_NOTE = "This job is live for Quality. Named forms and the rolling chart sit on this module.";
