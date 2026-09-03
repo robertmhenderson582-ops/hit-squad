@@ -222,7 +222,7 @@ function thirdPartyBucket(item: string): "tension" | "crane" | "rental" {
 function buildRateSheet(input: EstimateXlsxInput, keys: RateKey[]): BuiltSheet | null {
   if (!keys.length) return null;
   const cells = headerCells(input);
-  const headers = ["Craft", "COMP BW", "ST Bill", "OT Bill", "DT Bill", "PD"];
+  const headers = ["Craft", "COMP BW $", "ST Bill $", "OT Bill $", "DT Bill $", "PD Rate"];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
   const site = input.site ?? "";
   keys.forEach((key, index) => {
@@ -278,7 +278,7 @@ function buildCrewSheet(
     "OT $",
     "DT $",
     "PD $",
-    "Total",
+    "Total $",
   ];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
   live.forEach((row, index) => {
@@ -421,7 +421,7 @@ function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPa
   const live = lines.filter(liveThirdParty);
   if (!live.length) return null;
   const cells = headerCells(input);
-  ["Item", "Period", "Qty", "Periods", "Rate", "Freight", "Cost", "Total"].forEach((label, index) => {
+  ["Item", "Period", "Qty", "Periods", "Rate $", "Freight $", "Cost $", "Total $"].forEach((label, index) => {
     pushText(cells, `${colLetter(index + 1)}6`, label);
   });
   live.forEach((line, index) => {
@@ -449,7 +449,7 @@ function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
   const live = (input.equipment?.largeTools ?? []).filter(liveLargeTool);
   if (!live.length) return null;
   const cells = headerCells(input);
-  ["Item", "Period", "Qty", "Periods", "Rate", "Freight", "Total"].forEach((label, index) => {
+  ["Item", "Period", "Qty", "Periods", "Rate $", "Freight $", "Total $"].forEach((label, index) => {
     pushText(cells, `${colLetter(index + 1)}6`, label);
   });
   live.forEach((line, index) => {
@@ -482,7 +482,7 @@ function buildTravelSheet(input: EstimateXlsxInput, lines: TravelLine[], name: s
   const live = lines.filter(liveTravel);
   if (!live.length) return null;
   const cells = headerCells(input);
-  ["Kind", "Travelers", "Miles", "$ / mile", "Total"].forEach((label, index) => {
+  ["Kind", "Travelers", "Miles", "$ / mile", "Total $"].forEach((label, index) => {
     pushText(cells, `${colLetter(index + 1)}6`, label);
   });
   live.forEach((line, index) => {
@@ -506,7 +506,7 @@ function buildMiscSheet(input: EstimateXlsxInput): BuiltSheet | null {
   const craftTravel = (input.otherCost?.travel ?? []).filter((line) => line.kind === "craft" && liveTravel(line));
   if (!misc.length && !craftTravel.length) return null;
   const cells = headerCells(input);
-  ["Item", "Description", "Qty", "Each", "Total"].forEach((label, index) => {
+  ["Item", "Description", "Qty", "Each $", "Total $"].forEach((label, index) => {
     pushText(cells, `${colLetter(index + 1)}6`, label);
   });
   let excelRow = 7;
@@ -540,7 +540,7 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
   const cards = (sheet.cards ?? []).filter((card) => subCardTotal(card, ctx) > 0);
   if (!lines.length && !cards.length) return null;
   const cells = headerCells(input);
-  ["Vendor", "Scope", "Qty", "Rate", "Affiliate", "Cost", "Markup", "Total"].forEach((label, index) => {
+  ["Vendor", "Scope", "Qty", "Rate $", "Affiliate", "Cost $", "Markup $", "Total $"].forEach((label, index) => {
     pushText(cells, `${colLetter(index + 1)}6`, label);
   });
   let excelRow = 7;
@@ -569,7 +569,7 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
   }
   const first = 7;
   const last = excelRow - 1;
-  pushText(cells, `A${excelRow}`, "ESTIMATE TOTAL");
+  pushText(cells, `A${excelRow}`, "ESTIMATE TOTAL $");
   pushFormula(cells, `F${excelRow}`, `SUM(F${first}:F${last})`);
   pushFormula(cells, `G${excelRow}`, `SUM(G${first}:G${last})`);
   pushFormula(cells, `H${excelRow}`, `SUM(H${first}:H${last})`);
@@ -589,17 +589,17 @@ function addSummaryLine(
 
 function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet {
   const cells = headerCells(input);
-  pushText(cells, "A6", "Line");
-  pushText(cells, "B6", "Amount");
+  pushText(cells, "A6", "Rollup line");
+  pushText(cells, "B6", "Amount $");
   const byName = new Map(built.map((sheet) => [xlsxName(sheet.name), sheet]));
   const moneyRefs: string[] = [];
   let row = 7;
 
   const laborSheets: Array<[string, string]> = [
-    ["Staff", ESTIMATE_XLSX_SHEETS.staff],
-    ["Foremen", ESTIMATE_XLSX_SHEETS.foremen],
-    ["Direct", ESTIMATE_XLSX_SHEETS.direct],
-    ["Support", ESTIMATE_XLSX_SHEETS.support],
+    ["Staff labor $", ESTIMATE_XLSX_SHEETS.staff],
+    ["Foremen labor $", ESTIMATE_XLSX_SHEETS.foremen],
+    ["Direct labor $", ESTIMATE_XLSX_SHEETS.direct],
+    ["Support labor $", ESTIMATE_XLSX_SHEETS.support],
   ];
   const laborRefs: string[] = [];
   for (const [label, name] of laborSheets) {
@@ -610,7 +610,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     row += 1;
   }
   if (laborRefs.length) {
-    const ref = addSummaryLine(cells, row, "Labor", `SUM(${laborRefs.join(",")})`);
+    const ref = addSummaryLine(cells, row, "Labor $", `SUM(${laborRefs.join(",")})`);
     if (ref) moneyRefs.push(ref);
     row += 1;
   }
@@ -622,19 +622,25 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     })
     .filter(Boolean);
   if (pdRefs.length) {
-    const ref = addSummaryLine(cells, row, "Per diem", pdRefs.length === 1 ? pdRefs[0] : `SUM(${pdRefs.join(",")})`);
+    const ref = addSummaryLine(cells, row, "Per diem $", pdRefs.length === 1 ? pdRefs[0] : `SUM(${pdRefs.join(",")})`);
     if (ref) moneyRefs.push(ref);
     row += 1;
   }
 
+  const slicer = byName.get(xlsxName(ESTIMATE_XLSX_SHEETS.slicer));
+  if (slicer?.sheetTotal) {
+    addSummaryLine(cells, row, "Hours", sheetRef(ESTIMATE_XLSX_SHEETS.slicer, slicer.sheetTotal));
+    row += 1;
+  }
+
   const extra: Array<[string, string]> = [
-    ["Staff travel", ESTIMATE_XLSX_SHEETS.travel],
-    ["Misc", ESTIMATE_XLSX_SHEETS.misc],
-    ["Equipment rental", ESTIMATE_XLSX_SHEETS.rental],
-    ["Tensioning / torquing", ESTIMATE_XLSX_SHEETS.tension],
-    ["Crane rental", ESTIMATE_XLSX_SHEETS.crane],
-    ["COE", ESTIMATE_XLSX_SHEETS.coe],
-    ["Subcontractor", ESTIMATE_XLSX_SHEETS.sub],
+    ["Staff travel $", ESTIMATE_XLSX_SHEETS.travel],
+    ["Misc $", ESTIMATE_XLSX_SHEETS.misc],
+    ["Equipment rental $", ESTIMATE_XLSX_SHEETS.rental],
+    ["Tensioning / torquing $", ESTIMATE_XLSX_SHEETS.tension],
+    ["Crane rental $", ESTIMATE_XLSX_SHEETS.crane],
+    ["COE $", ESTIMATE_XLSX_SHEETS.coe],
+    ["Subcontractor $", ESTIMATE_XLSX_SHEETS.sub],
   ];
   for (const [label, name] of extra) {
     const sheet = byName.get(xlsxName(name));
@@ -645,7 +651,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
   }
 
   const totalRow = row + 1;
-  pushText(cells, `A${totalRow}`, "ESTIMATE TOTAL");
+  pushText(cells, `A${totalRow}`, "ESTIMATE TOTAL $");
   if (moneyRefs.length) pushFormula(cells, `B${totalRow}`, `SUM(${moneyRefs.join(",")})`);
   else pushNum(cells, `B${totalRow}`, 0);
 

@@ -257,9 +257,10 @@ describe("estimate excel export", () => {
     assert.match(String(staff.cells.find((cell) => cell.ref === "K7")?.value), /^C7\*G7$/);
     assert.match(String(staff.cells.find((cell) => cell.ref === "G7")?.value), /Rate Tables/);
     assert.match(String(staff.cells.find((cell) => cell.ref === "O8")?.value), /^SUM\(O7:O7\)$/);
-    const summaryFormulas = summary.cells.filter((cell) => cell.type === "formula");
-    assert.equal(summaryFormulas.length > 0, true);
-    assert.equal(summary.cells.some((cell) => cell.ref.startsWith("B") && cell.type === "number" && cell.value > 0), false);
+    assert.equal(summary.cells.some((cell) => cell.ref === "A7" && cell.value === "Staff labor $"), true);
+    assert.equal(summary.cells.some((cell) => cell.ref.startsWith("A") && cell.value === "Hours"), true);
+    assert.equal(summary.cells.find((cell) => cell.ref === "B6")?.value, "Amount $");
+    assert.equal(staff.cells.find((cell) => cell.ref === "O6")?.value, "Total $");
 
     const { evalAt } = evaluateWorkbook(sheets);
     const amountAt = (label: string) => {
@@ -274,7 +275,7 @@ describe("estimate excel export", () => {
     const rental = evalAt(ESTIMATE_XLSX_SHEETS.rental, "H8");
     const travel = evalAt(ESTIMATE_XLSX_SHEETS.travel, "E8");
     const misc = evalAt(ESTIMATE_XLSX_SHEETS.misc, "E8");
-    const grand = amountAt("ESTIMATE TOTAL");
+    const grand = amountAt("ESTIMATE TOTAL $");
     assert.equal(staffLabor > 0, true);
     assert.equal(directLabor > 0, true);
     assert.equal(Math.round((staffLabor + directLabor + staffPd + directPd + rental + travel + misc) * 100) / 100, Math.round(grand * 100) / 100);
@@ -305,6 +306,25 @@ describe("estimate excel export", () => {
     assert.match(String(summarySheet.getCell("A2").value ?? ""), /Produced by Hit Squad Project Controls/);
     assert.equal(wb.worksheets.some((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.summary), true);
     assert.equal(/nathan|cat 2 pit stop/i.test(JSON.stringify(wb.model)), false);
+
+    const staffSheet = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    assert.ok(staffSheet && summarySheet);
+    assert.equal(staffSheet.getCell("C7").numFmt, "#,##0.0");
+    assert.equal(staffSheet.getCell("K7").numFmt, "$#,##0.00");
+    assert.equal(staffSheet.getCell("G7").numFmt, "$#,##0.00");
+    assert.equal(staffSheet.getCell("B7").numFmt, "#,##0");
+    assert.equal(staffSheet.getCell("F7").numFmt, "#,##0.0");
+    let hoursRow = 0;
+    let totalRow = 0;
+    summarySheet.eachRow((row, rowNumber) => {
+      const label = String(row.getCell(1).value ?? "");
+      if (label === "Hours") hoursRow = rowNumber;
+      if (label === "ESTIMATE TOTAL $") totalRow = rowNumber;
+    });
+    assert.equal(hoursRow > 0, true);
+    assert.equal(totalRow > hoursRow, true);
+    assert.equal(summarySheet.getCell(`B${hoursRow}`).numFmt, "#,##0.0");
+    assert.equal(summarySheet.getCell(`B${totalRow}`).numFmt, "$#,##0.00");
   });
 
   it("uses that job's clock and rates, not a Wood River or Nathan gate", () => {

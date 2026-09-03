@@ -49,24 +49,33 @@ function maxHeaderCol(cells: SheetCell[], row = 6): string {
 
 /** Map column header labels to unmistakable Excel number formats. */
 export function formatForHeader(header: string): string | undefined {
-  const h = header.trim();
-  const lower = h.toLowerCase();
-  if (lower.includes("%") || (lower.includes("markup") && lower.includes("%"))) return FMT_PERCENT;
-  if (/hrs|hours/.test(lower)) return FMT_HOURS;
-  if (/days/.test(lower)) return FMT_HOURS;
-  if (/headcount|qty|periods|travelers|miles|\bcount\b/.test(lower)) return FMT_INTEGER;
-  if (lower === "amount") return FMT_CURRENCY;
+  const lower = header.trim().toLowerCase();
+  if (lower.includes("%") || lower === "markup %") return FMT_PERCENT;
+  if (/pd days/.test(lower)) return FMT_HOURS;
+  if (/hrs|hours/.test(lower) && !/\$/.test(lower)) return FMT_HOURS;
+  if (/headcount|qty|periods|travelers|\bcount\b/.test(lower)) return FMT_INTEGER;
+  if (lower === "miles") return FMT_INTEGER;
   if (
-    /\$|amount|total|cost|freight|each|pd \$|st \$|ot \$|dt \$/.test(lower) &&
+    /\$|amount|cost|freight|each|markup|bill|bw|\/ mile|rate|total|pd \$|st \$|ot \$|dt \$/.test(lower) &&
     !/hrs|hours/.test(lower)
   ) {
     return FMT_CURRENCY;
   }
-  if (/\bbill\b|\bbw\b|\brate\b|\$ \/ mile/.test(lower) && !/hrs|hours/.test(lower)) {
-    return FMT_CURRENCY;
-  }
   return undefined;
 }
+
+/** Summary rollup column B uses the line label in column A, not the sheet header. */
+export function summaryLineFormat(lineLabel: string): string {
+  if (lineLabel.trim().toLowerCase() === "hours") return FMT_HOURS;
+  return FMT_CURRENCY;
+}
+
+export const EXCEL_UNIT_FORMATS = {
+  currency: FMT_CURRENCY,
+  hours: FMT_HOURS,
+  integer: FMT_INTEGER,
+  percent: FMT_PERCENT,
+} as const;
 
 function tabColorArgb(name: string): string {
   if (name === "Summary Page") return BRAND_STEEL;
@@ -78,9 +87,28 @@ function tabColorArgb(name: string): string {
   return "FF2A7A84";
 }
 
+function labelByRow(cells: SheetCell[], row: number): string | undefined {
+  const cell = cells.find((item) => item.ref === `A${row}`);
+  return cell?.type === "text" ? cell.value : undefined;
+}
+
+function cellFormat(
+  sheet: WorkbookSheet,
+  headers: Map<string, string>,
+  col: string,
+  row: number,
+  isSummary: boolean,
+): string | undefined {
+  if (isSummary && col === "B" && row >= 7) {
+    return summaryLineFormat(labelByRow(sheet.cells, row) ?? "Amount $");
+  }
+  const header = headers.get(col) ?? (isSummary && col === "B" ? "Amount $" : "");
+  return formatForHeader(header);
+}
+
 function isTotalRow(cells: SheetCell[], row: number): boolean {
   const label = cells.find((cell) => cell.ref === `A${row}`);
-  return label?.type === "text" && /^(TOTAL|ESTIMATE TOTAL)$/i.test(label.value);
+  return label?.type === "text" && /^(TOTAL|ESTIMATE TOTAL)/i.test(label.value);
 }
 
 function defaultMerges(cells: SheetCell[]): string[] {
@@ -211,10 +239,8 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       if (totalRows.has(row)) applyTotalStyle(exCell);
       else applyRowStyle(exCell, row, maxRow, isSummary, colNum);
 
-      const header = headers.get(col);
-      const fmt = formatForHeader(header ?? (isSummary && col === "B" ? "Amount" : ""));
+      const fmt = cellFormat(sheet, headers, col, row, isSummary);
       if (fmt && row >= 7 && cell.type !== "text") exCell.numFmt = fmt;
-      if (isSummary && col === "B" && row >= 7 && cell.type !== "text") exCell.numFmt = FMT_CURRENCY;
     }
 
     for (const [col, header] of headers) {
