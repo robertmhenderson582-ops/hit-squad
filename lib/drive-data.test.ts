@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { beforeEach, describe, it } from "node:test";
 
 import {
   ACTIVITY_VAULT_KIND,
@@ -27,6 +27,10 @@ import {
 import { memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
 
 describe("vault named json", () => {
+  beforeEach(() => {
+    resetVaultFileIdsForTests();
+  });
+
   it("writes and reads companies.json without inventing hall dollars", async () => {
     const drive = memoryDrive();
     const payload = { assignments: { "josephmhenderson2002@gmail.com": "acme" }, companies: [{ id: "acme", name: "Acme" }] };
