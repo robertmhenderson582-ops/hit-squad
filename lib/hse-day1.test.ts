@@ -7,6 +7,7 @@ import {
   canSeeMadisonSafetyManuals,
   emptyHseDay1,
   hseJobSnapshot,
+  hseNotify,
   hsePackageForSeat,
   hseScoreboardHours,
 } from "./hse-day1.ts";
@@ -28,5 +29,7 @@ describe("HSE Day-1 seat leaks", () => {
     assert.equal(qualitySurfaceLeaks(surface), false);
     assert.equal(HSE_PACKAGE_SLOTS.some((slot) => /29\.1|sling/i.test(slot.label)), false);
     assert.equal(qualitySurfaceLeaks({ vault: "1zYl2dEvW21", file: "hse-briefs.json" }), true);
+    assert.equal(hseNotify("Awarded"), true);
+    assert.equal(hseNotify("Estimate"), false);
   });
 });

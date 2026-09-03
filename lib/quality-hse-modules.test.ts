@@ -7,7 +7,12 @@ import { qualityNotify } from "./quality-day1.ts";
 import { hseNotify } from "./hse-day1.ts";
 import {
   CLIENT_FOLDERS,
+  QUALITY_HSE_INTERACTION_ACTIVE,
+  QUALITY_TAB_ID,
+  HSE_TAB_ID,
   clientFolderId,
+  qualityHseAwardedHinge,
+  qualityHseQuietDoorsOn,
   qualityHseTabIds,
   showsQualityHseModules,
 } from "./quality-hse-modules.ts";
@@ -44,20 +49,32 @@ const DEAD_NAME_LIST =
 
 describe("Quality and HSE have no estimate interaction", () => {
   it("keeps the Awarded notify hinge in code and does not fire it", () => {
+    assert.equal(QUALITY_HSE_INTERACTION_ACTIVE, false);
+    assert.equal(qualityHseAwardedHinge("Awarded"), true);
+    assert.equal(qualityHseAwardedHinge("Estimate"), false);
+    assert.equal(qualityHseAwardedHinge("Submitted"), false);
     assert.equal(qualityNotify("Awarded"), true);
     assert.equal(qualityNotify("Estimate"), false);
     assert.equal(qualityNotify("Submitted"), false);
     assert.equal(hseNotify("Awarded"), true);
     assert.equal(hseNotify("Estimate"), false);
+    assert.equal(showsQualityHseModules("Awarded"), false);
+    assert.equal(qualityHseQuietDoorsOn("Awarded"), false);
+    assert.deepEqual(qualityHseTabIds("Awarded"), []);
+    assert.deepEqual(qualityHseTabIds("Awarded"), QUALITY_HSE_INTERACTION_ACTIVE ? [QUALITY_TAB_ID, HSE_TAB_ID] : []);
     const workspace = source("../components/EstimateWorkspace.tsx");
     const setup = source("../components/JobSetupCard.tsx");
     const quality = source("../components/QualityDesk.tsx");
     const hse = source("../components/HseDesk.tsx");
-    assert.doesNotMatch(workspace, /qualityNotify|hseNotify/);
-    assert.doesNotMatch(setup, /qualityNotify|hseNotify|onOpenQuality|onOpenHse/);
-    assert.doesNotMatch(quality, /qualityNotify|qualityLive/);
-    assert.doesNotMatch(hse, /hseNotify/);
-    assert.match(source("./quality-hse-modules.ts"), /No interaction with the estimate/);
+    const doors = source("../components/QualityHseQuietDoors.tsx");
+    assert.doesNotMatch(workspace, /qualityNotify|hseNotify|showsQualityHseModules|QUALITY_TAB_ID/);
+    assert.doesNotMatch(setup, /qualityNotify|hseNotify|onOpenQuality|onOpenHse|QualityHseQuietDoors|showsQualityHseModules/);
+    assert.doesNotMatch(quality, /qualityNotify|qualityLive|QualityHseQuietDoors/);
+    assert.doesNotMatch(hse, /hseNotify|QualityHseQuietDoors/);
+    assert.match(doors, /qualityHseQuietDoorsOn/);
+    assert.match(doors, /onOpenQuality/);
+    assert.match(doors, /onOpenHse/);
+    assert.match(source("./quality-hse-modules.ts"), /QUALITY_HSE_INTERACTION_ACTIVE/);
     const modules = source("../components/FutureModulesDesk.tsx");
     assert.match(modules, /No estimate interaction unless a lead/);
     assert.match(modules, /Quality and HSE are fillable modules/);
