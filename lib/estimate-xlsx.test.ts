@@ -15,7 +15,8 @@ import {
   sheetRef,
 } from "./estimate-xlsx.ts";
 import { computeRowHours } from "./hours-clock.ts";
-import { lookupShahanLabor, shahanCrewCostAmount } from "./shahan-wood-river.ts";
+import { defaultLaborClass } from "./labor-class.ts";
+import { lookupShahanLabor, SHAHAN_NO_RATE_LABEL, shahanCrewCostAmount } from "./shahan-wood-river.ts";
 import { wageLookupOpts } from "./wage-lookup.ts";
 import { buildSheetXml, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
@@ -23,7 +24,14 @@ function craft(
   id: string,
   position: string,
   hoursPerShift: number,
-  extra: Partial<CraftRow> & { phaseId?: string; start?: string; end?: string; perDiemPeople?: number; otAfter8?: boolean } = {},
+  extra: Partial<CraftRow> & {
+    phaseId?: string;
+    start?: string;
+    end?: string;
+    perDiemPeople?: number;
+    otAfter8?: boolean;
+    days?: boolean[];
+  } = {},
 ): CraftRow {
   return {
     id,
@@ -46,7 +54,7 @@ function craft(
         nightHeadcount: 0,
         hoursPerShift,
         perDiemPeople: extra.perDiemPeople ?? 1,
-        days: [false, true, true, true, true, true, false],
+        days: extra.days ?? [false, true, true, true, true, true, false],
         otAfter8: extra.otAfter8,
         phaseId: extra.phaseId ?? "mech",
       },
@@ -368,5 +376,140 @@ describe("estimate excel export", () => {
     const { evalAt } = evaluateWorkbook(sheets);
     const subTotal = evalAt(subName, "H8");
     assert.equal(subTotal, 1000 * 1.065);
+  });
+
+  it("resolves ambiguous Shahan titles the same way the desk does and never writes a fake $0 rate", () => {
+    assert.equal(lookupShahanLabor("Lead Safety 01"), null);
+    const merit = lookupShahanLabor("Lead Safety 01", { laborClass: "Merit" });
+    const union = lookupShahanLabor("Lead Safety 01", { laborClass: "Union" });
+    assert.equal(merit?.st, 91.02);
+    assert.equal(union?.st, 127.36);
+    assert.equal(defaultLaborClass("Lead Safety 01"), "Merit");
+
+    const site = "Wood River — Roxana, IL";
+    const meritRow = craft("st-merit", "Lead Safety 01", 10);
+    const unionRow = craft("st-union", "Lead Safety 01", 10, { laborClassOverride: "Union" });
+    const noneRow = craft("sup-1", "Fire Watch", 10);
+    const sheets = buildEstimateWorkbook({
+      title: "Aromatics staff rates",
+      client: "Phillips 66",
+      site,
+      crew: {
+        staff: [meritRow, unionRow],
+        support: [{ ...noneRow, billedAs: "" }],
+      },
+    });
+    const rates = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.rates);
+    const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff);
+    const support = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.support);
+    assert.ok(rates && staff && support);
+    const rateMap = cellMap(rates);
+    const staffMap = cellMap(staff);
+    const supportMap = cellMap(support);
+    assert.equal(rateMap.get("A7")?.value, "Lead Safety 01 · Merit");
+    assert.equal(rateMap.get("A8")?.value, "Lead Safety 01 · Union");
+    assert.equal(rateMap.get("C7")?.type, "number");
+    assert.equal(rateMap.get("C7")?.value, 91.02);
+    assert.equal(rateMap.get("C8")?.value, 127.36);
+    assert.equal(rateMap.get("B7")?.value, 52.5);
+    assert.equal(rateMap.get("A9")?.value, "Fire Watch");
+    assert.equal(rateMap.get("C9")?.type, "text");
+    assert.equal(rateMap.get("C9")?.value, SHAHAN_NO_RATE_LABEL);
+    assert.equal(rateMap.get("C9")?.value === 0, false);
+
+    assert.match(String(staffMap.get("G7")?.value), /Rate Tables.*C7/);
+    assert.match(String(staffMap.get("G8")?.value), /Rate Tables.*C8/);
+    assert.equal(supportMap.get("G7")?.type, "text");
+    assert.equal(supportMap.get("G7")?.value, SHAHAN_NO_RATE_LABEL);
+    assert.equal(supportMap.get("K7"), undefined);
+
+    const { evalAt } = evaluateWorkbook(sheets);
+    const hours = computeRowHours(meritRow, site, "Phillips 66");
+    assert.equal(hours.st, 10);
+    assert.equal(hours.ot, 0);
+    assert.equal(staffMap.get("C7")?.value, 10);
+    assert.equal(staffMap.get("D7")?.value, 0);
+    const round2 = (value: number) => Math.round(value * 100) / 100;
+    assert.equal(
+      round2(evalAt(ESTIMATE_XLSX_SHEETS.staff, "O7")),
+      shahanCrewCostAmount("Lead Safety 01", hours, wageLookupOpts(site, { laborClass: "Merit" })),
+    );
+    assert.equal(
+      round2(evalAt(ESTIMATE_XLSX_SHEETS.staff, "O8")),
+      shahanCrewCostAmount("Lead Safety 01", hours, wageLookupOpts(site, { laborClass: "Union" })),
+    );
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.support, "O7"), 0);
+  });
+
+  it("exports B-1 staff seats on the staff clock, not the East Coast craft clock", () => {
+    const site = "Wood River — Roxana, IL";
+    const client = "Phillips 66";
+    const weekday = {
+      start: "2026-09-01",
+      end: "2026-09-01",
+      otAfter8: false as const,
+    };
+    const sheets = buildEstimateWorkbook({
+      title: "Aromatics clocks",
+      client,
+      site,
+      crew: {
+        staff: [
+          craft("ls", "Lead Site 01", 10, weekday),
+          craft("safe", "Lead Safety 01", 10, weekday),
+          craft("qa", "COORDINATOR QA-QC 1", 10, weekday),
+          craft("doc", "Clerk Document 01", 10, weekday),
+          craft("off", "Manager Office 01", 10, weekday),
+          craft("tk", "Clerk Timekeeper 01", 10, weekday),
+          craft("comp", "Lead Site 01", 10, { ...weekday, clockOverride: "comp", otAfter8: true }),
+        ],
+        generalForeman: [craft("gf", "Pipefitter GF Union", 10, { ...weekday, otAfter8: true })],
+        otAfter8: true,
+      },
+    });
+    const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff);
+    const foremen = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.foremen);
+    assert.ok(staff && foremen);
+    const staffMap = cellMap(staff);
+    const gfMap = cellMap(foremen);
+    for (const row of [7, 8, 9, 10, 11, 12]) {
+      assert.equal(staffMap.get(`C${row}`)?.value, 10, `staff ST row ${row}`);
+      assert.equal(staffMap.get(`D${row}`)?.value, 0, `staff OT row ${row}`);
+    }
+    assert.equal(staffMap.get("C13")?.value, 8);
+    assert.equal(staffMap.get("D13")?.value, 2);
+    assert.equal(gfMap.get("C7")?.value, 8);
+    assert.equal(gfMap.get("D7")?.value, 2);
+
+    const saturday = buildEstimateWorkbook({
+      title: "Aromatics Saturday",
+      client,
+      site,
+      crew: {
+        staff: [
+          craft("sat-staff", "Lead Safety 01", 10, {
+            start: "2026-09-05",
+            end: "2026-09-05",
+            days: [false, false, false, false, false, false, true],
+            otAfter8: false,
+          }),
+        ],
+        generalForeman: [
+          craft("sat-gf", "Pipefitter GF Union", 10, {
+            start: "2026-09-05",
+            end: "2026-09-05",
+            days: [false, false, false, false, false, false, true],
+            otAfter8: true,
+          }),
+        ],
+        otAfter8: true,
+      },
+    });
+    const satStaff = cellMap(sheetOf(saturday, ESTIMATE_XLSX_SHEETS.staff)!);
+    const satGf = cellMap(sheetOf(saturday, ESTIMATE_XLSX_SHEETS.foremen)!);
+    assert.equal(satStaff.get("C7")?.value, 10);
+    assert.equal(satStaff.get("D7")?.value, 0);
+    assert.equal(satGf.get("C7")?.value, 0);
+    assert.equal(satGf.get("D7")?.value, 10);
   });
 });

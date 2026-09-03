@@ -43,6 +43,43 @@ describe("seat vs clock override", () => {
     assert.equal(seatKind("Project Manager"), "staff");
   });
 
+  it("B-1 staff titles use the staff clock, not a keyword-only lookup", () => {
+    for (const title of [
+      "Lead Site 01",
+      "LEAD SITE 01",
+      "Lead Safety 01",
+      "COORDINATOR QA-QC 1",
+      "Clerk Document 01",
+      "Manager Office 01",
+      "Clerk Timekeeper 01",
+      "Lead Site Boilermaker 01",
+    ]) {
+      assert.equal(seatKind(title), "staff", title);
+      assert.equal(runningClock(title, WOOD_RIVER.site, WOOD_RIVER.client, "auto"), "staff", title);
+    }
+    assert.equal(runningClock("Lead Safety 01", WOOD_RIVER.site, WOOD_RIVER.client, "comp"), "east-coast");
+    const weekday = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Lead Safety 01",
+      start: "2026-09-01",
+      end: "2026-09-01",
+      hoursPerShift: 10,
+      days: [false, true, true, true, true, true, false],
+    });
+    assert.equal(weekday.st, 10);
+    assert.equal(weekday.ot, 0);
+    const saturday = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Lead Site 01",
+      start: "2026-09-05",
+      end: "2026-09-05",
+      hoursPerShift: 10,
+      days: [false, false, false, false, false, false, true],
+    });
+    assert.equal(saturday.st, 10);
+    assert.equal(saturday.ot, 0);
+  });
+
   it("GF and craft codes stay on the COMP clock", () => {
     assert.equal(seatKind("General Foreman"), "craft");
     assert.equal(seatKind("Foreman"), "craft");

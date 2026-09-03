@@ -18,10 +18,19 @@ import {
 import { slugify } from "./estimate-pack.ts";
 import { ESTIMATE_MARKUP_RATE } from "./estimate-total.ts";
 import { boundOtLabel, computeRowHours, type HoursSplit } from "./hours-clock.ts";
+import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
 import { orgChartBoxLabel, orgChartBoxes, type OrgChartCrew, type OrgChartState } from "./org-chart.ts";
 import { crewPositionHeadcount, miscAmount, travelAmount, type OtherCostSheet, type TravelLine } from "./other-cost.ts";
 import { PHASE_NAMES, type PhaseId, type PhaseScheduleState } from "./phase-schedule.ts";
-import { lookupShahanEquipment, lookupShahanLabor, shahanCrewTitle, type JobRates, type ShahanLaborRow } from "./shahan-wood-river.ts";
+import {
+  hasShahanBillRate,
+  lookupShahanEquipment,
+  lookupShahanLabor,
+  SHAHAN_NO_RATE_LABEL,
+  shahanCrewTitle,
+  type JobRates,
+  type ShahanLaborRow,
+} from "./shahan-wood-river.ts";
 import { emptySubSheet, lineAmount, subCardTotal, type SubSheet } from "./subcontractor.ts";
 import { bookForSite, wageLookupOpts } from "./wage-lookup.ts";
 import { buildWorkbook, colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
@@ -129,26 +138,49 @@ function rowHours(row: CraftRow, input: EstimateXlsxInput): HoursSplit {
   );
 }
 
-function billedRow(title: string, site = ""): ShahanLaborRow | null {
-  return lookupShahanLabor(title, wageLookupOpts(site));
+type RateKey = {
+  title: string;
+  laborClass: LaborClass;
+};
+
+function rowLaborClass(row: CraftRow): LaborClass {
+  return row.laborClassOverride ?? defaultLaborClass(shahanCrewTitle(row));
 }
 
-function wageRow(title: string, site = ""): ShahanLaborRow | null {
+function rateKeyId(key: RateKey) {
+  return `${key.title}\0${key.laborClass}`;
+}
+
+function billedRow(title: string, site = "", laborClass?: LaborClass | null): ShahanLaborRow | null {
+  const resolved = laborClass ?? defaultLaborClass(title);
+  return lookupShahanLabor(title, wageLookupOpts(site, { laborClass: resolved }));
+}
+
+function wageRow(title: string, site = "", laborClass?: LaborClass | null): ShahanLaborRow | null {
   const book = bookForSite(site);
   if (!book) return null;
-  return lookupShahanLabor(title, { catalog: book.wageCatalog });
+  const resolved = laborClass ?? defaultLaborClass(title);
+  return lookupShahanLabor(title, { catalog: book.wageCatalog, laborClass: resolved });
 }
 
-function usedRateTitles(crew: EstimateXlsxCrew = {}) {
+function usedRateKeys(crew: EstimateXlsxCrew = {}): RateKey[] {
   const seen = new Set<string>();
-  const titles: string[] = [];
+  const keys: RateKey[] = [];
   for (const row of allCrewRows(crew)) {
     const title = shahanCrewTitle(row);
-    if (!title || seen.has(title)) continue;
-    seen.add(title);
-    titles.push(title);
+    if (!title) continue;
+    const key = { title, laborClass: rowLaborClass(row) };
+    const id = rateKeyId(key);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    keys.push(key);
   }
-  return titles;
+  return keys;
+}
+
+function rateCraftLabel(key: RateKey, keys: RateKey[]) {
+  const collisions = keys.filter((item) => item.title === key.title).length > 1;
+  return collisions ? `${key.title} · ${key.laborClass}` : key.title;
 }
 
 function headerCells(input: EstimateXlsxInput): SheetCell[] {
@@ -181,29 +213,33 @@ function thirdPartyBucket(item: string): "tension" | "crane" | "rental" {
   return "rental";
 }
 
-function buildRateSheet(input: EstimateXlsxInput, titles: string[]): BuiltSheet | null {
-  if (!titles.length) return null;
+function buildRateSheet(input: EstimateXlsxInput, keys: RateKey[]): BuiltSheet | null {
+  if (!keys.length) return null;
   const cells = headerCells(input);
   const headers = ["Craft", "COMP BW", "ST Bill", "OT Bill", "DT Bill", "PD"];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
   const site = input.site ?? "";
-  titles.forEach((title, index) => {
+  keys.forEach((key, index) => {
     const excelRow = 7 + index;
-    const billed = billedRow(title, site);
-    const wage = wageRow(title, site);
-    pushText(cells, `A${excelRow}`, title);
+    const billed = billedRow(key.title, site, key.laborClass);
+    const wage = wageRow(key.title, site, key.laborClass);
+    pushText(cells, `A${excelRow}`, rateCraftLabel(key, keys));
     if (typeof wage?.baseSt === "number" && wage.baseSt > 0) pushNum(cells, `B${excelRow}`, wage.baseSt);
-    pushNum(cells, `C${excelRow}`, billed?.st ?? 0);
-    pushNum(cells, `D${excelRow}`, billed?.ot ?? 0);
-    pushNum(cells, `E${excelRow}`, billed?.dt ?? 0);
-    pushNum(cells, `F${excelRow}`, billed?.pd ?? 0);
+    if (hasShahanBillRate(billed)) {
+      pushNum(cells, `C${excelRow}`, billed?.st ?? 0);
+      pushNum(cells, `D${excelRow}`, billed?.ot ?? 0);
+      pushNum(cells, `E${excelRow}`, billed?.dt ?? 0);
+      pushNum(cells, `F${excelRow}`, billed?.pd ?? 0);
+    } else {
+      pushText(cells, `C${excelRow}`, SHAHAN_NO_RATE_LABEL);
+    }
   });
   return { name: ESTIMATE_XLSX_SHEETS.rates, cells };
 }
 
-function rateCell(title: string, titles: string[], col: string) {
-  const index = titles.indexOf(title);
-  if (index < 0) return "0";
+function rateCell(key: RateKey, keys: RateKey[], col: string) {
+  const index = keys.findIndex((item) => item.title === key.title && item.laborClass === key.laborClass);
+  if (index < 0) return "";
   return sheetRef(ESTIMATE_XLSX_SHEETS.rates, `${col}${7 + index}`);
 }
 
@@ -215,7 +251,7 @@ function buildCrewSheet(
   input: EstimateXlsxInput,
   name: string,
   rows: CraftRow[],
-  titles: string[],
+  keys: RateKey[],
   staffPdOf: (row: CraftRow) => boolean,
 ): BuiltSheet | null {
   const live = liveCrewRows(rows);
@@ -243,19 +279,25 @@ function buildCrewSheet(
     const excelRow = 7 + index;
     const hours = rowHours(row, input);
     const title = shahanCrewTitle(row);
+    const key = { title, laborClass: rowLaborClass(row) };
+    const billed = billedRow(title, input.site ?? "", key.laborClass);
     pushText(cells, `A${excelRow}`, row.position.trim());
     pushNum(cells, `B${excelRow}`, crewPositionHeadcount(row));
     pushNum(cells, `C${excelRow}`, hours.st);
     pushNum(cells, `D${excelRow}`, hours.ot);
     pushNum(cells, `E${excelRow}`, hours.dt);
     pushNum(cells, `F${excelRow}`, hours.pd);
-    pushFormula(cells, `G${excelRow}`, rateCell(title, titles, "C"));
-    pushFormula(cells, `H${excelRow}`, rateCell(title, titles, "D"));
-    pushFormula(cells, `I${excelRow}`, rateCell(title, titles, "E"));
+    if (hasShahanBillRate(billed)) {
+      pushFormula(cells, `G${excelRow}`, rateCell(key, keys, "C"));
+      pushFormula(cells, `H${excelRow}`, rateCell(key, keys, "D"));
+      pushFormula(cells, `I${excelRow}`, rateCell(key, keys, "E"));
+      pushFormula(cells, `K${excelRow}`, `C${excelRow}*G${excelRow}`);
+      pushFormula(cells, `L${excelRow}`, `D${excelRow}*H${excelRow}`);
+      pushFormula(cells, `M${excelRow}`, `E${excelRow}*I${excelRow}`);
+    } else {
+      pushText(cells, `G${excelRow}`, SHAHAN_NO_RATE_LABEL);
+    }
     pushNum(cells, `J${excelRow}`, pdRateFor(input, staffPdOf(row)));
-    pushFormula(cells, `K${excelRow}`, `C${excelRow}*G${excelRow}`);
-    pushFormula(cells, `L${excelRow}`, `D${excelRow}*H${excelRow}`);
-    pushFormula(cells, `M${excelRow}`, `E${excelRow}*I${excelRow}`);
     pushFormula(cells, `N${excelRow}`, `F${excelRow}*J${excelRow}`);
     pushFormula(cells, `O${excelRow}`, `K${excelRow}+L${excelRow}+M${excelRow}`);
   });
@@ -605,19 +647,19 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
 }
 
 export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSheet[] {
-  const titles = usedRateTitles(input.crew);
-  const rates = buildRateSheet(input, titles);
+  const keys = usedRateKeys(input.crew);
+  const rates = buildRateSheet(input, keys);
   const gfIds = new Set((input.crew?.generalForeman ?? []).map((row) => row.id));
-  const staff = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.staff, input.crew?.staff ?? [], titles, () => true);
+  const staff = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.staff, input.crew?.staff ?? [], keys, () => true);
   const foremen = buildCrewSheet(
     input,
     ESTIMATE_XLSX_SHEETS.foremen,
     [...(input.crew?.generalForeman ?? []), ...(input.crew?.foreman ?? [])],
-    titles,
+    keys,
     (row) => gfIds.has(row.id),
   );
-  const direct = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.direct, input.crew?.direct ?? [], titles, () => false);
-  const support = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.support, input.crew?.support ?? [], titles, () => false);
+  const direct = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.direct, input.crew?.direct ?? [], keys, () => false);
+  const support = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.support, input.crew?.support ?? [], keys, () => false);
   const org = buildOrgSheet(input);
   const slicer = buildSlicerSheet(input);
   const third = input.equipment?.thirdParty ?? [];

@@ -1,3 +1,5 @@
+import { WOOD_RIVER_STAFF_TITLES } from "./wood-river-positions.ts";
+
 export type SiteClock = "east-coast" | "ca-daily" | "yates" | "customer";
 export type SeatKind = "staff" | "craft";
 export type ClockOverride = "auto" | "comp" | "staff";
@@ -46,7 +48,18 @@ export type RangeDay = {
 export type RangeHours = HoursSplit & { days: RangeDay[] };
 
 const STAFF_SEAT =
-  /\b(superintendent|superintendents|project manager|\bpm\b|cost analyst|analyst cost|project controls|supervision|supervisor|\bmerit\b)\b/i;
+  /\b(superintendent|superintendents|project manager|\bpm\b|cost analyst|analyst cost|project controls|supervision|supervisor|\bmerit\b|lead site|lead safety|lead qa|coordinator|clerk|manager office|manager,? project|engineer,? (?:project|field)|planner|analyst)\b/i;
+
+function staffTitleKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const B1_STAFF_KEYS = new Set(WOOD_RIVER_STAFF_TITLES.map(staffTitleKey));
 
 export function parseYmd(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -99,6 +112,7 @@ export function boundOtLabel(site = "", client = "", plantCode = ""): string {
 
 export function isStaffSeat(position: string): boolean {
   if (STAFF_SEAT.test(position)) return true;
+  if (B1_STAFF_KEYS.has(staffTitleKey(position))) return true;
   const code = position.match(/\b(PF|BM|OE|LB|IW|TM|M)\b/i);
   return Boolean(code && code[1].toUpperCase() === "M");
 }
