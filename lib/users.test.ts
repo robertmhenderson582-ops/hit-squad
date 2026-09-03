@@ -1105,9 +1105,9 @@ function unlistableSeatsDrive(listJson: DriveAdapter["listJson"]) {
   return drive;
 }
 
-async function assertPasswordSaveAgainstUnlistableFolder(listJson: DriveAdapter["listJson"]) {
-  const drive = unlistableSeatsDrive(listJson);
-  useSeatVaultForTests(drive);
+async function assertPasswordSaveAgainstUnlistableFolder(
+  drive: ReturnType<typeof unlistableSeatsDrive>,
+) {
   await hydrateSeatStore();
   const stored = findUserByEmail(OWNER_LOGIN_EMAIL);
   assert.ok(stored);
@@ -1133,11 +1133,15 @@ async function assertPasswordSaveAgainstUnlistableFolder(listJson: DriveAdapter[
 }
 
 test("confirmOwnPasswordWrite succeeds when listJson throws and seats.json is updated by id", async () => {
-  await assertPasswordSaveAgainstUnlistableFolder(async () => {
+  const drive = unlistableSeatsDrive(async () => {
     throw new Error("The user does not have sufficient permissions for this file.");
   });
+  useSeatVaultForTests(drive);
+  await assertPasswordSaveAgainstUnlistableFolder(drive);
 });
 
 test("confirmOwnPasswordWrite succeeds when listJson is empty and seats.json is updated by id", async () => {
-  await assertPasswordSaveAgainstUnlistableFolder(async () => []);
+  const drive = unlistableSeatsDrive(async () => []);
+  useSeatVaultForTests(drive);
+  await assertPasswordSaveAgainstUnlistableFolder(drive);
 });
