@@ -86,6 +86,28 @@ describe("job menu archive and delete", () => {
     assert.equal(isActiveMenuItem(cat2, menuForViewedDesk(false, store)), true);
   });
 
+  it("does not let leftover archive or delete hide HIS Wood River cards", () => {
+    const store = memoryStore();
+    const aromatics = { id: "job-new-mtj7bvtk-akmei", packId: "new-mtj7bvtk-akmei", title: "2027 Aromatics Turnaround" };
+    const cat2 = { id: "job-new-mtaajdwa-f7539", packId: "new-mtaajdwa-f7539", title: "Madison CAT 2 (Pit Stop)" };
+    const tm = { id: "job-EST-MTJ5D6", packId: "EST-MTJ5D6", title: "Wood River / T&M 2027-01 to 06" };
+    deleteMenuItem(aromatics, store);
+    archiveMenuItem(cat2, store);
+    deleteMenuItem(tm, store);
+    const menu = readJobMenu(store);
+    assert.equal(menuStatus(aromatics, menu), null);
+    assert.equal(menuStatus(cat2, menu), null);
+    assert.equal(menuStatus(tm, menu), null);
+    assert.equal(isActiveMenuItem(aromatics, menu), true);
+    assert.equal(isActiveMenuItem(cat2, menu), true);
+    assert.equal(isActiveMenuItem(tm, menu), true);
+    assert.deepEqual(omitDeletedJobs([aromatics, cat2, tm], menu).map((row) => row.id), [
+      aromatics.id,
+      cat2.id,
+      tm.id,
+    ]);
+  });
+
   it("evicts packs that left this desk on the vault list", () => {
     const store = memoryStore();
     writeVaultSeen(["new-cat2pit", "new-mine"], store);

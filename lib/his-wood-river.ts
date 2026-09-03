@@ -1,5 +1,4 @@
 import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
-import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import { listLocalPacks, rememberLocalPack, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
@@ -27,6 +26,7 @@ export type HisIdentityPack = {
   siteId?: string;
   ownerEmail?: string;
   fileId?: string;
+  code?: string;
   estimator?: string;
   transferredTo?: string;
   transferredToName?: string;
@@ -87,11 +87,17 @@ function normPackId(value = "") {
   return value.trim().toLowerCase();
 }
 
-/** EST-MTJ5D6 comes from the first six chars after `new-`, any casing. */
+/** EST-MTJ5D6 from a new- packId, a job-code leftover, or any id that already contains EST-XXXXXX. */
 export function jobCodeFromPackId(packId = "") {
   const id = packId.trim();
   if (!id) return "";
+  const coded = id.toUpperCase().match(/EST-([A-Z0-9]{6})/);
+  if (coded) return `EST-${coded[1]}`;
   return `EST-${id.replace(/^new-/i, "").slice(0, 6).toUpperCase()}`;
+}
+
+function hisTmFile() {
+  return hisKnownEstimateFiles().find((row) => row.fileId === HIS_TM_FILE_ID) ?? null;
 }
 
 export function hisFileForPackId(packId: string) {
@@ -104,9 +110,9 @@ export function hisFileForPackId(packId: string) {
     (row) => row.packId && needle.startsWith(normPackId(row.packId)) && normPackId(row.packId).length >= HIS_TM_PACK_ID.length,
   );
   if (byPrefix) return byPrefix;
-  // Live leftover may be new-MTJ5D6-… — job code still EST-MTJ5D6.
-  if (jobCodeFromPackId(id) === "EST-MTJ5D6") {
-    return hisKnownEstimateFiles().find((row) => row.fileId === HIS_TM_FILE_ID) ?? null;
+  // Live leftover is often EST-MTJ5D6 or new-MTJ5D6-… — not only exact new-mtj5d6.
+  if (needle.includes("mtj5d6") || jobCodeFromPackId(id) === "EST-MTJ5D6") {
+    return hisTmFile();
   }
   return null;
 }
@@ -130,6 +136,10 @@ export function hisMatchForPack(pack?: HisIdentityPack | null) {
   }
   const byId = pack.packId ? hisFileForPackId(pack.packId) : null;
   if (byId) return byId;
+  const code = (pack.code || "").trim().toUpperCase();
+  if (code === "EST-MTJ5D6" || jobCodeFromPackId(pack.packId || "") === "EST-MTJ5D6") {
+    return hisTmFile();
+  }
   const title = hisTitleKey(pack.title);
   if (!title) return null;
   // Exact HIS title is enough. Leftover T&M often has an empty site until rememberLocalPack defaults it.
@@ -147,20 +157,31 @@ export function isHisWoodRiverJob(job?: { title?: string; code?: string } | null
   return Boolean(title && hisKnownEstimateFiles().some((row) => hisTitleKey(row.title) === title));
 }
 
+/** Job-menu leftover ids: packId, job-{packId}, EST-MTJ5D6, or a HIS title. */
+export function isHisProtectedMenuItem(item?: { id?: string; packId?: string; title?: string } | null) {
+  if (!item) return false;
+  const rawId = (item.id || "").trim();
+  const packId = (item.packId || (rawId.startsWith("job-") ? rawId.slice(4) : rawId)).trim();
+  if (hisMatchForPack({ packId, title: item.title })) return true;
+  if (rawId && hisMatchForPack({ packId: rawId, title: item.title })) return true;
+  if (isHisWoodRiverJob({ title: item.title, code: rawId }) || isHisWoodRiverJob({ title: item.title, code: packId })) {
+    return true;
+  }
+  return false;
+}
+
 export function shouldPaintHisCards(user?: { email?: string; role?: string } | null) {
   if (!user) return true;
   if (user.role === "owner" || isOwnerIdentity(user.email)) return true;
   return canonicalEmail(user.email) === NATHAN_DESK_EMAIL;
 }
 
-function hisDeskOwnerEmail(existing?: string) {
-  const current = canonicalEmail(existing) || (existing || "").trim().toLowerCase();
-  if (current === NATHAN_DESK_EMAIL) return NATHAN_DESK_EMAIL;
-  if (isOwnerIdentity(current)) return OWNER_LOGIN_EMAIL;
+/** HIS jobs live on Nathan's desk. Owner OPEN/edits by role, not by owning the pack. */
+function hisDeskOwnerEmail(_existing?: string) {
   return NATHAN_DESK_EMAIL;
 }
 
-export const HIS_LEFTOVER_GEN = "3";
+export const HIS_LEFTOVER_GEN = "4";
 export const HIS_LEFTOVER_GEN_KEY = "hs_his_leftover_gen";
 
 function isJamesStamp(value?: string) {
@@ -178,14 +199,19 @@ export function isForeignHisIdentity(value?: string) {
   return email !== NATHAN_DESK_EMAIL && !isOwnerIdentity(email);
 }
 
-/** Leftover HIS row whose ownerEmail / transferredTo is not Nathan or the owner. */
+function hisOwnerKey(value?: string) {
+  return canonicalEmail(value) || (value || "").trim().toLowerCase();
+}
+
+function shouldClearHisStamp(value?: string) {
+  return isForeignHisIdentity(value) || isOwnerIdentity(value);
+}
+
+/** Leftover HIS row that is not stamped Nathan — James, Benny, owner, or empty. */
 export function isStaleHisLeftoverIdentity(pack?: HisIdentityPack | null) {
   if (!pack || !hisMatchForPack(pack)) return false;
-  return (
-    isForeignHisIdentity(pack.ownerEmail) ||
-    isForeignHisIdentity(pack.transferredTo) ||
-    isForeignHisIdentity(pack.transferredToName)
-  );
+  if (hisOwnerKey(pack.ownerEmail) !== NATHAN_DESK_EMAIL) return true;
+  return shouldClearHisStamp(pack.transferredTo) || shouldClearHisStamp(pack.transferredToName);
 }
 
 export function leftoverHasStaleHisIdentity(packs: HisIdentityPack[]): boolean {
@@ -202,28 +228,22 @@ export function markLeftoverGen(store?: StorageLike | null) {
   store.setItem(HIS_LEFTOVER_GEN_KEY, HIS_LEFTOVER_GEN);
 }
 
-/** Restore Nathan identity unless the owner already holds the pack. No share rows, no dollars. */
+/** Restore Nathan identity. Owner OPEN/edits by role — never own the HIS pack. No share rows, no dollars. */
 export function applyHisIdentity<T extends HisIdentityPack>(pack: T, his?: HisWoodRiverFile | null): T {
   const row = his ?? hisMatchForPack(pack);
   if (!row) return pack;
-  const ownerEmail = hisDeskOwnerEmail(pack.ownerEmail);
-  const next: T = {
+  return {
     ...pack,
     title: row.title,
     client: row.client,
     site: row.site,
     siteId: row.siteId,
-    ownerEmail,
-  };
-  if (ownerEmail !== NATHAN_DESK_EMAIL) return next;
-  // Leftover may keep James (or another desk) on transferredToName / estimator while ownerEmail is restamped.
-  return {
-    ...next,
-    estimator: isForeignHisIdentity(pack.estimator) ? NATHAN_DESK_NAME : pack.estimator,
-    transferredTo: isForeignHisIdentity(pack.transferredTo) ? undefined : pack.transferredTo,
-    transferredToName: isForeignHisIdentity(pack.transferredToName) ? undefined : pack.transferredToName,
-    transferredFrom: isJamesStamp(pack.transferredFrom) ? undefined : pack.transferredFrom,
-    transferredFromName: isJamesStamp(pack.transferredFromName) ? undefined : pack.transferredFromName,
+    ownerEmail: hisDeskOwnerEmail(pack.ownerEmail),
+    estimator: shouldClearHisStamp(pack.estimator) ? NATHAN_DESK_NAME : pack.estimator,
+    transferredTo: shouldClearHisStamp(pack.transferredTo) ? undefined : pack.transferredTo,
+    transferredToName: shouldClearHisStamp(pack.transferredToName) ? undefined : pack.transferredToName,
+    transferredFrom: isJamesStamp(pack.transferredFrom) || isOwnerIdentity(pack.transferredFrom) ? undefined : pack.transferredFrom,
+    transferredFromName: isJamesStamp(pack.transferredFromName) || isOwnerIdentity(pack.transferredFromName) ? undefined : pack.transferredFromName,
     sharedWith: Array.isArray(pack.sharedWith)
       ? pack.sharedWith.filter((email) => !isForeignHisIdentity(email))
       : pack.sharedWith,

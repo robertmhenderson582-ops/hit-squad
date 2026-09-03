@@ -62,7 +62,7 @@ describe("estimate vault scope", () => {
         title: "Madison CAT 2 (Pit Stop)",
         site: "Wood River — Roxana, IL",
       }),
-      OWNER_LOGIN_EMAIL,
+      "nathanboyte@gmail.com",
     );
     assert.equal(
       packOwnerEmailForWrite(

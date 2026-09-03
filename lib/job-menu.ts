@@ -1,3 +1,4 @@
+import { isHisProtectedMenuItem } from "./his-wood-river.ts";
 import { isLocalPackId, type StorageLike } from "./local-estimates.ts";
 
 export const JOB_MENU_KEY = "hs_job_menu_v1";
@@ -88,10 +89,26 @@ function touches(item: MenuItem, ids: string[]) {
 }
 
 export function menuStatus(item: MenuItem, menu: JobMenuState = readJobMenu()): "archived" | "deleted" | "transferred" | null {
+  if (isHisProtectedMenuItem(item)) return null;
   if (touches(item, menu.deleted)) return "deleted";
   if (touches(item, menu.transferred.map((row) => row.id))) return "transferred";
   if (touches(item, menu.archived)) return "archived";
   return null;
+}
+
+/** Drop HIS ids from leftover job-menu so archive/delete cannot hide Nathan's Wood River cards. */
+export function clearHisJobMenuLeftover(store?: StorageLike | null, seat?: string | null) {
+  const menu = readJobMenu(store, seat);
+  const keep = (id: string) => !isHisProtectedMenuItem({ id, packId: id });
+  return writeJobMenu(
+    {
+      archived: menu.archived.filter(keep),
+      deleted: menu.deleted.filter(keep),
+      transferred: menu.transferred.filter((row) => keep(row.id)),
+    },
+    store,
+    seat,
+  );
 }
 
 export function isActiveMenuItem(item: MenuItem, menu: JobMenuState = readJobMenu()) {

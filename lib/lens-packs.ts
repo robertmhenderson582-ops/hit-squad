@@ -12,6 +12,7 @@ import {
 } from "./his-wood-river.ts";
 import { isSamePerson } from "./identity.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
+import { JOB_MENU_KEY, clearHisJobMenuLeftover } from "./job-menu.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
 /** Live leftover keys already on the signed-in desktop. Rewrite these in place. */
@@ -20,10 +21,10 @@ export const OWNER_PACKS_KEY = "hs_owner_packs_v1";
 export const LENS_PACKS_LEGACY_KEY = "hs_lens_packs_v1";
 export const OWNER_PACKS_LEGACY_KEY = "hs_owner_packs_v1";
 
-const JOBS_LEFTOVER_KEYS = new Set([LENS_PACKS_KEY, OWNER_PACKS_KEY, "hs_his_leftover_gen", "hs_pack_index_v1"]);
+const JOBS_LEFTOVER_KEYS = new Set([LENS_PACKS_KEY, OWNER_PACKS_KEY, JOB_MENU_KEY, "hs_his_leftover_gen", "hs_pack_index_v1"]);
 
 export function isJobsLeftoverKey(key: string) {
-  return JOBS_LEFTOVER_KEYS.has(key) || key.startsWith("hs_pack_v1:");
+  return JOBS_LEFTOVER_KEYS.has(key) || key.startsWith("hs_pack_v1:") || key.startsWith(`${JOB_MENU_KEY}:`);
 }
 
 function asStore(store?: StorageLike | null): StorageLike | null {
@@ -221,6 +222,7 @@ export function bustHisLeftoverOnce(store?: StorageLike | null) {
 
   const ownerRows = rewriteHisLeftoverList(readOwnerPacks(target));
   writeOwnerPacks(ownerRows, target);
+  clearHisJobMenuLeftover(target);
   markLeftoverGen(target);
 }
 
