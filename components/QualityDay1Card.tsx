@@ -1,31 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FieldBlock } from "@/components/FieldMark";
+import { QualityFormJump, QualityFormScreens } from "@/components/QualityFormScreens";
 import { useSession } from "@/components/SessionProvider";
 import { companyScopeFor } from "@/lib/companies";
 import {
   QUALITY_DAY1_LABEL,
   QUALITY_PACKAGE_FORMS,
   canSeeMadisonManuals,
-  emptyQualityFormSlot,
   hydrateQualityDay1,
   madisonManualLabel,
   publicQualityDrops,
-  qualityFormSlot,
   type QualityDay1,
-  type QualityFormId,
-  type QualityFormSlot,
 } from "@/lib/quality-day1";
 import type { PublicLeadBrief } from "@/lib/lead-briefs";
 
 export function QualityDay1Card({
   value,
   workNames,
+  travelerRows,
   onChange,
   onWorkNames,
 }: {
   value: QualityDay1;
   workNames: string;
+  travelerRows: number;
   onChange: (next: QualityDay1) => void;
   onWorkNames: (next: string) => void;
 }) {
@@ -52,26 +52,14 @@ export function QualityDay1Card({
     onChange(hydrateQualityDay1({ ...packState, ...next }));
   }
 
-  function patchForm(id: QualityFormId, next: Partial<QualityFormSlot>) {
-    const current = qualityFormSlot(packState, id);
-    patch({
-      forms: {
-        ...packState.forms,
-        [id]: { ...emptyQualityFormSlot(), ...current, ...next },
-      },
-    });
-  }
-
   return (
-    <div className="rounded-lg border border-[#d5e0de] bg-white px-4 py-4">
-      <h2 className="text-sm font-semibold tracking-[0.12em] text-[#5b6f73]">{QUALITY_DAY1_LABEL.toUpperCase()}</h2>
-      <p className="mt-2 text-sm text-[#5b6f73]">
-        Chance’s named package. Mark, fill, or count on this module. Names only — no invented hold points.
-        Files stay off this desk.
+    <div className="plant-card px-4 py-4">
+      <h2 className="font-display text-xl text-[#163038]">{QUALITY_DAY1_LABEL}</h2>
+      <p className="mt-2 text-sm text-[#163038]">
+        Chance’s named package. Open a form and type. No invented hold points. Files stay off this desk.
       </p>
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
-        <label className="block text-sm">
-          <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">INSPECTION PLAN / ITP</span>
+        <FieldBlock label="Inspection plan / ITP">
           <select
             className="paper-field mt-1"
             value={packState.inspectionPlan ? "yes" : "no"}
@@ -80,9 +68,8 @@ export function QualityDay1Card({
             <option value="no">No</option>
             <option value="yes">Yes</option>
           </select>
-        </label>
-        <label className="block text-sm">
-          <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">WELD MAP</span>
+        </FieldBlock>
+        <FieldBlock label="Weld map">
           <select
             className="paper-field mt-1"
             value={packState.weldMap ? "yes" : "no"}
@@ -91,64 +78,32 @@ export function QualityDay1Card({
             <option value="no">No</option>
             <option value="yes">Yes</option>
           </select>
-        </label>
-        <label className="block text-sm">
-          <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">TRAVELER COUNT</span>
+        </FieldBlock>
+        <FieldBlock label="Traveler count">
           <input
             className="paper-field mt-1"
             inputMode="numeric"
             value={packState.travelerCount}
             onChange={(event) => patch({ travelerCount: event.target.value })}
           />
-        </label>
+          <p className="mt-1 text-sm text-[#163038]">
+            Board has {travelerRows} traveler{travelerRows === 1 ? "" : "s"}. Adding a traveler row updates this
+            count. Typing here does not invent travelers.
+          </p>
+        </FieldBlock>
       </div>
-      <label className="mt-3 block text-sm">
-        <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">PHASE / WORK NAMES</span>
+      <FieldBlock label="Phase / work names">
         <input
           className="paper-field mt-1"
           value={workNames}
           placeholder="Names only — no hold points"
           onChange={(event) => onWorkNames(event.target.value)}
         />
-      </label>
-      <div className="mt-4 grid gap-3">
-        {QUALITY_PACKAGE_FORMS.map((item) => {
-          const slot = qualityFormSlot(packState, item.id);
-          return (
-            <div key={item.id} className="rounded-lg border border-[#d5e0de] px-3 py-3">
-              <label className="flex items-center gap-2 text-sm text-[#163038]">
-                <input
-                  type="checkbox"
-                  checked={slot.marked}
-                  onChange={(event) => patchForm(item.id, { marked: event.target.checked })}
-                />
-                <span>{item.label}</span>
-              </label>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                <label className="block text-sm">
-                  <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">FILL</span>
-                  <input
-                    className="paper-field mt-1"
-                    value={slot.fill}
-                    onChange={(event) => patchForm(item.id, { fill: event.target.value })}
-                  />
-                </label>
-                <label className="block text-sm">
-                  <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">COUNT</span>
-                  <input
-                    className="paper-field mt-1"
-                    value={slot.count}
-                    inputMode="numeric"
-                    onChange={(event) => patchForm(item.id, { count: event.target.value })}
-                  />
-                </label>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      </FieldBlock>
+      <QualityFormJump />
+      <QualityFormScreens value={packState} onChange={onChange} />
       {drops.length ? (
-        <ul className="mt-3 space-y-1 text-sm text-[#5b6f73]">
+        <ul className="mt-3 space-y-1 text-sm text-[#163038]">
           {drops.map((drop) => (
             <li key={drop.name}>
               {drop.name}
@@ -157,7 +112,8 @@ export function QualityDay1Card({
           ))}
         </ul>
       ) : null}
-      {manuals ? <p className="mt-3 text-xs text-[#5b6f73]">{madisonManualLabel("quality")}</p> : null}
+      {manuals ? <p className="mt-3 text-sm text-[#163038]">{madisonManualLabel("quality")}</p> : null}
+      <p className="sr-only">{QUALITY_PACKAGE_FORMS.map((item) => item.label).join(" ")}</p>
     </div>
   );
 }

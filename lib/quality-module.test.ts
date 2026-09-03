@@ -33,16 +33,29 @@ describe("Quality module store", () => {
     state = addQualityRow(state, "ncrs");
     const ncrId = state.sections.ncrs[0].id;
     state = patchQualityRow(state, "ncrs", ncrId, "ncr", "NCR-1");
+    state = patchQualityRow(state, "ncrs", ncrId, "description", "leak");
+    state = patchQualityRow(state, "ncrs", ncrId, "disposition", "repair");
     state = patchQualityRow(state, "ncrs", ncrId, "status", "Open");
+    state = addQualityRow(state, "travelers");
     state = {
       ...state,
-      day1: { ...state.day1, inspectionPlan: true, travelerCount: "3" },
+      day1: {
+        ...state.day1,
+        inspectionPlan: true,
+        forms: {
+          "2.7.1": { fields: { job: "WR-1", testPressure: "150" }, rows: [{ id: "g1", cells: { gaugeId: "G-4" } }] },
+        },
+      },
     };
     writeQualityModule("phillips-66", state, store);
     const read = readQualityModule("Ironwood Refining", store);
     assert.equal(read.day1.inspectionPlan, true);
-    assert.equal(read.day1.travelerCount, "3");
+    assert.equal(read.day1.travelerCount, "1");
+    assert.equal(read.sections.travelers.length, 1);
+    assert.equal(read.day1.forms["2.7.1"]?.fields.testPressure, "150");
+    assert.equal(read.day1.forms["2.7.1"]?.rows[0]?.cells.gaugeId, "G-4");
     assert.equal(read.sections.ncrs[0]?.cells.ncr, "NCR-1");
+    assert.equal(read.sections.ncrs[0]?.cells.disposition, "repair");
     const now = new Date(2026, 8, 3);
     assert.equal(welderExpired("", now), false);
     assert.equal(welderExpired("2026-08-01", now), false);

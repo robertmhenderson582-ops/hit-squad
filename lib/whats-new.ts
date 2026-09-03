@@ -1,24 +1,26 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.50.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.50";
+export const DESK_VERSION = "1.51.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.51";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.50";
+export const DESK_THREAD_ID = "th-desk-v1.51";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.50",
-  "• Quality and HSE are fillable modules, not a name list.",
+  "Hit Squad Project Controls V1.51",
+  "• Quality and HSE are readable field modules with fillable forms.",
+  "• Rolling chart: set up the bank, then mark tubes on the map.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.50",
-  "• Quality and HSE are fillable modules, not a name list.",
+  "Hit Squad Project Controls V1.51",
+  "• Quality and HSE are readable field modules with fillable forms.",
+  "• Rolling chart: set up the bank, then mark tubes on the map.",
   "• Persist and Excel export stay. Madison manuals stay Madison-only.",
 ].join("\n");
 
-/** Same as the live V1.50 note. Kept so older imports still resolve. */
+/** Same as the live V1.51 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;

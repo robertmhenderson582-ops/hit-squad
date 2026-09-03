@@ -1,4 +1,10 @@
-import { emptyQualityDay1, hydrateQualityDay1, type QualityDay1 } from "./quality-day1.ts";
+import {
+  emptyQualityDay1,
+  hydrateQualityDay1,
+  setQualityFormRows,
+  travelerCountFromRows,
+  type QualityDay1,
+} from "./quality-day1.ts";
 import { emptyRollingChart, hydrateRollingChart, type RollingChartState } from "./rolling-chart.ts";
 import {
   clientFolderId,
@@ -16,33 +22,35 @@ export const QUALITY_SECTIONS = [
     title: "NCRs",
     board: "Open NCRs",
     fields: [
-      { id: "ncr", label: "NCR", kind: "text" },
-      { id: "area", label: "AREA", kind: "text" },
-      { id: "note", label: "NOTE", kind: "text" },
-      { id: "status", label: "STATUS", kind: "text" },
-      { id: "date", label: "DATE", kind: "date" },
+      { id: "ncr", label: "Number", kind: "text" },
+      { id: "area", label: "Area", kind: "text" },
+      { id: "description", label: "Description", kind: "text" },
+      { id: "disposition", label: "Disposition", kind: "text" },
+      { id: "status", label: "Status", kind: "text" },
+      { id: "date", label: "Date", kind: "date" },
     ],
   },
   {
     id: "welds-nde",
     title: "Welds/NDE",
-    board: "Weld reject",
+    board: "Welds/NDE",
     fields: [
-      { id: "weld", label: "WELD", kind: "text" },
-      { id: "joint", label: "JOINT", kind: "text" },
-      { id: "note", label: "NOTE", kind: "text" },
-      { id: "status", label: "STATUS", kind: "text" },
+      { id: "weld", label: "Weld / joint", kind: "text" },
+      { id: "process", label: "Process", kind: "text" },
+      { id: "nde", label: "NDE method", kind: "text" },
+      { id: "result", label: "Result", kind: "text" },
+      { id: "date", label: "Date", kind: "date" },
     ],
   },
   {
     id: "connections",
-    title: "Connections",
-    board: "Connection reject",
+    title: "Connections / flanges",
+    board: "Connections",
     fields: [
-      { id: "conn", label: "CONN", kind: "text" },
-      { id: "area", label: "AREA", kind: "text" },
-      { id: "note", label: "NOTE", kind: "text" },
-      { id: "status", label: "STATUS", kind: "text" },
+      { id: "flangeId", label: "ID", kind: "text" },
+      { id: "location", label: "Location", kind: "text" },
+      { id: "status", label: "Status", kind: "text" },
+      { id: "date", label: "Date", kind: "date" },
     ],
   },
   {
@@ -50,32 +58,36 @@ export const QUALITY_SECTIONS = [
     title: "Travelers",
     board: "Travelers",
     fields: [
-      { id: "traveler", label: "TRAVELER", kind: "text" },
-      { id: "scope", label: "SCOPE", kind: "text" },
-      { id: "note", label: "NOTE", kind: "text" },
-      { id: "status", label: "STATUS", kind: "text" },
+      { id: "traveler", label: "Number", kind: "text" },
+      { id: "scope", label: "Scope / phase name", kind: "text" },
+      { id: "status", label: "Status", kind: "text" },
+      { id: "date", label: "Date", kind: "date" },
     ],
   },
   {
     id: "welders",
     title: "Welders",
-    board: "Expired welders",
+    board: "Welders",
     fields: [
-      { id: "welder", label: "WELDER", kind: "text" },
-      { id: "stamp", label: "STAMP", kind: "text" },
-      { id: "lastUsed", label: "LAST USED", kind: "date" },
-      { id: "status", label: "STATUS", kind: "text" },
+      { id: "welder", label: "Name", kind: "text" },
+      { id: "stamp", label: "Stamp", kind: "text" },
+      { id: "process", label: "Process", kind: "text" },
+      { id: "expiry", label: "Expiry date", kind: "date" },
+      { id: "lastUsed", label: "Last used", kind: "date" },
+      { id: "status", label: "Status", kind: "text" },
     ],
   },
   {
     id: "calibration",
-    title: "Calibration",
+    title: "Calibration / gauges",
     board: "Overdue gauges",
     fields: [
-      { id: "gauge", label: "GAUGE", kind: "text" },
-      { id: "area", label: "AREA", kind: "text" },
-      { id: "due", label: "DUE", kind: "date" },
-      { id: "status", label: "STATUS", kind: "text" },
+      { id: "gauge", label: "ID", kind: "text" },
+      { id: "type", label: "Type", kind: "text" },
+      { id: "range", label: "Range", kind: "text" },
+      { id: "due", label: "Due date", kind: "date" },
+      { id: "status", label: "Status", kind: "text" },
+      { id: "area", label: "Area", kind: "text" },
     ],
   },
 ] as const;
@@ -113,6 +125,33 @@ export function qualityModuleKey(folder: ClientFolderId | string) {
   return `${QUALITY_MODULE_PREFIX}${clientFolderId(folder)}`;
 }
 
+function migrateNcrCells(row: ModuleRegisterRow): ModuleRegisterRow {
+  const cells = { ...row.cells };
+  if (!cells.description?.trim() && cells.note?.trim()) cells.description = cells.note;
+  return { ...row, cells };
+}
+
+function migrateWeldCells(row: ModuleRegisterRow): ModuleRegisterRow {
+  const cells = { ...row.cells };
+  if (!cells.weld?.trim() && cells.joint?.trim()) cells.weld = cells.joint;
+  return { ...row, cells };
+}
+
+function migrateConnectionCells(row: ModuleRegisterRow): ModuleRegisterRow {
+  const cells = { ...row.cells };
+  if (!cells.flangeId?.trim() && cells.conn?.trim()) cells.flangeId = cells.conn;
+  if (!cells.location?.trim() && cells.area?.trim()) cells.location = cells.area;
+  return { ...row, cells };
+}
+
+/** 2.7.19 flange log is the source of truth. Older Connections board rows migrate in if the log is empty. */
+function mergeFlangeRows(day1: QualityDay1, board: ModuleRegisterRow[]): { day1: QualityDay1; connections: ModuleRegisterRow[] } {
+  const formRows = day1.forms["2.7.19"]?.rows ?? [];
+  if (formRows.length) return { day1, connections: formRows };
+  if (!board.length) return { day1, connections: [] };
+  return { day1: setQualityFormRows(day1, "2.7.19", board), connections: board };
+}
+
 export function hydrateQualityModule(raw: unknown): QualityModuleState {
   const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const incoming = row.sections && typeof row.sections === "object" ? (row.sections as Record<string, unknown>) : {};
@@ -120,11 +159,16 @@ export function hydrateQualityModule(raw: unknown): QualityModuleState {
   for (const lane of QUALITY_SECTIONS) {
     sections[lane.id] = hydrateRegisterRows(incoming[lane.id]);
   }
+  sections.ncrs = sections.ncrs.map(migrateNcrCells);
+  sections["welds-nde"] = sections["welds-nde"].map(migrateWeldCells);
+  sections.connections = sections.connections.map(migrateConnectionCells);
+  const day1 = hydrateQualityDay1(row.day1 as Record<string, unknown> | null | undefined);
+  const flange = mergeFlangeRows(day1, sections.connections);
   return {
-    day1: hydrateQualityDay1(row.day1 as Record<string, unknown> | null | undefined),
+    day1: flange.day1,
     workNames: typeof row.workNames === "string" ? row.workNames : "",
     rollingChart: hydrateRollingChart(row.rollingChart as Record<string, unknown> | null | undefined),
-    sections,
+    sections: { ...sections, connections: flange.connections },
   };
 }
 
@@ -155,14 +199,31 @@ export function writeQualityModule(
   }
 }
 
-export function addQualityRow(state: QualityModuleState, section: QualitySectionId): QualityModuleState {
+function withTravelerCount(state: QualityModuleState): QualityModuleState {
   return {
+    ...state,
+    day1: { ...state.day1, travelerCount: travelerCountFromRows(state.sections.travelers) },
+  };
+}
+
+function withFlangeLog(state: QualityModuleState): QualityModuleState {
+  return {
+    ...state,
+    day1: setQualityFormRows(state.day1, "2.7.19", state.sections.connections),
+  };
+}
+
+export function addQualityRow(state: QualityModuleState, section: QualitySectionId): QualityModuleState {
+  let next: QualityModuleState = {
     ...state,
     sections: {
       ...state.sections,
       [section]: [...state.sections[section], emptyRegisterRow(`q-${section}-${Date.now()}`)],
     },
   };
+  if (section === "travelers") next = withTravelerCount(next);
+  if (section === "connections") next = withFlangeLog(next);
+  return next;
 }
 
 export function patchQualityRow(
@@ -172,7 +233,7 @@ export function patchQualityRow(
   field: string,
   value: string,
 ): QualityModuleState {
-  return {
+  let next: QualityModuleState = {
     ...state,
     sections: {
       ...state.sections,
@@ -181,15 +242,28 @@ export function patchQualityRow(
       ),
     },
   };
+  if (section === "connections") next = withFlangeLog(next);
+  return next;
 }
 
 export function removeQualityRow(state: QualityModuleState, section: QualitySectionId, id: string): QualityModuleState {
-  return {
+  let next: QualityModuleState = {
     ...state,
     sections: {
       ...state.sections,
       [section]: state.sections[section].filter((row) => row.id !== id),
     },
+  };
+  if (section === "travelers") next = withTravelerCount(next);
+  if (section === "connections") next = withFlangeLog(next);
+  return next;
+}
+
+export function applyFlangeFormRows(state: QualityModuleState, rows: ModuleRegisterRow[]): QualityModuleState {
+  return {
+    ...state,
+    day1: setQualityFormRows(state.day1, "2.7.19", rows),
+    sections: { ...state.sections, connections: rows },
   };
 }
 
@@ -231,7 +305,7 @@ export function qualityBoardCounts(state: QualityModuleState, now = new Date()) 
     "welds-nde": state.sections["welds-nde"].length,
     connections: state.sections.connections.length,
     travelers: state.sections.travelers.length,
-    welders: state.sections.welders.filter((row) => welderExpired(row.cells.lastUsed || "", now)).length,
+    welders: state.sections.welders.filter((row) => welderExpired(row.cells.lastUsed || "", now) || gaugeOverdue(row.cells.expiry || "", now)).length,
     calibration: state.sections.calibration.filter((row) => gaugeOverdue(row.cells.due || "", now)).length,
   } as Record<QualitySectionId, number>;
 }

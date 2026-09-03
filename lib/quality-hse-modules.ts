@@ -9,7 +9,7 @@ export const HSE_TAB_LABEL = "HSE";
 
 /**
  * GOAL: the estimate notifies Quality/HSE when a job is Awarded.
- * V1.50 keeps that hinge in code and leaves it off. A later lead ask turns this on.
+ * V1.51 keeps that hinge in code and leaves it off. A later lead ask turns this on.
  */
 export const QUALITY_HSE_INTERACTION_ACTIVE = false;
 
@@ -19,7 +19,7 @@ export function qualityHseAwardedHinge(status = "") {
 }
 
 /**
- * Interaction gate. Inactive for V1.50 — no estimate tabs, no Job setup doors, no fired notify.
+ * Interaction gate. Inactive for V1.51 — no estimate tabs, no Job setup doors, no fired notify.
  * Chance, Wendell, and Benny still fill /quality and /hse on their own.
  */
 export function showsQualityHseModules(status = "") {
@@ -30,7 +30,7 @@ export function qualityHseTabIds(status?: EstimateStatus | string) {
   return showsQualityHseModules(status) ? [QUALITY_TAB_ID, HSE_TAB_ID] : [];
 }
 
-/** Quiet Job setup doors. Mount only when a lead asks. V1.50 does not mount this. */
+/** Quiet Job setup doors. Mount only when a lead asks. V1.51 does not mount this. */
 export function qualityHseQuietDoorsOn(status = "") {
   return showsQualityHseModules(status);
 }

@@ -737,6 +737,47 @@ textarea:focus {
   color: #163038;
 }
 
+.field-mark {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #163038;
+}
+
+.tube-cell {
+  display: inline-flex;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.field-desk,
+.field-desk p,
+.field-desk h2,
+.field-desk h3,
+.field-desk th,
+.field-desk td,
+.field-desk label,
+.field-desk .field-mark {
+  color: #163038;
+}
+
+.industrial-root .field-desk,
+.industrial-root .field-desk p,
+.industrial-root .field-desk h2,
+.industrial-root .field-desk h3,
+.industrial-root .field-desk th,
+.industrial-root .field-desk td,
+.industrial-root .field-desk label,
+.industrial-root .field-desk .field-mark,
+.industrial-root .field-desk .text-\[\#163038\] {
+  color: #efe6d4;
+}
+
 .est-chrome {
   position: relative;
   z-index: 40;

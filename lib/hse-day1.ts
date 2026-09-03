@@ -4,7 +4,7 @@ import { qualitySurfaceLeaks } from "./quality-day1.ts";
 import { PHASE_IDS, PHASE_NAMES, type PhaseRow } from "./phase-schedule.ts";
 
 export const HSE_DAY1_LABEL = "HSE Day-1";
-export const HSE_LIVE_NOTE = "This job is live for HSE. Site safety package slots stay empty until you fill them.";
+export const HSE_LIVE_NOTE = "This job is live for HSE. Mark the package and type talks, permits, and observations on this module.";
 
 /** Empty slots until they fill. Do not invent a 29.1 sling form. */
 export const HSE_PACKAGE_SLOTS = [
@@ -19,8 +19,13 @@ export const HSE_PACKAGE_SLOTS = [
 
 export type HseSlotId = (typeof HSE_PACKAGE_SLOTS)[number]["id"];
 
+export type HseSlot = {
+  marked: boolean;
+  note: string;
+};
+
 export type HseDay1 = {
-  slots: Partial<Record<HseSlotId, string>>;
+  slots: Partial<Record<HseSlotId, HseSlot>>;
 };
 
 export type HseJobSnapshot = {
@@ -36,15 +41,36 @@ export function emptyHseDay1(): HseDay1 {
   return { slots: {} };
 }
 
+export function emptyHseSlot(): HseSlot {
+  return { marked: false, note: "" };
+}
+
+function hydrateHseSlot(raw: unknown): HseSlot | null {
+  if (typeof raw === "string") {
+    const note = raw.trim();
+    return note ? { marked: true, note } : null;
+  }
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const note = typeof row.note === "string" ? row.note : typeof row.value === "string" ? row.value : "";
+  const marked = Boolean(row.marked) || Boolean(note.trim());
+  if (!marked && !note.trim()) return null;
+  return { marked, note };
+}
+
 export function hydrateHseDay1(raw: Partial<HseDay1> | Record<string, unknown> | null | undefined): HseDay1 {
   const row = (raw && typeof raw === "object" ? raw : {}) as { slots?: Record<string, unknown> };
-  const slots: Partial<Record<HseSlotId, string>> = {};
+  const slots: Partial<Record<HseSlotId, HseSlot>> = {};
   const incoming = row.slots && typeof row.slots === "object" ? row.slots : {};
   for (const item of HSE_PACKAGE_SLOTS) {
-    const value = incoming[item.id];
-    if (typeof value === "string" && value.trim()) slots[item.id] = value.trim();
+    const slot = hydrateHseSlot(incoming[item.id]);
+    if (slot) slots[item.id] = slot;
   }
   return { slots };
+}
+
+export function hseSlot(pack: HseDay1, id: HseSlotId): HseSlot {
+  return pack.slots[id] ?? emptyHseSlot();
 }
 
 /** Estimate → HSE notify hinge. Kept inactive. Do not delete. */
@@ -102,7 +128,9 @@ export function hsePackageForSeat(
     slots: HSE_PACKAGE_SLOTS.map((item) => ({
       id: item.id,
       label: item.label,
-      value: pack.slots[item.id] || "",
+      marked: hseSlot(pack, item.id).marked,
+      note: hseSlot(pack, item.id).note,
+      value: hseSlot(pack, item.id).note,
     })),
     plant: snapshot.plant,
     phases: snapshot.phases,

@@ -4,7 +4,7 @@ import { HSE_TAB_LABEL, QUALITY_TAB_LABEL, qualityHseQuietDoorsOn } from "@/lib/
 
 /**
  * Quiet Awarded doors from the estimate to Quality/HSE.
- * Structure stays. V1.50 does not mount this on Job setup.
+ * Structure stays. V1.51 does not mount this on Job setup.
  */
 export function QualityHseQuietDoors({
   status = "",
