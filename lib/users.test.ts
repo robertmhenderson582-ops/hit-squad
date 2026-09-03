@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { after, beforeEach, test } from "node:test";
 import bcrypt from "bcryptjs";
-import { readSeatClaim, signSeatClaim } from "./auth.ts";
+import { readSeatClaim, readSession, signSeatClaim, signSession } from "./auth.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { hasForbiddenSeed } from "./tester-seats.ts";
@@ -34,6 +35,7 @@ import {
   seatHashClaimFor,
   seatNeedsPasswordCreate,
   setOwnPassword,
+  toPublicUser,
   useSeatVaultForTests,
   verifyPassword,
   collapseSeatHashes,
@@ -898,6 +900,83 @@ test("owner env recovery signs in without depending on a stored hash", async () 
     await hydrateSeatStore();
     assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
     assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  } finally {
+    delete process.env.OWNER_RECOVERY_PASSWORD;
+  }
+});
+
+test("owner env recovery forced change accepts next without current after hydrate", async () => {
+  const recovery = "env-recovery-secret-xx";
+  process.env.OWNER_RECOVERY_PASSWORD = recovery;
+  try {
+    const recovered = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: recovery });
+    assert.equal(recovered.status, "authenticated");
+    if (recovered.status !== "authenticated") return;
+    assert.equal(recovered.user.mustChangePassword, true);
+    assert.equal(recovered.user.email, OWNER_LOGIN_EMAIL);
+    assert.equal(ownerSeatCount(), 1);
+
+    const persisted = parseSeatHashes(JSON.parse(readFileSync(seatFile, "utf8")));
+    assert.equal(persisted[OWNER_LOGIN_EMAIL]?.mustChangePassword, true);
+
+    const stillRecovery = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: recovery });
+    assert.equal(stillRecovery.status, "authenticated");
+    if (stillRecovery.status === "authenticated") {
+      assert.equal(stillRecovery.user.mustChangePassword, true);
+    }
+
+    const token = await signSession(recovered.user);
+    const session = await readSession(token);
+    assert.equal(session?.mustChangePassword, true);
+    assert.equal(session?.email, OWNER_LOGIN_EMAIL);
+
+    resetUsersForTests();
+    await hydrateSeatStore();
+    const stored = findUserByEmail(OWNER_LOGIN_EMAIL);
+    assert.ok(stored);
+    assert.equal(stored.mustChangePassword, true);
+
+    stored.mustChangePassword = false;
+    const missing = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
+    assert.equal("error" in missing, true);
+    if ("error" in missing) {
+      assert.equal(missing.error, "Current and new password are required.");
+      assert.equal(missing.status, 400);
+    }
+
+    const seat = findSeatForSession(session!);
+    assert.ok(seat);
+    assert.equal(seat.email, OWNER_LOGIN_EMAIL);
+    const changed = await setOwnPassword(seat.email, CHOSEN, undefined, session?.mustChangePassword);
+    assert.equal("ok" in changed, true);
+
+    const publicUser = toPublicUser(findSeatForSession({ id: seat.id, email: changed.ok ? changed.email : seat.email })!);
+    const nextToken = await signSession(publicUser);
+    assert.equal((await readSession(nextToken))?.mustChangePassword, false);
+
+    const chosenLogin = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN });
+    assert.equal(chosenLogin.status, "authenticated");
+    if (chosenLogin.status === "authenticated") {
+      assert.equal(chosenLogin.user.mustChangePassword, false);
+    }
+
+    const settingsStillNeedsCurrent = await setOwnPassword(OWNER_LOGIN_EMAIL, OTHER);
+    assert.equal("error" in settingsStillNeedsCurrent, true);
+    if ("error" in settingsStillNeedsCurrent) {
+      assert.equal(settingsStillNeedsCurrent.error, "Current and new password are required.");
+    }
+
+    const envStillWorks = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: recovery });
+    assert.equal(envStillWorks.status, "authenticated");
+    if (envStillWorks.status === "authenticated") {
+      assert.equal(envStillWorks.user.mustChangePassword, true);
+    }
+
+    const route = readFileSync(fileURLToPath(new URL("../app/api/desk/password/route.ts", import.meta.url)), "utf8");
+    assert.match(route, /setOwnPassword\(seat\.email, next, current \|\| undefined, Boolean\(session\.mustChangePassword\)\)/);
+    assert.equal(JSON.stringify(recovered).includes(recovery), false);
+    assert.equal(JSON.stringify(publicUser).includes(CHOSEN), false);
+    assert.equal(ownerSeatCount(), 1);
   } finally {
     delete process.env.OWNER_RECOVERY_PASSWORD;
   }
