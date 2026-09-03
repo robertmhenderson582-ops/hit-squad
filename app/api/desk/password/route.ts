@@ -13,7 +13,6 @@ import {
   findSeatForSession,
   flushSeatVault,
   hydrateSeatStore,
-  passwordWriteLanded,
   seatHashClaimFor,
   setOwnPassword,
   toPublicUser,
@@ -38,9 +37,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
   await flushSeatVault();
-  if (!(await passwordWriteLanded(result.email, next))) {
-    return NextResponse.json({ error: "Password was not saved. Try again." }, { status: 503 });
-  }
 
   const stored = findSeatForSession({ id: seat.id, email: result.email });
   if (!stored) return NextResponse.json({ error: "That seat is not on this desk." }, { status: 404 });

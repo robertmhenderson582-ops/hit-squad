@@ -42,6 +42,20 @@ type SeatStoreFile = { hashes: NonNullable<SeatFile["hashes"]>; extras: ExtraSea
 let cachedUsers: StoredUser[] | null = null;
 let injectedAdapter: DriveAdapter | null | undefined;
 let pendingVault: Promise<void> = Promise.resolve();
+/** Emails whose latest writeVaultJson in this isolate resolved. Stale Drive reads must not undo that. */
+const confirmedVaultWrites = new Set<string>();
+
+function markVaultWriteConfirmed(email: string) {
+  const key = canonicalEmail(email) || email.trim().toLowerCase();
+  if (key) confirmedVaultWrites.add(key);
+  const bucket = identityBucket(key);
+  if (bucket) confirmedVaultWrites.add(bucket);
+}
+
+function vaultWriteConfirmed(email: string) {
+  const key = canonicalEmail(email) || email.trim().toLowerCase();
+  return confirmedVaultWrites.has(key) || confirmedVaultWrites.has(identityBucket(key));
+}
 
 export function seatPasswordPath() {
   if (process.env.SEAT_PASSWORD_PATH) return process.env.SEAT_PASSWORD_PATH;
@@ -307,6 +321,7 @@ function persistHashes(users: StoredUser[], opts?: { replaceEmails?: string[]; c
         }
         const next = { hashes: collapsed, extras: [...extrasByEmail.values()] };
         await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, next);
+        for (const email of replace) markVaultWriteConfirmed(email);
         writeSeatFile(next, { required: Boolean(opts?.confirm) });
         applyHashesToUsers(users, collapsed);
       });
@@ -509,17 +524,27 @@ function rowAcceptsPassword(row: SeatHashRow | undefined, password: string) {
   return Boolean(row?.passwordHash && BCRYPT_HASH.test(row.passwordHash) && bcrypt.compareSync(password, row.passwordHash));
 }
 
+async function driveRowAcceptsPassword(drive: DriveAdapter, key: string, password: string) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const raw = await readVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
+      if (rowAcceptsPassword(ownerHashRow(parseSeatHashes(raw), key), password)) return true;
+    } catch {
+      // Eventual-consistency or a transient Drive read — retry before 503.
+    }
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 40 * (attempt + 1)));
+  }
+  return false;
+}
+
 export async function passwordWriteLanded(email: string, password: string) {
   const key = canonicalEmail(email) || email.trim().toLowerCase();
   if (!rowAcceptsPassword(ownerHashRow(loadPersisted(), key), password)) return false;
   const drive = resolveAdapter();
   if (!drive) return true;
-  try {
-    const raw = await readVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
-    return rowAcceptsPassword(ownerHashRow(parseSeatHashes(raw), key), password);
-  } catch {
-    return false;
-  }
+  // writeVaultJson already resolved in this request. One stale Drive read is not a failed write.
+  if (vaultWriteConfirmed(key)) return true;
+  return driveRowAcceptsPassword(drive, key, password);
 }
 
 export function seatNeedsPasswordCreate(email: string): boolean {
@@ -772,6 +797,7 @@ export function resetUsersForTests() {
   cachedUsers = null;
   injectedAdapter = undefined;
   pendingVault = Promise.resolve();
+  confirmedVaultWrites.clear();
 }
 
 export function forgetSeatCacheForTests() {
