@@ -146,7 +146,7 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
     },
     async createJson(_folderId, name, content, properties) {
       n += 1;
-      const file: DriveFile = { id: `file-${n}`, name, properties, modifiedTime: new Date().toISOString() };
+      const file: DriveFile = { id: `file-${n}`, name, properties };
       files.set(file.id, { file, content });
       return file;
     },

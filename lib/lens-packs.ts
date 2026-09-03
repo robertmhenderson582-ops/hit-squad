@@ -7,7 +7,6 @@ import {
   leftoverHasStaleHisIdentity,
   markLeftoverGen,
   mergeHisWoodRiverCards,
-  persistHisWoodRiverCards,
   rewriteStaleHisLocalLeftover,
   shouldPaintHisCards,
 } from "./his-wood-river.ts";
@@ -222,7 +221,6 @@ export function bustHisLeftoverOnce(store?: StorageLike | null) {
 
   const ownerRows = rewriteHisLeftoverList(readOwnerPacks(target));
   writeOwnerPacks(ownerRows, target);
-  persistHisWoodRiverCards(target);
   markLeftoverGen(target);
 }
 
