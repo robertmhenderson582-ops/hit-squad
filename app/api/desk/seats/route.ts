@@ -3,7 +3,15 @@ import { readSession } from "@/lib/auth";
 import { addCompany, isKnownCompany, listCompanies, setAssignedCompany } from "@/lib/companies-store";
 import { hasBuildDesk, isOwner } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
-import { createSeat, findUserByEmail, flushSeatVault, hydrateSeatStore, issueSeatPassword, listSeatRows } from "@/lib/users";
+import {
+  createSeat,
+  findUserByEmail,
+  flushSeatVault,
+  hydrateSeatStore,
+  issueRecoveryPassword,
+  issueSeatPassword,
+  listSeatRows,
+} from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +38,7 @@ export async function POST(request: Request) {
     password?: string;
     companyId?: string;
     addCompany?: string;
+    recover?: boolean;
   };
 
   if (typeof body.addCompany === "string") {
@@ -65,6 +74,19 @@ export async function POST(request: Request) {
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
   await hydrateSeatStore();
+
+  if (body.recover === true) {
+    const issued = await issueRecoveryPassword(email);
+    if ("error" in issued) return NextResponse.json({ error: issued.error }, { status: 400 });
+    return NextResponse.json({
+      ok: true,
+      email: issued.email,
+      password: issued.password,
+      seats: await listSeatRows(),
+      note: "One-time recovery issued. Copy it now. It is not emailed and not logged.",
+    });
+  }
+
   const target = findUserByEmail(email);
   if (!target || target.role === "owner") {
     return NextResponse.json({ error: "Pick a non-owner seat on this desk." }, { status: 400 });
