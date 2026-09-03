@@ -10,6 +10,7 @@ import {
   packsForViewedDesk,
   readOwnerPacks,
   writeLensPacks,
+  writeOwnerPacks,
 } from "./lens-packs.ts";
 import { jobsOnDesk } from "./jobs.ts";
 import type { StorageLike } from "./local-estimates.ts";
@@ -37,6 +38,7 @@ import {
   HIS_LEFTOVER_GEN_KEY,
   isStaleHisLeftoverIdentity,
   leftoverGenIsCurrent,
+  leftoverHasStaleHisIdentity,
   persistHisWoodRiverCards,
   shouldPaintHisCards,
 } from "./his-wood-river.ts";
@@ -361,6 +363,81 @@ test("desktop leftover generation bust restamps HIS cards and leaves session key
   assert.equal(again.find((row) => row.title === "Wood River / T&M 2027-01 to 06")?.ownerEmail, NATHAN_DESK_EMAIL);
   assert.equal(handoffMarkText(again.find((row) => row.title === "Wood River / T&M 2027-01 to 06")!, owner.email), "Nathan Boyte's desk.");
   assert.equal(store.getItem(sessionKey), "1");
+});
+
+test("stale HIS leftover restamps on every owner paint when leftover gen is already current", () => {
+  const staleTm = {
+    packId: "new-MTJ5D6-live",
+    key: "new:new-MTJ5D6-live",
+    title: "Wood River / T&M 2027-01 to 06",
+    client: "",
+    site: "",
+    siteId: "",
+    createdAt: 4,
+    updatedAt: 9,
+    ownerEmail: JAMES_EMAIL,
+    transferredTo: JAMES_EMAIL,
+    transferredToName: "James Cain",
+  };
+  const store = memoryStore({
+    [HIS_LEFTOVER_GEN_KEY]: "2",
+    [OWNER_PACKS_LEGACY_KEY]: JSON.stringify([staleTm]),
+  });
+  rememberLocalPack(
+    {
+      packId: staleTm.packId,
+      title: staleTm.title,
+      ownerEmail: JAMES_EMAIL,
+      transferredTo: JAMES_EMAIL,
+      transferredToName: "James Cain",
+    },
+    store,
+  );
+  assert.equal(leftoverHasStaleHisIdentity([staleTm]), true);
+  assert.equal(leftoverGenIsCurrent(store), false);
+
+  const painted = packsForViewedDesk(owner, false, null, store);
+  const tm = painted.find((row) => row.title === staleTm.title);
+  assert.equal(tm?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+  assert.ok(painted.some((row) => row.packId === HIS_AROMATICS_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
+  assert.ok(painted.some((row) => row.packId === HIS_CAT2_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
+  assert.equal(store.getItem(HIS_LEFTOVER_GEN_KEY), HIS_LEFTOVER_GEN);
+  assert.equal(leftoverGenIsCurrent(store), true);
+  assert.equal(readOwnerPacks(store).find((row) => row.title === staleTm.title)?.ownerEmail, NATHAN_DESK_EMAIL);
+
+  writeOwnerPacks(
+    [
+      {
+        ...staleTm,
+        ownerEmail: JAMES_EMAIL,
+        transferredTo: JAMES_EMAIL,
+        transferredToName: "James Cain",
+      },
+    ],
+    store,
+  );
+  rememberLocalPack(
+    {
+      packId: staleTm.packId,
+      title: staleTm.title,
+      ownerEmail: JAMES_EMAIL,
+      transferredTo: JAMES_EMAIL,
+      transferredToName: "James Cain",
+      replaceHandoff: true,
+    },
+    store,
+  );
+  assert.equal(leftoverGenIsCurrent(store), true);
+  assert.equal(leftoverHasStaleHisIdentity(readOwnerPacks(store)), true);
+
+  const restamped = packsForViewedDesk(owner, false, null, store);
+  const again = restamped.find((row) => row.title === staleTm.title);
+  assert.equal(again?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(handoffMarkText(again!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(store.getItem(HIS_LEFTOVER_GEN_KEY), HIS_LEFTOVER_GEN);
+  assert.equal(readOwnerPacks(store).find((row) => row.title === staleTm.title)?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(leftoverHasStaleHisIdentity(readOwnerPacks(store)), false);
 });
 
 test("Benny leftover on HIS T&M is rewritten the same as James leftover", () => {

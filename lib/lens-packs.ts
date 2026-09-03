@@ -4,6 +4,7 @@ import {
   applyHisIdentity,
   hisMatchForPack,
   leftoverGenIsCurrent,
+  leftoverHasStaleHisIdentity,
   markLeftoverGen,
   mergeHisWoodRiverCards,
   rewriteStaleHisLocalLeftover,
@@ -195,13 +196,20 @@ function dropHisFromOtherLens(seat: string, packs: LocalPack[]): LocalPack[] {
   return packs.filter((pack) => !hisMatchForPack(pack));
 }
 
+function leftoverPacksForStaleCheck(store: StorageLike): LocalPack[] {
+  return [...listLocalPacks(store), ...readOwnerPacks(store), ...allLensPacks(store)];
+}
+
 /**
- * One reload on the already-signed-in desk. Rewrites Jobs leftover keys in place.
+ * Owner / Nathan Jobs paint. Rewrites leftover keys whenever gen is stale
+ * or a HIS row still names James / any non-Nathan non-owner. Not a one-shot flag.
  * Never clears cookies, sessionStorage, or the rest of localStorage.
  */
 export function bustHisLeftoverOnce(store?: StorageLike | null) {
   const target = asStore(store);
-  if (!target || leftoverGenIsCurrent(target)) return;
+  if (!target) return;
+  const stale = leftoverHasStaleHisIdentity(leftoverPacksForStaleCheck(target));
+  if (leftoverGenIsCurrent(target) && !stale) return;
   rewriteStaleHisLocalLeftover(target);
 
   const lens = readAll(target);

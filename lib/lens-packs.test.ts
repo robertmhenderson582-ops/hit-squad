@@ -16,7 +16,7 @@ import {
   writeLensPacks,
   writeOwnerPacks,
 } from "./lens-packs.ts";
-import { HIS_LEFTOVER_GEN_KEY, NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
+import { HIS_LEFTOVER_GEN, HIS_LEFTOVER_GEN_KEY, NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
 import { jobTree } from "./job-tree.ts";
 import { deleteLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 
@@ -294,7 +294,7 @@ test("signed-in leftover wipe rewrites v1 Jobs keys only and keeps session marks
   };
 
   const ownerDesk = packsForViewedDesk(owner, false, null, store);
-  assert.equal(store.getItem(HIS_LEFTOVER_GEN_KEY), "2");
+  assert.equal(store.getItem(HIS_LEFTOVER_GEN_KEY), HIS_LEFTOVER_GEN);
   assert.equal(store.getItem(keep), "1");
   assert.equal(removed.every((key) => isJobsLeftoverKey(key)), true);
   assert.equal(store.getItem(OWNER_PACKS_KEY)?.includes("jameshcainjr@gmail.com"), false);

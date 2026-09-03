@@ -154,5 +154,8 @@ export async function writeVaultJson(
     ? await adapter.updateJson(existing.id, payload, name, properties)
     : await adapter.createJson(folderId, name, payload, properties);
   if (written?.id) rememberVaultFileId(name, kind, written.id);
+  if (adapter.confirmWrite && written?.id && !(await adapter.confirmWrite(written.id, payload))) {
+    throw new Error("vault write not confirmed");
+  }
   return written;
 }
