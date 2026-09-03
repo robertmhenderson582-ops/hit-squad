@@ -900,6 +900,7 @@ describe("local transfer commit", () => {
       assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
       assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
       assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), true);
+      assert.equal(store.getItem("hs_his_leftover_gen"), "2");
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();

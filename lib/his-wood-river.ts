@@ -160,10 +160,42 @@ function hisDeskOwnerEmail(existing?: string) {
   return NATHAN_DESK_EMAIL;
 }
 
+export const HIS_LEFTOVER_GEN = "2";
+export const HIS_LEFTOVER_GEN_KEY = "hs_his_leftover_gen";
+
 function isJamesStamp(value?: string) {
   const key = canonicalEmail(value) || (value || "").trim().toLowerCase();
   if (!key) return false;
   return key === JAMES_DESK_EMAIL || isSamePerson(value, JAMES_DESK_EMAIL) || /james cain/i.test(value || "");
+}
+
+/** James, Benny, or any other non-Nathan non-owner stamp on a HIS card. */
+export function isForeignHisIdentity(value?: string) {
+  if (!value?.trim()) return false;
+  if (isJamesStamp(value)) return true;
+  const email = canonicalEmail(value) || value.trim().toLowerCase();
+  if (!email) return false;
+  return email !== NATHAN_DESK_EMAIL && !isOwnerIdentity(email);
+}
+
+/** Leftover HIS row whose ownerEmail / transferredTo is not Nathan or the owner. */
+export function isStaleHisLeftoverIdentity(pack?: HisIdentityPack | null) {
+  if (!pack || !hisMatchForPack(pack)) return false;
+  return (
+    isForeignHisIdentity(pack.ownerEmail) ||
+    isForeignHisIdentity(pack.transferredTo) ||
+    isForeignHisIdentity(pack.transferredToName)
+  );
+}
+
+export function leftoverGenIsCurrent(store?: StorageLike | null) {
+  if (!store) return false;
+  return store.getItem(HIS_LEFTOVER_GEN_KEY) === HIS_LEFTOVER_GEN;
+}
+
+export function markLeftoverGen(store?: StorageLike | null) {
+  if (!store) return;
+  store.setItem(HIS_LEFTOVER_GEN_KEY, HIS_LEFTOVER_GEN);
 }
 
 /** Restore Nathan identity unless the owner already holds the pack. No share rows, no dollars. */
@@ -180,15 +212,17 @@ export function applyHisIdentity<T extends HisIdentityPack>(pack: T, his?: HisWo
     ownerEmail,
   };
   if (ownerEmail !== NATHAN_DESK_EMAIL) return next;
-  // Leftover may keep James on transferredToName / estimator while ownerEmail is restamped.
+  // Leftover may keep James (or another desk) on transferredToName / estimator while ownerEmail is restamped.
   return {
     ...next,
-    estimator: isJamesStamp(pack.estimator) ? NATHAN_DESK_NAME : pack.estimator,
-    transferredTo: isJamesStamp(pack.transferredTo) ? undefined : pack.transferredTo,
-    transferredToName: isJamesStamp(pack.transferredToName) ? undefined : pack.transferredToName,
+    estimator: isForeignHisIdentity(pack.estimator) ? NATHAN_DESK_NAME : pack.estimator,
+    transferredTo: isForeignHisIdentity(pack.transferredTo) ? undefined : pack.transferredTo,
+    transferredToName: isForeignHisIdentity(pack.transferredToName) ? undefined : pack.transferredToName,
     transferredFrom: isJamesStamp(pack.transferredFrom) ? undefined : pack.transferredFrom,
     transferredFromName: isJamesStamp(pack.transferredFromName) ? undefined : pack.transferredFromName,
-    sharedWith: Array.isArray(pack.sharedWith) ? pack.sharedWith.filter((email) => !isJamesStamp(email)) : pack.sharedWith,
+    sharedWith: Array.isArray(pack.sharedWith)
+      ? pack.sharedWith.filter((email) => !isForeignHisIdentity(email))
+      : pack.sharedWith,
   };
 }
 
@@ -233,6 +267,35 @@ export function mergeHisWoodRiverCards(packs: LocalPack[]): LocalPack[] {
   });
   const extras = hisWoodRiverCards().filter((row) => !hisCardAlreadyPresent(next, row));
   return [...next, ...extras];
+}
+
+/** Rewrite stale local HIS leftover rows in place. Does not add extras or clear other keys. */
+export function rewriteStaleHisLocalLeftover(store?: StorageLike | null): LocalPack[] {
+  if (!store) return [];
+  for (const pack of listLocalPacks(store)) {
+    if (!isStaleHisLeftoverIdentity(pack)) continue;
+    const next = applyHisIdentity(pack);
+    rememberLocalPack(
+      {
+        packId: next.packId,
+        title: next.title,
+        client: next.client,
+        site: next.site,
+        size: next.size,
+        ownerEmail: next.ownerEmail,
+        archived: next.archived,
+        estimator: next.estimator,
+        sharedWith: next.sharedWith,
+        transferredFrom: next.transferredFrom,
+        transferredTo: next.transferredTo,
+        transferredToName: next.transferredToName,
+        transferredFromName: next.transferredFromName,
+        replaceHandoff: true,
+      },
+      store,
+    );
+  }
+  return listLocalPacks(store);
 }
 
 /** After leftover hydrate, restamp matches and keep Aromatics / CAT / T&M on the desk. Identity only. */

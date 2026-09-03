@@ -59,7 +59,7 @@ describe("inbox what's-new", () => {
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
     assert.match(TESTER_WHATS_NEW, /Quality and HSE are readable field modules with fillable forms/);
     assert.match(TESTER_WHATS_NEW, /Rolling chart: set up the bank, then mark tubes on the map/);
-    assert.match(TESTER_WHATS_NEW, /Company Jobs cards name the desk that owns each job/);
+    assert.match(TESTER_WHATS_NEW, /Jobs cards use the live desk, not an old leftover/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|testers|Follow|apcontrolsllc|seat|James|CBI|View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
@@ -149,7 +149,7 @@ describe("inbox what's-new", () => {
     assert.match(OWNER_WHATS_NEW, /Persist and Excel export stay/);
     assert.match(OWNER_WHATS_NEW, /Madison manuals stay Madison-only/);
     assert.match(TESTER_WHATS_NEW, /Quality and HSE are readable field modules with fillable forms/);
-    assert.match(TESTER_WHATS_NEW, /Company Jobs cards name the desk that owns each job/);
+    assert.match(TESTER_WHATS_NEW, /Jobs cards use the live desk, not an old leftover/);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|Follow|apcontrolsllc|seat|security|vault|other users|James|CBI|Stephanie|View as/i.test(TESTER_WHATS_NEW), false);
