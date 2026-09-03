@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useEstimatePackage } from "@/components/EstimatePackage";
 import {
   CIRCUIT_COUNT,
   DRUM_TUBE_COUNT,
@@ -10,6 +9,7 @@ import {
   SIDE_WALL_TUBE_COUNT,
   SIDE_WALLS,
   drumTubeKey,
+  emptyRollingChart,
   emptyRollingTube,
   formatWallReduction,
   hydrateRollingChart,
@@ -18,6 +18,7 @@ import {
   sideWallTubeKey,
   stepCount,
   type RollStepId,
+  type RollingChartState,
   type RollingSheetId,
   type RollingTube,
   type SideWall,
@@ -29,20 +30,22 @@ function tubeFill(tube: RollingTube) {
   return STEP_FILL[stepCount(tube)] || STEP_FILL[0];
 }
 
-export function RollingChartMap() {
-  const pack = useEstimatePackage();
-  const state = hydrateRollingChart(pack.jobMeta.rollingChart);
+export function RollingChartMap({
+  state: incoming = emptyRollingChart(),
+  onChange,
+}: {
+  state?: RollingChartState;
+  onChange: (next: RollingChartState) => void;
+}) {
+  const state = hydrateRollingChart(incoming);
   const [sheet, setSheet] = useState<RollingSheetId>("steam");
   const [picked, setPicked] = useState<string | null>(null);
   const current = ROLLING_SHEETS.find((item) => item.id === sheet) ?? ROLLING_SHEETS[0];
   const pickedTube = picked ? readRollingTube(state, picked) : emptyRollingTube();
   const progression = useMemo(() => rollingProgression(state), [state]);
 
-  function write(next: typeof state) {
-    pack.setJobMeta((currentMeta) => ({
-      ...currentMeta,
-      rollingChart: hydrateRollingChart(next),
-    }));
+  function write(next: RollingChartState) {
+    onChange(hydrateRollingChart(next));
   }
 
   function patchInputs(partial: Partial<typeof state>) {

@@ -13,12 +13,8 @@ import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { OrgChartDesk } from "@/components/OrgChartDesk";
 import { RodeoFormDesk } from "@/components/RodeoFormDesk";
 import { EstimatePackageProvider } from "@/components/EstimatePackage";
-import { HseDay1Card } from "@/components/HseDay1Card";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
-import { QualityDay1Card } from "@/components/QualityDay1Card";
-import { RollingChartMap } from "@/components/RollingChartMap";
-import { HSE_TAB_ID, QUALITY_TAB_ID } from "@/lib/quality-hse-modules";
 import { useAlias } from "@/components/OwnerDeskContext";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { boundOtLabel } from "@/lib/hours-clock";
@@ -95,8 +91,6 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
               setStatus(next);
               writeEstimateStatus(estimateId, next);
             }}
-            onOpenQuality={() => setTab(QUALITY_TAB_ID)}
-            onOpenHse={() => setTab(HSE_TAB_ID)}
           >
             {status !== "Estimate" ? (
               <>
@@ -140,17 +134,6 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       {tab === "change-orders" ? <ChangeOrderPacket client={estimate.client} site={siteName} /> : null}
 
       {tab === "rodeo" ? <RodeoFormDesk client={estimate.client} site={siteName} name={shown} /> : null}
-
-      {tab === QUALITY_TAB_ID ? (
-        <div className="space-y-5">
-          <QualityDay1Card status={status} />
-          <RollingChartMap />
-        </div>
-      ) : null}
-
-      {tab === HSE_TAB_ID ? (
-        <HseDay1Card status={status} site={siteName} client={estimate.client} />
-      ) : null}
     </EstimateWorkspace>
     </EstimatePackageProvider>
   );

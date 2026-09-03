@@ -1,13 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useEstimatePackage } from "@/components/EstimatePackage";
 import { useSession } from "@/components/SessionProvider";
 import { companyScopeFor } from "@/lib/companies";
-import type { EstimateStatus } from "@/lib/estimate-status";
 import {
   QUALITY_DAY1_LABEL,
-  QUALITY_LIVE_NOTE,
   QUALITY_PACKAGE_FORMS,
   canSeeMadisonManuals,
   emptyQualityFormSlot,
@@ -15,32 +12,25 @@ import {
   madisonManualLabel,
   publicQualityDrops,
   qualityFormSlot,
-  qualityNotify,
-  qualityWorkNames,
+  type QualityDay1,
   type QualityFormId,
   type QualityFormSlot,
 } from "@/lib/quality-day1";
 import type { PublicLeadBrief } from "@/lib/lead-briefs";
 
-export function QualityFormRoster({
-  forms = QUALITY_PACKAGE_FORMS,
+export function QualityDay1Card({
+  value,
+  workNames,
+  onChange,
+  onWorkNames,
 }: {
-  forms?: readonly { id: string; label: string }[];
+  value: QualityDay1;
+  workNames: string;
+  onChange: (next: QualityDay1) => void;
+  onWorkNames: (next: string) => void;
 }) {
-  return (
-    <ul className="mt-3 space-y-1 text-sm text-[#163038]">
-      {forms.map((item) => (
-        <li key={item.id}>{item.label}</li>
-      ))}
-    </ul>
-  );
-}
-
-export function QualityDay1Card({ status = "Estimate" }: { status?: EstimateStatus }) {
-  const pack = useEstimatePackage();
   const { user } = useSession();
-  const packState = hydrateQualityDay1(pack.jobMeta.qualityDay1);
-  const names = qualityWorkNames(pack.schedule.phases);
+  const packState = hydrateQualityDay1(value);
   const [drops, setDrops] = useState<Array<{ name: string; files: string[] }>>([]);
   const manuals = canSeeMadisonManuals(user, companyScopeFor(user));
 
@@ -58,11 +48,8 @@ export function QualityDay1Card({ status = "Estimate" }: { status?: EstimateStat
     };
   }, [user?.email]);
 
-  function patch(next: Partial<typeof packState>) {
-    pack.setJobMeta((current) => ({
-      ...current,
-      qualityDay1: hydrateQualityDay1({ ...packState, ...next }),
-    }));
+  function patch(next: Partial<QualityDay1>) {
+    onChange(hydrateQualityDay1({ ...packState, ...next }));
   }
 
   function patchForm(id: QualityFormId, next: Partial<QualityFormSlot>) {
@@ -76,14 +63,55 @@ export function QualityDay1Card({ status = "Estimate" }: { status?: EstimateStat
   }
 
   return (
-    <div className="mt-6 rounded-lg border border-[#d5e0de] bg-white px-4 py-4">
+    <div className="rounded-lg border border-[#d5e0de] bg-white px-4 py-4">
       <h2 className="text-sm font-semibold tracking-[0.12em] text-[#5b6f73]">{QUALITY_DAY1_LABEL.toUpperCase()}</h2>
-      {qualityNotify(status) ? <p className="mt-2 text-sm text-[#163038]">{QUALITY_LIVE_NOTE}</p> : null}
       <p className="mt-2 text-sm text-[#5b6f73]">
-        Named Day-1 package Chance sent. Mark, fill, or count per job. Phase names only — no invented hold points.
+        Chance’s named package. Mark, fill, or count on this module. Names only — no invented hold points.
         Files stay off this desk.
       </p>
-      <div className="mt-3 grid gap-3">
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <label className="block text-sm">
+          <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">INSPECTION PLAN / ITP</span>
+          <select
+            className="paper-field mt-1"
+            value={packState.inspectionPlan ? "yes" : "no"}
+            onChange={(event) => patch({ inspectionPlan: event.target.value === "yes" })}
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </label>
+        <label className="block text-sm">
+          <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">WELD MAP</span>
+          <select
+            className="paper-field mt-1"
+            value={packState.weldMap ? "yes" : "no"}
+            onChange={(event) => patch({ weldMap: event.target.value === "yes" })}
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </label>
+        <label className="block text-sm">
+          <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">TRAVELER COUNT</span>
+          <input
+            className="paper-field mt-1"
+            inputMode="numeric"
+            value={packState.travelerCount}
+            onChange={(event) => patch({ travelerCount: event.target.value })}
+          />
+        </label>
+      </div>
+      <label className="mt-3 block text-sm">
+        <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">PHASE / WORK NAMES</span>
+        <input
+          className="paper-field mt-1"
+          value={workNames}
+          placeholder="Names only — no hold points"
+          onChange={(event) => onWorkNames(event.target.value)}
+        />
+      </label>
+      <div className="mt-4 grid gap-3">
         {QUALITY_PACKAGE_FORMS.map((item) => {
           const slot = qualityFormSlot(packState, item.id);
           return (
@@ -119,11 +147,6 @@ export function QualityDay1Card({ status = "Estimate" }: { status?: EstimateStat
           );
         })}
       </div>
-      {names.length ? (
-        <p className="mt-3 text-sm text-[#163038]">Work names: {names.join(" · ")}</p>
-      ) : (
-        <p className="mt-3 text-sm text-[#5b6f73]">Turn on phases on Job setup to seed work names.</p>
-      )}
       {drops.length ? (
         <ul className="mt-3 space-y-1 text-sm text-[#5b6f73]">
           {drops.map((drop) => (

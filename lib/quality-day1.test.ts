@@ -8,6 +8,7 @@ import {
   emptyQualityDay1,
   hydrateQualityDay1,
   publicQualityDrops,
+  qualityNotify,
   qualityPackageForSeat,
   qualitySurfaceLeaks,
   qualityWorkNames,
@@ -40,6 +41,8 @@ describe("Quality Day-1 seat leaks", () => {
     );
     assert.deepEqual(drops, []);
     assert.deepEqual(qualityWorkNames([{ id: "mech", name: "Mechanical", on: true } as never]), ["Mechanical Window"]);
+    assert.equal(qualityNotify("Awarded"), true);
+    assert.equal(qualityNotify("Estimate"), false);
   });
 });
 

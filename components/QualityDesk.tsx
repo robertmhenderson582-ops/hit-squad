@@ -1,97 +1,111 @@
 "use client";
 
-import { useState } from "react";
-import { AwardedJobFrame } from "@/components/AwardedJobFrame";
-import { EmptyLane } from "@/components/EmptyLane";
+import { useEffect, useState } from "react";
 import { LeadStudio } from "@/components/LeadStudio";
-import { QualityDay1Card, QualityFormRoster } from "@/components/QualityDay1Card";
+import { ModuleRegister } from "@/components/ModuleRegister";
+import { QualityDay1Card } from "@/components/QualityDay1Card";
 import { RollingChartMap } from "@/components/RollingChartMap";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { companyScopeFor } from "@/lib/companies";
+import { CLIENT_FOLDERS, type ClientFolderId } from "@/lib/quality-hse-modules";
+import { canSeeMadisonManuals, madisonManualLabel } from "@/lib/quality-day1";
 import {
-  QUALITY_DAY1_LABEL,
-  QUALITY_PACKAGE_FORMS,
-  canSeeMadisonManuals,
-  madisonManualLabel,
-} from "@/lib/quality-day1";
-
-const CLIENTS = ["Phillips 66", "Georgia Power", "Other"] as const;
-
-const LANES = [
-  { title: "Open NCRs", headers: ["NCR", "AREA", "NOTE", "STATUS"] },
-  { title: "Weld reject", headers: ["WELD", "JOINT", "NOTE", "STATUS"] },
-  { title: "Connection reject", headers: ["CONN", "AREA", "NOTE", "STATUS"] },
-  { title: "Travelers", headers: ["TRAVELER", "SCOPE", "NOTE", "STATUS"] },
-  { title: "Expired welders", headers: ["WELDER", "STAMP", "EXPIRES", "STATUS"] },
-  { title: "Overdue gauges", headers: ["GAUGE", "AREA", "DUE", "STATUS"] },
-] as const;
+  QUALITY_SECTIONS,
+  addQualityRow,
+  emptyQualityModule,
+  patchQualityRow,
+  qualityBoardCounts,
+  readQualityModule,
+  removeQualityRow,
+  writeQualityModule,
+  type QualityModuleState,
+} from "@/lib/quality-module";
 
 export function QualityDesk() {
   const alias = useAlias();
   const owner = useOwnerDesk();
   const { user } = useSession();
-  const [client, setClient] = useState<(typeof CLIENTS)[number]>("Phillips 66");
+  const [folder, setFolder] = useState<ClientFolderId>("phillips-66");
+  const [module, setModule] = useState<QualityModuleState>(emptyQualityModule);
   const chance = owner?.viewAs === "chance";
   const manuals = canSeeMadisonManuals(user, companyScopeFor(user));
+  const counts = qualityBoardCounts(module);
+
+  useEffect(() => {
+    setModule(readQualityModule(folder));
+  }, [folder]);
+
+  function persist(next: QualityModuleState) {
+    setModule(next);
+    writeQualityModule(folder, next);
+  }
 
   return (
     <div className="mt-4 space-y-5">
-      <LeadStudio title="Quality lead studio" kind="quality" />
-      <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Quality module. {QUALITY_DAY1_LABEL} named forms and the rolling chart live here — not on Job
-        setup. Chance has this page. Saved briefs persist the same way as before.
-      </p>
-      {chance ? (
-        <p className="plant-card px-4 py-3 text-sm">
-          Chance — this is your Quality home. Named Day-1 forms and the live tube map sit on this
-          module. Drops you save stay on this desk.
-        </p>
-      ) : null}
-      {manuals ? <p className="text-xs text-[#5b6f73]">{madisonManualLabel("quality")}</p> : null}
-      <AwardedJobFrame
-        label="AWARDED JOB"
-        empty={
-          <div className="rounded-lg border border-[#d5e0de] bg-white px-4 py-4">
-            <h2 className="text-sm font-semibold tracking-[0.12em] text-[#5b6f73]">{QUALITY_DAY1_LABEL.toUpperCase()}</h2>
-            <p className="mt-2 text-sm text-[#5b6f73]">
-              Named package Chance sent. Pick an awarded job to mark, fill, or count. Steam Drum
-              Rolling Chart, Mud Drum Rolling Tracking Chart, and Generating Bank Retube Progression
-              Chart open on that job.
-            </p>
-            <QualityFormRoster forms={QUALITY_PACKAGE_FORMS} />
-          </div>
-        }
-      >
-        {() => (
-          <div className="space-y-5">
-            <QualityDay1Card status="Awarded" />
-            <RollingChartMap />
-          </div>
-        )}
-      </AwardedJobFrame>
       <label className="block max-w-sm text-sm">
         Client folder
         <select
-          value={client}
-          onChange={(event) => setClient(event.target.value as (typeof CLIENTS)[number])}
+          value={folder}
+          onChange={(event) => setFolder(event.target.value as ClientFolderId)}
           className="paper-field mt-1"
         >
-          {CLIENTS.map((item) => (
-            <option key={item} value={item}>
-              {alias(item)}
+          {CLIENT_FOLDERS.map((item) => (
+            <option key={item.id} value={item.id}>
+              {alias(item.label)}
             </option>
           ))}
         </select>
       </label>
-      <p className="font-mono text-[10px] tracking-[0.2em] text-[#5b6f73]">
-        {alias(client).toUpperCase()} · EMPTY BOARD
-      </p>
-      <div className="grid gap-4">
-        {LANES.map((lane) => (
-          <EmptyLane key={lane.title} title={lane.title} headers={[...lane.headers]} />
-        ))}
-      </div>
+      <LeadStudio title="Quality lead studio" kind="quality" />
+      {chance ? (
+        <p className="plant-card px-4 py-3 text-sm">
+          Chance — this is your Quality home. Named Day-1 forms, the board, and the live tube map sit
+          on this module. Drops you save stay on this desk.
+        </p>
+      ) : null}
+      {manuals ? <p className="text-xs text-[#5b6f73]">{madisonManualLabel("quality")}</p> : null}
+
+      <section className="plant-card px-4 py-4">
+        <h2 className="text-sm font-semibold tracking-[0.12em] text-[#5b6f73]">BOARD</h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {QUALITY_SECTIONS.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => document.getElementById(`quality-${section.id}`)?.scrollIntoView({ behavior: "smooth" })}
+              className="rounded-lg border border-[#d5e0de] px-4 py-3 text-left"
+            >
+              <p className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">{section.board.toUpperCase()}</p>
+              <p className="mt-2 font-display text-3xl text-[#163038]">{counts[section.id]}</p>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {QUALITY_SECTIONS.map((section) => (
+        <ModuleRegister
+          key={section.id}
+          id={`quality-${section.id}`}
+          title={section.title}
+          fields={section.fields}
+          rows={module.sections[section.id]}
+          onAdd={() => persist(addQualityRow(module, section.id))}
+          onPatch={(rowId, field, value) => persist(patchQualityRow(module, section.id, rowId, field, value))}
+          onRemove={(rowId) => persist(removeQualityRow(module, section.id, rowId))}
+        />
+      ))}
+
+      <QualityDay1Card
+        value={module.day1}
+        workNames={module.workNames}
+        onChange={(day1) => persist({ ...module, day1 })}
+        onWorkNames={(workNames) => persist({ ...module, workNames })}
+      />
+      <RollingChartMap
+        state={module.rollingChart}
+        onChange={(rollingChart) => persist({ ...module, rollingChart })}
+      />
     </div>
   );
 }
