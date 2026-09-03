@@ -8,11 +8,13 @@ export const HSE_TAB_ID = "hse";
 export const HSE_TAB_LABEL = "HSE";
 
 /** Quality and HSE are independent modules. They never appear on the estimate. */
-export function showsQualityHseModules(_status = "") {
+export function showsQualityHseModules(status = "") {
+  void status;
   return false;
 }
 
-export function qualityHseTabIds(_status?: EstimateStatus | string) {
+export function qualityHseTabIds(status?: EstimateStatus | string) {
+  void status;
   return [] as string[];
 }
 

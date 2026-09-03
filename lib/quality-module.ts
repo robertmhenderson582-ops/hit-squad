@@ -121,9 +121,9 @@ export function hydrateQualityModule(raw: unknown): QualityModuleState {
     sections[lane.id] = hydrateRegisterRows(incoming[lane.id]);
   }
   return {
-    day1: hydrateQualityDay1(row.day1),
+    day1: hydrateQualityDay1(row.day1 as Record<string, unknown> | null | undefined),
     workNames: typeof row.workNames === "string" ? row.workNames : "",
-    rollingChart: hydrateRollingChart(row.rollingChart),
+    rollingChart: hydrateRollingChart(row.rollingChart as Record<string, unknown> | null | undefined),
     sections,
   };
 }

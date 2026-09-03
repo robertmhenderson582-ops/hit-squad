@@ -129,7 +129,7 @@ export function hydrateHseModule(raw: unknown): HseModuleState {
     lanes[lane.id] = hydrateRegisterRows(incoming[lane.id]);
   }
   return {
-    day1: hydrateHseDay1(row.day1),
+    day1: hydrateHseDay1(row.day1 as Record<string, unknown> | null | undefined),
     plant: typeof row.plant === "string" ? row.plant : "",
     lanes,
   };

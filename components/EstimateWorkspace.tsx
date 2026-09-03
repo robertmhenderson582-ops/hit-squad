@@ -42,7 +42,8 @@ export const BASE_ESTIMATE_TABS = [
 
 export type EstimateTab = (typeof BASE_ESTIMATE_TABS)[number]["id"] | typeof RODEO_TAB_ID;
 
-export function estimateTabsForSite(site = "", client = "", _status?: EstimateStatus) {
+export function estimateTabsForSite(site = "", client = "", status?: EstimateStatus) {
+  void status;
   const tabs: Array<{ id: EstimateTab; label: string; icon: string }> = [...BASE_ESTIMATE_TABS];
   if (showsRodeoTab(site, client)) {
     const idx = tabs.findIndex((item) => item.id === "wage-lookup");
