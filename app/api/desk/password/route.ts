@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   const seat = findSeatForSession(session);
   if (!seat) return NextResponse.json({ error: "That seat is not on this desk." }, { status: 404 });
 
-  const result = await setOwnPassword(seat.email, next, current || undefined);
+  const result = await setOwnPassword(seat.email, next, current || undefined, Boolean(session.mustChangePassword));
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }

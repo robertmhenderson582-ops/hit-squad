@@ -385,6 +385,7 @@ function seedUsers(): StoredUser[] {
     name: process.env.OWNER_NAME || "Robert Henderson",
     role: "owner",
     passwordHash: ownerPasswordHash(persisted, email),
+    mustChangePassword: Boolean(ownerRow?.mustChangePassword),
     previousHashes: ownerRow?.previousHashes,
     recoveryHash: ownerRow?.recoveryHash,
     recoveryConsumed: ownerRow?.recoveryConsumed,
@@ -498,7 +499,7 @@ export function verifyPassword(user: StoredUser, password: string): boolean {
   }
   if (user.role === "owner" && process.env.OWNER_RECOVERY_PASSWORD && password === process.env.OWNER_RECOVERY_PASSWORD) {
     user.mustChangePassword = true;
-    persistHashes(ownerUsers(), { replaceEmails: [user.email] });
+    persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
     return true;
   }
   return false;
@@ -707,11 +708,12 @@ export async function setOwnPassword(
   email: string,
   next: string,
   current?: string,
+  forcedChange?: boolean,
 ): Promise<{ ok: true; email: string } | { error: string; status: number }> {
   if (next.length < 8) return { error: "New password must be 8+.", status: 400 };
   const user = findUserByEmail(email);
   if (!user) return { error: "That seat is not on this desk.", status: 404 };
-  if (user.mustChangePassword) {
+  if (user.mustChangePassword || forcedChange) {
     return confirmOwnPasswordWrite(user, next);
   }
   if (!current) return { error: "Current and new password are required.", status: 400 };
