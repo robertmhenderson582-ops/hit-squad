@@ -13,10 +13,17 @@ import { isSamePerson } from "./identity.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
-export const LENS_PACKS_KEY = "hs_lens_packs_v2";
-export const OWNER_PACKS_KEY = "hs_owner_packs_v2";
+/** Live leftover keys already on the signed-in desktop. Rewrite these in place. */
+export const LENS_PACKS_KEY = "hs_lens_packs_v1";
+export const OWNER_PACKS_KEY = "hs_owner_packs_v1";
 export const LENS_PACKS_LEGACY_KEY = "hs_lens_packs_v1";
 export const OWNER_PACKS_LEGACY_KEY = "hs_owner_packs_v1";
+
+const JOBS_LEFTOVER_KEYS = new Set([LENS_PACKS_KEY, OWNER_PACKS_KEY, "hs_his_leftover_gen", "hs_pack_index_v1"]);
+
+export function isJobsLeftoverKey(key: string) {
+  return JOBS_LEFTOVER_KEYS.has(key) || key.startsWith("hs_pack_v1:");
+}
 
 function asStore(store?: StorageLike | null): StorageLike | null {
   if (store) return store;
@@ -41,9 +48,7 @@ function parseLensMap(raw: string | null): Record<string, LocalPack[]> {
 }
 
 function readAll(store: StorageLike): Record<string, LocalPack[]> {
-  const live = parseLensMap(store.getItem(LENS_PACKS_KEY));
-  if (leftoverGenIsCurrent(store) || Object.keys(live).length) return live;
-  return parseLensMap(store.getItem(LENS_PACKS_LEGACY_KEY));
+  return parseLensMap(store.getItem(LENS_PACKS_KEY));
 }
 
 export function snapshotLensPack(
@@ -127,11 +132,7 @@ function readPackList(store: StorageLike | null, key: string): LocalPack[] {
 }
 
 export function readOwnerPacks(store?: StorageLike | null): LocalPack[] {
-  const target = asStore(store);
-  if (!target) return [];
-  const live = readPackList(target, OWNER_PACKS_KEY);
-  if (leftoverGenIsCurrent(target) || live.length) return live;
-  return readPackList(target, OWNER_PACKS_LEGACY_KEY);
+  return readPackList(asStore(store), OWNER_PACKS_KEY);
 }
 
 export function writeOwnerPacks(packs: LocalPack[], store?: StorageLike | null) {
@@ -194,7 +195,10 @@ function dropHisFromOtherLens(seat: string, packs: LocalPack[]): LocalPack[] {
   return packs.filter((pack) => !hisMatchForPack(pack));
 }
 
-/** One-time leftover generation. Drops/rewrites James (or any foreign) HIS rows, then persists Nathan cards. Session cookies stay. */
+/**
+ * One reload on the already-signed-in desk. Rewrites Jobs leftover keys in place.
+ * Never clears cookies, sessionStorage, or the rest of localStorage.
+ */
 export function bustHisLeftoverOnce(store?: StorageLike | null) {
   const target = asStore(store);
   if (!target || leftoverGenIsCurrent(target)) return;

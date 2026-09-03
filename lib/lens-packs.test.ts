@@ -7,6 +7,7 @@ import {
   OWNER_PACKS_KEY,
   OWNER_PACKS_LEGACY_KEY,
   findDeskPack,
+  isJobsLeftoverKey,
   ownerDeskHasImmediateWork,
   packsForViewedDesk,
   readLensPacks,
@@ -242,10 +243,19 @@ test("empty vault leftover cannot drop existing packs from the Jobs tree", () =>
   assert.equal(jobsOnDesk([], ownerDesk, false).length, jobs.length);
 });
 
-test("leftover generation writes v2 and keeps Nathan Follow snapshot plus unrelated keys", () => {
+test("signed-in leftover wipe rewrites v1 Jobs keys only and keeps session marks", () => {
+  assert.equal(LENS_PACKS_KEY, "hs_lens_packs_v1");
+  assert.equal(OWNER_PACKS_KEY, "hs_owner_packs_v1");
+  assert.equal(LENS_PACKS_KEY, LENS_PACKS_LEGACY_KEY);
+  assert.equal(OWNER_PACKS_KEY, OWNER_PACKS_LEGACY_KEY);
+  assert.equal(isJobsLeftoverKey(LENS_PACKS_KEY), true);
+  assert.equal(isJobsLeftoverKey("hs_whats_new:1.51.1:owner"), false);
+  assert.equal(isJobsLeftoverKey("hs_session"), false);
+
   const keep = "hs_whats_new:1.51.1:owner";
-  const store = memoryStore({
-    [LENS_PACKS_LEGACY_KEY]: JSON.stringify({
+  const removed: string[] = [];
+  const data: Record<string, string> = {
+    [LENS_PACKS_KEY]: JSON.stringify({
       nathan: [snapshotLensPack(cat2)],
       james: [
         snapshotLensPack({
@@ -259,7 +269,7 @@ test("leftover generation writes v2 and keeps Nathan Follow snapshot plus unrela
         }),
       ],
     }),
-    [OWNER_PACKS_LEGACY_KEY]: JSON.stringify([
+    [OWNER_PACKS_KEY]: JSON.stringify([
       snapshotLensPack({
         ...cat2,
         packId: "new-mtj5d6",
@@ -269,15 +279,28 @@ test("leftover generation writes v2 and keeps Nathan Follow snapshot plus unrela
       }),
     ]),
     [keep]: "1",
-  });
+  };
+  const store = {
+    getItem(key: string) {
+      return key in data ? data[key] : null;
+    },
+    setItem(key: string, value: string) {
+      data[key] = value;
+    },
+    removeItem(key: string) {
+      removed.push(key);
+      delete data[key];
+    },
+  };
+
   const ownerDesk = packsForViewedDesk(owner, false, null, store);
   assert.equal(store.getItem(HIS_LEFTOVER_GEN_KEY), "2");
   assert.equal(store.getItem(keep), "1");
+  assert.equal(removed.every((key) => isJobsLeftoverKey(key)), true);
+  assert.equal(store.getItem(OWNER_PACKS_KEY)?.includes("jameshcainjr@gmail.com"), false);
   assert.equal(readLensPacks("nathan", store)[0]?.packId, "new-mtaajdwa-f7539");
   assert.equal(readLensPacks("james", store).some((row) => row.title === "Wood River / T&M 2027-01 to 06"), false);
   assert.equal(readOwnerPacks(store).find((row) => row.title === "Wood River / T&M 2027-01 to 06")?.ownerEmail, NATHAN_DESK_EMAIL);
-  assert.ok(store.getItem(OWNER_PACKS_KEY));
-  assert.ok(store.getItem(LENS_PACKS_KEY));
   assert.ok(ownerDesk.some((pack) => pack.title === "2027 Aromatics Turnaround"));
   assert.ok(ownerDesk.some((pack) => pack.title === "Madison CAT 2 (Pit Stop)"));
 });

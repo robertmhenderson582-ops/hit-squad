@@ -352,8 +352,10 @@ test("desktop leftover generation bust restamps HIS cards and leaves session key
   assert.equal(cbi?.sites.some((site) => site.jobs.some((job) => job.title === "New Turnaround estimate")), true);
 
   const persisted = readOwnerPacks(store);
+  assert.equal(OWNER_PACKS_KEY, OWNER_PACKS_LEGACY_KEY);
   assert.equal(persisted.find((row) => row.title === "Wood River / T&M 2027-01 to 06")?.ownerEmail, NATHAN_DESK_EMAIL);
   assert.ok(store.getItem(OWNER_PACKS_KEY)?.includes(NATHAN_DESK_EMAIL));
+  assert.equal(store.getItem(OWNER_PACKS_KEY)?.includes(JAMES_EMAIL), false);
 
   const again = packsForViewedDesk(owner, false, null, store);
   assert.equal(again.find((row) => row.title === "Wood River / T&M 2027-01 to 06")?.ownerEmail, NATHAN_DESK_EMAIL);
