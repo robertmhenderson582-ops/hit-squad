@@ -1,12 +1,22 @@
 import { isOwner } from "./desk-role.ts";
 import { localPackVisibleTo, ownerVaultEmail, visibleDeskPacks, type ScopeUser } from "./estimate-scope.ts";
-import { applyHisIdentity, hisMatchForPack, mergeHisWoodRiverCards, shouldPaintHisCards } from "./his-wood-river.ts";
+import {
+  applyHisIdentity,
+  hisMatchForPack,
+  leftoverGenIsCurrent,
+  markLeftoverGen,
+  mergeHisWoodRiverCards,
+  rewriteStaleHisLocalLeftover,
+  shouldPaintHisCards,
+} from "./his-wood-river.ts";
 import { isSamePerson } from "./identity.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
-export const LENS_PACKS_KEY = "hs_lens_packs_v1";
-export const OWNER_PACKS_KEY = "hs_owner_packs_v1";
+export const LENS_PACKS_KEY = "hs_lens_packs_v2";
+export const OWNER_PACKS_KEY = "hs_owner_packs_v2";
+export const LENS_PACKS_LEGACY_KEY = "hs_lens_packs_v1";
+export const OWNER_PACKS_LEGACY_KEY = "hs_owner_packs_v1";
 
 function asStore(store?: StorageLike | null): StorageLike | null {
   if (store) return store;
@@ -14,10 +24,9 @@ function asStore(store?: StorageLike | null): StorageLike | null {
   return window.localStorage;
 }
 
-function readAll(store: StorageLike): Record<string, LocalPack[]> {
+function parseLensMap(raw: string | null): Record<string, LocalPack[]> {
+  if (!raw) return {};
   try {
-    const raw = store.getItem(LENS_PACKS_KEY);
-    if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (!parsed || typeof parsed !== "object") return {};
     const next: Record<string, LocalPack[]> = {};
@@ -29,6 +38,12 @@ function readAll(store: StorageLike): Record<string, LocalPack[]> {
   } catch {
     return {};
   }
+}
+
+function readAll(store: StorageLike): Record<string, LocalPack[]> {
+  const live = parseLensMap(store.getItem(LENS_PACKS_KEY));
+  if (leftoverGenIsCurrent(store) || Object.keys(live).length) return live;
+  return parseLensMap(store.getItem(LENS_PACKS_LEGACY_KEY));
 }
 
 export function snapshotLensPack(
@@ -112,7 +127,11 @@ function readPackList(store: StorageLike | null, key: string): LocalPack[] {
 }
 
 export function readOwnerPacks(store?: StorageLike | null): LocalPack[] {
-  return readPackList(asStore(store), OWNER_PACKS_KEY);
+  const target = asStore(store);
+  if (!target) return [];
+  const live = readPackList(target, OWNER_PACKS_KEY);
+  if (leftoverGenIsCurrent(target) || live.length) return live;
+  return readPackList(target, OWNER_PACKS_LEGACY_KEY);
 }
 
 export function writeOwnerPacks(packs: LocalPack[], store?: StorageLike | null) {
@@ -166,6 +185,33 @@ function mergeDeskPacks(...lists: LocalPack[][]): LocalPack[] {
   return [...map.values()];
 }
 
+function rewriteHisLeftoverList(packs: LocalPack[]): LocalPack[] {
+  return packs.map((pack) => (hisMatchForPack(pack) ? applyHisIdentity(pack) : pack));
+}
+
+function dropHisFromOtherLens(seat: string, packs: LocalPack[]): LocalPack[] {
+  if (seat === "nathan") return rewriteHisLeftoverList(packs);
+  return packs.filter((pack) => !hisMatchForPack(pack));
+}
+
+/** One-time leftover generation. Drops/rewrites James (or any foreign) HIS rows, then persists Nathan cards. Session cookies stay. */
+export function bustHisLeftoverOnce(store?: StorageLike | null) {
+  const target = asStore(store);
+  if (!target || leftoverGenIsCurrent(target)) return;
+  rewriteStaleHisLocalLeftover(target);
+
+  const lens = readAll(target);
+  const cleanedLens: Record<string, LocalPack[]> = {};
+  for (const [seat, rows] of Object.entries(lens)) {
+    cleanedLens[seat] = dropHisFromOtherLens(seat, rows);
+  }
+  target.setItem(LENS_PACKS_KEY, JSON.stringify(cleanedLens));
+
+  const ownerRows = rewriteHisLeftoverList(readOwnerPacks(target));
+  writeOwnerPacks(ownerRows, target);
+  markLeftoverGen(target);
+}
+
 export function ownerShouldSeePack(user: ScopeUser, pack: LocalPack) {
   if (isOwner(user)) return true;
   if (localPackVisibleTo(user, pack)) return true;
@@ -206,6 +252,8 @@ export function packsForViewedDesk(
   seat?: string | null,
   store?: StorageLike | null,
 ): LocalPack[] {
+  const target = asStore(store);
+  if (target) bustHisLeftoverOnce(target);
   const live = visibleDeskPacks(user, viewingAs, store);
   if (viewingAs) {
     if (live.length || !seat) return live;
@@ -221,6 +269,7 @@ export function packsForViewedDesk(
 export function snapshotOwnerDesk(_user?: ScopeUser | null, store?: StorageLike | null) {
   const target = asStore(store);
   if (!target) return;
+  bustHisLeftoverOnce(target);
   const owner = { email: ownerVaultEmail(), role: "owner" as const };
   writeOwnerPacks(mergeDeskPacks(readOwnerPacks(target), packsForViewedDesk(owner, false, null, target)), target);
 }

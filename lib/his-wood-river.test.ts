@@ -2,7 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { localPackToJob, rememberLocalPack } from "./local-estimates.ts";
 import { localPackVisibleTo } from "./estimate-scope.ts";
-import { packsForViewedDesk, writeLensPacks } from "./lens-packs.ts";
+import {
+  LENS_PACKS_LEGACY_KEY,
+  OWNER_PACKS_KEY,
+  OWNER_PACKS_LEGACY_KEY,
+  bustHisLeftoverOnce,
+  packsForViewedDesk,
+  readOwnerPacks,
+  writeLensPacks,
+} from "./lens-packs.ts";
 import { jobsOnDesk } from "./jobs.ts";
 import type { StorageLike } from "./local-estimates.ts";
 import { companyScopeFor } from "./companies.ts";
@@ -25,6 +33,10 @@ import {
   hisWoodRiverCards,
   jobCodeFromPackId,
   mergeHisWoodRiverCards,
+  HIS_LEFTOVER_GEN,
+  HIS_LEFTOVER_GEN_KEY,
+  isStaleHisLeftoverIdentity,
+  leftoverGenIsCurrent,
   persistHisWoodRiverCards,
   shouldPaintHisCards,
 } from "./his-wood-river.ts";
@@ -248,4 +260,129 @@ test("after leftover hydrate, persisted HIS extras still name Nathan's desk", ()
   assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
   assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), true);
+});
+
+test("stale HIS leftover is James or any non-Nathan non-owner identity", () => {
+  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: JAMES_EMAIL }), true);
+  assert.equal(
+    isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: NATHAN_DESK_EMAIL, transferredTo: JAMES_EMAIL }),
+    true,
+  );
+  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: "bccamp2@gmail.com" }), true);
+  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: NATHAN_DESK_EMAIL }), false);
+  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: owner.email }), false);
+  assert.equal(isStaleHisLeftoverIdentity({ packId: "new-mtkigb-james", ownerEmail: JAMES_EMAIL, title: "New Turnaround estimate" }), false);
+});
+
+test("desktop leftover generation bust restamps HIS cards and leaves session keys", () => {
+  const sessionKey = "hs_whats_new:1.51.1:owner";
+  const jamesTm = {
+    packId: "new-MTJ5D6-live",
+    key: "new:new-MTJ5D6-live",
+    title: "Wood River / T&M 2027-01 to 06",
+    client: "",
+    site: "",
+    siteId: "",
+    createdAt: 4,
+    updatedAt: 9,
+    ownerEmail: JAMES_EMAIL,
+    transferredTo: JAMES_EMAIL,
+    transferredToName: "James Cain",
+  };
+  const jamesSample = {
+    packId: "new-mtkigb-james",
+    key: "new:new-mtkigb-james",
+    title: "New Turnaround estimate",
+    client: "Phillips 66",
+    site: "Wood River — Roxana, IL",
+    siteId: "site-madison",
+    createdAt: 20,
+    updatedAt: 21,
+    ownerEmail: JAMES_EMAIL,
+  };
+  const store = memoryStore({
+    [LENS_PACKS_LEGACY_KEY]: JSON.stringify({ james: [jamesTm, jamesSample] }),
+    [OWNER_PACKS_LEGACY_KEY]: JSON.stringify([jamesTm]),
+    [sessionKey]: "1",
+  });
+  rememberLocalPack(
+    {
+      packId: jamesTm.packId,
+      title: jamesTm.title,
+      client: "",
+      site: "",
+      ownerEmail: JAMES_EMAIL,
+      transferredTo: JAMES_EMAIL,
+      transferredToName: "James Cain",
+    },
+    store,
+  );
+  rememberLocalPack(
+    {
+      packId: jamesSample.packId,
+      title: jamesSample.title,
+      client: jamesSample.client,
+      site: jamesSample.site,
+      ownerEmail: JAMES_EMAIL,
+    },
+    store,
+  );
+
+  const painted = packsForViewedDesk(owner, false, null, store);
+  const tm = painted.find((row) => row.title === "Wood River / T&M 2027-01 to 06");
+  const sample = painted.find((row) => row.packId === jamesSample.packId);
+  const jobs = jobsOnDesk(undefined, painted, false, companyScopeFor(owner), undefined, { includeSeeds: false });
+  const tree = jobTree({ scope: { isOwner: true, email: owner.email, companyId: "hitsquad" }, jobs, packs: painted });
+  const wood = tree.find((row) => row.id === "madison")?.sites.find((site) => site.id === "site-madison");
+  const cbi = tree.find((row) => row.id === "cbi");
+
+  assert.equal(leftoverGenIsCurrent(store), true);
+  assert.equal(store.getItem(HIS_LEFTOVER_GEN_KEY), HIS_LEFTOVER_GEN);
+  assert.equal(store.getItem(sessionKey), "1");
+  assert.equal(tm?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(sample?.ownerEmail, JAMES_EMAIL);
+  assert.equal(handoffMarkText(sample!, owner.email), "James Cain's desk.");
+  assert.ok(painted.some((row) => row.packId === HIS_AROMATICS_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
+  assert.ok(painted.some((row) => row.packId === HIS_CAT2_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
+  assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), true);
+  assert.equal(wood?.jobs.some((job) => job.title === "New Turnaround estimate"), false);
+  assert.equal(cbi?.sites.some((site) => site.jobs.some((job) => job.title === "New Turnaround estimate")), true);
+
+  const persisted = readOwnerPacks(store);
+  assert.equal(persisted.find((row) => row.title === "Wood River / T&M 2027-01 to 06")?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.ok(store.getItem(OWNER_PACKS_KEY)?.includes(NATHAN_DESK_EMAIL));
+
+  const again = packsForViewedDesk(owner, false, null, store);
+  assert.equal(again.find((row) => row.title === "Wood River / T&M 2027-01 to 06")?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(handoffMarkText(again.find((row) => row.title === "Wood River / T&M 2027-01 to 06")!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(store.getItem(sessionKey), "1");
+});
+
+test("Benny leftover on HIS T&M is rewritten the same as James leftover", () => {
+  const store = memoryStore({
+    [OWNER_PACKS_LEGACY_KEY]: JSON.stringify([
+      {
+        packId: HIS_TM_PACK_ID,
+        key: `new:${HIS_TM_PACK_ID}`,
+        title: "Wood River / T&M 2027-01 to 06",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        siteId: "site-madison",
+        createdAt: 1,
+        updatedAt: 2,
+        ownerEmail: "bccamp2@gmail.com",
+        transferredTo: "bccamp2@gmail.com",
+      },
+    ]),
+  });
+  bustHisLeftoverOnce(store);
+  const desk = packsForViewedDesk(owner, false, null, store);
+  const tm = desk.find((row) => row.packId === HIS_TM_PACK_ID);
+  assert.equal(tm?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+  assert.ok(desk.some((row) => row.packId === HIS_AROMATICS_PACK_ID));
+  assert.ok(desk.some((row) => row.packId === HIS_CAT2_PACK_ID));
 });

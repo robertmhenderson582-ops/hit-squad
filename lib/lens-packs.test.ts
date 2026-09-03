@@ -3,14 +3,19 @@ import { test } from "node:test";
 import { jobsOnDesk, seedJobs } from "./jobs.ts";
 import {
   LENS_PACKS_KEY,
+  LENS_PACKS_LEGACY_KEY,
+  OWNER_PACKS_KEY,
+  OWNER_PACKS_LEGACY_KEY,
   findDeskPack,
   ownerDeskHasImmediateWork,
   packsForViewedDesk,
   readLensPacks,
+  readOwnerPacks,
   snapshotLensPack,
   writeLensPacks,
   writeOwnerPacks,
 } from "./lens-packs.ts";
+import { HIS_LEFTOVER_GEN_KEY, NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
 import { jobTree } from "./job-tree.ts";
 import { deleteLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 
@@ -235,4 +240,44 @@ test("empty vault leftover cannot drop existing packs from the Jobs tree", () =>
   assert.equal(jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   assert.equal(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
   assert.equal(jobsOnDesk([], ownerDesk, false).length, jobs.length);
+});
+
+test("leftover generation writes v2 and keeps Nathan Follow snapshot plus unrelated keys", () => {
+  const keep = "hs_whats_new:1.51.1:owner";
+  const store = memoryStore({
+    [LENS_PACKS_LEGACY_KEY]: JSON.stringify({
+      nathan: [snapshotLensPack(cat2)],
+      james: [
+        snapshotLensPack({
+          ...cat2,
+          packId: "new-mtj5d6",
+          key: "new:new-mtj5d6",
+          title: "Wood River / T&M 2027-01 to 06",
+          ownerEmail: "jameshcainjr@gmail.com",
+          transferredTo: "jameshcainjr@gmail.com",
+          transferredToName: "James Cain",
+        }),
+      ],
+    }),
+    [OWNER_PACKS_LEGACY_KEY]: JSON.stringify([
+      snapshotLensPack({
+        ...cat2,
+        packId: "new-mtj5d6",
+        key: "new:new-mtj5d6",
+        title: "Wood River / T&M 2027-01 to 06",
+        ownerEmail: "jameshcainjr@gmail.com",
+      }),
+    ]),
+    [keep]: "1",
+  });
+  const ownerDesk = packsForViewedDesk(owner, false, null, store);
+  assert.equal(store.getItem(HIS_LEFTOVER_GEN_KEY), "2");
+  assert.equal(store.getItem(keep), "1");
+  assert.equal(readLensPacks("nathan", store)[0]?.packId, "new-mtaajdwa-f7539");
+  assert.equal(readLensPacks("james", store).some((row) => row.title === "Wood River / T&M 2027-01 to 06"), false);
+  assert.equal(readOwnerPacks(store).find((row) => row.title === "Wood River / T&M 2027-01 to 06")?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.ok(store.getItem(OWNER_PACKS_KEY));
+  assert.ok(store.getItem(LENS_PACKS_KEY));
+  assert.ok(ownerDesk.some((pack) => pack.title === "2027 Aromatics Turnaround"));
+  assert.ok(ownerDesk.some((pack) => pack.title === "Madison CAT 2 (Pit Stop)"));
 });

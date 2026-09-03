@@ -20,7 +20,7 @@ import {
   writeVaultSeen,
   type MenuItem,
 } from "./job-menu.ts";
-import { findDeskPack, readLensPacks, snapshotLensPack, snapshotOwnerDesk, writeLensPacks } from "./lens-packs.ts";
+import { bustHisLeftoverOnce, findDeskPack, readLensPacks, snapshotLensPack, snapshotOwnerDesk, writeLensPacks } from "./lens-packs.ts";
 import {
   deleteLocalPack,
   findLocalPack,
@@ -97,11 +97,14 @@ export async function hydrateFromVault(
   const target = browserStore(store);
   if (!target) return [];
   const seat = requestedVaultSeat(opts) || "owner";
+  if (seat === "owner" || seat === "nathan") bustHisLeftoverOnce(target);
   if (hydratePromise && hydrateSeat === seat) {
     const packs = await hydratePromise;
     for (const pack of packs) mergeVaultIntoLocal(target, hisMatchForPack(pack) ? applyHisIdentity(pack) : pack);
-    if (seat !== "owner") writeLensPacks(seat, packs.map((pack) => snapshotLensPack(hisMatchForPack(pack) ? applyHisIdentity(pack) : pack)), target);
-    else {
+    if (seat !== "owner") {
+      writeLensPacks(seat, packs.map((pack) => snapshotLensPack(hisMatchForPack(pack) ? applyHisIdentity(pack) : pack)), target);
+      if (seat === "nathan") persistHisWoodRiverCards(target);
+    } else {
       persistHisWoodRiverCards(target);
       snapshotOwnerDesk({ email: ownerVaultEmail(), role: "owner" }, target);
     }
@@ -127,7 +130,7 @@ export async function hydrateFromVault(
           }
         }
       }
-      if (!viewingAs) persistHisWoodRiverCards(target);
+      if (!viewingAs || seat === "nathan") persistHisWoodRiverCards(target);
       if (data.persisted && !viewingAs) {
         const deskEmail = ownerVaultEmail();
         const namedLocal = listLocalPacks(target).filter((pack) => (pack.title || "").trim());
