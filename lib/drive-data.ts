@@ -113,6 +113,9 @@ async function fileFromStoredId(adapter: DriveAdapter, name: string, kind: strin
 
 export async function findVaultJsonFile(adapter: DriveAdapter, name: string, kind: string, folderId = dataFolderId()) {
   if (!adapter.configured) return null;
+  const pinned = await fileFromStoredId(adapter, name, kind);
+  // seats.json: always PATCH the known production id. A zombie OAuth list must not redirect writes.
+  if (pinned && (KNOWN_VAULT_FILE_IDS[name] || vaultEnvFileId(name))) return pinned;
   const fromFolder = pickNewestMatch(await listFolderJson(adapter, folderId), name, kind);
   if (fromFolder) {
     rememberVaultFileId(name, kind, fromFolder.id);
@@ -123,7 +126,7 @@ export async function findVaultJsonFile(adapter: DriveAdapter, name: string, kin
     rememberVaultFileId(name, kind, fromAccessible.id);
     return fromAccessible;
   }
-  return fileFromStoredId(adapter, name, kind);
+  return pinned;
 }
 
 export async function readVaultJson<T>(

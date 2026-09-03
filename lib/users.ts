@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { assignedCompany, isKnownCompany, setAssignedCompany } from "./companies-store.ts";
 import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
 import { SEATS_VAULT_KIND, SEATS_VAULT_NAME, readVaultJson, resetVaultFileIdsForTests, writeVaultJson } from "./drive-data.ts";
-import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
+import { vaultDriveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import { canonicalEmail, identityBucket, isOwnerAliasSeat, isOwnerIdentity, resolveIdentity } from "./identity.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
@@ -180,6 +180,16 @@ function seatFileHasLocalOnly(merged: SeatStoreFile, vault: SeatStoreFile) {
   return merged.extras.some((extra) => !vault.extras.some((row) => row.email === extra.email));
 }
 
+function ownerHashNeedsVaultSync(local: SeatStoreFile, vault: SeatStoreFile, email: string) {
+  const localRow = ownerHashRow(local.hashes, email);
+  const vaultRow = ownerHashRow(vault.hashes, email);
+  if (!localRow?.passwordHash) return false;
+  if (!vaultRow?.passwordHash) return true;
+  if (localRow.passwordHash !== vaultRow.passwordHash && !localRow.mustChangePassword) return true;
+  if (vaultRow.mustChangePassword && !localRow.mustChangePassword) return true;
+  return false;
+}
+
 export function parseExtraSeats(raw: unknown): ExtraSeat[] {
   const parsed = raw && typeof raw === "object" ? (raw as SeatFile) : { extras: [] };
   const extras: ExtraSeat[] = [];
@@ -272,7 +282,7 @@ function hashesFromUsers(users: StoredUser[]) {
 function resolveAdapter(): DriveAdapter | null {
   if (injectedAdapter !== undefined) return injectedAdapter;
   if (process.env.SEAT_PASSWORD_PATH) return null;
-  const drive = driveAdapter();
+  const drive = vaultDriveAdapter();
   return drive.configured ? drive : null;
 }
 
@@ -359,7 +369,8 @@ export async function hydrateSeatStore() {
       if (hasSeatData(vault) || hasSeatData(cached)) {
         const merged = mergeSeatFiles(cached, vault);
         writeSeatFile(merged);
-        if (hasSeatData(vault) && seatFileHasLocalOnly(merged, vault)) {
+        const ownerNeedsSync = ownerHashNeedsVaultSync(cached, vault, ownerEmail());
+        if (hasSeatData(vault) && (seatFileHasLocalOnly(merged, vault) || ownerNeedsSync)) {
           await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, merged);
         } else if (!hasSeatData(vault) && hasSeatData(cached)) {
           await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, cached);
@@ -370,6 +381,44 @@ export async function hydrateSeatStore() {
     }
   }
   cachedUsers = null;
+}
+
+/**
+ * Push the owner hash already on /tmp or hs_seat_claim into seats.json.
+ * Does not invent a password. Does not overwrite tester hashes.
+ */
+export async function persistExistingOwnerHash(input?: {
+  claim?: SeatHashClaim | null;
+  email?: string;
+}): Promise<boolean> {
+  const wanted = canonicalEmail(input?.email || "") || ownerEmail();
+  if (!isOwnerIdentity(wanted) && wanted !== ownerEmail()) return false;
+  const hadLocalHash = Boolean(ownerHashRow(loadPersisted(), ownerEmail())?.passwordHash);
+  const claim = input?.claim;
+  const ownerClaim = Boolean(
+    claim &&
+      BCRYPT_HASH.test(claim.passwordHash) &&
+      (canonicalEmail(claim.email) === ownerEmail() || isOwnerIdentity(claim.email)),
+  );
+  if (ownerClaim && claim) {
+    restoreSeatHash(ownerEmail(), { ...claim, email: ownerEmail() });
+  }
+  if (!ownerClaim && !hadLocalHash) return false;
+  const user = findUserByEmail(ownerEmail());
+  if (!user?.passwordHash || !BCRYPT_HASH.test(user.passwordHash)) return false;
+  const envPassword = process.env.OWNER_PASSWORD;
+  if (
+    !ownerClaim &&
+    envPassword &&
+    BCRYPT_HASH.test(user.passwordHash) &&
+    bcrypt.compareSync(envPassword, user.passwordHash)
+  ) {
+    return false;
+  }
+  user.mustChangePassword = false;
+  persistHashes(ownerUsers(), { replaceEmails: [ownerEmail()], confirm: true });
+  await flushSeatVault();
+  return true;
 }
 
 export async function flushSeatVault() {
@@ -782,6 +831,11 @@ async function confirmOwnPasswordWrite(
     persistSeatFileLocal(ownerUsers());
     if (!forced) {
       return { error: "Password was not saved. Try again.", status: 503 };
+    }
+    try {
+      await persistExistingOwnerHash({ email: user.email });
+    } catch {
+      pendingVault = Promise.resolve();
     }
     return { ok: true, email: user.email };
   }

@@ -189,4 +189,47 @@ describe("vault named json", () => {
     };
     assert.equal(afterUnread.hashes["robertmhenderson582@gmail.com"]?.mustChangePassword, false);
   });
+
+  it("PATCHes the known seats.json id even when listAccessible returns a different file", async () => {
+    resetVaultFileIdsForTests();
+    const inner = memoryDrive();
+    inner.files.set(SEATS_VAULT_FILE_ID, {
+      file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+      content: `${JSON.stringify({ hashes: {}, extras: [] })}\n`,
+    });
+    const decoy = await inner.createJson("folder", SEATS_VAULT_NAME, JSON.stringify({ hashes: { decoy: {} } }), {
+      kind: SEATS_VAULT_KIND,
+    });
+    const updated: string[] = [];
+    const drive: DriveAdapter = {
+      configured: true,
+      async listJson() {
+        return [];
+      },
+      async listAccessibleJson() {
+        return [{ id: decoy.id, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } }];
+      },
+      readJson: (fileId) => inner.readJson(fileId),
+      async createJson() {
+        throw new Error("createJson must not run when seats.json id is known");
+      },
+      async updateJson(fileId, content, name, properties) {
+        updated.push(fileId);
+        return inner.updateJson(fileId, content, name, properties);
+      },
+      deleteJson: (fileId) => inner.deleteJson(fileId),
+    };
+    const found = await findVaultJsonFile(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
+    assert.equal(found?.id, SEATS_VAULT_FILE_ID);
+    await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, {
+      hashes: { "robertmhenderson582@gmail.com": { mustChangePassword: false } },
+    });
+    assert.deepEqual(updated, [SEATS_VAULT_FILE_ID]);
+    const seats = JSON.parse(await inner.readJson(SEATS_VAULT_FILE_ID)) as {
+      hashes: Record<string, { mustChangePassword?: boolean }>;
+    };
+    assert.equal(seats.hashes["robertmhenderson582@gmail.com"]?.mustChangePassword, false);
+    const decoyBody = JSON.parse(await inner.readJson(decoy.id)) as { hashes?: { decoy?: unknown } };
+    assert.equal(Boolean(decoyBody.hashes?.decoy), true);
+  });
 });
