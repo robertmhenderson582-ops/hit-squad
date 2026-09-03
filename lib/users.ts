@@ -31,7 +31,6 @@ type SeatFile = {
 type SeatStoreFile = { hashes: NonNullable<SeatFile["hashes"]>; extras: ExtraSeat[] };
 
 let cachedUsers: StoredUser[] | null = null;
-let hydrated = false;
 let injectedAdapter: DriveAdapter | null | undefined;
 let pendingVault: Promise<void> = Promise.resolve();
 
@@ -324,7 +323,6 @@ export async function hydrateSeatStore() {
     }
   }
   cachedUsers = null;
-  hydrated = true;
 }
 
 export async function flushSeatVault() {
@@ -664,20 +662,17 @@ export function ownerSeatCount() {
 
 export function resetUsersForTests() {
   cachedUsers = null;
-  hydrated = false;
   injectedAdapter = undefined;
   pendingVault = Promise.resolve();
 }
 
 export function forgetSeatCacheForTests() {
   cachedUsers = null;
-  hydrated = false;
   const file = seatPasswordPath();
   if (existsSync(file)) unlinkSync(file);
 }
 
 export function useSeatVaultForTests(adapter: DriveAdapter | null) {
   injectedAdapter = adapter;
-  hydrated = false;
   cachedUsers = null;
 }
