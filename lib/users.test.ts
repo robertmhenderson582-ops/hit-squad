@@ -974,6 +974,7 @@ test("owner env recovery forced change accepts next without current after hydrat
 
     const route = readFileSync(fileURLToPath(new URL("../app/api/desk/password/route.ts", import.meta.url)), "utf8");
     assert.match(route, /setOwnPassword\(seat\.email, next, current \|\| undefined, Boolean\(session\.mustChangePassword\)\)/);
+    assert.equal(/passwordWriteLanded/.test(route), false);
     assert.equal(JSON.stringify(recovered).includes(recovery), false);
     assert.equal(JSON.stringify(publicUser).includes(CHOSEN), false);
     assert.equal(ownerSeatCount(), 1);
@@ -991,4 +992,84 @@ test("owner never receives a temp-password create prompt", () => {
     loginOutcome({ email: OWNER_LOGIN_EMAIL, newPassword: CHOSEN, confirmPassword: CHOSEN }).status,
     "error",
   );
+});
+
+function driveWithOneStaleReadAfterWrite() {
+  const inner = memoryDrive();
+  const stale = new Map<string, string>();
+  return {
+    configured: true as const,
+    files: inner.files,
+    listJson: (folderId: string) => inner.listJson(folderId),
+    async readJson(fileId: string) {
+      const prior = stale.get(fileId);
+      if (prior !== undefined) {
+        stale.delete(fileId);
+        return prior;
+      }
+      return inner.readJson(fileId);
+    },
+    createJson: inner.createJson.bind(inner),
+    async updateJson(fileId: string, content: string, name?: string, properties?: Record<string, string>) {
+      const row = inner.files.get(fileId);
+      if (row) stale.set(fileId, row.content);
+      return inner.updateJson(fileId, content, name, properties);
+    },
+    deleteJson: inner.deleteJson.bind(inner),
+  };
+}
+
+test("stale Drive read after confirmOwnPasswordWrite does not 503 when the write already succeeded", async () => {
+  const drive = driveWithOneStaleReadAfterWrite();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "authenticated");
+  await flushSeatVault();
+
+  const stored = findUserByEmail(OWNER_LOGIN_EMAIL);
+  assert.ok(stored);
+  stored.mustChangePassword = true;
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
+  assert.equal("ok" in changed, true);
+  if ("error" in changed) {
+    assert.equal(changed.error, "expected ok after a successful vault write");
+    return;
+  }
+
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "error");
+  assert.equal(ownerSeatCount(), 1);
+
+  const settingsStillNeedsCurrent = await setOwnPassword(OWNER_LOGIN_EMAIL, OTHER);
+  assert.equal("error" in settingsStillNeedsCurrent, true);
+  if ("error" in settingsStillNeedsCurrent) {
+    assert.equal(settingsStillNeedsCurrent.error, "Current and new password are required.");
+  }
+
+  const vaultRaw = [...drive.files.values()].map((row) => row.content).join();
+  assert.equal(vaultRaw.includes(CHOSEN), false);
+  assert.equal(vaultRaw.includes(OWNER_SECRET), false);
+  assert.match(vaultRaw, /robertmhenderson582@gmail.com/i);
+});
+
+test("confirmOwnPasswordWrite still 503s when writeVaultJson throws", async () => {
+  const inner = memoryDrive();
+  useSeatVaultForTests({
+    configured: true,
+    listJson: (folderId) => inner.listJson(folderId),
+    readJson: (fileId) => inner.readJson(fileId),
+    async createJson() {
+      throw new Error("drive write failed");
+    },
+    async updateJson() {
+      throw new Error("drive write failed");
+    },
+    deleteJson: (fileId) => inner.deleteJson(fileId),
+  });
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN, OWNER_SECRET);
+  assert.equal("error" in changed, true);
+  if ("error" in changed) {
+    assert.equal(changed.status, 503);
+    assert.equal(changed.error, "Password was not saved. Try again.");
+  }
 });
