@@ -1,25 +1,24 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.47.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.47";
+export const DESK_VERSION = "1.48.0";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.48";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.47";
+export const DESK_THREAD_ID = "th-desk-v1.48";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.47",
-  "• Equipment, Subcontractor, and Other Cost come back from the saved job after refresh — 2027 Aromatics and any other estimate.",
+  "Hit Squad Project Controls V1.48",
+  "• Org chart shows night counterparts; Rodeo estimates get a Rodeo form tab; Crew shows PD $ and names; Job setup has contingency, CBA increase, and M.O.R.E.; Quality and HSE Day-1 checklists on the job.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.47",
-  "• Equipment, Subcontractor, and Other Cost come back from the saved job after refresh — 2027 Aromatics and any other estimate.",
-  "• Empty local tabs no longer replace the saved sheets. Completed estimates still export the V1.46 Excel workbook with live formulas.",
-  "• Joseph Henderson can use the full desk except owner lockout, including Export. Inbox stays the six. Owner stays the only owner.",
+  "Hit Squad Project Controls V1.48",
+  "• Org chart shows night counterparts; Rodeo estimates get a Rodeo form tab; Crew shows PD $ and names; Job setup has contingency, CBA increase, and M.O.R.E.; Quality and HSE Day-1 checklists on the job.",
+  "• Persist and Excel export stay. Madison manuals stay Madison-only.",
 ].join("\n");
 
-/** Same as the live V1.47 note. Kept so older imports still resolve. */
+/** Same as the live V1.48 note. Kept so older imports still resolve. */
 export const NEXT_SHIP_VERSION = DESK_VERSION;
 export const NEXT_SHIP_VERSION_LABEL = DESK_VERSION_LABEL;
 export const TESTER_NEXT_SHIP_DRAFT = TESTER_WHATS_NEW;

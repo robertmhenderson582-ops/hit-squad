@@ -4,6 +4,9 @@ import { useState } from "react";
 import { EmptyLane } from "@/components/EmptyLane";
 import { LeadStudio } from "@/components/LeadStudio";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useSession } from "@/components/SessionProvider";
+import { companyScopeFor } from "@/lib/companies";
+import { QUALITY_DAY1_LABEL, canSeeMadisonManuals, madisonManualLabel } from "@/lib/quality-day1";
 
 const CLIENTS = ["Phillips 66", "Georgia Power", "Other"] as const;
 
@@ -19,20 +22,25 @@ const LANES = [
 export function QualityDesk() {
   const alias = useAlias();
   const owner = useOwnerDesk();
+  const { user } = useSession();
   const [client, setClient] = useState<(typeof CLIENTS)[number]>("Phillips 66");
   const chance = owner?.viewAs === "chance";
+  const manuals = canSeeMadisonManuals(user, companyScopeFor(user));
 
   return (
     <div className="mt-4 space-y-5">
       <LeadStudio title="Quality lead studio" kind="quality" />
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Empty Quality desk. Client folders only — no fake NCR counts and no QC Manual digest.
+        Empty Quality desk. Client folders only — no fake NCR counts and no QC Manual digest.{" "}
+        {QUALITY_DAY1_LABEL} checklists live on the job. Saved briefs persist the same way as before.
       </p>
       {chance ? (
         <p className="plant-card px-4 py-3 text-sm">
-          Chance — this is your Quality home. Empty on purpose. You are the lead.
+          Chance — this is your Quality home. Empty on purpose. You are the lead. Open a job for the
+          Day-1 package. Drops you save stay on this desk.
         </p>
       ) : null}
+      {manuals ? <p className="text-xs text-[#5b6f73]">{madisonManualLabel("quality")}</p> : null}
       <label className="block max-w-sm text-sm">
         Client folder
         <select

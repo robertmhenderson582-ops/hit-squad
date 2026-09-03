@@ -26,6 +26,15 @@ import {
   rematchEquipmentSheetToShahan,
 } from "@/lib/shahan-wood-river";
 import { applyPlantJobRates, offerRateBookForSite } from "@/lib/wage-lookup";
+import { QualityDay1Card } from "@/components/QualityDay1Card";
+import { HseDay1Card } from "@/components/HseDay1Card";
+import {
+  CBA_INCREASE_LABEL,
+  EQUIPMENT_CONTINGENCY_LABEL,
+  LABOR_CONTINGENCY_LABEL,
+  MORE_FUND_LABEL,
+  SUBS_CONTINGENCY_LABEL,
+} from "@/lib/estimate-money";
 
 export function JobSetupCard({
   type,
@@ -365,6 +374,106 @@ export function JobSetupCard({
           <p className="mt-1 text-xs text-[#5b6f73]">Seeds Other Cost Travel Craft. You can still override on that line.</p>
         </label>
       </div>
+      <div className="mt-6 rounded-lg border border-[#d5e0de] bg-[#f4f1e8] px-4 py-4">
+        <h2 className="text-sm font-semibold tracking-[0.12em] text-[#5b6f73]">CONTINGENCY · CBA · M.O.R.E.</h2>
+        <p className="mt-1 text-sm text-[#5b6f73]">
+          Three independent percents. Separate from 6.5% markup. Labor is Crew ST/OT/DT only — not PD.
+          Affiliate subs stay out of markup and still take the subs contingency.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <label className="block">
+            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">{LABOR_CONTINGENCY_LABEL.toUpperCase()} %</span>
+            <input
+              type="number"
+              min={0}
+              className="paper-field mt-2"
+              value={pack.jobMeta.laborContingencyPct || ""}
+              onChange={(event) =>
+                pack.setJobMeta((current) => ({ ...current, laborContingencyPct: Number(event.target.value) || 0 }))
+              }
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">{EQUIPMENT_CONTINGENCY_LABEL.toUpperCase()} %</span>
+            <input
+              type="number"
+              min={0}
+              className="paper-field mt-2"
+              value={pack.jobMeta.equipmentContingencyPct || ""}
+              onChange={(event) =>
+                pack.setJobMeta((current) => ({ ...current, equipmentContingencyPct: Number(event.target.value) || 0 }))
+              }
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">{SUBS_CONTINGENCY_LABEL.toUpperCase()} %</span>
+            <input
+              type="number"
+              min={0}
+              className="paper-field mt-2"
+              value={pack.jobMeta.subsContingencyPct || ""}
+              onChange={(event) =>
+                pack.setJobMeta((current) => ({ ...current, subsContingencyPct: Number(event.target.value) || 0 }))
+              }
+            />
+          </label>
+        </div>
+        <label className="mt-4 flex items-center gap-2 text-sm text-[#163038]">
+          <input
+            type="checkbox"
+            checked={pack.jobMeta.cbaIncreaseOn}
+            onChange={(event) => pack.setJobMeta((current) => ({ ...current, cbaIncreaseOn: event.target.checked }))}
+          />
+          {CBA_INCREASE_LABEL} — CBA craft only
+        </label>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">CBA EFFECTIVE DATE</span>
+            <input
+              type="date"
+              className="paper-field mt-2"
+              value={pack.jobMeta.cbaIncreaseDate}
+              disabled={!pack.jobMeta.cbaIncreaseOn}
+              onChange={(event) => pack.setJobMeta((current) => ({ ...current, cbaIncreaseDate: event.target.value }))}
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">CBA INCREASE %</span>
+            <input
+              type="number"
+              min={0}
+              className="paper-field mt-2"
+              value={pack.jobMeta.cbaIncreaseOn ? pack.jobMeta.cbaIncreasePct || "" : ""}
+              disabled={!pack.jobMeta.cbaIncreaseOn}
+              onChange={(event) =>
+                pack.setJobMeta((current) => ({ ...current, cbaIncreasePct: Number(event.target.value) || 0 }))
+              }
+            />
+          </label>
+        </div>
+        <label className="mt-4 block">
+          <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">{MORE_FUND_LABEL.toUpperCase()} $ / HR</span>
+          <input
+            type="number"
+            step="0.01"
+            className="paper-field mt-2"
+            value={pack.jobMeta.moreFundPerHour ?? ""}
+            placeholder="Empty = $0. No default."
+            onChange={(event) => {
+              const raw = event.target.value;
+              pack.setJobMeta((current) => ({
+                ...current,
+                moreFundPerHour: raw === "" ? null : Number(raw),
+              }));
+            }}
+          />
+          <p className="mt-1 text-xs text-[#5b6f73]">
+            Typed $/hr. Empty is $0 and stays off the rail. Credit or cost. Craft hours only. Never seeded.
+          </p>
+        </label>
+      </div>
+      <QualityDay1Card status={status} />
+      <HseDay1Card status={status} site={site} client={client} />
     </section>
   );
 }

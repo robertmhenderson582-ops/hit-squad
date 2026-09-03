@@ -1,4 +1,5 @@
 import type { CalendarRange, CraftRow, CraftShift } from "./craft-labor.ts";
+import { emptyHseDay1, hydrateHseDay1, type HseDay1 } from "./hse-day1.ts";
 import {
   craftsForCoast,
   matchIpsCraft,
@@ -6,7 +7,10 @@ import {
   staffingCoastFromSite,
   type StaffingCoast,
 } from "./p66-ips-crafts.ts";
+import { emptyJobMoney, hydrateJobMoney, type JobMoney } from "./estimate-money.ts";
 import { eachYmd, parseYmd, PHASE_NAMES, type PhaseRow } from "./phase-schedule.ts";
+import { emptyQualityDay1, hydrateQualityDay1, type QualityDay1 } from "./quality-day1.ts";
+import { emptyRodeoForm, hydrateRodeoForm, type RodeoFormState } from "./rodeo-form.ts";
 import { emptyJobRates, hydrateJobRates, type JobRates } from "./shahan-wood-river.ts";
 import { buildXlsx, colLetter, type SheetCell } from "./xlsx-minimal.ts";
 
@@ -15,7 +19,11 @@ export const JOB_META_PREFIX = "hs_job_v1:";
 export type JobMeta = {
   afeName: string;
   area: string;
-} & JobRates;
+  qualityDay1: QualityDay1;
+  hseDay1: HseDay1;
+  rodeoForm: RodeoFormState;
+} & JobRates &
+  JobMoney;
 
 export type StaffingCrewInput = {
   staff?: CraftRow[];
@@ -57,8 +65,29 @@ export type StaffingExportMeta = {
 
 const WEEKDAY_MARK = ["S", "M", "T", "W", "T", "F", "S"] as const;
 
+export function hydrateJobMeta(raw: Partial<JobMeta> | Record<string, unknown> | null | undefined): JobMeta {
+  const parsed = (raw && typeof raw === "object" ? raw : {}) as Partial<JobMeta> & Record<string, unknown>;
+  return {
+    afeName: typeof parsed.afeName === "string" ? parsed.afeName : "",
+    area: typeof parsed.area === "string" ? parsed.area : "",
+    ...hydrateJobRates(parsed),
+    ...hydrateJobMoney(parsed),
+    qualityDay1: hydrateQualityDay1(parsed.qualityDay1),
+    hseDay1: hydrateHseDay1(parsed.hseDay1),
+    rodeoForm: hydrateRodeoForm(parsed.rodeoForm),
+  };
+}
+
 export function emptyJobMeta(): JobMeta {
-  return { afeName: "", area: "", ...emptyJobRates() };
+  return hydrateJobMeta({
+    afeName: "",
+    area: "",
+    ...emptyJobRates(),
+    ...emptyJobMoney(),
+    qualityDay1: emptyQualityDay1(),
+    hseDay1: emptyHseDay1(),
+    rodeoForm: emptyRodeoForm(),
+  });
 }
 
 export function readJobMeta(key: string): JobMeta {
@@ -66,12 +95,7 @@ export function readJobMeta(key: string): JobMeta {
   try {
     const raw = window.localStorage.getItem(`${JOB_META_PREFIX}${key}`);
     if (!raw) return emptyJobMeta();
-    const parsed = JSON.parse(raw) as Partial<JobMeta>;
-    return {
-      afeName: typeof parsed.afeName === "string" ? parsed.afeName : "",
-      area: typeof parsed.area === "string" ? parsed.area : "",
-      ...hydrateJobRates(parsed),
-    };
+    return hydrateJobMeta(JSON.parse(raw) as Partial<JobMeta>);
   } catch {
     return emptyJobMeta();
   }

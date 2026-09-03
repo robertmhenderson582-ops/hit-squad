@@ -271,6 +271,8 @@ function CalendarPattern({
     days: range.days,
     perDiemPeople: range.perDiemPeople,
     nightPerDiemPeople: range.nightPerDiemPeople,
+    sundayHeadcount: range.sundayHeadcount,
+    nightSundayHeadcount: range.nightSundayHeadcount,
     otAfter8: range.otAfter8 ?? phaseOtAfter8,
     phaseId: range.phaseId,
     billedAs: "billedAs" in row ? String(row.billedAs || "") : undefined,
@@ -407,7 +409,7 @@ function CalendarPattern({
           </label>
         ) : null}
         <label className="text-xs">
-          {two ? "Days per-diem" : "Per-diem Headcount"}
+          {two ? "Days Per-diem Headcount" : "Per-diem Headcount"}
           <input
             type="number"
             min={0}
@@ -421,7 +423,7 @@ function CalendarPattern({
         </label>
         {two ? (
           <label className="text-xs">
-            Nights per-diem
+            Nights Per-diem Headcount
             <input
               type="number"
               min={0}
@@ -476,6 +478,42 @@ function CalendarPattern({
                 </button>
               );
             })}
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <label className="text-xs">
+              {two ? "Days Sunday HC" : "Sunday HC"}
+              <input
+                type="number"
+                min={0}
+                className="paper-field mt-1"
+                value={range.sundayHeadcount ?? ""}
+                placeholder={String(range.headcount)}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  onPatch({
+                    sundayHeadcount: raw === "" ? undefined : Math.max(0, Number(raw) || 0),
+                  });
+                }}
+              />
+            </label>
+            {two ? (
+              <label className="text-xs">
+                Nights Sunday HC
+                <input
+                  type="number"
+                  min={0}
+                  className="paper-field mt-1"
+                  value={range.nightSundayHeadcount ?? ""}
+                  placeholder={String(range.nightHeadcount)}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    onPatch({
+                      nightSundayHeadcount: raw === "" ? undefined : Math.max(0, Number(raw) || 0),
+                    });
+                  }}
+                />
+              </label>
+            ) : null}
           </div>
         </div>
       ) : null}

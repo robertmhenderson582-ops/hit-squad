@@ -52,21 +52,22 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
-    assert.equal(DESK_VERSION, "1.47.0");
-    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.47");
-    assert.equal(DESK_THREAD_ID, "th-desk-v1.47");
+    assert.equal(DESK_VERSION, "1.48.0");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.48");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.48");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Equipment, Subcontractor, and Other Cost/);
-    assert.match(TESTER_WHATS_NEW, /2027 Aromatics/);
-    assert.match(TESTER_WHATS_NEW, /saved job after refresh/);
+    assert.match(TESTER_WHATS_NEW, /night counterparts/);
+    assert.match(TESTER_WHATS_NEW, /Rodeo form tab/);
+    assert.match(TESTER_WHATS_NEW, /PD \$ and names/);
+    assert.match(TESTER_WHATS_NEW, /contingency, CBA increase, and M\.O\.R\.E\./);
+    assert.match(TESTER_WHATS_NEW, /Quality and HSE Day-1/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|testers|Follow|apcontrolsllc|seat|James|CBI|View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
-    assert.match(OWNER_WHATS_NEW, /Equipment, Subcontractor, and Other Cost/);
-    assert.match(OWNER_WHATS_NEW, /Excel workbook/);
-    assert.match(OWNER_WHATS_NEW, /Joseph Henderson can use the full desk/);
-    assert.match(OWNER_WHATS_NEW, /Owner stays the only owner/);
+    assert.match(OWNER_WHATS_NEW, /night counterparts/);
+    assert.match(OWNER_WHATS_NEW, /Persist and Excel export stay/);
+    assert.match(OWNER_WHATS_NEW, /Madison manuals stay Madison-only/);
     assert.equal(/View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(
       /password|passwords|auth|cookie|session|security|Novus|vault|Drive|seats|owner tools|View as|aliases|deploy|other users|other testers|anyone else/i.test(
@@ -106,9 +107,9 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.47 onto an existing Hit Squad desk thread after V1.38", () => {
+  it("appends V1.48 onto an existing Hit Squad desk thread after V1.38", () => {
     assert.equal(seenKey("tester-x", "1.38.0"), `${WHATS_NEW_MARK_PREFIX}1.38.0:tester-x`);
-    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.47.0:tester-x`);
+    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.48.0:tester-x`);
     assert.notEqual(seenKey("tester-x", "1.38.0"), seenKey("tester-x"));
 
     const prior = [
@@ -140,18 +141,17 @@ describe("inbox what's-new", () => {
     assert.deepEqual(applyWhatsNew(prior, "tester-joseph-append", false, "josephmhenderson2002@gmail.com"), prior);
   });
 
-  it("posts the V1.47 Inbox note for testers and owner", () => {
-    assert.equal(DESK_VERSION, "1.47.0");
+  it("posts the V1.48 Inbox note for testers and owner", () => {
+    assert.equal(DESK_VERSION, "1.48.0");
     assert.equal(NEXT_SHIP_VERSION, DESK_VERSION);
     assert.equal(NEXT_SHIP_VERSION_LABEL, DESK_VERSION_LABEL);
     assert.equal(TESTER_NEXT_SHIP_DRAFT, TESTER_WHATS_NEW);
     assert.equal(OWNER_NEXT_SHIP_DRAFT, OWNER_WHATS_NEW);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(OWNER_WHATS_NEW, /Excel workbook/);
-    assert.match(OWNER_WHATS_NEW, /Joseph Henderson can use the full desk/);
-    assert.match(OWNER_WHATS_NEW, /Owner stays the only owner/);
-    assert.match(TESTER_WHATS_NEW, /Equipment, Subcontractor, and Other Cost/);
-    assert.match(TESTER_WHATS_NEW, /2027 Aromatics/);
+    assert.match(OWNER_WHATS_NEW, /Persist and Excel export stay/);
+    assert.match(OWNER_WHATS_NEW, /Madison manuals stay Madison-only/);
+    assert.match(TESTER_WHATS_NEW, /night counterparts/);
+    assert.match(TESTER_WHATS_NEW, /Rodeo form tab/);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|Follow|apcontrolsllc|seat|security|vault|other users|James|CBI|Stephanie|View as/i.test(TESTER_WHATS_NEW), false);
@@ -162,10 +162,10 @@ describe("inbox what's-new", () => {
       ),
       false,
     );
-    const live = applyWhatsNew([], "tester-v147-live", false, "nathanboyte@gmail.com");
-    assert.equal(live[0].id, "th-desk-v1.47");
+    const live = applyWhatsNew([], "tester-v148-live", false, "nathanboyte@gmail.com");
+    assert.equal(live[0].id, "th-desk-v1.48");
     assert.equal(live[0].messages[0]?.text, TESTER_WHATS_NEW);
-    const owner = applyWhatsNew([], "owner-v147-live", true);
+    const owner = applyWhatsNew([], "owner-v148-live", true);
     assert.equal(owner[0].messages[0]?.text, OWNER_WHATS_NEW);
   });
 });

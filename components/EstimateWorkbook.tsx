@@ -67,6 +67,7 @@ export function EstimateWorkbook({
             site={site}
             client={client}
             newRow={pack.addCraftRow}
+            laneId={lane.id}
           />
         );
       })}

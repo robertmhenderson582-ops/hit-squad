@@ -570,6 +570,8 @@ type HourRow = {
     hoursPerShift: number;
     headcount: number;
     nightHeadcount: number;
+    sundayHeadcount?: number;
+    nightSundayHeadcount?: number;
     perDiemPeople: number;
     nightPerDiemPeople?: number;
     days: boolean[];

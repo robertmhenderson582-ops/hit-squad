@@ -22,6 +22,8 @@ export type ComputeRangeInput = {
   hoursPerShift: number;
   headcount?: number;
   nightHeadcount?: number;
+  sundayHeadcount?: number;
+  nightSundayHeadcount?: number;
   shift?: "Days" | "Nights" | "Days & nights";
   days?: boolean[];
   perDiemPeople?: number;
@@ -254,14 +256,17 @@ export function computeRangeHours(input: ComputeRangeInput): RangeHours {
         shift: "Days",
         nightHeadcount: undefined,
         nightPerDiemPeople: undefined,
+        nightSundayHeadcount: undefined,
       }),
       computeRangeHours({
         ...input,
         shift: "Nights",
         headcount: input.nightHeadcount ?? 1,
         perDiemPeople: input.nightPerDiemPeople ?? 0,
+        sundayHeadcount: input.nightSundayHeadcount ?? input.sundayHeadcount,
         nightHeadcount: undefined,
         nightPerDiemPeople: undefined,
+        nightSundayHeadcount: undefined,
       }),
     );
   }
@@ -289,6 +294,11 @@ export function computeRangeHours(input: ComputeRangeInput): RangeHours {
     if (skip.has(stamp)) continue;
     const dow = date.getDay();
     if (!daysMask[dow]) continue;
+    const dayHead =
+      dow === 0 && input.sundayHeadcount != null && Number.isFinite(Number(input.sundayHeadcount))
+        ? Math.max(0, Number(input.sundayHeadcount))
+        : head;
+    if (dayHead <= 0) continue;
     const key = mondayKey(date);
     const prior = workedInWeek.get(key) ?? 0;
     const seventh = clock === "ca-daily" && prior >= 6;
@@ -298,9 +308,9 @@ export function computeRangeHours(input: ComputeRangeInput): RangeHours {
       key,
       date: ymd(date),
       weekday: dow,
-      st: split.st * head,
-      ot: split.ot * head,
-      dt: split.dt * head,
+      st: split.st * dayHead,
+      ot: split.ot * dayHead,
+      dt: split.dt * dayHead,
     });
     workedDays += 1;
   }
@@ -341,6 +351,8 @@ export function computeRowHours(
       hoursPerShift: number;
       headcount: number;
       nightHeadcount: number;
+      sundayHeadcount?: number;
+      nightSundayHeadcount?: number;
       perDiemPeople: number;
       nightPerDiemPeople?: number;
       days: boolean[];
@@ -375,6 +387,8 @@ export function computeRowHours(
         hoursPerShift: range.hoursPerShift,
         headcount: range.headcount,
         nightHeadcount: range.nightHeadcount,
+        sundayHeadcount: range.sundayHeadcount,
+        nightSundayHeadcount: range.nightSundayHeadcount,
         shift: range.shift ?? row.shift,
         days: range.days,
         perDiemPeople: range.perDiemPeople,

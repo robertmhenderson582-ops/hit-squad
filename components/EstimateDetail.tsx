@@ -11,6 +11,7 @@ import { SubcontractorDesk } from "@/components/SubcontractorDesk";
 import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { OrgChartDesk } from "@/components/OrgChartDesk";
+import { RodeoFormDesk } from "@/components/RodeoFormDesk";
 import { EstimatePackageProvider } from "@/components/EstimatePackage";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
@@ -131,6 +132,8 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       {tab === "costs" ? <OtherCostDesk client={estimate.client} site={siteName} /> : null}
 
       {tab === "change-orders" ? <ChangeOrderPacket client={estimate.client} site={siteName} /> : null}
+
+      {tab === "rodeo" ? <RodeoFormDesk client={estimate.client} site={siteName} name={shown} /> : null}
     </EstimateWorkspace>
     </EstimatePackageProvider>
   );

@@ -11,6 +11,10 @@ export type OrgChartLane = (typeof ORG_CHART_LANES)[number];
 export type OrgChartNames = {
   days?: string;
   nights?: string;
+  daysEmail?: string;
+  nightsEmail?: string;
+  daysPhone?: string;
+  nightsPhone?: string;
 };
 
 export type OrgChartState = {
@@ -75,7 +79,7 @@ export function peakShiftCount(
   row: { ranges?: Array<Pick<CalendarRange, "headcount" | "nightHeadcount" | "off">>; shift?: CraftShift },
   night: boolean,
 ): number {
-  const shift = asShift(row.shift);
+  const shift = positionShiftFromCards(row);
   const ranges = (row.ranges ?? []).filter((range) => !range.off);
   if (!ranges.length) return 0;
   let max = 0;
@@ -103,7 +107,7 @@ export function crewSourceForOrgChart(crew: OrgChartCrew = {}): OrgChartSource[]
     for (const row of rows ?? []) {
       const position = (row.position ?? "").trim();
       if (!row.id || !position) continue;
-      const shift = asShift(row.shift);
+      const shift = positionShiftFromCards(row);
       next.push({
         id: row.id,
         lane,
@@ -117,11 +121,51 @@ export function crewSourceForOrgChart(crew: OrgChartCrew = {}): OrgChartSource[]
   return next;
 }
 
+export function canNameOrgLane(lane: OrgChartLane) {
+  return lane === "staff" || lane === "generalForeman";
+}
+
+/** Phase cards decide counterparts. Days & Nights in ANY phase → day and night. */
+export function positionShiftFromCards(
+  row: { shift?: CraftShift; ranges?: Array<{ shift?: CraftShift; off?: boolean }> },
+): CraftShift {
+  const cards = (row.ranges ?? []).filter((range) => !range.off);
+  const shifts = cards.map((range) => asShift(range.shift ?? row.shift));
+  if (shifts.some((shift) => shift === "Days & nights")) return "Days & nights";
+  const hasDay = shifts.some((shift) => shift === "Days");
+  const hasNight = shifts.some((shift) => shift === "Nights");
+  if (hasDay && hasNight) return "Days & nights";
+  if (hasNight && !hasDay && shifts.length) return "Nights";
+  return asShift(row.shift);
+}
+
+function packNameSlot(slot: OrgChartNames): OrgChartNames | undefined {
+  const days = trimName(slot.days);
+  const nights = trimName(slot.nights);
+  const daysEmail = trimName(slot.daysEmail);
+  const nightsEmail = trimName(slot.nightsEmail);
+  const daysPhone = trimName(slot.daysPhone);
+  const nightsPhone = trimName(slot.nightsPhone);
+  if (!days && !nights && !daysEmail && !nightsEmail && !daysPhone && !nightsPhone) return undefined;
+  return {
+    ...(days ? { days } : {}),
+    ...(nights ? { nights } : {}),
+    ...(daysEmail ? { daysEmail } : {}),
+    ...(nightsEmail ? { nightsEmail } : {}),
+    ...(daysPhone ? { daysPhone } : {}),
+    ...(nightsPhone ? { nightsPhone } : {}),
+  };
+}
+
 export function nameSlot(state: OrgChartState, rowId: string): OrgChartNames {
   const slot = state.names[rowId];
   return {
     days: trimName(slot?.days),
     nights: trimName(slot?.nights),
+    daysEmail: trimName(slot?.daysEmail),
+    nightsEmail: trimName(slot?.nightsEmail),
+    daysPhone: trimName(slot?.daysPhone),
+    nightsPhone: trimName(slot?.nightsPhone),
   };
 }
 
@@ -130,9 +174,9 @@ function slotForShift(slot: OrgChartNames, shift: CraftShift, half: "days" | "ni
   return slot.days;
 }
 
-export function shouldSplitShifts(source: OrgChartSource, slot: OrgChartNames) {
-  if (source.shift !== "Days & nights") return false;
-  return Boolean(slot.days || slot.nights);
+/** Days & Nights is always two counterparts — names do not decide the split. */
+export function shouldSplitShifts(source: OrgChartSource, _slot?: OrgChartNames) {
+  return source.shift === "Days & nights";
 }
 
 function makeBox(
@@ -141,12 +185,12 @@ function makeBox(
   name: string,
   count: number,
 ): Omit<OrgChartBox, "parentId"> {
-  const named = Boolean(name);
+  const named = Boolean(name) && canNameOrgLane(source.lane);
   const nights = half === "nights";
   const shift: OrgChartBox["shift"] =
     half === "both" ? source.shift : nights ? "Nights" : source.shift === "Nights" ? "Nights" : "Days";
   const kind: OrgChartBox["kind"] =
-    source.lane === "foreman" && !named ? "count" : named ? "named" : "title";
+    source.lane === "foreman" ? "count" : named ? "named" : "title";
   return {
     id: boxId(source.id, nights ? "nights" : "days"),
     rowId: source.id,
@@ -186,9 +230,8 @@ export function pruneOrgChart(state: OrgChartState, liveIds: Iterable<string>): 
   const parents: Record<string, string> = {};
   for (const [rowId, slot] of Object.entries(state.names)) {
     if (!live.has(rowId)) continue;
-    const days = trimName(slot.days);
-    const nights = trimName(slot.nights);
-    if (days || nights) names[rowId] = { ...(days ? { days } : {}), ...(nights ? { nights } : {}) };
+    const packed = packNameSlot(slot);
+    if (packed) names[rowId] = packed;
   }
   for (const [id, parent] of Object.entries(state.parents)) {
     const rowId = id.split(":")[0] ?? "";
@@ -207,8 +250,25 @@ export function setOrgChartName(
   const current = nameSlot(state, rowId);
   const next = { ...current, [half]: trimName(value) };
   const names = { ...state.names };
-  if (!next.days && !next.nights) delete names[rowId];
-  else names[rowId] = { ...(next.days ? { days: next.days } : {}), ...(next.nights ? { nights: next.nights } : {}) };
+  const packed = packNameSlot(next);
+  if (!packed) delete names[rowId];
+  else names[rowId] = packed;
+  return { ...state, names };
+}
+
+export function setOrgChartContact(
+  state: OrgChartState,
+  rowId: string,
+  half: "days" | "nights",
+  field: "email" | "phone",
+  value: string,
+): OrgChartState {
+  const current = nameSlot(state, rowId);
+  const key = half === "nights" ? (field === "email" ? "nightsEmail" : "nightsPhone") : field === "email" ? "daysEmail" : "daysPhone";
+  const packed = packNameSlot({ ...current, [key]: trimName(value) });
+  const names = { ...state.names };
+  if (!packed) delete names[rowId];
+  else names[rowId] = packed;
   return { ...state, names };
 }
 
@@ -292,9 +352,8 @@ export function hydrateOrgChart(raw: unknown): OrgChartState {
   const parents: Record<string, string> = {};
   for (const [id, slot] of Object.entries(row.names ?? {})) {
     if (!id || !slot || typeof slot !== "object") continue;
-    const days = trimName((slot as OrgChartNames).days);
-    const nights = trimName((slot as OrgChartNames).nights);
-    if (days || nights) names[id] = { ...(days ? { days } : {}), ...(nights ? { nights } : {}) };
+    const packed = packNameSlot(slot as OrgChartNames);
+    if (packed) names[id] = packed;
   }
   for (const [id, parent] of Object.entries(row.parents ?? {})) {
     if (!id || typeof parent !== "string") continue;

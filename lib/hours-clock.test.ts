@@ -213,6 +213,32 @@ describe("CAT 2 Wood River hour cases", () => {
     assert.equal(result.hours, 160);
   });
 
+  it("Sunday HC can differ from weekday headcount without inventing a new clock", () => {
+    const full = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Pipefitter Journeyman",
+      start: "2026-08-23",
+      end: "2026-08-30",
+      hoursPerShift: 10,
+      days: [true, false, false, false, false, false, false],
+      headcount: 8,
+    });
+    const sundayTwo = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Pipefitter Journeyman",
+      start: "2026-08-23",
+      end: "2026-08-30",
+      hoursPerShift: 10,
+      days: [true, false, false, false, false, false, false],
+      headcount: 8,
+      sundayHeadcount: 2,
+    });
+    assert.equal(full.dt, 160);
+    assert.equal(sundayTwo.dt, 40);
+    assert.equal(sundayTwo.st, 0);
+    assert.equal(sundayTwo.ot, 0);
+  });
+
   it("Days & nights 1+1 at 8h Mo–Fr is two people, not one 40 ST / 40 OT line", () => {
     const result = computeRangeHours({
       ...WOOD_RIVER,
