@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { AwardedJobFrame } from "@/components/AwardedJobFrame";
+import { OpenJobFrame } from "@/components/AwardedJobFrame";
 import { EmptyLane } from "@/components/EmptyLane";
 import { LeadStudio } from "@/components/LeadStudio";
-import { QualityDay1Card, QualityFormRoster } from "@/components/QualityDay1Card";
+import { QualityDay1Card } from "@/components/QualityDay1Card";
 import { RollingChartMap } from "@/components/RollingChartMap";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { companyScopeFor } from "@/lib/companies";
+import { OPEN_JOB_EMPTY_COPY } from "@/lib/quality-hse-modules";
 import {
   QUALITY_DAY1_LABEL,
-  QUALITY_PACKAGE_FORMS,
   canSeeMadisonManuals,
   madisonManualLabel,
 } from "@/lib/quality-day1";
@@ -49,27 +49,14 @@ export function QualityDesk() {
         </p>
       ) : null}
       {manuals ? <p className="text-xs text-[#5b6f73]">{madisonManualLabel("quality")}</p> : null}
-      <AwardedJobFrame
-        label="AWARDED JOB"
-        empty={
-          <div className="rounded-lg border border-[#d5e0de] bg-white px-4 py-4">
-            <h2 className="text-sm font-semibold tracking-[0.12em] text-[#5b6f73]">{QUALITY_DAY1_LABEL.toUpperCase()}</h2>
-            <p className="mt-2 text-sm text-[#5b6f73]">
-              Named package Chance sent. Pick an awarded job to mark, fill, or count. Steam Drum
-              Rolling Chart, Mud Drum Rolling Tracking Chart, and Generating Bank Retube Progression
-              Chart open on that job.
-            </p>
-            <QualityFormRoster forms={QUALITY_PACKAGE_FORMS} />
-          </div>
-        }
-      >
-        {() => (
+      <OpenJobFrame empty={<p className="text-sm text-[#5b6f73]">{OPEN_JOB_EMPTY_COPY}</p>}>
+        {(job) => (
           <div className="space-y-5">
-            <QualityDay1Card status="Awarded" />
+            <QualityDay1Card status={job.status} />
             <RollingChartMap />
           </div>
         )}
-      </AwardedJobFrame>
+      </OpenJobFrame>
       <label className="block max-w-sm text-sm">
         Client folder
         <select

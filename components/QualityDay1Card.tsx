@@ -22,20 +22,6 @@ import {
 } from "@/lib/quality-day1";
 import type { PublicLeadBrief } from "@/lib/lead-briefs";
 
-export function QualityFormRoster({
-  forms = QUALITY_PACKAGE_FORMS,
-}: {
-  forms?: readonly { id: string; label: string }[];
-}) {
-  return (
-    <ul className="mt-3 space-y-1 text-sm text-[#163038]">
-      {forms.map((item) => (
-        <li key={item.id}>{item.label}</li>
-      ))}
-    </ul>
-  );
-}
-
 export function QualityDay1Card({ status = "Estimate" }: { status?: EstimateStatus }) {
   const pack = useEstimatePackage();
   const { user } = useSession();

@@ -52,16 +52,16 @@ describe("crew lanes", () => {
 
 describe("inbox what's-new", () => {
   it("seeds a per-seat Desk thread and keeps tester copy clean", () => {
-    assert.equal(DESK_VERSION, "1.49.0");
-    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.49");
-    assert.equal(DESK_THREAD_ID, "th-desk-v1.49");
+    assert.equal(DESK_VERSION, "1.50.0");
+    assert.equal(DESK_VERSION_LABEL, "Hit Squad Project Controls V1.50");
+    assert.equal(DESK_THREAD_ID, "th-desk-v1.50");
     assert.equal(TESTER_WHATS_NEW.startsWith(DESK_VERSION_LABEL), true);
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
-    assert.match(TESTER_WHATS_NEW, /Quality and HSE moved off Job setup onto their own modules/);
+    assert.match(TESTER_WHATS_NEW, /Quality and HSE are fillable modules, not a name list/);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|testers|Follow|apcontrolsllc|seat|James|CBI|View as/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
-    assert.match(OWNER_WHATS_NEW, /Quality and HSE moved off Job setup onto their own modules/);
+    assert.match(OWNER_WHATS_NEW, /Quality and HSE are fillable modules, not a name list/);
     assert.match(OWNER_WHATS_NEW, /Persist and Excel export stay/);
     assert.match(OWNER_WHATS_NEW, /Madison manuals stay Madison-only/);
     assert.equal(/View as/i.test(TESTER_WHATS_NEW), false);
@@ -103,9 +103,9 @@ describe("inbox what's-new", () => {
     assert.equal(owner.messages[0]?.text, OWNER_WHATS_NEW);
   });
 
-  it("appends V1.49 onto an existing Hit Squad desk thread after V1.38", () => {
+  it("appends V1.50 onto an existing Hit Squad desk thread after V1.38", () => {
     assert.equal(seenKey("tester-x", "1.38.0"), `${WHATS_NEW_MARK_PREFIX}1.38.0:tester-x`);
-    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.49.0:tester-x`);
+    assert.equal(seenKey("tester-x"), `${WHATS_NEW_MARK_PREFIX}1.50.0:tester-x`);
     assert.notEqual(seenKey("tester-x", "1.38.0"), seenKey("tester-x"));
 
     const prior = [
@@ -137,8 +137,8 @@ describe("inbox what's-new", () => {
     assert.deepEqual(applyWhatsNew(prior, "tester-joseph-append", false, "josephmhenderson2002@gmail.com"), prior);
   });
 
-  it("posts the V1.49 Inbox note for testers and owner", () => {
-    assert.equal(DESK_VERSION, "1.49.0");
+  it("posts the V1.50 Inbox note for testers and owner", () => {
+    assert.equal(DESK_VERSION, "1.50.0");
     assert.equal(NEXT_SHIP_VERSION, DESK_VERSION);
     assert.equal(NEXT_SHIP_VERSION_LABEL, DESK_VERSION_LABEL);
     assert.equal(TESTER_NEXT_SHIP_DRAFT, TESTER_WHATS_NEW);
@@ -146,7 +146,7 @@ describe("inbox what's-new", () => {
     assert.equal(testerCopyIsSafe(TESTER_WHATS_NEW), true);
     assert.match(OWNER_WHATS_NEW, /Persist and Excel export stay/);
     assert.match(OWNER_WHATS_NEW, /Madison manuals stay Madison-only/);
-    assert.match(TESTER_WHATS_NEW, /Quality and HSE moved off Job setup onto their own modules/);
+    assert.match(TESTER_WHATS_NEW, /Quality and HSE are fillable modules, not a name list/);
     assert.equal(/Robert, Nathan, Benny, Shane, Wendell, and Chance/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/poll|dedupe|optimistic/i.test(TESTER_WHATS_NEW), false);
     assert.equal(/Joseph|Follow|apcontrolsllc|seat|security|vault|other users|James|CBI|Stephanie|View as/i.test(TESTER_WHATS_NEW), false);
@@ -157,8 +157,8 @@ describe("inbox what's-new", () => {
       ),
       false,
     );
-    const live = applyWhatsNew([], "tester-v149-live", false, "nathanboyte@gmail.com");
-    assert.equal(live[0].id, "th-desk-v1.49");
+    const live = applyWhatsNew([], "tester-v150-live", false, "nathanboyte@gmail.com");
+    assert.equal(live[0].id, "th-desk-v1.50");
     assert.equal(live[0].messages[0]?.text, TESTER_WHATS_NEW);
     const owner = applyWhatsNew([], "owner-v149-live", true);
     assert.equal(owner[0].messages[0]?.text, OWNER_WHATS_NEW);

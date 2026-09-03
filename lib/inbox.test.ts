@@ -78,7 +78,7 @@ describe("inbox demo wipe", () => {
     const stored = persisted.threads ?? [];
     assert.equal(stored.some((thread) => (DEMO_IDS as readonly string[]).includes(thread.id)), false);
     assert.equal(stored.length, 1);
-    assert.equal(stored[0].id, "th-desk-v1.49");
+    assert.equal(stored[0].id, "th-desk-v1.50");
   });
 
   it("tester empty store stays empty (never had the demo threads)", () => {
@@ -89,7 +89,7 @@ describe("inbox demo wipe", () => {
     const note = deskWhatsNewThread(true);
     const cleaned = stripDemoThreads([...ownerDemoThreads(), note]);
     assert.equal(cleaned.length, 1);
-    assert.equal(cleaned[0].id, "th-desk-v1.49");
+    assert.equal(cleaned[0].id, "th-desk-v1.50");
     assert.equal(stripDemoThreads([note]).length, 1);
   });
 
@@ -122,20 +122,20 @@ describe("inbox demo wipe", () => {
     assert.deepEqual(omitHiddenPersonThreads([note, leftover], hides.personIds), [note]);
   });
 
-  it("Desk note stays V1.49 and tester-safe", () => {
-    assert.equal(DESK_VERSION, "1.49.0");
+  it("Desk note stays V1.50 and tester-safe", () => {
+    assert.equal(DESK_VERSION, "1.50.0");
     const tester = applyWhatsNew([deskWhatsNewThread(false)], "tester-note", false, "nathanboyte@gmail.com");
     assert.equal(tester.length, 1);
-    assert.equal(tester[0].id, "th-desk-v1.49");
+    assert.equal(tester[0].id, "th-desk-v1.50");
     const testerBody = tester[0].messages.map((message) => message.text).join(" ");
-    assert.match(testerBody, /V1\.49/);
-    assert.match(testerBody, /Quality and HSE moved off Job setup onto their own modules/);
+    assert.match(testerBody, /V1\.50/);
+    assert.match(testerBody, /Quality and HSE are fillable modules, not a name list/);
     assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Joseph|Stephanie|password|security|View as|Novus/i);
     assert.doesNotMatch(testerBody, /Robert, Nathan, Benny, Shane, Wendell, and Chance/);
     const owner = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
-    assert.equal(owner[0].id, "th-desk-v1.49");
+    assert.equal(owner[0].id, "th-desk-v1.50");
     const ownerBody = owner[0].messages.map((message) => message.text).join(" ");
-    assert.match(ownerBody, /Quality and HSE moved off Job setup onto their own modules/);
+    assert.match(ownerBody, /Quality and HSE are fillable modules, not a name list/);
     assert.match(ownerBody, /Persist and Excel export stay/);
     assert.match(ownerBody, /Madison manuals stay Madison-only/);
   });
