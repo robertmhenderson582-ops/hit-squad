@@ -13,7 +13,10 @@ import {
   plantJobsLine,
   plantTabFromQuery,
   seedJobs,
+  seedJobsAllowed,
 } from "./jobs.ts";
+import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
+import { JOHN_BEECH_EMAIL } from "./tester-seats.ts";
 import type { StorageLike } from "./local-estimates.ts";
 
 describe("desk counts", () => {
@@ -61,15 +64,17 @@ describe("desk counts", () => {
       createdAt: 1,
       updatedAt: 2,
     };
-    const firstPaint = jobsOnDesk(undefined, [aromatics, cat], false);
+    const ownerScope = { isOwner: true, email: OWNER_LOGIN_EMAIL, companyId: "hitsquad" as const };
+    const firstPaint = jobsOnDesk(undefined, [aromatics, cat], false, ownerScope);
     assert.equal(firstPaint.some((job) => job.title === "2027 Aromatics Turnaround"), true);
     assert.equal(firstPaint.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
-    const held = jobsOnDesk(undefined, [aromatics, cat], false, undefined, undefined, { includeSeeds: false });
+    assert.equal(firstPaint.some((job) => job.id === "job-8841"), false);
+    const held = jobsOnDesk(undefined, [aromatics, cat], false, ownerScope, undefined, { includeSeeds: false });
     assert.equal(held.some((job) => job.id === "job-8841"), false);
     assert.equal(held.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   });
 
-  it("keeps owner seed jobs after header nav and hides them while following", () => {
+  it("does not paint sample seed jobs on owner, Nathan, or John Beech desks", () => {
     const cat2 = {
       packId: "new-mtaajdwa-f7539",
       key: "new:new-mtaajdwa-f7539",
@@ -80,10 +85,18 @@ describe("desk counts", () => {
       createdAt: 1,
       updatedAt: 2,
     };
-    const ownerJobs = jobsOnDesk([], [cat2], false);
-    assert.equal(ownerJobs.some((job) => job.id === "job-8841"), true);
+    const ownerScope = { isOwner: true, email: OWNER_LOGIN_EMAIL, companyId: "hitsquad" as const };
+    const nathanScope = { isOwner: false, email: "nathanboyte@gmail.com", companyId: "madison" as const };
+    const beechScope = { isOwner: false, email: JOHN_BEECH_EMAIL, companyId: "madison" as const };
+    assert.equal(seedJobsAllowed(ownerScope), false);
+    assert.equal(seedJobsAllowed(nathanScope), false);
+    assert.equal(seedJobsAllowed(beechScope), false);
+    assert.equal(seedJobsAllowed({ isOwner: false, email: "josephmhenderson2002@gmail.com", companyId: "hitsquad" }), true);
+
+    const ownerJobs = jobsOnDesk([], [cat2], false, ownerScope);
+    assert.equal(ownerJobs.some((job) => job.id === "job-8841"), false);
     assert.equal(ownerJobs.some((job) => job.id === "job-new-mtaajdwa-f7539"), true);
-    assert.equal(ownerJobs.length, seedJobs().length + 1);
+    assert.equal(ownerJobs.length, 1);
 
     const followed = jobsOnDesk([], [cat2], true);
     assert.equal(followed.some((job) => job.id === "job-8841"), false);
@@ -92,24 +105,22 @@ describe("desk counts", () => {
 
     const emptyFollow = jobsOnDesk([], [], true);
     assert.equal(emptyFollow.length, 0);
-    const emptyOwner = jobsOnDesk([], [], false);
-    assert.equal(emptyOwner.length, seedJobs().length);
+    const emptyOwner = jobsOnDesk([], [], false, ownerScope);
+    assert.equal(emptyOwner.length, 0);
 
-    const firstPaintOwner = jobsOnDesk(undefined, [cat2], false);
-    assert.equal(firstPaintOwner.length, seedJobs().length + 1);
-    assert.equal(
-      plantJobTally(firstPaintOwner.filter((job) => job.id !== "job-new-mtaajdwa-f7539")).total,
-      seedJobs().length,
-    );
-    const afterStopFollowing = jobsOnDesk([], [cat2], false);
-    assert.equal(afterStopFollowing.some((job) => job.code === "TA-8841"), true);
+    const firstPaintOwner = jobsOnDesk(undefined, [cat2], false, ownerScope);
+    assert.equal(firstPaintOwner.length, 1);
+    assert.equal(firstPaintOwner[0]?.title, "Madison CAT 2 (Pit Stop)");
+    const afterStopFollowing = jobsOnDesk([], [cat2], false, ownerScope);
+    assert.equal(afterStopFollowing.some((job) => job.code === "TA-8841"), false);
     const cat2Job = ownerJobs.find((job) => job.id === "job-new-mtaajdwa-f7539");
     assert.ok(cat2Job);
     assert.equal(packForJob(cat2Job, [cat2])?.packId, "new-mtaajdwa-f7539");
     assert.equal(packForJob({ id: "job-8841" }, [cat2]), undefined);
 
     const desk = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
-    assert.match(desk, /includeSeeds: true/);
+    assert.match(desk, /seedJobsAllowed\(scope\)/);
+    assert.doesNotMatch(desk, /includeSeeds: true/);
     assert.doesNotMatch(desk, /holdPartialTree \? null/);
     assert.match(desk, /JobTreeDesk/);
   });

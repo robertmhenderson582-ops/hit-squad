@@ -1,22 +1,24 @@
 import { canReceiveDeskBot } from "./inbox-circle.ts";
 import type { InboxMessage, InboxThread } from "./inbox.ts";
 
-export const DESK_VERSION = "1.51.0";
-export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.51";
+export const DESK_VERSION = "1.51.1";
+export const DESK_VERSION_LABEL = "Hit Squad Project Controls V1.51.1";
 export const WHATS_NEW_MARK_PREFIX = "hs_whats_new:";
-export const DESK_THREAD_ID = "th-desk-v1.51";
+export const DESK_THREAD_ID = "th-desk-v1.51.1";
 export const DESK_PERSON_ID = "desk";
 
 export const TESTER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.51",
+  "Hit Squad Project Controls V1.51.1",
   "• Quality and HSE are readable field modules with fillable forms.",
   "• Rolling chart: set up the bank, then mark tubes on the map.",
+  "• Company Jobs shows each job on the desk that owns it.",
 ].join("\n");
 
 export const OWNER_WHATS_NEW = [
-  "Hit Squad Project Controls V1.51",
+  "Hit Squad Project Controls V1.51.1",
   "• Quality and HSE are readable field modules with fillable forms.",
   "• Rolling chart: set up the bank, then mark tubes on the map.",
+  "• Company Jobs shows each job on the desk that owns it.",
   "• Persist and Excel export stay. Madison manuals stay Madison-only.",
 ].join("\n");
 

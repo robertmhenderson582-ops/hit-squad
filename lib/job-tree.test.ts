@@ -115,6 +115,27 @@ describe("job tree", () => {
     assert.equal(jobEstimateHref(unit3, catalogEstimates()), "/estimates/est-u3");
   });
 
+  it("keeps a James Wood River sample under CBI on the owner tree", () => {
+    const sample = {
+      packId: "new-mtkigb-james",
+      key: "new:new-mtkigb-james",
+      title: "New Turnaround estimate",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 1,
+      ownerEmail: JAMES_EMAIL,
+    };
+    const jobs = jobsOnDesk([], [sample], false, owner, undefined, { includeSeeds: false });
+    const tree = jobTree({ scope: owner, jobs, packs: [sample] });
+    const wood = tree.find((row) => row.id === "madison")?.sites.find((site) => site.id === "site-madison");
+    const cbi = tree.find((row) => row.id === "cbi");
+    assert.equal(companyIdForJob(jobs[0]!, owner, sample), "cbi");
+    assert.equal(wood?.jobs.some((job) => job.title === "New Turnaround estimate"), false);
+    assert.equal(cbi?.sites.some((site) => site.jobs.some((job) => job.title === "New Turnaround estimate")), true);
+  });
+
   it("keeps a handed Madison job on James's CBI desk without leaking the Madison company", () => {
     const handed = {
       packId: "new-handed-1",

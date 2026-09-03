@@ -11,6 +11,7 @@ import {
   packVisibleTo,
   type ScopeUser,
 } from "./estimate-scope.ts";
+import { applyHisIdentity, hisMatchForPack } from "./his-wood-river.ts";
 import { hydratedHandoffExtras } from "./desk-scope-server.ts";
 import {
   findHandoffSeat,
@@ -87,7 +88,7 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
   if (!parsed.ok) return { ok: false as const, status: 400, error: parsed.error };
   const drive = estimateVaultAdapter(adapter);
   const existingOwner = parsed.pack.ownerEmail;
-  const ownerEmail = packOwnerEmailForWrite(user, existingOwner);
+  const ownerEmail = packOwnerEmailForWrite(user, existingOwner, parsed.pack);
   const claimed = await claimedPack(drive, parsed.pack.packId, ownerEmail);
   if (claimed && !packVisibleTo(user, claimed)) {
     return { ok: false as const, status: 404, error: "That package is not on this desk." };
@@ -98,7 +99,7 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
   const merged = pickPack(parsed.pack, claimed) || parsed.pack;
   const pack = publicPack({
     ...merged,
-    ownerEmail: claimed?.ownerEmail || ownerEmail,
+    ownerEmail: hisMatchForPack(merged) ? applyHisIdentity(merged).ownerEmail : claimed?.ownerEmail || ownerEmail,
     sharedWith: claimed?.sharedWith ?? merged.sharedWith,
     transferredFrom: claimed?.transferredFrom ?? merged.transferredFrom,
     transferredTo: claimed?.transferredTo ?? merged.transferredTo,

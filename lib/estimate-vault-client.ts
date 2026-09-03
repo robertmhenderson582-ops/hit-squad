@@ -6,6 +6,8 @@ import {
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
 import { ownerVaultEmail, packSharedEmails } from "./estimate-scope.ts";
+import { applyHisIdentity, hisMatchForPack } from "./his-wood-river.ts";
+import { canonicalEmail, isSamePerson } from "./identity.ts";
 import { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import {
   archiveMenuItem,
@@ -81,10 +83,10 @@ export function resetVaultHydrateForTests() {
 
 /** Leftover after Turn over is a pack this desk used to own. Shared-with-me stays. */
 export function isLeftoverOwnerCopy(pack: { ownerEmail?: string; sharedWith?: string[] }, email = ownerVaultEmail()) {
-  const ownerEmail = (pack.ownerEmail || "").trim().toLowerCase();
-  const desk = email.trim().toLowerCase();
-  if (packSharedEmails(pack).includes(desk)) return false;
-  if (ownerEmail && ownerEmail !== desk) return false;
+  const ownerEmail = canonicalEmail(pack.ownerEmail) || (pack.ownerEmail || "").trim().toLowerCase();
+  const desk = canonicalEmail(email) || email.trim().toLowerCase();
+  if (packSharedEmails(pack).some((row) => isSamePerson(row, desk))) return false;
+  if (ownerEmail && ownerEmail !== desk && !isSamePerson(pack.ownerEmail, email)) return false;
   return true;
 }
 
@@ -97,8 +99,8 @@ export async function hydrateFromVault(
   const seat = requestedVaultSeat(opts) || "owner";
   if (hydratePromise && hydrateSeat === seat) {
     const packs = await hydratePromise;
-    for (const pack of packs) mergeVaultIntoLocal(target, pack);
-    if (seat !== "owner") writeLensPacks(seat, packs.map(snapshotLensPack), target);
+    for (const pack of packs) mergeVaultIntoLocal(target, hisMatchForPack(pack) ? applyHisIdentity(pack) : pack);
+    if (seat !== "owner") writeLensPacks(seat, packs.map((pack) => snapshotLensPack(hisMatchForPack(pack) ? applyHisIdentity(pack) : pack)), target);
     else snapshotOwnerDesk({ email: ownerVaultEmail(), role: "owner" }, target);
     return packs;
   }
@@ -110,9 +112,9 @@ export async function hydrateFromVault(
       const data = (await response.json()) as { packs?: EstimatePackSnapshot[]; persisted?: boolean };
       const packs = Array.isArray(data.packs) ? data.packs : [];
       const viewingAs = seat !== "owner";
-      if (viewingAs) writeLensPacks(seat, packs.map(snapshotLensPack), target);
+      if (viewingAs) writeLensPacks(seat, packs.map((pack) => snapshotLensPack(hisMatchForPack(pack) ? applyHisIdentity(pack) : pack)), target);
       for (const pack of packs) {
-        mergeVaultIntoLocal(target, pack);
+        mergeVaultIntoLocal(target, hisMatchForPack(pack) ? applyHisIdentity(pack) : pack);
         if (viewingAs) continue;
         if (pack.archived) archiveMenuItem({ id: pack.packId, title: pack.title, packId: pack.packId }, target);
         else {
@@ -199,8 +201,8 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
 }
 
 function ownedByThisVault(pack: { ownerEmail?: string }, deskEmail = ownerVaultEmail()) {
-  const ownerEmail = (pack.ownerEmail || "").trim().toLowerCase();
-  return !ownerEmail || ownerEmail === deskEmail;
+  const ownerEmail = pack.ownerEmail || "";
+  return !ownerEmail || isSamePerson(ownerEmail, deskEmail);
 }
 
 export async function flushLocalPacksToVault(store?: StorageLike | null, opts?: { viewAs?: string | null }) {

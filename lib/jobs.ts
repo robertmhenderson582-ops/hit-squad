@@ -1,8 +1,10 @@
 import { catalogVisibleTo, type CompanyScope } from "./companies.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { boardForUser } from "./desk-data.ts";
+import { isOwnerIdentity } from "./identity.ts";
 import { mergeLocalJobs, type LocalPack } from "./local-estimates.ts";
 import { omitDeletedJobs, type JobMenuState } from "./job-menu.ts";
+import { JOHN_BEECH_EMAIL } from "./tester-seats.ts";
 import type { DeskBoard, JobRecord } from "./types.ts";
 
 const JOBS: JobRecord[] = [
@@ -77,6 +79,14 @@ export function visibleSeedJobs(scope?: CompanyScope | null): JobRecord[] {
   return seedJobs().filter((job) => catalogVisibleTo(scope, job.client, job.title, job.code));
 }
 
+/** Sample catalog jobs stay on testers who are supposed to have samples. */
+export function seedJobsAllowed(scope?: CompanyScope | null) {
+  if (!scope) return true;
+  if (scope.isOwner || isOwnerIdentity(scope.email)) return false;
+  const email = scope.email.trim().toLowerCase();
+  return email !== "nathanboyte@gmail.com" && email !== JOHN_BEECH_EMAIL;
+}
+
 /** Owner/Sites seed jobs stay on the signed-in desk. Follow / View as uses that person's packs only. */
 export function packForJob<T extends { packId: string }>(
   job: { id: string },
@@ -96,7 +106,7 @@ export function jobsOnDesk(
 ) {
   const fromServer = serverJobs ?? [];
   const nextPacks = [...packs, ...dummyPacksForUser(scope).filter((pack) => !packs.some((row) => row.packId === pack.packId))];
-  const includeSeeds = opts?.includeSeeds ?? true;
+  const includeSeeds = opts?.includeSeeds ?? seedJobsAllowed(scope);
   const merged = viewingAs || !includeSeeds
     ? mergeLocalJobs(fromServer, nextPacks)
     : (() => {

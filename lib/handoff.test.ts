@@ -29,6 +29,8 @@ describe("handoff seats", () => {
     assert.equal(isHandoffEmail("not-a-desk@example.com"), false);
     assert.equal(isHandoffEmail(NOVUS_EMAIL), false);
     assert.equal(findHandoffSeat("NathanBoyte@gmail.com")?.name, "Nathan Boyte");
+    assert.equal(findHandoffSeat("Robert Henderson")?.email, OWNER_LOGIN_EMAIL);
+    assert.equal(findHandoffSeat("Nathan Boyte")?.email, "nathanboyte@gmail.com");
   });
 
   it("merges owner-added vault extras and still never lists Novus", () => {

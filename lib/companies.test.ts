@@ -42,7 +42,7 @@ import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { boardForUser } from "./desk-data.ts";
 import { COMPANIES_VAULT_KIND, COMPANIES_VAULT_NAME, writeVaultJson } from "./drive-data.ts";
-import { jobsOnDesk, seedJobs, visibleSeedJobs } from "./jobs.ts";
+import { jobsOnDesk, visibleSeedJobs } from "./jobs.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { JAMES_EMAIL, JOHN_BEECH_EMAIL, JOHN_HENRY_EMAIL, JOSEPH_EMAIL, TESTER_SEATS } from "./tester-seats.ts";
 
@@ -173,7 +173,8 @@ describe("assign and visibility", () => {
     assert.equal(henrySeeds.length, 0);
 
     const ownerJobs = jobsOnDesk([], [], false, owner);
-    assert.equal(ownerJobs.length, seedJobs().length);
+    assert.equal(ownerJobs.length, 0);
+    assert.equal(ownerJobs.some((job) => job.id === "job-8841"), false);
 
     const jamesDesk = jobsOnDesk([], [], false, james);
     assert.equal(jamesDesk.some((job) => job.code === "TA-8841"), false);

@@ -1,7 +1,8 @@
 import { companyScopeFor, type CompanyScope } from "./companies.ts";
 import { dummyPacksForUser, mergeDummyPacks } from "./cbi-dummy.ts";
 import { hasBuildDesk, isOwner, isTester } from "./desk-role.ts";
-import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
+import { hisMatchForPack, mergeHisWoodRiverCards, NATHAN_DESK_EMAIL, shouldPaintHisCards } from "./his-wood-river.ts";
+import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import type { PublicUser } from "./types.ts";
@@ -25,14 +26,27 @@ function packOwnerKey(email = "") {
   return canonicalEmail(email) || email.trim().toLowerCase();
 }
 
-export function packOwnerEmailForWrite(user: ScopeUser, existing?: string) {
+export function packOwnerEmailForWrite(
+  user: ScopeUser,
+  existing?: string,
+  pack?: { packId?: string; title?: string; client?: string; site?: string; siteId?: string },
+) {
+  if (hisMatchForPack({ ...pack, ownerEmail: existing })) {
+    const current = canonicalEmail(existing) || (existing || "").trim().toLowerCase();
+    if (current === NATHAN_DESK_EMAIL || isOwnerIdentity(current)) {
+      return isOwnerIdentity(current) ? ownerVaultEmail() : NATHAN_DESK_EMAIL;
+    }
+    return NATHAN_DESK_EMAIL;
+  }
   if (isTester(user)) return user.email.trim().toLowerCase();
-  const current = (existing || "").trim().toLowerCase();
-  if (current && (isOwnerVaultEmail(current) || current === user.email.trim().toLowerCase())) {
-    return current;
+  const current = (existing || "").trim();
+  if (current && (isOwnerVaultEmail(current) || isSamePerson(current, user.email))) {
+    return ownerVaultEmail();
   }
   // A leftover owner flush must not restamp a tester-owned share as the owner vault.
-  if (current && current !== user.email.trim().toLowerCase()) return current;
+  if (current && !isSamePerson(current, user.email)) {
+    return canonicalEmail(current) || current.trim().toLowerCase();
+  }
   return ownerVaultEmail();
 }
 
@@ -123,10 +137,12 @@ export function visibleDeskPacks(
 ): LocalPack[] {
   if (!user) return dummyPacksForUser(scope);
   const next = scope ?? companyScopeFor(user);
-  return mergeDummyPacks(
+  const packs = mergeDummyPacks(
     localPacksForUser(user, listLocalPacks(store)).filter((pack) => !viewingAs || !pack.archived),
     next,
   );
+  if (!viewingAs && shouldPaintHisCards(user)) return mergeHisWoodRiverCards(packs);
+  return packs;
 }
 
 export function canWritePack(user: ScopeUser, pack: ScopedPack) {

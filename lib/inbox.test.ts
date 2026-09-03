@@ -78,7 +78,7 @@ describe("inbox demo wipe", () => {
     const stored = persisted.threads ?? [];
     assert.equal(stored.some((thread) => (DEMO_IDS as readonly string[]).includes(thread.id)), false);
     assert.equal(stored.length, 1);
-    assert.equal(stored[0].id, "th-desk-v1.51");
+    assert.equal(stored[0].id, "th-desk-v1.51.1");
   });
 
   it("tester empty store stays empty (never had the demo threads)", () => {
@@ -89,7 +89,7 @@ describe("inbox demo wipe", () => {
     const note = deskWhatsNewThread(true);
     const cleaned = stripDemoThreads([...ownerDemoThreads(), note]);
     assert.equal(cleaned.length, 1);
-    assert.equal(cleaned[0].id, "th-desk-v1.51");
+    assert.equal(cleaned[0].id, "th-desk-v1.51.1");
     assert.equal(stripDemoThreads([note]).length, 1);
   });
 
@@ -122,19 +122,19 @@ describe("inbox demo wipe", () => {
     assert.deepEqual(omitHiddenPersonThreads([note, leftover], hides.personIds), [note]);
   });
 
-  it("Desk note stays V1.51 and tester-safe", () => {
-    assert.equal(DESK_VERSION, "1.51.0");
+  it("Desk note stays V1.51.1 and tester-safe", () => {
+    assert.equal(DESK_VERSION, "1.51.1");
     const tester = applyWhatsNew([deskWhatsNewThread(false)], "tester-note", false, "nathanboyte@gmail.com");
     assert.equal(tester.length, 1);
-    assert.equal(tester[0].id, "th-desk-v1.51");
+    assert.equal(tester[0].id, "th-desk-v1.51.1");
     const testerBody = tester[0].messages.map((message) => message.text).join(" ");
-    assert.match(testerBody, /V1\.51/);
+    assert.match(testerBody, /V1\.51\.1/);
     assert.match(testerBody, /Quality and HSE are readable field modules with fillable forms/);
     assert.match(testerBody, /Rolling chart: set up the bank/);
     assert.doesNotMatch(testerBody, /poll|dedupe|optimistic|vault|Drive|seats?|James|CBI|Joseph|Stephanie|password|security|View as|Novus/i);
     assert.doesNotMatch(testerBody, /Robert, Nathan, Benny, Shane, Wendell, and Chance/);
     const owner = applyWhatsNew([deskWhatsNewThread(true)], "owner-note", true);
-    assert.equal(owner[0].id, "th-desk-v1.51");
+    assert.equal(owner[0].id, "th-desk-v1.51.1");
     const ownerBody = owner[0].messages.map((message) => message.text).join(" ");
     assert.match(ownerBody, /Quality and HSE are readable field modules with fillable forms/);
     assert.match(ownerBody, /Persist and Excel export stay/);
