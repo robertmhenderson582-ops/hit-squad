@@ -3,8 +3,8 @@
 import Link from "next/link";
 
 export const FUTURE_MODULES = [
-  { href: "/hse", name: "HSE", note: "not open for trial yet." },
-  { href: "/quality", name: "Quality", note: "not open for trial yet." },
+  { href: "/hse", name: "HSE", note: "Site safety package. Opens when a job is awarded." },
+  { href: "/quality", name: "Quality", note: "Day-1 package and rolling chart. Opens when a job is awarded." },
   { href: "/accounting", name: "Accounting", note: "not open for trial yet." },
   { href: "/payroll", name: "Payroll", note: "not open for trial yet." },
   { href: "/team", name: "Team", note: "not open for trial yet." },

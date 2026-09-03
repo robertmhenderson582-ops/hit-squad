@@ -4,25 +4,71 @@ import type { PublicLeadBrief } from "./lead-briefs.ts";
 import { PHASE_IDS, PHASE_NAMES, type PhaseRow } from "./phase-schedule.ts";
 
 export const QUALITY_DAY1_LABEL = "Quality Day-1";
-export const QUALITY_LIVE_NOTE = "This job is live for Quality. Inspection plan, weld map, and traveler count sit on this package.";
+export const QUALITY_LIVE_NOTE = "This job is live for Quality. Named forms and the rolling chart sit on this module.";
+
+/** Chance’s 2.7.x Day-1 package. Names only — files stay in the owner vault. Do not invent extra numbers. */
+export const QUALITY_PACKAGE_FORMS = [
+  { id: "2.7.1", label: "2.7.1 Madison Pressure Test Record Rev 2" },
+  { id: "2.7.11", label: "2.7.11 Madison Document Transmittal Form Rev. 2" },
+  { id: "2.7.17", label: "2.7.17 ROD Issue Form Rev. 4" },
+  { id: "2.7.19", label: "2.7.19 Madison Flange Log Rev.1" },
+  { id: "2.7.22", label: "2.7.22 Weld Test Instruction Form Rev. 8" },
+  { id: "2.7.34", label: "2.7.34 Job Completion Sign-off Form Rev 2" },
+  { id: "2.7.5", label: "2.7.5 Madison Punch List Rev. 1" },
+  { id: "nde-req", label: "NDE req spreadsheet" },
+] as const;
+
+export type QualityFormId = (typeof QUALITY_PACKAGE_FORMS)[number]["id"];
+
+export type QualityFormSlot = {
+  marked: boolean;
+  fill: string;
+  count: string;
+};
 
 export type QualityDay1 = {
   inspectionPlan: boolean;
   weldMap: boolean;
   travelerCount: string;
+  forms: Partial<Record<QualityFormId, QualityFormSlot>>;
 };
 
+export function emptyQualityFormSlot(): QualityFormSlot {
+  return { marked: false, fill: "", count: "" };
+}
+
 export function emptyQualityDay1(): QualityDay1 {
-  return { inspectionPlan: false, weldMap: false, travelerCount: "" };
+  return { inspectionPlan: false, weldMap: false, travelerCount: "", forms: {} };
+}
+
+function hydrateFormSlot(raw: unknown): QualityFormSlot {
+  const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    marked: Boolean(row.marked),
+    fill: typeof row.fill === "string" ? row.fill : "",
+    count: typeof row.count === "string" ? row.count : row.count != null ? String(row.count) : "",
+  };
 }
 
 export function hydrateQualityDay1(raw: Partial<QualityDay1> | Record<string, unknown> | null | undefined): QualityDay1 {
   const row = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const incoming = row.forms && typeof row.forms === "object" ? (row.forms as Record<string, unknown>) : {};
+  const forms: Partial<Record<QualityFormId, QualityFormSlot>> = {};
+  for (const item of QUALITY_PACKAGE_FORMS) {
+    if (incoming[item.id] == null) continue;
+    const slot = hydrateFormSlot(incoming[item.id]);
+    if (slot.marked || slot.fill.trim() || slot.count.trim()) forms[item.id] = slot;
+  }
   return {
     inspectionPlan: Boolean(row.inspectionPlan),
     weldMap: Boolean(row.weldMap),
     travelerCount: typeof row.travelerCount === "string" ? row.travelerCount : row.travelerCount != null ? String(row.travelerCount) : "",
+    forms,
   };
+}
+
+export function qualityFormSlot(pack: QualityDay1, id: QualityFormId): QualityFormSlot {
+  return pack.forms[id] ?? emptyQualityFormSlot();
 }
 
 /** Phase / work names only. No invented hold points. */
@@ -48,7 +94,7 @@ export function canSeeMadisonManuals(
 }
 
 const VAULT_LEAK =
-  /quality-briefs\.json|hse-briefs\.json|1y6Q3TOnpXzV|1zYl2dEvW21|drive\.google\.com|vault id|owner vault|\/tmp\/hit-squad/i;
+  /quality-briefs\.json|hse-briefs\.json|1y6Q3TOnpXzV|1zYl2dEvW21|1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|drive\.google\.com|vault id|owner vault|\/tmp\/hit-squad/i;
 
 export function qualitySurfaceLeaks(payload: unknown) {
   return VAULT_LEAK.test(JSON.stringify(payload ?? ""));
@@ -78,10 +124,25 @@ export function qualityPackageForSeat(
     inspectionPlan: pack.inspectionPlan,
     weldMap: pack.weldMap,
     travelerCount: pack.travelerCount,
+    forms: QUALITY_PACKAGE_FORMS.map((item) => ({
+      id: item.id,
+      label: item.label,
+      ...qualityFormSlot(pack, item.id),
+    })),
     manuals: canSeeMadisonManuals(user, scope) ? [madisonManualLabel("quality")] : [],
   };
   if (qualitySurfaceLeaks(surface)) {
-    return { inspectionPlan: pack.inspectionPlan, weldMap: pack.weldMap, travelerCount: pack.travelerCount, manuals: [] as string[] };
+    return {
+      inspectionPlan: pack.inspectionPlan,
+      weldMap: pack.weldMap,
+      travelerCount: pack.travelerCount,
+      forms: QUALITY_PACKAGE_FORMS.map((item) => ({
+        id: item.id,
+        label: item.label,
+        ...qualityFormSlot(pack, item.id),
+      })),
+      manuals: [] as string[],
+    };
   }
   return surface;
 }
