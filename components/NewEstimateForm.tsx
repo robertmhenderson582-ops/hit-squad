@@ -16,14 +16,10 @@ import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { OrgChartDesk } from "@/components/OrgChartDesk";
 import { RodeoFormDesk } from "@/components/RodeoFormDesk";
-import { HseDay1Card } from "@/components/HseDay1Card";
-import { QualityDay1Card } from "@/components/QualityDay1Card";
-import { RollingChartMap } from "@/components/RollingChartMap";
 import { NoRatesNotice } from "@/components/NoRatesNotice";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { ShopRigSheet } from "@/components/ShopRigSheet";
-import { HSE_TAB_ID, QUALITY_TAB_ID } from "@/lib/quality-hse-modules";
 import { newEstimateNeedsRatesNotice } from "@/lib/estimate-rates-gate";
 import { boundOtLabel } from "@/lib/hours-clock";
 import { newEstimateKey, newEstimatePackId } from "@/lib/estimate-open";
@@ -137,8 +133,6 @@ function NewEstimateDesk({
             existingClient={existingClient}
             status="Estimate"
             statusLocked
-            onOpenQuality={() => setTab(QUALITY_TAB_ID)}
-            onOpenHse={() => setTab(HSE_TAB_ID)}
           />
           <PhaseSchedule />
         </div>
@@ -152,13 +146,6 @@ function NewEstimateDesk({
       {tab === "costs" ? <OtherCostDesk client={client} site={site} /> : null}
       {tab === "change-orders" ? <ChangeOrderPacket client={client} site={site} /> : null}
       {tab === "rodeo" ? <RodeoFormDesk client={client} site={site} name={title} /> : null}
-      {tab === QUALITY_TAB_ID ? (
-        <div className="space-y-5">
-          <QualityDay1Card status="Estimate" />
-          <RollingChartMap />
-        </div>
-      ) : null}
-      {tab === HSE_TAB_ID ? <HseDay1Card status="Estimate" site={site} client={client} /> : null}
     </EstimateWorkspace>
     </EstimatePackageProvider>
   );

@@ -20,13 +20,6 @@ import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { ESTIMATE_EXPORT_ERROR, estimateToXlsx, estimateXlsxFilename } from "@/lib/estimate-xlsx";
 import type { EstimateStatus } from "@/lib/estimate-status";
 import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
-import {
-  HSE_TAB_ID,
-  HSE_TAB_LABEL,
-  QUALITY_TAB_ID,
-  QUALITY_TAB_LABEL,
-  showsQualityHseModules,
-} from "@/lib/quality-hse-modules";
 import { RODEO_TAB_ID, RODEO_TAB_LABEL, showsRodeoTab } from "@/lib/rodeo-form";
 import { readSubSheet } from "@/lib/subcontractor";
 import { downloadXlsx } from "@/lib/xlsx-minimal";
@@ -47,23 +40,13 @@ export const BASE_ESTIMATE_TABS = [
   { id: "wage-lookup", label: "Wage lookup", icon: "＄" },
 ] as const;
 
-export type EstimateTab =
-  | (typeof BASE_ESTIMATE_TABS)[number]["id"]
-  | typeof RODEO_TAB_ID
-  | typeof QUALITY_TAB_ID
-  | typeof HSE_TAB_ID;
+export type EstimateTab = (typeof BASE_ESTIMATE_TABS)[number]["id"] | typeof RODEO_TAB_ID;
 
-export function estimateTabsForSite(site = "", client = "", status?: EstimateStatus) {
+export function estimateTabsForSite(site = "", client = "", _status?: EstimateStatus) {
   const tabs: Array<{ id: EstimateTab; label: string; icon: string }> = [...BASE_ESTIMATE_TABS];
   if (showsRodeoTab(site, client)) {
     const idx = tabs.findIndex((item) => item.id === "wage-lookup");
     tabs.splice(idx < 0 ? tabs.length : idx, 0, { id: RODEO_TAB_ID, label: RODEO_TAB_LABEL, icon: "📋" });
-  }
-  if (showsQualityHseModules(status)) {
-    tabs.push(
-      { id: QUALITY_TAB_ID, label: QUALITY_TAB_LABEL, icon: "◈" },
-      { id: HSE_TAB_ID, label: HSE_TAB_LABEL, icon: "✚" },
-    );
   }
   return tabs;
 }

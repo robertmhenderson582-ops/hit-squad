@@ -4,17 +4,12 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
-  HSE_TAB_ID,
-  OPEN_JOB_EMPTY_COPY,
-  QUALITY_TAB_ID,
-  awardedLocalJobs,
-  dropClosedJobs,
-  mergeOpenJobs,
-  openLocalJobs,
-  pickOpenJob,
+  CLIENT_FOLDERS,
+  clientFolderId,
   qualityHseTabIds,
   showsQualityHseModules,
 } from "./quality-hse-modules.ts";
+import { awardedLocalJobs, mergeAwardedJobs } from "./quality-hse-modules.ts";
 import { writeEstimateStatus } from "./estimate-status.ts";
 import { rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 
@@ -40,111 +35,107 @@ function source(rel: string) {
 }
 
 const JOB_SETUP_BODY =
-  /QualityDay1Card|HseDay1Card|QUALITY_PACKAGE_FORMS|HSE_PACKAGE_SLOTS|QUALITY_DAY1_LABEL|HSE_DAY1_LABEL|inspectionPlan|travelerCount|RollingChartMap|2\.7\.1 Madison|Site orientation|Weld map|Madison QC manuals/;
+  /QualityDay1Card|HseDay1Card|QUALITY_PACKAGE_FORMS|HSE_PACKAGE_SLOTS|QUALITY_DAY1_LABEL|HSE_DAY1_LABEL|inspectionPlan|travelerCount|RollingChartMap|2\.7\.1 Madison|Site orientation|Weld map|Madison QC manuals|onOpenQuality|onOpenHse/;
 
 const DEAD_NAME_LIST =
-  /QualityFormRoster|QUALITY_PACKAGE_FORMS\.map|HSE_PACKAGE_SLOTS\.map|<ul[\s\S]{0,80}HSE_PACKAGE_SLOTS/;
+  /QualityFormRoster|QUALITY_PACKAGE_FORMS\.map|<ul[\s\S]{0,80}HSE_PACKAGE_SLOTS|HSE_PACKAGE_SLOTS\.map/;
 
-describe("Quality and HSE leave Job setup", () => {
-  it("fails if Job setup still renders the Quality/HSE checklist body", () => {
+describe("Quality and HSE stay off the estimate", () => {
+  it("fails if Job setup still renders Quality/HSE body or doors", () => {
     const setup = source("../components/JobSetupCard.tsx");
     assert.doesNotMatch(setup, JOB_SETUP_BODY);
-    assert.doesNotMatch(setup, /QualityDay1Card|HseDay1Card|RollingChartMap/);
-    assert.match(setup, /showsQualityHseModules/);
-    assert.match(setup, /onOpenQuality/);
-    assert.match(setup, /onOpenHse/);
+    assert.doesNotMatch(setup, /QualityDay1Card|HseDay1Card|RollingChartMap|showsQualityHseModules|onOpenQuality|onOpenHse/);
   });
 
-  it("fails if QualityDesk or HseDesk still render the form/slot name list as the main body", () => {
+  it("fails if the estimate workspace still has Quality/HSE tabs", () => {
+    assert.equal(showsQualityHseModules("Estimate"), false);
+    assert.equal(showsQualityHseModules("Submitted"), false);
+    assert.equal(showsQualityHseModules("Awarded"), false);
+    assert.deepEqual(qualityHseTabIds("Awarded"), []);
+    assert.deepEqual(qualityHseTabIds("Estimate"), []);
+    const workspace = source("../components/EstimateWorkspace.tsx");
+    const detail = source("../components/EstimateDetail.tsx");
+    const fresh = source("../components/NewEstimateForm.tsx");
+    assert.doesNotMatch(workspace, /QUALITY_TAB_ID|HSE_TAB_ID|showsQualityHseModules/);
+    assert.doesNotMatch(detail, /QualityDay1Card|HseDay1Card|RollingChartMap|QUALITY_TAB_ID|onOpenQuality/);
+    assert.doesNotMatch(fresh, /QualityDay1Card|HseDay1Card|RollingChartMap|QUALITY_TAB_ID|onOpenQuality/);
+    assert.match(workspace, /showsRodeoTab|estimateTabsForSite/);
+  });
+
+  it("fails if QualityDesk or HseDesk still gate on an Awarded/open estimate or render a name list", () => {
     const quality = source("../components/QualityDesk.tsx");
     const hse = source("../components/HseDesk.tsx");
     const qualityCard = source("../components/QualityDay1Card.tsx");
     const hseCard = source("../components/HseDay1Card.tsx");
+    const rolling = source("../components/RollingChartMap.tsx");
+    assert.doesNotMatch(quality, /OpenJobFrame|AwardedJobFrame|Awarded job|OPEN_JOB_EMPTY/);
+    assert.doesNotMatch(hse, /OpenJobFrame|AwardedJobFrame|Awarded job|OPEN_JOB_EMPTY/);
     assert.doesNotMatch(quality, DEAD_NAME_LIST);
     assert.doesNotMatch(hse, DEAD_NAME_LIST);
-    assert.doesNotMatch(quality, /QualityFormRoster/);
-    assert.doesNotMatch(qualityCard, /QualityFormRoster/);
-    assert.doesNotMatch(quality, /QUALITY_PACKAGE_FORMS/);
-    assert.doesNotMatch(hse, /HSE_PACKAGE_SLOTS/);
-    assert.match(quality, /OPEN_JOB_EMPTY_COPY/);
-    assert.match(hse, /OPEN_JOB_EMPTY_COPY/);
-    assert.equal(OPEN_JOB_EMPTY_COPY, "Open or pick a job.");
-    assert.match(qualityCard, /checkbox/);
-    assert.match(qualityCard, /FILL/);
-    assert.match(qualityCard, /COUNT/);
-    assert.match(hseCard, /paper-field/);
+    assert.doesNotMatch(quality, /EmptyLane/);
+    assert.doesNotMatch(hse, /EmptyLane/);
+    assert.doesNotMatch(qualityCard, /useEstimatePackage|setJobMeta|jobMeta/);
+    assert.doesNotMatch(hseCard, /useEstimatePackage|setJobMeta|jobMeta|readEquipmentSheet|readSubSheet|computeRowHours/);
+    assert.doesNotMatch(rolling, /useEstimatePackage|setJobMeta|jobMeta/);
+    assert.match(quality, /QualityDay1Card/);
+    assert.match(quality, /RollingChartMap/);
+    assert.match(quality, /QUALITY_SECTIONS/);
+    assert.match(quality, /Client folder/);
+    assert.match(hse, /HseDay1Card/);
+    assert.match(hse, /HSE_EXECUTE_LANES/);
+    assert.match(qualityCard, /QUALITY_PACKAGE_FORMS/);
+    assert.match(qualityCard, /INSPECTION PLAN \/ ITP/);
+    assert.match(qualityCard, /WELD MAP/);
+    assert.match(qualityCard, /TRAVELER COUNT/);
     assert.match(hseCard, /HSE_PACKAGE_SLOTS/);
+    assert.match(hseCard, /paper-field/);
   });
 
-  it("fails if Quality/HSE modules are missing that body", () => {
+  it("fails if Chance’s Quality studio or named forms are missing", () => {
     const quality = source("../components/QualityDesk.tsx");
     const qualityCard = source("../components/QualityDay1Card.tsx");
     const qualityLib = source("./quality-day1.ts");
+    const moduleLib = source("./quality-module.ts");
     const rolling = source("../components/RollingChartMap.tsx");
-    const hse = source("../components/HseDesk.tsx");
-    const hseCard = source("../components/HseDay1Card.tsx");
-    const detail = source("../components/EstimateDetail.tsx");
-    assert.match(quality, /QualityDay1Card/);
-    assert.match(quality, /RollingChartMap/);
-    assert.match(qualityLib, /2\.7\.1 Madison Pressure Test Record Rev 2/);
-    assert.match(qualityLib, /NDE req spreadsheet/);
-    assert.match(qualityCard, /QUALITY_PACKAGE_FORMS/);
     const rollingLib = source("./rolling-chart.ts");
+    assert.match(qualityLib, /2\.7\.1 Madison Pressure Test Record Rev 2/);
+    assert.match(qualityLib, /2\.7\.11 Madison Document Transmittal Form Rev\. 2/);
+    assert.match(qualityLib, /2\.7\.17 ROD Issue Form Rev\. 4/);
+    assert.match(qualityLib, /2\.7\.19 Madison Flange Log Rev\.1/);
+    assert.match(qualityLib, /2\.7\.22 Weld Test Instruction Form Rev\. 8/);
+    assert.match(qualityLib, /2\.7\.34 Job Completion Sign-off Form Rev 2/);
+    assert.match(qualityLib, /2\.7\.5 Madison Punch List Rev\. 1/);
+    assert.match(qualityLib, /NDE req spreadsheet/);
+    assert.doesNotMatch(qualityLib, /2\.7\.29|2\.7\.3\b|sling/i);
+    assert.match(moduleLib, /Open NCRs/);
+    assert.match(moduleLib, /Welds\/NDE/);
+    assert.match(moduleLib, /Connections/);
+    assert.match(moduleLib, /Travelers/);
+    assert.match(moduleLib, /Welders/);
+    assert.match(moduleLib, /Calibration/);
+    assert.match(quality, /BOARD/);
     assert.match(rollingLib, /Steam Drum Rolling Chart/);
     assert.match(rollingLib, /Generating Bank Retube Progression Chart/);
-    assert.match(rollingLib, /Tube Final Roll/);
     assert.match(rolling, /ROLLING_SHEETS/);
-    assert.match(rolling, /Tube Final Roll/);
     assert.doesNotMatch(rolling, /elevation/i);
-    const hseLib = source("./hse-day1.ts");
-    assert.match(hse, /HseDay1Card/);
-    assert.match(hseCard, /HSE_PACKAGE_SLOTS/);
-    assert.match(hseLib, /Site orientation/);
-    assert.match(hseLib, /HSE_PACKAGE_SLOTS/);
-    assert.match(detail, /QualityDay1Card/);
-    assert.match(detail, /RollingChartMap/);
-    assert.match(detail, /HseDay1Card/);
-    const fresh = source("../components/NewEstimateForm.tsx");
-    assert.match(fresh, /QualityDay1Card/);
-    assert.match(fresh, /RollingChartMap/);
-    assert.match(fresh, /HseDay1Card/);
-    assert.match(fresh, /onOpenQuality/);
-    assert.match(fresh, /onOpenHse/);
     assert.doesNotMatch(quality, /1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|quality-briefs\.json|owner vault/i);
     assert.doesNotMatch(qualityCard, /1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|1y6Q3TOnpXzV/);
-    assert.doesNotMatch(hse, /1zYl2dEvW21|hse-briefs\.json|29\.1|sling form/i);
   });
 
-  it("fails if fillable cards and the rolling chart require Awarded", () => {
-    assert.equal(showsQualityHseModules("Estimate"), true);
-    assert.equal(showsQualityHseModules("Submitted"), true);
-    assert.equal(showsQualityHseModules("Awarded"), true);
-    assert.equal(showsQualityHseModules(""), false);
-    assert.deepEqual(qualityHseTabIds("Awarded"), [QUALITY_TAB_ID, HSE_TAB_ID]);
-    assert.deepEqual(qualityHseTabIds("Estimate"), [QUALITY_TAB_ID, HSE_TAB_ID]);
-    assert.deepEqual(qualityHseTabIds("Submitted"), [QUALITY_TAB_ID, HSE_TAB_ID]);
-    const workspace = source("../components/EstimateWorkspace.tsx");
-    assert.match(workspace, /showsQualityHseModules/);
-    assert.match(workspace, /QUALITY_TAB_ID/);
-    assert.match(workspace, /HSE_TAB_ID/);
-    assert.match(workspace, /showsRodeoTab|estimateTabsForSite/);
-    const rodeo = source("./rodeo-form.ts");
-    assert.match(rodeo, /HIDDEN_RODEO_SITES/);
-    const quality = source("../components/QualityDesk.tsx");
+  it("keeps HSE fillable slots and usable execute lanes without invented hours or a 29.1 sling", () => {
     const hse = source("../components/HseDesk.tsx");
-    const frame = source("../components/AwardedJobFrame.tsx");
-    assert.match(quality, /OpenJobFrame/);
-    assert.match(hse, /OpenJobFrame/);
-    assert.doesNotMatch(quality, /status="Awarded"/);
-    assert.doesNotMatch(hse, /status="Awarded"/);
-    assert.match(frame, /openLocalJobs/);
-    assert.match(frame, /openBoardJobs/);
-    assert.match(frame, /pickOpenJob/);
-    assert.doesNotMatch(frame, /awardedLocalJobs\(/);
-    assert.doesNotMatch(frame, /awardedBoardJobs\(/);
-    const modules = source("../components/FutureModulesDesk.tsx");
-    assert.doesNotMatch(modules, /Opens when a job is awarded/);
-    assert.match(modules, /Fillable on the selected job/);
+    const hseCard = source("../components/HseDay1Card.tsx");
+    const hseLib = source("./hse-day1.ts");
+    const hseMod = source("./hse-module.ts");
+    assert.match(hseLib, /Site orientation/);
+    assert.match(hseLib, /HSE_PACKAGE_SLOTS/);
+    assert.match(hseMod, /Incidents \/ near misses/);
+    assert.match(hseMod, /Toolbox talks/);
+    assert.match(hse, /ModuleRegister/);
+    assert.doesNotMatch(hseCard, /Hours on this estimate|scoreboard until real hours exist/);
+    assert.doesNotMatch(hse, /1zYl2dEvW21|hse-briefs\.json/);
+    assert.doesNotMatch(hseCard, /29\.1|sling form/i);
+    assert.equal(/29\.1|sling/i.test(hseLib.split("HSE_PACKAGE_SLOTS")[1]?.slice(0, 400) || ""), false);
   });
 
   it("does not put generating-bank or QC/HSE books in git", () => {
@@ -153,23 +144,24 @@ describe("Quality and HSE leave Job setup", () => {
     assert.equal(/generating-bank/i.test(listed), false);
   });
 
-  it("lists open estimates, not only Awarded, and auto-picks a real job", () => {
+  it("locks Ironwood and Phillips 66 to the same client folder", () => {
+    assert.equal(clientFolderId("Phillips 66"), "phillips-66");
+    assert.equal(clientFolderId("Ironwood Refining"), "phillips-66");
+    assert.equal(clientFolderId("P66"), "phillips-66");
+    assert.equal(clientFolderId("Georgia Power"), "georgia-power");
+    assert.deepEqual(
+      CLIENT_FOLDERS.map((row) => row.id),
+      ["phillips-66", "georgia-power", "other"],
+    );
+  });
+
+  it("lists awarded local jobs without wiping other packs", () => {
     const store = memoryStorage();
     rememberLocalPack({ packId: "new-awarded", title: "Awarded bank", client: "Phillips 66", site: "Wood River" }, store);
     rememberLocalPack({ packId: "new-est", title: "Still estimate", client: "Phillips 66", site: "Wood River" }, store);
     writeEstimateStatus("new-awarded", "Awarded", store);
     const awarded = awardedLocalJobs(store);
     assert.deepEqual(awarded.map((row) => row.id), ["new-awarded"]);
-    const open = openLocalJobs(store);
-    assert.equal(open.some((row) => row.id === "new-est" && row.status === "Estimate"), true);
-    assert.equal(open.some((row) => row.id === "new-awarded" && row.status === "Awarded"), true);
-    assert.deepEqual(mergeOpenJobs(open, open).map((row) => row.id).sort(), ["new-awarded", "new-est"]);
-    assert.equal(pickOpenJob(open)?.id, open[0].id);
-    assert.equal(pickOpenJob(open, "new-est")?.id, "new-est");
-    assert.equal(pickOpenJob([], ""), null);
-    assert.deepEqual(
-      dropClosedJobs(open, (id) => id === "new-awarded").map((row) => row.id),
-      open.filter((row) => row.id !== "new-awarded").map((row) => row.id),
-    );
+    assert.deepEqual(mergeAwardedJobs(awarded, awarded).map((row) => row.id), ["new-awarded"]);
   });
 });
