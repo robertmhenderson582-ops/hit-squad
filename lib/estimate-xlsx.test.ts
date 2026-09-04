@@ -934,7 +934,7 @@ describe("estimate excel export", () => {
     assert.equal(argb(direct.getCell("A9")), LABOR_HC_HPS_CLEAR.slice(2));
     assert.equal(argb(direct.getCell("K9")), LABOR_HC_HPS_CLEAR.slice(2));
     assert.equal(direct.getCell("A9").value, LABOR_HPS_LABEL);
-    assert.equal(direct.getCell("A9").alignment?.wrapText, false);
+    assert.equal(Boolean(direct.getCell("A9").alignment?.wrapText), false);
     assert.equal(Number(direct.getRow(9).height) || 15, Number(direct.getRow(8).height) || 15);
     const weekendSet = new Set((directModel.weekendCols ?? []).map((col) => col.col));
     let weekdayDayCol = 12;
