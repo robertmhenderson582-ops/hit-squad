@@ -293,6 +293,12 @@ function resolveAdapter(): DriveAdapter | null {
   return drive.configured ? drive : null;
 }
 
+/** Production and injected vaults must confirm seats.json. Local SEAT_PASSWORD_PATH tests do not. */
+function expectVaultConfirm() {
+  if (injectedAdapter !== undefined) return true;
+  return !process.env.SEAT_PASSWORD_PATH;
+}
+
 function persistHashes(users: StoredUser[], opts?: { replaceEmails?: string[]; confirm?: boolean }) {
   const extras = extrasFromUsers(users);
   const hashes = collapseSeatHashes(hashesFromUsers(users));
@@ -304,6 +310,9 @@ function persistHashes(users: StoredUser[], opts?: { replaceEmails?: string[]; c
       .filter(Boolean),
   );
   const drive = resolveAdapter();
+  if (opts?.confirm && expectVaultConfirm() && !drive) {
+    throw new Error("Password was not saved");
+  }
   if (drive) {
     const write = pendingVault
       .then(async () => {
@@ -311,11 +320,12 @@ function persistHashes(users: StoredUser[], opts?: { replaceEmails?: string[]; c
         try {
           raw = await readVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
         } catch {
-          // Known seats.json id is still updated when GET media throws. 503 only if updateJson throws.
+          // Known seats.json id is still updated when GET media throws. Merge from local so testers are not wiped.
           raw = null;
         }
-        const vaultHashes = parseSeatHashes(raw);
-        const vaultExtras = parseExtraSeats(raw);
+        const localFallback = raw == null ? loadSeatFile() : null;
+        const vaultHashes = raw == null ? localFallback!.hashes : parseSeatHashes(raw);
+        const vaultExtras = raw == null ? localFallback!.extras : parseExtraSeats(raw);
         const combined: NonNullable<SeatFile["hashes"]> = { ...vaultHashes };
         for (const key of Object.keys(combined)) {
           const email = canonicalEmail(key);
@@ -394,22 +404,22 @@ const SEATS_WRITE_ATTEMPTS = 4;
 
 async function ownerHashLandedInVault(): Promise<boolean> {
   const drive = resolveAdapter();
-  if (!drive) return true;
+  if (!drive) return !expectVaultConfirm();
   const local = ownerHashRow(loadPersisted(), ownerEmail());
   if (!local?.passwordHash) return false;
-  try {
-    const raw = readFileSync(seatPasswordPath(), "utf8");
-    if (drive.confirmWrite && (await drive.confirmWrite(SEATS_VAULT_FILE_ID, raw))) return true;
-  } catch {
-    // Confirm by reading seats.json when the local snapshot is missing.
+  // Read seats.json and compare the owner hash. Do not md5 the local snapshot —
+  // that file can differ from the merged vault payload (testers / extras).
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const raw = await readVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
+      const vault = ownerHashRow(parseSeatHashes(raw), ownerEmail());
+      if (vault?.passwordHash === local.passwordHash && !vault.mustChangePassword) return true;
+    } catch {
+      // Eventual-consistency or a transient Drive read — retry before failing closed.
+    }
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 40 * (attempt + 1)));
   }
-  try {
-    const raw = await readVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
-    const vault = ownerHashRow(parseSeatHashes(raw), ownerEmail());
-    return Boolean(vault?.passwordHash === local.passwordHash && !vault.mustChangePassword);
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 /**
@@ -604,12 +614,20 @@ export function verifyPassword(user: StoredUser, password: string): boolean {
     user.recoveryHash = undefined;
     user.recoveryConsumed = true;
     user.mustChangePassword = true;
-    persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
+    try {
+      persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
+    } catch {
+      persistSeatFileLocal(ownerUsers());
+    }
     return true;
   }
   if (user.role === "owner" && process.env.OWNER_RECOVERY_PASSWORD && password === process.env.OWNER_RECOVERY_PASSWORD) {
     user.mustChangePassword = true;
-    persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
+    try {
+      persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
+    } catch {
+      persistSeatFileLocal(ownerUsers());
+    }
     return true;
   }
   return false;
@@ -636,7 +654,7 @@ export async function passwordWriteLanded(email: string, password: string) {
   const key = canonicalEmail(email) || email.trim().toLowerCase();
   if (!rowAcceptsPassword(ownerHashRow(loadPersisted(), key), password)) return false;
   const drive = resolveAdapter();
-  if (!drive) return true;
+  if (!drive) return !expectVaultConfirm();
   // writeVaultJson already resolved in this request. One stale Drive read is not a failed write.
   if (vaultWriteConfirmed(key)) return true;
   return driveRowAcceptsPassword(drive, key, password);
@@ -690,7 +708,11 @@ export function claimFirstPassword(
   if (password !== confirm) return { error: "New password and confirm did not match.", status: 400 };
   user.passwordHash = bcrypt.hashSync(password, 12);
   user.mustChangePassword = false;
-  persistHashes(ownerUsers(), { replaceEmails: [user.email] });
+  try {
+    persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
+  } catch {
+    return { error: "Password was not saved. Try again.", status: 503 };
+  }
   return { ok: true };
 }
 
@@ -747,7 +769,11 @@ export function issueSeatPassword(email: string, password: string): { ok: true }
   if (user.role === "owner") return { error: "Owner password is not issued from this form." };
   user.passwordHash = bcrypt.hashSync(password, 12);
   user.mustChangePassword = true;
-  persistHashes(ownerUsers(), { replaceEmails: [user.email] });
+  try {
+    persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
+  } catch {
+    return { error: "Password was not saved. Try again." };
+  }
   return { ok: true };
 }
 
@@ -808,7 +834,16 @@ export async function createSeat(input: {
     mustChangePassword: true,
   };
   users.push(user);
-  persistHashes(users);
+  persistHashes(users, { replaceEmails: [user.email], confirm: true });
+  try {
+    await flushSeatVault();
+  } catch {
+    pendingVault = Promise.resolve();
+    return { error: "Password was not saved. Try again." };
+  }
+  if (!(await passwordWriteLanded(email, password))) {
+    return { error: "Password was not saved. Try again." };
+  }
   await setAssignedCompany(email, companyId);
   return { ok: true, user: toPublicUser(user) };
 }
@@ -829,12 +864,15 @@ export async function listSeatRows(): Promise<Array<PublicUser & { passwordIssue
   );
 }
 
+export type PasswordWriteOk = { ok: true; email: string; vaultPersisted: true };
+export type PasswordWriteFail = { error: string; status: number; vaultPersisted?: false };
+
 export async function setOwnPassword(
   email: string,
   next: string,
   current?: string,
   forcedChange?: boolean,
-): Promise<{ ok: true; email: string } | { error: string; status: number }> {
+): Promise<PasswordWriteOk | PasswordWriteFail> {
   if (next.length < 8) return { error: "New password must be 8+.", status: 400 };
   const user = findUserByEmail(email);
   if (!user) return { error: "That seat is not on this desk.", status: 404 };
@@ -857,32 +895,37 @@ async function confirmOwnPasswordWrite(
   user: StoredUser,
   next: string,
   forced: boolean,
-): Promise<{ ok: true; email: string } | { error: string; status: number }> {
+): Promise<PasswordWriteOk | PasswordWriteFail> {
   user.passwordHash = bcrypt.hashSync(next, 12);
   user.previousHashes = [];
   user.recoveryHash = undefined;
   user.recoveryConsumed = false;
   user.mustChangePassword = false;
+  const notSaved = (): PasswordWriteFail => {
+    pendingVault = Promise.resolve();
+    if (forced) persistSeatFileLocal(ownerUsers());
+    return { error: "Password was not saved. Try again.", status: 503, vaultPersisted: false };
+  };
   try {
     persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
     await flushSeatVault();
   } catch {
-    pendingVault = Promise.resolve();
-    persistSeatFileLocal(ownerUsers());
-    if (!forced) {
-      return { error: "Password was not saved. Try again.", status: 503 };
+    if (forced) {
+      try {
+        await persistExistingOwnerHash({ email: user.email });
+        if (await passwordWriteLanded(user.email, next)) {
+          return { ok: true, email: user.email, vaultPersisted: true };
+        }
+      } catch {
+        pendingVault = Promise.resolve();
+      }
     }
-    try {
-      await persistExistingOwnerHash({ email: user.email });
-    } catch {
-      pendingVault = Promise.resolve();
-    }
-    return { ok: true, email: user.email };
+    return notSaved();
   }
-  if (!forced && !(await passwordWriteLanded(user.email, next))) {
-    return { error: "Password was not saved. Try again.", status: 503 };
+  if (!(await passwordWriteLanded(user.email, next))) {
+    return notSaved();
   }
-  return { ok: true, email: user.email };
+  return { ok: true, email: user.email, vaultPersisted: true };
 }
 
 function newRecoverySecret() {

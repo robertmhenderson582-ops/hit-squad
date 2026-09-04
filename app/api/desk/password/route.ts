@@ -34,7 +34,10 @@ export async function POST(request: Request) {
 
   const result = await setOwnPassword(seat.email, next, current || undefined, Boolean(session.mustChangePassword));
   if ("error" in result) {
-    return NextResponse.json({ error: result.error }, { status: result.status });
+    return NextResponse.json(
+      { error: result.error, vaultPersisted: false },
+      { status: result.status },
+    );
   }
   await flushSeatVault();
 
@@ -46,6 +49,7 @@ export async function POST(request: Request) {
     ok: true,
     user: publicUser,
     note: "Password changed.",
+    vaultPersisted: true,
   });
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
   const claim = seatHashClaimFor(publicUser.email);

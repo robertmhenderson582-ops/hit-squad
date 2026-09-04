@@ -232,4 +232,37 @@ describe("vault named json", () => {
     const decoyBody = JSON.parse(await inner.readJson(decoy.id)) as { hashes?: { decoy?: unknown } };
     assert.equal(Boolean(decoyBody.hashes?.decoy), true);
   });
+
+  it("never createJson a second seats.json when the known id is pinned", async () => {
+    resetVaultFileIdsForTests();
+    const inner = memoryDrive();
+    inner.files.set(SEATS_VAULT_FILE_ID, {
+      file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+      content: `${JSON.stringify({ hashes: {}, extras: [] })}\n`,
+    });
+    let created = 0;
+    const drive: DriveAdapter = {
+      configured: true,
+      async listJson() {
+        return [];
+      },
+      async listAccessibleJson() {
+        return [];
+      },
+      readJson: (fileId) => inner.readJson(fileId),
+      async createJson() {
+        created += 1;
+        throw new Error("createJson must not mint a second seats.json");
+      },
+      updateJson: (fileId, content, name, properties) => inner.updateJson(fileId, content, name, properties),
+      deleteJson: (fileId) => inner.deleteJson(fileId),
+      confirmWrite: (fileId, content) => inner.confirmWrite!(fileId, content),
+    };
+    await writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, {
+      hashes: { "robertmhenderson582@gmail.com": { mustChangePassword: false } },
+    });
+    assert.equal(created, 0);
+    assert.equal(inner.files.size, 1);
+    assert.equal([...inner.files.keys()][0], SEATS_VAULT_FILE_ID);
+  });
 });

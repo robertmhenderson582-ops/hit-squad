@@ -60,7 +60,10 @@ export async function POST(request: Request) {
       password: body.password,
       companyId: body.companyId,
     });
-    if ("error" in created) return NextResponse.json({ error: created.error }, { status: 400 });
+    if ("error" in created) {
+      const status = created.error.startsWith("Password was not saved") ? 503 : 400;
+      return NextResponse.json({ error: created.error, vaultPersisted: status === 503 ? false : undefined }, { status });
+    }
     await flushSeatVault();
     return NextResponse.json({
       ok: true,

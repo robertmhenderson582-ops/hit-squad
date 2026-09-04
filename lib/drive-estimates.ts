@@ -355,22 +355,36 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
   };
 }
 
-async function confirmDriveWrite(getAccessToken: () => Promise<string>, fileId: string, content: string) {
-  try {
-    const token = await getAccessToken();
-    const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { fields: "id,md5Checksum,modifiedTime" }), {
-      headers: { authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) return false;
-    const data = (await response.json()) as { id?: string; md5Checksum?: string; modifiedTime?: string };
-    if (!data.id) return false;
-    if (data.md5Checksum) {
-      return data.md5Checksum.toLowerCase() === createHash("md5").update(content).digest("hex");
-    }
-    return Boolean(data.modifiedTime);
-  } catch {
+async function confirmDriveWriteOnce(getAccessToken: () => Promise<string>, fileId: string, content: string) {
+  const token = await getAccessToken();
+  const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { fields: "id,md5Checksum,modifiedTime" }), {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) return false;
+  const data = (await response.json()) as { id?: string; md5Checksum?: string; modifiedTime?: string };
+  if (!data.id) return false;
+  const wanted = createHash("md5").update(content).digest("hex");
+  if (data.md5Checksum) {
+    if (data.md5Checksum.toLowerCase() === wanted) return true;
     return false;
   }
+  const media = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { alt: "media" }), {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (media.ok && (await media.text()) === content) return true;
+  return Boolean(data.modifiedTime);
+}
+
+async function confirmDriveWrite(getAccessToken: () => Promise<string>, fileId: string, content: string) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      if (await confirmDriveWriteOnce(getAccessToken, fileId, content)) return true;
+    } catch {
+      // Eventual-consistency or a transient metadata read — retry before failing closed.
+    }
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 40 * (attempt + 1)));
+  }
+  return false;
 }
 
 async function writeConfirmed(drive: DriveAdapter, fileId: string, content: string) {
@@ -468,20 +482,37 @@ function withVaultWritePreference(sa: DriveAdapter, oauth: DriveAdapter): DriveA
       return op(oauth);
     }
   }
+  async function writeLanded(drive: DriveAdapter, fileId: string, content: string) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (await writeConfirmed(drive, fileId, content)) return true;
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 40 * (attempt + 1)));
+    }
+    try {
+      return (await drive.readJson(fileId)) === content;
+    } catch {
+      return false;
+    }
+  }
   async function writePreferSa(
     fileId: string,
     content: string,
     op: (drive: DriveAdapter) => Promise<DriveFile>,
   ): Promise<DriveFile> {
+    let saWrote: DriveFile | null = null;
     try {
-      const written = await op(sa);
-      if (await writeConfirmed(sa, fileId, content)) return written;
+      saWrote = await op(sa);
+      if (await writeLanded(sa, fileId || saWrote.id, content)) return saWrote;
     } catch {
-      // SA threw — try OAuth without abandoning later SA writes.
+      saWrote = null;
     }
     logVaultSaFallback();
-    const written = await op(oauth);
-    if (await writeConfirmed(oauth, fileId || written.id, content)) return written;
+    try {
+      const written = await op(oauth);
+      if (await writeLanded(oauth, fileId || written.id, content)) return written;
+    } catch {
+      // OAuth failed — a prior SA PATCH may still have landed.
+    }
+    if (saWrote && (await writeLanded(sa, fileId || saWrote.id, content))) return saWrote;
     throw new Error("vault write not confirmed");
   }
   return {
