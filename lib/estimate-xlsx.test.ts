@@ -2045,6 +2045,8 @@ describe("estimate excel export", () => {
             assert.equal(cell.alignment?.horizontal, "center", `${ws.name} ${cell.address}`);
           }
           if (fmt === EXCEL_UNIT_FORMATS.currency) {
+            const align = cell.alignment?.horizontal;
+            assert.equal(align === "center" || align === "right", true, `${ws.name} ${cell.address} money ${align ?? "none"}`);
             const raw = typeof cell.value === "number" ? cell.value : (cell.value as { result?: number })?.result;
             if (typeof raw !== "number") return;
             const shown = `$${Math.abs(raw).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -2070,5 +2072,18 @@ describe("estimate excel export", () => {
     });
     assert.equal(summary.getCell(`C${hoursRow}`).numFmt, EXCEL_UNIT_FORMATS.hours);
     assert.equal(summary.getCell(`C${hoursRow}`).alignment?.horizontal, "center");
+    let laborRow = 0;
+    let markupRow = 0;
+    summary.eachRow((row, n) => {
+      const label = String(row.getCell(1).value ?? "");
+      if (label === "Labor $") laborRow = n;
+      if (label === "6.5% markup") markupRow = n;
+    });
+    assert.ok(laborRow);
+    assert.ok(markupRow);
+    assert.equal(summary.getCell(`B${laborRow}`).numFmt, EXCEL_UNIT_FORMATS.currency);
+    assert.equal(summary.getCell(`B${laborRow}`).alignment?.horizontal, "right");
+    assert.equal(summary.getCell(`B${markupRow}`).numFmt, EXCEL_UNIT_FORMATS.currency);
+    assert.equal(summary.getCell(`B${markupRow}`).alignment?.horizontal, "right");
   });
 });

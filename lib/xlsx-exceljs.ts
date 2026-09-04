@@ -563,8 +563,11 @@ function pinHoursAndMoney(
         centerLaborCell(cell);
       } else if (fmt === FMT_CURRENCY) {
         if (cellLooksNumeric(cell)) cell.numFmt = FMT_CURRENCY;
-        if (labor || !isSummary) centerLaborCell(cell);
-        if (isSummary && col === 3) centerLaborCell(cell);
+        if (isSummary && col === 2) {
+          cell.alignment = { horizontal: "right", vertical: "middle" };
+        } else {
+          centerLaborCell(cell);
+        }
       }
     }
   }
