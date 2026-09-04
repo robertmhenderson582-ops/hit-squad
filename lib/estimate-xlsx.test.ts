@@ -413,7 +413,7 @@ describe("estimate excel export", () => {
     const brandMerge = staffMerges.find((merge) => /^A1:[A-Z]+1$/.test(merge));
     assert.ok(brandMerge);
     const lastHeaderCol = brandMerge.slice(3, -1);
-    assert.ok(lastHeaderCol !== "K");
+    assert.ok(lastHeaderCol !== "J");
     assert.ok(staffMerges.includes(`A2:${lastHeaderCol}2`));
     assert.ok(staffMerges.includes(`A3:${lastHeaderCol}3`));
     const headerFill = (cell: ExcelJS.Cell) =>
@@ -1040,13 +1040,13 @@ describe("estimate excel export", () => {
     assert.equal(direct.getCell(11, weekdayDayCol).alignment?.horizontal, "center");
     assert.equal(direct.getCell(12, weekdayDayCol).alignment?.horizontal, "center");
     assert.equal(direct.getCell(13, weekdayDayCol).alignment?.horizontal, "center");
-    assert.equal(direct.getCell("J8").numFmt, EXCEL_UNIT_FORMATS.hours);
+    assert.equal(direct.getCell("F8").numFmt, EXCEL_UNIT_FORMATS.hours);
+    assert.equal(direct.getCell("J8").numFmt, EXCEL_UNIT_FORMATS.currency);
     assert.equal(String(direct.getCell("G7").numFmt ?? "").includes("."), false);
     assert.equal(argb(direct.getCell("E10")), LABOR_HOURS_LABEL.slice(2));
     assert.equal(argb(direct.getCell("B10")), LABOR_POSITION_TITLE.slice(2));
     assert.equal(argb(direct.getCell("G10")), LABOR_POSITION_TITLE.slice(2));
     assert.equal(argb(direct.getCell("D10")), LABOR_CAGE_WASH_B.slice(2));
-    assert.equal(argb(direct.getCell("E10")), LABOR_CAGE_WASH_B.slice(2));
     assert.equal(argb(direct.getCell(10, weekdayDayCol)), LABOR_DAY_WASH.slice(2));
     assert.equal(argb(direct.getCell("A14")), LABOR_SPACER.slice(2));
     const lastDateCol = colLetter(LABOR_DATE_START_COL + laborCalendarDates(input).length - 1);
@@ -1057,7 +1057,7 @@ describe("estimate excel export", () => {
     for (const merge of laborBlockVoidMerges(directModel.laborBlocks ?? [])) {
       assert.ok(directMerges.includes(merge), merge);
     }
-    assert.equal(directMerges.some((merge) => /^[DEF]\d+:/.test(merge)), false);
+    assert.equal(directMerges.some((merge) => /^[CDE]\d+:/.test(merge)), false);
     assert.equal(direct.getCell("B7").value, "Boilermaker Journeyman");
     assert.equal(direct.getCell("B10").value, "Boilermaker Journeyman");
     assert.equal(direct.getCell("B7").alignment?.horizontal, "center");
@@ -2015,7 +2015,7 @@ describe("estimate excel export", () => {
     assert.ok(totalRef);
     const voidFill = (cell: ExcelJS.Cell) =>
       String((cell.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "").toUpperCase();
-    assert.equal(voidFill(staffBook.getCell(`J${totalRef.slice(1)}`)), SHEET_VOID_WASH);
+    assert.equal(voidFill(staffBook.getCell(`J${totalRef.slice(1)}`)), SUMMARY_TOTAL);
     assert.equal(voidFill(staffBook.getCell("K8")), LABOR_HC_HPS);
     assert.equal(voidFill(supportBook.getCell(`B${fire.title}`)), STEEL);
     assert.equal(voidFill(supportBook.getCell(`B${fire.st}`)), STEEL_DEEP);
@@ -2097,7 +2097,7 @@ describe("estimate excel export", () => {
     assert.equal(phaseOwningDate(moved.schedule.phases, "2026-09-01"), undefined);
     assert.equal(phaseOwningDate(moved.schedule.phases, "2026-09-03")?.id, "mech");
     assert.equal(movedStaff.cells.find((cell) => cell.ref === "K4")?.value, undefined);
-    assert.equal(movedStaff.cells.find((cell) => cell.ref === "N4")?.value, "Mechanical Window");
+    assert.equal(movedStaff.cells.find((cell) => cell.ref === "M4")?.value, "Mechanical Window");
     assert.deepEqual(movedStaff.phaseBar, [
       { startCol: LABOR_DATE_START_COL + 2, endCol: LABOR_DATE_START_COL + dates.length - 1, phaseId: "mech" },
     ]);
@@ -2114,7 +2114,7 @@ describe("estimate excel export", () => {
     };
     const splitStaff = sheetOf(buildEstimateWorkbook(split), ESTIMATE_XLSX_SHEETS.staff)!;
     assert.equal(splitStaff.cells.find((cell) => cell.ref === "K4")?.value, "Pre-Turnaround");
-    assert.equal(splitStaff.cells.find((cell) => cell.ref === "N4")?.value, "Mechanical Window");
+    assert.equal(splitStaff.cells.find((cell) => cell.ref === "M4")?.value, "Mechanical Window");
     assert.deepEqual(
       splitStaff.phaseBar?.map((run) => run.phaseId),
       ["pre", "mech"],
