@@ -318,12 +318,16 @@ describe("estimate pack JSON → xlsx", () => {
     assert.match(xlsx, /Job setup/);
     assert.match(xlsx, /laborBlockVoidMerges/);
     assert.match(xlsx, /LABOR_BLOCK_VOID_COLS/);
+    assert.match(xlsx, /LABOR_WEEKDAY_LABELS/);
+    assert.match(xlsx, /writeWeekdayRow/);
     assert.match(pack, /one live pack/);
     assert.match(pack, /excel-ripple/);
     assert.match(chrome, /Chrome only/);
     assert.match(chrome, /excel-ripple/);
     assert.match(chrome, /RETROACTIVE/);
     assert.match(chrome, /native Excel column outline/);
+    assert.match(chrome, /LABOR_DATE_NUM_FMT/);
+    assert.match(chrome, /Hit Squad teal/);
     assert.equal(/vbaProject|\.xlsm/i.test(chrome), false);
     assert.equal(/from "\.\/other-cost/.test(chrome), false);
     assert.equal(/25324671|1435365/.test(xlsx), false);

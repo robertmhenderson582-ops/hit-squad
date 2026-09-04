@@ -31,6 +31,7 @@ import {
   LABOR_HPS_TYPE,
   LABOR_NIGHTSHIFT,
   LABOR_PHASE_LABEL,
+  LABOR_WEEKDAY_LABELS,
   LABOR_TYPE_ORDER,
   laborBlockId,
   estimateToXlsx,
@@ -68,7 +69,9 @@ import {
   LABOR_DAYSHIFT_BANNER,
   LABOR_CAGE_WASH_A,
   LABOR_CAGE_WASH_B,
+  LABOR_DATE_NUM_FMT,
   LABOR_DAY_WASH,
+  STEEL,
   LABOR_HC_HPS,
   LABOR_HC_HPS_CLEAR,
   LABOR_HOURS_LABEL,
@@ -1298,7 +1301,7 @@ describe("estimate excel export", () => {
     for (const col of [1, 2, 3, 4, 5, 6, 7, 8]) assert.equal(argb(rental.getCell(rentalTotal, col)), amber);
     assert.equal(argb(rates.getCell("A7")), LABOR_CAGE_WASH_A.slice(2));
     assert.equal(argb(rates.getCell("B8")) === LABOR_CAGE_WASH_A.slice(2) || argb(rates.getCell("B8")) === LABOR_CAGE_WASH_B.slice(2), true);
-    assert.equal(argb(rates.getCell("B2")), "E4EBE9");
+    assert.equal(argb(rates.getCell("B2")), STEEL.slice(2));
     const summaryTotal = totalRowOf(summary, "ESTIMATE TOTAL $");
     assert.ok(summaryTotal);
     for (const col of [1, 2, 3]) assert.equal(argb(summary.getCell(summaryTotal, col)), amber);
@@ -1795,6 +1798,7 @@ describe("estimate excel export", () => {
     const direct = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.direct)!;
     const staffMap = cellMap(staff);
     assert.equal(staffMap.get("L6")?.type, "date");
+    assert.equal(staffMap.get("L5")?.value, LABOR_WEEKDAY_LABELS[2]);
     assert.equal(staffMap.get("M6")?.type, "formula");
     assert.match(String(staffMap.get("M6")?.value), /L6\+1/);
     const lead = laborHours(staff, "Lead Safety 01");
@@ -1853,7 +1857,7 @@ describe("estimate excel export", () => {
       `A2:${lastDateCol}2`,
       `A3:${lastDateCol}3`,
       "A4:K5",
-      `L4:${lastDateCol}5`,
+      `L4:${lastDateCol}4`,
       ...laborBlockVoidMerges(staff.laborBlocks ?? []),
     ]);
     assert.deepEqual(direct.merges, [
@@ -1861,7 +1865,7 @@ describe("estimate excel export", () => {
       `A2:${lastDateCol}2`,
       `A3:${lastDateCol}3`,
       "A4:K5",
-      `L4:${lastDateCol}5`,
+      `L4:${lastDateCol}4`,
       ...laborBlockVoidMerges(direct.laborBlocks ?? []),
     ]);
     for (const col of LABOR_BLOCK_VOID_COLS) {
@@ -1928,8 +1932,13 @@ describe("estimate excel export", () => {
     const phaseFill = (cell: ExcelJS.Cell) =>
       String((cell.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "").toUpperCase();
     assert.equal(phaseFill(staffBook.getCell("L4")), PHASE_TONE_FILLS.mech);
-    assert.equal(phaseFill(staffBook.getCell("L5")), PHASE_TONE_FILLS.mech);
+    assert.equal(phaseFill(staffBook.getCell("L5")), STEEL);
     assert.equal(phaseFill(staffBook.getCell(`${lastDateCol}4`)), PHASE_TONE_FILLS.mech);
+    assert.equal(staffBook.getCell("L5").value, LABOR_WEEKDAY_LABELS[2]);
+    assert.equal(staffBook.getCell("L6").numFmt, LABOR_DATE_NUM_FMT);
+    assert.equal(Boolean(staffBook.getCell("L6").alignment?.textRotation), false);
+    assert.equal(String(staffBook.getCell("L6").font?.color?.argb ?? "").replace(/^FF/i, "").toUpperCase(), "FFFFFF");
+    assert.equal(String(staffBook.getCell("L5").font?.color?.argb ?? "").replace(/^FF/i, "").toUpperCase(), "FFFFFF");
     assert.equal(String(staffBook.getCell("L4").font?.color?.argb ?? "").replace(/^FF/i, "").toUpperCase(), "FFFFFF");
     assert.equal(staffBook.getCell("A4").value, LABOR_PHASE_LABEL);
     assert.equal(staffBook.getCell("L4").value, "Mechanical Window");
@@ -2061,7 +2070,7 @@ describe("estimate excel export", () => {
     assert.equal(fill(staff.getCell("L8")), LABOR_HC_HPS);
     assert.notEqual(fill(staff.getCell("L4")), SHEET_VOID_WASH);
     assert.notEqual(fill(staff.getCell("L4")), "FFFFFFFF");
-    assert.equal(fill(summary.getCell("A2")) === "E4EBE9" || fill(summary.getCell("A2")) === "FFE4EBE9", true);
+    assert.equal(fill(summary.getCell("A2")) === STEEL || fill(summary.getCell("A2")) === STEEL.slice(2), true);
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("C7").dataValidation, undefined);
     for (const sheet of [staff, summary, rates, misc]) {
       assert.equal(sheet.properties.defaultRowHeight, 0, sheet.name);

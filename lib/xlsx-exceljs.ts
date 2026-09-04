@@ -9,26 +9,27 @@
  * Phase bar is a locked view this Look pass — no editable Job setup card.
  * Unused columns past the used range are hidden. Unused rows below TOTAL
  * collapse (defaultRowHeight 0 + zeroHeight) so no white band remains.
- * Leftover white cells in the used band get a soft plate wash. Chrome only.
+ * Leftover white cells in the used band get Hit Squad teal, not mint/gray.
  * Craft sheets group A–K with native Excel column outline (+/−). No VBA / not xlsm.
+ * Day-grid header is weekday (row 5) over day-of-month (row 6), white on teal.
  */
 
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { evaluateWorkbook } from "./xlsx-eval.ts";
-import { isPhaseId, PHASE_TONE_BAND_INK, PHASE_TONE_FILLS, PHASE_TONE_INK } from "./phase-schedule.ts";
+import { isPhaseId, PHASE_TONE_BAND_INK, PHASE_TONE_FILLS } from "./phase-schedule.ts";
 import { colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
 const WHITE = "FFFFFFFF";
 const DARK_TEXT = "FF102226";
-const MUTED_TEXT = "FF3D4F54";
 const GRID = "FF8AA3A1";
 const BLACK = "FF000000";
 export const STEEL = "FF0F5F6D";
 export const STEEL_DEEP = "FF083943";
 export const AMBER_FLARE = "FFE38B2A";
-const PLATE_WASH = "FFE4EBE9";
-const PLATE_WASH_DEEP = "FFDCE6E4";
+/** Header / void / cage chrome — Hit Squad teal, not mint-gray plate. */
+const PLATE_WASH = STEEL;
+const PLATE_WASH_DEEP = STEEL_DEEP;
 
 const FMT_CURRENCY = "$#,##0.00";
 /**
@@ -50,19 +51,21 @@ export const LABOR_SUN_BODY = LABOR_WEEKEND_FILL;
 
 export const LABOR_POSITION_TITLE = STEEL;
 export const LABOR_HC_HPS = "FFFFFF00";
-/** Empty B–K on HC/HPS rows — not yellow voids. Desk mint plate. */
-export const LABOR_HC_HPS_CLEAR = "FFE7EEEC";
+/** Empty A–K on HC/HPS rows — teal chrome; yellow stays on the day HC/HPS cells. */
+export const LABOR_HC_HPS_CLEAR = STEEL;
 export const LABOR_HOURS_LABEL = STEEL;
 export const LABOR_PD_LABEL = AMBER_FLARE;
-export const LABOR_DAYSHIFT_BANNER = "FFC5D9D6";
+export const LABOR_DAYSHIFT_BANNER = STEEL;
 export const LABOR_NIGHTSHIFT_BANNER = STEEL_DEEP;
-export const LABOR_SPACER = "FFB7C8C6";
-export const LABOR_CAGE_WASH_A = "FFD5E3E1";
-export const LABOR_CAGE_WASH_B = "FFC4D6D4";
-/** ST/OT/DT/PD + empty day cells — mint plate, not near-white F2F6F5. */
-export const LABOR_DAY_WASH = LABOR_HC_HPS_CLEAR;
-/** Soft mint plate for leftover empty cells in the used band — not harsh white. */
-export const SHEET_VOID_WASH = LABOR_HC_HPS_CLEAR;
+export const LABOR_SPACER = STEEL_DEEP;
+export const LABOR_CAGE_WASH_A = STEEL;
+export const LABOR_CAGE_WASH_B = STEEL_DEEP;
+/** ST/OT/DT/PD weekday day cells — teal, not mint. Weekend gray still wins. */
+export const LABOR_DAY_WASH = STEEL;
+/** Leftover empty cells in the used band — teal, not mint/white. */
+export const SHEET_VOID_WASH = STEEL;
+/** Day-of-month in the narrow calendar col. `D-MMM` clipped at 3.2. */
+export const LABOR_DATE_NUM_FMT = "d";
 export const EXCEL_MAX_COL = 16384;
 /** Excel last row. Unused rows below content collapse via defaultRowHeight 0 + zeroHeight. */
 export const EXCEL_MAX_ROW = 1048576;
@@ -70,8 +73,8 @@ export const EXCEL_MAX_ROW = 1048576;
 export const USED_ROW_HEIGHT = 16;
 export const SUMMARY_SECTION = STEEL;
 export const SUMMARY_TOTAL = AMBER_FLARE;
-export const SUMMARY_ZEBRA_A = "FFE7EEEC";
-export const SUMMARY_ZEBRA_B = "FFDCE8E6";
+export const SUMMARY_ZEBRA_A = STEEL;
+export const SUMMARY_ZEBRA_B = STEEL_DEEP;
 
 /** Compact 9pt subtitle row. Grows only when the merged A1–last header is too narrow. */
 export const HEADER_META_LINE_HEIGHT = 16;
@@ -102,7 +105,7 @@ export const LABOR_CENTER: Partial<ExcelJS.Alignment> = {
 };
 /** Same width on every day col (L through last date). 3 made `9.5` into ##; 3.2 persists. */
 export const LABOR_DAY_COL_WIDTH = 3.2;
-/** A–K one line + 7pt rotated D-MMM. 36 looked like a doubled wrap row. */
+/** A–K one line + unrotated day-of-month. */
 export const LABOR_HEADER_ROW_HEIGHT = 22;
 /** Every craft HC/HPS/ST/OT/DT/PD/title row — no wrap-driven spikes. */
 export const LABOR_DATA_ROW_HEIGHT = 16;
@@ -416,19 +419,19 @@ function applyRowStyle(
     return;
   }
   if (row === 2) {
-    exCell.font = { size: 9, color: { argb: STEEL_DEEP }, name: "Calibri" };
+    exCell.font = { size: 9, color: { argb: WHITE }, name: "Calibri" };
     exCell.fill = solid(PLATE_WASH);
     exCell.alignment = { vertical: "middle", wrapText: true };
     return;
   }
   if (row === 3) {
-    exCell.font = { size: 9, italic: true, color: { argb: MUTED_TEXT }, name: "Calibri" };
+    exCell.font = { size: 9, italic: true, color: { argb: WHITE }, name: "Calibri" };
     exCell.fill = solid(PLATE_WASH_DEEP);
     exCell.alignment = { vertical: "middle", wrapText: true };
     return;
   }
   if (row === 4 || row === 5) {
-    exCell.font = { size: 9, color: { argb: MUTED_TEXT }, name: "Calibri" };
+    exCell.font = { size: 9, color: { argb: WHITE }, name: "Calibri" };
     exCell.fill = solid(PLATE_WASH);
     exCell.alignment = { wrapText: false };
     return;
@@ -501,9 +504,12 @@ function applyInstrumentChrome(
     for (let col = 1; col <= lastColNum; col += 1) {
       const cell = ws.getCell(row, col);
       cell.fill = solid(wash);
-      if (col === 1) {
-        cell.font = { bold: true, color: { argb: STEEL_DEEP }, name: "Calibri", size: 10 };
-      }
+      cell.font = {
+        bold: col === 1,
+        color: { argb: WHITE },
+        name: "Calibri",
+        size: 10,
+      };
     }
   }
   for (const row of sectionRows) {
@@ -512,7 +518,7 @@ function applyInstrumentChrome(
 }
 
 function applyAdderStyle(exCell: ExcelJS.Cell) {
-  exCell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
+  exCell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
 }
 
 function printHeader(sheetName: string): string {
@@ -650,7 +656,8 @@ function pinLaborCraftAlignment(ws: ExcelJS.Worksheet, lastDateCol: number, maxR
   }
   if (lastDateCol >= 12) {
     for (let col = 12; col <= lastDateCol; col += 1) {
-      centerLaborCell(ws.getCell(6, col), { textRotation: 90 });
+      centerLaborCell(ws.getCell(5, col));
+      centerLaborCell(ws.getCell(6, col));
       ws.getColumn(col).alignment = colAlign;
     }
   }
@@ -683,7 +690,7 @@ function applyLaborBlockChrome(
           cell.fill = solid(night ? LABOR_NIGHTSHIFT_BANNER : LABOR_DAYSHIFT_BANNER);
           cell.font = {
             bold: true,
-            color: { argb: night ? WHITE : DARK_TEXT },
+            color: { argb: WHITE },
             name: "Calibri",
             size: 9,
           };
@@ -695,7 +702,7 @@ function applyLaborBlockChrome(
         }
       } else if (kind === "hc" || kind === "hps") {
         cell.fill = solid(LABOR_HC_HPS_CLEAR);
-        cell.font = { bold: true, color: { argb: STEEL_DEEP }, name: "Calibri", size: 9 };
+        cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 9 };
         centerLaborCell(cell);
       } else if (kind === "hours" || kind === "pd") {
         if (col === 6) {
@@ -710,7 +717,7 @@ function applyLaborBlockChrome(
         } else {
           const wash = (row - block.start) % 2 === 0 ? LABOR_CAGE_WASH_A : LABOR_CAGE_WASH_B;
           cell.fill = solid(wash);
-          cell.font = { color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
+          cell.font = { color: { argb: WHITE }, name: "Calibri", size: 10 };
           centerLaborCell(cell);
         }
       }
@@ -776,42 +783,45 @@ function paintLaborDayCalendar(
       }
       if (weekend.has(col)) {
         cell.fill = solid(LABOR_WEEKEND_FILL);
+        cell.font = { ...(cell.font ?? {}), color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
         continue;
       }
       if (kind === "hc" || kind === "hps") {
         cell.fill = solid(LABOR_HC_HPS);
+        cell.font = { ...(cell.font ?? {}), color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
       } else {
         cell.fill = solid(LABOR_DAY_WASH);
+        cell.font = { ...(cell.font ?? {}), color: { argb: WHITE }, name: "Calibri", size: 10 };
       }
     }
   }
 }
 
 function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDateCol: number) {
-  const plateInk = { argb: PHASE_TONE_INK };
   const bandInk = { argb: PHASE_TONE_BAND_INK };
   for (const row of [4, 5] as const) {
     ws.getRow(row).height = LABOR_PHASE_ROW_HEIGHT;
     for (let col = 1; col <= 11; col += 1) {
       const cell = ws.getCell(row, col);
       cell.fill = solid(PLATE_WASH);
-      cell.font = { bold: true, name: "Calibri", size: 9, color: plateInk };
+      cell.font = { bold: true, name: "Calibri", size: 9, color: { argb: WHITE } };
       centerLaborCell(cell);
     }
     for (let col = 12; col <= lastDateCol; col += 1) {
-      ws.getCell(row, col).fill = solid(PLATE_WASH);
+      const cell = ws.getCell(row, col);
+      cell.fill = solid(PLATE_WASH);
+      cell.font = { bold: true, name: "Calibri", size: 7, color: { argb: WHITE } };
+      centerLaborCell(cell);
     }
   }
   for (const run of sheet.phaseBar ?? []) {
     if (!isPhaseId(run.phaseId)) continue;
     const fillArgb = PHASE_TONE_FILLS[run.phaseId];
-    for (let row = 4; row <= 5; row += 1) {
-      for (let col = run.startCol; col <= run.endCol; col += 1) {
-        const cell = ws.getCell(row, col);
-        cell.fill = solid(fillArgb);
-        cell.font = { bold: true, name: "Calibri", size: 8, color: bandInk };
-        centerLaborCell(cell);
-      }
+    for (let col = run.startCol; col <= run.endCol; col += 1) {
+      const cell = ws.getCell(4, col);
+      cell.fill = solid(fillArgb);
+      cell.font = { bold: true, name: "Calibri", size: 8, color: bandInk };
+      centerLaborCell(cell);
     }
   }
 }
@@ -901,11 +911,23 @@ function applyLaborChrome(
   }
 
   paintLaborDayCalendar(ws, sheet, lastDateCol, maxRow, totalRows);
+  const weekendCols = new Set((sheet.weekendCols ?? []).map((item) => item.col));
   for (let col = 12; col <= lastDateCol; col += 1) {
+    const weekday = ws.getCell(5, col);
+    centerLaborCell(weekday);
+    weekday.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 7 };
+    weekday.fill = solid(STEEL);
     const header = ws.getCell(6, col);
-    centerLaborCell(header, { textRotation: 90 });
-    header.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 7 };
-    header.numFmt = "D-MMM";
+    centerLaborCell(header);
+    header.numFmt = LABOR_DATE_NUM_FMT;
+    const weekend = weekendCols.has(col);
+    header.font = {
+      bold: true,
+      color: { argb: weekend ? DARK_TEXT : WHITE },
+      name: "Calibri",
+      size: 9,
+    };
+    if (!weekend) header.fill = solid(STEEL_DEEP);
   }
   for (let col = 1; col <= 11; col += 1) {
     centerLaborCell(ws.getCell(6, col));
@@ -933,6 +955,7 @@ function applySummaryChrome(
     for (let col = 1; col <= 3; col += 1) {
       const cell = ws.getCell(row, col);
       cell.fill = solid(wash);
+      cell.font = { ...(cell.font ?? {}), color: { argb: WHITE }, name: "Calibri", size: 10 };
       if (col === 3) cell.alignment = { ...LABOR_CENTER };
     }
   }
@@ -1205,7 +1228,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       else applyRowStyle(exCell, row, maxRow, isSummary, colNum);
 
       if (labor && row === 6 && colNum >= 12) {
-        exCell.numFmt = "D-MMM";
+        exCell.numFmt = LABOR_DATE_NUM_FMT;
       }
 
       const fmt = cellFormat(sheet, headers, col, row, isSummary);

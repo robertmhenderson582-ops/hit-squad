@@ -114,6 +114,8 @@ export const LABOR_DATE_START_COL = 12;
 export const LABOR_PHASE_ROW = 4;
 export const LABOR_PHASE_ROW_END = 5;
 export const LABOR_PHASE_LABEL = "Phase";
+/** Two-letter weekday over the date number (row 5 / row 6). */
+export const LABOR_WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 export const LABOR_BLOCK_HEIGHT = 7;
 /** Full job window. 90 days truncated Aromatics and understated desk totals. */
 export const LABOR_MAX_DAYS = 400;
@@ -645,6 +647,14 @@ function writeDateRow(cells: SheetCell[], dates: string[]) {
   });
 }
 
+function writeWeekdayRow(cells: SheetCell[], dates: string[]) {
+  dates.forEach((ymd, index) => {
+    const date = parseYmd(ymd);
+    const label = date ? LABOR_WEEKDAY_LABELS[date.getDay()] : "";
+    pushText(cells, `${colLetter(LABOR_DATE_START_COL + index)}5`, label);
+  });
+}
+
 function writePhaseBar(
   cells: SheetCell[],
   dates: string[],
@@ -659,7 +669,7 @@ function writePhaseBar(
     const first = colLetter(startCol);
     const last = colLetter(endCol);
     pushText(cells, `${first}${LABOR_PHASE_ROW}`, PHASE_NAMES[run.phase.id] ?? run.phase.name);
-    merges.push(`${first}${LABOR_PHASE_ROW}:${last}${LABOR_PHASE_ROW_END}`);
+    merges.push(`${first}${LABOR_PHASE_ROW}:${last}${LABOR_PHASE_ROW}`);
     return { startCol, endCol, phaseId: run.phase.id };
   });
   return { merges, phaseBar };
@@ -693,6 +703,7 @@ function buildCrewSheet(
   ];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
   writeDateRow(cells, dates);
+  writeWeekdayRow(cells, dates);
   const phaseBand = writePhaseBar(cells, dates, input.schedule);
 
   const titleRows: number[] = [];

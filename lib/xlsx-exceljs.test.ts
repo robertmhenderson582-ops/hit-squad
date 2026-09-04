@@ -7,7 +7,9 @@ import {
   HEADER_META_WRAP_HEIGHT,
   headerMetaHeight,
   LABOR_COL_WIDTHS,
+  LABOR_DATE_NUM_FMT,
   LABOR_DAY_WASH,
+  STEEL,
   LABOR_INSTRUMENT_OUTLINE_LEVEL,
   LABOR_SHEET_PROTECT_OPTIONS,
   SHEET_PROTECT_OPTIONS,
@@ -42,8 +44,9 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(formatForHeader("PD Days"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(formatForHeader("PD"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(EXCEL_UNIT_FORMATS.hours, "#,##0");
-    assert.equal(LABOR_DAY_WASH, "FFE7EEEC");
+    assert.equal(LABOR_DAY_WASH, STEEL);
     assert.equal(LABOR_DAY_WASH.includes("F2F6"), false);
+    assert.equal(LABOR_DATE_NUM_FMT, "d");
     assert.equal(EXCEL_UNIT_FORMATS.hours.includes("."), false);
     assert.equal(EXCEL_UNIT_FORMATS.hours.includes(".##"), false);
     assert.equal(formatForHeader("Headcount"), "#,##0");
