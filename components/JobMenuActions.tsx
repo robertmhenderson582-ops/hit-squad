@@ -19,6 +19,7 @@ import { findHandoffSeat, type HandoffSeat } from "@/lib/handoff";
 import { isHisProtectedMenuItem } from "@/lib/his-wood-river";
 import { findDeskPack } from "@/lib/lens-packs";
 import { isLocalPackId, deleteLocalPack } from "@/lib/local-estimates";
+import { canHardDeleteEstimate } from "@/lib/estimate-status";
 import { archiveMenuItem, deleteMenuItem, menuSeatForDesk, unarchiveMenuItem } from "@/lib/job-menu";
 
 export function vaultPackIdOf(id: string, packId?: string) {
@@ -51,6 +52,7 @@ export function JobMenuActions({
   const vaultId = vaultPackIdOf(id, packId);
   const item = { id, title, packId: vaultId || packId };
   const hisSeatHide = isHisProtectedMenuItem(item);
+  const allowDelete = canHardDeleteEstimate(item);
   const pack = vaultId ? findDeskPack(vaultId, seat) : null;
   const deskUser = lens ? { email: lens.email, role: lens.role } : null;
   const sharedEmails = pack ? packSharedEmails(pack) : [];
@@ -170,18 +172,20 @@ export function JobMenuActions({
           ) : null}
         </>
       )}
-      <button
-        type="button"
-        className="job-action"
-        title="Remove this job from your list. Confirm first."
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setConfirmDelete(true);
-        }}
-      >
-        DELETE
-      </button>
+      {allowDelete ? (
+        <button
+          type="button"
+          className="job-action"
+          title="Remove this job from your list. Confirm first."
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setConfirmDelete(true);
+          }}
+        >
+          DELETE
+        </button>
+      ) : null}
       {note ? <p className="w-full text-[11px] text-[#5b6f73]">{note}</p> : null}
       <HandoffDialog
         title={title}
@@ -265,7 +269,7 @@ export function JobMenuActions({
           </div>
         </ModalPortal>
       ) : null}
-      {confirmDelete ? (
+      {confirmDelete && allowDelete ? (
         <ModalPortal>
           <div className="modal-scrim" role="dialog" aria-modal="true">
             <div className="estimate-modal px-6 py-5">
@@ -286,6 +290,10 @@ export function JobMenuActions({
                   type="button"
                   onClick={() => {
                     void (async () => {
+                      if (!canHardDeleteEstimate(item)) {
+                        setConfirmDelete(false);
+                        return;
+                      }
                       deleteMenuItem(item, undefined, menuSeat);
                       if (vaultId && !hisSeatHide) {
                         await deleteVaultPack(vaultId);

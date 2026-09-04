@@ -17,6 +17,7 @@ import {
   unarchiveMenuItem,
   writeVaultSeen,
 } from "./job-menu.ts";
+import { writeEstimateStatus } from "./estimate-status.ts";
 import type { StorageLike } from "./local-estimates.ts";
 
 function memoryStore(seed: Record<string, string> = {}): StorageLike {
@@ -86,6 +87,19 @@ describe("job menu archive and delete", () => {
     archiveMenuItem(cat2, store, "nathan");
     assert.equal(menuStatus(cat2, menuForViewedDesk(true, store, "nathan")), "archived");
     assert.equal(isActiveMenuItem(cat2, menuForViewedDesk(false, store)), true);
+  });
+
+  it("Awarded jobs archive but delete is a no-op on every seat", () => {
+    const store = memoryStore();
+    const awarded = { id: "job-new-awarded", packId: "new-awarded", title: "Awarded bank" };
+    writeEstimateStatus("new-awarded", "Awarded", store);
+    deleteMenuItem(awarded, store);
+    deleteMenuItem(awarded, store, "nathan");
+    assert.equal(menuStatus(awarded, readJobMenu(store)), null);
+    assert.equal(menuStatus(awarded, menuForViewedDesk(true, store, "nathan")), null);
+    archiveMenuItem(awarded, store, "nathan");
+    assert.equal(menuStatus(awarded, menuForViewedDesk(true, store, "nathan")), "archived");
+    assert.equal(isActiveMenuItem(awarded, menuForViewedDesk(true, store, "nathan")), false);
   });
 
   it("Nathan login and View as Nathan share the nathan seat menu", () => {

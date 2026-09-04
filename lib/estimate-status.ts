@@ -15,7 +15,9 @@ export function statusStoreKey(estimateId: string) {
   return `${ESTIMATE_STATUS_PREFIX}${estimateId}`;
 }
 
-export function readEstimateStatus(estimateId: string, store?: Storage | null): EstimateStatus {
+type StatusStore = { getItem(key: string): string | null; setItem?(key: string, value: string): void } | null;
+
+export function readEstimateStatus(estimateId: string, store?: StatusStore): EstimateStatus {
   if (!estimateId) return "Estimate";
   const storage = store ?? (typeof window === "undefined" ? null : window.localStorage);
   if (!storage) return "Estimate";
@@ -26,10 +28,10 @@ export function readEstimateStatus(estimateId: string, store?: Storage | null): 
   }
 }
 
-export function writeEstimateStatus(estimateId: string, status: EstimateStatus, store?: Storage | null) {
+export function writeEstimateStatus(estimateId: string, status: EstimateStatus, store?: StatusStore) {
   if (!estimateId || !isEstimateStatus(status)) return;
   const storage = store ?? (typeof window === "undefined" ? null : window.localStorage);
-  if (!storage) return;
+  if (!storage?.setItem) return;
   try {
     storage.setItem(statusStoreKey(estimateId), status);
   } catch {
@@ -46,4 +48,21 @@ export function needsStatusConfirm(from: EstimateStatus, to: EstimateStatus) {
 
 export function statusConfirmCopy(from: EstimateStatus, to: EstimateStatus) {
   return `Move this job from ${from} to ${to}?`;
+}
+
+function statusIdsForItem(item?: { id?: string; packId?: string } | null): string[] {
+  if (!item) return [];
+  const ids = [item.packId, item.id];
+  if (item.id?.startsWith("job-")) ids.push(item.id.slice(4));
+  if (item.packId && !item.packId.startsWith("job-")) ids.push(`job-${item.packId}`);
+  return [...new Set(ids.filter((id): id is string => Boolean(id && id.trim())))];
+}
+
+/** Awarded jobs may archive. They cannot be hard-deleted from any seat. */
+export function isAwardedEstimate(item?: { id?: string; packId?: string } | null, store?: StatusStore) {
+  return statusIdsForItem(item).some((id) => readEstimateStatus(id, store) === "Awarded");
+}
+
+export function canHardDeleteEstimate(item?: { id?: string; packId?: string } | null, store?: StatusStore) {
+  return !isAwardedEstimate(item, store);
 }

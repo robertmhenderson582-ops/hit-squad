@@ -1,3 +1,4 @@
+import { canHardDeleteEstimate } from "./estimate-status.ts";
 import { hisMatchForPack, isHisProtectedMenuItem, NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
 import { canonicalEmail } from "./identity.ts";
 import { isLocalPackId, type StorageLike } from "./local-estimates.ts";
@@ -172,6 +173,7 @@ export function unarchiveMenuItem(item: MenuItem, store?: StorageLike | null, se
 }
 
 export function deleteMenuItem(item: MenuItem, store?: StorageLike | null, seat?: string | null) {
+  if (!canHardDeleteEstimate(item, store)) return readJobMenu(store, seat);
   const menu = readJobMenu(store, seat);
   const keys = keysForItem(item);
   const next: JobMenuState = {
