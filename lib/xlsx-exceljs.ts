@@ -661,6 +661,9 @@ function pinLaborCraftAlignment(ws: ExcelJS.Worksheet, lastDateCol: number, maxR
   }
 }
 
+/** C Position + G–K hour/money totals — merged title→PD. Skip per-row fills. */
+const LABOR_BLOCK_VOID_COL_NUMS = new Set([3, 7, 8, 9, 10, 11]);
+
 function applyLaborBlockChrome(
   ws: ExcelJS.Worksheet,
   sheet: WorkbookSheet,
@@ -673,6 +676,7 @@ function applyLaborBlockChrome(
   for (let row = block.start; row <= block.end; row += 1) {
     const kind = laborRowKind(sheet.cells, row);
     for (let col = 1; col <= 11; col += 1) {
+      if (LABOR_BLOCK_VOID_COL_NUMS.has(col)) continue;
       const cell = ws.getCell(row, col);
       if (kind === "title") {
         if (col === 1) {
@@ -724,6 +728,13 @@ function applyLaborBlockChrome(
         centerLaborCell(day);
       }
     }
+  }
+
+  for (const col of LABOR_BLOCK_VOID_COL_NUMS) {
+    const cell = ws.getCell(block.start, col);
+    cell.fill = solid(LABOR_POSITION_TITLE);
+    cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
+    centerLaborCell(cell);
   }
 
   hairGrid(ws, block.start, block.end, 1, 11);

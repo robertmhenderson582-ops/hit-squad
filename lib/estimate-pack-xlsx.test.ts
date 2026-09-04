@@ -316,6 +316,8 @@ describe("estimate pack JSON → xlsx", () => {
     assert.match(xlsx, /liveJobSetupPhases/);
     assert.match(xlsx, /phaseBarRuns/);
     assert.match(xlsx, /Job setup/);
+    assert.match(xlsx, /laborBlockVoidMerges/);
+    assert.match(xlsx, /LABOR_BLOCK_VOID_COLS/);
     assert.match(pack, /one live pack/);
     assert.match(pack, /excel-ripple/);
     assert.match(chrome, /Chrome only/);

@@ -6,7 +6,9 @@
  * cards (Staff / GF / Foreman / Direct / Support) — this file does not invent
  * a new crew presentation. PD stays off Labor TM $. Labor sheets keep the
  * CAT 2 daily itemized grid (date row from col L, 7-row HC/HPS/ST/OT/DT/PD
- * blocks, DAYSHIFT / NIGHTSHIFT). That grid is the stable client edit surface
+ * blocks, DAYSHIFT / NIGHTSHIFT). Position + ST/OT/DT/PD hrs + Labor $ merge
+ * down the block void and center — one value, not duplicated on detail rows.
+ * Type / Rate / Subtotal $ stay per-row. That grid is the stable client edit surface
  * for a later import. Position dropdowns + workbook import are parked until
  * Look sign-off — a validation list with no pack ripple would be a parallel
  * book. Hidden block-id column is for a future importer only. Polish,
@@ -132,6 +134,14 @@ export const LABOR_ST_OFFSET = 3;
 export const LABOR_OT_OFFSET = 4;
 export const LABOR_DT_OFFSET = 5;
 export const LABOR_PD_OFFSET = 6;
+/** Position + ST/OT/DT/PD hrs + Labor $ — one value centered in the block void. */
+export const LABOR_BLOCK_VOID_COLS = ["C", "G", "H", "I", "J", "K"] as const;
+
+export function laborBlockVoidMerges(blocks: ReadonlyArray<{ start: number; end: number }>): string[] {
+  return blocks.flatMap((block) =>
+    LABOR_BLOCK_VOID_COLS.map((col) => `${col}${block.start}:${col}${block.end}`),
+  );
+}
 
 export const ESTIMATE_XLSX_SHEETS = {
   summary: "Summary Page",
@@ -834,6 +844,8 @@ function buildCrewSheet(
       `A2:${lastDateCol || "K"}2`,
       `A3:${lastDateCol || "K"}3`,
       ...phaseBand.merges,
+      // Full title→PD range: HC/HPS sit between the summary and ST/OT/DT/PD rows.
+      ...laborBlockVoidMerges(laborBlocks),
     ],
   };
 }

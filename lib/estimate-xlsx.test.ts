@@ -21,6 +21,8 @@ import {
   OPTIONAL_ESTIMATE_SHEETS,
   LABOR_BLOCK_HEIGHT,
   LABOR_BLOCK_ID_COL,
+  LABOR_BLOCK_VOID_COLS,
+  laborBlockVoidMerges,
   LABOR_DATE_START_COL,
   LABOR_MAX_DAYS,
   LABOR_DAYSHIFT,
@@ -984,9 +986,9 @@ describe("estimate excel export", () => {
     assert.equal(Boolean(direct.getCell("A7").alignment?.wrapText), false);
     assert.equal(argb(direct.getCell("A8")), LABOR_HC_HPS_CLEAR.slice(2));
     assert.equal(argb(direct.getCell("B8")), LABOR_HC_HPS_CLEAR.slice(2));
-    assert.equal(argb(direct.getCell("K8")), LABOR_HC_HPS_CLEAR.slice(2));
+    assert.equal(argb(direct.getCell("K8")), LABOR_POSITION_TITLE.slice(2));
     assert.equal(argb(direct.getCell("A9")), LABOR_HC_HPS_CLEAR.slice(2));
-    assert.equal(argb(direct.getCell("K9")), LABOR_HC_HPS_CLEAR.slice(2));
+    assert.equal(argb(direct.getCell("K9")), LABOR_POSITION_TITLE.slice(2));
     assert.equal(direct.getCell("A9").value, LABOR_HPS_LABEL);
     assert.equal(Boolean(direct.getCell("A9").alignment?.wrapText), false);
     assert.equal(Boolean(direct.getCell("F10").alignment?.wrapText), false);
@@ -1007,8 +1009,10 @@ describe("estimate excel export", () => {
     assert.equal(direct.getCell("L8").numFmt, EXCEL_UNIT_FORMATS.hours);
     assert.equal(String(direct.getCell("G7").numFmt ?? "").includes("."), false);
     assert.equal(argb(direct.getCell("F10")), LABOR_HOURS_LABEL.slice(2));
-    assert.equal(argb(direct.getCell("C10")), LABOR_CAGE_WASH_B.slice(2));
-    assert.equal(argb(direct.getCell("G10")), LABOR_CAGE_WASH_B.slice(2));
+    assert.equal(argb(direct.getCell("C10")), LABOR_POSITION_TITLE.slice(2));
+    assert.equal(argb(direct.getCell("G10")), LABOR_POSITION_TITLE.slice(2));
+    assert.equal(argb(direct.getCell("D10")), LABOR_CAGE_WASH_B.slice(2));
+    assert.equal(argb(direct.getCell("E10")), LABOR_CAGE_WASH_B.slice(2));
     assert.equal(argb(direct.getCell(10, weekdayDayCol)), LABOR_DAY_WASH.slice(2));
     assert.equal(argb(direct.getCell("A14")), LABOR_SPACER.slice(2));
     const lastDateCol = colLetter(LABOR_DATE_START_COL + laborCalendarDates(input).length - 1);
@@ -1016,6 +1020,17 @@ describe("estimate excel export", () => {
     assert.ok(directMerges.includes(`A1:${lastDateCol}1`));
     assert.ok(directMerges.includes(`A2:${lastDateCol}2`));
     assert.ok(directMerges.includes(`A3:${lastDateCol}3`));
+    for (const merge of laborBlockVoidMerges(directModel.laborBlocks ?? [])) {
+      assert.ok(directMerges.includes(merge), merge);
+    }
+    assert.equal(directMerges.some((merge) => /^[DEF]\d+:/.test(merge)), false);
+    assert.equal(direct.getCell("C7").value, "Boilermaker Journeyman");
+    assert.equal(direct.getCell("C10").value, "Boilermaker Journeyman");
+    assert.equal(direct.getCell("C7").alignment?.horizontal, "center");
+    assert.equal(direct.getCell("C7").alignment?.vertical, "middle");
+    assert.equal(direct.getCell("G7").alignment?.vertical, "middle");
+    assert.equal(direct.getCell("K7").alignment?.vertical, "middle");
+    assert.equal(direct.getCell("K10").alignment?.vertical, "middle");
     assert.equal(argb(direct.getCell("L2")), argb(direct.getCell("A2")));
     assert.equal(argb(direct.getCell("L3")), argb(direct.getCell("A3")));
     assert.equal(argb(direct.getCell(`${lastDateCol}2`)), argb(direct.getCell("A2")));
@@ -1839,6 +1854,7 @@ describe("estimate excel export", () => {
       `A3:${lastDateCol}3`,
       "A4:K5",
       `L4:${lastDateCol}5`,
+      ...laborBlockVoidMerges(staff.laborBlocks ?? []),
     ]);
     assert.deepEqual(direct.merges, [
       `A1:${lastDateCol}1`,
@@ -1846,7 +1862,15 @@ describe("estimate excel export", () => {
       `A3:${lastDateCol}3`,
       "A4:K5",
       `L4:${lastDateCol}5`,
+      ...laborBlockVoidMerges(direct.laborBlocks ?? []),
     ]);
+    for (const col of LABOR_BLOCK_VOID_COLS) {
+      assert.ok(staff.merges?.includes(`${col}${lead.title}:${col}${lead.pd}`), `${col} void`);
+      assert.equal(staff.cells.some((cell) => cell.ref === `${col}${lead.st}`), false, `${col} not duplicated`);
+    }
+    assert.equal(staff.cells.some((cell) => cell.ref === `F${lead.st}`), true);
+    assert.equal(staff.cells.some((cell) => cell.ref === `D${lead.st}`), true);
+    assert.equal(staff.cells.some((cell) => cell.ref === `E${lead.st}`), true);
     assert.equal(staffMap.get("A4")?.value, LABOR_PHASE_LABEL);
     assert.equal(staffMap.get("L4")?.value, "Mechanical Window");
     assert.deepEqual(staff.phaseBar, [
@@ -1857,6 +1881,18 @@ describe("estimate excel export", () => {
     await wb.xlsx.load(Buffer.from(bytes));
     const staffBook = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
     assert.ok(staffBook);
+    const staffBookMerges = ((staffBook.model as { merges?: string[] }).merges ?? []) as string[];
+    for (const merge of laborBlockVoidMerges(staff.laborBlocks ?? [])) {
+      assert.ok(staffBookMerges.includes(merge), merge);
+    }
+    assert.equal(staffBook.getCell(`C${lead.title}`).value, "Lead Safety 01");
+    assert.equal(staffBook.getCell(`C${lead.st}`).value, "Lead Safety 01");
+    assert.equal(staffBook.getCell(`C${lead.title}`).alignment?.vertical, "middle");
+    assert.equal(staffBook.getCell(`G${lead.title}`).alignment?.vertical, "middle");
+    assert.equal(staffBook.getCell(`K${lead.title}`).alignment?.horizontal, "center");
+    const summaryBook = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
+    const summaryMerges = ((summaryBook?.model as { merges?: string[] } | undefined)?.merges ?? []) as string[];
+    assert.equal(summaryMerges.some((merge) => /^C\d+:C\d+$/.test(merge)), false);
     for (let col = LABOR_DATE_START_COL; col < LABOR_DATE_START_COL + dates.length; col += 1) {
       assert.equal(Number(staffBook.getColumn(col).width), LABOR_DAY_COL_WIDTH, `day col ${col}`);
       assert.equal(staffBook.getColumn(col).hidden, false, `day col ${col} visible`);
