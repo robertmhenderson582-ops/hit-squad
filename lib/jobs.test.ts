@@ -4,10 +4,12 @@ import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { archiveMenuItem, deleteMenuItem, menuForViewedDesk, menuStatus } from "./job-menu.ts";
 import {
+  CATALOG_SEED_CODES,
   deskForUser,
   jobByCode,
   jobPlantHref,
   jobsOnDesk,
+  omitCatalogSeedJobs,
   packForJob,
   plantJobTally,
   plantJobsLine,
@@ -19,13 +21,28 @@ import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { JOHN_BEECH_EMAIL } from "./tester-seats.ts";
 import type { StorageLike } from "./local-estimates.ts";
 
+const SEED_CODES = ["HS-8622", "TA-8841", "TM-8902", "ES-8710"];
+
+function hasCatalogSeed(jobs: Array<{ code?: string; title?: string; id?: string }>) {
+  return jobs.some(
+    (job) =>
+      SEED_CODES.includes(job.code || "") ||
+      /pre-outage hse walkdown/i.test(job.title || "") ||
+      ["job-8622", "job-8841", "job-8902", "job-8710"].includes(job.id || ""),
+  );
+}
+
 describe("desk counts", () => {
   it("counts real estimates, not every open job", () => {
+    const catalog = seedJobs();
+    assert.equal(catalog.length, 4);
+    assert.equal(catalog.some((job) => job.kind === "hse"), true);
+    assert.deepEqual([...CATALOG_SEED_CODES].sort(), [...SEED_CODES].sort());
     const desk = deskForUser("owner-robert-henderson");
-    assert.equal(desk.jobs.length, 4);
-    assert.equal(desk.jobs.some((job) => job.kind === "hse"), true);
+    assert.equal(desk.jobs.length, 0);
+    assert.equal(hasCatalogSeed(desk.jobs), false);
     assert.equal(desk.estimatesOpen, 3);
-    assert.notEqual(desk.estimatesOpen, desk.jobs.length);
+    assert.notEqual(desk.estimatesOpen, catalog.length);
   });
 
   it("keeps Wood River job IDs openable without inventing a fifth job", () => {
@@ -88,6 +105,9 @@ describe("desk counts", () => {
     const ownerScope = { isOwner: true, email: OWNER_LOGIN_EMAIL, companyId: "hitsquad" as const };
     const nathanScope = { isOwner: false, email: "nathanboyte@gmail.com", companyId: "madison" as const };
     const beechScope = { isOwner: false, email: JOHN_BEECH_EMAIL, companyId: "madison" as const };
+    assert.equal(seedJobsAllowed(undefined), false);
+    assert.equal(seedJobsAllowed(null), false);
+    assert.equal(seedJobsAllowed({ isOwner: false, email: "", companyId: "madison" }), false);
     assert.equal(seedJobsAllowed(ownerScope), false);
     assert.equal(seedJobsAllowed(nathanScope), false);
     assert.equal(seedJobsAllowed(beechScope), false);
@@ -120,10 +140,15 @@ describe("desk counts", () => {
 
     const desk = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
     assert.match(desk, /seedJobsAllowed\(scope\)/);
+    assert.match(desk, /omitCatalogSeedJobs/);
     assert.match(desk, /shouldPaintHisCards\(lens\)/);
     assert.doesNotMatch(desk, /includeSeeds: true/);
     assert.doesNotMatch(desk, /holdPartialTree \? null/);
     assert.match(desk, /JobTreeDesk/);
+    const jobsApi = readFileSync(fileURLToPath(new URL("../app/api/desk/jobs/route.ts", import.meta.url)), "utf8");
+    assert.match(jobsApi, /omitCatalogSeedJobs/);
+    assert.match(jobsApi, /seedJobsAllowed\(scope\)/);
+    assert.match(jobsApi, /scopedDeskUser/);
 
     assert.deepEqual(deskForUser("tester-nathan", nathanScope).jobs, []);
     assert.deepEqual(deskForUser("tester-john-beech", beechScope).jobs, []);
@@ -173,7 +198,78 @@ describe("desk counts", () => {
 
     deleteMenuItem({ id: "job-8902", title: "Coker drum valve package — time & material" }, store);
     const ownerJobs = jobsOnDesk(seedJobs(), [], false, undefined, menuForViewedDesk(false, store));
-    assert.equal(ownerJobs.some((job) => job.id === "job-8902"), false);
-    assert.equal(ownerJobs.some((job) => job.code === "TA-8841"), true);
+    assert.equal(hasCatalogSeed(ownerJobs), false);
+
+    const joseph = { isOwner: false, email: "josephmhenderson2002@gmail.com", companyId: "hitsquad" as const };
+    deleteMenuItem({ id: "job-8710", title: "Cooling-tower basin repair estimate" }, store);
+    const josephJobs = jobsOnDesk(seedJobs(), [], false, joseph, menuForViewedDesk(false, store), {
+      includeSeeds: true,
+    });
+    assert.equal(josephJobs.some((job) => job.id === "job-8710"), false);
+    assert.equal(josephJobs.some((job) => job.code === "ES-8710"), false);
+  });
+
+  it("undefined scope and first-paint race never paint catalog seeds", () => {
+    const aromatics = {
+      packId: "new-aromatics-2027",
+      key: "new:new-aromatics-2027",
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+      ownerEmail: "nathanboyte@gmail.com",
+    };
+    const cat2 = {
+      packId: "new-mtaajdwa-f7539",
+      key: "new:new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+      ownerEmail: "nathanboyte@gmail.com",
+    };
+    const tm = {
+      packId: "EST-MTJ5D6",
+      key: "new:EST-MTJ5D6",
+      title: "Wood River / T&M 2027-01 to 06",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+      ownerEmail: "nathanboyte@gmail.com",
+    };
+    const nathan = { isOwner: false, email: "nathanboyte@gmail.com", companyId: "madison" as const };
+    const his = [aromatics, cat2, tm];
+
+    const race = jobsOnDesk(undefined, [], false, undefined);
+    assert.equal(race.length, 0);
+    assert.equal(hasCatalogSeed(race), false);
+
+    const leakedRace = jobsOnDesk(seedJobs(), [], false, undefined, undefined, { includeSeeds: true });
+    assert.equal(hasCatalogSeed(leakedRace), false);
+    assert.equal(leakedRace.length, 0);
+
+    const firstPaint = jobsOnDesk(undefined, his, false, undefined);
+    assert.equal(hasCatalogSeed(firstPaint), false);
+    assert.equal(firstPaint.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+    assert.equal(firstPaint.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+    assert.equal(firstPaint.some((job) => job.code === "EST-MTJ5D6"), true);
+
+    const nathanLogin = jobsOnDesk(seedJobs(), his, false, nathan);
+    assert.equal(hasCatalogSeed(nathanLogin), false);
+    assert.equal(nathanLogin.some((job) => job.title.includes("Aromatics")), true);
+    assert.equal(nathanLogin.some((job) => job.title.includes("CAT 2")), true);
+    assert.equal(nathanLogin.some((job) => job.code === "EST-MTJ5D6"), true);
+
+    const viewAsNathan = jobsOnDesk(seedJobs(), his, true, nathan, undefined, { includeSeeds: true });
+    assert.equal(hasCatalogSeed(viewAsNathan), false);
+    assert.equal(omitCatalogSeedJobs(seedJobs()).length, 0);
+    assert.deepEqual(deskForUser("tester-nathan", nathan).jobs, []);
+    assert.deepEqual(deskForUser("tester-nathan").jobs, []);
   });
 });
