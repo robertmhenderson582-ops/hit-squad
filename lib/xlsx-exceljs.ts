@@ -20,7 +20,8 @@ const PLATE_WASH = "FFE4EBE9";
 const PLATE_WASH_DEEP = "FFDCE6E4";
 
 const FMT_CURRENCY = "$#,##0.00";
-const FMT_HOURS = "#,##0.0";
+/** Whole hours/counts as 9 / 2,752; fraction only when present (9.5). */
+export const FMT_HOURS = "#,##0.##";
 const FMT_INTEGER = "#,##0";
 const FMT_PERCENT = "0.0%";
 const FMT_DATE = "YYYY-MM-DD";
@@ -63,7 +64,8 @@ export const LABOR_COL_WIDTHS: Record<string, number> = {
   J: 8.5,
   K: 10,
 };
-export const LABOR_DAY_COL_WIDTH = 3;
+/** Wide enough for 10.5 after optional-decimal format. Width 3 made `9.0` into ##. */
+export const LABOR_DAY_COL_WIDTH = 4;
 export const SUMMARY_COL_A_WIDTH = 28;
 export const LABOR_DATE_FIRST_COL = 12;
 
@@ -704,8 +706,9 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       if (fmt && row >= 7 && cell.type !== "text" && cell.type !== "date") exCell.numFmt = fmt;
       if (labor && row >= 7 && colNum >= 12 && cell.type !== "text") {
         const kind = laborRowKind(sheet.cells, row);
-        if (kind === "hc" || kind === "pd") exCell.numFmt = FMT_INTEGER;
-        else if (kind === "hps" || kind === "hours") exCell.numFmt = FMT_HOURS;
+        if (kind === "hc" || kind === "hps" || kind === "pd" || kind === "hours") {
+          exCell.numFmt = FMT_HOURS;
+        }
       }
       exCell.protection = { locked: !isLaborDayInput(sheet, row, colNum) };
     }

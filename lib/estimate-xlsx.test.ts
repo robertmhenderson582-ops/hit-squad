@@ -41,6 +41,7 @@ import { defaultLaborClass } from "./labor-class.ts";
 import { lookupShahanLabor, SHAHAN_NO_RATE_LABEL, shahanCrewCostAmount } from "./shahan-wood-river.ts";
 import { wageLookupOpts } from "./wage-lookup.ts";
 import {
+  EXCEL_UNIT_FORMATS,
   LABOR_COL_WIDTHS,
   LABOR_DAY_COL_WIDTH,
   LABOR_DAYSHIFT_BANNER,
@@ -336,12 +337,14 @@ describe("estimate excel export", () => {
     assert.equal(Number(staffSheet.getRow(3).height) <= 18, true);
     assert.equal(Boolean(staffSheet.getCell("A2").alignment?.wrapText), false);
     assert.equal(Boolean(staffSheet.getCell("A3").alignment?.wrapText), false);
-    assert.equal(staffSheet.getCell("B7").numFmt, "#,##0.0");
+    assert.equal(staffSheet.getCell("B7").numFmt, EXCEL_UNIT_FORMATS.hours);
     assert.equal(staffSheet.getCell("K7").numFmt, "$#,##0.00");
     assert.equal(staffSheet.getCell("E10").numFmt, "$#,##0.00");
     assert.equal(staffSheet.getCell("D10").numFmt, "$#,##0.00");
-    assert.equal(staffSheet.getCell("L8").numFmt, "#,##0");
-    assert.equal(staffSheet.getCell("L10").numFmt, "#,##0.0");
+    assert.equal(staffSheet.getCell("L8").numFmt, EXCEL_UNIT_FORMATS.hours);
+    assert.equal(staffSheet.getCell("L10").numFmt, EXCEL_UNIT_FORMATS.hours);
+    assert.equal(staffSheet.getCell("G7").numFmt, EXCEL_UNIT_FORMATS.hours);
+    assert.equal(staffSheet.getCell("J7").numFmt, EXCEL_UNIT_FORMATS.hours);
     let hoursRow = 0;
     let totalRow = 0;
     summarySheet.eachRow((row, rowNumber) => {
@@ -351,7 +354,7 @@ describe("estimate excel export", () => {
     });
     assert.equal(hoursRow > 0, true);
     assert.equal(totalRow > hoursRow, true);
-    assert.equal(summarySheet.getCell(`C${hoursRow}`).numFmt, "#,##0.0");
+    assert.equal(summarySheet.getCell(`C${hoursRow}`).numFmt, EXCEL_UNIT_FORMATS.hours);
     assert.equal(summarySheet.getCell(`B${totalRow}`).numFmt, "$#,##0.00");
     assert.equal(/field trial|forgebook|not a release/i.test(JSON.stringify(wb.model)), false);
     assert.equal(estimateWorkbookSummaryTotal(input), deskEstimateTotal(input));
