@@ -529,14 +529,15 @@ function centerLaborCell(cell: ExcelJS.Cell, extra: Partial<ExcelJS.Alignment> =
 
 /** Last style write — Excel number xfs drop column-only center. */
 function pinLaborCraftAlignment(ws: ExcelJS.Worksheet, lastDateCol: number, maxRow: number) {
+  const colAlign = { horizontal: "center" as const, vertical: "middle" as const };
   for (let col = 1; col <= 11; col += 1) {
     centerLaborCell(ws.getCell(6, col));
-    ws.getColumn(col).alignment = { ...LABOR_CENTER };
+    ws.getColumn(col).alignment = colAlign;
   }
   if (lastDateCol >= 12) {
     for (let col = 12; col <= lastDateCol; col += 1) {
       centerLaborCell(ws.getCell(6, col), { textRotation: 90 });
-      ws.getColumn(col).alignment = { ...LABOR_CENTER };
+      ws.getColumn(col).alignment = colAlign;
     }
   }
   for (let row = 7; row <= maxRow; row += 1) {
@@ -962,7 +963,10 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
         }
       }
     }
-    if (labor) pinLaborCraftAlignment(ws, lastVisibleColNum, maxRow);
+    if (labor) {
+      pinLaborCraftAlignment(ws, lastVisibleColNum, maxRow);
+      applyHeaderMetaLayout(ws, Math.max(11, lastVisibleColNum));
+    }
     await ws.protect(SHEET_PROTECT_PASSWORD, SHEET_PROTECT_OPTIONS);
   }
 
