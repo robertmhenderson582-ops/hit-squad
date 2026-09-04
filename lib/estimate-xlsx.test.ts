@@ -23,6 +23,7 @@ import {
   LABOR_BLOCK_ID_COL,
   LABOR_BLOCK_VOID_COLS,
   laborBlockVoidMerges,
+  LABOR_BILL_AS_LABEL,
   LABOR_DATE_START_COL,
   LABOR_MAX_DAYS,
   LABOR_DAYSHIFT,
@@ -72,6 +73,7 @@ import {
   LABOR_DATE_NUM_FMT,
   LABOR_DAY_WASH,
   STEEL,
+  STEEL_DEEP,
   LABOR_HC_HPS,
   LABOR_HC_HPS_CLEAR,
   LABOR_HOURS_LABEL,
@@ -1722,6 +1724,14 @@ describe("estimate excel export", () => {
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.slicer), false);
     assert.equal(laborHours(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff)!, "Pipefitter GF Union").title > 0, true);
     assert.equal(cellMap(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.foremen)!).get("C7")?.value, "Boilermaker Foreman");
+    const supportSheet = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.support)!;
+    const supportCells = cellMap(supportSheet);
+    assert.equal(supportCells.get("C7")?.value, "Fire Watch");
+    assert.equal(supportCells.get("C10")?.value, LABOR_BILL_AS_LABEL);
+    assert.equal(supportCells.get("C11")?.value, "");
+    assert.ok(supportSheet.merges?.includes("C7:C9"));
+    assert.ok(supportSheet.merges?.includes("C11:C13"));
+    assert.equal(supportSheet.merges?.includes("C7:C13"), false);
   });
 
   it("keeps an unrecognized Staff-card title on the staff clock", () => {
@@ -1868,6 +1878,27 @@ describe("estimate excel export", () => {
       `L4:${lastDateCol}4`,
       ...laborBlockVoidMerges(direct.laborBlocks ?? []),
     ]);
+    const support = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.support)!;
+    const supportMap = cellMap(support);
+    const fire = laborHours(support, "Fire Watch");
+    assert.equal(supportMap.get(`C${fire.title}`)?.value, "Fire Watch");
+    assert.equal(supportMap.get(`C${fire.st}`)?.value, LABOR_BILL_AS_LABEL);
+    assert.equal(supportMap.get(`C${fire.ot}`)?.value, "Boilermaker Journeyman");
+    assert.equal(staff.cells.some((cell) => cell.type === "text" && cell.value === LABOR_BILL_AS_LABEL), false);
+    assert.deepEqual(support.billAs, [{ labelRow: fire.st, valueRow: fire.ot }]);
+    assert.deepEqual(support.merges, [
+      `A1:${lastDateCol}1`,
+      `A2:${lastDateCol}2`,
+      `A3:${lastDateCol}3`,
+      "A4:K5",
+      `L4:${lastDateCol}4`,
+      ...laborBlockVoidMerges(support.laborBlocks ?? [], { billAs: true }),
+    ]);
+    assert.ok(support.merges?.includes(`C${fire.title}:C${fire.hps}`));
+    assert.ok(support.merges?.includes(`C${fire.ot}:C${fire.pd}`));
+    assert.equal(support.merges?.includes(`C${fire.title}:C${fire.pd}`), false);
+    assert.ok(support.merges?.includes(`G${fire.title}:G${fire.pd}`));
+    assert.equal(supportMap.get(`E${fire.st}`)?.value, cellMap(direct).get(`E${day.st}`)?.value);
     for (const col of LABOR_BLOCK_VOID_COLS) {
       assert.ok(staff.merges?.includes(`${col}${lead.title}:${col}${lead.pd}`), `${col} void`);
       assert.equal(staff.cells.some((cell) => cell.ref === `${col}${lead.st}`), false, `${col} not duplicated`);
@@ -1891,6 +1922,21 @@ describe("estimate excel export", () => {
     }
     assert.equal(staffBook.getCell(`C${lead.title}`).value, "Lead Safety 01");
     assert.equal(staffBook.getCell(`C${lead.st}`).value, "Lead Safety 01");
+    const supportBook = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.support);
+    assert.ok(supportBook);
+    const supportBookMerges = ((supportBook.model as { merges?: string[] }).merges ?? []) as string[];
+    for (const merge of laborBlockVoidMerges(support.laborBlocks ?? [], { billAs: true })) {
+      assert.ok(supportBookMerges.includes(merge), merge);
+    }
+    assert.equal(supportBookMerges.includes(`C${fire.title}:C${fire.pd}`), false);
+    assert.equal(supportBook.getCell(`C${fire.title}`).value, "Fire Watch");
+    assert.equal(supportBook.getCell(`C${fire.st}`).value, LABOR_BILL_AS_LABEL);
+    assert.equal(supportBook.getCell(`C${fire.ot}`).value, "Boilermaker Journeyman");
+    assert.equal(Boolean(supportBook.getCell(`C${fire.ot}`).protection?.locked), false);
+    assert.equal(supportBook.getCell(`C${fire.title}`).protection?.locked !== false, true);
+    assert.equal(supportBook.getCell(`C${fire.st}`).protection?.locked !== false, true);
+    assert.equal(supportBook.getCell(`C${fire.ot}`).dataValidation, undefined);
+    assert.equal(Boolean(supportBook.getCell(`C${fire.ot}`).alignment?.wrapText), true);
     assert.equal(staffBook.getCell(`C${lead.title}`).alignment?.vertical, "middle");
     assert.equal(staffBook.getCell(`G${lead.title}`).alignment?.vertical, "middle");
     assert.equal(staffBook.getCell(`K${lead.title}`).alignment?.horizontal, "center");
@@ -1926,6 +1972,9 @@ describe("estimate excel export", () => {
       String((cell.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "").toUpperCase();
     assert.equal(voidFill(staffBook.getCell(`L${totalRef.slice(1)}`)), SHEET_VOID_WASH);
     assert.equal(voidFill(staffBook.getCell("L8")), LABOR_HC_HPS);
+    assert.equal(voidFill(supportBook.getCell(`C${fire.title}`)), STEEL);
+    assert.equal(voidFill(supportBook.getCell(`C${fire.st}`)), STEEL_DEEP);
+    assert.equal(voidFill(supportBook.getCell(`C${fire.ot}`)), STEEL);
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getColumn(LABOR_BLOCK_ID_COL).hidden, true);
     assert.equal(Number(staffBook.getRow(4).height), LABOR_PHASE_ROW_HEIGHT);
     assert.equal(Number(staffBook.getRow(5).height), LABOR_PHASE_ROW_HEIGHT);

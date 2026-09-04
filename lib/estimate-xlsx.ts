@@ -8,7 +8,8 @@
  * CAT 2 daily itemized grid (date row from col L, 7-row HC/HPS/ST/OT/DT/PD
  * blocks, DAYSHIFT / NIGHTSHIFT). Position + ST/OT/DT/PD hrs + Labor $ merge
  * down the block void and center — one value, not duplicated on detail rows.
- * Type / Rate / Subtotal $ stay per-row. That grid is the stable client edit surface
+ * Support shows live-pack Bill as under Position in column C (same rate title
+ * as Rate Tables). Type / Rate / Subtotal $ stay per-row. That grid is the stable client edit surface
  * for a later import. Position dropdowns + workbook import are parked until
  * Look sign-off — a validation list with no pack ripple would be a parallel
  * book. Hidden block-id column is for a future importer only. Polish,
@@ -138,11 +139,22 @@ export const LABOR_DT_OFFSET = 5;
 export const LABOR_PD_OFFSET = 6;
 /** Position + ST/OT/DT/PD hrs + Labor $ — one value centered in the block void. */
 export const LABOR_BLOCK_VOID_COLS = ["C", "G", "H", "I", "J", "K"] as const;
+export const LABOR_HOUR_VOID_COLS = ["G", "H", "I", "J", "K"] as const;
+/** Support-only field under Position. Live pack `billedAs` — import parked with Position dropdowns. */
+export const LABOR_BILL_AS_LABEL = "Bill as";
 
-export function laborBlockVoidMerges(blocks: ReadonlyArray<{ start: number; end: number }>): string[] {
-  return blocks.flatMap((block) =>
-    LABOR_BLOCK_VOID_COLS.map((col) => `${col}${block.start}:${col}${block.end}`),
-  );
+export function laborBlockVoidMerges(
+  blocks: ReadonlyArray<{ start: number; end: number }>,
+  opts: { billAs?: boolean } = {},
+): string[] {
+  return blocks.flatMap((block) => {
+    const hours = LABOR_HOUR_VOID_COLS.map((col) => `${col}${block.start}:${col}${block.end}`);
+    if (!opts.billAs) return [`C${block.start}:C${block.end}`, ...hours];
+    const title = block.start;
+    const hps = block.start + LABOR_HPS_OFFSET;
+    const ot = block.start + LABOR_OT_OFFSET;
+    return [`C${title}:C${hps}`, `C${ot}:C${block.end}`, ...hours];
+  });
 }
 
 export const ESTIMATE_XLSX_SHEETS = {
@@ -262,6 +274,14 @@ function rateKeyId(key: RateKey) {
 function billedRow(title: string, site = "", laborClass?: LaborClass | null): ShahanLaborRow | null {
   const resolved = laborClass ?? defaultLaborClass(title);
   return lookupShahanLabor(title, wageLookupOpts(site, { laborClass: resolved }));
+}
+
+/** Visible Bill as — catalog craft name when the pack billedAs hits Rate Tables. */
+function billAsDisplay(row: CraftRow, site = ""): string {
+  const billed = (row.billedAs ?? "").trim();
+  if (!billed) return "";
+  const title = shahanCrewTitle(row);
+  return billedRow(title, site, rowLaborClass(row))?.craftName?.trim() || billed;
 }
 
 function wageRow(title: string, site = "", laborClass?: LaborClass | null): ShahanLaborRow | null {
@@ -685,6 +705,7 @@ function buildCrewSheet(
 ): BuiltSheet | null {
   const live = liveCrewRows(rows).map((row) => withLaneClock(row, lane));
   if (!live.length) return null;
+  const showBillAs = name === ESTIMATE_XLSX_SHEETS.support;
   const dates = laborCalendarDates(input);
   const lastDateCol = dates.length ? colLetter(LABOR_DATE_START_COL + dates.length - 1) : "";
   const cells = headerCells(input);
@@ -738,6 +759,10 @@ function buildCrewSheet(
 
     pushText(cells, `A${titleRow}`, night ? LABOR_NIGHTSHIFT : LABOR_DAYSHIFT);
     pushText(cells, `C${titleRow}`, row.position.trim());
+    if (showBillAs) {
+      pushText(cells, `C${stRow}`, LABOR_BILL_AS_LABEL);
+      cells.push({ ref: `C${otRow}`, type: "text", value: billAsDisplay(row, input.site ?? "") });
+    }
     pushFormula(cells, `B${titleRow}`, `G${titleRow}+H${titleRow}+I${titleRow}`);
     pushFormula(cells, `D${titleRow}`, `K${titleRow}`);
     pushFormula(cells, `G${titleRow}`, `B${stRow}`);
@@ -850,13 +875,20 @@ function buildCrewSheet(
     laborBlocks,
     spacerRows,
     phaseBar: phaseBand.phaseBar,
+    billAs: showBillAs
+      ? laborBlocks.map((block) => ({
+          labelRow: block.start + LABOR_ST_OFFSET,
+          valueRow: block.start + LABOR_OT_OFFSET,
+        }))
+      : undefined,
     merges: [
       `A1:${lastDateCol || "K"}1`,
       `A2:${lastDateCol || "K"}2`,
       `A3:${lastDateCol || "K"}3`,
       ...phaseBand.merges,
       // Full title→PD range: HC/HPS sit between the summary and ST/OT/DT/PD rows.
-      ...laborBlockVoidMerges(laborBlocks),
+      // Support splits C: Position (title–HPS) + Bill as value (OT–PD).
+      ...laborBlockVoidMerges(laborBlocks, { billAs: showBillAs }),
     ],
   };
 }

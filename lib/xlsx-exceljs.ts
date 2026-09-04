@@ -378,11 +378,16 @@ function isLaborSheet(name: string) {
   return name === "Staff" || name === "Foremen" || name === "Direct" || name === "Support";
 }
 
-/** Yellow HC / HPS / PD day-grid cells — the only unlocked edit surface. */
+/** Yellow HC / HPS / PD day-grid cells — unlocked edit surface on the date grid. */
 export function isLaborDayInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
   if (!isLaborSheet(sheet.name) || colNum < LABOR_DATE_FIRST_COL) return false;
   const kind = laborRowKind(sheet.cells, row);
   return kind === "hc" || kind === "hps" || kind === "pd";
+}
+
+/** Support Bill as value in column C — unlocked so an estimator can set it offline. */
+export function isLaborBillAsInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
+  return colNum === 3 && (sheet.billAs?.some((slot) => slot.valueRow === row) ?? false);
 }
 
 function columnWidth(col: string, header: string | undefined, sheetName: string): number {
@@ -639,7 +644,10 @@ function pinLaborEvenRows(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDateC
     for (let col = 1; col <= Math.max(11, lastDateCol); col += 1) {
       const cell = ws.getCell(row, col);
       const rotation = cell.alignment?.textRotation;
-      centerLaborCell(cell, rotation ? { textRotation: rotation } : {});
+      centerLaborCell(cell, {
+        ...(rotation ? { textRotation: rotation } : {}),
+        ...(isLaborBillAsInput(sheet, row, col) ? { wrapText: true } : {}),
+      });
     }
   }
   for (let row = 7; row <= maxRow; row += 1) {
@@ -742,6 +750,17 @@ function applyLaborBlockChrome(
     cell.fill = solid(LABOR_POSITION_TITLE);
     cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
     centerLaborCell(cell);
+  }
+  const billAs = sheet.billAs?.find((slot) => slot.labelRow >= block.start && slot.valueRow <= block.end);
+  if (billAs) {
+    const label = ws.getCell(billAs.labelRow, 3);
+    label.fill = solid(STEEL_DEEP);
+    label.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 8 };
+    centerLaborCell(label);
+    const value = ws.getCell(billAs.valueRow, 3);
+    value.fill = solid(STEEL);
+    value.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
+    centerLaborCell(value, { wrapText: true });
   }
 
   hairGrid(ws, block.start, block.end, 1, 11);
@@ -1239,7 +1258,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
           exCell.numFmt = FMT_HOURS;
         }
       }
-      exCell.protection = { locked: !isLaborDayInput(sheet, row, colNum) };
+      exCell.protection = { locked: !(isLaborDayInput(sheet, row, colNum) || isLaborBillAsInput(sheet, row, colNum)) };
     }
 
     for (const [col, header] of headers) {
@@ -1288,6 +1307,9 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
           ws.getCell(row, col).protection = { locked: false };
         }
       }
+    }
+    for (const slot of sheet.billAs ?? []) {
+      ws.getCell(slot.valueRow, 3).protection = { locked: false };
     }
     if (labor) {
       pinLaborCraftAlignment(ws, lastVisibleColNum, maxRow);

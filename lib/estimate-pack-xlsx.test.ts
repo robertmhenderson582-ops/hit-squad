@@ -317,6 +317,8 @@ describe("estimate pack JSON → xlsx", () => {
     assert.match(xlsx, /phaseBarRuns/);
     assert.match(xlsx, /Job setup/);
     assert.match(xlsx, /laborBlockVoidMerges/);
+    assert.match(xlsx, /LABOR_BILL_AS_LABEL/);
+    assert.match(xlsx, /billedAs/);
     assert.match(xlsx, /LABOR_BLOCK_VOID_COLS/);
     assert.match(xlsx, /LABOR_WEEKDAY_LABELS/);
     assert.match(xlsx, /writeWeekdayRow/);
