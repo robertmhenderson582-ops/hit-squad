@@ -62,7 +62,6 @@ import {
   LABOR_DATA_ROW_HEIGHT,
   LABOR_HEADER_ROW_HEIGHT,
   SHEET_VOID_WASH,
-  UNUSED_ROW_HIDE,
   LABOR_DAYSHIFT_BANNER,
   LABOR_CAGE_WASH_A,
   LABOR_CAGE_WASH_B,
@@ -945,7 +944,10 @@ describe("estimate excel export", () => {
     assert.equal(widthOf(direct, 5) >= LABOR_COL_WIDTHS.E, true);
     assert.equal(widthOf(direct, 6), LABOR_COL_WIDTHS.F);
     assert.equal(widthOf(direct, 11) >= LABOR_COL_WIDTHS.K, true);
+    assert.equal(widthOf(direct, 11) <= 18, true);
     assert.equal(widthOf(direct, 12), LABOR_DAY_COL_WIDTH);
+    assert.equal(LABOR_COL_WIDTHS.A, 11);
+    assert.equal(LABOR_COL_WIDTHS.K, 16);
     assert.equal(Number(direct.getRow(6).height), LABOR_HEADER_ROW_HEIGHT);
     assert.equal(Boolean(direct.getCell("A6").alignment?.wrapText), false);
     assert.equal(Boolean(direct.getCell("B6").alignment?.wrapText), false);
@@ -1862,8 +1864,8 @@ describe("estimate excel export", () => {
     assert.equal(staffBook.getColumn(200).hidden, true);
     const lastStaffRow = Math.max(...staff.cells.map((cell) => Number(cell.ref.replace(/^[A-Z]+/, ""))));
     assert.equal(staffBook.getRow(lastStaffRow).hidden, false);
-    assert.equal(staffBook.getRow(lastStaffRow + 1).hidden, true);
-    assert.equal(staffBook.getRow(lastStaffRow + UNUSED_ROW_HIDE).hidden, true);
+    assert.equal(Number(staffBook.getRow(lastStaffRow).height) > 0, true);
+    assert.equal(staffBook.properties.defaultRowHeight, 0);
     const totalRef = staff.cells.find((cell) => cell.ref.startsWith("A") && cell.value === "TOTAL")?.ref;
     assert.ok(totalRef);
     const voidFill = (cell: ExcelJS.Cell) =>
@@ -2010,6 +2012,28 @@ describe("estimate excel export", () => {
     assert.notEqual(fill(staff.getCell("L4")), "FFFFFFFF");
     assert.equal(fill(summary.getCell("A2")) === "E4EBE9" || fill(summary.getCell("A2")) === "FFE4EBE9", true);
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("C7").dataValidation, undefined);
+    for (const sheet of [staff, summary, rates, misc]) {
+      assert.equal(sheet.properties.defaultRowHeight, 0, sheet.name);
+    }
+    let lastMiscContent = 0;
+    misc.eachRow((row, n) => {
+      if (String(row.getCell(1).value ?? "")) lastMiscContent = n;
+    });
+    assert.ok(lastMiscContent);
+    assert.equal(Number(misc.getRow(lastMiscContent).height) > 0, true);
+    assert.equal(String(misc.getCell(`A${lastMiscContent}`).value), "TOTAL");
+    const { default: JSZip } = await import("jszip");
+    const zip = await JSZip.loadAsync(bytes);
+    const sheetXml = await Promise.all(
+      Object.keys(zip.files)
+        .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+        .map((name) => zip.file(name)?.async("string") ?? Promise.resolve("")),
+    );
+    assert.ok(sheetXml.length);
+    for (const xml of sheetXml) {
+      assert.match(xml, /zeroHeight="1"/);
+      assert.match(xml, /defaultRowHeight="0"/);
+    }
   });
 
   it("uses #,##0 hours and unclipped $ currency on every package sheet", async () => {

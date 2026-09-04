@@ -12,6 +12,7 @@
  */
 
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import { evaluateWorkbook } from "./xlsx-eval.ts";
 import { isPhaseId, PHASE_TONE_FILLS, PHASE_TONE_INK } from "./phase-schedule.ts";
 import { colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
@@ -60,8 +61,10 @@ export const LABOR_DAY_WASH = "FFF2F6F5";
 /** Soft mint plate for leftover empty cells in the used band — not harsh white. */
 export const SHEET_VOID_WASH = LABOR_HC_HPS_CLEAR;
 export const EXCEL_MAX_COL = 16384;
-/** Hidden empty rows immediately below the last content row. */
-export const UNUSED_ROW_HIDE = 200;
+/** Excel last row. Unused rows below content collapse via defaultRowHeight 0 + zeroHeight. */
+export const EXCEL_MAX_ROW = 1048576;
+/** Explicit height for used rows so defaultRowHeight 0 does not flatten live data. */
+export const USED_ROW_HEIGHT = 16;
 export const SUMMARY_SECTION = STEEL;
 export const SUMMARY_TOTAL = AMBER_FLARE;
 export const SUMMARY_ZEBRA_A = "FFE7EEEC";
@@ -73,10 +76,12 @@ export const HEADER_META_LINE_HEIGHT = 16;
 export const HEADER_META_WRAP_HEIGHT = 28;
 
 export const LABOR_COL_WIDTHS: Record<string, number> = {
-  A: 13,
-  B: 13,
+  // Shift labels only (DAYSHIFT / Hours/shift). 13 ate frozen-pane space.
+  A: 11,
+  B: 11,
   C: 32,
-  D: 20,
+  // `$10,343,765.44` hashes at 15. 16 is the tightest full-currency floor.
+  D: 16,
   // ExcelJS omits width=9 (treats it as the default and drops the col). 9.01 persists as ~9.
   E: 12,
   F: 9.01,
@@ -84,8 +89,7 @@ export const LABOR_COL_WIDTHS: Record<string, number> = {
   H: 10,
   I: 10,
   J: 10,
-  // Bold TOTAL `$10,343,765.44` hashes at 15. 20 leaves gutter.
-  K: 20,
+  K: 16,
 };
 /** Explicit cell xf — column alignment alone does not center Excel number cells. */
 export const LABOR_CENTER: Partial<ExcelJS.Alignment> = {
@@ -601,7 +605,7 @@ function fitCurrencyColumns(ws: ExcelJS.Worksheet, lastCol: number, maxRow: numb
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })}`;
-      needed.set(col, Math.max(needed.get(col) ?? 14, shown.length + 4));
+      needed.set(col, Math.max(needed.get(col) ?? 14, shown.length + 2));
     }
   }
   for (const [col, width] of needed) {
@@ -900,16 +904,42 @@ function applySoftUsedBand(ws: ExcelJS.Worksheet, lastCol: number, maxRow: numbe
 }
 
 function hideUnusedGrid(ws: ExcelJS.Worksheet, lastVisibleCol: number, lastVisibleRow: number) {
+  ws.properties.defaultRowHeight = 0;
   ws.getColumn(EXCEL_MAX_COL);
   for (let col = lastVisibleCol + 1; col <= EXCEL_MAX_COL; col += 1) {
     ws.getColumn(col).hidden = true;
   }
-  const hideThrough = lastVisibleRow + UNUSED_ROW_HIDE;
-  for (let row = lastVisibleRow + 1; row <= hideThrough; row += 1) {
+  // Pin live rows so defaultRowHeight 0 / zeroHeight cannot flatten TOTAL or data.
+  for (let row = 1; row <= lastVisibleRow; row += 1) {
     const excelRow = ws.getRow(row);
-    excelRow.hidden = true;
-    excelRow.height = 0.1;
+    if (!Number(excelRow.height)) excelRow.height = USED_ROW_HEIGHT;
   }
+}
+
+/** Excel still paints a white band under TOTAL unless unused rows are hidden by default. */
+async function stampUnusedRowsHidden(buffer: Uint8Array): Promise<Uint8Array> {
+  const zip = await JSZip.loadAsync(buffer);
+  for (const name of Object.keys(zip.files)) {
+    if (!/^xl\/worksheets\/sheet\d+\.xml$/.test(name)) continue;
+    const file = zip.file(name);
+    if (!file) continue;
+    const xml = await file.async("string");
+    zip.file(
+      name,
+      xml.replace(/<sheetFormatPr\b([^>]*?)\/>/g, (_all, attrs: string) => {
+        let next = attrs;
+        next = /\bdefaultRowHeight=/.test(next)
+          ? next.replace(/defaultRowHeight="[^"]*"/, 'defaultRowHeight="0"')
+          : `${next} defaultRowHeight="0"`;
+        if (!/\bzeroHeight=/.test(next)) next += ' zeroHeight="1"';
+        if (!/\bcustomHeight=/.test(next)) next += ' customHeight="1"';
+        return `<sheetFormatPr${next}/>`;
+      }),
+    );
+  }
+  return new Uint8Array(
+    await zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 } }),
+  );
 }
 
 export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8Array> {
@@ -943,7 +973,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     const lastColNum = colIndex(lastCol);
     const lastVisibleColNum = lastVisibleContentCol(sheet, lastColNum);
     const ws = wb.addWorksheet(safeName, {
-      properties: { tabColor: { argb: tabColorArgb(sheet.name) } },
+      properties: { tabColor: { argb: tabColorArgb(sheet.name) }, defaultRowHeight: 0 },
       pageSetup: {
         orientation: "landscape",
         fitToPage: !labor,
@@ -1074,9 +1104,15 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       pinLaborEvenRows(ws, sheet, lastVisibleColNum, maxRow);
     }
     pinHoursAndMoney(ws, sheet, lastVisibleColNum, maxRow, labor, isSummary);
+    if (labor && lastVisibleColNum >= LABOR_DATE_FIRST_COL) {
+      for (let col = LABOR_DATE_FIRST_COL; col <= lastVisibleColNum; col += 1) {
+        if (sheet.hiddenCols?.includes(col)) continue;
+        ws.getColumn(col).width = LABOR_DAY_COL_WIDTH;
+      }
+    }
     await ws.protect(SHEET_PROTECT_PASSWORD, SHEET_PROTECT_OPTIONS);
   }
 
   const buffer = await wb.xlsx.writeBuffer();
-  return new Uint8Array(buffer);
+  return stampUnusedRowsHidden(new Uint8Array(buffer));
 }
