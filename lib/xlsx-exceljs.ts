@@ -49,6 +49,25 @@ export const LABOR_COL_WIDTHS: Record<string, number> = {
 };
 export const LABOR_DAY_COL_WIDTH = 3;
 export const SUMMARY_COL_A_WIDTH = 28;
+export const LABOR_DATE_FIRST_COL = 12;
+
+/** Empty password: Review → Unprotect Sheet with no prompt. Formula cells stay locked. */
+export const SHEET_PROTECT_PASSWORD = "";
+export const SHEET_PROTECT_OPTIONS: Partial<ExcelJS.WorksheetProtection> = {
+  selectLockedCells: true,
+  selectUnlockedCells: true,
+  formatCells: false,
+  formatColumns: false,
+  formatRows: false,
+  insertColumns: false,
+  insertRows: false,
+  insertHyperlinks: false,
+  deleteColumns: false,
+  deleteRows: false,
+  sort: false,
+  autoFilter: false,
+  pivotTables: false,
+};
 
 const FORBIDDEN_CLIENT_COPY = /field trial|forgebook|not a release/i;
 
@@ -243,6 +262,13 @@ function isLaborSheet(name: string) {
   return name === "Staff" || name === "Foremen" || name === "Direct" || name === "Support";
 }
 
+/** Yellow HC / HPS / PD day-grid cells — the only unlocked edit surface. */
+export function isLaborDayInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
+  if (!isLaborSheet(sheet.name) || colNum < LABOR_DATE_FIRST_COL) return false;
+  const kind = laborRowKind(sheet.cells, row);
+  return kind === "hc" || kind === "hps" || kind === "pd";
+}
+
 function columnWidth(col: string, header: string | undefined, sheetName: string): number {
   const lower = (header ?? "").toLowerCase();
   const colNum = colIndex(col);
@@ -373,7 +399,6 @@ function applyLaborBlockChrome(
           cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
         }
       } else if (kind === "hc" || kind === "hps") {
-        cell.fill = solid(LABOR_HC_HPS);
         cell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 9 };
         if (kind === "hps" && col === 1) {
           cell.alignment = { wrapText: true, vertical: "middle" };
@@ -598,6 +623,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
         if (kind === "hc" || kind === "pd") exCell.numFmt = FMT_INTEGER;
         else if (kind === "hps" || kind === "hours") exCell.numFmt = FMT_HOURS;
       }
+      exCell.protection = { locked: !isLaborDayInput(sheet, row, colNum) };
     }
 
     for (const [col, header] of headers) {
@@ -619,6 +645,15 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     if (!labor) ws.getRow(6).height = 20;
     ws.autoFilter = undefined;
     ws.pageSetup.printArea = `A1:${lastCol}${Math.max(maxRow, 7)}`;
+    if (labor && lastColNum >= LABOR_DATE_FIRST_COL) {
+      for (let row = 7; row <= maxRow; row += 1) {
+        if (!isLaborDayInput(sheet, row, LABOR_DATE_FIRST_COL)) continue;
+        for (let col = LABOR_DATE_FIRST_COL; col <= lastColNum; col += 1) {
+          ws.getCell(row, col).protection = { locked: false };
+        }
+      }
+    }
+    await ws.protect(SHEET_PROTECT_PASSWORD, SHEET_PROTECT_OPTIONS);
   }
 
   const buffer = await wb.xlsx.writeBuffer();

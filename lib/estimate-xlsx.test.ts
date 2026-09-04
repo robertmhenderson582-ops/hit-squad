@@ -877,8 +877,16 @@ describe("estimate excel export", () => {
     assert.equal(widthOf(summary, 1), SUMMARY_COL_A_WIDTH);
     assert.equal(argb(direct.getCell("A7")), LABOR_DAYSHIFT_BANNER.slice(2));
     assert.equal(argb(direct.getCell("C7")), LABOR_POSITION_TITLE.slice(2));
-    assert.equal(argb(direct.getCell("A8")), LABOR_HC_HPS.slice(2));
-    assert.equal(argb(direct.getCell("A9")), LABOR_HC_HPS.slice(2));
+    assert.notEqual(argb(direct.getCell("A8")), LABOR_HC_HPS.slice(2));
+    assert.notEqual(argb(direct.getCell("B8")), LABOR_HC_HPS.slice(2));
+    assert.notEqual(argb(direct.getCell("K8")), LABOR_HC_HPS.slice(2));
+    assert.notEqual(argb(direct.getCell("A9")), LABOR_HC_HPS.slice(2));
+    assert.notEqual(argb(direct.getCell("K9")), LABOR_HC_HPS.slice(2));
+    const weekendSet = new Set((directModel.weekendCols ?? []).map((col) => col.col));
+    let weekdayDayCol = 12;
+    while (weekendSet.has(weekdayDayCol) && weekdayDayCol < 20) weekdayDayCol += 1;
+    assert.equal(argb(direct.getCell(8, weekdayDayCol)), LABOR_HC_HPS.slice(2));
+    assert.equal(argb(direct.getCell(9, weekdayDayCol)), LABOR_HC_HPS.slice(2));
     assert.equal(argb(direct.getCell("F10")), LABOR_HOURS_LABEL.slice(2));
     assert.equal(argb(direct.getCell("A14")), LABOR_SPACER.slice(2));
     assert.equal(direct.getCell("A7").border?.left?.style, "medium");
@@ -895,6 +903,33 @@ describe("estimate excel export", () => {
     );
     assert.ok(totalRow);
     assert.equal(argb(summary.getCell(`A${totalRow.ref.slice(1)}`)), SUMMARY_TOTAL.slice(2));
+  });
+
+  it("protects formula cells and leaves HC/HPS/PD day-grid unlocked", async () => {
+    const bytes = await estimateToXlsx(woodRiverFixture());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const staff = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    const summary = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
+    const rates = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rates);
+    assert.ok(staff && summary && rates);
+    const staffProtect = (staff as ExcelJS.Worksheet & { sheetProtection?: { sheet?: boolean } }).sheetProtection;
+    const summaryProtect = (summary as ExcelJS.Worksheet & { sheetProtection?: { sheet?: boolean } }).sheetProtection;
+    assert.equal(staffProtect?.sheet, true);
+    assert.equal(summaryProtect?.sheet, true);
+    assert.equal(Boolean(staff.getCell("L8").protection?.locked), false);
+    assert.equal(Boolean(staff.getCell("L9").protection?.locked), false);
+    assert.equal(Boolean(staff.getCell("L13").protection?.locked), false);
+    assert.equal(staff.getCell("K7").protection?.locked !== false, true);
+    assert.equal(staff.getCell("G10").protection?.locked !== false, true);
+    assert.equal(staff.getCell("B10").protection?.locked !== false, true);
+    assert.equal(staff.getCell("A8").protection?.locked !== false, true);
+    let totalRow = 0;
+    summary.eachRow((row, rowNumber) => {
+      if (String(row.getCell(1).value ?? "") === "ESTIMATE TOTAL $") totalRow = rowNumber;
+    });
+    assert.equal(summary.getCell(`B${totalRow}`).protection?.locked !== false, true);
+    assert.equal(rates.getCell("C7").protection?.locked !== false, true);
   });
 
   it("stacks hiring-progression ranges on the same day the way the desk does", () => {
