@@ -160,9 +160,9 @@ export function thirdPartyMarkedUp(line: ThirdPartyLine, client = "", site = "")
   return Math.round(cost * (1 + commercialMarkupRate(client, site)) * 100) / 100;
 }
 
-export function equipmentTotals(sheet: EquipmentSheet) {
+export function equipmentTotals(sheet: EquipmentSheet, client = "", site = "") {
   const largeTools = sheet.largeTools.reduce((sum, line) => sum + largeToolAmount(line), 0);
-  const thirdParty = sheet.thirdParty.reduce((sum, line) => sum + thirdPartyMarkedUp(line), 0);
+  const thirdParty = sheet.thirdParty.reduce((sum, line) => sum + thirdPartyMarkedUp(line, client, site), 0);
   return { largeTools, thirdParty, total: largeTools + thirdParty };
 }
 

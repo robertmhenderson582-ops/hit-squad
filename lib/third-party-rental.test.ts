@@ -141,6 +141,9 @@ describe("Wood River third-party rental catalog", () => {
     assert.match(desk, /Third-party rental uses the Wood River third-party table/);
     assert.match(desk, /Large tools stay Shahan COMP/);
     assert.match(desk, /thirdPartyMarkedUp/);
+    assert.match(desk, /commercialMarkupLabel/);
+    assert.match(desk, /after \{commercialFee\}/);
+    assert.match(desk, /after 6%/);
     assert.match(desk, /useConfirmRemove/);
     assert.match(desk, /removeEquipmentLine/);
     assert.match(desk, /trash-btn/);

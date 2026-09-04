@@ -21,6 +21,8 @@ test("third-party rental is typed cost + 6.5% COMP fee, not a plant picker", () 
   const line = { ...blankThirdParty(), item: "Crane", period: "weekly" as const, rate: 1000, freight: 200, qty: 2 };
   assert.equal(thirdPartyCost(line), 2200);
   assert.equal(thirdPartyMarkedUp(line), 2343);
+  assert.equal(thirdPartyMarkedUp(line, "Phillips 66", "Bayway"), 2343);
+  assert.equal(thirdPartyMarkedUp(line, "Georgia Power", "Yates"), 2420);
   assert.equal("itemId" in line, false);
   assert.equal(lookupShahanEquipment("crane"), null);
 });

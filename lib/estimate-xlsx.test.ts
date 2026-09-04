@@ -348,6 +348,38 @@ describe("estimate excel export", () => {
     assert.equal(/field trial|forgebook|not a release/i.test(JSON.stringify(wb.model)), false);
   });
 
+  it("uses COMP 6.5% on P66/Bayway and 10% on Yates — not Nathan’s old 6% formula", () => {
+    const rental = woodRiverFixture().equipment.thirdParty;
+    const p66 = buildEstimateWorkbook({
+      title: "Bayway COMP",
+      client: "Phillips 66",
+      site: "Bayway",
+      equipment: { largeTools: [], thirdParty: rental },
+    });
+    const yates = buildEstimateWorkbook({
+      title: "Yates materials",
+      client: "Georgia Power",
+      site: "Yates",
+      equipment: { largeTools: [], thirdParty: rental },
+    });
+    const { evalAt: p66At } = evaluateWorkbook(p66);
+    const { evalAt: yatesAt } = evaluateWorkbook(yates);
+    assert.equal(p66At(ESTIMATE_XLSX_SHEETS.rental, "H7"), (134 + 100) * 1.065);
+    assert.equal(yatesAt(ESTIMATE_XLSX_SHEETS.rental, "H7"), (134 + 100) * 1.1);
+    assert.equal(
+      p66.some((sheet) => sheet.cells.some((cell) => cell.type === "text" && cell.value === "6.5% markup")),
+      true,
+    );
+    assert.equal(
+      yates.some((sheet) => sheet.cells.some((cell) => cell.type === "text" && cell.value === "10% markup")),
+      true,
+    );
+    assert.equal(
+      p66.some((sheet) => sheet.cells.some((cell) => cell.type === "formula" && String(cell.value).includes("*0.06"))),
+      false,
+    );
+  });
+
   it("uses that job's clock and rates, not a Wood River or Nathan gate", () => {
     const rodeo = buildEstimateWorkbook(rodeoFixture());
     const names = rodeo.map((sheet) => sheet.name);

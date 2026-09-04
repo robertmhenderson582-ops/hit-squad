@@ -141,7 +141,7 @@ function NewEstimateDesk({
       {tab === "crew" ? <EstimateWorkbook client={client} site={site} name={title} /> : null}
       {tab === "org-chart" ? <OrgChartDesk client={client} site={site} name={title} /> : null}
       {tab === "staffing" ? <StaffingPlanDesk client={client} site={site} name={title} /> : null}
-      {tab === "equipment" ? <EquipmentDesk /> : null}
+      {tab === "equipment" ? <EquipmentDesk client={client} site={site} /> : null}
       {tab === "subs" ? <SubcontractorDesk client={client} site={site} /> : null}
       {tab === "costs" ? <OtherCostDesk client={client} site={site} /> : null}
       {tab === "change-orders" ? <ChangeOrderPacket client={client} site={site} /> : null}

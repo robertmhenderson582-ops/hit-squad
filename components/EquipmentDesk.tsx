@@ -34,6 +34,7 @@ import {
 } from "@/lib/shahan-wood-river";
 import { deskFetch } from "@/lib/estimate-vault-client";
 import { onEstimateSheets } from "@/lib/sheet-events";
+import { commercialMarkupLabel } from "@/lib/estimate-total";
 import {
   WOOD_RIVER_THIRD_PARTY_RENTAL,
   applyThirdPartyCatalogItem,
@@ -72,12 +73,13 @@ const LARGE_HEADERS = [
 ];
 const RENTAL_HEADERS = ["ITEM", "PERIOD", "RATE", "QTY", "START", "END", "FREIGHT", "TOTAL"];
 
-export function EquipmentDesk() {
+export function EquipmentDesk({ client = "", site = "" }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
   const confirmRemove = useConfirmRemove();
   const [sheet, setSheet] = useState<EquipmentSheet>(emptyEquipmentSheet);
   const [catalog, setCatalog] = useState<ThirdPartyRentalRow[]>(() => [...WOOD_RIVER_THIRD_PARTY_RENTAL]);
-  const totals = equipmentTotals(sheet);
+  const totals = equipmentTotals(sheet, client, site);
+  const commercialFee = commercialMarkupLabel(client, site).replace(/ markup$/i, "");
   const window = useMemo(() => jobSetupWindow(pack.schedule.phases), [pack.schedule.phases]);
   const thirdPartyItems = useMemo(() => thirdPartyRentalDescriptions(catalog), [catalog]);
 
@@ -468,8 +470,8 @@ export function EquipmentDesk() {
                       />
                     </td>
                     <td className="px-2 py-2 text-sm text-[#5b6f73]">
-                      <span className="block font-semibold text-[#163038]">{money(thirdPartyMarkedUp(line))}</span>
-                      <span className="block text-xs">Cost {money(thirdPartyCost(line))} · after 6.5%</span>
+                      <span className="block font-semibold text-[#163038]">{money(thirdPartyMarkedUp(line, client, site))}</span>
+                      <span className="block text-xs">Cost {money(thirdPartyCost(line))} · after {commercialFee}</span>
                     </td>
                     <td className="px-2 py-2">
                       <button
