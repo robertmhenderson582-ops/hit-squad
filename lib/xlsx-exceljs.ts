@@ -7,6 +7,8 @@
  * phase bar) must not invent catalogs or disconnect math from those libs.
  * Phase-bar fills come from phase-schedule (desk globals), not sample dates.
  * Phase bar is a locked view this Look pass — no editable Job setup card.
+ * Unused columns/rows past the used range are hidden; leftover white cells
+ * in the used band get a soft plate wash. Chrome only.
  */
 
 import ExcelJS from "exceljs";
@@ -51,6 +53,11 @@ export const LABOR_SPACER = "FFB7C8C6";
 export const LABOR_CAGE_WASH_A = "FFD5E3E1";
 export const LABOR_CAGE_WASH_B = "FFC4D6D4";
 export const LABOR_DAY_WASH = "FFF2F6F5";
+/** Soft mint plate for leftover empty cells in the used band — not harsh white. */
+export const SHEET_VOID_WASH = LABOR_HC_HPS_CLEAR;
+export const EXCEL_MAX_COL = 16384;
+/** Hidden empty rows immediately below the last content row. */
+export const UNUSED_ROW_HIDE = 200;
 export const SUMMARY_SECTION = STEEL;
 export const SUMMARY_TOTAL = AMBER_FLARE;
 export const SUMMARY_ZEBRA_A = "FFE7EEEC";
@@ -728,6 +735,49 @@ function applySummaryChrome(
   }
 }
 
+function lastVisibleContentCol(sheet: WorkbookSheet, headerLast: number): number {
+  const hidden = new Set(sheet.hiddenCols ?? []);
+  let last = hidden.has(headerLast) ? 1 : headerLast;
+  for (const cell of sheet.cells) {
+    const col = parseRef(cell.ref).colNum;
+    if (!hidden.has(col)) last = Math.max(last, col);
+  }
+  return Math.max(1, last);
+}
+
+function cellFillArgb(cell: ExcelJS.Cell): string {
+  const fill = cell.fill as ExcelJS.FillPattern | undefined;
+  return String(fill?.fgColor?.argb ?? "").replace(/^FF/i, "").toUpperCase();
+}
+
+function isBareWhiteCell(cell: ExcelJS.Cell): boolean {
+  const argb = cellFillArgb(cell);
+  return !argb || argb === "FFFFFF" || argb === "000000" && (cell.fill as ExcelJS.FillPattern | undefined)?.pattern === "none";
+}
+
+function applySoftUsedBand(ws: ExcelJS.Worksheet, lastCol: number, maxRow: number) {
+  for (let row = 1; row <= maxRow; row += 1) {
+    for (let col = 1; col <= lastCol; col += 1) {
+      const cell = ws.getCell(row, col);
+      if (!isBareWhiteCell(cell)) continue;
+      cell.fill = solid(row <= 5 ? PLATE_WASH : SHEET_VOID_WASH);
+    }
+  }
+}
+
+function hideUnusedGrid(ws: ExcelJS.Worksheet, lastVisibleCol: number, lastVisibleRow: number) {
+  ws.getColumn(EXCEL_MAX_COL);
+  for (let col = lastVisibleCol + 1; col <= EXCEL_MAX_COL; col += 1) {
+    ws.getColumn(col).hidden = true;
+  }
+  const hideThrough = lastVisibleRow + UNUSED_ROW_HIDE;
+  for (let row = lastVisibleRow + 1; row <= hideThrough; row += 1) {
+    const excelRow = ws.getRow(row);
+    excelRow.hidden = true;
+    excelRow.height = 0.1;
+  }
+}
+
 export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8Array> {
   const list = sheets.filter((sheet) => sheet.name.trim());
   if (!list.length) throw new Error("empty-workbook");
@@ -757,6 +807,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     const labor = isLaborSheet(sheet.name);
     const lastCol = maxHeaderCol(sheet.cells, sheet.headerRows?.length ? sheet.headerRows : 6);
     const lastColNum = colIndex(lastCol);
+    const lastVisibleColNum = lastVisibleContentCol(sheet, lastColNum);
     const ws = wb.addWorksheet(safeName, {
       properties: { tabColor: { argb: tabColorArgb(sheet.name) } },
       pageSetup: {
@@ -777,7 +828,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       },
       views: [
         labor
-          ? { state: "frozen", xSplit: 11, ySplit: 6, activeCell: "L7", showGridLines: true }
+          ? { state: "frozen", xSplit: 11, ySplit: 6, activeCell: "L7", showGridLines: false }
           : { state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: false },
       ],
     });
@@ -839,19 +890,21 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     for (const [col, header] of headers) {
       ws.getColumn(colIndex(col)).width = columnWidth(col, header, sheet.name);
     }
-    if (labor) applyLaborChrome(ws, sheet, maxRow, lastColNum, totalRows);
+    if (labor) applyLaborChrome(ws, sheet, maxRow, lastVisibleColNum, totalRows);
     else if (isSummary) applySummaryChrome(ws, maxRow, totalRows, sectionRows);
-    else applyInstrumentChrome(ws, maxRow, lastColNum, totalRows, sectionRows, extraHeaders);
+    else applyInstrumentChrome(ws, maxRow, lastVisibleColNum, totalRows, sectionRows, extraHeaders);
 
-    const totalWidth = labor ? 11 : lastColNum;
+    const totalWidth = labor ? 11 : lastVisibleColNum;
     for (const row of totalRows) applyTotalBar(ws, row, totalWidth);
+    applySoftUsedBand(ws, lastVisibleColNum, maxRow);
 
     for (const col of sheet.hiddenCols ?? []) {
       ws.getColumn(col).hidden = true;
       ws.getColumn(col).width = 3;
     }
-    if (labor && lastColNum >= LABOR_DATE_FIRST_COL) {
-      for (let col = LABOR_DATE_FIRST_COL; col <= lastColNum; col += 1) {
+    hideUnusedGrid(ws, lastVisibleColNum, maxRow);
+    if (labor && lastVisibleColNum >= LABOR_DATE_FIRST_COL) {
+      for (let col = LABOR_DATE_FIRST_COL; col <= lastVisibleColNum; col += 1) {
         if (sheet.hiddenCols?.includes(col)) continue;
         ws.getColumn(col).width = LABOR_DAY_COL_WIDTH;
       }
@@ -865,14 +918,14 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       ws.getRow(4).height = 6;
       ws.getRow(5).height = 6;
     }
-    applyHeaderMetaLayout(ws, labor ? Math.max(11, lastColNum) : isSummary ? 3 : lastColNum);
+    applyHeaderMetaLayout(ws, labor ? Math.max(11, lastVisibleColNum) : isSummary ? 3 : lastVisibleColNum);
     if (!labor) ws.getRow(6).height = 20;
     ws.autoFilter = undefined;
-    ws.pageSetup.printArea = `A1:${lastCol}${Math.max(maxRow, 7)}`;
-    if (labor && lastColNum >= LABOR_DATE_FIRST_COL) {
+    ws.pageSetup.printArea = `A1:${colLetter(lastVisibleColNum)}${Math.max(maxRow, 7)}`;
+    if (labor && lastVisibleColNum >= LABOR_DATE_FIRST_COL) {
       for (let row = 7; row <= maxRow; row += 1) {
         if (!isLaborDayInput(sheet, row, LABOR_DATE_FIRST_COL)) continue;
-        for (let col = LABOR_DATE_FIRST_COL; col <= lastColNum; col += 1) {
+        for (let col = LABOR_DATE_FIRST_COL; col <= lastVisibleColNum; col += 1) {
           ws.getCell(row, col).protection = { locked: false };
         }
       }

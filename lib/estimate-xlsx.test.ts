@@ -60,6 +60,8 @@ import {
   LABOR_COL_WIDTHS,
   LABOR_DAY_COL_WIDTH,
   LABOR_HEADER_ROW_HEIGHT,
+  SHEET_VOID_WASH,
+  UNUSED_ROW_HIDE,
   LABOR_DAYSHIFT_BANNER,
   LABOR_CAGE_WASH_A,
   LABOR_CAGE_WASH_B,
@@ -1827,7 +1829,20 @@ describe("estimate excel export", () => {
     assert.ok(staffBook);
     for (let col = LABOR_DATE_START_COL; col < LABOR_DATE_START_COL + dates.length; col += 1) {
       assert.equal(Number(staffBook.getColumn(col).width), LABOR_DAY_COL_WIDTH, `day col ${col}`);
+      assert.equal(staffBook.getColumn(col).hidden, false, `day col ${col} visible`);
     }
+    assert.equal(staffBook.getColumn(LABOR_DATE_START_COL + dates.length).hidden, true);
+    assert.equal(staffBook.getColumn(200).hidden, true);
+    const lastStaffRow = Math.max(...staff.cells.map((cell) => Number(cell.ref.replace(/^[A-Z]+/, ""))));
+    assert.equal(staffBook.getRow(lastStaffRow).hidden, false);
+    assert.equal(staffBook.getRow(lastStaffRow + 1).hidden, true);
+    assert.equal(staffBook.getRow(lastStaffRow + UNUSED_ROW_HIDE).hidden, true);
+    const totalRef = staff.cells.find((cell) => cell.ref.startsWith("A") && cell.value === "TOTAL")?.ref;
+    assert.ok(totalRef);
+    const voidFill = (cell: ExcelJS.Cell) =>
+      String((cell.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "").toUpperCase();
+    assert.equal(voidFill(staffBook.getCell(`L${totalRef.slice(1)}`)), SHEET_VOID_WASH);
+    assert.equal(voidFill(staffBook.getCell("L8")), LABOR_HC_HPS);
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getColumn(LABOR_BLOCK_ID_COL).hidden, true);
     assert.equal(Number(staffBook.getRow(4).height), LABOR_PHASE_ROW_HEIGHT);
     assert.equal(Number(staffBook.getRow(5).height), LABOR_PHASE_ROW_HEIGHT);
@@ -1942,5 +1957,31 @@ describe("estimate excel export", () => {
     assert.equal(/2026-01-11|Jan 11/.test(src), false);
     assert.equal(EXCEL_JOB_SETUP_IMPORT_PARKED, true);
     assert.equal(buildEstimateWorkbook(base).some((sheet) => sheet.name === "Job setup"), false);
+  });
+
+  it("hides unused grid past the used range and washes leftover white cells", async () => {
+    const bytes = await estimateToXlsx(woodRiverFixture());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const staff = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    const summary = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
+    const rates = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rates);
+    const misc = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc);
+    assert.ok(staff && summary && rates && misc);
+    assert.equal(staff.getColumn(12).hidden, false);
+    assert.equal(Number(staff.getColumn(12).width), LABOR_DAY_COL_WIDTH);
+    assert.equal(staff.getColumn(13).hidden, true);
+    assert.equal(summary.getColumn(3).hidden, false);
+    assert.equal(summary.getColumn(4).hidden, true);
+    assert.equal(summary.getColumn(80).hidden, true);
+    assert.equal(rates.getColumn(7).hidden, true);
+    assert.equal(misc.getColumn(6).hidden, true);
+    const fill = (cell: ExcelJS.Cell) =>
+      String((cell.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "").toUpperCase();
+    assert.equal(fill(staff.getCell("L8")), LABOR_HC_HPS);
+    assert.notEqual(fill(staff.getCell("L4")), SHEET_VOID_WASH);
+    assert.notEqual(fill(staff.getCell("L4")), "FFFFFFFF");
+    assert.equal(fill(summary.getCell("A2")) === "E4EBE9" || fill(summary.getCell("A2")) === "FFE4EBE9", true);
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("C7").dataValidation, undefined);
   });
 });
