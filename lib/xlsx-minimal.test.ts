@@ -6,9 +6,11 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import ExcelJS from "exceljs";
 import {
+  REQUIRED_XLSX_PARTS,
   buildSheetXml,
   buildWorkbook,
   dosDateTime,
+  excelDateSerial,
   excelSafeSheetName,
   xmlEscape,
 } from "./xlsx-minimal.ts";
@@ -62,8 +64,10 @@ describe("xlsx-minimal Excel-strict package", () => {
     const parts = writeAndListZip(bytes);
     assert.equal(parts.some((part) => part.endsWith("xl/theme/theme1.xml")), true);
     assert.equal(parts.some((part) => part.endsWith("xl/sharedStrings.xml")), true);
-    assert.equal(parts.some((part) => part.endsWith("xl/styles.xml")), true);
-    assert.equal(parts.some((part) => part.endsWith("xl/workbook.xml")), true);
+    for (const part of REQUIRED_XLSX_PARTS) {
+      assert.equal(parts.some((item) => item.endsWith(part) || item === part), true, part);
+    }
+    assert.equal(excelDateSerial(new Date(2026, 8, 4)) > 40000, true);
 
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));

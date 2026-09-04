@@ -15,9 +15,21 @@ import {
   type LargeToolLine,
   type ThirdPartyLine,
 } from "./equipment-sheet.ts";
+import {
+  CBA_INCREASE_LABEL,
+  EQUIPMENT_CONTINGENCY_LABEL,
+  LABOR_CONTINGENCY_LABEL,
+  MORE_FUND_LABEL,
+  SUBS_CONTINGENCY_LABEL,
+  cbaIncreaseDollars,
+  hydrateJobMoney,
+  moneyAdderLines,
+  moreFundDollars,
+  type JobMoney,
+} from "./estimate-money.ts";
 import { slugify } from "./estimate-pack.ts";
-import { ESTIMATE_MARKUP_RATE } from "./estimate-total.ts";
-import { boundOtLabel, computeRowHours, type HoursSplit } from "./hours-clock.ts";
+import { ESTIMATE_MARKUP_LABEL, ESTIMATE_MARKUP_RATE, estimateMarkupDollars } from "./estimate-total.ts";
+import { boundOtLabel, computeRowHours, type ClockOverride, type HoursSplit } from "./hours-clock.ts";
 import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
 import { orgChartBoxLabel, orgChartBoxes, type OrgChartCrew, type OrgChartState } from "./org-chart.ts";
 import { crewPositionHeadcount, miscAmount, travelAmount, type OtherCostSheet, type TravelLine } from "./other-cost.ts";
@@ -31,13 +43,17 @@ import {
   type JobRates,
   type ShahanLaborRow,
 } from "./shahan-wood-river.ts";
-import { emptySubSheet, lineAmount, subCardTotal, type SubSheet } from "./subcontractor.ts";
+import { emptySubSheet, lineAmount, subCardTotal, subcontractorMarkupBase, type SubSheet } from "./subcontractor.ts";
 import { bookForSite, wageLookupOpts } from "./wage-lookup.ts";
 import { buildWorkbook, colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
 export const ESTIMATE_EXPORT_ERROR = "Could not export. Try again.";
 export const ESTIMATE_EXPORT_PRODUCER = "Produced by Hit Squad Project Controls";
 export const ESTIMATE_EXPORT_BRAND = "HIT SQUAD / PROJECT CONTROLS";
+export const ESTIMATE_EXPORT_CONFIDENTIAL = "Confidential estimate package";
+export const ESTIMATE_SUMMARY_AMOUNT = "Amount $";
+export const ESTIMATE_SUMMARY_HOURS = "Man-hours (MH)";
+export const ESTIMATE_HOURS_LINE = "Man-hours";
 
 export const ESTIMATE_XLSX_SHEETS = {
   summary: "Summary Page",
@@ -75,15 +91,20 @@ export type EstimateXlsxInput = {
   crew?: EstimateXlsxCrew;
   schedule?: PhaseScheduleState;
   orgChart?: OrgChartState;
-  jobMeta?: Partial<JobRates>;
+  jobMeta?: Partial<JobRates & JobMoney>;
   equipment?: EquipmentSheet;
   otherCost?: OtherCostSheet;
   subcontractor?: SubSheet;
 };
 
+type CrewLane = "staff" | "craft";
+
 type BuiltSheet = WorkbookSheet & {
   laborTotal?: string;
   pdTotal?: string;
+  hoursTotal?: string;
+  costTotal?: string;
+  markupTotal?: string;
   sheetTotal?: string;
 };
 
@@ -118,9 +139,20 @@ function liveCrewRows(rows: CraftRow[] | undefined) {
   return (rows ?? []).filter(rowHasPosition);
 }
 
+function isLaydownRow(row: { position?: string; billedAs?: string }) {
+  return /\blaydown\b/i.test(`${row.position ?? ""} ${row.billedAs ?? ""}`);
+}
+
+function withLaneClock(row: CraftRow, lane: CrewLane): CraftRow {
+  if (lane === "staff" && row.clockOverride !== "comp") {
+    return { ...row, clockOverride: "staff" satisfies ClockOverride };
+  }
+  return row;
+}
+
 function allCrewRows(crew: EstimateXlsxCrew = {}) {
   return [
-    ...liveCrewRows(crew.staff),
+    ...liveCrewRows(crew.staff).map((row) => withLaneClock(row, "staff")),
     ...liveCrewRows(crew.generalForeman),
     ...liveCrewRows(crew.foreman),
     ...liveCrewRows(crew.direct),
@@ -128,9 +160,9 @@ function allCrewRows(crew: EstimateXlsxCrew = {}) {
   ];
 }
 
-function rowHours(row: CraftRow, input: EstimateXlsxInput): HoursSplit {
+function rowHours(row: CraftRow, input: EstimateXlsxInput, lane: CrewLane = "craft"): HoursSplit {
   return computeRowHours(
-    row,
+    withLaneClock(row, lane),
     input.site ?? "",
     input.client ?? "",
     Boolean(input.crew?.otAfter8),
@@ -188,15 +220,16 @@ function exportProducedLabel(when = new Date()): string {
   return `Produced ${stamp}`;
 }
 
-function headerCells(input: EstimateXlsxInput): SheetCell[] {
+function headerCells(input: EstimateXlsxInput, when = new Date()): SheetCell[] {
   const clock = boundOtLabel(input.site ?? "", input.client ?? "", input.plantCode ?? "");
   const who = [input.client, input.site, clock].filter((part) => String(part || "").trim()).join("  ·  ");
   return [
     { ref: "A1", type: "text", value: ESTIMATE_EXPORT_BRAND },
-    { ref: "A2", type: "text", value: ESTIMATE_EXPORT_PRODUCER },
+    { ref: "A2", type: "text", value: `${ESTIMATE_EXPORT_PRODUCER}  ·  ${ESTIMATE_EXPORT_CONFIDENTIAL}` },
     { ref: "A3", type: "text", value: (input.title || "").trim() || "Estimate" },
     { ref: "A4", type: "text", value: who },
-    { ref: "A5", type: "text", value: exportProducedLabel() },
+    { ref: "A5", type: "text", value: exportProducedLabel(when) },
+    { ref: "B5", type: "date", value: when },
   ];
 }
 
@@ -259,6 +292,7 @@ function buildCrewSheet(
   rows: CraftRow[],
   keys: RateKey[],
   staffPdOf: (row: CraftRow) => boolean,
+  lane: CrewLane = "craft",
 ): BuiltSheet | null {
   const live = liveCrewRows(rows);
   if (!live.length) return null;
@@ -279,11 +313,12 @@ function buildCrewSheet(
     "DT $",
     "PD $",
     "Total $",
+    "MH",
   ];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
   live.forEach((row, index) => {
     const excelRow = 7 + index;
-    const hours = rowHours(row, input);
+    const hours = rowHours(row, input, lane);
     const title = shahanCrewTitle(row);
     const key = { title, laborClass: rowLaborClass(row) };
     const billed = billedRow(title, input.site ?? "", key.laborClass);
@@ -306,6 +341,7 @@ function buildCrewSheet(
     pushNum(cells, `J${excelRow}`, pdRateFor(input, staffPdOf(row)));
     pushFormula(cells, `N${excelRow}`, `F${excelRow}*J${excelRow}`);
     pushFormula(cells, `O${excelRow}`, `K${excelRow}+L${excelRow}+M${excelRow}`);
+    pushFormula(cells, `P${excelRow}`, `C${excelRow}+D${excelRow}+E${excelRow}`);
   });
   const first = 7;
   const last = 6 + live.length;
@@ -320,11 +356,13 @@ function buildCrewSheet(
   pushFormula(cells, `M${totalRow}`, `SUM(M${first}:M${last})`);
   pushFormula(cells, `N${totalRow}`, `SUM(N${first}:N${last})`);
   pushFormula(cells, `O${totalRow}`, `SUM(O${first}:O${last})`);
+  pushFormula(cells, `P${totalRow}`, `SUM(P${first}:P${last})`);
   return {
     name,
     cells,
     laborTotal: `O${totalRow}`,
     pdTotal: `N${totalRow}`,
+    hoursTotal: `P${totalRow}`,
     sheetTotal: `O${totalRow}`,
   };
 }
@@ -442,7 +480,7 @@ function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPa
   pushText(cells, `A${totalRow}`, "TOTAL");
   pushFormula(cells, `G${totalRow}`, `SUM(G${first}:G${last})`);
   pushFormula(cells, `H${totalRow}`, `SUM(H${first}:H${last})`);
-  return { name, cells, sheetTotal: `H${totalRow}` };
+  return { name, cells, costTotal: `G${totalRow}`, sheetTotal: `G${totalRow}` };
 }
 
 function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
@@ -573,26 +611,53 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
   pushFormula(cells, `F${excelRow}`, `SUM(F${first}:F${last})`);
   pushFormula(cells, `G${excelRow}`, `SUM(G${first}:G${last})`);
   pushFormula(cells, `H${excelRow}`, `SUM(H${first}:H${last})`);
-  return { name: ESTIMATE_XLSX_SHEETS.sub, cells, sheetTotal: `H${excelRow}` };
+  return {
+    name: ESTIMATE_XLSX_SHEETS.sub,
+    cells,
+    costTotal: `F${excelRow}`,
+    markupTotal: `G${excelRow}`,
+    sheetTotal: `F${excelRow}`,
+  };
 }
 
 function addSummaryLine(
   cells: SheetCell[],
   row: number,
   label: string,
-  formula: string | null,
+  amount: string | null,
+  hours: string | null = null,
 ) {
   pushText(cells, `A${row}`, label);
-  if (formula) pushFormula(cells, `B${row}`, formula);
-  return formula ? `B${row}` : null;
+  if (amount) pushFormula(cells, `B${row}`, amount);
+  if (hours) pushFormula(cells, `C${row}`, hours);
+  return amount ? `B${row}` : null;
+}
+
+function addSummaryHours(cells: SheetCell[], row: number, label: string, hours: string) {
+  pushText(cells, `A${row}`, label);
+  pushFormula(cells, `C${row}`, hours);
+  return `C${row}`;
+}
+
+function addSummaryAmount(cells: SheetCell[], row: number, label: string, amount: number | string) {
+  pushText(cells, `A${row}`, label);
+  if (typeof amount === "number") pushNum(cells, `B${row}`, amount);
+  else pushFormula(cells, `B${row}`, amount);
+  return `B${row}`;
+}
+
+function jobMoneyFrom(input: EstimateXlsxInput) {
+  return hydrateJobMoney(input.jobMeta);
 }
 
 function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet {
   const cells = headerCells(input);
   pushText(cells, "A6", "Rollup line");
-  pushText(cells, "B6", "Amount $");
+  pushText(cells, "B6", ESTIMATE_SUMMARY_AMOUNT);
+  pushText(cells, "C6", ESTIMATE_SUMMARY_HOURS);
   const byName = new Map(built.map((sheet) => [xlsxName(sheet.name), sheet]));
   const moneyRefs: string[] = [];
+  const hourRefs: string[] = [];
   let row = 7;
 
   const laborSheets: Array<[string, string]> = [
@@ -600,36 +665,45 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     ["Foremen labor $", ESTIMATE_XLSX_SHEETS.foremen],
     ["Direct labor $", ESTIMATE_XLSX_SHEETS.direct],
     ["Support labor $", ESTIMATE_XLSX_SHEETS.support],
+    ["Laydown labor $", ESTIMATE_XLSX_SHEETS.laydown],
   ];
   const laborRefs: string[] = [];
   for (const [label, name] of laborSheets) {
     const sheet = byName.get(xlsxName(name));
     if (!sheet?.laborTotal) continue;
-    const ref = addSummaryLine(cells, row, label, sheetRef(name, sheet.laborTotal));
+    const hours = sheet.hoursTotal ? sheetRef(name, sheet.hoursTotal) : null;
+    const ref = addSummaryLine(cells, row, label, sheetRef(name, sheet.laborTotal), hours);
     if (ref) laborRefs.push(ref);
+    if (hours) hourRefs.push(`C${row}`);
     row += 1;
   }
   if (laborRefs.length) {
-    const ref = addSummaryLine(cells, row, "Labor $", `SUM(${laborRefs.join(",")})`);
+    const ref = addSummaryLine(
+      cells,
+      row,
+      "Labor $",
+      `SUM(${laborRefs.join(",")})`,
+      hourRefs.length ? `SUM(${hourRefs.join(",")})` : null,
+    );
     if (ref) moneyRefs.push(ref);
     row += 1;
   }
 
-  const pdRefs = laborSheets
+  const pdSheets = laborSheets
     .map(([, name]) => {
       const sheet = byName.get(xlsxName(name));
       return sheet?.pdTotal ? sheetRef(name, sheet.pdTotal) : "";
     })
     .filter(Boolean);
-  if (pdRefs.length) {
-    const ref = addSummaryLine(cells, row, "Per diem $", pdRefs.length === 1 ? pdRefs[0] : `SUM(${pdRefs.join(",")})`);
+  if (pdSheets.length) {
+    const ref = addSummaryLine(cells, row, "Per diem $", pdSheets.length === 1 ? pdSheets[0] : `SUM(${pdSheets.join(",")})`);
     if (ref) moneyRefs.push(ref);
     row += 1;
   }
 
   const slicer = byName.get(xlsxName(ESTIMATE_XLSX_SHEETS.slicer));
   if (slicer?.sheetTotal) {
-    addSummaryLine(cells, row, "Hours", sheetRef(ESTIMATE_XLSX_SHEETS.slicer, slicer.sheetTotal));
+    addSummaryHours(cells, row, ESTIMATE_HOURS_LINE, sheetRef(ESTIMATE_XLSX_SHEETS.slicer, slicer.sheetTotal));
     row += 1;
   }
 
@@ -642,24 +716,92 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     ["COE $", ESTIMATE_XLSX_SHEETS.coe],
     ["Subcontractor $", ESTIMATE_XLSX_SHEETS.sub],
   ];
+  const extraRefs = new Map<string, string>();
   for (const [label, name] of extra) {
     const sheet = byName.get(xlsxName(name));
-    if (!sheet?.sheetTotal) continue;
-    const ref = addSummaryLine(cells, row, label, sheetRef(name, sheet.sheetTotal));
-    if (ref) moneyRefs.push(ref);
+    const total = sheet?.costTotal ?? sheet?.sheetTotal;
+    if (!sheet || !total) continue;
+    const ref = addSummaryLine(cells, row, label, sheetRef(name, total));
+    if (ref) {
+      moneyRefs.push(ref);
+      extraRefs.set(label, ref);
+    }
     row += 1;
   }
 
+  const money = jobMoneyFrom(input);
+  const laborCell = cells.find((cell) => cell.type === "text" && cell.value === "Labor $");
+  const laborAmountRef = laborCell ? `B${laborCell.ref.slice(1)}` : null;
+  const equipmentRefs = ["Equipment rental $", "Tensioning / torquing $", "Crane rental $", "COE $"]
+    .map((label) => extraRefs.get(label))
+    .filter((ref): ref is string => Boolean(ref));
+  const subRef = extraRefs.get("Subcontractor $");
+
+  const site = input.site ?? "";
+  const client = input.client ?? "";
+  const cba = cbaIncreaseDollars(input.crew ?? {}, money, site, client, wageLookupOpts(site));
+  const more = moreFundDollars(input.crew ?? {}, money.moreFundPerHour, site, client);
+  const adders = moneyAdderLines({
+    labor: 0,
+    equipment: 0,
+    subcontractor: 0,
+    money,
+    cbaIncrease: cba,
+    moreFund: more,
+  });
+  let cbaRef: string | null = null;
+  if (adders.cbaIncrease) {
+    cbaRef = addSummaryAmount(cells, row, CBA_INCREASE_LABEL, adders.cbaIncrease);
+    moneyRefs.push(cbaRef);
+    row += 1;
+  }
+
+  if (laborAmountRef && money.laborContingencyPct > 0) {
+    const base = cbaRef ? `(${laborAmountRef}+${cbaRef})` : laborAmountRef;
+    moneyRefs.push(addSummaryAmount(cells, row, LABOR_CONTINGENCY_LABEL, `${base}*${money.laborContingencyPct / 100}`));
+    row += 1;
+  }
+  if (equipmentRefs.length && money.equipmentContingencyPct > 0) {
+    const base = equipmentRefs.length === 1 ? equipmentRefs[0] : `SUM(${equipmentRefs.join(",")})`;
+    moneyRefs.push(addSummaryAmount(cells, row, EQUIPMENT_CONTINGENCY_LABEL, `${base}*${money.equipmentContingencyPct / 100}`));
+    row += 1;
+  }
+  if (subRef && money.subsContingencyPct > 0) {
+    moneyRefs.push(addSummaryAmount(cells, row, SUBS_CONTINGENCY_LABEL, `${subRef}*${money.subsContingencyPct / 100}`));
+    row += 1;
+  }
+  if (adders.moreFund) {
+    moneyRefs.push(addSummaryAmount(cells, row, MORE_FUND_LABEL, adders.moreFund));
+    row += 1;
+  }
+
+  const thirdPartyCostTotal = (input.equipment?.thirdParty ?? []).reduce((sum, line) => sum + thirdPartyCost(line), 0);
+  const miscTotal = (input.otherCost?.misc ?? []).reduce((sum, line) => sum + miscAmount(line), 0);
+  const subSheet = input.subcontractor ?? emptySubSheet();
+  const markup = estimateMarkupDollars({
+    subcontractor: subcontractorMarkupBase(subSheet, {
+      site,
+      client,
+      otAfter8: Boolean(input.crew?.otAfter8),
+    }),
+    thirdParty: thirdPartyCostTotal,
+    misc: miscTotal,
+  });
+  if (markup) {
+    moneyRefs.push(addSummaryAmount(cells, row, ESTIMATE_MARKUP_LABEL, markup));
+    row += 1;
+  }
   const totalRow = row + 1;
   pushText(cells, `A${totalRow}`, "ESTIMATE TOTAL $");
   if (moneyRefs.length) pushFormula(cells, `B${totalRow}`, `SUM(${moneyRefs.join(",")})`);
   else pushNum(cells, `B${totalRow}`, 0);
+  if (hourRefs.length) pushFormula(cells, `C${totalRow}`, `SUM(${hourRefs.join(",")})`);
 
   return {
     name: ESTIMATE_XLSX_SHEETS.summary,
     cells,
     sheetTotal: `B${totalRow}`,
-    merges: ["A1:B1", "A3:B3"],
+    merges: ["A1:C1", "A2:C2", "A3:C3"],
   };
 }
 
@@ -667,16 +809,27 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   const keys = usedRateKeys(input.crew);
   const rates = buildRateSheet(input, keys);
   const gfIds = new Set((input.crew?.generalForeman ?? []).map((row) => row.id));
-  const staff = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.staff, input.crew?.staff ?? [], keys, () => true);
+  const staffRows = (input.crew?.staff ?? []).map((row) => withLaneClock(row, "staff"));
+  const gfRows = input.crew?.generalForeman ?? [];
+  const foremanRows = (input.crew?.foreman ?? []).filter((row) => !isLaydownRow(row));
+  const directRows = (input.crew?.direct ?? []).filter((row) => !isLaydownRow(row));
+  const supportRows = (input.crew?.support ?? []).filter((row) => !isLaydownRow(row));
+  const laydownRows = [
+    ...(input.crew?.foreman ?? []).filter(isLaydownRow),
+    ...(input.crew?.direct ?? []).filter(isLaydownRow),
+    ...(input.crew?.support ?? []).filter(isLaydownRow),
+  ];
+  const staff = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.staff, staffRows, keys, () => true, "staff");
   const foremen = buildCrewSheet(
     input,
     ESTIMATE_XLSX_SHEETS.foremen,
-    [...(input.crew?.generalForeman ?? []), ...(input.crew?.foreman ?? [])],
+    [...gfRows, ...foremanRows],
     keys,
     (row) => gfIds.has(row.id),
   );
-  const direct = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.direct, input.crew?.direct ?? [], keys, () => false);
-  const support = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.support, input.crew?.support ?? [], keys, () => false);
+  const direct = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.direct, directRows, keys, () => false);
+  const support = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.support, supportRows, keys, () => false);
+  const laydown = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.laydown, laydownRows, keys, () => false);
   const org = buildOrgSheet(input);
   const slicer = buildSlicerSheet(input);
   const third = input.equipment?.thirdParty ?? [];
@@ -703,7 +856,7 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   );
   const misc = buildMiscSheet(input);
   const sub = buildSubSheet(input);
-  const body = [org, slicer, staff, foremen, direct, support, rental, tension, crane, sub, coe, staffTravel, misc, rates]
+  const body = [org, slicer, staff, foremen, direct, support, laydown, rental, tension, crane, sub, coe, staffTravel, misc, rates]
     .filter((sheet): sheet is BuiltSheet => Boolean(sheet))
     .map((sheet) => ({ ...sheet, name: xlsxName(sheet.name) }));
   return [{ ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) }, ...body];

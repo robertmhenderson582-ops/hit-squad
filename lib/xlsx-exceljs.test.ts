@@ -19,6 +19,8 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(formatForHeader("$ / mile"), "$#,##0.00");
     assert.equal(formatForHeader("ST Hrs"), "#,##0.0");
     assert.equal(formatForHeader("Hours"), "#,##0.0");
+    assert.equal(formatForHeader("Man-hours (MH)"), "#,##0.0");
+    assert.equal(formatForHeader("MH"), "#,##0.0");
     assert.equal(formatForHeader("PD Days"), "#,##0.0");
     assert.equal(formatForHeader("Headcount"), "#,##0");
     assert.equal(formatForHeader("Qty"), "#,##0");
@@ -34,6 +36,9 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(summaryLineFormat("Per diem $"), "$#,##0.00");
     assert.equal(summaryLineFormat("Staff travel $"), "$#,##0.00");
     assert.equal(summaryLineFormat("Hours"), "#,##0.0");
+    assert.equal(summaryLineFormat("Man-hours"), "#,##0.0");
+    assert.equal(summaryLineFormat("Labor contingency"), "$#,##0.00");
+    assert.equal(summaryLineFormat("6.5% markup"), "$#,##0.00");
     assert.equal(summaryLineFormat("ESTIMATE TOTAL $"), "$#,##0.00");
   });
 });

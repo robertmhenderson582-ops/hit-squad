@@ -10,8 +10,12 @@ import type { CraftRow } from "./craft-labor.ts";
 import {
   buildEstimateWorkbook,
   ESTIMATE_EXPORT_BRAND,
+  ESTIMATE_EXPORT_CONFIDENTIAL,
   ESTIMATE_EXPORT_ERROR,
   ESTIMATE_EXPORT_PRODUCER,
+  ESTIMATE_HOURS_LINE,
+  ESTIMATE_SUMMARY_AMOUNT,
+  ESTIMATE_SUMMARY_HOURS,
   ESTIMATE_XLSX_SHEETS,
   estimateToXlsx,
   estimateXlsxFilename,
@@ -21,7 +25,7 @@ import { computeRowHours } from "./hours-clock.ts";
 import { defaultLaborClass } from "./labor-class.ts";
 import { lookupShahanLabor, SHAHAN_NO_RATE_LABEL, shahanCrewCostAmount } from "./shahan-wood-river.ts";
 import { wageLookupOpts } from "./wage-lookup.ts";
-import { buildSheetXml, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
+import { REQUIRED_XLSX_PARTS, buildSheetXml, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
 function zipParts(bytes: Uint8Array): string[] {
   const dir = mkdtempSync(join(tmpdir(), "est-xlsx-"));
@@ -57,6 +61,7 @@ function craft(
     pd: 0,
     hours: 0,
     cost: "",
+    billedAs: extra.billedAs,
     clockOverride: extra.clockOverride ?? "auto",
     laborClassOverride: extra.laborClassOverride ?? null,
     ranges: [
@@ -253,14 +258,18 @@ describe("estimate excel export", () => {
     assert.ok(summary && staff && direct);
     assert.equal(summary.cells.find((cell) => cell.ref === "A1")?.value, ESTIMATE_EXPORT_BRAND);
     assert.equal(summary?.cells.find((cell) => cell.ref === "A5")?.value?.toString().startsWith("Produced"), true);
-    assert.equal(summary.cells.find((cell) => cell.ref === "A2")?.value, ESTIMATE_EXPORT_PRODUCER);
+    assert.match(String(summary.cells.find((cell) => cell.ref === "A2")?.value), new RegExp(ESTIMATE_EXPORT_PRODUCER));
+    assert.match(String(summary.cells.find((cell) => cell.ref === "A2")?.value), new RegExp(ESTIMATE_EXPORT_CONFIDENTIAL));
+    assert.equal(summary.cells.find((cell) => cell.ref === "B5")?.type, "date");
     assert.match(String(staff.cells.find((cell) => cell.ref === "K7")?.value), /^C7\*G7$/);
     assert.match(String(staff.cells.find((cell) => cell.ref === "G7")?.value), /Rate Tables/);
     assert.match(String(staff.cells.find((cell) => cell.ref === "O8")?.value), /^SUM\(O7:O7\)$/);
     assert.equal(summary.cells.some((cell) => cell.ref === "A7" && cell.value === "Staff labor $"), true);
-    assert.equal(summary.cells.some((cell) => cell.ref.startsWith("A") && cell.value === "Hours"), true);
-    assert.equal(summary.cells.find((cell) => cell.ref === "B6")?.value, "Amount $");
+    assert.equal(summary.cells.some((cell) => cell.ref.startsWith("A") && cell.value === ESTIMATE_HOURS_LINE), true);
+    assert.equal(summary.cells.find((cell) => cell.ref === "B6")?.value, ESTIMATE_SUMMARY_AMOUNT);
+    assert.equal(summary.cells.find((cell) => cell.ref === "C6")?.value, ESTIMATE_SUMMARY_HOURS);
     assert.equal(staff.cells.find((cell) => cell.ref === "O6")?.value, "Total $");
+    assert.equal(staff.cells.find((cell) => cell.ref === "P6")?.value, "MH");
 
     const { evalAt } = evaluateWorkbook(sheets);
     const amountAt = (label: string) => {
@@ -268,17 +277,32 @@ describe("estimate excel export", () => {
       assert.ok(row, label);
       return evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${row}`);
     };
+    const hoursAt = (label: string) => {
+      const row = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref.startsWith("A") && cell.value === label)?.ref.replace("A", "");
+      assert.ok(row, label);
+      return evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${row}`);
+    };
     const staffLabor = evalAt(ESTIMATE_XLSX_SHEETS.staff, "O8");
     const directLabor = evalAt(ESTIMATE_XLSX_SHEETS.direct, "O8");
     const staffPd = evalAt(ESTIMATE_XLSX_SHEETS.staff, "N8");
     const directPd = evalAt(ESTIMATE_XLSX_SHEETS.direct, "N8");
-    const rental = evalAt(ESTIMATE_XLSX_SHEETS.rental, "H8");
+    const rentalCost = evalAt(ESTIMATE_XLSX_SHEETS.rental, "G8");
+    const rentalMarked = evalAt(ESTIMATE_XLSX_SHEETS.rental, "H8");
     const travel = evalAt(ESTIMATE_XLSX_SHEETS.travel, "E8");
     const misc = evalAt(ESTIMATE_XLSX_SHEETS.misc, "E8");
+    const markup = amountAt("6.5% markup");
     const grand = amountAt("ESTIMATE TOTAL $");
     assert.equal(staffLabor > 0, true);
     assert.equal(directLabor > 0, true);
-    assert.equal(Math.round((staffLabor + directLabor + staffPd + directPd + rental + travel + misc) * 100) / 100, Math.round(grand * 100) / 100);
+    assert.equal(rentalCost, 234);
+    assert.equal(rentalMarked, (134 + 100) * 1.06);
+    assert.equal(markup, Math.round((234 + 50) * 0.065 * 100) / 100);
+    assert.equal(
+      Math.round((staffLabor + directLabor + staffPd + directPd + rentalCost + travel + misc + markup) * 100) / 100,
+      Math.round(grand * 100) / 100,
+    );
+    assert.equal(hoursAt(ESTIMATE_HOURS_LINE) > 0, true);
+    assert.equal(hoursAt("ESTIMATE TOTAL $"), evalAt(ESTIMATE_XLSX_SHEETS.staff, "P8") + evalAt(ESTIMATE_XLSX_SHEETS.direct, "P8"));
 
     const staffHours = computeRowHours(input.crew.staff[0], input.site, input.client, true);
     const directHours = computeRowHours(input.crew.direct[0], input.site, input.client, true);
@@ -288,7 +312,6 @@ describe("estimate excel export", () => {
     assert.equal(directHours.ot, 2);
     assert.equal(staffLabor, shahanCrewCostAmount("Superintendent 01", staffHours, wageLookupOpts(input.site)));
     assert.equal(directLabor, shahanCrewCostAmount("Boilermaker Journeyman", directHours, wageLookupOpts(input.site)));
-    assert.equal(rental, (134 + 100) * 1.06);
     assert.equal(travel, 28);
     assert.equal(misc, 50);
 
@@ -299,6 +322,9 @@ describe("estimate excel export", () => {
     assert.equal(bytes[1], 0x4b);
     const parts = zipParts(bytes);
     assert.equal(parts.some((part) => part.endsWith("xl/theme/theme1.xml")), true);
+    for (const part of REQUIRED_XLSX_PARTS) {
+      assert.equal(parts.some((item) => item.endsWith(part) || item === part), true, part);
+    }
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));
     const summarySheet = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
@@ -318,13 +344,14 @@ describe("estimate excel export", () => {
     let totalRow = 0;
     summarySheet.eachRow((row, rowNumber) => {
       const label = String(row.getCell(1).value ?? "");
-      if (label === "Hours") hoursRow = rowNumber;
+      if (label === ESTIMATE_HOURS_LINE) hoursRow = rowNumber;
       if (label === "ESTIMATE TOTAL $") totalRow = rowNumber;
     });
     assert.equal(hoursRow > 0, true);
     assert.equal(totalRow > hoursRow, true);
-    assert.equal(summarySheet.getCell(`B${hoursRow}`).numFmt, "#,##0.0");
+    assert.equal(summarySheet.getCell(`C${hoursRow}`).numFmt, "#,##0.0");
     assert.equal(summarySheet.getCell(`B${totalRow}`).numFmt, "$#,##0.00");
+    assert.equal(/field trial|forgebook|not a release/i.test(JSON.stringify(wb.model)), false);
   });
 
   it("uses that job's clock and rates, not a Wood River or Nathan gate", () => {
@@ -557,5 +584,176 @@ describe("estimate excel export", () => {
     assert.equal(satStaff.get("D7")?.value, 0);
     assert.equal(satGf.get("C7")?.value, 0);
     assert.equal(satGf.get("D7")?.value, 10);
+  });
+
+  it("labels contingency, CBA, M.O.R.E., and 6.5% markup on Summary Amount $ — not in MH", () => {
+    const input = {
+      ...woodRiverFixture(),
+      jobMeta: {
+        ...woodRiverFixture().jobMeta,
+        laborContingencyPct: 10,
+        equipmentContingencyPct: 5,
+        subsContingencyPct: 4,
+        cbaIncreaseOn: true,
+        cbaIncreasePct: 3,
+        cbaIncreaseDate: "2026-01-01",
+        moreFundPerHour: 2,
+      },
+      subcontractor: {
+        lines: [{ id: "sub-1", vendor: "O&M Crane", scope: "crane lift", qty: 1, unit: "LS" as const, rate: 1000, affiliate: false }],
+        cards: [],
+      },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const labels = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells
+      .filter((cell) => cell.ref.startsWith("A") && cell.type === "text")
+      .map((cell) => cell.value);
+    assert.ok(labels?.includes("Labor contingency"));
+    assert.ok(labels?.includes("Equipment contingency"));
+    assert.ok(labels?.includes("Subs contingency"));
+    assert.ok(labels?.includes("CBA increase"));
+    assert.ok(labels?.includes("M.O.R.E. fund"));
+    assert.ok(labels?.includes("6.5% markup"));
+    const { evalAt } = evaluateWorkbook(sheets);
+    const rowOf = (label: string) => {
+      const ref = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref.startsWith("A") && cell.value === label)?.ref;
+      assert.ok(ref, label);
+      return ref.replace("A", "");
+    };
+    const hoursRow = rowOf(ESTIMATE_HOURS_LINE);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${hoursRow}`), 0);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${hoursRow}`) > 0, true);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${rowOf("Labor contingency")}`) > 0, true);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${rowOf("6.5% markup")}`) > 0, true);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${rowOf("6.5% markup")}`), 0);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${rowOf("ESTIMATE TOTAL $")}`) > 0, true);
+  });
+
+  it("builds a CAT 2-shaped package and keeps FIELD TRIAL / Forgebook off the client file", async () => {
+    const weekday = { start: "2026-09-01", end: "2026-09-01" };
+    const craftWeek = { ...weekday, otAfter8: true as const };
+    const input = {
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      crew: {
+        staff: [craft("st-1", "Lead Safety 01", 10, { ...weekday, otAfter8: false })],
+        generalForeman: [craft("gf-1", "Pipefitter GF Union", 10, craftWeek)],
+        foreman: [craft("fm-1", "Boilermaker Foreman", 10, craftWeek)],
+        direct: [craft("dr-1", "Boilermaker Journeyman", 10, craftWeek)],
+        support: [craft("su-1", "Fire Watch", 10, { ...craftWeek, billedAs: "Boilermaker Journeyman" })],
+        otAfter8: true,
+      },
+      schedule: woodRiverFixture().schedule,
+      orgChart: { names: {}, parents: {} },
+      jobMeta: { staffPerDiemRate: 140, craftPerDiemRate: 130, staffMileageRate: 0.7, craftMileageRate: 0.5, rateBook: "" },
+      equipment: {
+        largeTools: [
+          {
+            id: "lt-1",
+            itemId: "air-mover",
+            period: "daily" as const,
+            qty: 1,
+            start: "2026-09-01",
+            end: "2026-09-01",
+            enteredCost: 0,
+            freight: 0,
+          },
+        ],
+        thirdParty: [
+          {
+            id: "tp-r",
+            item: "450amp diesel welder",
+            period: "daily" as const,
+            rate: 134,
+            freight: 0,
+            qty: 1,
+            start: "2026-09-01",
+            end: "2026-09-01",
+          },
+          {
+            id: "tp-t",
+            item: "Hydraulic tensioner",
+            period: "daily" as const,
+            rate: 80,
+            freight: 0,
+            qty: 1,
+            start: "2026-09-01",
+            end: "2026-09-01",
+          },
+          {
+            id: "tp-c",
+            item: "Carry deck crane",
+            period: "daily" as const,
+            rate: 400,
+            freight: 0,
+            qty: 1,
+            start: "2026-09-01",
+            end: "2026-09-01",
+          },
+        ],
+      },
+      otherCost: {
+        perDiemRate: 0,
+        travel: [
+          { id: "travel-staff", kind: "staff" as const, source: "crew" as const, headcount: 1, travelers: 1, perMile: 0.7, miles: 40 },
+        ],
+        misc: [{ id: "mc-1", item: "Alloy rod", description: "Stainless", qty: 1, each: 25 }],
+      },
+      subcontractor: {
+        lines: [{ id: "sub-1", vendor: "O&M Crane", scope: "crane lift", qty: 1, unit: "LS" as const, rate: 500, affiliate: false }],
+        cards: [],
+      },
+    };
+    const withLaydown = {
+      ...input,
+      crew: {
+        ...input.crew,
+        support: [
+          ...input.crew.support,
+          craft("ld-1", "Laydown Pipefitter Foreman", 10, craftWeek),
+        ],
+      },
+    };
+    const sheets = buildEstimateWorkbook(withLaydown);
+    const names = sheets.map((sheet) => sheet.name);
+    assert.equal(names.length, 16);
+    assert.equal(names[0], ESTIMATE_XLSX_SHEETS.summary);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.laydown), true);
+    assert.equal(names.includes(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub)), true);
+    assert.equal(names.some((name) => name.includes("&")), false);
+    const blob = JSON.stringify(sheets);
+    assert.equal(/field trial|forgebook|not a release/i.test(blob), false);
+
+    const bytes = await estimateToXlsx(withLaydown);
+    const parts = zipParts(bytes);
+    for (const part of REQUIRED_XLSX_PARTS) {
+      assert.equal(parts.some((item) => item.endsWith(part) || item === part), true, part);
+    }
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    assert.equal(wb.worksheets.length, 16);
+    assert.ok(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader?.includes("HIT SQUAD"));
+    assert.equal(/field trial|forgebook/i.test(String(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader)), false);
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("C7").value, 10);
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("D7").value, 0);
+    const rates = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rates);
+    assert.ok(rates);
+    assert.equal(Number(rates.getCell("C7").value) > 0, true);
+  });
+
+  it("keeps an unrecognized Staff-card title on the staff clock", () => {
+    const sheets = buildEstimateWorkbook({
+      title: "Staff clock lane",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      crew: {
+        staff: [craft("odd", "Turnaround Coordinator Desk", 10, { start: "2026-09-01", end: "2026-09-01", otAfter8: false })],
+        otAfter8: true,
+      },
+    });
+    const staff = cellMap(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff)!);
+    assert.equal(staff.get("C7")?.value, 10);
+    assert.equal(staff.get("D7")?.value, 0);
   });
 });

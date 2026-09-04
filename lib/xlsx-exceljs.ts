@@ -3,18 +3,22 @@
 import ExcelJS from "exceljs";
 import { colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
-const BRAND_STEEL = "FF163038";
-const HEADER_STEEL = "FF1E4A52";
-const BRAND_AMBER = "FFE8C872";
-const BAND_FILL = "FFF4F7F8";
+const BRAND_STEEL = "FF0F3D44";
+const HEADER_STEEL = "FF163038";
+const BRAND_AMBER = "FFF0C14B";
+const BAND_FILL = "FFE8EEF0";
 const WHITE = "FFFFFFFF";
-const DARK_TEXT = "FF163038";
-const MUTED_TEXT = "FF5A6A6E";
+const DARK_TEXT = "FF102226";
+const MUTED_TEXT = "FF3D4F54";
+const RULE = "FF0F5F6D";
 
 const FMT_CURRENCY = "$#,##0.00";
 const FMT_HOURS = "#,##0.0";
 const FMT_INTEGER = "#,##0";
 const FMT_PERCENT = "0.0%";
+const FMT_DATE = "YYYY-MM-DD";
+
+const FORBIDDEN_CLIENT_COPY = /field trial|forgebook|not a release/i;
 
 function colIndex(col: string): number {
   let n = 0;
@@ -51,13 +55,14 @@ function maxHeaderCol(cells: SheetCell[], row = 6): string {
 export function formatForHeader(header: string): string | undefined {
   const lower = header.trim().toLowerCase();
   if (lower.includes("%") || lower === "markup %") return FMT_PERCENT;
+  if (/man-hours|\bmh\b/.test(lower)) return FMT_HOURS;
   if (/pd days/.test(lower)) return FMT_HOURS;
   if (/hrs|hours/.test(lower) && !/\$/.test(lower)) return FMT_HOURS;
   if (/headcount|qty|periods|travelers|\bcount\b/.test(lower)) return FMT_INTEGER;
   if (lower === "miles") return FMT_INTEGER;
   if (
     /\$|amount|cost|freight|each|markup|bill|bw|\/ mile|rate|total|pd \$|st \$|ot \$|dt \$/.test(lower) &&
-    !/hrs|hours/.test(lower)
+    !/hrs|hours|man-hours|\bmh\b/.test(lower)
   ) {
     return FMT_CURRENCY;
   }
@@ -66,7 +71,8 @@ export function formatForHeader(header: string): string | undefined {
 
 /** Summary rollup column B uses the line label in column A, not the sheet header. */
 export function summaryLineFormat(lineLabel: string): string {
-  if (lineLabel.trim().toLowerCase() === "hours") return FMT_HOURS;
+  const lower = lineLabel.trim().toLowerCase();
+  if (/hours|man-hours|\bmh\b/.test(lower) && !/\$/.test(lower)) return FMT_HOURS;
   return FMT_CURRENCY;
 }
 
@@ -75,16 +81,19 @@ export const EXCEL_UNIT_FORMATS = {
   hours: FMT_HOURS,
   integer: FMT_INTEGER,
   percent: FMT_PERCENT,
+  date: FMT_DATE,
 } as const;
 
 function tabColorArgb(name: string): string {
   if (name === "Summary Page") return BRAND_STEEL;
-  if (name === "ORG Chart" || name === "Slicer Hrs") return "FF2A7A84";
-  if (name === "Staff" || name === "Foremen" || name === "Direct" || name === "Support") return "FF3EC6D4";
-  if (name.includes("Rental") || name === "COE" || name === "Tensioning Torquing equipment") return "FFD4A017";
+  if (name === "ORG Chart" || name === "Slicer Hrs") return "FF0F5F6D";
+  if (name === "Staff" || name === "Foremen" || name === "Direct" || name === "Support" || name === "Laydown") {
+    return "FF1F8A96";
+  }
+  if (name.includes("Rental") || name === "COE" || name === "Tensioning Torquing equipment") return "FFC49214";
   if (name === "Rate Tables") return BRAND_STEEL;
-  if (name.includes("Subcontractor") || name === "Staff Travel Cost" || name === "Misc Costs") return "FF2A7A84";
-  return "FF2A7A84";
+  if (name.includes("Subcontractor") || name === "Staff Travel Cost" || name === "Misc Costs") return "FF0F5F6D";
+  return "FF0F5F6D";
 }
 
 function labelByRow(cells: SheetCell[], row: number): string | undefined {
@@ -99,6 +108,7 @@ function cellFormat(
   row: number,
   isSummary: boolean,
 ): string | undefined {
+  if (isSummary && col === "C" && row >= 7) return FMT_HOURS;
   if (isSummary && col === "B" && row >= 7) {
     return summaryLineFormat(labelByRow(sheet.cells, row) ?? "Amount $");
   }
@@ -108,7 +118,15 @@ function cellFormat(
 
 function isTotalRow(cells: SheetCell[], row: number): boolean {
   const label = cells.find((cell) => cell.ref === `A${row}`);
-  return label?.type === "text" && /^(TOTAL|ESTIMATE TOTAL)/i.test(label.value);
+  return label?.type === "text" && /^(TOTAL|ESTIMATE TOTAL|MAN-HOURS)/i.test(label.value);
+}
+
+function isAdderRow(cells: SheetCell[], row: number): boolean {
+  const label = cells.find((cell) => cell.ref === `A${row}`);
+  return (
+    label?.type === "text" &&
+    /contingency|cba increase|m\.o\.r\.e|6\.5% markup|6% /i.test(label.value)
+  );
 }
 
 function defaultMerges(cells: SheetCell[]): string[] {
@@ -121,21 +139,22 @@ function defaultMerges(cells: SheetCell[]): string[] {
 function columnWidth(col: string, header: string | undefined, sheetName: string): number {
   const lower = (header ?? "").toLowerCase();
   if (col === "A") {
-    if (sheetName === "Summary Page") return 34;
-    if (/position|craft|item|vendor|phase|kind/.test(lower) || !header) return 30;
+    if (sheetName === "Summary Page") return 36;
+    if (/position|craft|item|vendor|phase|kind/.test(lower) || !header) return 32;
     return 24;
   }
-  if (/description|scope/.test(lower)) return 28;
+  if (/description|scope/.test(lower)) return 30;
   if (/position|vendor|phase|item/.test(lower)) return 26;
-  if (/headcount|qty|periods|travelers|miles|count|lane|shift/.test(lower)) return 11;
-  if (/hrs|hours|days/.test(lower)) return 11;
-  if (/\$|amount|total|cost|rate|freight|markup|each|bill|bw|pd/.test(lower)) return 13;
+  if (/man-hours|\bmh\b/.test(lower)) return 14;
+  if (/headcount|qty|periods|travelers|miles|count|lane|shift/.test(lower)) return 12;
+  if (/hrs|hours|days/.test(lower)) return 12;
+  if (/\$|amount|total|cost|rate|freight|markup|each|bill|bw|pd/.test(lower)) return 14;
   return 12;
 }
 
 function applyRowStyle(exCell: ExcelJS.Cell, row: number, maxRow: number, isSummary: boolean, colNum: number) {
   if (row === 1) {
-    exCell.font = { bold: true, size: 13, color: { argb: WHITE }, name: "Calibri" };
+    exCell.font = { bold: true, size: 16, color: { argb: WHITE }, name: "Calibri" };
     exCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRAND_STEEL } };
     exCell.alignment = { vertical: "middle" };
     return;
@@ -145,7 +164,7 @@ function applyRowStyle(exCell: ExcelJS.Cell, row: number, maxRow: number, isSumm
     return;
   }
   if (row === 3) {
-    exCell.font = { bold: true, size: 12, color: { argb: DARK_TEXT }, name: "Calibri" };
+    exCell.font = { bold: true, size: 14, color: { argb: DARK_TEXT }, name: "Calibri" };
     return;
   }
   if (row === 4) {
@@ -161,25 +180,42 @@ function applyRowStyle(exCell: ExcelJS.Cell, row: number, maxRow: number, isSumm
     exCell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
     exCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_STEEL } };
     exCell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    exCell.border = {
+      bottom: { style: "medium", color: { argb: BRAND_AMBER } },
+    };
     return;
   }
   if (row >= 7 && row < maxRow && (row - 7) % 2 === 1) {
     exCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND_FILL } };
     exCell.font = { color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
-    return;
-  }
-  if (row >= 7) {
+  } else if (row >= 7) {
     exCell.font = { color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
   }
-  if (isSummary && row >= 7 && colNum === 2) {
+  if (isSummary && row >= 7 && (colNum === 2 || colNum === 3)) {
     exCell.alignment = { horizontal: "right" };
   }
 }
 
 function applyTotalStyle(exCell: ExcelJS.Cell) {
-  exCell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
+  exCell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 11 };
   exCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRAND_AMBER } };
-  exCell.border = { top: { style: "medium", color: { argb: BRAND_STEEL } } };
+  exCell.border = { top: { style: "medium", color: { argb: RULE } } };
+}
+
+function applyAdderStyle(exCell: ExcelJS.Cell) {
+  exCell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
+  exCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF3D6" } };
+}
+
+function printHeader(sheetName: string): string {
+  const safe = sheetName.replace(/&/g, "and").slice(0, 24);
+  return `&L&B HIT SQUAD / PROJECT CONTROLS &C ${safe} &R Confidential`;
+}
+
+const PRINT_FOOTER = "&L Produced by Hit Squad Project Controls &C &D &R Page &P of &N";
+
+export function clientCopyIsClean(value: string): boolean {
+  return !FORBIDDEN_CLIENT_COPY.test(value);
 }
 
 export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8Array> {
@@ -191,6 +227,8 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
   wb.lastModifiedBy = "Hit Squad Project Controls";
   wb.created = new Date();
   wb.modified = new Date();
+  wb.calcProperties = { fullCalcOnLoad: true };
+  wb.views = [{ x: 0, y: 0, width: 12000, height: 8000, firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
   const used = new Set<string>();
   for (const sheet of list) {
@@ -205,17 +243,25 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     used.add(safeName.toLowerCase());
 
     const isSummary = sheet.name === "Summary Page";
+    const lastCol = maxHeaderCol(sheet.cells);
     const ws = wb.addWorksheet(safeName, {
       properties: { tabColor: { argb: tabColorArgb(sheet.name) } },
       pageSetup: {
         orientation: "landscape",
         fitToPage: true,
         fitToWidth: 1,
-        fitToHeight: 0,
-        margins: { left: 0.45, right: 0.45, top: 0.6, bottom: 0.6, header: 0.25, footer: 0.25 },
+        fitToHeight: 20,
+        horizontalCentered: true,
+        margins: { left: 0.4, right: 0.4, top: 0.65, bottom: 0.65, header: 0.28, footer: 0.28 },
         printTitlesRow: "6:6",
       },
-      views: [{ state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: true }],
+      headerFooter: {
+        oddHeader: printHeader(safeName),
+        oddFooter: PRINT_FOOTER,
+        evenHeader: printHeader(safeName),
+        evenFooter: PRINT_FOOTER,
+      },
+      views: [{ state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: false }],
     });
 
     const merges = sheet.merges?.length ? sheet.merges : defaultMerges(sheet.cells);
@@ -224,35 +270,52 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     const headers = headerByColumn(sheet.cells, 6);
     const maxRow = Math.max(1, ...sheet.cells.map((cell) => parseRef(cell.ref).row));
     const totalRows = new Set<number>();
+    const adderRows = new Set<number>();
     for (let row = 7; row <= maxRow + 1; row += 1) {
       if (isTotalRow(sheet.cells, row)) totalRows.add(row);
+      else if (isSummary && isAdderRow(sheet.cells, row)) adderRows.add(row);
     }
 
     for (const cell of sheet.cells) {
       const { col, row, colNum } = parseRef(cell.ref);
       const exCell = ws.getCell(row, colNum);
 
-      if (cell.type === "text") exCell.value = cell.value;
-      else if (cell.type === "number") exCell.value = cell.value;
-      else exCell.value = { formula: cell.value, result: 0 };
+      if (cell.type === "text") {
+        if (!clientCopyIsClean(cell.value)) {
+          throw new Error("client-copy-forbidden");
+        }
+        exCell.value = cell.value;
+      } else if (cell.type === "number") {
+        exCell.value = cell.value;
+      } else if (cell.type === "date") {
+        exCell.value = cell.value;
+        exCell.numFmt = FMT_DATE;
+      } else {
+        exCell.value = { formula: cell.value };
+      }
 
       if (totalRows.has(row)) applyTotalStyle(exCell);
+      else if (adderRows.has(row)) applyAdderStyle(exCell);
       else applyRowStyle(exCell, row, maxRow, isSummary, colNum);
 
       const fmt = cellFormat(sheet, headers, col, row, isSummary);
-      if (fmt && row >= 7 && cell.type !== "text") exCell.numFmt = fmt;
+      if (fmt && row >= 7 && cell.type !== "text" && cell.type !== "date") exCell.numFmt = fmt;
     }
 
     for (const [col, header] of headers) {
       ws.getColumn(colIndex(col)).width = columnWidth(col, header, sheet.name);
     }
     if (isSummary) {
-      ws.getColumn(1).width = 34;
+      ws.getColumn(1).width = 36;
       ws.getColumn(2).width = 16;
+      ws.getColumn(3).width = 14;
     }
 
-    ws.getRow(1).height = 22;
-    ws.getRow(6).height = 20;
+    ws.getRow(1).height = 26;
+    ws.getRow(3).height = 22;
+    ws.getRow(6).height = 22;
+    ws.autoFilter = undefined;
+    ws.pageSetup.printArea = `A1:${lastCol}${Math.max(maxRow, 7)}`;
   }
 
   const buffer = await wb.xlsx.writeBuffer();
