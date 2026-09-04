@@ -10,8 +10,9 @@ export function MustChangePasswordGate({ children }: { children: React.ReactNode
   const [confirm, setConfirm] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [released, setReleased] = useState(false);
 
-  const blocked = status === "authenticated" && Boolean(user?.mustChangePassword);
+  const blocked = status === "authenticated" && Boolean(user?.mustChangePassword) && !released;
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -37,6 +38,7 @@ export function MustChangePasswordGate({ children }: { children: React.ReactNode
       setMessage(data.error || "Password was not saved.");
       return;
     }
+    setReleased(true);
     setNext("");
     setConfirm("");
     await refresh();

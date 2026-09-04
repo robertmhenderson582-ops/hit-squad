@@ -23,24 +23,30 @@ export function SecurityDesk() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
-    const response = await fetch("/api/desk/password", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ current, next }),
-    });
-    const data = await response.json();
-    if (!response.ok || !data.ok || data.vaultPersisted === false) {
-      setMessage(data.error || "Password was not saved.");
-      return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/desk/password", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current, next }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok || data.vaultPersisted === false) {
+        setMessage(data.error || "Password was not saved.");
+        return;
+      }
+      setCurrent("");
+      setNext("");
+      setMessage(data.note || "Password changed.");
+    } finally {
+      setBusy(false);
     }
-    setCurrent("");
-    setNext("");
-    setMessage(data.note || "Password changed.");
   }
 
   return (
@@ -67,8 +73,12 @@ export function SecurityDesk() {
             required
             minLength={8}
           />
-          <button type="submit" className="rounded-lg bg-steel px-4 py-2 text-white sm:col-span-2">
-            Change password
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-lg bg-steel px-4 py-2 text-white sm:col-span-2"
+          >
+            {busy ? "Saving…" : "Change password"}
           </button>
         </form>
         {message ? <p className="mt-3 text-sm text-[#5b6f73]">{message}</p> : null}

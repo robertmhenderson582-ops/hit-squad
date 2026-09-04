@@ -42,6 +42,8 @@ import {
   listBuildSeats,
   ownerSeatCount,
   persistExistingOwnerHash,
+  mergeHashRows,
+  liveSessionUser,
 } from "./users.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 
@@ -1446,10 +1448,158 @@ test("forced setOwnPassword confirms the hash from seats.json before ok and does
   assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
 });
 
-test("session GET persists the owner hash without rewriting cookies", () => {
+test("session GET overlays live mustChange and heals stale cookies", () => {
   const route = readFileSync(fileURLToPath(new URL("../app/api/auth/session/route.ts", import.meta.url)), "utf8");
   assert.match(route, /persistExistingOwnerHash/);
   assert.match(route, /readSeatClaim/);
   assert.match(route, /SESSION_PERSIST_ATTEMPTS/);
-  assert.equal(/cookies\.(set|delete)/.test(route), false);
+  assert.match(route, /liveSessionUser/);
+  assert.match(route, /cookies\.set\(SESSION_COOKIE/);
+  assert.match(route, /cookies\.set\(SEAT_CLAIM_COOKIE/);
+});
+
+test("password route re-issues session and seat-claim cookies with mustChange false", () => {
+  const route = readFileSync(fileURLToPath(new URL("../app/api/desk/password/route.ts", import.meta.url)), "utf8");
+  assert.match(route, /mustChangePassword: false/);
+  assert.match(route, /cookies\.set\(SESSION_COOKIE/);
+  assert.match(route, /cookies\.set\(SEAT_CLAIM_COOKIE/);
+  assert.match(route, /signSeatClaim/);
+});
+
+test("SecurityDesk shows Saving… while the password request is in flight", () => {
+  const source = readFileSync(fileURLToPath(new URL("../components/SecurityDesk.tsx", import.meta.url)), "utf8");
+  assert.match(source, /Saving…/);
+  assert.match(source, /disabled=\{busy\}/);
+});
+
+test("MustChangePasswordGate releases FIRST SIGN-IN after a successful Continue", () => {
+  const source = readFileSync(
+    fileURLToPath(new URL("../components/MustChangePasswordGate.tsx", import.meta.url)),
+    "utf8",
+  );
+  assert.match(source, /setReleased\(true\)/);
+  assert.match(source, /!released/);
+});
+
+test("mergeHashRows does not resurrect mustChange true from an old vault row", () => {
+  const nextHash = bcrypt.hashSync(CHOSEN, 12);
+  const oldHash = bcrypt.hashSync(OWNER_SECRET, 12);
+  const merged = mergeHashRows(
+    { passwordHash: nextHash, mustChangePassword: false, previousHashes: [] },
+    { passwordHash: oldHash, mustChangePassword: true, previousHashes: [oldHash] },
+  );
+  assert.ok(merged);
+  assert.equal(merged.mustChangePassword, false);
+  const reverse = mergeHashRows(
+    { passwordHash: oldHash, mustChangePassword: true, previousHashes: [oldHash] },
+    { passwordHash: nextHash, mustChangePassword: false, previousHashes: [] },
+  );
+  assert.ok(reverse);
+  assert.equal(reverse.mustChangePassword, false);
+});
+
+test("confirmOwnPasswordWrite replaces the vault row with mustChange false and empty previousHashes", async () => {
+  const oldHash = bcrypt.hashSync(OWNER_SECRET, 12);
+  const drive = memoryDrive();
+  drive.files.set(SEATS_VAULT_FILE_ID, {
+    file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+    content: `${JSON.stringify({
+      hashes: {
+        [OWNER_LOGIN_EMAIL]: {
+          passwordHash: oldHash,
+          mustChangePassword: true,
+          previousHashes: [oldHash],
+        },
+        robertmhenderson582: {
+          passwordHash: oldHash,
+          mustChangePassword: true,
+          previousHashes: [oldHash],
+        },
+      },
+      extras: [],
+    })}\n`,
+  });
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  const stored = findUserByEmail(OWNER_LOGIN_EMAIL);
+  assert.ok(stored);
+  stored.mustChangePassword = true;
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
+  assert.equal("ok" in changed, true);
+  if ("ok" in changed) {
+    assert.equal(changed.vaultPersisted, true);
+  }
+  const vault = JSON.parse(await drive.readJson(SEATS_VAULT_FILE_ID)) as {
+    hashes?: Record<string, { mustChangePassword?: boolean; previousHashes?: string[]; passwordHash?: string }>;
+  };
+  const row = vault.hashes?.[OWNER_LOGIN_EMAIL];
+  assert.ok(row?.passwordHash);
+  assert.equal(row.mustChangePassword, false);
+  assert.deepEqual(row.previousHashes ?? [], []);
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+  const after = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN });
+  if (after.status === "authenticated") {
+    assert.equal(after.user.mustChangePassword, false);
+  }
+});
+
+test("stale mustChange true claim cannot restick a cleared owner vault row", async () => {
+  const settingsHash = bcrypt.hashSync(CHOSEN, 12);
+  writeFileSync(
+    seatFile,
+    `${JSON.stringify({
+      hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: settingsHash, mustChangePassword: false, previousHashes: [] } },
+      extras: [],
+    })}\n`,
+  );
+  const drive = memoryDrive();
+  drive.files.set(SEATS_VAULT_FILE_ID, {
+    file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+    content: `${JSON.stringify({
+      hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: settingsHash, mustChangePassword: false, previousHashes: [] } },
+      extras: [],
+    })}\n`,
+  });
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+
+  const staleClaim = { email: OWNER_LOGIN_EMAIL, passwordHash: settingsHash, mustChangePassword: true };
+  assert.equal(restoreSeatHash(OWNER_LOGIN_EMAIL, staleClaim), true);
+  const afterRestore = findUserByEmail(OWNER_LOGIN_EMAIL);
+  assert.equal(afterRestore?.mustChangePassword, false);
+
+  const persisted = await persistExistingOwnerHash({ claim: staleClaim, email: OWNER_LOGIN_EMAIL });
+  assert.equal(persisted, true);
+  await flushSeatVault();
+
+  const vault = JSON.parse(await drive.readJson(SEATS_VAULT_FILE_ID)) as {
+    hashes?: Record<string, { mustChangePassword?: boolean; previousHashes?: string[] }>;
+  };
+  assert.equal(vault.hashes?.[OWNER_LOGIN_EMAIL]?.mustChangePassword, false);
+  assert.deepEqual(vault.hashes?.[OWNER_LOGIN_EMAIL]?.previousHashes ?? [], []);
+
+  const cookieUser = {
+    id: "owner-robert-henderson",
+    email: OWNER_LOGIN_EMAIL,
+    name: "Robert Henderson",
+    role: "owner" as const,
+    mustChangePassword: true,
+  };
+  const live = liveSessionUser(cookieUser);
+  assert.equal(live.mustChangePassword, false);
+
+  resetUsersForTests();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  const again = persistExistingOwnerHash({ claim: staleClaim, email: OWNER_LOGIN_EMAIL });
+  assert.equal(await again, true);
+  const vaultAfter = JSON.parse(await drive.readJson(SEATS_VAULT_FILE_ID)) as {
+    hashes?: Record<string, { mustChangePassword?: boolean }>;
+  };
+  assert.equal(vaultAfter.hashes?.[OWNER_LOGIN_EMAIL]?.mustChangePassword, false);
+  const signedIn = loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN });
+  assert.equal(signedIn.status, "authenticated");
+  if (signedIn.status === "authenticated") {
+    assert.equal(signedIn.user.mustChangePassword, false);
+  }
 });
