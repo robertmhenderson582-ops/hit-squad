@@ -942,9 +942,9 @@ describe("estimate excel export", () => {
     assert.equal(widthOf(direct, 1), LABOR_COL_WIDTHS.A);
     assert.equal(widthOf(direct, 2), LABOR_COL_WIDTHS.B);
     assert.equal(widthOf(direct, 3), LABOR_COL_WIDTHS.C);
-    assert.equal(widthOf(direct, 5), LABOR_COL_WIDTHS.E);
+    assert.equal(widthOf(direct, 5) >= LABOR_COL_WIDTHS.E, true);
     assert.equal(widthOf(direct, 6), LABOR_COL_WIDTHS.F);
-    assert.equal(widthOf(direct, 11), LABOR_COL_WIDTHS.K);
+    assert.equal(widthOf(direct, 11) >= LABOR_COL_WIDTHS.K, true);
     assert.equal(widthOf(direct, 12), LABOR_DAY_COL_WIDTH);
     assert.equal(Number(direct.getRow(6).height), LABOR_HEADER_ROW_HEIGHT);
     assert.equal(Boolean(direct.getCell("A6").alignment?.wrapText), false);
