@@ -28,7 +28,7 @@ export function EstimateBoard() {
   useEffect(() => {
     setClosed(readClosed().filter((item) => item.kind === "estimate"));
   }, [tick]);
-  const menu = menuForViewedDesk(viewingAs, undefined, seat);
+  const menu = menuForViewedDesk(viewingAs, undefined, seat, lens);
   const rows = (board?.estimates ?? []).filter(
     (row) => !closed.some((item) => item.id === row.id) && isActiveMenuItem(row, menu),
   );

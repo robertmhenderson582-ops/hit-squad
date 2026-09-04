@@ -183,6 +183,21 @@ export function shouldPaintHisCards(user?: { email?: string; role?: string } | n
   return canonicalEmail(user.email) === NATHAN_DESK_EMAIL;
 }
 
+/** Owner Back to me always lists HIS. Nathan / View as Nathan use that seat's job-menu. */
+export function ownerKeepsHisMenuPaint(user?: { email?: string; role?: string } | null, viewingAs = false) {
+  if (viewingAs) return false;
+  return Boolean(user?.role === "owner" || isOwnerIdentity(user?.email));
+}
+
+/** Drive vault + freeze + thin stub. Seat delete never destroys these files. */
+export function isProtectedHisVaultTarget(packId?: string, fileId?: string) {
+  const file = (fileId || "").trim();
+  if (file && (file === HIS_SNAPSHOTS_FOLDER_ID || file === HIS_AROMATICS_STUB_ID || hisFileByDriveId(file))) {
+    return true;
+  }
+  return Boolean(packId && hisFileForPackId(packId));
+}
+
 /** Nathan unless the owner already holds the pack with no James / foreign leftover stamp. */
 function hisDeskOwnerEmail(pack: HisIdentityPack) {
   const current = hisOwnerKey(pack.ownerEmail);

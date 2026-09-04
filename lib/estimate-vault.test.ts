@@ -525,4 +525,34 @@ describe("estimate vault service", () => {
     assert.equal(nathanList.packs[0]?.ownerEmail, tester.email);
     assert.equal(nathanList.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);
   });
+
+  it("HIS T&M delete and archive stay seat-menu only and keep the vault file", async () => {
+    const drive = memoryDrive();
+    const tm = {
+      packId: "new-mtj5d6",
+      key: "new:new-mtj5d6",
+      title: "Wood River / T&M 2027-01 to 06",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+      ownerEmail: tester.email,
+    };
+    await drive.updateJson(
+      "1bBWKw2aCy3fVKm0rQAWcoCi8OXzahoPI",
+      JSON.stringify(tm),
+      "wood-river-wood-river-t-m-2027-01-to-06.json",
+      { packId: tm.packId, ownerEmail: tester.email },
+    );
+    const archived = await archiveVisiblePack(tester, tm.packId, true, drive);
+    assert.equal(archived.ok, true);
+    if (archived.ok) assert.equal(archived.pack?.archived, undefined);
+    const removed = await deleteVisiblePack(tester, tm.packId, drive);
+    assert.equal(removed.ok, true);
+    if (removed.ok) assert.equal(removed.deleted, false);
+    assert.equal(drive.files.has("1bBWKw2aCy3fVKm0rQAWcoCi8OXzahoPI"), true);
+    const listed = await listVisiblePacks(tester, drive);
+    assert.equal(listed.packs.some((row) => row.packId === tm.packId || row.title === tm.title), true);
+  });
 });

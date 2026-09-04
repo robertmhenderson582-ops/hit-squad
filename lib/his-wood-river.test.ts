@@ -16,7 +16,7 @@ import { jobsOnDesk, seedJobs } from "./jobs.ts";
 import type { StorageLike } from "./local-estimates.ts";
 import { companyScopeFor } from "./companies.ts";
 import { handoffMarkText } from "./handoff.ts";
-import { JOB_MENU_KEY, menuForViewedDesk } from "./job-menu.ts";
+import { JOB_MENU_KEY, archiveMenuItem, deleteMenuItem, menuForViewedDesk, menuStatus, unarchiveMenuItem } from "./job-menu.ts";
 import { jobTree } from "./job-tree.ts";
 import { JAMES_EMAIL } from "./tester-seats.ts";
 import {
@@ -42,6 +42,8 @@ import {
   leftoverHasStaleHisIdentity,
   persistHisWoodRiverCards,
   shouldPaintHisCards,
+  ownerKeepsHisMenuPaint,
+  isProtectedHisVaultTarget,
 } from "./his-wood-river.ts";
 
 const owner = { email: "robertmhenderson582@gmail.com", role: "owner" as const };
@@ -851,4 +853,97 @@ test("live Aromatics and CAT leftovers are not replaced by identity-only stubs",
     assert.equal(painted.filter((row) => row.title === "2027 Aromatics Turnaround").length, 1);
     assert.equal(painted.filter((row) => row.title === "Madison CAT 2 (Pit Stop)").length, 1);
   }
+});
+
+test("View as Nathan delete of EST-MTJ5D6 leaves the active list and is not re-injected", () => {
+  const store = memoryStore();
+  const tm = { id: "job-EST-MTJ5D6", packId: "EST-MTJ5D6", title: "Wood River / T&M 2027-01 to 06" };
+  rememberLocalPack(
+    {
+      packId: "EST-MTJ5D6",
+      title: tm.title,
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      ownerEmail: NATHAN_DESK_EMAIL,
+    },
+    store,
+  );
+  deleteMenuItem(tm, store, "nathan");
+  const painted = packsForViewedDesk(nathan, true, "nathan", store);
+  assert.equal(painted.some((row) => row.title === tm.title || row.packId === HIS_TM_PACK_ID), false);
+  const again = packsForViewedDesk(nathan, true, "nathan", store);
+  assert.equal(again.some((row) => row.title === tm.title || jobCodeFromPackId(row.packId) === "EST-MTJ5D6"), false);
+  const jobs = jobsOnDesk(undefined, painted, true, companyScopeFor(nathan), menuForViewedDesk(true, store, "nathan"));
+  assert.equal(jobs.some((job) => job.code === "EST-MTJ5D6" || job.title === tm.title), false);
+  assert.equal(jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(isProtectedHisVaultTarget("EST-MTJ5D6", HIS_TM_FILE_ID), true);
+  assert.equal(isProtectedHisVaultTarget(HIS_TM_PACK_ID, HIS_TM_FILE_ID), true);
+});
+
+test("View as Nathan archive of CAT 2 goes under Archived and restore brings it back", () => {
+  const store = memoryStore();
+  const cat2 = { id: `job-${HIS_CAT2_PACK_ID}`, packId: HIS_CAT2_PACK_ID, title: "Madison CAT 2 (Pit Stop)" };
+  archiveMenuItem(cat2, store, "nathan");
+  const painted = packsForViewedDesk(nathan, true, "nathan", store);
+  const menu = menuForViewedDesk(true, store, "nathan");
+  assert.equal(menuStatus(cat2, menu), "archived");
+  assert.equal(painted.some((row) => row.packId === HIS_CAT2_PACK_ID || row.title === cat2.title), true);
+  const jobs = jobsOnDesk(undefined, painted, true, companyScopeFor(nathan), menu);
+  assert.equal(jobs.some((job) => job.title === cat2.title), true);
+  const tree = jobTree({ scope: companyScopeFor(nathan), jobs: jobs.filter((job) => menuStatus(job, menu) === null), packs: painted });
+  const wood = tree.find((row) => row.id === "madison")?.sites.find((site) => site.id === "site-madison");
+  assert.equal(wood?.jobs.some((job) => job.title === cat2.title), false);
+  assert.equal(jobs.filter((job) => menuStatus(job, menu) === "archived").some((job) => job.title === cat2.title), true);
+  unarchiveMenuItem(cat2, store, "nathan");
+  const restoredMenu = menuForViewedDesk(true, store, "nathan");
+  assert.equal(menuStatus(cat2, restoredMenu), null);
+  const restoredJobs = jobsOnDesk(undefined, packsForViewedDesk(nathan, true, "nathan", store), true, companyScopeFor(nathan), restoredMenu);
+  assert.equal(restoredJobs.some((job) => job.title === cat2.title), true);
+});
+
+test("Nathan login uses the same seat menu as View as Nathan", () => {
+  const store = memoryStore();
+  const tm = { id: "job-EST-MTJ5D6", packId: "EST-MTJ5D6", title: "Wood River / T&M 2027-01 to 06" };
+  deleteMenuItem(tm, store, "nathan");
+  const loginPainted = packsForViewedDesk(nathan, false, null, store);
+  const loginMenu = menuForViewedDesk(false, store, null, nathan);
+  const loginJobs = jobsOnDesk(undefined, loginPainted, false, companyScopeFor(nathan), loginMenu);
+  assert.equal(loginPainted.some((row) => row.title === tm.title || jobCodeFromPackId(row.packId) === "EST-MTJ5D6"), false);
+  assert.equal(loginJobs.some((job) => job.code === "EST-MTJ5D6" || job.title === tm.title), false);
+  assert.equal(ownerKeepsHisMenuPaint(nathan, false), false);
+  assert.equal(ownerKeepsHisMenuPaint(owner, false), true);
+  assert.equal(ownerKeepsHisMenuPaint(nathan, true), false);
+});
+
+test("owner Back to me still sees HIS even when Nathan archived or deleted T&M", () => {
+  const store = memoryStore();
+  const tm = { id: "job-EST-MTJ5D6", packId: "EST-MTJ5D6", title: "Wood River / T&M 2027-01 to 06" };
+  const cat2 = { id: `job-${HIS_CAT2_PACK_ID}`, packId: HIS_CAT2_PACK_ID, title: "Madison CAT 2 (Pit Stop)" };
+  deleteMenuItem(tm, store, "nathan");
+  archiveMenuItem(cat2, store, "nathan");
+  const ownerDesk = packsForViewedDesk(owner, false, null, store);
+  const ownerJobs = jobsOnDesk(undefined, ownerDesk, false, companyScopeFor(owner), menuForViewedDesk(false, store), {
+    includeSeeds: false,
+  });
+  assert.equal(ownerDesk.some((row) => row.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(ownerDesk.some((row) => row.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(ownerDesk.some((row) => row.title === tm.title || jobCodeFromPackId(row.packId) === "EST-MTJ5D6"), true);
+  assert.equal(ownerJobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
+  assert.equal(ownerJobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(ownerJobs.some((job) => job.code === "EST-MTJ5D6" || job.title === tm.title), true);
+  const tree = jobTree({ scope: { isOwner: true, email: owner.email, companyId: "hitsquad" }, jobs: ownerJobs, packs: ownerDesk });
+  const wood = tree.find((row) => row.id === "madison")?.sites.find((site) => site.id === "site-madison");
+  assert.equal(wood?.jobs.some((job) => job.title === tm.title || job.code === "EST-MTJ5D6"), true);
+  assert.equal(handoffMarkText(ownerDesk.find((row) => row.title === tm.title || row.title === "Wood River / T&M 2027-01 to 06")!, owner.email), "Nathan Boyte's desk.");
+});
+
+test("leftover bust does not strip Nathan's HIS archive or delete", () => {
+  const store = memoryStore({ [HIS_LEFTOVER_GEN_KEY]: "2" });
+  const tm = { id: "job-EST-MTJ5D6", packId: "EST-MTJ5D6", title: "Wood River / T&M 2027-01 to 06" };
+  deleteMenuItem(tm, store, "nathan");
+  bustHisLeftoverOnce(store);
+  assert.equal(menuStatus(tm, menuForViewedDesk(true, store, "nathan")), "deleted");
+  assert.equal(packsForViewedDesk(nathan, true, "nathan", store).some((row) => row.title === tm.title), false);
+  assert.equal(packsForViewedDesk(owner, false, null, store).some((row) => row.title === tm.title), true);
 });

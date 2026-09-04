@@ -30,7 +30,7 @@ export function SitesDesk() {
   const { board, error, companyId } = useDeskBoard();
   const { lens, seat, viewingAs } = useDeskLens();
   const scope = companyScopeFor(lens, companyId);
-  const menu = menuForViewedDesk(viewingAs, undefined, seat);
+  const menu = menuForViewedDesk(viewingAs, undefined, seat, lens);
   const tally = plantJobTally(
     jobsOnDesk([], visibleDeskPacks(lens, viewingAs, undefined, scope), viewingAs, scope, menu, {
       includeSeeds: catalogSeedsAllowedOnDesk(scope, seat),

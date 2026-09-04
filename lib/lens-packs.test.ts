@@ -313,4 +313,6 @@ test("signed-in leftover wipe rewrites v1 Jobs keys only and keeps session marks
 
   const source = readFileSync(fileURLToPath(new URL("./lens-packs.ts", import.meta.url)), "utf8");
   assert.match(source, /if \(viewingAs\) \{[\s\S]*shouldPaintHisCards\(user\)[\s\S]*mergeHisWoodRiverCards/);
+  assert.match(source, /omitDeletedHisPaint/);
+  assert.doesNotMatch(source, /clearHisJobMenuLeftover\(target, "nathan"\)/);
 });

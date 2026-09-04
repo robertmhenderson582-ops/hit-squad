@@ -1,7 +1,7 @@
 import { catalogVisibleTo, type CompanyScope } from "./companies.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { boardForUser } from "./desk-data.ts";
-import { shouldPaintHisCards } from "./his-wood-river.ts";
+import { ownerKeepsHisMenuPaint } from "./his-wood-river.ts";
 import { isOwnerIdentity } from "./identity.ts";
 import { mergeLocalJobs, type LocalPack } from "./local-estimates.ts";
 import { omitDeletedJobs, type JobMenuState } from "./job-menu.ts";
@@ -170,9 +170,10 @@ export function jobsOnDesk(
       })()
     : mergeLocalJobs(fromServer, nextPacks);
   const painted = includeSeeds ? merged : omitCatalogSeedJobs(merged);
-  const keepHis =
-    !viewingAs ||
-    shouldPaintHisCards(scope ? { email: scope.email, role: scope.isOwner ? "owner" : undefined } : null);
+  const keepHis = ownerKeepsHisMenuPaint(
+    scope ? { email: scope.email, role: scope.isOwner ? "owner" : undefined } : null,
+    viewingAs,
+  );
   return menu ? omitDeletedJobs(painted, menu, keepHis) : painted;
 }
 
