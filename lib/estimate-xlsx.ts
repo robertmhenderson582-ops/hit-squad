@@ -100,7 +100,7 @@ export const LABOR_DATE_START_COL = 12;
 export const LABOR_BLOCK_HEIGHT = 7;
 /** Full job window. 90 days truncated Aromatics and understated desk totals. */
 export const LABOR_MAX_DAYS = 400;
-export const LABOR_HPS_LABEL = "Enter Hours Per shift Here";
+export const LABOR_HPS_LABEL = "Hours/shift";
 export const LABOR_DAYSHIFT = "DAYSHIFT";
 export const LABOR_NIGHTSHIFT = "NIGHTSHIFT";
 export const LABOR_HC_LABEL = "HC";

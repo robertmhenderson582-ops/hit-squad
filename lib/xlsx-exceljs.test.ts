@@ -60,7 +60,7 @@ describe("xlsx-exceljs unit formats", () => {
     const job = "2027 Aromatics Turnaround  ·  Phillips 66  ·  Wood River — Roxana, IL  ·  East Coast (PCA0001103)";
     const produced = "Produced by Hit Squad Project Controls  ·  Confidential estimate package  ·  Produced Sep 4, 2026";
     const summaryWidth = 28 + 14 + 12;
-    const laborWidth = 10 + 13 + 24 + 14 + 9.01 + 9.01 + 8.5 + 8.5 + 8.5 + 8.5 + 10;
+    const laborWidth = 12 + 13 + 24 + 14 + 9.01 + 9.01 + 8.5 + 8.5 + 8.5 + 8.5 + 10;
     assert.equal(headerMetaHeight("HIT SQUAD", summaryWidth), HEADER_META_LINE_HEIGHT);
     assert.equal(headerMetaHeight(job, summaryWidth), HEADER_META_WRAP_HEIGHT);
     assert.equal(headerMetaHeight(produced, summaryWidth), HEADER_META_WRAP_HEIGHT);

@@ -59,7 +59,7 @@ export const HEADER_META_LINE_HEIGHT = 16;
 export const HEADER_META_WRAP_HEIGHT = 28;
 
 export const LABOR_COL_WIDTHS: Record<string, number> = {
-  A: 10,
+  A: 12,
   B: 13,
   C: 24,
   D: 14,
@@ -528,9 +528,9 @@ function applyLaborBlockChrome(
       } else if (kind === "hc" || kind === "hps") {
         cell.fill = solid(LABOR_HC_HPS_CLEAR);
         cell.font = { bold: true, color: { argb: STEEL_DEEP }, name: "Calibri", size: 9 };
-        if (kind === "hps" && col === 1) {
-          cell.alignment = { wrapText: true, vertical: "middle" };
-        } else if (col >= 2) {
+        if (col === 1) {
+          cell.alignment = { vertical: "middle", wrapText: false };
+        } else {
           centerLaborCell(cell);
         }
       } else if (kind === "hours" || kind === "pd") {
@@ -565,7 +565,6 @@ function applyLaborBlockChrome(
         centerLaborCell(day);
       }
     }
-    if (kind === "hps") ws.getRow(row).height = 28;
   }
 
   hairGrid(ws, block.start, block.end, 1, 11);
