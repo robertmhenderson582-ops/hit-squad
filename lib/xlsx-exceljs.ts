@@ -26,6 +26,8 @@ export const LABOR_SUN_BODY = LABOR_WEEKEND_FILL;
 
 export const LABOR_POSITION_TITLE = "FF3D4C5F";
 export const LABOR_HC_HPS = "FFFFFF00";
+/** Empty B–K on HC/HPS rows — not yellow voids. */
+export const LABOR_HC_HPS_CLEAR = "FFFFFFFF";
 export const LABOR_HOURS_LABEL = "FF5B9BD5";
 export const LABOR_DAYSHIFT_BANNER = "FFDBDBDB";
 export const LABOR_NIGHTSHIFT_BANNER = "FF4472C4";
@@ -399,6 +401,7 @@ function applyLaborBlockChrome(
           cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
         }
       } else if (kind === "hc" || kind === "hps") {
+        cell.fill = solid(WHITE);
         cell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 9 };
         if (kind === "hps" && col === 1) {
           cell.alignment = { wrapText: true, vertical: "middle" };

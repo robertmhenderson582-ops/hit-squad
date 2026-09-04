@@ -45,6 +45,7 @@ import {
   LABOR_DAY_COL_WIDTH,
   LABOR_DAYSHIFT_BANNER,
   LABOR_HC_HPS,
+  LABOR_HC_HPS_CLEAR,
   LABOR_HOURS_LABEL,
   LABOR_POSITION_TITLE,
   LABOR_SAT_BODY,
@@ -877,11 +878,11 @@ describe("estimate excel export", () => {
     assert.equal(widthOf(summary, 1), SUMMARY_COL_A_WIDTH);
     assert.equal(argb(direct.getCell("A7")), LABOR_DAYSHIFT_BANNER.slice(2));
     assert.equal(argb(direct.getCell("C7")), LABOR_POSITION_TITLE.slice(2));
-    assert.notEqual(argb(direct.getCell("A8")), LABOR_HC_HPS.slice(2));
-    assert.notEqual(argb(direct.getCell("B8")), LABOR_HC_HPS.slice(2));
-    assert.notEqual(argb(direct.getCell("K8")), LABOR_HC_HPS.slice(2));
-    assert.notEqual(argb(direct.getCell("A9")), LABOR_HC_HPS.slice(2));
-    assert.notEqual(argb(direct.getCell("K9")), LABOR_HC_HPS.slice(2));
+    assert.equal(argb(direct.getCell("A8")), LABOR_HC_HPS_CLEAR.slice(2));
+    assert.equal(argb(direct.getCell("B8")), LABOR_HC_HPS_CLEAR.slice(2));
+    assert.equal(argb(direct.getCell("K8")), LABOR_HC_HPS_CLEAR.slice(2));
+    assert.equal(argb(direct.getCell("A9")), LABOR_HC_HPS_CLEAR.slice(2));
+    assert.equal(argb(direct.getCell("K9")), LABOR_HC_HPS_CLEAR.slice(2));
     const weekendSet = new Set((directModel.weekendCols ?? []).map((col) => col.col));
     let weekdayDayCol = 12;
     while (weekendSet.has(weekdayDayCol) && weekdayDayCol < 20) weekdayDayCol += 1;
