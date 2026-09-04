@@ -74,6 +74,52 @@ describe("drive estimate upsert", () => {
     assert.equal(driveStoreKind(oauthEnv), "drive");
   });
 
+  it("posts RFC 7523 jwt-bearer grant_type on the service-account token request", async () => {
+    resetDriveTokenCache();
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const grants: string[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || "GET").toUpperCase();
+      const headers = new Headers(init?.headers);
+      const body = typeof init?.body === "string" ? init.body : init?.body instanceof URLSearchParams ? init.body.toString() : "";
+      if (url.startsWith("https://oauth2.googleapis.com/token")) {
+        const params = new URLSearchParams(body);
+        const grant = params.get("grant_type") || "";
+        grants.push(grant);
+        assert.equal(grant, "urn:ietf:params:oauth:grant-type:jwt-bearer");
+        assert.notEqual(grant, "urn:ietf:params:oauth-2.0:grant-type:jwt-bearer");
+        assert.ok(params.get("assertion"));
+        return new Response(JSON.stringify({ access_token: "ya29.test-sa", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/upload/drive/v3/files/") && method === "PATCH") {
+        assert.equal(headers.get("authorization"), "Bearer ya29.test-sa");
+        return new Response(JSON.stringify({ id: "1d3lzLDxCPwC963fdplsnwYgrDEanohZc", name: "seats.json" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error(`unexpected fetch ${method} ${url}`);
+    }) as typeof fetch;
+    try {
+      const adapter = driveAdapter({
+        GOOGLE_CLIENT_EMAIL: "vault@hitsquad.iam.gserviceaccount.com",
+        GOOGLE_PRIVATE_KEY: pem,
+      });
+      const file = await adapter.updateJson("1d3lzLDxCPwC963fdplsnwYgrDEanohZc", '{"hashes":{}}');
+      assert.equal(file.id, "1d3lzLDxCPwC963fdplsnwYgrDEanohZc");
+      assert.deepEqual(grants, ["urn:ietf:params:oauth:grant-type:jwt-bearer"]);
+    } finally {
+      globalThis.fetch = previous;
+      resetDriveTokenCache();
+    }
+  });
+
   it("uses a refresh-token bearer for createJson when OAuth env is set", async () => {
     resetDriveTokenCache();
     const calls: Array<{ url: string; method: string; auth: string; body: string }> = [];
@@ -152,7 +198,7 @@ describe("drive estimate upsert", () => {
             headers: { "content-type": "application/json" },
           });
         }
-        assert.equal(params?.get("grant_type"), "urn:ietf:params:oauth-2.0:grant-type:jwt-bearer");
+        assert.equal(params?.get("grant_type"), "urn:ietf:params:oauth:grant-type:jwt-bearer");
         return new Response(JSON.stringify({ access_token: "ya29.test-sa", expires_in: 3600 }), {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -175,7 +221,7 @@ describe("drive estimate upsert", () => {
       const file = await adapter.updateJson("1d3lzLDxCPwC963fdplsnwYgrDEanohZc", '{"hashes":{}}', "seats.json");
       assert.equal(file.id, "1d3lzLDxCPwC963fdplsnwYgrDEanohZc");
       assert.equal(calls.some((call) => call.grant === "refresh_token"), true);
-      assert.equal(calls.some((call) => call.grant === "urn:ietf:params:oauth-2.0:grant-type:jwt-bearer"), true);
+      assert.equal(calls.some((call) => call.grant === "urn:ietf:params:oauth:grant-type:jwt-bearer"), true);
       assert.equal(
         calls.some((call) => call.url.includes("/upload/drive/v3/files/") && call.auth === "Bearer ya29.test-sa"),
         true,
