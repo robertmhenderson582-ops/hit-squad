@@ -59,7 +59,7 @@ export const HEADER_META_LINE_HEIGHT = 16;
 export const HEADER_META_WRAP_HEIGHT = 28;
 
 export const LABOR_COL_WIDTHS: Record<string, number> = {
-  A: 12,
+  A: 13,
   B: 13,
   C: 24,
   D: 14,
@@ -72,8 +72,10 @@ export const LABOR_COL_WIDTHS: Record<string, number> = {
   J: 8.5,
   K: 10,
 };
-/** Wide enough for 10.5 after optional-decimal format. Width 3 made `9.0` into ##. */
-export const LABOR_DAY_COL_WIDTH = 4;
+/** Same width on every day col (L through last date). 3 made `9.5` into ##; 3.2 persists. */
+export const LABOR_DAY_COL_WIDTH = 3.2;
+/** Rotated D-MMM day labels. A–K stay single-line (no wrap). */
+export const LABOR_HEADER_ROW_HEIGHT = 36;
 export const SUMMARY_COL_A_WIDTH = 28;
 export const LABOR_DATE_FIRST_COL = 12;
 
@@ -190,8 +192,8 @@ function hairGrid(
 export function formatForHeader(header: string): string | undefined {
   const lower = header.trim().toLowerCase();
   if (lower.includes("%") || lower === "markup %") return FMT_PERCENT;
-  if (/man-hours|\bmh\b|total billable/.test(lower)) return FMT_HOURS;
-  if (/pd days/.test(lower)) return FMT_HOURS;
+  if (/man-hours|\bmh\b|total billable|^billable$/.test(lower)) return FMT_HOURS;
+  if (/^pd$|pd days/.test(lower) && !/\$/.test(lower)) return FMT_HOURS;
   if (/hrs|hours/.test(lower) && !/\$/.test(lower)) return FMT_HOURS;
   if (/headcount|qty|periods|travelers|\bcount\b/.test(lower)) return FMT_INTEGER;
   if (lower === "miles") return FMT_INTEGER;
@@ -657,7 +659,11 @@ function applyLaborChrome(
     header.alignment = { textRotation: 90, vertical: "middle", horizontal: "center", wrapText: false };
     header.numFmt = "D-MMM";
   }
-  ws.getRow(6).height = 36;
+  for (let col = 1; col <= 11; col += 1) {
+    const cell = ws.getCell(6, col);
+    cell.alignment = { vertical: "middle", horizontal: "center", wrapText: false };
+  }
+  ws.getRow(6).height = LABOR_HEADER_ROW_HEIGHT;
 }
 
 function applySummaryChrome(
@@ -803,6 +809,12 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     for (const col of sheet.hiddenCols ?? []) {
       ws.getColumn(col).hidden = true;
       ws.getColumn(col).width = 3;
+    }
+    if (labor && lastColNum >= LABOR_DATE_FIRST_COL) {
+      for (let col = LABOR_DATE_FIRST_COL; col <= lastColNum; col += 1) {
+        if (sheet.hiddenCols?.includes(col)) continue;
+        ws.getColumn(col).width = LABOR_DAY_COL_WIDTH;
+      }
     }
 
     ws.getRow(1).height = 22;

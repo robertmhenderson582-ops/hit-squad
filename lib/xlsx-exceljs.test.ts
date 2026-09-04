@@ -29,11 +29,13 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(formatForHeader("Markup $"), "$#,##0.00");
     assert.equal(formatForHeader("$ / mile"), "$#,##0.00");
     assert.equal(formatForHeader("Total Billable"), EXCEL_UNIT_FORMATS.hours);
+    assert.equal(formatForHeader("Billable"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(formatForHeader("ST Hrs"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(formatForHeader("Hours"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(formatForHeader("Man-hours (MH)"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(formatForHeader("MH"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(formatForHeader("PD Days"), EXCEL_UNIT_FORMATS.hours);
+    assert.equal(formatForHeader("PD"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(EXCEL_UNIT_FORMATS.hours, "#,##0.##");
     assert.equal(EXCEL_UNIT_FORMATS.hours.includes(".0"), false);
     assert.equal(formatForHeader("Headcount"), "#,##0");
@@ -60,7 +62,7 @@ describe("xlsx-exceljs unit formats", () => {
     const job = "2027 Aromatics Turnaround  ·  Phillips 66  ·  Wood River — Roxana, IL  ·  East Coast (PCA0001103)";
     const produced = "Produced by Hit Squad Project Controls  ·  Confidential estimate package  ·  Produced Sep 4, 2026";
     const summaryWidth = 28 + 14 + 12;
-    const laborWidth = 12 + 13 + 24 + 14 + 9.01 + 9.01 + 8.5 + 8.5 + 8.5 + 8.5 + 10;
+    const laborWidth = 13 + 13 + 24 + 14 + 9.01 + 9.01 + 8.5 + 8.5 + 8.5 + 8.5 + 10;
     assert.equal(headerMetaHeight("HIT SQUAD", summaryWidth), HEADER_META_LINE_HEIGHT);
     assert.equal(headerMetaHeight(job, summaryWidth), HEADER_META_WRAP_HEIGHT);
     assert.equal(headerMetaHeight(produced, summaryWidth), HEADER_META_WRAP_HEIGHT);

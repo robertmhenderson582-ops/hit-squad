@@ -635,15 +635,15 @@ function buildCrewSheet(
   const cells = headerCells(input);
   const headers = [
     "Shift",
-    "Total Billable",
+    "Billable",
     "Position",
-    "Sub Total $",
+    "Subtotal $",
     "Rate",
     "Type",
     "ST Hrs",
     "OT Hrs",
     "DT Hrs",
-    "PD Days",
+    "PD",
     "Labor $",
   ];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));

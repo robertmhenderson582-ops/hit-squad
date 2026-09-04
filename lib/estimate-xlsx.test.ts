@@ -57,6 +57,7 @@ import {
   EXCEL_UNIT_FORMATS,
   LABOR_COL_WIDTHS,
   LABOR_DAY_COL_WIDTH,
+  LABOR_HEADER_ROW_HEIGHT,
   LABOR_DAYSHIFT_BANNER,
   LABOR_CAGE_WASH_A,
   LABOR_CAGE_WASH_B,
@@ -290,7 +291,9 @@ describe("estimate excel export", () => {
     assert.equal(summary.cells.find((cell) => cell.ref === "B6")?.value, ESTIMATE_SUMMARY_AMOUNT);
     assert.equal(summary.cells.find((cell) => cell.ref === "C6")?.value, ESTIMATE_SUMMARY_HOURS);
     assert.equal(staff.cells.find((cell) => cell.ref === "K6")?.value, "Labor $");
-    assert.equal(staff.cells.find((cell) => cell.ref === "B6")?.value, "Total Billable");
+    assert.equal(staff.cells.find((cell) => cell.ref === "B6")?.value, "Billable");
+    assert.equal(staff.cells.find((cell) => cell.ref === "D6")?.value, "Subtotal $");
+    assert.equal(staff.cells.find((cell) => cell.ref === "J6")?.value, "PD");
     assert.equal(staff.cells.find((cell) => cell.ref === "L6")?.type, "date");
 
     const { evalAt } = evaluateWorkbook(sheets);
@@ -915,6 +918,10 @@ describe("estimate excel export", () => {
     assert.equal(widthOf(direct, 6), LABOR_COL_WIDTHS.F);
     assert.equal(widthOf(direct, 11), LABOR_COL_WIDTHS.K);
     assert.equal(widthOf(direct, 12), LABOR_DAY_COL_WIDTH);
+    assert.equal(Number(direct.getRow(6).height), LABOR_HEADER_ROW_HEIGHT);
+    assert.equal(Boolean(direct.getCell("B6").alignment?.wrapText), false);
+    assert.equal(Boolean(direct.getCell("D6").alignment?.wrapText), false);
+    assert.equal(Boolean(direct.getCell("J6").alignment?.wrapText), false);
     assert.equal(widthOf(summary, 1), SUMMARY_COL_A_WIDTH);
     assert.equal(argb(direct.getCell("A7")), LABOR_DAYSHIFT_BANNER.slice(2));
     assert.equal(argb(direct.getCell("C7")), LABOR_POSITION_TITLE.slice(2));
@@ -1760,6 +1767,11 @@ describe("estimate excel export", () => {
     const bytes = await estimateToXlsx(input);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));
+    const staffBook = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    assert.ok(staffBook);
+    for (let col = LABOR_DATE_START_COL; col < LABOR_DATE_START_COL + dates.length; col += 1) {
+      assert.equal(Number(staffBook.getColumn(col).width), LABOR_DAY_COL_WIDTH, `day col ${col}`);
+    }
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getColumn(LABOR_BLOCK_ID_COL).hidden, true);
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("C7").dataValidation, undefined);
     const writer = readFileSync(fileURLToPath(new URL("./xlsx-exceljs.ts", import.meta.url)), "utf8");
