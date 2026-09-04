@@ -163,23 +163,27 @@ export function equipmentTotals(sheet: EquipmentSheet) {
   return { largeTools, thirdParty, total: largeTools + thirdParty };
 }
 
+export function parseEquipmentSheet(raw: unknown): EquipmentSheet {
+  const parsed = (raw && typeof raw === "object" ? raw : {}) as Partial<EquipmentSheet>;
+  const sheet = {
+    largeTools: Array.isArray(parsed.largeTools)
+      ? parsed.largeTools.map((line) => ({
+          ...line,
+          itemId: rematchShahanEquipmentId(line.itemId || ""),
+          freight: Number(line.freight) || 0,
+        }))
+      : [],
+    thirdParty: Array.isArray(parsed.thirdParty) ? parsed.thirdParty : [],
+  };
+  return rematchEquipmentSheetToShahan(sheet);
+}
+
 export function readEquipmentSheet(key: string): EquipmentSheet {
   if (typeof window === "undefined" || !key) return emptyEquipmentSheet();
   try {
     const raw = window.localStorage.getItem(`${EQUIPMENT_STORE_PREFIX}${key}`);
     if (!raw) return emptyEquipmentSheet();
-    const parsed = JSON.parse(raw) as Partial<EquipmentSheet>;
-    const sheet = {
-      largeTools: Array.isArray(parsed.largeTools)
-        ? parsed.largeTools.map((line) => ({
-            ...line,
-            itemId: rematchShahanEquipmentId(line.itemId || ""),
-            freight: Number(line.freight) || 0,
-          }))
-        : [],
-      thirdParty: Array.isArray(parsed.thirdParty) ? parsed.thirdParty : [],
-    };
-    return rematchEquipmentSheetToShahan(sheet);
+    return parseEquipmentSheet(JSON.parse(raw));
   } catch {
     return emptyEquipmentSheet();
   }
