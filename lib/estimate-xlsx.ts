@@ -10,6 +10,7 @@
  * for a later import (parked — not in this PR). Hidden block-id column is for
  * a future importer only. Polish, repair-safe package, and $ vs MH labels
  * only. ORG Chart is a later separate export — not in this workbook.
+ * Slicer Hrs (IPS / P6 dump) is not in this workbook.
  * Never commit source workbooks to git (Look samples excepted).
  */
 
@@ -40,17 +41,15 @@ import { ESTIMATE_MARKUP_LABEL, ESTIMATE_MARKUP_RATE, estimateMarkupDollars } fr
 import {
   boundOtLabel,
   clockTitle,
-  computeRowHours,
   eastCoastCraftOtAfter8,
   parseYmd,
   runningClock,
   type ClockOverride,
-  type HoursSplit,
   type RunningClock,
 } from "./hours-clock.ts";
 import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
 import { miscAmount, travelAmount, type OtherCostSheet, type TravelLine } from "./other-cost.ts";
-import { PHASE_NAMES, eachYmd, type PhaseId, type PhaseScheduleState } from "./phase-schedule.ts";
+import { eachYmd, type PhaseScheduleState } from "./phase-schedule.ts";
 import {
   hasShahanBillRate,
   lookupShahanEquipment,
@@ -604,60 +603,6 @@ function buildCrewSheet(
   };
 }
 
-function phaseHours(input: EstimateXlsxInput, phaseId: PhaseId): HoursSplit {
-  const rows = allCrewRows(input.crew);
-  return rows.reduce(
-    (sum, row) => {
-      const part = computeRowHours(
-        { ...row, ranges: (row.ranges ?? []).filter((range) => !range.off && range.phaseId === phaseId) },
-        input.site ?? "",
-        input.client ?? "",
-        Boolean(input.crew?.otAfter8),
-        input.plantCode ?? "",
-      );
-      return {
-        st: sum.st + part.st,
-        ot: sum.ot + part.ot,
-        dt: sum.dt + part.dt,
-        pd: sum.pd + part.pd,
-        hours: sum.hours + part.hours,
-        workedDays: sum.workedDays + part.workedDays,
-      };
-    },
-    { st: 0, ot: 0, dt: 0, pd: 0, hours: 0, workedDays: 0 },
-  );
-}
-
-function buildSlicerSheet(input: EstimateXlsxInput): BuiltSheet | null {
-  const phases = (input.schedule?.phases ?? []).filter((phase) => phase.on);
-  if (!phases.length || !allCrewRows(input.crew).length) return null;
-  const rows = phases
-    .map((phase) => ({ phase, hours: phaseHours(input, phase.id) }))
-    .filter((row) => row.hours.hours > 0);
-  if (!rows.length) return null;
-  const cells = headerCells(input);
-  ["Phase", "ST Hrs", "OT Hrs", "DT Hrs", "Hours"].forEach((label, index) => {
-    pushText(cells, `${colLetter(index + 1)}6`, label);
-  });
-  rows.forEach((row, index) => {
-    const excelRow = 7 + index;
-    pushText(cells, `A${excelRow}`, PHASE_NAMES[row.phase.id] ?? row.phase.name);
-    pushNum(cells, `B${excelRow}`, row.hours.st);
-    pushNum(cells, `C${excelRow}`, row.hours.ot);
-    pushNum(cells, `D${excelRow}`, row.hours.dt);
-    pushFormula(cells, `E${excelRow}`, `B${excelRow}+C${excelRow}+D${excelRow}`);
-  });
-  const first = 7;
-  const last = 6 + rows.length;
-  const totalRow = last + 1;
-  pushText(cells, `A${totalRow}`, "TOTAL");
-  pushFormula(cells, `B${totalRow}`, `SUM(B${first}:B${last})`);
-  pushFormula(cells, `C${totalRow}`, `SUM(C${first}:C${last})`);
-  pushFormula(cells, `D${totalRow}`, `SUM(D${first}:D${last})`);
-  pushFormula(cells, `E${totalRow}`, `SUM(E${first}:E${last})`);
-  return { name: ESTIMATE_XLSX_SHEETS.slicer, cells, sheetTotal: `E${totalRow}` };
-}
-
 function liveThirdParty(line: ThirdPartyLine) {
   return Boolean(line.item.trim()) && thirdPartyCost(line) > 0;
 }
@@ -911,9 +856,8 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     row += 1;
   }
 
-  const slicer = byName.get(xlsxName(ESTIMATE_XLSX_SHEETS.slicer));
-  if (slicer?.sheetTotal) {
-    addSummaryHours(cells, row, ESTIMATE_HOURS_LINE, sheetRef(ESTIMATE_XLSX_SHEETS.slicer, slicer.sheetTotal));
+  if (hourRefs.length) {
+    addSummaryHours(cells, row, ESTIMATE_HOURS_LINE, `SUM(${hourRefs.join(",")})`);
     row += 1;
   }
 
@@ -1030,7 +974,6 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   const foremen = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.foremen, input.crew?.foreman ?? [], keys, () => false);
   const direct = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.direct, input.crew?.direct ?? [], keys, () => false);
   const support = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.support, input.crew?.support ?? [], keys, () => false);
-  const slicer = buildSlicerSheet(input);
   const third = input.equipment?.thirdParty ?? [];
   const rental = buildRentalSheet(
     input,
@@ -1055,7 +998,7 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   );
   const misc = buildMiscSheet(input);
   const sub = buildSubSheet(input);
-  const body = [slicer, staff, foremen, direct, support, rental, tension, crane, sub, coe, staffTravel, misc, rates]
+  const body = [staff, foremen, direct, support, rental, tension, crane, sub, coe, staffTravel, misc, rates]
     .filter((sheet): sheet is BuiltSheet => Boolean(sheet))
     .map((sheet) => ({ ...sheet, name: xlsxName(sheet.name) }));
   return [{ ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) }, ...body];

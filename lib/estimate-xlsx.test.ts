@@ -220,6 +220,7 @@ describe("estimate excel export", () => {
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.rates), true);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.laydown), false);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.org), false);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.slicer), false);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.tension), false);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.crane), false);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.coe), false);
@@ -704,13 +705,14 @@ describe("estimate excel export", () => {
     };
     const sheets = buildEstimateWorkbook(input);
     const names = sheets.map((sheet) => sheet.name);
-    assert.equal(names.length, 14);
+    assert.equal(names.length, 13);
     assert.equal(names[0], ESTIMATE_XLSX_SHEETS.summary);
     assert.deepEqual(
       ["Staff", "Foremen", "Direct", "Support"].every((name) => names.includes(name)),
       true,
     );
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.org), false);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.slicer), false);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.laydown), false);
     assert.equal(names.includes(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub)), true);
     assert.equal(names.some((name) => name.includes("&")), false);
@@ -731,7 +733,7 @@ describe("estimate excel export", () => {
     }
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));
-    assert.equal(wb.worksheets.length, 14);
+    assert.equal(wb.worksheets.length, 13);
     assert.ok(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader?.includes("HIT SQUAD"));
     assert.equal(/field trial|forgebook/i.test(String(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader)), false);
     const lead = laborHours(staffSheet, "Lead Safety 01");
@@ -777,6 +779,7 @@ describe("estimate excel export", () => {
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.support), true);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.laydown), false);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.org), false);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.slicer), false);
     assert.equal(laborHours(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff)!, "Pipefitter GF Union").title > 0, true);
     assert.equal(cellMap(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.foremen)!).get("C7")?.value, "Boilermaker Foreman");
   });
