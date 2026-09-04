@@ -23,6 +23,9 @@
  * Craft-sheet Billable column is dropped — it duplicated ST+OT+DT / per-row
  * totals. Day-grid sums still feed ST/OT/DT hours and PD count → $; Summary
  * hours still F+G+H. Rate Tables ST Billable is a catalog column and stays.
+ * Shift is one merged DAYSHIFT/NIGHTSHIFT block (no Hours/shift or PD count
+ * in A). Subtotal $ + Rate merge title through HC/HPS so those cells are not
+ * empty holes; ST/OT/DT/PD rate+$ stay per-row.
  *
  * Adjustable Job setup + phase-bar import is parked for the next Excel compile
  * after Look (Robert 2026-09-04). Locked answer is YES under the

@@ -1013,17 +1013,18 @@ describe("estimate excel export", () => {
     assert.equal(direct.getCell("K6").alignment?.horizontal, "center");
     assert.equal(Boolean(direct.getCell("B7").alignment?.wrapText), false);
     assert.equal(Boolean(direct.getCell("A7").alignment?.wrapText), false);
-    assert.equal(argb(direct.getCell("A8")), LABOR_HC_HPS_CLEAR.slice(2));
+    assert.equal(argb(direct.getCell("A7")), LABOR_DAYSHIFT_BANNER.slice(2));
     assert.equal(argb(direct.getCell("B8")), LABOR_HC_HPS_CLEAR.slice(2));
     assert.equal(argb(direct.getCell("J8")), LABOR_POSITION_TITLE.slice(2));
-    assert.equal(argb(direct.getCell("A9")), LABOR_HC_HPS_CLEAR.slice(2));
     assert.equal(argb(direct.getCell("J9")), LABOR_POSITION_TITLE.slice(2));
-    assert.equal(direct.getCell("A9").value, LABOR_HPS_LABEL);
-    assert.equal(direct.getCell("A13").value, LABOR_PD_COUNT_LABEL);
+    assert.equal(direct.getCell("A7").value, LABOR_DAYSHIFT);
+    assert.equal(direct.getCell("A9").value, LABOR_DAYSHIFT);
+    assert.equal(direct.getCell("A13").value, LABOR_DAYSHIFT);
     assert.equal(direct.getCell("E13").value, LABOR_PD_TYPE);
-    assert.equal(argb(direct.getCell("A13")), LABOR_HC_HPS_CLEAR.slice(2));
+    assert.equal(argb(direct.getCell("C7")), LABOR_POSITION_TITLE.slice(2));
+    assert.equal(argb(direct.getCell("D7")), LABOR_POSITION_TITLE.slice(2));
     assert.equal(argb(direct.getCell("E13")), LABOR_PD_LABEL.slice(2));
-    assert.equal(Boolean(direct.getCell("A9").alignment?.wrapText), false);
+    assert.equal(Boolean(direct.getCell("A7").alignment?.wrapText), false);
     assert.equal(Boolean(direct.getCell("E10").alignment?.wrapText), false);
     for (let row = 7; row <= 13; row += 1) {
       assert.equal(Number(direct.getRow(row).height), LABOR_DATA_ROW_HEIGHT, `craft row ${row}`);
@@ -1057,7 +1058,10 @@ describe("estimate excel export", () => {
     for (const merge of laborBlockVoidMerges(directModel.laborBlocks ?? [])) {
       assert.ok(directMerges.includes(merge), merge);
     }
-    assert.equal(directMerges.some((merge) => /^[CDE]\d+:/.test(merge)), false);
+    assert.ok(directMerges.includes("A7:A13"));
+    assert.ok(directMerges.includes("C7:C9"));
+    assert.ok(directMerges.includes("D7:D9"));
+    assert.equal(directMerges.some((merge) => /^E\d+:/.test(merge)), false);
     assert.equal(direct.getCell("B7").value, "Boilermaker Journeyman");
     assert.equal(direct.getCell("B10").value, "Boilermaker Journeyman");
     assert.equal(direct.getCell("B7").alignment?.horizontal, "center");
@@ -1402,7 +1406,7 @@ describe("estimate excel export", () => {
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, `K${block.hps}`), 8);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, `K${block.pd}`), 6);
     assert.notEqual(evalAt(ESTIMATE_XLSX_SHEETS.direct, `K${block.pd}`), evalAt(ESTIMATE_XLSX_SHEETS.direct, `K${block.hc}`));
-    assert.equal(cellMap(direct).get(`A${block.pd}`)?.value, LABOR_PD_COUNT_LABEL);
+    assert.equal(cellMap(direct).get(`A${block.pd}`)?.value, undefined);
     assert.equal(cellMap(direct).get(`E${block.pd}`)?.value, LABOR_PD_TYPE);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, `C${block.pd}`), 6 * 130);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, laborHrsRef(block, "st")), 8 * 11);
@@ -1862,10 +1866,12 @@ describe("estimate excel export", () => {
       [...LABOR_TYPE_ORDER],
     );
     assert.equal(staffMap.get(`E${lead.hc}`)?.value, LABOR_HC_LABEL);
-    assert.equal(staffMap.get(`A${lead.hps}`)?.value, LABOR_HPS_LABEL);
+    assert.equal(staffMap.get(`A${lead.hps}`)?.value, undefined);
     assert.equal(staffMap.get(`E${lead.hps}`)?.value, LABOR_HPS_TYPE);
-    assert.equal(staffMap.get(`A${lead.pd}`)?.value, LABOR_PD_COUNT_LABEL);
+    assert.equal(staffMap.get(`A${lead.pd}`)?.value, undefined);
     assert.equal(staffMap.get(`E${lead.pd}`)?.value, LABOR_PD_TYPE);
+    assert.equal(staff.cells.some((cell) => cell.value === LABOR_HPS_LABEL), false);
+    assert.equal(staff.cells.some((cell) => cell.value === LABOR_PD_COUNT_LABEL), false);
     assert.equal(staff.cells.find((cell) => cell.ref === "I6")?.value, LABOR_PD_HEADER);
     assert.equal(staffMap.get(`E${lead.title}`), undefined);
     assert.equal(staffMap.get(`B${lead.title}`)?.value, "Lead Safety 01");

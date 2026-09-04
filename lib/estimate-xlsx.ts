@@ -8,10 +8,12 @@
  * CAT 2 daily itemized grid (date row from col K, 7-row HC/HPS/ST/OT/DT/PD
  * blocks, DAYSHIFT / NIGHTSHIFT). PD is a daily people-count row (live-pack
  * perDiemPeople / nightPerDiemPeople) — same calendar idea as HC, not hours.
- * Position + ST/OT/DT/PD hrs + Labor $ merge
+ * Shift + Position + ST/OT/DT/PD hrs + Labor $ merge
  * down the block void and center — one value, not duplicated on detail rows.
+ * Hours/shift and PD count stay off the Shift column (Type + PD # carry that).
  * Support shows live-pack Bill as under Position in column B (same rate title
- * as Rate Tables). Type / Rate / Subtotal $ stay per-row. That grid is the stable client edit surface
+ * as Rate Tables). Subtotal $ / Rate merge title through HC/HPS; ST/OT/DT/PD
+ * stay per-row. That grid is the stable client edit surface
  * for a later import. Position dropdowns + workbook import are parked until
  * Look sign-off — a validation list with no pack ripple would be a parallel
  * book. Hidden block-id column is for a future importer only. Polish,
@@ -129,7 +131,7 @@ export const LABOR_DAYSHIFT = "DAYSHIFT";
 export const LABOR_NIGHTSHIFT = "NIGHTSHIFT";
 export const LABOR_HC_LABEL = "HC";
 export const LABOR_HPS_TYPE = "HPS";
-/** A-column label on the PD people-count row — same idea as Hours/shift. */
+/** Kept for desk/source lock — not written on craft Shift. Type chip + PD # carry it. */
 export const LABOR_PD_COUNT_LABEL = "PD count";
 /** J header: daily PD people-days, not hours. */
 export const LABOR_PD_HEADER = "PD #";
@@ -146,9 +148,11 @@ export const LABOR_ST_OFFSET = 3;
 export const LABOR_OT_OFFSET = 4;
 export const LABOR_DT_OFFSET = 5;
 export const LABOR_PD_OFFSET = 6;
-/** Position + ST/OT/DT/PD hrs + Labor $ — one value centered in the block void. */
-export const LABOR_BLOCK_VOID_COLS = ["B", "F", "G", "H", "I", "J"] as const;
+/** Shift + Position + ST/OT/DT/PD hrs + Labor $ — one value centered in the block void. */
+export const LABOR_BLOCK_VOID_COLS = ["A", "B", "F", "G", "H", "I", "J"] as const;
 export const LABOR_HOUR_VOID_COLS = ["F", "G", "H", "I", "J"] as const;
+/** Subtotal $ + Rate — title through HPS so HC/HPS are not empty holes. */
+export const LABOR_TITLE_BAND_COLS = ["C", "D"] as const;
 /** Support-only field under Position. Live pack `billedAs` — import parked with Position dropdowns. */
 export const LABOR_BILL_AS_LABEL = "Bill as";
 
@@ -158,11 +162,15 @@ export function laborBlockVoidMerges(
 ): string[] {
   return blocks.flatMap((block) => {
     const hours = LABOR_HOUR_VOID_COLS.map((col) => `${col}${block.start}:${col}${block.end}`);
-    if (!opts.billAs) return [`B${block.start}:B${block.end}`, ...hours];
+    const shift = `A${block.start}:A${block.end}`;
+    const titleBand = LABOR_TITLE_BAND_COLS.map(
+      (col) => `${col}${block.start}:${col}${block.start + LABOR_HPS_OFFSET}`,
+    );
+    if (!opts.billAs) return [shift, `B${block.start}:B${block.end}`, ...titleBand, ...hours];
     const title = block.start;
     const hps = block.start + LABOR_HPS_OFFSET;
     const ot = block.start + LABOR_OT_OFFSET;
-    return [`B${title}:B${hps}`, `B${ot}:B${block.end}`, ...hours];
+    return [shift, `B${title}:B${hps}`, `B${ot}:B${block.end}`, ...titleBand, ...hours];
   });
 }
 
@@ -786,12 +794,10 @@ function buildCrewSheet(
     pushFormula(cells, `J${titleRow}`, `C${stRow}+C${otRow}+C${dtRow}`);
 
     pushText(cells, `E${hcRow}`, LABOR_HC_LABEL);
-    pushText(cells, `A${hpsRow}`, LABOR_HPS_LABEL);
     pushText(cells, `E${hpsRow}`, LABOR_HPS_TYPE);
     pushText(cells, `E${stRow}`, "ST");
     pushText(cells, `E${otRow}`, "OT");
     pushText(cells, `E${dtRow}`, "DT");
-    pushText(cells, `A${pdRow}`, LABOR_PD_COUNT_LABEL);
     pushText(cells, `E${pdRow}`, LABOR_PD_TYPE);
 
     if (hasRate) {

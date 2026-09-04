@@ -682,8 +682,10 @@ function pinLaborCraftAlignment(ws: ExcelJS.Worksheet, lastDateCol: number, maxR
   }
 }
 
-/** B Position + F–J hour/money totals — merged title→PD. Skip per-row fills. */
-const LABOR_BLOCK_VOID_COL_NUMS = new Set([2, 6, 7, 8, 9, 10]);
+/** A Shift + B Position + F–J hour/money totals — merged title→PD. Skip per-row fills. */
+const LABOR_BLOCK_VOID_COL_NUMS = new Set([1, 2, 6, 7, 8, 9, 10]);
+/** C Subtotal $ + D Rate — merged title through HPS. */
+const LABOR_TITLE_BAND_COL_NUMS = new Set([3, 4]);
 
 function applyLaborBlockChrome(
   ws: ExcelJS.Worksheet,
@@ -698,6 +700,7 @@ function applyLaborBlockChrome(
     const kind = laborRowKind(sheet.cells, row);
     for (let col = 1; col <= LABOR_INSTRUMENT_LAST_COL; col += 1) {
       if (LABOR_BLOCK_VOID_COL_NUMS.has(col)) continue;
+      if (LABOR_TITLE_BAND_COL_NUMS.has(col) && row <= block.start + 2) continue;
       const cell = ws.getCell(row, col);
       if (kind === "title") {
         if (col === 1) {
@@ -767,6 +770,17 @@ function applyLaborBlockChrome(
   }
 
   for (const col of LABOR_BLOCK_VOID_COL_NUMS) {
+    if (col === 1) continue;
+    const cell = ws.getCell(block.start, col);
+    cell.fill = solid(LABOR_POSITION_TITLE);
+    cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
+    centerLaborCell(cell);
+  }
+  const shiftCell = ws.getCell(block.start, 1);
+  shiftCell.fill = solid(night ? LABOR_NIGHTSHIFT_BANNER : LABOR_DAYSHIFT_BANNER);
+  shiftCell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 9 };
+  centerLaborCell(shiftCell);
+  for (const col of LABOR_TITLE_BAND_COL_NUMS) {
     const cell = ws.getCell(block.start, col);
     cell.fill = solid(LABOR_POSITION_TITLE);
     cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
