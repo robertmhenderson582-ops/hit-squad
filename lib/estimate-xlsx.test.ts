@@ -35,7 +35,7 @@ import {
   laborCalendarDates,
   sheetRef,
 } from "./estimate-xlsx.ts";
-import { deskEstimateTotal } from "./estimate-pack-xlsx.ts";
+import { deskEstimateTotal, estimateWorkbookSummaryTotal } from "./estimate-pack-xlsx.ts";
 import { computeRowHours } from "./hours-clock.ts";
 import { defaultLaborClass } from "./labor-class.ts";
 import { lookupShahanLabor, SHAHAN_NO_RATE_LABEL, shahanCrewCostAmount } from "./shahan-wood-river.ts";
@@ -350,6 +350,40 @@ describe("estimate excel export", () => {
     assert.equal(summarySheet.getCell(`C${hoursRow}`).numFmt, "#,##0.0");
     assert.equal(summarySheet.getCell(`B${totalRow}`).numFmt, "$#,##0.00");
     assert.equal(/field trial|forgebook|not a release/i.test(JSON.stringify(wb.model)), false);
+    assert.equal(estimateWorkbookSummaryTotal(input), deskEstimateTotal(input));
+  });
+
+  it("Summary ESTIMATE TOTAL $ equals the desk rail after weekly-40", () => {
+    const week = {
+      start: "2026-09-07",
+      end: "2026-09-18",
+      days: [false, true, true, true, true, true, false],
+      otAfter8: false,
+    };
+    const input = {
+      ...woodRiverFixture(),
+      title: "Weekly 40 match",
+      crew: {
+        staff: [craft("st-1", "Superintendent 01", 10, { ...week, otAfter8: false })],
+        direct: [craft("dr-1", "Boilermaker Journeyman", 10, week)],
+        otAfter8: false,
+      },
+      schedule: {
+        ...woodRiverFixture().schedule,
+        phases: [
+          {
+            ...woodRiverFixture().schedule.phases[0],
+            start: "2026-09-07",
+            stop: "2026-09-18",
+            otAfter8: false,
+          },
+        ],
+      },
+    };
+    const desk = deskEstimateTotal(input);
+    const excel = estimateWorkbookSummaryTotal(input);
+    assert.equal(excel, desk);
+    assert.equal(excel > 0, true);
   });
 
   it("uses COMP 6.5% on P66/Bayway and 10% on Yates — not Nathan’s old 6% formula", () => {
@@ -1319,9 +1353,9 @@ describe("estimate excel export", () => {
     assert.equal(staffMap.get("L8")?.type, "number");
     assert.equal(staffMap.get("L8")?.value, 1);
     assert.equal(staffMap.get("L9")?.value, 10);
-    assert.match(String(staffMap.get(`L${lead.st}`)?.value), /WEEKDAY/);
-    assert.match(String(staffMap.get(`L${lead.ot}`)?.value), /WEEKDAY/);
-    assert.match(String(staffMap.get(`L${lead.dt}`)?.value), /WEEKDAY/);
+    assert.equal(staffMap.get(`L${lead.st}`)?.type, "number");
+    assert.equal(staffMap.get(`L${lead.ot}`)?.type, "number");
+    assert.equal(staffMap.get(`L${lead.dt}`)?.type, "number");
     const { evalAt } = evaluateWorkbook(sheets);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, `L${lead.st}`), 10);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, `L${lead.ot}`), 0);

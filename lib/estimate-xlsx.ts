@@ -16,7 +16,9 @@
  * misc, or labor tab. Only sheets with live rows for that estimate.
  * Subcontractor tab is all subs (not crane-only). Summary Subs $ is desk
  * Subs ESTIMATE TOTAL (cost + affiliate-aware 6.5%). Weekend columns on
- * labor grids are shaded; clock math is unchanged.
+ * labor grids are shaded. Daily ST/OT/DT cells use the desk clock
+ * (computeRangeHours / applyWeekly40) so Summary ESTIMATE TOTAL $ matches
+ * the Estimate Total rail.
  * Never commit source workbooks to git (Look samples excepted).
  */
 
@@ -43,15 +45,7 @@ import {
 } from "./estimate-money.ts";
 import { slugify } from "./estimate-pack.ts";
 import { commercialMarkupLabel, commercialMarkupRate, estimateMarkupDollars } from "./estimate-total.ts";
-import {
-  boundOtLabel,
-  clockTitle,
-  eastCoastCraftOtAfter8,
-  parseYmd,
-  runningClock,
-  type ClockOverride,
-  type RunningClock,
-} from "./hours-clock.ts";
+import { boundOtLabel, computeRangeHours, parseYmd, type ClockOverride } from "./hours-clock.ts";
 import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
 import { miscAmount, travelAmount, type OtherCostSheet, type TravelLine } from "./other-cost.ts";
 import { eachYmd, type PhaseScheduleState } from "./phase-schedule.ts";
@@ -424,51 +418,56 @@ function dayPlug(row: CraftRow, ymd: string, night: boolean): { hc: number; hps:
   return { hc, hps, pd };
 }
 
-function blockClock(row: CraftRow, input: EstimateXlsxInput, lane: CrewLane): { clock: RunningClock; otAfter8: boolean } {
+/** Desk per-day ST/OT/DT after applyWeekly40 — same clock the Estimate Total rail uses. */
+function deskBlockDayHours(
+  row: CraftRow,
+  night: boolean,
+  input: EstimateXlsxInput,
+  lane: CrewLane,
+): Map<string, { st: number; ot: number; dt: number }> {
+  const map = new Map<string, { st: number; ot: number; dt: number }>();
   const titled = withLaneClock(row, lane);
-  const title = clockTitle(titled.position, titled.billedAs);
-  const clock = runningClock(title, input.site ?? "", input.client ?? "", titled.clockOverride ?? "auto", input.plantCode ?? "");
-  const range = (titled.ranges ?? []).find((item) => !item.off);
-  const flagged = Boolean(range?.otAfter8 ?? input.crew?.otAfter8);
-  const otAfter8 = clock === "east-coast" ? eastCoastCraftOtAfter8(range?.phaseId, flagged) : flagged;
-  return { clock, otAfter8 };
-}
-
-function dailyHourFormulas(
-  clock: RunningClock,
-  otAfter8: boolean,
-  dateRef: string,
-  hcRef: string,
-  hpsRef: string,
-): { st: string; ot: string; dt: string } {
-  const empty = `${dateRef}=""`;
-  if (clock === "ca-daily") {
-    return {
-      st: `IF(${empty},"",MIN(8,${hpsRef})*${hcRef})`,
-      ot: `IF(${empty},"",MIN(4,MAX(0,${hpsRef}-8))*${hcRef})`,
-      dt: `IF(${empty},"",MAX(0,${hpsRef}-12)*${hcRef})`,
-    };
+  for (const range of row.ranges ?? []) {
+    if (range.off) continue;
+    const shift = rangeShift(row, range);
+    if (night && shift === "Days") continue;
+    if (!night && shift === "Nights") continue;
+    if (night && shift === "Days & nights" && !(Number(range.nightHeadcount) || 0)) continue;
+    const nightsOnly = night && shift === "Nights";
+    const hours = computeRangeHours({
+      position: titled.position,
+      billedAs: titled.billedAs,
+      site: input.site ?? "",
+      client: input.client ?? "",
+      plantCode: input.plantCode ?? "",
+      start: range.start,
+      end: range.end,
+      hoursPerShift: range.hoursPerShift,
+      headcount: nightsOnly ? range.headcount : night ? range.nightHeadcount : range.headcount,
+      nightHeadcount: 0,
+      sundayHeadcount: night
+        ? nightsOnly
+          ? range.sundayHeadcount
+          : (range.nightSundayHeadcount ?? range.sundayHeadcount)
+        : range.sundayHeadcount,
+      shift: night ? "Nights" : "Days",
+      days: range.days,
+      perDiemPeople: rangeDayPd(row, range, night),
+      otAfter8: range.otAfter8 ?? input.crew?.otAfter8,
+      phaseId: range.phaseId,
+      clockOverride: titled.clockOverride ?? "auto",
+      skipDates: range.skipDates,
+    });
+    for (const day of hours.days) {
+      const prev = map.get(day.date) ?? { st: 0, ot: 0, dt: 0 };
+      map.set(day.date, {
+        st: prev.st + day.st,
+        ot: prev.ot + day.ot,
+        dt: prev.dt + day.dt,
+      });
+    }
   }
-  if (clock === "staff") {
-    const cap = otAfter8 ? 8 : 10;
-    return {
-      st: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=1,0,MIN(${cap},${hpsRef})*${hcRef}))`,
-      ot: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=1,0,MAX(0,${hpsRef}-${cap})*${hcRef}))`,
-      dt: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=1,${hpsRef}*${hcRef},0))`,
-    };
-  }
-  if (!otAfter8 && clock === "east-coast") {
-    return {
-      st: `IF(${empty},"",IF(OR(WEEKDAY(${dateRef},1)=1,WEEKDAY(${dateRef},1)=7),0,${hpsRef}*${hcRef}))`,
-      ot: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=7,${hpsRef}*${hcRef},0))`,
-      dt: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=1,${hpsRef}*${hcRef},0))`,
-    };
-  }
-  return {
-    st: `IF(${empty},"",IF(OR(WEEKDAY(${dateRef},1)=1,WEEKDAY(${dateRef},1)=7),0,MIN(8,${hpsRef})*${hcRef}))`,
-    ot: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=1,0,IF(WEEKDAY(${dateRef},1)=7,${hpsRef}*${hcRef},MAX(0,${hpsRef}-8)*${hcRef})))`,
-    dt: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=1,${hpsRef}*${hcRef},0))`,
-  };
+  return map;
 }
 
 function writeDateRow(cells: SheetCell[], dates: string[]) {
@@ -534,7 +533,7 @@ function buildCrewSheet(
     const key = { title, laborClass: rowLaborClass(row) };
     const billed = billedRow(title, input.site ?? "", key.laborClass);
     const hasRate = hasShahanBillRate(billed);
-    const { clock, otAfter8 } = blockClock(row, input, lane);
+    const deskHours = deskBlockDayHours(row, night, input, lane);
     const firstDate = dates.length ? colLetter(LABOR_DATE_START_COL) : "";
 
     const blockId = laborBlockId(row, night);
@@ -593,15 +592,14 @@ function buildCrewSheet(
     dates.forEach((ymd, index) => {
       const col = colLetter(LABOR_DATE_START_COL + index);
       const plug = dayPlug(row, ymd, night);
-      const dateRef = `${col}$6`;
       const hcRef = `${col}${hcRow}`;
       const hpsRef = `${col}${hpsRow}`;
       pushNum(cells, hcRef, plug.hc);
       pushNum(cells, hpsRef, plug.hps);
-      const hours = dailyHourFormulas(clock, otAfter8, dateRef, hcRef, hpsRef);
-      pushFormula(cells, `${col}${stRow}`, hours.st);
-      pushFormula(cells, `${col}${otRow}`, hours.ot);
-      pushFormula(cells, `${col}${dtRow}`, hours.dt);
+      const desk = deskHours.get(ymd) ?? { st: 0, ot: 0, dt: 0 };
+      pushNum(cells, `${col}${stRow}`, desk.st);
+      pushNum(cells, `${col}${otRow}`, desk.ot);
+      pushNum(cells, `${col}${dtRow}`, desk.dt);
       pushNum(cells, `${col}${pdRow}`, plug.pd);
     });
 

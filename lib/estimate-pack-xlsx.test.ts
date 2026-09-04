@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
   estimateJsonToXlsx,
   estimateJsonToXlsxInput,
+  deskEstimateTotal,
   estimateWorkbookSummaryTotal,
   packSnapshotToXlsxInput,
 } from "./estimate-pack-xlsx.ts";
@@ -241,5 +242,17 @@ describe("estimate pack JSON → xlsx", () => {
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.rental), false);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.travel), false);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.misc), false);
+  });
+
+  it("live Aromatics and CAT 2 vault packs match desk ESTIMATE TOTAL $", () => {
+    const packs = [
+      "/tmp/vault-estimates/wood-river-2027-aromatics-turnaround.json",
+      "/tmp/vault-estimates/wood-river-madison-cat-2-pit-stop.json",
+    ];
+    for (const file of packs) {
+      if (!existsSync(file)) continue;
+      const { input } = estimateJsonToXlsxInput(JSON.parse(readFileSync(file, "utf8")));
+      assert.equal(estimateWorkbookSummaryTotal(input), deskEstimateTotal(input), file);
+    }
   });
 });
