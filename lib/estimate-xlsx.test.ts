@@ -59,6 +59,7 @@ import {
   EXCEL_UNIT_FORMATS,
   LABOR_COL_WIDTHS,
   LABOR_DAY_COL_WIDTH,
+  LABOR_DATA_ROW_HEIGHT,
   LABOR_HEADER_ROW_HEIGHT,
   SHEET_VOID_WASH,
   UNUSED_ROW_HIDE,
@@ -375,8 +376,8 @@ describe("estimate excel export", () => {
     assert.equal(Number(summarySheet.getRow(3).height), HEADER_META_WRAP_HEIGHT);
     assert.equal(Number(staffSheet.getRow(2).height), HEADER_META_LINE_HEIGHT);
     assert.equal(Number(staffSheet.getRow(3).height), HEADER_META_LINE_HEIGHT);
-    assert.equal(staffSheet.getCell("A2").alignment?.wrapText, true);
-    assert.equal(staffSheet.getCell("A3").alignment?.wrapText, true);
+    assert.equal(Boolean(staffSheet.getCell("A2").alignment?.wrapText), false);
+    assert.equal(Boolean(staffSheet.getCell("A3").alignment?.wrapText), false);
     const staffMerges = ((staffSheet.model as { merges?: string[] }).merges ?? []) as string[];
     const brandMerge = staffMerges.find((merge) => /^A1:[A-Z]+1$/.test(merge));
     assert.ok(brandMerge);
@@ -946,9 +947,14 @@ describe("estimate excel export", () => {
     assert.equal(widthOf(direct, 11), LABOR_COL_WIDTHS.K);
     assert.equal(widthOf(direct, 12), LABOR_DAY_COL_WIDTH);
     assert.equal(Number(direct.getRow(6).height), LABOR_HEADER_ROW_HEIGHT);
+    assert.equal(Boolean(direct.getCell("A6").alignment?.wrapText), false);
     assert.equal(Boolean(direct.getCell("B6").alignment?.wrapText), false);
+    assert.equal(Boolean(direct.getCell("C6").alignment?.wrapText), false);
     assert.equal(Boolean(direct.getCell("D6").alignment?.wrapText), false);
     assert.equal(Boolean(direct.getCell("J6").alignment?.wrapText), false);
+    assert.equal(Boolean(direct.getCell("L6").alignment?.wrapText), false);
+    assert.equal(Boolean(direct.getCell("A4").alignment?.wrapText), false);
+    assert.equal(Boolean(direct.getCell("L4").alignment?.wrapText), false);
     assert.equal(widthOf(summary, 1), SUMMARY_COL_A_WIDTH);
     assert.equal(argb(direct.getCell("A7")), LABOR_DAYSHIFT_BANNER.slice(2));
     assert.equal(argb(direct.getCell("C7")), LABOR_POSITION_TITLE.slice(2));
@@ -980,7 +986,10 @@ describe("estimate excel export", () => {
     assert.equal(argb(direct.getCell("K9")), LABOR_HC_HPS_CLEAR.slice(2));
     assert.equal(direct.getCell("A9").value, LABOR_HPS_LABEL);
     assert.equal(Boolean(direct.getCell("A9").alignment?.wrapText), false);
-    assert.equal(Number(direct.getRow(9).height) || 15, Number(direct.getRow(8).height) || 15);
+    assert.equal(Boolean(direct.getCell("F10").alignment?.wrapText), false);
+    for (let row = 7; row <= 13; row += 1) {
+      assert.equal(Number(direct.getRow(row).height), LABOR_DATA_ROW_HEIGHT, `craft row ${row}`);
+    }
     const weekendSet = new Set((directModel.weekendCols ?? []).map((col) => col.col));
     let weekdayDayCol = 12;
     while (weekendSet.has(weekdayDayCol) && weekdayDayCol < 20) weekdayDayCol += 1;

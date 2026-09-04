@@ -75,7 +75,7 @@ export const HEADER_META_WRAP_HEIGHT = 28;
 export const LABOR_COL_WIDTHS: Record<string, number> = {
   A: 13,
   B: 13,
-  C: 24,
+  C: 32,
   D: 15,
   // ExcelJS omits width=9 (treats it as the default and drops the col). 9.01 persists as ~9.
   E: 10,
@@ -95,8 +95,10 @@ export const LABOR_CENTER: Partial<ExcelJS.Alignment> = {
 };
 /** Same width on every day col (L through last date). 3 made `9.5` into ##; 3.2 persists. */
 export const LABOR_DAY_COL_WIDTH = 3.2;
-/** Rotated D-MMM day labels. A–K stay single-line (no wrap). */
-export const LABOR_HEADER_ROW_HEIGHT = 36;
+/** A–K one line + 7pt rotated D-MMM. 36 looked like a doubled wrap row. */
+export const LABOR_HEADER_ROW_HEIGHT = 22;
+/** Every craft HC/HPS/ST/OT/DT/PD/title row — no wrap-driven spikes. */
+export const LABOR_DATA_ROW_HEIGHT = 16;
 /** Two short Job setup phase-bar rows above the date header. */
 export const LABOR_PHASE_ROW_HEIGHT = 14;
 export const SUMMARY_COL_A_WIDTH = 28;
@@ -345,11 +347,13 @@ export function headerMetaHeight(text: string, colWidth: number): number {
   return HEADER_META_LINE_HEIGHT + (lines - 1) * 12;
 }
 
-function applyHeaderMetaLayout(ws: ExcelJS.Worksheet, bandLastCol: number) {
+function applyHeaderMetaLayout(ws: ExcelJS.Worksheet, bandLastCol: number, wrap = true) {
   for (const row of [2, 3] as const) {
     const cell = ws.getCell(row, 1);
-    cell.alignment = { ...(cell.alignment ?? {}), vertical: "middle", wrapText: true };
-    ws.getRow(row).height = headerMetaHeight(String(cell.value ?? ""), headerBandWidth(ws, bandLastCol));
+    cell.alignment = { ...(cell.alignment ?? {}), vertical: "middle", wrapText: wrap };
+    ws.getRow(row).height = wrap
+      ? headerMetaHeight(String(cell.value ?? ""), headerBandWidth(ws, bandLastCol))
+      : HEADER_META_LINE_HEIGHT;
   }
 }
 
@@ -527,6 +531,23 @@ function centerLaborCell(cell: ExcelJS.Cell, extra: Partial<ExcelJS.Alignment> =
   };
 }
 
+function pinLaborEvenRows(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDateCol: number, maxRow: number) {
+  ws.getRow(4).height = LABOR_PHASE_ROW_HEIGHT;
+  ws.getRow(5).height = LABOR_PHASE_ROW_HEIGHT;
+  ws.getRow(6).height = LABOR_HEADER_ROW_HEIGHT;
+  const spacers = new Set(sheet.spacerRows ?? []);
+  for (let row = 4; row <= maxRow; row += 1) {
+    for (let col = 1; col <= Math.max(11, lastDateCol); col += 1) {
+      const cell = ws.getCell(row, col);
+      const rotation = cell.alignment?.textRotation;
+      centerLaborCell(cell, rotation ? { textRotation: rotation } : {});
+    }
+  }
+  for (let row = 7; row <= maxRow; row += 1) {
+    ws.getRow(row).height = spacers.has(row) ? 8 : LABOR_DATA_ROW_HEIGHT;
+  }
+}
+
 /** Last style write — Excel number xfs drop column-only center. */
 function pinLaborCraftAlignment(ws: ExcelJS.Worksheet, lastDateCol: number, maxRow: number) {
   const colAlign = { horizontal: "center" as const, vertical: "middle" as const };
@@ -672,7 +693,7 @@ function applyLaborChrome(
   if (lastDateCol >= 12) {
     for (let i = 12; i <= lastDateCol; i += 1) {
       ws.getColumn(i).width = LABOR_DAY_COL_WIDTH;
-      ws.getColumn(i).alignment = { ...LABOR_CENTER };
+      ws.getColumn(i).alignment = { horizontal: "center", vertical: "middle" };
     }
   }
   // Brand + subtitle bands span the day grid so L2:last / L3:last are not a white void.
@@ -682,7 +703,7 @@ function applyLaborChrome(
     }
   }
   for (const col of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) {
-    ws.getColumn(col).alignment = { ...LABOR_CENTER };
+    ws.getColumn(col).alignment = { horizontal: "center", vertical: "middle" };
   }
 
   const blocks = sheet.laborBlocks?.length ? sheet.laborBlocks : inferLaborBlocks(sheet.cells, maxRow);
@@ -707,7 +728,7 @@ function applyLaborChrome(
       const exCell = ws.getCell(row, weekend.col);
       exCell.fill = solid(LABOR_WEEKEND_FILL);
       if (row === 6) {
-        exCell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 8 };
+        exCell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 7 };
       }
     }
   }
@@ -734,6 +755,7 @@ function applyLaborChrome(
   for (let col = 12; col <= lastDateCol; col += 1) {
     const header = ws.getCell(6, col);
     centerLaborCell(header, { textRotation: 90 });
+    header.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 7 };
     header.numFmt = "D-MMM";
   }
   for (let col = 1; col <= 11; col += 1) {
@@ -951,7 +973,11 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       ws.getRow(4).height = 6;
       ws.getRow(5).height = 6;
     }
-    applyHeaderMetaLayout(ws, labor ? Math.max(11, lastVisibleColNum) : isSummary ? 3 : lastVisibleColNum);
+    applyHeaderMetaLayout(
+      ws,
+      labor ? Math.max(11, lastVisibleColNum) : isSummary ? 3 : lastVisibleColNum,
+      !labor,
+    );
     if (!labor) ws.getRow(6).height = 20;
     ws.autoFilter = undefined;
     ws.pageSetup.printArea = `A1:${colLetter(lastVisibleColNum)}${Math.max(maxRow, 7)}`;
@@ -965,7 +991,8 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     }
     if (labor) {
       pinLaborCraftAlignment(ws, lastVisibleColNum, maxRow);
-      applyHeaderMetaLayout(ws, Math.max(11, lastVisibleColNum));
+      applyHeaderMetaLayout(ws, Math.max(11, lastVisibleColNum), false);
+      pinLaborEvenRows(ws, sheet, lastVisibleColNum, maxRow);
     }
     await ws.protect(SHEET_PROTECT_PASSWORD, SHEET_PROTECT_OPTIONS);
   }
