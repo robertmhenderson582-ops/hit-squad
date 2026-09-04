@@ -271,7 +271,7 @@ function isAdderRow(cells: SheetCell[], row: number): boolean {
 
 function defaultMerges(cells: SheetCell[]): string[] {
   const lastCol = maxHeaderCol(cells);
-  return [`A1:${lastCol}1`];
+  return [`A1:${lastCol}1`, `A2:${lastCol}2`, `A3:${lastCol}3`];
 }
 
 function isLaborSheet(name: string) {
@@ -365,6 +365,41 @@ function applyTotalStyle(exCell: ExcelJS.Cell) {
 function applySectionStyle(exCell: ExcelJS.Cell) {
   exCell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
   exCell.fill = solid(SUMMARY_SECTION);
+}
+
+function applyTotalBar(ws: ExcelJS.Worksheet, row: number, lastColNum: number) {
+  for (let col = 1; col <= lastColNum; col += 1) {
+    applyTotalStyle(ws.getCell(row, col));
+  }
+}
+
+/** Rate Tables / cost tabs: steel header stack + zebra, no plain white grid. */
+function applyInstrumentChrome(
+  ws: ExcelJS.Worksheet,
+  maxRow: number,
+  lastColNum: number,
+  totalRows: Set<number>,
+) {
+  for (let row = 1; row <= 5; row += 1) {
+    for (let col = 1; col <= lastColNum; col += 1) {
+      applyRowStyle(ws.getCell(row, col), row, maxRow, false, col);
+    }
+  }
+  hairGrid(ws, 6, maxRow, 1, lastColNum);
+  for (let col = 1; col <= lastColNum; col += 1) {
+    patchBorder(ws.getCell(6, col), { bottom: edge("medium", AMBER_FLARE) });
+  }
+  for (let row = 7; row <= maxRow; row += 1) {
+    if (totalRows.has(row)) continue;
+    const wash = row % 2 === 0 ? LABOR_CAGE_WASH_B : LABOR_CAGE_WASH_A;
+    for (let col = 1; col <= lastColNum; col += 1) {
+      const cell = ws.getCell(row, col);
+      cell.fill = solid(wash);
+      if (col === 1) {
+        cell.font = { bold: true, color: { argb: STEEL_DEEP }, name: "Calibri", size: 10 };
+      }
+    }
+  }
 }
 
 function applyAdderStyle(exCell: ExcelJS.Cell) {
@@ -620,7 +655,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       views: [
         labor
           ? { state: "frozen", xSplit: 11, ySplit: 6, activeCell: "L7", showGridLines: true }
-          : { state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: true },
+          : { state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: false },
       ],
     });
 
@@ -679,7 +714,11 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       ws.getColumn(colIndex(col)).width = columnWidth(col, header, sheet.name);
     }
     if (labor) applyLaborChrome(ws, sheet, maxRow, lastColNum, totalRows);
-    if (isSummary) applySummaryChrome(ws, maxRow, totalRows, sectionRows);
+    else if (isSummary) applySummaryChrome(ws, maxRow, totalRows, sectionRows);
+    else applyInstrumentChrome(ws, maxRow, lastColNum, totalRows);
+
+    const totalWidth = labor ? 11 : lastColNum;
+    for (const row of totalRows) applyTotalBar(ws, row, totalWidth);
 
     for (const col of sheet.hiddenCols ?? []) {
       ws.getColumn(col).hidden = true;

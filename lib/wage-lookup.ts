@@ -16,6 +16,7 @@ import { BAYWAY_BOOK_ID, BAYWAY_BOOK_LABEL, BAYWAY_CRAFT_PD, BAYWAY_LABOR, BAYWA
 import { FERNDALE_BOOK_ID, FERNDALE_BOOK_LABEL, FERNDALE_CRAFT_PD, FERNDALE_LABOR, FERNDALE_MARKUP, FERNDALE_PLANT, FERNDALE_STAFF_PD } from "./shahan-ferndale.ts";
 import { MONROE_BOOK_ID, MONROE_BOOK_LABEL, MONROE_CRAFT_PD, MONROE_LABOR, MONROE_MARKUP, MONROE_PLANT, MONROE_STAFF_PD } from "./shahan-monroe.ts";
 import { RODEO_BOOK_ID, RODEO_BOOK_LABEL, RODEO_CRAFT_PD, RODEO_LABOR, RODEO_MARKUP, RODEO_PLANT, RODEO_STAFF_PD } from "./shahan-rodeo.ts";
+import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
 import {
   NO_COMP_WAGE_MESSAGE,
   SHAHAN_BOOK_ID,
@@ -26,6 +27,8 @@ import {
   SHAHAN_PLANT,
   SHAHAN_STAFF_PD,
   formatDeskDollars,
+  lookupShahanLabor,
+  normalizeTitle,
   type JobRates,
   type ShahanLaborRow,
   type ShahanLookupOpts,
@@ -227,6 +230,60 @@ export function wageLookupOpts(site = "", extra: ShahanLookupOpts = {}): ShahanL
   const catalog = catalogForSite(site);
   if (catalog) return { ...extra, catalog };
   return extra;
+}
+
+function pricedBaseWage(row: ShahanLaborRow | null | undefined): row is ShahanLaborRow {
+  return typeof row?.baseSt === "number" && Number.isFinite(row.baseSt) && row.baseSt > 0;
+}
+
+/** Token key so Shahan crew titles hit the COMP book (FORMAN/FOREMAN, word order, GRP01). */
+export function wageTitleKey(title: string): string {
+  return normalizeTitle(title)
+    .replace(/\bforman\b/g, "foreman")
+    .replace(/\bteamsters\b/g, "teamster")
+    .replace(/\bgrp0*(\d+)\b/g, (_, n) => `grp ${Number(n)}`)
+    .replace(/\b0+(\d+)\b/g, "$1")
+    .split(/\s+/)
+    .filter(Boolean)
+    .sort()
+    .join(" ");
+}
+
+function pickUniqueWageRow(rows: ShahanLaborRow[], laborClass?: LaborClass | null): ShahanLaborRow | null {
+  if (rows.length === 1) return rows[0];
+  if (!rows.length) return null;
+  if (laborClass === "Merit") {
+    const merit = rows.filter((row) => /merit/i.test(row.group));
+    if (merit.length === 1) return merit[0];
+  } else if (laborClass === "Union") {
+    const union = rows.filter((row) => !/merit/i.test(row.group));
+    if (union.length === 1) return union[0];
+  }
+  return null;
+}
+
+/**
+ * COMP BW for a crew title from the plant wage book, then the billed row’s
+ * verified baseSt. Unique token match only — never invents dollars.
+ */
+export function lookupCompWageRow(
+  title: string,
+  site = "",
+  laborClass?: LaborClass | null,
+): ShahanLaborRow | null {
+  const resolved = laborClass ?? defaultLaborClass(title);
+  const book = bookForSite(site);
+  if (book?.wageCatalog.length) {
+    const exact = lookupShahanLabor(title, { catalog: book.wageCatalog, laborClass: resolved });
+    if (pricedBaseWage(exact)) return exact;
+    const key = wageTitleKey(title);
+    const hits = book.wageCatalog.filter((row) => wageTitleKey(row.craftName) === key);
+    const picked = pickUniqueWageRow(hits, resolved);
+    if (pricedBaseWage(picked)) return picked;
+  }
+  const billed = lookupShahanLabor(title, wageLookupOpts(site, { laborClass: resolved }));
+  if (pricedBaseWage(billed)) return billed;
+  return null;
 }
 
 export function offerRateBookForSite(site = ""):

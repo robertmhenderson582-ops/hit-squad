@@ -44,6 +44,7 @@ import {
   LABOR_COL_WIDTHS,
   LABOR_DAY_COL_WIDTH,
   LABOR_DAYSHIFT_BANNER,
+  LABOR_CAGE_WASH_A,
   LABOR_CAGE_WASH_B,
   LABOR_DAY_WASH,
   LABOR_HC_HPS,
@@ -909,6 +910,75 @@ describe("estimate excel export", () => {
     );
     assert.ok(totalRow);
     assert.equal(argb(summary.getCell(`A${totalRow.ref.slice(1)}`)), SUMMARY_TOTAL.slice(2));
+    assert.equal(argb(summary.getCell(`B${totalRow.ref.slice(1)}`)), SUMMARY_TOTAL.slice(2));
+    assert.equal(argb(summary.getCell(`C${totalRow.ref.slice(1)}`)), SUMMARY_TOTAL.slice(2));
+  });
+
+  it("fills Rate Tables COMP BW from the Wood River wage book", () => {
+    const site = "Wood River — Roxana, IL";
+    const sheets = buildEstimateWorkbook({
+      title: "Aromatics rates",
+      client: "Phillips 66",
+      site,
+      crew: {
+        staff: [
+          craft("gs-pf", "General Superintendent PF 01", 10),
+          craft("gs-bm", "General Superintendent BM 01", 10),
+        ],
+        foreman: [craft("pf-fm", "PIPEFITTER FORMAN", 10, { otAfter8: true })],
+        support: [craft("tm", "TEAMSTERS GRP 01", 10, { otAfter8: true })],
+      },
+    });
+    const rates = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.rates);
+    assert.ok(rates);
+    const byCraft = new Map<string, number>();
+    for (const cell of rates.cells) {
+      if (cell.type !== "text" || !cell.ref.startsWith("A") || Number(cell.ref.slice(1)) < 7) continue;
+      const row = cell.ref.slice(1);
+      const bw = rates.cells.find((item) => item.ref === `B${row}` && item.type === "number");
+      byCraft.set(String(cell.value), bw?.type === "number" ? bw.value : 0);
+    }
+    assert.equal(byCraft.get("General Superintendent PF 01"), 67.5);
+    assert.equal(byCraft.get("General Superintendent BM 01"), 62);
+    assert.equal(byCraft.get("PIPEFITTER FORMAN"), 53.93);
+    assert.equal(byCraft.get("TEAMSTERS GRP 01"), 45.8);
+  });
+
+  it("paints a continuous amber TOTAL bar across every used column", async () => {
+    const bytes = await estimateToXlsx(woodRiverFixture());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const argb = (cell: ExcelJS.Cell) =>
+      String((cell.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "")
+        .replace(/^FF/i, "")
+        .toUpperCase();
+    const amber = SUMMARY_TOTAL.slice(2);
+    const totalRowOf = (sheet: ExcelJS.Worksheet, label: string) => {
+      let found = 0;
+      sheet.eachRow((row, rowNumber) => {
+        if (String(row.getCell(1).value ?? "") === label) found = rowNumber;
+      });
+      return found;
+    };
+    const misc = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc);
+    const travel = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.travel);
+    const rental = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rental);
+    const rates = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rates);
+    const summary = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
+    assert.ok(misc && travel && rental && rates && summary);
+    const miscTotal = totalRowOf(misc, "TOTAL");
+    const travelTotal = totalRowOf(travel, "TOTAL");
+    const rentalTotal = totalRowOf(rental, "TOTAL");
+    assert.ok(miscTotal && travelTotal && rentalTotal);
+    for (const col of [1, 2, 3, 4, 5]) assert.equal(argb(misc.getCell(miscTotal, col)), amber);
+    for (const col of [1, 2, 3, 4, 5]) assert.equal(argb(travel.getCell(travelTotal, col)), amber);
+    for (const col of [1, 2, 3, 4, 5, 6, 7, 8]) assert.equal(argb(rental.getCell(rentalTotal, col)), amber);
+    assert.equal(argb(rates.getCell("A7")), LABOR_CAGE_WASH_A.slice(2));
+    assert.equal(argb(rates.getCell("B8")) === LABOR_CAGE_WASH_A.slice(2) || argb(rates.getCell("B8")) === LABOR_CAGE_WASH_B.slice(2), true);
+    assert.equal(argb(rates.getCell("B2")), "E4EBE9");
+    const summaryTotal = totalRowOf(summary, "ESTIMATE TOTAL $");
+    assert.ok(summaryTotal);
+    for (const col of [1, 2, 3]) assert.equal(argb(summary.getCell(summaryTotal, col)), amber);
   });
 
   it("protects formula cells and leaves HC/HPS/PD day-grid unlocked", async () => {

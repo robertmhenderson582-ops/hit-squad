@@ -65,7 +65,7 @@ import {
   type ShahanLaborRow,
 } from "./shahan-wood-river.ts";
 import { emptySubSheet, lineAmount, subCardTotal, type SubSheet } from "./subcontractor.ts";
-import { bookForSite, wageLookupOpts } from "./wage-lookup.ts";
+import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
 import { buildWorkbook, colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
@@ -217,10 +217,7 @@ function billedRow(title: string, site = "", laborClass?: LaborClass | null): Sh
 }
 
 function wageRow(title: string, site = "", laborClass?: LaborClass | null): ShahanLaborRow | null {
-  const book = bookForSite(site);
-  if (!book) return null;
-  const resolved = laborClass ?? defaultLaborClass(title);
-  return lookupShahanLabor(title, { catalog: book.wageCatalog, laborClass: resolved });
+  return lookupCompWageRow(title, site, laborClass);
 }
 
 function usedRateKeys(crew: EstimateXlsxCrew = {}): RateKey[] {

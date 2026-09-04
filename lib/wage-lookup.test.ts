@@ -35,8 +35,10 @@ import {
   formatBaseWage,
   formatBilledSt,
   formatWageRate,
+  lookupCompWageRow,
   lookupWageRate,
   offerRateBookForSite,
+  wageTitleKey,
   wageLookupBook,
   wageLookupLabels,
   wageLookupNote,
@@ -280,6 +282,23 @@ describe("estimate wage lookup tab", () => {
     assert.match(ratesDesk, /ThirdPartyRentalDesk/);
     assert.match(ratesDesk, /RateBuilderCard/);
     assert.match(ratesDesk, /No book yet/);
+  });
+
+  it("maps Shahan crew titles to COMP BW without inventing dollars", () => {
+    const site = "Wood River — Roxana, IL";
+    assert.equal(lookupCompWageRow("General Superintendent PF 01", site)?.baseSt, 67.5);
+    assert.equal(lookupCompWageRow("General Superintendent BM 01", site)?.baseSt, 62);
+    assert.equal(lookupCompWageRow("PIPEFITTER FORMAN", site)?.baseSt, 53.93);
+    assert.equal(lookupCompWageRow("TEAMSTERS GRP 01", site)?.baseSt, 45.8);
+    assert.equal(lookupCompWageRow("Boilermaker Journeyman", site)?.baseSt, 45.6);
+    assert.equal(lookupCompWageRow("Not A Real Craft", site), null);
+    assert.equal(wageTitleKey("PIPEFITTER FORMAN"), wageTitleKey("PIPEFITTER FOREMAN"));
+    assert.equal(wageTitleKey("TEAMSTERS GRP 01"), wageTitleKey("TEAMSTER GRP01"));
+    assert.equal(wageTitleKey("General Superintendent PF 01"), wageTitleKey("SUPERINTENDENT GENERAL PF 01"));
+    assert.equal(wageTitleKey("PIPEFITTER FORMAN") === wageTitleKey("PIPEFITTER FOREMAN 01"), false);
+    const formanHits = WOOD_RIVER_WAGE.filter((row) => wageTitleKey(row.craftName) === wageTitleKey("PIPEFITTER FORMAN"));
+    assert.equal(formanHits.length, 1);
+    assert.equal(formanHits[0].craftName, "PIPEFITTER FOREMAN");
   });
 
   it("lists unique COMP wages for a Wood River estimate", () => {
