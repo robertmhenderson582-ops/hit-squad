@@ -766,6 +766,8 @@ describe("estimate excel export", () => {
     assert.equal(widthOf(direct, 1), LABOR_COL_WIDTHS.A);
     assert.equal(widthOf(direct, 2), LABOR_COL_WIDTHS.B);
     assert.equal(widthOf(direct, 3), LABOR_COL_WIDTHS.C);
+    assert.equal(widthOf(direct, 5), LABOR_COL_WIDTHS.E);
+    assert.equal(widthOf(direct, 6), LABOR_COL_WIDTHS.F);
     assert.equal(widthOf(direct, 11), LABOR_COL_WIDTHS.K);
     assert.equal(widthOf(direct, 12), LABOR_DAY_COL_WIDTH);
     assert.equal(widthOf(summary, 1), SUMMARY_COL_A_WIDTH);
@@ -1291,7 +1293,7 @@ describe("estimate excel export", () => {
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, `L${night.hc}`), 1);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, `K${lead.title}`) > 0, true);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, `D${lead.pd}`) > 0, true);
-    assert.equal(gf.title, lead.title + LABOR_BLOCK_HEIGHT);
+    assert.equal(gf.title, lead.title + LABOR_BLOCK_HEIGHT + 1);
     const idCol = colLetter(LABOR_BLOCK_ID_COL);
     const leadId = laborBlockId({ id: "st", position: "Lead Safety 01" }, false);
     const nightId = laborBlockId({ id: "dr", position: "Boilermaker Journeyman" }, true);

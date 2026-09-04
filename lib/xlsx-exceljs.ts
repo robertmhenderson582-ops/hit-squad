@@ -36,8 +36,9 @@ export const LABOR_COL_WIDTHS: Record<string, number> = {
   B: 13,
   C: 24,
   D: 14,
-  E: 9,
-  F: 9,
+  // ExcelJS omits width=9 (treats it as the default and drops the col). 9.01 persists as ~9.
+  E: 9.01,
+  F: 9.01,
   G: 8.5,
   H: 8.5,
   I: 8.5,
