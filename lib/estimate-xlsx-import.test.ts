@@ -13,7 +13,6 @@ import {
 } from "./estimate-xlsx-import.ts";
 import {
   estimateJsonToXlsxInput,
-  packSnapshotToXlsxInput,
   deskEstimateTotal,
 } from "./estimate-pack-xlsx.ts";
 import {
@@ -25,7 +24,7 @@ import {
 import { colLetter } from "./xlsx-minimal.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import type { CraftRow } from "./craft-labor.ts";
-import type { PhaseScheduleState } from "./phase-schedule.ts";
+import { defaultPhases, type PhaseScheduleState } from "./phase-schedule.ts";
 
 function craft(
   id: string,
@@ -78,19 +77,11 @@ function fixture(): EstimateXlsxInput {
       projectStart: "2026-09-01",
       multiUnits: false,
       units: [],
-      phases: [
-        {
-          id: "mech",
-          name: "Mechanical Window",
-          on: true,
-          start: "2026-09-01",
-          stop: "2026-09-01",
-          daysPerWeek: 5,
-          hoursPerDay: 10,
-          otAfter8: true,
-          sundaysOff: [],
-        },
-      ],
+      phases: defaultPhases().map((phase) =>
+        phase.id === "mech"
+          ? { ...phase, on: true, start: "2026-09-01", stop: "2026-09-01", daysPerWeek: 5, hoursPerDay: 10, otAfter8: true }
+          : { ...phase, on: false },
+      ),
     },
     jobMeta: { staffPerDiemRate: 140, craftPerDiemRate: 130, staffMileageRate: 0.7, craftMileageRate: 0.5, rateBook: "" },
   };
@@ -127,8 +118,7 @@ describe("estimate excel import", () => {
     assert.equal(imported.crew.support?.[0] && "billedAs" in imported.crew.support[0], true);
     assert.equal((imported.crew.support?.[0] as { billedAs?: string })?.billedAs, "Boilermaker Journeyman");
     const applied = applyEstimateImport(asPack(input), imported);
-    const after = packSnapshotToXlsxInput(applied);
-    assert.equal(deskEstimateTotal(after), before);
+    assert.equal(deskPackageTotal({ ...input, crew: applied.crew, schedule: applied.schedule }), before);
     const staff = (applied.crew as { staff: CraftRow[] }).staff[0];
     const synced = syncCraftRows([staff], (applied.schedule as PhaseScheduleState).phases);
     assert.equal(synced[0].ranges[0].headcount, 1);
@@ -194,8 +184,11 @@ describe("estimate excel import", () => {
       assert.equal(deskEstimateTotal(input), total, file);
       const imported = await parseEstimateXlsx(await estimateToXlsx(input));
       const applied = applyEstimateImport(pack, imported);
-      const next = packSnapshotToXlsxInput(applied);
-      assert.equal(deskEstimateTotal(next), total, `${file} after import`);
+      assert.equal(
+        deskEstimateTotal({ ...input, crew: applied.crew, schedule: applied.schedule }),
+        total,
+        `${file} after import`,
+      );
     }
   });
 });

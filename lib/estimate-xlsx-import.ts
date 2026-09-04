@@ -197,6 +197,13 @@ function daysMask(days: ImportedDay[]): boolean[] {
   return mask;
 }
 
+function priorOtAfter8(existing: CraftRow | undefined, phaseId: string | undefined, night: boolean): boolean | undefined {
+  const ranges = existing?.ranges ?? [];
+  const hit = ranges.find((range) => range.phaseId === phaseId && (range.shift === "Nights") === night)
+    ?? ranges.find((range) => range.phaseId === phaseId);
+  return hit?.otAfter8;
+}
+
 function rangeFromPattern(
   days: ImportedDay[],
   night: boolean,
@@ -205,6 +212,7 @@ function rangeFromPattern(
   end: string,
   pattern: Pick<ImportedDay, "hc" | "hps" | "pd">,
   skipDates: string[],
+  existing?: CraftRow,
 ): CalendarRange {
   return {
     id: `rg-${start}-${night ? "n" : "d"}-${phase?.id ?? "x"}`,
@@ -219,7 +227,7 @@ function rangeFromPattern(
     skipDates,
     phaseId: phase?.id,
     shift: night ? "Nights" : "Days",
-    otAfter8: phase?.otAfter8,
+    otAfter8: priorOtAfter8(existing, phase?.id, night) ?? phase?.otAfter8,
   };
 }
 
@@ -249,26 +257,90 @@ function contiguousRuns(days: ImportedDay[]): ImportedDay[][] {
   return runs;
 }
 
-function rangesFromDays(days: ImportedDay[], night: boolean, phases: PhaseRow[]): CalendarRange[] {
+function rangeShiftOf(range: CalendarRange): CalendarRange["shift"] {
+  return range.shift ?? "Days";
+}
+
+function rangeCoversImported(range: CalendarRange, ymd: string, night: boolean): boolean {
+  const shift = rangeShiftOf(range);
+  if (range.off) return false;
+  if (night && shift === "Days") return false;
+  if (!night && shift === "Nights") return false;
+  if (!range.start || !range.end || ymd < range.start || ymd > range.end) return false;
+  if (range.skipDates?.includes(ymd)) return false;
+  const date = parseYmd(ymd);
+  if (!date) return false;
+  if (Array.isArray(range.days) && range.days.length === 7 && !range.days[date.getDay()]) return false;
+  return true;
+}
+
+function existingDayPlug(row: CraftRow, ymd: string, night: boolean): Pick<ImportedDay, "hc" | "hps" | "pd"> {
+  const ranges = (row.ranges ?? []).filter((range) => rangeCoversImported(range, ymd, night));
+  if (!ranges.length) return { hc: 0, hps: 0, pd: 0 };
+  let hourUnits = 0;
+  let pd = 0;
+  let hps = 0;
+  for (const range of ranges) {
+    const shift = rangeShiftOf(range);
+    const nightsOnly = night && shift === "Nights";
+    const hc = nightsOnly ? range.headcount : night ? range.nightHeadcount : range.headcount;
+    const rangeHps = Number(range.hoursPerShift) || 0;
+    hourUnits += (Number(hc) || 0) * rangeHps;
+    pd += nightsOnly || !night ? Number(range.perDiemPeople) || 0 : Number(range.nightPerDiemPeople) || 0;
+    if (rangeHps > 0) hps = rangeHps;
+  }
+  const hc = hps > 0 ? hourUnits / hps : 0;
+  if (hc <= 0 && pd <= 0) return { hc: 0, hps: 0, pd: 0 };
+  return { hc, hps, pd };
+}
+
+function sameQty(left: number, right: number) {
+  return Math.abs(left - right) < 0.02;
+}
+
+function existingMatchesDays(row: CraftRow | undefined, days: ImportedDay[], night: boolean): boolean {
+  if (!row?.ranges?.length) return false;
+  return days.every((day) => {
+    const plug = existingDayPlug(row, day.ymd, night);
+    return sameQty(plug.hc, day.hc) && sameQty(plug.pd, day.pd) && (day.hc <= 0 || sameQty(plug.hps, day.hps) || plug.hps === 0);
+  });
+}
+
+function existingRangesForSide(row: CraftRow, night: boolean): CalendarRange[] {
+  return (row.ranges ?? []).filter((range) => {
+    const shift = rangeShiftOf(range);
+    return night ? shift === "Nights" : shift !== "Nights";
+  });
+}
+
+function rangesFromDays(days: ImportedDay[], night: boolean, phases: PhaseRow[], existing?: CraftRow): CalendarRange[] {
+  if (existing && existingMatchesDays(existing, days, night)) {
+    return existingRangesForSide(existing, night);
+  }
   const byYmd = new Map(days.map((day) => [day.ymd, day]));
   const used = new Set<string>();
   const ranges: CalendarRange[] = [];
   const onPhases = phases.filter((phase) => phase.on && phase.start && phase.stop);
   for (const phase of onPhases) {
-    const window = eachYmd(phase.start, phase.stop).map((ymd) => byYmd.get(ymd) ?? { ymd, hc: 0, hps: 0, st: 0, ot: 0, dt: 0, pd: 0 });
-    window.forEach((day) => used.add(day.ymd));
+    const window = eachYmd(phase.start, phase.stop).map((ymd) => {
+      const day = byYmd.get(ymd) ?? { ymd, hc: 0, hps: 0, st: 0, ot: 0, dt: 0, pd: 0 };
+      used.add(ymd);
+      const owner = phaseOwningDate(phases, ymd);
+      if (owner?.id !== phase.id) return { ...day, hc: 0, hps: 0, st: 0, ot: 0, dt: 0, pd: 0 };
+      return day;
+    });
     const firstLive = window.find(dayLive);
-    const pattern = firstLive ?? { hc: 0, hps: firstLive?.hps || phase.hoursPerDay || 0, pd: 0 };
-    const skipDates = window.filter((day) => dayPattern(day) !== dayPattern(pattern) || !dayLive(day)).map((day) => day.ymd);
-    ranges.push(rangeFromPattern(window, night, phase, phase.start, phase.stop, pattern, skipDates));
+    const pattern = firstLive ?? { hc: 0, hps: phase.hoursPerDay || 0, pd: 0 };
+    const skipDates = window.filter((day) => !dayLive(day) || dayPattern(day) !== dayPattern(pattern)).map((day) => day.ymd);
+    ranges.push(rangeFromPattern(window, night, phase, phase.start, phase.stop, pattern, skipDates, existing));
     const extras = window.filter((day) => dayLive(day) && dayPattern(day) !== dayPattern(pattern));
     for (const run of contiguousRuns(extras)) {
-      ranges.push(rangeFromPattern(run, night, phase, run[0].ymd, run[run.length - 1].ymd, run[0], []));
+      ranges.push(rangeFromPattern(run, night, phase, run[0].ymd, run[run.length - 1].ymd, run[0], [], existing));
     }
   }
   const leftover = days.filter((day) => !used.has(day.ymd) && dayLive(day));
   for (const run of contiguousRuns(leftover)) {
-    ranges.push(rangeFromPattern(run, night, phaseOwningDate(phases, run[0].ymd), run[0].ymd, run[run.length - 1].ymd, run[0], []));
+    ranges.push(rangeFromPattern(run, night, phaseOwningDate(phases, run[0].ymd), run[0].ymd, run[run.length - 1].ymd, run[0], [], existing));
   }
   return ranges;
 }
@@ -362,8 +434,8 @@ function applyRowFromBlocks(existing: CraftRow, blocks: ImportedBlock[], phases:
   const dayBlocks = blocks.filter((block) => !block.night);
   const nightBlocks = blocks.filter((block) => block.night);
   const ranges = [
-    ...dayBlocks.flatMap((block) => rangesFromDays(block.days, false, phases)),
-    ...nightBlocks.flatMap((block) => rangesFromDays(block.days, true, phases)),
+    ...dayBlocks.flatMap((block) => rangesFromDays(block.days, false, phases, existing)),
+    ...nightBlocks.flatMap((block) => rangesFromDays(block.days, true, phases, existing)),
   ];
   const hours = rollupHours(blocks.flatMap((block) => block.days));
   const night = ranges.some((range) => range.shift === "Nights");

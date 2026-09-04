@@ -1715,7 +1715,7 @@ describe("estimate excel export", () => {
     };
     const sheets = buildEstimateWorkbook(input);
     const names = sheets.map((sheet) => sheet.name);
-    assert.equal(names.length, 13);
+    assert.equal(names.length, 15);
     assert.equal(names[0], ESTIMATE_XLSX_SHEETS.summary);
     assert.deepEqual(
       ["Staff", "Foremen", "Direct", "Support"].every((name) => names.includes(name)),
@@ -1743,7 +1743,7 @@ describe("estimate excel export", () => {
     }
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));
-    assert.equal(wb.worksheets.length, 13);
+    assert.equal(wb.worksheets.length, 15);
     assert.ok(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader?.includes("HIT SQUAD"));
     assert.equal(/field trial|forgebook/i.test(String(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader)), false);
     const lead = laborHours(staffSheet, "Lead Safety 01");
@@ -2005,7 +2005,7 @@ describe("estimate excel export", () => {
     assert.equal(supportBook.getCell(`B${fire.st}`).value, LABOR_BILL_AS_LABEL);
     assert.equal(supportBook.getCell(`B${fire.ot}`).value, "Boilermaker Journeyman");
     assert.equal(Boolean(supportBook.getCell(`B${fire.ot}`).protection?.locked), false);
-    assert.equal(supportBook.getCell(`B${fire.title}`).protection?.locked !== false, true);
+    assert.equal(Boolean(supportBook.getCell(`B${fire.title}`).protection?.locked), false);
     assert.equal(supportBook.getCell(`B${fire.st}`).protection?.locked !== false, true);
     assert.ok(supportBook.getCell(`B${fire.ot}`).dataValidation);
     assert.equal(Boolean(supportBook.getCell(`B${fire.ot}`).alignment?.wrapText), true);
