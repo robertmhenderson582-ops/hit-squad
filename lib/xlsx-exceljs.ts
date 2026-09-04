@@ -50,6 +50,11 @@ export const SUMMARY_TOTAL = AMBER_FLARE;
 export const SUMMARY_ZEBRA_A = "FFE7EEEC";
 export const SUMMARY_ZEBRA_B = "FFDCE8E6";
 
+/** Compact 9pt subtitle row. Grows only when the merged A1–last header is too narrow. */
+export const HEADER_META_LINE_HEIGHT = 16;
+/** Two wrapped lines of Calibri 9 — keeps the header stack, no giant single-line merge. */
+export const HEADER_META_WRAP_HEIGHT = 28;
+
 export const LABOR_COL_WIDTHS: Record<string, number> = {
   A: 10,
   B: 13,
@@ -295,6 +300,30 @@ function defaultMerges(cells: SheetCell[]): string[] {
   return [`A1:${lastCol}1`, `A2:${lastCol}2`, `A3:${lastCol}3`];
 }
 
+function headerBandWidth(ws: ExcelJS.Worksheet, lastCol: number): number {
+  let width = 0;
+  for (let col = 1; col <= lastCol; col += 1) {
+    width += Number(ws.getColumn(col).width) || 11;
+  }
+  return width;
+}
+
+/** One Excel width unit ≈ one Calibri 11 character. Size 9 is close enough to wrap before clip. */
+export function headerMetaHeight(text: string, colWidth: number): number {
+  const fit = Math.max(8, colWidth);
+  if (!text || text.length <= fit) return HEADER_META_LINE_HEIGHT;
+  const lines = Math.min(3, Math.ceil(text.length / fit));
+  return HEADER_META_LINE_HEIGHT + (lines - 1) * 12;
+}
+
+function applyHeaderMetaLayout(ws: ExcelJS.Worksheet, bandLastCol: number) {
+  for (const row of [2, 3] as const) {
+    const cell = ws.getCell(row, 1);
+    cell.alignment = { ...(cell.alignment ?? {}), vertical: "middle", wrapText: true };
+    ws.getRow(row).height = headerMetaHeight(String(cell.value ?? ""), headerBandWidth(ws, bandLastCol));
+  }
+}
+
 function isLaborSheet(name: string) {
   return name === "Staff" || name === "Foremen" || name === "Direct" || name === "Support";
 }
@@ -342,13 +371,13 @@ function applyRowStyle(
   if (row === 2) {
     exCell.font = { size: 9, color: { argb: STEEL_DEEP }, name: "Calibri" };
     exCell.fill = solid(PLATE_WASH);
-    exCell.alignment = { vertical: "middle", wrapText: false };
+    exCell.alignment = { vertical: "middle", wrapText: true };
     return;
   }
   if (row === 3) {
     exCell.font = { size: 9, italic: true, color: { argb: MUTED_TEXT }, name: "Calibri" };
     exCell.fill = solid(PLATE_WASH_DEEP);
-    exCell.alignment = { vertical: "middle", wrapText: false };
+    exCell.alignment = { vertical: "middle", wrapText: true };
     return;
   }
   if (row === 4 || row === 5) {
@@ -603,10 +632,6 @@ function applyLaborChrome(
     header.numFmt = "D-MMM";
   }
   ws.getRow(6).height = 36;
-  for (const row of [2, 3]) {
-    const cell = ws.getCell(row, 1);
-    cell.alignment = { vertical: "middle", wrapText: false };
-  }
 }
 
 function applySummaryChrome(
@@ -628,9 +653,6 @@ function applySummaryChrome(
     for (let col = 1; col <= 3; col += 1) {
       ws.getCell(row, col).fill = solid(wash);
     }
-  }
-  for (const row of [2, 3]) {
-    ws.getCell(row, 1).alignment = { vertical: "middle", wrapText: false };
   }
 }
 
@@ -758,10 +780,9 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     }
 
     ws.getRow(1).height = 22;
-    ws.getRow(2).height = 16;
-    ws.getRow(3).height = 16;
     ws.getRow(4).height = 6;
     ws.getRow(5).height = 6;
+    applyHeaderMetaLayout(ws, labor ? 11 : isSummary ? 3 : lastColNum);
     if (!labor) ws.getRow(6).height = 20;
     ws.autoFilter = undefined;
     ws.pageSetup.printArea = `A1:${lastCol}${Math.max(maxRow, 7)}`;

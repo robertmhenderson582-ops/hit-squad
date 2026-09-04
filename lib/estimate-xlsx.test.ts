@@ -70,6 +70,8 @@ import {
   LABOR_SPACER,
   LABOR_SUN_BODY,
   LABOR_SUN_HEADER,
+  HEADER_META_LINE_HEIGHT,
+  HEADER_META_WRAP_HEIGHT,
   SUMMARY_COL_A_WIDTH,
   SUMMARY_SECTION,
   SUMMARY_TOTAL,
@@ -355,10 +357,16 @@ describe("estimate excel export", () => {
 
     const staffSheet = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
     assert.ok(staffSheet && summarySheet);
-    assert.equal(Number(staffSheet.getRow(2).height) <= 18, true);
-    assert.equal(Number(staffSheet.getRow(3).height) <= 18, true);
-    assert.equal(Boolean(staffSheet.getCell("A2").alignment?.wrapText), false);
-    assert.equal(Boolean(staffSheet.getCell("A3").alignment?.wrapText), false);
+    assert.match(String(summarySheet.getCell("A2").value ?? ""), /East Coast \(PCA0001103\)/);
+    assert.match(String(summarySheet.getCell("A3").value ?? ""), /Confidential estimate package/);
+    assert.equal(summarySheet.getCell("A2").alignment?.wrapText, true);
+    assert.equal(summarySheet.getCell("A3").alignment?.wrapText, true);
+    assert.equal(Number(summarySheet.getRow(2).height), HEADER_META_WRAP_HEIGHT);
+    assert.equal(Number(summarySheet.getRow(3).height), HEADER_META_WRAP_HEIGHT);
+    assert.equal(Number(staffSheet.getRow(2).height), HEADER_META_LINE_HEIGHT);
+    assert.equal(Number(staffSheet.getRow(3).height), HEADER_META_LINE_HEIGHT);
+    assert.equal(staffSheet.getCell("A2").alignment?.wrapText, true);
+    assert.equal(staffSheet.getCell("A3").alignment?.wrapText, true);
     assert.equal(staffSheet.getCell("B7").numFmt, EXCEL_UNIT_FORMATS.hours);
     assert.equal(staffSheet.getCell("K7").numFmt, "$#,##0.00");
     assert.equal(staffSheet.getCell("E10").numFmt, "$#,##0.00");
