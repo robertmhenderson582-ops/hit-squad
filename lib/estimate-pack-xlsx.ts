@@ -29,7 +29,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
-export { EXCEL_RIPPLE_RETROACTIVE, EXCEL_RIPPLE_RULE } from "./excel-ripple.ts";
+export { EXCEL_JOB_SETUP_IMPORT_PARKED, EXCEL_RIPPLE_RETROACTIVE, EXCEL_RIPPLE_RULE } from "./excel-ripple.ts";
 
 export function crewFromPack(raw: unknown): EstimateXlsxCrew {
   const parsed = asRecord(raw) ?? {};

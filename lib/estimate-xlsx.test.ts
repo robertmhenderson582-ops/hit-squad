@@ -9,6 +9,7 @@ import { describe, it } from "node:test";
 import type { CraftRow } from "./craft-labor.ts";
 import {
   buildEstimateWorkbook,
+  EXCEL_JOB_SETUP_IMPORT_PARKED,
   ESTIMATE_EXPORT_BRAND,
   ESTIMATE_EXPORT_CONFIDENTIAL,
   ESTIMATE_EXPORT_ERROR,
@@ -709,6 +710,7 @@ describe("estimate excel export", () => {
       assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.org), false);
       assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.slicer), false);
       assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.laydown), false);
+      assert.equal(names.includes("Job setup"), false);
     }
   });
 
@@ -1274,6 +1276,10 @@ describe("estimate excel export", () => {
     assert.equal(staff.getCell("G10").protection?.locked !== false, true);
     assert.equal(staff.getCell("B10").protection?.locked !== false, true);
     assert.equal(staff.getCell("A8").protection?.locked !== false, true);
+    assert.equal(staff.getCell("A4").protection?.locked !== false, true);
+    assert.equal(staff.getCell("L4").protection?.locked !== false, true);
+    assert.equal(staff.getCell("L5").protection?.locked !== false, true);
+    assert.equal(wb.getWorksheet("Job setup"), undefined);
     let totalRow = 0;
     summary.eachRow((row, rowNumber) => {
       if (String(row.getCell(1).value ?? "") === "ESTIMATE TOTAL $") totalRow = rowNumber;
@@ -1931,6 +1937,10 @@ describe("estimate excel export", () => {
     const src = readFileSync(fileURLToPath(new URL("./estimate-xlsx.ts", import.meta.url)), "utf8");
     assert.match(src, /liveJobSetupPhases/);
     assert.match(src, /phaseBarRuns/);
+    assert.match(src, /next Excel compile/);
+    assert.match(src, /view only/);
     assert.equal(/2026-01-11|Jan 11/.test(src), false);
+    assert.equal(EXCEL_JOB_SETUP_IMPORT_PARKED, true);
+    assert.equal(buildEstimateWorkbook(base).some((sheet) => sheet.name === "Job setup"), false);
   });
 });

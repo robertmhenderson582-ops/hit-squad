@@ -6,6 +6,7 @@
  * on this branch (TOTAL bars, Rate Tables chrome, wrap, center, drop .0,
  * phase bar) must not invent catalogs or disconnect math from those libs.
  * Phase-bar fills come from phase-schedule (desk globals), not sample dates.
+ * Phase bar is a locked view this Look pass — no editable Job setup card.
  */
 
 import ExcelJS from "exceljs";
@@ -217,7 +218,7 @@ export function summaryLineFormat(lineLabel: string): string {
   return FMT_CURRENCY;
 }
 
-export { EXCEL_RIPPLE_RULE } from "./excel-ripple.ts";
+export { EXCEL_JOB_SETUP_IMPORT_PARKED, EXCEL_RIPPLE_RULE } from "./excel-ripple.ts";
 export const EXCEL_UNIT_FORMATS = {
   currency: FMT_CURRENCY,
   hours: FMT_HOURS,

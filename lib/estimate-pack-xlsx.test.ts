@@ -328,6 +328,9 @@ describe("estimate pack JSON → xlsx", () => {
     assert.match(ripple, /RETROACTIVE/);
     assert.match(ripple, /never a parallel book/);
     assert.match(ripple, /Look chrome already shipped/);
+    assert.match(ripple, /next Excel compile/);
+    assert.match(ripple, /Adjustable Job setup/);
+    assert.match(ripple, /view of Job setup only/);
     assert.equal(/25324671|1435365/.test(ripple), false);
   });
 });

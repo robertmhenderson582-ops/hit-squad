@@ -36,6 +36,9 @@
  * (xlsx-exceljs) must not invent money.
  * Labor phase bar (rows 4–5 above the date row) is Job setup ON phases from
  * phase-schedule (start/stop per phase) — not hard-coded sample dates.
+ * This Look pass paints that bar as a view only. Adjustable Job setup card
+ * + phase-bar / Position / hour import is parked for the next Excel compile
+ * after Look (excel-ripple.ts). Do not add a Job setup sheet here.
  * Never commit source workbooks to git (Look samples excepted).
  */
 
@@ -94,7 +97,7 @@ import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
 import { buildWorkbook, colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
-export { EXCEL_RIPPLE_RETROACTIVE, EXCEL_RIPPLE_RULE } from "./excel-ripple.ts";
+export { EXCEL_JOB_SETUP_IMPORT_PARKED, EXCEL_RIPPLE_RETROACTIVE, EXCEL_RIPPLE_RULE } from "./excel-ripple.ts";
 export const ESTIMATE_EXPORT_ERROR = "Could not export. Try again.";
 export const ESTIMATE_EXPORT_PRODUCER = "Produced by Hit Squad Project Controls";
 export const ESTIMATE_EXPORT_BRAND = "HIT SQUAD / PROJECT CONTROLS";

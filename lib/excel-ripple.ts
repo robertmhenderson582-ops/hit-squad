@@ -15,7 +15,17 @@
  *
  * Position dropdowns + workbook import stay parked until Look sign-off.
  * A validation list with no pack path would be a parallel book.
+ *
+ * Adjustable Job setup + phase-bar import is parked for the next Excel
+ * compile after Look (Robert 2026-09-04). Locked answer is YES under the
+ * ripple rule: a Job setup sheet/card (phases / dates / OT picks) will
+ * drive the phase bar, and edits to that card, the bar, Position
+ * dropdowns, and hour cells will import back into the live desk pack.
+ * This Look pass ships the phase bar as a view of Job setup only — not
+ * editable, not a Job setup card, not an import path.
  */
 export const EXCEL_RIPPLE_RETROACTIVE = true;
 export const EXCEL_RIPPLE_RULE =
   "Excel is a view of the live estimate pack. One change updates the pack and every surface. Never a parallel book.";
+/** Next Excel compile after Look — not this Look chrome pass. */
+export const EXCEL_JOB_SETUP_IMPORT_PARKED = true;
