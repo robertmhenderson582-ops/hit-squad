@@ -76,9 +76,9 @@ export const LABOR_COL_WIDTHS: Record<string, number> = {
   A: 13,
   B: 13,
   C: 32,
-  D: 15,
+  D: 20,
   // ExcelJS omits width=9 (treats it as the default and drops the col). 9.01 persists as ~9.
-  E: 10,
+  E: 12,
   F: 9.01,
   G: 10,
   H: 10,
@@ -572,6 +572,38 @@ function pinHoursAndMoney(
     for (const [col, width] of Object.entries(LABOR_COL_WIDTHS)) {
       ws.getColumn(colIndex(col)).width = width;
     }
+  }
+  fitCurrencyColumns(ws, lastCol, maxRow);
+}
+
+function numericResult(cell: ExcelJS.Cell): number | undefined {
+  const value = cell.value as { result?: unknown } | number | null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value && typeof value === "object" && typeof value.result === "number" && Number.isFinite(value.result)) {
+    return value.result;
+  }
+  return undefined;
+}
+
+/** Excel hashes (`##########`) when the formatted $ string is wider than the column. */
+function fitCurrencyColumns(ws: ExcelJS.Worksheet, lastCol: number, maxRow: number) {
+  const needed = new Map<number, number>();
+  for (let row = 7; row <= maxRow; row += 1) {
+    for (let col = 1; col <= lastCol; col += 1) {
+      const cell = ws.getCell(row, col);
+      if (cell.numFmt !== FMT_CURRENCY) continue;
+      const amount = numericResult(cell);
+      if (amount == null) continue;
+      const shown = `$${Math.abs(amount).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
+      needed.set(col, Math.max(needed.get(col) ?? 14, shown.length + 4));
+    }
+  }
+  for (const [col, width] of needed) {
+    const current = Number(ws.getColumn(col).width) || 11;
+    if (width > current) ws.getColumn(col).width = width;
   }
 }
 

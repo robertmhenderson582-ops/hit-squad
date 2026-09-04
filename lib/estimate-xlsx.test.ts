@@ -2011,4 +2011,64 @@ describe("estimate excel export", () => {
     assert.equal(fill(summary.getCell("A2")) === "E4EBE9" || fill(summary.getCell("A2")) === "FFE4EBE9", true);
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("C7").dataValidation, undefined);
   });
+
+  it("uses #,##0 hours and unclipped $ currency on every package sheet", async () => {
+    const bytes = await estimateToXlsx(woodRiverFixture());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const names = wb.worksheets.map((sheet) => sheet.name);
+    assert.ok(names.includes(ESTIMATE_XLSX_SHEETS.summary));
+    assert.ok(names.includes(ESTIMATE_XLSX_SHEETS.staff));
+    assert.ok(names.includes(ESTIMATE_XLSX_SHEETS.direct));
+    assert.ok(names.includes(ESTIMATE_XLSX_SHEETS.rental));
+    assert.ok(names.includes(ESTIMATE_XLSX_SHEETS.travel));
+    assert.ok(names.includes(ESTIMATE_XLSX_SHEETS.misc));
+    assert.ok(names.includes(ESTIMATE_XLSX_SHEETS.rates));
+    for (const ws of wb.worksheets) {
+      const headers = new Map<number, string>();
+      ws.getRow(6).eachCell((cell, col) => {
+        headers.set(col, String(cell.value ?? ""));
+      });
+      ws.eachRow((row, rowNumber) => {
+        if (rowNumber < 7) return;
+        row.eachCell({ includeEmpty: false }, (cell, col) => {
+          const fmt = String(cell.numFmt ?? "");
+          const header = headers.get(col) ?? "";
+          const lower = header.toLowerCase();
+          const hourish =
+            /hrs|hours|qty|periods|travelers|miles|\bcount\b|man-hours|\bmh\b|^pd$|^billable$/.test(lower) &&
+            !/\$/.test(lower) &&
+            !/rate/.test(lower);
+          if (hourish && cell.type !== ExcelJS.ValueType.String) {
+            assert.equal(fmt, EXCEL_UNIT_FORMATS.hours, `${ws.name} ${cell.address} ${header}`);
+            assert.equal(fmt.includes("."), false, `${ws.name} ${cell.address}`);
+            assert.equal(cell.alignment?.horizontal, "center", `${ws.name} ${cell.address}`);
+          }
+          if (fmt === EXCEL_UNIT_FORMATS.currency) {
+            const raw = typeof cell.value === "number" ? cell.value : (cell.value as { result?: number })?.result;
+            if (typeof raw !== "number") return;
+            const shown = `$${Math.abs(raw).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            assert.equal(Number(ws.getColumn(col).width) >= shown.length + 2, true, `${ws.name} col ${col} ${shown}`);
+          }
+        });
+      });
+    }
+    const misc = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc)!;
+    assert.equal(misc.getCell("C7").numFmt, EXCEL_UNIT_FORMATS.hours);
+    assert.equal(misc.getCell("C7").alignment?.horizontal, "center");
+    assert.equal(misc.getCell("E7").numFmt, EXCEL_UNIT_FORMATS.currency);
+    const travel = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.travel)!;
+    assert.equal(travel.getCell("B7").numFmt, EXCEL_UNIT_FORMATS.hours);
+    assert.equal(travel.getCell("E7").numFmt, EXCEL_UNIT_FORMATS.currency);
+    const rental = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rental)!;
+    assert.equal(rental.getCell("C7").numFmt, EXCEL_UNIT_FORMATS.hours);
+    assert.equal(rental.getCell("H7").numFmt, EXCEL_UNIT_FORMATS.currency);
+    const summary = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)!;
+    let hoursRow = 0;
+    summary.eachRow((row, n) => {
+      if (String(row.getCell(1).value ?? "") === ESTIMATE_HOURS_LINE) hoursRow = n;
+    });
+    assert.equal(summary.getCell(`C${hoursRow}`).numFmt, EXCEL_UNIT_FORMATS.hours);
+    assert.equal(summary.getCell(`C${hoursRow}`).alignment?.horizontal, "center");
+  });
 });
