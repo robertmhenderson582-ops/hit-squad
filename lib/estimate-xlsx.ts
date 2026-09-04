@@ -14,6 +14,9 @@
  * Empty category sheets are omitted — leftover $0 / untitled rows do not
  * create a blank Crane Rental, Subcontractor, tension, rental, COE, travel,
  * misc, or labor tab. Only sheets with live rows for that estimate.
+ * Rate Tables lists used crafts plus live Large tools (Shahan COE dry/wet
+ * rates) and live third-party rentals from the same catalogs the desk uses.
+ * A category with no live lines is omitted; dollars are never invented.
  * Subcontractor tab is all subs (not crane-only). Summary Subs $ is desk
  * Subs ESTIMATE TOTAL (cost + affiliate-aware 6.5%). Weekend columns on
  * labor grids are shaded. Daily ST/OT/DT cells use the desk clock
@@ -57,13 +60,20 @@ import { miscAmount, travelAmount, type OtherCostSheet, type TravelLine } from "
 import { eachYmd, type PhaseScheduleState } from "./phase-schedule.ts";
 import {
   hasShahanBillRate,
+  isShahanCostPlus,
   lookupShahanEquipment,
   lookupShahanLabor,
   SHAHAN_NO_RATE_LABEL,
   shahanCrewTitle,
+  shahanPeriodRate,
   type JobRates,
   type ShahanLaborRow,
 } from "./shahan-wood-river.ts";
+import {
+  hasThirdPartyPeriodRate,
+  lookupThirdPartyRental,
+  thirdPartyRentalPeriodRate,
+} from "./third-party-rental.ts";
 import { emptySubSheet, lineAmount, subCardTotal, type SubSheet } from "./subcontractor.ts";
 import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
@@ -76,6 +86,8 @@ export const ESTIMATE_EXPORT_CONFIDENTIAL = "Confidential estimate package";
 export const ESTIMATE_SUMMARY_AMOUNT = "Amount $";
 export const ESTIMATE_SUMMARY_HOURS = "Man-hours (MH)";
 export const ESTIMATE_HOURS_LINE = "Man-hours";
+export const RATE_TOOLS_SECTION = "Large tools (COE / dry rates)";
+export const RATE_RENTAL_SECTION = "Third-party rental";
 export const LABOR_DATE_START_COL = 12;
 export const LABOR_BLOCK_HEIGHT = 7;
 /** Full job window. 90 days truncated Aromatics and understated desk totals. */
@@ -273,6 +285,10 @@ function pushFormula(cells: SheetCell[], ref: string, value: string) {
   cells.push({ ref, type: "formula", value });
 }
 
+function pushRate(cells: SheetCell[], ref: string, value: number | null | undefined) {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) pushNum(cells, ref, value);
+}
+
 function thirdPartyBucket(item: string): "tension" | "crane" | "rental" {
   const hay = item.toLowerCase();
   if (/tension|torqu|rad gun/.test(hay)) return "tension";
@@ -280,11 +296,54 @@ function thirdPartyBucket(item: string): "tension" | "crane" | "rental" {
   return "rental";
 }
 
+function usedLargeTools(input: EstimateXlsxInput): LargeToolLine[] {
+  const seen = new Set<string>();
+  const rows: LargeToolLine[] = [];
+  for (const line of input.equipment?.largeTools ?? []) {
+    if (!liveLargeTool(line) || seen.has(line.itemId)) continue;
+    seen.add(line.itemId);
+    rows.push(line);
+  }
+  return rows;
+}
+
+function usedThirdParty(input: EstimateXlsxInput): ThirdPartyLine[] {
+  const seen = new Set<string>();
+  const rows: ThirdPartyLine[] = [];
+  for (const line of input.equipment?.thirdParty ?? []) {
+    const name = line.item.trim();
+    if (!liveThirdParty(line) || seen.has(name)) continue;
+    seen.add(name);
+    rows.push(line);
+  }
+  return rows;
+}
+
+function writeRateSection(
+  cells: SheetCell[],
+  row: number,
+  title: string,
+  headers: string[],
+): { headerRow: number; next: number } {
+  pushText(cells, `A${row}`, title);
+  const headerRow = row + 1;
+  headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}${headerRow}`, label));
+  return { headerRow, next: headerRow + 1 };
+}
+
 function buildRateSheet(input: EstimateXlsxInput, keys: RateKey[]): BuiltSheet | null {
-  if (!keys.length) return null;
+  const tools = usedLargeTools(input);
+  const rentals = usedThirdParty(input);
+  if (!keys.length && !tools.length && !rentals.length) return null;
   const cells = headerCells(input);
-  const headers = ["Craft", "COMP BW $", "ST Bill $", "OT Bill $", "DT Bill $", "PD Rate"];
-  headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
+  const headerRows: number[] = [];
+  const lastCol = "F";
+  const merges = [`A1:${lastCol}1`, `A2:${lastCol}2`, `A3:${lastCol}3`];
+  if (keys.length) {
+    headerRows.push(6);
+    const headers = ["Craft", "COMP BW $", "ST Bill $", "OT Bill $", "DT Bill $", "PD Rate"];
+    headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
+  }
   const site = input.site ?? "";
   keys.forEach((key, index) => {
     const excelRow = 7 + index;
@@ -301,7 +360,71 @@ function buildRateSheet(input: EstimateXlsxInput, keys: RateKey[]): BuiltSheet |
       pushText(cells, `C${excelRow}`, SHAHAN_NO_RATE_LABEL);
     }
   });
-  return { name: ESTIMATE_XLSX_SHEETS.rates, cells };
+  let excelRow = keys.length ? 7 + keys.length : 6;
+  if (tools.length) {
+    if (keys.length) excelRow += 1;
+    const section = writeRateSection(cells, excelRow, RATE_TOOLS_SECTION, [
+      "Item",
+      "Fuel",
+      "Daily $",
+      "Weekly $",
+      "Monthly $",
+      "Notes",
+    ]);
+    merges.push(`A${excelRow}:${lastCol}${excelRow}`);
+    headerRows.push(section.headerRow);
+    excelRow = section.next;
+    for (const line of tools) {
+      const item = lookupShahanEquipment(line.itemId);
+      pushText(cells, `A${excelRow}`, item?.description || line.itemId);
+      pushText(cells, `B${excelRow}`, item ? (item.wet ? "Wet" : "Dry") : "");
+      if (item) {
+        pushRate(cells, `C${excelRow}`, shahanPeriodRate(item, "daily"));
+        pushRate(cells, `D${excelRow}`, shahanPeriodRate(item, "weekly"));
+        pushRate(cells, `E${excelRow}`, shahanPeriodRate(item, "monthly"));
+      }
+      if (item && isShahanCostPlus(item)) pushText(cells, `F${excelRow}`, "Cost + 6%");
+      excelRow += 1;
+    }
+  }
+  if (rentals.length) {
+    if (keys.length || tools.length) excelRow += 1;
+    const markup = commercialMarkupRate(input.client, input.site);
+    const section = writeRateSection(cells, excelRow, RATE_RENTAL_SECTION, [
+      "Item",
+      "Daily $",
+      "Weekly $",
+      "Monthly $",
+      "Freight $",
+      "Markup %",
+    ]);
+    merges.push(`A${excelRow}:${lastCol}${excelRow}`);
+    headerRows.push(section.headerRow);
+    excelRow = section.next;
+    for (const line of rentals) {
+      const catalog = lookupThirdPartyRental(line.item);
+      pushText(cells, `A${excelRow}`, line.item);
+      if (catalog) {
+        if (hasThirdPartyPeriodRate(catalog, "daily")) {
+          pushRate(cells, `B${excelRow}`, thirdPartyRentalPeriodRate(catalog, "daily"));
+        }
+        if (hasThirdPartyPeriodRate(catalog, "weekly")) {
+          pushRate(cells, `C${excelRow}`, thirdPartyRentalPeriodRate(catalog, "weekly"));
+        }
+        if (hasThirdPartyPeriodRate(catalog, "monthly")) {
+          pushRate(cells, `D${excelRow}`, thirdPartyRentalPeriodRate(catalog, "monthly"));
+        }
+        if (catalog.freight > 0) pushNum(cells, `E${excelRow}`, catalog.freight);
+      } else if (line.rate > 0) {
+        const col = line.period === "daily" ? "B" : line.period === "weekly" ? "C" : "D";
+        pushRate(cells, `${col}${excelRow}`, line.rate);
+        if (line.freight > 0) pushNum(cells, `E${excelRow}`, line.freight);
+      }
+      if (markup > 0) cells.push({ ref: `F${excelRow}`, type: "number", value: markup });
+      excelRow += 1;
+    }
+  }
+  return { name: ESTIMATE_XLSX_SHEETS.rates, cells, merges, headerRows };
 }
 
 function rateCell(key: RateKey, keys: RateKey[], col: string) {

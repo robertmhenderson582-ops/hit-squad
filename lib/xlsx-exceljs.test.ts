@@ -13,6 +13,10 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(formatForHeader("COMP BW $"), "$#,##0.00");
     assert.equal(formatForHeader("ST Bill $"), "$#,##0.00");
     assert.equal(formatForHeader("Rate $"), "$#,##0.00");
+    assert.equal(formatForHeader("Daily $"), "$#,##0.00");
+    assert.equal(formatForHeader("Weekly $"), "$#,##0.00");
+    assert.equal(formatForHeader("Monthly $"), "$#,##0.00");
+    assert.equal(formatForHeader("Freight $"), "$#,##0.00");
     assert.equal(formatForHeader("Cost $"), "$#,##0.00");
     assert.equal(formatForHeader("Each $"), "$#,##0.00");
     assert.equal(formatForHeader("Markup $"), "$#,##0.00");

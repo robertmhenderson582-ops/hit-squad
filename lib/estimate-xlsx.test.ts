@@ -32,12 +32,26 @@ import {
   estimateToXlsx,
   estimateXlsxFilename,
   laborCalendarDates,
+  RATE_RENTAL_SECTION,
+  RATE_TOOLS_SECTION,
   sheetRef,
 } from "./estimate-xlsx.ts";
+import { commercialMarkupRate } from "./estimate-total.ts";
+import {
+  hasThirdPartyPeriodRate,
+  lookupThirdPartyRental,
+  thirdPartyRentalPeriodRate,
+} from "./third-party-rental.ts";
 import { deskEstimateTotal, estimateWorkbookSummaryTotal } from "./estimate-pack-xlsx.ts";
 import { computeRowHours } from "./hours-clock.ts";
 import { defaultLaborClass } from "./labor-class.ts";
-import { lookupShahanLabor, SHAHAN_NO_RATE_LABEL, shahanCrewCostAmount } from "./shahan-wood-river.ts";
+import {
+  lookupShahanEquipment,
+  lookupShahanLabor,
+  SHAHAN_NO_RATE_LABEL,
+  shahanCrewCostAmount,
+  shahanPeriodRate,
+} from "./shahan-wood-river.ts";
 import { wageLookupOpts } from "./wage-lookup.ts";
 import {
   EXCEL_UNIT_FORMATS,
@@ -201,6 +215,15 @@ function sheetOf(sheets: WorkbookSheet[], name: string) {
 
 function cellMap(sheet: WorkbookSheet) {
   return new Map(sheet.cells.map((cell) => [cell.ref, cell]));
+}
+
+function labelRow(sheet: WorkbookSheet, label: string) {
+  for (const cell of sheet.cells) {
+    if (cell.type === "text" && cell.ref.startsWith("A") && cell.value === label) {
+      return Number(cell.ref.slice(1));
+    }
+  }
+  return 0;
 }
 
 function laborTitleRow(sheet: WorkbookSheet, position: string, shift = LABOR_DAYSHIFT) {
@@ -604,6 +627,10 @@ describe("estimate excel export", () => {
     );
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crane), undefined);
     assert.equal(wb.getWorksheet(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub)), undefined);
+    const leftoverRates = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.rates);
+    assert.ok(leftoverRates);
+    assert.equal(leftoverRates.cells.some((cell) => cell.value === RATE_TOOLS_SECTION), false);
+    assert.equal(leftoverRates.cells.some((cell) => cell.value === RATE_RENTAL_SECTION), false);
   });
 
   it("Look samples omit empty category sheets (no blank Crane / OM Crane tabs)", async () => {
@@ -944,6 +971,190 @@ describe("estimate excel export", () => {
     assert.equal(byCraft.get("General Superintendent BM 01"), 62);
     assert.equal(byCraft.get("PIPEFITTER FORMAN"), 53.93);
     assert.equal(byCraft.get("TEAMSTERS GRP 01"), 45.8);
+  });
+
+  it("appends live Large tools and third-party catalogs to Rate Tables without inventing rates", async () => {
+    const weekday = { start: "2026-09-01", end: "2026-09-01" };
+    const welder = lookupThirdPartyRental("450amp diesel welder");
+    const ln25 = lookupThirdPartyRental("LN 25 Mig guns");
+    const mover = lookupShahanEquipment("air-mover");
+    const truck = lookupShahanEquipment("wet:8:truck-crew");
+    const threaders = lookupShahanEquipment("PIPE THREADERS (535 AND LARGER) COST PLUS 6%");
+    assert.ok(welder && ln25 && mover && truck && threaders);
+    const input = {
+      title: "Rate Tables equipment",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      crew: { staff: [craft("st-1", "Superintendent 01", 10)] },
+      schedule: woodRiverFixture().schedule,
+      jobMeta: woodRiverFixture().jobMeta,
+      equipment: {
+        largeTools: [
+          {
+            id: "lt-mover",
+            itemId: "air-mover",
+            period: "daily" as const,
+            qty: 1,
+            ...weekday,
+            enteredCost: 0,
+            freight: 0,
+          },
+          {
+            id: "lt-mover-dup",
+            itemId: "air-mover",
+            period: "weekly" as const,
+            qty: 2,
+            ...weekday,
+            enteredCost: 0,
+            freight: 0,
+          },
+          {
+            id: "lt-truck",
+            itemId: "wet:8:truck-crew",
+            period: "monthly" as const,
+            qty: 1,
+            ...weekday,
+            enteredCost: 0,
+            freight: 0,
+          },
+          {
+            id: "lt-plus",
+            itemId: "PIPE THREADERS (535 AND LARGER) COST PLUS 6%",
+            period: "daily" as const,
+            qty: 1,
+            ...weekday,
+            enteredCost: 1000,
+            freight: 0,
+          },
+        ],
+        thirdParty: [
+          {
+            id: "tp-weld",
+            item: "450amp diesel welder",
+            period: "daily" as const,
+            rate: 134,
+            freight: 100,
+            qty: 1,
+            ...weekday,
+          },
+          {
+            id: "tp-purge",
+            item: "Purge Monitors",
+            period: "monthly" as const,
+            rate: 1200,
+            freight: 50,
+            qty: 1,
+            ...weekday,
+          },
+          {
+            id: "tp-ln",
+            item: "LN 25 Mig guns",
+            period: "monthly" as const,
+            rate: 225,
+            freight: 50,
+            qty: 1,
+            ...weekday,
+          },
+        ],
+      },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const rates = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.rates);
+    assert.ok(rates);
+    const map = cellMap(rates);
+    assert.equal(map.get("A7")?.value, "Superintendent 01");
+    assert.equal(map.get("C7")?.type, "number");
+    assert.equal(Number(map.get("C7")?.value) > 0, true);
+    assert.deepEqual(rates.headerRows?.includes(6), true);
+
+    const toolsTitle = labelRow(rates, RATE_TOOLS_SECTION);
+    const rentalTitle = labelRow(rates, RATE_RENTAL_SECTION);
+    assert.ok(toolsTitle > 7);
+    assert.ok(rentalTitle > toolsTitle);
+    const toolsHeader = toolsTitle + 1;
+    const rentalHeader = rentalTitle + 1;
+    assert.equal(map.get(`A${toolsHeader}`)?.value, "Item");
+    assert.equal(map.get(`B${toolsHeader}`)?.value, "Fuel");
+    assert.equal(map.get(`C${toolsHeader}`)?.value, "Daily $");
+    assert.equal(map.get(`A${rentalHeader}`)?.value, "Item");
+    assert.equal(map.get(`B${rentalHeader}`)?.value, "Daily $");
+    assert.equal(map.get(`F${rentalHeader}`)?.value, "Markup %");
+    assert.equal(rates.headerRows?.includes(toolsHeader), true);
+    assert.equal(rates.headerRows?.includes(rentalHeader), true);
+
+    const moverRow = toolsHeader + 1;
+    const truckRow = toolsHeader + 2;
+    const plusRow = toolsHeader + 3;
+    assert.equal(map.get(`A${moverRow}`)?.value, mover.description);
+    assert.equal(map.get(`B${moverRow}`)?.value, "Dry");
+    assert.equal(map.get(`C${moverRow}`)?.value, shahanPeriodRate(mover, "daily"));
+    assert.equal(map.get(`D${moverRow}`)?.value, shahanPeriodRate(mover, "weekly"));
+    assert.equal(map.get(`E${moverRow}`)?.value, shahanPeriodRate(mover, "monthly"));
+    assert.equal(map.get(`A${truckRow}`)?.value, truck.description);
+    assert.equal(map.get(`B${truckRow}`)?.value, "Wet");
+    assert.equal(map.get(`C${truckRow}`)?.value, shahanPeriodRate(truck, "daily"));
+    assert.equal(map.get(`D${truckRow}`)?.value, shahanPeriodRate(truck, "weekly"));
+    assert.equal(map.get(`E${truckRow}`)?.value, shahanPeriodRate(truck, "monthly"));
+    assert.equal(map.get(`A${plusRow}`)?.value, threaders.description);
+    assert.equal(map.get(`C${plusRow}`), undefined);
+    assert.equal(map.get(`D${plusRow}`), undefined);
+    assert.equal(map.get(`E${plusRow}`), undefined);
+    assert.equal(map.get(`F${plusRow}`)?.value, "Cost + 6%");
+    assert.equal(
+      rates.cells.filter((cell) => cell.type === "text" && cell.value === mover.description).length,
+      1,
+    );
+
+    const weldRow = rentalHeader + 1;
+    const purgeRow = rentalHeader + 2;
+    const lnRow = rentalHeader + 3;
+    const markup = commercialMarkupRate("Phillips 66", "Wood River — Roxana, IL");
+    assert.equal(map.get(`A${weldRow}`)?.value, "450amp diesel welder");
+    assert.equal(map.get(`B${weldRow}`)?.value, thirdPartyRentalPeriodRate(welder, "daily"));
+    assert.equal(map.get(`C${weldRow}`)?.value, thirdPartyRentalPeriodRate(welder, "weekly"));
+    assert.equal(map.get(`D${weldRow}`)?.value, thirdPartyRentalPeriodRate(welder, "monthly"));
+    assert.equal(map.get(`E${weldRow}`)?.value, welder.freight);
+    assert.equal(map.get(`F${weldRow}`)?.value, markup);
+    assert.equal(hasThirdPartyPeriodRate(ln25, "daily"), false);
+    assert.equal(map.get(`A${purgeRow}`)?.value, "Purge Monitors");
+    assert.equal(map.get(`B${purgeRow}`), undefined);
+    assert.equal(map.get(`C${purgeRow}`), undefined);
+    assert.equal(map.get(`D${purgeRow}`)?.value, 1200);
+    assert.equal(map.get(`E${purgeRow}`)?.value, 50);
+    assert.equal(map.get(`F${purgeRow}`)?.value, markup);
+    assert.equal(map.get(`A${lnRow}`)?.value, "LN 25 Mig guns");
+    assert.equal(map.get(`B${lnRow}`), undefined);
+    assert.equal(map.get(`C${lnRow}`), undefined);
+    assert.equal(map.get(`D${lnRow}`)?.value, thirdPartyRentalPeriodRate(ln25, "monthly"));
+    assert.equal(map.get(`E${lnRow}`)?.value, ln25.freight);
+    assert.equal(map.get(`F${lnRow}`)?.value, markup);
+
+    const wood = sheetOf(buildEstimateWorkbook(woodRiverFixture()), ESTIMATE_XLSX_SHEETS.rates);
+    assert.ok(wood);
+    assert.equal(labelRow(wood, RATE_TOOLS_SECTION), 0);
+    assert.ok(labelRow(wood, RATE_RENTAL_SECTION) > 0);
+    assert.equal(cellMap(wood).get(`A${labelRow(wood, RATE_RENTAL_SECTION) + 2}`)?.value, "450amp diesel welder");
+
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const painted = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rates);
+    assert.ok(painted);
+    const argb = (cell: ExcelJS.Cell) =>
+      String((cell.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "")
+        .replace(/^FF/i, "")
+        .toUpperCase();
+    const steel = SUMMARY_SECTION.slice(2);
+    const header = "083943";
+    const toolsPaint = labelRow(rates, RATE_TOOLS_SECTION);
+    const rentalPaint = labelRow(rates, RATE_RENTAL_SECTION);
+    assert.equal(argb(painted.getCell(`A${toolsPaint}`)), steel);
+    assert.equal(argb(painted.getCell(`F${toolsPaint}`)), steel);
+    assert.equal(argb(painted.getCell(`A${toolsPaint + 1}`)), header);
+    assert.equal(argb(painted.getCell(`A${rentalPaint}`)), steel);
+    assert.equal(argb(painted.getCell(`A${rentalPaint + 1}`)), header);
+    assert.equal(painted.getCell(`C${toolsPaint + 2}`).numFmt, EXCEL_UNIT_FORMATS.currency);
+    assert.equal(painted.getCell(`F${rentalPaint + 2}`).numFmt, EXCEL_UNIT_FORMATS.percent);
   });
 
   it("paints a continuous amber TOTAL bar across every used column", async () => {

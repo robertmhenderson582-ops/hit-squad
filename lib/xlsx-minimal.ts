@@ -135,6 +135,8 @@ export type WorkbookSheet = {
   laborBlocks?: Array<{ start: number; end: number }>;
   /** Gray break rows between position blocks. */
   spacerRows?: number[];
+  /** Extra column-header rows (Rate Tables sections). Row 6 is always a header. */
+  headerRows?: number[];
 };
 
 export async function buildWorkbook(sheets: WorkbookSheet[]): Promise<Uint8Array> {

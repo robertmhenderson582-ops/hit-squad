@@ -111,11 +111,12 @@ function headerByColumn(cells: SheetCell[], row: number): Map<string, string> {
   return map;
 }
 
-function maxHeaderCol(cells: SheetCell[], row = 6): string {
+function maxHeaderCol(cells: SheetCell[], rows: number | readonly number[] = 6): string {
+  const wanted = new Set(typeof rows === "number" ? [rows] : rows);
   let max = 1;
   for (const cell of cells) {
     const parsed = parseRef(cell.ref);
-    if (parsed.row === row) max = Math.max(max, parsed.colNum);
+    if (wanted.has(parsed.row)) max = Math.max(max, parsed.colNum);
   }
   return colLetter(max);
 }
@@ -237,7 +238,9 @@ function cellFormat(
   if (isSummary && col === "B" && row >= 7) {
     return summaryLineFormat(labelByRow(sheet.cells, row) ?? "Amount $");
   }
-  const header = headers.get(col) ?? (isSummary && col === "B" ? "Amount $" : "");
+  const headerRow = sheet.headerRows?.length ? nearestHeaderRow(sheet.cells, row, sheet.headerRows) : 6;
+  const local = headerRow === 6 ? headers : headerByColumn(sheet.cells, headerRow);
+  const header = local.get(col) ?? (isSummary && col === "B" ? "Amount $" : "");
   return formatForHeader(header);
 }
 
@@ -248,7 +251,23 @@ function isTotalRow(cells: SheetCell[], row: number): boolean {
 
 function isSectionRow(cells: SheetCell[], row: number): boolean {
   const label = cells.find((cell) => cell.ref === `A${row}`);
-  return label?.type === "text" && /^Labor \$/i.test(label.value);
+  return (
+    label?.type === "text" && /^(Labor \$|Large tools|Third-party rental)/i.test(label.value)
+  );
+}
+
+function nearestHeaderRow(cells: SheetCell[], row: number, extra: number[] = []): number {
+  const headers = new Set<number>([6, ...extra]);
+  for (const cell of cells) {
+    if (cell.type !== "text") continue;
+    if (!/COMP BW \$|ST Bill \$|Daily \$/.test(cell.value)) continue;
+    headers.add(parseRef(cell.ref).row);
+  }
+  let best = 6;
+  for (const header of headers) {
+    if (header < row && header >= best) best = header;
+  }
+  return best;
 }
 
 function laborRowKind(cells: SheetCell[], row: number): "title" | "hc" | "hps" | "pd" | "hours" | "" {
@@ -381,6 +400,8 @@ function applyInstrumentChrome(
   maxRow: number,
   lastColNum: number,
   totalRows: Set<number>,
+  sectionRows: Set<number> = new Set(),
+  headerRows: Set<number> = new Set([6]),
 ) {
   for (let row = 1; row <= 5; row += 1) {
     for (let col = 1; col <= lastColNum; col += 1) {
@@ -388,11 +409,14 @@ function applyInstrumentChrome(
     }
   }
   hairGrid(ws, 6, maxRow, 1, lastColNum);
-  for (let col = 1; col <= lastColNum; col += 1) {
-    patchBorder(ws.getCell(6, col), { bottom: edge("medium", AMBER_FLARE) });
+  for (const headerRow of headerRows) {
+    for (let col = 1; col <= lastColNum; col += 1) {
+      applyRowStyle(ws.getCell(headerRow, col), 6, maxRow, false, col);
+      patchBorder(ws.getCell(headerRow, col), { bottom: edge("medium", AMBER_FLARE) });
+    }
   }
   for (let row = 7; row <= maxRow; row += 1) {
-    if (totalRows.has(row)) continue;
+    if (totalRows.has(row) || sectionRows.has(row) || headerRows.has(row)) continue;
     const wash = row % 2 === 0 ? LABOR_CAGE_WASH_B : LABOR_CAGE_WASH_A;
     for (let col = 1; col <= lastColNum; col += 1) {
       const cell = ws.getCell(row, col);
@@ -401,6 +425,9 @@ function applyInstrumentChrome(
         cell.font = { bold: true, color: { argb: STEEL_DEEP }, name: "Calibri", size: 10 };
       }
     }
+  }
+  for (const row of sectionRows) {
+    for (let col = 1; col <= lastColNum; col += 1) applySectionStyle(ws.getCell(row, col));
   }
 }
 
@@ -634,7 +661,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
 
     const isSummary = sheet.name === "Summary Page";
     const labor = isLaborSheet(sheet.name);
-    const lastCol = maxHeaderCol(sheet.cells);
+    const lastCol = maxHeaderCol(sheet.cells, sheet.headerRows?.length ? sheet.headerRows : 6);
     const lastColNum = colIndex(lastCol);
     const ws = wb.addWorksheet(safeName, {
       properties: { tabColor: { argb: tabColorArgb(sheet.name) } },
@@ -669,9 +696,10 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     const totalRows = new Set<number>();
     const adderRows = new Set<number>();
     const sectionRows = new Set<number>();
-    for (let row = 7; row <= maxRow + 1; row += 1) {
+    const extraHeaders = new Set<number>([6, ...(sheet.headerRows ?? [])]);
+    for (let row = 6; row <= maxRow + 1; row += 1) {
       if (isTotalRow(sheet.cells, row)) totalRows.add(row);
-      else if (isSummary && isSectionRow(sheet.cells, row)) sectionRows.add(row);
+      else if (isSectionRow(sheet.cells, row)) sectionRows.add(row);
       else if (isSummary && isAdderRow(sheet.cells, row)) adderRows.add(row);
     }
 
@@ -695,6 +723,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
 
       if (totalRows.has(row)) applyTotalStyle(exCell);
       else if (sectionRows.has(row)) applySectionStyle(exCell);
+      else if (extraHeaders.has(row) && row !== 6) applyRowStyle(exCell, 6, maxRow, isSummary, colNum);
       else if (adderRows.has(row)) applyAdderStyle(exCell);
       else applyRowStyle(exCell, row, maxRow, isSummary, colNum);
 
@@ -718,7 +747,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     }
     if (labor) applyLaborChrome(ws, sheet, maxRow, lastColNum, totalRows);
     else if (isSummary) applySummaryChrome(ws, maxRow, totalRows, sectionRows);
-    else applyInstrumentChrome(ws, maxRow, lastColNum, totalRows);
+    else applyInstrumentChrome(ws, maxRow, lastColNum, totalRows, sectionRows, extraHeaders);
 
     const totalWidth = labor ? 11 : lastColNum;
     for (const row of totalRows) applyTotalBar(ws, row, totalWidth);
