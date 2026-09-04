@@ -14,9 +14,8 @@
  * Support shows live-pack Bill as under Position in column B (same rate title
  * as Rate Tables). Subtotal $ / Rate merge title through HC/HPS; ST/OT/DT/PD
  * stay per-row. That grid is the stable client edit surface
- * for a later import. Position dropdowns + workbook import are parked until
- * Look sign-off — a validation list with no pack ripple would be a parallel
- * book. Hidden block-id column is for a future importer only. Polish,
+ * for import. Position dropdowns + workbook import write the live pack
+ * (excel-ripple.ts). Hidden block-id column keys the importer. Polish,
  * repair-safe package, and $ vs MH labels only. ORG Chart is a later
  * separate export — not in this workbook.
  * Slicer Hrs (IPS / P6 dump) is not in this workbook.
@@ -44,8 +43,8 @@
  * Labor phase bar (rows 4–5 above the date row) is Job setup ON phases from
  * phase-schedule (start/stop per phase) — not hard-coded sample dates.
  * This Look pass paints that bar as a view only. Adjustable Job setup card
- * + phase-bar / Position / hour import is parked for the next Excel compile
- * after Look (excel-ripple.ts). Do not add a Job setup sheet here.
+ * + Position / hour / Bill as import ships on this compile (excel-ripple.ts).
+ * Phase-bar day/night hour chips stay parked after this next Excel compile.
  * Never commit source workbooks to git (Look samples excepted).
  */
 
@@ -79,16 +78,26 @@ import { miscAmount, travelAmount, type OtherCostSheet, type TravelLine } from "
 import {
   eachYmd,
   liveJobSetupPhases,
+  mergeSchedule,
+  PHASE_IDS,
   PHASE_NAMES,
+  PHASE_OT_PICKS,
   phaseBarRuns,
+  phaseOtPick,
   type PhaseScheduleState,
 } from "./phase-schedule.ts";
+import { SUPPORT_BILLED_AS_TITLES } from "./crew-lanes.ts";
 import {
   hasShahanBillRate,
   isShahanCostPlus,
   lookupShahanEquipment,
   lookupShahanLabor,
+  SHAHAN_CRAFT_TITLES,
+  SHAHAN_FOREMAN_TITLES,
+  SHAHAN_GENERAL_FOREMAN_TITLES,
   SHAHAN_NO_RATE_LABEL,
+  SHAHAN_STAFF_TITLES,
+  SHAHAN_SUPPORT_TITLES,
   shahanCrewTitle,
   shahanPeriodRate,
   type JobRates,
@@ -106,6 +115,7 @@ import { buildWorkbook, colLetter, excelSafeSheetName, type SheetCell, type Work
 
 export { EXCEL_JOB_SETUP_IMPORT_PARKED, EXCEL_RIPPLE_RETROACTIVE, EXCEL_RIPPLE_RULE } from "./excel-ripple.ts";
 export const ESTIMATE_EXPORT_ERROR = "Could not export. Try again.";
+export const ESTIMATE_IMPORT_ERROR = "Could not import that workbook. Use a Hit Squad export.";
 export const ESTIMATE_EXPORT_PRODUCER = "Produced by Hit Squad Project Controls";
 export const ESTIMATE_EXPORT_BRAND = "HIT SQUAD / PROJECT CONTROLS";
 export const ESTIMATE_EXPORT_CONFIDENTIAL = "Confidential estimate package";
@@ -139,7 +149,7 @@ export const LABOR_PD_TYPE = "PD";
 /** Type chip on the position header row is omitted — the Position name is the title. */
 export const LABOR_TITLE_TYPE = "";
 export const LABOR_TYPE_ORDER = ["HC", "HPS", "ST", "OT", "DT", "PD"] as const;
-/** Hidden column after the longest calendar so a later importer can key blocks. */
+/** Hidden column after the longest calendar so the importer can key blocks. */
 export const LABOR_BLOCK_ID_COL = LABOR_DATE_START_COL + LABOR_MAX_DAYS;
 export const LABOR_TITLE_OFFSET = 0;
 export const LABOR_HC_OFFSET = 1;
@@ -153,7 +163,7 @@ export const LABOR_BLOCK_VOID_COLS = ["A", "B", "F", "G", "H", "I", "J"] as cons
 export const LABOR_HOUR_VOID_COLS = ["F", "G", "H", "I", "J"] as const;
 /** Subtotal $ + Rate — title through HPS so HC/HPS are not empty holes. */
 export const LABOR_TITLE_BAND_COLS = ["C", "D"] as const;
-/** Support-only field under Position. Live pack `billedAs` — import parked with Position dropdowns. */
+/** Support-only field under Position. Live pack `billedAs` — dropdown + import round-trip. */
 export const LABOR_BILL_AS_LABEL = "Bill as";
 
 export function laborBlockVoidMerges(
@@ -176,6 +186,8 @@ export function laborBlockVoidMerges(
 
 export const ESTIMATE_XLSX_SHEETS = {
   summary: "Summary Page",
+  jobSetup: "Job setup",
+  lists: "_Lists",
   org: "ORG Chart",
   slicer: "Slicer Hrs",
   foremen: "Foremen",
@@ -894,6 +906,7 @@ function buildCrewSheet(
           valueRow: block.start + LABOR_OT_OFFSET,
         }))
       : undefined,
+    validations: laborPositionValidations(name, laborBlocks, Boolean(showBillAs)),
     merges: [
       `A1:${lastDateCol || "J"}1`,
       `A2:${lastDateCol || "J"}2`,
@@ -1289,7 +1302,114 @@ export const OPTIONAL_ESTIMATE_SHEETS = [
   ESTIMATE_XLSX_SHEETS.rates,
 ] as const;
 
-/** Summary always. Optional tabs only when that category has live rows. */
+function listFormula(col: string, count: number) {
+  return `=${ESTIMATE_XLSX_SHEETS.lists}!$${col}$1:$${col}$${Math.max(1, count)}`;
+}
+
+function laborPositionValidations(
+  name: string,
+  blocks: Array<{ start: number; end: number }>,
+  billAs: boolean,
+): Array<{ sqref: string; formulae: string[] }> {
+  const col =
+    name === ESTIMATE_XLSX_SHEETS.staff
+      ? "A"
+      : name === ESTIMATE_XLSX_SHEETS.foremen
+        ? "B"
+        : name === ESTIMATE_XLSX_SHEETS.direct
+          ? "C"
+          : "D";
+  const count =
+    name === ESTIMATE_XLSX_SHEETS.staff
+      ? uniqueTitles([...SHAHAN_STAFF_TITLES, ...SHAHAN_GENERAL_FOREMAN_TITLES]).length
+      : name === ESTIMATE_XLSX_SHEETS.foremen
+        ? SHAHAN_FOREMAN_TITLES.length
+        : name === ESTIMATE_XLSX_SHEETS.direct
+          ? SHAHAN_CRAFT_TITLES.length
+          : SHAHAN_SUPPORT_TITLES.length;
+  const next = blocks.map((block) => ({
+    sqref: `B${block.start}`,
+    formulae: [listFormula(col, count)],
+  }));
+  if (billAs) {
+    next.push(
+      ...blocks.map((block) => ({
+        sqref: `B${block.start + LABOR_OT_OFFSET}`,
+        formulae: [listFormula("E", SUPPORT_BILLED_AS_TITLES.length)],
+      })),
+    );
+  }
+  return next;
+}
+
+function uniqueTitles(titles: readonly string[]) {
+  const seen = new Set<string>();
+  const next: string[] = [];
+  for (const title of titles) {
+    const trimmed = title.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    next.push(trimmed);
+  }
+  return next;
+}
+
+function buildListsSheet(): WorkbookSheet {
+  const columns = [
+    uniqueTitles([...SHAHAN_STAFF_TITLES, ...SHAHAN_GENERAL_FOREMAN_TITLES]),
+    uniqueTitles(SHAHAN_FOREMAN_TITLES),
+    uniqueTitles(SHAHAN_CRAFT_TITLES),
+    uniqueTitles(SHAHAN_SUPPORT_TITLES),
+    uniqueTitles(SUPPORT_BILLED_AS_TITLES),
+    PHASE_OT_PICKS.map((pick) => pick.label),
+  ];
+  const cells: SheetCell[] = [];
+  columns.forEach((list, index) => {
+    const col = colLetter(index + 1);
+    list.forEach((title, row) => pushText(cells, `${col}${row + 1}`, title));
+  });
+  return { name: ESTIMATE_XLSX_SHEETS.lists, cells, veryHidden: true };
+}
+
+function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
+  const schedule = mergeSchedule(input.schedule);
+  const cells = headerCells(input);
+  const headers = ["Phase", "ON", "Start", "Stop", "Days/wk", "Hrs/day", "OT after 8", "OT pick"];
+  headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
+  const unlocked: Array<{ row: number; col: number }> = [];
+  schedule.phases.forEach((row, index) => {
+    const excelRow = 7 + index;
+    pushText(cells, `A${excelRow}`, row.name);
+    pushText(cells, `B${excelRow}`, row.on ? "ON" : "OFF");
+    const start = parseYmd(row.start);
+    const stop = parseYmd(row.stop);
+    if (start) cells.push({ ref: `C${excelRow}`, type: "date", value: start });
+    if (stop) cells.push({ ref: `D${excelRow}`, type: "date", value: stop });
+    pushNum(cells, `E${excelRow}`, row.daysPerWeek);
+    pushNum(cells, `F${excelRow}`, row.hoursPerDay);
+    pushText(cells, `G${excelRow}`, row.otAfter8 ? "YES" : "NO");
+    const pick = phaseOtPick(row);
+    if (pick) {
+      const label = PHASE_OT_PICKS.find((item) => item.id === pick)?.label ?? "";
+      pushText(cells, `H${excelRow}`, label);
+    }
+    pushText(cells, `I${excelRow}`, row.id);
+    for (let col = 2; col <= 8; col += 1) unlocked.push({ row: excelRow, col });
+  });
+  return {
+    name: ESTIMATE_XLSX_SHEETS.jobSetup,
+    cells,
+    hiddenCols: [9],
+    unlocked,
+    validations: PHASE_IDS.flatMap((id, index) => {
+      if (id !== "pre" && id !== "post") return [];
+      return [{ sqref: `H${7 + index}`, formulae: [listFormula("F", PHASE_OT_PICKS.length)] }];
+    }),
+    merges: ["A1:H1", "A2:H2", "A3:H3"],
+  };
+}
+
+/** Summary always. Job setup + Position lists always (import compile). Optional tabs when live. */
 export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSheet[] {
   const keys = usedRateKeys(input.crew);
   const rates = buildRateSheet(input, keys);
@@ -1332,7 +1452,9 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   const body = [staff, foremen, direct, support, rental, tension, crane, sub, coe, staffTravel, misc, rates]
     .filter((sheet): sheet is BuiltSheet => Boolean(sheet))
     .map((sheet) => ({ ...sheet, name: xlsxName(sheet.name) }));
-  return [{ ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) }, ...body];
+  const setup = { ...buildJobSetupSheet(input), name: xlsxName(ESTIMATE_XLSX_SHEETS.jobSetup) };
+  const lists = { ...buildListsSheet(), name: xlsxName(ESTIMATE_XLSX_SHEETS.lists) };
+  return [{ ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) }, setup, ...body, lists];
 }
 
 export async function estimateToXlsx(input: EstimateXlsxInput = {}): Promise<Uint8Array> {

@@ -6,7 +6,7 @@
  * on this branch (TOTAL bars, Rate Tables chrome, wrap, center, hour integers,
  * phase bar) must not invent catalogs or disconnect math from those libs.
  * Phase-bar fills come from phase-schedule (desk globals), not sample dates.
- * Phase bar is a locked view this Look pass — no editable Job setup card.
+ * Phase bar is a locked view of Job setup. The Job setup sheet is the edit card.
  * Unused columns past the used range are hidden. Unused rows below TOTAL
  * collapse (defaultRowHeight 0 + zeroHeight) so no white band remains.
  * Leftover white cells in the used band get Hit Squad teal, not mint/gray.
@@ -383,7 +383,7 @@ function isLaborSheet(name: string) {
 export function isLaborDayInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
   if (!isLaborSheet(sheet.name) || colNum < LABOR_DATE_FIRST_COL) return false;
   const kind = laborRowKind(sheet.cells, row);
-  return kind === "hc" || kind === "hps" || kind === "pd";
+  return kind === "hc" || kind === "hps" || kind === "pd" || kind === "hours";
 }
 
 /** Hard count/HPS plugs only — empty unused day cells stay teal, not yellow. */
@@ -394,6 +394,11 @@ function isLaborCountInputCell(cell: ExcelJS.Cell): boolean {
 /** Support Bill as value in column B — unlocked so an estimator can set it offline. */
 export function isLaborBillAsInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
   return colNum === 2 && (sheet.billAs?.some((slot) => slot.valueRow === row) ?? false);
+}
+
+/** Position title cell — unlocked for the Shahan list dropdown. */
+export function isLaborPositionInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
+  return colNum === 2 && (sheet.laborBlocks?.some((block) => block.start === row) ?? false);
 }
 
 function columnWidth(col: string, header: string | undefined, sheetName: string): number {
@@ -1218,6 +1223,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     const lastColNum = colIndex(lastCol);
     const lastVisibleColNum = lastVisibleContentCol(sheet, lastColNum);
     const ws = wb.addWorksheet(safeName, {
+      state: sheet.veryHidden ? "veryHidden" : "visible",
       properties: { tabColor: { argb: tabColorArgb(sheet.name) }, defaultRowHeight: 0 },
       pageSetup: {
         orientation: "landscape",
@@ -1293,7 +1299,24 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
           exCell.numFmt = FMT_HOURS;
         }
       }
-      exCell.protection = { locked: !(isLaborDayInput(sheet, row, colNum) || isLaborBillAsInput(sheet, row, colNum)) };
+      const setupUnlock = sheet.unlocked?.some((item) => item.row === row && item.col === colNum);
+      exCell.protection = {
+        locked: !(
+          isLaborDayInput(sheet, row, colNum) ||
+          isLaborBillAsInput(sheet, row, colNum) ||
+          isLaborPositionInput(sheet, row, colNum) ||
+          setupUnlock
+        ),
+      };
+    }
+    for (const rule of sheet.validations ?? []) {
+      ws.getCell(rule.sqref).dataValidation = {
+        type: "list",
+        allowBlank: true,
+        formulae: rule.formulae,
+        showErrorMessage: false,
+        showInputMessage: false,
+      };
     }
 
     for (const [col, header] of headers) {
@@ -1347,6 +1370,9 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     }
     for (const slot of sheet.billAs ?? []) {
       ws.getCell(slot.valueRow, 2).protection = { locked: false };
+    }
+    for (const block of sheet.laborBlocks ?? []) {
+      ws.getCell(block.start, 2).protection = { locked: false };
     }
     if (labor) {
       pinLaborCraftAlignment(ws, lastVisibleColNum, maxRow);

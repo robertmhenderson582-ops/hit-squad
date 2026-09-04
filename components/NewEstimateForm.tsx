@@ -115,6 +115,7 @@ function NewEstimateDesk({
       jobClient={client}
       jobSite={site}
       name={title}
+      onName={setTitle}
       packageId={pack}
       status="Estimate"
       statusLocked

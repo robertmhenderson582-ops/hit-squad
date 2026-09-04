@@ -13,10 +13,10 @@
  * (estimate-total, other-cost, equipment-sheet, shahan-wood-river,
  * third-party-rental, wage-lookup, phase-schedule).
  *
- * Position dropdowns + workbook import stay parked until Look sign-off.
- * A validation list with no pack path would be a parallel book.
+ * Position dropdowns + workbook import are on this compile (Robert Look
+ * sign-off 2026-09-04). Lists come from the same Shahan titles the desk uses.
  * Support Bill as is a live-pack view of billedAs (same Rate Tables craft);
- * the field is on the Support sheet for offline fill — import still parked.
+ * the field round-trips on import.
  * Daily PD count on craft sheets is live-pack perDiemPeople / nightPerDiemPeople
  * (can differ from HC). Day cells are hard yellow inputs like HC; PD $ stays
  * count × PD rate. Empty unused day cells stay teal, not yellow.
@@ -27,16 +27,14 @@
  * in A). Subtotal $ + Rate merge title through HC/HPS so those cells are not
  * empty holes; ST/OT/DT/PD rate+$ stay per-row.
  *
- * Adjustable Job setup + phase-bar import is parked for the next Excel compile
- * after Look (Robert 2026-09-04). Locked answer is YES under the
- * ripple rule: a Job setup sheet/card (phases / dates / OT picks) will
- * drive the phase bar, and edits to that card, the bar, Position
- * dropdowns, and hour cells will import back into the live desk pack.
- * This Look pass ships the phase bar as a view of Job setup only — not
- * editable, not a Job setup card, not an import path.
+ * Adjustable Job setup + phase-bar import ships on this compile (the next Excel compile
+ * after Look). A Job setup sheet/card (phases / dates / OT picks) drives
+ * the phase bar; edits to that card, Position dropdowns, hour cells, and
+ * Bill as import back into the live desk pack. The Look pass shipped the
+ * phase bar as a view of Job setup only — this compile adds the card + path.
  */
 export const EXCEL_RIPPLE_RETROACTIVE = true;
 export const EXCEL_RIPPLE_RULE =
   "Excel is a view of the live estimate pack. One change updates the pack and every surface. Never a parallel book.";
-/** Next Excel compile after Look — not this Look chrome pass. */
-export const EXCEL_JOB_SETUP_IMPORT_PARKED = true;
+/** Job setup card + Position dropdowns + workbook import are live on this compile. */
+export const EXCEL_JOB_SETUP_IMPORT_PARKED = false;

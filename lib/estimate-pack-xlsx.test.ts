@@ -238,7 +238,13 @@ describe("estimate pack JSON → xlsx", () => {
     };
     const { input } = estimateJsonToXlsxInput(leftover);
     const names = buildEstimateWorkbook(input).map((sheet) => sheet.name);
-    assert.deepEqual(names, [ESTIMATE_XLSX_SHEETS.summary, ESTIMATE_XLSX_SHEETS.staff, ESTIMATE_XLSX_SHEETS.rates]);
+    assert.deepEqual(names, [
+      ESTIMATE_XLSX_SHEETS.summary,
+      ESTIMATE_XLSX_SHEETS.jobSetup,
+      ESTIMATE_XLSX_SHEETS.staff,
+      ESTIMATE_XLSX_SHEETS.rates,
+      ESTIMATE_XLSX_SHEETS.lists,
+    ]);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.crane), false);
     assert.equal(names.includes(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub)), false);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.foremen), false);

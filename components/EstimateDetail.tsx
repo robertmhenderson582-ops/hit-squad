@@ -67,6 +67,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       jobClient={estimate.client}
       jobSite={siteName}
       name={shown}
+      onName={setTitle}
       total={estimate.total}
       packageId={estimate.id}
       staffing={staffing}

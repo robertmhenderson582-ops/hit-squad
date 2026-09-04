@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ModalPortal } from "@/components/ModalPortal";
 import { NoRatesNotice } from "@/components/NoRatesNotice";
@@ -8,7 +8,11 @@ import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
 import { newEstimateNeedsRatesNotice } from "@/lib/estimate-rates-gate";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
 import { defaultEstimateName, isDefaultEstimateName, startJobEventLabel } from "@/lib/job-event";
+import { applyPackToStore } from "@/lib/estimate-pack";
+import { ESTIMATE_IMPORT_ERROR } from "@/lib/estimate-xlsx";
+import { createPackFromImport, parseEstimateXlsx } from "@/lib/estimate-xlsx-import";
 import { newEstimatePackId } from "@/lib/estimate-open";
+import { scheduleVaultUpsert } from "@/lib/estimate-vault-client";
 
 const CLIENTS = ["Phillips 66", "Georgia Power", "Shop"];
 const SITES = [
@@ -50,6 +54,8 @@ export function NewEstimateModal({
   const [client, setClient] = useState(startClient);
   const [site, setSite] = useState(startSite);
   const [name, setName] = useState(defaultEstimateName(startClient, startSite, startSize));
+  const [importError, setImportError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
   const rule = boundOtLabel(site, client);
   const eastCoast = siteClockFromText(site, client) === "east-coast";
   const needsRates = size !== "shop" && newEstimateNeedsRatesNotice(lens) && ratesTick >= 0;
@@ -88,6 +94,28 @@ export function NewEstimateModal({
     });
     onClose();
     router.push(`/estimates/new?${query.toString()}`);
+  }
+
+  async function createFromWorkbook(file: File) {
+    setImportError("");
+    try {
+      const imported = await parseEstimateXlsx(new Uint8Array(await file.arrayBuffer()));
+      const pack = createPackFromImport(imported, lens?.email || "");
+      applyPackToStore(window.localStorage, pack);
+      scheduleVaultUpsert(pack.packId);
+      onClose();
+      const query = new URLSearchParams({
+        client: pack.client,
+        site: pack.site,
+        rule: boundOtLabel(pack.site, pack.client),
+        name: pack.title,
+        size: "outage",
+        pack: pack.packId,
+      });
+      router.push(`/estimates/new?${query.toString()}`);
+    } catch {
+      setImportError(ESTIMATE_IMPORT_ERROR);
+    }
   }
 
   return (
@@ -225,6 +253,38 @@ export function NewEstimateModal({
           <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">ESTIMATE NAME</span>
           <input value={name} onChange={(event) => setName(event.target.value)} className="paper-field mt-1" />
         </label>
+        {size !== "shop" ? (
+          <div className="mt-4">
+            <p className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">OR UPLOAD WORKBOOK</p>
+            <p className="mt-1 text-xs text-[#5b6f73]">
+              John&apos;s filled Hit Squad xlsx seeds a new live pack — Job setup, crew, and Bill as.
+            </p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx"
+              className="hidden"
+              aria-label="Upload xlsx"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void createFromWorkbook(file);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="mt-2 rounded-lg border border-steel px-4 py-2 text-steel"
+            >
+              Upload xlsx
+            </button>
+            {importError ? (
+              <p className="mt-2 text-sm text-[#b42318]" role="alert">
+                {importError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {eastCoast && size !== "shop" ? (
           <p className="mt-3 text-xs text-[#5b6f73]">
             {alias("East Coast (PCA0001103)")} — never PA or Mid-Atlantic. Catalog plants fill OT from the bound

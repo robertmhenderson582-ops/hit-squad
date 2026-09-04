@@ -1,0 +1,565 @@
+/**
+ * Hit Squad client workbook → live estimate pack.
+ * Inverse of estimate-xlsx export. Hidden block ids + Job setup card are
+ * the keys. Excel is never a parallel book (excel-ripple.ts).
+ */
+import ExcelJS from "exceljs";
+import { blankCraftRow, hydrateSupportLine, type CalendarRange, type CraftRow, type SupportLine } from "./craft-labor.ts";
+import {
+  SHAHAN_GENERAL_FOREMAN_TITLES,
+} from "./shahan-wood-river.ts";
+import { newEstimateKey, newEstimatePackId } from "./estimate-open.ts";
+import { type EstimatePackSnapshot } from "./estimate-pack.ts";
+import {
+  ESTIMATE_IMPORT_ERROR,
+  ESTIMATE_XLSX_SHEETS,
+  LABOR_BLOCK_HEIGHT,
+  LABOR_BLOCK_ID_COL,
+  LABOR_DATE_START_COL,
+  LABOR_DT_OFFSET,
+  LABOR_HC_OFFSET,
+  LABOR_HPS_OFFSET,
+  LABOR_OT_OFFSET,
+  LABOR_PD_OFFSET,
+  LABOR_ST_OFFSET,
+  laborBlockId,
+} from "./estimate-xlsx.ts";
+import type { EstimateXlsxCrew } from "./estimate-xlsx.ts";
+import {
+  formatYmd,
+  isPhaseId,
+  mergeSchedule,
+  parseYmd,
+  PHASE_IDS,
+  PHASE_NAMES,
+  PHASE_OT_PICKS,
+  eachYmd,
+  maskForPhaseDays,
+  phaseOwningDate,
+  type PhaseOtPick,
+  type PhaseRow,
+  type PhaseScheduleState,
+} from "./phase-schedule.ts";
+
+export { ESTIMATE_IMPORT_ERROR };
+
+export type ImportedDay = {
+  ymd: string;
+  hc: number;
+  hps: number;
+  st: number;
+  ot: number;
+  dt: number;
+  pd: number;
+};
+
+export type ImportedBlock = {
+  id: string;
+  night: boolean;
+  position: string;
+  sheet: string;
+  billedAs?: string;
+  days: ImportedDay[];
+};
+
+export type EstimateImport = {
+  title: string;
+  client: string;
+  site: string;
+  schedule: PhaseScheduleState;
+  crew: EstimateXlsxCrew;
+  blocks: ImportedBlock[];
+};
+
+export type EstimateImportDiff = {
+  lines: string[];
+  createsNew: boolean;
+};
+
+function asNum(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (typeof value === "string" && value.trim()) {
+    const next = Number(value);
+    return Number.isFinite(next) ? next : 0;
+  }
+  if (value && typeof value === "object" && "result" in value) {
+    return asNum((value as { result: unknown }).result);
+  }
+  return 0;
+}
+
+function asText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+  if (value && typeof value === "object" && "result" in value) {
+    return asText((value as { result: unknown }).result);
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return formatYmd(value);
+  return "";
+}
+
+function cellYmd(value: unknown): string {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return formatYmd(new Date(value.getFullYear(), value.getMonth(), value.getDate()));
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const utc = new Date(Date.UTC(1899, 11, 30) + Math.round(value * 86400000));
+    return formatYmd(new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate()));
+  }
+  const text = asText(value);
+  if (parseYmd(text)) return text;
+  const parsed = Date.parse(text);
+  if (!Number.isNaN(parsed)) {
+    const date = new Date(parsed);
+    return formatYmd(new Date(date.getFullYear(), date.getMonth(), date.getDate()));
+  }
+  if (value && typeof value === "object" && "result" in value) return cellYmd((value as { result: unknown }).result);
+  return "";
+}
+
+function isOn(value: unknown): boolean {
+  const text = asText(value).toUpperCase();
+  return text === "ON" || text === "YES" || text === "TRUE" || text === "1" || text === "Y";
+}
+
+function parseHeader(job: string): { title: string; client: string; site: string } {
+  const parts = job.split(/\s+·\s+/).map((part) => part.trim()).filter(Boolean);
+  return {
+    title: parts[0] || "Estimate",
+    client: parts[1] || "",
+    site: parts[2] || "",
+  };
+}
+
+function parseBlockId(raw: string): { id: string; night: boolean } | null {
+  const value = raw.trim();
+  if (!value || !value.includes("|")) return null;
+  const cut = value.lastIndexOf("|");
+  const id = value.slice(0, cut).trim();
+  const side = value.slice(cut + 1).trim().toLowerCase();
+  if (!id) return null;
+  return { id, night: side === "night" };
+}
+
+function sheetDates(ws: ExcelJS.Worksheet): string[] {
+  const dates: string[] = [];
+  let first = "";
+  for (let col = LABOR_DATE_START_COL; col < LABOR_DATE_START_COL + 400; col += 1) {
+    const ymd = cellYmd(ws.getCell(6, col).value);
+    if (ymd) {
+      if (!first) first = ymd;
+      dates.push(ymd);
+      continue;
+    }
+    if (!first) break;
+    const start = parseYmd(first);
+    if (!start) break;
+    start.setDate(start.getDate() + dates.length);
+    const next = formatYmd(start);
+    const hidden = Boolean(ws.getColumn(col).hidden);
+    if (hidden && dates.length) break;
+    dates.push(next);
+  }
+  return dates;
+}
+
+function readBlockDays(ws: ExcelJS.Worksheet, titleRow: number, dates: string[]): ImportedDay[] {
+  return dates.map((ymd, index) => {
+    const col = LABOR_DATE_START_COL + index;
+    return {
+      ymd,
+      hc: asNum(ws.getCell(titleRow + LABOR_HC_OFFSET, col).value),
+      hps: asNum(ws.getCell(titleRow + LABOR_HPS_OFFSET, col).value),
+      st: asNum(ws.getCell(titleRow + LABOR_ST_OFFSET, col).value),
+      ot: asNum(ws.getCell(titleRow + LABOR_OT_OFFSET, col).value),
+      dt: asNum(ws.getCell(titleRow + LABOR_DT_OFFSET, col).value),
+      pd: asNum(ws.getCell(titleRow + LABOR_PD_OFFSET, col).value),
+    };
+  });
+}
+
+function dayLive(day: ImportedDay) {
+  return day.hc > 0 || day.pd > 0;
+}
+
+function dayPattern(day: Pick<ImportedDay, "hc" | "hps" | "pd">) {
+  return `${day.hc}|${day.hps}|${day.pd}`;
+}
+
+function daysMask(days: ImportedDay[]): boolean[] {
+  const mask = [false, false, false, false, false, false, false];
+  for (const day of days) {
+    const date = parseYmd(day.ymd);
+    if (date) mask[date.getDay()] = true;
+  }
+  return mask;
+}
+
+function rangeFromPattern(
+  days: ImportedDay[],
+  night: boolean,
+  phase: PhaseRow | undefined,
+  start: string,
+  end: string,
+  pattern: Pick<ImportedDay, "hc" | "hps" | "pd">,
+  skipDates: string[],
+): CalendarRange {
+  return {
+    id: `rg-${start}-${night ? "n" : "d"}-${phase?.id ?? "x"}`,
+    start,
+    end,
+    headcount: pattern.hc,
+    nightHeadcount: 0,
+    hoursPerShift: pattern.hps,
+    perDiemPeople: pattern.pd,
+    nightPerDiemPeople: 0,
+    days: days.some(dayLive) ? daysMask(days.filter((day) => dayPattern(day) === dayPattern(pattern) && dayLive(day))) : maskForPhaseDays(phase?.daysPerWeek ?? 5),
+    skipDates,
+    phaseId: phase?.id,
+    shift: night ? "Nights" : "Days",
+    otAfter8: phase?.otAfter8,
+  };
+}
+
+function contiguousRuns(days: ImportedDay[]): ImportedDay[][] {
+  const runs: ImportedDay[][] = [];
+  let run: ImportedDay[] = [];
+  const flush = () => {
+    if (run.length) runs.push(run);
+    run = [];
+  };
+  for (const day of days) {
+    const prev = run[run.length - 1];
+    if (
+      prev &&
+      dayPattern(prev) === dayPattern(day) &&
+      parseYmd(prev.ymd) &&
+      parseYmd(day.ymd) &&
+      (parseYmd(day.ymd)!.getTime() - parseYmd(prev.ymd)!.getTime()) / 86_400_000 === 1
+    ) {
+      run.push(day);
+      continue;
+    }
+    flush();
+    run = [day];
+  }
+  flush();
+  return runs;
+}
+
+function rangesFromDays(days: ImportedDay[], night: boolean, phases: PhaseRow[]): CalendarRange[] {
+  const byYmd = new Map(days.map((day) => [day.ymd, day]));
+  const used = new Set<string>();
+  const ranges: CalendarRange[] = [];
+  const onPhases = phases.filter((phase) => phase.on && phase.start && phase.stop);
+  for (const phase of onPhases) {
+    const window = eachYmd(phase.start, phase.stop).map((ymd) => byYmd.get(ymd) ?? { ymd, hc: 0, hps: 0, st: 0, ot: 0, dt: 0, pd: 0 });
+    window.forEach((day) => used.add(day.ymd));
+    const firstLive = window.find(dayLive);
+    const pattern = firstLive ?? { hc: 0, hps: firstLive?.hps || phase.hoursPerDay || 0, pd: 0 };
+    const skipDates = window.filter((day) => dayPattern(day) !== dayPattern(pattern) || !dayLive(day)).map((day) => day.ymd);
+    ranges.push(rangeFromPattern(window, night, phase, phase.start, phase.stop, pattern, skipDates));
+    const extras = window.filter((day) => dayLive(day) && dayPattern(day) !== dayPattern(pattern));
+    for (const run of contiguousRuns(extras)) {
+      ranges.push(rangeFromPattern(run, night, phase, run[0].ymd, run[run.length - 1].ymd, run[0], []));
+    }
+  }
+  const leftover = days.filter((day) => !used.has(day.ymd) && dayLive(day));
+  for (const run of contiguousRuns(leftover)) {
+    ranges.push(rangeFromPattern(run, night, phaseOwningDate(phases, run[0].ymd), run[0].ymd, run[run.length - 1].ymd, run[0], []));
+  }
+  return ranges;
+}
+
+function parseJobSetup(ws: ExcelJS.Worksheet | undefined): PhaseScheduleState {
+  const base = mergeSchedule(null);
+  if (!ws) return base;
+  const incoming: PhaseRow[] = [];
+  for (let row = 7; row <= 20; row += 1) {
+    const hiddenId = asText(ws.getCell(row, 9).value);
+    const name = asText(ws.getCell(row, 1).value);
+    const id = isPhaseId(hiddenId)
+      ? hiddenId
+      : (PHASE_IDS.find((item) => PHASE_NAMES[item] === name) ?? null);
+    if (!id) continue;
+    const start = cellYmd(ws.getCell(row, 3).value);
+    const stop = cellYmd(ws.getCell(row, 4).value);
+    const pickLabel = asText(ws.getCell(row, 8).value);
+    const pick = PHASE_OT_PICKS.find((item) => item.label === pickLabel)?.id as PhaseOtPick | undefined;
+    incoming.push({
+      id,
+      name: PHASE_NAMES[id],
+      on: isOn(ws.getCell(row, 2).value),
+      start: start || base.phases.find((row) => row.id === id)?.start || "",
+      stop: stop || base.phases.find((row) => row.id === id)?.stop || "",
+      daysPerWeek: pick?.startsWith("4x") ? 4 : pick?.startsWith("5x") ? 5 : asNum(ws.getCell(row, 5).value) || 5,
+      hoursPerDay: pick?.includes("10") ? 10 : pick?.includes("8") ? 8 : asNum(ws.getCell(row, 6).value) || 10,
+      otAfter8: pick ? pick.endsWith("ot8") : isOn(ws.getCell(row, 7).value),
+      sundaysOff: [],
+    });
+  }
+  return mergeSchedule({ ...base, phases: incoming, projectStart: incoming.find((row) => row.on)?.start || base.projectStart });
+}
+
+function parseCraftSheet(ws: ExcelJS.Worksheet | undefined): ImportedBlock[] {
+  if (!ws) return [];
+  const dates = sheetDates(ws);
+  const seen = new Set<string>();
+  const blocks: ImportedBlock[] = [];
+  const last = Math.max(ws.rowCount, 7);
+  for (let row = 7; row <= last; row += 1) {
+    const parsed = parseBlockId(asText(ws.getCell(row, LABOR_BLOCK_ID_COL).value));
+    if (!parsed) continue;
+    const key = laborBlockId({ id: parsed.id }, parsed.night);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const position = asText(ws.getCell(row, 2).value);
+    const billLabel = asText(ws.getCell(row + LABOR_ST_OFFSET, 2).value);
+    const billedAs = billLabel.toLowerCase() === "bill as" ? asText(ws.getCell(row + LABOR_OT_OFFSET, 2).value) : undefined;
+    blocks.push({
+      id: parsed.id,
+      night: parsed.night,
+      position,
+      sheet: ws.name,
+      billedAs,
+      days: readBlockDays(ws, row, dates),
+    });
+  }
+  return blocks;
+}
+
+function laneForNewBlock(block: ImportedBlock, sheet: string): keyof Pick<EstimateXlsxCrew, "staff" | "generalForeman" | "foreman" | "direct" | "support"> {
+  if (sheet === ESTIMATE_XLSX_SHEETS.foremen) return "foreman";
+  if (sheet === ESTIMATE_XLSX_SHEETS.direct) return "direct";
+  if (sheet === ESTIMATE_XLSX_SHEETS.support) return "support";
+  if (SHAHAN_GENERAL_FOREMAN_TITLES.includes(block.position)) return "generalForeman";
+  return "staff";
+}
+
+function findRow(crew: EstimateXlsxCrew, id: string): { lane: keyof EstimateXlsxCrew; row: CraftRow } | null {
+  for (const lane of ["staff", "generalForeman", "foreman", "direct", "support"] as const) {
+    const hit = (crew[lane] ?? []).find((row) => row.id === id);
+    if (hit) return { lane, row: hit };
+  }
+  return null;
+}
+
+function rollupHours(days: ImportedDay[]) {
+  return days.reduce(
+    (sum, day) => ({
+      st: sum.st + day.st,
+      ot: sum.ot + day.ot,
+      dt: sum.dt + day.dt,
+      pd: sum.pd + day.pd,
+    }),
+    { st: 0, ot: 0, dt: 0, pd: 0 },
+  );
+}
+
+function applyRowFromBlocks(existing: CraftRow, blocks: ImportedBlock[], phases: PhaseRow[]): CraftRow {
+  const dayBlocks = blocks.filter((block) => !block.night);
+  const nightBlocks = blocks.filter((block) => block.night);
+  const ranges = [
+    ...dayBlocks.flatMap((block) => rangesFromDays(block.days, false, phases)),
+    ...nightBlocks.flatMap((block) => rangesFromDays(block.days, true, phases)),
+  ];
+  const hours = rollupHours(blocks.flatMap((block) => block.days));
+  const night = ranges.some((range) => range.shift === "Nights");
+  const day = ranges.some((range) => (range.shift ?? "Days") !== "Nights");
+  const position = blocks.find((block) => block.position)?.position || existing.position;
+  const billedAs = blocks.find((block) => block.billedAs)?.billedAs ?? (existing as SupportLine).billedAs ?? "";
+  return {
+    ...existing,
+    id: blocks[0]?.id || existing.id,
+    position,
+    shift: night && day ? "Days & nights" : night ? "Nights" : "Days",
+    ranges,
+    st: hours.st,
+    ot: hours.ot,
+    dt: hours.dt,
+    pd: hours.pd,
+    hours: hours.st + hours.ot + hours.dt,
+    billedAs,
+  } as CraftRow;
+}
+
+function applyBlocks(
+  base: EstimateXlsxCrew,
+  bySheet: Array<{ sheet: string; blocks: ImportedBlock[] }>,
+  phases: PhaseRow[],
+): EstimateXlsxCrew {
+  const next: EstimateXlsxCrew = {
+    staff: [...(base.staff ?? [])],
+    generalForeman: [...(base.generalForeman ?? [])],
+    foreman: [...(base.foreman ?? [])],
+    direct: [...(base.direct ?? [])],
+    support: [...(base.support ?? [])],
+    otAfter8: Boolean(base.otAfter8),
+  };
+  const sheetLanes = new Map<string, Set<string>>();
+  for (const { sheet, blocks } of bySheet) {
+    const lanes = new Set<string>();
+    const byId = new Map<string, ImportedBlock[]>();
+    for (const block of blocks) {
+      const list = byId.get(block.id) ?? [];
+      list.push(block);
+      byId.set(block.id, list);
+    }
+    for (const group of byId.values()) {
+      const found = findRow(next, group[0].id);
+      const lane = found?.lane ?? laneForNewBlock(group[0], sheet);
+      lanes.add(lane);
+      const existing = found?.row ?? { ...blankCraftRow(), id: group[0].id };
+      const row = applyRowFromBlocks(existing, group, phases);
+      const list = [...(next[lane] as CraftRow[])];
+      const index = list.findIndex((item) => item.id === row.id);
+      const written = lane === "support" ? hydrateSupportLine({ ...row, billedAs: (row as SupportLine).billedAs ?? "" }) : row;
+      if (index >= 0) list[index] = written;
+      else list.push(written);
+      (next[lane] as CraftRow[]) = list;
+    }
+    sheetLanes.set(sheet, lanes);
+  }
+  if (sheetLanes.has(ESTIMATE_XLSX_SHEETS.staff)) {
+    const keep = new Set((bySheet.find((item) => item.sheet === ESTIMATE_XLSX_SHEETS.staff)?.blocks ?? []).map((block) => block.id));
+    next.staff = (next.staff ?? []).filter((row) => keep.has(row.id));
+    next.generalForeman = (next.generalForeman ?? []).filter((row) => keep.has(row.id));
+  }
+  if (sheetLanes.has(ESTIMATE_XLSX_SHEETS.foremen)) {
+    const keep = new Set((bySheet.find((item) => item.sheet === ESTIMATE_XLSX_SHEETS.foremen)?.blocks ?? []).map((block) => block.id));
+    next.foreman = (next.foreman ?? []).filter((row) => keep.has(row.id));
+  }
+  if (sheetLanes.has(ESTIMATE_XLSX_SHEETS.direct)) {
+    const keep = new Set((bySheet.find((item) => item.sheet === ESTIMATE_XLSX_SHEETS.direct)?.blocks ?? []).map((block) => block.id));
+    next.direct = (next.direct ?? []).filter((row) => keep.has(row.id));
+  }
+  if (sheetLanes.has(ESTIMATE_XLSX_SHEETS.support)) {
+    const keep = new Set((bySheet.find((item) => item.sheet === ESTIMATE_XLSX_SHEETS.support)?.blocks ?? []).map((block) => block.id));
+    next.support = (next.support ?? []).filter((row) => keep.has(row.id));
+  }
+  return next;
+}
+
+export async function parseEstimateXlsx(bytes: Uint8Array): Promise<EstimateImport> {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(bytes as unknown as ArrayBuffer);
+  const summary = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
+  if (!summary) throw new Error(ESTIMATE_IMPORT_ERROR);
+  const header = parseHeader(asText(summary.getCell("A2").value));
+  const schedule = parseJobSetup(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup));
+  const sheets = [
+    ESTIMATE_XLSX_SHEETS.staff,
+    ESTIMATE_XLSX_SHEETS.foremen,
+    ESTIMATE_XLSX_SHEETS.direct,
+    ESTIMATE_XLSX_SHEETS.support,
+  ] as const;
+  const bySheet = sheets.map((name) => ({ sheet: name, blocks: parseCraftSheet(wb.getWorksheet(name)) }));
+  const blocks = bySheet.flatMap((item) => item.blocks);
+  if (!blocks.length && !wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup)) throw new Error(ESTIMATE_IMPORT_ERROR);
+  const crew = applyBlocks({}, bySheet, schedule.phases);
+  return { ...header, schedule, crew, blocks };
+}
+
+function blocksBySheet(blocks: ImportedBlock[]): Array<{ sheet: string; blocks: ImportedBlock[] }> {
+  const names = [
+    ESTIMATE_XLSX_SHEETS.staff,
+    ESTIMATE_XLSX_SHEETS.foremen,
+    ESTIMATE_XLSX_SHEETS.direct,
+    ESTIMATE_XLSX_SHEETS.support,
+  ];
+  return names
+    .map((sheet) => ({ sheet, blocks: blocks.filter((block) => block.sheet === sheet) }))
+    .filter((item) => item.blocks.length);
+}
+
+export function applyEstimateImport(base: EstimatePackSnapshot, imported: EstimateImport): EstimatePackSnapshot {
+  const schedule = imported.schedule;
+  const crew = applyBlocks(asCrew(base.crew), blocksBySheet(imported.blocks), schedule.phases);
+  return {
+    ...base,
+    title: imported.title || base.title,
+    client: imported.client || base.client,
+    site: imported.site || base.site,
+    updatedAt: Date.now(),
+    schedule,
+    crew,
+  };
+}
+
+export function createPackFromImport(imported: EstimateImport, ownerEmail = ""): EstimatePackSnapshot {
+  const packId = newEstimatePackId();
+  return {
+    packId,
+    key: newEstimateKey(packId),
+    title: imported.title || "Working estimate",
+    client: imported.client || "Phillips 66",
+    site: imported.site || "Wood River — Roxana, IL",
+    siteId: "site-madison",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    ownerEmail,
+    schedule: imported.schedule,
+    crew: {
+      ...imported.crew,
+      support: (imported.crew.support ?? []).map((row) => hydrateSupportLine(row)),
+    },
+  };
+}
+
+export function diffEstimateImport(base: EstimatePackSnapshot | null, imported: EstimateImport): EstimateImportDiff {
+  const lines: string[] = [];
+  if (!base) {
+    lines.push(`New estimate: ${imported.title || "untitled"}`);
+    const seats = ["staff", "generalForeman", "foreman", "direct", "support"] as const;
+    const count = seats.reduce((sum, lane) => sum + (imported.crew[lane]?.length ?? 0), 0);
+    lines.push(`${count} crew block${count === 1 ? "" : "s"} from the workbook`);
+    return { lines, createsNew: true };
+  }
+  if (imported.title && imported.title !== base.title) lines.push(`Title → ${imported.title}`);
+  const before = mergeSchedule(base.schedule as PhaseScheduleState | null);
+  for (const id of PHASE_IDS) {
+    const prev = before.phases.find((row) => row.id === id);
+    const next = imported.schedule.phases.find((row) => row.id === id);
+    if (!prev || !next) continue;
+    if (prev.on !== next.on || prev.start !== next.start || prev.stop !== next.stop) {
+      lines.push(`${next.name}: ${next.on ? "ON" : "OFF"} ${next.start}–${next.stop}`);
+    }
+  }
+  const current = asCrew(base.crew);
+  for (const block of imported.blocks) {
+    const found = findRow(current, block.id);
+    if (!found) {
+      lines.push(`Add ${block.position || block.id}`);
+      continue;
+    }
+    if (block.position && block.position !== found.row.position) {
+      lines.push(`${found.row.position} → ${block.position}`);
+    }
+    if (block.billedAs && block.billedAs !== (found.row as SupportLine).billedAs) {
+      lines.push(`${block.position || found.row.position} Bill as → ${block.billedAs}`);
+    }
+    const hc = block.days.reduce((sum, day) => sum + day.hc, 0);
+    const prevHc = (found.row.ranges ?? []).reduce((sum, range) => {
+      const span = Math.max(1, Math.round(((parseYmd(range.end)?.getTime() ?? 0) - (parseYmd(range.start)?.getTime() ?? 0)) / 86_400_000) + 1);
+      return sum + (block.night ? range.nightHeadcount : range.headcount) * span;
+    }, 0);
+    if (hc !== prevHc) lines.push(`${block.position || found.row.position} headcount days ${prevHc} → ${hc}`);
+  }
+  if (!lines.length) lines.push("No crew or Job setup changes.");
+  return { lines, createsNew: false };
+}
+
+function asCrew(raw: unknown): EstimateXlsxCrew {
+  const row = raw && typeof raw === "object" ? (raw as EstimateXlsxCrew) : {};
+  return {
+    staff: Array.isArray(row.staff) ? row.staff : [],
+    generalForeman: Array.isArray(row.generalForeman) ? row.generalForeman : [],
+    foreman: Array.isArray(row.foreman) ? row.foreman : [],
+    direct: Array.isArray(row.direct) ? row.direct : [],
+    support: Array.isArray(row.support) ? row.support : [],
+    otAfter8: Boolean(row.otAfter8),
+  };
+}
+

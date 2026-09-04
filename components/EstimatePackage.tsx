@@ -57,6 +57,7 @@ type EstimatePackageApi = {
   patch: (id: PhaseId, next: Partial<PhaseRow>) => void;
   pickOt: (id: PhaseId, pick: PhaseOtPick) => void;
   setCrew: (next: CrewState | ((current: CrewState) => CrewState)) => void;
+  replaceFromImport: (next: { schedule: PhaseScheduleState; crew: CrewState; title?: string }) => void;
   setOrgChart: (next: OrgChartState | ((current: OrgChartState) => OrgChartState)) => void;
   setJobMeta: (next: JobMeta | ((current: JobMeta) => JobMeta)) => void;
   setPackTitle: (title: string) => string | null;
@@ -296,6 +297,25 @@ export function EstimatePackageProvider({
       setCrew(next) {
         setCrewState((current) => (typeof next === "function" ? next(current) : next));
       },
+      replaceFromImport(next) {
+        setSchedule(next.schedule);
+        setCrewState({
+          staff: next.crew.staff ?? [],
+          generalForeman: next.crew.generalForeman ?? [],
+          foreman: next.crew.foreman ?? [],
+          direct: next.crew.direct ?? [],
+          support: hydrateSupportLines(next.crew.support),
+          otAfter8: Boolean(next.crew.otAfter8),
+        });
+        if (next.title) {
+          const packId = packIdFromStoreKey(estimateKey);
+          if (packId) {
+            renameLocalPackTitle(packId, next.title);
+            touchLocalPack(packId);
+            scheduleVaultUpsert(packId);
+          }
+        }
+      },
       setOrgChart(next) {
         setOrgChartState((current) => (typeof next === "function" ? next(current) : next));
       },
@@ -341,6 +361,7 @@ export function useEstimatePackage() {
       patch() {},
       pickOt() {},
       setCrew() {},
+      replaceFromImport() {},
       setOrgChart() {},
       setJobMeta() {},
       setPackTitle() {

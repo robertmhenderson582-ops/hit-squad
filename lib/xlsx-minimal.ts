@@ -141,6 +141,12 @@ export type WorkbookSheet = {
   phaseBar?: Array<{ startCol: number; endCol: number; phaseId: string }>;
   /** Support Bill as field — label + value rows in column B under Position. */
   billAs?: Array<{ labelRow: number; valueRow: number }>;
+  /** Excel list validations (Position / Bill as / Job setup OT pick). */
+  validations?: Array<{ sqref: string; formulae: string[] }>;
+  /** Extra unlocked cells (Job setup inputs). */
+  unlocked?: Array<{ row: number; col: number }>;
+  /** Very-hidden helper sheets (Position lists). */
+  veryHidden?: boolean;
 };
 
 export async function buildWorkbook(sheets: WorkbookSheet[]): Promise<Uint8Array> {

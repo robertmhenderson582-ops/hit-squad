@@ -577,7 +577,11 @@ describe("estimate excel export", () => {
     assert.match(workspace, /ESTIMATE_EXPORT_ERROR/);
     assert.equal(/nathanboyte|CAT 2 Pit Stop|isNathan/i.test(workspace), false);
     const empty = buildEstimateWorkbook({ title: "Blank", site: "Yates", client: "Georgia Power" });
-    assert.deepEqual(empty.map((sheet) => sheet.name), [ESTIMATE_XLSX_SHEETS.summary]);
+    assert.deepEqual(empty.map((sheet) => sheet.name), [
+      ESTIMATE_XLSX_SHEETS.summary,
+      ESTIMATE_XLSX_SHEETS.jobSetup,
+      ESTIMATE_XLSX_SHEETS.lists,
+    ]);
     assert.equal(empty[0].cells.some((cell) => cell.type === "formula" || (cell.type === "number" && cell.ref === "B8")), true);
   });
 
@@ -670,7 +674,13 @@ describe("estimate excel export", () => {
     };
     const sheets = buildEstimateWorkbook(leftoverZero);
     const names = sheets.map((sheet) => sheet.name);
-    assert.deepEqual(names, [ESTIMATE_XLSX_SHEETS.summary, ESTIMATE_XLSX_SHEETS.staff, ESTIMATE_XLSX_SHEETS.rates]);
+    assert.deepEqual(names, [
+      ESTIMATE_XLSX_SHEETS.summary,
+      ESTIMATE_XLSX_SHEETS.jobSetup,
+      ESTIMATE_XLSX_SHEETS.staff,
+      ESTIMATE_XLSX_SHEETS.rates,
+      ESTIMATE_XLSX_SHEETS.lists,
+    ]);
     for (const name of [
       ESTIMATE_XLSX_SHEETS.foremen,
       ESTIMATE_XLSX_SHEETS.direct,
@@ -692,7 +702,13 @@ describe("estimate excel export", () => {
     await wb.xlsx.load(Buffer.from(bytes));
     assert.deepEqual(
       wb.worksheets.map((sheet) => sheet.name),
-      [ESTIMATE_XLSX_SHEETS.summary, ESTIMATE_XLSX_SHEETS.staff, ESTIMATE_XLSX_SHEETS.rates],
+      [
+        ESTIMATE_XLSX_SHEETS.summary,
+        ESTIMATE_XLSX_SHEETS.jobSetup,
+        ESTIMATE_XLSX_SHEETS.staff,
+        ESTIMATE_XLSX_SHEETS.rates,
+        ESTIMATE_XLSX_SHEETS.lists,
+      ],
     );
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crane), undefined);
     assert.equal(wb.getWorksheet(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub)), undefined);
@@ -711,6 +727,7 @@ describe("estimate excel export", () => {
     const cat2 = await sheetNames("v151_real_cat2.xlsx");
     assert.deepEqual(cat2, [
       ESTIMATE_XLSX_SHEETS.summary,
+      ESTIMATE_XLSX_SHEETS.jobSetup,
       ESTIMATE_XLSX_SHEETS.staff,
       ESTIMATE_XLSX_SHEETS.foremen,
       ESTIMATE_XLSX_SHEETS.direct,
@@ -719,6 +736,7 @@ describe("estimate excel export", () => {
       ESTIMATE_XLSX_SHEETS.travel,
       ESTIMATE_XLSX_SHEETS.misc,
       ESTIMATE_XLSX_SHEETS.rates,
+      ESTIMATE_XLSX_SHEETS.lists,
     ]);
     assert.equal(cat2.includes(ESTIMATE_XLSX_SHEETS.crane), false);
     assert.equal(cat2.includes(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub)), false);
@@ -728,6 +746,7 @@ describe("estimate excel export", () => {
     const aromatics = await sheetNames("v151_real_aromatics.xlsx");
     assert.deepEqual(aromatics, [
       ESTIMATE_XLSX_SHEETS.summary,
+      ESTIMATE_XLSX_SHEETS.jobSetup,
       ESTIMATE_XLSX_SHEETS.staff,
       ESTIMATE_XLSX_SHEETS.foremen,
       ESTIMATE_XLSX_SHEETS.direct,
@@ -738,6 +757,7 @@ describe("estimate excel export", () => {
       ESTIMATE_XLSX_SHEETS.travel,
       ESTIMATE_XLSX_SHEETS.misc,
       ESTIMATE_XLSX_SHEETS.rates,
+      ESTIMATE_XLSX_SHEETS.lists,
     ]);
     assert.equal(aromatics.includes("OM Crane Subcontractor"), false);
     assert.equal(aromatics.includes(ESTIMATE_XLSX_SHEETS.crane), false);
@@ -746,7 +766,7 @@ describe("estimate excel export", () => {
       assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.org), false);
       assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.slicer), false);
       assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.laydown), false);
-      assert.equal(names.includes("Job setup"), false);
+      assert.equal(names.includes("Job setup"), true);
     }
   });
 
@@ -1359,7 +1379,7 @@ describe("estimate excel export", () => {
     assert.equal(Boolean(staff.getCell("K13").protection?.locked), false);
     assert.equal(typeof staff.getCell("K8").value, "number");
     assert.equal(typeof staff.getCell("K13").value, "number");
-    assert.equal(staff.getCell("K10").protection?.locked !== false, true);
+    assert.equal(Boolean(staff.getCell("K10").protection?.locked), false);
     assert.equal(staff.getCell("I7").protection?.locked !== false, true);
     assert.equal(staff.getCell("C13").protection?.locked !== false, true);
     assert.equal(staff.getCell("J7").protection?.locked !== false, true);
@@ -1369,7 +1389,8 @@ describe("estimate excel export", () => {
     assert.equal(staff.getCell("A4").protection?.locked !== false, true);
     assert.equal(staff.getCell("K4").protection?.locked !== false, true);
     assert.equal(staff.getCell("K5").protection?.locked !== false, true);
-    assert.equal(wb.getWorksheet("Job setup"), undefined);
+    assert.ok(wb.getWorksheet("Job setup"));
+    assert.equal(Boolean(wb.getWorksheet("Job setup")?.getCell("B7").protection?.locked), false);
     let totalRow = 0;
     summary.eachRow((row, rowNumber) => {
       if (String(row.getCell(1).value ?? "") === "ESTIMATE TOTAL $") totalRow = rowNumber;
@@ -1986,7 +2007,7 @@ describe("estimate excel export", () => {
     assert.equal(Boolean(supportBook.getCell(`B${fire.ot}`).protection?.locked), false);
     assert.equal(supportBook.getCell(`B${fire.title}`).protection?.locked !== false, true);
     assert.equal(supportBook.getCell(`B${fire.st}`).protection?.locked !== false, true);
-    assert.equal(supportBook.getCell(`B${fire.ot}`).dataValidation, undefined);
+    assert.ok(supportBook.getCell(`B${fire.ot}`).dataValidation);
     assert.equal(Boolean(supportBook.getCell(`B${fire.ot}`).alignment?.wrapText), true);
     assert.equal(staffBook.getCell(`B${lead.title}`).alignment?.vertical, "middle");
     assert.equal(staffBook.getCell(`F${lead.title}`).alignment?.vertical, "middle");
@@ -2043,11 +2064,11 @@ describe("estimate excel export", () => {
     assert.equal(staffBook.getCell("A4").value, LABOR_PHASE_LABEL);
     assert.equal(staffBook.getCell("K4").value, "Mechanical Window");
     assert.notEqual(phaseFill(staffBook.getCell("K4")), LABOR_WEEKEND_FILL);
-    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("B7").dataValidation, undefined);
+    assert.ok(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("B7").dataValidation);
     const writer = readFileSync(fileURLToPath(new URL("./xlsx-exceljs.ts", import.meta.url)), "utf8");
-    assert.equal(/dataValidation/i.test(writer), false);
+    assert.match(writer, /dataValidation/i);
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
-    assert.equal(/import workbook|upload.*xlsx|round-trip/i.test(workspace), false);
+    assert.match(workspace, /import workbook|upload.*xlsx|round-trip/i);
   });
 
   it("phase bar follows live Job setup dates and only ON phases", async () => {
@@ -2144,8 +2165,8 @@ describe("estimate excel export", () => {
     assert.match(src, /next Excel compile/);
     assert.match(src, /view only/);
     assert.equal(/2026-01-11|Jan 11/.test(src), false);
-    assert.equal(EXCEL_JOB_SETUP_IMPORT_PARKED, true);
-    assert.equal(buildEstimateWorkbook(base).some((sheet) => sheet.name === "Job setup"), false);
+    assert.equal(EXCEL_JOB_SETUP_IMPORT_PARKED, false);
+    assert.equal(buildEstimateWorkbook(base).some((sheet) => sheet.name === "Job setup"), true);
   });
 
   it("hides unused grid past the used range and washes leftover white cells", async () => {
@@ -2174,7 +2195,7 @@ describe("estimate excel export", () => {
     assert.notEqual(fill(staff.getCell("K4")), SHEET_VOID_WASH);
     assert.notEqual(fill(staff.getCell("K4")), "FFFFFFFF");
     assert.equal(fill(summary.getCell("A2")) === STEEL || fill(summary.getCell("A2")) === STEEL.slice(2), true);
-    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("B7").dataValidation, undefined);
+    assert.ok(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("B7").dataValidation);
     for (const sheet of [staff, summary, rates, misc]) {
       assert.equal(sheet.properties.defaultRowHeight, 0, sheet.name);
     }
