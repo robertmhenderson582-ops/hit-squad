@@ -378,11 +378,16 @@ function isLaborSheet(name: string) {
   return name === "Staff" || name === "Foremen" || name === "Direct" || name === "Support";
 }
 
-/** Yellow HC / HPS / PD day-grid cells — unlocked edit surface on the date grid. */
+/** Yellow HC / HPS / PD count day-grid — same unlocked edit surface as HC. */
 export function isLaborDayInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
   if (!isLaborSheet(sheet.name) || colNum < LABOR_DATE_FIRST_COL) return false;
   const kind = laborRowKind(sheet.cells, row);
   return kind === "hc" || kind === "hps" || kind === "pd";
+}
+
+/** Hard count/HPS plugs only — empty unused day cells stay teal, not yellow. */
+function isLaborCountInputCell(cell: ExcelJS.Cell): boolean {
+  return typeof cell.value === "number";
 }
 
 /** Support Bill as value in column C — unlocked so an estimator can set it offline. */
@@ -748,7 +753,7 @@ function applyLaborBlockChrome(
     if (kind === "hc" || kind === "hps" || kind === "pd") {
       for (let col = 12; col <= lastDateCol; col += 1) {
         const day = ws.getCell(row, col);
-        day.fill = solid(LABOR_HC_HPS);
+        if (isLaborCountInputCell(day)) day.fill = solid(LABOR_HC_HPS);
         centerLaborCell(day);
       }
     } else {
@@ -820,7 +825,7 @@ function paintLaborDayCalendar(
         cell.font = { ...(cell.font ?? {}), color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
         continue;
       }
-      if (kind === "hc" || kind === "hps" || kind === "pd") {
+      if ((kind === "hc" || kind === "hps" || kind === "pd") && isLaborCountInputCell(cell)) {
         cell.fill = solid(LABOR_HC_HPS);
         cell.font = { ...(cell.font ?? {}), color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
       } else {
@@ -1319,7 +1324,9 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       for (let row = 7; row <= maxRow; row += 1) {
         if (!isLaborDayInput(sheet, row, LABOR_DATE_FIRST_COL)) continue;
         for (let col = LABOR_DATE_FIRST_COL; col <= lastVisibleColNum; col += 1) {
-          ws.getCell(row, col).protection = { locked: false };
+          const cell = ws.getCell(row, col);
+          if (!isLaborCountInputCell(cell)) continue;
+          cell.protection = { locked: false };
         }
       }
     }

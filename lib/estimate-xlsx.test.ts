@@ -1333,6 +1333,11 @@ describe("estimate excel export", () => {
     assert.equal(Boolean(staff.getCell("L8").protection?.locked), false);
     assert.equal(Boolean(staff.getCell("L9").protection?.locked), false);
     assert.equal(Boolean(staff.getCell("L13").protection?.locked), false);
+    assert.equal(typeof staff.getCell("L8").value, "number");
+    assert.equal(typeof staff.getCell("L13").value, "number");
+    assert.equal(staff.getCell("L10").protection?.locked !== false, true);
+    assert.equal(staff.getCell("B13").protection?.locked !== false, true);
+    assert.equal(staff.getCell("D13").protection?.locked !== false, true);
     assert.equal(staff.getCell("K7").protection?.locked !== false, true);
     assert.equal(staff.getCell("G10").protection?.locked !== false, true);
     assert.equal(staff.getCell("B10").protection?.locked !== false, true);
@@ -2133,6 +2138,9 @@ describe("estimate excel export", () => {
     const fill = (cell: ExcelJS.Cell) =>
       String((cell.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "").toUpperCase();
     assert.equal(fill(staff.getCell("L8")), LABOR_HC_HPS);
+    assert.equal(fill(staff.getCell("L13")), LABOR_HC_HPS);
+    assert.notEqual(fill(staff.getCell("M8")), LABOR_HC_HPS);
+    assert.notEqual(fill(staff.getCell("M13")), LABOR_HC_HPS);
     assert.notEqual(fill(staff.getCell("L4")), SHEET_VOID_WASH);
     assert.notEqual(fill(staff.getCell("L4")), "FFFFFFFF");
     assert.equal(fill(summary.getCell("A2")) === STEEL || fill(summary.getCell("A2")) === STEEL.slice(2), true);
