@@ -469,7 +469,7 @@ export function EquipmentDesk() {
                     </td>
                     <td className="px-2 py-2 text-sm text-[#5b6f73]">
                       <span className="block font-semibold text-[#163038]">{money(thirdPartyMarkedUp(line))}</span>
-                      <span className="block text-xs">Cost {money(thirdPartyCost(line))} · after 6%</span>
+                      <span className="block text-xs">Cost {money(thirdPartyCost(line))} · after 6.5%</span>
                     </td>
                     <td className="px-2 py-2">
                       <button

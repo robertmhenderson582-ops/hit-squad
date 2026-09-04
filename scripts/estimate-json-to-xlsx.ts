@@ -14,6 +14,7 @@ import {
   estimateJsonToXlsxInput,
   estimateWorkbookSummaryTotal,
 } from "../lib/estimate-pack-xlsx.ts";
+import { commercialMarkupLabel, commercialMarkupRate } from "../lib/estimate-total.ts";
 import { estimateXlsxFilename } from "../lib/estimate-xlsx.ts";
 
 function usage() {
@@ -49,5 +50,7 @@ const summary = {
   deskEstimateTotal: deskTotal,
   excelEstimateTotal: excelTotal,
   estimateTotal: excelTotal,
+  commercialMarkupRate: commercialMarkupRate(pack.client, pack.site),
+  commercialMarkupLabel: commercialMarkupLabel(pack.client, pack.site),
 };
 if (report) process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);

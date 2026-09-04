@@ -136,6 +136,8 @@ export function deskEstimateTotal(input: EstimateXlsxInput): number {
       subcontractor: subcontractorMarkupBase(sheet, subCtx),
       thirdParty: thirdCost,
       misc: rest.misc,
+      client,
+      site,
     }),
     otherCost: rest.total + perDiem,
     changeOrders: 0,

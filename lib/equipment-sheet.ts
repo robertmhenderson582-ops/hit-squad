@@ -1,4 +1,5 @@
 import { markup6, type B2Period } from "./b2-east-coast.ts";
+import { commercialMarkupRate } from "./estimate-total.ts";
 import { inclusiveDays, parseYmd } from "./phase-schedule.ts";
 import {
   isShahanCostPlus,
@@ -11,6 +12,7 @@ import {
 import { notifyEstimateSheets } from "./sheet-events.ts";
 
 export const EQUIPMENT_STORE_PREFIX = "hs_equip_v1:";
+/** Legacy alias. Commercial third-party fee is COMP 6.5% / Yates 10%, not this 6%. B-2 Cost+6% stays on markup6(). */
 export const THIRD_PARTY_MARKUP = 0.06;
 export const THIRD_PARTY_PERIODS = ["daily", "weekly", "monthly"] as const;
 export type ThirdPartyPeriod = (typeof THIRD_PARTY_PERIODS)[number];
@@ -153,8 +155,9 @@ export function thirdPartyCost(line: ThirdPartyLine) {
   return Math.max(0, line.rate) * Math.max(0, line.qty) * periods + Math.max(0, line.freight);
 }
 
-export function thirdPartyMarkedUp(line: ThirdPartyLine) {
-  return markup6(thirdPartyCost(line));
+export function thirdPartyMarkedUp(line: ThirdPartyLine, client = "", site = "") {
+  const cost = thirdPartyCost(line);
+  return Math.round(cost * (1 + commercialMarkupRate(client, site)) * 100) / 100;
 }
 
 export function equipmentTotals(sheet: EquipmentSheet) {

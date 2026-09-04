@@ -6,6 +6,8 @@ import {
   ESTIMATE_MARKUP_LABEL,
   ESTIMATE_MARKUP_RATE,
   buildersRiskPct,
+  commercialMarkupLabel,
+  commercialMarkupRate,
   estimateMarkupDollars,
   estimateTotalBreakdown,
   markupBase,
@@ -101,6 +103,12 @@ test("6.5% markup is only subs + third-party + misc", () => {
   assert.equal(next.total, crew + tools + thirdParty + subs + travelAndPd + misc + 81.25);
   assert.equal(estimateMarkupDollars({ subcontractor: 0, thirdParty: 0, misc: 80 }), 5.2);
   assert.notEqual(estimateMarkupDollars({ subcontractor: 1000, thirdParty: 200, misc: 50 }), 1000 * 0.06);
+  assert.equal(commercialMarkupRate("Phillips 66", "Wood River — Roxana, IL"), 0.065);
+  assert.equal(commercialMarkupRate("Phillips 66", "Bayway"), 0.065);
+  assert.equal(commercialMarkupLabel("Phillips 66", "Wood River"), "6.5% markup");
+  assert.equal(commercialMarkupRate("Georgia Power", "Yates"), 0.1);
+  assert.equal(commercialMarkupLabel("Georgia Power", "Yates"), "10% markup");
+  assert.equal(estimateMarkupDollars({ subcontractor: 1000, client: "Georgia Power", site: "Yates" }), 100);
 });
 
 test("6.5% markup rereads the same dollars after the estimate sheets persist", () => {

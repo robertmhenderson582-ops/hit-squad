@@ -84,6 +84,8 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
         subcontractor: subcontractorMarkupBase(sheet, subCtx),
         thirdParty: thirdCost,
         misc: rest.misc,
+        client,
+        site,
       }),
       otherCost: rest.total + perDiem,
       changeOrders: fcrSummary(fcr, 0, 0).total,

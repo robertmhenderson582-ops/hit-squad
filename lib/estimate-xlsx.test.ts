@@ -273,7 +273,7 @@ describe("estimate excel export", () => {
     assert.equal(staffLabor > 0, true);
     assert.equal(directLabor > 0, true);
     assert.equal(rentalCost, 234);
-    assert.equal(rentalMarked, (134 + 100) * 1.06);
+    assert.equal(rentalMarked, (134 + 100) * 1.065);
     assert.equal(markup, Math.round((234 + 50) * 0.065 * 100) / 100);
     assert.equal(
       Math.round((staffLabor + directLabor + staffPd + directPd + rentalCost + travel + misc + markup) * 100) / 100,

@@ -24,7 +24,6 @@ import type { CalendarRange, CraftRow, CraftShift } from "./craft-labor.ts";
 import {
   billedPeriodCount,
   largeToolAmount,
-  THIRD_PARTY_MARKUP,
   thirdPartyCost,
   type EquipmentSheet,
   type LargeToolLine,
@@ -43,7 +42,7 @@ import {
   type JobMoney,
 } from "./estimate-money.ts";
 import { slugify } from "./estimate-pack.ts";
-import { ESTIMATE_MARKUP_LABEL, ESTIMATE_MARKUP_RATE, estimateMarkupDollars } from "./estimate-total.ts";
+import { commercialMarkupLabel, commercialMarkupRate, estimateMarkupDollars } from "./estimate-total.ts";
 import {
   boundOtLabel,
   clockTitle,
@@ -672,7 +671,7 @@ function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPa
     pushNum(cells, `E${excelRow}`, line.rate);
     pushNum(cells, `F${excelRow}`, line.freight);
     pushFormula(cells, `G${excelRow}`, `C${excelRow}*D${excelRow}*E${excelRow}+F${excelRow}`);
-    pushFormula(cells, `H${excelRow}`, `G${excelRow}*${1 + THIRD_PARTY_MARKUP}`);
+    pushFormula(cells, `H${excelRow}`, `G${excelRow}*${1 + commercialMarkupRate(input.client, input.site)}`);
   });
   const first = 7;
   const last = 6 + live.length;
@@ -789,7 +788,7 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushNum(cells, `D${excelRow}`, line.rate);
     pushText(cells, `E${excelRow}`, line.affiliate ? "Yes" : "No");
     pushFormula(cells, `F${excelRow}`, `C${excelRow}*D${excelRow}`);
-    pushFormula(cells, `G${excelRow}`, line.affiliate ? "0" : `F${excelRow}*${ESTIMATE_MARKUP_RATE}`);
+    pushFormula(cells, `G${excelRow}`, line.affiliate ? "0" : `F${excelRow}*${commercialMarkupRate(input.client, input.site)}`);
     pushFormula(cells, `H${excelRow}`, `F${excelRow}+G${excelRow}`);
     excelRow += 1;
   }
@@ -801,7 +800,7 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushNum(cells, `D${excelRow}`, amount);
     pushText(cells, `E${excelRow}`, card.affiliate ? "Yes" : "No");
     pushFormula(cells, `F${excelRow}`, `C${excelRow}*D${excelRow}`);
-    pushFormula(cells, `G${excelRow}`, card.affiliate ? "0" : `F${excelRow}*${ESTIMATE_MARKUP_RATE}`);
+    pushFormula(cells, `G${excelRow}`, card.affiliate ? "0" : `F${excelRow}*${commercialMarkupRate(input.client, input.site)}`);
     pushFormula(cells, `H${excelRow}`, `F${excelRow}+G${excelRow}`);
     excelRow += 1;
   }
@@ -988,9 +987,11 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     subcontractor: 0,
     thirdParty: thirdPartyCostTotal,
     misc: miscTotal,
+    client,
+    site,
   });
   if (markup) {
-    moneyRefs.push(addSummaryAmount(cells, row, ESTIMATE_MARKUP_LABEL, markup));
+    moneyRefs.push(addSummaryAmount(cells, row, commercialMarkupLabel(client, site), markup));
     row += 1;
   }
   const totalRow = row + 1;

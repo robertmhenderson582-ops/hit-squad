@@ -127,10 +127,10 @@ describe("Wood River third-party rental catalog", () => {
     assert.equal(period.rate, 400);
     assert.equal(period.period, "daily");
     assert.equal(thirdPartyCost({ ...typed, qty: 1 }), 475);
-    assert.equal(thirdPartyMarkedUp({ ...typed, qty: 1 }), 503.5);
+    assert.equal(thirdPartyMarkedUp({ ...typed, qty: 1 }), 505.88);
   });
 
-  it("EquipmentDesk picks the Wood River table and keeps 6% markup; no workbooks in git", () => {
+  it("EquipmentDesk picks the Wood River table and keeps 6.5% COMP markup; no workbooks in git", () => {
     const desk = readFileSync(DESK_PATH, "utf8");
     assert.match(desk, /CatalogPick/);
     assert.match(desk, /thirdPartyRentalDescriptions/);
