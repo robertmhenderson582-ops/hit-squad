@@ -154,7 +154,7 @@ function columnWidth(col: string, header: string | undefined, sheetName: string)
 
 function applyRowStyle(exCell: ExcelJS.Cell, row: number, maxRow: number, isSummary: boolean, colNum: number) {
   if (row === 1) {
-    exCell.font = { bold: true, size: 16, color: { argb: WHITE }, name: "Calibri" };
+    exCell.font = { bold: true, size: 13, color: { argb: WHITE }, name: "Calibri" };
     exCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRAND_STEEL } };
     exCell.alignment = { vertical: "middle" };
     return;
@@ -164,7 +164,7 @@ function applyRowStyle(exCell: ExcelJS.Cell, row: number, maxRow: number, isSumm
     return;
   }
   if (row === 3) {
-    exCell.font = { bold: true, size: 14, color: { argb: DARK_TEXT }, name: "Calibri" };
+    exCell.font = { bold: true, size: 12, color: { argb: DARK_TEXT }, name: "Calibri" };
     return;
   }
   if (row === 4) {
@@ -261,7 +261,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
         evenHeader: printHeader(safeName),
         evenFooter: PRINT_FOOTER,
       },
-      views: [{ state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: false }],
+      views: [{ state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: true }],
     });
 
     const merges = sheet.merges?.length ? sheet.merges : defaultMerges(sheet.cells);
@@ -311,9 +311,8 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       ws.getColumn(3).width = 14;
     }
 
-    ws.getRow(1).height = 26;
-    ws.getRow(3).height = 22;
-    ws.getRow(6).height = 22;
+    ws.getRow(1).height = 22;
+    ws.getRow(6).height = 20;
     ws.autoFilter = undefined;
     ws.pageSetup.printArea = `A1:${lastCol}${Math.max(maxRow, 7)}`;
   }

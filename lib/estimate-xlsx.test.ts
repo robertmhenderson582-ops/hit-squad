@@ -541,18 +541,18 @@ describe("estimate excel export", () => {
       },
     });
     const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff);
-    const foremen = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.foremen);
-    assert.ok(staff && foremen);
+    assert.ok(staff);
+    assert.equal(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.foremen), undefined);
     const staffMap = cellMap(staff);
-    const gfMap = cellMap(foremen);
     for (const row of [7, 8, 9, 10, 11, 12]) {
       assert.equal(staffMap.get(`C${row}`)?.value, 10, `staff ST row ${row}`);
       assert.equal(staffMap.get(`D${row}`)?.value, 0, `staff OT row ${row}`);
     }
     assert.equal(staffMap.get("C13")?.value, 8);
     assert.equal(staffMap.get("D13")?.value, 2);
-    assert.equal(gfMap.get("C7")?.value, 8);
-    assert.equal(gfMap.get("D7")?.value, 2);
+    assert.equal(staffMap.get("A14")?.value, "Pipefitter GF Union");
+    assert.equal(staffMap.get("C14")?.value, 8);
+    assert.equal(staffMap.get("D14")?.value, 2);
 
     const saturday = buildEstimateWorkbook({
       title: "Aromatics Saturday",
@@ -579,11 +579,12 @@ describe("estimate excel export", () => {
       },
     });
     const satStaff = cellMap(sheetOf(saturday, ESTIMATE_XLSX_SHEETS.staff)!);
-    const satGf = cellMap(sheetOf(saturday, ESTIMATE_XLSX_SHEETS.foremen)!);
+    assert.equal(sheetOf(saturday, ESTIMATE_XLSX_SHEETS.foremen), undefined);
     assert.equal(satStaff.get("C7")?.value, 10);
     assert.equal(satStaff.get("D7")?.value, 0);
-    assert.equal(satGf.get("C7")?.value, 0);
-    assert.equal(satGf.get("D7")?.value, 10);
+    assert.equal(satStaff.get("A8")?.value, "Pipefitter GF Union");
+    assert.equal(satStaff.get("C8")?.value, 0);
+    assert.equal(satStaff.get("D8")?.value, 10);
   });
 
   it("labels contingency, CBA, M.O.R.E., and 6.5% markup on Summary Amount $ — not in MH", () => {
@@ -705,41 +706,75 @@ describe("estimate excel export", () => {
         cards: [],
       },
     };
-    const withLaydown = {
-      ...input,
-      crew: {
-        ...input.crew,
-        support: [
-          ...input.crew.support,
-          craft("ld-1", "Laydown Pipefitter Foreman", 10, craftWeek),
-        ],
-      },
-    };
-    const sheets = buildEstimateWorkbook(withLaydown);
+    const sheets = buildEstimateWorkbook(input);
     const names = sheets.map((sheet) => sheet.name);
-    assert.equal(names.length, 16);
+    assert.equal(names.length, 15);
     assert.equal(names[0], ESTIMATE_XLSX_SHEETS.summary);
-    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.laydown), true);
+    assert.deepEqual(
+      ["Staff", "Foremen", "Direct", "Support"].every((name) => names.includes(name)),
+      true,
+    );
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.laydown), false);
     assert.equal(names.includes(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub)), true);
     assert.equal(names.some((name) => name.includes("&")), false);
     const blob = JSON.stringify(sheets);
     assert.equal(/field trial|forgebook|not a release/i.test(blob), false);
+    const staffMap = cellMap(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff)!);
+    const foremenMap = cellMap(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.foremen)!);
+    assert.equal(staffMap.get("A7")?.value, "Lead Safety 01");
+    assert.equal(staffMap.get("A8")?.value, "Pipefitter GF Union");
+    assert.equal(foremenMap.get("A7")?.value, "Boilermaker Foreman");
 
-    const bytes = await estimateToXlsx(withLaydown);
+    const bytes = await estimateToXlsx(input);
     const parts = zipParts(bytes);
     for (const part of REQUIRED_XLSX_PARTS) {
       assert.equal(parts.some((item) => item.endsWith(part) || item === part), true, part);
     }
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));
-    assert.equal(wb.worksheets.length, 16);
+    assert.equal(wb.worksheets.length, 15);
     assert.ok(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader?.includes("HIT SQUAD"));
     assert.equal(/field trial|forgebook/i.test(String(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader)), false);
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("C7").value, 10);
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("D7").value, 0);
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("C8").value, 8);
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("D8").value, 2);
     const rates = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rates);
     assert.ok(rates);
     assert.equal(Number(rates.getCell("C7").value) > 0, true);
+  });
+
+  it("keeps workbook Staff/Foremen/Direct/Support itemization and does not invent a sixth crew sheet", () => {
+    const listed = execSync('git ls-files "components/CrewPhaseCards.tsx" "lib/crew-lanes.ts"', { encoding: "utf8" });
+    assert.match(listed, /crew-lanes/);
+    const lanes = readFileSync(fileURLToPath(new URL("./crew-lanes.ts", import.meta.url)), "utf8");
+    assert.match(lanes, /Staff/);
+    assert.match(lanes, /General Foreman/);
+    assert.match(lanes, /Foreman/);
+    assert.match(lanes, /Direct Craft/);
+    assert.match(lanes, /Support/);
+    assert.equal(/laydown/i.test(lanes), false);
+    const sheets = buildEstimateWorkbook({
+      title: "Wood River itemization",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      crew: {
+        staff: [craft("st", "Lead Safety 01", 10)],
+        generalForeman: [craft("gf", "Pipefitter GF Union", 10, { otAfter8: true })],
+        foreman: [craft("fm", "Boilermaker Foreman", 10, { otAfter8: true })],
+        direct: [craft("dr", "Boilermaker Journeyman", 10, { otAfter8: true })],
+        support: [craft("su", "Fire Watch", 10, { otAfter8: true })],
+        otAfter8: true,
+      },
+    });
+    const names = sheets.map((sheet) => sheet.name);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.staff), true);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.foremen), true);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.direct), true);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.support), true);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.laydown), false);
+    assert.equal(cellMap(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff)!).get("A8")?.value, "Pipefitter GF Union");
+    assert.equal(cellMap(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.foremen)!).get("A7")?.value, "Boilermaker Foreman");
   });
 
   it("keeps an unrecognized Staff-card title on the staff clock", () => {

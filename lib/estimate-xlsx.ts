@@ -1,8 +1,11 @@
 /**
  * Desk estimate → Excel workbook.
- * Sheet names follow the live CAT 2 / Wood River TM book shape.
- * Content, clocks, and rates follow THIS estimate's site — not a Nathan-only
- * or Wood River-only exporter. Never commit source workbooks to git.
+ * Wood River / CAT 2 familiarity is an explicit constraint: same labor sheet
+ * names and itemized position blocks. Workbook Staff = desk Staff + GF & above.
+ * Foremen / Direct / Support stay their own sheets. Desk cards stay the five
+ * cards (Staff / GF / Foreman / Direct / Support) — this file does not invent
+ * a new crew presentation. PD stays off Labor TM $. Polish, repair-safe
+ * package, and $ vs MH labels only. Never commit source workbooks to git.
  */
 
 import type { CraftRow } from "./craft-labor.ts";
@@ -137,10 +140,6 @@ function rowHasPosition(row: { position?: string } | undefined) {
 
 function liveCrewRows(rows: CraftRow[] | undefined) {
   return (rows ?? []).filter(rowHasPosition);
-}
-
-function isLaydownRow(row: { position?: string; billedAs?: string }) {
-  return /\blaydown\b/i.test(`${row.position ?? ""} ${row.billedAs ?? ""}`);
 }
 
 function withLaneClock(row: CraftRow, lane: CrewLane): CraftRow {
@@ -665,7 +664,6 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     ["Foremen labor $", ESTIMATE_XLSX_SHEETS.foremen],
     ["Direct labor $", ESTIMATE_XLSX_SHEETS.direct],
     ["Support labor $", ESTIMATE_XLSX_SHEETS.support],
-    ["Laydown labor $", ESTIMATE_XLSX_SHEETS.laydown],
   ];
   const laborRefs: string[] = [];
   for (const [label, name] of laborSheets) {
@@ -808,28 +806,18 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
 export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSheet[] {
   const keys = usedRateKeys(input.crew);
   const rates = buildRateSheet(input, keys);
-  const gfIds = new Set((input.crew?.generalForeman ?? []).map((row) => row.id));
-  const staffRows = (input.crew?.staff ?? []).map((row) => withLaneClock(row, "staff"));
+  const staffCardRows = (input.crew?.staff ?? []).map((row) => withLaneClock(row, "staff"));
   const gfRows = input.crew?.generalForeman ?? [];
-  const foremanRows = (input.crew?.foreman ?? []).filter((row) => !isLaydownRow(row));
-  const directRows = (input.crew?.direct ?? []).filter((row) => !isLaydownRow(row));
-  const supportRows = (input.crew?.support ?? []).filter((row) => !isLaydownRow(row));
-  const laydownRows = [
-    ...(input.crew?.foreman ?? []).filter(isLaydownRow),
-    ...(input.crew?.direct ?? []).filter(isLaydownRow),
-    ...(input.crew?.support ?? []).filter(isLaydownRow),
-  ];
-  const staff = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.staff, staffRows, keys, () => true, "staff");
-  const foremen = buildCrewSheet(
+  const staff = buildCrewSheet(
     input,
-    ESTIMATE_XLSX_SHEETS.foremen,
-    [...gfRows, ...foremanRows],
+    ESTIMATE_XLSX_SHEETS.staff,
+    [...staffCardRows, ...gfRows],
     keys,
-    (row) => gfIds.has(row.id),
+    () => true,
   );
-  const direct = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.direct, directRows, keys, () => false);
-  const support = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.support, supportRows, keys, () => false);
-  const laydown = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.laydown, laydownRows, keys, () => false);
+  const foremen = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.foremen, input.crew?.foreman ?? [], keys, () => false);
+  const direct = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.direct, input.crew?.direct ?? [], keys, () => false);
+  const support = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.support, input.crew?.support ?? [], keys, () => false);
   const org = buildOrgSheet(input);
   const slicer = buildSlicerSheet(input);
   const third = input.equipment?.thirdParty ?? [];
@@ -856,7 +844,7 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   );
   const misc = buildMiscSheet(input);
   const sub = buildSubSheet(input);
-  const body = [org, slicer, staff, foremen, direct, support, laydown, rental, tension, crane, sub, coe, staffTravel, misc, rates]
+  const body = [org, slicer, staff, foremen, direct, support, rental, tension, crane, sub, coe, staffTravel, misc, rates]
     .filter((sheet): sheet is BuiltSheet => Boolean(sheet))
     .map((sheet) => ({ ...sheet, name: xlsxName(sheet.name) }));
   return [{ ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) }, ...body];
