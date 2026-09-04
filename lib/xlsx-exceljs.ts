@@ -60,7 +60,7 @@ export const LABOR_NIGHTSHIFT_BANNER = STEEL_DEEP;
 export const LABOR_SPACER = STEEL_DEEP;
 export const LABOR_CAGE_WASH_A = STEEL;
 export const LABOR_CAGE_WASH_B = STEEL_DEEP;
-/** ST/OT/DT/PD weekday day cells — teal, not mint. Weekend gray still wins. */
+/** ST/OT/DT weekday day cells — teal, not mint. Weekend gray still wins. PD count is yellow like HC. */
 export const LABOR_DAY_WASH = STEEL;
 /** Leftover empty cells in the used band — teal, not mint/white. */
 export const SHEET_VOID_WASH = STEEL;
@@ -712,12 +712,27 @@ function applyLaborBlockChrome(
         cell.fill = solid(LABOR_HC_HPS_CLEAR);
         cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 9 };
         centerLaborCell(cell);
-      } else if (kind === "hours" || kind === "pd") {
+      } else if (kind === "pd") {
         if (col === 6) {
-          cell.fill = solid(kind === "pd" ? LABOR_PD_LABEL : LABOR_HOURS_LABEL);
+          cell.fill = solid(LABOR_PD_LABEL);
+          cell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 9 };
+          centerLaborCell(cell);
+        } else if (col === 4 || col === 5) {
+          const wash = (row - block.start) % 2 === 0 ? LABOR_CAGE_WASH_A : LABOR_CAGE_WASH_B;
+          cell.fill = solid(wash);
+          cell.font = { color: { argb: WHITE }, name: "Calibri", size: 10 };
+          centerLaborCell(cell);
+        } else {
+          cell.fill = solid(LABOR_HC_HPS_CLEAR);
+          cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 9 };
+          centerLaborCell(cell);
+        }
+      } else if (kind === "hours") {
+        if (col === 6) {
+          cell.fill = solid(LABOR_HOURS_LABEL);
           cell.font = {
             bold: true,
-            color: { argb: kind === "pd" ? DARK_TEXT : WHITE },
+            color: { argb: WHITE },
             name: "Calibri",
             size: 9,
           };
@@ -730,7 +745,7 @@ function applyLaborBlockChrome(
         }
       }
     }
-    if (kind === "hc" || kind === "hps") {
+    if (kind === "hc" || kind === "hps" || kind === "pd") {
       for (let col = 12; col <= lastDateCol; col += 1) {
         const day = ws.getCell(row, col);
         day.fill = solid(LABOR_HC_HPS);
@@ -805,7 +820,7 @@ function paintLaborDayCalendar(
         cell.font = { ...(cell.font ?? {}), color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
         continue;
       }
-      if (kind === "hc" || kind === "hps") {
+      if (kind === "hc" || kind === "hps" || kind === "pd") {
         cell.fill = solid(LABOR_HC_HPS);
         cell.font = { ...(cell.font ?? {}), color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
       } else {

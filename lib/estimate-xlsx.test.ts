@@ -30,6 +30,9 @@ import {
   LABOR_HC_LABEL,
   LABOR_HPS_LABEL,
   LABOR_HPS_TYPE,
+  LABOR_PD_COUNT_LABEL,
+  LABOR_PD_HEADER,
+  LABOR_PD_TYPE,
   LABOR_NIGHTSHIFT,
   LABOR_PHASE_LABEL,
   LABOR_WEEKDAY_LABELS,
@@ -77,6 +80,7 @@ import {
   LABOR_HC_HPS,
   LABOR_HC_HPS_CLEAR,
   LABOR_HOURS_LABEL,
+  LABOR_PD_LABEL,
   LABOR_POSITION_TITLE,
   LABOR_SAT_BODY,
   LABOR_SAT_HEADER,
@@ -308,7 +312,7 @@ describe("estimate excel export", () => {
     assert.equal(staff.cells.find((cell) => cell.ref === "K6")?.value, "Labor $");
     assert.equal(staff.cells.find((cell) => cell.ref === "B6")?.value, "Billable");
     assert.equal(staff.cells.find((cell) => cell.ref === "D6")?.value, "Subtotal $");
-    assert.equal(staff.cells.find((cell) => cell.ref === "J6")?.value, "PD");
+    assert.equal(staff.cells.find((cell) => cell.ref === "J6")?.value, LABOR_PD_HEADER);
     assert.equal(staff.cells.find((cell) => cell.ref === "L6")?.type, "date");
 
     const { evalAt } = evaluateWorkbook(sheets);
@@ -995,6 +999,10 @@ describe("estimate excel export", () => {
     assert.equal(argb(direct.getCell("A9")), LABOR_HC_HPS_CLEAR.slice(2));
     assert.equal(argb(direct.getCell("K9")), LABOR_POSITION_TITLE.slice(2));
     assert.equal(direct.getCell("A9").value, LABOR_HPS_LABEL);
+    assert.equal(direct.getCell("A13").value, LABOR_PD_COUNT_LABEL);
+    assert.equal(direct.getCell("F13").value, LABOR_PD_TYPE);
+    assert.equal(argb(direct.getCell("A13")), LABOR_HC_HPS_CLEAR.slice(2));
+    assert.equal(argb(direct.getCell("F13")), LABOR_PD_LABEL.slice(2));
     assert.equal(Boolean(direct.getCell("A9").alignment?.wrapText), false);
     assert.equal(Boolean(direct.getCell("F10").alignment?.wrapText), false);
     for (let row = 7; row <= 13; row += 1) {
@@ -1005,6 +1013,7 @@ describe("estimate excel export", () => {
     while (weekendSet.has(weekdayDayCol) && weekdayDayCol < 20) weekdayDayCol += 1;
     assert.equal(argb(direct.getCell(8, weekdayDayCol)), LABOR_HC_HPS.slice(2));
     assert.equal(argb(direct.getCell(9, weekdayDayCol)), LABOR_HC_HPS.slice(2));
+    assert.equal(argb(direct.getCell(13, weekdayDayCol)), LABOR_HC_HPS.slice(2));
     assert.equal(direct.getCell(8, weekdayDayCol).alignment?.horizontal, "center");
     assert.equal(direct.getCell(9, weekdayDayCol).alignment?.horizontal, "center");
     assert.equal(direct.getCell(10, weekdayDayCol).alignment?.horizontal, "center");
@@ -1367,6 +1376,10 @@ describe("estimate excel export", () => {
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, `L${block.hc}`), 11);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, `L${block.hps}`), 8);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, `L${block.pd}`), 6);
+    assert.notEqual(evalAt(ESTIMATE_XLSX_SHEETS.direct, `L${block.pd}`), evalAt(ESTIMATE_XLSX_SHEETS.direct, `L${block.hc}`));
+    assert.equal(cellMap(direct).get(`A${block.pd}`)?.value, LABOR_PD_COUNT_LABEL);
+    assert.equal(cellMap(direct).get(`F${block.pd}`)?.value, LABOR_PD_TYPE);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, `D${block.pd}`), 6 * 130);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, `B${block.st}`), 8 * 11);
     const desk = computeRowHours(base, "Wood River — Roxana, IL", "Phillips 66", true);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, `B${block.title}`), desk.hours);
@@ -1821,6 +1834,9 @@ describe("estimate excel export", () => {
     assert.equal(staffMap.get(`F${lead.hc}`)?.value, LABOR_HC_LABEL);
     assert.equal(staffMap.get(`A${lead.hps}`)?.value, LABOR_HPS_LABEL);
     assert.equal(staffMap.get(`F${lead.hps}`)?.value, LABOR_HPS_TYPE);
+    assert.equal(staffMap.get(`A${lead.pd}`)?.value, LABOR_PD_COUNT_LABEL);
+    assert.equal(staffMap.get(`F${lead.pd}`)?.value, LABOR_PD_TYPE);
+    assert.equal(staff.cells.find((cell) => cell.ref === "J6")?.value, LABOR_PD_HEADER);
     assert.equal(staffMap.get(`F${lead.title}`), undefined);
     assert.equal(staffMap.get(`C${lead.title}`)?.value, "Lead Safety 01");
     assert.equal(staff.cells.some((cell) => cell.type === "text" && cell.value === "TITLE"), false);

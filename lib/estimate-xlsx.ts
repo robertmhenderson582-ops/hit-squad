@@ -6,7 +6,9 @@
  * cards (Staff / GF / Foreman / Direct / Support) — this file does not invent
  * a new crew presentation. PD stays off Labor TM $. Labor sheets keep the
  * CAT 2 daily itemized grid (date row from col L, 7-row HC/HPS/ST/OT/DT/PD
- * blocks, DAYSHIFT / NIGHTSHIFT). Position + ST/OT/DT/PD hrs + Labor $ merge
+ * blocks, DAYSHIFT / NIGHTSHIFT). PD is a daily people-count row (live-pack
+ * perDiemPeople / nightPerDiemPeople) — same calendar idea as HC, not hours.
+ * Position + ST/OT/DT/PD hrs + Labor $ merge
  * down the block void and center — one value, not duplicated on detail rows.
  * Support shows live-pack Bill as under Position in column C (same rate title
  * as Rate Tables). Type / Rate / Subtotal $ stay per-row. That grid is the stable client edit surface
@@ -125,6 +127,11 @@ export const LABOR_DAYSHIFT = "DAYSHIFT";
 export const LABOR_NIGHTSHIFT = "NIGHTSHIFT";
 export const LABOR_HC_LABEL = "HC";
 export const LABOR_HPS_TYPE = "HPS";
+/** A-column label on the PD people-count row — same idea as Hours/shift. */
+export const LABOR_PD_COUNT_LABEL = "PD count";
+/** J header: daily PD people-days, not hours. */
+export const LABOR_PD_HEADER = "PD #";
+export const LABOR_PD_TYPE = "PD";
 /** Type chip on the position header row is omitted — the Position name is the title. */
 export const LABOR_TITLE_TYPE = "";
 export const LABOR_TYPE_ORDER = ["HC", "HPS", "ST", "OT", "DT", "PD"] as const;
@@ -719,7 +726,7 @@ function buildCrewSheet(
     "ST Hrs",
     "OT Hrs",
     "DT Hrs",
-    "PD",
+    LABOR_PD_HEADER,
     "Labor $",
   ];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
@@ -777,7 +784,8 @@ function buildCrewSheet(
     pushText(cells, `F${stRow}`, "ST");
     pushText(cells, `F${otRow}`, "OT");
     pushText(cells, `F${dtRow}`, "DT");
-    pushText(cells, `F${pdRow}`, "PD");
+    pushText(cells, `A${pdRow}`, LABOR_PD_COUNT_LABEL);
+    pushText(cells, `F${pdRow}`, LABOR_PD_TYPE);
 
     if (dates.length) {
       pushFormula(cells, `B${stRow}`, `SUM(${firstDate}${stRow}:${lastDateCol}${stRow})`);
