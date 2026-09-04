@@ -1317,6 +1317,11 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       pinLaborEvenRows(ws, sheet, lastVisibleColNum, maxRow);
     }
     pinHoursAndMoney(ws, sheet, lastVisibleColNum, maxRow, labor, isSummary);
+    for (const slot of sheet.billAs ?? []) {
+      const value = ws.getCell(slot.valueRow, 3);
+      centerLaborCell(value, { wrapText: true });
+      value.protection = { locked: false };
+    }
     if (labor && lastVisibleColNum >= LABOR_DATE_FIRST_COL) {
       for (let col = LABOR_DATE_FIRST_COL; col <= lastVisibleColNum; col += 1) {
         if (sheet.hiddenCols?.includes(col)) continue;
