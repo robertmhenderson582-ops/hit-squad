@@ -399,7 +399,9 @@ describe("estimate excel export", () => {
     assert.equal(staffSheet.getCell("E10").numFmt, "$#,##0.00");
     assert.equal(staffSheet.getCell("D10").numFmt, "$#,##0.00");
     assert.equal(staffSheet.getCell("L8").numFmt, EXCEL_UNIT_FORMATS.hours);
+    assert.equal(staffSheet.getCell("L9").numFmt, EXCEL_UNIT_FORMATS.hours);
     assert.equal(staffSheet.getCell("L10").numFmt, EXCEL_UNIT_FORMATS.hours);
+    assert.equal(staffSheet.getCell("L8").numFmt.includes("."), false);
     assert.equal(staffSheet.getCell("G7").numFmt, EXCEL_UNIT_FORMATS.hours);
     assert.equal(staffSheet.getCell("J7").numFmt, EXCEL_UNIT_FORMATS.hours);
     let hoursRow = 0;
