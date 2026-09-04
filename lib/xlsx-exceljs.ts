@@ -7,8 +7,9 @@
  * phase bar) must not invent catalogs or disconnect math from those libs.
  * Phase-bar fills come from phase-schedule (desk globals), not sample dates.
  * Phase bar is a locked view this Look pass — no editable Job setup card.
- * Unused columns/rows past the used range are hidden; leftover white cells
- * in the used band get a soft plate wash. Chrome only.
+ * Unused columns past the used range are hidden. Unused rows below TOTAL
+ * collapse (defaultRowHeight 0 + zeroHeight) so no white band remains.
+ * Leftover white cells in the used band get a soft plate wash. Chrome only.
  */
 
 import ExcelJS from "exceljs";
