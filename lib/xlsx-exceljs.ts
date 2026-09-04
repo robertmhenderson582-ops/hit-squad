@@ -235,7 +235,7 @@ export function formatForHeader(header: string): string | undefined {
   const lower = header.trim().toLowerCase();
   if (lower.includes("%") || lower === "markup %") return FMT_PERCENT;
   if (/man-hours|\bmh\b|total billable|^billable$/.test(lower)) return FMT_HOURS;
-  if (/^pd$|pd days/.test(lower) && !/\$/.test(lower)) return FMT_HOURS;
+  if (/^(pd|pd #|pd count)$|pd days/.test(lower) && !/\$/.test(lower)) return FMT_HOURS;
   if (/hrs|hours/.test(lower) && !/\$/.test(lower)) return FMT_HOURS;
   if (/headcount|qty|periods|travelers|\bcount\b/.test(lower)) return FMT_INTEGER;
   if (lower === "miles") return FMT_INTEGER;

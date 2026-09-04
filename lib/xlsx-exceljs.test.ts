@@ -43,6 +43,8 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(formatForHeader("MH"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(formatForHeader("PD Days"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(formatForHeader("PD"), EXCEL_UNIT_FORMATS.hours);
+    assert.equal(formatForHeader("PD #"), EXCEL_UNIT_FORMATS.hours);
+    assert.equal(formatForHeader("PD count"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(EXCEL_UNIT_FORMATS.hours, "#,##0");
     assert.equal(LABOR_DAY_WASH, STEEL);
     assert.equal(LABOR_DAY_WASH.includes("F2F6"), false);
