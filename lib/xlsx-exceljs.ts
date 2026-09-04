@@ -4,12 +4,16 @@ import ExcelJS from "exceljs";
 import { evaluateWorkbook } from "./xlsx-eval.ts";
 import { colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
-const OFFICE_SLATE = "FF3D4C5F";
 const WHITE = "FFFFFFFF";
 const DARK_TEXT = "FF102226";
 const MUTED_TEXT = "FF3D4F54";
-const GRID = "FFB0B0B0";
+const GRID = "FF8AA3A1";
 const BLACK = "FF000000";
+export const STEEL = "FF0F5F6D";
+export const STEEL_DEEP = "FF083943";
+export const AMBER_FLARE = "FFE38B2A";
+const PLATE_WASH = "FFE4EBE9";
+const PLATE_WASH_DEEP = "FFDCE6E4";
 
 const FMT_CURRENCY = "$#,##0.00";
 const FMT_HOURS = "#,##0.0";
@@ -24,16 +28,22 @@ export const LABOR_SAT_BODY = LABOR_WEEKEND_FILL;
 export const LABOR_SUN_HEADER = LABOR_WEEKEND_FILL;
 export const LABOR_SUN_BODY = LABOR_WEEKEND_FILL;
 
-export const LABOR_POSITION_TITLE = "FF3D4C5F";
+export const LABOR_POSITION_TITLE = STEEL;
 export const LABOR_HC_HPS = "FFFFFF00";
-/** Empty B–K on HC/HPS rows — not yellow voids. */
-export const LABOR_HC_HPS_CLEAR = "FFFFFFFF";
-export const LABOR_HOURS_LABEL = "FF5B9BD5";
-export const LABOR_DAYSHIFT_BANNER = "FFDBDBDB";
-export const LABOR_NIGHTSHIFT_BANNER = "FF4472C4";
-export const LABOR_SPACER = "FFF1F0F0";
-export const SUMMARY_SECTION = "FFED7D31";
-export const SUMMARY_TOTAL = "FFFFC000";
+/** Empty B–K on HC/HPS rows — not yellow voids. Desk mint plate. */
+export const LABOR_HC_HPS_CLEAR = "FFE7EEEC";
+export const LABOR_HOURS_LABEL = STEEL;
+export const LABOR_PD_LABEL = AMBER_FLARE;
+export const LABOR_DAYSHIFT_BANNER = "FFC5D9D6";
+export const LABOR_NIGHTSHIFT_BANNER = STEEL_DEEP;
+export const LABOR_SPACER = "FFB7C8C6";
+export const LABOR_CAGE_WASH_A = "FFD5E3E1";
+export const LABOR_CAGE_WASH_B = "FFC4D6D4";
+export const LABOR_DAY_WASH = "FFF2F6F5";
+export const SUMMARY_SECTION = STEEL;
+export const SUMMARY_TOTAL = AMBER_FLARE;
+export const SUMMARY_ZEBRA_A = "FFE7EEEC";
+export const SUMMARY_ZEBRA_B = "FFDCE8E6";
 
 export const LABOR_COL_WIDTHS: Record<string, number> = {
   A: 10,
@@ -195,14 +205,14 @@ export const EXCEL_UNIT_FORMATS = {
 } as const;
 
 function tabColorArgb(name: string): string {
-  if (name === "Summary Page") return OFFICE_SLATE;
+  if (name === "Summary Page") return STEEL_DEEP;
   if (name === "Staff" || name === "Foremen" || name === "Direct" || name === "Support" || name === "Laydown") {
-    return "FF5B9BD5";
+    return STEEL;
   }
-  if (name.includes("Rental") || name === "COE" || name === "Tensioning Torquing equipment") return "FFED7D31";
-  if (name === "Rate Tables") return OFFICE_SLATE;
-  if (name.includes("Subcontractor") || name === "Staff Travel Cost" || name === "Misc Costs") return "FF4472C4";
-  return OFFICE_SLATE;
+  if (name.includes("Rental") || name === "COE" || name === "Tensioning Torquing equipment") return AMBER_FLARE;
+  if (name === "Rate Tables") return STEEL_DEEP;
+  if (name.includes("Subcontractor") || name === "Staff Travel Cost" || name === "Misc Costs") return "FF1A7A88";
+  return STEEL;
 }
 
 function labelByRow(cells: SheetCell[], row: number): string | undefined {
@@ -298,32 +308,36 @@ function applyRowStyle(
   colNum: number,
 ) {
   if (row === 1) {
-    exCell.font = { bold: true, size: 13, color: { argb: WHITE }, name: "Calibri" };
-    exCell.fill = solid(OFFICE_SLATE);
+    exCell.font = { bold: true, size: 14, color: { argb: WHITE }, name: "Calibri" };
+    exCell.fill = solid(STEEL);
     exCell.alignment = { vertical: "middle" };
+    exCell.border = { bottom: edge("medium", AMBER_FLARE) };
     return;
   }
   if (row === 2) {
-    exCell.font = { size: 9, color: { argb: DARK_TEXT }, name: "Calibri" };
+    exCell.font = { size: 9, color: { argb: STEEL_DEEP }, name: "Calibri" };
+    exCell.fill = solid(PLATE_WASH);
     exCell.alignment = { vertical: "middle", wrapText: false };
     return;
   }
   if (row === 3) {
     exCell.font = { size: 9, italic: true, color: { argb: MUTED_TEXT }, name: "Calibri" };
+    exCell.fill = solid(PLATE_WASH_DEEP);
     exCell.alignment = { vertical: "middle", wrapText: false };
     return;
   }
   if (row === 4 || row === 5) {
     exCell.font = { size: 9, color: { argb: MUTED_TEXT }, name: "Calibri" };
+    exCell.fill = solid(PLATE_WASH);
     exCell.alignment = { wrapText: false };
     return;
   }
   if (row === 6) {
     exCell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 9 };
-    exCell.fill = solid(OFFICE_SLATE);
+    exCell.fill = solid(STEEL_DEEP);
     exCell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     exCell.border = {
-      bottom: { style: "double", color: { argb: BLACK } },
+      bottom: { style: "medium", color: { argb: AMBER_FLARE } },
     };
     return;
   }
@@ -401,20 +415,36 @@ function applyLaborBlockChrome(
           cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
         }
       } else if (kind === "hc" || kind === "hps") {
-        cell.fill = solid(WHITE);
-        cell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 9 };
+        cell.fill = solid(LABOR_HC_HPS_CLEAR);
+        cell.font = { bold: true, color: { argb: STEEL_DEEP }, name: "Calibri", size: 9 };
         if (kind === "hps" && col === 1) {
           cell.alignment = { wrapText: true, vertical: "middle" };
         }
-      } else if (kind === "hours" && col === 6) {
-        cell.fill = solid(LABOR_HOURS_LABEL);
-        cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 9 };
-        cell.alignment = { horizontal: "center" };
+      } else if (kind === "hours" || kind === "pd") {
+        if (col === 6) {
+          cell.fill = solid(kind === "pd" ? LABOR_PD_LABEL : LABOR_HOURS_LABEL);
+          cell.font = {
+            bold: true,
+            color: { argb: kind === "pd" ? DARK_TEXT : WHITE },
+            name: "Calibri",
+            size: 9,
+          };
+          cell.alignment = { horizontal: "center" };
+        } else {
+          const wash = (row - block.start) % 2 === 0 ? LABOR_CAGE_WASH_A : LABOR_CAGE_WASH_B;
+          cell.fill = solid(wash);
+          cell.font = { color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
+        }
       }
     }
     if (kind === "hc" || kind === "hps") {
       for (let col = 12; col <= lastDateCol; col += 1) {
         ws.getCell(row, col).fill = solid(LABOR_HC_HPS);
+      }
+    }
+    if (kind === "hours" || kind === "pd") {
+      for (let col = 12; col <= lastDateCol; col += 1) {
+        ws.getCell(row, col).fill = solid(LABOR_DAY_WASH);
       }
     }
     if (kind === "hps") ws.getRow(row).height = 28;
@@ -511,13 +541,25 @@ function applyLaborChrome(
   }
 }
 
-function applySummaryChrome(ws: ExcelJS.Worksheet, maxRow: number) {
+function applySummaryChrome(
+  ws: ExcelJS.Worksheet,
+  maxRow: number,
+  totalRows: Set<number>,
+  sectionRows: Set<number>,
+) {
   ws.getColumn(1).width = SUMMARY_COL_A_WIDTH;
   ws.getColumn(2).width = 14;
   ws.getColumn(3).width = 12;
   hairGrid(ws, 6, maxRow, 1, 3);
   for (let col = 1; col <= 3; col += 1) {
-    patchBorder(ws.getCell(6, col), { bottom: edge("double") });
+    patchBorder(ws.getCell(6, col), { bottom: edge("medium", AMBER_FLARE) });
+  }
+  for (let row = 7; row <= maxRow; row += 1) {
+    if (totalRows.has(row) || sectionRows.has(row)) continue;
+    const wash = row % 2 === 0 ? SUMMARY_ZEBRA_B : SUMMARY_ZEBRA_A;
+    for (let col = 1; col <= 3; col += 1) {
+      ws.getCell(row, col).fill = solid(wash);
+    }
   }
   for (const row of [2, 3]) {
     ws.getCell(row, 1).alignment = { vertical: "middle", wrapText: false };
@@ -633,14 +675,14 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       ws.getColumn(colIndex(col)).width = columnWidth(col, header, sheet.name);
     }
     if (labor) applyLaborChrome(ws, sheet, maxRow, lastColNum, totalRows);
-    if (isSummary) applySummaryChrome(ws, maxRow);
+    if (isSummary) applySummaryChrome(ws, maxRow, totalRows, sectionRows);
 
     for (const col of sheet.hiddenCols ?? []) {
       ws.getColumn(col).hidden = true;
       ws.getColumn(col).width = 3;
     }
 
-    ws.getRow(1).height = 20;
+    ws.getRow(1).height = 22;
     ws.getRow(2).height = 16;
     ws.getRow(3).height = 16;
     ws.getRow(4).height = 6;

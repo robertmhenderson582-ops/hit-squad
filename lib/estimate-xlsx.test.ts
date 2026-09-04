@@ -44,6 +44,8 @@ import {
   LABOR_COL_WIDTHS,
   LABOR_DAY_COL_WIDTH,
   LABOR_DAYSHIFT_BANNER,
+  LABOR_CAGE_WASH_B,
+  LABOR_DAY_WASH,
   LABOR_HC_HPS,
   LABOR_HC_HPS_CLEAR,
   LABOR_HOURS_LABEL,
@@ -889,6 +891,9 @@ describe("estimate excel export", () => {
     assert.equal(argb(direct.getCell(8, weekdayDayCol)), LABOR_HC_HPS.slice(2));
     assert.equal(argb(direct.getCell(9, weekdayDayCol)), LABOR_HC_HPS.slice(2));
     assert.equal(argb(direct.getCell("F10")), LABOR_HOURS_LABEL.slice(2));
+    assert.equal(argb(direct.getCell("C10")), LABOR_CAGE_WASH_B.slice(2));
+    assert.equal(argb(direct.getCell("G10")), LABOR_CAGE_WASH_B.slice(2));
+    assert.equal(argb(direct.getCell(10, weekdayDayCol)), LABOR_DAY_WASH.slice(2));
     assert.equal(argb(direct.getCell("A14")), LABOR_SPACER.slice(2));
     assert.equal(direct.getCell("A7").border?.left?.style, "medium");
     assert.equal(direct.getCell("K13").border?.right?.style, "medium");
