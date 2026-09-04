@@ -3,7 +3,7 @@
  * Chrome only. Does not compute estimate dollars. Money stays in
  * estimate-xlsx / estimate-desk-total / shared desk libs.
  * Standing ripple rule is RETROACTIVE (excel-ripple.ts): Look paint already
- * on this branch (TOTAL bars, Rate Tables chrome, wrap, center, drop .0,
+ * on this branch (TOTAL bars, Rate Tables chrome, wrap, center, hour integers,
  * phase bar) must not invent catalogs or disconnect math from those libs.
  * Phase-bar fills come from phase-schedule (desk globals), not sample dates.
  * Phase bar is a locked view this Look pass — no editable Job setup card.
@@ -28,8 +28,8 @@ const PLATE_WASH = "FFE4EBE9";
 const PLATE_WASH_DEEP = "FFDCE6E4";
 
 const FMT_CURRENCY = "$#,##0.00";
-/** Whole hours/counts as 9 / 2,752; fraction only when present (9.5). */
-export const FMT_HOURS = "#,##0.##";
+/** Hour cells: no decimal point (9 / 2,752). Dollars stay $#,##0.00. */
+export const FMT_HOURS = "#,##0";
 const FMT_INTEGER = "#,##0";
 const FMT_PERCENT = "0.0%";
 const FMT_DATE = "YYYY-MM-DD";
@@ -752,7 +752,8 @@ function cellFillArgb(cell: ExcelJS.Cell): string {
 
 function isBareWhiteCell(cell: ExcelJS.Cell): boolean {
   const argb = cellFillArgb(cell);
-  return !argb || argb === "FFFFFF" || argb === "000000" && (cell.fill as ExcelJS.FillPattern | undefined)?.pattern === "none";
+  const none = (cell.fill as ExcelJS.FillPattern | undefined)?.pattern === "none";
+  return !argb || argb === "FFFFFF" || (argb === "000000" && none);
 }
 
 function applySoftUsedBand(ws: ExcelJS.Worksheet, lastCol: number, maxRow: number) {

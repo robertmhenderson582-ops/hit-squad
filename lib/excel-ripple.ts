@@ -1,7 +1,7 @@
 /**
  * Standing ripple rule (Robert 2026-09-04) — RETROACTIVE.
  * Covers every Hit Squad modification: Look chrome already shipped on PR 138
- * (TOTAL bars, Rate Tables BW/chrome/tools/rentals, drop .0, craft titles,
+ * (TOTAL bars, Rate Tables BW/chrome/tools/rentals, hour integers, craft titles,
  * Summary wrap, centered craft blocks, Job setup phase bar) and earlier
  * Excel/desk paths, not only new asks.
  *
