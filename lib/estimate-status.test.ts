@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { isProjectManager, isProjectManagerOrAbove, canLookupRates, canUseRateBuilder } from "./desk-role.ts";
 import {
   ESTIMATE_STATUSES,
+  canHardDeleteEstimate,
+  isAwardedEstimate,
   needsStatusConfirm,
   parseEstimateStatus,
   readEstimateStatus,
@@ -55,5 +57,23 @@ describe("estimate status", () => {
     assert.equal(isProjectManagerOrAbove({ email: "josephmhenderson2002@gmail.com", role: "tester" }), true);
     assert.equal(canLookupRates({ email: "nathanboyte@gmail.com", role: "tester" }), true);
     assert.equal(canUseRateBuilder({ email: "nathanboyte@gmail.com", role: "tester" }), false);
+  });
+
+  it("Awarded jobs cannot be hard-deleted; Estimate and Submitted still can", () => {
+    const store = memoryStorage();
+    const awarded = { id: "job-new-awarded", packId: "new-awarded", title: "Awarded bank" };
+    const open = { id: "job-EST-MTJ5D6", packId: "EST-MTJ5D6", title: "Wood River / T&M 2027-01 to 06" };
+    writeEstimateStatus("new-awarded", "Awarded", store);
+    writeEstimateStatus("EST-MTJ5D6", "Estimate", store);
+    assert.equal(isAwardedEstimate(awarded, store), true);
+    assert.equal(canHardDeleteEstimate(awarded, store), false);
+    assert.equal(isAwardedEstimate(open, store), false);
+    assert.equal(canHardDeleteEstimate(open, store), true);
+    writeEstimateStatus("EST-MTJ5D6", "Submitted", store);
+    assert.equal(canHardDeleteEstimate(open, store), true);
+    const menu = readFileSync(fileURLToPath(new URL("../components/JobMenuActions.tsx", import.meta.url)), "utf8");
+    assert.match(menu, /allowDelete/);
+    assert.match(menu, /canHardDeleteEstimate/);
+    assert.match(menu, /allowDelete \? \(/);
   });
 });

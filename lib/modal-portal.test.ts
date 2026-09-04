@@ -20,6 +20,10 @@ describe("modal portal", () => {
     assert.match(menu, /deleteMenuItem/);
     assert.match(menu, /deleteVaultPack/);
     assert.match(menu, /archiveMenuItem/);
+    assert.match(menu, /hisSeatHide/);
+    assert.match(menu, /menuSeatForDesk/);
+    assert.match(menu, /canHardDeleteEstimate/);
+    assert.match(menu, /allowDelete/);
 
     const confirm = read("../components/ConfirmDialog.tsx");
     assert.match(confirm, /ModalPortal/);

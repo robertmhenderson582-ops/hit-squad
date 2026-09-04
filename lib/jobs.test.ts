@@ -148,7 +148,7 @@ describe("desk counts", () => {
     assert.match(desk, /catalogSeedsAllowedOnDesk\(scope, seat\)/);
     assert.match(desk, /omitCatalogSeedJobs/);
     assert.match(desk, /omitCatalogSeedPacks/);
-    assert.match(desk, /shouldPaintHisCards\(lens\)/);
+    assert.match(desk, /ownerKeepsHisMenuPaint\(lens, viewingAs\)/);
     assert.doesNotMatch(desk, /includeSeeds: true/);
     assert.doesNotMatch(desk, /holdPartialTree \? null/);
     assert.match(desk, /JobTreeDesk/);
@@ -218,6 +218,25 @@ describe("desk counts", () => {
     });
     assert.equal(josephJobs.some((job) => job.id === "job-8710"), false);
     assert.equal(josephJobs.some((job) => job.code === "ES-8710"), false);
+
+    const tm = {
+      packId: "EST-MTJ5D6",
+      key: "new:EST-MTJ5D6",
+      title: "Wood River / T&M 2027-01 to 06",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+      ownerEmail: "nathanboyte@gmail.com",
+    };
+    deleteMenuItem({ id: "job-EST-MTJ5D6", packId: tm.packId, title: tm.title }, store, "nathan");
+    const afterHisDelete = jobsOnDesk(leaked, [cat2, tm], true, nathan, menuForViewedDesk(true, store, "nathan"), {
+      seat: "nathan",
+    });
+    assert.equal(afterHisDelete.some((job) => job.code === "EST-MTJ5D6" || job.title === tm.title), false);
+    assert.equal(afterHisDelete.some((job) => job.title.includes("CAT 2")), true);
+    assert.equal(hasCatalogSeed(afterHisDelete), false);
   });
 
   it("undefined scope and first-paint race never paint catalog seeds", () => {

@@ -16,9 +16,11 @@ import {
 } from "@/lib/estimate-vault-client";
 import { canReturnPack, canSharePack, packSharedEmails } from "@/lib/estimate-scope";
 import { findHandoffSeat, type HandoffSeat } from "@/lib/handoff";
+import { isHisProtectedMenuItem } from "@/lib/his-wood-river";
 import { findDeskPack } from "@/lib/lens-packs";
 import { isLocalPackId, deleteLocalPack } from "@/lib/local-estimates";
-import { archiveMenuItem, deleteMenuItem, unarchiveMenuItem } from "@/lib/job-menu";
+import { canHardDeleteEstimate } from "@/lib/estimate-status";
+import { archiveMenuItem, deleteMenuItem, menuSeatForDesk, unarchiveMenuItem } from "@/lib/job-menu";
 
 export function vaultPackIdOf(id: string, packId?: string) {
   if (packId && isLocalPackId(packId)) return packId;
@@ -42,13 +44,15 @@ export function JobMenuActions({
 }) {
   const { lens, seat, viewingAs } = useDeskLens();
   const extras = useHandoffPeople();
-  const menuSeat = viewingAs ? seat : undefined;
+  const menuSeat = menuSeatForDesk(viewingAs, seat, lens);
   const [handoff, setHandoff] = useState<"share" | "unshare" | "turnover" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const vaultId = vaultPackIdOf(id, packId);
   const item = { id, title, packId: vaultId || packId };
+  const hisSeatHide = isHisProtectedMenuItem(item);
+  const allowDelete = canHardDeleteEstimate(item);
   const pack = vaultId ? findDeskPack(vaultId, seat) : null;
   const deskUser = lens ? { email: lens.email, role: lens.role } : null;
   const sharedEmails = pack ? packSharedEmails(pack) : [];
@@ -70,7 +74,7 @@ export function JobMenuActions({
             event.preventDefault();
             event.stopPropagation();
             unarchiveMenuItem(item, undefined, menuSeat);
-            if (vaultId) void archiveVaultPack(vaultId, false);
+            if (vaultId && !hisSeatHide) void archiveVaultPack(vaultId, false);
             void refresh();
           }}
         >
@@ -168,18 +172,20 @@ export function JobMenuActions({
           ) : null}
         </>
       )}
-      <button
-        type="button"
-        className="job-action"
-        title="Remove this job from your list. Confirm first."
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setConfirmDelete(true);
-        }}
-      >
-        DELETE
-      </button>
+      {allowDelete ? (
+        <button
+          type="button"
+          className="job-action"
+          title="Remove this job from your list. Confirm first."
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setConfirmDelete(true);
+          }}
+        >
+          DELETE
+        </button>
+      ) : null}
       {note ? <p className="w-full text-[11px] text-[#5b6f73]">{note}</p> : null}
       <HandoffDialog
         title={title}
@@ -250,7 +256,7 @@ export function JobMenuActions({
                   type="button"
                   onClick={() => {
                     archiveMenuItem(item, undefined, menuSeat);
-                    if (vaultId) void archiveVaultPack(vaultId, true);
+                    if (vaultId && !hisSeatHide) void archiveVaultPack(vaultId, true);
                     setConfirmArchive(false);
                     void refresh();
                   }}
@@ -263,7 +269,7 @@ export function JobMenuActions({
           </div>
         </ModalPortal>
       ) : null}
-      {confirmDelete ? (
+      {confirmDelete && allowDelete ? (
         <ModalPortal>
           <div className="modal-scrim" role="dialog" aria-modal="true">
             <div className="estimate-modal px-6 py-5">
@@ -284,8 +290,12 @@ export function JobMenuActions({
                   type="button"
                   onClick={() => {
                     void (async () => {
+                      if (!canHardDeleteEstimate(item)) {
+                        setConfirmDelete(false);
+                        return;
+                      }
                       deleteMenuItem(item, undefined, menuSeat);
-                      if (vaultId) {
+                      if (vaultId && !hisSeatHide) {
                         await deleteVaultPack(vaultId);
                         deleteLocalPack(vaultId);
                       }

@@ -1,4 +1,6 @@
-import { isHisProtectedMenuItem } from "./his-wood-river.ts";
+import { canHardDeleteEstimate } from "./estimate-status.ts";
+import { hisMatchForPack, isHisProtectedMenuItem, NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
+import { canonicalEmail } from "./identity.ts";
 import { isLocalPackId, type StorageLike } from "./local-estimates.ts";
 
 export const JOB_MENU_KEY = "hs_job_menu_v1";
@@ -95,8 +97,25 @@ export function menuStatus(item: MenuItem, menu: JobMenuState = readJobMenu()): 
   return null;
 }
 
-/** Drop HIS ids from leftover job-menu so archive/delete cannot hide Nathan's Wood River cards. */
+/**
+ * Nathan login and View as Nathan share hs_job_menu_v1:nathan.
+ * Owner leftover stays on the bare key so owner HIS paint cannot be erased.
+ */
+export function menuSeatForDesk(
+  viewingAs = false,
+  seat?: string | null,
+  user?: { email?: string } | null,
+): string | null {
+  const viewed = (seat || "").trim().toLowerCase();
+  if (viewingAs && viewed && viewed !== "owner") return viewed;
+  if (viewed === "nathan" || canonicalEmail(user?.email) === NATHAN_DESK_EMAIL) return "nathan";
+  return null;
+}
+
+/** Drop HIS ids from the owner leftover key only. Nathan's seat menu is authoritative. */
 export function clearHisJobMenuLeftover(store?: StorageLike | null, seat?: string | null) {
+  const leftoverSeat = (seat || "").trim().toLowerCase();
+  if (leftoverSeat && leftoverSeat !== "owner") return readJobMenu(store, seat);
   const menu = readJobMenu(store, seat);
   const keep = (id: string) => !isHisProtectedMenuItem({ id, packId: id });
   return writeJobMenu(
@@ -122,11 +141,11 @@ export function menuForViewedDesk(
   viewingAs: boolean,
   store?: StorageLike | null,
   seat?: string | null,
+  user?: { email?: string } | null,
 ): JobMenuState {
-  if (!viewingAs) return readJobMenu(store);
-  const id = (seat || "").trim();
-  if (!id || id === "owner") return emptyJobMenu();
-  return readJobMenu(store, id);
+  const menuSeat = menuSeatForDesk(viewingAs, seat, user);
+  if (viewingAs && !menuSeat) return emptyJobMenu();
+  return readJobMenu(store, menuSeat);
 }
 
 export function archiveMenuItem(item: MenuItem, store?: StorageLike | null, seat?: string | null) {
@@ -154,6 +173,7 @@ export function unarchiveMenuItem(item: MenuItem, store?: StorageLike | null, se
 }
 
 export function deleteMenuItem(item: MenuItem, store?: StorageLike | null, seat?: string | null) {
+  if (!canHardDeleteEstimate(item, store)) return readJobMenu(store, seat);
   const menu = readJobMenu(store, seat);
   const keys = keysForItem(item);
   const next: JobMenuState = {
@@ -195,11 +215,24 @@ export function recordTransferredMenuItem(
   return writeJobMenu(next, store, seat);
 }
 
+/** Leftover EST-MTJ5D6 and seed new-mtj5d6 are the same HIS job on this seat. */
+export function hisHiddenOnSeatMenu(item: MenuItem, menu: JobMenuState): boolean {
+  if (menuStatus(item, menu) === "deleted") return true;
+  if (!isHisProtectedMenuItem(item)) return false;
+  const his = hisMatchForPack({ packId: item.packId || item.id.replace(/^job-/, ""), title: item.title });
+  if (!his) return false;
+  return menu.deleted.some((id) => {
+    const packId = id.replace(/^job-/, "");
+    const match = hisMatchForPack({ packId, code: packId });
+    return Boolean(match && match.fileId === his.fileId);
+  });
+}
+
 /** Deleted sample / seed ids stay off this seat after a reload or poll. */
 export function omitDeletedJobs<T extends MenuItem>(jobs: T[], menu: JobMenuState, keepHis = false): T[] {
   return jobs.filter((job) => {
     if (keepHis && isHisProtectedMenuItem(job)) return true;
-    return menuStatus(job, menu) !== "deleted";
+    return !hisHiddenOnSeatMenu(job, menu);
   });
 }
 

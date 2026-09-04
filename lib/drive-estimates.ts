@@ -8,7 +8,14 @@ import {
   publicPack,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
-import { applyHisIdentity, hisFileForPackId, hisKnownEstimateFiles, hisMatchForPack, NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
+import {
+  applyHisIdentity,
+  hisFileForPackId,
+  hisKnownEstimateFiles,
+  hisMatchForPack,
+  isProtectedHisVaultTarget,
+  NATHAN_DESK_EMAIL,
+} from "./his-wood-river.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 
 export type DriveFile = {
@@ -664,6 +671,7 @@ export async function deleteEstimateInDrive(
   const target = resolveEstimatesFolder(folderId);
   const file = await findDrivePackFile(adapter, target, packId, ownerEmail);
   if (!file) return false;
+  if (isProtectedHisVaultTarget(packId, file.id)) return false;
   await adapter.deleteJson(file.id);
   return true;
 }

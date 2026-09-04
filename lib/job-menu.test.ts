@@ -8,6 +8,7 @@ import {
   isActiveMenuItem,
   jobMenuKey,
   menuForViewedDesk,
+  menuSeatForDesk,
   menuStatus,
   omitDeletedJobs,
   packsMissingFromVault,
@@ -16,6 +17,7 @@ import {
   unarchiveMenuItem,
   writeVaultSeen,
 } from "./job-menu.ts";
+import { writeEstimateStatus } from "./estimate-status.ts";
 import type { StorageLike } from "./local-estimates.ts";
 
 function memoryStore(seed: Record<string, string> = {}): StorageLike {
@@ -85,6 +87,46 @@ describe("job menu archive and delete", () => {
     archiveMenuItem(cat2, store, "nathan");
     assert.equal(menuStatus(cat2, menuForViewedDesk(true, store, "nathan")), "archived");
     assert.equal(isActiveMenuItem(cat2, menuForViewedDesk(false, store)), true);
+  });
+
+  it("Awarded jobs archive but delete is a no-op on every seat", () => {
+    const store = memoryStore();
+    const awarded = { id: "job-new-awarded", packId: "new-awarded", title: "Awarded bank" };
+    writeEstimateStatus("new-awarded", "Awarded", store);
+    deleteMenuItem(awarded, store);
+    deleteMenuItem(awarded, store, "nathan");
+    assert.equal(menuStatus(awarded, readJobMenu(store)), null);
+    assert.equal(menuStatus(awarded, menuForViewedDesk(true, store, "nathan")), null);
+    archiveMenuItem(awarded, store, "nathan");
+    assert.equal(menuStatus(awarded, menuForViewedDesk(true, store, "nathan")), "archived");
+    assert.equal(isActiveMenuItem(awarded, menuForViewedDesk(true, store, "nathan")), false);
+  });
+
+  it("Nathan login and View as Nathan share the nathan seat menu", () => {
+    assert.equal(menuSeatForDesk(true, "nathan"), "nathan");
+    assert.equal(menuSeatForDesk(false, null, { email: "nathanboyte@gmail.com" }), "nathan");
+    assert.equal(menuSeatForDesk(false, null, { email: "robertmhenderson582@gmail.com" }), null);
+    assert.equal(menuSeatForDesk(true, "james"), "james");
+  });
+
+  it("Nathan seat delete of EST-MTJ5D6 sticks after leftover rewrite", () => {
+    const store = memoryStore();
+    const tm = { id: "job-EST-MTJ5D6", packId: "EST-MTJ5D6", title: "Wood River / T&M 2027-01 to 06" };
+    const cat2 = { id: "job-new-mtaajdwa-f7539", packId: "new-mtaajdwa-f7539", title: "Madison CAT 2 (Pit Stop)" };
+    deleteMenuItem(tm, store, "nathan");
+    archiveMenuItem(cat2, store, "nathan");
+    clearHisJobMenuLeftover(store, "nathan");
+    clearHisJobMenuLeftover(store);
+    const viewed = menuForViewedDesk(true, store, "nathan");
+    const login = menuForViewedDesk(false, store, null, { email: "nathanboyte@gmail.com" });
+    assert.equal(menuStatus(tm, viewed), "deleted");
+    assert.equal(menuStatus(cat2, viewed), "archived");
+    assert.equal(menuStatus(tm, login), "deleted");
+    assert.equal(isActiveMenuItem(tm, viewed), false);
+    assert.deepEqual(omitDeletedJobs([tm, cat2], viewed, false).map((row) => row.id), [cat2.id]);
+    assert.equal(menuStatus(tm, menuForViewedDesk(false, store)), null);
+    const seedTm = { id: "job-new-mtj5d6", packId: "new-mtj5d6", title: tm.title };
+    assert.deepEqual(omitDeletedJobs([seedTm, cat2], viewed, false).map((row) => row.id), [cat2.id]);
   });
 
   it("rewrites owner job-menu leftover so HIS cards stay listed", () => {

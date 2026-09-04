@@ -13,7 +13,7 @@ import { estimateForJob } from "@/lib/estimate-open";
 import { packsForViewedDesk, snapshotOwnerDesk } from "@/lib/lens-packs";
 import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
-import { isHisProtectedMenuItem, shouldPaintHisCards } from "@/lib/his-wood-river";
+import { isHisProtectedMenuItem, ownerKeepsHisMenuPaint } from "@/lib/his-wood-river";
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
 import { ensureCbiDummyPack, shouldSeedCbiDummy } from "@/lib/cbi-dummy";
 import { catalogSites } from "@/lib/desk-data";
@@ -80,14 +80,15 @@ export function JobsDesk() {
   const closed = readClosed();
   const scope = companyScopeFor(lens, companyId);
   const deskPacks = omitCatalogSeedPacks(packsForViewedDesk(lens, viewingAs, seat));
-  const menu = menuForViewedDesk(viewingAs, undefined, seat);
+  const menu = menuForViewedDesk(viewingAs, undefined, seat, lens);
   const includeSeeds = catalogSeedsAllowedOnDesk(scope, seat);
   const deskJobs = jobsOnDesk(serverJobs, deskPacks, viewingAs, scope, menu, { includeSeeds, seat });
   const jobs = includeSeeds ? deskJobs : omitCatalogSeedJobs(deskJobs);
   void packTick;
+  const keepHisActive = ownerKeepsHisMenuPaint(lens, viewingAs);
   const active = jobs.filter((job) => {
     const pack = packForJob(job, deskPacks);
-    if (shouldPaintHisCards(lens) && isHisProtectedMenuItem({ id: job.id, packId: pack?.packId, title: job.title })) {
+    if (keepHisActive && isHisProtectedMenuItem({ id: job.id, packId: pack?.packId, title: job.title })) {
       return !jobLooksClosed(job, closed);
     }
     return isActiveMenuItem(job, menu) && !jobLooksClosed(job, closed);

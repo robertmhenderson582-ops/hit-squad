@@ -12,7 +12,7 @@ import {
 } from "./his-wood-river.ts";
 import { isSamePerson } from "./identity.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
-import { JOB_MENU_KEY, clearHisJobMenuLeftover } from "./job-menu.ts";
+import { JOB_MENU_KEY, clearHisJobMenuLeftover, hisHiddenOnSeatMenu, menuSeatForDesk, readJobMenu } from "./job-menu.ts";
 import { omitCatalogSeedPacks } from "./jobs.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
@@ -202,6 +202,14 @@ function leftoverPacksForStaleCheck(store: StorageLike): LocalPack[] {
   return [...listLocalPacks(store), ...readOwnerPacks(store), ...allLensPacks(store)];
 }
 
+/** Nathan seat delete hides HIS paint on that desk only. Owner leftover still re-injects. */
+function omitDeletedHisPaint(packs: LocalPack[], store?: StorageLike | null, seat?: string | null): LocalPack[] {
+  const menu = readJobMenu(store, seat);
+  return packs.filter(
+    (pack) => !hisHiddenOnSeatMenu({ id: `job-${pack.packId}`, packId: pack.packId, title: pack.title }, menu),
+  );
+}
+
 /**
  * Owner / Nathan Jobs paint. Rewrites leftover keys whenever gen is stale
  * or a HIS row still names James / any non-Nathan non-owner. Not a one-shot flag.
@@ -224,7 +232,6 @@ export function bustHisLeftoverOnce(store?: StorageLike | null) {
   const ownerRows = rewriteHisLeftoverList(readOwnerPacks(target));
   writeOwnerPacks(ownerRows, target);
   clearHisJobMenuLeftover(target);
-  clearHisJobMenuLeftover(target, "nathan");
   markLeftoverGen(target);
 }
 
@@ -271,17 +278,19 @@ export function packsForViewedDesk(
   const target = asStore(store);
   if (target) bustHisLeftoverOnce(target);
   const live = visibleDeskPacks(user, viewingAs, store);
+  const menuSeat = menuSeatForDesk(viewingAs, seat, user);
+  const hideDeletedHis = menuSeat === "nathan";
   if (viewingAs) {
     const next = seat ? mergeDeskPacks(live, readLensPacks(seat, store)) : live;
     // View as Nathan still injects HIS Wood River cards. James / CBI stay off this merge.
     const painted = shouldPaintHisCards(user) ? mergeHisWoodRiverCards(next) : next;
-    return omitCatalogSeedPacks(painted);
+    return omitCatalogSeedPacks(hideDeletedHis ? omitDeletedHisPaint(painted, store, menuSeat) : painted);
   }
   const extras = [readOwnerPacks(store)];
   if (user) extras.push(localPacksOwnerShouldSee(user, store), lensPacksOwnerShouldSee(user, store));
   const merged = mergeDeskPacks(live, ...extras);
   const painted = shouldPaintHisCards(user) ? mergeHisWoodRiverCards(merged) : merged;
-  return omitCatalogSeedPacks(painted);
+  return omitCatalogSeedPacks(hideDeletedHis ? omitDeletedHisPaint(painted, store, menuSeat) : painted);
 }
 
 export function snapshotOwnerDesk(_user?: ScopeUser | null, store?: StorageLike | null) {

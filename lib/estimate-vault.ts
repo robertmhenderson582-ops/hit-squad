@@ -11,7 +11,7 @@ import {
   packVisibleTo,
   type ScopeUser,
 } from "./estimate-scope.ts";
-import { applyHisIdentity, hisMatchForPack } from "./his-wood-river.ts";
+import { applyHisIdentity, hisMatchForPack, isProtectedHisVaultTarget } from "./his-wood-river.ts";
 import { hydratedHandoffExtras } from "./desk-scope-server.ts";
 import {
   findHandoffSeat,
@@ -312,6 +312,9 @@ export async function archiveVisiblePack(
   if (!current) {
     return { ok: true as const, stored: false, store: drive.configured ? "drive" : driveStoreKind(), pack: null };
   }
+  if (isProtectedHisVaultTarget(packId) || hisMatchForPack(current)) {
+    return { ok: true as const, stored: false, store: "drive" as const, pack: current };
+  }
   const pack = publicPack({ ...current, archived, updatedAt: Date.now() });
   await upsertEstimateInDrive(drive, pack);
   return { ok: true as const, stored: true, store: "drive" as const, pack };
@@ -328,6 +331,9 @@ export async function deleteVisiblePack(user: ScopeUser, packId: string, adapter
   }
   if (!current || !drive.configured) {
     return { ok: true as const, deleted: false, store: drive.configured ? "drive" : driveStoreKind() };
+  }
+  if (isProtectedHisVaultTarget(packId) || hisMatchForPack(current)) {
+    return { ok: true as const, deleted: false, store: "drive" as const };
   }
   const removed = await deleteEstimateInDrive(drive, packId, current.ownerEmail);
   return { ok: true as const, deleted: removed, store: "drive" as const };

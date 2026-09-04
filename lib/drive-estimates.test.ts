@@ -659,4 +659,28 @@ describe("drive estimate upsert", () => {
     assert.deepEqual(parsed.sharedWith, ["robertmhenderson582@gmail.com"]);
     assert.equal(parsed.ownerEmail, "nathanboyte@gmail.com");
   });
+
+  it("refuses to delete the live HIS T&M vault file", async () => {
+    const drive = memoryDrive();
+    const pack: EstimatePackSnapshot = {
+      packId: "new-mtj5d6",
+      key: "new:new-mtj5d6",
+      title: "Wood River / T&M 2027-01 to 06",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+      ownerEmail: "nathanboyte@gmail.com",
+    };
+    await drive.updateJson(
+      "1bBWKw2aCy3fVKm0rQAWcoCi8OXzahoPI",
+      JSON.stringify(pack),
+      "wood-river-wood-river-t-m-2027-01-to-06.json",
+      { packId: pack.packId, ownerEmail: pack.ownerEmail },
+    );
+    const removed = await deleteEstimateInDrive(drive, pack.packId, pack.ownerEmail, "folder");
+    assert.equal(removed, false);
+    assert.equal(drive.files.has("1bBWKw2aCy3fVKm0rQAWcoCi8OXzahoPI"), true);
+  });
 });
