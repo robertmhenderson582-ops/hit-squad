@@ -43,7 +43,9 @@ export async function POST(request: Request) {
 
   const stored = findSeatForSession({ id: seat.id, email: result.email });
   if (!stored) return NextResponse.json({ error: "That seat is not on this desk." }, { status: 404 });
-  const publicUser = toPublicUser(stored);
+  stored.mustChangePassword = false;
+  stored.previousHashes = [];
+  const publicUser = { ...toPublicUser(stored), mustChangePassword: false };
   const token = await signSession(publicUser);
   const response = NextResponse.json({
     ok: true,

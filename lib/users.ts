@@ -126,14 +126,14 @@ export function collapseSeatHashes(hashes: NonNullable<SeatFile["hashes"]>): Non
   const next: NonNullable<SeatFile["hashes"]> = {};
   for (const { key, entries } of groups.values()) {
     const candidates = uniqueHashes(entries.flatMap((entry) => hashRowCandidates(entry.row)));
-    const mustChange = entries.some((entry) => entry.row.mustChangePassword);
     const preferred = entries.find((entry) => canonicalEmail(entry.key) === key || entry.key === key) ?? entries[0];
     const recoveryHash = entries.map((entry) => entry.row.recoveryHash).find((hash) => hash && BCRYPT_HASH.test(hash));
     const primary = preferred?.row.passwordHash || candidates[0];
     if (!primary && !recoveryHash) continue;
     next[key] = {
       passwordHash: primary,
-      mustChangePassword: mustChange,
+      // Canonical/preferred row wins. OR-ing aliases re-sticks FIRST SIGN-IN after a password set.
+      mustChangePassword: Boolean(preferred?.row.mustChangePassword),
       previousHashes: uniqueHashes(candidates, primary),
       recoveryHash,
       recoveryConsumed: entries.some((entry) => entry.row.recoveryConsumed),
@@ -150,7 +150,7 @@ function hasSeatData(file: SeatStoreFile) {
   return hasHashes(file.hashes) || file.extras.length > 0;
 }
 
-function mergeHashRows(left?: SeatHashRow, right?: SeatHashRow): SeatHashRow | undefined {
+export function mergeHashRows(left?: SeatHashRow, right?: SeatHashRow): SeatHashRow | undefined {
   if (!left) return right;
   if (!right) return left;
   const candidates = uniqueHashes([...hashRowCandidates(left), ...hashRowCandidates(right)]);
@@ -159,7 +159,8 @@ function mergeHashRows(left?: SeatHashRow, right?: SeatHashRow): SeatHashRow | u
   if (!primary && !recoveryHash) return undefined;
   return {
     passwordHash: primary,
-    mustChangePassword: Boolean(left.mustChangePassword || right.mustChangePassword),
+    // False wins. OR-ing re-sticks mustChange after Settings / Continue / a manual vault clear.
+    mustChangePassword: Boolean(left.mustChangePassword && right.mustChangePassword),
     previousHashes: uniqueHashes(candidates, primary),
     recoveryHash,
     recoveryConsumed: Boolean(left.recoveryConsumed || right.recoveryConsumed),
@@ -346,6 +347,14 @@ function persistHashes(users: StoredUser[], opts?: { replaceEmails?: string[]; c
           }
         }
         const collapsed = collapseSeatHashes(combined);
+        for (const email of replace) {
+          const row = hashes[email];
+          if (!row) continue;
+          collapsed[email] = row;
+          for (const key of Object.keys(collapsed)) {
+            if (key !== email && identityBucket(key) === identityBucket(email)) delete collapsed[key];
+          }
+        }
         const extrasByEmail = new Map<string, ExtraSeat>();
         for (const extra of [...vaultExtras, ...extras]) {
           if (isOwnerAliasSeat(extra) || resolveIdentity(extra.email) || resolveIdentity(extra.id)) continue;
@@ -412,7 +421,12 @@ async function ownerHashLandedInVault(): Promise<boolean> {
     try {
       const raw = await readVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
       const vault = ownerHashRow(parseSeatHashes(raw), ownerEmail());
-      if (vault?.passwordHash === local.passwordHash && !vault.mustChangePassword) return true;
+      if (
+        vault?.passwordHash === local.passwordHash &&
+        Boolean(vault.mustChangePassword) === Boolean(local.mustChangePassword)
+      ) {
+        return true;
+      }
     } catch {
       // Eventual-consistency or a transient Drive read — retry before failing closed.
     }
@@ -439,8 +453,16 @@ export async function persistExistingOwnerHash(input?: {
       BCRYPT_HASH.test(claim.passwordHash) &&
       (canonicalEmail(claim.email) === ownerEmail() || isOwnerIdentity(claim.email)),
   );
+  const persisted = ownerHashRow(loadPersisted(), ownerEmail());
+  const alreadyCleared = seatPasswordAlreadyCleared(ownerEmail());
   if (ownerClaim && claim) {
-    restoreSeatHash(ownerEmail(), { ...claim, email: ownerEmail() });
+    restoreSeatHash(ownerEmail(), {
+      ...claim,
+      email: ownerEmail(),
+      // Stale hs_seat_claim mustChange:true must not overwrite a cleared Settings / Continue row.
+      mustChangePassword: alreadyCleared ? false : Boolean(claim.mustChangePassword),
+      passwordHash: alreadyCleared && persisted?.passwordHash ? persisted.passwordHash : claim.passwordHash,
+    });
   }
   if (!ownerClaim && !hadLocalHash) return false;
   const user = findUserByEmail(ownerEmail());
@@ -454,7 +476,9 @@ export async function persistExistingOwnerHash(input?: {
   ) {
     return false;
   }
-  user.mustChangePassword = false;
+  if (alreadyCleared || !user.mustChangePassword) {
+    user.mustChangePassword = false;
+  }
   let lastError: unknown;
   for (let attempt = 0; attempt < SEATS_WRITE_ATTEMPTS; attempt++) {
     persistHashes(ownerUsers(), { replaceEmails: [ownerEmail()], confirm: true });
@@ -482,6 +506,25 @@ function ownerHashRow(persisted: NonNullable<SeatFile["hashes"]>, email: string)
     if (identityBucket(key) === bucket && row.passwordHash) return row;
   }
   return undefined;
+}
+
+function isEnvOwnerPasswordHash(hash?: string) {
+  const envPassword = process.env.OWNER_PASSWORD;
+  return Boolean(
+    hash && envPassword && BCRYPT_HASH.test(hash) && bcrypt.compareSync(envPassword, hash),
+  );
+}
+
+/** True when a real (non-env-seed) password is already on file and FIRST SIGN-IN is cleared. */
+function seatPasswordAlreadyCleared(email: string, user?: StoredUser) {
+  const persisted = ownerHashRow(loadPersisted(), email);
+  const persistedCleared =
+    Boolean(persisted?.passwordHash) &&
+    !persisted?.mustChangePassword &&
+    !isEnvOwnerPasswordHash(persisted?.passwordHash);
+  const memoryCleared =
+    Boolean(user?.passwordHash) && !user?.mustChangePassword && !isEnvOwnerPasswordHash(user?.passwordHash);
+  return persistedCleared || memoryCleared;
 }
 
 function ownerPasswordHash(persisted: NonNullable<SeatFile["hashes"]>, email: string) {
@@ -572,6 +615,12 @@ export function toPublicUser(user: StoredUser): PublicUser {
     role: user.role,
     mustChangePassword: Boolean(user.mustChangePassword),
   };
+}
+
+/** Seat store wins over a stale session / hs_seat_claim cookie for FIRST SIGN-IN. */
+export function liveSessionUser(session: PublicUser): PublicUser {
+  const seat = findSeatForSession(session);
+  return seat ? toPublicUser(seat) : session;
 }
 
 export function findUserByEmail(email: string): StoredUser | undefined {
@@ -688,8 +737,10 @@ export function restoreSeatHash(email: string, claim: SeatHashClaim | null | und
   const user = findUserByEmail(wanted);
   if (!user) return false;
   if (user.role !== "owner" && user.passwordHash) return false;
-  user.passwordHash = claim.passwordHash;
-  user.mustChangePassword = Boolean(claim.mustChangePassword);
+  const alreadyCleared = seatPasswordAlreadyCleared(user.email, user);
+  user.passwordHash = alreadyCleared && user.passwordHash ? user.passwordHash : claim.passwordHash;
+  // Do not re-apply mustChange:true from an old claim over a row that already has a password and is cleared.
+  user.mustChangePassword = alreadyCleared ? false : Boolean(claim.mustChangePassword);
   persistHashes(ownerUsers());
   return true;
 }
@@ -879,8 +930,22 @@ export async function setOwnPassword(
     return confirmOwnPasswordWrite(user, next, true);
   }
   if (!current) return { error: "Current and new password are required.", status: 400 };
-  if (!verifyPassword(user, current)) return { error: "Current password did not match.", status: 401 };
+  if (!currentPasswordAccepted(user, current)) return { error: "Current password did not match.", status: 401 };
   return confirmOwnPasswordWrite(user, next, false);
+}
+
+function currentPasswordAccepted(user: StoredUser, password: string) {
+  if (!password) return false;
+  const hashes = [user.passwordHash, ...(user.previousHashes ?? [])].filter((hash): hash is string => Boolean(hash));
+  for (const hash of hashes) {
+    if (BCRYPT_HASH.test(hash) && bcrypt.compareSync(password, hash)) return true;
+  }
+  if (user.recoveryHash && BCRYPT_HASH.test(user.recoveryHash) && bcrypt.compareSync(password, user.recoveryHash)) {
+    return true;
+  }
+  return Boolean(
+    user.role === "owner" && process.env.OWNER_RECOVERY_PASSWORD && password === process.env.OWNER_RECOVERY_PASSWORD,
+  );
 }
 
 function persistSeatFileLocal(users: StoredUser[]) {
@@ -919,6 +984,8 @@ async function confirmOwnPasswordWrite(
   try {
     persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
     await flushSeatVault();
+    user.mustChangePassword = false;
+    user.previousHashes = [];
   } catch (error) {
     if (forced) {
       try {
