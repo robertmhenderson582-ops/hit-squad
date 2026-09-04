@@ -1893,6 +1893,7 @@ describe("estimate excel export", () => {
     assert.equal(phaseFill(staffBook.getCell("L4")), PHASE_TONE_FILLS.mech);
     assert.equal(phaseFill(staffBook.getCell("L5")), PHASE_TONE_FILLS.mech);
     assert.equal(phaseFill(staffBook.getCell(`${lastDateCol}4`)), PHASE_TONE_FILLS.mech);
+    assert.equal(String(staffBook.getCell("L4").font?.color?.argb ?? "").replace(/^FF/i, "").toUpperCase(), "FFFFFF");
     assert.equal(staffBook.getCell("A4").value, LABOR_PHASE_LABEL);
     assert.equal(staffBook.getCell("L4").value, "Mechanical Window");
     assert.notEqual(phaseFill(staffBook.getCell("L4")), LABOR_WEEKEND_FILL);

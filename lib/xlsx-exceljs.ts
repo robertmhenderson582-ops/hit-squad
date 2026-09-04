@@ -15,7 +15,7 @@
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { evaluateWorkbook } from "./xlsx-eval.ts";
-import { isPhaseId, PHASE_TONE_FILLS, PHASE_TONE_INK } from "./phase-schedule.ts";
+import { isPhaseId, PHASE_TONE_BAND_INK, PHASE_TONE_FILLS, PHASE_TONE_INK } from "./phase-schedule.ts";
 import { colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
 const WHITE = "FFFFFFFF";
@@ -769,13 +769,14 @@ function paintLaborDayCalendar(
 }
 
 function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDateCol: number) {
-  const labelInk = { argb: PHASE_TONE_INK };
+  const plateInk = { argb: PHASE_TONE_INK };
+  const bandInk = { argb: PHASE_TONE_BAND_INK };
   for (const row of [4, 5] as const) {
     ws.getRow(row).height = LABOR_PHASE_ROW_HEIGHT;
     for (let col = 1; col <= 11; col += 1) {
       const cell = ws.getCell(row, col);
       cell.fill = solid(PLATE_WASH);
-      cell.font = { bold: true, name: "Calibri", size: 9, color: labelInk };
+      cell.font = { bold: true, name: "Calibri", size: 9, color: plateInk };
       centerLaborCell(cell);
     }
     for (let col = 12; col <= lastDateCol; col += 1) {
@@ -789,7 +790,7 @@ function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDat
       for (let col = run.startCol; col <= run.endCol; col += 1) {
         const cell = ws.getCell(row, col);
         cell.fill = solid(fillArgb);
-        cell.font = { bold: true, name: "Calibri", size: 8, color: labelInk };
+        cell.font = { bold: true, name: "Calibri", size: 8, color: bandInk };
         centerLaborCell(cell);
       }
     }

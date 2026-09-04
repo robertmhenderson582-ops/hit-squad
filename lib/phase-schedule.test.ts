@@ -14,6 +14,7 @@ import {
   phaseBarRuns,
   phaseOwningDate,
   PHASE_OT_PICKS,
+  PHASE_TONE_BAND_INK,
   PHASE_TONE_FILLS,
   setMultiUnits,
   setProjectStart,
@@ -186,17 +187,14 @@ describe("phase schedule", () => {
     );
   });
 
-  it("phase tone fills match desk globals.css", () => {
-    const css = readFileSync(fileURLToPath(new URL("../app/globals.css", import.meta.url)), "utf8");
-    assert.match(css, /\.phase-moss\s*\{[^}]*background:\s*#d5e2c4/i);
-    assert.match(css, /\.phase-rust\s*\{[^}]*background:\s*#ebcfc0/i);
-    assert.match(css, /\.phase-steel\s*\{[^}]*background:\s*#c5d0d5/i);
-    assert.match(css, /\.phase-amber\s*\{[^}]*background:\s*#e6ce86/i);
-    assert.match(css, /\.phase-green\s*\{[^}]*background:\s*#c0dec6/i);
-    assert.equal(PHASE_TONE_FILLS.pre, "FFD5E2C4");
-    assert.equal(PHASE_TONE_FILLS["oil-out"], "FFEBCFC0");
-    assert.equal(PHASE_TONE_FILLS.mech, "FFC5D0D5");
-    assert.equal(PHASE_TONE_FILLS["oil-in"], "FFE6CE86");
-    assert.equal(PHASE_TONE_FILLS.post, "FFC0DEC6");
+  it("Excel phase bar uses hard blue / red / green with white labels", () => {
+    assert.equal(PHASE_TONE_FILLS.pre, "FF0B5CAD");
+    assert.equal(PHASE_TONE_FILLS.post, PHASE_TONE_FILLS.pre);
+    assert.equal(PHASE_TONE_FILLS["oil-out"], "FFC62828");
+    assert.equal(PHASE_TONE_FILLS["oil-in"], PHASE_TONE_FILLS["oil-out"]);
+    assert.equal(PHASE_TONE_FILLS.mech, "FF1B7F3A");
+    assert.equal(PHASE_TONE_BAND_INK, "FFFFFFFF");
+    assert.notEqual(PHASE_TONE_FILLS.pre, "FFD5E2C4");
+    assert.notEqual(PHASE_TONE_FILLS.mech, "FFC5D0D5");
   });
 });

@@ -17,17 +17,22 @@ export const PHASE_TONES: Record<PhaseId, string> = {
   post: "phase-green",
 };
 
-/** Desk `globals.css` light phase fills (`.phase-moss` … `.phase-green`). Excel ARGB. */
+/**
+ * Excel craft-sheet phase bar — hard colors, not pastel desk chips.
+ * Pre/Post blue, Oil Out/Oil In red, Mechanical green.
+ */
 export const PHASE_TONE_FILLS: Record<PhaseId, string> = {
-  pre: "FFD5E2C4",
-  "oil-out": "FFEBCFC0",
-  mech: "FFC5D0D5",
-  "oil-in": "FFE6CE86",
-  post: "FFC0DEC6",
+  pre: "FF0B5CAD",
+  "oil-out": "FFC62828",
+  mech: "FF1B7F3A",
+  "oil-in": "FFC62828",
+  post: "FF0B5CAD",
 };
 
-/** Desk rule: dark high-contrast type on the phase chip (`color: #163038`). */
+/** Dark type on the A–K Job setup label (plate wash). */
 export const PHASE_TONE_INK = "FF163038";
+/** White type on hard phase-band fills. */
+export const PHASE_TONE_BAND_INK = "FFFFFFFF";
 
 export function isPhaseId(value: string): value is PhaseId {
   return (PHASE_IDS as readonly string[]).includes(value);
