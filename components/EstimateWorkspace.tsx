@@ -16,7 +16,9 @@ import { ModalPortal } from "@/components/ModalPortal";
 import { WageLookupDesk } from "@/components/WageLookupDesk";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
+import { readFcrPacket } from "@/lib/change-order-packet";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
+import { fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
 import { ESTIMATE_EXPORT_ERROR, estimateToXlsx, estimateXlsxFilename } from "@/lib/estimate-xlsx";
 import type { EstimateStatus } from "@/lib/estimate-status";
 import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
@@ -118,6 +120,7 @@ export function EstimateWorkspace({
           craftPerMile: pack.jobMeta.craftMileageRate,
         }),
         subcontractor: readSubSheet(pack.estimateKey),
+        changeOrders: fcrChangeOrderTotal(readFcrPacket(pack.estimateKey)),
       });
       if (!bytes.byteLength) throw new Error("empty-workbook");
       downloadXlsx(estimateXlsxFilename({ site: boundSite, title: name || crumb }), bytes);

@@ -245,14 +245,25 @@ describe("estimate pack JSON → xlsx", () => {
   });
 
   it("live Aromatics and CAT 2 vault packs match desk ESTIMATE TOTAL $", () => {
-    const packs = [
-      "/tmp/vault-estimates/wood-river-2027-aromatics-turnaround.json",
-      "/tmp/vault-estimates/wood-river-madison-cat-2-pit-stop.json",
+    const expected = [
+      {
+        file: "/tmp/vault-estimates/wood-river-2027-aromatics-turnaround.json",
+        // Robert’s stale Summary $25,250,782.45 was weekday-clock labor.
+        // Desk weekly-40 Staff+Foremen OT is the $73,889.52 gap — extras are $0.
+        total: 25324671.97,
+      },
+      {
+        file: "/tmp/vault-estimates/wood-river-madison-cat-2-pit-stop.json",
+        total: 1435365.66,
+      },
     ];
-    for (const file of packs) {
+    for (const { file, total } of expected) {
       if (!existsSync(file)) continue;
       const { input } = estimateJsonToXlsxInput(JSON.parse(readFileSync(file, "utf8")));
-      assert.equal(estimateWorkbookSummaryTotal(input), deskEstimateTotal(input), file);
+      const desk = deskEstimateTotal(input);
+      const excel = estimateWorkbookSummaryTotal(input);
+      assert.equal(desk, total, file);
+      assert.equal(excel, desk, file);
     }
   });
 });

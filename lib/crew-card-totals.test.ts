@@ -20,7 +20,7 @@ describe("crew card grand totals", () => {
     assert.match(support, /tfoot/);
     const rail = read("../components/EstimateTotalRail.tsx");
     assert.match(rail, /Estimate total/);
-    assert.match(rail, /laborDollarsFromCrew/);
+    assert.match(rail, /deskPackageBreakdown/);
 
     const hours = { st: 10, ot: 2, dt: 0 };
     const amount = shahanCrewCostAmount("Manager, Project 01", hours);

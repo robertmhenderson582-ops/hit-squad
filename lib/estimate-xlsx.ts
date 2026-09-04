@@ -17,8 +17,8 @@
  * Subcontractor tab is all subs (not crane-only). Summary Subs $ is desk
  * Subs ESTIMATE TOTAL (cost + affiliate-aware 6.5%). Weekend columns on
  * labor grids are shaded. Daily ST/OT/DT cells use the desk clock
- * (computeRangeHours / applyWeekly40) so Summary ESTIMATE TOTAL $ matches
- * the Estimate Total rail.
+ * (computeRangeHours / applyWeekly40). Summary ESTIMATE TOTAL $ is the same
+ * deskPackageTotal / estimateTotalBreakdown number as the Estimate Total rail.
  * Never commit source workbooks to git (Look samples excepted).
  */
 
@@ -44,6 +44,7 @@ import {
   type JobMoney,
 } from "./estimate-money.ts";
 import { slugify } from "./estimate-pack.ts";
+import { deskPackageTotal } from "./estimate-desk-total.ts";
 import { commercialMarkupLabel, commercialMarkupRate, estimateMarkupDollars } from "./estimate-total.ts";
 import { boundOtLabel, computeRangeHours, parseYmd, type ClockOverride } from "./hours-clock.ts";
 import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
@@ -60,6 +61,7 @@ import {
 } from "./shahan-wood-river.ts";
 import { emptySubSheet, lineAmount, subCardTotal, type SubSheet } from "./subcontractor.ts";
 import { bookForSite, wageLookupOpts } from "./wage-lookup.ts";
+import { summaryAmountAt } from "./xlsx-eval.ts";
 import { buildWorkbook, colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
 export const ESTIMATE_EXPORT_ERROR = "Could not export. Try again.";
@@ -129,6 +131,7 @@ export type EstimateXlsxInput = {
   equipment?: EquipmentSheet;
   otherCost?: OtherCostSheet;
   subcontractor?: SubSheet;
+  changeOrders?: number;
 };
 
 type CrewLane = "staff" | "craft";
@@ -993,6 +996,11 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     moneyRefs.push(addSummaryAmount(cells, row, MORE_FUND_LABEL, adders.moreFund));
     row += 1;
   }
+  const changeOrders = Math.round((Number(input.changeOrders) || 0) * 100) / 100;
+  if (changeOrders) {
+    moneyRefs.push(addSummaryAmount(cells, row, "Change orders", changeOrders));
+    row += 1;
+  }
 
   const thirdPartyCostTotal = (input.equipment?.thirdParty ?? []).reduce((sum, line) => sum + thirdPartyCost(line), 0);
   const miscTotal = (input.otherCost?.misc ?? []).reduce((sum, line) => sum + miscAmount(line), 0);
@@ -1087,6 +1095,11 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
 export async function estimateToXlsx(input: EstimateXlsxInput = {}): Promise<Uint8Array> {
   const sheets = buildEstimateWorkbook(input);
   if (!sheets.length) throw new Error("empty-workbook");
+  const excel = summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "ESTIMATE TOTAL $");
+  const desk = deskPackageTotal(input);
+  if (excel == null || Math.round(excel * 100) / 100 !== desk) {
+    throw new Error("summary-total-mismatch");
+  }
   const bytes = await buildWorkbook(sheets);
   if (!bytes.byteLength) throw new Error("empty-workbook");
   return bytes;

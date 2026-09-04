@@ -1,6 +1,7 @@
 /** ExcelJS .xlsx writer — Excel-365-safe package + Hit Squad client styling. */
 
 import ExcelJS from "exceljs";
+import { evaluateWorkbook } from "./xlsx-eval.ts";
 import { colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
 const OFFICE_SLATE = "FF3D4C5F";
@@ -507,6 +508,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
   wb.calcProperties = { fullCalcOnLoad: true };
   wb.views = [{ x: 0, y: 0, width: 12000, height: 8000, firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
+  const { evalAt } = evaluateWorkbook(list);
   const used = new Set<string>();
   for (const sheet of list) {
     const raw = excelSafeSheetName(sheet.name);
@@ -577,7 +579,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
         exCell.value = cell.value;
         exCell.numFmt = FMT_DATE;
       } else {
-        exCell.value = { formula: cell.value };
+        exCell.value = { formula: cell.value, result: evalAt(sheet.name, cell.ref) };
       }
 
       if (totalRows.has(row)) applyTotalStyle(exCell);

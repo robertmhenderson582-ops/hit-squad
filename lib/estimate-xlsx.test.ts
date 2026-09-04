@@ -353,7 +353,7 @@ describe("estimate excel export", () => {
     assert.equal(estimateWorkbookSummaryTotal(input), deskEstimateTotal(input));
   });
 
-  it("Summary ESTIMATE TOTAL $ equals the desk rail after weekly-40", () => {
+  it("Summary ESTIMATE TOTAL $ equals the desk rail after weekly-40", async () => {
     const week = {
       start: "2026-09-07",
       end: "2026-09-18",
@@ -384,6 +384,31 @@ describe("estimate excel export", () => {
     const excel = estimateWorkbookSummaryTotal(input);
     assert.equal(excel, desk);
     assert.equal(excel > 0, true);
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const summary = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
+    assert.ok(summary);
+    let totalRow = 0;
+    summary.eachRow((row, rowNumber) => {
+      if (String(row.getCell(1).value ?? "") === "ESTIMATE TOTAL $") totalRow = rowNumber;
+    });
+    const cell = summary.getCell(`B${totalRow}`).value as { formula?: string; result?: number };
+    assert.match(String(cell.formula ?? ""), /^SUM\(/);
+    assert.equal(Math.round(Number(cell.result) * 100) / 100, desk);
+  });
+
+  it("includes change-order dollars on Summary so ESTIMATE TOTAL $ stays on the rail", () => {
+    const input = { ...woodRiverFixture(), changeOrders: 73889.52 };
+    const desk = deskEstimateTotal(input);
+    assert.equal(desk, deskEstimateTotal({ ...input, changeOrders: 0 }) + 73889.52);
+    const excel = estimateWorkbookSummaryTotal(input);
+    assert.equal(excel, desk);
+    const sheets = buildEstimateWorkbook(input);
+    assert.equal(
+      sheets[0].cells.some((cell) => cell.type === "text" && cell.value === "Change orders"),
+      true,
+    );
   });
 
   it("uses COMP 6.5% on P66/Bayway and 10% on Yates — not Nathan’s old 6% formula", () => {
