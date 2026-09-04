@@ -124,6 +124,7 @@ function isTotalRow(cells: SheetCell[], row: number): boolean {
 function laborRowKind(cells: SheetCell[], row: number): "title" | "hc" | "hps" | "pd" | "hours" | "" {
   const shift = cells.find((cell) => cell.ref === `A${row}`);
   const type = cells.find((cell) => cell.ref === `F${row}`);
+  if (type?.type === "text" && type.value === "TITLE") return "title";
   if (shift?.type === "text" && /DAYSHIFT|NIGHTSHIFT/i.test(shift.value)) return "title";
   if (type?.type === "text" && type.value === "HC") return "hc";
   if (type?.type === "text" && type.value === "HPS") return "hps";
@@ -360,6 +361,10 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       for (let i = 12; i <= lastColNum; i += 1) ws.getColumn(i).width = 7;
       ws.getColumn(1).width = 28;
       ws.getColumn(3).width = 26;
+    }
+    for (const col of sheet.hiddenCols ?? []) {
+      ws.getColumn(col).hidden = true;
+      ws.getColumn(col).width = 3;
     }
     if (isSummary) {
       ws.getColumn(1).width = 36;

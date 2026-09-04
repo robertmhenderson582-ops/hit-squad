@@ -17,11 +17,17 @@ import {
   ESTIMATE_SUMMARY_AMOUNT,
   ESTIMATE_SUMMARY_HOURS,
   ESTIMATE_XLSX_SHEETS,
+  LABOR_BLOCK_HEIGHT,
+  LABOR_BLOCK_ID_COL,
   LABOR_DATE_START_COL,
   LABOR_DAYSHIFT,
   LABOR_HC_LABEL,
   LABOR_HPS_LABEL,
+  LABOR_HPS_TYPE,
   LABOR_NIGHTSHIFT,
+  LABOR_TITLE_TYPE,
+  LABOR_TYPE_ORDER,
+  laborBlockId,
   estimateToXlsx,
   estimateXlsxFilename,
   laborCalendarDates,
@@ -1061,7 +1067,7 @@ describe("estimate excel export", () => {
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, `B${block.ot}`), 0);
   });
 
-  it("writes a CAT 2 daily itemized labor grid — date row, 7-row HC/HPS/ST/OT/DT/PD blocks", () => {
+  it("writes a CAT 2 daily itemized labor grid — date row, 7-row HC/HPS/ST/OT/DT/PD blocks", async () => {
     const weekday = {
       start: "2026-09-01",
       end: "2026-09-07",
@@ -1123,12 +1129,19 @@ describe("estimate excel export", () => {
     const lead = laborHours(staff, "Lead Safety 01");
     assert.equal(staffMap.get(`A${lead.title}`)?.value, LABOR_DAYSHIFT);
     assert.equal(staffMap.get(`C${lead.title}`)?.value, "Lead Safety 01");
+    assert.deepEqual(
+      LABOR_TYPE_ORDER.map((type, index) => staffMap.get(`F${lead.title + index}`)?.value),
+      [...LABOR_TYPE_ORDER],
+    );
     assert.equal(staffMap.get(`F${lead.hc}`)?.value, LABOR_HC_LABEL);
     assert.equal(staffMap.get(`A${lead.hps}`)?.value, LABOR_HPS_LABEL);
+    assert.equal(staffMap.get(`F${lead.hps}`)?.value, LABOR_HPS_TYPE);
+    assert.equal(staffMap.get(`F${lead.title}`)?.value, LABOR_TITLE_TYPE);
     assert.equal(staffMap.get(`F${lead.st}`)?.value, "ST");
     assert.equal(staffMap.get(`F${lead.ot}`)?.value, "OT");
     assert.equal(staffMap.get(`F${lead.dt}`)?.value, "DT");
     assert.equal(staffMap.get(`F${lead.pd}`)?.value, "PD");
+    assert.equal(lead.pd - lead.title + 1, LABOR_BLOCK_HEIGHT);
     assert.equal(staffMap.get("L8")?.type, "number");
     assert.equal(staffMap.get("L8")?.value, 1);
     assert.equal(staffMap.get("L9")?.value, 10);
@@ -1151,5 +1164,21 @@ describe("estimate excel export", () => {
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, `L${night.hc}`), 1);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, `K${lead.title}`) > 0, true);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, `D${lead.pd}`) > 0, true);
+    assert.equal(gf.title, lead.title + LABOR_BLOCK_HEIGHT);
+    const idCol = colLetter(LABOR_BLOCK_ID_COL);
+    const leadId = laborBlockId({ id: "st", position: "Lead Safety 01" }, false);
+    const nightId = laborBlockId({ id: "dr", position: "Boilermaker Journeyman" }, true);
+    assert.equal(staffMap.get(`${idCol}${lead.title}`)?.value, leadId);
+    assert.equal(staffMap.get(`${idCol}${lead.hc}`)?.value, leadId);
+    assert.equal(staffMap.get(`${idCol}${lead.hps}`)?.value, leadId);
+    assert.equal(staffMap.get(`${idCol}${lead.pd}`)?.value, leadId);
+    assert.equal(cellMap(direct).get(`${idCol}${night.title}`)?.value, nightId);
+    assert.equal(staff.hiddenCols?.includes(LABOR_BLOCK_ID_COL), true);
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getColumn(LABOR_BLOCK_ID_COL).hidden, true);
+    const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
+    assert.equal(/import workbook|upload.*xlsx|round-trip/i.test(workspace), false);
   });
 });

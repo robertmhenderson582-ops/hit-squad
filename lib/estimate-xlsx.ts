@@ -6,8 +6,10 @@
  * cards (Staff / GF / Foreman / Direct / Support) — this file does not invent
  * a new crew presentation. PD stays off Labor TM $. Labor sheets keep the
  * CAT 2 daily itemized grid (date row from col L, 7-row HC/HPS/ST/OT/DT/PD
- * blocks, DAYSHIFT / NIGHTSHIFT). Polish, repair-safe package, and $ vs MH
- * labels only. Never commit source workbooks to git (Look samples excepted).
+ * blocks, DAYSHIFT / NIGHTSHIFT). That grid is the stable client edit surface
+ * for a later import (parked — not in this PR). Hidden block-id column is for
+ * a future importer only. Polish, repair-safe package, and $ vs MH labels
+ * only. Never commit source workbooks to git (Look samples excepted).
  */
 
 import type { CalendarRange, CraftRow, CraftShift } from "./craft-labor.ts";
@@ -76,6 +78,11 @@ export const LABOR_HPS_LABEL = "Enter Hours Per shift Here";
 export const LABOR_DAYSHIFT = "DAYSHIFT";
 export const LABOR_NIGHTSHIFT = "NIGHTSHIFT";
 export const LABOR_HC_LABEL = "HC";
+export const LABOR_HPS_TYPE = "HPS";
+export const LABOR_TITLE_TYPE = "TITLE";
+export const LABOR_TYPE_ORDER = ["TITLE", "HC", "HPS", "ST", "OT", "DT", "PD"] as const;
+/** Hidden column after the longest calendar so a later importer can key blocks. */
+export const LABOR_BLOCK_ID_COL = LABOR_DATE_START_COL + LABOR_MAX_DAYS;
 export const LABOR_TITLE_OFFSET = 0;
 export const LABOR_HC_OFFSET = 1;
 export const LABOR_HPS_OFFSET = 2;
@@ -301,6 +308,12 @@ function pdRateFor(input: EstimateXlsxInput, staffPd: boolean) {
   return staffPd ? Number(input.jobMeta?.staffPerDiemRate) || 0 : Number(input.jobMeta?.craftPerDiemRate) || 0;
 }
 
+/** Stable key for one DAYSHIFT / NIGHTSHIFT block. Future import only — not shown. */
+export function laborBlockId(row: { id?: string; position?: string }, night: boolean): string {
+  const raw = (row.id || row.position || "row").trim().replace(/\|/g, "-");
+  return `${raw}|${night ? "night" : "day"}`;
+}
+
 export function laborCalendarDates(input: EstimateXlsxInput): string[] {
   let start = "";
   let stop = "";
@@ -488,8 +501,15 @@ function buildCrewSheet(
     const { clock, otAfter8 } = blockClock(row, input, lane);
     const firstDate = dates.length ? colLetter(LABOR_DATE_START_COL) : "";
 
+    const blockId = laborBlockId(row, night);
+    const idCol = colLetter(LABOR_BLOCK_ID_COL);
+    for (let offset = 0; offset < LABOR_BLOCK_HEIGHT; offset += 1) {
+      pushText(cells, `${idCol}${excelRow + offset}`, blockId);
+    }
+
     pushText(cells, `A${titleRow}`, night ? LABOR_NIGHTSHIFT : LABOR_DAYSHIFT);
     pushText(cells, `C${titleRow}`, row.position.trim());
+    pushText(cells, `F${titleRow}`, LABOR_TITLE_TYPE);
     pushFormula(cells, `B${titleRow}`, `G${titleRow}+H${titleRow}+I${titleRow}`);
     pushFormula(cells, `D${titleRow}`, `K${titleRow}`);
     pushFormula(cells, `G${titleRow}`, `B${stRow}`);
@@ -500,7 +520,7 @@ function buildCrewSheet(
 
     pushText(cells, `F${hcRow}`, LABOR_HC_LABEL);
     pushText(cells, `A${hpsRow}`, LABOR_HPS_LABEL);
-    pushText(cells, `F${hpsRow}`, "HPS");
+    pushText(cells, `F${hpsRow}`, LABOR_HPS_TYPE);
     pushText(cells, `F${stRow}`, "ST");
     pushText(cells, `F${otRow}`, "OT");
     pushText(cells, `F${dtRow}`, "DT");
@@ -581,6 +601,7 @@ function buildCrewSheet(
     pdTotal: `D${totalRow}`,
     hoursTotal: `B${totalRow}`,
     sheetTotal: `K${totalRow}`,
+    hiddenCols: [LABOR_BLOCK_ID_COL],
   };
 }
 

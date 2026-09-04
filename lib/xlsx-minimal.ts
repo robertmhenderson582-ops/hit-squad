@@ -127,6 +127,8 @@ export type WorkbookSheet = {
   name: string;
   cells: SheetCell[];
   merges?: string[];
+  /** 1-based columns to hide (labor block-id, etc.). */
+  hiddenCols?: number[];
 };
 
 export async function buildWorkbook(sheets: WorkbookSheet[]): Promise<Uint8Array> {
