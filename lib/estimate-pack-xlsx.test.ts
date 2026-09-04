@@ -12,6 +12,7 @@ import {
 } from "./estimate-pack-xlsx.ts";
 import { parseIncomingPack } from "./estimate-pack.ts";
 import { buildEstimateWorkbook, ESTIMATE_XLSX_SHEETS } from "./estimate-xlsx.ts";
+import { excelSafeSheetName } from "./xlsx-minimal.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
 
 const SAMPLE_PACK = {
@@ -168,5 +169,77 @@ describe("estimate pack JSON → xlsx", () => {
   it("labels Look samples as REAL-ESTIMATE exports, not fixture demos", () => {
     const files = readdirSync("look-samples").filter((file) => file.endsWith(".xlsx")).sort();
     assert.deepEqual(files, ["v151_real_aromatics.xlsx", "v151_real_cat2.xlsx"]);
+  });
+
+  it("vault leftover $0 crane / sub / untitled labor rows do not create tabs", () => {
+    const leftover = {
+      ...SAMPLE_PACK,
+      packId: "new-mtleftover-zeros1",
+      title: "Leftover zeros",
+      crew: {
+        staff: SAMPLE_PACK.crew.staff,
+        generalForeman: [],
+        foreman: [{ id: "fm-empty", position: "", shift: "Days", ranges: [] }],
+        direct: [],
+        support: [{ id: "sup-empty", position: "   ", shift: "Days", ranges: [] }],
+        otAfter8: true,
+      },
+      equipment: {
+        largeTools: [
+          {
+            id: "lt-empty",
+            itemId: "",
+            period: "daily",
+            qty: 1,
+            start: "2026-09-21",
+            end: "2026-10-22",
+            enteredCost: 0,
+            freight: 0,
+          },
+        ],
+        thirdParty: [
+          {
+            id: "tp-empty",
+            item: "",
+            period: "daily",
+            rate: 0,
+            freight: 0,
+            qty: 1,
+            start: "2026-09-21",
+            end: "2026-10-22",
+          },
+          {
+            id: "tp-crane-zero",
+            item: "Carry deck crane",
+            period: "daily",
+            rate: 0,
+            freight: 0,
+            qty: 1,
+            start: "2026-09-21",
+            end: "2026-10-22",
+          },
+        ],
+      },
+      otherCost: {
+        perDiemRate: 0,
+        travel: [
+          { id: "travel-staff", kind: "staff", source: "crew", headcount: 8, travelers: 0, perMile: 0.76, miles: 0 },
+        ],
+        misc: [{ id: "mc-alloy", item: "Alloy rod", description: "Stainless", qty: 1, each: 0 }],
+      },
+      subcontractor: {
+        lines: [{ id: "sb-empty", vendor: "", scope: "", qty: 1, unit: "LS", rate: 0, affiliate: false }],
+        cards: [],
+      },
+    };
+    const { input } = estimateJsonToXlsxInput(leftover);
+    const names = buildEstimateWorkbook(input).map((sheet) => sheet.name);
+    assert.deepEqual(names, [ESTIMATE_XLSX_SHEETS.summary, ESTIMATE_XLSX_SHEETS.staff, ESTIMATE_XLSX_SHEETS.rates]);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.crane), false);
+    assert.equal(names.includes(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub)), false);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.foremen), false);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.rental), false);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.travel), false);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.misc), false);
   });
 });

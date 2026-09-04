@@ -11,6 +11,9 @@
  * a future importer only. Polish, repair-safe package, and $ vs MH labels
  * only. ORG Chart is a later separate export — not in this workbook.
  * Slicer Hrs (IPS / P6 dump) is not in this workbook.
+ * Empty category sheets are omitted — leftover $0 / untitled rows do not
+ * create a blank Crane Rental, OM Crane Subcontractor, tension, rental,
+ * COE, travel, misc, or labor tab. Only sheets with live rows for that estimate.
  * Never commit source workbooks to git (Look samples excepted).
  */
 
@@ -959,6 +962,23 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
   };
 }
 
+/** Optional tabs. Header-only / leftover $0 catalog rows never create these. */
+export const OPTIONAL_ESTIMATE_SHEETS = [
+  ESTIMATE_XLSX_SHEETS.staff,
+  ESTIMATE_XLSX_SHEETS.foremen,
+  ESTIMATE_XLSX_SHEETS.direct,
+  ESTIMATE_XLSX_SHEETS.support,
+  ESTIMATE_XLSX_SHEETS.rental,
+  ESTIMATE_XLSX_SHEETS.tension,
+  ESTIMATE_XLSX_SHEETS.crane,
+  ESTIMATE_XLSX_SHEETS.sub,
+  ESTIMATE_XLSX_SHEETS.coe,
+  ESTIMATE_XLSX_SHEETS.travel,
+  ESTIMATE_XLSX_SHEETS.misc,
+  ESTIMATE_XLSX_SHEETS.rates,
+] as const;
+
+/** Summary always. Optional tabs only when that category has live rows. */
 export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSheet[] {
   const keys = usedRateKeys(input.crew);
   const rates = buildRateSheet(input, keys);

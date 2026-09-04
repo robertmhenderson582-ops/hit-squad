@@ -1,6 +1,7 @@
 /**
  * Estimate pack JSON (vault / desk snapshot) → client workbook.
  * Same builder path as the live Export button. Does not invent numbers.
+ * Empty categories are omitted (no blank Crane / OM Crane / unused labor tabs).
  *
  *   node --experimental-strip-types scripts/estimate-json-to-xlsx.ts <estimate.json> [out.xlsx]
  *   npm run estimate:xlsx -- path/to/pack.json look-samples/v151_real_cat2.xlsx

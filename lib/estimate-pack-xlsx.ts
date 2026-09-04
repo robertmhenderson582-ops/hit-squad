@@ -1,6 +1,7 @@
 /**
  * Vault / desk estimate JSON → the same EstimateXlsxInput the live Export
- * button builds. No invented crew, dollars, or fixtures.
+ * button builds. No invented crew, dollars, or fixtures. Empty categories
+ * stay omitted — leftover $0 catalog rows do not become blank tabs.
  */
 import { hydrateSupportLines, syncCraftRows, syncSupportRows, type CraftRow } from "./craft-labor.ts";
 import { parseEquipmentSheet } from "./equipment-sheet.ts";

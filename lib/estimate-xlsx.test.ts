@@ -17,6 +17,7 @@ import {
   ESTIMATE_SUMMARY_AMOUNT,
   ESTIMATE_SUMMARY_HOURS,
   ESTIMATE_XLSX_SHEETS,
+  OPTIONAL_ESTIMATE_SHEETS,
   LABOR_BLOCK_HEIGHT,
   LABOR_BLOCK_ID_COL,
   LABOR_DATE_START_COL,
@@ -367,6 +368,169 @@ describe("estimate excel export", () => {
     const empty = buildEstimateWorkbook({ title: "Blank", site: "Yates", client: "Georgia Power" });
     assert.deepEqual(empty.map((sheet) => sheet.name), [ESTIMATE_XLSX_SHEETS.summary]);
     assert.equal(empty[0].cells.some((cell) => cell.type === "formula" || (cell.type === "number" && cell.ref === "B8")), true);
+  });
+
+  it("omits leftover $0 catalog rows — no blank Crane / OM Crane / empty labor tabs", async () => {
+    const leftoverZero = {
+      title: "CAT 2 leftover zeros",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      crew: {
+        staff: [craft("st-1", "Superintendent PF 01", 10)],
+        generalForeman: [],
+        foreman: [{ ...craft("fm-empty", "", 10), position: "" }],
+        direct: [],
+        support: [{ ...craft("sup-ws", "   ", 10), position: "   " }],
+        otAfter8: true,
+      },
+      schedule: woodRiverFixture().schedule,
+      jobMeta: { staffPerDiemRate: 140, craftPerDiemRate: 130, staffMileageRate: 0, craftMileageRate: 0, rateBook: "" },
+      equipment: {
+        largeTools: [
+          {
+            id: "lt-empty",
+            itemId: "",
+            period: "daily" as const,
+            qty: 1,
+            start: "2026-09-21",
+            end: "2026-10-22",
+            enteredCost: 0,
+            freight: 0,
+          },
+        ],
+        thirdParty: [
+          {
+            id: "tp-empty",
+            item: "",
+            period: "daily" as const,
+            rate: 0,
+            freight: 0,
+            qty: 1,
+            start: "2026-09-21",
+            end: "2026-10-22",
+          },
+          {
+            id: "tp-crane-zero",
+            item: "Carry deck crane",
+            period: "daily" as const,
+            rate: 0,
+            freight: 0,
+            qty: 1,
+            start: "2026-09-21",
+            end: "2026-10-22",
+          },
+          {
+            id: "tp-tension-zero",
+            item: "Hydraulic tensioner",
+            period: "daily" as const,
+            rate: 0,
+            freight: 0,
+            qty: 1,
+            start: "2026-09-21",
+            end: "2026-10-22",
+          },
+          {
+            id: "tp-rental-zero",
+            item: "450amp diesel welder",
+            period: "daily" as const,
+            rate: 0,
+            freight: 0,
+            qty: 1,
+            start: "2026-09-21",
+            end: "2026-10-22",
+          },
+        ],
+      },
+      otherCost: {
+        perDiemRate: 0,
+        travel: [
+          { id: "travel-staff", kind: "staff" as const, source: "crew" as const, headcount: 8, travelers: 0, perMile: 0.76, miles: 0 },
+          { id: "travel-craft", kind: "craft" as const, source: "crew" as const, headcount: 40, travelers: 0, perMile: 0, miles: 0 },
+        ],
+        misc: [
+          { id: "mc-alloy", item: "Alloy rod", description: "Stainless", qty: 1, each: 0 },
+          { id: "mc-steel", item: "Steel", description: "", qty: 1, each: 0 },
+        ],
+      },
+      subcontractor: {
+        lines: [{ id: "sb-empty", vendor: "", scope: "", qty: 1, unit: "LS" as const, rate: 0, affiliate: false }],
+        cards: [],
+      },
+    };
+    const sheets = buildEstimateWorkbook(leftoverZero);
+    const names = sheets.map((sheet) => sheet.name);
+    assert.deepEqual(names, [ESTIMATE_XLSX_SHEETS.summary, ESTIMATE_XLSX_SHEETS.staff, ESTIMATE_XLSX_SHEETS.rates]);
+    for (const name of [
+      ESTIMATE_XLSX_SHEETS.foremen,
+      ESTIMATE_XLSX_SHEETS.direct,
+      ESTIMATE_XLSX_SHEETS.support,
+      ESTIMATE_XLSX_SHEETS.rental,
+      ESTIMATE_XLSX_SHEETS.tension,
+      ESTIMATE_XLSX_SHEETS.crane,
+      excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub),
+      ESTIMATE_XLSX_SHEETS.coe,
+      ESTIMATE_XLSX_SHEETS.travel,
+      ESTIMATE_XLSX_SHEETS.misc,
+    ]) {
+      assert.equal(names.includes(name), false, name);
+    }
+    assert.equal(OPTIONAL_ESTIMATE_SHEETS.includes(ESTIMATE_XLSX_SHEETS.crane), true);
+
+    const bytes = await estimateToXlsx(leftoverZero);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    assert.deepEqual(
+      wb.worksheets.map((sheet) => sheet.name),
+      [ESTIMATE_XLSX_SHEETS.summary, ESTIMATE_XLSX_SHEETS.staff, ESTIMATE_XLSX_SHEETS.rates],
+    );
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crane), undefined);
+    assert.equal(wb.getWorksheet(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub)), undefined);
+  });
+
+  it("Look samples omit empty category sheets (no blank Crane / OM Crane tabs)", async () => {
+    async function sheetNames(file: string) {
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(readFileSync(fileURLToPath(new URL(`../look-samples/${file}`, import.meta.url))));
+      return wb.worksheets.map((sheet) => sheet.name);
+    }
+    const cat2 = await sheetNames("v151_real_cat2.xlsx");
+    assert.deepEqual(cat2, [
+      ESTIMATE_XLSX_SHEETS.summary,
+      ESTIMATE_XLSX_SHEETS.staff,
+      ESTIMATE_XLSX_SHEETS.foremen,
+      ESTIMATE_XLSX_SHEETS.direct,
+      ESTIMATE_XLSX_SHEETS.support,
+      ESTIMATE_XLSX_SHEETS.coe,
+      ESTIMATE_XLSX_SHEETS.travel,
+      ESTIMATE_XLSX_SHEETS.misc,
+      ESTIMATE_XLSX_SHEETS.rates,
+    ]);
+    assert.equal(cat2.includes(ESTIMATE_XLSX_SHEETS.crane), false);
+    assert.equal(cat2.includes(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub)), false);
+    assert.equal(cat2.includes(ESTIMATE_XLSX_SHEETS.rental), false);
+    assert.equal(cat2.includes(ESTIMATE_XLSX_SHEETS.tension), false);
+
+    const aromatics = await sheetNames("v151_real_aromatics.xlsx");
+    assert.deepEqual(aromatics, [
+      ESTIMATE_XLSX_SHEETS.summary,
+      ESTIMATE_XLSX_SHEETS.staff,
+      ESTIMATE_XLSX_SHEETS.foremen,
+      ESTIMATE_XLSX_SHEETS.direct,
+      ESTIMATE_XLSX_SHEETS.support,
+      ESTIMATE_XLSX_SHEETS.rental,
+      excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub),
+      ESTIMATE_XLSX_SHEETS.coe,
+      ESTIMATE_XLSX_SHEETS.travel,
+      ESTIMATE_XLSX_SHEETS.misc,
+      ESTIMATE_XLSX_SHEETS.rates,
+    ]);
+    assert.equal(aromatics.includes(ESTIMATE_XLSX_SHEETS.crane), false);
+    assert.equal(aromatics.includes(ESTIMATE_XLSX_SHEETS.tension), false);
+    for (const names of [cat2, aromatics]) {
+      assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.org), false);
+      assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.slicer), false);
+      assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.laydown), false);
+    }
   });
 
   it("writes an Excel-365-safe package for the O&M sub sheet, inch-quotes, and > text", async () => {
