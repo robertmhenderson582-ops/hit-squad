@@ -1758,6 +1758,9 @@ describe("estimate excel export", () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getColumn(LABOR_BLOCK_ID_COL).hidden, true);
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("C7").dataValidation, undefined);
+    const writer = readFileSync(fileURLToPath(new URL("./xlsx-exceljs.ts", import.meta.url)), "utf8");
+    assert.equal(/dataValidation/i.test(writer), false);
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
     assert.equal(/import workbook|upload.*xlsx|round-trip/i.test(workspace), false);
   });

@@ -7,9 +7,11 @@
  * a new crew presentation. PD stays off Labor TM $. Labor sheets keep the
  * CAT 2 daily itemized grid (date row from col L, 7-row HC/HPS/ST/OT/DT/PD
  * blocks, DAYSHIFT / NIGHTSHIFT). That grid is the stable client edit surface
- * for a later import (parked — not in this PR). Hidden block-id column is for
- * a future importer only. Polish, repair-safe package, and $ vs MH labels
- * only. ORG Chart is a later separate export — not in this workbook.
+ * for a later import. Position dropdowns + workbook import are parked until
+ * Look sign-off — a validation list with no pack ripple would be a parallel
+ * book. Hidden block-id column is for a future importer only. Polish,
+ * repair-safe package, and $ vs MH labels only. ORG Chart is a later
+ * separate export — not in this workbook.
  * Slicer Hrs (IPS / P6 dump) is not in this workbook.
  * Empty category sheets are omitted — leftover $0 / untitled rows do not
  * create a blank Crane Rental, Subcontractor, tension, rental, COE, travel,
@@ -22,11 +24,14 @@
  * labor grids are shaded. Daily ST/OT/DT cells use the desk clock
  * (computeRangeHours / applyWeekly40). Summary ESTIMATE TOTAL $ is the same
  * deskPackageTotal / estimateTotalBreakdown number as the Estimate Total rail.
- * Platform rule: Excel is a view of the live estimate pack. Crew, misc,
+ * Standing ripple rule (Robert 2026-09-04): every Excel change updates the
+ * live estimate pack and every surface (desk totals, export/edit, Rate
+ * Tables, fills). Excel is a view/edit surface of that pack — never a
+ * parallel book. No Excel-only catalogs or hard-coded dollars. Crew, misc,
  * equipment, subs, and totals come from the same shared libs the desk uses
  * (other-cost, equipment-sheet, estimate-total). A Misc / rod-weight change
- * on the desk must appear in the next export of that pack. Do not hard-code
- * sample dollars. Chrome (xlsx-exceljs) must not invent money.
+ * on the desk must appear in the next export of that pack. Chrome
+ * (xlsx-exceljs) must not invent money.
  * Never commit source workbooks to git (Look samples excepted).
  */
 
