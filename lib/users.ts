@@ -5,7 +5,6 @@ import bcrypt from "bcryptjs";
 import { assignedCompany, isKnownCompany, setAssignedCompany } from "./companies-store.ts";
 import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
 import {
-  SEATS_VAULT_FILE_ID,
   SEATS_VAULT_KIND,
   SEATS_VAULT_NAME,
   readVaultJson,
