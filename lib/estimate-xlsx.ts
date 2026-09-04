@@ -513,6 +513,8 @@ function buildCrewSheet(
 
   const titleRows: number[] = [];
   const pdMoneyRows: number[] = [];
+  const laborBlocks: Array<{ start: number; end: number }> = [];
+  const spacerRows: number[] = [];
   let excelRow = 7;
 
   function emitBlock(row: CraftRow, night: boolean) {
@@ -601,14 +603,23 @@ function buildCrewSheet(
       pushNum(cells, `${col}${pdRow}`, plug.pd);
     });
 
+    laborBlocks.push({ start: titleRow, end: pdRow });
     excelRow += LABOR_BLOCK_HEIGHT;
   }
 
+  const planned: Array<{ row: CraftRow; night: boolean }> = [];
   for (const row of live) {
-    if (rowHasDayBlock(row)) emitBlock(row, false);
-    if (rowHasNightBlock(row)) emitBlock(row, true);
-    if (!rowHasDayBlock(row) && !rowHasNightBlock(row)) emitBlock(row, false);
+    if (rowHasDayBlock(row)) planned.push({ row, night: false });
+    if (rowHasNightBlock(row)) planned.push({ row, night: true });
+    if (!rowHasDayBlock(row) && !rowHasNightBlock(row)) planned.push({ row, night: false });
   }
+  planned.forEach((item, index) => {
+    emitBlock(item.row, item.night);
+    if (index < planned.length - 1) {
+      spacerRows.push(excelRow);
+      excelRow += 1;
+    }
+  });
 
   const totalRow = excelRow;
   pushText(cells, `A${totalRow}`, "TOTAL");
@@ -643,6 +654,8 @@ function buildCrewSheet(
     sheetTotal: `K${totalRow}`,
     hiddenCols: [LABOR_BLOCK_ID_COL],
     weekendCols,
+    laborBlocks,
+    spacerRows,
   };
 }
 

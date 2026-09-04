@@ -131,6 +131,10 @@ export type WorkbookSheet = {
   hiddenCols?: number[];
   /** Labor date columns: JS weekday 0 = Sunday, 6 = Saturday. */
   weekendCols?: Array<{ col: number; weekday: 0 | 6 }>;
+  /** 7-row position blocks on Staff / Foremen / Direct / Support (title…PD). */
+  laborBlocks?: Array<{ start: number; end: number }>;
+  /** Gray break rows between position blocks. */
+  spacerRows?: number[];
 };
 
 export async function buildWorkbook(sheets: WorkbookSheet[]): Promise<Uint8Array> {

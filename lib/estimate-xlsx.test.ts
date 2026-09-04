@@ -40,7 +40,22 @@ import { computeRowHours } from "./hours-clock.ts";
 import { defaultLaborClass } from "./labor-class.ts";
 import { lookupShahanLabor, SHAHAN_NO_RATE_LABEL, shahanCrewCostAmount } from "./shahan-wood-river.ts";
 import { wageLookupOpts } from "./wage-lookup.ts";
-import { LABOR_SAT_BODY, LABOR_SAT_HEADER, LABOR_SUN_BODY, LABOR_SUN_HEADER } from "./xlsx-exceljs.ts";
+import {
+  LABOR_COL_WIDTHS,
+  LABOR_DAY_COL_WIDTH,
+  LABOR_DAYSHIFT_BANNER,
+  LABOR_HC_HPS,
+  LABOR_HOURS_LABEL,
+  LABOR_POSITION_TITLE,
+  LABOR_SAT_BODY,
+  LABOR_SAT_HEADER,
+  LABOR_SPACER,
+  LABOR_SUN_BODY,
+  LABOR_SUN_HEADER,
+  SUMMARY_COL_A_WIDTH,
+  SUMMARY_SECTION,
+  SUMMARY_TOTAL,
+} from "./xlsx-exceljs.ts";
 import { evaluateWorkbook } from "./xlsx-eval.ts";
 import {
   REQUIRED_XLSX_PARTS,
@@ -714,6 +729,66 @@ describe("estimate excel export", () => {
     assert.equal(argb(direct.getCell(7, sat.col)), LABOR_SAT_BODY.slice(2));
     assert.equal(argb(direct.getCell(7, sun.col)), LABOR_SUN_BODY.slice(2));
     assert.notEqual(argb(direct.getCell(6, sat.col)), argb(direct.getCell(6, sun.col)));
+  });
+
+  it("tightens A–K and paints Office craft cages like Robert’s CAT 2", async () => {
+    const input = {
+      ...woodRiverFixture(),
+      crew: {
+        ...woodRiverFixture().crew,
+        direct: [
+          craft("dr-1", "Boilermaker Journeyman", 10, { perDiemPeople: 1, otAfter8: true }),
+          craft("dr-2", "Pipefitter Journeyman", 10, { perDiemPeople: 1, otAfter8: true }),
+        ],
+      },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const directModel = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.direct);
+    assert.ok(directModel);
+    assert.deepEqual(directModel.laborBlocks, [
+      { start: 7, end: 13 },
+      { start: 15, end: 21 },
+    ]);
+    assert.deepEqual(directModel.spacerRows, [14]);
+
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const direct = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.direct);
+    const summary = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
+    assert.ok(direct);
+    assert.ok(summary);
+    const argb = (cell: ExcelJS.Cell) =>
+      String((cell.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "")
+        .replace(/^FF/i, "")
+        .toUpperCase();
+    const widthOf = (sheet: ExcelJS.Worksheet, col: number) => Number(sheet.getColumn(col).width);
+    assert.equal(widthOf(direct, 1), LABOR_COL_WIDTHS.A);
+    assert.equal(widthOf(direct, 2), LABOR_COL_WIDTHS.B);
+    assert.equal(widthOf(direct, 3), LABOR_COL_WIDTHS.C);
+    assert.equal(widthOf(direct, 11), LABOR_COL_WIDTHS.K);
+    assert.equal(widthOf(direct, 12), LABOR_DAY_COL_WIDTH);
+    assert.equal(widthOf(summary, 1), SUMMARY_COL_A_WIDTH);
+    assert.equal(argb(direct.getCell("A7")), LABOR_DAYSHIFT_BANNER.slice(2));
+    assert.equal(argb(direct.getCell("C7")), LABOR_POSITION_TITLE.slice(2));
+    assert.equal(argb(direct.getCell("A8")), LABOR_HC_HPS.slice(2));
+    assert.equal(argb(direct.getCell("A9")), LABOR_HC_HPS.slice(2));
+    assert.equal(argb(direct.getCell("F10")), LABOR_HOURS_LABEL.slice(2));
+    assert.equal(argb(direct.getCell("A14")), LABOR_SPACER.slice(2));
+    assert.equal(direct.getCell("A7").border?.left?.style, "medium");
+    assert.equal(direct.getCell("K13").border?.right?.style, "medium");
+    assert.equal(direct.getCell("K13").border?.bottom?.style, "medium");
+    const laborRow = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find(
+      (cell) => cell.ref.startsWith("A") && cell.value === "Labor $",
+    );
+    assert.ok(laborRow);
+    const laborExcelRow = Number(laborRow.ref.slice(1));
+    assert.equal(argb(summary.getCell(`A${laborExcelRow}`)), SUMMARY_SECTION.slice(2));
+    const totalRow = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find(
+      (cell) => cell.ref.startsWith("A") && cell.value === "ESTIMATE TOTAL $",
+    );
+    assert.ok(totalRow);
+    assert.equal(argb(summary.getCell(`A${totalRow.ref.slice(1)}`)), SUMMARY_TOTAL.slice(2));
   });
 
   it("stacks hiring-progression ranges on the same day the way the desk does", () => {
