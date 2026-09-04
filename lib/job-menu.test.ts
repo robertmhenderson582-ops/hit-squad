@@ -111,6 +111,8 @@ describe("job menu archive and delete", () => {
     assert.equal(isActiveMenuItem(tm, viewed), false);
     assert.deepEqual(omitDeletedJobs([tm, cat2], viewed, false).map((row) => row.id), [cat2.id]);
     assert.equal(menuStatus(tm, menuForViewedDesk(false, store)), null);
+    const seedTm = { id: "job-new-mtj5d6", packId: "new-mtj5d6", title: tm.title };
+    assert.deepEqual(omitDeletedJobs([seedTm, cat2], viewed, false).map((row) => row.id), [cat2.id]);
   });
 
   it("rewrites owner job-menu leftover so HIS cards stay listed", () => {

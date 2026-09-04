@@ -1,4 +1,4 @@
-import { isHisProtectedMenuItem, NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
+import { hisMatchForPack, isHisProtectedMenuItem, NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
 import { canonicalEmail } from "./identity.ts";
 import { isLocalPackId, type StorageLike } from "./local-estimates.ts";
 
@@ -213,11 +213,24 @@ export function recordTransferredMenuItem(
   return writeJobMenu(next, store, seat);
 }
 
+/** Leftover EST-MTJ5D6 and seed new-mtj5d6 are the same HIS job on this seat. */
+export function hisHiddenOnSeatMenu(item: MenuItem, menu: JobMenuState): boolean {
+  if (menuStatus(item, menu) === "deleted") return true;
+  if (!isHisProtectedMenuItem(item)) return false;
+  const his = hisMatchForPack({ packId: item.packId || item.id.replace(/^job-/, ""), title: item.title });
+  if (!his) return false;
+  return menu.deleted.some((id) => {
+    const packId = id.replace(/^job-/, "");
+    const match = hisMatchForPack({ packId, code: packId });
+    return Boolean(match && match.fileId === his.fileId);
+  });
+}
+
 /** Deleted sample / seed ids stay off this seat after a reload or poll. */
 export function omitDeletedJobs<T extends MenuItem>(jobs: T[], menu: JobMenuState, keepHis = false): T[] {
   return jobs.filter((job) => {
     if (keepHis && isHisProtectedMenuItem(job)) return true;
-    return menuStatus(job, menu) !== "deleted";
+    return !hisHiddenOnSeatMenu(job, menu);
   });
 }
 

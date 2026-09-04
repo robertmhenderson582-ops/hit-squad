@@ -12,7 +12,7 @@ import {
 } from "./his-wood-river.ts";
 import { isSamePerson } from "./identity.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
-import { JOB_MENU_KEY, clearHisJobMenuLeftover, menuSeatForDesk, menuStatus, readJobMenu } from "./job-menu.ts";
+import { JOB_MENU_KEY, clearHisJobMenuLeftover, hisHiddenOnSeatMenu, menuSeatForDesk, readJobMenu } from "./job-menu.ts";
 import { omitCatalogSeedPacks } from "./jobs.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
@@ -206,7 +206,7 @@ function leftoverPacksForStaleCheck(store: StorageLike): LocalPack[] {
 function omitDeletedHisPaint(packs: LocalPack[], store?: StorageLike | null, seat?: string | null): LocalPack[] {
   const menu = readJobMenu(store, seat);
   return packs.filter(
-    (pack) => menuStatus({ id: `job-${pack.packId}`, packId: pack.packId, title: pack.title }, menu) !== "deleted",
+    (pack) => !hisHiddenOnSeatMenu({ id: `job-${pack.packId}`, packId: pack.packId, title: pack.title }, menu),
   );
 }
 
