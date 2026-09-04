@@ -9,7 +9,8 @@
  * blocks, DAYSHIFT / NIGHTSHIFT). That grid is the stable client edit surface
  * for a later import (parked — not in this PR). Hidden block-id column is for
  * a future importer only. Polish, repair-safe package, and $ vs MH labels
- * only. Never commit source workbooks to git (Look samples excepted).
+ * only. ORG Chart is a later separate export — not in this workbook.
+ * Never commit source workbooks to git (Look samples excepted).
  */
 
 import type { CalendarRange, CraftRow, CraftShift } from "./craft-labor.ts";
@@ -48,7 +49,6 @@ import {
   type RunningClock,
 } from "./hours-clock.ts";
 import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
-import { orgChartBoxLabel, orgChartBoxes, type OrgChartCrew, type OrgChartState } from "./org-chart.ts";
 import { miscAmount, travelAmount, type OtherCostSheet, type TravelLine } from "./other-cost.ts";
 import { PHASE_NAMES, eachYmd, type PhaseId, type PhaseScheduleState } from "./phase-schedule.ts";
 import {
@@ -126,7 +126,6 @@ export type EstimateXlsxInput = {
   plantCode?: string;
   crew?: EstimateXlsxCrew;
   schedule?: PhaseScheduleState;
-  orgChart?: OrgChartState;
   jobMeta?: Partial<JobRates & JobMoney>;
   equipment?: EquipmentSheet;
   otherCost?: OtherCostSheet;
@@ -605,32 +604,6 @@ function buildCrewSheet(
   };
 }
 
-function buildOrgSheet(input: EstimateXlsxInput): BuiltSheet | null {
-  const crew: OrgChartCrew = {
-    staff: input.crew?.staff,
-    generalForeman: input.crew?.generalForeman,
-    foreman: input.crew?.foreman,
-  };
-  const boxes = orgChartBoxes(crew, input.orgChart);
-  if (!boxes.length) return null;
-  const cells = headerCells(input);
-  ["Position", "Name", "Lane", "Shift", "Count", "Reports to"].forEach((label, index) => {
-    pushText(cells, `${colLetter(index + 1)}6`, label);
-  });
-  const byId = new Map(boxes.map((box) => [box.id, box]));
-  boxes.forEach((box, index) => {
-    const excelRow = 7 + index;
-    pushText(cells, `A${excelRow}`, box.position);
-    pushText(cells, `B${excelRow}`, orgChartBoxLabel(box));
-    pushText(cells, `C${excelRow}`, box.lane);
-    pushText(cells, `D${excelRow}`, box.shift);
-    pushNum(cells, `E${excelRow}`, box.count);
-    const parent = box.parentId === "company" ? "Company" : orgChartBoxLabel(byId.get(box.parentId) ?? { ...box, kind: "title", name: "", position: box.parentId });
-    pushText(cells, `F${excelRow}`, parent);
-  });
-  return { name: ESTIMATE_XLSX_SHEETS.org, cells };
-}
-
 function phaseHours(input: EstimateXlsxInput, phaseId: PhaseId): HoursSplit {
   const rows = allCrewRows(input.crew);
   return rows.reduce(
@@ -1057,7 +1030,6 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   const foremen = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.foremen, input.crew?.foreman ?? [], keys, () => false);
   const direct = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.direct, input.crew?.direct ?? [], keys, () => false);
   const support = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.support, input.crew?.support ?? [], keys, () => false);
-  const org = buildOrgSheet(input);
   const slicer = buildSlicerSheet(input);
   const third = input.equipment?.thirdParty ?? [];
   const rental = buildRentalSheet(
@@ -1083,7 +1055,7 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   );
   const misc = buildMiscSheet(input);
   const sub = buildSubSheet(input);
-  const body = [org, slicer, staff, foremen, direct, support, rental, tension, crane, sub, coe, staffTravel, misc, rates]
+  const body = [slicer, staff, foremen, direct, support, rental, tension, crane, sub, coe, staffTravel, misc, rates]
     .filter((sheet): sheet is BuiltSheet => Boolean(sheet))
     .map((sheet) => ({ ...sheet, name: xlsxName(sheet.name) }));
   return [{ ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) }, ...body];

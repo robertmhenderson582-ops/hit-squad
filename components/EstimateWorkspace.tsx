@@ -111,7 +111,6 @@ export function EstimateWorkspace({
         site: boundSite,
         crew: pack.crew,
         schedule: pack.schedule,
-        orgChart: pack.orgChart,
         jobMeta: pack.jobMeta,
         equipment: readEquipmentSheet(pack.estimateKey),
         otherCost: syncOtherCostTravel(readOtherCost(pack.estimateKey), pack.crew, {

@@ -12,7 +12,6 @@ import {
   type EstimateXlsxCrew,
   type EstimateXlsxInput,
 } from "./estimate-xlsx.ts";
-import { hydrateOrgChart } from "./org-chart.ts";
 import { parseOtherCostJson, syncOtherCostTravel } from "./other-cost.ts";
 import { mergeSchedule, type PhaseScheduleState } from "./phase-schedule.ts";
 import { hydrateJobMeta } from "./staffing-plan.ts";
@@ -60,7 +59,6 @@ export function packSnapshotToXlsxInput(pack: EstimatePackSnapshot): EstimateXls
     site: pack.site,
     crew,
     schedule,
-    orgChart: hydrateOrgChart(pack.orgChart),
     jobMeta,
     equipment: parseEquipmentSheet(pack.equipment),
     otherCost: syncOtherCostTravel(parseOtherCostJson(pack.otherCost), crew, {

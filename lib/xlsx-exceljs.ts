@@ -86,7 +86,7 @@ export const EXCEL_UNIT_FORMATS = {
 
 function tabColorArgb(name: string): string {
   if (name === "Summary Page") return BRAND_STEEL;
-  if (name === "ORG Chart" || name === "Slicer Hrs") return "FF0F5F6D";
+  if (name === "Slicer Hrs") return "FF0F5F6D";
   if (name === "Staff" || name === "Foremen" || name === "Direct" || name === "Support" || name === "Laydown") {
     return "FF1F8A96";
   }
