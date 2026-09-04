@@ -7,6 +7,7 @@ import {
   HEADER_META_WRAP_HEIGHT,
   headerMetaHeight,
   LABOR_COL_WIDTHS,
+  LABOR_DAY_WASH,
   summaryLineFormat,
 } from "./xlsx-exceljs.ts";
 
@@ -38,6 +39,8 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(formatForHeader("PD Days"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(formatForHeader("PD"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(EXCEL_UNIT_FORMATS.hours, "#,##0");
+    assert.equal(LABOR_DAY_WASH, "FFE7EEEC");
+    assert.equal(LABOR_DAY_WASH.includes("F2F6"), false);
     assert.equal(EXCEL_UNIT_FORMATS.hours.includes("."), false);
     assert.equal(EXCEL_UNIT_FORMATS.hours.includes(".##"), false);
     assert.equal(formatForHeader("Headcount"), "#,##0");

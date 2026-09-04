@@ -1859,7 +1859,20 @@ describe("estimate excel export", () => {
     for (let col = LABOR_DATE_START_COL; col < LABOR_DATE_START_COL + dates.length; col += 1) {
       assert.equal(Number(staffBook.getColumn(col).width), LABOR_DAY_COL_WIDTH, `day col ${col}`);
       assert.equal(staffBook.getColumn(col).hidden, false, `day col ${col} visible`);
+      assert.notEqual(Number(staffBook.getColumn(col).width), 13, `day col ${col} not default 13`);
     }
+    assert.ok(dates.length >= 2);
+    assert.equal(Number(staffBook.getColumn(LABOR_DATE_START_COL + 1).width), LABOR_DAY_COL_WIDTH);
+    const { default: JSZip } = await import("jszip");
+    const zip = await JSZip.loadAsync(bytes);
+    const staffXmls = await Promise.all(
+      Object.keys(zip.files)
+        .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+        .map((name) => zip.file(name)?.async("string") ?? Promise.resolve("")),
+    );
+    const laborXml = staffXmls.find((xml) => /min="13" max="13" width="3.2"/.test(xml));
+    assert.ok(laborXml, "each day col must be its own 3.2 width tag so Excel does not leave M+ at default");
+    assert.equal(/min="12" max="1[3-9]" width="3.2"/.test(laborXml), false);
     assert.equal(staffBook.getColumn(LABOR_DATE_START_COL + dates.length).hidden, true);
     assert.equal(staffBook.getColumn(200).hidden, true);
     const lastStaffRow = Math.max(...staff.cells.map((cell) => Number(cell.ref.replace(/^[A-Z]+/, ""))));

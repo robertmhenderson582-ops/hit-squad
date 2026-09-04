@@ -58,7 +58,8 @@ export const LABOR_NIGHTSHIFT_BANNER = STEEL_DEEP;
 export const LABOR_SPACER = "FFB7C8C6";
 export const LABOR_CAGE_WASH_A = "FFD5E3E1";
 export const LABOR_CAGE_WASH_B = "FFC4D6D4";
-export const LABOR_DAY_WASH = "FFF2F6F5";
+/** ST/OT/DT/PD + empty day cells — mint plate, not near-white F2F6F5. */
+export const LABOR_DAY_WASH = LABOR_HC_HPS_CLEAR;
 /** Soft mint plate for leftover empty cells in the used band — not harsh white. */
 export const SHEET_VOID_WASH = LABOR_HC_HPS_CLEAR;
 export const EXCEL_MAX_COL = 16384;
@@ -708,8 +709,7 @@ function applyLaborBlockChrome(
         day.fill = solid(LABOR_HC_HPS);
         centerLaborCell(day);
       }
-    }
-    if (kind === "hours" || kind === "pd") {
+    } else {
       for (let col = 12; col <= lastDateCol; col += 1) {
         const day = ws.getCell(row, col);
         day.fill = solid(LABOR_DAY_WASH);
@@ -733,6 +733,38 @@ function applyLaborBlockChrome(
       }
     }
     boxRange(ws, block.start, block.end, 12, lastDateCol, "medium");
+  }
+}
+
+/** Last fill write on the date grid — yellow entry, weekend gray, mint everywhere else. */
+function paintLaborDayCalendar(
+  ws: ExcelJS.Worksheet,
+  sheet: WorkbookSheet,
+  lastDateCol: number,
+  maxRow: number,
+  totalRows: Set<number>,
+) {
+  if (lastDateCol < LABOR_DATE_FIRST_COL) return;
+  const weekend = new Set((sheet.weekendCols ?? []).map((item) => item.col));
+  const spacers = new Set(sheet.spacerRows ?? []);
+  for (let row = 7; row <= maxRow; row += 1) {
+    const kind = laborRowKind(sheet.cells, row);
+    for (let col = LABOR_DATE_FIRST_COL; col <= lastDateCol; col += 1) {
+      const cell = ws.getCell(row, col);
+      if (spacers.has(row) || totalRows.has(row)) {
+        cell.fill = solid(spacers.has(row) ? LABOR_SPACER : SHEET_VOID_WASH);
+        continue;
+      }
+      if (weekend.has(col)) {
+        cell.fill = solid(LABOR_WEEKEND_FILL);
+        continue;
+      }
+      if (kind === "hc" || kind === "hps") {
+        cell.fill = solid(LABOR_HC_HPS);
+      } else {
+        cell.fill = solid(LABOR_DAY_WASH);
+      }
+    }
   }
 }
 
@@ -836,6 +868,7 @@ function applyLaborChrome(
     }
   }
 
+  paintLaborDayCalendar(ws, sheet, lastDateCol, maxRow, totalRows);
   for (let col = 12; col <= lastDateCol; col += 1) {
     const header = ws.getCell(6, col);
     centerLaborCell(header, { textRotation: 90 });
@@ -904,17 +937,78 @@ function applySoftUsedBand(ws: ExcelJS.Worksheet, lastCol: number, maxRow: numbe
   }
 }
 
-function hideUnusedGrid(ws: ExcelJS.Worksheet, lastVisibleCol: number, lastVisibleRow: number) {
+function hideUnusedGrid(ws: ExcelJS.Worksheet, _lastVisibleCol: number, lastVisibleRow: number) {
   ws.properties.defaultRowHeight = 0;
-  ws.getColumn(EXCEL_MAX_COL);
-  for (let col = lastVisibleCol + 1; col <= EXCEL_MAX_COL; col += 1) {
-    ws.getColumn(col).hidden = true;
-  }
-  // Pin live rows so defaultRowHeight 0 / zeroHeight cannot flatten TOTAL or data.
   for (let row = 1; row <= lastVisibleRow; row += 1) {
     const excelRow = ws.getRow(row);
     if (!Number(excelRow.height)) excelRow.height = USED_ROW_HEIGHT;
   }
+}
+
+function stampSheetCols(xml: string): string {
+  const block = xml.match(/<cols>[\s\S]*?<\/cols>/);
+  if (!block) return xml;
+  type ColInfo = { width: string; hidden: boolean };
+  const byCol = new Map<number, ColInfo>();
+  for (const tag of block[0].matchAll(/<col ([^/]+)\/>/g)) {
+    const attrs = tag[1];
+    const min = Number(/min="(\d+)"/.exec(attrs)?.[1] ?? 0);
+    const max = Number(/max="(\d+)"/.exec(attrs)?.[1] ?? 0);
+    const width = /width="([^"]+)"/.exec(attrs)?.[1] ?? "9";
+    const hidden = /\bhidden="1"/.test(attrs);
+    for (let col = min; col <= max; col += 1) byCol.set(col, { width, hidden });
+  }
+  let lastVisible = 1;
+  for (const [col, info] of byCol) {
+    if (!info.hidden) lastVisible = Math.max(lastVisible, col);
+  }
+  const firstDay = byCol.get(LABOR_DATE_FIRST_COL);
+  const dayGrid =
+    lastVisible >= LABOR_DATE_FIRST_COL &&
+    !firstDay?.hidden &&
+    Math.abs(Number(firstDay?.width) - LABOR_DAY_COL_WIDTH) < 0.05;
+  const tags: string[] = [];
+  const push = (min: number, max: number, width: string, hidden = false) => {
+    tags.push(
+      `<col min="${min}" max="${max}" width="${width}"${hidden ? ' hidden="1"' : ""} customWidth="1"/>`,
+    );
+  };
+  if (dayGrid) {
+    for (let col = 1; col < LABOR_DATE_FIRST_COL; col += 1) {
+      const info = byCol.get(col);
+      if (!info || info.hidden) continue;
+      push(col, col, info.width);
+    }
+    for (let col = LABOR_DATE_FIRST_COL; col <= lastVisible; col += 1) {
+      if (byCol.get(col)?.hidden) continue;
+      push(col, col, String(LABOR_DAY_COL_WIDTH));
+    }
+  } else {
+    let runStart = 0;
+    let runWidth = "";
+    const flush = (end: number) => {
+      if (runStart) push(runStart, end, runWidth);
+      runStart = 0;
+    };
+    for (let col = 1; col <= lastVisible; col += 1) {
+      const info = byCol.get(col);
+      if (!info || info.hidden) {
+        flush(col - 1);
+        continue;
+      }
+      if (!runStart) {
+        runStart = col;
+        runWidth = info.width;
+      } else if (info.width !== runWidth) {
+        flush(col - 1);
+        runStart = col;
+        runWidth = info.width;
+      }
+    }
+    flush(lastVisible);
+  }
+  if (lastVisible < EXCEL_MAX_COL) push(lastVisible + 1, EXCEL_MAX_COL, "9", true);
+  return xml.replace(/<cols>[\s\S]*?<\/cols>/, `<cols>${tags.join("")}</cols>`);
 }
 
 /** Excel still paints a white band under TOTAL unless unused rows are hidden by default. */
@@ -924,7 +1018,8 @@ async function stampUnusedRowsHidden(buffer: Uint8Array): Promise<Uint8Array> {
     if (!/^xl\/worksheets\/sheet\d+\.xml$/.test(name)) continue;
     const file = zip.file(name);
     if (!file) continue;
-    const xml = await file.async("string");
+    let xml = await file.async("string");
+    xml = stampSheetCols(xml);
     zip.file(
       name,
       xml.replace(/<sheetFormatPr\b([^>]*?)\/>/g, (_all, attrs: string) => {
