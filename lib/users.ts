@@ -520,10 +520,10 @@ function seatPasswordAlreadyCleared(email: string, user?: StoredUser) {
   const persisted = ownerHashRow(loadPersisted(), email);
   const persistedCleared =
     Boolean(persisted?.passwordHash) &&
-    !persisted.mustChangePassword &&
-    !isEnvOwnerPasswordHash(persisted.passwordHash);
+    !persisted?.mustChangePassword &&
+    !isEnvOwnerPasswordHash(persisted?.passwordHash);
   const memoryCleared =
-    Boolean(user?.passwordHash) && !user.mustChangePassword && !isEnvOwnerPasswordHash(user.passwordHash);
+    Boolean(user?.passwordHash) && !user?.mustChangePassword && !isEnvOwnerPasswordHash(user?.passwordHash);
   return persistedCleared || memoryCleared;
 }
 
