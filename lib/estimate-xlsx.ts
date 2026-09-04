@@ -85,8 +85,9 @@ export const LABOR_DAYSHIFT = "DAYSHIFT";
 export const LABOR_NIGHTSHIFT = "NIGHTSHIFT";
 export const LABOR_HC_LABEL = "HC";
 export const LABOR_HPS_TYPE = "HPS";
-export const LABOR_TITLE_TYPE = "TITLE";
-export const LABOR_TYPE_ORDER = ["TITLE", "HC", "HPS", "ST", "OT", "DT", "PD"] as const;
+/** Type chip on the position header row is omitted — the Position name is the title. */
+export const LABOR_TITLE_TYPE = "";
+export const LABOR_TYPE_ORDER = ["HC", "HPS", "ST", "OT", "DT", "PD"] as const;
 /** Hidden column after the longest calendar so a later importer can key blocks. */
 export const LABOR_BLOCK_ID_COL = LABOR_DATE_START_COL + LABOR_MAX_DAYS;
 export const LABOR_TITLE_OFFSET = 0;
@@ -549,7 +550,6 @@ function buildCrewSheet(
 
     pushText(cells, `A${titleRow}`, night ? LABOR_NIGHTSHIFT : LABOR_DAYSHIFT);
     pushText(cells, `C${titleRow}`, row.position.trim());
-    pushText(cells, `F${titleRow}`, LABOR_TITLE_TYPE);
     pushFormula(cells, `B${titleRow}`, `G${titleRow}+H${titleRow}+I${titleRow}`);
     pushFormula(cells, `D${titleRow}`, `K${titleRow}`);
     pushFormula(cells, `G${titleRow}`, `B${stRow}`);

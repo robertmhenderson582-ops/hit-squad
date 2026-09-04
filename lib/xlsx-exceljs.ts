@@ -254,8 +254,8 @@ function isSectionRow(cells: SheetCell[], row: number): boolean {
 function laborRowKind(cells: SheetCell[], row: number): "title" | "hc" | "hps" | "pd" | "hours" | "" {
   const shift = cells.find((cell) => cell.ref === `A${row}`);
   const type = cells.find((cell) => cell.ref === `F${row}`);
-  if (type?.type === "text" && type.value === "TITLE") return "title";
   if (shift?.type === "text" && /DAYSHIFT|NIGHTSHIFT/i.test(shift.value)) return "title";
+  if (type?.type === "text" && type.value === "TITLE") return "title";
   if (type?.type === "text" && type.value === "HC") return "hc";
   if (type?.type === "text" && type.value === "HPS") return "hps";
   if (type?.type === "text" && type.value === "PD") return "pd";

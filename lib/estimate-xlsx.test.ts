@@ -27,7 +27,6 @@ import {
   LABOR_HPS_LABEL,
   LABOR_HPS_TYPE,
   LABOR_NIGHTSHIFT,
-  LABOR_TITLE_TYPE,
   LABOR_TYPE_ORDER,
   laborBlockId,
   estimateToXlsx,
@@ -1477,13 +1476,15 @@ describe("estimate excel export", () => {
     assert.equal(staffMap.get(`A${lead.title}`)?.value, LABOR_DAYSHIFT);
     assert.equal(staffMap.get(`C${lead.title}`)?.value, "Lead Safety 01");
     assert.deepEqual(
-      LABOR_TYPE_ORDER.map((type, index) => staffMap.get(`F${lead.title + index}`)?.value),
+      ["HC", "HPS", "ST", "OT", "DT", "PD"].map((type, index) => staffMap.get(`F${lead.hc + index}`)?.value),
       [...LABOR_TYPE_ORDER],
     );
     assert.equal(staffMap.get(`F${lead.hc}`)?.value, LABOR_HC_LABEL);
     assert.equal(staffMap.get(`A${lead.hps}`)?.value, LABOR_HPS_LABEL);
     assert.equal(staffMap.get(`F${lead.hps}`)?.value, LABOR_HPS_TYPE);
-    assert.equal(staffMap.get(`F${lead.title}`)?.value, LABOR_TITLE_TYPE);
+    assert.equal(staffMap.get(`F${lead.title}`), undefined);
+    assert.equal(staffMap.get(`C${lead.title}`)?.value, "Lead Safety 01");
+    assert.equal(staff.cells.some((cell) => cell.type === "text" && cell.value === "TITLE"), false);
     assert.equal(staffMap.get(`F${lead.st}`)?.value, "ST");
     assert.equal(staffMap.get(`F${lead.ot}`)?.value, "OT");
     assert.equal(staffMap.get(`F${lead.dt}`)?.value, "DT");
