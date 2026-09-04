@@ -29,11 +29,11 @@ const PLATE_WASH_DEEP = "FFDCE6E4";
 
 const FMT_CURRENCY = "$#,##0.00";
 /**
- * Hour cells: integer display, no decimal point, no trailing `.`
- * (not `9.0`, not `1,192.`). Three-section custom fmt so ExcelJS does
- * not collapse it to locale built-in id 3. Dollars stay $#,##0.00.
+ * Hour cells: Excel integer thousands. `#,##0.##` paints `1,192.` —
+ * the decimal point stays when `#` has nothing to show. Never use a
+ * `.` in this format. Dollars stay $#,##0.00.
  */
-export const FMT_HOURS = "#,##0;-#,##0;0";
+export const FMT_HOURS = "#,##0";
 const FMT_INTEGER = "#,##0";
 const FMT_PERCENT = "0.0%";
 const FMT_DATE = "YYYY-MM-DD";
@@ -84,8 +84,8 @@ export const LABOR_COL_WIDTHS: Record<string, number> = {
   H: 10,
   I: 10,
   J: 10,
-  // Fits $10,343,765.44 / $4,653,519.25 — width 10 painted ##########.
-  K: 15,
+  // Bold TOTAL `$10,343,765.44` hashes at 15. 20 leaves gutter.
+  K: 20,
 };
 /** Explicit cell xf — column alignment alone does not center Excel number cells. */
 export const LABOR_CENTER: Partial<ExcelJS.Alignment> = {
@@ -383,7 +383,7 @@ function columnWidth(col: string, header: string | undefined, sheetName: string)
   if (/man-hours|\bmh\b/.test(lower)) return 12;
   if (/headcount|qty|periods|travelers|miles|count|lane|shift/.test(lower)) return 10;
   if (/hrs|hours|days/.test(lower)) return 10;
-  if (/\$|amount|total|cost|rate|freight|markup|each|bill|bw|pd/.test(lower)) return 15;
+  if (/\$|amount|total|cost|rate|freight|markup|each|bill|bw|pd/.test(lower)) return 18;
   return 11;
 }
 
@@ -529,6 +529,50 @@ function centerLaborCell(cell: ExcelJS.Cell, extra: Partial<ExcelJS.Alignment> =
     vertical: extra.vertical ?? "middle",
     wrapText: extra.wrapText ?? false,
   };
+}
+
+function cellLooksNumeric(cell: ExcelJS.Cell): boolean {
+  const value = cell.value as { formula?: string; result?: unknown; sharedFormula?: string } | number | string | null;
+  if (typeof value === "number") return true;
+  if (value && typeof value === "object" && (value.formula != null || value.sharedFormula != null || value.result != null)) {
+    return true;
+  }
+  return false;
+}
+
+/** Last write: numFmt then center, so Excel does not keep a dangling `.` or right-align. */
+function pinHoursAndMoney(
+  ws: ExcelJS.Worksheet,
+  sheet: WorkbookSheet,
+  lastCol: number,
+  maxRow: number,
+  labor: boolean,
+  isSummary: boolean,
+) {
+  const headers = headerByColumn(sheet.cells, 6);
+  for (let row = 7; row <= maxRow; row += 1) {
+    const kind = labor ? laborRowKind(sheet.cells, row) : "";
+    for (let col = 1; col <= lastCol; col += 1) {
+      const cell = ws.getCell(row, col);
+      let fmt = cellFormat(sheet, headers, colLetter(col), row, isSummary);
+      if (labor && col >= 12 && (kind === "hc" || kind === "hps" || kind === "pd" || kind === "hours")) {
+        fmt = FMT_HOURS;
+      }
+      if (fmt === FMT_HOURS || fmt === FMT_INTEGER) {
+        if (cellLooksNumeric(cell)) cell.numFmt = FMT_HOURS;
+        centerLaborCell(cell);
+      } else if (fmt === FMT_CURRENCY) {
+        if (cellLooksNumeric(cell)) cell.numFmt = FMT_CURRENCY;
+        if (labor || !isSummary) centerLaborCell(cell);
+        if (isSummary && col === 3) centerLaborCell(cell);
+      }
+    }
+  }
+  if (labor) {
+    for (const [col, width] of Object.entries(LABOR_COL_WIDTHS)) {
+      ws.getColumn(colIndex(col)).width = width;
+    }
+  }
 }
 
 function pinLaborEvenRows(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDateCol: number, maxRow: number) {
@@ -772,7 +816,7 @@ function applySummaryChrome(
   sectionRows: Set<number>,
 ) {
   ws.getColumn(1).width = SUMMARY_COL_A_WIDTH;
-  ws.getColumn(2).width = 16;
+  ws.getColumn(2).width = 18;
   ws.getColumn(3).width = 12;
   hairGrid(ws, 6, maxRow, 1, 3);
   for (let col = 1; col <= 3; col += 1) {
@@ -994,6 +1038,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       applyHeaderMetaLayout(ws, Math.max(11, lastVisibleColNum), false);
       pinLaborEvenRows(ws, sheet, lastVisibleColNum, maxRow);
     }
+    pinHoursAndMoney(ws, sheet, lastVisibleColNum, maxRow, labor, isSummary);
     await ws.protect(SHEET_PROTECT_PASSWORD, SHEET_PROTECT_OPTIONS);
   }
 

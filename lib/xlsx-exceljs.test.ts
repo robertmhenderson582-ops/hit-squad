@@ -37,9 +37,9 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(formatForHeader("MH"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(formatForHeader("PD Days"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(formatForHeader("PD"), EXCEL_UNIT_FORMATS.hours);
-    assert.match(EXCEL_UNIT_FORMATS.hours, /^#,##0/);
+    assert.equal(EXCEL_UNIT_FORMATS.hours, "#,##0");
     assert.equal(EXCEL_UNIT_FORMATS.hours.includes("."), false);
-    assert.equal(EXCEL_UNIT_FORMATS.hours.endsWith("."), false);
+    assert.equal(EXCEL_UNIT_FORMATS.hours.includes(".##"), false);
     assert.equal(formatForHeader("Headcount"), "#,##0");
     assert.equal(formatForHeader("Qty"), "#,##0");
     assert.equal(formatForHeader("Periods"), "#,##0");
