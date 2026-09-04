@@ -8,7 +8,12 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { estimateJsonToXlsx, estimateJsonToXlsxInput, estimateWorkbookSummaryTotal } from "../lib/estimate-pack-xlsx.ts";
+import {
+  deskEstimateTotal,
+  estimateJsonToXlsx,
+  estimateJsonToXlsxInput,
+  estimateWorkbookSummaryTotal,
+} from "../lib/estimate-pack-xlsx.ts";
 import { estimateXlsxFilename } from "../lib/estimate-xlsx.ts";
 
 function usage() {
@@ -31,7 +36,8 @@ const out = resolve(args[1] || estimateXlsxFilename({ site: pack.site, title: pa
 mkdirSync(dirname(out), { recursive: true });
 const bytes = await estimateJsonToXlsx(raw);
 writeFileSync(out, bytes);
-const total = estimateWorkbookSummaryTotal(input);
+const excelTotal = estimateWorkbookSummaryTotal(input);
+const deskTotal = deskEstimateTotal(input);
 const summary = {
   packId: pack.packId,
   title: pack.title,
@@ -40,6 +46,8 @@ const summary = {
   source: resolve(src),
   out,
   bytes: bytes.byteLength,
-  estimateTotal: total,
+  deskEstimateTotal: deskTotal,
+  excelEstimateTotal: excelTotal,
+  estimateTotal: excelTotal,
 };
 if (report) process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);

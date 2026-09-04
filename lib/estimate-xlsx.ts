@@ -12,8 +12,11 @@
  * only. ORG Chart is a later separate export — not in this workbook.
  * Slicer Hrs (IPS / P6 dump) is not in this workbook.
  * Empty category sheets are omitted — leftover $0 / untitled rows do not
- * create a blank Crane Rental, OM Crane Subcontractor, tension, rental,
- * COE, travel, misc, or labor tab. Only sheets with live rows for that estimate.
+ * create a blank Crane Rental, Subcontractor, tension, rental, COE, travel,
+ * misc, or labor tab. Only sheets with live rows for that estimate.
+ * Subcontractor tab is all subs (not crane-only). Summary Subs $ is desk
+ * Subs ESTIMATE TOTAL (cost + affiliate-aware 6.5%). Weekend columns on
+ * labor grids are shaded; clock math is unchanged.
  * Never commit source workbooks to git (Look samples excepted).
  */
 
@@ -62,7 +65,7 @@ import {
   type JobRates,
   type ShahanLaborRow,
 } from "./shahan-wood-river.ts";
-import { emptySubSheet, lineAmount, subCardTotal, subcontractorMarkupBase, type SubSheet } from "./subcontractor.ts";
+import { emptySubSheet, lineAmount, subCardTotal, type SubSheet } from "./subcontractor.ts";
 import { bookForSite, wageLookupOpts } from "./wage-lookup.ts";
 import { buildWorkbook, colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
@@ -75,7 +78,8 @@ export const ESTIMATE_SUMMARY_HOURS = "Man-hours (MH)";
 export const ESTIMATE_HOURS_LINE = "Man-hours";
 export const LABOR_DATE_START_COL = 12;
 export const LABOR_BLOCK_HEIGHT = 7;
-export const LABOR_MAX_DAYS = 90;
+/** Full job window. 90 days truncated Aromatics and understated desk totals. */
+export const LABOR_MAX_DAYS = 400;
 export const LABOR_HPS_LABEL = "Enter Hours Per shift Here";
 export const LABOR_DAYSHIFT = "DAYSHIFT";
 export const LABOR_NIGHTSHIFT = "NIGHTSHIFT";
@@ -105,7 +109,7 @@ export const ESTIMATE_XLSX_SHEETS = {
   rental: "Equipment Rental",
   tension: "Tensioning Torquing equipment",
   crane: "Crane Rental",
-  sub: "O&M Crane Subcontractor",
+  sub: "Subcontractor",
   coe: "COE",
   travel: "Staff Travel Cost",
   misc: "Misc Costs",
@@ -358,37 +362,65 @@ function rowHasNightBlock(row: CraftRow) {
   });
 }
 
-function coveringRange(row: CraftRow, ymd: string, night: boolean): CalendarRange | null {
-  const list = (row.ranges ?? []).filter((range) => !range.off);
-  for (let i = list.length - 1; i >= 0; i -= 1) {
-    const range = list[i];
-    const shift = rangeShift(row, range);
-    if (night && shift === "Days") continue;
-    if (!night && shift === "Nights") continue;
-    if (!range.start || !range.end) continue;
-    if (ymd < range.start || ymd > range.end) continue;
-    if (range.skipDates?.includes(ymd)) continue;
-    const date = parseYmd(ymd);
-    if (!date) continue;
-    if (Array.isArray(range.days) && range.days.length === 7 && !range.days[date.getDay()]) continue;
-    return range;
-  }
-  return null;
+function rangeCoversDay(row: CraftRow, range: CalendarRange, ymd: string, night: boolean): boolean {
+  if (range.off) return false;
+  const shift = rangeShift(row, range);
+  if (night && shift === "Days") return false;
+  if (!night && shift === "Nights") return false;
+  if (!range.start || !range.end) return false;
+  if (ymd < range.start || ymd > range.end) return false;
+  if (range.skipDates?.includes(ymd)) return false;
+  const date = parseYmd(ymd);
+  if (!date) return false;
+  if (Array.isArray(range.days) && range.days.length === 7 && !range.days[date.getDay()]) return false;
+  return true;
 }
 
-function dayPlug(row: CraftRow, ymd: string, night: boolean): { hc: number; hps: number; pd: number } {
-  const range = coveringRange(row, ymd, night);
-  if (!range) return { hc: 0, hps: 0, pd: 0 };
+function coveringRanges(row: CraftRow, ymd: string, night: boolean): CalendarRange[] {
+  return (row.ranges ?? []).filter((range) => rangeCoversDay(row, range, ymd, night));
+}
+
+function rangeDayHeadcount(row: CraftRow, range: CalendarRange, ymd: string, night: boolean): number {
   const date = parseYmd(ymd);
   const dow = date?.getDay() ?? -1;
-  let hc = night ? Number(range.nightHeadcount) || 0 : Number(range.headcount) || 0;
+  const shift = rangeShift(row, range);
+  const nightsOnly = night && shift === "Nights";
+  let hc = nightsOnly
+    ? Number(range.headcount) || 0
+    : night
+      ? Number(range.nightHeadcount) || 0
+      : Number(range.headcount) || 0;
   if (dow === 0) {
-    if (night && range.nightSundayHeadcount != null) hc = Number(range.nightSundayHeadcount) || 0;
+    if (nightsOnly && range.sundayHeadcount != null) hc = Number(range.sundayHeadcount) || 0;
+    else if (night && range.nightSundayHeadcount != null) hc = Number(range.nightSundayHeadcount) || 0;
     else if (!night && range.sundayHeadcount != null) hc = Number(range.sundayHeadcount) || 0;
   }
-  if (hc <= 0) return { hc: 0, hps: 0, pd: 0 };
-  const pd = night ? Number(range.nightPerDiemPeople) || 0 : Number(range.perDiemPeople) || 0;
-  return { hc, hps: Number(range.hoursPerShift) || 0, pd };
+  return Math.max(0, hc);
+}
+
+function rangeDayPd(row: CraftRow, range: CalendarRange, night: boolean): number {
+  const shift = rangeShift(row, range);
+  if (night && shift === "Nights") return Math.max(0, Number(range.perDiemPeople) || 0);
+  return Math.max(0, night ? Number(range.nightPerDiemPeople) || 0 : Number(range.perDiemPeople) || 0);
+}
+
+/** Sum every live range on that day — hiring-progression adds stack, same as the desk. */
+function dayPlug(row: CraftRow, ymd: string, night: boolean): { hc: number; hps: number; pd: number } {
+  const ranges = coveringRanges(row, ymd, night);
+  if (!ranges.length) return { hc: 0, hps: 0, pd: 0 };
+  let hourUnits = 0;
+  let pd = 0;
+  let hps = 0;
+  for (const range of ranges) {
+    const hc = rangeDayHeadcount(row, range, ymd, night);
+    const rangeHps = Number(range.hoursPerShift) || 0;
+    hourUnits += hc * rangeHps;
+    pd += rangeDayPd(row, range, night);
+    if (rangeHps > 0) hps = rangeHps;
+  }
+  const hc = hps > 0 ? hourUnits / hps : 0;
+  if (hc <= 0 && pd <= 0) return { hc: 0, hps: 0, pd: 0 };
+  return { hc, hps, pd };
 }
 
 function blockClock(row: CraftRow, input: EstimateXlsxInput, lane: CrewLane): { clock: RunningClock; otAfter8: boolean } {
@@ -595,6 +627,14 @@ function buildCrewSheet(
     pushNum(cells, `K${totalRow}`, 0);
   }
 
+  const weekendCols = dates
+    .map((ymd, index) => {
+      const dow = parseYmd(ymd)?.getDay();
+      if (dow !== 0 && dow !== 6) return null;
+      return { col: LABOR_DATE_START_COL + index, weekday: dow as 0 | 6 };
+    })
+    .filter((item): item is { col: number; weekday: 0 | 6 } => Boolean(item));
+
   return {
     name,
     cells,
@@ -603,6 +643,7 @@ function buildCrewSheet(
     hoursTotal: `B${totalRow}`,
     sheetTotal: `K${totalRow}`,
     hiddenCols: [LABOR_BLOCK_ID_COL],
+    weekendCols,
   };
 }
 
@@ -775,7 +816,7 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
     cells,
     costTotal: `F${excelRow}`,
     markupTotal: `G${excelRow}`,
-    sheetTotal: `F${excelRow}`,
+    sheetTotal: `H${excelRow}`,
   };
 }
 
@@ -874,14 +915,21 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     ["Subcontractor $", ESTIMATE_XLSX_SHEETS.sub],
   ];
   const extraRefs = new Map<string, string>();
+  let subCostRef: string | null = null;
   for (const [label, name] of extra) {
     const sheet = byName.get(xlsxName(name));
-    const total = sheet?.costTotal ?? sheet?.sheetTotal;
+    const total =
+      name === ESTIMATE_XLSX_SHEETS.sub
+        ? (sheet?.sheetTotal ?? sheet?.costTotal)
+        : (sheet?.costTotal ?? sheet?.sheetTotal);
     if (!sheet || !total) continue;
     const ref = addSummaryLine(cells, row, label, sheetRef(name, total));
     if (ref) {
       moneyRefs.push(ref);
       extraRefs.set(label, ref);
+    }
+    if (name === ESTIMATE_XLSX_SHEETS.sub && sheet.costTotal) {
+      subCostRef = sheetRef(name, sheet.costTotal);
     }
     row += 1;
   }
@@ -893,6 +941,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     .map((label) => extraRefs.get(label))
     .filter((ref): ref is string => Boolean(ref));
   const subRef = extraRefs.get("Subcontractor $");
+  const subContingencyBase = subCostRef ?? subRef;
 
   const site = input.site ?? "";
   const client = input.client ?? "";
@@ -923,8 +972,8 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     moneyRefs.push(addSummaryAmount(cells, row, EQUIPMENT_CONTINGENCY_LABEL, `${base}*${money.equipmentContingencyPct / 100}`));
     row += 1;
   }
-  if (subRef && money.subsContingencyPct > 0) {
-    moneyRefs.push(addSummaryAmount(cells, row, SUBS_CONTINGENCY_LABEL, `${subRef}*${money.subsContingencyPct / 100}`));
+  if (subContingencyBase && money.subsContingencyPct > 0) {
+    moneyRefs.push(addSummaryAmount(cells, row, SUBS_CONTINGENCY_LABEL, `${subContingencyBase}*${money.subsContingencyPct / 100}`));
     row += 1;
   }
   if (adders.moreFund) {
@@ -936,11 +985,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
   const miscTotal = (input.otherCost?.misc ?? []).reduce((sum, line) => sum + miscAmount(line), 0);
   const subSheet = input.subcontractor ?? emptySubSheet();
   const markup = estimateMarkupDollars({
-    subcontractor: subcontractorMarkupBase(subSheet, {
-      site,
-      client,
-      otAfter8: Boolean(input.crew?.otAfter8),
-    }),
+    subcontractor: 0,
     thirdParty: thirdPartyCostTotal,
     misc: miscTotal,
   });

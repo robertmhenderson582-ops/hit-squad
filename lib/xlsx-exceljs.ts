@@ -18,6 +18,12 @@ const FMT_INTEGER = "#,##0";
 const FMT_PERCENT = "0.0%";
 const FMT_DATE = "YYYY-MM-DD";
 
+/** Saturday / Sunday labor-grid fills. Distinct from Mon–Fri steel. Clock math unchanged. */
+export const LABOR_SAT_HEADER = "FFE3B64A";
+export const LABOR_SAT_BODY = "FFF6E4B8";
+export const LABOR_SUN_HEADER = "FF7A9BB4";
+export const LABOR_SUN_BODY = "FFD5E4F0";
+
 const FORBIDDEN_CLIENT_COPY = /field trial|forgebook|not a release/i;
 
 function colIndex(col: string): number {
@@ -360,6 +366,18 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       for (let i = 12; i <= lastColNum; i += 1) ws.getColumn(i).width = 7;
       ws.getColumn(1).width = 28;
       ws.getColumn(3).width = 26;
+    }
+    for (const weekend of sheet.weekendCols ?? []) {
+      const header = weekend.weekday === 6 ? LABOR_SAT_HEADER : LABOR_SUN_HEADER;
+      const body = weekend.weekday === 6 ? LABOR_SAT_BODY : LABOR_SUN_BODY;
+      for (let row = 6; row <= maxRow; row += 1) {
+        if (totalRows.has(row)) continue;
+        const exCell = ws.getCell(row, weekend.col);
+        exCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: row === 6 ? header : body } };
+        if (row === 6) {
+          exCell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
+        }
+      }
     }
     for (const col of sheet.hiddenCols ?? []) {
       ws.getColumn(col).hidden = true;

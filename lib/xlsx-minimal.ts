@@ -129,6 +129,8 @@ export type WorkbookSheet = {
   merges?: string[];
   /** 1-based columns to hide (labor block-id, etc.). */
   hiddenCols?: number[];
+  /** Labor date columns: JS weekday 0 = Sunday, 6 = Saturday. */
+  weekendCols?: Array<{ col: number; weekday: 0 | 6 }>;
 };
 
 export async function buildWorkbook(sheets: WorkbookSheet[]): Promise<Uint8Array> {
