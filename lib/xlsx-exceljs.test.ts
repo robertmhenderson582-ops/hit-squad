@@ -17,6 +17,7 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(formatForHeader("Each $"), "$#,##0.00");
     assert.equal(formatForHeader("Markup $"), "$#,##0.00");
     assert.equal(formatForHeader("$ / mile"), "$#,##0.00");
+    assert.equal(formatForHeader("Total Billable"), "#,##0.0");
     assert.equal(formatForHeader("ST Hrs"), "#,##0.0");
     assert.equal(formatForHeader("Hours"), "#,##0.0");
     assert.equal(formatForHeader("Man-hours (MH)"), "#,##0.0");

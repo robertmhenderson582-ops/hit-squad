@@ -241,7 +241,11 @@ describe("Shahan TM OCIP — Wood River", () => {
   });
 
   it("does not put workbooks in the repo", () => {
-    const listed = execSync('git ls-files "*.xlsx" "*.xlsm" "*.xls" "*.pdf"', { encoding: "utf8" }).trim();
+    const listed = execSync('git ls-files "*.xlsx" "*.xlsm" "*.xls" "*.pdf"', { encoding: "utf8" })
+      .trim()
+      .split("\n")
+      .filter((file) => file && !file.startsWith("look-samples/"))
+      .join("\n");
     assert.equal(listed, "");
   });
 

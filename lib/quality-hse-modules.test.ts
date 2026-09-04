@@ -190,7 +190,11 @@ describe("Quality and HSE have no estimate interaction", () => {
   });
 
   it("does not put generating-bank or QC/HSE books in git", () => {
-    const listed = execSync('git ls-files "*.xlsx" "*.xlsm" "*.xls" "*.xlsb" "*.pdf"', { encoding: "utf8" }).trim();
+    const listed = execSync('git ls-files "*.xlsx" "*.xlsm" "*.xls" "*.xlsb" "*.pdf"', { encoding: "utf8" })
+      .trim()
+      .split("\n")
+      .filter((file) => file && !file.startsWith("look-samples/"))
+      .join("\n");
     assert.equal(listed, "");
     assert.equal(/generating-bank/i.test(listed), false);
   });

@@ -4,11 +4,13 @@
  * names and itemized position blocks. Workbook Staff = desk Staff + GF & above.
  * Foremen / Direct / Support stay their own sheets. Desk cards stay the five
  * cards (Staff / GF / Foreman / Direct / Support) — this file does not invent
- * a new crew presentation. PD stays off Labor TM $. Polish, repair-safe
- * package, and $ vs MH labels only. Never commit source workbooks to git.
+ * a new crew presentation. PD stays off Labor TM $. Labor sheets keep the
+ * CAT 2 daily itemized grid (date row from col L, 7-row HC/HPS/ST/OT/DT/PD
+ * blocks, DAYSHIFT / NIGHTSHIFT). Polish, repair-safe package, and $ vs MH
+ * labels only. Never commit source workbooks to git (Look samples excepted).
  */
 
-import type { CraftRow } from "./craft-labor.ts";
+import type { CalendarRange, CraftRow, CraftShift } from "./craft-labor.ts";
 import {
   billedPeriodCount,
   largeToolAmount,
@@ -32,11 +34,21 @@ import {
 } from "./estimate-money.ts";
 import { slugify } from "./estimate-pack.ts";
 import { ESTIMATE_MARKUP_LABEL, ESTIMATE_MARKUP_RATE, estimateMarkupDollars } from "./estimate-total.ts";
-import { boundOtLabel, computeRowHours, type ClockOverride, type HoursSplit } from "./hours-clock.ts";
+import {
+  boundOtLabel,
+  clockTitle,
+  computeRowHours,
+  eastCoastCraftOtAfter8,
+  parseYmd,
+  runningClock,
+  type ClockOverride,
+  type HoursSplit,
+  type RunningClock,
+} from "./hours-clock.ts";
 import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
 import { orgChartBoxLabel, orgChartBoxes, type OrgChartCrew, type OrgChartState } from "./org-chart.ts";
-import { crewPositionHeadcount, miscAmount, travelAmount, type OtherCostSheet, type TravelLine } from "./other-cost.ts";
-import { PHASE_NAMES, type PhaseId, type PhaseScheduleState } from "./phase-schedule.ts";
+import { miscAmount, travelAmount, type OtherCostSheet, type TravelLine } from "./other-cost.ts";
+import { PHASE_NAMES, eachYmd, type PhaseId, type PhaseScheduleState } from "./phase-schedule.ts";
 import {
   hasShahanBillRate,
   lookupShahanEquipment,
@@ -57,6 +69,20 @@ export const ESTIMATE_EXPORT_CONFIDENTIAL = "Confidential estimate package";
 export const ESTIMATE_SUMMARY_AMOUNT = "Amount $";
 export const ESTIMATE_SUMMARY_HOURS = "Man-hours (MH)";
 export const ESTIMATE_HOURS_LINE = "Man-hours";
+export const LABOR_DATE_START_COL = 12;
+export const LABOR_BLOCK_HEIGHT = 7;
+export const LABOR_MAX_DAYS = 90;
+export const LABOR_HPS_LABEL = "Enter Hours Per shift Here";
+export const LABOR_DAYSHIFT = "DAYSHIFT";
+export const LABOR_NIGHTSHIFT = "NIGHTSHIFT";
+export const LABOR_HC_LABEL = "HC";
+export const LABOR_TITLE_OFFSET = 0;
+export const LABOR_HC_OFFSET = 1;
+export const LABOR_HPS_OFFSET = 2;
+export const LABOR_ST_OFFSET = 3;
+export const LABOR_OT_OFFSET = 4;
+export const LABOR_DT_OFFSET = 5;
+export const LABOR_PD_OFFSET = 6;
 
 export const ESTIMATE_XLSX_SHEETS = {
   summary: "Summary Page",
@@ -157,16 +183,6 @@ function allCrewRows(crew: EstimateXlsxCrew = {}) {
     ...liveCrewRows(crew.direct),
     ...liveCrewRows(crew.support),
   ];
-}
-
-function rowHours(row: CraftRow, input: EstimateXlsxInput, lane: CrewLane = "craft"): HoursSplit {
-  return computeRowHours(
-    withLaneClock(row, lane),
-    input.site ?? "",
-    input.client ?? "",
-    Boolean(input.crew?.otAfter8),
-    input.plantCode ?? "",
-  );
 }
 
 type RateKey = {
@@ -285,6 +301,142 @@ function pdRateFor(input: EstimateXlsxInput, staffPd: boolean) {
   return staffPd ? Number(input.jobMeta?.staffPerDiemRate) || 0 : Number(input.jobMeta?.craftPerDiemRate) || 0;
 }
 
+export function laborCalendarDates(input: EstimateXlsxInput): string[] {
+  let start = "";
+  let stop = "";
+  const phases = [
+    ...(input.schedule?.phases ?? []),
+    ...((input.schedule?.multiUnits ? input.schedule.units : []) ?? []).flatMap((unit) => unit.phases),
+  ].filter((phase) => phase.on && phase.start && phase.stop);
+  for (const phase of phases) {
+    if (!start || phase.start < start) start = phase.start;
+    if (!stop || phase.stop > stop) stop = phase.stop;
+  }
+  for (const row of allCrewRows(input.crew)) {
+    for (const range of row.ranges ?? []) {
+      if (range.off) continue;
+      if (range.start && (!start || range.start < start)) start = range.start;
+      if (range.end && (!stop || range.end > stop)) stop = range.end;
+    }
+  }
+  if (!start || !stop) return [];
+  return eachYmd(start, stop).slice(0, LABOR_MAX_DAYS);
+}
+
+function rangeShift(row: CraftRow, range: CalendarRange): CraftShift {
+  return range.shift ?? row.shift ?? "Days";
+}
+
+function rowHasDayBlock(row: CraftRow) {
+  return (row.ranges ?? []).some((range) => {
+    if (range.off) return false;
+    const shift = rangeShift(row, range);
+    return shift !== "Nights";
+  });
+}
+
+function rowHasNightBlock(row: CraftRow) {
+  return (row.ranges ?? []).some((range) => {
+    if (range.off) return false;
+    const shift = rangeShift(row, range);
+    if (shift === "Nights") return true;
+    return shift === "Days & nights" && (Number(range.nightHeadcount) || 0) > 0;
+  });
+}
+
+function coveringRange(row: CraftRow, ymd: string, night: boolean): CalendarRange | null {
+  const list = (row.ranges ?? []).filter((range) => !range.off);
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const range = list[i];
+    const shift = rangeShift(row, range);
+    if (night && shift === "Days") continue;
+    if (!night && shift === "Nights") continue;
+    if (!range.start || !range.end) continue;
+    if (ymd < range.start || ymd > range.end) continue;
+    if (range.skipDates?.includes(ymd)) continue;
+    const date = parseYmd(ymd);
+    if (!date) continue;
+    if (Array.isArray(range.days) && range.days.length === 7 && !range.days[date.getDay()]) continue;
+    return range;
+  }
+  return null;
+}
+
+function dayPlug(row: CraftRow, ymd: string, night: boolean): { hc: number; hps: number; pd: number } {
+  const range = coveringRange(row, ymd, night);
+  if (!range) return { hc: 0, hps: 0, pd: 0 };
+  const date = parseYmd(ymd);
+  const dow = date?.getDay() ?? -1;
+  let hc = night ? Number(range.nightHeadcount) || 0 : Number(range.headcount) || 0;
+  if (dow === 0) {
+    if (night && range.nightSundayHeadcount != null) hc = Number(range.nightSundayHeadcount) || 0;
+    else if (!night && range.sundayHeadcount != null) hc = Number(range.sundayHeadcount) || 0;
+  }
+  if (hc <= 0) return { hc: 0, hps: 0, pd: 0 };
+  const pd = night ? Number(range.nightPerDiemPeople) || 0 : Number(range.perDiemPeople) || 0;
+  return { hc, hps: Number(range.hoursPerShift) || 0, pd };
+}
+
+function blockClock(row: CraftRow, input: EstimateXlsxInput, lane: CrewLane): { clock: RunningClock; otAfter8: boolean } {
+  const titled = withLaneClock(row, lane);
+  const title = clockTitle(titled.position, titled.billedAs);
+  const clock = runningClock(title, input.site ?? "", input.client ?? "", titled.clockOverride ?? "auto", input.plantCode ?? "");
+  const range = (titled.ranges ?? []).find((item) => !item.off);
+  const flagged = Boolean(range?.otAfter8 ?? input.crew?.otAfter8);
+  const otAfter8 = clock === "east-coast" ? eastCoastCraftOtAfter8(range?.phaseId, flagged) : flagged;
+  return { clock, otAfter8 };
+}
+
+function dailyHourFormulas(
+  clock: RunningClock,
+  otAfter8: boolean,
+  dateRef: string,
+  hcRef: string,
+  hpsRef: string,
+): { st: string; ot: string; dt: string } {
+  const empty = `${dateRef}=""`;
+  if (clock === "ca-daily") {
+    return {
+      st: `IF(${empty},"",MIN(8,${hpsRef})*${hcRef})`,
+      ot: `IF(${empty},"",MIN(4,MAX(0,${hpsRef}-8))*${hcRef})`,
+      dt: `IF(${empty},"",MAX(0,${hpsRef}-12)*${hcRef})`,
+    };
+  }
+  if (clock === "staff") {
+    const cap = otAfter8 ? 8 : 10;
+    return {
+      st: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=1,0,MIN(${cap},${hpsRef})*${hcRef}))`,
+      ot: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=1,0,MAX(0,${hpsRef}-${cap})*${hcRef}))`,
+      dt: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=1,${hpsRef}*${hcRef},0))`,
+    };
+  }
+  if (!otAfter8 && clock === "east-coast") {
+    return {
+      st: `IF(${empty},"",IF(OR(WEEKDAY(${dateRef},1)=1,WEEKDAY(${dateRef},1)=7),0,${hpsRef}*${hcRef}))`,
+      ot: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=7,${hpsRef}*${hcRef},0))`,
+      dt: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=1,${hpsRef}*${hcRef},0))`,
+    };
+  }
+  return {
+    st: `IF(${empty},"",IF(OR(WEEKDAY(${dateRef},1)=1,WEEKDAY(${dateRef},1)=7),0,MIN(8,${hpsRef})*${hcRef}))`,
+    ot: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=1,0,IF(WEEKDAY(${dateRef},1)=7,${hpsRef}*${hcRef},MAX(0,${hpsRef}-8)*${hcRef})))`,
+    dt: `IF(${empty},"",IF(WEEKDAY(${dateRef},1)=1,${hpsRef}*${hcRef},0))`,
+  };
+}
+
+function writeDateRow(cells: SheetCell[], dates: string[]) {
+  dates.forEach((ymd, index) => {
+    const col = colLetter(LABOR_DATE_START_COL + index);
+    if (index === 0) {
+      const date = parseYmd(ymd);
+      if (date) cells.push({ ref: `${col}6`, type: "date", value: date });
+      else pushText(cells, `${col}6`, ymd);
+      return;
+    }
+    pushFormula(cells, `${col}6`, `${colLetter(LABOR_DATE_START_COL + index - 1)}6+1`);
+  });
+}
+
 function buildCrewSheet(
   input: EstimateXlsxInput,
   name: string,
@@ -293,76 +445,142 @@ function buildCrewSheet(
   staffPdOf: (row: CraftRow) => boolean,
   lane: CrewLane = "craft",
 ): BuiltSheet | null {
-  const live = liveCrewRows(rows);
+  const live = liveCrewRows(rows).map((row) => withLaneClock(row, lane));
   if (!live.length) return null;
+  const dates = laborCalendarDates(input);
+  const lastDateCol = dates.length ? colLetter(LABOR_DATE_START_COL + dates.length - 1) : "";
   const cells = headerCells(input);
   const headers = [
+    "Shift",
+    "Total Billable",
     "Position",
-    "Headcount",
+    "Sub Total $",
+    "Rate",
+    "Type",
     "ST Hrs",
     "OT Hrs",
     "DT Hrs",
     "PD Days",
-    "ST Rate",
-    "OT Rate",
-    "DT Rate",
-    "PD Rate",
-    "ST $",
-    "OT $",
-    "DT $",
-    "PD $",
-    "Total $",
-    "MH",
+    "Labor $",
   ];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
-  live.forEach((row, index) => {
-    const excelRow = 7 + index;
-    const hours = rowHours(row, input, lane);
+  writeDateRow(cells, dates);
+
+  const titleRows: number[] = [];
+  const pdMoneyRows: number[] = [];
+  let excelRow = 7;
+
+  function emitBlock(row: CraftRow, night: boolean) {
+    const titleRow = excelRow + LABOR_TITLE_OFFSET;
+    const hcRow = excelRow + LABOR_HC_OFFSET;
+    const hpsRow = excelRow + LABOR_HPS_OFFSET;
+    const stRow = excelRow + LABOR_ST_OFFSET;
+    const otRow = excelRow + LABOR_OT_OFFSET;
+    const dtRow = excelRow + LABOR_DT_OFFSET;
+    const pdRow = excelRow + LABOR_PD_OFFSET;
+    titleRows.push(titleRow);
+    pdMoneyRows.push(pdRow);
+
     const title = shahanCrewTitle(row);
     const key = { title, laborClass: rowLaborClass(row) };
     const billed = billedRow(title, input.site ?? "", key.laborClass);
-    pushText(cells, `A${excelRow}`, row.position.trim());
-    pushNum(cells, `B${excelRow}`, crewPositionHeadcount(row));
-    pushNum(cells, `C${excelRow}`, hours.st);
-    pushNum(cells, `D${excelRow}`, hours.ot);
-    pushNum(cells, `E${excelRow}`, hours.dt);
-    pushNum(cells, `F${excelRow}`, hours.pd);
-    if (hasShahanBillRate(billed)) {
-      pushFormula(cells, `G${excelRow}`, rateCell(key, keys, "C"));
-      pushFormula(cells, `H${excelRow}`, rateCell(key, keys, "D"));
-      pushFormula(cells, `I${excelRow}`, rateCell(key, keys, "E"));
-      pushFormula(cells, `K${excelRow}`, `C${excelRow}*G${excelRow}`);
-      pushFormula(cells, `L${excelRow}`, `D${excelRow}*H${excelRow}`);
-      pushFormula(cells, `M${excelRow}`, `E${excelRow}*I${excelRow}`);
+    const hasRate = hasShahanBillRate(billed);
+    const { clock, otAfter8 } = blockClock(row, input, lane);
+    const firstDate = dates.length ? colLetter(LABOR_DATE_START_COL) : "";
+
+    pushText(cells, `A${titleRow}`, night ? LABOR_NIGHTSHIFT : LABOR_DAYSHIFT);
+    pushText(cells, `C${titleRow}`, row.position.trim());
+    pushFormula(cells, `B${titleRow}`, `G${titleRow}+H${titleRow}+I${titleRow}`);
+    pushFormula(cells, `D${titleRow}`, `K${titleRow}`);
+    pushFormula(cells, `G${titleRow}`, `B${stRow}`);
+    pushFormula(cells, `H${titleRow}`, `B${otRow}`);
+    pushFormula(cells, `I${titleRow}`, `B${dtRow}`);
+    pushFormula(cells, `J${titleRow}`, `B${pdRow}`);
+    pushFormula(cells, `K${titleRow}`, `D${stRow}+D${otRow}+D${dtRow}`);
+
+    pushText(cells, `F${hcRow}`, LABOR_HC_LABEL);
+    pushText(cells, `A${hpsRow}`, LABOR_HPS_LABEL);
+    pushText(cells, `F${hpsRow}`, "HPS");
+    pushText(cells, `F${stRow}`, "ST");
+    pushText(cells, `F${otRow}`, "OT");
+    pushText(cells, `F${dtRow}`, "DT");
+    pushText(cells, `F${pdRow}`, "PD");
+
+    if (dates.length) {
+      pushFormula(cells, `B${stRow}`, `SUM(${firstDate}${stRow}:${lastDateCol}${stRow})`);
+      pushFormula(cells, `B${otRow}`, `SUM(${firstDate}${otRow}:${lastDateCol}${otRow})`);
+      pushFormula(cells, `B${dtRow}`, `SUM(${firstDate}${dtRow}:${lastDateCol}${dtRow})`);
+      pushFormula(cells, `B${pdRow}`, `SUM(${firstDate}${pdRow}:${lastDateCol}${pdRow})`);
     } else {
-      pushText(cells, `G${excelRow}`, SHAHAN_NO_RATE_LABEL);
+      pushNum(cells, `B${stRow}`, 0);
+      pushNum(cells, `B${otRow}`, 0);
+      pushNum(cells, `B${dtRow}`, 0);
+      pushNum(cells, `B${pdRow}`, 0);
     }
-    pushNum(cells, `J${excelRow}`, pdRateFor(input, staffPdOf(row)));
-    pushFormula(cells, `N${excelRow}`, `F${excelRow}*J${excelRow}`);
-    pushFormula(cells, `O${excelRow}`, `K${excelRow}+L${excelRow}+M${excelRow}`);
-    pushFormula(cells, `P${excelRow}`, `C${excelRow}+D${excelRow}+E${excelRow}`);
-  });
-  const first = 7;
-  const last = 6 + live.length;
-  const totalRow = last + 1;
+
+    if (hasRate) {
+      pushFormula(cells, `E${stRow}`, rateCell(key, keys, "C"));
+      pushFormula(cells, `E${otRow}`, rateCell(key, keys, "D"));
+      pushFormula(cells, `E${dtRow}`, rateCell(key, keys, "E"));
+      pushFormula(cells, `D${stRow}`, `B${stRow}*E${stRow}`);
+      pushFormula(cells, `D${otRow}`, `B${otRow}*E${otRow}`);
+      pushFormula(cells, `D${dtRow}`, `B${dtRow}*E${dtRow}`);
+    } else {
+      pushText(cells, `E${stRow}`, SHAHAN_NO_RATE_LABEL);
+      pushNum(cells, `D${stRow}`, 0);
+      pushNum(cells, `D${otRow}`, 0);
+      pushNum(cells, `D${dtRow}`, 0);
+    }
+    pushNum(cells, `E${pdRow}`, pdRateFor(input, staffPdOf(row)));
+    pushFormula(cells, `D${pdRow}`, `B${pdRow}*E${pdRow}`);
+
+    dates.forEach((ymd, index) => {
+      const col = colLetter(LABOR_DATE_START_COL + index);
+      const plug = dayPlug(row, ymd, night);
+      const dateRef = `${col}$6`;
+      const hcRef = `${col}${hcRow}`;
+      const hpsRef = `${col}${hpsRow}`;
+      pushNum(cells, hcRef, plug.hc);
+      pushNum(cells, hpsRef, plug.hps);
+      const hours = dailyHourFormulas(clock, otAfter8, dateRef, hcRef, hpsRef);
+      pushFormula(cells, `${col}${stRow}`, hours.st);
+      pushFormula(cells, `${col}${otRow}`, hours.ot);
+      pushFormula(cells, `${col}${dtRow}`, hours.dt);
+      pushNum(cells, `${col}${pdRow}`, plug.pd);
+    });
+
+    excelRow += LABOR_BLOCK_HEIGHT;
+  }
+
+  for (const row of live) {
+    if (rowHasDayBlock(row)) emitBlock(row, false);
+    if (rowHasNightBlock(row)) emitBlock(row, true);
+    if (!rowHasDayBlock(row) && !rowHasNightBlock(row)) emitBlock(row, false);
+  }
+
+  const totalRow = excelRow;
   pushText(cells, `A${totalRow}`, "TOTAL");
-  pushFormula(cells, `C${totalRow}`, `SUM(C${first}:C${last})`);
-  pushFormula(cells, `D${totalRow}`, `SUM(D${first}:D${last})`);
-  pushFormula(cells, `E${totalRow}`, `SUM(E${first}:E${last})`);
-  pushFormula(cells, `F${totalRow}`, `SUM(F${first}:F${last})`);
-  pushFormula(cells, `K${totalRow}`, `SUM(K${first}:K${last})`);
-  pushFormula(cells, `L${totalRow}`, `SUM(L${first}:L${last})`);
-  pushFormula(cells, `M${totalRow}`, `SUM(M${first}:M${last})`);
-  pushFormula(cells, `N${totalRow}`, `SUM(N${first}:N${last})`);
-  pushFormula(cells, `O${totalRow}`, `SUM(O${first}:O${last})`);
-  pushFormula(cells, `P${totalRow}`, `SUM(P${first}:P${last})`);
+  if (titleRows.length) {
+    pushFormula(cells, `B${totalRow}`, `SUM(${titleRows.map((row) => `B${row}`).join(",")})`);
+    pushFormula(cells, `D${totalRow}`, `SUM(${pdMoneyRows.map((row) => `D${row}`).join(",")})`);
+    pushFormula(cells, `G${totalRow}`, `SUM(${titleRows.map((row) => `G${row}`).join(",")})`);
+    pushFormula(cells, `H${totalRow}`, `SUM(${titleRows.map((row) => `H${row}`).join(",")})`);
+    pushFormula(cells, `I${totalRow}`, `SUM(${titleRows.map((row) => `I${row}`).join(",")})`);
+    pushFormula(cells, `J${totalRow}`, `SUM(${titleRows.map((row) => `J${row}`).join(",")})`);
+    pushFormula(cells, `K${totalRow}`, `SUM(${titleRows.map((row) => `K${row}`).join(",")})`);
+  } else {
+    pushNum(cells, `B${totalRow}`, 0);
+    pushNum(cells, `D${totalRow}`, 0);
+    pushNum(cells, `K${totalRow}`, 0);
+  }
+
   return {
     name,
     cells,
-    laborTotal: `O${totalRow}`,
-    pdTotal: `N${totalRow}`,
-    hoursTotal: `P${totalRow}`,
-    sheetTotal: `O${totalRow}`,
+    laborTotal: `K${totalRow}`,
+    pdTotal: `D${totalRow}`,
+    hoursTotal: `B${totalRow}`,
+    sheetTotal: `K${totalRow}`,
   };
 }
 

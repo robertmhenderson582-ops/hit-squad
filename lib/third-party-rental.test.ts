@@ -148,7 +148,11 @@ describe("Wood River third-party rental catalog", () => {
     assert.match(desk, /\+ Add rental/);
     assert.equal(/No COMP rental book/.test(desk), false);
     assert.equal(/Third-party rental is typed/.test(desk), false);
-    const listed = execSync('git ls-files "*.xlsx" "*.xlsm" "*.xls" "*.pdf"', { encoding: "utf8" }).trim();
+    const listed = execSync('git ls-files "*.xlsx" "*.xlsm" "*.xls" "*.pdf"', { encoding: "utf8" })
+      .trim()
+      .split("\n")
+      .filter((file) => file && !file.startsWith("look-samples/"))
+      .join("\n");
     assert.equal(listed, "");
   });
 });

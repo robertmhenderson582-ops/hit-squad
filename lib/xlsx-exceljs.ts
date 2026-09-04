@@ -55,7 +55,7 @@ function maxHeaderCol(cells: SheetCell[], row = 6): string {
 export function formatForHeader(header: string): string | undefined {
   const lower = header.trim().toLowerCase();
   if (lower.includes("%") || lower === "markup %") return FMT_PERCENT;
-  if (/man-hours|\bmh\b/.test(lower)) return FMT_HOURS;
+  if (/man-hours|\bmh\b|total billable/.test(lower)) return FMT_HOURS;
   if (/pd days/.test(lower)) return FMT_HOURS;
   if (/hrs|hours/.test(lower) && !/\$/.test(lower)) return FMT_HOURS;
   if (/headcount|qty|periods|travelers|\bcount\b/.test(lower)) return FMT_INTEGER;
@@ -121,6 +121,17 @@ function isTotalRow(cells: SheetCell[], row: number): boolean {
   return label?.type === "text" && /^(TOTAL|ESTIMATE TOTAL|MAN-HOURS)/i.test(label.value);
 }
 
+function laborRowKind(cells: SheetCell[], row: number): "title" | "hc" | "hps" | "pd" | "hours" | "" {
+  const shift = cells.find((cell) => cell.ref === `A${row}`);
+  const type = cells.find((cell) => cell.ref === `F${row}`);
+  if (shift?.type === "text" && /DAYSHIFT|NIGHTSHIFT/i.test(shift.value)) return "title";
+  if (type?.type === "text" && type.value === "HC") return "hc";
+  if (type?.type === "text" && type.value === "HPS") return "hps";
+  if (type?.type === "text" && type.value === "PD") return "pd";
+  if (type?.type === "text" && /^(ST|OT|DT)$/.test(type.value)) return "hours";
+  return "";
+}
+
 function isAdderRow(cells: SheetCell[], row: number): boolean {
   const label = cells.find((cell) => cell.ref === `A${row}`);
   return (
@@ -136,10 +147,17 @@ function defaultMerges(cells: SheetCell[]): string[] {
   return merges;
 }
 
+function isLaborSheet(name: string) {
+  return name === "Staff" || name === "Foremen" || name === "Direct" || name === "Support";
+}
+
 function columnWidth(col: string, header: string | undefined, sheetName: string): number {
   const lower = (header ?? "").toLowerCase();
+  const colNum = colIndex(col);
+  if (isLaborSheet(sheetName) && colNum >= 12) return 7;
   if (col === "A") {
     if (sheetName === "Summary Page") return 36;
+    if (isLaborSheet(sheetName)) return 28;
     if (/position|craft|item|vendor|phase|kind/.test(lower) || !header) return 32;
     return 24;
   }
@@ -152,7 +170,14 @@ function columnWidth(col: string, header: string | undefined, sheetName: string)
   return 12;
 }
 
-function applyRowStyle(exCell: ExcelJS.Cell, row: number, maxRow: number, isSummary: boolean, colNum: number) {
+function applyRowStyle(
+  exCell: ExcelJS.Cell,
+  row: number,
+  maxRow: number,
+  isSummary: boolean,
+  colNum: number,
+  skipBand = false,
+) {
   if (row === 1) {
     exCell.font = { bold: true, size: 13, color: { argb: WHITE }, name: "Calibri" };
     exCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRAND_STEEL } };
@@ -186,7 +211,7 @@ function applyRowStyle(exCell: ExcelJS.Cell, row: number, maxRow: number, isSumm
     return;
   }
   if (row >= 7 && row < maxRow && (row - 7) % 2 === 1) {
-    exCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND_FILL } };
+    if (!skipBand) exCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND_FILL } };
     exCell.font = { color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
   } else if (row >= 7) {
     exCell.font = { color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
@@ -243,17 +268,19 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     used.add(safeName.toLowerCase());
 
     const isSummary = sheet.name === "Summary Page";
+    const labor = isLaborSheet(sheet.name);
     const lastCol = maxHeaderCol(sheet.cells);
     const ws = wb.addWorksheet(safeName, {
       properties: { tabColor: { argb: tabColorArgb(sheet.name) } },
       pageSetup: {
         orientation: "landscape",
-        fitToPage: true,
-        fitToWidth: 1,
-        fitToHeight: 20,
+        fitToPage: !labor,
+        fitToWidth: labor ? undefined : 1,
+        fitToHeight: labor ? undefined : 20,
         horizontalCentered: true,
         margins: { left: 0.4, right: 0.4, top: 0.65, bottom: 0.65, header: 0.28, footer: 0.28 },
         printTitlesRow: "6:6",
+        printTitlesColumn: labor ? "A:K" : undefined,
       },
       headerFooter: {
         oddHeader: printHeader(safeName),
@@ -261,7 +288,11 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
         evenHeader: printHeader(safeName),
         evenFooter: PRINT_FOOTER,
       },
-      views: [{ state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: true }],
+      views: [
+        labor
+          ? { state: "frozen", xSplit: 11, ySplit: 6, activeCell: "L7", showGridLines: true }
+          : { state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: true },
+      ],
     });
 
     const merges = sheet.merges?.length ? sheet.merges : defaultMerges(sheet.cells);
@@ -296,14 +327,39 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
 
       if (totalRows.has(row)) applyTotalStyle(exCell);
       else if (adderRows.has(row)) applyAdderStyle(exCell);
-      else applyRowStyle(exCell, row, maxRow, isSummary, colNum);
+      else applyRowStyle(exCell, row, maxRow, isSummary, colNum, labor);
+
+      if (labor && !totalRows.has(row)) {
+        const kind = laborRowKind(sheet.cells, row);
+        if (kind === "title") {
+          exCell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
+          exCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND_FILL } };
+        } else if (kind === "hc" || kind === "hps") {
+          exCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF8E6" } };
+        }
+      }
+
+      if (labor && row === 6 && colNum >= 12) {
+        exCell.numFmt = "D-MMM";
+      }
 
       const fmt = cellFormat(sheet, headers, col, row, isSummary);
       if (fmt && row >= 7 && cell.type !== "text" && cell.type !== "date") exCell.numFmt = fmt;
+      if (labor && row >= 7 && colNum >= 12 && cell.type !== "text") {
+        const kind = laborRowKind(sheet.cells, row);
+        if (kind === "hc" || kind === "pd") exCell.numFmt = FMT_INTEGER;
+        else if (kind === "hps" || kind === "hours") exCell.numFmt = FMT_HOURS;
+      }
     }
 
     for (const [col, header] of headers) {
       ws.getColumn(colIndex(col)).width = columnWidth(col, header, sheet.name);
+    }
+    if (labor) {
+      const lastColNum = colIndex(lastCol);
+      for (let i = 12; i <= lastColNum; i += 1) ws.getColumn(i).width = 7;
+      ws.getColumn(1).width = 28;
+      ws.getColumn(3).width = 26;
     }
     if (isSummary) {
       ws.getColumn(1).width = 36;
