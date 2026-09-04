@@ -76,22 +76,65 @@ export function seedJobs(): JobRecord[] {
   return JOBS;
 }
 
+export const CATALOG_SEED_CODES = JOBS.map((job) => job.code);
+
 export function visibleSeedJobs(scope?: CompanyScope | null): JobRecord[] {
   return seedJobs().filter((job) => catalogVisibleTo(scope, job.client, job.title, job.code));
 }
 
-/** Sample catalog jobs stay on testers who are supposed to have samples. */
+/** Sample catalog jobs stay on testers who are supposed to have samples. Unknown seat → no seeds. */
 export function seedJobsAllowed(scope?: CompanyScope | null) {
-  if (!scope) return true;
-  if (scope.isOwner || isOwnerIdentity(scope.email)) return false;
-  const email = scope.email.trim().toLowerCase();
+  const email = scope?.email?.trim().toLowerCase();
+  if (!email) return false;
+  if (scope?.isOwner || isOwnerIdentity(email)) return false;
   return email !== "nathanboyte@gmail.com" && email !== JOHN_BEECH_EMAIL;
 }
 
-function isCatalogSeedJob(job: Pick<JobRecord, "id" | "code">) {
-  return seedJobs().some(
-    (seed) => seed.id === job.id || seed.code.toUpperCase() === (job.code || "").trim().toUpperCase(),
-  );
+function normSeedText(value = "") {
+  return value
+    .toLowerCase()
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+export function isCatalogSeedJob(job: Pick<JobRecord, "id" | "code" | "title">) {
+  const code = (job.code || "").trim().toUpperCase();
+  const title = normSeedText(job.title);
+  const id = (job.id || "").trim();
+  return seedJobs().some((seed) => {
+    const seedCode = seed.code.toUpperCase();
+    return (
+      seed.id === id ||
+      (id && (id === seed.code || id === `job-${seed.code}` || id === seedCode)) ||
+      (code && (code === seedCode || code === seed.id.toUpperCase())) ||
+      (title && title === normSeedText(seed.title))
+    );
+  });
+}
+
+export function isCatalogSeedPack(pack: Pick<LocalPack, "packId" | "title"> & { code?: string }) {
+  const packId = (pack.packId || "").trim();
+  return isCatalogSeedJob({
+    id: packId.startsWith("job-") ? packId : `job-${packId}`,
+    code: pack.code || packId,
+    title: pack.title,
+  });
+}
+
+export function omitCatalogSeedJobs<T extends Pick<JobRecord, "id" | "code" | "title">>(jobs: T[] | undefined | null): T[] {
+  return (jobs ?? []).filter((job) => !isCatalogSeedJob(job));
+}
+
+export function omitCatalogSeedPacks<T extends Pick<LocalPack, "packId" | "title">>(packs: T[] | undefined | null): T[] {
+  return (packs ?? []).filter((pack) => !isCatalogSeedPack(pack));
+}
+
+/** View as Nathan / owner leftover / missing seat never paint catalog samples. */
+export function catalogSeedsAllowedOnDesk(scope?: CompanyScope | null, seat?: string | null) {
+  const id = (seat || "").trim().toLowerCase();
+  if (id === "nathan" || id === "john") return false;
+  return seedJobsAllowed(scope);
 }
 
 /** Owner/Sites seed jobs stay on the signed-in desk. Follow / View as uses that person's packs only. */
@@ -109,23 +152,28 @@ export function jobsOnDesk(
   viewingAs: boolean,
   scope?: CompanyScope | null,
   menu?: JobMenuState | null,
-  opts?: { includeSeeds?: boolean },
+  opts?: { includeSeeds?: boolean; seat?: string | null },
 ) {
-  const includeSeeds = opts?.includeSeeds ?? seedJobsAllowed(scope);
-  // API / leftover catalog samples must not reappear on owner, Nathan, or John Beech.
-  const fromServer = (serverJobs ?? []).filter((job) => includeSeeds || !isCatalogSeedJob(job));
-  const nextPacks = [...packs, ...dummyPacksForUser(scope).filter((pack) => !packs.some((row) => row.packId === pack.packId))];
-  const merged = viewingAs || !includeSeeds
-    ? mergeLocalJobs(fromServer, nextPacks)
-    : (() => {
+  const allowed = catalogSeedsAllowedOnDesk(scope, opts?.seat);
+  // Missing scope, View as Nathan, and protected seats never merge catalog samples.
+  const includeSeeds = allowed && opts?.includeSeeds === true;
+  const fromServer = includeSeeds ? (serverJobs ?? []) : omitCatalogSeedJobs(serverJobs);
+  const nextPacks = omitCatalogSeedPacks([
+    ...packs,
+    ...dummyPacksForUser(scope).filter((pack) => !packs.some((row) => row.packId === pack.packId)),
+  ]);
+  const merged = includeSeeds
+    ? (() => {
         const seeds = visibleSeedJobs(scope);
         const seen = new Set(fromServer.map((job) => job.id));
         return mergeLocalJobs([...seeds.filter((job) => !seen.has(job.id)), ...fromServer], nextPacks);
-      })();
+      })()
+    : mergeLocalJobs(fromServer, nextPacks);
+  const painted = includeSeeds ? merged : omitCatalogSeedJobs(merged);
   const keepHis =
     !viewingAs ||
     shouldPaintHisCards(scope ? { email: scope.email, role: scope.isOwner ? "owner" : undefined } : null);
-  return menu ? omitDeletedJobs(merged, menu, keepHis) : merged;
+  return menu ? omitDeletedJobs(painted, menu, keepHis) : painted;
 }
 
 export function plantJobTally(jobs: JobRecord[] = JOBS) {

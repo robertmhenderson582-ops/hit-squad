@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { COMPANIES, LUCKY13_ID, STANDALONE_ID, companyScopeFor } from "./companies.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { catalogEstimates } from "./desk-data.ts";
-import { jobsOnDesk, seedJobs } from "./jobs.ts";
+import { jobsOnDesk, seedJobs, seedJobsAllowed } from "./jobs.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import {
   assignedSiteIds,
@@ -93,12 +93,20 @@ describe("job tree", () => {
     assert.equal(jamesTree.some((row) => row.id === "madison"), false);
     assert.equal(jamesTree[0]?.sites.some((site) => /yates|wood river/i.test(site.name)), false);
 
-    const josephTree = jobTree({ scope: joseph, jobs: jobsOnDesk([], [], false, joseph), packs: [] });
+    const josephTree = jobTree({
+      scope: joseph,
+      jobs: jobsOnDesk([], [], false, joseph, undefined, { includeSeeds: seedJobsAllowed(joseph) }),
+      packs: [],
+    });
     assert.deepEqual(josephTree.map((row) => row.id), ["hitsquad"]);
     assert.equal(josephTree[0]?.sites.some((site) => /yates|wood river/i.test(site.name) && site.id !== UNASSIGNED_SITE_ID), false);
     assert.equal(josephTree[0]?.sites.some((site) => !site.jobs.length), false);
 
-    const henryTree = jobTree({ scope: johnHenry, jobs: jobsOnDesk([], [], false, johnHenry), packs: [] });
+    const henryTree = jobTree({
+      scope: johnHenry,
+      jobs: jobsOnDesk([], [], false, johnHenry, undefined, { includeSeeds: seedJobsAllowed(johnHenry) }),
+      packs: [],
+    });
     assert.deepEqual(henryTree.map((row) => row.id), [LUCKY13_ID]);
     assert.equal(henryTree[0]?.sites.every((site) => site.jobs.length > 0), true);
     assert.equal(henryTree[0]?.sites.some((site) => !site.jobs.length), false);

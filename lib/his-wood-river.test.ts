@@ -694,6 +694,60 @@ function assertHisWoodRiverDesk(
   return { jobs, tree, wood };
 }
 
+test("owner leftover catalog samples stay off View as Nathan and Back to me", () => {
+  const store = memoryStore();
+  writeOwnerPacks(
+    [
+      {
+        packId: "job-8622",
+        key: "new:job-8622",
+        title: "Pre-outage HSE walkdown – flare / piperack",
+        client: "Madison / P66",
+        site: "Madison / P66",
+        siteId: "site-unassigned",
+        createdAt: 1,
+        updatedAt: 1,
+        ownerEmail: owner.email,
+      },
+      {
+        packId: "job-8841",
+        key: "new:job-8841",
+        title: "Unit 3 turnaround — mechanical T&M",
+        client: "Madison / P66",
+        site: "Madison / P66",
+        siteId: "site-unassigned",
+        createdAt: 1,
+        updatedAt: 1,
+        ownerEmail: owner.email,
+      },
+    ],
+    store,
+  );
+  writeLensPacks(
+    "nathan",
+    [
+      {
+        packId: "HS-8622",
+        key: "new:HS-8622",
+        title: "Pre-outage HSE walkdown — flare / piperack",
+        client: "Madison / P66",
+        site: "Madison / P66",
+        siteId: "site-unassigned",
+        createdAt: 1,
+        updatedAt: 1,
+        ownerEmail: owner.email,
+      },
+    ],
+    store,
+  );
+  const viewed = packsForViewedDesk(nathan, true, "nathan", store);
+  assertHisWoodRiverDesk(viewed, true, nathan);
+  assert.equal(viewed.some((pack) => /walkdown|unit 3/i.test(pack.title)), false);
+  const back = packsForViewedDesk(owner, false, null, store);
+  assertHisWoodRiverDesk(back, false, owner);
+  assert.equal(back.some((pack) => /walkdown|unit 3/i.test(pack.title)), false);
+});
+
 test("View as Nathan paints three HIS Wood River jobs and no catalog seeds", () => {
   const store = memoryStore();
   rememberLocalPack(

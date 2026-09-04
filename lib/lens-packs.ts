@@ -13,6 +13,7 @@ import {
 import { isSamePerson } from "./identity.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import { JOB_MENU_KEY, clearHisJobMenuLeftover } from "./job-menu.ts";
+import { omitCatalogSeedPacks } from "./jobs.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
 /** Live leftover keys already on the signed-in desktop. Rewrite these in place. */
@@ -273,14 +274,14 @@ export function packsForViewedDesk(
   if (viewingAs) {
     const next = seat ? mergeDeskPacks(live, readLensPacks(seat, store)) : live;
     // View as Nathan still injects HIS Wood River cards. James / CBI stay off this merge.
-    if (shouldPaintHisCards(user)) return mergeHisWoodRiverCards(next);
-    return next;
+    const painted = shouldPaintHisCards(user) ? mergeHisWoodRiverCards(next) : next;
+    return omitCatalogSeedPacks(painted);
   }
   const extras = [readOwnerPacks(store)];
   if (user) extras.push(localPacksOwnerShouldSee(user, store), lensPacksOwnerShouldSee(user, store));
   const merged = mergeDeskPacks(live, ...extras);
-  if (shouldPaintHisCards(user)) return mergeHisWoodRiverCards(merged);
-  return merged;
+  const painted = shouldPaintHisCards(user) ? mergeHisWoodRiverCards(merged) : merged;
+  return omitCatalogSeedPacks(painted);
 }
 
 export function snapshotOwnerDesk(_user?: ScopeUser | null, store?: StorageLike | null) {

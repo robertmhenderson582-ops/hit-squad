@@ -18,7 +18,7 @@ import { companyScopeFor } from "@/lib/companies";
 import { visibleDeskPacks } from "@/lib/estimate-scope";
 import { VIEW_RESPONSIBILITIES, VISUAL_ROSTER } from "@/lib/owner-desk";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
-import { jobByCode, plantJobTally, plantJobsLine, plantTabFromQuery, plantTabQuery, seedJobsAllowed, visibleSeedJobs, type PlantTab } from "@/lib/jobs";
+import { catalogSeedsAllowedOnDesk, jobByCode, plantJobTally, plantJobsLine, plantTabFromQuery, plantTabQuery, visibleSeedJobs, type PlantTab } from "@/lib/jobs";
 import { listLocalPacks, localPackToJob } from "@/lib/local-estimates";
 
 const PLANTS: Record<string, { client: string; folder: string; name: string; city: string; plant: string; site: string }> = {
@@ -80,7 +80,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const alias = useAlias();
   const { user } = useSession();
   const desk = useOwnerDesk();
-  const { lens, viewingAs, lensKey } = useDeskLens();
+  const { lens, viewingAs, lensKey, seat } = useDeskLens();
   const people = hasBuildDesk(user) ? desk?.people ?? [] : VISUAL_ROSTER;
   const router = useRouter();
   const pathname = usePathname();
@@ -107,7 +107,10 @@ export function JobPlantPage({ slug }: { slug: string }) {
     plant.name,
     plant.city,
   );
-  const tally = plantJobTally([...(viewingAs || !seedJobsAllowed(scope) ? [] : visibleSeedJobs(scope)), ...localJobs]);
+  const tally = plantJobTally([
+    ...(catalogSeedsAllowedOnDesk(scope, seat) && !viewingAs ? visibleSeedJobs(scope) : []),
+    ...localJobs,
+  ]);
   const openedEstimate = openedJob ? estimateForJob(openedJob, board?.estimates ?? []) : undefined;
 
   function setTab(next: PlantTab) {
