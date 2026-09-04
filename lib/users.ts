@@ -11,7 +11,7 @@ import {
   resetVaultFileIdsForTests,
   writeVaultJson,
 } from "./drive-data.ts";
-import { vaultDriveAdapter, type DriveAdapter } from "./drive-estimates.ts";
+import { DriveApiError, SEATS_SA_OPEN_ERROR, isSeatsOpenDenied, vaultDriveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import { canonicalEmail, identityBucket, isOwnerAliasSeat, isOwnerIdentity, resolveIdentity } from "./identity.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
@@ -890,6 +890,17 @@ function persistSeatFileLocal(users: StoredUser[]) {
   applyHashesToUsers(users, hashes);
 }
 
+function passwordVaultError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes(SEATS_SA_OPEN_ERROR) || isSeatsOpenDenied(error)) {
+    return "Password was not saved. Service account cannot open seats.json.";
+  }
+  if (error instanceof DriveApiError && error.status) {
+    return "Password was not saved. Try again.";
+  }
+  return "Password was not saved. Try again.";
+}
+
 async function confirmOwnPasswordWrite(
   user: StoredUser,
   next: string,
@@ -900,26 +911,27 @@ async function confirmOwnPasswordWrite(
   user.recoveryHash = undefined;
   user.recoveryConsumed = false;
   user.mustChangePassword = false;
-  const notSaved = (): PasswordWriteFail => {
+  const notSaved = (error?: unknown): PasswordWriteFail => {
     pendingVault = Promise.resolve();
     if (forced) persistSeatFileLocal(ownerUsers());
-    return { error: "Password was not saved. Try again.", status: 503, vaultPersisted: false };
+    return { error: passwordVaultError(error), status: 503, vaultPersisted: false };
   };
   try {
     persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
     await flushSeatVault();
-  } catch {
+  } catch (error) {
     if (forced) {
       try {
         await persistExistingOwnerHash({ email: user.email });
         if (await passwordWriteLanded(user.email, next)) {
           return { ok: true, email: user.email, vaultPersisted: true };
         }
-      } catch {
+      } catch (retryError) {
         pendingVault = Promise.resolve();
+        return notSaved(retryError);
       }
     }
-    return notSaved();
+    return notSaved(error);
   }
   if (!(await passwordWriteLanded(user.email, next))) {
     return notSaved();

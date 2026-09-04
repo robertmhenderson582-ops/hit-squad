@@ -23,6 +23,8 @@ export type DriveAdapter = {
   listJson(folderId: string): Promise<DriveFile[]>;
   /** JSON the account can already open, without listing a parent folder. */
   listAccessibleJson?(name?: string): Promise<DriveFile[]>;
+  /** Metadata GET. Used to probe seats.json before PATCH. Never logs content. */
+  statFile?(fileId: string): Promise<DriveFile>;
   readJson(fileId: string): Promise<string>;
   createJson(
     folderId: string,
@@ -40,6 +42,29 @@ export type DriveAdapter = {
   /** True when the file bytes match what we just wrote. Never log content. */
   confirmWrite?(fileId: string, content: string): Promise<boolean>;
 };
+
+export const SEATS_SA_OPEN_ERROR = "service account cannot open seats.json";
+
+export class DriveApiError extends Error {
+  readonly status: number;
+  principal?: "service-account" | "oauth";
+  constructor(status: number, message: string, principal?: "service-account" | "oauth") {
+    super(sanitizeDriveMessage(message));
+    this.name = "DriveApiError";
+    this.status = status;
+    this.principal = principal;
+  }
+}
+
+function sanitizeDriveMessage(message: string) {
+  return message
+    .replace(/ya29\.[A-Za-z0-9._-]+/g, "[token]")
+    .replace(/-----BEGIN[\s\S]+?-----END[^-]+-----/g, "[key]")
+    .replace(/[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[jwt]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
+}
 
 type ServiceAccount = {
   client_email: string;
@@ -139,6 +164,11 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
     async listAccessibleJson(name) {
       return [...files.values()].map((row) => row.file).filter((file) => !name || file.name === name);
     },
+    async statFile(fileId) {
+      const row = files.get(fileId);
+      if (!row) throw new DriveApiError(404, "not found");
+      return row.file;
+    },
     async readJson(fileId) {
       const row = files.get(fileId);
       if (!row) throw new Error("missing");
@@ -194,8 +224,10 @@ async function googleAccessToken(account: ServiceAccount) {
       assertion: jwt,
     }),
   });
-  const data = (await response.json()) as { access_token?: string; expires_in?: number };
-  if (!data.access_token) throw new Error("token");
+  const data = (await response.json()) as { access_token?: string; expires_in?: number; error?: unknown };
+  if (!response.ok || !data.access_token) {
+    throw new DriveApiError(response.status || 401, driveApiError(data, "token"), "service-account");
+  }
   cachedSaToken = { value: data.access_token, exp: now + (Number(data.expires_in) || 3600) };
   return cachedSaToken.value;
 }
@@ -214,8 +246,10 @@ async function oauthAccessToken(client: OAuthClient) {
       refresh_token: client.refreshToken,
     }),
   });
-  const data = (await response.json()) as { access_token?: string; expires_in?: number };
-  if (!data.access_token) throw new Error("token");
+  const data = (await response.json()) as { access_token?: string; expires_in?: number; error?: unknown };
+  if (!response.ok || !data.access_token) {
+    throw new DriveApiError(response.status || 401, driveApiError(data, "token"), "oauth");
+  }
   const next = { value: data.access_token, exp: now + (Number(data.expires_in) || 3600) };
   cachedOAuthTokens.set(client.refreshToken, next);
   return next.value;
@@ -230,6 +264,10 @@ function driveApiError(payload: unknown, fallback: string) {
     if (typeof message === "string" && message.trim()) return message;
   }
   return fallback;
+}
+
+function driveHttpError(status: number, payload: unknown, fallback: string, principal?: "service-account" | "oauth") {
+  return new DriveApiError(status, `${status} ${driveApiError(payload, fallback)}`, principal);
 }
 
 function escapeDriveQueryValue(value: string) {
@@ -271,7 +309,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       const url = driveApiUrl("/drive/v3/files", params);
       const response = await fetch(url, { headers: await authHeaders() });
       const data = (await response.json()) as { files?: DriveFile[]; nextPageToken?: string; error?: unknown };
-      if (!response.ok) throw new Error(driveApiError(data, "list"));
+      if (!response.ok) throw driveHttpError(response.status, data, "list");
       if (Array.isArray(data.files)) files.push(...data.files);
       pageToken = typeof data.nextPageToken === "string" ? data.nextPageToken : "";
     } while (pageToken);
@@ -287,11 +325,23 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       const named = name ? `name='${escapeDriveQueryValue(name)}' and ` : "";
       return listByQuery(`${named}trashed=false and mimeType='application/json'`, { accessible: true });
     },
+    async statFile(fileId) {
+      const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { fields: "id,name,modifiedTime,md5Checksum" }), {
+        headers: await authHeaders(),
+      });
+      const data = (await response.json().catch(() => null)) as (DriveFile & { error?: unknown }) | null;
+      if (!response.ok) throw driveHttpError(response.status, data, "stat");
+      if (!data?.id) throw new DriveApiError(response.status || 404, "stat");
+      return { id: data.id, name: data.name, modifiedTime: data.modifiedTime };
+    },
     async readJson(fileId) {
       const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { alt: "media" }), {
         headers: await authHeaders(),
       });
-      if (!response.ok) throw new Error("read");
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw driveHttpError(response.status, payload, "read");
+      }
       return response.text();
     },
     async createJson(folderId, name, content, properties) {
@@ -304,7 +354,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
         body,
       });
       const file = (await response.json()) as DriveFile & { error?: { message?: string } | string };
-      if (!file.id) throw new Error(driveApiError(file, "create"));
+      if (!file.id) throw driveHttpError(response.status || 400, file, "create");
       return { id: file.id, name: file.name || name, properties };
     },
     async updateJson(fileId, content, name, properties) {
@@ -321,7 +371,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       );
       if (!upload.ok) {
         const payload = await upload.json().catch(() => null);
-        throw new Error(driveApiError(payload, "update"));
+        throw driveHttpError(upload.status, payload, "update");
       }
       const uploaded = (await upload.json().catch(() => null)) as DriveFile & { md5Checksum?: string } | null;
       if (name || properties) {
@@ -346,7 +396,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
-        throw new Error(driveApiError(payload, "delete"));
+        throw driveHttpError(response.status, payload, "delete");
       }
     },
     async confirmWrite(fileId, content) {
@@ -428,8 +478,19 @@ function logOauthDriveFallback() {
   console.warn("drive: OAuth failed; falling back to service account");
 }
 
+function logVaultWriteFailure(principal: "service-account" | "oauth", error: unknown) {
+  const status = error instanceof DriveApiError ? error.status : 0;
+  const message = error instanceof Error ? sanitizeDriveMessage(error.message) : "write failed";
+  console.warn(`drive: ${principal} vault write failed; ${status || "err"} ${message}`);
+}
+
 function logVaultSaFallback() {
   console.warn("drive: service account vault write failed; trying OAuth");
+}
+
+export function isSeatsOpenDenied(error: unknown) {
+  const status = error instanceof DriveApiError ? error.status : 0;
+  return status === 401 || status === 403 || status === 404;
 }
 
 function withServiceAccountFallback(primary: DriveAdapter, secondary: DriveAdapter): DriveAdapter {
@@ -499,21 +560,35 @@ function withVaultWritePreference(sa: DriveAdapter, oauth: DriveAdapter): DriveA
     op: (drive: DriveAdapter) => Promise<DriveFile>,
   ): Promise<DriveFile> {
     let saWrote: DriveFile | null = null;
+    let saError: unknown;
+    let oauthError: unknown;
     try {
       saWrote = await op(sa);
       if (await writeLanded(sa, fileId || saWrote.id, content)) return saWrote;
-    } catch {
+      saError = new DriveApiError(409, "zombie", "service-account");
+    } catch (error) {
       saWrote = null;
+      saError = error;
     }
+    if (saError) logVaultWriteFailure("service-account", saError);
     logVaultSaFallback();
     try {
       const written = await op(oauth);
       if (await writeLanded(oauth, fileId || written.id, content)) return written;
-    } catch {
-      // OAuth failed — a prior SA PATCH may still have landed.
+      oauthError = new DriveApiError(409, "zombie", "oauth");
+    } catch (error) {
+      oauthError = error;
     }
+    if (oauthError) logVaultWriteFailure("oauth", oauthError);
     if (saWrote && (await writeLanded(sa, fileId || saWrote.id, content))) return saWrote;
-    throw new Error("vault write not confirmed");
+    if (saError instanceof DriveApiError && isSeatsOpenDenied(saError)) {
+      throw new DriveApiError(saError.status, SEATS_SA_OPEN_ERROR, "service-account");
+    }
+    throw saError instanceof Error
+      ? saError
+      : oauthError instanceof Error
+        ? oauthError
+        : new Error("vault write not confirmed");
   }
   return {
     configured: true,
@@ -525,12 +600,17 @@ function withVaultWritePreference(sa: DriveAdapter, oauth: DriveAdapter): DriveA
       try {
         const written = await sa.createJson(folderId, name, content, properties);
         if (await writeConfirmed(sa, written.id, content)) return written;
-      } catch {
-        // SA cannot create in an owner-only folder — try OAuth.
+      } catch (error) {
+        logVaultWriteFailure("service-account", error);
       }
       logVaultSaFallback();
-      const written = await oauth.createJson(folderId, name, content, properties);
-      if (await writeConfirmed(oauth, written.id, content)) return written;
+      try {
+        const written = await oauth.createJson(folderId, name, content, properties);
+        if (await writeConfirmed(oauth, written.id, content)) return written;
+      } catch (error) {
+        logVaultWriteFailure("oauth", error);
+        throw error instanceof Error ? error : new Error("vault write not confirmed");
+      }
       throw new Error("vault write not confirmed");
     },
     updateJson: (fileId, content, name, properties) =>
@@ -538,6 +618,8 @@ function withVaultWritePreference(sa: DriveAdapter, oauth: DriveAdapter): DriveA
     deleteJson: (fileId) => preferSa((drive) => drive.deleteJson(fileId)),
     confirmWrite: async (fileId, content) =>
       (await writeConfirmed(sa, fileId, content)) || writeConfirmed(oauth, fileId, content),
+    // SA only — do not let an OAuth GET hide a 403 on seats.json.
+    statFile: (fileId) => (sa.statFile ? sa.statFile(fileId) : Promise.reject(new DriveApiError(404, "stat"))),
   };
 }
 

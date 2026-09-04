@@ -14,7 +14,7 @@ import { assignedCompany, resetCompanyAssignmentsForTests } from "./companies-st
 import { lensPeopleFromSeats } from "./desk-people.ts";
 import { canLookupRates, canUseRateBuilder, canUseViewAs } from "./desk-role.ts";
 import { SEATS_VAULT_FILE_ID, SEATS_VAULT_KIND, SEATS_VAULT_NAME, writeVaultJson } from "./drive-data.ts";
-import { memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
+import { DriveApiError, SEATS_SA_OPEN_ERROR, memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
 import {
   claimFirstPassword,
   createSeat,
@@ -1054,6 +1054,43 @@ test("stale Drive read after confirmOwnPasswordWrite does not 503 when the write
   assert.equal(vaultRaw.includes(CHOSEN), false);
   assert.equal(vaultRaw.includes(OWNER_SECRET), false);
   assert.match(vaultRaw, /robertmhenderson582@gmail.com/i);
+});
+
+test("forced setOwnPassword surfaces service account cannot open seats.json and does not silently ok", async () => {
+  const inner = memoryDrive();
+  inner.files.set(SEATS_VAULT_FILE_ID, {
+    file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+    content: `${JSON.stringify({ hashes: {}, extras: [] })}\n`,
+  });
+  useSeatVaultForTests({
+    configured: true,
+    listJson: (folderId) => inner.listJson(folderId),
+    readJson: (fileId) => inner.readJson(fileId),
+    async statFile() {
+      throw new DriveApiError(403, "The user does not have sufficient permissions for this file.", "service-account");
+    },
+    async createJson() {
+      throw new Error("createJson must not mint a second seats.json");
+    },
+    async updateJson() {
+      throw new DriveApiError(403, "The user does not have sufficient permissions for this file.", "service-account");
+    },
+    deleteJson: (fileId) => inner.deleteJson(fileId),
+  });
+  const stored = findUserByEmail(OWNER_LOGIN_EMAIL);
+  assert.ok(stored);
+  stored.mustChangePassword = true;
+  const changed = await setOwnPassword(OWNER_LOGIN_EMAIL, CHOSEN);
+  assert.equal("ok" in changed, false);
+  if ("error" in changed) {
+    assert.equal(changed.status, 503);
+    assert.equal(changed.vaultPersisted, false);
+    assert.equal(changed.error, "Password was not saved. Service account cannot open seats.json.");
+    assert.equal(changed.error.toLowerCase().includes(SEATS_SA_OPEN_ERROR), true);
+  }
+  const persisted = parseSeatHashes(JSON.parse(readFileSync(seatFile, "utf8")));
+  assert.ok(persisted[OWNER_LOGIN_EMAIL]?.passwordHash);
+  assert.equal(verifyPassword(findUserByEmail(OWNER_LOGIN_EMAIL)!, CHOSEN), true);
 });
 
 test("forced setOwnPassword does not silently ok when Drive write fails", async () => {

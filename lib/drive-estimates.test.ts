@@ -20,6 +20,8 @@ import {
   resolveEstimatesFolder,
   upsertEstimateInDrive,
   vaultDriveAdapter,
+  DriveApiError,
+  SEATS_SA_OPEN_ERROR,
 } from "./drive-estimates.ts";
 import { estimateFileName, parseIncomingPack, publicPack, responseLeaksDrive, type EstimatePackSnapshot } from "./estimate-pack.ts";
 
@@ -658,5 +660,113 @@ describe("drive estimate upsert", () => {
     const parsed = JSON.parse(await drive.readJson(saved.id));
     assert.deepEqual(parsed.sharedWith, ["robertmhenderson582@gmail.com"]);
     assert.equal(parsed.ownerEmail, "nathanboyte@gmail.com");
+  });
+
+  it("updateJson throws HTTP status and Drive error.message without secrets", async () => {
+    resetDriveTokenCache();
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || "GET").toUpperCase();
+      if (url.startsWith("https://oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.test-sa", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/upload/drive/v3/files/") && method === "PATCH") {
+        return new Response(
+          JSON.stringify({ error: { message: "The user does not have sufficient permissions for this file." } }),
+          { status: 403, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`unexpected fetch ${method} ${url}`);
+    }) as typeof fetch;
+    try {
+      const adapter = vaultDriveAdapter({
+        GOOGLE_CLIENT_EMAIL: "hitsquad-vault@hit-squad-vault.iam.gserviceaccount.com",
+        GOOGLE_PRIVATE_KEY: pem,
+      });
+      await assert.rejects(
+        () => adapter.updateJson("1d3lzLDxCPwC963fdplsnwYgrDEanohZc", '{"hashes":{}}'),
+        (error: unknown) => {
+          assert.ok(error instanceof DriveApiError);
+          assert.equal(error.status, 403);
+          assert.match(error.message, /403/);
+          assert.match(error.message, /sufficient permissions/i);
+          assert.equal(error.message.includes(pem), false);
+          assert.equal(error.message.includes("ya29."), false);
+          return true;
+        },
+      );
+    } finally {
+      globalThis.fetch = previous;
+      resetDriveTokenCache();
+    }
+  });
+
+  it("writePreferSa logs which principal failed with status then surfaces SA cannot open seats.json", async () => {
+    resetDriveTokenCache();
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const warnings: string[] = [];
+    const warn = console.warn;
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || "GET").toUpperCase();
+      const headers = new Headers(init?.headers);
+      const body = typeof init?.body === "string" ? init.body : init?.body instanceof URLSearchParams ? init.body.toString() : "";
+      if (url.startsWith("https://oauth2.googleapis.com/token")) {
+        const params = new URLSearchParams(body);
+        const token =
+          params.get("grant_type") === "refresh_token" ? "ya29.test-oauth" : "ya29.test-sa";
+        return new Response(JSON.stringify({ access_token: token, expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/upload/drive/v3/files/") && method === "PATCH") {
+        const who = headers.get("authorization") === "Bearer ya29.test-sa" ? "service account" : "OAuth";
+        return new Response(
+          JSON.stringify({ error: { message: `${who} cannot PATCH this file.` } }),
+          { status: 403, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`unexpected fetch ${method} ${url}`);
+    }) as typeof fetch;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+    try {
+      const adapter = vaultDriveAdapter({
+        ...oauthEnv,
+        GOOGLE_CLIENT_EMAIL: "hitsquad-vault@hit-squad-vault.iam.gserviceaccount.com",
+        GOOGLE_PRIVATE_KEY: pem,
+      });
+      await assert.rejects(
+        () => adapter.updateJson("1d3lzLDxCPwC963fdplsnwYgrDEanohZc", '{"hashes":{}}'),
+        (error: unknown) => {
+          assert.ok(error instanceof DriveApiError);
+          assert.equal(error.message, SEATS_SA_OPEN_ERROR);
+          assert.equal(error.status, 403);
+          return true;
+        },
+      );
+      assert.equal(
+        warnings.some((line) => line.includes("service-account") && line.includes("403")),
+        true,
+      );
+      assert.equal(warnings.some((line) => line.includes("oauth") && line.includes("403")), true);
+      assert.equal(warnings.every((line) => !line.includes("test-oauth-refresh-token")), true);
+      assert.equal(warnings.every((line) => !line.includes("ya29.")), true);
+      assert.equal(warnings.every((line) => !line.includes(pem)), true);
+    } finally {
+      globalThis.fetch = previous;
+      console.warn = warn;
+      resetDriveTokenCache();
+    }
   });
 });

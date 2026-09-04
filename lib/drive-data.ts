@@ -1,4 +1,11 @@
-import { ESTIMATES_ROOM_ID, type DriveAdapter, type DriveFile } from "./drive-estimates.ts";
+import {
+  ESTIMATES_ROOM_ID,
+  DriveApiError,
+  SEATS_SA_OPEN_ERROR,
+  isSeatsOpenDenied,
+  type DriveAdapter,
+  type DriveFile,
+} from "./drive-estimates.ts";
 
 export const COMPANIES_VAULT_NAME = "companies.json";
 export const ACTIVITY_VAULT_NAME = "activity.json";
@@ -153,6 +160,20 @@ async function confirmedVaultBytes(adapter: DriveAdapter, fileId: string, payloa
   }
 }
 
+async function probeSeatsFile(adapter: DriveAdapter, fileId: string) {
+  if (!adapter.statFile) return null;
+  try {
+    await adapter.statFile(fileId);
+    return null;
+  } catch (error) {
+    if (!isSeatsOpenDenied(error)) throw error;
+    const status = error instanceof DriveApiError ? error.status : 403;
+    const detail = error instanceof Error ? error.message : "stat";
+    console.warn(`drive: service account cannot open seats.json; ${status} ${detail}`);
+    return new DriveApiError(status, SEATS_SA_OPEN_ERROR, "service-account");
+  }
+}
+
 export async function writeVaultJson(
   adapter: DriveAdapter,
   name: string,
@@ -171,12 +192,21 @@ export async function writeVaultJson(
   if (!existing && name === SEATS_VAULT_NAME) {
     throw new Error("seats vault must PATCH known id");
   }
-  const written = existing
-    ? await adapter.updateJson(existing.id, payload, name, properties)
-    : await adapter.createJson(folderId, name, payload, properties);
-  if (written?.id) rememberVaultFileId(name, kind, written.id);
-  if (written?.id && !(await confirmedVaultBytes(adapter, written.id, payload))) {
-    throw new Error("vault write not confirmed");
+  const seatsDenied =
+    name === SEATS_VAULT_NAME && (existing?.id || pinnedId)
+      ? await probeSeatsFile(adapter, existing?.id || pinnedId)
+      : null;
+  try {
+    const written = existing
+      ? await adapter.updateJson(existing.id, payload, name, properties)
+      : await adapter.createJson(folderId, name, payload, properties);
+    if (written?.id) rememberVaultFileId(name, kind, written.id);
+    if (written?.id && !(await confirmedVaultBytes(adapter, written.id, payload))) {
+      throw seatsDenied || new Error("vault write not confirmed");
+    }
+    return written;
+  } catch (error) {
+    if (seatsDenied) throw seatsDenied;
+    throw error;
   }
-  return written;
 }
