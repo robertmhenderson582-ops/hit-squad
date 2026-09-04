@@ -24,9 +24,11 @@
  * labor grids are shaded. Daily ST/OT/DT cells use the desk clock
  * (computeRangeHours / applyWeekly40). Summary ESTIMATE TOTAL $ is the same
  * deskPackageTotal / estimateTotalBreakdown number as the Estimate Total rail.
- * Standing ripple rule (Robert 2026-09-04): every Excel change updates the
- * live estimate pack and every surface (desk totals, export/edit, Rate
- * Tables, fills). Excel is a view of the live estimate pack — never a
+ * Standing ripple rule (Robert 2026-09-04, RETROACTIVE — see excel-ripple.ts):
+ * applies to Look chrome already on this branch and earlier Excel/desk
+ * paths, not only new asks. Every change updates the live estimate pack
+ * and every surface (desk totals, export/edit, Rate Tables, fills, Misc,
+ * Equipment/COE). Excel is a view of the live estimate pack — never a
  * parallel book. No Excel-only catalogs or hard-coded dollars. Crew, misc,
  * equipment, subs, and totals come from the same shared libs the desk uses
  * (other-cost, equipment-sheet, estimate-total). A Misc / rod-weight change
@@ -84,6 +86,7 @@ import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
 import { buildWorkbook, colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
+export { EXCEL_RIPPLE_RETROACTIVE, EXCEL_RIPPLE_RULE } from "./excel-ripple.ts";
 export const ESTIMATE_EXPORT_ERROR = "Could not export. Try again.";
 export const ESTIMATE_EXPORT_PRODUCER = "Produced by Hit Squad Project Controls";
 export const ESTIMATE_EXPORT_BRAND = "HIT SQUAD / PROJECT CONTROLS";

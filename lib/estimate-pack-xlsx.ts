@@ -5,6 +5,8 @@
  * Platform rule: one live pack. Desk edits (Misc extras, rod weights,
  * equipment, crew) ripple into this export through the same parsers and
  * shared libs. Do not snapshot stale dollars beside the pack.
+ * Standing ripple rule is RETROACTIVE (excel-ripple.ts): Look chrome and
+ * earlier Excel/desk paths on this branch stay views of that same pack.
  */
 import { hydrateSupportLines, syncCraftRows, syncSupportRows, type CraftRow } from "./craft-labor.ts";
 import { parseEquipmentSheet } from "./equipment-sheet.ts";
@@ -26,6 +28,8 @@ import { summaryAmountAt } from "./xlsx-eval.ts";
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
+
+export { EXCEL_RIPPLE_RETROACTIVE, EXCEL_RIPPLE_RULE } from "./excel-ripple.ts";
 
 export function crewFromPack(raw: unknown): EstimateXlsxCrew {
   const parsed = asRecord(raw) ?? {};

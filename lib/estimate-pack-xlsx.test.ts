@@ -13,7 +13,9 @@ import {
   packSnapshotToXlsxInput,
 } from "./estimate-pack-xlsx.ts";
 import { parseIncomingPack } from "./estimate-pack.ts";
-import { buildEstimateWorkbook, ESTIMATE_XLSX_SHEETS } from "./estimate-xlsx.ts";
+import { largeToolAmount } from "./equipment-sheet.ts";
+import { buildEstimateWorkbook, ESTIMATE_XLSX_SHEETS, RATE_TOOLS_SECTION } from "./estimate-xlsx.ts";
+import { lookupShahanEquipment, shahanPeriodRate } from "./shahan-wood-river.ts";
 import { excelSafeSheetName } from "./xlsx-minimal.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
 
@@ -265,6 +267,20 @@ describe("estimate pack JSON → xlsx", () => {
       const excel = estimateWorkbookSummaryTotal(input);
       assert.equal(desk, total, file);
       assert.equal(excel, desk, file);
+      const sheets = buildEstimateWorkbook(input);
+      const rates = sheets.find((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.rates);
+      assert.ok(rates);
+      const liveTool = (input.equipment?.largeTools ?? []).find((line) => largeToolAmount(line) > 0);
+      if (liveTool) {
+        const item = lookupShahanEquipment(liveTool.itemId);
+        assert.ok(item, liveTool.itemId);
+        assert.equal(rates.cells.some((cell) => cell.type === "text" && cell.value === RATE_TOOLS_SECTION), true);
+        assert.equal(rates.cells.some((cell) => cell.type === "text" && cell.value === item.description), true);
+        const daily = shahanPeriodRate(item, "daily");
+        if (typeof daily === "number" && daily > 0) {
+          assert.equal(rates.cells.some((cell) => cell.type === "number" && cell.value === daily), true);
+        }
+      }
     }
   });
 
@@ -295,9 +311,20 @@ describe("estimate pack JSON → xlsx", () => {
     assert.match(xlsx, /miscAmount/);
     assert.match(xlsx, /from "\.\/other-cost\.ts"/);
     assert.match(xlsx, /view of the live estimate pack/);
+    assert.match(xlsx, /excel-ripple/);
+    assert.match(xlsx, /RETROACTIVE/);
     assert.match(pack, /one live pack/);
+    assert.match(pack, /excel-ripple/);
     assert.match(chrome, /Chrome only/);
+    assert.match(chrome, /excel-ripple/);
+    assert.match(chrome, /RETROACTIVE/);
     assert.equal(/from "\.\/other-cost/.test(chrome), false);
     assert.equal(/25324671|1435365/.test(xlsx), false);
+    assert.equal(/25324671|1435365/.test(chrome), false);
+    const ripple = readFileSync(here("./excel-ripple.ts"), "utf8");
+    assert.match(ripple, /RETROACTIVE/);
+    assert.match(ripple, /never a parallel book/);
+    assert.match(ripple, /Look chrome already shipped/);
+    assert.equal(/25324671|1435365/.test(ripple), false);
   });
 });

@@ -2,6 +2,9 @@
  * ExcelJS .xlsx writer — Excel-365-safe package + Hit Squad client styling.
  * Chrome only. Does not compute estimate dollars. Money stays in
  * estimate-xlsx / estimate-desk-total / shared desk libs.
+ * Standing ripple rule is RETROACTIVE (excel-ripple.ts): Look paint already
+ * on this branch (TOTAL bars, Rate Tables chrome, wrap, center, drop .0)
+ * must not invent catalogs or disconnect math from those libs.
  */
 
 import ExcelJS from "exceljs";
@@ -208,6 +211,7 @@ export function summaryLineFormat(lineLabel: string): string {
   return FMT_CURRENCY;
 }
 
+export { EXCEL_RIPPLE_RULE } from "./excel-ripple.ts";
 export const EXCEL_UNIT_FORMATS = {
   currency: FMT_CURRENCY,
   hours: FMT_HOURS,
