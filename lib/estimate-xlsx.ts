@@ -26,7 +26,7 @@
  * deskPackageTotal / estimateTotalBreakdown number as the Estimate Total rail.
  * Standing ripple rule (Robert 2026-09-04): every Excel change updates the
  * live estimate pack and every surface (desk totals, export/edit, Rate
- * Tables, fills). Excel is a view/edit surface of that pack — never a
+ * Tables, fills). Excel is a view of the live estimate pack — never a
  * parallel book. No Excel-only catalogs or hard-coded dollars. Crew, misc,
  * equipment, subs, and totals come from the same shared libs the desk uses
  * (other-cost, equipment-sheet, estimate-total). A Misc / rod-weight change
