@@ -603,6 +603,12 @@ function applyLaborChrome(
       ws.getColumn(i).alignment = { horizontal: "center", vertical: "middle" };
     }
   }
+  // Brand + subtitle bands span the day grid so L2:last / L3:last are not a white void.
+  for (let row = 1; row <= 3; row += 1) {
+    for (let col = 1; col <= Math.max(11, lastDateCol); col += 1) {
+      applyRowStyle(ws.getCell(row, col), row, maxRow, false, col);
+    }
+  }
   ws.getColumn(3).alignment = { wrapText: true, vertical: "middle", horizontal: "center" };
   for (const col of [2, 4, 5, 6, 7, 8, 9, 10, 11]) {
     ws.getColumn(col).alignment = { horizontal: "center", vertical: "middle" };
@@ -820,7 +826,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     ws.getRow(1).height = 22;
     ws.getRow(4).height = 6;
     ws.getRow(5).height = 6;
-    applyHeaderMetaLayout(ws, labor ? 11 : isSummary ? 3 : lastColNum);
+    applyHeaderMetaLayout(ws, labor ? Math.max(11, lastColNum) : isSummary ? 3 : lastColNum);
     if (!labor) ws.getRow(6).height = 20;
     ws.autoFilter = undefined;
     ws.pageSetup.printArea = `A1:${lastCol}${Math.max(maxRow, 7)}`;

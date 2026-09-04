@@ -370,6 +370,23 @@ describe("estimate excel export", () => {
     assert.equal(Number(staffSheet.getRow(3).height), HEADER_META_LINE_HEIGHT);
     assert.equal(staffSheet.getCell("A2").alignment?.wrapText, true);
     assert.equal(staffSheet.getCell("A3").alignment?.wrapText, true);
+    const staffMerges = ((staffSheet.model as { merges?: string[] }).merges ?? []) as string[];
+    const brandMerge = staffMerges.find((merge) => /^A1:[A-Z]+1$/.test(merge));
+    assert.ok(brandMerge);
+    const lastHeaderCol = brandMerge.slice(3, -1);
+    assert.ok(lastHeaderCol !== "K");
+    assert.ok(staffMerges.includes(`A2:${lastHeaderCol}2`));
+    assert.ok(staffMerges.includes(`A3:${lastHeaderCol}3`));
+    const headerFill = (cell: ExcelJS.Cell) =>
+      String((cell.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "")
+        .replace(/^FF/i, "")
+        .toUpperCase();
+    assert.ok(headerFill(staffSheet.getCell("A2")));
+    assert.ok(headerFill(staffSheet.getCell("A3")));
+    assert.equal(headerFill(staffSheet.getCell("L2")), headerFill(staffSheet.getCell("A2")));
+    assert.equal(headerFill(staffSheet.getCell("L3")), headerFill(staffSheet.getCell("A3")));
+    assert.equal(headerFill(staffSheet.getCell(`${lastHeaderCol}2`)), headerFill(staffSheet.getCell("A2")));
+    assert.equal(headerFill(staffSheet.getCell(`${lastHeaderCol}3`)), headerFill(staffSheet.getCell("A3")));
     assert.equal(staffSheet.getCell("B7").numFmt, EXCEL_UNIT_FORMATS.hours);
     assert.equal(staffSheet.getCell("K7").numFmt, "$#,##0.00");
     assert.equal(staffSheet.getCell("E10").numFmt, "$#,##0.00");
@@ -956,6 +973,15 @@ describe("estimate excel export", () => {
     assert.equal(argb(direct.getCell("G10")), LABOR_CAGE_WASH_B.slice(2));
     assert.equal(argb(direct.getCell(10, weekdayDayCol)), LABOR_DAY_WASH.slice(2));
     assert.equal(argb(direct.getCell("A14")), LABOR_SPACER.slice(2));
+    const lastDateCol = colLetter(LABOR_DATE_START_COL + laborCalendarDates(input).length - 1);
+    const directMerges = ((direct.model as { merges?: string[] }).merges ?? []) as string[];
+    assert.ok(directMerges.includes(`A1:${lastDateCol}1`));
+    assert.ok(directMerges.includes(`A2:${lastDateCol}2`));
+    assert.ok(directMerges.includes(`A3:${lastDateCol}3`));
+    assert.equal(argb(direct.getCell("L2")), argb(direct.getCell("A2")));
+    assert.equal(argb(direct.getCell("L3")), argb(direct.getCell("A3")));
+    assert.equal(argb(direct.getCell(`${lastDateCol}2`)), argb(direct.getCell("A2")));
+    assert.equal(argb(direct.getCell(`${lastDateCol}3`)), argb(direct.getCell("A3")));
     assert.equal(direct.getCell("A7").border?.left?.style, "medium");
     assert.equal(direct.getCell("K13").border?.right?.style, "medium");
     assert.equal(direct.getCell("K13").border?.bottom?.style, "medium");
@@ -1764,6 +1790,9 @@ describe("estimate excel export", () => {
     assert.equal(staffMap.get(`${idCol}${lead.pd}`)?.value, leadId);
     assert.equal(cellMap(direct).get(`${idCol}${night.title}`)?.value, nightId);
     assert.equal(staff.hiddenCols?.includes(LABOR_BLOCK_ID_COL), true);
+    const lastDateCol = colLetter(LABOR_DATE_START_COL + dates.length - 1);
+    assert.deepEqual(staff.merges, [`A1:${lastDateCol}1`, `A2:${lastDateCol}2`, `A3:${lastDateCol}3`]);
+    assert.deepEqual(direct.merges, [`A1:${lastDateCol}1`, `A2:${lastDateCol}2`, `A3:${lastDateCol}3`]);
     const bytes = await estimateToXlsx(input);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));

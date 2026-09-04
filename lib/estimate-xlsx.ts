@@ -792,7 +792,11 @@ function buildCrewSheet(
     weekendCols,
     laborBlocks,
     spacerRows,
-    merges: [`A1:${lastDateCol || "K"}1`, "A2:K2", "A3:K3"],
+    merges: [
+      `A1:${lastDateCol || "K"}1`,
+      `A2:${lastDateCol || "K"}2`,
+      `A3:${lastDateCol || "K"}3`,
+    ],
   };
 }
 
