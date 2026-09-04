@@ -16,11 +16,12 @@ const FMT_INTEGER = "#,##0";
 const FMT_PERCENT = "0.0%";
 const FMT_DATE = "YYYY-MM-DD";
 
-/** Saturday / Sunday labor-grid fills. Distinct grays so the week is obvious. Clock math unchanged. */
-export const LABOR_SAT_HEADER = "FFC9C9C9";
-export const LABOR_SAT_BODY = "FFC9C9C9";
-export const LABOR_SUN_HEADER = "FFA6A6A6";
-export const LABOR_SUN_BODY = "FFA6A6A6";
+/** Sat/Sun day-grid fill. Robert’s CAT 2: WEEKDAY=7 or 1 → #C9C9C9. Clock math unchanged. */
+export const LABOR_WEEKEND_FILL = "FFC9C9C9";
+export const LABOR_SAT_HEADER = LABOR_WEEKEND_FILL;
+export const LABOR_SAT_BODY = LABOR_WEEKEND_FILL;
+export const LABOR_SUN_HEADER = LABOR_WEEKEND_FILL;
+export const LABOR_SUN_BODY = LABOR_WEEKEND_FILL;
 
 export const LABOR_POSITION_TITLE = "FF3D4C5F";
 export const LABOR_HC_HPS = "FFFFFF00";
@@ -436,24 +437,41 @@ function applyLaborChrome(
       const cell = ws.getCell(row, col);
       cell.fill = solid(LABOR_SPACER);
       cell.border = {
-        top: edge("thin", GRID),
-        bottom: edge("thin", GRID),
+        top: edge("medium"),
+        bottom: edge("medium"),
       };
     }
     ws.getRow(row).height = 8;
   }
 
   for (const weekend of sheet.weekendCols ?? []) {
-    const header = weekend.weekday === 6 ? LABOR_SAT_HEADER : LABOR_SUN_HEADER;
-    const body = weekend.weekday === 6 ? LABOR_SAT_BODY : LABOR_SUN_BODY;
     for (let row = 6; row <= maxRow; row += 1) {
       if (totalRows.has(row)) continue;
       if (sheet.spacerRows?.includes(row)) continue;
       const exCell = ws.getCell(row, weekend.col);
-      exCell.fill = solid(row === 6 ? header : body);
+      exCell.fill = solid(LABOR_WEEKEND_FILL);
       if (row === 6) {
         exCell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 8 };
       }
+    }
+  }
+
+  if (lastDateCol >= 12) {
+    const first = colLetter(12);
+    const last = colLetter(lastDateCol);
+    const weekendRule = {
+      type: "expression" as const,
+      formulae: [`OR(WEEKDAY(${first}$6,1)=7,WEEKDAY(${first}$6,1)=1)`],
+      style: {
+        fill: { type: "pattern" as const, pattern: "solid" as const, bgColor: { argb: LABOR_WEEKEND_FILL } },
+      },
+    };
+    ws.addConditionalFormatting({ ref: `${first}6:${last}6`, rules: [weekendRule] });
+    for (const block of blocks) {
+      ws.addConditionalFormatting({
+        ref: `${first}${block.start}:${last}${block.end}`,
+        rules: [weekendRule],
+      });
     }
   }
 

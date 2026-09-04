@@ -760,7 +760,16 @@ describe("estimate excel export", () => {
     assert.equal(argb(direct.getCell(6, sun.col)), LABOR_SUN_HEADER.slice(2));
     assert.equal(argb(direct.getCell(7, sat.col)), LABOR_SAT_BODY.slice(2));
     assert.equal(argb(direct.getCell(7, sun.col)), LABOR_SUN_BODY.slice(2));
-    assert.notEqual(argb(direct.getCell(6, sat.col)), argb(direct.getCell(6, sun.col)));
+    assert.equal(argb(direct.getCell(6, sat.col)), "C9C9C9");
+    assert.equal(argb(direct.getCell(6, sun.col)), "C9C9C9");
+    const weekday = [sat.col - 1, sat.col + 1, sun.col - 1, sun.col + 1].find(
+      (col) => col !== sat.col && col !== sun.col && col >= 12,
+    );
+    assert.ok(weekday);
+    assert.notEqual(argb(direct.getCell(6, weekday)), "C9C9C9");
+    const cfDump = JSON.stringify(direct.conditionalFormattings ?? []);
+    assert.match(cfDump, /WEEKDAY/);
+    assert.match(cfDump, /C9C9C9/i);
   });
 
   it("tightens A–K and paints Office craft cages like Robert’s CAT 2", async () => {
