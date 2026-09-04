@@ -10,7 +10,7 @@
  * Unused columns past the used range are hidden. Unused rows below TOTAL
  * collapse (defaultRowHeight 0 + zeroHeight) so no white band remains.
  * Leftover white cells in the used band get Hit Squad teal, not mint/gray.
- * Craft sheets group A–K with native Excel column outline (+/−). No VBA / not xlsm.
+ * Craft sheets group A–J with native Excel column outline (+/−). No VBA / not xlsm.
  * Day-grid header is weekday (row 5) over day-of-month (row 6), white on teal.
  */
 
@@ -51,7 +51,7 @@ export const LABOR_SUN_BODY = LABOR_WEEKEND_FILL;
 
 export const LABOR_POSITION_TITLE = STEEL;
 export const LABOR_HC_HPS = "FFFFFF00";
-/** Empty A–K on HC/HPS rows — teal chrome; yellow stays on the day HC/HPS cells. */
+/** Empty A–J on HC/HPS rows — teal chrome; yellow stays on the day HC/HPS cells. */
 export const LABOR_HC_HPS_CLEAR = STEEL;
 export const LABOR_HOURS_LABEL = STEEL;
 export const LABOR_PD_LABEL = AMBER_FLARE;
@@ -82,20 +82,19 @@ export const HEADER_META_LINE_HEIGHT = 16;
 export const HEADER_META_WRAP_HEIGHT = 28;
 
 export const LABOR_COL_WIDTHS: Record<string, number> = {
-  // Shift labels only (DAYSHIFT / Hours/shift). 13 ate frozen-pane space.
+  // Shift next to Position — no Billable column.
   A: 11,
-  B: 11,
-  C: 32,
+  B: 32,
   // `$10,343,765.44` hashes at 15. 16 is the tightest full-currency floor.
-  D: 16,
+  C: 16,
+  D: 12,
   // ExcelJS omits width=9 (treats it as the default and drops the col). 9.01 persists as ~9.
-  E: 12,
-  F: 9.01,
+  E: 9.01,
+  F: 10,
   G: 10,
   H: 10,
   I: 10,
-  J: 10,
-  K: 16,
+  J: 16,
 };
 /** Explicit cell xf — column alignment alone does not center Excel number cells. */
 export const LABOR_CENTER: Partial<ExcelJS.Alignment> = {
@@ -103,17 +102,19 @@ export const LABOR_CENTER: Partial<ExcelJS.Alignment> = {
   vertical: "middle",
   wrapText: false,
 };
-/** Same width on every day col (L through last date). 3 made `9.5` into ##; 3.2 persists. */
+/** Same width on every day col (K through last date). 3 made `9.5` into ##; 3.2 persists. */
 export const LABOR_DAY_COL_WIDTH = 3.2;
-/** A–K one line + unrotated day-of-month. */
+/** A–J one line + unrotated day-of-month. */
 export const LABOR_HEADER_ROW_HEIGHT = 22;
 /** Every craft HC/HPS/ST/OT/DT/PD/title row — no wrap-driven spikes. */
 export const LABOR_DATA_ROW_HEIGHT = 16;
 /** Two short Job setup phase-bar rows above the date header. */
 export const LABOR_PHASE_ROW_HEIGHT = 14;
 export const SUMMARY_COL_A_WIDTH = 28;
-export const LABOR_DATE_FIRST_COL = 12;
-/** Native Excel column group on A–K (outline +/−). No VBA. */
+export const LABOR_DATE_FIRST_COL = 11;
+/** Frozen instrument columns A–J (Shift through Labor $). */
+export const LABOR_INSTRUMENT_LAST_COL = 10;
+/** Native Excel column group on A–J (outline +/−). No VBA. */
 export const LABOR_INSTRUMENT_OUTLINE_LEVEL = 1;
 
 /** Empty password: Review → Unprotect Sheet with no prompt. Formula cells stay locked. */
@@ -133,7 +134,7 @@ export const SHEET_PROTECT_OPTIONS: Partial<ExcelJS.WorksheetProtection> = {
   autoFilter: false,
   pivotTables: false,
 };
-/** Craft sheets: Format columns must stay on so the A–K outline +/− works when protected. */
+/** Craft sheets: Format columns must stay on so the A–J outline +/− works when protected. */
 export const LABOR_SHEET_PROTECT_OPTIONS: Partial<ExcelJS.WorksheetProtection> = {
   ...SHEET_PROTECT_OPTIONS,
   formatColumns: true,
@@ -325,7 +326,7 @@ function nearestHeaderRow(cells: SheetCell[], row: number, extra: number[] = [])
 
 function laborRowKind(cells: SheetCell[], row: number): "title" | "hc" | "hps" | "pd" | "hours" | "" {
   const shift = cells.find((cell) => cell.ref === `A${row}`);
-  const type = cells.find((cell) => cell.ref === `F${row}`);
+  const type = cells.find((cell) => cell.ref === `E${row}`);
   if (shift?.type === "text" && /DAYSHIFT|NIGHTSHIFT/i.test(shift.value)) return "title";
   if (type?.type === "text" && type.value === "TITLE") return "title";
   if (type?.type === "text" && type.value === "HC") return "hc";
@@ -390,15 +391,15 @@ function isLaborCountInputCell(cell: ExcelJS.Cell): boolean {
   return typeof cell.value === "number";
 }
 
-/** Support Bill as value in column C — unlocked so an estimator can set it offline. */
+/** Support Bill as value in column B — unlocked so an estimator can set it offline. */
 export function isLaborBillAsInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
-  return colNum === 3 && (sheet.billAs?.some((slot) => slot.valueRow === row) ?? false);
+  return colNum === 2 && (sheet.billAs?.some((slot) => slot.valueRow === row) ?? false);
 }
 
 function columnWidth(col: string, header: string | undefined, sheetName: string): number {
   const lower = (header ?? "").toLowerCase();
   const colNum = colIndex(col);
-  if (isLaborSheet(sheetName) && colNum >= 12) return LABOR_DAY_COL_WIDTH;
+  if (isLaborSheet(sheetName) && colNum >= LABOR_DATE_FIRST_COL) return LABOR_DAY_COL_WIDTH;
   if (isLaborSheet(sheetName) && LABOR_COL_WIDTHS[col] != null) return LABOR_COL_WIDTHS[col];
   if (col === "A") {
     if (sheetName === "Summary Page") return SUMMARY_COL_A_WIDTH;
@@ -585,7 +586,7 @@ function pinHoursAndMoney(
     for (let col = 1; col <= lastCol; col += 1) {
       const cell = ws.getCell(row, col);
       let fmt = cellFormat(sheet, headers, colLetter(col), row, isSummary);
-      if (labor && col >= 12 && (kind === "hc" || kind === "hps" || kind === "pd" || kind === "hours")) {
+      if (labor && col >= LABOR_DATE_FIRST_COL && (kind === "hc" || kind === "hps" || kind === "pd" || kind === "hours")) {
         fmt = FMT_HOURS;
       }
       if (fmt === FMT_HOURS || fmt === FMT_INTEGER) {
@@ -646,7 +647,7 @@ function pinLaborEvenRows(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDateC
   ws.getRow(6).height = LABOR_HEADER_ROW_HEIGHT;
   const spacers = new Set(sheet.spacerRows ?? []);
   for (let row = 4; row <= maxRow; row += 1) {
-    for (let col = 1; col <= Math.max(11, lastDateCol); col += 1) {
+    for (let col = 1; col <= Math.max(LABOR_INSTRUMENT_LAST_COL, lastDateCol); col += 1) {
       const cell = ws.getCell(row, col);
       const rotation = cell.alignment?.textRotation;
       centerLaborCell(cell, {
@@ -663,26 +664,26 @@ function pinLaborEvenRows(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDateC
 /** Last style write — Excel number xfs drop column-only center. */
 function pinLaborCraftAlignment(ws: ExcelJS.Worksheet, lastDateCol: number, maxRow: number) {
   const colAlign = { horizontal: "center" as const, vertical: "middle" as const };
-  for (let col = 1; col <= 11; col += 1) {
+  for (let col = 1; col <= LABOR_INSTRUMENT_LAST_COL; col += 1) {
     centerLaborCell(ws.getCell(6, col));
     ws.getColumn(col).alignment = colAlign;
   }
-  if (lastDateCol >= 12) {
-    for (let col = 12; col <= lastDateCol; col += 1) {
+  if (lastDateCol >= LABOR_DATE_FIRST_COL) {
+    for (let col = LABOR_DATE_FIRST_COL; col <= lastDateCol; col += 1) {
       centerLaborCell(ws.getCell(5, col));
       centerLaborCell(ws.getCell(6, col));
       ws.getColumn(col).alignment = colAlign;
     }
   }
   for (let row = 7; row <= maxRow; row += 1) {
-    for (let col = 1; col <= Math.max(11, lastDateCol); col += 1) {
+    for (let col = 1; col <= Math.max(LABOR_INSTRUMENT_LAST_COL, lastDateCol); col += 1) {
       centerLaborCell(ws.getCell(row, col));
     }
   }
 }
 
-/** C Position + G–K hour/money totals — merged title→PD. Skip per-row fills. */
-const LABOR_BLOCK_VOID_COL_NUMS = new Set([3, 7, 8, 9, 10, 11]);
+/** B Position + F–J hour/money totals — merged title→PD. Skip per-row fills. */
+const LABOR_BLOCK_VOID_COL_NUMS = new Set([2, 6, 7, 8, 9, 10]);
 
 function applyLaborBlockChrome(
   ws: ExcelJS.Worksheet,
@@ -695,7 +696,7 @@ function applyLaborBlockChrome(
 
   for (let row = block.start; row <= block.end; row += 1) {
     const kind = laborRowKind(sheet.cells, row);
-    for (let col = 1; col <= 11; col += 1) {
+    for (let col = 1; col <= LABOR_INSTRUMENT_LAST_COL; col += 1) {
       if (LABOR_BLOCK_VOID_COL_NUMS.has(col)) continue;
       const cell = ws.getCell(row, col);
       if (kind === "title") {
@@ -718,11 +719,11 @@ function applyLaborBlockChrome(
         cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 9 };
         centerLaborCell(cell);
       } else if (kind === "pd") {
-        if (col === 6) {
+        if (col === 5) {
           cell.fill = solid(LABOR_PD_LABEL);
           cell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 9 };
           centerLaborCell(cell);
-        } else if (col === 4 || col === 5) {
+        } else if (col === 3 || col === 4) {
           const wash = (row - block.start) % 2 === 0 ? LABOR_CAGE_WASH_A : LABOR_CAGE_WASH_B;
           cell.fill = solid(wash);
           cell.font = { color: { argb: WHITE }, name: "Calibri", size: 10 };
@@ -733,7 +734,7 @@ function applyLaborBlockChrome(
           centerLaborCell(cell);
         }
       } else if (kind === "hours") {
-        if (col === 6) {
+        if (col === 5) {
           cell.fill = solid(LABOR_HOURS_LABEL);
           cell.font = {
             bold: true,
@@ -751,13 +752,13 @@ function applyLaborBlockChrome(
       }
     }
     if (kind === "hc" || kind === "hps" || kind === "pd") {
-      for (let col = 12; col <= lastDateCol; col += 1) {
+      for (let col = LABOR_DATE_FIRST_COL; col <= lastDateCol; col += 1) {
         const day = ws.getCell(row, col);
         if (isLaborCountInputCell(day)) day.fill = solid(LABOR_HC_HPS);
         centerLaborCell(day);
       }
     } else {
-      for (let col = 12; col <= lastDateCol; col += 1) {
+      for (let col = LABOR_DATE_FIRST_COL; col <= lastDateCol; col += 1) {
         const day = ws.getCell(row, col);
         day.fill = solid(LABOR_DAY_WASH);
         centerLaborCell(day);
@@ -773,31 +774,31 @@ function applyLaborBlockChrome(
   }
   const billAs = sheet.billAs?.find((slot) => slot.labelRow >= block.start && slot.valueRow <= block.end);
   if (billAs) {
-    const label = ws.getCell(billAs.labelRow, 3);
+    const label = ws.getCell(billAs.labelRow, 2);
     label.fill = solid(STEEL_DEEP);
     label.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 8 };
     centerLaborCell(label);
-    const value = ws.getCell(billAs.valueRow, 3);
+    const value = ws.getCell(billAs.valueRow, 2);
     value.fill = solid(STEEL);
     value.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
     centerLaborCell(value, { wrapText: true });
   }
 
-  hairGrid(ws, block.start, block.end, 1, 11);
-  boxRange(ws, block.start, block.end, 1, 11, "medium");
+  hairGrid(ws, block.start, block.end, 1, LABOR_INSTRUMENT_LAST_COL);
+  boxRange(ws, block.start, block.end, 1, LABOR_INSTRUMENT_LAST_COL, "medium");
 
-  if (lastDateCol >= 12) {
-    hairGrid(ws, block.start, block.end, 12, lastDateCol);
+  if (lastDateCol >= LABOR_DATE_FIRST_COL) {
+    hairGrid(ws, block.start, block.end, LABOR_DATE_FIRST_COL, lastDateCol);
     for (let row = block.start + 3; row <= block.start + 5; row += 1) {
-      for (let col = 12; col <= lastDateCol; col += 1) {
+      for (let col = LABOR_DATE_FIRST_COL; col <= lastDateCol; col += 1) {
         patchBorder(ws.getCell(row, col), {
           top: edge("hair", GRID),
           bottom: edge("hair", GRID),
         });
-        if (col > 12) patchBorder(ws.getCell(row, col), { left: edge("thin", GRID) });
+        if (col > LABOR_DATE_FIRST_COL) patchBorder(ws.getCell(row, col), { left: edge("thin", GRID) });
       }
     }
-    boxRange(ws, block.start, block.end, 12, lastDateCol, "medium");
+    boxRange(ws, block.start, block.end, LABOR_DATE_FIRST_COL, lastDateCol, "medium");
   }
 }
 
@@ -840,13 +841,13 @@ function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDat
   const bandInk = { argb: PHASE_TONE_BAND_INK };
   for (const row of [4, 5] as const) {
     ws.getRow(row).height = LABOR_PHASE_ROW_HEIGHT;
-    for (let col = 1; col <= 11; col += 1) {
+    for (let col = 1; col <= LABOR_INSTRUMENT_LAST_COL; col += 1) {
       const cell = ws.getCell(row, col);
       cell.fill = solid(PLATE_WASH);
       cell.font = { bold: true, name: "Calibri", size: 9, color: { argb: WHITE } };
       centerLaborCell(cell);
     }
-    for (let col = 12; col <= lastDateCol; col += 1) {
+    for (let col = LABOR_DATE_FIRST_COL; col <= lastDateCol; col += 1) {
       const cell = ws.getCell(row, col);
       cell.fill = solid(PLATE_WASH);
       cell.font = { bold: true, name: "Calibri", size: 7, color: { argb: WHITE } };
@@ -868,10 +869,10 @@ function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDat
 function applyLaborInstrumentOutline(ws: ExcelJS.Worksheet): void {
   const props = ws.properties as ExcelJS.WorksheetProperties;
   // ExcelJS Column.collapsed is `outlineLevel >= outlineLevelCol`. Keep the
-  // sheet threshold above the group so A–K start expanded (no collapsed="1").
+  // sheet threshold above the group so A–J start expanded (no collapsed="1").
   props.outlineLevelCol = LABOR_INSTRUMENT_OUTLINE_LEVEL + 1;
   props.outlineProperties = { summaryBelow: true, summaryRight: true };
-  for (let col = 1; col <= 11; col += 1) {
+  for (let col = 1; col <= LABOR_INSTRUMENT_LAST_COL; col += 1) {
     ws.getColumn(col).outlineLevel = LABOR_INSTRUMENT_OUTLINE_LEVEL;
   }
 }
@@ -887,19 +888,19 @@ function applyLaborChrome(
     ws.getColumn(colIndex(col)).width = width;
   }
   applyLaborInstrumentOutline(ws);
-  if (lastDateCol >= 12) {
-    for (let i = 12; i <= lastDateCol; i += 1) {
+  if (lastDateCol >= LABOR_DATE_FIRST_COL) {
+    for (let i = LABOR_DATE_FIRST_COL; i <= lastDateCol; i += 1) {
       ws.getColumn(i).width = LABOR_DAY_COL_WIDTH;
       ws.getColumn(i).alignment = { horizontal: "center", vertical: "middle" };
     }
   }
-  // Brand + subtitle bands span the day grid so L2:last / L3:last are not a white void.
+  // Brand + subtitle bands span the day grid so K2:last / K3:last are not a white void.
   for (let row = 1; row <= 3; row += 1) {
-    for (let col = 1; col <= Math.max(11, lastDateCol); col += 1) {
+    for (let col = 1; col <= Math.max(LABOR_INSTRUMENT_LAST_COL, lastDateCol); col += 1) {
       applyRowStyle(ws.getCell(row, col), row, maxRow, false, col);
     }
   }
-  for (const col of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) {
+  for (let col = 1; col <= LABOR_INSTRUMENT_LAST_COL; col += 1) {
     ws.getColumn(col).alignment = { horizontal: "center", vertical: "middle" };
   }
 
@@ -907,7 +908,7 @@ function applyLaborChrome(
   for (const block of blocks) applyLaborBlockChrome(ws, sheet, block, lastDateCol);
 
   for (const row of sheet.spacerRows ?? []) {
-    for (let col = 1; col <= Math.max(11, lastDateCol); col += 1) {
+    for (let col = 1; col <= Math.max(LABOR_INSTRUMENT_LAST_COL, lastDateCol); col += 1) {
       const cell = ws.getCell(row, col);
       cell.fill = solid(LABOR_SPACER);
       cell.border = {
@@ -930,8 +931,8 @@ function applyLaborChrome(
     }
   }
 
-  if (lastDateCol >= 12) {
-    const first = colLetter(12);
+  if (lastDateCol >= LABOR_DATE_FIRST_COL) {
+    const first = colLetter(LABOR_DATE_FIRST_COL);
     const last = colLetter(lastDateCol);
     const weekendRule = {
       type: "expression" as const,
@@ -951,7 +952,7 @@ function applyLaborChrome(
 
   paintLaborDayCalendar(ws, sheet, lastDateCol, maxRow, totalRows);
   const weekendCols = new Set((sheet.weekendCols ?? []).map((item) => item.col));
-  for (let col = 12; col <= lastDateCol; col += 1) {
+  for (let col = LABOR_DATE_FIRST_COL; col <= lastDateCol; col += 1) {
     const weekday = ws.getCell(5, col);
     centerLaborCell(weekday);
     weekday.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 7 };
@@ -968,7 +969,7 @@ function applyLaborChrome(
     };
     if (!weekend) header.fill = solid(STEEL_DEEP);
   }
-  for (let col = 1; col <= 11; col += 1) {
+  for (let col = 1; col <= LABOR_INSTRUMENT_LAST_COL; col += 1) {
     centerLaborCell(ws.getCell(6, col));
   }
   ws.getRow(6).height = LABOR_HEADER_ROW_HEIGHT;
@@ -1212,7 +1213,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
         horizontalCentered: true,
         margins: { left: 0.4, right: 0.4, top: 0.65, bottom: 0.65, header: 0.28, footer: 0.28 },
         printTitlesRow: labor ? "4:6" : "6:6",
-        printTitlesColumn: labor ? "A:K" : undefined,
+        printTitlesColumn: labor ? "A:J" : undefined,
       },
       headerFooter: {
         oddHeader: printHeader(safeName),
@@ -1222,7 +1223,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       },
       views: [
         labor
-          ? { state: "frozen", xSplit: 11, ySplit: 6, activeCell: "L7", showGridLines: false }
+          ? { state: "frozen", xSplit: LABOR_INSTRUMENT_LAST_COL, ySplit: 6, activeCell: "K7", showGridLines: false }
           : { state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: false },
       ],
     });
@@ -1266,13 +1267,13 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       else if (adderRows.has(row)) applyAdderStyle(exCell);
       else applyRowStyle(exCell, row, maxRow, isSummary, colNum);
 
-      if (labor && row === 6 && colNum >= 12) {
+      if (labor && row === 6 && colNum >= LABOR_DATE_FIRST_COL) {
         exCell.numFmt = LABOR_DATE_NUM_FMT;
       }
 
       const fmt = cellFormat(sheet, headers, col, row, isSummary);
       if (fmt && row >= 7 && cell.type !== "text" && cell.type !== "date") exCell.numFmt = fmt;
-      if (labor && row >= 7 && colNum >= 12 && cell.type !== "text") {
+      if (labor && row >= 7 && colNum >= LABOR_DATE_FIRST_COL && cell.type !== "text") {
         const kind = laborRowKind(sheet.cells, row);
         if (kind === "hc" || kind === "hps" || kind === "pd" || kind === "hours") {
           exCell.numFmt = FMT_HOURS;
@@ -1288,7 +1289,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     else if (isSummary) applySummaryChrome(ws, maxRow, totalRows, sectionRows);
     else applyInstrumentChrome(ws, maxRow, lastVisibleColNum, totalRows, sectionRows, extraHeaders);
 
-    const totalWidth = labor ? 11 : lastVisibleColNum;
+    const totalWidth = labor ? LABOR_INSTRUMENT_LAST_COL : lastVisibleColNum;
     for (const row of totalRows) applyTotalBar(ws, row, totalWidth);
     applySoftUsedBand(ws, lastVisibleColNum, maxRow);
 
@@ -1314,7 +1315,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     }
     applyHeaderMetaLayout(
       ws,
-      labor ? Math.max(11, lastVisibleColNum) : isSummary ? 3 : lastVisibleColNum,
+      labor ? Math.max(LABOR_INSTRUMENT_LAST_COL, lastVisibleColNum) : isSummary ? 3 : lastVisibleColNum,
       !labor,
     );
     if (!labor) ws.getRow(6).height = 20;
@@ -1331,16 +1332,16 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       }
     }
     for (const slot of sheet.billAs ?? []) {
-      ws.getCell(slot.valueRow, 3).protection = { locked: false };
+      ws.getCell(slot.valueRow, 2).protection = { locked: false };
     }
     if (labor) {
       pinLaborCraftAlignment(ws, lastVisibleColNum, maxRow);
-      applyHeaderMetaLayout(ws, Math.max(11, lastVisibleColNum), false);
+      applyHeaderMetaLayout(ws, Math.max(LABOR_INSTRUMENT_LAST_COL, lastVisibleColNum), false);
       pinLaborEvenRows(ws, sheet, lastVisibleColNum, maxRow);
     }
     pinHoursAndMoney(ws, sheet, lastVisibleColNum, maxRow, labor, isSummary);
     for (const slot of sheet.billAs ?? []) {
-      const value = ws.getCell(slot.valueRow, 3);
+      const value = ws.getCell(slot.valueRow, 2);
       centerLaborCell(value, { wrapText: true });
       value.protection = { locked: false };
     }

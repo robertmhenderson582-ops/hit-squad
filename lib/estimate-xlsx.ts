@@ -5,12 +5,12 @@
  * Foremen / Direct / Support stay their own sheets. Desk cards stay the five
  * cards (Staff / GF / Foreman / Direct / Support) — this file does not invent
  * a new crew presentation. PD stays off Labor TM $. Labor sheets keep the
- * CAT 2 daily itemized grid (date row from col L, 7-row HC/HPS/ST/OT/DT/PD
+ * CAT 2 daily itemized grid (date row from col K, 7-row HC/HPS/ST/OT/DT/PD
  * blocks, DAYSHIFT / NIGHTSHIFT). PD is a daily people-count row (live-pack
  * perDiemPeople / nightPerDiemPeople) — same calendar idea as HC, not hours.
  * Position + ST/OT/DT/PD hrs + Labor $ merge
  * down the block void and center — one value, not duplicated on detail rows.
- * Support shows live-pack Bill as under Position in column C (same rate title
+ * Support shows live-pack Bill as under Position in column B (same rate title
  * as Rate Tables). Type / Rate / Subtotal $ stay per-row. That grid is the stable client edit surface
  * for a later import. Position dropdowns + workbook import are parked until
  * Look sign-off — a validation list with no pack ripple would be a parallel
@@ -112,7 +112,9 @@ export const ESTIMATE_SUMMARY_HOURS = "Man-hours (MH)";
 export const ESTIMATE_HOURS_LINE = "Man-hours";
 export const RATE_TOOLS_SECTION = "Large tools (COE / dry rates)";
 export const RATE_RENTAL_SECTION = "Third-party rental";
-export const LABOR_DATE_START_COL = 12;
+/** First day-grid column after the A–J instrument (Shift sits next to Position). */
+export const LABOR_DATE_START_COL = 11;
+export const LABOR_INSTRUMENT_LAST_COL = 10;
 /** Two short rows above the date header — live Job setup phase band. */
 export const LABOR_PHASE_ROW = 4;
 export const LABOR_PHASE_ROW_END = 5;
@@ -145,8 +147,8 @@ export const LABOR_OT_OFFSET = 4;
 export const LABOR_DT_OFFSET = 5;
 export const LABOR_PD_OFFSET = 6;
 /** Position + ST/OT/DT/PD hrs + Labor $ — one value centered in the block void. */
-export const LABOR_BLOCK_VOID_COLS = ["C", "G", "H", "I", "J", "K"] as const;
-export const LABOR_HOUR_VOID_COLS = ["G", "H", "I", "J", "K"] as const;
+export const LABOR_BLOCK_VOID_COLS = ["B", "F", "G", "H", "I", "J"] as const;
+export const LABOR_HOUR_VOID_COLS = ["F", "G", "H", "I", "J"] as const;
 /** Support-only field under Position. Live pack `billedAs` — import parked with Position dropdowns. */
 export const LABOR_BILL_AS_LABEL = "Bill as";
 
@@ -156,11 +158,11 @@ export function laborBlockVoidMerges(
 ): string[] {
   return blocks.flatMap((block) => {
     const hours = LABOR_HOUR_VOID_COLS.map((col) => `${col}${block.start}:${col}${block.end}`);
-    if (!opts.billAs) return [`C${block.start}:C${block.end}`, ...hours];
+    if (!opts.billAs) return [`B${block.start}:B${block.end}`, ...hours];
     const title = block.start;
     const hps = block.start + LABOR_HPS_OFFSET;
     const ot = block.start + LABOR_OT_OFFSET;
-    return [`C${title}:C${hps}`, `C${ot}:C${block.end}`, ...hours];
+    return [`B${title}:B${hps}`, `B${ot}:B${block.end}`, ...hours];
   });
 }
 
@@ -687,7 +689,7 @@ function writePhaseBar(
   dates: string[],
   schedule: EstimateXlsxInput["schedule"],
 ): { merges: string[]; phaseBar: NonNullable<WorkbookSheet["phaseBar"]> } {
-  const merges = [`A${LABOR_PHASE_ROW}:K${LABOR_PHASE_ROW_END}`];
+  const merges = [`A${LABOR_PHASE_ROW}:${colLetter(LABOR_INSTRUMENT_LAST_COL)}${LABOR_PHASE_ROW_END}`];
   pushText(cells, `A${LABOR_PHASE_ROW}`, LABOR_PHASE_LABEL);
   const runs = phaseBarRuns(dates, liveJobSetupPhases(schedule));
   const phaseBar = runs.map((run) => {
@@ -718,7 +720,6 @@ function buildCrewSheet(
   const cells = headerCells(input);
   const headers = [
     "Shift",
-    "Billable",
     "Position",
     "Subtotal $",
     "Rate",
@@ -765,55 +766,49 @@ function buildCrewSheet(
     }
 
     pushText(cells, `A${titleRow}`, night ? LABOR_NIGHTSHIFT : LABOR_DAYSHIFT);
-    pushText(cells, `C${titleRow}`, row.position.trim());
+    pushText(cells, `B${titleRow}`, row.position.trim());
     if (showBillAs) {
-      pushText(cells, `C${stRow}`, LABOR_BILL_AS_LABEL);
-      cells.push({ ref: `C${otRow}`, type: "text", value: billAsDisplay(row, input.site ?? "") });
+      pushText(cells, `B${stRow}`, LABOR_BILL_AS_LABEL);
+      cells.push({ ref: `B${otRow}`, type: "text", value: billAsDisplay(row, input.site ?? "") });
     }
-    pushFormula(cells, `B${titleRow}`, `G${titleRow}+H${titleRow}+I${titleRow}`);
-    pushFormula(cells, `D${titleRow}`, `K${titleRow}`);
-    pushFormula(cells, `G${titleRow}`, `B${stRow}`);
-    pushFormula(cells, `H${titleRow}`, `B${otRow}`);
-    pushFormula(cells, `I${titleRow}`, `B${dtRow}`);
-    pushFormula(cells, `J${titleRow}`, `B${pdRow}`);
-    pushFormula(cells, `K${titleRow}`, `D${stRow}+D${otRow}+D${dtRow}`);
-
-    pushText(cells, `F${hcRow}`, LABOR_HC_LABEL);
-    pushText(cells, `A${hpsRow}`, LABOR_HPS_LABEL);
-    pushText(cells, `F${hpsRow}`, LABOR_HPS_TYPE);
-    pushText(cells, `F${stRow}`, "ST");
-    pushText(cells, `F${otRow}`, "OT");
-    pushText(cells, `F${dtRow}`, "DT");
-    pushText(cells, `A${pdRow}`, LABOR_PD_COUNT_LABEL);
-    pushText(cells, `F${pdRow}`, LABOR_PD_TYPE);
-
+    pushFormula(cells, `C${titleRow}`, `J${titleRow}`);
     if (dates.length) {
-      pushFormula(cells, `B${stRow}`, `SUM(${firstDate}${stRow}:${lastDateCol}${stRow})`);
-      pushFormula(cells, `B${otRow}`, `SUM(${firstDate}${otRow}:${lastDateCol}${otRow})`);
-      pushFormula(cells, `B${dtRow}`, `SUM(${firstDate}${dtRow}:${lastDateCol}${dtRow})`);
-      pushFormula(cells, `B${pdRow}`, `SUM(${firstDate}${pdRow}:${lastDateCol}${pdRow})`);
+      pushFormula(cells, `F${titleRow}`, `SUM(${firstDate}${stRow}:${lastDateCol}${stRow})`);
+      pushFormula(cells, `G${titleRow}`, `SUM(${firstDate}${otRow}:${lastDateCol}${otRow})`);
+      pushFormula(cells, `H${titleRow}`, `SUM(${firstDate}${dtRow}:${lastDateCol}${dtRow})`);
+      pushFormula(cells, `I${titleRow}`, `SUM(${firstDate}${pdRow}:${lastDateCol}${pdRow})`);
     } else {
-      pushNum(cells, `B${stRow}`, 0);
-      pushNum(cells, `B${otRow}`, 0);
-      pushNum(cells, `B${dtRow}`, 0);
-      pushNum(cells, `B${pdRow}`, 0);
+      pushNum(cells, `F${titleRow}`, 0);
+      pushNum(cells, `G${titleRow}`, 0);
+      pushNum(cells, `H${titleRow}`, 0);
+      pushNum(cells, `I${titleRow}`, 0);
     }
+    pushFormula(cells, `J${titleRow}`, `C${stRow}+C${otRow}+C${dtRow}`);
+
+    pushText(cells, `E${hcRow}`, LABOR_HC_LABEL);
+    pushText(cells, `A${hpsRow}`, LABOR_HPS_LABEL);
+    pushText(cells, `E${hpsRow}`, LABOR_HPS_TYPE);
+    pushText(cells, `E${stRow}`, "ST");
+    pushText(cells, `E${otRow}`, "OT");
+    pushText(cells, `E${dtRow}`, "DT");
+    pushText(cells, `A${pdRow}`, LABOR_PD_COUNT_LABEL);
+    pushText(cells, `E${pdRow}`, LABOR_PD_TYPE);
 
     if (hasRate) {
-      pushFormula(cells, `E${stRow}`, rateCell(key, keys, "C"));
-      pushFormula(cells, `E${otRow}`, rateCell(key, keys, "D"));
-      pushFormula(cells, `E${dtRow}`, rateCell(key, keys, "E"));
-      pushFormula(cells, `D${stRow}`, `B${stRow}*E${stRow}`);
-      pushFormula(cells, `D${otRow}`, `B${otRow}*E${otRow}`);
-      pushFormula(cells, `D${dtRow}`, `B${dtRow}*E${dtRow}`);
+      pushFormula(cells, `D${stRow}`, rateCell(key, keys, "C"));
+      pushFormula(cells, `D${otRow}`, rateCell(key, keys, "D"));
+      pushFormula(cells, `D${dtRow}`, rateCell(key, keys, "E"));
+      pushFormula(cells, `C${stRow}`, `F${titleRow}*D${stRow}`);
+      pushFormula(cells, `C${otRow}`, `G${titleRow}*D${otRow}`);
+      pushFormula(cells, `C${dtRow}`, `H${titleRow}*D${dtRow}`);
     } else {
-      pushText(cells, `E${stRow}`, SHAHAN_NO_RATE_LABEL);
-      pushNum(cells, `D${stRow}`, 0);
-      pushNum(cells, `D${otRow}`, 0);
-      pushNum(cells, `D${dtRow}`, 0);
+      pushText(cells, `D${stRow}`, SHAHAN_NO_RATE_LABEL);
+      pushNum(cells, `C${stRow}`, 0);
+      pushNum(cells, `C${otRow}`, 0);
+      pushNum(cells, `C${dtRow}`, 0);
     }
-    pushNum(cells, `E${pdRow}`, pdRateFor(input, staffPdOf(row)));
-    pushFormula(cells, `D${pdRow}`, `B${pdRow}*E${pdRow}`);
+    pushNum(cells, `D${pdRow}`, pdRateFor(input, staffPdOf(row)));
+    pushFormula(cells, `C${pdRow}`, `I${titleRow}*D${pdRow}`);
 
     dates.forEach((ymd, index) => {
       const col = colLetter(LABOR_DATE_START_COL + index);
@@ -849,18 +844,22 @@ function buildCrewSheet(
 
   const totalRow = excelRow;
   pushText(cells, `A${totalRow}`, "TOTAL");
+  const hoursRollup = `${colLetter(LABOR_BLOCK_ID_COL)}${totalRow}`;
   if (titleRows.length) {
-    pushFormula(cells, `B${totalRow}`, `SUM(${titleRows.map((row) => `B${row}`).join(",")})`);
-    pushFormula(cells, `D${totalRow}`, `SUM(${pdMoneyRows.map((row) => `D${row}`).join(",")})`);
+    pushFormula(cells, `C${totalRow}`, `SUM(${pdMoneyRows.map((row) => `C${row}`).join(",")})`);
+    pushFormula(cells, `F${totalRow}`, `SUM(${titleRows.map((row) => `F${row}`).join(",")})`);
     pushFormula(cells, `G${totalRow}`, `SUM(${titleRows.map((row) => `G${row}`).join(",")})`);
     pushFormula(cells, `H${totalRow}`, `SUM(${titleRows.map((row) => `H${row}`).join(",")})`);
     pushFormula(cells, `I${totalRow}`, `SUM(${titleRows.map((row) => `I${row}`).join(",")})`);
     pushFormula(cells, `J${totalRow}`, `SUM(${titleRows.map((row) => `J${row}`).join(",")})`);
-    pushFormula(cells, `K${totalRow}`, `SUM(${titleRows.map((row) => `K${row}`).join(",")})`);
+    pushFormula(cells, hoursRollup, `F${totalRow}+G${totalRow}+H${totalRow}`);
   } else {
-    pushNum(cells, `B${totalRow}`, 0);
-    pushNum(cells, `D${totalRow}`, 0);
-    pushNum(cells, `K${totalRow}`, 0);
+    pushNum(cells, `C${totalRow}`, 0);
+    pushNum(cells, `F${totalRow}`, 0);
+    pushNum(cells, `G${totalRow}`, 0);
+    pushNum(cells, `H${totalRow}`, 0);
+    pushNum(cells, `J${totalRow}`, 0);
+    pushNum(cells, hoursRollup, 0);
   }
 
   const weekendCols = dates
@@ -874,10 +873,10 @@ function buildCrewSheet(
   return {
     name,
     cells,
-    laborTotal: `K${totalRow}`,
-    pdTotal: `D${totalRow}`,
-    hoursTotal: `B${totalRow}`,
-    sheetTotal: `K${totalRow}`,
+    laborTotal: `J${totalRow}`,
+    pdTotal: `C${totalRow}`,
+    hoursTotal: hoursRollup,
+    sheetTotal: `J${totalRow}`,
     hiddenCols: [LABOR_BLOCK_ID_COL],
     weekendCols,
     laborBlocks,
@@ -890,12 +889,12 @@ function buildCrewSheet(
         }))
       : undefined,
     merges: [
-      `A1:${lastDateCol || "K"}1`,
-      `A2:${lastDateCol || "K"}2`,
-      `A3:${lastDateCol || "K"}3`,
+      `A1:${lastDateCol || "J"}1`,
+      `A2:${lastDateCol || "J"}2`,
+      `A3:${lastDateCol || "J"}3`,
       ...phaseBand.merges,
       // Full title→PD range: HC/HPS sit between the summary and ST/OT/DT/PD rows.
-      // Support splits C: Position (title–HPS) + Bill as value (OT–PD).
+      // Support splits B: Position (title–HPS) + Bill as value (OT–PD).
       ...laborBlockVoidMerges(laborBlocks, { billAs: showBillAs }),
     ],
   };

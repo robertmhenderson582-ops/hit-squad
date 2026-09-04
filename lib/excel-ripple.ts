@@ -20,6 +20,9 @@
  * Daily PD count on craft sheets is live-pack perDiemPeople / nightPerDiemPeople
  * (can differ from HC). Day cells are hard yellow inputs like HC; PD $ stays
  * count × PD rate. Empty unused day cells stay teal, not yellow.
+ * Craft-sheet Billable column is dropped — it duplicated ST+OT+DT / per-row
+ * totals. Day-grid sums still feed ST/OT/DT hours and PD count → $; Summary
+ * hours still F+G+H. Rate Tables ST Billable is a catalog column and stays.
  *
  * Adjustable Job setup + phase-bar import is parked for the next Excel compile
  * after Look (Robert 2026-09-04). Locked answer is YES under the

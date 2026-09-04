@@ -332,6 +332,7 @@ describe("estimate pack JSON → xlsx", () => {
     assert.match(chrome, /native Excel column outline/);
     assert.match(chrome, /LABOR_DATE_NUM_FMT/);
     assert.match(chrome, /Hit Squad teal/);
+    assert.match(chrome, /no Billable column/);
     assert.equal(/vbaProject|\.xlsm/i.test(chrome), false);
     assert.equal(/from "\.\/other-cost/.test(chrome), false);
     assert.equal(/25324671|1435365/.test(xlsx), false);

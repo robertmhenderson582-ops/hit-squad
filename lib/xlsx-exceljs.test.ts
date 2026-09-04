@@ -60,7 +60,8 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(formatForHeader("ST Hrs") === formatForHeader("ST $"), false);
     assert.equal(LABOR_INSTRUMENT_OUTLINE_LEVEL, 1);
     assert.equal(LABOR_COL_WIDTHS.A, 11);
-    assert.equal(LABOR_COL_WIDTHS.K, 16);
+    assert.equal(LABOR_COL_WIDTHS.J, 16);
+    assert.equal(LABOR_COL_WIDTHS.K, undefined);
     assert.equal(SHEET_PROTECT_OPTIONS.formatColumns, false);
     assert.equal(LABOR_SHEET_PROTECT_OPTIONS.formatColumns, true);
   });
@@ -90,8 +91,7 @@ describe("xlsx-exceljs unit formats", () => {
       LABOR_COL_WIDTHS.G +
       LABOR_COL_WIDTHS.H +
       LABOR_COL_WIDTHS.I +
-      LABOR_COL_WIDTHS.J +
-      LABOR_COL_WIDTHS.K;
+      LABOR_COL_WIDTHS.J;
     assert.equal(headerMetaHeight("HIT SQUAD", summaryWidth), HEADER_META_LINE_HEIGHT);
     assert.equal(headerMetaHeight(job, summaryWidth), HEADER_META_WRAP_HEIGHT);
     assert.equal(headerMetaHeight(produced, summaryWidth), HEADER_META_WRAP_HEIGHT);

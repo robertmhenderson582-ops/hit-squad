@@ -139,7 +139,7 @@ export type WorkbookSheet = {
   headerRows?: number[];
   /** Job setup phase runs on labor rows 4–5 (day-grid columns). */
   phaseBar?: Array<{ startCol: number; endCol: number; phaseId: string }>;
-  /** Support Bill as field — label + value rows in column C under Position. */
+  /** Support Bill as field — label + value rows in column B under Position. */
   billAs?: Array<{ labelRow: number; valueRow: number }>;
 };
 
