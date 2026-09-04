@@ -8,6 +8,9 @@ import {
   headerMetaHeight,
   LABOR_COL_WIDTHS,
   LABOR_DAY_WASH,
+  LABOR_INSTRUMENT_OUTLINE_LEVEL,
+  LABOR_SHEET_PROTECT_OPTIONS,
+  SHEET_PROTECT_OPTIONS,
   summaryLineFormat,
 } from "./xlsx-exceljs.ts";
 
@@ -50,6 +53,11 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(formatForHeader("Markup %"), "0.0%");
     assert.equal(formatForHeader("Position"), undefined);
     assert.equal(formatForHeader("ST Hrs") === formatForHeader("ST $"), false);
+    assert.equal(LABOR_INSTRUMENT_OUTLINE_LEVEL, 1);
+    assert.equal(LABOR_COL_WIDTHS.A, 11);
+    assert.equal(LABOR_COL_WIDTHS.K, 16);
+    assert.equal(SHEET_PROTECT_OPTIONS.formatColumns, false);
+    assert.equal(LABOR_SHEET_PROTECT_OPTIONS.formatColumns, true);
   });
 
   it("formats summary rollup lines by the unit in column A", () => {

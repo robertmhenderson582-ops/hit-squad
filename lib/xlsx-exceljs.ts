@@ -10,6 +10,7 @@
  * Unused columns past the used range are hidden. Unused rows below TOTAL
  * collapse (defaultRowHeight 0 + zeroHeight) so no white band remains.
  * Leftover white cells in the used band get a soft plate wash. Chrome only.
+ * Craft sheets group A–K with native Excel column outline (+/−). No VBA / not xlsm.
  */
 
 import ExcelJS from "exceljs";
@@ -109,6 +110,8 @@ export const LABOR_DATA_ROW_HEIGHT = 16;
 export const LABOR_PHASE_ROW_HEIGHT = 14;
 export const SUMMARY_COL_A_WIDTH = 28;
 export const LABOR_DATE_FIRST_COL = 12;
+/** Native Excel column group on A–K (outline +/−). No VBA. */
+export const LABOR_INSTRUMENT_OUTLINE_LEVEL = 1;
 
 /** Empty password: Review → Unprotect Sheet with no prompt. Formula cells stay locked. */
 export const SHEET_PROTECT_PASSWORD = "";
@@ -126,6 +129,11 @@ export const SHEET_PROTECT_OPTIONS: Partial<ExcelJS.WorksheetProtection> = {
   sort: false,
   autoFilter: false,
   pivotTables: false,
+};
+/** Craft sheets: Format columns must stay on so the A–K outline +/− works when protected. */
+export const LABOR_SHEET_PROTECT_OPTIONS: Partial<ExcelJS.WorksheetProtection> = {
+  ...SHEET_PROTECT_OPTIONS,
+  formatColumns: true,
 };
 
 const FORBIDDEN_CLIENT_COPY = /field trial|forgebook|not a release/i;
@@ -797,6 +805,17 @@ function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDat
   }
 }
 
+function applyLaborInstrumentOutline(ws: ExcelJS.Worksheet): void {
+  const props = ws.properties as ExcelJS.WorksheetProperties;
+  // ExcelJS Column.collapsed is `outlineLevel >= outlineLevelCol`. Keep the
+  // sheet threshold above the group so A–K start expanded (no collapsed="1").
+  props.outlineLevelCol = LABOR_INSTRUMENT_OUTLINE_LEVEL + 1;
+  props.outlineProperties = { summaryBelow: true, summaryRight: true };
+  for (let col = 1; col <= 11; col += 1) {
+    ws.getColumn(col).outlineLevel = LABOR_INSTRUMENT_OUTLINE_LEVEL;
+  }
+}
+
 function applyLaborChrome(
   ws: ExcelJS.Worksheet,
   sheet: WorkbookSheet,
@@ -807,6 +826,7 @@ function applyLaborChrome(
   for (const [col, width] of Object.entries(LABOR_COL_WIDTHS)) {
     ws.getColumn(colIndex(col)).width = width;
   }
+  applyLaborInstrumentOutline(ws);
   if (lastDateCol >= 12) {
     for (let i = 12; i <= lastDateCol; i += 1) {
       ws.getColumn(i).width = LABOR_DAY_COL_WIDTH;
@@ -949,7 +969,7 @@ function hideUnusedGrid(ws: ExcelJS.Worksheet, _lastVisibleCol: number, lastVisi
 function stampSheetCols(xml: string): string {
   const block = xml.match(/<cols>[\s\S]*?<\/cols>/);
   if (!block) return xml;
-  type ColInfo = { width: string; hidden: boolean };
+  type ColInfo = { width: string; hidden: boolean; outlineLevel?: string };
   const byCol = new Map<number, ColInfo>();
   for (const tag of block[0].matchAll(/<col ([^/]+)\/>/g)) {
     const attrs = tag[1];
@@ -957,7 +977,10 @@ function stampSheetCols(xml: string): string {
     const max = Number(/max="(\d+)"/.exec(attrs)?.[1] ?? 0);
     const width = /width="([^"]+)"/.exec(attrs)?.[1] ?? "9";
     const hidden = /\bhidden="1"/.test(attrs);
-    for (let col = min; col <= max; col += 1) byCol.set(col, { width, hidden });
+    const outlineLevel = /outlineLevel="(\d+)"/.exec(attrs)?.[1];
+    for (let col = min; col <= max; col += 1) {
+      byCol.set(col, { width, hidden, ...(outlineLevel ? { outlineLevel } : {}) });
+    }
   }
   let lastVisible = 1;
   for (const [col, info] of byCol) {
@@ -969,16 +992,17 @@ function stampSheetCols(xml: string): string {
     !firstDay?.hidden &&
     Math.abs(Number(firstDay?.width) - LABOR_DAY_COL_WIDTH) < 0.05;
   const tags: string[] = [];
-  const push = (min: number, max: number, width: string, hidden = false) => {
+  const push = (min: number, max: number, width: string, hidden = false, outlineLevel?: string) => {
+    const outline = outlineLevel ? ` outlineLevel="${outlineLevel}"` : "";
     tags.push(
-      `<col min="${min}" max="${max}" width="${width}"${hidden ? ' hidden="1"' : ""} customWidth="1"/>`,
+      `<col min="${min}" max="${max}" width="${width}"${hidden ? ' hidden="1"' : ""} customWidth="1"${outline}/>`,
     );
   };
   if (dayGrid) {
     for (let col = 1; col < LABOR_DATE_FIRST_COL; col += 1) {
       const info = byCol.get(col);
       if (!info || info.hidden) continue;
-      push(col, col, info.width);
+      push(col, col, info.width, false, info.outlineLevel);
     }
     for (let col = LABOR_DATE_FIRST_COL; col <= lastVisible; col += 1) {
       if (byCol.get(col)?.hidden) continue;
@@ -1021,18 +1045,54 @@ async function stampUnusedRowsHidden(buffer: Uint8Array): Promise<Uint8Array> {
     if (!file) continue;
     let xml = await file.async("string");
     xml = stampSheetCols(xml);
-    zip.file(
-      name,
-      xml.replace(/<sheetFormatPr\b([^>]*?)\/>/g, (_all, attrs: string) => {
-        let next = attrs;
-        next = /\bdefaultRowHeight=/.test(next)
-          ? next.replace(/defaultRowHeight="[^"]*"/, 'defaultRowHeight="0"')
-          : `${next} defaultRowHeight="0"`;
-        if (!/\bzeroHeight=/.test(next)) next += ' zeroHeight="1"';
-        if (!/\bcustomHeight=/.test(next)) next += ' customHeight="1"';
-        return `<sheetFormatPr${next}/>`;
-      }),
-    );
+    const hasInstrumentOutline = /<col[^>]*outlineLevel="1"/.test(xml);
+    xml = xml.replace(/<sheetFormatPr\b([^>]*?)\/>/g, (_all, attrs: string) => {
+      let next = attrs;
+      next = /\bdefaultRowHeight=/.test(next)
+        ? next.replace(/defaultRowHeight="[^"]*"/, 'defaultRowHeight="0"')
+        : `${next} defaultRowHeight="0"`;
+      if (!/\bzeroHeight=/.test(next)) next += ' zeroHeight="1"';
+      if (!/\bcustomHeight=/.test(next)) next += ' customHeight="1"';
+      if (hasInstrumentOutline) {
+        next = /\boutlineLevelCol=/.test(next)
+          ? next.replace(/outlineLevelCol="[^"]*"/, 'outlineLevelCol="1"')
+          : `${next} outlineLevelCol="1"`;
+      }
+      return `<sheetFormatPr${next}/>`;
+    });
+    if (hasInstrumentOutline) {
+      xml = xml.replace(/<sheetProtection\b([^>]*)\/>/, (full, attrs: string) => {
+        if (/formatColumns=/.test(attrs)) {
+          return full.replace(/formatColumns="[^"]*"/, 'formatColumns="1"');
+        }
+        return full.replace("<sheetProtection", '<sheetProtection formatColumns="1"');
+      });
+      xml = xml.replace(/<sheetView\b([^>]*)>/, (full, attrs: string) => {
+        if (/showOutlineSymbols=/.test(attrs)) {
+          return full.replace(/showOutlineSymbols="[^"]*"/, 'showOutlineSymbols="1"');
+        }
+        return full.replace("<sheetView", '<sheetView showOutlineSymbols="1"');
+      });
+      if (!xml.includes("<outlinePr")) {
+        if (/<sheetPr\b[^>]*\/>/.test(xml)) {
+          xml = xml.replace(
+            /<sheetPr\b([^>]*)\/>/,
+            '<sheetPr$1><outlinePr summaryBelow="1" summaryRight="1"/></sheetPr>',
+          );
+        } else if (/<sheetPr\b/.test(xml)) {
+          xml = xml.replace(
+            /<sheetPr\b([^>]*)>/,
+            '<sheetPr$1><outlinePr summaryBelow="1" summaryRight="1"/>',
+          );
+        } else {
+          xml = xml.replace(
+            /<worksheet\b([^>]*)>/,
+            '<worksheet$1><sheetPr><outlinePr summaryBelow="1" summaryRight="1"/></sheetPr>',
+          );
+        }
+      }
+    }
+    zip.file(name, xml);
   }
   return new Uint8Array(
     await zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 } }),
@@ -1207,7 +1267,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
         ws.getColumn(col).width = LABOR_DAY_COL_WIDTH;
       }
     }
-    await ws.protect(SHEET_PROTECT_PASSWORD, SHEET_PROTECT_OPTIONS);
+    await ws.protect(SHEET_PROTECT_PASSWORD, labor ? LABOR_SHEET_PROTECT_OPTIONS : SHEET_PROTECT_OPTIONS);
   }
 
   const buffer = await wb.xlsx.writeBuffer();

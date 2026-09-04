@@ -59,6 +59,7 @@ import {
   EXCEL_UNIT_FORMATS,
   LABOR_COL_WIDTHS,
   LABOR_DAY_COL_WIDTH,
+  LABOR_INSTRUMENT_OUTLINE_LEVEL,
   LABOR_DATA_ROW_HEIGHT,
   LABOR_HEADER_ROW_HEIGHT,
   SHEET_VOID_WASH,
@@ -2048,6 +2049,74 @@ describe("estimate excel export", () => {
       assert.match(xml, /zeroHeight="1"/);
       assert.match(xml, /defaultRowHeight="0"/);
     }
+  });
+
+  it("groups A–K on craft sheets with native column outline, no VBA", async () => {
+    const bytes = await estimateToXlsx({
+      ...woodRiverFixture(),
+      crew: {
+        ...woodRiverFixture().crew,
+        generalForeman: [craft("gf-1", "Pipefitter GF Union", 10, { perDiemPeople: 1, otAfter8: true })],
+        foreman: [craft("fm-1", "Boilermaker Foreman", 10, { perDiemPeople: 1, otAfter8: true })],
+        support: [craft("su-1", "Fire Watch", 10, { perDiemPeople: 1, otAfter8: true, billedAs: "Boilermaker Journeyman" })],
+      },
+    });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const craftNames = [
+      ESTIMATE_XLSX_SHEETS.staff,
+      ESTIMATE_XLSX_SHEETS.foremen,
+      ESTIMATE_XLSX_SHEETS.direct,
+      ESTIMATE_XLSX_SHEETS.support,
+    ];
+    for (const name of craftNames) {
+      const sheet = wb.getWorksheet(name);
+      assert.ok(sheet, name);
+      assert.equal(sheet.getColumn(1).outlineLevel, LABOR_INSTRUMENT_OUTLINE_LEVEL, `${name} A`);
+      assert.equal(sheet.getColumn(11).outlineLevel, LABOR_INSTRUMENT_OUTLINE_LEVEL, `${name} K`);
+      assert.equal(Number(sheet.getColumn(12).outlineLevel ?? 0), 0, `${name} L`);
+      assert.equal(Number(sheet.getColumn(1).width), LABOR_COL_WIDTHS.A);
+      assert.equal(Number(sheet.getColumn(11).width), LABOR_COL_WIDTHS.K);
+    }
+    const summary = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
+    assert.ok(summary);
+    assert.equal(Number(summary.getColumn(1).outlineLevel ?? 0), 0);
+
+    const { default: JSZip } = await import("jszip");
+    const zip = await JSZip.loadAsync(bytes);
+    assert.equal(Object.keys(zip.files).some((name) => /vbaProject/i.test(name)), false);
+    const contentTypes = await zip.file("[Content_Types].xml")?.async("string");
+    assert.ok(contentTypes);
+    assert.equal(/macroEnabled/i.test(contentTypes), false);
+    assert.match(contentTypes, /workbook.xml/);
+
+    const sheetXml = await Promise.all(
+      Object.keys(zip.files)
+        .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+        .map((name) => zip.file(name)?.async("string") ?? Promise.resolve("")),
+    );
+    const laborXml = sheetXml.filter((xml) => /min="1" max="1"[^>]*outlineLevel="1"/.test(xml));
+    assert.equal(laborXml.length, 4);
+    for (const xml of laborXml) {
+      assert.match(xml, /min="1" max="1"[^>]*outlineLevel="1"/);
+      assert.match(xml, /min="11" max="11"[^>]*outlineLevel="1"/);
+      assert.equal(/min="1" max="1"[^>]*collapsed="1"/.test(xml), false);
+      assert.equal(/min="11" max="11"[^>]*collapsed="1"/.test(xml), false);
+      assert.equal(/min="12" max="12"[^>]*outlineLevel=/.test(xml), false);
+      assert.match(xml, /showOutlineSymbols="1"/);
+      assert.match(xml, /outlineLevelCol="1"/);
+      assert.match(xml, /<outlinePr[^>]*summaryRight="1"/);
+      assert.match(xml, /formatColumns="1"/);
+      assert.match(xml, /min="12" max="12" width="3.2"/);
+    }
+    const nonLabor = sheetXml.filter((xml) => !/min="1" max="1"[^>]*outlineLevel="1"/.test(xml));
+    assert.ok(nonLabor.length);
+    for (const xml of nonLabor) {
+      assert.equal(/min="1" max="1"[^>]*outlineLevel=/.test(xml), false);
+    }
+    const writer = readFileSync(fileURLToPath(new URL("./xlsx-exceljs.ts", import.meta.url)), "utf8");
+    assert.match(writer, /applyLaborInstrumentOutline/);
+    assert.equal(/vbaProject|\.xlsm/i.test(writer), false);
   });
 
   it("uses #,##0 hours and unclipped $ currency on every package sheet", async () => {
