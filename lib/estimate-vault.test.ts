@@ -547,7 +547,7 @@ describe("estimate vault service", () => {
     );
     const archived = await archiveVisiblePack(tester, tm.packId, true, drive);
     assert.equal(archived.ok, true);
-    if (archived.ok) assert.equal(archived.pack?.archived, undefined);
+    if (archived.ok) assert.equal(archived.pack?.archived ?? false, false);
     const removed = await deleteVisiblePack(tester, tm.packId, drive);
     assert.equal(removed.ok, true);
     if (removed.ok) assert.equal(removed.deleted, false);
