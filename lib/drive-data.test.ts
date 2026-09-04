@@ -24,7 +24,7 @@ import {
   resetVaultFileIdsForTests,
   writeVaultJson,
 } from "./drive-data.ts";
-import { memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
+import { DriveApiError, SEATS_SA_OPEN_ERROR, memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
 
 describe("vault named json", () => {
   beforeEach(() => {
@@ -264,5 +264,41 @@ describe("vault named json", () => {
     assert.equal(created, 0);
     assert.equal(inner.files.size, 1);
     assert.equal([...inner.files.keys()][0], SEATS_VAULT_FILE_ID);
+  });
+
+  it("probes seats.json with statFile and names a 403 as service account cannot open", async () => {
+    resetVaultFileIdsForTests();
+    const inner = memoryDrive();
+    inner.files.set(SEATS_VAULT_FILE_ID, {
+      file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+      content: `${JSON.stringify({ hashes: {}, extras: [] })}\n`,
+    });
+    const drive: DriveAdapter = {
+      configured: true,
+      listJson: () => inner.listJson("folder"),
+      readJson: (fileId) => inner.readJson(fileId),
+      async statFile() {
+        throw new DriveApiError(403, "The user does not have sufficient permissions for this file.", "service-account");
+      },
+      async createJson() {
+        throw new Error("createJson must not run");
+      },
+      async updateJson() {
+        throw new DriveApiError(403, "The user does not have sufficient permissions for this file.", "service-account");
+      },
+      deleteJson: (fileId) => inner.deleteJson(fileId),
+    };
+    await assert.rejects(
+      () =>
+        writeVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND, {
+          hashes: { "robertmhenderson582@gmail.com": { mustChangePassword: false } },
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof DriveApiError);
+        assert.equal(error.message, SEATS_SA_OPEN_ERROR);
+        assert.equal(error.status, 403);
+        return true;
+      },
+    );
   });
 });
