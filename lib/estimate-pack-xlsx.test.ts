@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } fro
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   estimateJsonToXlsx,
   estimateJsonToXlsxInput,
@@ -265,5 +266,38 @@ describe("estimate pack JSON → xlsx", () => {
       assert.equal(desk, total, file);
       assert.equal(excel, desk, file);
     }
+  });
+
+  it("export is a view of the live pack — a Misc change ripples desk and Excel the same way", () => {
+    const { input } = estimateJsonToXlsxInput(SAMPLE_PACK);
+    const beforeDesk = deskEstimateTotal(input);
+    const beforeExcel = estimateWorkbookSummaryTotal(input);
+    assert.equal(beforeExcel, beforeDesk);
+    const next = {
+      ...input,
+      otherCost: {
+        perDiemRate: input.otherCost?.perDiemRate ?? 0,
+        travel: input.otherCost?.travel ?? [],
+        misc: [...(input.otherCost?.misc ?? []), { id: "mc-rod", item: "Alloy rod", description: "pack weight", qty: 2, each: 50 }],
+      },
+    };
+    const afterDesk = deskEstimateTotal(next);
+    const afterExcel = estimateWorkbookSummaryTotal(next);
+    assert.equal(afterExcel, afterDesk);
+    assert.equal(Math.round((afterDesk - beforeDesk) * 100) / 100, 106.5);
+  });
+
+  it("export source stays wired to desk libs and does not hard-code sample dollars", () => {
+    const here = (name: string) => fileURLToPath(new URL(name, import.meta.url));
+    const xlsx = readFileSync(here("./estimate-xlsx.ts"), "utf8");
+    const pack = readFileSync(here("./estimate-pack-xlsx.ts"), "utf8");
+    const chrome = readFileSync(here("./xlsx-exceljs.ts"), "utf8");
+    assert.match(xlsx, /miscAmount/);
+    assert.match(xlsx, /from "\.\/other-cost\.ts"/);
+    assert.match(xlsx, /view of the live estimate pack/);
+    assert.match(pack, /one live pack/);
+    assert.match(chrome, /Chrome only/);
+    assert.equal(/from "\.\/other-cost/.test(chrome), false);
+    assert.equal(/25324671|1435365/.test(xlsx), false);
   });
 });

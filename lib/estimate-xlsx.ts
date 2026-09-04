@@ -19,6 +19,11 @@
  * labor grids are shaded. Daily ST/OT/DT cells use the desk clock
  * (computeRangeHours / applyWeekly40). Summary ESTIMATE TOTAL $ is the same
  * deskPackageTotal / estimateTotalBreakdown number as the Estimate Total rail.
+ * Platform rule: Excel is a view of the live estimate pack. Crew, misc,
+ * equipment, subs, and totals come from the same shared libs the desk uses
+ * (other-cost, equipment-sheet, estimate-total). A Misc / rod-weight change
+ * on the desk must appear in the next export of that pack. Do not hard-code
+ * sample dollars. Chrome (xlsx-exceljs) must not invent money.
  * Never commit source workbooks to git (Look samples excepted).
  */
 

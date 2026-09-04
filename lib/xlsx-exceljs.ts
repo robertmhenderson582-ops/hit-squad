@@ -1,4 +1,8 @@
-/** ExcelJS .xlsx writer — Excel-365-safe package + Hit Squad client styling. */
+/**
+ * ExcelJS .xlsx writer — Excel-365-safe package + Hit Squad client styling.
+ * Chrome only. Does not compute estimate dollars. Money stays in
+ * estimate-xlsx / estimate-desk-total / shared desk libs.
+ */
 
 import ExcelJS from "exceljs";
 import { evaluateWorkbook } from "./xlsx-eval.ts";

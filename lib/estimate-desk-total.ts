@@ -2,6 +2,10 @@
  * One Estimate Total for the desk HUD and the Excel Summary.
  * Same estimateTotalBreakdown path EstimateTotalRail uses — do not
  * independently invent a second grand total.
+ * Platform rule: export is a view of the live pack. Totals flow through
+ * estimate-total / other-cost / equipment-sheet / crew. No hard-coded
+ * sample dollars. When Misc sell-units or rod weights land, this path
+ * picks them up automatically.
  */
 import { emptyFcrPacket, fcrSummary, normalizePeople, type FcrPacket } from "./change-order-packet.ts";
 import { equipmentTotals, thirdPartyCost, type EquipmentSheet } from "./equipment-sheet.ts";
