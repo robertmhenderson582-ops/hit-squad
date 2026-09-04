@@ -249,10 +249,10 @@ describe("estimate excel export", () => {
     const direct = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.direct);
     assert.ok(summary && staff && direct);
     assert.equal(summary.cells.find((cell) => cell.ref === "A1")?.value, ESTIMATE_EXPORT_BRAND);
-    assert.equal(summary?.cells.find((cell) => cell.ref === "A5")?.value?.toString().startsWith("Produced"), true);
-    assert.match(String(summary.cells.find((cell) => cell.ref === "A2")?.value), new RegExp(ESTIMATE_EXPORT_PRODUCER));
-    assert.match(String(summary.cells.find((cell) => cell.ref === "A2")?.value), new RegExp(ESTIMATE_EXPORT_CONFIDENTIAL));
-    assert.equal(summary.cells.find((cell) => cell.ref === "B5")?.type, "date");
+    assert.match(String(summary.cells.find((cell) => cell.ref === "A2")?.value), /Unit 3 mechanical/);
+    assert.match(String(summary.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(ESTIMATE_EXPORT_PRODUCER));
+    assert.match(String(summary.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(ESTIMATE_EXPORT_CONFIDENTIAL));
+    assert.match(String(summary.cells.find((cell) => cell.ref === "A3")?.value), /Produced /);
     assert.match(String(staff.cells.find((cell) => cell.ref === "D10")?.value), /^B10\*E10$/);
     assert.match(String(staff.cells.find((cell) => cell.ref === "E10")?.value), /Rate Tables/);
     assert.match(String(staff.cells.find((cell) => cell.ref === "K14")?.value), /^SUM\(K7\)$/);
@@ -322,12 +322,16 @@ describe("estimate excel export", () => {
     await wb.xlsx.load(Buffer.from(bytes));
     const summarySheet = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
     assert.ok(summarySheet);
-    assert.match(String(summarySheet.getCell("A2").value ?? ""), /Produced by Hit Squad Project Controls/);
+    assert.match(String(summarySheet.getCell("A3").value ?? ""), /Produced by Hit Squad Project Controls/);
     assert.equal(wb.worksheets.some((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.summary), true);
     assert.equal(/nathan|cat 2 pit stop/i.test(JSON.stringify(wb.model)), false);
 
     const staffSheet = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
     assert.ok(staffSheet && summarySheet);
+    assert.equal(Number(staffSheet.getRow(2).height) <= 18, true);
+    assert.equal(Number(staffSheet.getRow(3).height) <= 18, true);
+    assert.equal(Boolean(staffSheet.getCell("A2").alignment?.wrapText), false);
+    assert.equal(Boolean(staffSheet.getCell("A3").alignment?.wrapText), false);
     assert.equal(staffSheet.getCell("B7").numFmt, "#,##0.0");
     assert.equal(staffSheet.getCell("K7").numFmt, "$#,##0.00");
     assert.equal(staffSheet.getCell("E10").numFmt, "$#,##0.00");

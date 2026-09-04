@@ -248,14 +248,16 @@ function exportProducedLabel(when = new Date()): string {
 
 function headerCells(input: EstimateXlsxInput, when = new Date()): SheetCell[] {
   const clock = boundOtLabel(input.site ?? "", input.client ?? "", input.plantCode ?? "");
-  const who = [input.client, input.site, clock].filter((part) => String(part || "").trim()).join("  ·  ");
+  const title = (input.title || "").trim() || "Estimate";
+  const job = [title, input.client, input.site, clock].filter((part) => String(part || "").trim()).join("  ·  ");
   return [
     { ref: "A1", type: "text", value: ESTIMATE_EXPORT_BRAND },
-    { ref: "A2", type: "text", value: `${ESTIMATE_EXPORT_PRODUCER}  ·  ${ESTIMATE_EXPORT_CONFIDENTIAL}` },
-    { ref: "A3", type: "text", value: (input.title || "").trim() || "Estimate" },
-    { ref: "A4", type: "text", value: who },
-    { ref: "A5", type: "text", value: exportProducedLabel(when) },
-    { ref: "B5", type: "date", value: when },
+    { ref: "A2", type: "text", value: job },
+    {
+      ref: "A3",
+      type: "text",
+      value: `${ESTIMATE_EXPORT_PRODUCER}  ·  ${ESTIMATE_EXPORT_CONFIDENTIAL}  ·  ${exportProducedLabel(when)}`,
+    },
   ];
 }
 
@@ -656,6 +658,7 @@ function buildCrewSheet(
     weekendCols,
     laborBlocks,
     spacerRows,
+    merges: [`A1:${lastDateCol || "K"}1`, "A2:K2", "A3:K3"],
   };
 }
 

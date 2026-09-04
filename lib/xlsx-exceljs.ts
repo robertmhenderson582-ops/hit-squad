@@ -235,9 +235,7 @@ function isAdderRow(cells: SheetCell[], row: number): boolean {
 
 function defaultMerges(cells: SheetCell[]): string[] {
   const lastCol = maxHeaderCol(cells);
-  const merges = [`A1:${lastCol}1`];
-  if (cells.some((cell) => cell.ref === "A3")) merges.push(`A3:${lastCol}3`);
-  return merges;
+  return [`A1:${lastCol}1`];
 }
 
 function isLaborSheet(name: string) {
@@ -277,20 +275,18 @@ function applyRowStyle(
     return;
   }
   if (row === 2) {
-    exCell.font = { size: 9, color: { argb: MUTED_TEXT }, name: "Calibri" };
+    exCell.font = { size: 9, color: { argb: DARK_TEXT }, name: "Calibri" };
+    exCell.alignment = { vertical: "middle", wrapText: false };
     return;
   }
   if (row === 3) {
-    exCell.font = { bold: true, size: 12, color: { argb: DARK_TEXT }, name: "Calibri" };
-    return;
-  }
-  if (row === 4) {
-    exCell.font = { size: 10, color: { argb: DARK_TEXT }, name: "Calibri" };
-    exCell.alignment = { wrapText: true };
-    return;
-  }
-  if (row === 5) {
     exCell.font = { size: 9, italic: true, color: { argb: MUTED_TEXT }, name: "Calibri" };
+    exCell.alignment = { vertical: "middle", wrapText: false };
+    return;
+  }
+  if (row === 4 || row === 5) {
+    exCell.font = { size: 9, color: { argb: MUTED_TEXT }, name: "Calibri" };
+    exCell.alignment = { wrapText: false };
     return;
   }
   if (row === 6) {
@@ -426,7 +422,6 @@ function applyLaborChrome(
   if (lastDateCol >= 12) {
     for (let i = 12; i <= lastDateCol; i += 1) ws.getColumn(i).width = LABOR_DAY_COL_WIDTH;
   }
-  ws.getColumn(1).alignment = { wrapText: true, vertical: "middle" };
   ws.getColumn(3).alignment = { wrapText: true, vertical: "middle" };
 
   const blocks = sheet.laborBlocks?.length ? sheet.laborBlocks : inferLaborBlocks(sheet.cells, maxRow);
@@ -481,6 +476,10 @@ function applyLaborChrome(
     header.numFmt = "D-MMM";
   }
   ws.getRow(6).height = 36;
+  for (const row of [2, 3]) {
+    const cell = ws.getCell(row, 1);
+    cell.alignment = { vertical: "middle", wrapText: false };
+  }
 }
 
 function applySummaryChrome(ws: ExcelJS.Worksheet, maxRow: number) {
@@ -490,6 +489,9 @@ function applySummaryChrome(ws: ExcelJS.Worksheet, maxRow: number) {
   hairGrid(ws, 6, maxRow, 1, 3);
   for (let col = 1; col <= 3; col += 1) {
     patchBorder(ws.getCell(6, col), { bottom: edge("double") });
+  }
+  for (const row of [2, 3]) {
+    ws.getCell(row, 1).alignment = { vertical: "middle", wrapText: false };
   }
 }
 
@@ -607,7 +609,11 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       ws.getColumn(col).width = 3;
     }
 
-    ws.getRow(1).height = 22;
+    ws.getRow(1).height = 20;
+    ws.getRow(2).height = 16;
+    ws.getRow(3).height = 16;
+    ws.getRow(4).height = 6;
+    ws.getRow(5).height = 6;
     if (!labor) ws.getRow(6).height = 20;
     ws.autoFilter = undefined;
     ws.pageSetup.printArea = `A1:${lastCol}${Math.max(maxRow, 7)}`;
