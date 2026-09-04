@@ -7,7 +7,7 @@ import { visibleDeskPacks } from "@/lib/estimate-scope";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { isActiveMenuItem, menuForViewedDesk } from "@/lib/job-menu";
 import { canSeeCompany, companyScopeFor } from "@/lib/companies";
-import { jobsOnDesk, plantJobTally, plantJobsLine, seedJobsAllowed } from "@/lib/jobs";
+import { catalogSeedsAllowedOnDesk, jobsOnDesk, plantJobTally, plantJobsLine } from "@/lib/jobs";
 import type { SiteRecord } from "@/lib/types";
 
 function slugFor(site: SiteRecord) {
@@ -33,7 +33,7 @@ export function SitesDesk() {
   const menu = menuForViewedDesk(viewingAs, undefined, seat);
   const tally = plantJobTally(
     jobsOnDesk([], visibleDeskPacks(lens, viewingAs, undefined, scope), viewingAs, scope, menu, {
-      includeSeeds: seedJobsAllowed(scope),
+      includeSeeds: catalogSeedsAllowedOnDesk(scope, seat),
     }).filter((job) =>
       isActiveMenuItem(job, menu),
     ),

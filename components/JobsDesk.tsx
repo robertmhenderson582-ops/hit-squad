@@ -18,7 +18,7 @@ import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu"
 import { ensureCbiDummyPack, shouldSeedCbiDummy } from "@/lib/cbi-dummy";
 import { catalogSites } from "@/lib/desk-data";
 import { companyScopeFor, isStandaloneId, type CompanyId } from "@/lib/companies";
-import { jobsOnDesk, omitCatalogSeedJobs, packForJob, seedJobsAllowed } from "@/lib/jobs";
+import { catalogSeedsAllowedOnDesk, jobsOnDesk, omitCatalogSeedJobs, omitCatalogSeedPacks, packForJob } from "@/lib/jobs";
 import { defaultOpenCompanyId, jobTree } from "@/lib/job-tree";
 import type { JobRecord } from "@/lib/types";
 
@@ -68,7 +68,7 @@ export function JobsDesk() {
       }
       const incoming = ((data.desk?.jobs as JobRecord[]) ?? []);
       const nextScope = companyScopeFor(lens, typeof data.companyId === "string" ? (data.companyId as CompanyId) : companyId);
-      setServerJobs(seedJobsAllowed(nextScope) ? incoming : omitCatalogSeedJobs(incoming));
+      setServerJobs(catalogSeedsAllowedOnDesk(nextScope, seat) ? incoming : omitCatalogSeedJobs(incoming));
       if (typeof data.companyId === "string") setCompanyId(data.companyId as CompanyId);
       if (shouldSeedCbiDummy(nextScope)) ensureCbiDummyPack();
     })();
@@ -79,10 +79,10 @@ export function JobsDesk() {
 
   const closed = readClosed();
   const scope = companyScopeFor(lens, companyId);
-  const deskPacks = packsForViewedDesk(lens, viewingAs, seat);
+  const deskPacks = omitCatalogSeedPacks(packsForViewedDesk(lens, viewingAs, seat));
   const menu = menuForViewedDesk(viewingAs, undefined, seat);
-  const includeSeeds = seedJobsAllowed(scope);
-  const deskJobs = jobsOnDesk(serverJobs, deskPacks, viewingAs, scope, menu, { includeSeeds });
+  const includeSeeds = catalogSeedsAllowedOnDesk(scope, seat);
+  const deskJobs = jobsOnDesk(serverJobs, deskPacks, viewingAs, scope, menu, { includeSeeds, seat });
   const jobs = includeSeeds ? deskJobs : omitCatalogSeedJobs(deskJobs);
   void packTick;
   const active = jobs.filter((job) => {

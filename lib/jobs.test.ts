@@ -5,11 +5,13 @@ import { describe, it } from "node:test";
 import { archiveMenuItem, deleteMenuItem, menuForViewedDesk, menuStatus } from "./job-menu.ts";
 import {
   CATALOG_SEED_CODES,
+  catalogSeedsAllowedOnDesk,
   deskForUser,
   jobByCode,
   jobPlantHref,
   jobsOnDesk,
   omitCatalogSeedJobs,
+  omitCatalogSeedPacks,
   packForJob,
   plantJobTally,
   plantJobsLine,
@@ -112,6 +114,10 @@ describe("desk counts", () => {
     assert.equal(seedJobsAllowed(nathanScope), false);
     assert.equal(seedJobsAllowed(beechScope), false);
     assert.equal(seedJobsAllowed({ isOwner: false, email: "josephmhenderson2002@gmail.com", companyId: "hitsquad" }), true);
+    assert.equal(catalogSeedsAllowedOnDesk(nathanScope, "nathan"), false);
+    assert.equal(catalogSeedsAllowedOnDesk(ownerScope, "nathan"), false);
+    assert.equal(catalogSeedsAllowedOnDesk(undefined, "nathan"), false);
+    assert.equal(catalogSeedsAllowedOnDesk({ isOwner: false, email: "josephmhenderson2002@gmail.com", companyId: "hitsquad" }, "joseph"), true);
 
     const ownerJobs = jobsOnDesk([], [cat2], false, ownerScope);
     assert.equal(ownerJobs.some((job) => job.id === "job-8841"), false);
@@ -139,8 +145,9 @@ describe("desk counts", () => {
     assert.equal(packForJob({ id: "job-8841" }, [cat2]), undefined);
 
     const desk = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
-    assert.match(desk, /seedJobsAllowed\(scope\)/);
+    assert.match(desk, /catalogSeedsAllowedOnDesk\(scope, seat\)/);
     assert.match(desk, /omitCatalogSeedJobs/);
+    assert.match(desk, /omitCatalogSeedPacks/);
     assert.match(desk, /shouldPaintHisCards\(lens\)/);
     assert.doesNotMatch(desk, /includeSeeds: true/);
     assert.doesNotMatch(desk, /holdPartialTree \? null/);
@@ -149,6 +156,10 @@ describe("desk counts", () => {
     assert.match(jobsApi, /omitCatalogSeedJobs/);
     assert.match(jobsApi, /seedJobsAllowed\(scope\)/);
     assert.match(jobsApi, /scopedDeskUser/);
+    const lens = readFileSync(fileURLToPath(new URL("../components/OwnerDeskContext.tsx", import.meta.url)), "utf8");
+    assert.match(lens, /Session still loading: keep stored View as Nathan/);
+    assert.match(lens, /readStoredViewAs\(\)/);
+    assert.match(lens, /setLensReady\(false\)/);
 
     assert.deepEqual(deskForUser("tester-nathan", nathanScope).jobs, []);
     assert.deepEqual(deskForUser("tester-john-beech", beechScope).jobs, []);
@@ -266,10 +277,52 @@ describe("desk counts", () => {
     assert.equal(nathanLogin.some((job) => job.title.includes("CAT 2")), true);
     assert.equal(nathanLogin.some((job) => job.code === "EST-MTJ5D6"), true);
 
-    const viewAsNathan = jobsOnDesk(seedJobs(), his, true, nathan, undefined, { includeSeeds: true });
+    const viewAsNathan = jobsOnDesk(seedJobs(), his, true, nathan, undefined, { includeSeeds: true, seat: "nathan" });
     assert.equal(hasCatalogSeed(viewAsNathan), false);
     assert.equal(omitCatalogSeedJobs(seedJobs()).length, 0);
     assert.deepEqual(deskForUser("tester-nathan", nathan).jobs, []);
     assert.deepEqual(deskForUser("tester-nathan").jobs, []);
+  });
+
+  it("owner leftover catalog samples do not paint on View as Nathan or Back to me", () => {
+    const leftoverSeeds = seedJobs().map((job) => ({
+      packId: job.id,
+      key: `new:${job.id}`,
+      title: job.title,
+      client: job.client,
+      site: "Madison / P66",
+      siteId: "site-unassigned",
+      createdAt: 1,
+      updatedAt: 2,
+      ownerEmail: OWNER_LOGIN_EMAIL,
+    }));
+    const his = {
+      packId: "new-mtaajdwa-f7539",
+      key: "new:new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+      ownerEmail: "nathanboyte@gmail.com",
+    };
+    const nathan = { isOwner: false, email: "nathanboyte@gmail.com", companyId: "madison" as const };
+    const ownerScope = { isOwner: true, email: OWNER_LOGIN_EMAIL, companyId: "hitsquad" as const };
+    const leftover = [...leftoverSeeds, his];
+    assert.equal(omitCatalogSeedPacks(leftover).some((pack) => pack.title.includes("CAT 2")), true);
+    assert.equal(omitCatalogSeedPacks(leftover).some((pack) => /pre-outage hse walkdown/i.test(pack.title)), false);
+
+    const viewAs = jobsOnDesk(seedJobs(), leftover, true, ownerScope, undefined, { includeSeeds: true, seat: "nathan" });
+    assert.equal(hasCatalogSeed(viewAs), false);
+    assert.equal(viewAs.some((job) => job.title.includes("CAT 2")), true);
+
+    const nathanLens = jobsOnDesk(seedJobs(), leftover, true, nathan, undefined, { seat: "nathan" });
+    assert.equal(hasCatalogSeed(nathanLens), false);
+    assert.equal(nathanLens.some((job) => job.title.includes("CAT 2")), true);
+
+    const backToMe = jobsOnDesk(seedJobs(), leftover, false, ownerScope);
+    assert.equal(hasCatalogSeed(backToMe), false);
+    assert.equal(backToMe.some((job) => job.title.includes("CAT 2")), true);
   });
 });

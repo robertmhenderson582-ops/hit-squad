@@ -134,6 +134,16 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
   const people = useDeskPeople();
 
   useLayoutEffect(() => {
+    // Session still loading: keep stored View as Nathan. Do not reset to owner leftover.
+    if (!user) {
+      const stored = readStoredViewAs();
+      const storedFollow = readStoredFollow();
+      if (stored) setViewAsState(stored);
+      if (storedFollow) setFollowSeatState(storedFollow);
+      setVaultViewAs(activeLensSeat(stored, storedFollow));
+      setLensReady(false);
+      return;
+    }
     if (tester || !hasBuildDesk(user)) {
       setViewAsState("owner");
       setFollowSeatState("owner");
