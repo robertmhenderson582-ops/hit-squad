@@ -918,6 +918,16 @@ describe("estimate excel export", () => {
     assert.equal(widthOf(summary, 1), SUMMARY_COL_A_WIDTH);
     assert.equal(argb(direct.getCell("A7")), LABOR_DAYSHIFT_BANNER.slice(2));
     assert.equal(argb(direct.getCell("C7")), LABOR_POSITION_TITLE.slice(2));
+    assert.equal(direct.getCell("B7").alignment?.horizontal, "center");
+    assert.equal(direct.getCell("C7").alignment?.horizontal, "center");
+    assert.equal(direct.getCell("D7").alignment?.horizontal, "center");
+    assert.equal(direct.getCell("G7").alignment?.horizontal, "center");
+    assert.equal(direct.getCell("H7").alignment?.horizontal, "center");
+    assert.equal(direct.getCell("I7").alignment?.horizontal, "center");
+    assert.equal(direct.getCell("J7").alignment?.horizontal, "center");
+    assert.equal(direct.getCell("K7").alignment?.horizontal, "center");
+    assert.equal(direct.getCell("F10").alignment?.horizontal, "center");
+    assert.equal(direct.getCell("B6").alignment?.horizontal, "center");
     assert.equal(argb(direct.getCell("A8")), LABOR_HC_HPS_CLEAR.slice(2));
     assert.equal(argb(direct.getCell("B8")), LABOR_HC_HPS_CLEAR.slice(2));
     assert.equal(argb(direct.getCell("K8")), LABOR_HC_HPS_CLEAR.slice(2));
@@ -928,6 +938,9 @@ describe("estimate excel export", () => {
     while (weekendSet.has(weekdayDayCol) && weekdayDayCol < 20) weekdayDayCol += 1;
     assert.equal(argb(direct.getCell(8, weekdayDayCol)), LABOR_HC_HPS.slice(2));
     assert.equal(argb(direct.getCell(9, weekdayDayCol)), LABOR_HC_HPS.slice(2));
+    assert.equal(direct.getCell(8, weekdayDayCol).alignment?.horizontal, "center");
+    assert.equal(direct.getCell(10, weekdayDayCol).alignment?.horizontal, "center");
+    assert.equal(direct.getCell(13, weekdayDayCol).alignment?.horizontal, "center");
     assert.equal(argb(direct.getCell("F10")), LABOR_HOURS_LABEL.slice(2));
     assert.equal(argb(direct.getCell("C10")), LABOR_CAGE_WASH_B.slice(2));
     assert.equal(argb(direct.getCell("G10")), LABOR_CAGE_WASH_B.slice(2));

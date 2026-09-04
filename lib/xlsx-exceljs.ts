@@ -484,6 +484,15 @@ function inferLaborBlocks(cells: SheetCell[], maxRow: number): Array<{ start: nu
   return blocks;
 }
 
+function centerLaborCell(cell: ExcelJS.Cell, extra: Partial<ExcelJS.Alignment> = {}) {
+  cell.alignment = {
+    vertical: "middle",
+    horizontal: "center",
+    wrapText: Boolean(cell.alignment?.wrapText),
+    ...extra,
+  };
+}
+
 function applyLaborBlockChrome(
   ws: ExcelJS.Worksheet,
   sheet: WorkbookSheet,
@@ -510,12 +519,15 @@ function applyLaborBlockChrome(
         } else {
           cell.fill = solid(LABOR_POSITION_TITLE);
           cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
+          centerLaborCell(cell, col === 3 ? { wrapText: true } : {});
         }
       } else if (kind === "hc" || kind === "hps") {
         cell.fill = solid(LABOR_HC_HPS_CLEAR);
         cell.font = { bold: true, color: { argb: STEEL_DEEP }, name: "Calibri", size: 9 };
         if (kind === "hps" && col === 1) {
           cell.alignment = { wrapText: true, vertical: "middle" };
+        } else if (col >= 2) {
+          centerLaborCell(cell);
         }
       } else if (kind === "hours" || kind === "pd") {
         if (col === 6) {
@@ -526,22 +538,27 @@ function applyLaborBlockChrome(
             name: "Calibri",
             size: 9,
           };
-          cell.alignment = { horizontal: "center" };
+          centerLaborCell(cell);
         } else {
           const wash = (row - block.start) % 2 === 0 ? LABOR_CAGE_WASH_A : LABOR_CAGE_WASH_B;
           cell.fill = solid(wash);
           cell.font = { color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
+          if (col >= 2) centerLaborCell(cell);
         }
       }
     }
     if (kind === "hc" || kind === "hps") {
       for (let col = 12; col <= lastDateCol; col += 1) {
-        ws.getCell(row, col).fill = solid(LABOR_HC_HPS);
+        const day = ws.getCell(row, col);
+        day.fill = solid(LABOR_HC_HPS);
+        centerLaborCell(day);
       }
     }
     if (kind === "hours" || kind === "pd") {
       for (let col = 12; col <= lastDateCol; col += 1) {
-        ws.getCell(row, col).fill = solid(LABOR_DAY_WASH);
+        const day = ws.getCell(row, col);
+        day.fill = solid(LABOR_DAY_WASH);
+        centerLaborCell(day);
       }
     }
     if (kind === "hps") ws.getRow(row).height = 28;
@@ -576,9 +593,15 @@ function applyLaborChrome(
     ws.getColumn(colIndex(col)).width = width;
   }
   if (lastDateCol >= 12) {
-    for (let i = 12; i <= lastDateCol; i += 1) ws.getColumn(i).width = LABOR_DAY_COL_WIDTH;
+    for (let i = 12; i <= lastDateCol; i += 1) {
+      ws.getColumn(i).width = LABOR_DAY_COL_WIDTH;
+      ws.getColumn(i).alignment = { horizontal: "center", vertical: "middle" };
+    }
   }
-  ws.getColumn(3).alignment = { wrapText: true, vertical: "middle" };
+  ws.getColumn(3).alignment = { wrapText: true, vertical: "middle", horizontal: "center" };
+  for (const col of [2, 4, 5, 6, 7, 8, 9, 10, 11]) {
+    ws.getColumn(col).alignment = { horizontal: "center", vertical: "middle" };
+  }
 
   const blocks = sheet.laborBlocks?.length ? sheet.laborBlocks : inferLaborBlocks(sheet.cells, maxRow);
   for (const block of blocks) applyLaborBlockChrome(ws, sheet, block, lastDateCol);
