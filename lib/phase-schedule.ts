@@ -17,6 +17,67 @@ export const PHASE_TONES: Record<PhaseId, string> = {
   post: "phase-green",
 };
 
+/** Desk `globals.css` light phase fills (`.phase-moss` … `.phase-green`). Excel ARGB. */
+export const PHASE_TONE_FILLS: Record<PhaseId, string> = {
+  pre: "FFD5E2C4",
+  "oil-out": "FFEBCFC0",
+  mech: "FFC5D0D5",
+  "oil-in": "FFE6CE86",
+  post: "FFC0DEC6",
+};
+
+/** Desk rule: dark high-contrast type on the phase chip (`color: #163038`). */
+export const PHASE_TONE_INK = "FF163038";
+
+export function isPhaseId(value: string): value is PhaseId {
+  return (PHASE_IDS as readonly string[]).includes(value);
+}
+
+/** ON Job setup windows that own the calendar. Multi-unit uses unit phases when any are on. */
+export function liveJobSetupPhases(schedule?: {
+  multiUnits?: boolean;
+  phases?: PhaseRow[];
+  units?: Array<{ phases?: PhaseRow[] }>;
+}): PhaseRow[] {
+  const on = (rows: PhaseRow[] | undefined) =>
+    (rows ?? []).filter((row) => row.on && Boolean(row.start) && Boolean(row.stop));
+  if (schedule?.multiUnits && schedule.units?.length) {
+    const fromUnits = schedule.units.flatMap((unit) => on(unit.phases));
+    if (fromUnits.length) return fromUnits;
+  }
+  return on(schedule?.phases);
+}
+
+/** Inclusive start/stop. Canonical phase order wins if windows overlap. */
+export function phaseOwningDate(phases: PhaseRow[], ymd: string): PhaseRow | undefined {
+  const hits = phases.filter((row) => row.on && row.start && row.stop && ymd >= row.start && ymd <= row.stop);
+  if (!hits.length) return undefined;
+  hits.sort((a, b) => {
+    const order = PHASE_IDS.indexOf(a.id) - PHASE_IDS.indexOf(b.id);
+    if (order !== 0) return order;
+    return a.start.localeCompare(b.start);
+  });
+  return hits[0];
+}
+
+export type PhaseBarRun = { phase: PhaseRow; startIndex: number; endIndex: number };
+
+/** Contiguous same-phase days on a calendar (column index into `dates`). */
+export function phaseBarRuns(dates: string[], phases: PhaseRow[]): PhaseBarRun[] {
+  const runs: PhaseBarRun[] = [];
+  dates.forEach((ymd, index) => {
+    const phase = phaseOwningDate(phases, ymd);
+    if (!phase) return;
+    const last = runs[runs.length - 1];
+    if (last && last.endIndex === index - 1 && last.phase.id === phase.id) {
+      last.endIndex = index;
+      return;
+    }
+    runs.push({ phase, startIndex: index, endIndex: index });
+  });
+  return runs;
+}
+
 export type PhaseOtPick = "4x10-st" | "4x10-ot8" | "5x8-st" | "5x8-ot8";
 
 /** Pre-Turnaround and Post share this list. Do not shorten Pre. */

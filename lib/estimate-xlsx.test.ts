@@ -27,6 +27,7 @@ import {
   LABOR_HPS_LABEL,
   LABOR_HPS_TYPE,
   LABOR_NIGHTSHIFT,
+  LABOR_PHASE_LABEL,
   LABOR_TYPE_ORDER,
   laborBlockId,
   estimateToXlsx,
@@ -71,12 +72,15 @@ import {
   LABOR_SPACER,
   LABOR_SUN_BODY,
   LABOR_SUN_HEADER,
+  LABOR_WEEKEND_FILL,
   HEADER_META_LINE_HEIGHT,
   HEADER_META_WRAP_HEIGHT,
+  LABOR_PHASE_ROW_HEIGHT,
   SUMMARY_COL_A_WIDTH,
   SUMMARY_SECTION,
   SUMMARY_TOTAL,
 } from "./xlsx-exceljs.ts";
+import { PHASE_TONE_FILLS, phaseOwningDate } from "./phase-schedule.ts";
 import { evaluateWorkbook } from "./xlsx-eval.ts";
 import {
   REQUIRED_XLSX_PARTS,
@@ -1791,8 +1795,25 @@ describe("estimate excel export", () => {
     assert.equal(cellMap(direct).get(`${idCol}${night.title}`)?.value, nightId);
     assert.equal(staff.hiddenCols?.includes(LABOR_BLOCK_ID_COL), true);
     const lastDateCol = colLetter(LABOR_DATE_START_COL + dates.length - 1);
-    assert.deepEqual(staff.merges, [`A1:${lastDateCol}1`, `A2:${lastDateCol}2`, `A3:${lastDateCol}3`]);
-    assert.deepEqual(direct.merges, [`A1:${lastDateCol}1`, `A2:${lastDateCol}2`, `A3:${lastDateCol}3`]);
+    assert.deepEqual(staff.merges, [
+      `A1:${lastDateCol}1`,
+      `A2:${lastDateCol}2`,
+      `A3:${lastDateCol}3`,
+      "A4:K5",
+      `L4:${lastDateCol}5`,
+    ]);
+    assert.deepEqual(direct.merges, [
+      `A1:${lastDateCol}1`,
+      `A2:${lastDateCol}2`,
+      `A3:${lastDateCol}3`,
+      "A4:K5",
+      `L4:${lastDateCol}5`,
+    ]);
+    assert.equal(staffMap.get("A4")?.value, LABOR_PHASE_LABEL);
+    assert.equal(staffMap.get("L4")?.value, "Mechanical Window");
+    assert.deepEqual(staff.phaseBar, [
+      { startCol: LABOR_DATE_START_COL, endCol: LABOR_DATE_START_COL + dates.length - 1, phaseId: "mech" },
+    ]);
     const bytes = await estimateToXlsx(input);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));
@@ -1802,10 +1823,114 @@ describe("estimate excel export", () => {
       assert.equal(Number(staffBook.getColumn(col).width), LABOR_DAY_COL_WIDTH, `day col ${col}`);
     }
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getColumn(LABOR_BLOCK_ID_COL).hidden, true);
+    assert.equal(Number(staffBook.getRow(4).height), LABOR_PHASE_ROW_HEIGHT);
+    assert.equal(Number(staffBook.getRow(5).height), LABOR_PHASE_ROW_HEIGHT);
+    const phaseFill = (cell: ExcelJS.Cell) =>
+      String((cell.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "").toUpperCase();
+    assert.equal(phaseFill(staffBook.getCell("L4")), PHASE_TONE_FILLS.mech);
+    assert.equal(phaseFill(staffBook.getCell("L5")), PHASE_TONE_FILLS.mech);
+    assert.equal(phaseFill(staffBook.getCell(`${lastDateCol}4`)), PHASE_TONE_FILLS.mech);
+    assert.equal(staffBook.getCell("A4").value, LABOR_PHASE_LABEL);
+    assert.equal(staffBook.getCell("L4").value, "Mechanical Window");
+    assert.notEqual(phaseFill(staffBook.getCell("L4")), LABOR_WEEKEND_FILL);
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)?.getCell("C7").dataValidation, undefined);
     const writer = readFileSync(fileURLToPath(new URL("./xlsx-exceljs.ts", import.meta.url)), "utf8");
     assert.equal(/dataValidation/i.test(writer), false);
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
     assert.equal(/import workbook|upload.*xlsx|round-trip/i.test(workspace), false);
+  });
+
+  it("phase bar follows live Job setup dates and only ON phases", async () => {
+    const weekday = {
+      start: "2026-09-01",
+      end: "2026-09-07",
+      days: [true, true, true, true, true, true, true],
+    };
+    const mech = {
+      id: "mech" as const,
+      name: "Mechanical Window",
+      on: true,
+      start: "2026-09-01",
+      stop: "2026-09-07",
+      daysPerWeek: 5,
+      hoursPerDay: 10,
+      otAfter8: true,
+      sundaysOff: [] as string[],
+    };
+    const base = {
+      title: "Phase bar ripple",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      crew: {
+        staff: [craft("st", "Lead Safety 01", 10, { ...weekday, otAfter8: false })],
+        otAfter8: true,
+      },
+      schedule: {
+        projectStart: "2026-09-01",
+        multiUnits: false,
+        units: [],
+        phases: [mech],
+      },
+      jobMeta: { staffPerDiemRate: 140, craftPerDiemRate: 130, staffMileageRate: 0.7, craftMileageRate: 0.5, rateBook: "" },
+    };
+    const staff = sheetOf(buildEstimateWorkbook(base), ESTIMATE_XLSX_SHEETS.staff)!;
+    const dates = laborCalendarDates(base);
+    assert.equal(staff.cells.find((cell) => cell.ref === "A4")?.value, LABOR_PHASE_LABEL);
+    assert.equal(staff.cells.find((cell) => cell.ref === "L4")?.value, "Mechanical Window");
+    assert.deepEqual(staff.phaseBar, [
+      { startCol: LABOR_DATE_START_COL, endCol: LABOR_DATE_START_COL + dates.length - 1, phaseId: "mech" },
+    ]);
+
+    const moved = {
+      ...base,
+      schedule: {
+        ...base.schedule,
+        phases: [{ ...mech, start: "2026-09-03", stop: "2026-09-07" }],
+      },
+    };
+    const movedStaff = sheetOf(buildEstimateWorkbook(moved), ESTIMATE_XLSX_SHEETS.staff)!;
+    assert.equal(laborCalendarDates(moved)[0], "2026-09-01");
+    assert.equal(phaseOwningDate(moved.schedule.phases, "2026-09-01"), undefined);
+    assert.equal(phaseOwningDate(moved.schedule.phases, "2026-09-03")?.id, "mech");
+    assert.equal(movedStaff.cells.find((cell) => cell.ref === "L4")?.value, undefined);
+    assert.equal(movedStaff.cells.find((cell) => cell.ref === "N4")?.value, "Mechanical Window");
+    assert.deepEqual(movedStaff.phaseBar, [
+      { startCol: LABOR_DATE_START_COL + 2, endCol: LABOR_DATE_START_COL + dates.length - 1, phaseId: "mech" },
+    ]);
+
+    const split = {
+      ...base,
+      schedule: {
+        ...base.schedule,
+        phases: [
+          { ...mech, id: "pre" as const, name: "Pre-Turnaround", start: "2026-09-01", stop: "2026-09-02" },
+          { ...mech, start: "2026-09-03", stop: "2026-09-07" },
+        ],
+      },
+    };
+    const splitStaff = sheetOf(buildEstimateWorkbook(split), ESTIMATE_XLSX_SHEETS.staff)!;
+    assert.equal(splitStaff.cells.find((cell) => cell.ref === "L4")?.value, "Pre-Turnaround");
+    assert.equal(splitStaff.cells.find((cell) => cell.ref === "N4")?.value, "Mechanical Window");
+    assert.deepEqual(
+      splitStaff.phaseBar?.map((run) => run.phaseId),
+      ["pre", "mech"],
+    );
+
+    const off = {
+      ...base,
+      schedule: {
+        ...base.schedule,
+        phases: [{ ...mech, on: false }],
+      },
+    };
+    const offStaff = sheetOf(buildEstimateWorkbook(off), ESTIMATE_XLSX_SHEETS.staff)!;
+    assert.equal(offStaff.cells.find((cell) => cell.ref === "L4")?.value, undefined);
+    assert.deepEqual(offStaff.phaseBar, []);
+    assert.equal(offStaff.cells.find((cell) => cell.ref === "A4")?.value, LABOR_PHASE_LABEL);
+
+    const src = readFileSync(fileURLToPath(new URL("./estimate-xlsx.ts", import.meta.url)), "utf8");
+    assert.match(src, /liveJobSetupPhases/);
+    assert.match(src, /phaseBarRuns/);
+    assert.equal(/2026-01-11|Jan 11/.test(src), false);
   });
 });

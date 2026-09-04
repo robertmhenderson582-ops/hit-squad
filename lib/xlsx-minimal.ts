@@ -137,6 +137,8 @@ export type WorkbookSheet = {
   spacerRows?: number[];
   /** Extra column-header rows (Rate Tables sections). Row 6 is always a header. */
   headerRows?: number[];
+  /** Job setup phase runs on labor rows 4–5 (day-grid columns). */
+  phaseBar?: Array<{ startCol: number; endCol: number; phaseId: string }>;
 };
 
 export async function buildWorkbook(sheets: WorkbookSheet[]): Promise<Uint8Array> {

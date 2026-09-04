@@ -3,12 +3,14 @@
  * Chrome only. Does not compute estimate dollars. Money stays in
  * estimate-xlsx / estimate-desk-total / shared desk libs.
  * Standing ripple rule is RETROACTIVE (excel-ripple.ts): Look paint already
- * on this branch (TOTAL bars, Rate Tables chrome, wrap, center, drop .0)
- * must not invent catalogs or disconnect math from those libs.
+ * on this branch (TOTAL bars, Rate Tables chrome, wrap, center, drop .0,
+ * phase bar) must not invent catalogs or disconnect math from those libs.
+ * Phase-bar fills come from phase-schedule (desk globals), not sample dates.
  */
 
 import ExcelJS from "exceljs";
 import { evaluateWorkbook } from "./xlsx-eval.ts";
+import { isPhaseId, PHASE_TONE_FILLS, PHASE_TONE_INK } from "./phase-schedule.ts";
 import { colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
 const WHITE = "FFFFFFFF";
@@ -76,6 +78,8 @@ export const LABOR_COL_WIDTHS: Record<string, number> = {
 export const LABOR_DAY_COL_WIDTH = 3.2;
 /** Rotated D-MMM day labels. A–K stay single-line (no wrap). */
 export const LABOR_HEADER_ROW_HEIGHT = 36;
+/** Two short Job setup phase-bar rows above the date header. */
+export const LABOR_PHASE_ROW_HEIGHT = 14;
 export const SUMMARY_COL_A_WIDTH = 28;
 export const LABOR_DATE_FIRST_COL = 12;
 
@@ -587,6 +591,34 @@ function applyLaborBlockChrome(
   }
 }
 
+function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDateCol: number) {
+  const labelInk = { argb: PHASE_TONE_INK };
+  for (const row of [4, 5] as const) {
+    ws.getRow(row).height = LABOR_PHASE_ROW_HEIGHT;
+    for (let col = 1; col <= 11; col += 1) {
+      const cell = ws.getCell(row, col);
+      cell.fill = solid(PLATE_WASH);
+      cell.font = { bold: true, name: "Calibri", size: 9, color: labelInk };
+      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: false };
+    }
+    for (let col = 12; col <= lastDateCol; col += 1) {
+      ws.getCell(row, col).fill = solid(PLATE_WASH);
+    }
+  }
+  for (const run of sheet.phaseBar ?? []) {
+    if (!isPhaseId(run.phaseId)) continue;
+    const fillArgb = PHASE_TONE_FILLS[run.phaseId];
+    for (let row = 4; row <= 5; row += 1) {
+      for (let col = run.startCol; col <= run.endCol; col += 1) {
+        const cell = ws.getCell(row, col);
+        cell.fill = solid(fillArgb);
+        cell.font = { bold: true, name: "Calibri", size: 8, color: labelInk };
+        cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      }
+    }
+  }
+}
+
 function applyLaborChrome(
   ws: ExcelJS.Worksheet,
   sheet: WorkbookSheet,
@@ -670,6 +702,7 @@ function applyLaborChrome(
     cell.alignment = { vertical: "middle", horizontal: "center", wrapText: false };
   }
   ws.getRow(6).height = LABOR_HEADER_ROW_HEIGHT;
+  applyLaborPhaseBar(ws, sheet, lastDateCol);
 }
 
 function applySummaryChrome(
@@ -732,7 +765,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
         fitToHeight: labor ? undefined : 20,
         horizontalCentered: true,
         margins: { left: 0.4, right: 0.4, top: 0.65, bottom: 0.65, header: 0.28, footer: 0.28 },
-        printTitlesRow: "6:6",
+        printTitlesRow: labor ? "4:6" : "6:6",
         printTitlesColumn: labor ? "A:K" : undefined,
       },
       headerFooter: {
@@ -824,8 +857,13 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     }
 
     ws.getRow(1).height = 22;
-    ws.getRow(4).height = 6;
-    ws.getRow(5).height = 6;
+    if (labor) {
+      ws.getRow(4).height = LABOR_PHASE_ROW_HEIGHT;
+      ws.getRow(5).height = LABOR_PHASE_ROW_HEIGHT;
+    } else {
+      ws.getRow(4).height = 6;
+      ws.getRow(5).height = 6;
+    }
     applyHeaderMetaLayout(ws, labor ? Math.max(11, lastColNum) : isSummary ? 3 : lastColNum);
     if (!labor) ws.getRow(6).height = 20;
     ws.autoFilter = undefined;

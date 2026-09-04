@@ -1,14 +1,20 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   addUnit,
   applyOtPick,
   cascadePhases,
   defaultPhaseSchedule,
+  liveJobSetupPhases,
   mergeSchedule,
   otPicksForPhase,
   patchPhase,
+  phaseBarRuns,
+  phaseOwningDate,
   PHASE_OT_PICKS,
+  PHASE_TONE_FILLS,
   setMultiUnits,
   setProjectStart,
   workedDays,
@@ -153,5 +159,44 @@ describe("phase schedule", () => {
     assert.equal(off.multiUnits, false);
     assert.equal(off.units.length, 2);
     assert.equal(off.phases.find((row) => row.id === "pre")?.start, two.units[0].phases[0].start);
+  });
+
+  it("phase owning date and bar runs follow ON Job setup windows", () => {
+    const start = defaultPhaseSchedule();
+    assert.equal(phaseOwningDate(start.phases, "2026-08-21")?.id, "pre");
+    assert.equal(phaseOwningDate(start.phases, "2026-09-04")?.id, "oil-out");
+    assert.equal(phaseOwningDate(start.phases, "2026-09-07")?.id, "mech");
+    const slid = patchPhase(start, "pre", { stop: "2026-09-05" });
+    assert.equal(phaseOwningDate(slid.phases, "2026-09-05")?.id, "pre");
+    assert.equal(phaseOwningDate(slid.phases, "2026-09-06")?.id, "oil-out");
+    const offOil = {
+      ...start,
+      phases: start.phases.map((row) => (row.id === "oil-out" ? { ...row, on: false } : row)),
+    };
+    assert.equal(liveJobSetupPhases(offOil).some((row) => row.id === "oil-out"), false);
+    assert.equal(phaseOwningDate(liveJobSetupPhases(offOil), "2026-09-05"), undefined);
+    const dates = ["2026-09-04", "2026-09-05", "2026-09-06", "2026-09-07"];
+    const runs = phaseBarRuns(dates, liveJobSetupPhases(start));
+    assert.deepEqual(
+      runs.map((run) => ({ id: run.phase.id, startIndex: run.startIndex, endIndex: run.endIndex })),
+      [
+        { id: "oil-out", startIndex: 0, endIndex: 2 },
+        { id: "mech", startIndex: 3, endIndex: 3 },
+      ],
+    );
+  });
+
+  it("phase tone fills match desk globals.css", () => {
+    const css = readFileSync(fileURLToPath(new URL("../app/globals.css", import.meta.url)), "utf8");
+    assert.match(css, /\.phase-moss\s*\{[^}]*background:\s*#d5e2c4/i);
+    assert.match(css, /\.phase-rust\s*\{[^}]*background:\s*#ebcfc0/i);
+    assert.match(css, /\.phase-steel\s*\{[^}]*background:\s*#c5d0d5/i);
+    assert.match(css, /\.phase-amber\s*\{[^}]*background:\s*#e6ce86/i);
+    assert.match(css, /\.phase-green\s*\{[^}]*background:\s*#c0dec6/i);
+    assert.equal(PHASE_TONE_FILLS.pre, "FFD5E2C4");
+    assert.equal(PHASE_TONE_FILLS["oil-out"], "FFEBCFC0");
+    assert.equal(PHASE_TONE_FILLS.mech, "FFC5D0D5");
+    assert.equal(PHASE_TONE_FILLS["oil-in"], "FFE6CE86");
+    assert.equal(PHASE_TONE_FILLS.post, "FFC0DEC6");
   });
 });

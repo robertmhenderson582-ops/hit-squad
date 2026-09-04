@@ -34,6 +34,8 @@
  * (other-cost, equipment-sheet, estimate-total). A Misc / rod-weight change
  * on the desk must appear in the next export of that pack. Chrome
  * (xlsx-exceljs) must not invent money.
+ * Labor phase bar (rows 4–5 above the date row) is Job setup ON phases from
+ * phase-schedule (start/stop per phase) — not hard-coded sample dates.
  * Never commit source workbooks to git (Look samples excepted).
  */
 
@@ -64,7 +66,13 @@ import { commercialMarkupLabel, commercialMarkupRate, estimateMarkupDollars } fr
 import { boundOtLabel, computeRangeHours, parseYmd, type ClockOverride } from "./hours-clock.ts";
 import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
 import { miscAmount, travelAmount, type OtherCostSheet, type TravelLine } from "./other-cost.ts";
-import { eachYmd, type PhaseScheduleState } from "./phase-schedule.ts";
+import {
+  eachYmd,
+  liveJobSetupPhases,
+  PHASE_NAMES,
+  phaseBarRuns,
+  type PhaseScheduleState,
+} from "./phase-schedule.ts";
 import {
   hasShahanBillRate,
   isShahanCostPlus,
@@ -97,6 +105,10 @@ export const ESTIMATE_HOURS_LINE = "Man-hours";
 export const RATE_TOOLS_SECTION = "Large tools (COE / dry rates)";
 export const RATE_RENTAL_SECTION = "Third-party rental";
 export const LABOR_DATE_START_COL = 12;
+/** Two short rows above the date header — live Job setup phase band. */
+export const LABOR_PHASE_ROW = 4;
+export const LABOR_PHASE_ROW_END = 5;
+export const LABOR_PHASE_LABEL = "Phase";
 export const LABOR_BLOCK_HEIGHT = 7;
 /** Full job window. 90 days truncated Aromatics and understated desk totals. */
 export const LABOR_MAX_DAYS = 400;
@@ -620,6 +632,26 @@ function writeDateRow(cells: SheetCell[], dates: string[]) {
   });
 }
 
+function writePhaseBar(
+  cells: SheetCell[],
+  dates: string[],
+  schedule: EstimateXlsxInput["schedule"],
+): { merges: string[]; phaseBar: NonNullable<WorkbookSheet["phaseBar"]> } {
+  const merges = [`A${LABOR_PHASE_ROW}:K${LABOR_PHASE_ROW_END}`];
+  pushText(cells, `A${LABOR_PHASE_ROW}`, LABOR_PHASE_LABEL);
+  const runs = phaseBarRuns(dates, liveJobSetupPhases(schedule));
+  const phaseBar = runs.map((run) => {
+    const startCol = LABOR_DATE_START_COL + run.startIndex;
+    const endCol = LABOR_DATE_START_COL + run.endIndex;
+    const first = colLetter(startCol);
+    const last = colLetter(endCol);
+    pushText(cells, `${first}${LABOR_PHASE_ROW}`, PHASE_NAMES[run.phase.id] ?? run.phase.name);
+    merges.push(`${first}${LABOR_PHASE_ROW}:${last}${LABOR_PHASE_ROW_END}`);
+    return { startCol, endCol, phaseId: run.phase.id };
+  });
+  return { merges, phaseBar };
+}
+
 function buildCrewSheet(
   input: EstimateXlsxInput,
   name: string,
@@ -648,6 +680,7 @@ function buildCrewSheet(
   ];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
   writeDateRow(cells, dates);
+  const phaseBand = writePhaseBar(cells, dates, input.schedule);
 
   const titleRows: number[] = [];
   const pdMoneyRows: number[] = [];
@@ -792,10 +825,12 @@ function buildCrewSheet(
     weekendCols,
     laborBlocks,
     spacerRows,
+    phaseBar: phaseBand.phaseBar,
     merges: [
       `A1:${lastDateCol || "K"}1`,
       `A2:${lastDateCol || "K"}2`,
       `A3:${lastDateCol || "K"}3`,
+      ...phaseBand.merges,
     ],
   };
 }
