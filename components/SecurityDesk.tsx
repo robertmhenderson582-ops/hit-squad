@@ -34,7 +34,7 @@ export function SecurityDesk() {
       body: JSON.stringify({ current, next }),
     });
     const data = await response.json();
-    if (!response.ok || !data.ok) {
+    if (!response.ok || !data.ok || data.vaultPersisted === false) {
       setMessage(data.error || "Password was not saved.");
       return;
     }

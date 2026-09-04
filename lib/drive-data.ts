@@ -140,6 +140,19 @@ export async function readVaultJson<T>(
   return JSON.parse(await adapter.readJson(file.id)) as T;
 }
 
+async function confirmedVaultBytes(adapter: DriveAdapter, fileId: string, payload: string) {
+  if (!adapter.confirmWrite) return true;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (await adapter.confirmWrite(fileId, payload)) return true;
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 40 * (attempt + 1)));
+  }
+  try {
+    return (await adapter.readJson(fileId)) === payload;
+  } catch {
+    return false;
+  }
+}
+
 export async function writeVaultJson(
   adapter: DriveAdapter,
   name: string,
@@ -149,12 +162,20 @@ export async function writeVaultJson(
 ) {
   const payload = `${JSON.stringify(data, null, 2)}\n`;
   const properties = { kind };
+  const pinnedId = KNOWN_VAULT_FILE_IDS[name] || vaultEnvFileId(name);
   const existing = await findVaultJsonFile(adapter, name, kind, folderId);
+  // seats.json: never createJson. A folder 403 must not mint a second file.
+  if (!existing && pinnedId) {
+    throw new Error("vault file id not writable");
+  }
+  if (!existing && name === SEATS_VAULT_NAME) {
+    throw new Error("seats vault must PATCH known id");
+  }
   const written = existing
     ? await adapter.updateJson(existing.id, payload, name, properties)
     : await adapter.createJson(folderId, name, payload, properties);
   if (written?.id) rememberVaultFileId(name, kind, written.id);
-  if (adapter.confirmWrite && written?.id && !(await adapter.confirmWrite(written.id, payload))) {
+  if (written?.id && !(await confirmedVaultBytes(adapter, written.id, payload))) {
     throw new Error("vault write not confirmed");
   }
   return written;

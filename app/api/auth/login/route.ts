@@ -14,6 +14,7 @@ import {
   hydrateSeatStore,
   loginOutcome,
   persistExistingOwnerHash,
+  passwordWriteLanded,
   restoreSeatHash,
   seatHashClaimFor,
 } from "@/lib/users";
@@ -58,7 +59,25 @@ export async function POST(request: Request) {
     newPassword: typeof body.newPassword === "string" ? body.newPassword : "",
     confirmPassword: typeof body.confirmPassword === "string" ? body.confirmPassword : "",
   });
-  await flushSeatVault();
+  const createdPassword = typeof body.newPassword === "string" ? body.newPassword : "";
+  try {
+    await flushSeatVault();
+  } catch {
+    if (createdPassword) {
+      return NextResponse.json(
+        { error: "Password was not saved.", vaultPersisted: false },
+        { status: 503 },
+      );
+    }
+  }
+  if (createdPassword && outcome.status === "authenticated") {
+    if (!(await passwordWriteLanded(email, createdPassword))) {
+      return NextResponse.json(
+        { error: "Password was not saved.", vaultPersisted: false },
+        { status: 503 },
+      );
+    }
+  }
 
   if (outcome.status === "needsCreate") {
     return NextResponse.json({ needsCreate: true });

@@ -33,7 +33,7 @@ export function MustChangePasswordGate({ children }: { children: React.ReactNode
     });
     const data = await response.json();
     setBusy(false);
-    if (!response.ok || !data.ok) {
+    if (!response.ok || !data.ok || data.vaultPersisted === false) {
       setMessage(data.error || "Password was not saved.");
       return;
     }
