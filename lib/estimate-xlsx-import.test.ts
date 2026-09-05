@@ -1614,6 +1614,24 @@ describe("estimate excel import", () => {
     assert.equal(money.desk, money.summary);
   });
 
+  it("Nathan half-fill stacked Hours/shift on create-new keeps the live stacks", async () => {
+    const input = stackedHiring();
+    const before = deskPackageTotal(input);
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const staff = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    assert.ok(staff);
+    staff.getCell(`${dayCol(2)}${7 + LABOR_HPS_OFFSET}`).value = null;
+    const pack = createPackFromImport(await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    const ranges = (pack.crew as { staff: CraftRow[] }).staff[0].ranges;
+    assert.equal(ranges.some((range) => range.id === "rg-base" && range.hoursPerShift === 10), true);
+    assert.equal(ranges.some((range) => range.id === "rg-hire" && range.hoursPerShift === 8 && range.otAfter8 === true), true);
+    const money = livePackMoney(pack);
+    assert.equal(money.desk, before);
+    assert.equal(money.desk, money.summary);
+  });
+
   it("Nathan deletes _CrewRanges: create-new still imports; Aromatics labor leaves the desk rail", async () => {
     const file = "/tmp/vault-estimates/wood-river-2027-aromatics-turnaround.json";
     if (!existsSync(file)) return;
