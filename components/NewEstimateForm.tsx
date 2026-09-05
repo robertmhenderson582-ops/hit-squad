@@ -150,6 +150,7 @@ function NewEstimateDeskBody({
   setTab,
   alias,
   user,
+  lens,
   plant,
   otRule,
   needsRates,
