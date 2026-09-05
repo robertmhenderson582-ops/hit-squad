@@ -6,6 +6,7 @@ import {
   blankLargeTool,
   blankThirdParty,
   emptyEquipmentSheet,
+  endDateForPeriodCount,
   equipmentTotals,
   jobSetupWindow,
   largeToolAmount,
@@ -265,4 +266,16 @@ test("removing one third-party line leaves the others; last line may empty the c
   const empty = removeEquipmentLine(next, "thirdParty", "tp-keep");
   assert.deepEqual(empty.thirdParty, []);
   assert.equal(empty.largeTools[0]?.id, "lt-keep");
+});
+
+test("endDateForPeriodCount inverts billedPeriodCount for daily weekly and monthly", () => {
+  const start = "2026-09-01";
+  for (const period of ["daily", "weekly", "monthly"] as const) {
+    for (const n of [1, 2, 5, 12]) {
+      const end = endDateForPeriodCount(start, period, n);
+      assert.equal(billedPeriodCount(start, end, period), n, `${period} × ${n}`);
+    }
+  }
+  assert.equal(endDateForPeriodCount(start, "daily", 1), start);
+  assert.equal(billedPeriodCount(start, endDateForPeriodCount(start, "hourly", 8), "hourly"), 8);
 });

@@ -26,8 +26,9 @@
  * Rate Tables lists used crafts plus live Large tools (Shahan COE dry/wet
  * rates) and live third-party rentals from the same catalogs the desk uses.
  * A category with no live lines is omitted; dollars are never invented.
- * Subcontractor tab is all subs (not crane-only). Summary Subs $ is desk
- * Subs ESTIMATE TOTAL (cost + affiliate-aware 6.5%). Weekend columns on
+ * Subcontractor tab is all subs (not crane-only). Summary Subcontractor $ is
+ * desk Subcontractor cost; affiliate-aware 6.5% sits on the markup line —
+ * same split as the Estimate Total rail. Weekend columns on
  * labor grids are shaded. Daily ST/OT/DT cells are live HC×HPS formulas
  * (OT-after-N / Sunday DT / Saturday OT / weekly-40 via prior ST cells)
  * tied to Job setup ON / Start / Stop / OT after 8 (direct B–G cells).
@@ -141,7 +142,7 @@ import {
   thirdPartyPeriodsWithRates,
   thirdPartyRentalPeriodRate,
 } from "./third-party-rental.ts";
-import { emptySubSheet, lineAmount, subCardTotal, type SubSheet } from "./subcontractor.ts";
+import { emptySubSheet, lineAmount, subCardTotal, subcontractorMarkupBase, type SubSheet } from "./subcontractor.ts";
 import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
 import { catalogSites } from "./desk-data.ts";
 import { clampEstimateStatus, parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
@@ -1593,6 +1594,7 @@ function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushNum(cells, `E${excelRow}`, rate);
     pushNum(cells, `F${excelRow}`, line.freight);
     pushFormula(cells, `G${excelRow}`, rentalLineTotal(excelRow));
+    pushText(cells, `H${excelRow}`, line.itemId);
     unlockInputCols(unlocked, excelRow, 6);
     periodRows.push({
       row: excelRow,
@@ -1614,6 +1616,7 @@ function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
     name: ESTIMATE_XLSX_SHEETS.coe,
     cells,
     sheetTotal: `G${totalRow}`,
+    hiddenCols: [8],
     unlocked,
     validations: periodValidations(periodRows),
   };
@@ -1867,10 +1870,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
   let subCostRef: string | null = null;
   for (const [label, name] of extra) {
     const sheet = byName.get(xlsxName(name));
-    const total =
-      name === ESTIMATE_XLSX_SHEETS.sub
-        ? (sheet?.sheetTotal ?? sheet?.costTotal)
-        : (sheet?.costTotal ?? sheet?.sheetTotal);
+    const total = sheet?.costTotal ?? sheet?.sheetTotal;
     if (!sheet || !total) continue;
     const ref = addSummaryLine(cells, row, label, safeSheetAmount(sheetRef(name, total)));
     if (ref) {
@@ -1949,7 +1949,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
   const miscTotal = (input.otherCost?.misc ?? []).reduce((sum, line) => sum + miscAmount(line), 0);
   const subSheet = input.subcontractor ?? emptySubSheet();
   const markup = estimateMarkupDollars({
-    subcontractor: 0,
+    subcontractor: subcontractorMarkupBase(subSheet, { site, client, otAfter8: Boolean(input.crew?.otAfter8) }),
     thirdParty: thirdPartyCostTotal,
     misc: miscTotal,
     client,

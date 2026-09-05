@@ -51,6 +51,8 @@ import {
   type SubTotalContext,
 } from "./subcontractor.ts";
 import {
+  billedPeriodCount,
+  endDateForPeriodCount,
   jobSetupWindow,
   resolveLargeToolLine,
   resolveThirdPartyLine,
@@ -60,7 +62,7 @@ import {
 } from "./equipment-sheet.ts";
 import { type MiscLine, type OtherCostSheet, type TravelKind, type TravelLine } from "./other-cost.ts";
 import type { B2Period } from "./b2-east-coast.ts";
-import type { ClockOverride } from "./hours-clock.ts";
+import { isStaffSeat, type ClockOverride } from "./hours-clock.ts";
 import type { EstimateXlsxCrew } from "./estimate-xlsx.ts";
 import {
   cascadePhases,
@@ -108,10 +110,12 @@ export type ImportedCostLine = {
   qty: number;
   rate: number;
   freight?: number;
+  periods?: number;
   travelers?: number;
   miles?: number;
   kind?: TravelKind;
   affiliate?: boolean;
+  itemId?: string;
 };
 
 export type EstimateImport = {
@@ -289,34 +293,10 @@ function rangeFromPattern(
     skipDates,
     phaseId: phase?.id,
     shift: night ? "Nights" : "Days",
-    otAfter8: priorOtAfter8(existing, phase?.id, night) ?? phase?.otAfter8,
+    otAfter8:
+      priorOtAfter8(existing, phase?.id, night) ??
+      (existing && isStaffSeat(existing.position) ? false : phase?.otAfter8),
   };
-}
-
-function contiguousRuns(days: ImportedDay[]): ImportedDay[][] {
-  const runs: ImportedDay[][] = [];
-  let run: ImportedDay[] = [];
-  const flush = () => {
-    if (run.length) runs.push(run);
-    run = [];
-  };
-  for (const day of days) {
-    const prev = run[run.length - 1];
-    if (
-      prev &&
-      dayPattern(prev) === dayPattern(day) &&
-      parseYmd(prev.ymd) &&
-      parseYmd(day.ymd) &&
-      (parseYmd(day.ymd)!.getTime() - parseYmd(prev.ymd)!.getTime()) / 86_400_000 === 1
-    ) {
-      run.push(day);
-      continue;
-    }
-    flush();
-    run = [day];
-  }
-  flush();
-  return runs;
 }
 
 function rangeShiftOf(range: CalendarRange): CalendarRange["shift"] {
@@ -396,13 +376,33 @@ function rangesFromDays(days: ImportedDay[], night: boolean, phases: PhaseRow[],
     const skipDates = window.filter((day) => !dayLive(day) || dayPattern(day) !== dayPattern(pattern)).map((day) => day.ymd);
     ranges.push(rangeFromPattern(window, night, phase, phase.start, phase.stop, pattern, skipDates, existing));
     const extras = window.filter((day) => dayLive(day) && dayPattern(day) !== dayPattern(pattern));
-    for (const run of contiguousRuns(extras)) {
-      ranges.push(rangeFromPattern(run, night, phase, run[0].ymd, run[run.length - 1].ymd, run[0], [], existing));
+    const extraPatterns = new Map<string, ImportedDay[]>();
+    for (const day of extras) {
+      const key = dayPattern(day);
+      const list = extraPatterns.get(key) ?? [];
+      list.push(day);
+      extraPatterns.set(key, list);
+    }
+    for (const group of extraPatterns.values()) {
+      const start = group[0].ymd;
+      const end = group[group.length - 1].ymd;
+      const skip = eachYmd(start, end).filter((ymd) => !group.some((day) => day.ymd === ymd));
+      ranges.push(rangeFromPattern(group, night, phase, start, end, group[0], skip, existing));
     }
   }
   const leftover = days.filter((day) => !used.has(day.ymd) && dayLive(day));
-  for (const run of contiguousRuns(leftover)) {
-    ranges.push(rangeFromPattern(run, night, phaseOwningDate(phases, run[0].ymd), run[0].ymd, run[run.length - 1].ymd, run[0], [], existing));
+  const leftoverPatterns = new Map<string, ImportedDay[]>();
+  for (const day of leftover) {
+    const key = dayPattern(day);
+    const list = leftoverPatterns.get(key) ?? [];
+    list.push(day);
+    leftoverPatterns.set(key, list);
+  }
+  for (const group of leftoverPatterns.values()) {
+    const start = group[0].ymd;
+    const end = group[group.length - 1].ymd;
+    const skip = eachYmd(start, end).filter((ymd) => !group.some((day) => day.ymd === ymd));
+    ranges.push(rangeFromPattern(group, night, phaseOwningDate(phases, start), start, end, group[0], skip, existing));
   }
   return ranges;
 }
@@ -533,14 +533,15 @@ function rollupHours(days: ImportedDay[]) {
 function applyRowFromBlocks(existing: CraftRow, blocks: ImportedBlock[], phases: PhaseRow[]): CraftRow {
   const dayBlocks = blocks.filter((block) => !block.night);
   const nightBlocks = blocks.filter((block) => block.night);
+  const position = blocks.find((block) => block.position.trim())?.position || existing.position;
+  const seeded = { ...existing, position };
   const ranges = [
-    ...dayBlocks.flatMap((block) => rangesFromDays(block.days, false, phases, existing)),
-    ...nightBlocks.flatMap((block) => rangesFromDays(block.days, true, phases, existing)),
+    ...dayBlocks.flatMap((block) => rangesFromDays(block.days, false, phases, seeded)),
+    ...nightBlocks.flatMap((block) => rangesFromDays(block.days, true, phases, seeded)),
   ];
   const hours = rollupHours(blocks.flatMap((block) => block.days));
   const night = ranges.some((range) => range.shift === "Nights");
   const day = ranges.some((range) => (range.shift ?? "Days") !== "Nights");
-  const position = blocks.find((block) => block.position.trim())?.position || existing.position;
   const billedAs =
     blocks.find((block) => (block.billedAs ?? "").trim())?.billedAs ?? (existing as SupportLine).billedAs ?? "";
   const clockOverride = blocks.find((block) => block.clockOverride)?.clockOverride ?? existing.clockOverride ?? "auto";
@@ -683,10 +684,12 @@ function parseRentalLikeSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLi
     const item = asText(ws.getCell(row, 1).value);
     const period = asText(ws.getCell(row, 2).value).toLowerCase();
     const qty = asNum(ws.getCell(row, 3).value);
+    const periods = asNum(ws.getCell(row, 4).value);
     const rate = asNum(ws.getCell(row, 5).value);
     const freight = asNum(ws.getCell(row, 6).value);
+    const itemId = asText(ws.getCell(row, 8).value);
     if (!item && qty === 0 && rate === 0 && freight === 0) continue;
-    lines.push({ item, period, qty, rate, freight });
+    lines.push({ item, period, qty, rate, freight, periods, itemId: itemId || undefined });
   }
   return lines;
 }
@@ -796,9 +799,9 @@ function applyTravelLines(existing: TravelLine[], incoming: ImportedCostLine[] |
   let ci = 0;
   return incoming.map((row) => {
     const kind: TravelKind = row.kind === "craft" ? "craft" : "staff";
-    const prev = kind === "craft" ? staff[ci++] : staff[si++];
+    const prev = kind === "craft" ? craft[ci++] : staff[si++];
     return {
-      id: prev?.id ?? `travel-${kind}-${Date.now()}-${kind === "craft" ? ci : si}`,
+      id: prev?.id ?? `travel-${kind}-${kind === "craft" ? ci : si}`,
       kind,
       source: prev?.source ?? "extra",
       headcount: Math.max(prev?.headcount ?? 0, row.travelers ?? row.qty ?? 0),
@@ -833,6 +836,25 @@ function takePrev<T>(list: T[], used: Set<number>, match: (row: T) => boolean, f
   return undefined;
 }
 
+function datesFromImportedPeriods(
+  prior: { start?: string; end?: string } | undefined,
+  window: { start: string; end: string },
+  period: B2Period | ThirdPartyPeriod,
+  periods: number | undefined,
+): { start: string; end: string } {
+  const start = prior?.start || window.start;
+  const imported = Math.round(Number(periods) || 0);
+  if (imported > 0) {
+    if (prior?.start && prior.end && billedPeriodCount(prior.start, prior.end, period) === imported) {
+      return { start: prior.start, end: prior.end };
+    }
+    return { start, end: endDateForPeriodCount(start, period, imported) };
+  }
+  if (prior?.start && prior.end) return { start: prior.start, end: prior.end };
+  if (!start) return { start: window.start, end: window.end };
+  return { start, end: endDateForPeriodCount(start, period, 1) };
+}
+
 function applyRentalBucket(
   existing: ThirdPartyLine[],
   incoming: ImportedCostLine[] | undefined,
@@ -845,15 +867,17 @@ function applyRentalBucket(
   return incoming.map((row, index) => {
     const item = row.item.trim().toLowerCase();
     const prior = takePrev(prev, used, (line) => line.item.trim().toLowerCase() === item, index);
+    const period = parsePeriod(row.period);
+    const span = datesFromImportedPeriods(prior, dates, period, row.periods);
     return resolveThirdPartyLine({
       id: prior?.id ?? `${bucket}-imp-${index + 1}`,
       item: row.item,
-      period: parsePeriod(row.period),
+      period,
       rate: row.rate,
       freight: row.freight ?? 0,
       qty: row.qty,
-      start: prior?.start || dates.start,
-      end: prior?.end || dates.end,
+      start: span.start,
+      end: span.end,
     });
   });
 }
@@ -877,14 +901,16 @@ function applyCoeLines(
       },
       index,
     );
-    const resolvedId = prior?.itemId || rematchShahanEquipmentId(row.item) || row.item;
+    const resolvedId = prior?.itemId || row.itemId || rematchShahanEquipmentId(row.item) || row.item;
+    const period = parseCoePeriod(row.period ?? prior?.period);
+    const span = datesFromImportedPeriods(prior, dates, period, row.periods);
     return resolveLargeToolLine({
       id: prior?.id ?? `lt-imp-${index + 1}`,
       itemId: resolvedId,
-      period: parseCoePeriod(row.period ?? prior?.period),
+      period,
       qty: row.qty,
-      start: prior?.start || dates.start,
-      end: prior?.end || dates.end,
+      start: span.start,
+      end: span.end,
       enteredCost: 0,
       freight: row.freight ?? 0,
     });

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import ExcelJS from "exceljs";
 import { syncCraftRows } from "./craft-labor.ts";
-import { deskPackageTotal } from "./estimate-desk-total.ts";
+import { deskPackageBreakdown, deskPackageTotal } from "./estimate-desk-total.ts";
 import {
   applyEstimateImport,
   createPackFromImport,
@@ -24,7 +24,7 @@ import {
   type EstimateXlsxInput,
 } from "./estimate-xlsx.ts";
 import type { MiscLine } from "./other-cost.ts";
-import type { LargeToolLine, ThirdPartyLine } from "./equipment-sheet.ts";
+import { billedPeriodCount, type LargeToolLine, type ThirdPartyLine } from "./equipment-sheet.ts";
 import { colLetter } from "./xlsx-minimal.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import type { CraftRow } from "./craft-labor.ts";
@@ -278,12 +278,16 @@ describe("estimate excel import", () => {
   });
 
   it("creates a new pack from a filled workbook", async () => {
-    const imported = await parseEstimateXlsx(await estimateToXlsx(fixture()));
+    const input = fixture();
+    const imported = await parseEstimateXlsx(await estimateToXlsx(input));
     const pack = createPackFromImport(imported, "nathan@example.com");
     assert.match(pack.packId, /^new-/);
-    assert.equal(pack.title, fixture().title);
+    assert.equal(pack.title, input.title);
     assert.equal((pack.crew as { staff: CraftRow[] }).staff[0].position, "Superintendent 01");
     assert.equal(diffEstimateImport(null, imported).createsNew, true);
+    const money = livePackMoney(pack);
+    assert.equal(money.desk, deskPackageTotal(input));
+    assert.equal(money.desk, money.summary);
   });
 
   it("imports filled spare rows on COE, Misc, Equipment Rental, Travel, and Subs", async () => {
@@ -810,5 +814,216 @@ describe("estimate excel import", () => {
       subcontractor: applied.subcontractor,
     });
     assert.equal(secondUp, money.desk);
+  });
+
+  it("DOWN: craft travel keeps craft identity and import-twice does not drift money", async () => {
+    const input: EstimateXlsxInput = {
+      ...fixture(),
+      otherCost: {
+        perDiemRate: 0,
+        travel: [
+          { id: "travel-staff", kind: "staff", source: "crew", headcount: 1, travelers: 1, perMile: 0.7, miles: 40 },
+          { id: "travel-craft", kind: "craft", source: "crew", headcount: 2, travelers: 2, perMile: 0.5, miles: 20 },
+        ],
+        misc: [{ id: "mc-1", item: "Alloy rod", description: "Stainless", qty: 2, each: 25 }],
+      },
+    };
+    const first = applyEstimateImport(asPack(input), await parseEstimateXlsx(await estimateToXlsx(input)));
+    const travel = (first.otherCost as { travel: Array<{ id: string; kind: string; miles: number; source: string }> }).travel;
+    assert.equal(travel.find((line) => line.kind === "staff")?.id, "travel-staff");
+    assert.equal(travel.find((line) => line.kind === "craft")?.id, "travel-craft");
+    assert.equal(travel.find((line) => line.kind === "craft")?.source, "crew");
+    assert.equal(travel.find((line) => line.kind === "craft")?.miles, 20);
+    const once = livePackMoney(first);
+    const second = applyEstimateImport(first, await parseEstimateXlsx(await estimateToXlsx({
+      title: first.title,
+      client: first.client,
+      site: first.site,
+      crew: first.crew,
+      schedule: first.schedule,
+      jobMeta: first.jobMeta,
+      equipment: first.equipment,
+      otherCost: first.otherCost,
+      subcontractor: first.subcontractor,
+    })));
+    const twice = livePackMoney(second);
+    assert.equal(once.desk, twice.desk);
+    assert.equal(twice.desk, twice.summary);
+    assert.equal((second.otherCost as { travel: Array<{ id: string }> }).travel.find((line) => line.id === "travel-craft")?.id, "travel-craft");
+  });
+
+  it("DOWN: Position change after hours plus Bill as flip still locks the rail", async () => {
+    const input = fixture();
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const staff = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    const support = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.support);
+    assert.ok(staff && support);
+    staff.getCell("B7").value = "Project Manager 01";
+    staff.getCell(`${dayCol()}8`).value = 2;
+    support.getCell("B11").value = "Superintendent 01";
+    const imported = await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer()));
+    const applied = applyEstimateImport(asPack(input), imported);
+    const crew = applied.crew as { staff: CraftRow[]; support: Array<CraftRow & { billedAs?: string }> };
+    assert.equal(crew.staff[0].position, "Project Manager 01");
+    assert.equal(crew.staff[0].ranges.some((range) => range.headcount === 2), true);
+    assert.equal(crew.support[0].billedAs, "Superintendent 01");
+    assertFiniteMoney(applied, "position-after-hours");
+  });
+
+  it("DOWN: Periods edit on rental and COE ripples billed days and desk money", async () => {
+    const input: EstimateXlsxInput = {
+      ...fixture(),
+      equipment: {
+        largeTools: [
+          {
+            id: "lt-mover",
+            itemId: "air-mover",
+            period: "daily",
+            qty: 1,
+            start: "2026-09-01",
+            end: "2026-09-01",
+            enteredCost: 0,
+            freight: 0,
+          },
+        ],
+        thirdParty: [
+          {
+            id: "tp-1",
+            item: "450amp diesel welder",
+            period: "daily",
+            rate: 134,
+            freight: 100,
+            qty: 1,
+            start: "2026-09-01",
+            end: "2026-09-01",
+          },
+        ],
+      },
+    };
+    const before = deskPackageTotal(input);
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const rental = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rental);
+    const coe = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.coe);
+    assert.ok(rental && coe);
+    rental.getCell("D7").value = 5;
+    coe.getCell("D7").value = 3;
+    const applied = applyEstimateImport(asPack(input), await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    const tools = (applied.equipment as { largeTools: LargeToolLine[]; thirdParty: ThirdPartyLine[] }).largeTools;
+    const third = (applied.equipment as { largeTools: LargeToolLine[]; thirdParty: ThirdPartyLine[] }).thirdParty;
+    assert.equal(billedPeriodCount(tools[0]!.start, tools[0]!.end, tools[0]!.period), 3);
+    assert.equal(billedPeriodCount(third[0]!.start, third[0]!.end, third[0]!.period), 5);
+    const money = livePackMoney(applied);
+    assert.equal(money.desk, money.summary);
+    assert.equal(money.desk > before, true);
+  });
+
+  it("DOWN: create-new keeps wet vs dry COE identity from the hidden item id", async () => {
+    const weekday = { start: "2026-09-01", end: "2026-09-01" };
+    const input: EstimateXlsxInput = {
+      ...fixture(),
+      equipment: {
+        largeTools: [
+          {
+            id: "lt-wet",
+            itemId: "wet:8:truck-crew",
+            period: "daily",
+            qty: 1,
+            ...weekday,
+            enteredCost: 0,
+            freight: 0,
+          },
+          {
+            id: "lt-dry",
+            itemId: "dry:40:truck-crew",
+            period: "daily",
+            qty: 1,
+            ...weekday,
+            enteredCost: 0,
+            freight: 0,
+          },
+        ],
+        thirdParty: [],
+      },
+    };
+    const before = deskPackageTotal(input);
+    const pack = createPackFromImport(await parseEstimateXlsx(await estimateToXlsx(input)));
+    const tools = (pack.equipment as { largeTools: LargeToolLine[] }).largeTools;
+    assert.equal(tools.some((line) => line.itemId.startsWith("wet:")), true);
+    assert.equal(tools.some((line) => line.itemId.startsWith("dry:")), true);
+    const money = livePackMoney(pack);
+    assert.equal(money.desk, before);
+    assert.equal(money.desk, money.summary);
+  });
+
+  it("DOWN: create-new from Aromatics and CAT 2 workbooks keeps the desk rail", async () => {
+    const vaults = [
+      { file: "/tmp/vault-estimates/wood-river-2027-aromatics-turnaround.json", total: 25324671.97 },
+      { file: "/tmp/vault-estimates/wood-river-madison-cat-2-pit-stop.json", total: 1435365.66 },
+    ];
+    for (const { file, total } of vaults) {
+      if (!existsSync(file)) continue;
+      const { input } = estimateJsonToXlsxInput(JSON.parse(readFileSync(file, "utf8")));
+      const pack = createPackFromImport(await parseEstimateXlsx(await estimateToXlsx(input)));
+      const money = livePackMoney(pack);
+      assert.equal(money.desk, money.summary, `${file} create-new desk===Summary`);
+      if (file.includes("cat-2")) {
+        assert.equal(money.desk, total, `${file} create-new desk`);
+        continue;
+      }
+      const orig = deskPackageBreakdown(input);
+      const next = deskPackageBreakdown({
+        title: pack.title,
+        client: pack.client,
+        site: pack.site,
+        crew: pack.crew,
+        schedule: pack.schedule,
+        jobMeta: pack.jobMeta,
+        equipment: pack.equipment,
+        otherCost: pack.otherCost,
+        subcontractor: pack.subcontractor,
+      });
+      const cents = (n: number) => Math.round(n * 100) / 100;
+      for (const id of ["equipment", "subcontractor", "other", "markup"]) {
+        assert.equal(
+          cents(next.lines.find((line) => line.id === id)?.amount ?? 0),
+          cents(orig.lines.find((line) => line.id === id)?.amount ?? 0),
+          `${file} ${id}`,
+        );
+      }
+    }
+  });
+
+  it("UP then DOWN: Aromatics and CAT 2 line money and a second import stay on the rail", async () => {
+    const vaults = [
+      { file: "/tmp/vault-estimates/wood-river-2027-aromatics-turnaround.json", total: 25324671.97 },
+      { file: "/tmp/vault-estimates/wood-river-madison-cat-2-pit-stop.json", total: 1435365.66 },
+    ];
+    for (const { file, total } of vaults) {
+      if (!existsSync(file)) continue;
+      const { pack, input } = estimateJsonToXlsxInput(JSON.parse(readFileSync(file, "utf8")));
+      assert.equal(deskEstimateTotal(input), total, file);
+      assert.equal(estimateWorkbookSummaryTotal(input), total, `${file} first UP`);
+      const imported = await parseEstimateXlsx(await estimateToXlsx(input));
+      const applied = applyEstimateImport(pack, imported);
+      const first = livePackMoney(applied);
+      assert.equal(first.desk, total, `${file} after DOWN`);
+      assert.equal(first.summary, total, `${file} second UP`);
+      const again = applyEstimateImport(applied, await parseEstimateXlsx(await estimateToXlsx({
+        title: applied.title,
+        client: applied.client,
+        site: applied.site,
+        crew: applied.crew,
+        schedule: applied.schedule,
+        jobMeta: applied.jobMeta,
+        equipment: applied.equipment,
+        otherCost: applied.otherCost,
+        subcontractor: applied.subcontractor,
+      })));
+      assert.equal(livePackMoney(again).desk, total, `${file} import twice`);
+    }
   });
 });

@@ -1,6 +1,6 @@
 import { markup6, type B2Period } from "./b2-east-coast.ts";
 import { commercialMarkupRate } from "./estimate-total.ts";
-import { inclusiveDays, parseYmd } from "./phase-schedule.ts";
+import { addDays, inclusiveDays, parseYmd } from "./phase-schedule.ts";
 import {
   allowedShahanPeriod,
   isShahanCostPlus,
@@ -138,6 +138,32 @@ export function billedPeriodCount(start: string, end: string, period: B2Period |
     covered = addCalendarMonths(covered, 1);
   }
   return count;
+}
+
+/** Inverse of billedPeriodCount — an end date that bills `count` units from start. */
+export function endDateForPeriodCount(
+  start: string,
+  period: B2Period | ThirdPartyPeriod,
+  count: number,
+): string {
+  const n = Math.max(1, Math.round(Number(count) || 1));
+  if (!parseYmd(start)) return start || "";
+  if (period === "daily") return addDays(start, n - 1);
+  if (period === "hourly") return addDays(start, Math.max(1, Math.ceil(n / 8)) - 1);
+  if (period === "weekly") return addDays(start, 7 * (n - 1));
+  let end = start;
+  let guard = 0;
+  while (billedPeriodCount(start, end, period) < n && guard < 4000) {
+    end = addDays(end, 1);
+    guard += 1;
+  }
+  while (billedPeriodCount(start, end, period) > n && guard < 4000) {
+    const prev = addDays(end, -1);
+    if (!parseYmd(prev) || prev < start) break;
+    end = prev;
+    guard += 1;
+  }
+  return end;
 }
 
 export function largeToolAmount(line: LargeToolLine) {

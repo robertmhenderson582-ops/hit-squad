@@ -73,7 +73,7 @@ import {
   XLSX_INPUT_NOTES,
   XLSX_TYPE_NOTES,
 } from "./estimate-xlsx.ts";
-import { commercialMarkupRate } from "./estimate-total.ts";
+import { commercialMarkupRate, estimateMarkupDollars } from "./estimate-total.ts";
 import {
   hasThirdPartyPeriodRate,
   lookupThirdPartyRental,
@@ -83,8 +83,10 @@ import { deskEstimateTotal, estimateWorkbookSummaryTotal } from "./estimate-pack
 import { computeRowHours } from "./hours-clock.ts";
 import { defaultLaborClass } from "./labor-class.ts";
 import {
+  laborDollarsFromCrew,
   lookupShahanEquipment,
   lookupShahanLabor,
+  perDiemDollarsFromCrew,
   SHAHAN_NO_RATE_LABEL,
   shahanCrewCostAmount,
   shahanPeriodRate,
@@ -126,7 +128,10 @@ import {
   SUMMARY_TOTAL,
 } from "./xlsx-exceljs.ts";
 import { PHASE_TONE_FILLS, phaseOwningDate } from "./phase-schedule.ts";
-import { evaluateWorkbook } from "./xlsx-eval.ts";
+import { evaluateWorkbook, summaryAmountAt } from "./xlsx-eval.ts";
+import { miscAmount, travelAmount } from "./other-cost.ts";
+import { largeToolAmount, thirdPartyCost } from "./equipment-sheet.ts";
+import { subcontractorMarkupBase, subcontractorTotal } from "./subcontractor.ts";
 import {
   REQUIRED_XLSX_PARTS,
   buildSheetXml,
@@ -492,6 +497,47 @@ describe("estimate excel export", () => {
     assert.equal(summarySheet.getCell(`B${hoursRow}`).numFmt, EXCEL_UNIT_FORMATS.hours);
     assert.equal(summarySheet.getCell(`C${totalRow}`).numFmt, "$#,##0.00");
     assert.equal(/field trial|forgebook|not a release/i.test(JSON.stringify(wb.model)), false);
+    assert.equal(estimateWorkbookSummaryTotal(input), deskEstimateTotal(input));
+  });
+
+  it("UP: Summary money lines equal the same shared libs the desk rail uses", () => {
+    const input = {
+      ...woodRiverFixture(),
+      subcontractor: {
+        lines: [{ id: "sub-1", vendor: "O&M Crane", scope: "crane lift", qty: 1, unit: "LS" as const, rate: 1000, affiliate: false }],
+        cards: [],
+      },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const cents = (n: number) => Math.round(n * 100) / 100;
+    const labor = laborDollarsFromCrew(input.crew, input.site, input.client, wageLookupOpts(input.site));
+    const pd = perDiemDollarsFromCrew(
+      input.crew,
+      { staffPerDiemRate: 140, craftPerDiemRate: 130 },
+      input.site,
+      input.client,
+    );
+    const travel = (input.otherCost?.travel ?? []).reduce((sum, line) => sum + travelAmount(line), 0);
+    const misc = (input.otherCost?.misc ?? []).reduce((sum, line) => sum + miscAmount(line), 0);
+    const rental = (input.equipment?.thirdParty ?? []).reduce((sum, line) => sum + thirdPartyCost(line), 0);
+    const tools = (input.equipment?.largeTools ?? []).reduce((sum, line) => sum + largeToolAmount(line), 0);
+    const subCtx = { site: input.site, client: input.client, otAfter8: true };
+    const subs = subcontractorTotal(input.subcontractor, subCtx);
+    const markup = estimateMarkupDollars({
+      subcontractor: subcontractorMarkupBase(input.subcontractor, subCtx),
+      thirdParty: rental,
+      misc,
+      client: input.client,
+      site: input.site,
+    });
+    assert.equal(cents(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "Labor $") ?? -1), cents(labor));
+    assert.equal(cents(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "Per diem $") ?? -1), cents(pd));
+    assert.equal(cents(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "Travel $") ?? -1), cents(travel));
+    assert.equal(cents(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "Misc $") ?? -1), cents(misc));
+    assert.equal(cents(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "Equipment rental $") ?? -1), cents(rental));
+    assert.equal(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "COE $"), tools > 0 ? cents(tools) : null);
+    assert.equal(cents(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "Subcontractor $") ?? -1), cents(subs));
+    assert.equal(cents(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "6.5% markup") ?? -1), cents(markup));
     assert.equal(estimateWorkbookSummaryTotal(input), deskEstimateTotal(input));
   });
 
@@ -1013,8 +1059,8 @@ describe("estimate excel export", () => {
       assert.ok(row, label);
       return evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${row}`);
     };
-    assert.equal(summaryAmount("Subcontractor $"), 1065);
-    assert.equal(summaryAmount("6.5% markup"), Math.round((234 + 50 + 50) * 0.065 * 100) / 100);
+    assert.equal(summaryAmount("Subcontractor $"), 1000);
+    assert.equal(summaryAmount("6.5% markup"), Math.round((1000 + 234 + 50 + 50) * 0.065 * 100) / 100);
   });
 
   it("rolls Subs as desk Cost + affiliate-aware markup and keeps the full job calendar", async () => {
@@ -1099,8 +1145,8 @@ describe("estimate excel export", () => {
       assert.ok(row, label);
       return evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${row}`);
     };
-    assert.equal(amountAt("Subcontractor $"), 4000 + 2500 + Math.round(2500 * 0.065 * 100) / 100);
-    assert.equal(amountAt("6.5% markup"), Math.round((100 + 200) * 0.065 * 100) / 100);
+    assert.equal(amountAt("Subcontractor $"), 4000 + 2500);
+    assert.equal(amountAt("6.5% markup"), Math.round((2500 + 100 + 200) * 0.065 * 100) / 100);
     assert.equal(sheets.some((sheet) => sheet.name === "Subcontractor"), true);
     const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.direct);
     assert.ok(staff?.weekendCols?.some((col) => col.weekday === 6));
