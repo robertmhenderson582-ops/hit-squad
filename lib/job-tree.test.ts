@@ -15,8 +15,12 @@ import {
   jobTree,
   matchCatalogSite,
   resolveOpenCompanyId,
+  resolveSiteOpen,
+  siteIsCollapsible,
+  siteTreeKey,
   sitesForCompany,
   stickyOpenCompanyId,
+  toggleCollapsedSite,
   toggleOpenCompanyId,
   UNASSIGNED_SITE_ID,
 } from "./job-tree.ts";
@@ -210,5 +214,31 @@ describe("job tree", () => {
     assert.match(desk, /toggleOpenCompanyId\(current, id, tree\)/);
     assert.match(rates, /writeRateCompanyOpen/);
     assert.equal(/resolveOpenCompanyId|stickyOpenCompanyId/.test(rates), false);
+  });
+
+  it("collapses sites with 2+ jobs and stays collapsed (missing key is expanded)", () => {
+    const one = { id: "site-one", jobs: [{ id: "a" }] };
+    const two = { id: "site-two", jobs: [{ id: "a" }, { id: "b" }] };
+    const empty = { id: "site-empty", jobs: [] };
+    assert.equal(siteIsCollapsible(one), false);
+    assert.equal(siteIsCollapsible(empty), false);
+    assert.equal(siteIsCollapsible(two), true);
+    assert.equal(siteTreeKey("madison", "site-madison"), "madison:site-madison");
+
+    const start = new Set<string>();
+    assert.equal(resolveSiteOpen(start, "madison", two), true);
+    assert.equal(resolveSiteOpen(start, "madison", one), true);
+    const collapsed = toggleCollapsedSite(start, "madison", two);
+    assert.equal(resolveSiteOpen(collapsed, "madison", two), false);
+    assert.equal(resolveSiteOpen(collapsed, "madison", one), true);
+    assert.equal(resolveSiteOpen(toggleCollapsedSite(collapsed, "madison", one), "madison", two), false);
+    assert.equal(resolveSiteOpen(toggleCollapsedSite(collapsed, "madison", two), "madison", two), true);
+
+    const treeDesk = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
+    assert.match(treeDesk, /resolveSiteOpen\(collapsedSites, company\.id, site\)/);
+    assert.match(treeDesk, /toggleCollapsedSite\(prev, company\.id, site\)/);
+    assert.match(treeDesk, /siteIsCollapsible\(site\)/);
+    assert.equal(/openSites\[key\] \|\| true/.test(treeDesk), false);
+    assert.match(treeDesk, /useState<Set<string>>/);
   });
 });

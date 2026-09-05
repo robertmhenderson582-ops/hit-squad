@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { JobHandoffMark } from "@/components/JobHandoffMark";
 import { JobMenuActions } from "@/components/JobMenuActions";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
@@ -9,7 +10,14 @@ import { StatusStamp } from "@/components/StatusStamp";
 import { useDisplay } from "@/components/DisplayProvider";
 import { estimateForJob } from "@/lib/estimate-open";
 import { packForJob } from "@/lib/jobs";
-import { jobEstimateHref, resolveOpenCompanyId, type JobTreeCompany } from "@/lib/job-tree";
+import {
+  jobEstimateHref,
+  resolveOpenCompanyId,
+  resolveSiteOpen,
+  siteIsCollapsible,
+  toggleCollapsedSite,
+  type JobTreeCompany,
+} from "@/lib/job-tree";
 import type { EstimateRecord, JobRecord } from "@/lib/types";
 import type { LocalPack } from "@/lib/local-estimates";
 
@@ -34,6 +42,7 @@ export function JobTreeDesk({
   const { resolvedTheme } = useDisplay();
   const night = resolvedTheme === "night";
   const openId = resolveOpenCompanyId(openCompanyId, tree);
+  const [collapsedSites, setCollapsedSites] = useState<Set<string>>(() => new Set());
 
   function openJob(job: JobRecord, event?: { preventDefault: () => void; stopPropagation: () => void }) {
     const href = jobEstimateHref(job, estimates, packs);
@@ -64,16 +73,31 @@ export function JobTreeDesk({
             </button>
             {open ? (
               <div className="space-y-4 px-4 pb-5 pt-2">
-                {company.sites.map((site) => (
+                {company.sites.map((site) => {
+                  const collapsible = siteIsCollapsible(site);
+                  const siteOpen = resolveSiteOpen(collapsedSites, company.id, site);
+                  const title = site.assigned ? alias(site.name) : "Not assigned";
+                  const titleClass = `font-display text-xl tracking-wide ${
+                    site.assigned ? (night ? "text-paper-cream" : "text-[#163038]") : "text-steel-glow"
+                  }`;
+                  return (
                   <div key={`${company.id}-${site.id}`}>
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <h3
-                        className={`font-display text-xl tracking-wide ${
-                          site.assigned ? (night ? "text-paper-cream" : "text-[#163038]") : "text-steel-glow"
-                        }`}
-                      >
-                        {site.assigned ? alias(site.name) : "Not assigned"}
-                      </h3>
+                      {collapsible ? (
+                        <button
+                          type="button"
+                          className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+                          aria-expanded={siteOpen}
+                          onClick={() => setCollapsedSites((prev) => toggleCollapsedSite(prev, company.id, site))}
+                        >
+                          <h3 className={titleClass}>{title}</h3>
+                          <span className="font-mono text-[11px] tracking-[0.2em] text-amber-label" aria-hidden="true">
+                            {siteOpen ? "▴" : "▾"}
+                          </span>
+                        </button>
+                      ) : (
+                        <h3 className={titleClass}>{title}</h3>
+                      )}
                       {site.assigned && site.city ? (
                         <p className="font-mono text-[10px] tracking-[0.16em] text-steel-glow">
                           {alias(site.client)} · {alias(site.city)}
@@ -85,7 +109,8 @@ export function JobTreeDesk({
                         {site.id === "site-unassigned" ? alias(company.name) : alias(site.name)} · no jobs on this site
                       </p>
                     ) : null}
-                    {site.jobs.map((job) => {
+                    {siteOpen
+                      ? site.jobs.map((job) => {
                       const estimate = estimateForJob(job, estimates);
                       const pack = packForJob(job, packs, estimate?.id);
                       const href = jobEstimateHref(job, estimates, packs);
@@ -142,9 +167,11 @@ export function JobTreeDesk({
                           ) : null}
                         </article>
                       );
-                    })}
+                    })
+                      : null}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : null}
           </section>

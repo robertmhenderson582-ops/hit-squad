@@ -67,6 +67,38 @@ export function stickyOpenCompanyId(
   return defaultOpenCompanyId(companies) ?? "";
 }
 
+export function siteTreeKey(companyId: string, siteId: string) {
+  return `${companyId}:${siteId}`;
+}
+
+/** Only sites with 2+ jobs/estimates collapse. 0–1 stay open. */
+export function siteIsCollapsible(site: { jobs: readonly unknown[] }) {
+  return site.jobs.length >= 2;
+}
+
+/** Missing key = expanded (first paint). Collapsed keys stay collapsed across re-renders. */
+export function resolveSiteOpen(
+  collapsed: ReadonlySet<string>,
+  companyId: string,
+  site: { id: string; jobs: readonly unknown[] },
+) {
+  if (!siteIsCollapsible(site)) return true;
+  return !collapsed.has(siteTreeKey(companyId, site.id));
+}
+
+export function toggleCollapsedSite(
+  collapsed: ReadonlySet<string>,
+  companyId: string,
+  site: { id: string; jobs: readonly unknown[] },
+) {
+  const next = new Set(collapsed);
+  if (!siteIsCollapsible(site)) return next;
+  const key = siteTreeKey(companyId, site.id);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  return next;
+}
+
 /** Single-open accordion. Collapsing the open company yields `""` (none open). */
 export function toggleOpenCompanyId(
   current: string | null,
