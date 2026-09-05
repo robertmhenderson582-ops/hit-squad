@@ -288,8 +288,8 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
         if (tok.value === "IF") return args[0] ? args[1] : args[2];
         if (tok.value === "AND") return args.every((arg) => Boolean(isRange(arg) ? false : arg));
         if (tok.value === "OR") return args.some((arg) => Boolean(isRange(arg) ? false : arg));
-        if (tok.value === "MIN") return Math.min(...args.map(asNumber));
-        if (tok.value === "MAX") return Math.max(...args.map(asNumber));
+        if (tok.value === "MIN") return Math.min(...args.map((arg) => asNumber(arg)));
+        if (tok.value === "MAX") return Math.max(...args.map((arg) => asNumber(arg)));
         if (tok.value === "TRIM") return String(isRange(args[0]) ? "" : (args[0] ?? "")).trim();
         if (tok.value === "N") return isRange(args[0]) ? 0 : asNumber(args[0]);
         if (tok.value === "ISNUMBER") return typeof args[0] === "number" && Number.isFinite(args[0]);
