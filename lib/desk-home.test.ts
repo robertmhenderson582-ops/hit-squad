@@ -45,6 +45,13 @@ describe("home doors", () => {
     assert.match(hero, /href=\{href\}/);
     assert.match(wordmark, /HIT SQUAD/);
     assert.match(wordmark, /PROJECT CONTROLS/);
+    assert.match(wordmark, /variant="stacked"/);
+    const mark = readFileSync(fileURLToPath(new URL("../components/BrandMark.tsx", import.meta.url)), "utf8");
+    assert.match(hero, /variant="stacked"/);
+    assert.match(chrome, /variant="stacked"/);
+    assert.match(mark, /variant === "stacked" \|\| variant === "jets"/);
+    assert.equal(/M20 2\.5 34 16\.5 20 30\.5 6 16\.5Z/.test(mark), false);
+    assert.match(mark, /translate\(0 24\)/);
     assert.equal(/Forgebook|Estimators/.test(hero), false);
     assert.equal(/Forgebook|Estimators/.test(home), false);
     assert.equal(/New .*estimate|Simple shop|shop job|Other client/i.test(hero), false);

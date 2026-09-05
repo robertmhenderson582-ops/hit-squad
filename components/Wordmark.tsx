@@ -12,7 +12,7 @@ export function Wordmark({
 }) {
   return (
     <div className={`flex ${compact ? "items-center gap-3" : "flex-col items-center gap-3"}`}>
-      <BrandMark className={compact ? "h-10 w-10" : "h-16 w-16"} />
+      <BrandMark variant="stacked" className={compact ? "h-10 w-7" : "h-16 w-11"} />
       <div className={compact ? "text-left" : "text-center"}>
         <p
           className={`font-display font-semibold leading-none tracking-[0.14em] text-paper-cream ${

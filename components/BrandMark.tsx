@@ -1,15 +1,20 @@
+const JET =
+  "M20 1.1 24.4 8.8 33 15.4 25.8 13.6 28.6 23.2 22.4 18.6 20 26 17.6 18.6 11.4 23.2 14.2 13.6 7 15.4 15.6 8.8Z";
+
 export function BrandMark({
   className = "h-16 w-16",
   variant = "rings",
 }: {
   className?: string;
-  variant?: "rings" | "stacked";
+  variant?: "rings" | "stacked" | "jets";
 }) {
-  if (variant === "stacked") {
+  if (variant === "stacked" || variant === "jets") {
     return (
       <svg className={className} viewBox="0 0 40 56" fill="none" aria-hidden="true">
-        <path d="M20 2.5 34 16.5 20 30.5 6 16.5Z" stroke="#ffffff" strokeWidth="2" />
-        <path d="M20 25.5 34 39.5 20 53.5 6 39.5Z" stroke="#ffffff" strokeWidth="2" />
+        <g fill="#ffffff" stroke="#ffffff" strokeWidth="0.7" strokeLinejoin="round">
+          <path d={JET} />
+          <path d={JET} transform="translate(0 24)" />
+        </g>
       </svg>
     );
   }
