@@ -540,8 +540,9 @@ function applyRowFromBlocks(existing: CraftRow, blocks: ImportedBlock[], phases:
   const hours = rollupHours(blocks.flatMap((block) => block.days));
   const night = ranges.some((range) => range.shift === "Nights");
   const day = ranges.some((range) => (range.shift ?? "Days") !== "Nights");
-  const position = blocks.find((block) => block.position)?.position || existing.position;
-  const billedAs = blocks.find((block) => block.billedAs)?.billedAs ?? (existing as SupportLine).billedAs ?? "";
+  const position = blocks.find((block) => block.position.trim())?.position || existing.position;
+  const billedAs =
+    blocks.find((block) => (block.billedAs ?? "").trim())?.billedAs ?? (existing as SupportLine).billedAs ?? "";
   const clockOverride = blocks.find((block) => block.clockOverride)?.clockOverride ?? existing.clockOverride ?? "auto";
   return {
     ...existing,
