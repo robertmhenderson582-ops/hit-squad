@@ -719,7 +719,10 @@ export type AppliedEstimateImport = Omit<EstimatePackSnapshot, "schedule" | "cre
 };
 
 function asEquipment(raw: unknown): { largeTools: LargeToolLine[]; thirdParty: ThirdPartyLine[] } {
-  const row = raw && typeof raw === "object" ? (raw as { largeTools?: LargeToolLine[]; thirdParty?: ThirdPartyLine[] }) : {};
+  const row = (raw && typeof raw === "object" ? raw : {}) as {
+    largeTools?: LargeToolLine[];
+    thirdParty?: ThirdPartyLine[];
+  };
   return {
     largeTools: Array.isArray(row.largeTools) ? row.largeTools : [],
     thirdParty: Array.isArray(row.thirdParty) ? row.thirdParty : [],
@@ -727,7 +730,7 @@ function asEquipment(raw: unknown): { largeTools: LargeToolLine[]; thirdParty: T
 }
 
 function asOtherCost(raw: unknown): OtherCostSheet {
-  const row = raw && typeof raw === "object" ? (raw as OtherCostSheet) : {};
+  const row = (raw && typeof raw === "object" ? raw : {}) as Partial<OtherCostSheet>;
   return {
     perDiemRate: Number(row.perDiemRate) || 0,
     travel: Array.isArray(row.travel) ? row.travel : [],
@@ -934,7 +937,7 @@ export function diffEstimateImport(base: EstimatePackSnapshot | null, imported: 
 }
 
 function asCrew(raw: unknown): EstimateXlsxCrew {
-  const row = raw && typeof raw === "object" ? (raw as EstimateXlsxCrew) : {};
+  const row = (raw && typeof raw === "object" ? raw : {}) as Partial<EstimateXlsxCrew>;
   return {
     staff: Array.isArray(row.staff) ? row.staff : [],
     generalForeman: Array.isArray(row.generalForeman) ? row.generalForeman : [],
