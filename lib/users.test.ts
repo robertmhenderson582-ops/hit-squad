@@ -44,6 +44,7 @@ import {
   persistExistingOwnerHash,
   mergeHashRows,
   liveSessionUser,
+  scheduleSessionVaultCatchUp,
 } from "./users.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 
@@ -1456,6 +1457,32 @@ test("session GET overlays live mustChange and heals stale cookies", () => {
   assert.match(route, /liveSessionUser/);
   assert.match(route, /cookies\.set\(SESSION_COOKIE/);
   assert.match(route, /cookies\.set\(SEAT_CLAIM_COOKIE/);
+  assert.match(route, /scheduleSessionVaultCatchUp|after\(/);
+  assert.match(route, /peekAssignedCompany/);
+  const getFn = route.slice(route.indexOf("export async function GET"));
+  assert.doesNotMatch(getFn, /await hydrateSeatStore/);
+  assert.doesNotMatch(getFn, /await persistExistingOwnerHash/);
+  assert.doesNotMatch(getFn, /await assignedCompany/);
+});
+
+test("scheduleSessionVaultCatchUp returns while Drive hydrate is still hung", async () => {
+  useSeatVaultForTests({
+    configured: true,
+    listJson: () => new Promise(() => {}),
+    readJson: () => new Promise(() => {}),
+    createJson: () => new Promise(() => {}),
+    updateJson: () => new Promise(() => {}),
+    deleteJson: () => new Promise(() => {}),
+  });
+  const started = Date.now();
+  scheduleSessionVaultCatchUp(() => hydrateSeatStore());
+  assert.ok(Date.now() - started < 100, "session catch-up must not await Drive");
+
+  const raced = await Promise.race([
+    hydrateSeatStore().then(() => "resolved" as const),
+    new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 80)),
+  ]);
+  assert.equal(raced, "timeout");
 });
 
 test("password route re-issues session and seat-claim cookies with mustChange false", () => {

@@ -139,6 +139,12 @@ export async function assignedCompany(email: string): Promise<CompanyId> {
   return data.assignments[key] ?? seedCompanyForEmail(key);
 }
 
+/** Local cache / seed only. Session GET must not wait on Drive for companyId. */
+export function peekAssignedCompany(email: string): CompanyId {
+  const key = email.trim().toLowerCase();
+  return readCache().assignments[key] ?? seedCompanyForEmail(key);
+}
+
 /** Assigned companies for this email only — never the owner's full catalog. */
 export async function assignedCompaniesForEmail(email: string): Promise<Company[]> {
   return assignedCompaniesForId(await assignedCompany(email), await listCompanies());
