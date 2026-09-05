@@ -16,7 +16,7 @@ export function DeskHero({
   return (
     <section className="desk-hero desk-hero-home px-4 py-10 text-center sm:py-12">
       <Link href={href} aria-label={label} className="hero-mark brand-static relative z-10">
-        <BrandMark variant="stacked" className="mx-auto h-14 w-10" />
+        <BrandMark variant="stacked" className="mx-auto h-14 w-14" />
         <p className="mt-3 font-display text-5xl font-semibold tracking-[0.16em] text-white sm:text-6xl">
           {HOME_WORDMARK}
         </p>
