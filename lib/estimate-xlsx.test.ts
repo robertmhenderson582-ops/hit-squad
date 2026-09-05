@@ -50,6 +50,7 @@ import {
   estimateToXlsx,
   estimateXlsxFilename,
   laborCalendarDates,
+  priorWeekStRefs,
   RATE_RENTAL_SECTION,
   RATE_TOOLS_SECTION,
   sheetRef,
@@ -1931,6 +1932,60 @@ describe("estimate excel export", () => {
     assert.ok(satGf.title);
     assert.equal(satAt(ESTIMATE_XLSX_SHEETS.staff, laborHrsRef(satGf, "st")), 0);
     assert.equal(satAt(ESTIMATE_XLSX_SHEETS.staff, laborHrsRef(satGf, "ot")), 10);
+  });
+
+  it("staff Saturday after Mon–Fri 40 ST is 0 ST on desk and Excel (live prior-ST room)", () => {
+    const week = {
+      start: "2027-03-15",
+      end: "2027-03-20",
+      days: [false, true, true, true, true, true, true] as boolean[],
+      otAfter8: true as const,
+    };
+    const dates = ["2027-03-15", "2027-03-16", "2027-03-17", "2027-03-18", "2027-03-19", "2027-03-20"];
+    assert.deepEqual(priorWeekStRefs(dates, 5, 10), ["J10", "K10", "L10", "M10", "N10"]);
+    assert.deepEqual(priorWeekStRefs(["2027-03-20"], 0, 10), []);
+
+    const lead = craft("lead-sat40", "Lead Site 01", 9, week);
+    const desk = computeRowHours(lead, "Wood River — Roxana, IL", "Phillips 66", true, "PCA0001103");
+    assert.equal(desk.st, 40);
+    assert.equal(desk.ot, 14);
+
+    const sheets = buildEstimateWorkbook({
+      title: "Staff weekly 40 Saturday",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      plantCode: "PCA0001103",
+      crew: { staff: [lead], otAfter8: true },
+      schedule: {
+        projectStart: "2027-03-15",
+        multiUnits: false,
+        units: [],
+        phases: [
+          {
+            id: "mech",
+            name: "Mechanical Window",
+            on: true,
+            start: "2027-03-15",
+            stop: "2027-03-20",
+            daysPerWeek: 6,
+            hoursPerDay: 9,
+            otAfter8: true,
+            sundaysOff: [],
+          },
+        ],
+      },
+    });
+    const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff)!;
+    const one = laborHours(staff, "Lead Site 01");
+    const satCol = colLetter(LABOR_DATE_START_COL + 5);
+    const monCol = colLetter(LABOR_DATE_START_COL);
+    const staffMap = cellMap(staff);
+    const satSt = String(staffMap.get(`${satCol}${one.st}`)?.value ?? "");
+    assert.match(satSt, new RegExp(`${monCol}${one.st}`));
+    assert.match(satSt, /40\*/);
+    const { evalAt } = evaluateWorkbook(sheets);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, `${satCol}${one.st}`), 0);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, `${satCol}${one.ot}`), 9);
   });
 
   it("puts union-coded Staff rows on the COMP clock under Auto and follows the clock pick", () => {

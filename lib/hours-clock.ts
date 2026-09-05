@@ -208,7 +208,7 @@ function dailySplit(
   return { st, ot: Math.max(0, hours - st), dt: 0 };
 }
 
-function applyWeekly40(days: { key: string; st: number; ot: number; dt: number }[], headcount: number) {
+export function applyWeekly40(days: { key: string; st: number; ot: number; dt: number }[], headcount: number) {
   const weeklySt = 40 * Math.max(1, headcount);
   const weeks = new Map<string, typeof days>();
   for (const day of days) {
@@ -259,10 +259,90 @@ function mergeDualCrew(day: RangeHours, night: RangeHours): RangeHours {
   };
 }
 
-export function computeRangeHours(input: ComputeRangeInput): RangeHours {
-  if (!input.position.trim()) {
-    return { st: 0, ot: 0, dt: 0, pd: 0, hours: 0, workedDays: 0, days: [] };
+type WeekDaySplit = { key: string; date: string; weekday: number; st: number; ot: number; dt: number };
+
+function emptyHours(): RangeHours {
+  return { st: 0, ot: 0, dt: 0, pd: 0, hours: 0, workedDays: 0, days: [] };
+}
+
+function hoursFromSplits(raw: WeekDaySplit[], workedDays: number, pd: number): RangeHours {
+  const st = raw.reduce((sum, day) => sum + day.st, 0);
+  const ot = raw.reduce((sum, day) => sum + day.ot, 0);
+  const dt = raw.reduce((sum, day) => sum + day.dt, 0);
+  return {
+    st,
+    ot,
+    dt,
+    pd,
+    hours: st + ot + dt,
+    workedDays,
+    days: raw.map(({ date, weekday, st: daySt, ot: dayOt, dt: dayDt }) => ({
+      date,
+      weekday,
+      st: daySt,
+      ot: dayOt,
+      dt: dayDt,
+    })),
+  };
+}
+
+/** Daily ST/OT/DT before weekly-40. Same Monday-week across ranges still shares the 40 ST bank. */
+export function computeRangeDaySplits(input: ComputeRangeInput): {
+  raw: WeekDaySplit[];
+  head: number;
+  workedDays: number;
+  pd: number;
+} {
+  if (!input.position.trim() || input.shift === "Days & nights") {
+    return { raw: [], head: 1, workedDays: 0, pd: 0 };
   }
+  const daysMask = input.days ?? [false, true, true, true, true, true, true];
+  const head = Math.max(1, input.headcount ?? 1);
+  const title = clockTitle(input.position, input.billedAs);
+  const clock = runningClock(
+    title,
+    input.site ?? "",
+    input.client ?? "",
+    input.clockOverride ?? "auto",
+    input.plantCode ?? "",
+  );
+  const flagged = Boolean(input.otAfter8);
+  const otAfter8 = clock === "east-coast" ? eastCoastCraftOtAfter8(input.phaseId, flagged) : flagged;
+  const dates = eachDate(input.start, input.end);
+  const raw: WeekDaySplit[] = [];
+  let workedDays = 0;
+  const workedInWeek = new Map<string, number>();
+  const skip = new Set(input.skipDates ?? []);
+  for (const date of dates) {
+    const stamp = ymd(date);
+    if (skip.has(stamp)) continue;
+    const dow = date.getDay();
+    if (!daysMask[dow]) continue;
+    const dayHead =
+      dow === 0 && input.sundayHeadcount != null && Number.isFinite(Number(input.sundayHeadcount))
+        ? Math.max(0, Number(input.sundayHeadcount))
+        : head;
+    if (dayHead <= 0) continue;
+    const key = mondayKey(date);
+    const prior = workedInWeek.get(key) ?? 0;
+    const seventh = clock === "ca-daily" && prior >= 6;
+    workedInWeek.set(key, prior + 1);
+    const split = dailySplit(input.hoursPerShift, dow, clock, otAfter8, seventh);
+    raw.push({
+      key,
+      date: stamp,
+      weekday: dow,
+      st: split.st * dayHead,
+      ot: split.ot * dayHead,
+      dt: split.dt * dayHead,
+    });
+    workedDays += 1;
+  }
+  return { raw, head, workedDays, pd: workedDays * Math.max(0, input.perDiemPeople ?? 0) };
+}
+
+export function computeRangeHours(input: ComputeRangeInput): RangeHours {
+  if (!input.position.trim()) return emptyHours();
   if (input.shift === "Days & nights") {
     return mergeDualCrew(
       computeRangeHours({
@@ -284,73 +364,9 @@ export function computeRangeHours(input: ComputeRangeInput): RangeHours {
       }),
     );
   }
-
-  const daysMask = input.days ?? [false, true, true, true, true, true, true];
-  const head = Math.max(1, input.headcount ?? 1);
-  const title = clockTitle(input.position, input.billedAs);
-  const clock = runningClock(
-    title,
-    input.site ?? "",
-    input.client ?? "",
-    input.clockOverride ?? "auto",
-    input.plantCode ?? "",
-  );
-  const flagged = Boolean(input.otAfter8);
-  const otAfter8 = clock === "east-coast" ? eastCoastCraftOtAfter8(input.phaseId, flagged) : flagged;
-  const dates = eachDate(input.start, input.end);
-  const raw: { key: string; date: string; weekday: number; st: number; ot: number; dt: number }[] = [];
-  let workedDays = 0;
-  const workedInWeek = new Map<string, number>();
-
-  const skip = new Set(input.skipDates ?? []);
-  for (const date of dates) {
-    const stamp = ymd(date);
-    if (skip.has(stamp)) continue;
-    const dow = date.getDay();
-    if (!daysMask[dow]) continue;
-    const dayHead =
-      dow === 0 && input.sundayHeadcount != null && Number.isFinite(Number(input.sundayHeadcount))
-        ? Math.max(0, Number(input.sundayHeadcount))
-        : head;
-    if (dayHead <= 0) continue;
-    const key = mondayKey(date);
-    const prior = workedInWeek.get(key) ?? 0;
-    const seventh = clock === "ca-daily" && prior >= 6;
-    workedInWeek.set(key, prior + 1);
-    const split = dailySplit(input.hoursPerShift, dow, clock, otAfter8, seventh);
-    raw.push({
-      key,
-      date: ymd(date),
-      weekday: dow,
-      st: split.st * dayHead,
-      ot: split.ot * dayHead,
-      dt: split.dt * dayHead,
-    });
-    workedDays += 1;
-  }
-
+  const { raw, head, workedDays, pd } = computeRangeDaySplits(input);
   applyWeekly40(raw, head);
-
-  const st = raw.reduce((sum, day) => sum + day.st, 0);
-  const ot = raw.reduce((sum, day) => sum + day.ot, 0);
-  const dt = raw.reduce((sum, day) => sum + day.dt, 0);
-  const dayPd = Math.max(0, input.perDiemPeople ?? 0);
-  const pd = workedDays * dayPd;
-  return {
-    st,
-    ot,
-    dt,
-    pd,
-    hours: st + ot + dt,
-    workedDays,
-    days: raw.map(({ date, weekday, st: daySt, ot: dayOt, dt: dayDt }) => ({
-      date,
-      weekday,
-      st: daySt,
-      ot: dayOt,
-      dt: dayDt,
-    })),
-  };
+  return hoursFromSplits(raw, workedDays, pd);
 }
 
 export function computeRowHours(

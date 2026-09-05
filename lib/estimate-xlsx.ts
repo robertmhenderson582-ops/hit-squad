@@ -725,9 +725,14 @@ export function excelBlockClock(row: CraftRow, input: EstimateXlsxInput): Runnin
   );
 }
 
-function rangeWeekKey(range: CalendarRange | undefined) {
-  if (!range) return "";
-  return range.id || `${range.phaseId ?? ""}|${range.start ?? ""}|${range.end ?? ""}`;
+/** Prior ST cells in the same Monday-week. Do not filter by range — that dropped Monday and left Saturday a 40-hour room. */
+export function priorWeekStRefs(dates: string[], index: number, stRow: number) {
+  const week = mondayStamp(dates[index] ?? "");
+  return dates
+    .slice(0, index)
+    .map((stamp, prior) => ({ stamp, ref: `${colLetter(LABOR_DATE_START_COL + prior)}${stRow}` }))
+    .filter((item) => mondayStamp(item.stamp) === week)
+    .map((item) => item.ref);
 }
 
 function dayHourFormulas(
@@ -1087,14 +1092,7 @@ function buildCrewSheet(
       const plug = dayPlug(row, ymd, night);
       pushNum(cells, `${col}${hcRow}`, plug.hc);
       pushNum(cells, `${col}${hpsRow}`, plug.hps);
-      const week = mondayStamp(ymd);
-      const rangeKey = rangeWeekKey(coveringRanges(row, ymd, night)[0]);
-      const priorStRefs = dates
-        .slice(0, index)
-        .map((stamp, prior) => ({ stamp, ref: `${colLetter(LABOR_DATE_START_COL + prior)}${stRow}` }))
-        .filter((item) => mondayStamp(item.stamp) === week)
-        .filter((item) => rangeWeekKey(coveringRanges(row, item.stamp, night)[0]) === rangeKey)
-        .map((item) => item.ref);
+      const priorStRefs = priorWeekStRefs(dates, index, stRow);
       const dateRef = `${col}$6`;
       const inPhaseRef = jobDaysRef(index, 2);
       const staffOtRef = jobDaysRef(index, 3);
