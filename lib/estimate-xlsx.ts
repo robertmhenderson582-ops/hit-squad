@@ -55,7 +55,8 @@
  * phase-schedule (start/stop per phase) — not hard-coded sample dates.
  * This Look pass paints that bar as a view only. Adjustable Job setup card
  * + Position / hour / Bill as import ships on this compile (excel-ripple.ts).
- * Phase-bar day/night hour chips stay parked after this next Excel compile.
+ * Phase-bar day/night/complete hour chips ship on the next Excel compile —
+ * view of live calendar ST+OT+DT per Job setup phase (import does not edit chips).
  * Never commit source workbooks to git (Look samples excepted).
  */
 
@@ -192,6 +193,11 @@ export const LABOR_INSTRUMENT_LAST_COL = 9;
 export const LABOR_PHASE_ROW = 4;
 export const LABOR_PHASE_ROW_END = 5;
 export const LABOR_PHASE_LABEL = "Phase";
+/** Day / night / complete hour chips sit on the unused date cells of row 3 (above the phase name). */
+export const LABOR_PHASE_CHIP_ROW = 3;
+export const LABOR_PHASE_CHIP_DAYS_FMT = '"D"0';
+export const LABOR_PHASE_CHIP_NIGHTS_FMT = '"N"0';
+export const LABOR_PHASE_CHIP_COMPLETE_FMT = '"C"0';
 /** Two-letter weekday over the date number (row 5 / row 6). */
 export const LABOR_WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 export const LABOR_BLOCK_HEIGHT = 7;
@@ -478,8 +484,9 @@ export const ESTIMATE_XLSX_SHEETS = {
 
 /**
  * Blank formula-ready pad after live COE / Misc / Equipment Rental (and
- * Tension/Crane — same rental builder). SUM covers live + spare. Import
- * scans the full block; filled pad rows become new pack lines.
+ * Tension/Crane — same rental builder), plus Travel and Subcontractor.
+ * SUM covers live + spare. Import scans the full block; filled pad rows
+ * become new pack lines.
  */
 export const ESTIMATE_XLSX_SPARE_ROWS = 8;
 
@@ -1235,6 +1242,57 @@ function writePhaseBar(
   return { merges, phaseBar };
 }
 
+/** ST+OT+DT for title blocks over a phase date span — same hour rows the desk rolls. */
+function phaseHourRollup(titles: number[], startCol: number, endCol: number): string {
+  if (!titles.length) return "0";
+  const first = colLetter(startCol);
+  const last = colLetter(endCol);
+  return titles
+    .map((title) => `SUM(${first}${title + LABOR_ST_OFFSET}:${last}${title + LABOR_DT_OFFSET})`)
+    .join("+");
+}
+
+function writePhaseHourChips(
+  cells: SheetCell[],
+  runs: NonNullable<WorkbookSheet["phaseBar"]>,
+  dayTitles: number[],
+  nightTitles: number[],
+): NonNullable<WorkbookSheet["phaseChips"]> {
+  const chips: NonNullable<WorkbookSheet["phaseChips"]> = [];
+  for (const run of runs) {
+    const span = run.endCol - run.startCol + 1;
+    const daysExpr = phaseHourRollup(dayTitles, run.startCol, run.endCol);
+    const nightsExpr = phaseHourRollup(nightTitles, run.startCol, run.endCol);
+    const completeExpr =
+      daysExpr === "0" ? nightsExpr : nightsExpr === "0" ? daysExpr : `(${daysExpr})+(${nightsExpr})`;
+    const place = (col: number, kind: "days" | "nights" | "complete", formula: string, fmt: string) => {
+      cells.push({
+        ref: `${colLetter(col)}${LABOR_PHASE_CHIP_ROW}`,
+        type: "formula",
+        value: formula,
+        numFmt: fmt,
+      });
+      chips.push({ col, kind, startCol: run.startCol, endCol: run.endCol, phaseId: run.phaseId });
+    };
+    if (span >= 3) {
+      place(run.startCol, "days", daysExpr, LABOR_PHASE_CHIP_DAYS_FMT);
+      place(run.startCol + 1, "nights", nightsExpr, LABOR_PHASE_CHIP_NIGHTS_FMT);
+      place(
+        run.startCol + 2,
+        "complete",
+        `${colLetter(run.startCol)}${LABOR_PHASE_CHIP_ROW}+${colLetter(run.startCol + 1)}${LABOR_PHASE_CHIP_ROW}`,
+        LABOR_PHASE_CHIP_COMPLETE_FMT,
+      );
+    } else if (span === 2) {
+      place(run.startCol, "days", daysExpr, LABOR_PHASE_CHIP_DAYS_FMT);
+      place(run.startCol + 1, "complete", completeExpr, LABOR_PHASE_CHIP_COMPLETE_FMT);
+    } else {
+      place(run.startCol, "complete", completeExpr, LABOR_PHASE_CHIP_COMPLETE_FMT);
+    }
+  }
+  return chips;
+}
+
 function buildCrewSheet(
   input: EstimateXlsxInput,
   name: string,
@@ -1267,6 +1325,8 @@ function buildCrewSheet(
   const phaseBand = writePhaseBar(cells, dates, input.schedule);
 
   const titleRows: number[] = [];
+  const dayTitleRows: number[] = [];
+  const nightTitleRows: number[] = [];
   const pdMoneyRows: number[] = [];
   const laborBlocks: Array<{ start: number; end: number }> = [];
   const spacerRows: number[] = [];
@@ -1274,6 +1334,8 @@ function buildCrewSheet(
 
   function emitBlock(row: CraftRow, night: boolean) {
     const titleRow = excelRow + LABOR_TITLE_OFFSET;
+    if (night) nightTitleRows.push(titleRow);
+    else dayTitleRows.push(titleRow);
     const hcRow = excelRow + LABOR_HC_OFFSET;
     const hpsRow = excelRow + LABOR_HPS_OFFSET;
     const stRow = excelRow + LABOR_ST_OFFSET;
@@ -1431,6 +1493,7 @@ function buildCrewSheet(
     laborBlocks,
     spacerRows,
     phaseBar: phaseBand.phaseBar,
+    phaseChips: writePhaseHourChips(cells, phaseBand.phaseBar, dayTitleRows, nightTitleRows),
     billAs: showBillAs
       ? laborBlocks.map((block) => ({
           labelRow: block.start + LABOR_ST_OFFSET,
@@ -1574,11 +1637,16 @@ function buildTravelSheet(input: EstimateXlsxInput, lines: TravelLine[], name: s
     pushNum(cells, `B${excelRow}`, Math.min(line.travelers, line.headcount || line.travelers));
     pushNum(cells, `C${excelRow}`, line.miles);
     pushNum(cells, `D${excelRow}`, line.perMile);
-    pushFormula(cells, `E${excelRow}`, `B${excelRow}*C${excelRow}*D${excelRow}`);
+    pushFormula(cells, `E${excelRow}`, `${nCell(`B${excelRow}`)}*${nCell(`C${excelRow}`)}*${nCell(`D${excelRow}`)}`);
     unlockInputCols(unlocked, excelRow, 4);
   });
   const first = 7;
-  const last = 6 + live.length;
+  const lastLive = 6 + live.length;
+  const last = lastLive + ESTIMATE_XLSX_SPARE_ROWS;
+  for (let excelRow = lastLive + 1; excelRow <= last; excelRow += 1) {
+    pushFormula(cells, `E${excelRow}`, `${nCell(`B${excelRow}`)}*${nCell(`C${excelRow}`)}*${nCell(`D${excelRow}`)}`);
+    unlockInputCols(unlocked, excelRow, 4);
+  }
   const totalRow = last + 1;
   pushText(cells, `A${totalRow}`, "TOTAL");
   pushFormula(cells, `E${totalRow}`, `SUM(E${first}:E${last})`);
@@ -1627,16 +1695,22 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
   });
   let excelRow = 7;
   const unlocked: Array<{ row: number; col: number }> = [];
+  const validations: NonNullable<WorkbookSheet["validations"]> = [];
+  const markup = commercialMarkupRate(input.client, input.site);
+  const writeSubFormulas = (row: number) => {
+    pushFormula(cells, `F${row}`, `${nCell(`C${row}`)}*${nCell(`D${row}`)}`);
+    pushFormula(cells, `G${row}`, `IF(UPPER(TRIM(E${row}))="YES",0,F${row}*${markup})`);
+    pushFormula(cells, `H${row}`, `F${row}+G${row}`);
+    unlockInputCols(unlocked, row, 5);
+    validations.push({ sqref: `E${row}`, formulae: [listFormula("I", 2)] });
+  };
   for (const line of lines) {
     pushText(cells, `A${excelRow}`, line.vendor);
     pushText(cells, `B${excelRow}`, line.scope);
     pushNum(cells, `C${excelRow}`, line.qty);
     pushNum(cells, `D${excelRow}`, line.rate);
-    pushText(cells, `E${excelRow}`, line.affiliate ? "Yes" : "No");
-    pushFormula(cells, `F${excelRow}`, `C${excelRow}*D${excelRow}`);
-    pushFormula(cells, `G${excelRow}`, line.affiliate ? "0" : `F${excelRow}*${commercialMarkupRate(input.client, input.site)}`);
-    pushFormula(cells, `H${excelRow}`, `F${excelRow}+G${excelRow}`);
-    unlockInputCols(unlocked, excelRow, 5);
+    pushText(cells, `E${excelRow}`, line.affiliate ? "YES" : "NO");
+    writeSubFormulas(excelRow);
     excelRow += 1;
   }
   for (const card of cards) {
@@ -1645,26 +1719,29 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushText(cells, `B${excelRow}`, card.kind);
     pushNum(cells, `C${excelRow}`, 1);
     pushNum(cells, `D${excelRow}`, amount);
-    pushText(cells, `E${excelRow}`, card.affiliate ? "Yes" : "No");
-    pushFormula(cells, `F${excelRow}`, `C${excelRow}*D${excelRow}`);
-    pushFormula(cells, `G${excelRow}`, card.affiliate ? "0" : `F${excelRow}*${commercialMarkupRate(input.client, input.site)}`);
-    pushFormula(cells, `H${excelRow}`, `F${excelRow}+G${excelRow}`);
-    unlockInputCols(unlocked, excelRow, 5);
+    pushText(cells, `E${excelRow}`, card.affiliate ? "YES" : "NO");
+    writeSubFormulas(excelRow);
     excelRow += 1;
   }
   const first = 7;
-  const last = excelRow - 1;
-  pushText(cells, `A${excelRow}`, "ESTIMATE TOTAL $");
-  pushFormula(cells, `F${excelRow}`, `SUM(F${first}:F${last})`);
-  pushFormula(cells, `G${excelRow}`, `SUM(G${first}:G${last})`);
-  pushFormula(cells, `H${excelRow}`, `SUM(H${first}:H${last})`);
+  const lastLive = excelRow - 1;
+  const last = lastLive + ESTIMATE_XLSX_SPARE_ROWS;
+  for (; excelRow <= last; excelRow += 1) {
+    writeSubFormulas(excelRow);
+  }
+  const totalRow = excelRow;
+  pushText(cells, `A${totalRow}`, "ESTIMATE TOTAL $");
+  pushFormula(cells, `F${totalRow}`, `SUM(F${first}:F${last})`);
+  pushFormula(cells, `G${totalRow}`, `SUM(G${first}:G${last})`);
+  pushFormula(cells, `H${totalRow}`, `SUM(H${first}:H${last})`);
   return {
     name: ESTIMATE_XLSX_SHEETS.sub,
     cells,
-    costTotal: `F${excelRow}`,
-    markupTotal: `G${excelRow}`,
-    sheetTotal: `H${excelRow}`,
+    costTotal: `F${totalRow}`,
+    markupTotal: `G${totalRow}`,
+    sheetTotal: `H${totalRow}`,
     unlocked,
+    validations,
   };
 }
 

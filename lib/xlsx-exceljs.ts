@@ -950,6 +950,25 @@ function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDat
       centerLaborCell(cell);
     }
   }
+  applyLaborPhaseChips(ws, sheet);
+}
+
+/** Day / night / complete hour chips on row 3 — locked view of calendar ST+OT+DT. */
+function applyLaborPhaseChips(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
+  const chips = sheet.phaseChips ?? [];
+  if (!chips.length) return;
+  const byPhase = new Map<string, string>();
+  for (const run of sheet.phaseBar ?? []) {
+    if (isPhaseId(run.phaseId)) byPhase.set(`${run.startCol}:${run.endCol}:${run.phaseId}`, PHASE_TONE_FILLS[run.phaseId]);
+  }
+  for (const chip of chips) {
+    const cell = ws.getCell(3, chip.col);
+    const fillArgb = byPhase.get(`${chip.startCol}:${chip.endCol}:${chip.phaseId}`) ?? STEEL;
+    cell.fill = solid(fillArgb);
+    cell.font = { bold: true, name: "Calibri", size: 7, color: { argb: PHASE_TONE_BAND_INK } };
+    cell.alignment = { ...LABOR_CENTER };
+    cell.protection = { locked: true };
+  }
 }
 
 function applyLaborInstrumentOutline(ws: ExcelJS.Worksheet): void {
@@ -1463,6 +1482,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
       pinLaborTitleBlock(ws);
       applyHeaderMetaLayout(ws, LABOR_INSTRUMENT_LAST_COL, true);
       pinLaborEvenRows(ws, sheet, lastVisibleColNum, maxRow);
+      applyLaborPhaseChips(ws, sheet);
     }
     pinHoursAndMoney(ws, sheet, lastVisibleColNum, maxRow, labor, isSummary);
     for (const slot of sheet.billAs ?? []) {

@@ -54,6 +54,10 @@ import {
   LABOR_PD_TYPE,
   LABOR_NIGHTSHIFT,
   LABOR_PHASE_LABEL,
+  LABOR_PHASE_CHIP_ROW,
+  LABOR_PHASE_CHIP_DAYS_FMT,
+  LABOR_PHASE_CHIP_NIGHTS_FMT,
+  LABOR_PHASE_CHIP_COMPLETE_FMT,
   LABOR_WEEKDAY_LABELS,
   LABOR_TYPE_ORDER,
   laborBlockId,
@@ -463,7 +467,7 @@ describe("estimate excel export", () => {
     assert.ok(headerFill(staffSheet.getCell("A2")));
     assert.ok(headerFill(staffSheet.getCell("A3")));
     assert.equal(headerFill(staffSheet.getCell("J2")), headerFill(staffSheet.getCell("A2")));
-    assert.equal(headerFill(staffSheet.getCell("J3")), headerFill(staffSheet.getCell("A3")));
+    assert.equal(headerFill(staffSheet.getCell("J3")), PHASE_TONE_FILLS.mech.replace(/^FF/i, ""));
     assert.equal(headerFill(staffSheet.getCell(`${lastHeaderCol}2`)), headerFill(staffSheet.getCell("A2")));
     assert.equal(headerFill(staffSheet.getCell(`${lastHeaderCol}3`)), headerFill(staffSheet.getCell("A3")));
     assert.equal(staffSheet.getCell("F7").numFmt, EXCEL_UNIT_FORMATS.hours);
@@ -1001,7 +1005,8 @@ describe("estimate excel export", () => {
     assert.ok(misc);
     assert.match(String(misc.getCell("B7").value), /Stainless > 2"/);
     const { evalAt } = evaluateWorkbook(sheets);
-    const subTotal = evalAt(subName, "H8");
+    const subTotalRow = labelRow(sheetOf(sheets, subName)!, "ESTIMATE TOTAL $");
+    const subTotal = evalAt(subName, `H${subTotalRow}`);
     assert.equal(subTotal, 1000 * 1.065);
     const summaryAmount = (label: string) => {
       const row = summary?.cells.find((cell) => cell.ref.startsWith("A") && cell.value === label)?.ref.replace("A", "");
@@ -1263,9 +1268,13 @@ describe("estimate excel export", () => {
     assert.equal(direct.getCell("J7").alignment?.vertical, "middle");
     assert.equal(direct.getCell("J10").alignment?.vertical, "middle");
     assert.equal(argb(direct.getCell("J2")), argb(direct.getCell("A2")));
-    assert.equal(argb(direct.getCell("J3")), argb(direct.getCell("A3")));
+    assert.equal(argb(direct.getCell("J3")), PHASE_TONE_FILLS.mech.replace(/^FF/i, ""));
     assert.equal(argb(direct.getCell(`${lastDateCol}2`)), argb(direct.getCell("A2")));
-    assert.equal(argb(direct.getCell(`${lastDateCol}3`)), argb(direct.getCell("A3")));
+    const leftoverChip = laborCalendarDates(input).length > 3;
+    assert.equal(
+      argb(direct.getCell(`${lastDateCol}3`)),
+      leftoverChip ? argb(direct.getCell("A3")) : PHASE_TONE_FILLS.mech.replace(/^FF/i, ""),
+    );
     assert.equal(direct.getCell("A7").border?.left?.style, "medium");
     assert.equal(direct.getCell("I13").border?.right?.style, "medium");
     assert.equal(direct.getCell("I13").border?.bottom?.style, "medium");
@@ -1778,7 +1787,7 @@ describe("estimate excel export", () => {
     assert.equal(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.some((cell) => cell.value === "Staff travel $"), false);
   });
 
-  it("pads COE, Misc, and Equipment Rental with formula-ready spare rows", () => {
+  it("pads COE, Misc, Equipment Rental, Travel, and Subs with formula-ready spare rows", () => {
     const input = {
       ...woodRiverFixture(),
       equipment: {
@@ -1796,20 +1805,32 @@ describe("estimate excel export", () => {
           },
         ],
       },
+      subcontractor: {
+        lines: [{ id: "sub-1", vendor: "O&M Crane", scope: "crane lift", qty: 1, unit: "LS" as const, rate: 1000, affiliate: false }],
+        cards: [],
+      },
     };
     const sheets = buildEstimateWorkbook(input);
     const misc = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.misc)!;
     const rental = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.rental)!;
     const coe = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.coe)!;
+    const travel = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.travel)!;
+    const sub = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.sub)!;
     const miscTotal = labelRow(misc, "TOTAL");
     const rentalTotal = labelRow(rental, "TOTAL");
     const coeTotal = labelRow(coe, "TOTAL");
+    const travelTotal = labelRow(travel, "TOTAL");
+    const subTotal = labelRow(sub, "ESTIMATE TOTAL $");
     assert.equal(miscTotal, 7 + 1 + ESTIMATE_XLSX_SPARE_ROWS);
     assert.equal(rentalTotal, 7 + 1 + ESTIMATE_XLSX_SPARE_ROWS);
     assert.equal(coeTotal, 7 + 1 + ESTIMATE_XLSX_SPARE_ROWS);
+    assert.equal(travelTotal, 7 + 1 + ESTIMATE_XLSX_SPARE_ROWS);
+    assert.equal(subTotal, 7 + 1 + ESTIMATE_XLSX_SPARE_ROWS);
     assert.match(String(cellMap(misc).get(`E${miscTotal}`)?.value), new RegExp(`SUM\\(E7:E${miscTotal - 1}\\)`));
     assert.match(String(cellMap(rental).get(`G${rentalTotal}`)?.value), new RegExp(`SUM\\(G7:G${rentalTotal - 1}\\)`));
     assert.match(String(cellMap(coe).get(`G${coeTotal}`)?.value), new RegExp(`SUM\\(G7:G${coeTotal - 1}\\)`));
+    assert.match(String(cellMap(travel).get(`E${travelTotal}`)?.value), new RegExp(`SUM\\(E7:E${travelTotal - 1}\\)`));
+    assert.match(String(cellMap(sub).get(`F${subTotal}`)?.value), new RegExp(`SUM\\(F7:F${subTotal - 1}\\)`));
     assert.equal(cellMap(misc).get("E8")?.type, "formula");
     assert.match(String(cellMap(misc).get("E7")?.value), /^N\(C7\)\*N\(D7\)$/);
     assert.match(String(cellMap(misc).get("E8")?.value), /^N\(C8\)\*N\(D8\)$/);
@@ -1817,8 +1838,15 @@ describe("estimate excel export", () => {
     assert.match(String(cellMap(rental).get("G8")?.value), /^N\(C8\)\*N\(D8\)\*N\(E8\)\+N\(F8\)$/);
     assert.match(String(cellMap(coe).get("G7")?.value), /^N\(C7\)\*N\(D7\)\*N\(E7\)\+N\(F7\)$/);
     assert.match(String(cellMap(coe).get("G8")?.value), /^N\(C8\)\*N\(D8\)\*N\(E8\)\+N\(F8\)$/);
+    assert.match(String(cellMap(travel).get("E7")?.value), /^N\(B7\)\*N\(C7\)\*N\(D7\)$/);
+    assert.match(String(cellMap(travel).get("E8")?.value), /^N\(B8\)\*N\(C8\)\*N\(D8\)$/);
+    assert.match(String(cellMap(sub).get("F7")?.value), /^N\(C7\)\*N\(D7\)$/);
+    assert.match(String(cellMap(sub).get("F8")?.value), /^N\(C8\)\*N\(D8\)$/);
+    assert.match(String(cellMap(sub).get("G8")?.value), /UPPER\(TRIM\(E8\)\)/);
     assert.equal(misc.unlocked?.some((cell) => cell.row === 8 && cell.col === 3), true);
     assert.equal(rental.unlocked?.some((cell) => cell.row === 8 && cell.col === 3), true);
+    assert.equal(travel.unlocked?.some((cell) => cell.row === 8 && cell.col === 2), true);
+    assert.equal(sub.unlocked?.some((cell) => cell.row === 8 && cell.col === 3), true);
     const summary = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)!;
     const summaryAmount = (label: string) => {
       const row = summary.cells.find((cell) => cell.ref.startsWith("A") && cell.value === label)?.ref.replace("A", "");
@@ -1828,6 +1856,8 @@ describe("estimate excel export", () => {
     assert.match(summaryAmount("Misc $"), /^IFERROR\(N\(/);
     assert.match(summaryAmount("Equipment rental $"), /^IFERROR\(N\(/);
     assert.match(summaryAmount("COE $"), /^IFERROR\(N\(/);
+    assert.match(summaryAmount("Travel $"), /^IFERROR\(N\(/);
+    assert.match(summaryAmount("Subcontractor $"), /^IFERROR\(N\(/);
   });
 
   it("keeps spare-pad and empty MORE numeric so Summary Amount $ is not #VALUE!", async () => {
@@ -3046,6 +3076,104 @@ describe("estimate excel export", () => {
     assert.equal(/2026-01-11|Jan 11/.test(src), false);
     assert.equal(EXCEL_JOB_SETUP_IMPORT_PARKED, false);
     assert.equal(buildEstimateWorkbook(base).some((sheet) => sheet.name === "Job setup"), true);
+  });
+
+  it("writes day/night/complete hour chips on row 3 tied to the same ST+OT+DT rolls", async () => {
+    const weekday = {
+      start: "2026-09-01",
+      end: "2026-09-07",
+      days: [true, true, true, true, true, true, true],
+    };
+    const input = {
+      title: "Phase chips",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      crew: {
+        staff: [
+          craft("st", "Lead Safety 01", 10, { ...weekday, otAfter8: false }),
+          craft("st-n", "Night Safety 01", 10, {
+            ...weekday,
+            otAfter8: false,
+            shift: "Nights",
+            headcount: 0,
+            nightHeadcount: 1,
+          }),
+        ],
+        otAfter8: true,
+      },
+      schedule: {
+        projectStart: "2026-09-01",
+        multiUnits: false,
+        units: [],
+        phases: [
+          {
+            id: "pre" as const,
+            name: "Pre-Turnaround",
+            on: true,
+            start: "2026-09-01",
+            stop: "2026-09-02",
+            daysPerWeek: 7,
+            hoursPerDay: 10,
+            otAfter8: false,
+            sundaysOff: [] as string[],
+          },
+          {
+            id: "mech" as const,
+            name: "Mechanical Window",
+            on: true,
+            start: "2026-09-03",
+            stop: "2026-09-07",
+            daysPerWeek: 7,
+            hoursPerDay: 10,
+            otAfter8: true,
+            sundaysOff: [] as string[],
+          },
+        ],
+      },
+      jobMeta: { staffPerDiemRate: 140, craftPerDiemRate: 130, staffMileageRate: 0.7, craftMileageRate: 0.5, rateBook: "" },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff)!;
+    const cells = cellMap(staff);
+    const day = laborHours(staff, "Lead Safety 01");
+    const night = laborHours(staff, "Night Safety 01", LABOR_NIGHTSHIFT);
+    assert.ok(day.title && night.title);
+    const preDays = cells.get(`J${LABOR_PHASE_CHIP_ROW}`);
+    const preComplete = cells.get(`K${LABOR_PHASE_CHIP_ROW}`);
+    const mechDays = cells.get(`L${LABOR_PHASE_CHIP_ROW}`);
+    const mechNights = cells.get(`M${LABOR_PHASE_CHIP_ROW}`);
+    const mechComplete = cells.get(`N${LABOR_PHASE_CHIP_ROW}`);
+    assert.equal(preDays?.type, "formula");
+    assert.equal(preComplete?.type, "formula");
+    assert.equal(mechDays?.type, "formula");
+    assert.equal(mechNights?.type, "formula");
+    assert.equal(mechComplete?.type, "formula");
+    assert.equal(preDays?.numFmt, LABOR_PHASE_CHIP_DAYS_FMT);
+    assert.equal(mechNights?.numFmt, LABOR_PHASE_CHIP_NIGHTS_FMT);
+    assert.equal(mechComplete?.numFmt, LABOR_PHASE_CHIP_COMPLETE_FMT);
+    assert.match(String(preDays?.value), new RegExp(`SUM\\(J${day.st}:K${day.dt}\\)`));
+    assert.match(String(mechDays?.value), new RegExp(`SUM\\(L${day.st}:P${day.dt}\\)`));
+    assert.match(String(mechNights?.value), new RegExp(`SUM\\(L${night.st}:P${night.dt}\\)`));
+    assert.equal(String(mechComplete?.value), `L${LABOR_PHASE_CHIP_ROW}+M${LABOR_PHASE_CHIP_ROW}`);
+    assert.deepEqual(
+      staff.phaseChips?.map((chip) => chip.kind),
+      ["days", "complete", "days", "nights", "complete"],
+    );
+    const { evalAt } = evaluateWorkbook(sheets);
+    const daysHrs = evalAt(ESTIMATE_XLSX_SHEETS.staff, `L${LABOR_PHASE_CHIP_ROW}`);
+    const nightsHrs = evalAt(ESTIMATE_XLSX_SHEETS.staff, `M${LABOR_PHASE_CHIP_ROW}`);
+    const completeHrs = evalAt(ESTIMATE_XLSX_SHEETS.staff, `N${LABOR_PHASE_CHIP_ROW}`);
+    assert.equal(daysHrs > 0, true);
+    assert.equal(nightsHrs > 0, true);
+    assert.equal(completeHrs, daysHrs + nightsHrs);
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const staffBook = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    assert.ok(staffBook);
+    const chipFill = String((staffBook.getCell("L3").fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "").toUpperCase();
+    assert.equal(chipFill, PHASE_TONE_FILLS.mech);
+    assert.equal(staffBook.getCell("L3").protection?.locked !== false, true);
   });
 
   it("hides unused grid past the used range and washes leftover white cells", async () => {

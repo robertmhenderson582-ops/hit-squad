@@ -41,7 +41,15 @@ import {
 import { hydrateJobMeta } from "./staffing-plan.ts";
 import type { JobMoney } from "./estimate-money.ts";
 import type { JobRates } from "./shahan-wood-river.ts";
-import { rematchShahanEquipmentId } from "./shahan-wood-river.ts";
+import { lookupShahanEquipment, rematchShahanEquipmentId } from "./shahan-wood-river.ts";
+import {
+  lineAmount,
+  normalizeSubSheet,
+  subCardTotal,
+  type SubLine,
+  type SubSheet,
+  type SubTotalContext,
+} from "./subcontractor.ts";
 import {
   jobSetupWindow,
   resolveLargeToolLine,
@@ -103,6 +111,7 @@ export type ImportedCostLine = {
   travelers?: number;
   miles?: number;
   kind?: TravelKind;
+  affiliate?: boolean;
 };
 
 export type EstimateImport = {
@@ -119,6 +128,7 @@ export type EstimateImport = {
   tension?: ImportedCostLine[];
   crane?: ImportedCostLine[];
   coe?: ImportedCostLine[];
+  subs?: ImportedCostLine[];
   jobMeta?: Partial<JobRates & JobMoney>;
 };
 
@@ -680,6 +690,26 @@ function parseRentalLikeSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLi
   return lines;
 }
 
+function parseSubsSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLine[] | undefined {
+  if (!ws) return undefined;
+  const lines: ImportedCostLine[] = [];
+  for (const row of scanCostRows(ws)) {
+    const item = asText(ws.getCell(row, 1).value);
+    const description = asText(ws.getCell(row, 2).value);
+    const qty = asNum(ws.getCell(row, 3).value);
+    const rate = asNum(ws.getCell(row, 4).value);
+    if (!item && !description && qty === 0 && rate === 0) continue;
+    lines.push({
+      item,
+      description,
+      qty,
+      rate,
+      affiliate: isOn(ws.getCell(row, 5).value),
+    });
+  }
+  return lines;
+}
+
 export async function parseEstimateXlsx(bytes: Uint8Array): Promise<EstimateImport> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(bytes as unknown as ArrayBuffer);
@@ -710,6 +740,7 @@ export async function parseEstimateXlsx(bytes: Uint8Array): Promise<EstimateImpo
     tension: parseRentalLikeSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.tension)),
     crane: parseRentalLikeSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crane)),
     coe: parseRentalLikeSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.coe)),
+    subs: parseSubsSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.sub)),
     jobMeta,
   };
 }
@@ -788,6 +819,19 @@ function applyMiscLines(existing: MiscLine[], incoming: ImportedCostLine[] | und
   }));
 }
 
+function takePrev<T>(list: T[], used: Set<number>, match: (row: T) => boolean, fallbackIndex: number): T | undefined {
+  const found = list.findIndex((row, index) => !used.has(index) && match(row));
+  if (found >= 0) {
+    used.add(found);
+    return list[found];
+  }
+  if (!used.has(fallbackIndex) && list[fallbackIndex]) {
+    used.add(fallbackIndex);
+    return list[fallbackIndex];
+  }
+  return undefined;
+}
+
 function applyRentalBucket(
   existing: ThirdPartyLine[],
   incoming: ImportedCostLine[] | undefined,
@@ -796,18 +840,21 @@ function applyRentalBucket(
 ): ThirdPartyLine[] {
   const prev = existing.filter((line) => thirdPartyBucket(line.item) === bucket);
   if (!incoming) return prev;
-  return incoming.map((row, index) =>
-    resolveThirdPartyLine({
-      id: prev[index]?.id ?? `${bucket}-imp-${index + 1}`,
+  const used = new Set<number>();
+  return incoming.map((row, index) => {
+    const item = row.item.trim().toLowerCase();
+    const prior = takePrev(prev, used, (line) => line.item.trim().toLowerCase() === item, index);
+    return resolveThirdPartyLine({
+      id: prior?.id ?? `${bucket}-imp-${index + 1}`,
       item: row.item,
       period: parsePeriod(row.period),
       rate: row.rate,
       freight: row.freight ?? 0,
       qty: row.qty,
-      start: prev[index]?.start || dates.start,
-      end: prev[index]?.end || dates.end,
-    }),
-  );
+      start: prior?.start || dates.start,
+      end: prior?.end || dates.end,
+    });
+  });
 }
 
 function applyCoeLines(
@@ -816,20 +863,85 @@ function applyCoeLines(
   dates: { start: string; end: string },
 ): LargeToolLine[] {
   if (!incoming) return existing;
+  const used = new Set<number>();
   return incoming.map((row, index) => {
-    const prev = existing[index];
-    const itemId = rematchShahanEquipmentId(row.item) || prev?.itemId || row.item;
+    const desc = row.item.trim().toLowerCase();
+    const prior = takePrev(
+      existing,
+      used,
+      (line) => {
+        const catalog = lookupShahanEquipment(line.itemId);
+        const name = (catalog?.description || line.itemId).trim().toLowerCase();
+        return name === desc || line.itemId === rematchShahanEquipmentId(row.item);
+      },
+      index,
+    );
+    const resolvedId = prior?.itemId || rematchShahanEquipmentId(row.item) || row.item;
     return resolveLargeToolLine({
-      id: prev?.id ?? `lt-imp-${index + 1}`,
-      itemId,
-      period: parseCoePeriod(row.period ?? prev?.period),
+      id: prior?.id ?? `lt-imp-${index + 1}`,
+      itemId: resolvedId,
+      period: parseCoePeriod(row.period ?? prior?.period),
       qty: row.qty,
-      start: prev?.start || dates.start,
-      end: prev?.end || dates.end,
+      start: prior?.start || dates.start,
+      end: prior?.end || dates.end,
       enteredCost: 0,
       freight: row.freight ?? 0,
     });
   });
+}
+
+function money2(value: number) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function applySubSheet(
+  existing: SubSheet,
+  incoming: ImportedCostLine[] | undefined,
+  ctx: SubTotalContext,
+): SubSheet {
+  if (!incoming) return existing;
+  const prevLines = (existing.lines ?? []).filter((line) => lineAmount(line) > 0);
+  const prevCards = (existing.cards ?? []).filter((card) => subCardTotal(card, ctx) > 0);
+  const lines: SubLine[] = [];
+  const cards: SubSheet["cards"] = [];
+  incoming.forEach((row, index) => {
+    if (index < prevLines.length) {
+      const prev = prevLines[index];
+      lines.push({
+        ...prev,
+        vendor: row.item || prev.vendor,
+        scope: row.description ?? prev.scope,
+        qty: row.qty,
+        rate: row.rate,
+        affiliate: row.affiliate ?? prev.affiliate,
+      });
+      return;
+    }
+    const prevCard = prevCards[index - prevLines.length];
+    if (prevCard) {
+      const excelCost = money2(row.qty * row.rate);
+      const cardCost = money2(subCardTotal(prevCard, ctx));
+      const kindOk = !row.description || row.description === prevCard.kind;
+      if (kindOk && Math.abs(excelCost - cardCost) < 0.02) {
+        cards.push({
+          ...prevCard,
+          vendor: row.item || prevCard.vendor,
+          affiliate: row.affiliate ?? prevCard.affiliate,
+        });
+        return;
+      }
+    }
+    lines.push({
+      id: `sub-imp-${index + 1}`,
+      vendor: row.item,
+      scope: row.description ?? "",
+      qty: row.qty,
+      unit: "LS",
+      rate: row.rate,
+      affiliate: Boolean(row.affiliate),
+    });
+  });
+  return { lines, cards };
 }
 
 function applyImportedCosts(base: EstimatePackSnapshot, imported: EstimateImport, schedule: PhaseScheduleState) {
@@ -841,6 +953,11 @@ function applyImportedCosts(base: EstimatePackSnapshot, imported: EstimateImport
     ...applyRentalBucket(equipment.thirdParty, imported.tension, "tension", dates),
     ...applyRentalBucket(equipment.thirdParty, imported.crane, "crane", dates),
   ];
+  const ctx: SubTotalContext = {
+    site: String(base.site ?? ""),
+    client: String(base.client ?? ""),
+    otAfter8: Boolean((base.crew as { otAfter8?: boolean } | undefined)?.otAfter8),
+  };
   return {
     equipment: {
       largeTools: applyCoeLines(equipment.largeTools, imported.coe, dates),
@@ -851,7 +968,12 @@ function applyImportedCosts(base: EstimatePackSnapshot, imported: EstimateImport
       travel: applyTravelLines(other.travel, imported.travel),
       misc: applyMiscLines(other.misc, imported.misc),
     },
+    subcontractor: applySubSheet(normalizeSubSheet(asRecordish(base.subcontractor)), imported.subs, ctx),
   };
+}
+
+function asRecordish(raw: unknown): Partial<SubSheet> | null {
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Partial<SubSheet>) : null;
 }
 
 export function applyEstimateImport(base: EstimatePackSnapshot, imported: EstimateImport): AppliedEstimateImport {
