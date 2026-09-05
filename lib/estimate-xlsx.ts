@@ -1046,9 +1046,12 @@ function buildCrewSheet(
 
   const planned: Array<{ row: CraftRow; night: boolean }> = [];
   for (const row of live) {
-    if (rowHasDayBlock(row)) planned.push({ row, night: false });
+    if (rowHasDayBlock(row) || (!rowHasDayBlock(row) && !rowHasNightBlock(row))) {
+      planned.push({ row, night: false });
+    }
+  }
+  for (const row of live) {
     if (rowHasNightBlock(row)) planned.push({ row, night: true });
-    if (!rowHasDayBlock(row) && !rowHasNightBlock(row)) planned.push({ row, night: false });
   }
   planned.forEach((item, index) => {
     emitBlock(item.row, item.night);
@@ -1261,6 +1264,7 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushText(cells, `${colLetter(index + 1)}6`, label);
   });
   let excelRow = 7;
+  const unlocked: Array<{ row: number; col: number }> = [];
   for (const line of lines) {
     pushText(cells, `A${excelRow}`, line.vendor);
     pushText(cells, `B${excelRow}`, line.scope);
@@ -1270,6 +1274,7 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushFormula(cells, `F${excelRow}`, `C${excelRow}*D${excelRow}`);
     pushFormula(cells, `G${excelRow}`, line.affiliate ? "0" : `F${excelRow}*${commercialMarkupRate(input.client, input.site)}`);
     pushFormula(cells, `H${excelRow}`, `F${excelRow}+G${excelRow}`);
+    unlockInputCols(unlocked, excelRow, 5);
     excelRow += 1;
   }
   for (const card of cards) {
@@ -1282,6 +1287,7 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushFormula(cells, `F${excelRow}`, `C${excelRow}*D${excelRow}`);
     pushFormula(cells, `G${excelRow}`, card.affiliate ? "0" : `F${excelRow}*${commercialMarkupRate(input.client, input.site)}`);
     pushFormula(cells, `H${excelRow}`, `F${excelRow}+G${excelRow}`);
+    unlockInputCols(unlocked, excelRow, 5);
     excelRow += 1;
   }
   const first = 7;
@@ -1296,6 +1302,7 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
     costTotal: `F${excelRow}`,
     markupTotal: `G${excelRow}`,
     sheetTotal: `H${excelRow}`,
+    unlocked,
   };
 }
 

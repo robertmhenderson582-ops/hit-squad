@@ -143,7 +143,7 @@ export type WorkbookSheet = {
   billAs?: Array<{ labelRow: number; valueRow: number }>;
   /** Excel list validations (Position / Bill as / Job setup OT pick). */
   validations?: Array<{ sqref: string; formulae: string[] }>;
-  /** Extra unlocked cells (Job setup + Misc/Travel/Equipment/COE inputs). */
+  /** Extra unlocked cells (Job setup + cost-sheet estimator inputs). */
   unlocked?: Array<{ row: number; col: number }>;
   /** Very-hidden helper sheets (Position lists). */
   veryHidden?: boolean;

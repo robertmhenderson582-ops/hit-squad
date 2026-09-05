@@ -1602,6 +1602,65 @@ describe("estimate excel export", () => {
     assert.equal(misc?.unlocked?.some((cell) => cell.row === 7 && cell.col === 5), false);
   });
 
+  it("unlocks Subcontractor estimator inputs and keeps formula totals locked", async () => {
+    const bytes = await estimateToXlsx({
+      ...woodRiverFixture(),
+      subcontractor: {
+        lines: [{ id: "sb-1", vendor: "ACME", scope: "Scaffold", qty: 2, unit: "LS" as const, rate: 500, affiliate: false }],
+        cards: [],
+      },
+    });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const sub = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.sub);
+    assert.ok(sub);
+    assert.equal(sub.getCell("A7").protection?.locked, false);
+    assert.equal(sub.getCell("B7").protection?.locked, false);
+    assert.equal(sub.getCell("C7").protection?.locked, false);
+    assert.equal(sub.getCell("D7").protection?.locked, false);
+    assert.equal(sub.getCell("E7").protection?.locked, false);
+    assert.equal(sub.getCell("F7").protection?.locked !== false, true);
+    assert.equal(sub.getCell("G7").protection?.locked !== false, true);
+    assert.equal(sub.getCell("H7").protection?.locked !== false, true);
+  });
+
+  it("emits all DAYSHIFT blocks then all NIGHTSHIFT blocks", () => {
+    const sheets = buildEstimateWorkbook({
+      ...woodRiverFixture(),
+      crew: {
+        direct: [
+          craft("dr-1", "Boilermaker Journeyman", 10, {
+            otAfter8: true,
+            shift: "Days & nights",
+            headcount: 2,
+            nightHeadcount: 1,
+          }),
+          craft("dr-2", "Pipefitter Journeyman", 10, {
+            otAfter8: true,
+            shift: "Days & nights",
+            headcount: 1,
+            nightHeadcount: 1,
+          }),
+        ],
+        otAfter8: true,
+      },
+    });
+    const direct = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.direct)!;
+    const bmDay = laborHours(direct, "Boilermaker Journeyman");
+    const pfDay = laborHours(direct, "Pipefitter Journeyman");
+    const bmNight = laborHours(direct, "Boilermaker Journeyman", LABOR_NIGHTSHIFT);
+    const pfNight = laborHours(direct, "Pipefitter Journeyman", LABOR_NIGHTSHIFT);
+    assert.ok(bmDay.title && pfDay.title && bmNight.title && pfNight.title);
+    assert.equal(bmDay.title < pfDay.title, true);
+    assert.equal(pfDay.title < bmNight.title, true);
+    assert.equal(bmNight.title < pfNight.title, true);
+    const cells = cellMap(direct);
+    assert.equal(cells.get(`A${bmDay.title}`)?.value, LABOR_DAYSHIFT);
+    assert.equal(cells.get(`A${pfDay.title}`)?.value, LABOR_DAYSHIFT);
+    assert.equal(cells.get(`A${bmNight.title}`)?.value, LABOR_NIGHTSHIFT);
+    assert.equal(cells.get(`A${pfNight.title}`)?.value, LABOR_NIGHTSHIFT);
+  });
+
   it("stacks hiring-progression ranges on the same day the way the desk does", () => {
     const base = craft("dr-1", "Boilermaker Journeyman", 8, {
       start: "2026-09-01",
