@@ -8,7 +8,7 @@ import { FCR_STORE_PREFIX } from "./change-order-packet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { CREW_STORE_PREFIX, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
 import { SUB_STORE_PREFIX } from "./subcontractor.ts";
-import { JOB_META_PREFIX } from "./staffing-plan.ts";
+import { JOB_META_PREFIX } from "./job-meta-prefix.ts";
 import { ORG_CHART_STORE_PREFIX } from "./org-chart.ts";
 import type { EstimateRecord, ForgebookBoard, JobRecord } from "./types.ts";
 
