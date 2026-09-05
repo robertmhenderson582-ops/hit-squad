@@ -39,5 +39,9 @@ describe("hold screen lock", () => {
     assert.match(pack, /ready: true/);
     assert.match(jobs, /HoldScreen/);
     assert.match(jobs, /REFRESHING JOBS/);
+    assert.match(pack, /findLocalPack/);
+    assert.match(pack, /hydrateOpenPack/);
+    assert.match(pack, /requestAnimationFrame/);
+    assert.match(pack, /paintFromLocal/);
   });
 });

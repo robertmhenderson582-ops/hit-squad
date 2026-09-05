@@ -6,6 +6,7 @@ import {
   canWritePack,
   listedDeskPacks,
   ownerVaultEmail,
+  packListedOnOwnerDesk,
   packOwnerEmailForWrite,
   packSharedEmails,
   packVisibleTo,
@@ -49,8 +50,13 @@ export async function listVisiblePacks(user: ScopeUser, adapter?: DriveAdapter) 
 }
 
 export async function getVisiblePack(user: ScopeUser, packId: string, adapter?: DriveAdapter) {
-  const { packs } = await listVisiblePacks(user, adapter);
-  return packs.find((pack) => pack.packId === packId) ?? null;
+  const drive = estimateVaultAdapter(adapter);
+  if (!drive.configured) return null;
+  const raw = await readDrivePackById(drive, packId);
+  if (!raw) return null;
+  const pack = publicPack(raw);
+  if (isTester(user) ? !packVisibleTo(user, pack) : !packListedOnOwnerDesk(user, pack)) return null;
+  return pack;
 }
 
 async function claimedPack(drive: DriveAdapter, packId: string, ownerEmail: string) {

@@ -48,18 +48,18 @@ export function NewEstimateForm() {
 
   useEffect(() => {
     if (!pack || size === "shop") return;
+    const existing = findLocalPack(pack);
+    rememberLocalPack({
+      packId: pack,
+      title: existing?.title || name,
+      client,
+      site,
+      size: size ?? undefined,
+      ownerEmail: lens?.email || user?.email,
+      estimator: lens?.name || user?.name,
+      status: existing?.status || "Draft",
+    });
     void hydrateFromVault(undefined, { viewAs: seat }).then(() => {
-      const existing = findLocalPack(pack);
-      rememberLocalPack({
-        packId: pack,
-        title: existing?.title || name,
-        client,
-        site,
-        size: size ?? undefined,
-        ownerEmail: lens?.email || user?.email,
-        estimator: lens?.name || user?.name,
-        status: existing?.status || "Draft",
-      });
       scheduleVaultUpsert(pack);
       void flushVaultUpsert(pack);
     });
@@ -105,6 +105,17 @@ function NewEstimateDesk({
 
   const existingClient = size !== "other";
   const estimateKey = newEstimateKey(pack);
+  const existing = findLocalPack(pack);
+  rememberLocalPack({
+    packId: pack,
+    title: existing?.title || name,
+    client,
+    site,
+    size: size ?? undefined,
+    ownerEmail: lens?.email || user?.email,
+    estimator: lens?.name || user?.name,
+    status: existing?.status || "Draft",
+  });
 
   return (
     <EstimatePackageProvider estimateKey={estimateKey}>

@@ -8,6 +8,7 @@ import {
   flushLocalPacksToVault,
   flushVaultUpsert,
   hydrateFromVault,
+  hydrateOpenPack,
   isLeftoverOwnerCopy,
   resetVaultHydrateForTests,
   setVaultViewAs,
@@ -949,6 +950,49 @@ describe("local transfer commit", () => {
       assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
       assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), true);
       assert.equal(store.getItem("hs_his_leftover_gen"), HIS_LEFTOVER_GEN);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("opens a cold pack from the single-pack GET and still starts the list hydrate", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const urls: string[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.includes("/api/desk/estimates/new-cat2pit")) {
+        return new Response(
+          JSON.stringify({
+            pack: {
+              packId: "new-cat2pit",
+              key: "new:new-cat2pit",
+              title: "Cat 2 Pit Stop",
+              client: "Phillips 66",
+              site: "Wood River — Roxana, IL",
+              siteId: "site-madison",
+              createdAt: 1,
+              updatedAt: 2,
+              ownerEmail: OWNER_LOGIN_EMAIL,
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ persisted: true, packs: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      const packs = await hydrateOpenPack("new-cat2pit", store);
+      assert.equal(packs[0]?.title, "Cat 2 Pit Stop");
+      assert.equal(findLocalPack("new-cat2pit", store)?.title, "Cat 2 Pit Stop");
+      assert.equal(urls.some((url) => url.includes("/api/desk/estimates/new-cat2pit")), true);
+      assert.equal(urls.some((url) => /\/api\/desk\/estimates\/?$/.test(url) || url.endsWith("/api/desk/estimates")), true);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();

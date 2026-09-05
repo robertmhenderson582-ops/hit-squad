@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { cookieValue } from "@/lib/http";
+import { cookieValue, serverTiming } from "@/lib/http";
 import { hasBuildDesk } from "@/lib/desk-role";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { listVisiblePacks, packsResponse, upsertVisiblePack } from "@/lib/estimate-vault";
@@ -11,8 +11,15 @@ export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   const deskUser = await scopedDeskUser(user, request);
+  const started = Date.now();
   const { packs, store } = await listVisiblePacks(deskUser);
-  return NextResponse.json(packsResponse(deskUser, packs, store));
+  const ms = Date.now() - started;
+  const response = NextResponse.json(packsResponse(deskUser, packs, store));
+  response.headers.set("Server-Timing", serverTiming([["estimates", ms]]));
+  if (user.role === "owner") {
+    console.info("[hs-vault] estimates GET", { ms, packs: packs.length, store });
+  }
+  return response;
 }
 
 export async function PUT(request: Request) {

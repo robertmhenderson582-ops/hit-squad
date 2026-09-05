@@ -81,6 +81,11 @@ export function resetVaultHydrateForTests() {
   lastBody.clear();
 }
 
+export function vaultListHydratePending(opts?: { viewAs?: string | null }) {
+  const seat = requestedVaultSeat(opts) || "owner";
+  return Boolean(hydratePromise && hydrateSeat === seat);
+}
+
 /** Leftover after Turn over is a pack this desk used to own. Shared-with-me stays. */
 export function isLeftoverOwnerCopy(pack: { ownerEmail?: string; sharedWith?: string[] }, email = ownerVaultEmail()) {
   const ownerEmail = canonicalEmail(pack.ownerEmail) || (pack.ownerEmail || "").trim().toLowerCase();
@@ -113,7 +118,15 @@ export async function hydrateFromVault(
   hydrateSeat = seat;
   hydratePromise = (async () => {
     try {
+      const started = Date.now();
       const response = await deskFetch("/api/desk/estimates", viewAsInit(seat === "owner" ? null : seat));
+      const ms = Date.now() - started;
+      console.info("[hs-vault] estimates GET", {
+        ms,
+        ok: response.ok,
+        seat,
+        serverTiming: response.headers.get("Server-Timing") || "",
+      });
       if (!response.ok) return [];
       const data = (await response.json()) as { packs?: EstimatePackSnapshot[]; persisted?: boolean };
       const packs = Array.isArray(data.packs) ? data.packs : [];
@@ -170,6 +183,47 @@ export async function hydrateFromVault(
     }
   })();
   return hydratePromise;
+}
+
+/** Open one pack without waiting for the full desk list when hydrate is cold. */
+export async function hydrateOpenPack(
+  packId: string,
+  store?: StorageLike | null,
+  opts?: { viewAs?: string | null },
+): Promise<EstimatePackSnapshot[]> {
+  const target = browserStore(store);
+  if (!target || !packId) return [];
+  const seat = requestedVaultSeat(opts) || "owner";
+  if (hydratePromise && hydrateSeat === seat) {
+    return hydrateFromVault(store, opts);
+  }
+  const list = hydrateFromVault(store, opts);
+  try {
+    const started = Date.now();
+    const response = await deskFetch(
+      `/api/desk/estimates/${encodeURIComponent(packId)}`,
+      viewAsInit(seat === "owner" ? null : seat),
+    );
+    const ms = Date.now() - started;
+    console.info("[hs-vault] pack GET", {
+      packId,
+      ms,
+      ok: response.ok,
+      seat,
+      serverTiming: response.headers.get("Server-Timing") || "",
+    });
+    if (response.ok) {
+      const data = (await response.json()) as { pack?: EstimatePackSnapshot };
+      if (data.pack?.packId === packId) {
+        const pack = hisMatchForPack(data.pack) ? applyHisIdentity(data.pack) : data.pack;
+        mergeVaultIntoLocal(target, pack);
+        return [pack];
+      }
+    }
+  } catch {
+    // Fall through to the list hydrate already in flight.
+  }
+  return list;
 }
 
 function vaultPutError(data: { error?: string }) {

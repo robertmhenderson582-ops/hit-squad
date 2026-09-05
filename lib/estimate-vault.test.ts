@@ -9,6 +9,7 @@ import { responseLeaksDrive, type EstimatePackSnapshot } from "./estimate-pack.t
 import {
   archiveVisiblePack,
   deleteVisiblePack,
+  getVisiblePack,
   listVisiblePacks,
   packsResponse,
   returnVisiblePack,
@@ -67,6 +68,9 @@ describe("estimate vault service", () => {
     assert.equal(hidden.persisted, true);
     assert.equal(responseLeaksDrive(hidden), false);
     assert.equal(responseLeaksDrive(packsResponse(novus, novusList.packs, "drive")), false);
+    const one = await getVisiblePack(owner, "new-cat2pit", drive);
+    assert.equal(one?.title, "Cat 2 Pit Stop");
+    assert.equal(await getVisiblePack(tester, "new-cat2pit", drive), null);
   });
 
   it("lets testers persist their own pack without seeing anyone else's", async () => {
