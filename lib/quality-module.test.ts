@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  QUALITY_DESK_TABS,
   QUALITY_MODULE_PREFIX,
+  QUALITY_SECTIONS,
   addQualityRow,
   emptyQualityModule,
   gaugeOverdue,
   hydrateQualityModule,
+  isQualityDeskTab,
   patchQualityRow,
   qualityBoardCounts,
   qualityModuleKey,
@@ -33,6 +36,9 @@ describe("Quality module store", () => {
     state = addQualityRow(state, "ncrs");
     const ncrId = state.sections.ncrs[0].id;
     state = patchQualityRow(state, "ncrs", ncrId, "ncr", "NCR-1");
+    state = patchQualityRow(state, "ncrs", ncrId, "client", "phillips-66");
+    state = patchQualityRow(state, "ncrs", ncrId, "job", "new-awarded");
+    state = patchQualityRow(state, "ncrs", ncrId, "unit", "B-12");
     state = patchQualityRow(state, "ncrs", ncrId, "description", "leak");
     state = patchQualityRow(state, "ncrs", ncrId, "disposition", "repair");
     state = patchQualityRow(state, "ncrs", ncrId, "status", "Open");
@@ -55,6 +61,9 @@ describe("Quality module store", () => {
     assert.equal(read.day1.forms["2.7.1"]?.fields.testPressure, "150");
     assert.equal(read.day1.forms["2.7.1"]?.rows[0]?.cells.gaugeId, "G-4");
     assert.equal(read.sections.ncrs[0]?.cells.ncr, "NCR-1");
+    assert.equal(read.sections.ncrs[0]?.cells.client, "phillips-66");
+    assert.equal(read.sections.ncrs[0]?.cells.job, "new-awarded");
+    assert.equal(read.sections.ncrs[0]?.cells.unit, "B-12");
     assert.equal(read.sections.ncrs[0]?.cells.disposition, "repair");
     const now = new Date(2026, 8, 3);
     assert.equal(welderExpired("", now), false);
@@ -76,5 +85,37 @@ describe("Quality module store", () => {
     assert.equal(board.travelers, 1);
     assert.equal(board.welders, 1);
     assert.equal(board.calibration, 1);
+  });
+
+  it("migrates old NCR rows and keeps Client / Job / Unit on the log", () => {
+    const ncrFields = QUALITY_SECTIONS.find((section) => section.id === "ncrs")?.fields.map((field) => field.id);
+    assert.deepEqual(ncrFields, [
+      "ncr",
+      "client",
+      "job",
+      "unit",
+      "area",
+      "description",
+      "disposition",
+      "status",
+      "date",
+    ]);
+    assert.deepEqual(
+      QUALITY_DESK_TABS.map((tab) => tab.label),
+      ["Board", "NCRs", "Welds/NDE", "Connections", "Travelers", "Welders", "Gauges", "Day-1 package", "Rolling chart"],
+    );
+    assert.equal(isQualityDeskTab("ncrs"), true);
+    assert.equal(isQualityDeskTab("board"), true);
+    assert.equal(isQualityDeskTab("money"), false);
+    const old = hydrateQualityModule({
+      sections: {
+        ncrs: [{ id: "old", cells: { ncr: "NCR-9", area: "drum", note: "old note", company: "Phillips 66" } }],
+      },
+    });
+    assert.equal(old.sections.ncrs[0]?.cells.description, "old note");
+    assert.equal(old.sections.ncrs[0]?.cells.client, "phillips-66");
+    assert.equal(old.sections.ncrs[0]?.cells.job, "");
+    assert.equal(old.sections.ncrs[0]?.cells.unit, "");
+    assert.equal(old.sections.ncrs[0]?.cells.area, "drum");
   });
 });
