@@ -366,11 +366,22 @@ function existingRangesForSide(row: CraftRow, night: boolean): CalendarRange[] {
   });
 }
 
+function fillBlankHps(days: ImportedDay[], night: boolean, phases: PhaseRow[], existing?: CraftRow): ImportedDay[] {
+  return days.map((day) => {
+    if (day.hps > 0 || day.hc <= 0) return day;
+    const plug = existing ? existingDayPlug(existing, day.ymd, night) : { hc: 0, hps: 0, pd: 0 };
+    const phase = phaseOwningDate(phases, day.ymd);
+    const hps = plug.hps || Number(existing?.ranges?.[0]?.hoursPerShift) || Number(phase?.hoursPerDay) || 0;
+    return hps > 0 ? { ...day, hps } : day;
+  });
+}
+
 function rangesFromDays(days: ImportedDay[], night: boolean, phases: PhaseRow[], existing?: CraftRow): CalendarRange[] {
-  if (existing && existingMatchesDays(existing, days, night)) {
+  const filled = fillBlankHps(days, night, phases, existing);
+  if (existing && existingMatchesDays(existing, filled, night)) {
     return existingRangesForSide(existing, night);
   }
-  const byYmd = new Map(days.map((day) => [day.ymd, day]));
+  const byYmd = new Map(filled.map((day) => [day.ymd, day]));
   const used = new Set<string>();
   const ranges: CalendarRange[] = [];
   const onPhases = phases.filter((phase) => phase.on && phase.start && phase.stop);
@@ -401,7 +412,7 @@ function rangesFromDays(days: ImportedDay[], night: boolean, phases: PhaseRow[],
       ranges.push(rangeFromPattern(group, night, phase, start, end, group[0], skip, existing));
     }
   }
-  const leftover = days.filter((day) => !used.has(day.ymd) && dayLive(day));
+  const leftover = filled.filter((day) => !used.has(day.ymd) && dayLive(day));
   const leftoverPatterns = new Map<string, ImportedDay[]>();
   for (const day of leftover) {
     const key = dayPattern(day);
@@ -662,11 +673,13 @@ function parseMiscSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLine[] |
   const lines: ImportedCostLine[] = [];
   for (const row of scanCostRows(ws)) {
     const item = asText(ws.getCell(row, 1).value);
-    if (/^craft travel$/i.test(item)) continue;
+    if (/craft\s*travel/i.test(item)) continue;
     const description = asText(ws.getCell(row, 2).value);
+    if (/craft\s*travel/i.test(description)) continue;
     const qty = asNum(ws.getCell(row, 3).value);
     const rate = asNum(ws.getCell(row, 4).value);
     if (!item && !description && qty === 0 && rate === 0) continue;
+    if (qty === 0 && rate === 0) continue;
     lines.push({ item, description, qty, rate });
   }
   return lines;
@@ -681,8 +694,8 @@ function parseTravelSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLine[]
     const travelers = asNum(ws.getCell(row, 2).value);
     const miles = asNum(ws.getCell(row, 3).value);
     const perMile = asNum(ws.getCell(row, 4).value);
-    if (!label && travelers === 0 && miles === 0 && perMile === 0) continue;
-    if (!label && travelers === 0) continue;
+    if (!label) continue;
+    if (travelers === 0 && miles === 0 && perMile === 0) continue;
     lines.push({ item: label || kind, kind, travelers, miles, rate: perMile, qty: travelers });
   }
   return lines;
@@ -908,11 +921,15 @@ function applyCoeLines(
       (line) => {
         const catalog = lookupShahanEquipment(line.itemId);
         const name = (catalog?.description || line.itemId).trim().toLowerCase();
-        return name === desc || line.itemId === rematchShahanEquipmentId(row.item);
+        return name === desc || line.itemId === rematchShahanEquipmentId(row.item, undefined, { period: row.period, rate: row.rate });
       },
       index,
     );
-    const resolvedId = prior?.itemId || row.itemId || rematchShahanEquipmentId(row.item) || row.item;
+    const resolvedId =
+      prior?.itemId ||
+      row.itemId ||
+      rematchShahanEquipmentId(row.item, undefined, { period: row.period, rate: row.rate }) ||
+      row.item;
     const period = parseCoePeriod(row.period ?? prior?.period);
     const span = datesFromImportedPeriods(prior, dates, period, row.periods);
     return resolveLargeToolLine({

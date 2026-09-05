@@ -813,6 +813,7 @@ describe("estimate excel import", () => {
     const imported = await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer()));
     const applied = applyEstimateImport(asPack(input), imported);
     const miscLines = (applied.otherCost as { misc: MiscLine[] }).misc;
+    assert.equal(miscLines.some((line) => /halfway gasket/i.test(line.item)), false);
     assert.equal(miscLines.some((line) => /craft travel/i.test(line.item)), false);
     assert.equal(imported.travel?.some((line) => line.kind === "craft"), true);
     const money = assertFiniteMoney(applied, "halfway-spare");
@@ -1348,5 +1349,193 @@ describe("estimate excel import", () => {
       });
       assert.equal(secondUp, money.desk, `${file} second UP`);
     }
+  });
+
+  function secondUpFrom(applied: ReturnType<typeof applyEstimateImport>) {
+    return estimateWorkbookSummaryTotal({
+      title: applied.title,
+      client: applied.client,
+      site: applied.site,
+      crew: applied.crew,
+      schedule: applied.schedule,
+      jobMeta: applied.jobMeta,
+      equipment: applied.equipment,
+      otherCost: applied.otherCost,
+      subcontractor: applied.subcontractor,
+    });
+  }
+
+  it("Nathan half-fill a day: blank HPS keeps the live Hours/shift", async () => {
+    const input = fixture();
+    const before = deskPackageTotal(input);
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const staff = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    assert.ok(staff);
+    staff.getCell(`${dayCol()}${7 + LABOR_HPS_OFFSET}`).value = null;
+    staff.getCell(`${dayCol()}${7 + LABOR_PD_OFFSET}`).value = null;
+    const applied = applyEstimateImport(asPack(input), await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    const row = (applied.crew as { staff: CraftRow[] }).staff[0];
+    assert.equal(row.ranges[0]?.hoursPerShift, 10);
+    assert.equal(row.ranges[0]?.perDiemPeople, 0);
+    const money = assertFiniteMoney(applied, "nathan-half-fill");
+    assert.equal(money.desk < before, true);
+    assert.equal(secondUpFrom(applied), money.desk);
+  });
+
+  it("Nathan halfway Travel spare without Kind does not invent staff miles", async () => {
+    const input: EstimateXlsxInput = {
+      ...fixture(),
+      otherCost: {
+        perDiemRate: 0,
+        travel: [{ id: "travel-staff", kind: "staff", source: "crew", headcount: 1, travelers: 1, perMile: 0.7, miles: 40 }],
+        misc: [],
+      },
+    };
+    const before = deskPackageTotal(input);
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const travel = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.travel);
+    assert.ok(travel);
+    travel.getCell("B8").value = 2;
+    travel.getCell("C8").value = 80;
+    travel.getCell("D8").value = 0.7;
+    const applied = applyEstimateImport(asPack(input), await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    const lines = (applied.otherCost as { travel: Array<{ kind: string; miles: number }> }).travel;
+    assert.equal(lines.length, 1);
+    assert.equal(lines[0]?.miles, 40);
+    assert.equal(livePackMoney(applied).desk, before);
+  });
+
+  it("Nathan halfway Misc name-only does not add a $0 desk row", async () => {
+    const input: EstimateXlsxInput = {
+      ...fixture(),
+      otherCost: { perDiemRate: 0, travel: [], misc: [{ id: "mc-1", item: "Alloy rod", description: "Stainless", qty: 2, each: 25 }] },
+    };
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const misc = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc);
+    assert.ok(misc);
+    misc.getCell("A8").value = "Halfway gasket";
+    const applied = applyEstimateImport(asPack(input), await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    const lines = (applied.otherCost as { misc: MiscLine[] }).misc;
+    assert.equal(lines.some((line) => /halfway/i.test(line.item)), false);
+    assert.equal(lines.length, 1);
+    assertFiniteMoney(applied, "nathan-misc-halfway");
+  });
+
+  it("Nathan spare TRUCK CREW with the wet daily rate stays wet", async () => {
+    const input: EstimateXlsxInput = {
+      ...fixture(),
+      equipment: {
+        largeTools: [
+          {
+            id: "lt-mover",
+            itemId: "air-mover",
+            period: "daily",
+            qty: 1,
+            start: "2026-09-01",
+            end: "2026-09-01",
+            enteredCost: 0,
+            freight: 0,
+          },
+        ],
+        thirdParty: [],
+      },
+    };
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const coe = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.coe);
+    assert.ok(coe);
+    coe.getCell("A8").value = "TRUCK CREW";
+    coe.getCell("B8").value = "daily";
+    coe.getCell("C8").value = 1;
+    coe.getCell("D8").value = 1;
+    coe.getCell("E8").value = 184;
+    const applied = applyEstimateImport(asPack(input), await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    const tools = (applied.equipment as { largeTools: LargeToolLine[] }).largeTools;
+    const truck = tools.find((line) => /truck-crew/i.test(line.itemId));
+    assert.ok(truck);
+    assert.match(truck.itemId, /^wet:/);
+    assertFiniteMoney(applied, "nathan-wet-truck");
+  });
+
+  it("Nathan puts Craft travel on Misc as a dumb label — second UP stays off Misc", async () => {
+    const input: EstimateXlsxInput = {
+      ...fixture(),
+      otherCost: {
+        perDiemRate: 0,
+        travel: [{ id: "travel-craft", kind: "craft", source: "crew", headcount: 2, travelers: 2, perMile: 0.5, miles: 20 }],
+        misc: [{ id: "mc-1", item: "Alloy rod", description: "Stainless", qty: 2, each: 25 }],
+      },
+    };
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const misc = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc);
+    assert.ok(misc);
+    misc.getCell("A8").value = "Craft travel (miles)";
+    misc.getCell("C8").value = 2;
+    misc.getCell("D8").value = 90;
+    const applied = applyEstimateImport(asPack(input), await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    const lines = (applied.otherCost as { misc: MiscLine[] }).misc;
+    assert.equal(lines.some((line) => /craft\s*travel/i.test(line.item)), false);
+    const money = assertFiniteMoney(applied, "nathan-craft-on-misc");
+    assert.equal(secondUpFrom(applied), money.desk);
+  });
+
+  it("Nathan combo: Position after hours, Bill as, backward date, bad Period, typed ST, import twice", async () => {
+    const input = richPack();
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const staff = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    const support = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.support);
+    const setup = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup);
+    const rental = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rental);
+    const misc = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc);
+    assert.ok(staff && support && setup && rental && misc);
+    staff.getCell("B7").value = "Project Manager 01";
+    staff.getCell(`${dayCol()}${7 + LABOR_HC_OFFSET}`).value = 2;
+    staff.getCell(`${dayCol()}${7 + LABOR_ST_OFFSET}`).value = 99;
+    support.getCell("B11").value = "Superintendent 01";
+    setup.getCell("B7").value = "ON";
+    setup.getCell("C7").value = new Date(2026, 8, 10);
+    setup.getCell("D7").value = new Date(2026, 8, 1);
+    rental.getCell("B8").value = "daily";
+    misc.getCell("A8").value = "Craft Travel $";
+    misc.getCell("C8").value = 1;
+    misc.getCell("D8").value = 50;
+    const first = applyEstimateImport(asPack(input), await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    const crew = first.crew as { staff: CraftRow[]; support: Array<CraftRow & { billedAs?: string }> };
+    assert.equal(crew.staff[0].position, "Project Manager 01");
+    assert.equal(crew.staff[0].ranges.some((range) => range.headcount === 2), true);
+    assert.equal(crew.support[0].billedAs, "Superintendent 01");
+    const pre = (first.schedule as PhaseScheduleState).phases.find((row) => row.id === "pre");
+    assert.ok(pre);
+    assert.equal(pre.stop >= pre.start, true);
+    const guns = (first.equipment as { thirdParty: ThirdPartyLine[] }).thirdParty.find((line) => line.item === "LN 25 Mig guns");
+    assert.equal(guns?.period, "monthly");
+    assert.equal(((first.otherCost as { misc: MiscLine[] }).misc ?? []).some((line) => /craft\s*travel/i.test(line.item)), false);
+    const once = assertFiniteMoney(first, "nathan-combo-1");
+    const second = applyEstimateImport(first, await parseEstimateXlsx(await estimateToXlsx({
+      title: first.title,
+      client: first.client,
+      site: first.site,
+      crew: first.crew,
+      schedule: first.schedule,
+      jobMeta: first.jobMeta,
+      equipment: first.equipment,
+      otherCost: first.otherCost,
+      subcontractor: first.subcontractor,
+    })));
+    const twice = livePackMoney(second);
+    assert.equal(twice.desk, once.desk);
+    assert.equal(twice.desk, twice.summary);
+    assert.equal(secondUpFrom(second), twice.desk);
   });
 });

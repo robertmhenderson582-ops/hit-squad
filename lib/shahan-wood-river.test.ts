@@ -425,4 +425,13 @@ describe("Shahan TM OCIP — Wood River", () => {
     assert.match(sheet.largeTools?.[0]?.itemId || "", /^dry:\d+:air-mover$/);
     assert.equal(rematchShahanEquipmentId(""), "");
   });
+
+  it("Nathan spare TRUCK CREW with the wet daily rate rematches wet, not dry", () => {
+    const wet = rematchShahanEquipmentId("TRUCK CREW", undefined, { period: "daily", rate: 184 });
+    const dry = rematchShahanEquipmentId("TRUCK CREW", undefined, { period: "daily", rate: 104 });
+    const bare = rematchShahanEquipmentId("TRUCK CREW");
+    assert.match(wet, /^wet:/);
+    assert.match(dry, /^dry:/);
+    assert.match(bare, /^dry:/);
+  });
 });

@@ -832,20 +832,33 @@ function equipmentNameKey(value: string): string {
   return normalizeTitle(value.replace(/^(wet|dry):\d+:/i, "").replace(/-/g, " "));
 }
 
+export type ShahanRematchHint = { period?: string; rate?: number };
+
+function rematchByTypedRate(rows: ShahanEquipmentRow[], hint?: ShahanRematchHint): ShahanEquipmentRow | undefined {
+  const rate = Number(hint?.rate);
+  if (!hint || !(rate > 0) || rows.length < 2) return undefined;
+  const period = hint.period === "weekly" || hint.period === "monthly" || hint.period === "hourly" ? hint.period : "daily";
+  return rows.find((row) => {
+    const listed = shahanPeriodRate(row, period);
+    return typeof listed === "number" && Math.abs(listed - rate) < 0.02;
+  });
+}
+
 export function rematchShahanEquipment(
   itemId: string,
   catalog: ShahanEquipmentRow[] = SHAHAN_EQUIPMENT,
+  hint?: ShahanRematchHint,
 ): ShahanEquipmentRow | null {
   const rows = shahanEquipmentRows(catalog);
   const key = equipmentNameKey(itemId);
   if (!key) return null;
   const exact = rows.filter((row) => normalizeTitle(row.description) === key);
-  if (exact.length) return exact.find((row) => !row.wet) ?? exact[0];
+  if (exact.length) return rematchByTypedRate(exact, hint) ?? exact.find((row) => !row.wet) ?? exact[0];
   const starts = rows.filter((row) => {
     const name = normalizeTitle(row.description);
     return name.startsWith(key) || key.startsWith(name);
   });
-  if (starts.length) return starts.find((row) => !row.wet) ?? starts[0];
+  if (starts.length) return rematchByTypedRate(starts, hint) ?? starts.find((row) => !row.wet) ?? starts[0];
   return null;
 }
 
@@ -863,11 +876,12 @@ export function lookupShahanEquipment(
 export function rematchShahanEquipmentId(
   itemId: string,
   catalog: ShahanEquipmentRow[] = SHAHAN_EQUIPMENT,
+  hint?: ShahanRematchHint,
 ): string {
   if (!itemId) return "";
   const rows = shahanEquipmentRows(catalog);
   if (rows.some((row, index) => shahanEquipmentId(row, index) === itemId)) return itemId;
-  const row = rematchShahanEquipment(itemId, catalog);
+  const row = rematchShahanEquipment(itemId, catalog, hint);
   if (!row) return itemId;
   return shahanEquipmentId(row, rows.indexOf(row));
 }
