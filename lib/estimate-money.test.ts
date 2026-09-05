@@ -12,6 +12,8 @@ import {
   subsContingencyDollars,
 } from "./estimate-money.ts";
 import { laborDollarsFromCrew } from "./shahan-wood-river.ts";
+import { computeRangeHours } from "./hours-clock.ts";
+import { lookupCompWageRow } from "./wage-lookup.ts";
 import { emptyJobMeta } from "./staffing-plan.ts";
 import { setOrgChartName, emptyOrgChart } from "./org-chart.ts";
 
@@ -82,6 +84,46 @@ describe("CBA increase", () => {
     };
     assert.equal(isCbaCraftLane("direct", craft.direct[0]!), true);
     assert.equal(cbaIncreaseDollars(craft, money, "Wood River — Roxana, IL", "Phillips 66") > 0, true);
+  });
+
+  it("lifts CBA hours on base wage, not billed ST", () => {
+    const site = "Wood River — Roxana, IL";
+    const client = "Phillips 66";
+    const money = { cbaIncreaseOn: true, cbaIncreasePct: 10, cbaIncreaseDate: "2026-01-01" };
+    const row = { position: "Boilermaker Journeyman", ranges: [WEEK] };
+    const split = computeRangeHours({
+      position: row.position,
+      site,
+      client,
+      start: WEEK.start,
+      end: WEEK.end,
+      hoursPerShift: WEEK.hoursPerShift,
+      headcount: WEEK.headcount,
+      nightHeadcount: WEEK.nightHeadcount,
+      days: WEEK.days,
+      perDiemPeople: WEEK.perDiemPeople,
+      otAfter8: false,
+      clockOverride: "auto",
+    });
+    const hours = split.st + split.ot + split.dt;
+    const wage = lookupCompWageRow(row.position, site);
+    assert.ok(wage && wage.baseSt && wage.st);
+    assert.equal(wage.baseSt < wage.st, true);
+    const lift = cbaIncreaseDollars({ direct: [row] }, money, site, client);
+    const expected = Math.round(hours * wage.baseSt * 0.1 * 100) / 100;
+    const billed = Math.round(hours * wage.st * 0.1 * 100) / 100;
+    assert.equal(hours > 0, true);
+    assert.equal(lift, expected);
+    assert.equal(lift < billed, true);
+    assert.equal(
+      cbaIncreaseDollars(
+        { direct: [{ position: "Boilermaker ASST Foreman", ranges: [WEEK] }] },
+        money,
+        site,
+        client,
+      ),
+      0,
+    );
   });
 });
 

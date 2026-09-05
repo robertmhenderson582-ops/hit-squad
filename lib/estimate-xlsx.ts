@@ -317,9 +317,9 @@ export const XLSX_JOB_MONEY_NOTES = {
   subsCont: "Subs contingency percent. 10 = 10%. Applies to Subcontractor cost.",
   cbaOn: "YES applies the CBA increase after the effective date.",
   cbaDate: "CBA increase starts on this date. Desk splits craft hours on this date.",
-  cbaPct: "CBA increase percent. 3 = 3%. Summary $ is the desk craft-hour lift at export.",
+  cbaPct: "CBA increase percent. 3 = 3%. Applies to COMP / Shahan base wage (baseSt), not billed ST.",
   more: "M.O.R.E. fund $ per craft hour. Blank stays $0. Summary $ = desk MORE hours × this cell.",
-  cbaSummary: "CBA $ follows desk craft hours after the Job setup effective date. Hour-split CBA math does not live in Excel.",
+  cbaSummary: "CBA $ is desk hours after the effective date × base wage × %. Not billed composite. Math does not live in Excel.",
 } as const;
 
 const LABOR_SHEET_NAMES = new Set(["Staff", "Foremen", "Direct", "Support"]);

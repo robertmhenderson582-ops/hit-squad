@@ -1,10 +1,7 @@
 import { computeRangeHours, type HoursSplit } from "./hours-clock.ts";
 import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
-import {
-  shahanCrewCostAmount,
-  shahanCrewTitle,
-  type ShahanLookupOpts,
-} from "./shahan-wood-river.ts";
+import { shahanCrewTitle, type ShahanLookupOpts } from "./shahan-wood-river.ts";
+import { lookupCompWageRow } from "./wage-lookup.ts";
 
 export const LABOR_CONTINGENCY_LABEL = "Labor contingency";
 export const EQUIPMENT_CONTINGENCY_LABEL = "Equipment contingency";
@@ -220,6 +217,7 @@ function rowOpts(row: MoneyHourRow, opts: ShahanLookupOpts = {}): ShahanLookupOp
   };
 }
 
+/** CBA % of COMP / Shahan baseSt × hours on/after the date. Never billed ST/OT/DT. */
 export function cbaIncreaseDollars(
   crew: MoneyCrew,
   money: Pick<JobMoney, "cbaIncreaseOn" | "cbaIncreasePct" | "cbaIncreaseDate">,
@@ -241,8 +239,11 @@ export function cbaIncreaseDollars(
       if (!isCbaCraftLane(lane, row)) continue;
       const { after } = splitHoursOnDate(row, money.cbaIncreaseDate, site, client, crew.otAfter8);
       if (after.hours <= 0) continue;
-      const book = shahanCrewCostAmount(shahanCrewTitle(row), after, rowOpts(row, opts));
-      lift += book * (money.cbaIncreasePct / 100);
+      const title = shahanCrewTitle(row);
+      const wage = lookupCompWageRow(title, site, rowOpts(row, opts).laborClass);
+      const baseWage = Number(wage?.baseSt);
+      if (!Number.isFinite(baseWage) || baseWage <= 0) continue;
+      lift += (after.st + after.ot + after.dt) * baseWage * (money.cbaIncreasePct / 100);
     }
   }
   return roundCents(lift);
