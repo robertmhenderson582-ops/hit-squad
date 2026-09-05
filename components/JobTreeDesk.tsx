@@ -21,6 +21,21 @@ import {
 import type { EstimateRecord, JobRecord } from "@/lib/types";
 import type { LocalPack } from "@/lib/local-estimates";
 
+function CollapseChip({ open, night }: { open: boolean; night: boolean }) {
+  return (
+    <span
+      className={
+        night
+          ? "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#3ec6d4]/70 bg-[#0F5F6D]/55 text-xl leading-none text-paper-cream"
+          : "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#0F5F6D]/40 bg-white/80 text-xl leading-none text-[#0F5F6D]"
+      }
+      aria-hidden="true"
+    >
+      {open ? "▴" : "▾"}
+    </span>
+  );
+}
+
 export function JobTreeDesk({
   tree,
   estimates,
@@ -64,12 +79,11 @@ export function JobTreeDesk({
                 night ? "hud-rail hud-rail-active" : "paper-rail paper-rail-active"
               }`}
               aria-expanded={open}
+              aria-label={open ? "Collapse" : "Expand"}
               onClick={() => onToggleCompany(company.id)}
             >
               <span className="font-display text-2xl tracking-[0.14em]">{alias(company.name).toUpperCase()}</span>
-              <span className="font-mono text-[11px] tracking-[0.2em] text-amber-label" aria-hidden="true">
-                {open ? "▴" : "▾"}
-              </span>
+              <CollapseChip open={open} night={night} />
             </button>
             {open ? (
               <div className="space-y-4 px-4 pb-5 pt-2">
@@ -82,18 +96,17 @@ export function JobTreeDesk({
                   }`;
                   return (
                   <div key={`${company.id}-${site.id}`}>
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       {collapsible ? (
                         <button
                           type="button"
                           className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
                           aria-expanded={siteOpen}
+                          aria-label={siteOpen ? "Collapse" : "Expand"}
                           onClick={() => setCollapsedSites((prev) => toggleCollapsedSite(prev, company.id, site))}
                         >
                           <h3 className={titleClass}>{title}</h3>
-                          <span className="font-mono text-[11px] tracking-[0.2em] text-amber-label" aria-hidden="true">
-                            {siteOpen ? "▴" : "▾"}
-                          </span>
+                          <CollapseChip open={siteOpen} night={night} />
                         </button>
                       ) : (
                         <h3 className={titleClass}>{title}</h3>

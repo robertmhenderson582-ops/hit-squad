@@ -209,6 +209,14 @@ describe("job tree", () => {
     assert.match(treeDesk, /resolveOpenCompanyId\(openCompanyId, tree\)/);
     assert.equal(/openCompanyId \|\| defaultOpenCompanyId/.test(treeDesk), false);
     assert.match(treeDesk, /\{open \? "▴" : "▾"\}/);
+    assert.match(treeDesk, /inline-flex h-9 w-9 shrink-0 items-center justify-center/);
+    assert.match(treeDesk, /text-xl leading-none/);
+    assert.match(treeDesk, /border-\[#3ec6d4\]\/70 bg-\[#0F5F6D\]\/55/);
+    assert.match(treeDesk, /text-paper-cream/);
+    assert.match(treeDesk, /border-\[#0F5F6D\]\/40 bg-white\/80/);
+    assert.match(treeDesk, /text-\[#0F5F6D\]/);
+    assert.equal(/font-mono text-\[11px\] tracking-\[0\.2em\] text-amber-label/.test(treeDesk), false);
+    assert.match(treeDesk, /aria-label=\{open \? "Collapse" : "Expand"\}/);
     assert.match(treeDesk, /company\.id === openId/);
     assert.match(desk, /stickyOpenCompanyId\(openCompanyId, tree\)/);
     assert.match(desk, /toggleOpenCompanyId\(current, id, tree\)/);
@@ -237,6 +245,8 @@ describe("job tree", () => {
     const treeDesk = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
     assert.match(treeDesk, /resolveSiteOpen\(collapsedSites, company\.id, site\)/);
     assert.match(treeDesk, /toggleCollapsedSite\(prev, company\.id, site\)/);
+    assert.match(treeDesk, /aria-label=\{siteOpen \? "Collapse" : "Expand"\}/);
+    assert.match(treeDesk, /<CollapseChip open=\{siteOpen\} night=\{night\} \/>/);
     assert.match(treeDesk, /siteIsCollapsible\(site\)/);
     assert.equal(/openSites\[key\] \|\| true/.test(treeDesk), false);
     assert.match(treeDesk, /useState<Set<string>>/);
