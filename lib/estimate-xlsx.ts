@@ -703,6 +703,23 @@ function pushFormula(cells: SheetCell[], ref: string, value: string) {
   cells.push({ ref, type: "formula", value });
 }
 
+/** Blank / comment-only inputs are "" in Excel — N() keeps line totals numeric. */
+function nCell(ref: string) {
+  return `N(${ref})`;
+}
+
+function qtyEachTotal(row: number) {
+  return `${nCell(`C${row}`)}*${nCell(`D${row}`)}`;
+}
+
+function rentalLineTotal(row: number) {
+  return `${nCell(`C${row}`)}*${nCell(`D${row}`)}*${nCell(`E${row}`)}+${nCell(`F${row}`)}`;
+}
+
+function safeSheetAmount(ref: string) {
+  return `IFERROR(${nCell(ref)},0)`;
+}
+
 function pushRate(cells: SheetCell[], ref: string, value: number | null | undefined) {
   if (typeof value === "number" && Number.isFinite(value) && value > 0) pushNum(cells, ref, value);
 }
@@ -1010,6 +1027,10 @@ function dayHourFormulas(
 
 function jobSetupMoneyRef(cell: string) {
   return `${jobSetupSheet()}!${cell}`;
+}
+
+function jobSetupNumRef(cell: string) {
+  return nCell(jobSetupMoneyRef(cell));
 }
 
 function pdRateFormula(staffPd: boolean) {
@@ -1456,7 +1477,7 @@ function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPa
     pushNum(cells, `D${excelRow}`, periods);
     pushNum(cells, `E${excelRow}`, line.rate);
     pushNum(cells, `F${excelRow}`, line.freight);
-    pushFormula(cells, `G${excelRow}`, `C${excelRow}*D${excelRow}*E${excelRow}+F${excelRow}`);
+    pushFormula(cells, `G${excelRow}`, rentalLineTotal(excelRow));
     pushFormula(cells, `H${excelRow}`, `G${excelRow}*${1 + commercialMarkupRate(input.client, input.site)}`);
     unlockInputCols(unlocked, excelRow, 6);
   });
@@ -1465,7 +1486,7 @@ function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPa
   const last = lastLive + ESTIMATE_XLSX_SPARE_ROWS;
   const markup = 1 + commercialMarkupRate(input.client, input.site);
   for (let excelRow = lastLive + 1; excelRow <= last; excelRow += 1) {
-    pushFormula(cells, `G${excelRow}`, `C${excelRow}*D${excelRow}*E${excelRow}+F${excelRow}`);
+    pushFormula(cells, `G${excelRow}`, rentalLineTotal(excelRow));
     pushFormula(cells, `H${excelRow}`, `G${excelRow}*${markup}`);
     unlockInputCols(unlocked, excelRow, 6);
   }
@@ -1503,14 +1524,14 @@ function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushNum(cells, `D${excelRow}`, periods);
     pushNum(cells, `E${excelRow}`, rate);
     pushNum(cells, `F${excelRow}`, line.freight);
-    pushFormula(cells, `G${excelRow}`, `C${excelRow}*D${excelRow}*E${excelRow}+F${excelRow}`);
+    pushFormula(cells, `G${excelRow}`, rentalLineTotal(excelRow));
     unlockInputCols(unlocked, excelRow, 6);
   });
   const first = 7;
   const lastLive = 6 + live.length;
   const last = lastLive + ESTIMATE_XLSX_SPARE_ROWS;
   for (let excelRow = lastLive + 1; excelRow <= last; excelRow += 1) {
-    pushFormula(cells, `G${excelRow}`, `C${excelRow}*D${excelRow}*E${excelRow}+F${excelRow}`);
+    pushFormula(cells, `G${excelRow}`, rentalLineTotal(excelRow));
     unlockInputCols(unlocked, excelRow, 6);
   }
   const totalRow = last + 1;
@@ -1568,7 +1589,7 @@ function buildMiscSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushText(cells, `B${excelRow}`, line.description);
     pushNum(cells, `C${excelRow}`, line.qty);
     pushNum(cells, `D${excelRow}`, line.each);
-    pushFormula(cells, `E${excelRow}`, `C${excelRow}*D${excelRow}`);
+    pushFormula(cells, `E${excelRow}`, qtyEachTotal(excelRow));
     unlockInputCols(unlocked, excelRow, 4);
     excelRow += 1;
   }
@@ -1576,7 +1597,7 @@ function buildMiscSheet(input: EstimateXlsxInput): BuiltSheet | null {
   const lastLive = excelRow - 1;
   const last = lastLive + ESTIMATE_XLSX_SPARE_ROWS;
   for (; excelRow <= last; excelRow += 1) {
-    pushFormula(cells, `E${excelRow}`, `C${excelRow}*D${excelRow}`);
+    pushFormula(cells, `E${excelRow}`, qtyEachTotal(excelRow));
     unlockInputCols(unlocked, excelRow, 4);
   }
   pushText(cells, `A${excelRow}`, "TOTAL");
@@ -1764,7 +1785,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
         ? (sheet?.sheetTotal ?? sheet?.costTotal)
         : (sheet?.costTotal ?? sheet?.sheetTotal);
     if (!sheet || !total) continue;
-    const ref = addSummaryLine(cells, row, label, sheetRef(name, total));
+    const ref = addSummaryLine(cells, row, label, safeSheetAmount(sheetRef(name, total)));
     if (ref) {
       moneyRefs.push(ref);
       extraRefs.set(label, ref);
@@ -1806,26 +1827,26 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
   if (laborAmountRef) {
     const base = cbaRef ? `(${laborAmountRef}+${cbaRef})` : laborAmountRef;
     moneyRefs.push(
-      addSummaryAmount(cells, row, LABOR_CONTINGENCY_LABEL, `${base}*${jobSetupMoneyRef(JOB_SETUP_LABOR_CONT_CELL)}/100`),
+      addSummaryAmount(cells, row, LABOR_CONTINGENCY_LABEL, `${base}*${jobSetupNumRef(JOB_SETUP_LABOR_CONT_CELL)}/100`),
     );
     row += 1;
   }
   if (equipmentRefs.length) {
     const base = equipmentRefs.length === 1 ? equipmentRefs[0] : `SUM(${equipmentRefs.join(",")})`;
     moneyRefs.push(
-      addSummaryAmount(cells, row, EQUIPMENT_CONTINGENCY_LABEL, `${base}*${jobSetupMoneyRef(JOB_SETUP_EQUIP_CONT_CELL)}/100`),
+      addSummaryAmount(cells, row, EQUIPMENT_CONTINGENCY_LABEL, `${base}*${jobSetupNumRef(JOB_SETUP_EQUIP_CONT_CELL)}/100`),
     );
     row += 1;
   }
   if (subContingencyBase) {
     moneyRefs.push(
-      addSummaryAmount(cells, row, SUBS_CONTINGENCY_LABEL, `${subContingencyBase}*${jobSetupMoneyRef(JOB_SETUP_SUBS_CONT_CELL)}/100`),
+      addSummaryAmount(cells, row, SUBS_CONTINGENCY_LABEL, `${subContingencyBase}*${jobSetupNumRef(JOB_SETUP_SUBS_CONT_CELL)}/100`),
     );
     row += 1;
   }
   const moreHrs = moreFundHours(input.crew ?? {}, site, client);
   if (moreHrs > 0) {
-    moneyRefs.push(addSummaryAmount(cells, row, MORE_FUND_LABEL, `${moreHrs}*${jobSetupMoneyRef(JOB_SETUP_MORE_CELL)}`));
+    moneyRefs.push(addSummaryAmount(cells, row, MORE_FUND_LABEL, `${moreHrs}*${jobSetupNumRef(JOB_SETUP_MORE_CELL)}`));
     row += 1;
   } else if (adders.moreFund) {
     moneyRefs.push(addSummaryAmount(cells, row, MORE_FUND_LABEL, adders.moreFund));
@@ -2091,8 +2112,8 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
       cell: JOB_SETUP_MORE_CELL,
       label: "M.O.R.E. fund $ / hr",
       note: XLSX_JOB_MONEY_NOTES.more,
-      kind: drivers.moreFundPerHour == null ? "empty" : "number",
-      value: drivers.moreFundPerHour ?? undefined,
+      kind: "number",
+      value: drivers.moreFundPerHour ?? 0,
       fmt: "$#,##0.00",
     },
   ];

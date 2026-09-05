@@ -24,7 +24,9 @@ import {
   INDIRECT_DIRECT_RATIO_LABEL,
   JOB_SETUP_CRAFT_PD_CELL,
   JOB_SETUP_DATE_FMT,
+  JOB_SETUP_EQUIP_CONT_CELL,
   JOB_SETUP_LABOR_CONT_CELL,
+  JOB_SETUP_MORE_CELL,
   JOB_SETUP_MONEY_TITLE,
   JOB_SETUP_STAFF_PD_CELL,
   XLSX_JOB_MONEY_NOTES,
@@ -1796,8 +1798,60 @@ describe("estimate excel export", () => {
     assert.match(String(cellMap(rental).get(`G${rentalTotal}`)?.value), new RegExp(`SUM\\(G7:G${rentalTotal - 1}\\)`));
     assert.match(String(cellMap(coe).get(`G${coeTotal}`)?.value), new RegExp(`SUM\\(G7:G${coeTotal - 1}\\)`));
     assert.equal(cellMap(misc).get("E8")?.type, "formula");
+    assert.match(String(cellMap(misc).get("E7")?.value), /^N\(C7\)\*N\(D7\)$/);
+    assert.match(String(cellMap(misc).get("E8")?.value), /^N\(C8\)\*N\(D8\)$/);
+    assert.match(String(cellMap(rental).get("G7")?.value), /^N\(C7\)\*N\(D7\)\*N\(E7\)\+N\(F7\)$/);
+    assert.match(String(cellMap(rental).get("G8")?.value), /^N\(C8\)\*N\(D8\)\*N\(E8\)\+N\(F8\)$/);
+    assert.match(String(cellMap(coe).get("G7")?.value), /^N\(C7\)\*N\(D7\)\*N\(E7\)\+N\(F7\)$/);
+    assert.match(String(cellMap(coe).get("G8")?.value), /^N\(C8\)\*N\(D8\)\*N\(E8\)\+N\(F8\)$/);
     assert.equal(misc.unlocked?.some((cell) => cell.row === 8 && cell.col === 3), true);
     assert.equal(rental.unlocked?.some((cell) => cell.row === 8 && cell.col === 3), true);
+    const summary = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)!;
+    const summaryAmount = (label: string) => {
+      const row = summary.cells.find((cell) => cell.ref.startsWith("A") && cell.value === label)?.ref.replace("A", "");
+      assert.ok(row, label);
+      return String(cellMap(summary).get(`C${row}`)?.value ?? "");
+    };
+    assert.match(summaryAmount("Misc $"), /^IFERROR\(N\(/);
+    assert.match(summaryAmount("Equipment rental $"), /^IFERROR\(N\(/);
+    assert.match(summaryAmount("COE $"), /^IFERROR\(N\(/);
+  });
+
+  it("keeps spare-pad and empty MORE numeric so Summary Amount $ is not #VALUE!", async () => {
+    const bytes = await estimateToXlsx(woodRiverFixture());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const misc = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc);
+    const rental = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rental);
+    const setup = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup);
+    const summary = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
+    assert.ok(misc && rental && setup && summary);
+    assert.ok(misc.getCell("C8").value == null || misc.getCell("C8").value === "");
+    assert.equal(String((misc.getCell("E8").value as { formula?: string })?.formula ?? ""), "N(C8)*N(D8)");
+    assert.ok(rental.getCell("C8").value == null || rental.getCell("C8").value === "");
+    assert.equal(String((rental.getCell("G8").value as { formula?: string })?.formula ?? ""), "N(C8)*N(D8)*N(E8)+N(F8)");
+    assert.equal(setup.getCell(JOB_SETUP_MORE_CELL).value, 0);
+    let moreRow = 0;
+    let miscRow = 0;
+    let equipContRow = 0;
+    let totalRow = 0;
+    summary.eachRow((row, rowNumber) => {
+      const label = String(row.getCell(1).value ?? "");
+      if (label === "Misc $") miscRow = rowNumber;
+      if (label === "M.O.R.E. fund") moreRow = rowNumber;
+      if (label === "Equipment contingency") equipContRow = rowNumber;
+      if (label === "ESTIMATE TOTAL $") totalRow = rowNumber;
+    });
+    assert.ok(miscRow);
+    assert.match(String((summary.getCell(miscRow, 3).value as { formula?: string })?.formula ?? ""), /^IFERROR\(N\(/);
+    if (moreRow) {
+      assert.match(String((summary.getCell(moreRow, 3).value as { formula?: string })?.formula ?? ""), new RegExp(`N\\(.*${JOB_SETUP_MORE_CELL}`));
+    }
+    if (equipContRow) {
+      assert.match(String((summary.getCell(equipContRow, 3).value as { formula?: string })?.formula ?? ""), new RegExp(`N\\(.*${JOB_SETUP_EQUIP_CONT_CELL}`));
+    }
+    assert.ok(totalRow);
+    assert.match(String((summary.getCell(totalRow, 3).value as { formula?: string })?.formula ?? ""), /^SUM\(/);
   });
 
   it("lists daily / weekly / monthly on COE and rental Period cells", async () => {
@@ -2252,7 +2306,9 @@ describe("estimate excel export", () => {
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${rowOf("6.5% markup")}`), 0);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${rowOf("ESTIMATE TOTAL $")}`) > 0, true);
     assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${rowOf("Labor contingency")}`)?.value), /Job setup/);
-    assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${rowOf("Labor contingency")}`)?.value), new RegExp(JOB_SETUP_LABOR_CONT_CELL));
+    assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${rowOf("Labor contingency")}`)?.value), new RegExp(`N\\(.*${JOB_SETUP_LABOR_CONT_CELL}`));
+    assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${rowOf("Equipment contingency")}`)?.value), new RegExp(`N\\(.*${JOB_SETUP_EQUIP_CONT_CELL}`));
+    assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${rowOf("M.O.R.E. fund")}`)?.value), new RegExp(`N\\(.*${JOB_SETUP_MORE_CELL}`));
   });
 
   it("puts Hours in B and Amount $ in C and keeps Indirect/Direct off ESTIMATE TOTAL $", () => {
@@ -2300,6 +2356,8 @@ describe("estimate excel export", () => {
     assert.equal(setupCells.get(JOB_SETUP_STAFF_PD_CELL)?.value, 140);
     assert.equal(setupCells.get(JOB_SETUP_CRAFT_PD_CELL)?.value, 130);
     assert.equal(setupCells.get(JOB_SETUP_LABOR_CONT_CELL)?.value, 10);
+    assert.equal(setupCells.get(JOB_SETUP_MORE_CELL)?.type, "number");
+    assert.equal(setupCells.get(JOB_SETUP_MORE_CELL)?.value, 0);
     assert.equal(setupCells.get(JOB_SETUP_STAFF_PD_CELL)?.note, XLSX_JOB_MONEY_NOTES.staffPd);
     const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff);
     const pdRate = staff?.cells.find((cell) => cell.ref === "D13");
