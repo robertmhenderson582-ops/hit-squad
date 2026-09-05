@@ -294,6 +294,13 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
         if (tok.value === "TRIM") return String(isRange(args[0]) ? "" : (args[0] ?? "")).trim();
         if (tok.value === "UPPER") return String(isRange(args[0]) ? "" : (args[0] ?? "")).toUpperCase();
         if (tok.value === "N") return isRange(args[0]) ? 0 : asNumber(args[0]);
+        if (tok.value === "INT") return Math.floor(asNumber(args[0]));
+        if (tok.value === "DATE") {
+          const year = asNumber(args[0]);
+          const month = asNumber(args[1]);
+          const day = asNumber(args[2]);
+          return excelDateSerial(new Date(year, month - 1, day));
+        }
         if (tok.value === "ISNUMBER") return typeof args[0] === "number" && Number.isFinite(args[0]);
         if (tok.value === "IFERROR") return isExcelError(args[0]) ? args[1] : args[0];
         if (tok.value === "INDEX") {

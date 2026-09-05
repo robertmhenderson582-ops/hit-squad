@@ -13,9 +13,25 @@ import {
   packSnapshotToXlsxInput,
 } from "./estimate-pack-xlsx.ts";
 import { parseIncomingPack } from "./estimate-pack.ts";
-import { largeToolAmount } from "./equipment-sheet.ts";
+import { largeToolAmount, thirdPartyCost } from "./equipment-sheet.ts";
+import { deskPackageBreakdown } from "./estimate-desk-total.ts";
+import {
+  CBA_INCREASE_LABEL,
+  EQUIPMENT_CONTINGENCY_LABEL,
+  LABOR_CONTINGENCY_LABEL,
+  MORE_FUND_LABEL,
+  SUBS_CONTINGENCY_LABEL,
+  cbaIncreaseDollars,
+  hydrateJobMoney,
+  moneyAdderLines,
+  moreFundDollars,
+} from "./estimate-money.ts";
+import { commercialMarkupLabel, estimateMarkupDollars } from "./estimate-total.ts";
 import { buildEstimateWorkbook, ESTIMATE_XLSX_SHEETS, RATE_TOOLS_SECTION } from "./estimate-xlsx.ts";
-import { lookupShahanEquipment, shahanPeriodRate } from "./shahan-wood-river.ts";
+import { miscAmount, travelAmount } from "./other-cost.ts";
+import { laborDollarsFromCrew, lookupShahanEquipment, perDiemDollarsFromCrew, shahanPeriodRate } from "./shahan-wood-river.ts";
+import { subcontractorMarkupBase, subcontractorTotal } from "./subcontractor.ts";
+import { wageLookupOpts } from "./wage-lookup.ts";
 import { excelSafeSheetName } from "./xlsx-minimal.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
 
@@ -259,16 +275,23 @@ describe("estimate pack JSON → xlsx", () => {
     const expected = [
       {
         file: "/tmp/vault-estimates/wood-river-2027-aromatics-turnaround.json",
-        // Robert’s stale Summary $25,250,782.45 was weekday-clock labor.
-        // Desk weekly-40 Staff+Foremen OT is the $73,889.52 gap — extras are $0.
+        // Screenshot Labor $18,598,972.74 / TOTAL $24,859,836.19 was Excel recalc
+        // taking the clock fallback (date lock vs header serial). Desk weekly-40
+        // Labor $ is $19,063,808.52 — TOTAL $25,324,671.97. Other buckets already matched.
         total: 25324671.97,
+        labor: 19063808.52,
       },
       {
         file: "/tmp/vault-estimates/wood-river-madison-cat-2-pit-stop.json",
         total: 1435365.66,
       },
     ];
-    for (const { file, total } of expected) {
+    const penny = (n: number) => Math.round(n * 100) / 100;
+    const near = (got: number | null, want: number, label: string, file: string) => {
+      if (penny(want) === 0 && (got == null || penny(got) === 0)) return;
+      assert.equal(got == null ? null : penny(got), penny(want), `${file} ${label}`);
+    };
+    for (const { file, total, labor } of expected) {
       if (!existsSync(file)) continue;
       const { input } = estimateJsonToXlsxInput(JSON.parse(readFileSync(file, "utf8")));
       const desk = deskEstimateTotal(input);
@@ -276,6 +299,67 @@ describe("estimate pack JSON → xlsx", () => {
       assert.equal(desk, total, file);
       assert.equal(excel, desk, file);
       const sheets = buildEstimateWorkbook(input);
+      const breakdown = deskPackageBreakdown(input);
+      const site = input.site ?? "";
+      const client = input.client ?? "";
+      const holidays = hydrateJobMoney(input.jobMeta).holidays;
+      const laborAmt = laborDollarsFromCrew(input.crew ?? {}, site, client, wageLookupOpts(site), holidays);
+      const pd = perDiemDollarsFromCrew(
+        input.crew ?? {},
+        {
+          staffPerDiemRate: Number(input.jobMeta?.staffPerDiemRate) || 0,
+          craftPerDiemRate: Number(input.jobMeta?.craftPerDiemRate) || 0,
+        },
+        site,
+        client,
+        holidays,
+      );
+      const travel = (input.otherCost?.travel ?? []).reduce((sum, line) => sum + travelAmount(line), 0);
+      const misc = (input.otherCost?.misc ?? []).reduce((sum, line) => sum + miscAmount(line), 0);
+      const rental = (input.equipment?.thirdParty ?? []).reduce((sum, line) => sum + thirdPartyCost(line), 0);
+      const tools = (input.equipment?.largeTools ?? []).reduce((sum, line) => sum + largeToolAmount(line), 0);
+      const subCtx = { site, client, otAfter8: Boolean(input.crew?.otAfter8) };
+      const subs = subcontractorTotal(input.subcontractor, subCtx);
+      const markup = estimateMarkupDollars({
+        subcontractor: subcontractorMarkupBase(input.subcontractor, subCtx),
+        thirdParty: rental,
+        misc,
+        client,
+        site,
+      });
+      const money = hydrateJobMoney(input.jobMeta);
+      const cba = cbaIncreaseDollars(input.crew ?? {}, money, site, client, wageLookupOpts(site));
+      const more = moreFundDollars(input.crew ?? {}, input.jobMeta?.moreFundPerHour ?? null, site, client, holidays);
+      const adders = moneyAdderLines({
+        labor: laborAmt,
+        equipment: tools + rental,
+        subcontractor: subs,
+        money,
+        cbaIncrease: cba,
+        moreFund: more,
+      });
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "Labor $"), laborAmt, "Labor $", file);
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "Labor $"), breakdown.lines.find((line) => line.id === "labor")?.amount ?? -1, "Labor $ vs desk", file);
+      if (labor != null) near(laborAmt, labor, "desk labor fixture", file);
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "Per diem $"), pd, "Per diem $", file);
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "Travel $"), travel, "Travel $", file);
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "Misc $"), misc, "Misc $", file);
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "Equipment rental $"), rental, "Equipment rental $", file);
+      if (tools > 0) near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "COE $"), tools, "COE $", file);
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "Subcontractor $"), subs, "Subcontractor $", file);
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, commercialMarkupLabel(client, site)), markup, commercialMarkupLabel(client, site), file);
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, CBA_INCREASE_LABEL) ?? 0, cba, CBA_INCREASE_LABEL, file);
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, LABOR_CONTINGENCY_LABEL) ?? 0, adders.laborContingency, LABOR_CONTINGENCY_LABEL, file);
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, EQUIPMENT_CONTINGENCY_LABEL) ?? 0, adders.equipmentContingency, EQUIPMENT_CONTINGENCY_LABEL, file);
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, SUBS_CONTINGENCY_LABEL) ?? 0, adders.subsContingency, SUBS_CONTINGENCY_LABEL, file);
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, MORE_FUND_LABEL) ?? 0, more, MORE_FUND_LABEL, file);
+      near(summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "ESTIMATE TOTAL $"), desk, "ESTIMATE TOTAL $", file);
+      const staff = sheets.find((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.staff);
+      const hour = staff?.cells.find((cell) => cell.ref === "J10" && cell.type === "formula");
+      if (hour) {
+        assert.match(String(hour.value), /IFERROR\(/);
+        assert.match(String(hour.value), /INT\(/);
+      }
       const rates = sheets.find((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.rates);
       assert.ok(rates);
       const liveTool = (input.equipment?.largeTools ?? []).find((line) => largeToolAmount(line) > 0);

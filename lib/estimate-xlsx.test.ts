@@ -600,6 +600,8 @@ describe("estimate excel export", () => {
     assert.match(st, /\$C\$7/);
     assert.match(st, /\$D\$7/);
     assert.match(st, /\$G\$7/);
+    assert.match(st, /INT\(/);
+    assert.match(st, /IFERROR\(/);
     assert.match(st, /"ON"/);
     assert.match(st, /"NO"/);
     const days = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.jobDays);

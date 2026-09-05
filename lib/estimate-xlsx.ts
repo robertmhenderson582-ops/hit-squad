@@ -157,6 +157,7 @@ import { summaryAmountAt } from "./xlsx-eval.ts";
 import {
   buildWorkbook,
   colLetter,
+  excelDateSerial,
   excelSafeSheetName,
   parseA1,
   type SheetCell,
@@ -925,7 +926,7 @@ function jobDaysRef(index: number, row: number) {
 }
 
 function jobSetupPhaseOwns(dateRef: string, phaseId: PhaseId) {
-  return `AND(${jobSetupCell("B", phaseId)}="ON",${jobSetupCell("C", phaseId)}<=${dateRef},${jobSetupCell("D", phaseId)}>=${dateRef})`;
+  return `AND(${jobSetupCell("B", phaseId)}="ON",INT(${jobSetupCell("C", phaseId)})<=INT(${dateRef}),INT(${jobSetupCell("D", phaseId)})>=INT(${dateRef}))`;
 }
 
 function jobSetupInPhase(dateRef: string) {
@@ -959,9 +960,11 @@ function jobSetupTextEquals(expr: string, expected: string) {
   return `${expr}="${expected}"`;
 }
 
-function jobSetupExportLock(dateRef: string, owner: PhaseRow | undefined, inPhaseRef: string) {
+function jobSetupExportLock(ymd: string, owner: PhaseRow | undefined, inPhaseRef: string) {
+  const date = parseYmd(ymd);
+  const serial = date ? excelDateSerial(date) : 0;
   if (!owner) return `NOT(${inPhaseRef})`;
-  return `AND(${jobSetupCell("B", owner.id)}="ON",${jobSetupCell("C", owner.id)}<=${dateRef},${jobSetupCell("D", owner.id)}>=${dateRef},${jobSetupTextEquals(jobSetupCell("G", owner.id), owner.otAfter8 ? "YES" : "NO")})`;
+  return `AND(${jobSetupCell("B", owner.id)}="ON",INT(${jobSetupCell("C", owner.id)})<=${serial},INT(${jobSetupCell("D", owner.id)})>=${serial},${jobSetupTextEquals(jobSetupCell("G", owner.id), owner.otAfter8 ? "YES" : "NO")})`;
 }
 
 function buildJobDaysSheet(dates: string[]): WorkbookSheet | null {
@@ -1523,7 +1526,6 @@ function buildCrewSheet(
       pushNum(cells, `${col}${hcRow}`, plug.hc);
       pushNum(cells, `${col}${hpsRow}`, plug.hps);
       const priorStRefs = priorWeekStRefs(dates, index, stRow);
-      const dateRef = `${col}$6`;
       const inPhaseRef = jobDaysRef(index, 2);
       const staffOtRef = jobDaysRef(index, 3);
       const compOtRef =
@@ -1540,10 +1542,10 @@ function buildCrewSheet(
       const hpsVal = money(plug.hps);
       const owner = phaseOwningDate(setupPhases, ymd);
       const titleLock = `${clockTitleRef}=${excelTextLiteral(clockTitle(row.position, row.billedAs ?? ""))}`;
-      const exported = `AND(${col}${hcRow}=${hcVal},${col}${hpsRow}=${hpsVal},${pickRef}=${excelTextLiteral(clockPick)},${titleLock},${jobSetupExportLock(dateRef, owner, inPhaseRef)})`;
-      pushFormula(cells, `${col}${stRow}`, `IF(${exported},${desk.st},${hours.st})`);
-      pushFormula(cells, `${col}${otRow}`, `IF(${exported},${desk.ot},${hours.ot})`);
-      pushFormula(cells, `${col}${dtRow}`, `IF(${exported},${desk.dt},${hours.dt})`);
+      const exported = `AND(${col}${hcRow}=${hcVal},${col}${hpsRow}=${hpsVal},${pickRef}=${excelTextLiteral(clockPick)},${titleLock},${jobSetupExportLock(ymd, owner, inPhaseRef)})`;
+      pushFormula(cells, `${col}${stRow}`, `IFERROR(IF(${exported},${desk.st},${hours.st}),${desk.st})`);
+      pushFormula(cells, `${col}${otRow}`, `IFERROR(IF(${exported},${desk.ot},${hours.ot}),${desk.ot})`);
+      pushFormula(cells, `${col}${dtRow}`, `IFERROR(IF(${exported},${desk.dt},${hours.dt}),${desk.dt})`);
       pushNum(cells, `${col}${pdRow}`, plug.pd);
     });
 
