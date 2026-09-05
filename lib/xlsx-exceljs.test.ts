@@ -76,6 +76,8 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(summaryLineFormat("Labor contingency"), "$#,##0.00");
     assert.equal(summaryLineFormat("6.5% markup"), "$#,##0.00");
     assert.equal(summaryLineFormat("ESTIMATE TOTAL $"), "$#,##0.00");
+    assert.equal(summaryLineFormat("Indirect / Direct (hrs)"), "0.00");
+    assert.equal(summaryLineFormat("Direct per indirect (1 : X)"), "0.00");
   });
 
   it("grows wrapped header subtitle rows only when the merged band is too narrow", () => {

@@ -18,8 +18,16 @@ import {
   ESTIMATE_STATUS_LABEL,
   exporterDisplayName,
   ESTIMATE_HOURS_LINE,
+  DIRECT_PER_INDIRECT_LABEL,
   ESTIMATE_SUMMARY_AMOUNT,
   ESTIMATE_SUMMARY_HOURS,
+  INDIRECT_DIRECT_RATIO_LABEL,
+  JOB_SETUP_CRAFT_PD_CELL,
+  JOB_SETUP_DATE_FMT,
+  JOB_SETUP_LABOR_CONT_CELL,
+  JOB_SETUP_MONEY_TITLE,
+  JOB_SETUP_STAFF_PD_CELL,
+  XLSX_JOB_MONEY_NOTES,
   ESTIMATE_XLSX_SHEETS,
   EXCEL_FORMULA_CHAR_LIMIT,
   OPTIONAL_ESTIMATE_SHEETS,
@@ -340,8 +348,8 @@ describe("estimate excel export", () => {
     assert.match(String(staff.cells.find((cell) => cell.ref === "C14")?.value), /^SUM\(C7\)$/);
     assert.equal(summary.cells.some((cell) => cell.ref === "A7" && cell.value === "Staff labor $"), true);
     assert.equal(summary.cells.some((cell) => cell.ref.startsWith("A") && cell.value === ESTIMATE_HOURS_LINE), true);
-    assert.equal(summary.cells.find((cell) => cell.ref === "B6")?.value, ESTIMATE_SUMMARY_AMOUNT);
-    assert.equal(summary.cells.find((cell) => cell.ref === "C6")?.value, ESTIMATE_SUMMARY_HOURS);
+    assert.equal(summary.cells.find((cell) => cell.ref === "B6")?.value, ESTIMATE_SUMMARY_HOURS);
+    assert.equal(summary.cells.find((cell) => cell.ref === "C6")?.value, ESTIMATE_SUMMARY_AMOUNT);
     assert.equal(staff.cells.find((cell) => cell.ref === "A6")?.value, "Shift");
     assert.equal(staff.cells.some((cell) => cell.value === "Labor $"), false);
     assert.equal(staff.cells.find((cell) => cell.ref === "B6")?.value, "Position");
@@ -354,12 +362,12 @@ describe("estimate excel export", () => {
     const amountAt = (label: string) => {
       const row = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref.startsWith("A") && cell.value === label)?.ref.replace("A", "");
       assert.ok(row, label);
-      return evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${row}`);
+      return evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${row}`);
     };
     const hoursAt = (label: string) => {
       const row = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref.startsWith("A") && cell.value === label)?.ref.replace("A", "");
       assert.ok(row, label);
-      return evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${row}`);
+      return evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${row}`);
     };
     const staffLabor = evalAt(ESTIMATE_XLSX_SHEETS.staff, "C14");
     const directLabor = evalAt(ESTIMATE_XLSX_SHEETS.direct, "C14");
@@ -475,8 +483,8 @@ describe("estimate excel export", () => {
     });
     assert.equal(hoursRow > 0, true);
     assert.equal(totalRow > hoursRow, true);
-    assert.equal(summarySheet.getCell(`C${hoursRow}`).numFmt, EXCEL_UNIT_FORMATS.hours);
-    assert.equal(summarySheet.getCell(`B${totalRow}`).numFmt, "$#,##0.00");
+    assert.equal(summarySheet.getCell(`B${hoursRow}`).numFmt, EXCEL_UNIT_FORMATS.hours);
+    assert.equal(summarySheet.getCell(`C${totalRow}`).numFmt, "$#,##0.00");
     assert.equal(/field trial|forgebook|not a release/i.test(JSON.stringify(wb.model)), false);
     assert.equal(estimateWorkbookSummaryTotal(input), deskEstimateTotal(input));
   });
@@ -642,7 +650,7 @@ describe("estimate excel export", () => {
     summary.eachRow((row, rowNumber) => {
       if (String(row.getCell(1).value ?? "") === "ESTIMATE TOTAL $") totalRow = rowNumber;
     });
-    const cell = summary.getCell(`B${totalRow}`).value as { formula?: string; result?: number };
+    const cell = summary.getCell(`C${totalRow}`).value as { formula?: string; result?: number };
     assert.match(String(cell.formula ?? ""), /^SUM\(/);
     assert.equal(Math.round(Number(cell.result) * 100) / 100, desk);
   });
@@ -735,7 +743,7 @@ describe("estimate excel export", () => {
       ESTIMATE_XLSX_SHEETS.jobSetup,
       ESTIMATE_XLSX_SHEETS.lists,
     ]);
-    assert.equal(empty[0].cells.some((cell) => cell.type === "formula" || (cell.type === "number" && cell.ref === "B8")), true);
+    assert.equal(empty[0].cells.some((cell) => cell.type === "formula" || (cell.type === "number" && /^C\d+$/.test(cell.ref))), true);
   });
 
   it("omits leftover $0 catalog rows — no blank Crane / OM Crane / empty labor tabs", async () => {
@@ -996,7 +1004,7 @@ describe("estimate excel export", () => {
     const summaryAmount = (label: string) => {
       const row = summary?.cells.find((cell) => cell.ref.startsWith("A") && cell.value === label)?.ref.replace("A", "");
       assert.ok(row, label);
-      return evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${row}`);
+      return evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${row}`);
     };
     assert.equal(summaryAmount("Subcontractor $"), 1065);
     assert.equal(summaryAmount("6.5% markup"), Math.round((234 + 50 + 50) * 0.065 * 100) / 100);
@@ -1082,7 +1090,7 @@ describe("estimate excel export", () => {
     const amountAt = (label: string) => {
       const row = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref.startsWith("A") && cell.value === label)?.ref.replace("A", "");
       assert.ok(row, label);
-      return evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${row}`);
+      return evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${row}`);
     };
     assert.equal(amountAt("Subcontractor $"), 4000 + 2500 + Math.round(2500 * 0.065 * 100) / 100);
     assert.equal(amountAt("6.5% markup"), Math.round((100 + 200) * 0.065 * 100) / 100);
@@ -1567,6 +1575,10 @@ describe("estimate excel export", () => {
     assert.ok(setup.getCell("F7").dataValidation);
     assert.ok(setup.getCell("G7").dataValidation);
     assert.ok(setup.getCell("G11").dataValidation);
+    assert.equal(setup.getCell("C7").dataValidation?.type, "date");
+    assert.equal(setup.getCell("D7").dataValidation?.type, "date");
+    assert.equal(setup.getCell("C7").numFmt, JOB_SETUP_DATE_FMT);
+    assert.equal(setup.getCell("B15").protection?.locked, false);
     assert.equal(setup.getCell("G6").value, "OT after 8");
     assert.notEqual(setup.getCell("H6").value, "OT pick");
     assert.ok(misc);
@@ -1595,7 +1607,7 @@ describe("estimate excel export", () => {
     summary.eachRow((row, rowNumber) => {
       if (String(row.getCell(1).value ?? "") === "ESTIMATE TOTAL $") totalRow = rowNumber;
     });
-    assert.equal(summary.getCell(`B${totalRow}`).protection?.locked !== false, true);
+    assert.equal(summary.getCell(`C${totalRow}`).protection?.locked !== false, true);
     assert.equal(rates.getCell("C7").protection?.locked !== false, true);
   });
 
@@ -2233,12 +2245,87 @@ describe("estimate excel export", () => {
       return ref.replace("A", "");
     };
     const hoursRow = rowOf(ESTIMATE_HOURS_LINE);
-    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${hoursRow}`), 0);
-    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${hoursRow}`) > 0, true);
-    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${rowOf("Labor contingency")}`) > 0, true);
-    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${rowOf("6.5% markup")}`) > 0, true);
-    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${rowOf("6.5% markup")}`), 0);
-    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${rowOf("ESTIMATE TOTAL $")}`) > 0, true);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${hoursRow}`), 0);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${hoursRow}`) > 0, true);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${rowOf("Labor contingency")}`) > 0, true);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${rowOf("6.5% markup")}`) > 0, true);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${rowOf("6.5% markup")}`), 0);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${rowOf("ESTIMATE TOTAL $")}`) > 0, true);
+    assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${rowOf("Labor contingency")}`)?.value), /Job setup/);
+    assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${rowOf("Labor contingency")}`)?.value), new RegExp(JOB_SETUP_LABOR_CONT_CELL));
+  });
+
+  it("puts Hours in B and Amount $ in C and keeps Indirect/Direct off ESTIMATE TOTAL $", () => {
+    const sheets = buildEstimateWorkbook(woodRiverFixture());
+    const summary = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary);
+    assert.ok(summary);
+    assert.equal(summary.cells.find((cell) => cell.ref === "B6")?.value, ESTIMATE_SUMMARY_HOURS);
+    assert.equal(summary.cells.find((cell) => cell.ref === "C6")?.value, ESTIMATE_SUMMARY_AMOUNT);
+    assert.equal(summary.cells.some((cell) => cell.value === INDIRECT_DIRECT_RATIO_LABEL), true);
+    assert.equal(summary.cells.some((cell) => cell.value === DIRECT_PER_INDIRECT_LABEL), true);
+    const { evalAt } = evaluateWorkbook(sheets);
+    const rowOf = (label: string) => {
+      const ref = summary.cells.find((cell) => cell.ref.startsWith("A") && cell.value === label)?.ref;
+      assert.ok(ref, label);
+      return ref.replace("A", "");
+    };
+    const staffHrs = evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${rowOf("Staff labor $")}`);
+    const directHrs = evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${rowOf("Direct labor $")}`);
+    assert.equal(staffHrs > 0, true);
+    assert.equal(directHrs > 0, true);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${rowOf(INDIRECT_DIRECT_RATIO_LABEL)}`), staffHrs / directHrs);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${rowOf(DIRECT_PER_INDIRECT_LABEL)}`), directHrs / staffHrs);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${rowOf(INDIRECT_DIRECT_RATIO_LABEL)}`), 0);
+    const totalFormula = String(summary.cells.find((cell) => cell.ref === `C${rowOf("ESTIMATE TOTAL $")}`)?.value ?? "");
+    assert.match(totalFormula, /^SUM\(/);
+    assert.equal(totalFormula.includes(rowOf(INDIRECT_DIRECT_RATIO_LABEL)), false);
+    assert.equal(totalFormula.includes(rowOf(DIRECT_PER_INDIRECT_LABEL)), false);
+  });
+
+  it("exports Job setup money drivers and ties PD / contingency to those cells", () => {
+    const input = {
+      ...woodRiverFixture(),
+      jobMeta: {
+        ...woodRiverFixture().jobMeta,
+        laborContingencyPct: 10,
+        staffPerDiemRate: 140,
+        craftPerDiemRate: 130,
+      },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const setup = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.jobSetup);
+    assert.ok(setup);
+    const setupCells = cellMap(setup);
+    assert.equal(setupCells.get("A13")?.value, JOB_SETUP_MONEY_TITLE);
+    assert.equal(setupCells.get(JOB_SETUP_STAFF_PD_CELL)?.value, 140);
+    assert.equal(setupCells.get(JOB_SETUP_CRAFT_PD_CELL)?.value, 130);
+    assert.equal(setupCells.get(JOB_SETUP_LABOR_CONT_CELL)?.value, 10);
+    assert.equal(setupCells.get(JOB_SETUP_STAFF_PD_CELL)?.note, XLSX_JOB_MONEY_NOTES.staffPd);
+    const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff);
+    const pdRate = staff?.cells.find((cell) => cell.ref === "D13");
+    assert.match(String(pdRate?.value ?? ""), /Job setup/);
+    assert.match(String(pdRate?.value ?? ""), new RegExp(JOB_SETUP_STAFF_PD_CELL));
+    const { evalAt } = evaluateWorkbook(sheets);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, "D13"), 140);
+    const laborRow = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find(
+      (cell) => cell.ref.startsWith("A") && cell.value === "Labor contingency",
+    );
+    assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${laborRow?.ref.slice(1)}`)?.value), /Job setup/);
+  });
+
+  it("puts date pickers on Job setup Start/Stop and blocks back-in-time Stop", () => {
+    const setup = sheetOf(buildEstimateWorkbook(woodRiverFixture()), ESTIMATE_XLSX_SHEETS.jobSetup);
+    assert.ok(setup);
+    assert.equal(setup.cells.find((cell) => cell.ref === "C7")?.numFmt, JOB_SETUP_DATE_FMT);
+    assert.equal(setup.cells.find((cell) => cell.ref === "D7")?.numFmt, JOB_SETUP_DATE_FMT);
+    const start = setup.validations?.find((rule) => rule.sqref === "C8");
+    const stop = setup.validations?.find((rule) => rule.sqref === "D7");
+    assert.equal(start?.type, "date");
+    assert.equal(start?.operator, "greaterThanOrEqual");
+    assert.match(String(start?.formulae[0] ?? ""), /LOOKUP/);
+    assert.equal(stop?.type, "date");
+    assert.equal(stop?.formulae[0], "C7");
+    assert.match(String(setup.cells.find((cell) => cell.ref === "C6")?.note ?? ""), /flow forward/);
   });
 
   it("builds a CAT 2-shaped package and keeps FIELD TRIAL / Forgebook off the client file", async () => {
@@ -2917,6 +3004,8 @@ describe("estimate excel export", () => {
       });
       ws.eachRow((row, rowNumber) => {
         if (rowNumber < 7) return;
+        const lineLabel = String(row.getCell(1).value ?? "");
+        if (lineLabel === INDIRECT_DIRECT_RATIO_LABEL || lineLabel === DIRECT_PER_INDIRECT_LABEL) return;
         row.eachCell({ includeEmpty: false }, (cell, col) => {
           const fmt = String(cell.numFmt ?? "");
           const header = headers.get(col) ?? "";
@@ -2956,8 +3045,8 @@ describe("estimate excel export", () => {
     summary.eachRow((row, n) => {
       if (String(row.getCell(1).value ?? "") === ESTIMATE_HOURS_LINE) hoursRow = n;
     });
-    assert.equal(summary.getCell(`C${hoursRow}`).numFmt, EXCEL_UNIT_FORMATS.hours);
-    assert.equal(summary.getCell(`C${hoursRow}`).alignment?.horizontal, "center");
+    assert.equal(summary.getCell(`B${hoursRow}`).numFmt, EXCEL_UNIT_FORMATS.hours);
+    assert.equal(summary.getCell(`B${hoursRow}`).alignment?.horizontal, "center");
     let laborRow = 0;
     let markupRow = 0;
     summary.eachRow((row, n) => {
@@ -2967,10 +3056,10 @@ describe("estimate excel export", () => {
     });
     assert.ok(laborRow);
     assert.ok(markupRow);
-    assert.equal(summary.getCell(`B${laborRow}`).numFmt, EXCEL_UNIT_FORMATS.currency);
-    assert.equal(summary.getCell(`B${laborRow}`).alignment?.horizontal, "right");
-    assert.equal(summary.getCell(`B${markupRow}`).numFmt, EXCEL_UNIT_FORMATS.currency);
-    assert.equal(summary.getCell(`B${markupRow}`).alignment?.horizontal, "right");
+    assert.equal(summary.getCell(`C${laborRow}`).numFmt, EXCEL_UNIT_FORMATS.currency);
+    assert.equal(summary.getCell(`C${laborRow}`).alignment?.horizontal, "right");
+    assert.equal(summary.getCell(`C${markupRow}`).numFmt, EXCEL_UNIT_FORMATS.currency);
+    assert.equal(summary.getCell(`C${markupRow}`).alignment?.horizontal, "right");
   });
 
   it("brands visible sheets with a faded company-logo splash and skips hidden helpers", async () => {

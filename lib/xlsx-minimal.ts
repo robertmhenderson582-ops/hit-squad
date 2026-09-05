@@ -91,10 +91,32 @@ export function parseA1(ref: string): { col: string; row: number; colNum: number
 /** Hover note written as an Excel comment (not VBA). Import ignores these. */
 export type WorkbookComment = { ref: string; text: string };
 
+/** List dropdowns, date picker, or custom reject. Default type is list. */
+export type SheetValidation = {
+  sqref: string;
+  formulae: string[];
+  type?: "list" | "date" | "custom";
+  operator?:
+    | "between"
+    | "notBetween"
+    | "equal"
+    | "notEqual"
+    | "greaterThan"
+    | "lessThan"
+    | "greaterThanOrEqual"
+    | "lessThanOrEqual";
+  allowBlank?: boolean;
+  showErrorMessage?: boolean;
+  errorTitle?: string;
+  error?: string;
+};
+
 export type SheetCell = {
   ref: string;
   /** Excel comment / note. Chrome only — import does not read it. */
   note?: string;
+  /** Wins over header/type defaults when set (Job setup dates, money drivers). */
+  numFmt?: string;
 } & (
   | { type: "text"; value: string }
   | { type: "number"; value: number }
@@ -162,8 +184,8 @@ export type WorkbookSheet = {
   phaseBar?: Array<{ startCol: number; endCol: number; phaseId: string }>;
   /** Support Bill as field — label + value rows in column B under Position. */
   billAs?: Array<{ labelRow: number; valueRow: number }>;
-  /** Excel list validations (Position / Bill as / Job setup / Period). */
-  validations?: Array<{ sqref: string; formulae: string[] }>;
+  /** Excel list / date / custom validations (Position / Bill as / Job setup / Period). */
+  validations?: SheetValidation[];
   /** Extra unlocked cells (Job setup + cost-sheet estimator inputs). */
   unlocked?: Array<{ row: number; col: number }>;
   /** Hover comments for refs that have no cell, or extras beyond `cell.note`. */

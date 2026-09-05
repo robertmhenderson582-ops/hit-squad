@@ -79,6 +79,7 @@ import {
   hydrateJobMoney,
   moneyAdderLines,
   moreFundDollars,
+  moreFundHours,
   type JobMoney,
 } from "./estimate-money.ts";
 import { slugify } from "./estimate-pack.ts";
@@ -161,6 +162,22 @@ export const ESTIMATE_STATUS_LABEL = "Status";
 export const ESTIMATE_SUMMARY_AMOUNT = "Amount $";
 export const ESTIMATE_SUMMARY_HOURS = "Man-hours (MH)";
 export const ESTIMATE_HOURS_LINE = "Man-hours";
+export const INDIRECT_DIRECT_RATIO_LABEL = "Indirect / Direct (hrs)";
+export const DIRECT_PER_INDIRECT_LABEL = "Direct per indirect (1 : X)";
+/** Job setup Start / Stop / CBA date — desktop Excel calendar picker. */
+export const JOB_SETUP_DATE_FMT = "m/d/yyyy";
+export const JOB_SETUP_MONEY_TITLE = "Job rates / money";
+export const JOB_SETUP_STAFF_PD_CELL = "B15";
+export const JOB_SETUP_CRAFT_PD_CELL = "B16";
+export const JOB_SETUP_STAFF_MILE_CELL = "B17";
+export const JOB_SETUP_CRAFT_MILE_CELL = "B18";
+export const JOB_SETUP_LABOR_CONT_CELL = "B19";
+export const JOB_SETUP_EQUIP_CONT_CELL = "B20";
+export const JOB_SETUP_SUBS_CONT_CELL = "B21";
+export const JOB_SETUP_CBA_ON_CELL = "B22";
+export const JOB_SETUP_CBA_DATE_CELL = "B23";
+export const JOB_SETUP_CBA_PCT_CELL = "B24";
+export const JOB_SETUP_MORE_CELL = "B25";
 export const RATE_TOOLS_SECTION = "Large tools (COE / dry rates)";
 export const RATE_RENTAL_SECTION = "Third-party rental";
 /** First day-grid column after the A–I instrument (Shift sits next to Position). */
@@ -256,8 +273,8 @@ export const XLSX_INPUT_NOTES = {
   periods: "How many periods to bill.",
   daysPerWeek: "Days worked per week (4–7).",
   hoursPerDay: "Hours per day (8 / 9 / 10 / 12 / 13).",
-  start: "Phase start date.",
-  stop: "Phase stop date.",
+  start: "Phase start date. Must flow forward like Job setup on the desk — later ON starts on or after the previous ON Stop + 1 day.",
+  stop: "Phase stop date. Must be on or after Start. Dates must flow forward like Job setup on the desk.",
   on: "ON = this range is working. OFF = out.",
   ot: "OT YES/NO for this range. YES uses the OT clock.",
   item: "Line name or catalog item.",
@@ -271,6 +288,21 @@ export const XLSX_INPUT_NOTES = {
   miles: "Miles for this trip.",
   notes: "Optional note.",
   fallback: "Editable input for this line.",
+} as const;
+
+export const XLSX_JOB_MONEY_NOTES = {
+  staffPd: "Staff per diem $ per person-day. Labor PD rates INDEX this cell.",
+  craftPd: "Craft per diem $ per person-day. Labor PD rates INDEX this cell.",
+  staffMile: "Default staff mileage $ / mile. Travel lines keep their own typed rate.",
+  craftMile: "Default craft mileage $ / mile. Travel lines keep their own typed rate.",
+  laborCont: "Labor contingency percent. 10 = 10%. Summary Labor contingency $ = Labor $ × this / 100.",
+  equipCont: "Equipment contingency percent. 10 = 10%. Applies to rental / tension / crane / COE.",
+  subsCont: "Subs contingency percent. 10 = 10%. Applies to Subcontractor cost.",
+  cbaOn: "YES applies the CBA increase after the effective date.",
+  cbaDate: "CBA increase starts on this date. Desk splits craft hours on this date.",
+  cbaPct: "CBA increase percent. 3 = 3%. Summary $ is the desk craft-hour lift at export.",
+  more: "M.O.R.E. fund $ per craft hour. Blank stays $0. Summary $ = desk MORE hours × this cell.",
+  cbaSummary: "CBA $ follows desk craft hours after the Job setup effective date. Hour-split CBA math does not live in Excel.",
 } as const;
 
 const LABOR_SHEET_NAMES = new Set(["Staff", "Foremen", "Direct", "Support"]);
@@ -309,6 +341,17 @@ export function headerInputNote(header: string): string | undefined {
   if (h === "travelers") return XLSX_INPUT_NOTES.travelers;
   if (h === "miles") return XLSX_INPUT_NOTES.miles;
   if (h === "notes") return XLSX_INPUT_NOTES.notes;
+  if (h === "staff pd $ / day") return XLSX_JOB_MONEY_NOTES.staffPd;
+  if (h === "craft pd $ / day") return XLSX_JOB_MONEY_NOTES.craftPd;
+  if (h === "staff mileage $ / mile") return XLSX_JOB_MONEY_NOTES.staffMile;
+  if (h === "craft mileage $ / mile") return XLSX_JOB_MONEY_NOTES.craftMile;
+  if (h === "labor contingency %") return XLSX_JOB_MONEY_NOTES.laborCont;
+  if (h === "equipment contingency %") return XLSX_JOB_MONEY_NOTES.equipCont;
+  if (h === "subs contingency %") return XLSX_JOB_MONEY_NOTES.subsCont;
+  if (h === "cba increase on") return XLSX_JOB_MONEY_NOTES.cbaOn;
+  if (h === "cba effective date") return XLSX_JOB_MONEY_NOTES.cbaDate;
+  if (h === "cba increase %") return XLSX_JOB_MONEY_NOTES.cbaPct;
+  if (h === "m.o.r.e. fund $ / hr") return XLSX_JOB_MONEY_NOTES.more;
   return XLSX_INPUT_NOTES.fallback;
 }
 
@@ -965,8 +1008,12 @@ function dayHourFormulas(
   };
 }
 
-function pdRateFor(input: EstimateXlsxInput, staffPd: boolean) {
-  return staffPd ? Number(input.jobMeta?.staffPerDiemRate) || 0 : Number(input.jobMeta?.craftPerDiemRate) || 0;
+function jobSetupMoneyRef(cell: string) {
+  return `${jobSetupSheet()}!${cell}`;
+}
+
+function pdRateFormula(staffPd: boolean) {
+  return jobSetupMoneyRef(staffPd ? JOB_SETUP_STAFF_PD_CELL : JOB_SETUP_CRAFT_PD_CELL);
 }
 
 /** Stable key for one DAYSHIFT / NIGHTSHIFT block. Future import only — not shown. */
@@ -1273,7 +1320,7 @@ function buildCrewSheet(
     pushFormula(cells, `C${stRow}`, `F${titleRow}*N(D${stRow})`);
     pushFormula(cells, `C${otRow}`, `G${titleRow}*N(D${otRow})`);
     pushFormula(cells, `C${dtRow}`, `H${titleRow}*N(D${dtRow})`);
-    pushNum(cells, `D${pdRow}`, pdRateFor(input, staffPdOf(row)));
+    pushFormula(cells, `D${pdRow}`, pdRateFormula(staffPdOf(row)));
     pushFormula(cells, `C${pdRow}`, `I${titleRow}*D${pdRow}`);
     dates.forEach((ymd, index) => {
       const col = colLetter(LABOR_DATE_START_COL + index);
@@ -1598,22 +1645,25 @@ function addSummaryLine(
   hours: string | null = null,
 ) {
   pushText(cells, `A${row}`, label);
-  if (amount) pushFormula(cells, `B${row}`, amount);
-  if (hours) pushFormula(cells, `C${row}`, hours);
-  return amount ? `B${row}` : null;
+  if (hours) pushFormula(cells, `B${row}`, hours);
+  if (amount) pushFormula(cells, `C${row}`, amount);
+  return amount ? `C${row}` : null;
 }
 
 function addSummaryHours(cells: SheetCell[], row: number, label: string, hours: string) {
   pushText(cells, `A${row}`, label);
-  pushFormula(cells, `C${row}`, hours);
-  return `C${row}`;
+  pushFormula(cells, `B${row}`, hours);
+  return `B${row}`;
 }
 
-function addSummaryAmount(cells: SheetCell[], row: number, label: string, amount: number | string) {
+function addSummaryAmount(cells: SheetCell[], row: number, label: string, amount: number | string, note?: string) {
   pushText(cells, `A${row}`, label);
-  if (typeof amount === "number") pushNum(cells, `B${row}`, amount);
-  else pushFormula(cells, `B${row}`, amount);
-  return `B${row}`;
+  if (typeof amount === "number") {
+    cells.push({ ref: `C${row}`, type: "number", value: money(amount), note });
+  } else {
+    cells.push({ ref: `C${row}`, type: "formula", value: amount, note });
+  }
+  return `C${row}`;
 }
 
 function jobMoneyFrom(input: EstimateXlsxInput) {
@@ -1623,11 +1673,12 @@ function jobMoneyFrom(input: EstimateXlsxInput) {
 function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet {
   const cells = headerCells(input);
   pushText(cells, "A6", "Rollup line");
-  pushText(cells, "B6", ESTIMATE_SUMMARY_AMOUNT);
-  pushText(cells, "C6", ESTIMATE_SUMMARY_HOURS);
+  pushText(cells, "B6", ESTIMATE_SUMMARY_HOURS);
+  pushText(cells, "C6", ESTIMATE_SUMMARY_AMOUNT);
   const byName = new Map(built.map((sheet) => [xlsxName(sheet.name), sheet]));
   const moneyRefs: string[] = [];
   const hourRefs: string[] = [];
+  const laborHourByName = new Map<string, string>();
   let row = 7;
 
   const laborSheets: Array<[string, string]> = [
@@ -1643,7 +1694,10 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     const hours = sheet.hoursTotal ? sheetRef(name, sheet.hoursTotal) : null;
     const ref = addSummaryLine(cells, row, label, sheetRef(name, sheet.laborTotal), hours);
     if (ref) laborRefs.push(ref);
-    if (hours) hourRefs.push(`C${row}`);
+    if (hours) {
+      hourRefs.push(`B${row}`);
+      laborHourByName.set(name, `B${row}`);
+    }
     row += 1;
   }
   if (laborRefs.length) {
@@ -1672,6 +1726,23 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
 
   if (hourRefs.length) {
     addSummaryHours(cells, row, ESTIMATE_HOURS_LINE, `SUM(${hourRefs.join(",")})`);
+    row += 1;
+  }
+  // Support hours stay off this ratio: Summary has one Support labor $ line
+  // and does not split those hours by Bill as (craft → Direct, staff/foreman → Indirect).
+  const indirectParts = [
+    laborHourByName.get(ESTIMATE_XLSX_SHEETS.staff),
+    laborHourByName.get(ESTIMATE_XLSX_SHEETS.foremen),
+  ].filter((ref): ref is string => Boolean(ref));
+  const directHrs = laborHourByName.get(ESTIMATE_XLSX_SHEETS.direct);
+  if (indirectParts.length || directHrs) {
+    const indirect = indirectParts.length === 0 ? "0" : indirectParts.length === 1 ? indirectParts[0] : `SUM(${indirectParts.join(",")})`;
+    const direct = directHrs ?? "0";
+    pushText(cells, `A${row}`, INDIRECT_DIRECT_RATIO_LABEL);
+    pushFormula(cells, `B${row}`, `IF(N(${direct})=0,"",(${indirect})/(${direct}))`);
+    row += 1;
+    pushText(cells, `A${row}`, DIRECT_PER_INDIRECT_LABEL);
+    pushFormula(cells, `B${row}`, `IF(N(${indirect})=0,"",(${direct})/(${indirect}))`);
     row += 1;
   }
 
@@ -1706,7 +1777,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
 
   const money = jobMoneyFrom(input);
   const laborCell = cells.find((cell) => cell.type === "text" && cell.value === "Labor $");
-  const laborAmountRef = laborCell ? `B${laborCell.ref.slice(1)}` : null;
+  const laborAmountRef = laborCell ? `C${laborCell.ref.slice(1)}` : null;
   const equipmentRefs = ["Equipment rental $", "Tensioning / torquing $", "Crane rental $", "COE $"]
     .map((label) => extraRefs.get(label))
     .filter((ref): ref is string => Boolean(ref));
@@ -1726,27 +1797,37 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
     moreFund: more,
   });
   let cbaRef: string | null = null;
-  if (adders.cbaIncrease) {
-    cbaRef = addSummaryAmount(cells, row, CBA_INCREASE_LABEL, adders.cbaIncrease);
+  if (adders.cbaIncrease || money.cbaIncreaseOn) {
+    cbaRef = addSummaryAmount(cells, row, CBA_INCREASE_LABEL, adders.cbaIncrease, XLSX_JOB_MONEY_NOTES.cbaSummary);
     moneyRefs.push(cbaRef);
     row += 1;
   }
 
-  if (laborAmountRef && money.laborContingencyPct > 0) {
+  if (laborAmountRef) {
     const base = cbaRef ? `(${laborAmountRef}+${cbaRef})` : laborAmountRef;
-    moneyRefs.push(addSummaryAmount(cells, row, LABOR_CONTINGENCY_LABEL, `${base}*${money.laborContingencyPct / 100}`));
+    moneyRefs.push(
+      addSummaryAmount(cells, row, LABOR_CONTINGENCY_LABEL, `${base}*${jobSetupMoneyRef(JOB_SETUP_LABOR_CONT_CELL)}/100`),
+    );
     row += 1;
   }
-  if (equipmentRefs.length && money.equipmentContingencyPct > 0) {
+  if (equipmentRefs.length) {
     const base = equipmentRefs.length === 1 ? equipmentRefs[0] : `SUM(${equipmentRefs.join(",")})`;
-    moneyRefs.push(addSummaryAmount(cells, row, EQUIPMENT_CONTINGENCY_LABEL, `${base}*${money.equipmentContingencyPct / 100}`));
+    moneyRefs.push(
+      addSummaryAmount(cells, row, EQUIPMENT_CONTINGENCY_LABEL, `${base}*${jobSetupMoneyRef(JOB_SETUP_EQUIP_CONT_CELL)}/100`),
+    );
     row += 1;
   }
-  if (subContingencyBase && money.subsContingencyPct > 0) {
-    moneyRefs.push(addSummaryAmount(cells, row, SUBS_CONTINGENCY_LABEL, `${subContingencyBase}*${money.subsContingencyPct / 100}`));
+  if (subContingencyBase) {
+    moneyRefs.push(
+      addSummaryAmount(cells, row, SUBS_CONTINGENCY_LABEL, `${subContingencyBase}*${jobSetupMoneyRef(JOB_SETUP_SUBS_CONT_CELL)}/100`),
+    );
     row += 1;
   }
-  if (adders.moreFund) {
+  const moreHrs = moreFundHours(input.crew ?? {}, site, client);
+  if (moreHrs > 0) {
+    moneyRefs.push(addSummaryAmount(cells, row, MORE_FUND_LABEL, `${moreHrs}*${jobSetupMoneyRef(JOB_SETUP_MORE_CELL)}`));
+    row += 1;
+  } else if (adders.moreFund) {
     moneyRefs.push(addSummaryAmount(cells, row, MORE_FUND_LABEL, adders.moreFund));
     row += 1;
   }
@@ -1772,14 +1853,14 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
   }
   const totalRow = row + 1;
   pushText(cells, `A${totalRow}`, "ESTIMATE TOTAL $");
-  if (moneyRefs.length) pushFormula(cells, `B${totalRow}`, `SUM(${moneyRefs.join(",")})`);
-  else pushNum(cells, `B${totalRow}`, 0);
-  if (hourRefs.length) pushFormula(cells, `C${totalRow}`, `SUM(${hourRefs.join(",")})`);
+  if (moneyRefs.length) pushFormula(cells, `C${totalRow}`, `SUM(${moneyRefs.join(",")})`);
+  else pushNum(cells, `C${totalRow}`, 0);
+  if (hourRefs.length) pushFormula(cells, `B${totalRow}`, `SUM(${hourRefs.join(",")})`);
 
   return {
     name: ESTIMATE_XLSX_SHEETS.summary,
     cells,
-    sheetTotal: `B${totalRow}`,
+    sheetTotal: `C${totalRow}`,
     merges: ["A1:C1", "A2:C2", "A3:C3"],
   };
 }
@@ -1906,40 +1987,147 @@ function buildListsSheet(): WorkbookSheet {
   return { name: ESTIMATE_XLSX_SHEETS.lists, cells, veryHidden: true, merges: [] };
 }
 
+function jobSetupStartMinFormula(row: number) {
+  if (row <= 7) return "DATE(1990,1,1)";
+  const prev = row - 1;
+  return `IF($B${row}<>"ON",DATE(1990,1,1),IF(COUNTIF($B$7:$B${prev},"ON")=0,DATE(1990,1,1),LOOKUP(2,1/($B$7:$B${prev}="ON"),$D$7:$D${prev})+1))`;
+}
+
+function jobSetupDateValidation(sqref: string, minFormula: string, title: string, error: string) {
+  return {
+    sqref,
+    type: "date" as const,
+    operator: "greaterThanOrEqual" as const,
+    formulae: [minFormula],
+    allowBlank: true,
+    showErrorMessage: true,
+    errorTitle: title,
+    error,
+  };
+}
+
 function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
   const schedule = mergeSchedule(input.schedule);
+  const drivers = jobMoneyFrom(input);
+  const rates = {
+    staffPerDiemRate: Number(input.jobMeta?.staffPerDiemRate) || 0,
+    craftPerDiemRate: Number(input.jobMeta?.craftPerDiemRate) || 0,
+    staffMileageRate: Number(input.jobMeta?.staffMileageRate) || 0,
+    craftMileageRate: Number(input.jobMeta?.craftMileageRate) || 0,
+  };
   const cells = headerCells(input);
   const headers = ["Phase", "ON", "Start", "Stop", "Days/wk", "Hrs/day", "OT after 8"];
-  headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
+  headers.forEach((label, index) => {
+    const ref = `${colLetter(index + 1)}6`;
+    const note = label === "Start" ? XLSX_INPUT_NOTES.start : label === "Stop" ? XLSX_INPUT_NOTES.stop : undefined;
+    cells.push({ ref, type: "text", value: label, note });
+  });
   const unlocked: Array<{ row: number; col: number }> = [];
+  const comments: WorkbookComment[] = [];
+  const validations = PHASE_IDS.flatMap((_, index) => {
+    const row = 7 + index;
+    return [
+      { sqref: `E${row}`, formulae: [listFormula("G", 4)] },
+      { sqref: `F${row}`, formulae: [listFormula("H", 5)] },
+      { sqref: `G${row}`, formulae: [listFormula("I", 2)] },
+      jobSetupDateValidation(
+        `C${row}`,
+        jobSetupStartMinFormula(row),
+        "Dates must flow forward",
+        "ON phase Start must be on or after the previous ON Stop + 1 day. OFF phases do not block neighbors.",
+      ),
+      jobSetupDateValidation(
+        `D${row}`,
+        `C${row}`,
+        "Stop cannot precede Start",
+        "Phase Stop must be on or after Start.",
+      ),
+    ];
+  });
   schedule.phases.forEach((row, index) => {
     const excelRow = 7 + index;
     pushText(cells, `A${excelRow}`, row.name);
     pushText(cells, `B${excelRow}`, row.on ? "ON" : "OFF");
     const start = parseYmd(row.start);
     const stop = parseYmd(row.stop);
-    if (start) cells.push({ ref: `C${excelRow}`, type: "date", value: start });
-    if (stop) cells.push({ ref: `D${excelRow}`, type: "date", value: stop });
+    if (start) cells.push({ ref: `C${excelRow}`, type: "date", value: start, numFmt: JOB_SETUP_DATE_FMT });
+    if (stop) cells.push({ ref: `D${excelRow}`, type: "date", value: stop, numFmt: JOB_SETUP_DATE_FMT });
     pushNum(cells, `E${excelRow}`, row.daysPerWeek);
     pushNum(cells, `F${excelRow}`, row.hoursPerDay);
     pushText(cells, `G${excelRow}`, row.otAfter8 ? "YES" : "NO");
     pushText(cells, `I${excelRow}`, row.id);
     for (let col = 2; col <= 7; col += 1) unlocked.push({ row: excelRow, col });
   });
+
+  pushText(cells, "A13", JOB_SETUP_MONEY_TITLE);
+  pushText(cells, "A14", "Driver");
+  pushText(cells, "B14", "Value");
+  const moneyRows: Array<{
+    cell: string;
+    label: string;
+    note: string;
+    kind: "number" | "text" | "date" | "empty";
+    value?: number | string | Date;
+    fmt?: string;
+  }> = [
+    { cell: JOB_SETUP_STAFF_PD_CELL, label: "Staff PD $ / day", note: XLSX_JOB_MONEY_NOTES.staffPd, kind: "number", value: rates.staffPerDiemRate, fmt: "$#,##0.00" },
+    { cell: JOB_SETUP_CRAFT_PD_CELL, label: "Craft PD $ / day", note: XLSX_JOB_MONEY_NOTES.craftPd, kind: "number", value: rates.craftPerDiemRate, fmt: "$#,##0.00" },
+    { cell: JOB_SETUP_STAFF_MILE_CELL, label: "Staff mileage $ / mile", note: XLSX_JOB_MONEY_NOTES.staffMile, kind: "number", value: rates.staffMileageRate, fmt: "$#,##0.00" },
+    { cell: JOB_SETUP_CRAFT_MILE_CELL, label: "Craft mileage $ / mile", note: XLSX_JOB_MONEY_NOTES.craftMile, kind: "number", value: rates.craftMileageRate, fmt: "$#,##0.00" },
+    { cell: JOB_SETUP_LABOR_CONT_CELL, label: "Labor contingency %", note: XLSX_JOB_MONEY_NOTES.laborCont, kind: "number", value: drivers.laborContingencyPct, fmt: "0.0" },
+    { cell: JOB_SETUP_EQUIP_CONT_CELL, label: "Equipment contingency %", note: XLSX_JOB_MONEY_NOTES.equipCont, kind: "number", value: drivers.equipmentContingencyPct, fmt: "0.0" },
+    { cell: JOB_SETUP_SUBS_CONT_CELL, label: "Subs contingency %", note: XLSX_JOB_MONEY_NOTES.subsCont, kind: "number", value: drivers.subsContingencyPct, fmt: "0.0" },
+    { cell: JOB_SETUP_CBA_ON_CELL, label: "CBA increase ON", note: XLSX_JOB_MONEY_NOTES.cbaOn, kind: "text", value: drivers.cbaIncreaseOn ? "YES" : "NO" },
+    {
+      cell: JOB_SETUP_CBA_DATE_CELL,
+      label: "CBA effective date",
+      note: XLSX_JOB_MONEY_NOTES.cbaDate,
+      kind: drivers.cbaIncreaseDate && parseYmd(drivers.cbaIncreaseDate) ? "date" : "empty",
+      value: drivers.cbaIncreaseDate ? parseYmd(drivers.cbaIncreaseDate) ?? undefined : undefined,
+      fmt: JOB_SETUP_DATE_FMT,
+    },
+    { cell: JOB_SETUP_CBA_PCT_CELL, label: "CBA increase %", note: XLSX_JOB_MONEY_NOTES.cbaPct, kind: "number", value: drivers.cbaIncreasePct, fmt: "0.0" },
+    {
+      cell: JOB_SETUP_MORE_CELL,
+      label: "M.O.R.E. fund $ / hr",
+      note: XLSX_JOB_MONEY_NOTES.more,
+      kind: drivers.moreFundPerHour == null ? "empty" : "number",
+      value: drivers.moreFundPerHour ?? undefined,
+      fmt: "$#,##0.00",
+    },
+  ];
+  for (const item of moneyRows) {
+    const row = Number(/(\d+)$/.exec(item.cell)?.[1] || 0);
+    pushText(cells, `A${row}`, item.label);
+    unlocked.push({ row, col: 2 });
+    if (item.kind === "number" && typeof item.value === "number") {
+      cells.push({ ref: item.cell, type: "number", value: money(item.value), note: item.note, numFmt: item.fmt });
+    } else if (item.kind === "text" && typeof item.value === "string") {
+      cells.push({ ref: item.cell, type: "text", value: item.value, note: item.note });
+    } else if (item.kind === "date" && item.value instanceof Date) {
+      cells.push({ ref: item.cell, type: "date", value: item.value, note: item.note, numFmt: JOB_SETUP_DATE_FMT });
+    } else {
+      comments.push({ ref: item.cell, text: item.note });
+    }
+  }
+  validations.push(
+    { sqref: JOB_SETUP_CBA_ON_CELL, formulae: [listFormula("I", 2)] },
+    jobSetupDateValidation(
+      JOB_SETUP_CBA_DATE_CELL,
+      "DATE(1990,1,1)",
+      "Pick a CBA date",
+      "Choose the CBA effective date from the calendar.",
+    ),
+  );
   return {
     name: ESTIMATE_XLSX_SHEETS.jobSetup,
     cells,
     hiddenCols: [8, 9],
     unlocked,
-    validations: PHASE_IDS.flatMap((_, index) => {
-      const row = 7 + index;
-      return [
-        { sqref: `E${row}`, formulae: [listFormula("G", 4)] },
-        { sqref: `F${row}`, formulae: [listFormula("H", 5)] },
-        { sqref: `G${row}`, formulae: [listFormula("I", 2)] },
-      ];
-    }),
-    merges: ["A1:G1", "A2:G2", "A3:G3"],
+    validations,
+    comments: comments.length ? comments : undefined,
+    headerRows: [13, 14],
+    merges: ["A1:G1", "A2:G2", "A3:G3", "A13:B13"],
   };
 }
 

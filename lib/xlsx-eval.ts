@@ -390,9 +390,10 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
   return { evalAt, cellRaw };
 }
 
+/** Amount $ sits in column C after the Summary B↔C swap (Hours in B). */
 export function summaryAmountAt(sheets: WorkbookSheet[], sheetName: string, label: string): number | null {
   const sheet = sheets.find((item) => item.name === sheetName);
   const ref = sheet?.cells.find((cell) => cell.ref.startsWith("A") && cell.type === "text" && cell.value === label)?.ref;
   if (!ref) return null;
-  return evaluateWorkbook(sheets).evalAt(sheetName, `B${ref.slice(1)}`);
+  return evaluateWorkbook(sheets).evalAt(sheetName, `C${ref.slice(1)}`);
 }

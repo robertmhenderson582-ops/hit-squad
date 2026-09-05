@@ -173,6 +173,56 @@ describe("estimate excel import", () => {
     assert.equal(diff.lines.some((line) => /Lead Safety|headcount|Bill as|Pre/i.test(line)), true);
   });
 
+  it("imports Job setup money drivers onto jobMeta", async () => {
+    const input = fixture();
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const setup = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup);
+    assert.ok(setup);
+    setup.getCell("B15").value = 155;
+    setup.getCell("B16").value = 145;
+    setup.getCell("B19").value = 8;
+    setup.getCell("B22").value = "YES";
+    setup.getCell("B23").value = new Date(2026, 0, 1);
+    setup.getCell("B24").value = 3;
+    setup.getCell("B25").value = 2;
+    const imported = await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer()));
+    assert.equal(imported.jobMeta?.staffPerDiemRate, 155);
+    assert.equal(imported.jobMeta?.craftPerDiemRate, 145);
+    assert.equal(imported.jobMeta?.laborContingencyPct, 8);
+    assert.equal(imported.jobMeta?.cbaIncreaseOn, true);
+    assert.equal(imported.jobMeta?.cbaIncreaseDate, "2026-01-01");
+    assert.equal(imported.jobMeta?.cbaIncreasePct, 3);
+    assert.equal(imported.jobMeta?.moreFundPerHour, 2);
+    const applied = applyEstimateImport(asPack(input), imported);
+    const meta = applied.jobMeta as { staffPerDiemRate?: number; laborContingencyPct?: number; moreFundPerHour?: number | null };
+    assert.equal(meta.staffPerDiemRate, 155);
+    assert.equal(meta.laborContingencyPct, 8);
+    assert.equal(meta.moreFundPerHour, 2);
+  });
+
+  it("cascades illegal back-in-time ON dates on import", async () => {
+    const input = fixture();
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const setup = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup);
+    assert.ok(setup);
+    setup.getCell("B7").value = "ON";
+    setup.getCell("C7").value = new Date(2026, 8, 1);
+    setup.getCell("D7").value = new Date(2026, 7, 15);
+    setup.getCell("B9").value = "ON";
+    setup.getCell("C9").value = new Date(2026, 7, 1);
+    setup.getCell("D9").value = new Date(2026, 7, 10);
+    const imported = await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer()));
+    const pre = imported.schedule.phases.find((row) => row.id === "pre");
+    const mech = imported.schedule.phases.find((row) => row.id === "mech");
+    assert.equal(pre?.start, "2026-09-01");
+    assert.equal(pre?.stop, "2026-09-01");
+    assert.equal(mech?.start > (pre?.stop ?? ""), true);
+  });
+
   it("creates a new pack from a filled workbook", async () => {
     const imported = await parseEstimateXlsx(await estimateToXlsx(fixture()));
     const pack = createPackFromImport(imported, "nathan@example.com");

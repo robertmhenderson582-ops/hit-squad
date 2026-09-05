@@ -13,6 +13,18 @@ import { type EstimatePackSnapshot } from "./estimate-pack.ts";
 import {
   ESTIMATE_IMPORT_ERROR,
   ESTIMATE_XLSX_SHEETS,
+  JOB_SETUP_CBA_DATE_CELL,
+  JOB_SETUP_CBA_ON_CELL,
+  JOB_SETUP_CBA_PCT_CELL,
+  JOB_SETUP_CRAFT_MILE_CELL,
+  JOB_SETUP_CRAFT_PD_CELL,
+  JOB_SETUP_EQUIP_CONT_CELL,
+  JOB_SETUP_LABOR_CONT_CELL,
+  JOB_SETUP_MONEY_TITLE,
+  JOB_SETUP_MORE_CELL,
+  JOB_SETUP_STAFF_MILE_CELL,
+  JOB_SETUP_STAFF_PD_CELL,
+  JOB_SETUP_SUBS_CONT_CELL,
   LABOR_BLOCK_HEIGHT,
   LABOR_BLOCK_ID_COL,
   LABOR_DATE_START_COL,
@@ -26,6 +38,9 @@ import {
   laborBlockId,
   thirdPartyBucket,
 } from "./estimate-xlsx.ts";
+import { hydrateJobMeta } from "./staffing-plan.ts";
+import type { JobMoney } from "./estimate-money.ts";
+import type { JobRates } from "./shahan-wood-river.ts";
 import { rematchShahanEquipmentId } from "./shahan-wood-river.ts";
 import { jobSetupWindow, type LargeToolLine, type ThirdPartyLine, type ThirdPartyPeriod } from "./equipment-sheet.ts";
 import { type MiscLine, type OtherCostSheet, type TravelKind, type TravelLine } from "./other-cost.ts";
@@ -33,6 +48,7 @@ import type { B2Period } from "./b2-east-coast.ts";
 import type { ClockOverride } from "./hours-clock.ts";
 import type { EstimateXlsxCrew } from "./estimate-xlsx.ts";
 import {
+  cascadePhases,
   formatYmd,
   isPhaseId,
   mergeSchedule,
@@ -96,6 +112,7 @@ export type EstimateImport = {
   tension?: ImportedCostLine[];
   crane?: ImportedCostLine[];
   coe?: ImportedCostLine[];
+  jobMeta?: Partial<JobRates & JobMoney>;
 };
 
 export type EstimateImportDiff = {
@@ -385,7 +402,8 @@ function parseJobSetup(ws: ExcelJS.Worksheet | undefined): PhaseScheduleState {
       : (PHASE_IDS.find((item) => PHASE_NAMES[item] === name) ?? null);
     if (!id) continue;
     const start = cellYmd(ws.getCell(row, 3).value);
-    const stop = cellYmd(ws.getCell(row, 4).value);
+    let stop = cellYmd(ws.getCell(row, 4).value);
+    if (start && stop && stop < start) stop = start;
     const pickLabel = asText(ws.getCell(row, 8).value);
     const pick = PHASE_OT_PICKS.find((item) => item.label === pickLabel)?.id as PhaseOtPick | undefined;
     const days = asNum(ws.getCell(row, 5).value);
@@ -402,7 +420,40 @@ function parseJobSetup(ws: ExcelJS.Worksheet | undefined): PhaseScheduleState {
       sundaysOff: [],
     });
   }
-  return mergeSchedule({ ...base, phases: incoming, projectStart: incoming.find((row) => row.on)?.start || base.projectStart });
+  const merged = mergeSchedule({
+    ...base,
+    phases: incoming,
+    projectStart: incoming.find((row) => row.on)?.start || base.projectStart,
+  });
+  return { ...merged, phases: cascadePhases(merged.phases) };
+}
+
+function jobSetupCell(ws: ExcelJS.Worksheet, ref: string) {
+  const col = ref.charCodeAt(0) - 64;
+  const row = Number(ref.slice(1));
+  return ws.getCell(row, col);
+}
+
+function parseJobSetupMoney(ws: ExcelJS.Worksheet | undefined): Partial<JobRates & JobMoney> | undefined {
+  if (!ws) return undefined;
+  const title = asText(ws.getCell(13, 1).value);
+  const staffLabel = asText(ws.getCell(15, 1).value);
+  if (title !== JOB_SETUP_MONEY_TITLE && staffLabel !== "Staff PD $ / day") return undefined;
+  const moreRaw = jobSetupCell(ws, JOB_SETUP_MORE_CELL).value;
+  const moreEmpty = moreRaw == null || moreRaw === "";
+  return {
+    staffPerDiemRate: asNum(jobSetupCell(ws, JOB_SETUP_STAFF_PD_CELL).value),
+    craftPerDiemRate: asNum(jobSetupCell(ws, JOB_SETUP_CRAFT_PD_CELL).value),
+    staffMileageRate: asNum(jobSetupCell(ws, JOB_SETUP_STAFF_MILE_CELL).value),
+    craftMileageRate: asNum(jobSetupCell(ws, JOB_SETUP_CRAFT_MILE_CELL).value),
+    laborContingencyPct: asNum(jobSetupCell(ws, JOB_SETUP_LABOR_CONT_CELL).value),
+    equipmentContingencyPct: asNum(jobSetupCell(ws, JOB_SETUP_EQUIP_CONT_CELL).value),
+    subsContingencyPct: asNum(jobSetupCell(ws, JOB_SETUP_SUBS_CONT_CELL).value),
+    cbaIncreaseOn: isOn(jobSetupCell(ws, JOB_SETUP_CBA_ON_CELL).value),
+    cbaIncreaseDate: cellYmd(jobSetupCell(ws, JOB_SETUP_CBA_DATE_CELL).value),
+    cbaIncreasePct: asNum(jobSetupCell(ws, JOB_SETUP_CBA_PCT_CELL).value),
+    moreFundPerHour: moreEmpty ? null : asNum(moreRaw),
+  };
 }
 
 function parseCraftSheet(ws: ExcelJS.Worksheet | undefined): ImportedBlock[] {
@@ -622,7 +673,9 @@ export async function parseEstimateXlsx(bytes: Uint8Array): Promise<EstimateImpo
   const summary = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
   if (!summary) throw new Error(ESTIMATE_IMPORT_ERROR);
   const header = parseHeader(asText(summary.getCell("A2").value));
-  const schedule = parseJobSetup(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup));
+  const setupWs = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup);
+  const schedule = parseJobSetup(setupWs);
+  const jobMeta = parseJobSetupMoney(setupWs);
   const sheets = [
     ESTIMATE_XLSX_SHEETS.staff,
     ESTIMATE_XLSX_SHEETS.foremen,
@@ -644,6 +697,7 @@ export async function parseEstimateXlsx(bytes: Uint8Array): Promise<EstimateImpo
     tension: parseRentalLikeSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.tension)),
     crane: parseRentalLikeSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crane)),
     coe: parseRentalLikeSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.coe)),
+    jobMeta,
   };
 }
 
@@ -796,6 +850,12 @@ export function applyEstimateImport(base: EstimatePackSnapshot, imported: Estima
     updatedAt: Date.now(),
     schedule,
     crew,
+    jobMeta: imported.jobMeta
+      ? hydrateJobMeta({
+          ...((base.jobMeta && typeof base.jobMeta === "object" ? base.jobMeta : {}) as Record<string, unknown>),
+          ...imported.jobMeta,
+        })
+      : base.jobMeta,
     ...costs,
   };
 }
@@ -822,6 +882,7 @@ export function createPackFromImport(imported: EstimateImport, ownerEmail = ""):
       ...imported.crew,
       support: (imported.crew.support ?? []).map((row) => hydrateSupportLine(row)),
     },
+    jobMeta: imported.jobMeta ? hydrateJobMeta(imported.jobMeta) : undefined,
     ...costs,
   };
 }

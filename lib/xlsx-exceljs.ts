@@ -252,9 +252,10 @@ export function formatForHeader(header: string): string | undefined {
   return undefined;
 }
 
-/** Summary rollup column B uses the line label in column A, not the sheet header. */
+/** Summary Amount $ (column C) uses the line label in column A, not the sheet header. */
 export function summaryLineFormat(lineLabel: string): string {
   const lower = lineLabel.trim().toLowerCase();
+  if (/indirect\s*\/\s*direct|direct per indirect/.test(lower)) return "0.00";
   if (/hours|man-hours|\bmh\b/.test(lower) && !/\$/.test(lower)) return FMT_HOURS;
   return FMT_CURRENCY;
 }
@@ -291,13 +292,17 @@ function cellFormat(
   row: number,
   isSummary: boolean,
 ): string | undefined {
-  if (isSummary && col === "C" && row >= 7) return FMT_HOURS;
   if (isSummary && col === "B" && row >= 7) {
+    const label = labelByRow(sheet.cells, row) ?? "";
+    if (/indirect\s*\/\s*direct|direct per indirect/.test(label.toLowerCase())) return "0.00";
+    return FMT_HOURS;
+  }
+  if (isSummary && col === "C" && row >= 7) {
     return summaryLineFormat(labelByRow(sheet.cells, row) ?? "Amount $");
   }
   const headerRow = sheet.headerRows?.length ? nearestHeaderRow(sheet.cells, row, sheet.headerRows) : 6;
   const local = headerRow === 6 ? headers : headerByColumn(sheet.cells, headerRow);
-  const header = local.get(col) ?? (isSummary && col === "B" ? "Amount $" : "");
+  const header = local.get(col) ?? (isSummary && col === "C" ? "Amount $" : "");
   return formatForHeader(header);
 }
 
@@ -525,10 +530,10 @@ function applyRowStyle(
   }
   exCell.font = { color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
   if (isSummary && row >= 7 && colNum === 2) {
-    exCell.alignment = { horizontal: "right" };
+    exCell.alignment = { ...LABOR_CENTER };
   }
   if (isSummary && row >= 7 && colNum === 3) {
-    exCell.alignment = { ...LABOR_CENTER };
+    exCell.alignment = { horizontal: "right" };
   }
 }
 
@@ -661,7 +666,7 @@ function pinHoursAndMoney(
         centerLaborCell(cell);
       } else if (fmt === FMT_CURRENCY) {
         if (cellLooksNumeric(cell)) cell.numFmt = FMT_CURRENCY;
-        if (isSummary && col === 2) {
+        if (isSummary && col === 3) {
           cell.alignment = { horizontal: "right", vertical: "middle" };
         } else {
           centerLaborCell(cell);
@@ -1065,8 +1070,8 @@ function applySummaryChrome(
   sectionRows: Set<number>,
 ) {
   ws.getColumn(1).width = SUMMARY_COL_A_WIDTH;
-  ws.getColumn(2).width = 18;
-  ws.getColumn(3).width = 12;
+  ws.getColumn(2).width = 12;
+  ws.getColumn(3).width = 18;
   hairGrid(ws, 6, maxRow, 1, 3);
   for (let col = 1; col <= 3; col += 1) {
     patchBorder(ws.getCell(6, col), { bottom: edge("medium", AMBER_FLARE) });
@@ -1078,7 +1083,7 @@ function applySummaryChrome(
       const cell = ws.getCell(row, col);
       cell.fill = solid(wash);
       cell.font = { ...(cell.font ?? {}), color: { argb: WHITE }, name: "Calibri", size: 10 };
-      if (col === 3) cell.alignment = { ...LABOR_CENTER };
+      if (col === 2) cell.alignment = { ...LABOR_CENTER };
     }
   }
 }
@@ -1343,7 +1348,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
         exCell.value = cell.value;
       } else if (cell.type === "date") {
         exCell.value = cell.value;
-        exCell.numFmt = FMT_DATE;
+        exCell.numFmt = cell.numFmt || FMT_DATE;
       } else {
         exCell.value = { formula: cell.value, result: evalAt(sheet.name, cell.ref) };
       }
@@ -1366,6 +1371,12 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
           exCell.numFmt = FMT_HOURS;
         }
       }
+      if (cell.numFmt) {
+        exCell.numFmt = cell.numFmt;
+        if (/\$/.test(cell.numFmt)) {
+          exCell.alignment = { horizontal: "center", vertical: "middle" };
+        }
+      }
       exCell.protection = {
         locked: !(
           isLaborDayInput(sheet, row, colNum) ||
@@ -1377,12 +1388,17 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
       };
     }
     for (const rule of sheet.validations ?? []) {
+      const type = rule.type ?? "list";
       ws.getCell(rule.sqref).dataValidation = {
-        type: "list",
-        allowBlank: true,
+        type,
+        allowBlank: rule.allowBlank ?? true,
         formulae: rule.formulae,
-        showErrorMessage: false,
+        operator: rule.operator,
+        showErrorMessage: rule.showErrorMessage ?? type !== "list",
         showInputMessage: false,
+        errorTitle: rule.errorTitle,
+        error: rule.error,
+        errorStyle: type === "list" ? undefined : "stop",
       };
     }
 
