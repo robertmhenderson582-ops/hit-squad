@@ -476,8 +476,13 @@ describe("estimate excel export", () => {
     assert.equal(first.evalAt(ESTIMATE_XLSX_SHEETS.direct, "K10"), 8);
     assert.equal(first.evalAt(ESTIMATE_XLSX_SHEETS.direct, "K11"), 2);
     const staffRateBefore = first.evalAt(ESTIMATE_XLSX_SHEETS.staff, "D10");
+    assert.match(String(direct.cells.find((cell) => cell.ref === "K10")?.value), /Job setup/);
+    assert.match(String(direct.cells.find((cell) => cell.ref === "K10")?.value), /MATCH\("pre"/);
     const hps = direct.cells.find((cell) => cell.ref === "K9");
     assert.ok(hps && hps.type === "number");
+    const preOt = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.jobSetup)?.cells.find((cell) => cell.ref === "G7");
+    assert.ok(preOt && preOt.type === "text");
+    preOt.value = "YES";
     hps.value = 12;
     const afterHps = evaluateWorkbook(sheets);
     assert.equal(afterHps.evalAt(ESTIMATE_XLSX_SHEETS.direct, "K10"), 8);
@@ -488,6 +493,53 @@ describe("estimate excel export", () => {
     const afterTitle = evaluateWorkbook(sheets);
     assert.equal(afterTitle.evalAt(ESTIMATE_XLSX_SHEETS.staff, "D10") === staffRateBefore, false);
     assert.equal(afterTitle.evalAt(ESTIMATE_XLSX_SHEETS.staff, "D10") > 0, true);
+  });
+
+  it("ties craft day ST/OT/DT to Job setup ON / dates / OT after 8", () => {
+    const input = woodRiverFixture();
+    const sheets = buildEstimateWorkbook(input);
+    const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff);
+    const setup = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.jobSetup);
+    assert.ok(staff && setup);
+    const st = String(staff.cells.find((cell) => cell.ref === "K10")?.value);
+    const ot = String(staff.cells.find((cell) => cell.ref === "K11")?.value);
+    assert.match(st, /Job setup/);
+    assert.match(ot, /Job setup/);
+    assert.match(st, /MATCH\("pre"/);
+    assert.match(st, /MATCH\("mech"/);
+    assert.match(st, /I\$7:I\$11/);
+    assert.match(st, /C\$7:C\$11/);
+    assert.match(st, /D\$7:D\$11/);
+    assert.match(st, /G\$7:G\$11/);
+    assert.match(st, /"ON"/);
+    assert.match(st, /"YES"/);
+    const first = evaluateWorkbook(sheets);
+    assert.equal(first.evalAt(ESTIMATE_XLSX_SHEETS.staff, "K10"), 10);
+    assert.equal(first.evalAt(ESTIMATE_XLSX_SHEETS.staff, "K11"), 0);
+    const preOt = setup.cells.find((cell) => cell.ref === "G7");
+    assert.ok(preOt && preOt.type === "text");
+    preOt.value = "YES";
+    const afterOt = evaluateWorkbook(sheets);
+    assert.equal(afterOt.evalAt(ESTIMATE_XLSX_SHEETS.staff, "K10"), 8);
+    assert.equal(afterOt.evalAt(ESTIMATE_XLSX_SHEETS.staff, "K11"), 2);
+    const preStop = setup.cells.find((cell) => cell.ref === "D7");
+    const mechStop = setup.cells.find((cell) => cell.ref === "D9");
+    assert.ok(preStop && preStop.type === "date");
+    assert.ok(mechStop && mechStop.type === "date");
+    preStop.value = new Date(2026, 7, 31);
+    mechStop.value = new Date(2026, 7, 31);
+    const afterStop = evaluateWorkbook(sheets);
+    assert.equal(afterStop.evalAt(ESTIMATE_XLSX_SHEETS.staff, "K10"), 0);
+    assert.equal(afterStop.evalAt(ESTIMATE_XLSX_SHEETS.staff, "K11"), 0);
+    preStop.value = new Date(2026, 8, 3);
+    mechStop.value = new Date(2026, 8, 1);
+    for (const row of [7, 8, 9, 10, 11]) {
+      const on = setup.cells.find((cell) => cell.ref === `B${row}`);
+      if (on && on.type === "text") on.value = "OFF";
+    }
+    const afterOff = evaluateWorkbook(sheets);
+    assert.equal(afterOff.evalAt(ESTIMATE_XLSX_SHEETS.staff, "K10"), 0);
+    assert.equal(afterOff.evalAt(ESTIMATE_XLSX_SHEETS.staff, "K11"), 0);
   });
 
   it("Summary ESTIMATE TOTAL $ equals the desk rail after weekly-40", async () => {

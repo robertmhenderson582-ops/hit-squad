@@ -28,9 +28,12 @@
  * Subcontractor tab is all subs (not crane-only). Summary Subs $ is desk
  * Subs ESTIMATE TOTAL (cost + affiliate-aware 6.5%). Weekend columns on
  * labor grids are shaded. Daily ST/OT/DT cells are live HC×HPS formulas
- * (OT-after-N / Sunday DT / Saturday OT / weekly-40 via prior ST cells).
- * Job setup OT-after-8 is baked at export. CA 7th-day DT is not in the day
- * formula this pass. ST/OT/DT Rate cells INDEX/MATCH the live Position
+ * (OT-after-N / Sunday DT / Saturday OT / weekly-40 via prior ST cells)
+ * tied to Job setup ON / Start / Stop / OT after 8 / OT pick (phase id col I).
+ * Calendar column count is baked at export — Start/Stop beyond that window
+ * needs re-export. Phase bar stays painted (Excel cannot restretch merges
+ * without VBA). Job setup F hrs/day does not overwrite yellow HPS. CA 7th-day
+ * DT is not in the day formula this pass. ST/OT/DT Rate cells INDEX/MATCH the live Position
  * (or Support Bill as) against Rate Tables. Summary ESTIMATE TOTAL $ is the same
  * deskPackageTotal / estimateTotalBreakdown number as the Estimate Total rail.
  * Standing ripple rule (Robert 2026-09-04, RETROACTIVE — see excel-ripple.ts):
@@ -79,7 +82,6 @@ import {
   boundOtLabel,
   clockTitle,
   computeRangeHours,
-  eastCoastCraftOtAfter8,
   mondayKey,
   parseYmd,
   runningClock,
@@ -97,6 +99,9 @@ import {
   PHASE_OT_PICKS,
   phaseBarRuns,
   phaseOtPick,
+  phaseOwningDate,
+  type PhaseId,
+  type PhaseRow,
   type PhaseScheduleState,
 } from "./phase-schedule.ts";
 import { SUPPORT_BILLED_AS_TITLES } from "./crew-lanes.ts";
@@ -554,6 +559,55 @@ function rateLookupFormula(lookupExpr: string, col: string, lastRow: number) {
   return `IF(TRIM(${lookupExpr})="","${SHAHAN_NO_RATE_LABEL}",IFERROR(INDEX(${valueRange},MATCH(${lookupExpr},${titleRange},0)),"${SHAHAN_NO_RATE_LABEL}"))`;
 }
 
+const JOB_SETUP_LAST_ROW = 6 + PHASE_IDS.length;
+const JOB_SETUP_OT8_PICKS = PHASE_OT_PICKS.filter((item) => item.id.endsWith("ot8")).map((item) => item.label);
+
+function jobSetupSheet() {
+  return quoteSheet(xlsxName(ESTIMATE_XLSX_SHEETS.jobSetup));
+}
+
+function jobSetupLookup(col: string, phaseId: PhaseId) {
+  const sheet = jobSetupSheet();
+  return `IFERROR(INDEX(${sheet}!${col}$7:${col}$${JOB_SETUP_LAST_ROW},MATCH("${phaseId}",${sheet}!I$7:I$${JOB_SETUP_LAST_ROW},0)),"")`;
+}
+
+function jobSetupPhaseOwns(dateRef: string, phaseId: PhaseId) {
+  return `AND(${jobSetupLookup("B", phaseId)}="ON",${jobSetupLookup("C", phaseId)}<=${dateRef},${jobSetupLookup("D", phaseId)}>=${dateRef})`;
+}
+
+function jobSetupInPhase(dateRef: string) {
+  return `OR(${PHASE_IDS.map((id) => jobSetupPhaseOwns(dateRef, id)).join(",")})`;
+}
+
+function jobSetupOtFlag(phaseId: PhaseId) {
+  const g = jobSetupLookup("G", phaseId);
+  const h = jobSetupLookup("H", phaseId);
+  const picks = JOB_SETUP_OT8_PICKS.map((label) => `${h}="${label}"`).join(",");
+  return `OR(${g}="YES",${picks})`;
+}
+
+function jobSetupOtAfter8Expr(dateRef: string, clock: RunningClock) {
+  if (clock === "ca-daily") return "FALSE";
+  let expr = "FALSE";
+  for (let i = PHASE_IDS.length - 1; i >= 0; i -= 1) {
+    const id = PHASE_IDS[i];
+    expr = `IF(${jobSetupPhaseOwns(dateRef, id)},${jobSetupOtFlag(id)},${expr})`;
+  }
+  return expr;
+}
+
+function jobSetupTextEquals(expr: string, expected: string) {
+  if (!expected) return `OR(${expr}="",${expr}=0)`;
+  return `${expr}="${expected}"`;
+}
+
+function jobSetupExportLock(dateRef: string, owner: PhaseRow | undefined, inPhase: string) {
+  if (!owner) return `NOT(${inPhase})`;
+  const pick = phaseOtPick(owner);
+  const hLabel = pick ? (PHASE_OT_PICKS.find((item) => item.id === pick)?.label ?? "") : "";
+  return `AND(${jobSetupLookup("B", owner.id)}="ON",${jobSetupLookup("C", owner.id)}<=${dateRef},${jobSetupLookup("D", owner.id)}>=${dateRef},${jobSetupTextEquals(jobSetupLookup("G", owner.id), owner.otAfter8 ? "YES" : "NO")},${jobSetupTextEquals(jobSetupLookup("H", owner.id), hLabel)})`;
+}
+
 function mondayStamp(ymd: string) {
   const date = parseYmd(ymd);
   return date ? mondayKey(date) : ymd;
@@ -574,32 +628,20 @@ function rangeWeekKey(range: CalendarRange | undefined) {
   return range.id || `${range.phaseId ?? ""}|${range.start ?? ""}|${range.end ?? ""}`;
 }
 
-function dayOtAfter8(
-  row: CraftRow,
-  ymd: string,
-  night: boolean,
-  input: EstimateXlsxInput,
-  clock: RunningClock,
-) {
-  const cover = coveringRanges(row, ymd, night)[0];
-  const flagged = Boolean(cover?.otAfter8 ?? input.crew?.otAfter8);
-  if (clock === "east-coast") return eastCoastCraftOtAfter8(cover?.phaseId, flagged);
-  return flagged;
-}
-
 function dayHourFormulas(
   col: string,
   hcRow: number,
   hpsRow: number,
   clock: RunningClock,
-  otAfter8: boolean,
+  otAfter8Expr: string,
+  inPhaseExpr: string,
   priorStRefs: string[],
 ): { st: string; ot: string; dt: string } {
   const hc = `${col}${hcRow}`;
   const hps = `${col}${hpsRow}`;
   const dateRef = `${col}$6`;
   const dow = `WEEKDAY(${dateRef},1)`;
-  const none = `${hc}<=0`;
+  const none = `OR(${hc}<=0,NOT(${inPhaseExpr}))`;
   let dailySt: string;
   let dailyOt: string;
   let dailyDt: string;
@@ -608,19 +650,15 @@ function dayHourFormulas(
     dailyOt = `IF(${none},0,MIN(4,MAX(0,${hps}-8))*${hc})`;
     dailyDt = `IF(${none},0,MAX(0,${hps}-12)*${hc})`;
   } else if (clock === "staff") {
-    const cap = otAfter8 ? "8" : "10";
+    const cap = `IF(${otAfter8Expr},8,10)`;
     dailySt = `IF(${none},0,IF(${dow}=1,0,MIN(${cap},${hps})*${hc}))`;
-    dailyOt = `IF(${none},0,IF(${dow}=1,0,MAX(0,${hps}-${cap})*${hc}))`;
+    dailyOt = `IF(${none},0,IF(${dow}=1,0,MAX(0,${hps}-(${cap}))*${hc}))`;
     dailyDt = `IF(${none},0,IF(${dow}=1,${hc}*${hps},0))`;
   } else {
-    const after8 = clock === "east-coast" ? otAfter8 : true;
-    if (after8) {
-      dailySt = `IF(${none},0,IF(${dow}=1,0,IF(${dow}=7,0,MIN(8,${hps})*${hc})))`;
-      dailyOt = `IF(${none},0,IF(${dow}=1,0,IF(${dow}=7,${hc}*${hps},MAX(0,${hps}-8)*${hc})))`;
-    } else {
-      dailySt = `IF(${none},0,IF(${dow}=1,0,IF(${dow}=7,0,${hc}*${hps})))`;
-      dailyOt = `IF(${none},0,IF(${dow}=1,0,IF(${dow}=7,${hc}*${hps},0)))`;
-    }
+    const weekdaySt = `IF(${otAfter8Expr},MIN(8,${hps})*${hc},${hc}*${hps})`;
+    const weekdayOt = `IF(${otAfter8Expr},MAX(0,${hps}-8)*${hc},0)`;
+    dailySt = `IF(${none},0,IF(${dow}=1,0,IF(${dow}=7,0,${weekdaySt})))`;
+    dailyOt = `IF(${none},0,IF(${dow}=1,0,IF(${dow}=7,${hc}*${hps},${weekdayOt})))`;
     dailyDt = `IF(${none},0,IF(${dow}=1,${hc}*${hps},0))`;
   }
   const prior = priorStRefs.length ? priorStRefs.join("+") : "0";
@@ -891,6 +929,7 @@ function buildCrewSheet(
     const rateName = showBillAs ? `IF(TRIM(B${otRow})<>"",B${otRow},B${titleRow})` : `B${titleRow}`;
     const clock = excelBlockClock(row, input);
     const deskHours = deskBlockDayHours(row, night, input);
+    const setupPhases = mergeSchedule(input.schedule).phases;
 
     const blockId = laborBlockId(row, night);
     const idCol = colLetter(LABOR_BLOCK_ID_COL);
@@ -946,11 +985,22 @@ function buildCrewSheet(
         .filter((item) => mondayStamp(item.stamp) === week)
         .filter((item) => rangeWeekKey(coveringRanges(row, item.stamp, night)[0]) === rangeKey)
         .map((item) => item.ref);
-      const hours = dayHourFormulas(col, hcRow, hpsRow, clock, dayOtAfter8(row, ymd, night, input, clock), priorStRefs);
+      const dateRef = `${col}$6`;
+      const inPhase = jobSetupInPhase(dateRef);
+      const hours = dayHourFormulas(
+        col,
+        hcRow,
+        hpsRow,
+        clock,
+        jobSetupOtAfter8Expr(dateRef, clock),
+        inPhase,
+        priorStRefs,
+      );
       const desk = deskHours.get(ymd) ?? { st: 0, ot: 0, dt: 0 };
       const hcVal = money(plug.hc);
       const hpsVal = money(plug.hps);
-      const exported = `AND(${col}${hcRow}=${hcVal},${col}${hpsRow}=${hpsVal})`;
+      const owner = phaseOwningDate(setupPhases, ymd);
+      const exported = `AND(${col}${hcRow}=${hcVal},${col}${hpsRow}=${hpsVal},${jobSetupExportLock(dateRef, owner, inPhase)})`;
       pushFormula(cells, `${col}${stRow}`, `IF(${exported},${desk.st},${hours.st})`);
       pushFormula(cells, `${col}${otRow}`, `IF(${exported},${desk.ot},${hours.ot})`);
       pushFormula(cells, `${col}${dtRow}`, `IF(${exported},${desk.dt},${hours.dt})`);
@@ -1504,10 +1554,8 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
     pushNum(cells, `F${excelRow}`, row.hoursPerDay);
     pushText(cells, `G${excelRow}`, row.otAfter8 ? "YES" : "NO");
     const pick = phaseOtPick(row);
-    if (pick) {
-      const label = PHASE_OT_PICKS.find((item) => item.id === pick)?.label ?? "";
-      pushText(cells, `H${excelRow}`, label);
-    }
+    const label = pick ? (PHASE_OT_PICKS.find((item) => item.id === pick)?.label ?? "") : "";
+    cells.push({ ref: `H${excelRow}`, type: "text", value: label });
     pushText(cells, `I${excelRow}`, row.id);
     for (let col = 2; col <= 8; col += 1) unlocked.push({ row: excelRow, col });
   });
