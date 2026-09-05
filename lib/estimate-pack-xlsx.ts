@@ -76,6 +76,7 @@ export function packSnapshotToXlsxInput(pack: EstimatePackSnapshot): EstimateXls
     }),
     subcontractor: normalizeSubSheet(asRecord(pack.subcontractor) as Partial<SubSheet> | null),
     changeOrders: fcrChangeOrderTotal(fcrFromUnknown(pack.fcr)),
+    status: pack.status,
   };
 }
 

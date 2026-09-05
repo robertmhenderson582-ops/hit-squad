@@ -57,6 +57,7 @@ export function NewEstimateForm() {
         size: size ?? undefined,
         ownerEmail: lens?.email || user?.email,
         estimator: lens?.name || user?.name,
+        status: existing?.status || "Draft",
       });
       scheduleVaultUpsert(pack);
       void flushVaultUpsert(pack);
@@ -117,7 +118,7 @@ function NewEstimateDesk({
       name={title}
       onName={setTitle}
       packageId={pack}
-      status="Estimate"
+      status="Draft"
       statusLocked
     >
       {tab === "summary" ? (
@@ -132,7 +133,7 @@ function NewEstimateDesk({
             otRule={alias(otRule)}
             author={user?.name}
             existingClient={existingClient}
-            status="Estimate"
+            status="Draft"
             statusLocked
           />
           <PhaseSchedule />

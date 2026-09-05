@@ -3,10 +3,13 @@
 import { useEffect, useState } from "react";
 import { CreatedBy } from "@/components/CreatedBy";
 import { useAlias, useLensUser } from "@/components/OwnerDeskContext";
+import { StatusStamp } from "@/components/StatusStamp";
 import {
-  ESTIMATE_STATUSES,
+  isEstimateLocked,
   needsStatusConfirm,
   statusConfirmCopy,
+  statusNeedsManager,
+  statusOptionsForSite,
   type EstimateStatus,
 } from "@/lib/estimate-status";
 import { isProjectManagerOrAbove } from "@/lib/desk-role";
@@ -45,7 +48,7 @@ export function JobSetupCard({
   code,
   window,
   existingClient = false,
-  status = "Estimate",
+  status = "Draft",
   onStatus,
   statusLocked = false,
   children,
@@ -94,13 +97,18 @@ export function JobSetupCard({
   const canAward = isProjectManagerOrAbove(lens);
 
   function requestStatus(next: EstimateStatus) {
-    if (statusLocked && next !== "Estimate") return;
-    if (next !== "Estimate" && !canAward) return;
+    if (statusLocked && next !== "Draft") return;
+    if (statusNeedsManager(status, next) && !canAward) return;
     if (next === status) return;
     if (needsStatusConfirm(status, next)) {
       setPendingStatus(next);
       return;
     }
+    commitStatus(next);
+  }
+
+  function commitStatus(next: EstimateStatus) {
+    pack.setPackStatus(next);
     onStatus?.(next);
   }
 
@@ -133,10 +141,14 @@ export function JobSetupCard({
         {author ? <CreatedBy author={author} /> : null}
       </div>
       <div className="mt-5">
-        <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">STATUS</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">STATUS</span>
+          <StatusStamp value={status.toUpperCase()} />
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          {ESTIMATE_STATUSES.map((item) => {
-            const locked = (statusLocked && item !== "Estimate") || (item !== "Estimate" && !canAward);
+          {statusOptionsForSite(site || "").map((item) => {
+            const locked =
+              (statusLocked && item !== "Draft") || (statusNeedsManager(status, item) && !canAward);
             const active = status === item;
             return (
               <button
@@ -144,10 +156,10 @@ export function JobSetupCard({
                 type="button"
                 disabled={locked}
                 title={
-                  statusLocked && item !== "Estimate"
-                    ? "New sheet stays Estimate"
-                    : item !== "Estimate" && !canAward
-                      ? "Project Manager or above can set Submitted or Awarded"
+                  statusLocked && item !== "Draft"
+                    ? "New sheet stays Draft"
+                    : statusNeedsManager(status, item) && !canAward
+                      ? "Project Manager or above can set Locked, Submitted, or Awarded"
                       : undefined
                 }
                 onClick={() => requestStatus(item)}
@@ -161,8 +173,14 @@ export function JobSetupCard({
           })}
         </div>
         <p className="mt-1 text-xs text-[#5b6f73]">
-          Estimate, Submitted, Awarded. Project Manager or above sets Submitted or Awarded.
+          Draft, In progress, Budgetary, Review, Locked, Submitted, Awarded. Project Manager or
+          above sets Locked, Submitted, or Awarded.
         </p>
+        {isEstimateLocked(status) ? (
+          <p className="mt-1 text-xs text-[#5b6f73]">
+            Locked — stamped on the desk and Excel. This pass does not block edits.
+          </p>
+        ) : null}
         {pendingStatus ? (
           <div className="mt-3 rounded-lg border border-[#c5d4d4] bg-white px-3 py-3">
             <p className="text-sm text-[#163038]">{statusConfirmCopy(status, pendingStatus)}</p>
@@ -177,7 +195,7 @@ export function JobSetupCard({
               <button
                 type="button"
                 onClick={() => {
-                  onStatus?.(pendingStatus);
+                  commitStatus(pendingStatus);
                   setPendingStatus(null);
                 }}
                 className="rounded-lg bg-steel px-4 py-2 text-white"

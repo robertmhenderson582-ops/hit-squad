@@ -136,6 +136,7 @@ import {
 } from "./third-party-rental.ts";
 import { emptySubSheet, lineAmount, subCardTotal, type SubSheet } from "./subcontractor.ts";
 import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
+import { parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
 import { buildWorkbook, colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
@@ -146,6 +147,7 @@ export const ESTIMATE_EXPORT_PRODUCER = "Produced by Hit Squad Project Controls"
 export const ESTIMATE_EXPORT_BRAND = "HIT SQUAD / PROJECT CONTROLS";
 export const ESTIMATE_EXPORT_CONFIDENTIAL = "Confidential estimate package";
 export const ESTIMATE_PREPARED_BY_LABEL = "Prepared by";
+export const ESTIMATE_STATUS_LABEL = "Status";
 export const ESTIMATE_SUMMARY_AMOUNT = "Amount $";
 export const ESTIMATE_SUMMARY_HOURS = "Man-hours (MH)";
 export const ESTIMATE_HOURS_LINE = "Man-hours";
@@ -277,6 +279,8 @@ export type EstimateXlsxInput = {
   companyLogo?: string | null;
   /** Signed-in exporter display name. Export-only; import ignores it. */
   preparedBy?: string | null;
+  /** Live pack status. Export-only; import does not overwrite the pack. */
+  status?: EstimateStatus | string | null;
 };
 
 type CrewLane = "staff" | "craft";
@@ -427,9 +431,10 @@ export function exporterDisplayName(name?: string | null, email?: string | null)
 }
 
 function headerByline(input: EstimateXlsxInput, when = new Date()): string {
+  const stamp = `${ESTIMATE_STATUS_LABEL}: ${parseEstimateStatus(input.status)}`;
   const prepared = exporterDisplayName(input.preparedBy, null);
   const who = prepared ? `${ESTIMATE_PREPARED_BY_LABEL}: ${prepared}  ·  ` : "";
-  return `${who}${ESTIMATE_EXPORT_PRODUCER}  ·  ${ESTIMATE_EXPORT_CONFIDENTIAL}  ·  ${exportProducedLabel(when)}`;
+  return `${stamp}  ·  ${who}${ESTIMATE_EXPORT_PRODUCER}  ·  ${ESTIMATE_EXPORT_CONFIDENTIAL}  ·  ${exportProducedLabel(when)}`;
 }
 
 function headerTitleMerges(lastCol: string): string[] {

@@ -12,7 +12,7 @@ import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { OrgChartDesk } from "@/components/OrgChartDesk";
 import { RodeoFormDesk } from "@/components/RodeoFormDesk";
-import { EstimatePackageProvider } from "@/components/EstimatePackage";
+import { EstimatePackageProvider, useEstimatePackage } from "@/components/EstimatePackage";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
 import { useAlias } from "@/components/OwnerDeskContext";
@@ -20,13 +20,13 @@ import { useDeskBoard } from "@/components/useDeskBoard";
 import { boundOtLabel } from "@/lib/hours-clock";
 import { estimateStorageKey } from "@/lib/estimate-open";
 import { findLocalPack, localPackToEstimate } from "@/lib/local-estimates";
-import { readEstimateStatus, writeEstimateStatus, type EstimateStatus } from "@/lib/estimate-status";
+import { DEFAULT_ESTIMATE_STATUS, type EstimateStatus } from "@/lib/estimate-status";
+import type { EstimateRecord, StaffingLine } from "@/lib/types";
 
 export function EstimateDetail({ estimateId }: { estimateId: string }) {
   const alias = useAlias();
   const { board, error } = useDeskBoard();
   const [tab, setTab] = useState<EstimateTab>("summary");
-  const [status, setStatus] = useState<EstimateStatus>(() => readEstimateStatus(estimateId));
   const local = findLocalPack(estimateId);
   const estimate = board?.estimates.find((row) => row.id === estimateId) ?? (local ? localPackToEstimate(local) : undefined);
   const site = board?.sites.find((row) => row.id === estimate?.siteId);
@@ -58,6 +58,47 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
 
   return (
     <EstimatePackageProvider estimateKey={estimateStorageKey(estimate.id)}>
+      <EstimateDetailBody
+        estimate={estimate}
+        siteName={siteName}
+        siteCode={site?.code}
+        staffing={staffing}
+        alias={alias}
+        title={shown}
+        setTitle={setTitle}
+        tab={tab}
+        setTab={setTab}
+      />
+    </EstimatePackageProvider>
+  );
+}
+
+function EstimateDetailBody({
+  estimate,
+  siteName,
+  siteCode,
+  staffing,
+  alias,
+  title,
+  setTitle,
+  tab,
+  setTab,
+}: {
+  estimate: EstimateRecord;
+  siteName: string;
+  siteCode?: string;
+  staffing: StaffingLine[];
+  alias: (value: string) => string;
+  title: string;
+  setTitle: (next: string) => void;
+  tab: EstimateTab;
+  setTab: (next: EstimateTab) => void;
+}) {
+  const pack = useEstimatePackage();
+  const status: EstimateStatus = pack.status || DEFAULT_ESTIMATE_STATUS;
+  const shown = title || estimate.title;
+
+  return (
     <EstimateWorkspace
       crumb={`${alias(siteName)} / ${shown}`}
       tab={tab}
@@ -72,7 +113,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
       packageId={estimate.id}
       staffing={staffing}
       status={status}
-      onStatus={setStatus}
+      onStatus={(next) => pack.setPackStatus(next)}
     >
       {tab === "summary" ? (
         <div className="space-y-5">
@@ -82,18 +123,15 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
             site={siteName}
             name={shown}
             onName={setTitle}
-            otRule={alias(boundOtLabel(siteName, estimate.client, site?.code))}
+            otRule={alias(boundOtLabel(siteName, estimate.client, siteCode))}
             author={estimate.estimator}
             code={estimate.code}
             window={estimate.window}
             existingClient
             status={status}
-            onStatus={(next) => {
-              setStatus(next);
-              writeEstimateStatus(estimateId, next);
-            }}
+            onStatus={(next) => pack.setPackStatus(next)}
           >
-            {status !== "Estimate" ? (
+            {status !== "Draft" ? (
               <>
                 <label className="mt-4 block">
                   <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">JOB / CR</span>
@@ -136,6 +174,5 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
 
       {tab === "rodeo" ? <RodeoFormDesk client={estimate.client} site={siteName} name={shown} /> : null}
     </EstimateWorkspace>
-    </EstimatePackageProvider>
   );
 }

@@ -1,4 +1,4 @@
-import { readEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
+import { readEstimateStatus, resolveEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { estimateStorageKey } from "./estimate-open.ts";
 import { listLocalPacks, storageKeyForPack, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
@@ -68,7 +68,7 @@ export function awardedLocalJobs(
 ): AwardedJobPick[] {
   const target = store ?? (typeof window === "undefined" ? null : window.localStorage);
   return packs
-    .filter((pack) => readEstimateStatus(pack.packId, target as Storage | null) === "Awarded")
+    .filter((pack) => resolveEstimateStatus(pack.status, pack.packId, target as Storage | null) === "Awarded")
     .map((pack) => ({
       id: pack.packId,
       title: pack.title,

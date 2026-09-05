@@ -15,6 +15,7 @@ import {
   ESTIMATE_EXPORT_ERROR,
   ESTIMATE_EXPORT_PRODUCER,
   ESTIMATE_PREPARED_BY_LABEL,
+  ESTIMATE_STATUS_LABEL,
   exporterDisplayName,
   ESTIMATE_HOURS_LINE,
   ESTIMATE_SUMMARY_AMOUNT,
@@ -2809,6 +2810,7 @@ describe("estimate excel export", () => {
     assert.ok(staff);
     assert.equal(staff.cells.find((cell) => cell.ref === "A1")?.value, ESTIMATE_EXPORT_BRAND);
     assert.match(String(staff.cells.find((cell) => cell.ref === "A2")?.value), /Unit 3 mechanical/);
+    assert.match(String(staff.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(`${ESTIMATE_STATUS_LABEL}: Draft`));
     assert.match(String(staff.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(`${ESTIMATE_PREPARED_BY_LABEL}: Nathan Boyte`));
     assert.match(String(staff.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(ESTIMATE_EXPORT_PRODUCER));
     assert.deepEqual(
@@ -2821,13 +2823,24 @@ describe("estimate excel export", () => {
     );
     const bare = sheetOf(buildEstimateWorkbook(woodRiverFixture()), ESTIMATE_XLSX_SHEETS.summary);
     assert.ok(bare);
+    assert.match(String(bare.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(`${ESTIMATE_STATUS_LABEL}: Draft`));
     assert.equal(/Prepared by/.test(String(bare.cells.find((cell) => cell.ref === "A3")?.value)), false);
+    const review = sheetOf(
+      buildEstimateWorkbook({ ...woodRiverFixture(), status: "Review" }),
+      ESTIMATE_XLSX_SHEETS.jobSetup,
+    );
+    assert.ok(review);
+    assert.match(String(review.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(`${ESTIMATE_STATUS_LABEL}: Review`));
 
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
     const importer = readFileSync(fileURLToPath(new URL("./estimate-xlsx-import.ts", import.meta.url)), "utf8");
+    const packXlsx = readFileSync(fileURLToPath(new URL("./estimate-pack-xlsx.ts", import.meta.url)), "utf8");
     assert.match(workspace, /preparedBy:/);
     assert.match(workspace, /exporterDisplayName/);
+    assert.match(workspace, /status: pack\.status \|\| status/);
+    assert.match(packXlsx, /status: pack\.status/);
     assert.match(importer, /export-only/);
     assert.equal(/preparedBy/.test(importer), false);
+    assert.equal(/input\.status/.test(importer), false);
   });
 });

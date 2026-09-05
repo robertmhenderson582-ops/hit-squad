@@ -103,7 +103,7 @@ export function EstimateWorkspace({
   jobSite,
   name,
   packageId,
-  status = "Estimate",
+  status = "Draft",
   onStatus: _onStatus,
   statusLocked: _statusLocked = false,
   onName,
@@ -166,6 +166,7 @@ export function EstimateWorkspace({
         changeOrders: fcrChangeOrderTotal(readFcrPacket(pack.estimateKey)),
         companyLogo: await fetchEstimateCompanyLogo(boundClient, boundSite),
         preparedBy: exporterDisplayName(user?.name, user?.email),
+        status: pack.status || status,
       });
       if (!bytes.byteLength) throw new Error("empty-workbook");
       downloadXlsx(estimateXlsxFilename({ site: boundSite, title: name || crumb }), bytes);

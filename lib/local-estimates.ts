@@ -1,3 +1,4 @@
+import { parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { ACTIVITY_STORE_PREFIX } from "./work-activities.ts";
 import { newEstimateKey } from "./estimate-open.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
@@ -44,6 +45,8 @@ export type LocalPack = {
   transferredTo?: string;
   transferredToName?: string;
   transferredFromName?: string;
+  /** Live estimate workflow status. Pack is source of truth. */
+  status?: EstimateStatus;
 };
 
 export type StorageLike = {
@@ -140,6 +143,30 @@ export function renameLocalPackTitle(
       size: current?.size,
       ownerEmail: current?.ownerEmail,
       estimator: current?.estimator,
+      status: current?.status,
+    },
+    store,
+  );
+}
+
+export function writeLocalPackStatus(
+  packId: string,
+  status: EstimateStatus,
+  store: StorageLike | null = typeof window === "undefined" ? null : window.localStorage,
+): LocalPack | null {
+  if (!store || !packId.startsWith("new-")) return null;
+  const current = findLocalPack(packId, store);
+  if (!current) return null;
+  return rememberLocalPack(
+    {
+      packId,
+      title: current.title,
+      client: current.client,
+      site: current.site,
+      size: current.size,
+      ownerEmail: current.ownerEmail,
+      estimator: current.estimator,
+      status: parseEstimateStatus(status),
     },
     store,
   );
@@ -167,6 +194,7 @@ export function rememberLocalPack(
     transferredToName?: string;
     transferredFromName?: string;
     replaceHandoff?: boolean;
+    status?: EstimateStatus;
   },
   store: StorageLike | null = typeof window === "undefined" ? null : window.localStorage,
 ): LocalPack | null {
@@ -178,12 +206,19 @@ export function rememberLocalPack(
   const client = input.client || existing?.client || "Phillips 66";
   const site = input.site || existing?.site || "Wood River — Roxana, IL";
   const size = input.size ?? existing?.size;
+  const status =
+    input.status !== undefined
+      ? parseEstimateStatus(input.status)
+      : existing?.status
+        ? parseEstimateStatus(existing.status)
+        : undefined;
   const unchanged =
     existing &&
     existing.title === title &&
     existing.client === client &&
     existing.site === site &&
-    existing.size === size;
+    existing.size === size &&
+    existing.status === status;
   const next: LocalPack = {
     packId: input.packId,
     key,
@@ -204,6 +239,7 @@ export function rememberLocalPack(
     transferredFromName: input.replaceHandoff
       ? input.transferredFromName
       : (input.transferredFromName ?? existing?.transferredFromName),
+    status,
   };
   writeStoreJson(store, `${PACK_STORE_PREFIX}${next.key}`, next);
   upsertIndex(store, next);
@@ -267,6 +303,7 @@ function packFromStore(packId: string, store: StorageLike): LocalPack {
     transferredTo: saved?.transferredTo || indexed?.transferredTo,
     transferredToName: saved?.transferredToName || indexed?.transferredToName,
     transferredFromName: saved?.transferredFromName || indexed?.transferredFromName,
+    status: saved?.status || indexed?.status ? parseEstimateStatus(saved?.status || indexed?.status) : undefined,
   };
 }
 

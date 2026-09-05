@@ -117,6 +117,9 @@ describe("estimate excel import", () => {
     const stamped = await parseEstimateXlsx(await estimateToXlsx({ ...input, preparedBy: "Nathan Boyte" }));
     assert.equal(stamped.title, input.title);
     assert.equal("preparedBy" in stamped, false);
+    assert.equal("status" in stamped, false);
+    const kept = applyEstimateImport({ ...asPack(input), status: "Awarded" }, stamped);
+    assert.equal(kept.status, "Awarded");
     assert.equal(imported.crew.staff?.[0]?.position, "Superintendent 01");
     assert.equal(imported.crew.support?.[0] && "billedAs" in imported.crew.support[0], true);
     assert.equal((imported.crew.support?.[0] as { billedAs?: string })?.billedAs, "Boilermaker Journeyman");

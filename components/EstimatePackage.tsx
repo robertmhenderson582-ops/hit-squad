@@ -30,7 +30,14 @@ import {
 } from "@/lib/phase-schedule";
 import { emptyJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
 import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
-import { packIdFromStoreKey, renameLocalPackTitle, touchLocalPack } from "@/lib/local-estimates";
+import { packIdFromStoreKey, findLocalPack, renameLocalPackTitle, touchLocalPack, writeLocalPackStatus } from "@/lib/local-estimates";
+import {
+  DEFAULT_ESTIMATE_STATUS,
+  parseEstimateStatus,
+  readEstimateStatus,
+  writeEstimateStatus,
+  type EstimateStatus,
+} from "@/lib/estimate-status";
 import { hydrateFromVault, flushVaultUpsert, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
 import { persistCrewTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
@@ -60,6 +67,8 @@ type EstimatePackageApi = {
   replaceFromImport: (next: { schedule: PhaseScheduleState; crew: CrewState; title?: string }) => void;
   setOrgChart: (next: OrgChartState | ((current: OrgChartState) => OrgChartState)) => void;
   setJobMeta: (next: JobMeta | ((current: JobMeta) => JobMeta)) => void;
+  status: EstimateStatus;
+  setPackStatus: (status: EstimateStatus) => EstimateStatus | null;
   setPackTitle: (title: string) => string | null;
   setActivities: (next: WorkActivity[] | ((current: WorkActivity[]) => WorkActivity[])) => void;
   addCraftRow: () => CraftRow;
@@ -75,6 +84,27 @@ const EstimatePackageContext = createContext<EstimatePackageApi | null>(null);
 
 function emptyCrew(): CrewState {
   return { staff: [], generalForeman: [], foreman: [], direct: [], support: [], otAfter8: false };
+}
+
+function readPackStatus(estimateKey: string): EstimateStatus {
+  const packId = packIdFromStoreKey(estimateKey);
+  if (!packId) return DEFAULT_ESTIMATE_STATUS;
+  const local = findLocalPack(packId);
+  if (local?.status) return parseEstimateStatus(local.status);
+  return readEstimateStatus(packId);
+}
+
+/** Write missing pack status once so vault JSON becomes source of truth. */
+function hydratePackStatus(estimateKey: string, status: EstimateStatus) {
+  const packId = packIdFromStoreKey(estimateKey);
+  if (!packId) return;
+  const local = findLocalPack(packId);
+  if (local?.status) {
+    writeEstimateStatus(packId, parseEstimateStatus(local.status));
+    return;
+  }
+  writeLocalPackStatus(packId, status);
+  writeEstimateStatus(packId, status);
 }
 
 function readCrew(key: string): CrewState {
@@ -131,6 +161,7 @@ export function EstimatePackageProvider({
   const [orgChart, setOrgChartState] = useState<OrgChartState>(() => readOrgChart(estimateKey));
   const [jobMeta, setJobMetaState] = useState<JobMeta>(() => readJobMeta(estimateKey));
   const [activities, setActivitiesState] = useState<WorkActivity[]>(() => readActivities(estimateKey) ?? []);
+  const [status, setStatusState] = useState<EstimateStatus>(() => readPackStatus(estimateKey));
   const [ready, setReady] = useState(false);
   const [vaultSaveError, setVaultSaveError] = useState("");
 
@@ -147,6 +178,9 @@ export function EstimatePackageProvider({
       setOrgChartState(readOrgChart(estimateKey));
       setJobMetaState(readJobMeta(estimateKey));
       setActivitiesState(readActivities(estimateKey) ?? []);
+      const nextStatus = readPackStatus(estimateKey);
+      setStatusState(nextStatus);
+      hydratePackStatus(estimateKey, nextStatus);
       setReady(true);
       if (packId) {
         void flushVaultUpsert(packId).then((result) => {
@@ -235,6 +269,7 @@ export function EstimatePackageProvider({
       vaultSaveError,
       jobMeta,
       activities,
+      status,
       setProjectStartDate(start) {
         setSchedule((current) => {
           const next = setProjectStart(current, start);
@@ -322,6 +357,20 @@ export function EstimatePackageProvider({
       setJobMeta(next) {
         setJobMetaState((current) => (typeof next === "function" ? next(current) : next));
       },
+      setPackStatus(next) {
+        const parsed = parseEstimateStatus(next);
+        setStatusState(parsed);
+        const packId = packIdFromStoreKey(estimateKey);
+        if (!packId) return parsed;
+        const saved = writeLocalPackStatus(packId, parsed);
+        writeEstimateStatus(packId, parsed);
+        if (saved) {
+          touchLocalPack(packId);
+          scheduleVaultUpsert(packId);
+          return saved.status ?? parsed;
+        }
+        return parsed;
+      },
       setPackTitle(title) {
         const packId = packIdFromStoreKey(estimateKey);
         if (!packId) return null;
@@ -340,7 +389,7 @@ export function EstimatePackageProvider({
         return blankCraftRow();
       },
     }),
-    [activities, crew, estimateKey, jobMeta, orgChart, schedule, vaultSaveError],
+    [activities, crew, estimateKey, jobMeta, orgChart, schedule, status, vaultSaveError],
   );
 
   return <EstimatePackageContext.Provider value={api}>{children}</EstimatePackageContext.Provider>;
@@ -364,6 +413,10 @@ export function useEstimatePackage() {
       replaceFromImport() {},
       setOrgChart() {},
       setJobMeta() {},
+      status: DEFAULT_ESTIMATE_STATUS,
+      setPackStatus() {
+        return null;
+      },
       setPackTitle() {
         return null;
       },
