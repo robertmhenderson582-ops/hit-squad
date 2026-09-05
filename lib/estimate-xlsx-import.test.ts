@@ -1732,7 +1732,7 @@ describe("estimate excel import", () => {
         perDiemRate: 0,
         travel: [
           { id: "travel-lead", kind: "staff", source: "crew", headcount: 1, travelers: 1, perMile: 0.7, miles: 40 },
-          { id: "travel-pm", kind: "staff", source: "crew", headcount: 1, travelers: 2, perMile: 0.7, miles: 12 },
+          { id: "travel-pm", kind: "staff", source: "crew", headcount: 2, travelers: 2, perMile: 0.7, miles: 12 },
           { id: "travel-craft", kind: "craft", source: "crew", headcount: 2, travelers: 2, perMile: 0.5, miles: 20 },
         ],
         misc: [],
