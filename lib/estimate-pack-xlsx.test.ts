@@ -360,6 +360,13 @@ describe("estimate pack JSON → xlsx", () => {
         assert.match(String(hour.value), /IFERROR\(/);
         assert.match(String(hour.value), /INT\(/);
       }
+      const titleChip = staff?.cells.find((cell) => cell.ref === "J7" && cell.type === "formula");
+      if (titleChip) {
+        const expr = String(titleChip.value);
+        assert.match(expr, /SUM\(J10:/);
+        assert.equal(/\+SUM\(/.test(expr), false);
+        assert.equal(staff.cells.some((cell) => cell.ref === "J3" && cell.type === "formula"), false);
+      }
       const rates = sheets.find((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.rates);
       assert.ok(rates);
       const liveTool = (input.equipment?.largeTools ?? []).find((line) => largeToolAmount(line) > 0);

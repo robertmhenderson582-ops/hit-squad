@@ -58,6 +58,9 @@
  * + Position / hour / Bill as import ships on this compile (excel-ripple.ts).
  * Phase-bar day/night/complete hour chips ship on the next Excel compile —
  * view of live calendar ST+OT+DT per Job setup phase (import does not edit chips).
+ * Each DAYSHIFT / NIGHTSHIFT title carries its own D / N / C chips on that
+ * block’s title row — phase-bounded ST+OT+DT for that position only. Not a
+ * sheet-global row-3 strip of every craft.
  * Hidden _CrewRanges is a view of live pack CalendarRange stacks for create-new.
  * Import uses those ranges only when the daily HC/HPS/PD grid still matches.
  * Look sample xlsx files are stale chrome (no _CrewRanges). Fresh export always
@@ -205,11 +208,12 @@ export const LABOR_INSTRUMENT_LAST_COL = 9;
 export const LABOR_PHASE_ROW = 4;
 export const LABOR_PHASE_ROW_END = 5;
 export const LABOR_PHASE_LABEL = "Phase";
-/** Day / night / complete hour chips sit on the unused date cells of row 3 (above the phase name). */
+/** Unused header row above the phase name. Hour chips sit on each position title row. */
 export const LABOR_PHASE_CHIP_ROW = 3;
-export const LABOR_PHASE_CHIP_DAYS_FMT = '"D"0';
-export const LABOR_PHASE_CHIP_NIGHTS_FMT = '"N"0';
-export const LABOR_PHASE_CHIP_COMPLETE_FMT = '"C"0';
+/** Spaced prefix so Excel does not read D9784 as a cell ref. */
+export const LABOR_PHASE_CHIP_DAYS_FMT = '"D "0';
+export const LABOR_PHASE_CHIP_NIGHTS_FMT = '"N "0';
+export const LABOR_PHASE_CHIP_COMPLETE_FMT = '"C "0';
 /** Two-letter weekday over the date number (row 5 / row 6). */
 export const LABOR_WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 export const LABOR_BLOCK_HEIGHT = 7;
@@ -1373,39 +1377,47 @@ function phaseHourRollup(titles: number[], startCol: number, endCol: number): st
 function writePhaseHourChips(
   cells: SheetCell[],
   runs: NonNullable<WorkbookSheet["phaseBar"]>,
-  dayTitles: number[],
-  nightTitles: number[],
+  blocks: Array<{ titleRow: number; night: boolean }>,
 ): NonNullable<WorkbookSheet["phaseChips"]> {
   const chips: NonNullable<WorkbookSheet["phaseChips"]> = [];
-  for (const run of runs) {
-    const span = run.endCol - run.startCol + 1;
-    const daysExpr = phaseHourRollup(dayTitles, run.startCol, run.endCol);
-    const nightsExpr = phaseHourRollup(nightTitles, run.startCol, run.endCol);
-    const completeExpr =
-      daysExpr === "0" ? nightsExpr : nightsExpr === "0" ? daysExpr : `(${daysExpr})+(${nightsExpr})`;
-    const place = (col: number, kind: "days" | "nights" | "complete", formula: string, fmt: string) => {
-      cells.push({
-        ref: `${colLetter(col)}${LABOR_PHASE_CHIP_ROW}`,
-        type: "formula",
-        value: formula,
-        numFmt: fmt,
-      });
-      chips.push({ col, kind, startCol: run.startCol, endCol: run.endCol, phaseId: run.phaseId });
-    };
-    if (span >= 3) {
-      place(run.startCol, "days", daysExpr, LABOR_PHASE_CHIP_DAYS_FMT);
-      place(run.startCol + 1, "nights", nightsExpr, LABOR_PHASE_CHIP_NIGHTS_FMT);
-      place(
-        run.startCol + 2,
-        "complete",
-        `${colLetter(run.startCol)}${LABOR_PHASE_CHIP_ROW}+${colLetter(run.startCol + 1)}${LABOR_PHASE_CHIP_ROW}`,
-        LABOR_PHASE_CHIP_COMPLETE_FMT,
-      );
-    } else if (span === 2) {
-      place(run.startCol, "days", daysExpr, LABOR_PHASE_CHIP_DAYS_FMT);
-      place(run.startCol + 1, "complete", completeExpr, LABOR_PHASE_CHIP_COMPLETE_FMT);
-    } else {
-      place(run.startCol, "complete", completeExpr, LABOR_PHASE_CHIP_COMPLETE_FMT);
+  for (const block of blocks) {
+    for (const run of runs) {
+      const span = run.endCol - run.startCol + 1;
+      const blockHours = phaseHourRollup([block.titleRow], run.startCol, run.endCol);
+      const daysExpr = block.night ? "0" : blockHours;
+      const nightsExpr = block.night ? blockHours : "0";
+      const chipRow = block.titleRow;
+      const place = (col: number, kind: "days" | "nights" | "complete", formula: string, fmt: string) => {
+        cells.push({
+          ref: `${colLetter(col)}${chipRow}`,
+          type: "formula",
+          value: formula,
+          numFmt: fmt,
+        });
+        chips.push({
+          col,
+          row: chipRow,
+          kind,
+          startCol: run.startCol,
+          endCol: run.endCol,
+          phaseId: run.phaseId,
+        });
+      };
+      if (span >= 3) {
+        place(run.startCol, "days", daysExpr, LABOR_PHASE_CHIP_DAYS_FMT);
+        place(run.startCol + 1, "nights", nightsExpr, LABOR_PHASE_CHIP_NIGHTS_FMT);
+        place(
+          run.startCol + 2,
+          "complete",
+          `${colLetter(run.startCol)}${chipRow}+${colLetter(run.startCol + 1)}${chipRow}`,
+          LABOR_PHASE_CHIP_COMPLETE_FMT,
+        );
+      } else if (span === 2) {
+        place(run.startCol, "days", daysExpr, LABOR_PHASE_CHIP_DAYS_FMT);
+        place(run.startCol + 1, "complete", blockHours, LABOR_PHASE_CHIP_COMPLETE_FMT);
+      } else {
+        place(run.startCol, "complete", blockHours, LABOR_PHASE_CHIP_COMPLETE_FMT);
+      }
     }
   }
   return chips;
@@ -1444,8 +1456,7 @@ function buildCrewSheet(
   const phaseBand = writePhaseBar(cells, dates, input.schedule);
 
   const titleRows: number[] = [];
-  const dayTitleRows: number[] = [];
-  const nightTitleRows: number[] = [];
+  const chipBlocks: Array<{ titleRow: number; night: boolean }> = [];
   const pdMoneyRows: number[] = [];
   const laborBlocks: Array<{ start: number; end: number }> = [];
   const spacerRows: number[] = [];
@@ -1453,8 +1464,6 @@ function buildCrewSheet(
 
   function emitBlock(row: CraftRow, night: boolean) {
     const titleRow = excelRow + LABOR_TITLE_OFFSET;
-    if (night) nightTitleRows.push(titleRow);
-    else dayTitleRows.push(titleRow);
     const hcRow = excelRow + LABOR_HC_OFFSET;
     const hpsRow = excelRow + LABOR_HPS_OFFSET;
     const stRow = excelRow + LABOR_ST_OFFSET;
@@ -1462,6 +1471,7 @@ function buildCrewSheet(
     const dtRow = excelRow + LABOR_DT_OFFSET;
     const pdRow = excelRow + LABOR_PD_OFFSET;
     titleRows.push(titleRow);
+    chipBlocks.push({ titleRow, night });
     pdMoneyRows.push(pdRow);
 
     const firstDate = dates.length ? colLetter(LABOR_DATE_START_COL) : "";
@@ -1615,7 +1625,7 @@ function buildCrewSheet(
     laborBlocks,
     spacerRows,
     phaseBar: phaseBand.phaseBar,
-    phaseChips: writePhaseHourChips(cells, phaseBand.phaseBar, dayTitleRows, nightTitleRows),
+    phaseChips: writePhaseHourChips(cells, phaseBand.phaseBar, chipBlocks),
     billAs: showBillAs
       ? laborBlocks.map((block) => ({
           labelRow: block.start + LABOR_ST_OFFSET,

@@ -962,7 +962,7 @@ function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDat
   applyLaborPhaseChips(ws, sheet);
 }
 
-/** Day / night / complete hour chips on row 3 — locked view of calendar ST+OT+DT. */
+/** Day / night / complete hour chips on each position title row — locked view of that block. */
 function applyLaborPhaseChips(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
   const chips = sheet.phaseChips ?? [];
   if (!chips.length) return;
@@ -971,7 +971,7 @@ function applyLaborPhaseChips(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
     if (isPhaseId(run.phaseId)) byPhase.set(`${run.startCol}:${run.endCol}:${run.phaseId}`, PHASE_TONE_FILLS[run.phaseId]);
   }
   for (const chip of chips) {
-    const cell = ws.getCell(3, chip.col);
+    const cell = ws.getCell(chip.row, chip.col);
     const fillArgb = byPhase.get(`${chip.startCol}:${chip.endCol}:${chip.phaseId}`) ?? STEEL;
     cell.fill = solid(fillArgb);
     cell.font = { bold: true, name: "Calibri", size: 7, color: { argb: PHASE_TONE_BAND_INK } };
@@ -1070,7 +1070,7 @@ function applyLaborChrome(
     ws.addConditionalFormatting({ ref: `${first}6:${last}6`, rules: [weekendRule] });
     for (const block of blocks) {
       ws.addConditionalFormatting({
-        ref: `${first}${block.start}:${last}${block.end}`,
+        ref: `${first}${block.start + 1}:${last}${block.end}`,
         rules: [weekendRule],
       });
     }

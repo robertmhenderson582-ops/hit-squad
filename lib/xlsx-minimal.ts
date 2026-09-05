@@ -184,9 +184,10 @@ export type WorkbookSheet = {
   headerRows?: number[];
   /** Job setup phase runs on labor rows 4–5 (day-grid columns). */
   phaseBar?: Array<{ startCol: number; endCol: number; phaseId: string }>;
-  /** Row-3 day/night/complete hour chips aligned to each phase run (view of calendar math). */
+  /** Per-position title-row day/night/complete hour chips (view of that block’s phase hours). */
   phaseChips?: Array<{
     col: number;
+    row: number;
     kind: "days" | "nights" | "complete";
     startCol: number;
     endCol: number;
