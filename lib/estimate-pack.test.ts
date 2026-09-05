@@ -508,6 +508,17 @@ describe("estimate pack snapshot", () => {
       store,
     );
     assert.equal(yates?.status, "Awarded");
+    const ferndale = rememberLocalPack(
+      {
+        packId: "new-ferndale-award",
+        title: "Ferndale bid",
+        client: "Phillips 66",
+        site: "Ferndale",
+        status: "Awarded",
+      },
+      store,
+    );
+    assert.equal(ferndale?.status, "Awarded");
   });
 
   it("persists subcontractors on the pack without wiping crew, equipment, or Other Cost", () => {

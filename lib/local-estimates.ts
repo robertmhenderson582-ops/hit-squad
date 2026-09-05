@@ -1,4 +1,6 @@
-import { clampEstimateStatus, parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
+import { catalogSites } from "./desk-data.ts";
+import { parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
+import { clampStatusForSite } from "./site-regular.ts";
 import { ACTIVITY_STORE_PREFIX } from "./work-activities.ts";
 import { newEstimateKey } from "./estimate-open.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
@@ -212,7 +214,7 @@ export function rememberLocalPack(
       : existing?.status
         ? parseEstimateStatus(existing.status)
         : undefined;
-  const status = rawStatus ? clampEstimateStatus(rawStatus, site, client) : undefined;
+  const status = rawStatus ? clampStatusForSite(rawStatus, site, client, catalogSites()) : undefined;
   const unchanged =
     existing &&
     existing.title === title &&

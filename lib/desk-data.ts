@@ -1,4 +1,6 @@
 import { assignedCompanyId, catalogVisibleTo, type CompanyScope } from "./companies.ts";
+import { applyRegularClient } from "./site-regular.ts";
+import { peekRegularClientOverrides } from "./site-regular-overrides.ts";
 import type {
   ActivityLine,
   ChangeOrderRecord,
@@ -33,6 +35,7 @@ const SITES: SiteRecord[] = [
     contract: "As bid",
     gate: "Plant security",
     notes: "Georgia Power tile on the Madison desk.",
+    regularClient: false,
   },
   {
     id: "site-rodeo",
@@ -50,6 +53,7 @@ const SITES: SiteRecord[] = [
     contract: "Master T&M",
     gate: "Contractor gate",
     notes: "P66 plant card.",
+    regularClient: true,
   },
   {
     id: "site-bayway",
@@ -67,6 +71,7 @@ const SITES: SiteRecord[] = [
     contract: "Master T&M",
     gate: "Contractor gate",
     notes: "P66 plant card.",
+    regularClient: true,
   },
   {
     id: "site-ferndale",
@@ -83,7 +88,8 @@ const SITES: SiteRecord[] = [
     turnaround: "As released",
     contract: "Master T&M",
     gate: "Contractor gate",
-    notes: "P66 plant card.",
+    notes: "P66 plant card. Competitive bid until Madison presence is Regular.",
+    regularClient: false,
   },
   {
     id: "site-madison",
@@ -101,6 +107,7 @@ const SITES: SiteRecord[] = [
     contract: "Master T&M + discrete lump-sum packages",
     gate: "North contractor gate · badge + TWIC",
     notes: "Client and contractor records are loaded for estimating only. Not Madison software.",
+    regularClient: true,
   },
   {
     id: "site-billings",
@@ -118,6 +125,7 @@ const SITES: SiteRecord[] = [
     contract: "Master T&M",
     gate: "Contractor gate",
     notes: "P66 plant card.",
+    regularClient: false,
   },
   {
     id: "site-monroe",
@@ -135,6 +143,7 @@ const SITES: SiteRecord[] = [
     contract: "As bid",
     gate: "Plant security",
     notes: "Monroe Energy tile on the Madison desk.",
+    regularClient: false,
   },
 ];
 
@@ -330,7 +339,7 @@ const OWNER_BOARD: ForgebookBoard = {
 };
 
 export function catalogSites(): SiteRecord[] {
-  return SITES;
+  return applyRegularClient(SITES, peekRegularClientOverrides());
 }
 
 export function catalogEstimates(): EstimateRecord[] {
@@ -338,11 +347,12 @@ export function catalogEstimates(): EstimateRecord[] {
 }
 
 export function boardForUser(userId: string, scope?: CompanyScope | null): ForgebookBoard {
-  if (userId === OWNER || scope?.isOwner) return OWNER_BOARD;
+  const sites = catalogSites();
+  if (userId === OWNER || scope?.isOwner) return { ...OWNER_BOARD, sites };
   if (assignedCompanyId(scope) === "madison") {
     return {
       ...EMPTY,
-      sites: SITES.filter((site) => catalogVisibleTo(scope, site.client, site.name, site.family, site.city)),
+      sites: sites.filter((site) => catalogVisibleTo(scope, site.client, site.name, site.family, site.city)),
       estimates: ESTIMATES.filter((row) => catalogVisibleTo(scope, row.client, row.title, row.unit)),
     };
   }

@@ -106,6 +106,7 @@ export function EstimateWorkspace({
   status = "Draft",
   onStatus: _onStatus,
   statusLocked: _statusLocked = false,
+  regularClient,
   onName,
   children,
 }: {
@@ -123,6 +124,7 @@ export function EstimateWorkspace({
   status?: EstimateStatus;
   onStatus?: (next: EstimateStatus) => void;
   statusLocked?: boolean;
+  regularClient?: boolean;
   onName?: (next: string) => void;
   children: React.ReactNode;
 }) {
@@ -167,6 +169,7 @@ export function EstimateWorkspace({
         companyLogo: await fetchEstimateCompanyLogo(boundClient, boundSite),
         preparedBy: exporterDisplayName(user?.name, user?.email),
         status: pack.status || status,
+        regularClient,
       });
       if (!bytes.byteLength) throw new Error("empty-workbook");
       downloadXlsx(estimateXlsxFilename({ site: boundSite, title: name || crumb }), bytes);

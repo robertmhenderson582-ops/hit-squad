@@ -4,16 +4,18 @@ import { useEffect, useState } from "react";
 import { CreatedBy } from "@/components/CreatedBy";
 import { useAlias, useLensUser } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
+import { catalogSites } from "@/lib/desk-data";
 import {
   clampEstimateStatus,
-  estimateStatusLane,
+  estimateStatusLaneFromRegular,
   isEstimateLocked,
   needsStatusConfirm,
   statusConfirmCopy,
   statusNeedsManager,
-  statusOptionsForSite,
+  statusOptionsForRegular,
   type EstimateStatus,
 } from "@/lib/estimate-status";
+import { regularClientFromParts } from "@/lib/site-regular";
 import { isProjectManagerOrAbove } from "@/lib/desk-role";
 import { DateField } from "@/components/DateField";
 import { useEstimatePackage } from "@/components/EstimatePackage";
@@ -53,6 +55,7 @@ export function JobSetupCard({
   status = "Draft",
   onStatus,
   statusLocked = false,
+  regularClient,
   children,
 }: {
   type: string;
@@ -68,6 +71,7 @@ export function JobSetupCard({
   status?: EstimateStatus;
   onStatus?: (next: EstimateStatus) => void;
   statusLocked?: boolean;
+  regularClient?: boolean;
   children?: React.ReactNode;
 }) {
   const pack = useEstimatePackage();
@@ -97,9 +101,11 @@ export function JobSetupCard({
   }
   const offer = offerRateBookForSite(site || "");
   const canAward = isProjectManagerOrAbove(lens);
-  const lane = estimateStatusLane(site || "", client);
-  const options = statusOptionsForSite(site || "", client);
-  const liveStatus = clampEstimateStatus(status, site || "", client);
+  const flag =
+    typeof regularClient === "boolean" ? regularClient : regularClientFromParts(site || "", client, catalogSites());
+  const lane = estimateStatusLaneFromRegular(flag);
+  const options = statusOptionsForRegular(flag);
+  const liveStatus = clampEstimateStatus(status, flag);
 
   function requestStatus(next: EstimateStatus) {
     if (statusLocked && next !== "Draft") return;

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "
 import { dirname, join } from "node:path";
 
 import { SETTINGS_VAULT_KIND, SETTINGS_VAULT_NAME, readVaultJson, writeVaultJson } from "./drive-data.ts";
+import { setRegularClientOverrides, writeRegularClientOverride } from "./site-regular-overrides.ts";
 import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import {
   VIEW_RESPONSIBILITIES,
@@ -68,11 +69,22 @@ export function parseOwnerSettings(raw: unknown): OwnerSettings {
       inboxNotice: typeof pub.inboxNotice === "string" ? pub.inboxNotice : null,
     };
   }
+  if (row.regularClient && typeof row.regularClient === "object") {
+    const nextMap: Record<string, boolean> = {};
+    for (const [id, value] of Object.entries(row.regularClient)) {
+      if (typeof value === "boolean" && /^site-[a-z0-9-]+$/.test(id)) nextMap[id] = value;
+    }
+    next.regularClient = nextMap;
+  }
   return next;
 }
 
 function snapshot(): OwnerSettings {
-  return { ...settings, republish: { ...settings.republish } };
+  return {
+    ...settings,
+    republish: { ...settings.republish },
+    regularClient: { ...(settings.regularClient ?? {}) },
+  };
 }
 
 function readCache(): OwnerSettings | null {
@@ -103,6 +115,7 @@ function resolveAdapter(): DriveAdapter | null {
 
 async function persist() {
   writeCache(settings);
+  setRegularClientOverrides(settings.regularClient ?? {});
   const drive = resolveAdapter();
   if (drive) await writeVaultJson(drive, SETTINGS_VAULT_NAME, SETTINGS_VAULT_KIND, snapshot());
 }
@@ -145,6 +158,7 @@ async function hydrateOwnerSettings(): Promise<OwnerSettings> {
   }
   hydrated = true;
   if (clearStaleRepublish()) await persist();
+  setRegularClientOverrides(settings.regularClient ?? {});
   return snapshot();
 }
 
@@ -162,6 +176,21 @@ export async function setOwnerSettings(next: Partial<OwnerSettings>): Promise<Ow
   }
   if (typeof next.viewSite === "string") settings.viewSite = next.viewSite;
   if (next.republish) settings.republish = { ...settings.republish, ...next.republish, buildStamp: BUILD_STAMP };
+  if (next.regularClient && typeof next.regularClient === "object") {
+    settings.regularClient = { ...(settings.regularClient ?? {}), ...next.regularClient };
+  }
+  await persist();
+  return snapshot();
+}
+
+export function peekRegularClientOverrides(): Record<string, boolean> {
+  return { ...(settings.regularClient ?? {}) };
+}
+
+export async function setSiteRegularClient(siteId: string, regularClient: boolean): Promise<OwnerSettings> {
+  await hydrateOwnerSettings();
+  settings.regularClient = { ...(settings.regularClient ?? {}), [siteId]: regularClient };
+  writeRegularClientOverride(siteId, regularClient);
   await persist();
   return snapshot();
 }
@@ -200,6 +229,7 @@ export async function clearRepublish(): Promise<OwnerSettings> {
 
 export function resetOwnerSettingsForTests() {
   settings = defaultSettings();
+  setRegularClientOverrides({});
   hydrated = false;
   injectedAdapter = undefined;
   const path = ownerSettingsPath();
@@ -210,6 +240,7 @@ export function resetOwnerSettingsForTests() {
 
 export function forgetOwnerSettingsCacheForTests() {
   settings = defaultSettings();
+  setRegularClientOverrides({});
   hydrated = false;
   const path = ownerSettingsPath();
   if (existsSync(path)) unlinkSync(path);

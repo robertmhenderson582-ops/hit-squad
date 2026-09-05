@@ -1,4 +1,6 @@
+import { catalogSites } from "./desk-data.ts";
 import { readEstimateStatus, resolveEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
+import { regularClientFromParts } from "./site-regular.ts";
 import { estimateStorageKey } from "./estimate-open.ts";
 import { listLocalPacks, storageKeyForPack, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
@@ -70,7 +72,12 @@ export function awardedLocalJobs(
   return packs
     .filter(
       (pack) =>
-        resolveEstimateStatus(pack.status, pack.packId, target as Storage | null, pack.site, pack.client) === "Awarded",
+        resolveEstimateStatus(
+          pack.status,
+          pack.packId,
+          target as Storage | null,
+          regularClientFromParts(pack.site, pack.client, catalogSites()),
+        ) === "Awarded",
     )
     .map((pack) => ({
       id: pack.packId,

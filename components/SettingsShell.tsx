@@ -26,6 +26,7 @@ const SECTIONS: {
   { href: "/settings/republish", label: "Heads up — republish", buildDesk: true },
   { href: "/settings/vault", label: "Data vault", buildDesk: true },
   { href: "/settings/branding", label: "Branding", buildDesk: true },
+  { href: "/settings/sites", label: "Sites", buildDesk: true },
   { href: "/settings/checks", label: "Checks", ownerOnly: true },
   { href: "/settings/modules", label: "Future modules" },
 ];

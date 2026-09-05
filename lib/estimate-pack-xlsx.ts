@@ -9,6 +9,7 @@
  * earlier Excel/desk paths on this branch stay views of that same pack.
  */
 import { hydrateSupportLines, syncCraftRows, syncSupportRows, type CraftRow } from "./craft-labor.ts";
+import { catalogSites } from "./desk-data.ts";
 import { parseEquipmentSheet } from "./equipment-sheet.ts";
 import { deskPackageTotal, fcrChangeOrderTotal, fcrFromUnknown } from "./estimate-desk-total.ts";
 import { parseIncomingPack, type EstimatePackSnapshot } from "./estimate-pack.ts";
@@ -23,6 +24,7 @@ import { parseOtherCostJson, syncOtherCostTravel } from "./other-cost.ts";
 import { mergeSchedule, type PhaseScheduleState } from "./phase-schedule.ts";
 import { hydrateJobMeta } from "./staffing-plan.ts";
 import { normalizeSubSheet, type SubSheet } from "./subcontractor.ts";
+import { regularClientFromParts } from "./site-regular.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -77,6 +79,7 @@ export function packSnapshotToXlsxInput(pack: EstimatePackSnapshot): EstimateXls
     subcontractor: normalizeSubSheet(asRecord(pack.subcontractor) as Partial<SubSheet> | null),
     changeOrders: fcrChangeOrderTotal(fcrFromUnknown(pack.fcr)),
     status: pack.status,
+    regularClient: regularClientFromParts(pack.site, pack.client, catalogSites()),
   };
 }
 

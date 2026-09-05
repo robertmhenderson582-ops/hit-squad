@@ -136,7 +136,9 @@ import {
 } from "./third-party-rental.ts";
 import { emptySubSheet, lineAmount, subCardTotal, type SubSheet } from "./subcontractor.ts";
 import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
+import { catalogSites } from "./desk-data.ts";
 import { clampEstimateStatus, parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
+import { regularClientFromParts } from "./site-regular.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
 import { buildWorkbook, colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
@@ -281,6 +283,8 @@ export type EstimateXlsxInput = {
   preparedBy?: string | null;
   /** Live pack status. Export-only; import does not overwrite the pack. */
   status?: EstimateStatus | string | null;
+  /** Open site Regular-client flag. When omitted, catalog seed/override is used. */
+  regularClient?: boolean;
 };
 
 type CrewLane = "staff" | "craft";
@@ -431,7 +435,11 @@ export function exporterDisplayName(name?: string | null, email?: string | null)
 }
 
 function headerByline(input: EstimateXlsxInput, when = new Date()): string {
-  const stamp = `${ESTIMATE_STATUS_LABEL}: ${clampEstimateStatus(parseEstimateStatus(input.status), input.site, input.client)}`;
+  const regular =
+    typeof input.regularClient === "boolean"
+      ? input.regularClient
+      : regularClientFromParts(input.site ?? "", input.client ?? "", catalogSites());
+  const stamp = `${ESTIMATE_STATUS_LABEL}: ${clampEstimateStatus(parseEstimateStatus(input.status), regular)}`;
   const prepared = exporterDisplayName(input.preparedBy, null);
   const who = prepared ? `${ESTIMATE_PREPARED_BY_LABEL}: ${prepared}  ·  ` : "";
   return `${stamp}  ·  ${who}${ESTIMATE_EXPORT_PRODUCER}  ·  ${ESTIMATE_EXPORT_CONFIDENTIAL}  ·  ${exportProducedLabel(when)}`;

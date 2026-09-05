@@ -31,6 +31,7 @@ import {
 import { emptyJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
 import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
 import { packIdFromStoreKey, findLocalPack, renameLocalPackTitle, touchLocalPack, writeLocalPackStatus } from "@/lib/local-estimates";
+import { catalogSites } from "@/lib/desk-data";
 import {
   DEFAULT_ESTIMATE_STATUS,
   clampEstimateStatus,
@@ -39,6 +40,7 @@ import {
   writeEstimateStatus,
   type EstimateStatus,
 } from "@/lib/estimate-status";
+import { regularClientFromParts } from "@/lib/site-regular";
 import { hydrateFromVault, flushVaultUpsert, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
 import { persistCrewTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
@@ -90,21 +92,29 @@ function emptyCrew(): CrewState {
 function packSite(estimateKey: string) {
   const packId = packIdFromStoreKey(estimateKey);
   const local = packId ? findLocalPack(packId) : null;
-  return { packId, local, site: local?.site || "", client: local?.client || "" };
+  const site = local?.site || "";
+  const client = local?.client || "";
+  return {
+    packId,
+    local,
+    site,
+    client,
+    regularClient: regularClientFromParts(site, client, catalogSites()),
+  };
 }
 
 function readPackStatus(estimateKey: string): EstimateStatus {
-  const { packId, local, site, client } = packSite(estimateKey);
+  const { packId, local, regularClient } = packSite(estimateKey);
   if (!packId) return DEFAULT_ESTIMATE_STATUS;
   const raw = local?.status ? parseEstimateStatus(local.status) : readEstimateStatus(packId);
-  return clampEstimateStatus(raw, site, client);
+  return clampEstimateStatus(raw, regularClient);
 }
 
 /** Write missing pack status once so vault JSON becomes source of truth. Clamp invalid lane statuses. */
 function hydratePackStatus(estimateKey: string, status: EstimateStatus) {
-  const { packId, local, site, client } = packSite(estimateKey);
+  const { packId, local, regularClient } = packSite(estimateKey);
   if (!packId) return;
-  const next = clampEstimateStatus(status, site, client);
+  const next = clampEstimateStatus(status, regularClient);
   if (!local?.status || parseEstimateStatus(local.status) !== next) {
     writeLocalPackStatus(packId, next);
   }
@@ -362,8 +372,8 @@ export function EstimatePackageProvider({
         setJobMetaState((current) => (typeof next === "function" ? next(current) : next));
       },
       setPackStatus(next) {
-        const { packId, site, client } = packSite(estimateKey);
-        const parsed = clampEstimateStatus(parseEstimateStatus(next), site, client);
+        const { packId, regularClient } = packSite(estimateKey);
+        const parsed = clampEstimateStatus(parseEstimateStatus(next), regularClient);
         setStatusState(parsed);
         if (!packId) return parsed;
         const saved = writeLocalPackStatus(packId, parsed);

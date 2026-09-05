@@ -62,6 +62,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
         estimate={estimate}
         siteName={siteName}
         siteCode={site?.code}
+        regularClient={site?.regularClient}
         staffing={staffing}
         alias={alias}
         title={shown}
@@ -77,6 +78,7 @@ function EstimateDetailBody({
   estimate,
   siteName,
   siteCode,
+  regularClient,
   staffing,
   alias,
   title,
@@ -87,6 +89,7 @@ function EstimateDetailBody({
   estimate: EstimateRecord;
   siteName: string;
   siteCode?: string;
+  regularClient?: boolean;
   staffing: StaffingLine[];
   alias: (value: string) => string;
   title: string;
@@ -114,6 +117,7 @@ function EstimateDetailBody({
       staffing={staffing}
       status={status}
       onStatus={(next) => pack.setPackStatus(next)}
+      regularClient={regularClient}
     >
       {tab === "summary" ? (
         <div className="space-y-5">
@@ -130,6 +134,7 @@ function EstimateDetailBody({
             existingClient
             status={status}
             onStatus={(next) => pack.setPackStatus(next)}
+            regularClient={regularClient}
           >
             {status !== "Draft" ? (
               <>

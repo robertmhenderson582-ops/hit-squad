@@ -1,4 +1,6 @@
-import { clampEstimateStatus, parseEstimateStatus, resolveEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
+import { catalogSites } from "./desk-data.ts";
+import { parseEstimateStatus, resolveEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
+import { clampStatusForSite, regularClientFromParts } from "./site-regular.ts";
 import { ACTIVITY_STORE_PREFIX } from "./work-activities.ts";
 import { FCR_STORE_PREFIX } from "./change-order-packet.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
@@ -383,7 +385,12 @@ export function collectPack(
     transferredTo: identity.transferredTo,
     transferredToName: identity.transferredToName,
     transferredFromName: identity.transferredFromName,
-    status: resolveEstimateStatus(identity.status, packId, store as Storage, identity.site, identity.client),
+    status: resolveEstimateStatus(
+      identity.status,
+      packId,
+      store as Storage,
+      regularClientFromParts(identity.site, identity.client, catalogSites()),
+    ),
     schedule: readStoreJson(store, `${PHASE_STORE_PREFIX}${key}`) ?? undefined,
     crew: readStoreJson(store, `${CREW_STORE_PREFIX}${key}`) ?? undefined,
     orgChart: readStoreJson(store, `${ORG_CHART_STORE_PREFIX}${key}`) ?? undefined,
@@ -477,7 +484,7 @@ export function parseIncomingPack(input: unknown): { ok: true; pack: EstimatePac
     transferredTo: typeof row?.transferredTo === "string" ? row.transferredTo : undefined,
     transferredToName: typeof row?.transferredToName === "string" ? row.transferredToName : undefined,
     transferredFromName: typeof row?.transferredFromName === "string" ? row.transferredFromName : undefined,
-    status: row && "status" in row ? clampEstimateStatus(parseEstimateStatus(row.status), site, client) : undefined,
+    status: row && "status" in row ? clampStatusForSite(parseEstimateStatus(row.status), site, client, catalogSites()) : undefined,
     schedule: row?.schedule,
       crew: row?.crew,
       orgChart: row?.orgChart,
