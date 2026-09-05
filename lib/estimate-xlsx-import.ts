@@ -548,13 +548,13 @@ function blocksBySheet(blocks: ImportedBlock[]): Array<{ sheet: string; blocks: 
     .filter((item) => item.blocks.length);
 }
 
-export type AppliedEstimateImport = EstimatePackSnapshot & {
+export type AppliedEstimateImport = Omit<EstimatePackSnapshot, "schedule" | "crew"> & {
   schedule: PhaseScheduleState;
   crew: EstimateXlsxCrew;
 };
 
 export function applyEstimateImport(base: EstimatePackSnapshot, imported: EstimateImport): AppliedEstimateImport {
-  const schedule = imported.schedule;
+  const schedule = mergeSchedule(imported.schedule);
   const crew = applyBlocks(asCrew(base.crew), blocksBySheet(imported.blocks), schedule.phases);
   return {
     ...base,

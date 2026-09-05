@@ -37,6 +37,7 @@ import {
 } from "@/lib/estimate-xlsx-import";
 import type { EstimateStatus } from "@/lib/estimate-status";
 import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
+import { mergeSchedule, type PhaseScheduleState } from "@/lib/phase-schedule";
 import { RODEO_TAB_ID, RODEO_TAB_LABEL, showsRodeoTab } from "@/lib/rodeo-form";
 import { readSubSheet } from "@/lib/subcontractor";
 import { downloadXlsx } from "@/lib/xlsx-minimal";
@@ -185,8 +186,9 @@ export function EstimateWorkspace({
         },
         pendingImport,
       );
+      const schedule: PhaseScheduleState = mergeSchedule(next.schedule);
       pack.replaceFromImport({
-        schedule: next.schedule,
+        schedule,
         crew: {
           staff: next.crew.staff ?? [],
           generalForeman: next.crew.generalForeman ?? [],
