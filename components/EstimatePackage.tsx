@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   blankCraftRow,
   hydrateSupportLines,
@@ -41,7 +41,13 @@ import {
   type EstimateStatus,
 } from "@/lib/estimate-status";
 import { regularClientFromParts } from "@/lib/site-regular";
-import { hydrateFromVault, flushVaultUpsert, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
+import {
+  ESTIMATE_VAULT_DEBOUNCE_MS,
+  flushVaultUpsert,
+  hydrateFromVault,
+  scheduleVaultUpsert,
+  type VaultUpsertResult,
+} from "@/lib/estimate-vault-client";
 import { persistCrewTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
 import { emptyOrgChart, readOrgChart, writeOrgChart, type OrgChartState } from "@/lib/org-chart";
@@ -178,9 +184,35 @@ export function EstimatePackageProvider({
   const [status, setStatusState] = useState<EstimateStatus>(() => readPackStatus(estimateKey));
   const [ready, setReady] = useState(false);
   const [vaultSaveError, setVaultSaveError] = useState("");
+  const aliveRef = useRef(true);
+  const reportVaultErrors = useRef(false);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  function applyVaultFlushResult(result: VaultUpsertResult, opts?: { force?: boolean }) {
+    if (!aliveRef.current) return;
+    if (result.ok) {
+      setVaultSaveError("");
+      return;
+    }
+    if ((opts?.force || reportVaultErrors.current) && "error" in result && result.error) {
+      setVaultSaveError(result.error);
+    }
+  }
+
+  function queueVaultUpsert(packId: string) {
+    scheduleVaultUpsert(packId, undefined, applyVaultFlushResult);
+  }
 
   useEffect(() => {
     let cancelled = false;
+    reportVaultErrors.current = false;
+    setVaultSaveError("");
     setReady(false);
     const packId = packIdFromStoreKey(estimateKey);
     const boot = packId ? hydrateFromVault() : Promise.resolve([]);
@@ -196,13 +228,21 @@ export function EstimatePackageProvider({
       setStatusState(nextStatus);
       hydratePackStatus(estimateKey, nextStatus);
       setReady(true);
-      if (packId) {
-        void flushVaultUpsert(packId).then((result) => {
-          if (cancelled) return;
-          if (!result.ok && "error" in result && result.error) setVaultSaveError(result.error);
-          else setVaultSaveError("");
-        });
-      }
+      if (!packId) return;
+      void (async () => {
+        const first = await flushVaultUpsert(packId);
+        if (cancelled || !aliveRef.current) return;
+        if (first.ok) {
+          setVaultSaveError("");
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        if (cancelled || !aliveRef.current) return;
+        const retry = await flushVaultUpsert(packId);
+        if (cancelled || !aliveRef.current) return;
+        if (retry.ok) setVaultSaveError("");
+        else console.warn("Drive sync delayed", "error" in retry ? retry.error : "");
+      })();
     });
     return () => {
       cancelled = true;
@@ -212,11 +252,19 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
+    const timer = window.setTimeout(() => {
+      reportVaultErrors.current = true;
+    }, ESTIMATE_VAULT_DEBOUNCE_MS + 400);
+    return () => window.clearTimeout(timer);
+  }, [estimateKey, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
     writeSchedule(estimateKey, schedule);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
       touchLocalPack(packId);
-      scheduleVaultUpsert(packId);
+      queueVaultUpsert(packId);
     }
   }, [estimateKey, ready, schedule]);
 
@@ -230,7 +278,7 @@ export function EstimatePackageProvider({
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
       touchLocalPack(packId);
-      scheduleVaultUpsert(packId);
+      queueVaultUpsert(packId);
     }
   }, [crew, estimateKey, jobMeta.craftMileageRate, jobMeta.staffMileageRate, ready]);
 
@@ -240,7 +288,7 @@ export function EstimatePackageProvider({
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
       touchLocalPack(packId);
-      scheduleVaultUpsert(packId);
+      queueVaultUpsert(packId);
     }
   }, [estimateKey, orgChart, ready]);
 
@@ -250,7 +298,7 @@ export function EstimatePackageProvider({
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
       touchLocalPack(packId);
-      scheduleVaultUpsert(packId);
+      queueVaultUpsert(packId);
     }
   }, [estimateKey, jobMeta, ready]);
 
@@ -260,7 +308,7 @@ export function EstimatePackageProvider({
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
       touchLocalPack(packId);
-      scheduleVaultUpsert(packId);
+      queueVaultUpsert(packId);
     }
   }, [activities, estimateKey, ready]);
 
@@ -270,7 +318,7 @@ export function EstimatePackageProvider({
     if (!packId) return;
     return onEstimateSheets(() => {
       touchLocalPack(packId);
-      scheduleVaultUpsert(packId);
+      queueVaultUpsert(packId);
     });
   }, [estimateKey, ready]);
 
@@ -361,7 +409,7 @@ export function EstimatePackageProvider({
           if (packId) {
             renameLocalPackTitle(packId, next.title);
             touchLocalPack(packId);
-            scheduleVaultUpsert(packId);
+            queueVaultUpsert(packId);
           }
         }
       },
@@ -380,7 +428,7 @@ export function EstimatePackageProvider({
         writeEstimateStatus(packId, parsed);
         if (saved) {
           touchLocalPack(packId);
-          scheduleVaultUpsert(packId);
+          queueVaultUpsert(packId);
           return saved.status ?? parsed;
         }
         return parsed;
@@ -391,7 +439,7 @@ export function EstimatePackageProvider({
         const renamed = renameLocalPackTitle(packId, title);
         if (renamed) {
           touchLocalPack(packId);
-          scheduleVaultUpsert(packId);
+          queueVaultUpsert(packId);
           return renamed.title;
         }
         return null;
