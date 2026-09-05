@@ -6,6 +6,7 @@ import {
   hydrateJobMoney,
   isCbaCraftLane,
   laborContingencyDollars,
+  moneyAdderLines,
   moreFundDollars,
   moreFundIsEmpty,
   subsContingencyDollars,
@@ -44,6 +45,16 @@ describe("labor contingency", () => {
     assert.equal(laborContingencyDollars(labor, 10), 100);
     assert.notEqual(laborContingencyDollars(labor + pd, 10), 100);
     assert.equal(laborContingencyDollars(labor, 0), 0);
+  });
+
+  it("does not fold CBA into the labor contingency base", () => {
+    const lines = moneyAdderLines({
+      labor: 1000,
+      money: { laborContingencyPct: 10, cbaIncreaseOn: true },
+      cbaIncrease: 200,
+    });
+    assert.equal(lines.laborContingency, 100);
+    assert.equal(lines.cbaIncrease, 200);
   });
 });
 

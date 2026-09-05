@@ -2318,8 +2318,21 @@ describe("estimate excel export", () => {
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${rowOf("6.5% markup")}`) > 0, true);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${rowOf("6.5% markup")}`), 0);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${rowOf("ESTIMATE TOTAL $")}`) > 0, true);
-    assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${rowOf("Labor contingency")}`)?.value), /Job setup/);
-    assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${rowOf("Labor contingency")}`)?.value), new RegExp(`N\\(.*${JOB_SETUP_LABOR_CONT_CELL}`));
+    const laborContFormula = String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${rowOf("Labor contingency")}`)?.value);
+    assert.match(laborContFormula, /Job setup/);
+    assert.match(laborContFormula, new RegExp(`N\\(.*${JOB_SETUP_LABOR_CONT_CELL}`));
+    assert.match(laborContFormula, /^C\d+\*N\(/);
+    assert.equal(/\+C\d+/.test(laborContFormula), false);
+    const laborDollars = evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${rowOf("Labor $")}`);
+    const laborCont = evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${rowOf("Labor contingency")}`);
+    const cbaDollars = evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${rowOf("CBA increase")}`);
+    assert.equal(Math.round(laborCont * 100) / 100, Math.round(laborDollars * 0.1 * 100) / 100);
+    assert.equal(cbaDollars > 0, true);
+    assert.notEqual(Math.round(laborCont * 100) / 100, Math.round((laborDollars + cbaDollars) * 0.1 * 100) / 100);
+    assert.equal(
+      Math.round(evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${rowOf("ESTIMATE TOTAL $")}`) * 100) / 100,
+      deskEstimateTotal(input),
+    );
     assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${rowOf("Equipment contingency")}`)?.value), new RegExp(`N\\(.*${JOB_SETUP_EQUIP_CONT_CELL}`));
     assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${rowOf("M.O.R.E. fund")}`)?.value), new RegExp(`N\\(.*${JOB_SETUP_MORE_CELL}`));
   });

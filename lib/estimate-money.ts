@@ -142,6 +142,7 @@ export function isMoreCraftLane(
   return false;
 }
 
+/** Labor ST/OT/DT $ only. CBA is its own adder — do not fold it into this base. */
 export function laborContingencyDollars(laborStOtDt: number, pct: number) {
   return pctOf(laborStOtDt, pct);
 }
@@ -315,9 +316,8 @@ export function moneyAdderLines(input: {
   const subs = Number(input.subcontractor) || 0;
   const cba = Number(input.cbaIncrease) || 0;
   const more = Number(input.moreFund) || 0;
-  const laborBase = labor + (cba > 0 ? cba : 0);
   return {
-    laborContingency: laborContingencyDollars(laborBase, money.laborContingencyPct),
+    laborContingency: laborContingencyDollars(labor, money.laborContingencyPct),
     equipmentContingency: equipmentContingencyDollars(equipment, money.equipmentContingencyPct),
     subsContingency: subsContingencyDollars(subs, money.subsContingencyPct),
     cbaIncrease: money.cbaIncreaseOn ? cba : 0,

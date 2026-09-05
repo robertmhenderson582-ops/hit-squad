@@ -1817,9 +1817,9 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
   }
 
   if (laborAmountRef) {
-    const base = cbaRef ? `(${laborAmountRef}+${cbaRef})` : laborAmountRef;
+    // Labor ST/OT/DT $ only. CBA is its own Summary line — not in this base.
     moneyRefs.push(
-      addSummaryAmount(cells, row, LABOR_CONTINGENCY_LABEL, `${base}*${jobSetupNumRef(JOB_SETUP_LABOR_CONT_CELL)}/100`),
+      addSummaryAmount(cells, row, LABOR_CONTINGENCY_LABEL, `${laborAmountRef}*${jobSetupNumRef(JOB_SETUP_LABOR_CONT_CELL)}/100`),
     );
     row += 1;
   }
