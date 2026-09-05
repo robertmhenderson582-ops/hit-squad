@@ -264,6 +264,15 @@ function money(value: number) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
 
+/** Item/kind text through unit rate — not the formula Total $ (or Cost/Markup rollup). */
+function unlockInputCols(
+  unlocked: Array<{ row: number; col: number }>,
+  row: number,
+  lastInputCol: number,
+) {
+  for (let col = 1; col <= lastInputCol; col += 1) unlocked.push({ row, col });
+}
+
 function quoteSheet(name: string) {
   return /[^A-Za-z0-9]/.test(name) ? `'${name.replaceAll("'", "''")}'` : name;
 }
@@ -1123,6 +1132,7 @@ function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPa
   ["Item", "Period", "Qty", "Periods", "Rate $", "Freight $", "Cost $", "Total $"].forEach((label, index) => {
     pushText(cells, `${colLetter(index + 1)}6`, label);
   });
+  const unlocked: Array<{ row: number; col: number }> = [];
   live.forEach((line, index) => {
     const excelRow = 7 + index;
     const periods = billedPeriodCount(line.start, line.end, line.period);
@@ -1134,6 +1144,7 @@ function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPa
     pushNum(cells, `F${excelRow}`, line.freight);
     pushFormula(cells, `G${excelRow}`, `C${excelRow}*D${excelRow}*E${excelRow}+F${excelRow}`);
     pushFormula(cells, `H${excelRow}`, `G${excelRow}*${1 + commercialMarkupRate(input.client, input.site)}`);
+    unlockInputCols(unlocked, excelRow, 6);
   });
   const first = 7;
   const last = 6 + live.length;
@@ -1141,7 +1152,7 @@ function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPa
   pushText(cells, `A${totalRow}`, "TOTAL");
   pushFormula(cells, `G${totalRow}`, `SUM(G${first}:G${last})`);
   pushFormula(cells, `H${totalRow}`, `SUM(H${first}:H${last})`);
-  return { name, cells, costTotal: `G${totalRow}`, sheetTotal: `G${totalRow}` };
+  return { name, cells, costTotal: `G${totalRow}`, sheetTotal: `G${totalRow}`, unlocked };
 }
 
 function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
@@ -1151,6 +1162,7 @@ function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
   ["Item", "Period", "Qty", "Periods", "Rate $", "Freight $", "Total $"].forEach((label, index) => {
     pushText(cells, `${colLetter(index + 1)}6`, label);
   });
+  const unlocked: Array<{ row: number; col: number }> = [];
   live.forEach((line, index) => {
     const excelRow = 7 + index;
     const item = lookupShahanEquipment(line.itemId);
@@ -1164,13 +1176,14 @@ function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushNum(cells, `E${excelRow}`, rate);
     pushNum(cells, `F${excelRow}`, line.freight);
     pushFormula(cells, `G${excelRow}`, `C${excelRow}*D${excelRow}*E${excelRow}+F${excelRow}`);
+    unlockInputCols(unlocked, excelRow, 6);
   });
   const first = 7;
   const last = 6 + live.length;
   const totalRow = last + 1;
   pushText(cells, `A${totalRow}`, "TOTAL");
   pushFormula(cells, `G${totalRow}`, `SUM(G${first}:G${last})`);
-  return { name: ESTIMATE_XLSX_SHEETS.coe, cells, sheetTotal: `G${totalRow}` };
+  return { name: ESTIMATE_XLSX_SHEETS.coe, cells, sheetTotal: `G${totalRow}`, unlocked };
 }
 
 function liveTravel(line: TravelLine) {
@@ -1192,7 +1205,7 @@ function buildTravelSheet(input: EstimateXlsxInput, lines: TravelLine[], name: s
     pushNum(cells, `C${excelRow}`, line.miles);
     pushNum(cells, `D${excelRow}`, line.perMile);
     pushFormula(cells, `E${excelRow}`, `B${excelRow}*C${excelRow}*D${excelRow}`);
-    unlocked.push({ row: excelRow, col: 2 }, { row: excelRow, col: 3 }, { row: excelRow, col: 4 });
+    unlockInputCols(unlocked, excelRow, 4);
   });
   const first = 7;
   const last = 6 + live.length;
@@ -1218,7 +1231,7 @@ function buildMiscSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushNum(cells, `C${excelRow}`, Math.min(line.travelers, line.headcount || line.travelers));
     pushNum(cells, `D${excelRow}`, money(line.miles * line.perMile));
     pushFormula(cells, `E${excelRow}`, `C${excelRow}*D${excelRow}`);
-    unlocked.push({ row: excelRow, col: 2 }, { row: excelRow, col: 3 }, { row: excelRow, col: 4 });
+    unlockInputCols(unlocked, excelRow, 4);
     excelRow += 1;
   }
   for (const line of misc) {
@@ -1227,7 +1240,7 @@ function buildMiscSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushNum(cells, `C${excelRow}`, line.qty);
     pushNum(cells, `D${excelRow}`, line.each);
     pushFormula(cells, `E${excelRow}`, `C${excelRow}*D${excelRow}`);
-    unlocked.push({ row: excelRow, col: 2 }, { row: excelRow, col: 3 }, { row: excelRow, col: 4 });
+    unlockInputCols(unlocked, excelRow, 4);
     excelRow += 1;
   }
   const first = 7;

@@ -27,7 +27,7 @@
  * in A). Subtotal $ + Rate merge title through HC/HPS so those cells are not
  * empty holes; ST/OT/DT/PD rate+$ stay per-row.
  * ST/OT/DT Rate cells INDEX/MATCH the live Position (Support Bill as) on Rate Tables.
- * Calendar ST/OT/DT live-tie Job setup ON/Start/Stop/OT after 8 (G). Days/wk (4–7) and Hrs/day (8/9/10/12/13) are lists; one OT control. Long gates sit on hidden _JobDays so day cells stay short (Excel 8192-char limit). Column span is baked — Start/Stop beyond the exported window needs re-export. Phase bar stays painted (no VBA). Job setup F does not overwrite yellow HPS. CA 7th-day is a re-export gap. Misc/Travel Description, Qty, and Each stay unlocked; Total $ stays locked.
+ * Calendar ST/OT/DT live-tie Job setup ON/Start/Stop/OT after 8 (G). Days/wk (4–7) and Hrs/day (8/9/10/12/13) are lists; one OT control. Long gates sit on hidden _JobDays so day cells stay short (Excel 8192-char limit). Column span is baked — Start/Stop beyond the exported window needs re-export. Phase bar stays painted (no VBA). Job setup F does not overwrite yellow HPS. CA 7th-day is a re-export gap. Misc/Travel/Equipment/COE Item, Description, Qty, travelers, miles, and unit rates stay unlocked; formula Total $ stays locked.
  *
  * Adjustable Job setup + phase-bar import ships on this compile (the next Excel compile
  * after Look). A Job setup sheet/card (phases / dates / OT picks) drives

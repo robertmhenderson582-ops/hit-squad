@@ -1527,10 +1527,10 @@ describe("estimate excel export", () => {
     const misc = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc);
     const travel = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.travel);
     assert.ok(setup);
-    assert.equal(Boolean(setup.getCell("B7").protection?.locked), false);
-    assert.equal(Boolean(setup.getCell("E7").protection?.locked), false);
-    assert.equal(Boolean(setup.getCell("F7").protection?.locked), false);
-    assert.equal(Boolean(setup.getCell("G7").protection?.locked), false);
+    assert.equal(setup.getCell("B7").protection?.locked, false);
+    assert.equal(setup.getCell("E7").protection?.locked, false);
+    assert.equal(setup.getCell("F7").protection?.locked, false);
+    assert.equal(setup.getCell("G7").protection?.locked, false);
     assert.ok(setup.getCell("E7").dataValidation);
     assert.ok(setup.getCell("F7").dataValidation);
     assert.ok(setup.getCell("G7").dataValidation);
@@ -1538,21 +1538,68 @@ describe("estimate excel export", () => {
     assert.equal(setup.getCell("G6").value, "OT after 8");
     assert.notEqual(setup.getCell("H6").value, "OT pick");
     assert.ok(misc);
-    assert.equal(Boolean(misc.getCell("B7").protection?.locked), false);
-    assert.equal(Boolean(misc.getCell("C7").protection?.locked), false);
-    assert.equal(Boolean(misc.getCell("D7").protection?.locked), false);
+    assert.equal(misc.getCell("A7").protection?.locked, false);
+    assert.equal(misc.getCell("B7").protection?.locked, false);
+    assert.equal(misc.getCell("C7").protection?.locked, false);
+    assert.equal(misc.getCell("D7").protection?.locked, false);
     assert.equal(misc.getCell("E7").protection?.locked !== false, true);
     assert.ok(travel);
-    assert.equal(Boolean(travel.getCell("B7").protection?.locked), false);
-    assert.equal(Boolean(travel.getCell("C7").protection?.locked), false);
-    assert.equal(Boolean(travel.getCell("D7").protection?.locked), false);
+    assert.equal(travel.getCell("A7").protection?.locked, false);
+    assert.equal(travel.getCell("B7").protection?.locked, false);
+    assert.equal(travel.getCell("C7").protection?.locked, false);
+    assert.equal(travel.getCell("D7").protection?.locked, false);
     assert.equal(travel.getCell("E7").protection?.locked !== false, true);
+    const rental = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rental);
+    assert.ok(rental);
+    assert.equal(rental.getCell("A7").protection?.locked, false);
+    assert.equal(rental.getCell("B7").protection?.locked, false);
+    assert.equal(rental.getCell("C7").protection?.locked, false);
+    assert.equal(rental.getCell("D7").protection?.locked, false);
+    assert.equal(rental.getCell("E7").protection?.locked, false);
+    assert.equal(rental.getCell("F7").protection?.locked, false);
+    assert.equal(rental.getCell("G7").protection?.locked !== false, true);
+    assert.equal(rental.getCell("H7").protection?.locked !== false, true);
     let totalRow = 0;
     summary.eachRow((row, rowNumber) => {
       if (String(row.getCell(1).value ?? "") === "ESTIMATE TOTAL $") totalRow = rowNumber;
     });
     assert.equal(summary.getCell(`B${totalRow}`).protection?.locked !== false, true);
     assert.equal(rates.getCell("C7").protection?.locked !== false, true);
+  });
+
+  it("unlocks COE estimator inputs and keeps formula Total $ locked", async () => {
+    const bytes = await estimateToXlsx({
+      ...woodRiverFixture(),
+      equipment: {
+        ...woodRiverFixture().equipment,
+        largeTools: [
+          {
+            id: "lt-mover",
+            itemId: "air-mover",
+            period: "daily" as const,
+            qty: 1,
+            start: "2026-09-01",
+            end: "2026-09-01",
+            enteredCost: 0,
+            freight: 0,
+          },
+        ],
+      },
+    });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const coe = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.coe);
+    assert.ok(coe);
+    assert.equal(coe.getCell("A7").protection?.locked, false);
+    assert.equal(coe.getCell("B7").protection?.locked, false);
+    assert.equal(coe.getCell("C7").protection?.locked, false);
+    assert.equal(coe.getCell("D7").protection?.locked, false);
+    assert.equal(coe.getCell("E7").protection?.locked, false);
+    assert.equal(coe.getCell("F7").protection?.locked, false);
+    assert.equal(coe.getCell("G7").protection?.locked !== false, true);
+    const misc = sheetOf(buildEstimateWorkbook(woodRiverFixture()), ESTIMATE_XLSX_SHEETS.misc);
+    assert.ok(misc?.unlocked?.some((cell) => cell.row === 7 && cell.col === 1));
+    assert.equal(misc?.unlocked?.some((cell) => cell.row === 7 && cell.col === 5), false);
   });
 
   it("stacks hiring-progression ranges on the same day the way the desk does", () => {

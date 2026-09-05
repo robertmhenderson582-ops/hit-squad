@@ -401,6 +401,18 @@ export function isLaborPositionInput(sheet: WorkbookSheet, row: number, colNum: 
   return colNum === 2 && (sheet.laborBlocks?.some((block) => block.start === row) ?? false);
 }
 
+/** Job setup + Misc/Travel/Equipment/COE estimator inputs (not formula totals). */
+export function isSheetUnlockedInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
+  return sheet.unlocked?.some((item) => item.row === row && item.col === colNum) ?? false;
+}
+
+/** Chrome fill/font after the first write drops protection from the xf — re-apply last. */
+function applySheetUnlocks(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
+  for (const cell of sheet.unlocked ?? []) {
+    ws.getCell(cell.row, cell.col).protection = { locked: false };
+  }
+}
+
 function columnWidth(col: string, header: string | undefined, sheetName: string): number {
   const lower = (header ?? "").toLowerCase();
   const colNum = colIndex(col);
@@ -1300,13 +1312,12 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
           exCell.numFmt = FMT_HOURS;
         }
       }
-      const setupUnlock = sheet.unlocked?.some((item) => item.row === row && item.col === colNum);
       exCell.protection = {
         locked: !(
           isLaborDayInput(sheet, row, colNum) ||
           isLaborBillAsInput(sheet, row, colNum) ||
           isLaborPositionInput(sheet, row, colNum) ||
-          setupUnlock
+          isSheetUnlockedInput(sheet, row, colNum)
         ),
       };
     }
@@ -1392,6 +1403,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
         ws.getColumn(col).width = LABOR_DAY_COL_WIDTH;
       }
     }
+    applySheetUnlocks(ws, sheet);
     await ws.protect(SHEET_PROTECT_PASSWORD, labor ? LABOR_SHEET_PROTECT_OPTIONS : SHEET_PROTECT_OPTIONS);
   }
 
