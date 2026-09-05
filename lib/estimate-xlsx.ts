@@ -27,8 +27,11 @@
  * A category with no live lines is omitted; dollars are never invented.
  * Subcontractor tab is all subs (not crane-only). Summary Subs $ is desk
  * Subs ESTIMATE TOTAL (cost + affiliate-aware 6.5%). Weekend columns on
- * labor grids are shaded. Daily ST/OT/DT cells use the desk clock
- * (computeRangeHours / applyWeekly40). Summary ESTIMATE TOTAL $ is the same
+ * labor grids are shaded. Daily ST/OT/DT cells are live HC×HPS formulas
+ * (OT-after-N / Sunday DT / Saturday OT / weekly-40 via prior ST cells).
+ * Job setup OT-after-8 is baked at export. CA 7th-day DT is not in the day
+ * formula this pass. ST/OT/DT Rate cells INDEX/MATCH the live Position
+ * (or Support Bill as) against Rate Tables. Summary ESTIMATE TOTAL $ is the same
  * deskPackageTotal / estimateTotalBreakdown number as the Estimate Total rail.
  * Standing ripple rule (Robert 2026-09-04, RETROACTIVE — see excel-ripple.ts):
  * applies to Look chrome already on this branch and earlier Excel/desk
@@ -72,7 +75,17 @@ import {
 import { slugify } from "./estimate-pack.ts";
 import { deskPackageTotal } from "./estimate-desk-total.ts";
 import { commercialMarkupLabel, commercialMarkupRate, estimateMarkupDollars } from "./estimate-total.ts";
-import { boundOtLabel, computeRangeHours, parseYmd, type ClockOverride } from "./hours-clock.ts";
+import {
+  boundOtLabel,
+  clockTitle,
+  computeRangeHours,
+  eastCoastCraftOtAfter8,
+  mondayKey,
+  parseYmd,
+  runningClock,
+  type ClockOverride,
+  type RunningClock,
+} from "./hours-clock.ts";
 import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
 import { miscAmount, travelAmount, type OtherCostSheet, type TravelLine } from "./other-cost.ts";
 import {
@@ -332,9 +345,31 @@ function usedRateKeys(crew: EstimateXlsxCrew = {}): RateKey[] {
   return keys;
 }
 
-function rateCraftLabel(key: RateKey, keys: RateKey[]) {
-  const collisions = keys.filter((item) => item.title === key.title).length > 1;
-  return collisions ? `${key.title} · ${key.laborClass}` : key.title;
+function rateCraftLabel(key: RateKey) {
+  return key.title.trim();
+}
+
+/** Used crew keys first, then every Position / Bill as dropdown title. Column A matches the lists exactly. */
+function rateCatalogKeys(used: RateKey[]): RateKey[] {
+  const seen = new Set<string>();
+  const next: RateKey[] = [];
+  const add = (key: RateKey) => {
+    const title = key.title.trim();
+    if (!title || seen.has(title)) return;
+    seen.add(title);
+    next.push({ title, laborClass: key.laborClass });
+  };
+  for (const key of used) add(key);
+  for (const title of uniqueTitles([
+    ...SHAHAN_STAFF_TITLES,
+    ...SHAHAN_GENERAL_FOREMAN_TITLES,
+    ...SHAHAN_FOREMAN_TITLES,
+    ...SHAHAN_CRAFT_TITLES,
+    ...SUPPORT_BILLED_AS_TITLES,
+  ])) {
+    add({ title, laborClass: defaultLaborClass(title) });
+  }
+  return next;
 }
 
 function exportProducedLabel(when = new Date()): string {
@@ -433,7 +468,7 @@ function buildRateSheet(input: EstimateXlsxInput, keys: RateKey[]): BuiltSheet |
     const excelRow = 7 + index;
     const billed = billedRow(key.title, site, key.laborClass);
     const wage = wageRow(key.title, site, key.laborClass);
-    pushText(cells, `A${excelRow}`, rateCraftLabel(key, keys));
+    pushText(cells, `A${excelRow}`, rateCraftLabel(key));
     if (typeof wage?.baseSt === "number" && wage.baseSt > 0) pushNum(cells, `B${excelRow}`, wage.baseSt);
     if (hasShahanBillRate(billed)) {
       pushNum(cells, `C${excelRow}`, billed?.st ?? 0);
@@ -511,10 +546,90 @@ function buildRateSheet(input: EstimateXlsxInput, keys: RateKey[]): BuiltSheet |
   return { name: ESTIMATE_XLSX_SHEETS.rates, cells, merges, headerRows };
 }
 
-function rateCell(key: RateKey, keys: RateKey[], col: string) {
-  const index = keys.findIndex((item) => item.title === key.title && item.laborClass === key.laborClass);
-  if (index < 0) return "";
-  return sheetRef(ESTIMATE_XLSX_SHEETS.rates, `${col}${7 + index}`);
+function rateLookupFormula(lookupExpr: string, col: string, lastRow: number) {
+  if (lastRow < 7) return `"${SHAHAN_NO_RATE_LABEL}"`;
+  const sheet = quoteSheet(xlsxName(ESTIMATE_XLSX_SHEETS.rates));
+  const titleRange = `${sheet}!A$7:A$${lastRow}`;
+  const valueRange = `${sheet}!${col}$7:${col}$${lastRow}`;
+  return `IF(TRIM(${lookupExpr})="","${SHAHAN_NO_RATE_LABEL}",IFERROR(INDEX(${valueRange},MATCH(${lookupExpr},${titleRange},0)),"${SHAHAN_NO_RATE_LABEL}"))`;
+}
+
+function mondayStamp(ymd: string) {
+  const date = parseYmd(ymd);
+  return date ? mondayKey(date) : ymd;
+}
+
+function excelBlockClock(row: CraftRow, input: EstimateXlsxInput): RunningClock {
+  return runningClock(
+    clockTitle(row.position, row.billedAs ?? ""),
+    input.site ?? "",
+    input.client ?? "",
+    row.clockOverride === "comp" ? "comp" : "auto",
+    input.plantCode ?? "",
+  );
+}
+
+function rangeWeekKey(range: CalendarRange | undefined) {
+  if (!range) return "";
+  return range.id || `${range.phaseId ?? ""}|${range.start ?? ""}|${range.end ?? ""}`;
+}
+
+function dayOtAfter8(
+  row: CraftRow,
+  ymd: string,
+  night: boolean,
+  input: EstimateXlsxInput,
+  clock: RunningClock,
+) {
+  const cover = coveringRanges(row, ymd, night)[0];
+  const flagged = Boolean(cover?.otAfter8 ?? input.crew?.otAfter8);
+  if (clock === "east-coast") return eastCoastCraftOtAfter8(cover?.phaseId, flagged);
+  return flagged;
+}
+
+function dayHourFormulas(
+  col: string,
+  hcRow: number,
+  hpsRow: number,
+  clock: RunningClock,
+  otAfter8: boolean,
+  priorStRefs: string[],
+): { st: string; ot: string; dt: string } {
+  const hc = `${col}${hcRow}`;
+  const hps = `${col}${hpsRow}`;
+  const dateRef = `${col}$6`;
+  const dow = `WEEKDAY(${dateRef},1)`;
+  const none = `${hc}<=0`;
+  let dailySt: string;
+  let dailyOt: string;
+  let dailyDt: string;
+  if (clock === "ca-daily") {
+    dailySt = `IF(${none},0,MIN(8,${hps})*${hc})`;
+    dailyOt = `IF(${none},0,MIN(4,MAX(0,${hps}-8))*${hc})`;
+    dailyDt = `IF(${none},0,MAX(0,${hps}-12)*${hc})`;
+  } else if (clock === "staff") {
+    const cap = otAfter8 ? "8" : "10";
+    dailySt = `IF(${none},0,IF(${dow}=1,0,MIN(${cap},${hps})*${hc}))`;
+    dailyOt = `IF(${none},0,IF(${dow}=1,0,MAX(0,${hps}-${cap})*${hc}))`;
+    dailyDt = `IF(${none},0,IF(${dow}=1,${hc}*${hps},0))`;
+  } else {
+    const after8 = clock === "east-coast" ? otAfter8 : true;
+    if (after8) {
+      dailySt = `IF(${none},0,IF(${dow}=1,0,IF(${dow}=7,0,MIN(8,${hps})*${hc})))`;
+      dailyOt = `IF(${none},0,IF(${dow}=1,0,IF(${dow}=7,${hc}*${hps},MAX(0,${hps}-8)*${hc})))`;
+    } else {
+      dailySt = `IF(${none},0,IF(${dow}=1,0,IF(${dow}=7,0,${hc}*${hps})))`;
+      dailyOt = `IF(${none},0,IF(${dow}=1,0,IF(${dow}=7,${hc}*${hps},0)))`;
+    }
+    dailyDt = `IF(${none},0,IF(${dow}=1,${hc}*${hps},0))`;
+  }
+  const prior = priorStRefs.length ? priorStRefs.join("+") : "0";
+  const room = `MAX(0,40*MAX(1,${hc})-(${prior}))`;
+  return {
+    st: `MIN(${dailySt},${room})`,
+    ot: `${dailyOt}+((${dailySt})-MIN(${dailySt},${room}))`,
+    dt: dailyDt,
+  };
 }
 
 function pdRateFor(input: EstimateXlsxInput, staffPd: boolean) {
@@ -631,15 +746,14 @@ function dayPlug(row: CraftRow, ymd: string, night: boolean): { hc: number; hps:
   return { hc, hps, pd };
 }
 
-/** Desk per-day ST/OT/DT after applyWeekly40 — same clock the Estimate Total rail uses. */
+/** Per-day desk ST/OT/DT (each range + applyWeekly40). Used so export totals stay on the rail. */
 function deskBlockDayHours(
   row: CraftRow,
   night: boolean,
   input: EstimateXlsxInput,
-  lane: CrewLane,
 ): Map<string, { st: number; ot: number; dt: number }> {
   const map = new Map<string, { st: number; ot: number; dt: number }>();
-  const titled = withLaneClock(row, lane);
+  const override = row.clockOverride === "comp" ? "comp" : "auto";
   for (const range of row.ranges ?? []) {
     if (range.off) continue;
     const shift = rangeShift(row, range);
@@ -648,8 +762,8 @@ function deskBlockDayHours(
     if (night && shift === "Days & nights" && !(Number(range.nightHeadcount) || 0)) continue;
     const nightsOnly = night && shift === "Nights";
     const hours = computeRangeHours({
-      position: titled.position,
-      billedAs: titled.billedAs,
+      position: row.position,
+      billedAs: row.billedAs,
       site: input.site ?? "",
       client: input.client ?? "",
       plantCode: input.plantCode ?? "",
@@ -668,7 +782,7 @@ function deskBlockDayHours(
       perDiemPeople: rangeDayPd(row, range, night),
       otAfter8: range.otAfter8 ?? input.crew?.otAfter8,
       phaseId: range.phaseId,
-      clockOverride: titled.clockOverride ?? "auto",
+      clockOverride: override,
       skipDates: range.skipDates,
     });
     for (const day of hours.days) {
@@ -731,6 +845,7 @@ function buildCrewSheet(
   keys: RateKey[],
   staffPdOf: (row: CraftRow) => boolean,
   lane: CrewLane = "craft",
+  lastRateRow = 0,
 ): BuiltSheet | null {
   const live = liveCrewRows(rows).map((row) => withLaneClock(row, lane));
   if (!live.length) return null;
@@ -772,12 +887,10 @@ function buildCrewSheet(
     titleRows.push(titleRow);
     pdMoneyRows.push(pdRow);
 
-    const title = shahanCrewTitle(row);
-    const key = { title, laborClass: rowLaborClass(row) };
-    const billed = billedRow(title, input.site ?? "", key.laborClass);
-    const hasRate = hasShahanBillRate(billed);
-    const deskHours = deskBlockDayHours(row, night, input, lane);
     const firstDate = dates.length ? colLetter(LABOR_DATE_START_COL) : "";
+    const rateName = showBillAs ? `IF(TRIM(B${otRow})<>"",B${otRow},B${titleRow})` : `B${titleRow}`;
+    const clock = excelBlockClock(row, input);
+    const deskHours = deskBlockDayHours(row, night, input);
 
     const blockId = laborBlockId(row, night);
     const idCol = colLetter(LABOR_BLOCK_ID_COL);
@@ -812,33 +925,35 @@ function buildCrewSheet(
     pushText(cells, `E${dtRow}`, "DT");
     pushText(cells, `E${pdRow}`, LABOR_PD_TYPE);
 
-    if (hasRate) {
-      pushFormula(cells, `D${stRow}`, rateCell(key, keys, "C"));
-      pushFormula(cells, `D${otRow}`, rateCell(key, keys, "D"));
-      pushFormula(cells, `D${dtRow}`, rateCell(key, keys, "E"));
-      pushFormula(cells, `C${stRow}`, `F${titleRow}*D${stRow}`);
-      pushFormula(cells, `C${otRow}`, `G${titleRow}*D${otRow}`);
-      pushFormula(cells, `C${dtRow}`, `H${titleRow}*D${dtRow}`);
-    } else {
-      pushText(cells, `D${stRow}`, SHAHAN_NO_RATE_LABEL);
-      pushNum(cells, `C${stRow}`, 0);
-      pushNum(cells, `C${otRow}`, 0);
-      pushNum(cells, `C${dtRow}`, 0);
-    }
+    pushFormula(cells, `D${stRow}`, rateLookupFormula(rateName, "C", lastRateRow));
+    pushFormula(cells, `D${otRow}`, rateLookupFormula(rateName, "D", lastRateRow));
+    pushFormula(cells, `D${dtRow}`, rateLookupFormula(rateName, "E", lastRateRow));
+    pushFormula(cells, `C${stRow}`, `F${titleRow}*N(D${stRow})`);
+    pushFormula(cells, `C${otRow}`, `G${titleRow}*N(D${otRow})`);
+    pushFormula(cells, `C${dtRow}`, `H${titleRow}*N(D${dtRow})`);
     pushNum(cells, `D${pdRow}`, pdRateFor(input, staffPdOf(row)));
     pushFormula(cells, `C${pdRow}`, `I${titleRow}*D${pdRow}`);
-
     dates.forEach((ymd, index) => {
       const col = colLetter(LABOR_DATE_START_COL + index);
       const plug = dayPlug(row, ymd, night);
-      const hcRef = `${col}${hcRow}`;
-      const hpsRef = `${col}${hpsRow}`;
-      pushNum(cells, hcRef, plug.hc);
-      pushNum(cells, hpsRef, plug.hps);
+      pushNum(cells, `${col}${hcRow}`, plug.hc);
+      pushNum(cells, `${col}${hpsRow}`, plug.hps);
+      const week = mondayStamp(ymd);
+      const rangeKey = rangeWeekKey(coveringRanges(row, ymd, night)[0]);
+      const priorStRefs = dates
+        .slice(0, index)
+        .map((stamp, prior) => ({ stamp, ref: `${colLetter(LABOR_DATE_START_COL + prior)}${stRow}` }))
+        .filter((item) => mondayStamp(item.stamp) === week)
+        .filter((item) => rangeWeekKey(coveringRanges(row, item.stamp, night)[0]) === rangeKey)
+        .map((item) => item.ref);
+      const hours = dayHourFormulas(col, hcRow, hpsRow, clock, dayOtAfter8(row, ymd, night, input, clock), priorStRefs);
       const desk = deskHours.get(ymd) ?? { st: 0, ot: 0, dt: 0 };
-      pushNum(cells, `${col}${stRow}`, desk.st);
-      pushNum(cells, `${col}${otRow}`, desk.ot);
-      pushNum(cells, `${col}${dtRow}`, desk.dt);
+      const hcVal = money(plug.hc);
+      const hpsVal = money(plug.hps);
+      const exported = `AND(${col}${hcRow}=${hcVal},${col}${hpsRow}=${hpsVal})`;
+      pushFormula(cells, `${col}${stRow}`, `IF(${exported},${desk.st},${hours.st})`);
+      pushFormula(cells, `${col}${otRow}`, `IF(${exported},${desk.ot},${hours.ot})`);
+      pushFormula(cells, `${col}${dtRow}`, `IF(${exported},${desk.dt},${hours.dt})`);
       pushNum(cells, `${col}${pdRow}`, plug.pd);
     });
 
@@ -1411,7 +1526,9 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
 
 /** Summary always. Job setup + Position lists always (import compile). Optional tabs when live. */
 export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSheet[] {
-  const keys = usedRateKeys(input.crew);
+  const used = usedRateKeys(input.crew);
+  const keys = used.length ? rateCatalogKeys(used) : [];
+  const lastRateRow = keys.length ? 6 + keys.length : 0;
   const rates = buildRateSheet(input, keys);
   const staffCardRows = (input.crew?.staff ?? []).map((row) => withLaneClock(row, "staff"));
   const gfRows = input.crew?.generalForeman ?? [];
@@ -1421,10 +1538,12 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
     [...staffCardRows, ...gfRows],
     keys,
     () => true,
+    "staff",
+    lastRateRow,
   );
-  const foremen = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.foremen, input.crew?.foreman ?? [], keys, () => false);
-  const direct = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.direct, input.crew?.direct ?? [], keys, () => false);
-  const support = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.support, input.crew?.support ?? [], keys, () => false);
+  const foremen = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.foremen, input.crew?.foreman ?? [], keys, () => false, "craft", lastRateRow);
+  const direct = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.direct, input.crew?.direct ?? [], keys, () => false, "craft", lastRateRow);
+  const support = buildCrewSheet(input, ESTIMATE_XLSX_SHEETS.support, input.crew?.support ?? [], keys, () => false, "craft", lastRateRow);
   const third = input.equipment?.thirdParty ?? [];
   const rental = buildRentalSheet(
     input,

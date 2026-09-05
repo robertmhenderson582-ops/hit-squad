@@ -59,19 +59,53 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
     return Number.isFinite(n) ? n : 0;
   }
 
+  function isNumericLike(value: EvalValue): boolean {
+    if (isRange(value)) return false;
+    if (typeof value === "boolean") return true;
+    if (typeof value === "number") return Number.isFinite(value);
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return false;
+      return Number.isFinite(Number(trimmed));
+    }
+    return false;
+  }
+
+  function asText(value: EvalValue): string {
+    if (isRange(value)) return "";
+    if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+    return String(value ?? "").trim();
+  }
+
   function evalAt(sheet: string, ref: string): number {
     return asNumber(cellRaw(sheet, ref));
   }
 
+  type RangeRef = { kind: "range"; sheet?: string; from: string; to: string };
   type Token =
     | { kind: "num"; value: number }
     | { kind: "str"; value: string }
     | { kind: "id"; value: string }
     | { kind: "ref"; sheet?: string; ref: string }
+    | RangeRef
     | { kind: "op"; value: string }
     | { kind: "lp" }
     | { kind: "rp" }
     | { kind: "comma" };
+  type EvalValue = number | string | boolean | RangeRef;
+
+  function isRange(value: EvalValue): value is RangeRef {
+    return Boolean(value && typeof value === "object" && value.kind === "range");
+  }
+
+  function rangeCells(range: RangeRef, fallbackSheet: string) {
+    const name = range.sheet || fallbackSheet;
+    return expandRange(range.from, range.to).map((ref) => ({ sheet: name, ref }));
+  }
+
+  function isExcelError(value: EvalValue) {
+    return typeof value === "string" && /^#(N\/A|VALUE!|REF!|DIV\/0!)$/.test(value);
+  }
 
   function tokenize(sheet: string, raw: string): Token[] {
     const src = raw.replace(/^=/, "").trim();
@@ -88,10 +122,19 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
         const name = src.slice(i + 1, end);
         i = end + 1;
         if (src[i] === "!") i += 1;
-        const ref = /^(\$?[A-Z]+\$?\d+)/.exec(src.slice(i));
-        if (!ref) throw new Error(`sheet-ref ${raw}`);
-        tokens.push({ kind: "ref", sheet: name, ref: ref[1].replaceAll("$", "") });
-        i += ref[1].length;
+        const span = /^(\$?[A-Z]+\$?\d+)(?::(\$?[A-Z]+\$?\d+))?/.exec(src.slice(i));
+        if (!span) throw new Error(`sheet-ref ${raw}`);
+        if (span[2]) {
+          tokens.push({
+            kind: "range",
+            sheet: name,
+            from: span[1].replaceAll("$", ""),
+            to: span[2].replaceAll("$", ""),
+          });
+        } else {
+          tokens.push({ kind: "ref", sheet: name, ref: span[1].replaceAll("$", "") });
+        }
+        i += span[0].length;
         continue;
       }
       if (ch === '"') {
@@ -108,17 +151,38 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
       }
       const cell = /^(\$?[A-Z]+\$?\d+)/.exec(src.slice(i));
       if (cell) {
-        tokens.push({ kind: "ref", ref: cell[1].replaceAll("$", "") });
         i += cell[1].length;
+        if (src[i] === ":") {
+          const next = /^(\$?[A-Z]+\$?\d+)/.exec(src.slice(i + 1));
+          if (next) {
+            tokens.push({
+              kind: "range",
+              from: cell[1].replaceAll("$", ""),
+              to: next[1].replaceAll("$", ""),
+            });
+            i += 1 + next[1].length;
+            continue;
+          }
+        }
+        tokens.push({ kind: "ref", ref: cell[1].replaceAll("$", "") });
         continue;
       }
       if (/[A-Za-z]/.test(ch)) {
         const ident = /^[A-Za-z][A-Za-z0-9]*/.exec(src.slice(i))!;
         const after = src.slice(i + ident[0].length);
-        const sheetRef = /^!(\$?[A-Z]+\$?\d+)/.exec(after);
-        if (sheetRef) {
-          tokens.push({ kind: "ref", sheet: ident[0], ref: sheetRef[1].replaceAll("$", "") });
-          i += ident[0].length + 1 + sheetRef[1].length;
+        const sheetSpan = /^!(\$?[A-Z]+\$?\d+)(?::(\$?[A-Z]+\$?\d+))?/.exec(after);
+        if (sheetSpan) {
+          if (sheetSpan[2]) {
+            tokens.push({
+              kind: "range",
+              sheet: ident[0],
+              from: sheetSpan[1].replaceAll("$", ""),
+              to: sheetSpan[2].replaceAll("$", ""),
+            });
+          } else {
+            tokens.push({ kind: "ref", sheet: ident[0], ref: sheetSpan[1].replaceAll("$", "") });
+          }
+          i += ident[0].length + sheetSpan[0].length;
           continue;
         }
         tokens.push({ kind: "id", value: ident[0].toUpperCase() });
@@ -181,8 +245,8 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
     const peek = () => tokens[p];
     const take = () => tokens[p++];
 
-    function parseArgs(): Array<number | string | boolean> {
-      const args: Array<number | string | boolean> = [];
+    function parseArgs(): EvalValue[] {
+      const args: EvalValue[] = [];
       if (peek()?.kind === "rp") return args;
       args.push(parseCompare());
       while (peek()?.kind === "comma") {
@@ -192,33 +256,65 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
       return args;
     }
 
-    function parsePrimary(): number | string | boolean {
+    function parsePrimary(): EvalValue {
       const tok = take();
       if (!tok) return 0;
       if (tok.kind === "num") return tok.value;
       if (tok.kind === "str") return tok.value;
       if (tok.kind === "ref") return cellRaw(tok.sheet || sheet, tok.ref);
+      if (tok.kind === "range") return tok;
       if (tok.kind === "lp") {
         const inner = parseCompare();
         if (peek()?.kind === "rp") take();
         return inner;
       }
       if (tok.kind === "id") {
+        if (tok.value === "TRUE") return true;
+        if (tok.value === "FALSE") return false;
         if (peek()?.kind !== "lp") return 0;
         take();
         const args = parseArgs();
         if (peek()?.kind === "rp") take();
         if (tok.value === "SUM") {
           return args.reduce<number>((sum, arg) => {
+            if (isRange(arg)) {
+              return sum + rangeCells(arg, sheet).reduce((n, item) => n + evalAt(item.sheet, item.ref), 0);
+            }
             if (typeof arg === "string" && /:/.test(arg)) return sum;
             return sum + asNumber(arg);
           }, 0);
         }
         if (tok.value === "IF") return args[0] ? args[1] : args[2];
-        if (tok.value === "AND") return args.every(Boolean);
-        if (tok.value === "OR") return args.some(Boolean);
+        if (tok.value === "AND") return args.every((arg) => Boolean(isRange(arg) ? false : arg));
+        if (tok.value === "OR") return args.some((arg) => Boolean(isRange(arg) ? false : arg));
         if (tok.value === "MIN") return Math.min(...args.map(asNumber));
         if (tok.value === "MAX") return Math.max(...args.map(asNumber));
+        if (tok.value === "TRIM") return String(isRange(args[0]) ? "" : (args[0] ?? "")).trim();
+        if (tok.value === "N") return isRange(args[0]) ? 0 : asNumber(args[0]);
+        if (tok.value === "ISNUMBER") return typeof args[0] === "number" && Number.isFinite(args[0]);
+        if (tok.value === "IFERROR") return isExcelError(args[0]) ? args[1] : args[0];
+        if (tok.value === "INDEX") {
+          const range = args[0];
+          const index = Math.round(asNumber(args[1]));
+          if (!isRange(range) || index < 1) return "#N/A";
+          const cells = rangeCells(range, sheet);
+          const hit = cells[index - 1];
+          return hit ? cellRaw(hit.sheet, hit.ref) : "#N/A";
+        }
+        if (tok.value === "MATCH") {
+          const needle = String(isRange(args[0]) ? "" : (args[0] ?? "")).trim();
+          const range = args[1];
+          if (!isRange(range) || !needle) return "#N/A";
+          const cells = rangeCells(range, sheet);
+          const found = cells.findIndex((item) => String(cellRaw(item.sheet, item.ref)).trim() === needle);
+          return found >= 0 ? found + 1 : "#N/A";
+        }
+        if (tok.value === "COUNTIF") {
+          const range = args[0];
+          const needle = String(isRange(args[1]) ? "" : (args[1] ?? "")).trim();
+          if (!isRange(range)) return 0;
+          return rangeCells(range, sheet).filter((item) => String(cellRaw(item.sheet, item.ref)).trim() === needle).length;
+        }
         if (tok.value === "WEEKDAY") {
           const serial = asNumber(args[0]);
           const utc = Date.UTC(1899, 11, 30) + serial * 86400000;
@@ -235,7 +331,7 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
       return tok?.kind === "op" ? tok.value : undefined;
     }
 
-    function parseMul(): number | string | boolean {
+    function parseMul(): EvalValue {
       let left = parsePrimary();
       let op = takeOp();
       while (op === "*" || op === "/") {
@@ -247,7 +343,7 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
       return left;
     }
 
-    function parseAdd(): number | string | boolean {
+    function parseAdd(): EvalValue {
       let left = parseMul();
       let op = takeOp();
       while (op === "+" || op === "-") {
@@ -259,14 +355,21 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
       return left;
     }
 
-    function parseCompare(): number | string | boolean {
+    function parseCompare(): EvalValue {
       let left = parseAdd();
       let op = takeOp();
       while (op && ["=", "<>", "<", ">", "<=", ">="].includes(op)) {
         take();
         const right = parseAdd();
-        if (op === "=") left = left === right || asNumber(left) === asNumber(right);
-        else if (op === "<>") left = left !== right;
+        if (op === "=") {
+          if (left === right) left = true;
+          else if (isNumericLike(left) && isNumericLike(right)) left = asNumber(left) === asNumber(right);
+          else left = asText(left) === asText(right);
+        } else if (op === "<>") {
+          if (left === right) left = false;
+          else if (isNumericLike(left) && isNumericLike(right)) left = asNumber(left) !== asNumber(right);
+          else left = asText(left) !== asText(right);
+        }
         else if (op === "<") left = asNumber(left) < asNumber(right);
         else if (op === ">") left = asNumber(left) > asNumber(right);
         else if (op === "<=") left = asNumber(left) <= asNumber(right);
@@ -277,7 +380,9 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
     }
 
     const result = parseCompare();
-    return typeof result === "boolean" ? asNumber(result) : result;
+    if (typeof result === "boolean") return asNumber(result);
+    if (isRange(result)) return "#VALUE!";
+    return result;
   }
 
   return { evalAt, cellRaw };

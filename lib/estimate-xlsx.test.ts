@@ -312,7 +312,9 @@ describe("estimate excel export", () => {
     assert.match(String(summary.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(ESTIMATE_EXPORT_PRODUCER));
     assert.match(String(summary.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(ESTIMATE_EXPORT_CONFIDENTIAL));
     assert.match(String(summary.cells.find((cell) => cell.ref === "A3")?.value), /Produced /);
-    assert.match(String(staff.cells.find((cell) => cell.ref === "C10")?.value), /^F7\*D10$/);
+    assert.match(String(staff.cells.find((cell) => cell.ref === "C10")?.value), /^F7\*N\(D10\)$/);
+    assert.match(String(staff.cells.find((cell) => cell.ref === "D10")?.value), /INDEX\(/);
+    assert.match(String(staff.cells.find((cell) => cell.ref === "D10")?.value), /MATCH\(B7,/);
     assert.match(String(staff.cells.find((cell) => cell.ref === "D10")?.value), /Rate Tables/);
     assert.match(String(staff.cells.find((cell) => cell.ref === "J14")?.value), /^SUM\(J7\)$/);
     assert.equal(summary.cells.some((cell) => cell.ref === "A7" && cell.value === "Staff labor $"), true);
@@ -449,6 +451,43 @@ describe("estimate excel export", () => {
     assert.equal(summarySheet.getCell(`B${totalRow}`).numFmt, "$#,##0.00");
     assert.equal(/field trial|forgebook|not a release/i.test(JSON.stringify(wb.model)), false);
     assert.equal(estimateWorkbookSummaryTotal(input), deskEstimateTotal(input));
+  });
+
+  it("looks up live Position on Rate Tables and splits day ST/OT/DT from HC×HPS", () => {
+    const input = woodRiverFixture();
+    const sheets = buildEstimateWorkbook(input);
+    const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff);
+    const direct = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.direct);
+    assert.ok(staff && direct);
+    const staffRate = String(staff.cells.find((cell) => cell.ref === "D10")?.value);
+    assert.match(staffRate, /INDEX\(/);
+    assert.match(staffRate, /MATCH\(B7,/);
+    assert.match(staffRate, /Rate Tables/);
+    assert.equal(/Rate Tables'!C\d+$/.test(staffRate.replaceAll("$", "")), false);
+    assert.equal(direct.cells.find((cell) => cell.ref === "K8")?.type, "number");
+    assert.equal(direct.cells.find((cell) => cell.ref === "K9")?.type, "number");
+    assert.equal(direct.cells.find((cell) => cell.ref === "K13")?.type, "number");
+    assert.equal(direct.cells.find((cell) => cell.ref === "K10")?.type, "formula");
+    assert.equal(direct.cells.find((cell) => cell.ref === "K11")?.type, "formula");
+    assert.equal(direct.cells.find((cell) => cell.ref === "K12")?.type, "formula");
+    assert.match(String(direct.cells.find((cell) => cell.ref === "K10")?.value), /K8/);
+    assert.match(String(direct.cells.find((cell) => cell.ref === "K10")?.value), /K9/);
+    const first = evaluateWorkbook(sheets);
+    assert.equal(first.evalAt(ESTIMATE_XLSX_SHEETS.direct, "K10"), 8);
+    assert.equal(first.evalAt(ESTIMATE_XLSX_SHEETS.direct, "K11"), 2);
+    const staffRateBefore = first.evalAt(ESTIMATE_XLSX_SHEETS.staff, "D10");
+    const hps = direct.cells.find((cell) => cell.ref === "K9");
+    assert.ok(hps && hps.type === "number");
+    hps.value = 12;
+    const afterHps = evaluateWorkbook(sheets);
+    assert.equal(afterHps.evalAt(ESTIMATE_XLSX_SHEETS.direct, "K10"), 8);
+    assert.equal(afterHps.evalAt(ESTIMATE_XLSX_SHEETS.direct, "K11"), 4);
+    const title = staff.cells.find((cell) => cell.ref === "B7");
+    assert.ok(title && title.type === "text");
+    title.value = "Lead Safety 01";
+    const afterTitle = evaluateWorkbook(sheets);
+    assert.equal(afterTitle.evalAt(ESTIMATE_XLSX_SHEETS.staff, "D10") === staffRateBefore, false);
+    assert.equal(afterTitle.evalAt(ESTIMATE_XLSX_SHEETS.staff, "D10") > 0, true);
   });
 
   it("Summary ESTIMATE TOTAL $ equals the desk rail after weekly-40", async () => {
@@ -1379,7 +1418,7 @@ describe("estimate excel export", () => {
     assert.equal(Boolean(staff.getCell("K13").protection?.locked), false);
     assert.equal(typeof staff.getCell("K8").value, "number");
     assert.equal(typeof staff.getCell("K13").value, "number");
-    assert.equal(Boolean(staff.getCell("K10").protection?.locked), false);
+    assert.equal(staff.getCell("K10").protection?.locked !== false, true);
     assert.equal(staff.getCell("I7").protection?.locked !== false, true);
     assert.equal(staff.getCell("C13").protection?.locked !== false, true);
     assert.equal(staff.getCell("J7").protection?.locked !== false, true);
@@ -1468,26 +1507,27 @@ describe("estimate excel export", () => {
     const rateMap = cellMap(rates);
     const staffMap = cellMap(staff);
     const supportMap = cellMap(support);
-    assert.equal(rateMap.get("A7")?.value, "Lead Safety 01 · Merit");
-    assert.equal(rateMap.get("A8")?.value, "Lead Safety 01 · Union");
+    assert.equal(rateMap.get("A7")?.value, "Lead Safety 01");
+    assert.equal(rateMap.get("A8")?.value === "Lead Safety 01", false);
     assert.equal(rateMap.get("C7")?.type, "number");
     assert.equal(rateMap.get("C7")?.value, 91.02);
-    assert.equal(rateMap.get("C8")?.value, 127.36);
     assert.equal(rateMap.get("B7")?.value, 52.5);
-    assert.equal(rateMap.get("A9")?.value, "Fire Watch");
-    assert.equal(rateMap.get("C9")?.type, "text");
-    assert.equal(rateMap.get("C9")?.value, SHAHAN_NO_RATE_LABEL);
-    assert.equal(rateMap.get("C9")?.value === 0, false);
+    assert.equal(rateMap.get("A8")?.value, "Fire Watch");
+    assert.equal(rateMap.get("C8")?.type, "text");
+    assert.equal(rateMap.get("C8")?.value, SHAHAN_NO_RATE_LABEL);
+    assert.equal(rateMap.get("C8")?.value === 0, false);
 
     const meritBlock = laborHours(staff, "Lead Safety 01");
     const unionTitle = staff.cells.filter((cell) => cell.ref.startsWith("B") && cell.value === "Lead Safety 01")[1];
     const unionTitleRow = Number(unionTitle?.ref.slice(1) ?? 0);
     const supportBlock = laborHours(support, "Fire Watch");
-    assert.match(String(staffMap.get(`D${meritBlock.st}`)?.value), /Rate Tables.*C7/);
-    assert.match(String(staffMap.get(`D${unionTitleRow + 3}`)?.value), /Rate Tables.*C8/);
-    assert.equal(supportMap.get(`D${supportBlock.st}`)?.type, "text");
-    assert.equal(supportMap.get(`D${supportBlock.st}`)?.value, SHAHAN_NO_RATE_LABEL);
-    assert.equal(supportMap.get(`C${supportBlock.st}`)?.value, 0);
+    assert.match(String(staffMap.get(`D${meritBlock.st}`)?.value), /INDEX\(/);
+    assert.match(String(staffMap.get(`D${meritBlock.st}`)?.value), /MATCH\(B7,/);
+    assert.match(String(staffMap.get(`D${unionTitleRow + 3}`)?.value), new RegExp(`MATCH\\(B${unionTitleRow},`));
+    assert.equal(supportMap.get(`D${supportBlock.st}`)?.type, "formula");
+    assert.match(String(supportMap.get(`D${supportBlock.st}`)?.value), /INDEX\(/);
+    assert.match(String(supportMap.get(`D${supportBlock.st}`)?.value), /Bill as|B11|TRIM\(B/);
+    assert.match(String(supportMap.get(`C${supportBlock.st}`)?.value), /N\(D/);
 
     const { evalAt } = evaluateWorkbook(sheets);
     const hours = computeRowHours(meritRow, site, "Phillips 66");
@@ -1502,7 +1542,7 @@ describe("estimate excel export", () => {
     );
     assert.equal(
       round2(evalAt(ESTIMATE_XLSX_SHEETS.staff, `J${unionTitleRow}`)),
-      shahanCrewCostAmount("Lead Safety 01", hours, wageLookupOpts(site, { laborClass: "Union" })),
+      shahanCrewCostAmount("Lead Safety 01", hours, wageLookupOpts(site, { laborClass: "Merit" })),
     );
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.support, laborMoneyRef(supportBlock)), 0);
   });
@@ -1905,9 +1945,11 @@ describe("estimate excel export", () => {
     assert.equal(staffMap.get("K8")?.type, "number");
     assert.equal(staffMap.get("K8")?.value, 1);
     assert.equal(staffMap.get("K9")?.value, 10);
-    assert.equal(staffMap.get(`K${lead.st}`)?.type, "number");
-    assert.equal(staffMap.get(`K${lead.ot}`)?.type, "number");
-    assert.equal(staffMap.get(`K${lead.dt}`)?.type, "number");
+    assert.equal(staffMap.get(`K${lead.st}`)?.type, "formula");
+    assert.equal(staffMap.get(`K${lead.ot}`)?.type, "formula");
+    assert.equal(staffMap.get(`K${lead.dt}`)?.type, "formula");
+    assert.match(String(staffMap.get(`K${lead.st}`)?.value), /K8/);
+    assert.match(String(staffMap.get(`K${lead.st}`)?.value), /K9/);
     const { evalAt } = evaluateWorkbook(sheets);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, `K${lead.st}`), 10);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, `K${lead.ot}`), 0);
@@ -1971,7 +2013,9 @@ describe("estimate excel export", () => {
     assert.ok(support.merges?.includes(`B${fire.ot}:B${fire.pd}`));
     assert.equal(support.merges?.includes(`B${fire.title}:B${fire.pd}`), false);
     assert.ok(support.merges?.includes(`F${fire.title}:F${fire.pd}`));
-    assert.equal(supportMap.get(`D${fire.st}`)?.value, cellMap(direct).get(`D${day.st}`)?.value);
+    assert.match(String(supportMap.get(`D${fire.st}`)?.value), /INDEX\(/);
+    assert.match(String(supportMap.get(`D${fire.st}`)?.value), /MATCH\(/);
+    assert.match(String(cellMap(direct).get(`D${day.st}`)?.value), new RegExp(`MATCH\\(B${day.title},`));
     for (const col of LABOR_BLOCK_VOID_COLS) {
       assert.ok(staff.merges?.includes(`${col}${lead.title}:${col}${lead.pd}`), `${col} void`);
       assert.equal(staff.cells.some((cell) => cell.ref === `${col}${lead.st}`), false, `${col} not duplicated`);

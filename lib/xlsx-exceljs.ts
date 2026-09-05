@@ -383,7 +383,7 @@ function isLaborSheet(name: string) {
 export function isLaborDayInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
   if (!isLaborSheet(sheet.name) || colNum < LABOR_DATE_FIRST_COL) return false;
   const kind = laborRowKind(sheet.cells, row);
-  return kind === "hc" || kind === "hps" || kind === "pd" || kind === "hours";
+  return kind === "hc" || kind === "hps" || kind === "pd";
 }
 
 /** Hard count/HPS plugs only — empty unused day cells stay teal, not yellow. */

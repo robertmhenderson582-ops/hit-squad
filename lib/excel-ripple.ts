@@ -26,6 +26,8 @@
  * Shift is one merged DAYSHIFT/NIGHTSHIFT block (no Hours/shift or PD count
  * in A). Subtotal $ + Rate merge title through HC/HPS so those cells are not
  * empty holes; ST/OT/DT/PD rate+$ stay per-row.
+ * ST/OT/DT Rate cells INDEX/MATCH the live Position (Support Bill as) on Rate Tables.
+ * Calendar ST/OT/DT are HC×HPS formulas (OT-after-N / Sunday DT / Saturday OT / weekly-40). CA 7th-day is a re-export gap.
  *
  * Adjustable Job setup + phase-bar import ships on this compile (the next Excel compile
  * after Look). A Job setup sheet/card (phases / dates / OT picks) drives
