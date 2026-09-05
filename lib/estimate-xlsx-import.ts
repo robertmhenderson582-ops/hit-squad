@@ -141,25 +141,36 @@ export type EstimateImportDiff = {
   createsNew: boolean;
 };
 
+function isExcelError(value: unknown): boolean {
+  if (typeof value === "string" && /^#(?:VALUE|REF|N\/A|DIV\/0|NAME|NULL|NUM|GETTING_DATA)!?$/i.test(value.trim())) {
+    return true;
+  }
+  return Boolean(value && typeof value === "object" && "error" in value && (value as { error?: unknown }).error);
+}
+
 function asNum(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "boolean") return value ? 1 : 0;
   if (typeof value === "string" && value.trim()) {
-    const next = Number(value);
+    const text = value.trim();
+    if (text.startsWith("=") || isExcelError(text)) return 0;
+    const next = Number(text);
     return Number.isFinite(next) ? next : 0;
   }
-  if (value && typeof value === "object" && "result" in value) {
-    return asNum((value as { result: unknown }).result);
+  if (value && typeof value === "object") {
+    if (isExcelError(value)) return 0;
+    if ("result" in value) return asNum((value as { result: unknown }).result);
   }
   return 0;
 }
 
 function asText(value: unknown): string {
-  if (typeof value === "string") return value.trim();
+  if (typeof value === "string") return isExcelError(value) ? "" : value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
-  if (value && typeof value === "object" && "result" in value) {
-    return asText((value as { result: unknown }).result);
+  if (value && typeof value === "object") {
+    if (isExcelError(value)) return "";
+    if ("result" in value) return asText((value as { result: unknown }).result);
   }
   if (value instanceof Date && !Number.isNaN(value.getTime())) return formatYmd(value);
   return "";
