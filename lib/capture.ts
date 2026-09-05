@@ -1,5 +1,6 @@
 export const CAPTURE_ROOT_SELECTORS = [
   "[data-capture-root]",
+  ".desk-home-root",
   ".paper-page",
   ".desk-day",
   ".industrial-root",
@@ -25,6 +26,7 @@ export const CAPTURE_OVERLAY_SELECTOR = ".modal-scrim, .estimate-modal, .ticket-
 
 export function pickCaptureSelector(classNames: string[]): string {
   if (classNames.includes("data-capture-root")) return "[data-capture-root]";
+  if (classNames.includes("desk-home-root")) return ".desk-home-root";
   if (classNames.includes("paper-page")) return ".paper-page";
   if (classNames.includes("desk-day")) return ".desk-day";
   if (classNames.includes("industrial-root")) return ".industrial-root";

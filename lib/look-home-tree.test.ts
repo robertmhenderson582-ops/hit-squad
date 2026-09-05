@@ -13,12 +13,14 @@ describe("home tree look batch", () => {
     assert.match(css, /\.inbox-fab-pulse \{\n  animation: teal-pulse 1\.4s ease-out infinite;\n  background: #0f5f6d;/);
     assert.match(css, /\.inbox-header-badge \{\n  border-radius: 999px;\n  background: #0f5f6d;/);
     assert.match(css, /\.trial-banner \{[\s\S]*#e38b2a/);
-    assert.match(css, /\.company-desk-logo-door \{/);
-    assert.match(css, /\.company-desk-logo-fill img \{/);
+    assert.match(css, /\.hero-company-logo \{/);
+    assert.match(css, /\.hero-company-logo img \{/);
     assert.match(css, /object-fit: contain;/);
     const home = readFileSync(fileURLToPath(new URL("../components/DeskHome.tsx", import.meta.url)), "utf8");
-    assert.match(home, /company-desk-logo-door/);
-    assert.match(home, /door\.key === "company"/);
+    const hero = readFileSync(fileURLToPath(new URL("../components/DeskHero.tsx", import.meta.url)), "utf8");
+    assert.match(home, /companyDeskLogo/);
+    assert.match(hero, /hero-company-logo/);
+    assert.match(hero, /COMPANY_DESK_DOOR/);
     assert.match(css, /\.org-chart-desk \{/);
     assert.match(css, /\.org-chart-card \{/);
     assert.match(css, /\.org-chart-logo img \{/);
