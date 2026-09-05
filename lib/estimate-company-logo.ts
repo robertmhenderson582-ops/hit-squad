@@ -95,7 +95,9 @@ function decodeDataImage(src: string): { bytes: Uint8Array; mime: string } | nul
 
 async function rasterizeFadedLogo(bytes: Uint8Array, mime: string): Promise<CompanyLogoSplash | null> {
   if (typeof document === "undefined") return null;
-  const blob = new Blob([bytes], { type: mime.startsWith("image/") ? mime : "image/png" });
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  const blob = new Blob([copy], { type: mime.startsWith("image/") ? mime : "image/png" });
   const url = URL.createObjectURL(blob);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
