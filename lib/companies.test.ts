@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   COMPANIES,
@@ -13,10 +14,14 @@ import {
   catalogVisibleTo,
   companiesForScope,
   companyDeskLogoSrc,
+  COMPANY_LOGO_BAD_TYPE,
+  COMPANY_LOGO_MAX_ENCODED,
+  COMPANY_LOGO_TOO_LARGE,
   inferCompanyId,
   assignmentChoices,
   isStandaloneId,
   mergeCompanies,
+  validateCompanyLogoInput,
   peopleLane,
   samePeopleLane,
   seedCompanyForEmail,
@@ -35,6 +40,7 @@ import {
   parseAssignmentFile,
   resetCompanyAssignmentsForTests,
   setAssignedCompany,
+  setCompanyLogo,
   useCompanyVaultForTests,
   useMemoryCompanyAssignments,
 } from "./companies-store.ts";
@@ -295,6 +301,70 @@ describe("company desk logo on file", () => {
     assert.equal((await listCompanies()).find((row) => row.id === "madison")?.logo, "/madison.png");
     assert.equal(await companyDeskLogoForEmail("nathanboyte@gmail.com"), "/madison.png");
     assert.equal(await companyDeskLogoForEmail(OWNER_LOGIN_EMAIL), null);
+  });
+
+  it("lets the owner set and clear a vault logo without inventing one", async () => {
+    const tiny =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    useMemoryCompanyAssignments();
+    assert.equal((await listCompanies()).find((row) => row.id === "madison")?.logo, undefined);
+
+    const saved = await setCompanyLogo("madison", tiny);
+    assert.equal("ok" in saved, true);
+    if (!("ok" in saved)) return;
+    assert.equal(saved.company.logo, tiny);
+    assert.equal((await listCompanies()).find((row) => row.id === "madison")?.logo, tiny);
+    assert.equal(await companyDeskLogoForEmail("nathanboyte@gmail.com"), tiny);
+
+    const cleared = await setCompanyLogo("madison", null);
+    assert.equal("ok" in cleared, true);
+    if (!("ok" in cleared)) return;
+    assert.equal(cleared.company.logo, undefined);
+    assert.equal((await listCompanies()).find((row) => row.id === "madison")?.logo, undefined);
+    assert.equal(await companyDeskLogoForEmail("nathanboyte@gmail.com"), null);
+
+    const svg = await setCompanyLogo("madison", "data:image/svg+xml;base64,PHN2Zy8+");
+    assert.equal("error" in svg, true);
+    if ("error" in svg) assert.equal(svg.error, COMPANY_LOGO_BAD_TYPE);
+    const junk = await setCompanyLogo("madison", "javascript:alert(1)");
+    assert.equal("error" in junk, true);
+    const missing = await setCompanyLogo("notacompany", tiny);
+    assert.equal("error" in missing, true);
+    const door = await setCompanyLogo(STANDALONE_ID, tiny);
+    assert.equal("error" in door, true);
+    assert.equal((await listCompanies()).find((row) => row.id === "madison")?.logo, undefined);
+
+    const huge = `data:image/png;base64,${"A".repeat(COMPANY_LOGO_MAX_ENCODED)}`;
+    assert.equal("error" in validateCompanyLogoInput(huge) && validateCompanyLogoInput(huge).error, COMPANY_LOGO_TOO_LARGE);
+    assert.equal("logo" in validateCompanyLogoInput(tiny) && validateCompanyLogoInput(tiny).logo, tiny);
+    assert.equal("logo" in validateCompanyLogoInput(null) && validateCompanyLogoInput(null).logo, null);
+
+    const drive = memoryDrive();
+    useCompanyVaultForTests(drive);
+    const vaulted = await setCompanyLogo("madison", tiny);
+    assert.equal("ok" in vaulted, true);
+    forgetCompanyCacheForTests();
+    useCompanyVaultForTests(drive);
+    assert.equal((await listCompanies()).find((row) => row.id === "madison")?.logo, tiny);
+  });
+
+  it("Settings Branding manages live company logos on the vault", () => {
+    const desk = readFileSync(fileURLToPath(new URL("../components/BrandingDesk.tsx", import.meta.url)), "utf8");
+    const api = readFileSync(fileURLToPath(new URL("../app/api/desk/companies/logo/route.ts", import.meta.url)), "utf8");
+    const store = readFileSync(fileURLToPath(new URL("./companies-store.ts", import.meta.url)), "utf8");
+    assert.match(desk, /type="file"/);
+    assert.match(desk, /Upload/);
+    assert.match(desk, /Change/);
+    assert.match(desk, /Remove/);
+    assert.match(desk, /No logo/);
+    assert.match(desk, /\/api\/desk\/companies\/logo/);
+    assert.equal(/HIT SQUAD over PROJECT CONTROLS/.test(desk), false);
+    assert.match(api, /setCompanyLogo/);
+    assert.match(api, /isOwner/);
+    assert.match(api, /hasBuildDesk/);
+    assert.match(store, /setCompanyLogo/);
+    assert.match(store, /validateCompanyLogoInput/);
+    assert.match(store, /COMPANIES_VAULT/);
   });
 });
 

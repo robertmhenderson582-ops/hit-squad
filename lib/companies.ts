@@ -80,6 +80,28 @@ export function companyLogoSrc(value?: string | null): string | null {
   return null;
 }
 
+/** Encoded data-URL cap. File picker accepts PNG / JPEG / WebP only — no SVG. */
+export const COMPANY_LOGO_MAX_ENCODED = 800 * 1024;
+export const COMPANY_LOGO_ACCEPT = "image/png,image/jpeg,image/webp";
+export const COMPANY_LOGO_TOO_LARGE = "That logo is too large. Use a PNG, JPEG, or WebP under 800 KB.";
+export const COMPANY_LOGO_BAD_TYPE = "Use a PNG, JPEG, or WebP image.";
+
+const COMPANY_LOGO_DATA_RE = /^data:image\/(png|jpe?g|webp);base64,/i;
+
+/** Settings upload / vault write. Rejects SVG and oversized data-URLs. */
+export function validateCompanyLogoInput(value?: string | null): { logo: string | null } | { error: string } {
+  if (value == null || !String(value).trim()) return { logo: null };
+  const raw = String(value).trim();
+  if (/^data:image\/svg\+xml/i.test(raw)) return { error: COMPANY_LOGO_BAD_TYPE };
+  if (raw.startsWith("data:")) {
+    if (!COMPANY_LOGO_DATA_RE.test(raw)) return { error: COMPANY_LOGO_BAD_TYPE };
+    if (raw.length > COMPANY_LOGO_MAX_ENCODED) return { error: COMPANY_LOGO_TOO_LARGE };
+  }
+  const logo = companyLogoSrc(raw);
+  if (!logo) return { error: COMPANY_LOGO_BAD_TYPE };
+  return { logo };
+}
+
 export function withCompanyLogo(row: Company): Company {
   const logo = companyLogoSrc(row.logo);
   return logo ? { id: row.id, name: row.name, logo } : { id: row.id, name: row.name };

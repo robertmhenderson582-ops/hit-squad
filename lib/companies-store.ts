@@ -12,6 +12,7 @@ import {
   isStandaloneId,
   mergeCompanies,
   seedCompanyForEmail,
+  validateCompanyLogoInput,
   type Company,
   type CompanyId,
 } from "./companies.ts";
@@ -158,6 +159,24 @@ export async function setAssignedCompany(email: string, companyId: CompanyId) {
   const data = await hydrateCompanyStore();
   data.assignments[email.trim().toLowerCase()] = companyId;
   await persist(data);
+}
+
+export async function setCompanyLogo(
+  companyId: string,
+  logoSrc: string | null,
+): Promise<{ ok: true; company: Company } | { error: string }> {
+  const id = companyId.trim();
+  if (!isCompanyId(id) || isStandaloneId(id)) return { error: "Pick a company on this desk." };
+  const current = (await listCompanies()).find((row) => row.id === id);
+  if (!current) return { error: "Pick a company on this desk." };
+  const checked = validateCompanyLogoInput(logoSrc);
+  if ("error" in checked) return checked;
+  const overlay: Company = { id: current.id, name: current.name };
+  if (checked.logo) overlay.logo = checked.logo;
+  const data = await hydrateCompanyStore();
+  data.companies = [...(data.companies ?? []).filter((row) => row.id !== id), overlay];
+  await persist(data);
+  return { ok: true, company: overlay };
 }
 
 export async function addCompany(name: string): Promise<{ ok: true; company: Company } | { error: string }> {
