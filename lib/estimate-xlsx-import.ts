@@ -360,15 +360,17 @@ function parseJobSetup(ws: ExcelJS.Worksheet | undefined): PhaseScheduleState {
     const stop = cellYmd(ws.getCell(row, 4).value);
     const pickLabel = asText(ws.getCell(row, 8).value);
     const pick = PHASE_OT_PICKS.find((item) => item.label === pickLabel)?.id as PhaseOtPick | undefined;
+    const days = asNum(ws.getCell(row, 5).value);
+    const hours = asNum(ws.getCell(row, 6).value);
     incoming.push({
       id,
       name: PHASE_NAMES[id],
       on: isOn(ws.getCell(row, 2).value),
       start: start || base.phases.find((row) => row.id === id)?.start || "",
       stop: stop || base.phases.find((row) => row.id === id)?.stop || "",
-      daysPerWeek: pick?.startsWith("4x") ? 4 : pick?.startsWith("5x") ? 5 : asNum(ws.getCell(row, 5).value) || 5,
-      hoursPerDay: pick?.includes("10") ? 10 : pick?.includes("8") ? 8 : asNum(ws.getCell(row, 6).value) || 10,
-      otAfter8: pick ? pick.endsWith("ot8") : isOn(ws.getCell(row, 7).value),
+      daysPerWeek: days || (pick?.startsWith("4x") ? 4 : pick?.startsWith("5x") ? 5 : 5),
+      hoursPerDay: hours || (pick?.includes("10") ? 10 : pick?.includes("8") ? 8 : 10),
+      otAfter8: isOn(ws.getCell(row, 7).value) || Boolean(pick?.endsWith("ot8")),
       sundaysOff: [],
     });
   }

@@ -118,6 +118,7 @@ export function EstimateWorkspace({
   const importBlocked = viewingAsOther(desk?.viewAs);
   const fileRef = useRef<HTMLInputElement>(null);
   const [exportError, setExportError] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
   const [importError, setImportError] = useState("");
   const [importBusy, setImportBusy] = useState(false);
   const [pendingImport, setPendingImport] = useState<EstimateImport | null>(null);
@@ -130,7 +131,9 @@ export function EstimateWorkspace({
   const tabs = estimateTabsForSite(boundSite, boundClient, status);
 
   async function exportWorkbook() {
+    if (exportBusy) return;
     setExportError("");
+    setExportBusy(true);
     try {
       const bytes = await estimateToXlsx({
         title: name || crumb,
@@ -151,6 +154,8 @@ export function EstimateWorkspace({
       downloadXlsx(estimateXlsxFilename({ site: boundSite, title: name || crumb }), bytes);
     } catch {
       setExportError(ESTIMATE_EXPORT_ERROR);
+    } finally {
+      setExportBusy(false);
     }
   }
 
@@ -249,9 +254,10 @@ export function EstimateWorkspace({
                             ? "Undo is not wired yet"
                             : "Team is chrome only"
                 }
+                disabled={action.id === "export" ? exportBusy : action.id === "import" ? importBlocked : false}
                 onClick={() => {
                   if (action.id === "export") {
-                    exportWorkbook();
+                    void exportWorkbook();
                     noteFeatureTrail("export");
                   }
                   if (action.id === "import" && !importBlocked) {
@@ -269,9 +275,9 @@ export function EstimateWorkspace({
                     router.push(`/estimates/new?${query.toString()}`);
                   }
                 }}
-                className="rounded border border-white/20 px-3 py-1.5 text-white/90"
+                className="rounded border border-white/20 px-3 py-1.5 text-white/90 disabled:opacity-60"
               >
-                {action.label}
+                {action.id === "export" && exportBusy ? "Exporting…" : action.label}
               </button>
             ))}
             <input

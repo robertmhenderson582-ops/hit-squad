@@ -18,6 +18,7 @@ import {
   ESTIMATE_SUMMARY_AMOUNT,
   ESTIMATE_SUMMARY_HOURS,
   ESTIMATE_XLSX_SHEETS,
+  EXCEL_FORMULA_CHAR_LIMIT,
   OPTIONAL_ESTIMATE_SHEETS,
   LABOR_BLOCK_HEIGHT,
   LABOR_BLOCK_ID_COL,
@@ -477,7 +478,7 @@ describe("estimate excel export", () => {
     assert.equal(first.evalAt(ESTIMATE_XLSX_SHEETS.direct, "K11"), 2);
     const staffRateBefore = first.evalAt(ESTIMATE_XLSX_SHEETS.staff, "D10");
     assert.match(String(direct.cells.find((cell) => cell.ref === "K10")?.value), /Job setup/);
-    assert.match(String(direct.cells.find((cell) => cell.ref === "K10")?.value), /MATCH\("pre"/);
+    assert.match(String(direct.cells.find((cell) => cell.ref === "K10")?.value), /\$B\$7/);
     const hps = direct.cells.find((cell) => cell.ref === "K9");
     assert.ok(hps && hps.type === "number");
     const preOt = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.jobSetup)?.cells.find((cell) => cell.ref === "G7");
@@ -505,14 +506,18 @@ describe("estimate excel export", () => {
     const ot = String(staff.cells.find((cell) => cell.ref === "K11")?.value);
     assert.match(st, /Job setup/);
     assert.match(ot, /Job setup/);
-    assert.match(st, /MATCH\("pre"/);
-    assert.match(st, /MATCH\("mech"/);
-    assert.match(st, /I\$7:I\$11/);
-    assert.match(st, /C\$7:C\$11/);
-    assert.match(st, /D\$7:D\$11/);
-    assert.match(st, /G\$7:G\$11/);
+    assert.match(st, /_JobDays/);
+    assert.match(st, /\$B\$7/);
+    assert.match(st, /\$C\$7/);
+    assert.match(st, /\$D\$7/);
+    assert.match(st, /\$G\$7/);
     assert.match(st, /"ON"/);
-    assert.match(st, /"YES"/);
+    assert.match(st, /"NO"/);
+    const days = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.jobDays);
+    assert.match(String(days?.cells.find((cell) => cell.ref === "A3")?.value), /"YES"/);
+    assert.match(String(days?.cells.find((cell) => cell.ref === "A2")?.value), /Job setup/);
+    assert.equal(st.length < EXCEL_FORMULA_CHAR_LIMIT, true);
+    assert.equal(ot.length < EXCEL_FORMULA_CHAR_LIMIT, true);
     const first = evaluateWorkbook(sheets);
     assert.equal(first.evalAt(ESTIMATE_XLSX_SHEETS.staff, "K10"), 10);
     assert.equal(first.evalAt(ESTIMATE_XLSX_SHEETS.staff, "K11"), 0);
@@ -540,6 +545,34 @@ describe("estimate excel export", () => {
     const afterOff = evaluateWorkbook(sheets);
     assert.equal(afterOff.evalAt(ESTIMATE_XLSX_SHEETS.staff, "K10"), 0);
     assert.equal(afterOff.evalAt(ESTIMATE_XLSX_SHEETS.staff, "K11"), 0);
+  });
+
+  it("keeps craft day ST/OT/DT formulas under the Excel repair limit", async () => {
+    const input = woodRiverFixture();
+    const sheets = buildEstimateWorkbook(input);
+    for (const sheet of sheets) {
+      for (const cell of sheet.cells) {
+        if (cell.type !== "formula") continue;
+        assert.ok(
+          String(cell.value).length <= EXCEL_FORMULA_CHAR_LIMIT,
+          `${sheet.name}!${cell.ref} is ${String(cell.value).length} chars`,
+        );
+      }
+    }
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const staff = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    assert.ok(staff);
+    const st = staff.getCell("K10").value as { formula?: string };
+    const ot = staff.getCell("K11").value as { formula?: string };
+    const dt = staff.getCell("K12").value as { formula?: string };
+    assert.match(String(st.formula ?? ""), /Job setup/);
+    assert.match(String(st.formula ?? ""), /_JobDays/);
+    assert.match(String(ot.formula ?? ""), /Job setup/);
+    assert.match(String(dt.formula ?? ""), /Job setup/);
+    assert.equal(String(st.formula ?? "").length <= EXCEL_FORMULA_CHAR_LIMIT, true);
+    assert.equal(String(ot.formula ?? "").length <= EXCEL_FORMULA_CHAR_LIMIT, true);
   });
 
   it("Summary ESTIMATE TOTAL $ equals the desk rail after weekly-40", async () => {
@@ -666,6 +699,8 @@ describe("estimate excel export", () => {
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
     assert.match(workspace, /estimateToXlsx/);
     assert.match(workspace, /ESTIMATE_EXPORT_ERROR/);
+    assert.match(workspace, /Exporting…/);
+    assert.match(workspace, /exportBusy/);
     assert.equal(/nathanboyte|CAT 2 Pit Stop|isNathan/i.test(workspace), false);
     const empty = buildEstimateWorkbook({ title: "Blank", site: "Yates", client: "Georgia Power" });
     assert.deepEqual(empty.map((sheet) => sheet.name), [
@@ -771,6 +806,7 @@ describe("estimate excel export", () => {
       ESTIMATE_XLSX_SHEETS.staff,
       ESTIMATE_XLSX_SHEETS.rates,
       ESTIMATE_XLSX_SHEETS.lists,
+      ESTIMATE_XLSX_SHEETS.jobDays,
     ]);
     for (const name of [
       ESTIMATE_XLSX_SHEETS.foremen,
@@ -799,6 +835,7 @@ describe("estimate excel export", () => {
         ESTIMATE_XLSX_SHEETS.staff,
         ESTIMATE_XLSX_SHEETS.rates,
         ESTIMATE_XLSX_SHEETS.lists,
+        ESTIMATE_XLSX_SHEETS.jobDays,
       ],
     );
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crane), undefined);
@@ -810,12 +847,16 @@ describe("estimate excel export", () => {
   });
 
   it("Look samples omit empty category sheets (no blank Crane / OM Crane tabs)", async () => {
-    async function sheetNames(file: string) {
+    async function loadSample(file: string) {
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(readFileSync(fileURLToPath(new URL(`../look-samples/${file}`, import.meta.url))));
+      const staff = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+      const st = String((staff?.getCell("K10").value as { formula?: string } | undefined)?.formula ?? "");
+      assert.match(st, /Job setup/);
+      assert.equal(st.length <= EXCEL_FORMULA_CHAR_LIMIT, true);
       return wb.worksheets.map((sheet) => sheet.name);
     }
-    const cat2 = await sheetNames("v151_real_cat2.xlsx");
+    const cat2 = await loadSample("v151_real_cat2.xlsx");
     assert.deepEqual(cat2, [
       ESTIMATE_XLSX_SHEETS.summary,
       ESTIMATE_XLSX_SHEETS.jobSetup,
@@ -828,13 +869,14 @@ describe("estimate excel export", () => {
       ESTIMATE_XLSX_SHEETS.misc,
       ESTIMATE_XLSX_SHEETS.rates,
       ESTIMATE_XLSX_SHEETS.lists,
+      ESTIMATE_XLSX_SHEETS.jobDays,
     ]);
     assert.equal(cat2.includes(ESTIMATE_XLSX_SHEETS.crane), false);
     assert.equal(cat2.includes(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub)), false);
     assert.equal(cat2.includes(ESTIMATE_XLSX_SHEETS.rental), false);
     assert.equal(cat2.includes(ESTIMATE_XLSX_SHEETS.tension), false);
 
-    const aromatics = await sheetNames("v151_real_aromatics.xlsx");
+    const aromatics = await loadSample("v151_real_aromatics.xlsx");
     assert.deepEqual(aromatics, [
       ESTIMATE_XLSX_SHEETS.summary,
       ESTIMATE_XLSX_SHEETS.jobSetup,
@@ -849,6 +891,7 @@ describe("estimate excel export", () => {
       ESTIMATE_XLSX_SHEETS.misc,
       ESTIMATE_XLSX_SHEETS.rates,
       ESTIMATE_XLSX_SHEETS.lists,
+      ESTIMATE_XLSX_SHEETS.jobDays,
     ]);
     assert.equal(aromatics.includes("OM Crane Subcontractor"), false);
     assert.equal(aromatics.includes(ESTIMATE_XLSX_SHEETS.crane), false);
@@ -1480,8 +1523,30 @@ describe("estimate excel export", () => {
     assert.equal(staff.getCell("A4").protection?.locked !== false, true);
     assert.equal(staff.getCell("K4").protection?.locked !== false, true);
     assert.equal(staff.getCell("K5").protection?.locked !== false, true);
-    assert.ok(wb.getWorksheet("Job setup"));
-    assert.equal(Boolean(wb.getWorksheet("Job setup")?.getCell("B7").protection?.locked), false);
+    const setup = wb.getWorksheet("Job setup");
+    const misc = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc);
+    const travel = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.travel);
+    assert.ok(setup);
+    assert.equal(Boolean(setup.getCell("B7").protection?.locked), false);
+    assert.equal(Boolean(setup.getCell("E7").protection?.locked), false);
+    assert.equal(Boolean(setup.getCell("F7").protection?.locked), false);
+    assert.equal(Boolean(setup.getCell("G7").protection?.locked), false);
+    assert.ok(setup.getCell("E7").dataValidation);
+    assert.ok(setup.getCell("F7").dataValidation);
+    assert.ok(setup.getCell("G7").dataValidation);
+    assert.ok(setup.getCell("G11").dataValidation);
+    assert.equal(setup.getCell("G6").value, "OT after 8");
+    assert.notEqual(setup.getCell("H6").value, "OT pick");
+    assert.ok(misc);
+    assert.equal(Boolean(misc.getCell("B7").protection?.locked), false);
+    assert.equal(Boolean(misc.getCell("C7").protection?.locked), false);
+    assert.equal(Boolean(misc.getCell("D7").protection?.locked), false);
+    assert.equal(misc.getCell("E7").protection?.locked !== false, true);
+    assert.ok(travel);
+    assert.equal(Boolean(travel.getCell("B7").protection?.locked), false);
+    assert.equal(Boolean(travel.getCell("C7").protection?.locked), false);
+    assert.equal(Boolean(travel.getCell("D7").protection?.locked), false);
+    assert.equal(travel.getCell("E7").protection?.locked !== false, true);
     let totalRow = 0;
     summary.eachRow((row, rowNumber) => {
       if (String(row.getCell(1).value ?? "") === "ESTIMATE TOTAL $") totalRow = rowNumber;
@@ -1807,7 +1872,8 @@ describe("estimate excel export", () => {
     };
     const sheets = buildEstimateWorkbook(input);
     const names = sheets.map((sheet) => sheet.name);
-    assert.equal(names.length, 15);
+    assert.equal(names.length, 16);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.jobDays), true);
     assert.equal(names[0], ESTIMATE_XLSX_SHEETS.summary);
     assert.deepEqual(
       ["Staff", "Foremen", "Direct", "Support"].every((name) => names.includes(name)),
@@ -1835,7 +1901,8 @@ describe("estimate excel export", () => {
     }
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));
-    assert.equal(wb.worksheets.length, 15);
+    assert.equal(wb.worksheets.length, 16);
+    assert.ok(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobDays));
     assert.ok(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader?.includes("HIT SQUAD"));
     assert.equal(/field trial|forgebook/i.test(String(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader)), false);
     const lead = laborHours(staffSheet, "Lead Safety 01");

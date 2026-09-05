@@ -141,6 +141,9 @@ describe("estimate excel import", () => {
     setup.getCell("B7").value = "ON";
     setup.getCell("C7").value = new Date(2026, 8, 1);
     setup.getCell("D7").value = new Date(2026, 8, 1);
+    setup.getCell("E7").value = 6;
+    setup.getCell("F7").value = 12;
+    setup.getCell("G7").value = "YES";
     const out = await wb.xlsx.writeBuffer();
     const imported = await parseEstimateXlsx(new Uint8Array(out));
     const applied = applyEstimateImport(asPack(input), imported);
@@ -152,6 +155,9 @@ describe("estimate excel import", () => {
     const pre = (applied.schedule as PhaseScheduleState).phases.find((row) => row.id === "pre");
     assert.equal(pre?.on, true);
     assert.equal(pre?.start, "2026-09-01");
+    assert.equal(pre?.daysPerWeek, 6);
+    assert.equal(pre?.hoursPerDay, 12);
+    assert.equal(pre?.otAfter8, true);
     const diff = diffEstimateImport(asPack(input), imported);
     assert.equal(diff.createsNew, false);
     assert.equal(diff.lines.some((line) => /Lead Safety|headcount|Bill as|Pre/i.test(line)), true);

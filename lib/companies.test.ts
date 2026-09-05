@@ -28,6 +28,7 @@ import {
   addCompany,
   assignedCompaniesForEmail,
   assignedCompany,
+  peekAssignedCompany,
   companyDeskLogoForEmail,
   forgetCompanyCacheForTests,
   listCompanies,
@@ -115,6 +116,12 @@ describe("assign and visibility", () => {
     assert.equal(await assignedCompany(JAMES_EMAIL), "hitsquad");
     await setAssignedCompany(JAMES_EMAIL, "cbi");
     assert.equal(await assignedCompany(JAMES_EMAIL), "cbi");
+  });
+
+  it("peeks local assignment without waiting on Drive", async () => {
+    assert.equal(peekAssignedCompany("nathanboyte@gmail.com"), "madison");
+    await setAssignedCompany(JAMES_EMAIL, "hitsquad");
+    assert.equal(peekAssignedCompany(JAMES_EMAIL), "hitsquad");
   });
 
   it("lets the owner see every company and testers only their assigned one", () => {

@@ -29,7 +29,10 @@
  * Subs ESTIMATE TOTAL (cost + affiliate-aware 6.5%). Weekend columns on
  * labor grids are shaded. Daily ST/OT/DT cells are live HC×HPS formulas
  * (OT-after-N / Sunday DT / Saturday OT / weekly-40 via prior ST cells)
- * tied to Job setup ON / Start / Stop / OT after 8 / OT pick (phase id col I).
+ * tied to Job setup ON / Start / Stop / OT after 8 (direct B–G cells).
+ * Long Job setup gates live on hidden _JobDays (in-phase / OT after 8). Craft
+ * day ST/OT/DT only reference those shorts plus Job setup lock cells — keep
+ * every formula under 4096 chars so Excel does not repair-strip Staff–Support.
  * Calendar column count is baked at export — Start/Stop beyond that window
  * needs re-export. Phase bar stays painted (Excel cannot restretch merges
  * without VBA). Job setup F hrs/day does not overwrite yellow HPS. CA 7th-day
@@ -98,7 +101,6 @@ import {
   PHASE_NAMES,
   PHASE_OT_PICKS,
   phaseBarRuns,
-  phaseOtPick,
   phaseOwningDate,
   type PhaseId,
   type PhaseRow,
@@ -205,6 +207,7 @@ export function laborBlockVoidMerges(
 export const ESTIMATE_XLSX_SHEETS = {
   summary: "Summary Page",
   jobSetup: "Job setup",
+  jobDays: "_JobDays",
   lists: "_Lists",
   org: "ORG Chart",
   slicer: "Slicer Hrs",
@@ -559,20 +562,32 @@ function rateLookupFormula(lookupExpr: string, col: string, lastRow: number) {
   return `IF(TRIM(${lookupExpr})="","${SHAHAN_NO_RATE_LABEL}",IFERROR(INDEX(${valueRange},MATCH(${lookupExpr},${titleRange},0)),"${SHAHAN_NO_RATE_LABEL}"))`;
 }
 
-const JOB_SETUP_LAST_ROW = 6 + PHASE_IDS.length;
+/** Excel drops a formula past ~8192 chars. Day ST/OT/DT must stay well under this. */
+export const EXCEL_FORMULA_CHAR_LIMIT = 4096;
 const JOB_SETUP_OT8_PICKS = PHASE_OT_PICKS.filter((item) => item.id.endsWith("ot8")).map((item) => item.label);
 
 function jobSetupSheet() {
   return quoteSheet(xlsxName(ESTIMATE_XLSX_SHEETS.jobSetup));
 }
 
-function jobSetupLookup(col: string, phaseId: PhaseId) {
-  const sheet = jobSetupSheet();
-  return `IFERROR(INDEX(${sheet}!${col}$7:${col}$${JOB_SETUP_LAST_ROW},MATCH("${phaseId}",${sheet}!I$7:I$${JOB_SETUP_LAST_ROW},0)),"")`;
+function jobDaysSheet() {
+  return quoteSheet(xlsxName(ESTIMATE_XLSX_SHEETS.jobDays));
+}
+
+function jobSetupPhaseRow(phaseId: PhaseId) {
+  return 7 + PHASE_IDS.indexOf(phaseId);
+}
+
+function jobSetupCell(col: string, phaseId: PhaseId) {
+  return `${jobSetupSheet()}!$${col}$${jobSetupPhaseRow(phaseId)}`;
+}
+
+function jobDaysRef(index: number, row: number) {
+  return `${jobDaysSheet()}!${colLetter(1 + index)}${row}`;
 }
 
 function jobSetupPhaseOwns(dateRef: string, phaseId: PhaseId) {
-  return `AND(${jobSetupLookup("B", phaseId)}="ON",${jobSetupLookup("C", phaseId)}<=${dateRef},${jobSetupLookup("D", phaseId)}>=${dateRef})`;
+  return `AND(${jobSetupCell("B", phaseId)}="ON",${jobSetupCell("C", phaseId)}<=${dateRef},${jobSetupCell("D", phaseId)}>=${dateRef})`;
 }
 
 function jobSetupInPhase(dateRef: string) {
@@ -580,14 +595,13 @@ function jobSetupInPhase(dateRef: string) {
 }
 
 function jobSetupOtFlag(phaseId: PhaseId) {
-  const g = jobSetupLookup("G", phaseId);
-  const h = jobSetupLookup("H", phaseId);
+  const g = jobSetupCell("G", phaseId);
+  const h = jobSetupCell("H", phaseId);
   const picks = JOB_SETUP_OT8_PICKS.map((label) => `${h}="${label}"`).join(",");
   return `OR(${g}="YES",${picks})`;
 }
 
-function jobSetupOtAfter8Expr(dateRef: string, clock: RunningClock) {
-  if (clock === "ca-daily") return "FALSE";
+function jobSetupOtAfter8Expr(dateRef: string) {
   let expr = "FALSE";
   for (let i = PHASE_IDS.length - 1; i >= 0; i -= 1) {
     const id = PHASE_IDS[i];
@@ -601,11 +615,28 @@ function jobSetupTextEquals(expr: string, expected: string) {
   return `${expr}="${expected}"`;
 }
 
-function jobSetupExportLock(dateRef: string, owner: PhaseRow | undefined, inPhase: string) {
-  if (!owner) return `NOT(${inPhase})`;
-  const pick = phaseOtPick(owner);
-  const hLabel = pick ? (PHASE_OT_PICKS.find((item) => item.id === pick)?.label ?? "") : "";
-  return `AND(${jobSetupLookup("B", owner.id)}="ON",${jobSetupLookup("C", owner.id)}<=${dateRef},${jobSetupLookup("D", owner.id)}>=${dateRef},${jobSetupTextEquals(jobSetupLookup("G", owner.id), owner.otAfter8 ? "YES" : "NO")},${jobSetupTextEquals(jobSetupLookup("H", owner.id), hLabel)})`;
+function jobSetupExportLock(dateRef: string, owner: PhaseRow | undefined, inPhaseRef: string) {
+  if (!owner) return `NOT(${inPhaseRef})`;
+  return `AND(${jobSetupCell("B", owner.id)}="ON",${jobSetupCell("C", owner.id)}<=${dateRef},${jobSetupCell("D", owner.id)}>=${dateRef},${jobSetupTextEquals(jobSetupCell("G", owner.id), owner.otAfter8 ? "YES" : "NO")})`;
+}
+
+function buildJobDaysSheet(dates: string[]): WorkbookSheet | null {
+  if (!dates.length) return null;
+  const cells: SheetCell[] = [];
+  dates.forEach((ymd, index) => {
+    const col = colLetter(1 + index);
+    if (index === 0) {
+      const date = parseYmd(ymd);
+      if (date) cells.push({ ref: `${col}1`, type: "date", value: date });
+      else pushText(cells, `${col}1`, ymd);
+    } else {
+      pushFormula(cells, `${col}1`, `${colLetter(index)}1+1`);
+    }
+    const dateRef = `${col}$1`;
+    pushFormula(cells, `${col}2`, jobSetupInPhase(dateRef));
+    pushFormula(cells, `${col}3`, jobSetupOtAfter8Expr(dateRef));
+  });
+  return { name: ESTIMATE_XLSX_SHEETS.jobDays, cells, veryHidden: true };
 }
 
 function mondayStamp(ymd: string) {
@@ -986,21 +1017,14 @@ function buildCrewSheet(
         .filter((item) => rangeWeekKey(coveringRanges(row, item.stamp, night)[0]) === rangeKey)
         .map((item) => item.ref);
       const dateRef = `${col}$6`;
-      const inPhase = jobSetupInPhase(dateRef);
-      const hours = dayHourFormulas(
-        col,
-        hcRow,
-        hpsRow,
-        clock,
-        jobSetupOtAfter8Expr(dateRef, clock),
-        inPhase,
-        priorStRefs,
-      );
+      const inPhaseRef = jobDaysRef(index, 2);
+      const otAfter8Ref = clock === "ca-daily" ? "FALSE" : jobDaysRef(index, 3);
+      const hours = dayHourFormulas(col, hcRow, hpsRow, clock, otAfter8Ref, inPhaseRef, priorStRefs);
       const desk = deskHours.get(ymd) ?? { st: 0, ot: 0, dt: 0 };
       const hcVal = money(plug.hc);
       const hpsVal = money(plug.hps);
       const owner = phaseOwningDate(setupPhases, ymd);
-      const exported = `AND(${col}${hcRow}=${hcVal},${col}${hpsRow}=${hpsVal},${jobSetupExportLock(dateRef, owner, inPhase)})`;
+      const exported = `AND(${col}${hcRow}=${hcVal},${col}${hpsRow}=${hpsVal},${jobSetupExportLock(dateRef, owner, inPhaseRef)})`;
       pushFormula(cells, `${col}${stRow}`, `IF(${exported},${desk.st},${hours.st})`);
       pushFormula(cells, `${col}${otRow}`, `IF(${exported},${desk.ot},${hours.ot})`);
       pushFormula(cells, `${col}${dtRow}`, `IF(${exported},${desk.dt},${hours.dt})`);
@@ -1160,6 +1184,7 @@ function buildTravelSheet(input: EstimateXlsxInput, lines: TravelLine[], name: s
   ["Kind", "Travelers", "Miles", "$ / mile", "Total $"].forEach((label, index) => {
     pushText(cells, `${colLetter(index + 1)}6`, label);
   });
+  const unlocked: Array<{ row: number; col: number }> = [];
   live.forEach((line, index) => {
     const excelRow = 7 + index;
     pushText(cells, `A${excelRow}`, line.kind === "staff" ? "Staff" : "Craft");
@@ -1167,13 +1192,14 @@ function buildTravelSheet(input: EstimateXlsxInput, lines: TravelLine[], name: s
     pushNum(cells, `C${excelRow}`, line.miles);
     pushNum(cells, `D${excelRow}`, line.perMile);
     pushFormula(cells, `E${excelRow}`, `B${excelRow}*C${excelRow}*D${excelRow}`);
+    unlocked.push({ row: excelRow, col: 2 }, { row: excelRow, col: 3 }, { row: excelRow, col: 4 });
   });
   const first = 7;
   const last = 6 + live.length;
   const totalRow = last + 1;
   pushText(cells, `A${totalRow}`, "TOTAL");
   pushFormula(cells, `E${totalRow}`, `SUM(E${first}:E${last})`);
-  return { name, cells, sheetTotal: `E${totalRow}` };
+  return { name, cells, sheetTotal: `E${totalRow}`, unlocked };
 }
 
 function buildMiscSheet(input: EstimateXlsxInput): BuiltSheet | null {
@@ -1185,12 +1211,14 @@ function buildMiscSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushText(cells, `${colLetter(index + 1)}6`, label);
   });
   let excelRow = 7;
+  const unlocked: Array<{ row: number; col: number }> = [];
   for (const line of craftTravel) {
     pushText(cells, `A${excelRow}`, "Craft travel");
     pushText(cells, `B${excelRow}`, `${line.travelers} travelers`);
     pushNum(cells, `C${excelRow}`, Math.min(line.travelers, line.headcount || line.travelers));
     pushNum(cells, `D${excelRow}`, money(line.miles * line.perMile));
     pushFormula(cells, `E${excelRow}`, `C${excelRow}*D${excelRow}`);
+    unlocked.push({ row: excelRow, col: 2 }, { row: excelRow, col: 3 }, { row: excelRow, col: 4 });
     excelRow += 1;
   }
   for (const line of misc) {
@@ -1199,13 +1227,14 @@ function buildMiscSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushNum(cells, `C${excelRow}`, line.qty);
     pushNum(cells, `D${excelRow}`, line.each);
     pushFormula(cells, `E${excelRow}`, `C${excelRow}*D${excelRow}`);
+    unlocked.push({ row: excelRow, col: 2 }, { row: excelRow, col: 3 }, { row: excelRow, col: 4 });
     excelRow += 1;
   }
   const first = 7;
   const last = excelRow - 1;
   pushText(cells, `A${excelRow}`, "TOTAL");
   pushFormula(cells, `E${excelRow}`, `SUM(E${first}:E${last})`);
-  return { name: ESTIMATE_XLSX_SHEETS.misc, cells, sheetTotal: `E${excelRow}` };
+  return { name: ESTIMATE_XLSX_SHEETS.misc, cells, sheetTotal: `E${excelRow}`, unlocked };
 }
 
 function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
@@ -1527,6 +1556,9 @@ function buildListsSheet(): WorkbookSheet {
     uniqueTitles(SHAHAN_SUPPORT_TITLES),
     uniqueTitles(SUPPORT_BILLED_AS_TITLES),
     PHASE_OT_PICKS.map((pick) => pick.label),
+    ["4", "5", "6", "7"],
+    ["8", "9", "10", "12", "13"],
+    ["YES", "NO"],
   ];
   const cells: SheetCell[] = [];
   columns.forEach((list, index) => {
@@ -1539,7 +1571,7 @@ function buildListsSheet(): WorkbookSheet {
 function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
   const schedule = mergeSchedule(input.schedule);
   const cells = headerCells(input);
-  const headers = ["Phase", "ON", "Start", "Stop", "Days/wk", "Hrs/day", "OT after 8", "OT pick"];
+  const headers = ["Phase", "ON", "Start", "Stop", "Days/wk", "Hrs/day", "OT after 8"];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
   const unlocked: Array<{ row: number; col: number }> = [];
   schedule.phases.forEach((row, index) => {
@@ -1553,22 +1585,23 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
     pushNum(cells, `E${excelRow}`, row.daysPerWeek);
     pushNum(cells, `F${excelRow}`, row.hoursPerDay);
     pushText(cells, `G${excelRow}`, row.otAfter8 ? "YES" : "NO");
-    const pick = phaseOtPick(row);
-    const label = pick ? (PHASE_OT_PICKS.find((item) => item.id === pick)?.label ?? "") : "";
-    cells.push({ ref: `H${excelRow}`, type: "text", value: label });
     pushText(cells, `I${excelRow}`, row.id);
-    for (let col = 2; col <= 8; col += 1) unlocked.push({ row: excelRow, col });
+    for (let col = 2; col <= 7; col += 1) unlocked.push({ row: excelRow, col });
   });
   return {
     name: ESTIMATE_XLSX_SHEETS.jobSetup,
     cells,
-    hiddenCols: [9],
+    hiddenCols: [8, 9],
     unlocked,
-    validations: PHASE_IDS.flatMap((id, index) => {
-      if (id !== "pre" && id !== "post") return [];
-      return [{ sqref: `H${7 + index}`, formulae: [listFormula("F", PHASE_OT_PICKS.length)] }];
+    validations: PHASE_IDS.flatMap((_, index) => {
+      const row = 7 + index;
+      return [
+        { sqref: `E${row}`, formulae: [listFormula("G", 4)] },
+        { sqref: `F${row}`, formulae: [listFormula("H", 5)] },
+        { sqref: `G${row}`, formulae: [listFormula("I", 2)] },
+      ];
     }),
-    merges: ["A1:H1", "A2:H2", "A3:H3"],
+    merges: ["A1:G1", "A2:G2", "A3:G3"],
   };
 }
 
@@ -1621,7 +1654,9 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
     .map((sheet) => ({ ...sheet, name: xlsxName(sheet.name) }));
   const setup = { ...buildJobSetupSheet(input), name: xlsxName(ESTIMATE_XLSX_SHEETS.jobSetup) };
   const lists = { ...buildListsSheet(), name: xlsxName(ESTIMATE_XLSX_SHEETS.lists) };
-  return [{ ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) }, setup, ...body, lists];
+  const jobDays = buildJobDaysSheet(laborCalendarDates(input));
+  const helpers = jobDays ? [{ ...jobDays, name: xlsxName(ESTIMATE_XLSX_SHEETS.jobDays) }] : [];
+  return [{ ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) }, setup, ...body, lists, ...helpers];
 }
 
 export async function estimateToXlsx(input: EstimateXlsxInput = {}): Promise<Uint8Array> {
