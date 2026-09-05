@@ -9,11 +9,21 @@ export function BrandMark({
   variant?: "rings" | "stacked" | "jets";
 }) {
   if (variant === "stacked" || variant === "jets") {
+    // Two jets chasing upper-right with a CLEAR empty gap between them.
+    // Absolute positions only — do not use transform/scale (they collapse at h-8/h-16).
     return (
-      <svg className={className} viewBox="0 0 76 58" fill="none" aria-hidden="true">
-        <g fill="#ffffff" stroke="#ffffff" strokeWidth="0.7" strokeLinejoin="round">
-          <path d={JET} transform="translate(42 2) rotate(12 20 13.5)" />
-          <path d={JET} transform="translate(2 28) rotate(18 20 13.5) scale(0.76)" />
+      <svg
+        className={className}
+        viewBox="0 0 100 72"
+        fill="none"
+        aria-hidden="true"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <g fill="#ffffff" stroke="#ffffff" strokeWidth="0.9" strokeLinejoin="round">
+          {/* LEAD — upper right */}
+          <path d={JET} transform="translate(48 4)" />
+          {/* TRAIL — lower left, same size, wide gap */}
+          <path d={JET} transform="translate(4 34)" />
         </g>
       </svg>
     );
