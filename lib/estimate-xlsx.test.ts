@@ -991,6 +991,8 @@ describe("estimate excel export", () => {
       assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.slicer), false);
       assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.laydown), false);
       assert.equal(names.includes("Job setup"), true);
+      // Stale Look chrome — no _CrewRanges. Fresh export always writes it; vault fixtures prove create-new.
+      assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.crewRanges), false);
     }
   });
 

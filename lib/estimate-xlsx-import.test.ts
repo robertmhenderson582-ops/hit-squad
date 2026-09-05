@@ -19,6 +19,8 @@ import {
 import type { SubSheet } from "./subcontractor.ts";
 import {
   ESTIMATE_XLSX_SHEETS,
+  SUB_HIDDEN_ID_COL,
+  TRAVEL_HIDDEN_ID_COL,
   JOB_SETUP_CBA_DATE_CELL,
   JOB_SETUP_CBA_ON_CELL,
   JOB_SETUP_CRAFT_MILE_CELL,
@@ -1647,4 +1649,135 @@ describe("estimate excel import", () => {
     assert.equal(money.desk, money.summary);
     assert.notEqual(money.desk, 25324671.97);
   });
+
+  it("Nathan types over ST/OT/DT formulas — DOWN honors or clear-rejects", async () => {
+    const input = fixture();
+    const before = deskPackageTotal(input);
+    const bytes = await estimateToXlsx(input);
+    const rejected = new ExcelJS.Workbook();
+    await rejected.xlsx.load(Buffer.from(bytes));
+    const staff = rejected.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    assert.ok(staff);
+    staff.getCell(`${dayCol()}${7 + LABOR_ST_OFFSET}`).value = 99;
+    const imported = await parseEstimateXlsx(new Uint8Array(await rejected.xlsx.writeBuffer()));
+    assert.ok(imported.warnings?.some((line) => /typed ST\/OT\/DT/i.test(line) && /Hours\/shift/.test(line)));
+    const applied = applyEstimateImport(asPack(input), imported);
+    const rejectedMoney = livePackMoney(applied);
+    assert.equal(rejectedMoney.desk, before);
+    assert.equal(rejectedMoney.desk, rejectedMoney.summary);
+    const diff = diffEstimateImport(asPack(input), imported);
+    assert.ok(diff.lines.some((line) => /typed ST\/OT\/DT/i.test(line)));
+
+    const honored = new ExcelJS.Workbook();
+    await honored.xlsx.load(Buffer.from(bytes));
+    const honStaff = honored.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    assert.ok(honStaff);
+    honStaff.getCell(`${dayCol()}${7 + LABOR_ST_OFFSET}`).value = 12;
+    honStaff.getCell(`${dayCol()}${7 + LABOR_OT_OFFSET}`).value = 0;
+    honStaff.getCell(`${dayCol()}${7 + LABOR_DT_OFFSET}`).value = 0;
+    const honImport = await parseEstimateXlsx(new Uint8Array(await honored.xlsx.writeBuffer()));
+    assert.equal(honImport.warnings?.some((line) => /typed ST\/OT\/DT/i.test(line)) ?? false, false);
+    const honPack = applyEstimateImport(asPack(input), honImport);
+    const honMoney = livePackMoney(honPack);
+    assert.notEqual(honMoney.desk, before);
+    assert.equal(honMoney.desk, honMoney.summary);
+    assert.equal((honPack.crew as { staff: CraftRow[] }).staff[0].ranges.some((range) => range.hoursPerShift === 12), true);
+  });
+
+  it("DOWN: Sub qty/rate edit keeps the same sub id and the desk rail", async () => {
+    const input: EstimateXlsxInput = {
+      ...fixture(),
+      subcontractor: {
+        lines: [{ id: "sb-1", vendor: "ACME", scope: "Scaffold", qty: 2, unit: "LS", rate: 500, affiliate: false }],
+        cards: [
+          {
+            id: "sc-aff",
+            vendor: "JVIC Engineering",
+            kind: "equipment",
+            labor: [],
+            equipment: [{ id: "se-1", description: "LS", period: "daily", rate: 4000, qty: 1, freight: 0, start: "", end: "" }],
+            affiliate: true,
+          },
+        ],
+      },
+    };
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const sub = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.sub);
+    assert.ok(sub);
+    assert.equal(asTextCell(sub.getCell(7, SUB_HIDDEN_ID_COL).value), "sb-1");
+    assert.equal(asTextCell(sub.getCell(8, SUB_HIDDEN_ID_COL).value), "sc-aff");
+    sub.getCell("C7").value = 3;
+    sub.getCell("D7").value = 600;
+    sub.getCell("C8").value = 2;
+    sub.getCell("D8").value = 2100;
+    const applied = applyEstimateImport(asPack(input), await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    const sheet = applied.subcontractor as SubSheet;
+    assert.equal(sheet.lines.find((line) => line.id === "sb-1")?.qty, 3);
+    assert.equal(sheet.lines.find((line) => line.id === "sb-1")?.rate, 600);
+    assert.equal(sheet.lines.find((line) => line.id === "sc-aff")?.qty, 2);
+    assert.equal(sheet.lines.find((line) => line.id === "sc-aff")?.rate, 2100);
+    assert.equal(sheet.cards.some((card) => card.id === "sc-aff"), false);
+    assert.equal(sheet.lines.some((line) => line.id.startsWith("sub-imp-")), false);
+    const money = livePackMoney(applied);
+    assert.equal(money.desk, money.summary);
+    assert.notEqual(money.desk, deskPackageTotal(input));
+  });
+
+  it("DOWN: same-kind Travel reorder keeps staff identity after re-export", async () => {
+    const input: EstimateXlsxInput = {
+      ...fixture(),
+      otherCost: {
+        perDiemRate: 0,
+        travel: [
+          { id: "travel-lead", kind: "staff", source: "crew", headcount: 1, travelers: 1, perMile: 0.7, miles: 40 },
+          { id: "travel-pm", kind: "staff", source: "crew", headcount: 1, travelers: 2, perMile: 0.7, miles: 12 },
+          { id: "travel-craft", kind: "craft", source: "crew", headcount: 2, travelers: 2, perMile: 0.5, miles: 20 },
+        ],
+        misc: [],
+      },
+    };
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const travel = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.travel);
+    assert.ok(travel);
+    const idCol = TRAVEL_HIDDEN_ID_COL;
+    assert.equal(asTextCell(travel.getCell(7, idCol).value), "travel-lead");
+    assert.equal(asTextCell(travel.getCell(8, idCol).value), "travel-pm");
+    const row7 = [1, 2, 3, 4, idCol].map((col) => travel.getCell(7, col).value);
+    const row8 = [1, 2, 3, 4, idCol].map((col) => travel.getCell(8, col).value);
+    [1, 2, 3, 4, idCol].forEach((col, index) => {
+      travel.getCell(7, col).value = row8[index] as typeof row8[number];
+      travel.getCell(8, col).value = row7[index] as typeof row7[number];
+    });
+    const first = applyEstimateImport(asPack(input), await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    const after = (first.otherCost as { travel: Array<{ id: string; kind: string; miles: number; travelers: number }> }).travel;
+    assert.equal(after.find((line) => line.miles === 12)?.id, "travel-pm");
+    assert.equal(after.find((line) => line.miles === 40)?.id, "travel-lead");
+    assert.equal(after.find((line) => line.kind === "craft")?.id, "travel-craft");
+    assert.equal(after.find((line) => line.id === "travel-pm")?.travelers, 2);
+    const money = livePackMoney(first);
+    assert.equal(money.desk, deskPackageTotal(input));
+    const again = applyEstimateImport(first, await parseEstimateXlsx(await estimateToXlsx({
+      title: first.title,
+      client: first.client,
+      site: first.site,
+      crew: first.crew,
+      schedule: first.schedule,
+      jobMeta: first.jobMeta,
+      equipment: first.equipment,
+      otherCost: first.otherCost,
+      subcontractor: first.subcontractor,
+    })));
+    const twice = (again.otherCost as { travel: Array<{ id: string; miles: number }> }).travel;
+    assert.equal(twice.find((line) => line.miles === 12)?.id, "travel-pm");
+    assert.equal(twice.find((line) => line.miles === 40)?.id, "travel-lead");
+    assert.equal(livePackMoney(again).desk, money.desk);
+  });
 });
+
+function asTextCell(value: unknown) {
+  return String(value ?? "").trim();
+}

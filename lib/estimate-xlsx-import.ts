@@ -43,6 +43,8 @@ import {
   LABOR_OT_OFFSET,
   LABOR_PD_OFFSET,
   LABOR_ST_OFFSET,
+  SUB_HIDDEN_ID_COL,
+  TRAVEL_HIDDEN_ID_COL,
   clockLabelOverride,
   laborBlockId,
   laborDayPlug,
@@ -56,6 +58,7 @@ import {
   lineAmount,
   normalizeSubSheet,
   subCardTotal,
+  type SubCard,
   type SubLine,
   type SubSheet,
   type SubTotalContext,
@@ -101,6 +104,9 @@ export type ImportedDay = {
   ot: number;
   dt: number;
   pd: number;
+  typedSt?: boolean;
+  typedOt?: boolean;
+  typedDt?: boolean;
 };
 
 export type ImportedBlock = {
@@ -111,6 +117,8 @@ export type ImportedBlock = {
   billedAs?: string;
   clockOverride?: ClockOverride;
   days: ImportedDay[];
+  /** False when Subtotal $ was baked to a number (formula-strip / CHAOS). */
+  hourFormulasIntact?: boolean;
 };
 
 export type ImportedCostLine = {
@@ -146,6 +154,8 @@ export type EstimateImport = {
   jobMeta?: Partial<JobRates & JobMoney>;
   /** Hidden _CrewRanges stacks, keyed by craft row id. Create-new only when the daily grid still matches. */
   crewRanges?: Record<string, CalendarRange[]>;
+  /** Typed-over ST/OT/DT that were not honored (hours still follow HC / Hours/shift / PD). */
+  warnings?: string[];
 };
 
 export type EstimateImportDiff = {
@@ -254,19 +264,64 @@ function sheetDates(ws: ExcelJS.Worksheet): string[] {
   return dates;
 }
 
+function cellIsFormula(value: unknown): boolean {
+  if (typeof value === "string" && value.trim().startsWith("=")) return true;
+  if (value && typeof value === "object") {
+    const row = value as { formula?: unknown; sharedFormula?: unknown };
+    return Boolean(row.formula || row.sharedFormula);
+  }
+  return false;
+}
+
+function hourCell(ws: ExcelJS.Worksheet, row: number, col: number): { value: number; typed: boolean } {
+  const raw = ws.getCell(row, col).value;
+  const empty = raw == null || raw === "";
+  return { value: asNum(raw), typed: !empty && !cellIsFormula(raw) };
+}
+
 function readBlockDays(ws: ExcelJS.Worksheet, titleRow: number, dates: string[]): ImportedDay[] {
   return dates.map((ymd, index) => {
     const col = LABOR_DATE_START_COL + index;
+    const st = hourCell(ws, titleRow + LABOR_ST_OFFSET, col);
+    const ot = hourCell(ws, titleRow + LABOR_OT_OFFSET, col);
+    const dt = hourCell(ws, titleRow + LABOR_DT_OFFSET, col);
     return {
       ymd,
       hc: asNum(ws.getCell(titleRow + LABOR_HC_OFFSET, col).value),
       hps: asNum(ws.getCell(titleRow + LABOR_HPS_OFFSET, col).value),
-      st: asNum(ws.getCell(titleRow + LABOR_ST_OFFSET, col).value),
-      ot: asNum(ws.getCell(titleRow + LABOR_OT_OFFSET, col).value),
-      dt: asNum(ws.getCell(titleRow + LABOR_DT_OFFSET, col).value),
+      st: st.value,
+      ot: ot.value,
+      dt: dt.value,
       pd: asNum(ws.getCell(titleRow + LABOR_PD_OFFSET, col).value),
+      typedSt: st.typed,
+      typedOt: ot.typed,
+      typedDt: dt.typed,
     };
   });
+}
+
+function applyTypedHourPolicy(blocks: ImportedBlock[]): { blocks: ImportedBlock[]; warnings: string[] } {
+  const warnings: string[] = [];
+  const next = blocks.map((block) => {
+    if (!block.hourFormulasIntact) return block;
+    const days = block.days.map((day) => {
+      const typedAny = Boolean(day.typedSt || day.typedOt || day.typedDt);
+      const typedAll = Boolean(day.typedSt && day.typedOt && day.typedDt);
+      if (typedAll && day.hc > 0) {
+        const total = day.st + day.ot + day.dt;
+        if (total > 0) return { ...day, hps: total / day.hc };
+      }
+      if (typedAny && !typedAll) {
+        const label = block.position.trim() || block.id;
+        warnings.push(
+          `${label}: typed ST/OT/DT on ${day.ymd} ignored — hours follow HC / Hours/shift / PD.`,
+        );
+      }
+      return day;
+    });
+    return { ...block, days };
+  });
+  return { blocks: next, warnings };
 }
 
 function dayLive(day: ImportedDay) {
@@ -502,6 +557,7 @@ function parseCraftSheet(ws: ExcelJS.Worksheet | undefined): ImportedBlock[] {
       billedAs,
       clockOverride,
       days: readBlockDays(ws, row, dates),
+      hourFormulasIntact: cellIsFormula(ws.getCell(row, 3).value),
     });
   }
   return blocks;
@@ -688,7 +744,8 @@ function parseTravelSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLine[]
     const perMile = asNum(ws.getCell(row, 4).value);
     if (!label) continue;
     if (travelers === 0 && miles === 0 && perMile === 0) continue;
-    lines.push({ item: label || kind, kind, travelers, miles, rate: perMile, qty: travelers });
+    const itemId = asText(ws.getCell(row, TRAVEL_HIDDEN_ID_COL).value);
+    lines.push({ item: label || kind, kind, travelers, miles, rate: perMile, qty: travelers, itemId: itemId || undefined });
   }
   return lines;
 }
@@ -790,12 +847,14 @@ function parseSubsSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLine[] |
     const qty = asNum(ws.getCell(row, 3).value);
     const rate = asNum(ws.getCell(row, 4).value);
     if (!item && !description && qty === 0 && rate === 0) continue;
+    const itemId = asText(ws.getCell(row, SUB_HIDDEN_ID_COL).value);
     lines.push({
       item,
       description,
       qty,
       rate,
       affiliate: isOn(ws.getCell(row, 5).value),
+      itemId: itemId || undefined,
     });
   }
   return lines;
@@ -816,8 +875,13 @@ export async function parseEstimateXlsx(bytes: Uint8Array): Promise<EstimateImpo
     ESTIMATE_XLSX_SHEETS.direct,
     ESTIMATE_XLSX_SHEETS.support,
   ] as const;
-  const bySheet = sheets.map((name) => ({ sheet: name, blocks: parseCraftSheet(wb.getWorksheet(name)) }));
-  const blocks = bySheet.flatMap((item) => item.blocks);
+  const rawBySheet = sheets.map((name) => ({ sheet: name, blocks: parseCraftSheet(wb.getWorksheet(name)) }));
+  const typed = applyTypedHourPolicy(rawBySheet.flatMap((item) => item.blocks));
+  const bySheet = rawBySheet.map((item) => ({
+    sheet: item.sheet,
+    blocks: typed.blocks.filter((block) => block.sheet === item.sheet),
+  }));
+  const blocks = typed.blocks;
   if (!blocks.length && !wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup)) throw new Error(ESTIMATE_IMPORT_ERROR);
   const crewRanges = parseCrewRanges(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crewRanges));
   const crew = applyBlocks({}, bySheet, schedule.phases, crewRanges);
@@ -827,6 +891,7 @@ export async function parseEstimateXlsx(bytes: Uint8Array): Promise<EstimateImpo
     crew,
     blocks,
     crewRanges,
+    warnings: typed.warnings.length ? typed.warnings : undefined,
     travel: parseTravelSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.travel)),
     misc: parseMiscSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc)),
     rental: parseRentalLikeSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rental)),
@@ -880,21 +945,50 @@ function windowDates(schedule: PhaseScheduleState): { start: string; end: string
   return { start: window.start || "", end: window.end || "" };
 }
 
+function takeTravelPrev(existing: TravelLine[], used: Set<number>, row: ImportedCostLine): TravelLine | undefined {
+  const kind: TravelKind = row.kind === "craft" ? "craft" : "staff";
+  const travelers = row.travelers ?? row.qty ?? 0;
+  const miles = row.miles ?? 0;
+  if (row.itemId) {
+    const byId = existing.findIndex((line, index) => !used.has(index) && line.id === row.itemId);
+    if (byId >= 0) {
+      used.add(byId);
+      return existing[byId];
+    }
+  }
+  const byPrint = existing.findIndex(
+    (line, index) =>
+      !used.has(index) &&
+      line.kind === kind &&
+      line.travelers === travelers &&
+      line.miles === miles &&
+      money2(line.perMile) === money2(row.rate),
+  );
+  if (byPrint >= 0) {
+    used.add(byPrint);
+    return existing[byPrint];
+  }
+  const byKind = existing.findIndex((line, index) => !used.has(index) && line.kind === kind);
+  if (byKind >= 0) {
+    used.add(byKind);
+    return existing[byKind];
+  }
+  return undefined;
+}
+
 function applyTravelLines(existing: TravelLine[], incoming: ImportedCostLine[] | undefined): TravelLine[] {
   if (!incoming) return existing;
-  const staff = existing.filter((line) => line.kind === "staff");
-  const craft = existing.filter((line) => line.kind === "craft");
-  let si = 0;
-  let ci = 0;
-  return incoming.map((row) => {
+  const used = new Set<number>();
+  return incoming.map((row, index) => {
     const kind: TravelKind = row.kind === "craft" ? "craft" : "staff";
-    const prev = kind === "craft" ? craft[ci++] : staff[si++];
+    const prev = takeTravelPrev(existing, used, row);
+    const travelers = row.travelers ?? row.qty ?? 0;
     return {
-      id: prev?.id ?? `travel-${kind}-${kind === "craft" ? ci : si}`,
+      id: prev?.id ?? row.itemId ?? `travel-${kind}-${index + 1}`,
       kind,
       source: prev?.source ?? "extra",
-      headcount: Math.max(prev?.headcount ?? 0, row.travelers ?? row.qty ?? 0),
-      travelers: row.travelers ?? row.qty ?? 0,
+      headcount: Math.max(prev?.headcount ?? 0, travelers),
+      travelers,
       perMile: row.rate,
       miles: row.miles ?? 0,
     };
@@ -1014,6 +1108,50 @@ function money2(value: number) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
 
+function takeSubLine(prevLines: SubLine[], used: Set<number>, row: ImportedCostLine, index: number): SubLine | undefined {
+  if (row.itemId) {
+    const byId = prevLines.findIndex((line, i) => !used.has(i) && line.id === row.itemId);
+    if (byId >= 0) {
+      used.add(byId);
+      return prevLines[byId];
+    }
+  }
+  const vendor = row.item.trim().toLowerCase();
+  const scope = (row.description ?? "").trim().toLowerCase();
+  const byName = prevLines.findIndex(
+    (line, i) => !used.has(i) && line.vendor.trim().toLowerCase() === vendor && line.scope.trim().toLowerCase() === scope,
+  );
+  if (byName >= 0) {
+    used.add(byName);
+    return prevLines[byName];
+  }
+  if (index < prevLines.length && !used.has(index)) {
+    used.add(index);
+    return prevLines[index];
+  }
+  return undefined;
+}
+
+function takeSubCard(prevCards: SubCard[], used: Set<number>, row: ImportedCostLine): SubCard | undefined {
+  if (row.itemId) {
+    const byId = prevCards.findIndex((card, i) => !used.has(i) && card.id === row.itemId);
+    if (byId >= 0) {
+      used.add(byId);
+      return prevCards[byId];
+    }
+  }
+  const vendor = row.item.trim().toLowerCase();
+  const kind = (row.description ?? "").trim();
+  const byName = prevCards.findIndex(
+    (card, i) => !used.has(i) && card.vendor.trim().toLowerCase() === vendor && (!kind || kind === card.kind),
+  );
+  if (byName >= 0) {
+    used.add(byName);
+    return prevCards[byName];
+  }
+  return undefined;
+}
+
 function applySubSheet(
   existing: SubSheet,
   incoming: ImportedCostLine[] | undefined,
@@ -1022,27 +1160,28 @@ function applySubSheet(
   if (!incoming) return existing;
   const prevLines = (existing.lines ?? []).filter((line) => lineAmount(line) > 0);
   const prevCards = (existing.cards ?? []).filter((card) => subCardTotal(card, ctx) > 0);
+  const usedLines = new Set<number>();
+  const usedCards = new Set<number>();
   const lines: SubLine[] = [];
   const cards: SubSheet["cards"] = [];
   incoming.forEach((row, index) => {
-    if (index < prevLines.length) {
-      const prev = prevLines[index];
+    const prevLine = takeSubLine(prevLines, usedLines, row, index);
+    if (prevLine) {
       lines.push({
-        ...prev,
-        vendor: row.item || prev.vendor,
-        scope: row.description ?? prev.scope,
+        ...prevLine,
+        vendor: row.item || prevLine.vendor,
+        scope: row.description ?? prevLine.scope,
         qty: row.qty,
         rate: row.rate,
-        affiliate: row.affiliate ?? prev.affiliate,
+        affiliate: row.affiliate ?? prevLine.affiliate,
       });
       return;
     }
-    const prevCard = prevCards[index - prevLines.length];
+    const prevCard = takeSubCard(prevCards, usedCards, row);
     if (prevCard) {
       const excelCost = money2(row.qty * row.rate);
       const cardCost = money2(subCardTotal(prevCard, ctx));
-      const kindOk = !row.description || row.description === prevCard.kind;
-      if (kindOk && Math.abs(excelCost - cardCost) < 0.02) {
+      if (Math.abs(excelCost - cardCost) < 0.02) {
         cards.push({
           ...prevCard,
           vendor: row.item || prevCard.vendor,
@@ -1050,9 +1189,19 @@ function applySubSheet(
         });
         return;
       }
+      lines.push({
+        id: prevCard.id,
+        vendor: row.item || prevCard.vendor,
+        scope: row.description || prevCard.kind,
+        qty: row.qty,
+        unit: "LS",
+        rate: row.rate,
+        affiliate: row.affiliate ?? prevCard.affiliate,
+      });
+      return;
     }
     lines.push({
-      id: `sub-imp-${index + 1}`,
+      id: row.itemId || `sub-imp-${index + 1}`,
       vendor: row.item,
       scope: row.description ?? "",
       qty: row.qty,
@@ -1146,7 +1295,7 @@ export function createPackFromImport(imported: EstimateImport, ownerEmail = ""):
 }
 
 export function diffEstimateImport(base: EstimatePackSnapshot | null, imported: EstimateImport): EstimateImportDiff {
-  const lines: string[] = [];
+  const lines: string[] = [...(imported.warnings ?? [])];
   if (!base) {
     lines.push(`New estimate: ${imported.title || "untitled"}`);
     const seats = ["staff", "generalForeman", "foreman", "direct", "support"] as const;

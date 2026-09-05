@@ -60,6 +60,9 @@
  * view of live calendar ST+OT+DT per Job setup phase (import does not edit chips).
  * Hidden _CrewRanges is a view of live pack CalendarRange stacks for create-new.
  * Import uses those ranges only when the daily HC/HPS/PD grid still matches.
+ * Look sample xlsx files are stale chrome (no _CrewRanges). Fresh export always
+ * writes the helper. Vault Aromatics / CAT 2 fixtures prove create-new — do not
+ * rebuild those Look blobs unless totals change.
  * Never commit source workbooks to git (Look samples excepted).
  */
 
@@ -493,6 +496,9 @@ export const ESTIMATE_XLSX_SHEETS = {
  * become new pack lines.
  */
 export const ESTIMATE_XLSX_SPARE_ROWS = 8;
+/** Hidden Travel / Subcontractor row id — same idea as COE col H / labor block id. */
+export const TRAVEL_HIDDEN_ID_COL = 6;
+export const SUB_HIDDEN_ID_COL = 9;
 
 export type EstimateXlsxCrew = {
   staff?: CraftRow[];
@@ -1712,6 +1718,7 @@ function buildTravelSheet(input: EstimateXlsxInput, lines: TravelLine[], name: s
     pushNum(cells, `C${excelRow}`, line.miles);
     pushNum(cells, `D${excelRow}`, line.perMile);
     pushFormula(cells, `E${excelRow}`, `${nCell(`B${excelRow}`)}*${nCell(`C${excelRow}`)}*${nCell(`D${excelRow}`)}`);
+    pushText(cells, `${colLetter(TRAVEL_HIDDEN_ID_COL)}${excelRow}`, line.id);
     unlockInputCols(unlocked, excelRow, 4);
   });
   const first = 7;
@@ -1724,7 +1731,7 @@ function buildTravelSheet(input: EstimateXlsxInput, lines: TravelLine[], name: s
   const totalRow = last + 1;
   pushText(cells, `A${totalRow}`, "TOTAL");
   pushFormula(cells, `E${totalRow}`, `SUM(E${first}:E${last})`);
-  return { name, cells, sheetTotal: `E${totalRow}`, unlocked };
+  return { name, cells, sheetTotal: `E${totalRow}`, unlocked, hiddenCols: [TRAVEL_HIDDEN_ID_COL] };
 }
 
 function buildMiscSheet(input: EstimateXlsxInput): BuiltSheet | null {
@@ -1784,6 +1791,7 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushNum(cells, `C${excelRow}`, line.qty);
     pushNum(cells, `D${excelRow}`, line.rate);
     pushText(cells, `E${excelRow}`, line.affiliate ? "YES" : "NO");
+    pushText(cells, `${colLetter(SUB_HIDDEN_ID_COL)}${excelRow}`, line.id);
     writeSubFormulas(excelRow);
     excelRow += 1;
   }
@@ -1794,6 +1802,7 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushNum(cells, `C${excelRow}`, 1);
     pushNum(cells, `D${excelRow}`, amount);
     pushText(cells, `E${excelRow}`, card.affiliate ? "YES" : "NO");
+    pushText(cells, `${colLetter(SUB_HIDDEN_ID_COL)}${excelRow}`, card.id);
     writeSubFormulas(excelRow);
     excelRow += 1;
   }
@@ -1816,6 +1825,7 @@ function buildSubSheet(input: EstimateXlsxInput): BuiltSheet | null {
     sheetTotal: `H${totalRow}`,
     unlocked,
     validations,
+    hiddenCols: [SUB_HIDDEN_ID_COL],
   };
 }
 
