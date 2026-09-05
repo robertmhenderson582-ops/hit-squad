@@ -362,7 +362,7 @@ function laborRowOffset(sheet: WorkbookSheet, row: number): number | null {
   return null;
 }
 
-/** Attach hover notes to Type chips, Position / Bill as, and every unlocked input. */
+/** Attach hover notes to the clock pick, Position / Bill as, day-grid HC/HPS/PD, and unlocked inputs. */
 export function attachEstimateComments(sheet: WorkbookSheet): WorkbookSheet {
   const notes = new Map<string, string>();
   const add = (ref: string, text: string | undefined) => {
@@ -377,12 +377,6 @@ export function attachEstimateComments(sheet: WorkbookSheet): WorkbookSheet {
   if (LABOR_SHEET_NAMES.has(sheet.name)) {
     for (const block of sheet.laborBlocks ?? []) {
       add(`E${block.start}`, typeLabelNote(textAt(sheet.cells, `E${block.start}`)) ?? XLSX_TYPE_NOTES[LABOR_CLOCK_AUTO]);
-      add(`E${block.start + LABOR_HC_OFFSET}`, XLSX_TYPE_NOTES.HC);
-      add(`E${block.start + LABOR_HPS_OFFSET}`, XLSX_TYPE_NOTES.HPS);
-      add(`E${block.start + LABOR_ST_OFFSET}`, XLSX_TYPE_NOTES.ST);
-      add(`E${block.start + LABOR_OT_OFFSET}`, XLSX_TYPE_NOTES.OT);
-      add(`E${block.start + LABOR_DT_OFFSET}`, XLSX_TYPE_NOTES.DT);
-      add(`E${block.start + LABOR_PD_OFFSET}`, XLSX_TYPE_NOTES.PD);
       add(`B${block.start}`, XLSX_INPUT_NOTES.position);
     }
     for (const slot of sheet.billAs ?? []) {
@@ -392,18 +386,15 @@ export function attachEstimateComments(sheet: WorkbookSheet): WorkbookSheet {
       const parsed = parseA1(cell.ref);
       return parsed.row === 6 && parsed.colNum === LABOR_DATE_START_COL;
     });
-    let start: Date | null = null;
-    if (firstDate?.type === "date") start = firstDate.value;
-    else if (firstDate?.type === "text") start = parseYmd(firstDate.value);
+    if (firstDate?.type === "date") add(firstDate.ref, excelFullDateNote(firstDate.value));
+    else if (firstDate?.type === "text") {
+      const parsed = parseYmd(firstDate.value);
+      if (parsed) add(firstDate.ref, excelFullDateNote(parsed));
+    }
     const hidden = new Set(sheet.hiddenCols ?? []);
     for (const cell of sheet.cells) {
       const { colNum, row } = parseA1(cell.ref);
-      if (colNum < LABOR_DATE_START_COL || hidden.has(colNum)) continue;
-      if (row === 6 && start && (cell.type === "date" || cell.type === "formula")) {
-        const date = new Date(start);
-        date.setDate(start.getDate() + (colNum - LABOR_DATE_START_COL));
-        add(cell.ref, excelFullDateNote(date));
-      }
+      if (colNum < LABOR_DATE_START_COL || hidden.has(colNum) || row === 6) continue;
       const offset = laborRowOffset(sheet, row);
       if (offset === LABOR_HC_OFFSET) add(cell.ref, XLSX_TYPE_NOTES.HC);
       else if (offset === LABOR_HPS_OFFSET) add(cell.ref, XLSX_TYPE_NOTES.HPS);
@@ -1441,6 +1432,7 @@ function buildCrewSheet(
           valueRow: block.start + LABOR_OT_OFFSET,
         }))
       : undefined,
+    unlocked: dates.length ? [{ row: 6, col: LABOR_DATE_START_COL }] : [],
     validations: laborPositionValidations(name, laborBlocks, Boolean(showBillAs)),
     merges: [
       ...headerTitleMerges(colLetter(LABOR_DATE_START_COL - 1)),

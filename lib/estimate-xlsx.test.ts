@@ -1562,6 +1562,8 @@ describe("estimate excel export", () => {
     assert.equal(staff.getCell("A4").protection?.locked !== false, true);
     assert.equal(staff.getCell("J4").protection?.locked !== false, true);
     assert.equal(staff.getCell("J5").protection?.locked !== false, true);
+    assert.equal(staff.getCell("J6").protection?.locked, false);
+    assert.equal(staff.getCell("K6").protection?.locked !== false, true);
     assert.equal(staff.getCell("E7").protection?.locked, false);
     assert.ok(staff.getCell("E7").dataValidation);
     assert.equal(staff.getCell("E7").value, LABOR_CLOCK_AUTO);
@@ -1661,25 +1663,28 @@ describe("estimate excel export", () => {
     const staffRows = laborHours(staffModel, "Superintendent 01");
     const staffCells = cellMap(staffModel);
     assert.equal(staffCells.get(`E${staffRows.title}`)?.note, XLSX_TYPE_NOTES[LABOR_CLOCK_AUTO]);
-    assert.equal(staffCells.get(`E${staffRows.hc}`)?.note, XLSX_TYPE_NOTES.HC);
-    assert.equal(staffCells.get(`E${staffRows.hps}`)?.note, XLSX_TYPE_NOTES.HPS);
-    assert.equal(staffCells.get(`E${staffRows.st}`)?.note, XLSX_TYPE_NOTES.ST);
-    assert.equal(staffCells.get(`E${staffRows.ot}`)?.note, XLSX_TYPE_NOTES.OT);
-    assert.equal(staffCells.get(`E${staffRows.dt}`)?.note, XLSX_TYPE_NOTES.DT);
-    assert.equal(staffCells.get(`E${staffRows.pd}`)?.note, XLSX_TYPE_NOTES.PD);
+    assert.equal(staffCells.get(`E${staffRows.hc}`)?.note, undefined);
+    assert.equal(staffCells.get(`E${staffRows.hps}`)?.note, undefined);
+    assert.equal(staffCells.get(`E${staffRows.st}`)?.note, undefined);
+    assert.equal(staffCells.get(`E${staffRows.ot}`)?.note, undefined);
+    assert.equal(staffCells.get(`E${staffRows.dt}`)?.note, undefined);
+    assert.equal(staffCells.get(`E${staffRows.pd}`)?.note, undefined);
     assert.equal(staffCells.get(`B${staffRows.title}`)?.note, XLSX_INPUT_NOTES.position);
     assert.equal(staffCells.get(`J${staffRows.hc}`)?.note, XLSX_TYPE_NOTES.HC);
     assert.equal(staffCells.get(`J${staffRows.hps}`)?.note, XLSX_TYPE_NOTES.HPS);
     assert.equal(staffCells.get(`J${staffRows.pd}`)?.note, XLSX_TYPE_NOTES.PD);
     assert.equal(staffCells.get(`J${staffRows.st}`)?.note, undefined);
     assert.equal(staffCells.get("J6")?.note, excelFullDateNote(new Date(2026, 8, 1)));
+    assert.equal(staffCells.get("K6")?.note, undefined);
+    assert.equal(staffCells.get("J5")?.note, undefined);
 
     const supportModel = sheetOf(model, ESTIMATE_XLSX_SHEETS.support)!;
     const supportRows = laborHours(supportModel, "Fire Watch");
     const billAs = supportModel.billAs?.[0];
     assert.ok(billAs);
     assert.equal(cellMap(supportModel).get(`B${billAs.valueRow}`)?.note, XLSX_INPUT_NOTES.billAs);
-    assert.equal(cellMap(supportModel).get(`E${supportRows.hc}`)?.note, XLSX_TYPE_NOTES.HC);
+    assert.equal(cellMap(supportModel).get(`E${supportRows.hc}`)?.note, undefined);
+    assert.equal(cellMap(supportModel).get(`E${supportRows.title}`)?.note, XLSX_TYPE_NOTES[LABOR_CLOCK_AUTO]);
 
     const setupModel = sheetOf(model, ESTIMATE_XLSX_SHEETS.jobSetup)!;
     const setupCells = cellMap(setupModel);
@@ -1712,15 +1717,17 @@ describe("estimate excel export", () => {
     const support = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.support);
     assert.ok(staff && setup && misc && rental && support);
     assert.equal(excelNoteText(staff.getCell(`E${staffRows.title}`)), XLSX_TYPE_NOTES[LABOR_CLOCK_AUTO]);
-    assert.equal(excelNoteText(staff.getCell(`E${staffRows.hc}`)), XLSX_TYPE_NOTES.HC);
-    assert.equal(excelNoteText(staff.getCell(`E${staffRows.hps}`)), XLSX_TYPE_NOTES.HPS);
-    assert.equal(excelNoteText(staff.getCell(`E${staffRows.st}`)), XLSX_TYPE_NOTES.ST);
-    assert.equal(excelNoteText(staff.getCell(`E${staffRows.ot}`)), XLSX_TYPE_NOTES.OT);
-    assert.equal(excelNoteText(staff.getCell(`E${staffRows.dt}`)), XLSX_TYPE_NOTES.DT);
-    assert.equal(excelNoteText(staff.getCell(`E${staffRows.pd}`)), XLSX_TYPE_NOTES.PD);
+    assert.equal(excelNoteText(staff.getCell(`E${staffRows.hc}`)), "");
+    assert.equal(excelNoteText(staff.getCell(`E${staffRows.hps}`)), "");
+    assert.equal(excelNoteText(staff.getCell(`E${staffRows.st}`)), "");
+    assert.equal(excelNoteText(staff.getCell(`E${staffRows.ot}`)), "");
+    assert.equal(excelNoteText(staff.getCell(`E${staffRows.dt}`)), "");
+    assert.equal(excelNoteText(staff.getCell(`E${staffRows.pd}`)), "");
     assert.equal(excelNoteText(staff.getCell("J8")), XLSX_TYPE_NOTES.HC);
     assert.equal(excelNoteText(staff.getCell("J10")), "");
     assert.equal(excelNoteText(staff.getCell("J6")), excelFullDateNote(new Date(2026, 8, 1)));
+    assert.equal(excelNoteText(staff.getCell("K6")), "");
+    assert.equal(excelNoteText(staff.getCell("J5")), "");
     assert.equal(staff.getCell("J6").numFmt, LABOR_DATE_NUM_FMT);
     assert.equal(excelNoteText(setup.getCell("E7")), XLSX_INPUT_NOTES.daysPerWeek);
     assert.equal(excelNoteText(misc.getCell("C7")), XLSX_INPUT_NOTES.quantity);
@@ -1729,17 +1736,23 @@ describe("estimate excel export", () => {
     assert.equal(excelNoteText(support.getCell(`B${supportRows.ot}`)), XLSX_INPUT_NOTES.billAs);
   });
 
-  it("shows d-mmm date headers with a full-date hover comment", async () => {
+  it("shows d-mmm date headers and only comments the J6 seed", async () => {
     const sheets = buildEstimateWorkbook(woodRiverFixture());
     const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff)!;
     assert.equal(cellMap(staff).get("J6")?.type, "date");
     assert.equal(cellMap(staff).get("J6")?.note, excelFullDateNote(new Date(2026, 8, 1)));
+    assert.equal(cellMap(staff).get("K6")?.note, undefined);
+    assert.equal(staff.unlocked?.some((cell) => cell.row === 6 && cell.col === LABOR_DATE_START_COL), true);
+    assert.equal(staff.unlocked?.some((cell) => cell.row === 6 && cell.col === LABOR_DATE_START_COL + 1), false);
     const bytes = await estimateToXlsx(woodRiverFixture());
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));
     const book = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)!;
     assert.equal(book.getCell("J6").numFmt, "d-mmm");
     assert.equal(excelNoteText(book.getCell("J6")), "Tuesday, September 1, 2026");
+    assert.equal(excelNoteText(book.getCell("K6")), "");
+    assert.equal(book.getCell("J6").protection?.locked, false);
+    assert.equal(book.getCell("K6").protection?.locked !== false, true);
     assert.equal(Number(book.getColumn(10).width), LABOR_DAY_COL_WIDTH);
   });
 
