@@ -63,6 +63,7 @@ type CrewState = {
 
 type EstimatePackageApi = {
   estimateKey: string;
+  ready: boolean;
   schedule: PhaseScheduleState;
   crew: CrewState;
   jobMeta: JobMeta;
@@ -325,6 +326,7 @@ export function EstimatePackageProvider({
   const api = useMemo<EstimatePackageApi>(
     () => ({
       estimateKey,
+      ready,
       schedule,
       crew,
       orgChart,
@@ -451,7 +453,7 @@ export function EstimatePackageProvider({
         return blankCraftRow();
       },
     }),
-    [activities, crew, estimateKey, jobMeta, orgChart, schedule, status, vaultSaveError],
+    [activities, crew, estimateKey, jobMeta, orgChart, ready, schedule, status, vaultSaveError],
   );
 
   return <EstimatePackageContext.Provider value={api}>{children}</EstimatePackageContext.Provider>;
@@ -462,6 +464,7 @@ export function useEstimatePackage() {
   if (!ctx) {
     return {
       estimateKey: "",
+      ready: true,
       schedule: defaultPhaseSchedule(),
       crew: emptyCrew(),
       orgChart: emptyOrgChart(),

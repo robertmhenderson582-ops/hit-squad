@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { HoldScreen } from "@/components/HoldScreen";
 import { JobMenuActions } from "@/components/JobMenuActions";
 import { JobTreeDesk } from "@/components/JobTreeDesk";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
@@ -128,9 +129,9 @@ export function JobsDesk() {
       </div>
       {error ? <p className="mt-3 text-amber-flare">{error}</p> : null}
       {hydrating ? (
-        <p className="mt-4 text-sm font-semibold text-[#163038]" aria-live="polite">
-          Refreshing jobs on this desk…
-        </p>
+        <div className="mt-6">
+          <HoldScreen label="REFRESHING JOBS" variant="compact" />
+        </div>
       ) : null}
       {standaloneLane ? (
         <p className="mt-6 text-sm text-[#5b6f73]">
