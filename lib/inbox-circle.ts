@@ -1,6 +1,6 @@
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
-import { testerByEmail } from "./tester-seats.ts";
+import { JOSEPH_EMAIL, testerByEmail } from "./tester-seats.ts";
 
 export type InboxCirclePerson = {
   id: string;
@@ -13,6 +13,9 @@ export type InboxCirclePerson = {
 export const NOVUS_INBOX_ID = "novus";
 export const NOVUS_INBOX_EMAIL = "novus@hitsquad.local";
 
+/** User-facing gate. Seven humans + Novus contact — not the rest of the testers. */
+export const INBOX_CIRCLE_COPY = "Inbox is the seven plus Novus.";
+
 /** In-program Inbox + Suggestion Box + Desk bot. Not the rest of the testers. */
 export const INBOX_CIRCLE: InboxCirclePerson[] = [
   { id: "owner", email: OWNER_LOGIN_EMAIL, name: "Robert Henderson", company: "Hit Squad" },
@@ -21,6 +24,7 @@ export const INBOX_CIRCLE: InboxCirclePerson[] = [
   { id: "tester-shane", email: "shane@apcontrolsllc.com", name: "Shane Smith", company: "Hit Squad" },
   { id: "tester-wendell", email: "wlanderno@yahoo.com", name: "Wendell Landerno", company: "Hit Squad" },
   { id: "tester-chance", email: "chancec318@yahoo.com", name: "Chance Middlebrooks", company: "Hit Squad" },
+  { id: "tester-joseph", email: JOSEPH_EMAIL, name: "Joseph Henderson", company: "Hit Squad" },
   { id: NOVUS_INBOX_ID, email: NOVUS_INBOX_EMAIL, name: "Novus", company: "Hit Squad" },
 ];
 

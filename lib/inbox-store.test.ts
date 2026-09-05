@@ -7,7 +7,7 @@ import { INBOX_VAULT_KIND, INBOX_VAULT_NAME, readVaultJson } from "./drive-data.
 import { memoryDrive } from "./drive-estimates.ts";
 import { NOVUS_INBOX_EMAIL } from "./inbox-circle.ts";
 import { acceptedInboxPhoto } from "./inbox.ts";
-import { JOSEPH_EMAIL } from "./tester-seats.ts";
+import { JOHN_BEECH_EMAIL, JOSEPH_EMAIL } from "./tester-seats.ts";
 import {
   forgetInboxCacheForTests,
   hideInboxFor,
@@ -46,7 +46,7 @@ function row(id: string, extra?: Partial<StoredInboxMessage>): StoredInboxMessag
 }
 
 describe("inbox store", { concurrency: 1 }, () => {
-  it("lets the six see each other's messages and keeps Joseph out", async () => {
+  it("lets the seven plus Novus see each other's messages and keeps John Beech out", async () => {
     resetInboxStoreForTests(join(dir, "inbox.json"));
     const posted = await postInboxMessage({
       fromEmail: "nathanboyte@gmail.com",
@@ -63,16 +63,29 @@ describe("inbox store", { concurrency: 1 }, () => {
     assert.equal(fromNathan.messages.some((message) => message.text === "Hello Benny"), true);
     assert.equal(fromNathan.unread, 1);
 
-    const steal = await postInboxMessage({
+    const josephToRobert = await postInboxMessage({
       fromEmail: JOSEPH_EMAIL,
       fromName: "Joseph Henderson",
+      toEmail: OWNER,
+      text: "Joseph to Robert",
+    });
+    assert.equal(josephToRobert.ok, true);
+    if (!josephToRobert.ok) return;
+    const robert = await listInboxFor(OWNER);
+    const fromJoseph = robert.find((thread) => thread.personId === "tester-joseph");
+    assert.ok(fromJoseph);
+    assert.equal(fromJoseph.messages.some((message) => message.text === "Joseph to Robert"), true);
+
+    const steal = await postInboxMessage({
+      fromEmail: JOHN_BEECH_EMAIL,
+      fromName: "John Beech",
       toEmail: "nathanboyte@gmail.com",
       text: "Should not land",
     });
     assert.equal(steal.ok, false);
     if (steal.ok) return;
     assert.equal(steal.status, 403);
-    assert.deepEqual(await listInboxFor(JOSEPH_EMAIL), []);
+    assert.deepEqual(await listInboxFor(JOHN_BEECH_EMAIL), []);
   });
 
   it("two posts from different hydrate resets keep both messages in the vault", async () => {

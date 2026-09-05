@@ -4,7 +4,7 @@ import { AuthGate } from "@/components/AuthGate";
 import { DeskChrome } from "@/components/DeskChrome";
 import { InboxDesk } from "@/components/InboxDesk";
 import { useLensUser } from "@/components/OwnerDeskContext";
-import { canUseInbox } from "@/lib/inbox-circle";
+import { canUseInbox, INBOX_CIRCLE_COPY } from "@/lib/inbox-circle";
 
 export default function InboxPage() {
   const lens = useLensUser();
@@ -14,7 +14,7 @@ export default function InboxPage() {
         {canUseInbox(lens) ? (
           <InboxDesk />
         ) : (
-          <section className="plant-card px-5 py-5 text-[#5b6f73]">Inbox is those six only.</section>
+          <section className="plant-card px-5 py-5 text-[#5b6f73]">{INBOX_CIRCLE_COPY}</section>
         )}
       </DeskChrome>
     </AuthGate>
