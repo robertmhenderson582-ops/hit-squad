@@ -24,7 +24,12 @@ import {
   LABOR_ST_OFFSET,
   clockLabelOverride,
   laborBlockId,
+  thirdPartyBucket,
 } from "./estimate-xlsx.ts";
+import { rematchShahanEquipmentId } from "./shahan-wood-river.ts";
+import { jobSetupWindow, type LargeToolLine, type ThirdPartyLine, type ThirdPartyPeriod } from "./equipment-sheet.ts";
+import { type MiscLine, type OtherCostSheet, type TravelKind, type TravelLine } from "./other-cost.ts";
+import type { B2Period } from "./b2-east-coast.ts";
 import type { ClockOverride } from "./hours-clock.ts";
 import type { EstimateXlsxCrew } from "./estimate-xlsx.ts";
 import {
@@ -65,6 +70,18 @@ export type ImportedBlock = {
   days: ImportedDay[];
 };
 
+export type ImportedCostLine = {
+  item: string;
+  description?: string;
+  period?: string;
+  qty: number;
+  rate: number;
+  freight?: number;
+  travelers?: number;
+  miles?: number;
+  kind?: TravelKind;
+};
+
 export type EstimateImport = {
   title: string;
   client: string;
@@ -72,6 +89,13 @@ export type EstimateImport = {
   schedule: PhaseScheduleState;
   crew: EstimateXlsxCrew;
   blocks: ImportedBlock[];
+  /** Present when that tab exists. Filled spare rows are included; blank pad is not. */
+  travel?: ImportedCostLine[];
+  misc?: ImportedCostLine[];
+  rental?: ImportedCostLine[];
+  tension?: ImportedCostLine[];
+  crane?: ImportedCostLine[];
+  coe?: ImportedCostLine[];
 };
 
 export type EstimateImportDiff = {
@@ -526,6 +550,72 @@ function applyBlocks(
   return next;
 }
 
+function isSheetTotalLabel(value: unknown): boolean {
+  return /^(TOTAL|ESTIMATE TOTAL)/i.test(asText(value));
+}
+
+function scanCostRows(ws: ExcelJS.Worksheet): number[] {
+  const rows: number[] = [];
+  const last = Math.max(ws.rowCount || 7, 7);
+  for (let row = 7; row <= last + 32; row += 1) {
+    if (isSheetTotalLabel(ws.getCell(row, 1).value)) break;
+    rows.push(row);
+  }
+  return rows;
+}
+
+function parsePeriod(value: unknown): ThirdPartyPeriod {
+  const text = asText(value).toLowerCase();
+  if (text === "weekly" || text === "monthly") return text;
+  return "daily";
+}
+
+function parseMiscSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLine[] | undefined {
+  if (!ws) return undefined;
+  const lines: ImportedCostLine[] = [];
+  for (const row of scanCostRows(ws)) {
+    const item = asText(ws.getCell(row, 1).value);
+    if (/^craft travel$/i.test(item)) continue;
+    const description = asText(ws.getCell(row, 2).value);
+    const qty = asNum(ws.getCell(row, 3).value);
+    const rate = asNum(ws.getCell(row, 4).value);
+    if (!item && !description && qty === 0 && rate === 0) continue;
+    lines.push({ item, description, qty, rate });
+  }
+  return lines;
+}
+
+function parseTravelSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLine[] | undefined {
+  if (!ws) return undefined;
+  const lines: ImportedCostLine[] = [];
+  for (const row of scanCostRows(ws)) {
+    const label = asText(ws.getCell(row, 1).value).toLowerCase();
+    const kind: TravelKind = label === "craft" ? "craft" : "staff";
+    const travelers = asNum(ws.getCell(row, 2).value);
+    const miles = asNum(ws.getCell(row, 3).value);
+    const perMile = asNum(ws.getCell(row, 4).value);
+    if (!label && travelers === 0 && miles === 0 && perMile === 0) continue;
+    if (!label && travelers === 0) continue;
+    lines.push({ item: label || kind, kind, travelers, miles, rate: perMile, qty: travelers });
+  }
+  return lines;
+}
+
+function parseRentalLikeSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLine[] | undefined {
+  if (!ws) return undefined;
+  const lines: ImportedCostLine[] = [];
+  for (const row of scanCostRows(ws)) {
+    const item = asText(ws.getCell(row, 1).value);
+    const period = parsePeriod(ws.getCell(row, 2).value);
+    const qty = asNum(ws.getCell(row, 3).value);
+    const rate = asNum(ws.getCell(row, 5).value);
+    const freight = asNum(ws.getCell(row, 6).value);
+    if (!item && qty === 0 && rate === 0 && freight === 0) continue;
+    lines.push({ item, period, qty, rate, freight });
+  }
+  return lines;
+}
+
 export async function parseEstimateXlsx(bytes: Uint8Array): Promise<EstimateImport> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(bytes as unknown as ArrayBuffer);
@@ -543,7 +633,18 @@ export async function parseEstimateXlsx(bytes: Uint8Array): Promise<EstimateImpo
   const blocks = bySheet.flatMap((item) => item.blocks);
   if (!blocks.length && !wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup)) throw new Error(ESTIMATE_IMPORT_ERROR);
   const crew = applyBlocks({}, bySheet, schedule.phases);
-  return { ...header, schedule, crew, blocks };
+  return {
+    ...header,
+    schedule,
+    crew,
+    blocks,
+    travel: parseTravelSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.travel)),
+    misc: parseMiscSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc)),
+    rental: parseRentalLikeSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rental)),
+    tension: parseRentalLikeSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.tension)),
+    crane: parseRentalLikeSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crane)),
+    coe: parseRentalLikeSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.coe)),
+  };
 }
 
 function blocksBySheet(blocks: ImportedBlock[]): Array<{ sheet: string; blocks: ImportedBlock[] }> {
@@ -563,9 +664,130 @@ export type AppliedEstimateImport = Omit<EstimatePackSnapshot, "schedule" | "cre
   crew: EstimateXlsxCrew;
 };
 
+function asEquipment(raw: unknown): { largeTools: LargeToolLine[]; thirdParty: ThirdPartyLine[] } {
+  const row = raw && typeof raw === "object" ? (raw as { largeTools?: LargeToolLine[]; thirdParty?: ThirdPartyLine[] }) : {};
+  return {
+    largeTools: Array.isArray(row.largeTools) ? row.largeTools : [],
+    thirdParty: Array.isArray(row.thirdParty) ? row.thirdParty : [],
+  };
+}
+
+function asOtherCost(raw: unknown): OtherCostSheet {
+  const row = raw && typeof raw === "object" ? (raw as OtherCostSheet) : {};
+  return {
+    perDiemRate: Number(row.perDiemRate) || 0,
+    travel: Array.isArray(row.travel) ? row.travel : [],
+    misc: Array.isArray(row.misc) ? row.misc : [],
+  };
+}
+
+function windowDates(schedule: PhaseScheduleState): { start: string; end: string } {
+  const window = jobSetupWindow(schedule.phases);
+  return { start: window.start || "", end: window.end || "" };
+}
+
+function applyTravelLines(existing: TravelLine[], incoming: ImportedCostLine[] | undefined): TravelLine[] {
+  if (!incoming) return existing;
+  const staff = existing.filter((line) => line.kind === "staff");
+  const craft = existing.filter((line) => line.kind === "craft");
+  let si = 0;
+  let ci = 0;
+  return incoming.map((row) => {
+    const kind: TravelKind = row.kind === "craft" ? "craft" : "staff";
+    const prev = kind === "craft" ? staff[ci++] : staff[si++];
+    return {
+      id: prev?.id ?? `travel-${kind}-${Date.now()}-${kind === "craft" ? ci : si}`,
+      kind,
+      source: prev?.source ?? "extra",
+      headcount: Math.max(prev?.headcount ?? 0, row.travelers ?? row.qty ?? 0),
+      travelers: row.travelers ?? row.qty ?? 0,
+      perMile: row.rate,
+      miles: row.miles ?? 0,
+    };
+  });
+}
+
+function applyMiscLines(existing: MiscLine[], incoming: ImportedCostLine[] | undefined): MiscLine[] {
+  if (!incoming) return existing;
+  return incoming.map((row, index) => ({
+    id: existing[index]?.id ?? `misc-imp-${index + 1}`,
+    item: row.item,
+    description: row.description ?? "",
+    qty: row.qty,
+    each: row.rate,
+  }));
+}
+
+function applyRentalBucket(
+  existing: ThirdPartyLine[],
+  incoming: ImportedCostLine[] | undefined,
+  bucket: "rental" | "tension" | "crane",
+  dates: { start: string; end: string },
+): ThirdPartyLine[] {
+  const prev = existing.filter((line) => thirdPartyBucket(line.item) === bucket);
+  if (!incoming) return prev;
+  return incoming.map((row, index) => ({
+    id: prev[index]?.id ?? `${bucket}-imp-${index + 1}`,
+    item: row.item,
+    period: parsePeriod(row.period),
+    rate: row.rate,
+    freight: row.freight ?? 0,
+    qty: row.qty,
+    start: prev[index]?.start || dates.start,
+    end: prev[index]?.end || dates.end,
+  }));
+}
+
+function applyCoeLines(
+  existing: LargeToolLine[],
+  incoming: ImportedCostLine[] | undefined,
+  dates: { start: string; end: string },
+): LargeToolLine[] {
+  if (!incoming) return existing;
+  return incoming.map((row, index) => {
+    const prev = existing[index];
+    const itemId = rematchShahanEquipmentId(row.item) || prev?.itemId || row.item;
+    return {
+      id: prev?.id ?? `lt-imp-${index + 1}`,
+      itemId,
+      period: (["hourly", "weekly", "monthly"].includes((row.period ?? "").toLowerCase())
+        ? (row.period as B2Period)
+        : prev?.period || "daily"),
+      qty: row.qty,
+      start: prev?.start || dates.start,
+      end: prev?.end || dates.end,
+      enteredCost: 0,
+      freight: row.freight ?? 0,
+    };
+  });
+}
+
+function applyImportedCosts(base: EstimatePackSnapshot, imported: EstimateImport, schedule: PhaseScheduleState) {
+  const dates = windowDates(schedule);
+  const equipment = asEquipment(base.equipment);
+  const other = asOtherCost(base.otherCost);
+  const thirdParty = [
+    ...applyRentalBucket(equipment.thirdParty, imported.rental, "rental", dates),
+    ...applyRentalBucket(equipment.thirdParty, imported.tension, "tension", dates),
+    ...applyRentalBucket(equipment.thirdParty, imported.crane, "crane", dates),
+  ];
+  return {
+    equipment: {
+      largeTools: applyCoeLines(equipment.largeTools, imported.coe, dates),
+      thirdParty,
+    },
+    otherCost: {
+      ...other,
+      travel: applyTravelLines(other.travel, imported.travel),
+      misc: applyMiscLines(other.misc, imported.misc),
+    },
+  };
+}
+
 export function applyEstimateImport(base: EstimatePackSnapshot, imported: EstimateImport): AppliedEstimateImport {
   const schedule = mergeSchedule(imported.schedule);
   const crew = applyBlocks(asCrew(base.crew), blocksBySheet(imported.blocks), schedule.phases);
+  const costs = applyImportedCosts(base, imported, schedule);
   return {
     ...base,
     title: imported.title || base.title,
@@ -574,11 +796,17 @@ export function applyEstimateImport(base: EstimatePackSnapshot, imported: Estima
     updatedAt: Date.now(),
     schedule,
     crew,
+    ...costs,
   };
 }
 
 export function createPackFromImport(imported: EstimateImport, ownerEmail = ""): EstimatePackSnapshot {
   const packId = newEstimatePackId();
+  const costs = applyImportedCosts(
+    { equipment: { largeTools: [], thirdParty: [] }, otherCost: { perDiemRate: 0, travel: [], misc: [] } } as EstimatePackSnapshot,
+    imported,
+    imported.schedule,
+  );
   return {
     packId,
     key: newEstimateKey(packId),
@@ -594,6 +822,7 @@ export function createPackFromImport(imported: EstimateImport, ownerEmail = ""):
       ...imported.crew,
       support: (imported.crew.support ?? []).map((row) => hydrateSupportLine(row)),
     },
+    ...costs,
   };
 }
 

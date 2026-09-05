@@ -21,6 +21,8 @@ import {
   estimateToXlsx,
   type EstimateXlsxInput,
 } from "./estimate-xlsx.ts";
+import type { MiscLine } from "./other-cost.ts";
+import type { ThirdPartyLine } from "./equipment-sheet.ts";
 import { colLetter } from "./xlsx-minimal.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import type { CraftRow } from "./craft-labor.ts";
@@ -178,6 +180,87 @@ describe("estimate excel import", () => {
     assert.equal(pack.title, fixture().title);
     assert.equal((pack.crew as { staff: CraftRow[] }).staff[0].position, "Superintendent 01");
     assert.equal(diffEstimateImport(null, imported).createsNew, true);
+  });
+
+  it("imports filled spare rows on COE, Misc, and Equipment Rental", async () => {
+    const input: EstimateXlsxInput = {
+      ...fixture(),
+      equipment: {
+        largeTools: [
+          {
+            id: "lt-mover",
+            itemId: "air-mover",
+            period: "daily",
+            qty: 1,
+            start: "2026-09-01",
+            end: "2026-09-01",
+            enteredCost: 0,
+            freight: 0,
+          },
+        ],
+        thirdParty: [
+          {
+            id: "tp-1",
+            item: "450amp diesel welder",
+            period: "daily",
+            rate: 134,
+            freight: 100,
+            qty: 1,
+            start: "2026-09-01",
+            end: "2026-09-01",
+          },
+        ],
+      },
+      otherCost: {
+        perDiemRate: 0,
+        travel: [
+          { id: "travel-staff", kind: "staff", source: "crew", headcount: 1, travelers: 1, perMile: 0.7, miles: 40 },
+          { id: "travel-craft", kind: "craft", source: "crew", headcount: 2, travelers: 2, perMile: 0.5, miles: 20 },
+        ],
+        misc: [{ id: "mc-1", item: "Alloy rod", description: "Stainless", qty: 2, each: 25 }],
+      },
+    };
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const misc = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc);
+    const rental = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rental);
+    const coe = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.coe);
+    const travel = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.travel);
+    assert.ok(misc && rental && coe && travel);
+    assert.equal(String(travel.getCell("A8").value ?? ""), "Craft");
+    assert.notEqual(String(misc.getCell("A7").value ?? ""), "Craft travel");
+    misc.getCell("A8").value = "Gasket";
+    misc.getCell("B8").value = "Bolt-up";
+    misc.getCell("C8").value = 3;
+    misc.getCell("D8").value = 12;
+    rental.getCell("A8").value = "Light tower";
+    rental.getCell("B8").value = "weekly";
+    rental.getCell("C8").value = 2;
+    rental.getCell("E8").value = 80;
+    rental.getCell("F8").value = 10;
+    coe.getCell("A8").value = "air-mover";
+    coe.getCell("B8").value = "daily";
+    coe.getCell("C8").value = 1;
+    coe.getCell("E8").value = 50;
+    const out = await wb.xlsx.writeBuffer();
+    const imported = await parseEstimateXlsx(new Uint8Array(out));
+    assert.equal(imported.misc?.length, 2);
+    assert.equal(imported.rental?.length, 2);
+    assert.equal(imported.coe?.length, 2);
+    assert.equal(imported.travel?.some((line) => line.kind === "craft"), true);
+    const applied = applyEstimateImport(
+      { ...asPack(input), equipment: input.equipment, otherCost: input.otherCost },
+      imported,
+    );
+    const miscLines = (applied.otherCost as { misc: MiscLine[] }).misc;
+    const rentals = (applied.equipment as { thirdParty: ThirdPartyLine[] }).thirdParty;
+    assert.equal(miscLines.length, 2);
+    assert.equal(miscLines[1]?.item, "Gasket");
+    assert.equal(miscLines[1]?.qty, 3);
+    assert.equal(rentals.some((line) => line.item === "Light tower" && line.qty === 2), true);
+    assert.equal((applied.equipment as { largeTools: Array<{ itemId: string }> }).largeTools.length, 2);
+    assert.equal(miscLines.some((line) => /craft travel/i.test(line.item)), false);
   });
 
   it("rejects a workbook that is not a Hit Squad export", async () => {

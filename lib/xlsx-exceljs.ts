@@ -68,8 +68,8 @@ export const LABOR_CAGE_WASH_B = STEEL_DEEP;
 export const LABOR_DAY_WASH = STEEL;
 /** Leftover empty cells in the used band — teal, not mint/white. */
 export const SHEET_VOID_WASH = STEEL;
-/** Day-of-month in the narrow calendar col. `D-MMM` clipped at 3.2. */
-export const LABOR_DATE_NUM_FMT = "d";
+/** Row-6 day headers: 11-Jan. Width 7 so it does not #### / clip. */
+export const LABOR_DATE_NUM_FMT = "d-mmm";
 export const EXCEL_MAX_COL = 16384;
 /** Excel last row. Unused rows below content collapse via defaultRowHeight 0 + zeroHeight. */
 export const EXCEL_MAX_ROW = 1048576;
@@ -105,8 +105,8 @@ export const LABOR_CENTER: Partial<ExcelJS.Alignment> = {
   vertical: "middle",
   wrapText: false,
 };
-/** Same width on every day col (J through last date). 3 made `9.5` into ##; 3.2 persists. */
-export const LABOR_DAY_COL_WIDTH = 3.2;
+/** Same width on every day col (J through last date). 7 fits `d-mmm` (11-Jan). */
+export const LABOR_DAY_COL_WIDTH = 7;
 /** A–I one line + unrotated day-of-month. */
 export const LABOR_HEADER_ROW_HEIGHT = 22;
 /** Every craft HC/HPS/ST/OT/DT/PD/title row — no wrap-driven spikes. */

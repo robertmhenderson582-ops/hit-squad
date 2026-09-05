@@ -54,6 +54,8 @@ import {
   RATE_RENTAL_SECTION,
   RATE_TOOLS_SECTION,
   sheetRef,
+  ESTIMATE_XLSX_SPARE_ROWS,
+  excelFullDateNote,
   XLSX_INPUT_NOTES,
   XLSX_TYPE_NOTES,
 } from "./estimate-xlsx.ts";
@@ -364,10 +366,13 @@ describe("estimate excel export", () => {
     const pdRollup = `${colLetter(LABOR_CLOCK_FLAG_COL)}14`;
     const staffPd = evalAt(ESTIMATE_XLSX_SHEETS.staff, pdRollup);
     const directPd = evalAt(ESTIMATE_XLSX_SHEETS.direct, pdRollup);
-    const rentalCost = evalAt(ESTIMATE_XLSX_SHEETS.rental, "G8");
-    const rentalMarked = evalAt(ESTIMATE_XLSX_SHEETS.rental, "H8");
-    const travel = evalAt(ESTIMATE_XLSX_SHEETS.travel, "E8");
-    const misc = evalAt(ESTIMATE_XLSX_SHEETS.misc, "E8");
+    const rentalTotalRow = labelRow(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.rental)!, "TOTAL");
+    const miscTotalRow = labelRow(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.misc)!, "TOTAL");
+    const travelTotalRow = labelRow(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.travel)!, "TOTAL");
+    const rentalCost = evalAt(ESTIMATE_XLSX_SHEETS.rental, `G${rentalTotalRow}`);
+    const rentalMarked = evalAt(ESTIMATE_XLSX_SHEETS.rental, `H${rentalTotalRow}`);
+    const travel = evalAt(ESTIMATE_XLSX_SHEETS.travel, `E${travelTotalRow}`);
+    const misc = evalAt(ESTIMATE_XLSX_SHEETS.misc, `E${miscTotalRow}`);
     const markup = amountAt("6.5% markup");
     const grand = amountAt("ESTIMATE TOTAL $");
     assert.equal(staffLabor > 0, true);
@@ -1653,6 +1658,7 @@ describe("estimate excel export", () => {
     assert.equal(staffCells.get(`J${staffRows.hps}`)?.note, XLSX_TYPE_NOTES.HPS);
     assert.equal(staffCells.get(`J${staffRows.pd}`)?.note, XLSX_TYPE_NOTES.PD);
     assert.equal(staffCells.get(`J${staffRows.st}`)?.note, undefined);
+    assert.equal(staffCells.get("J6")?.note, excelFullDateNote(new Date(2026, 8, 1)));
 
     const supportModel = sheetOf(model, ESTIMATE_XLSX_SHEETS.support)!;
     const supportRows = laborHours(supportModel, "Fire Watch");
@@ -1700,11 +1706,86 @@ describe("estimate excel export", () => {
     assert.equal(excelNoteText(staff.getCell(`E${staffRows.pd}`)), XLSX_TYPE_NOTES.PD);
     assert.equal(excelNoteText(staff.getCell("J8")), XLSX_TYPE_NOTES.HC);
     assert.equal(excelNoteText(staff.getCell("J10")), "");
+    assert.equal(excelNoteText(staff.getCell("J6")), excelFullDateNote(new Date(2026, 8, 1)));
+    assert.equal(staff.getCell("J6").numFmt, LABOR_DATE_NUM_FMT);
     assert.equal(excelNoteText(setup.getCell("E7")), XLSX_INPUT_NOTES.daysPerWeek);
     assert.equal(excelNoteText(misc.getCell("C7")), XLSX_INPUT_NOTES.quantity);
     assert.equal(excelNoteText(misc.getCell("D7")), XLSX_INPUT_NOTES.rate);
     assert.equal(excelNoteText(rental.getCell("B7")), XLSX_INPUT_NOTES.period);
     assert.equal(excelNoteText(support.getCell(`B${supportRows.ot}`)), XLSX_INPUT_NOTES.billAs);
+  });
+
+  it("shows d-mmm date headers with a full-date hover comment", async () => {
+    const sheets = buildEstimateWorkbook(woodRiverFixture());
+    const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff)!;
+    assert.equal(cellMap(staff).get("J6")?.type, "date");
+    assert.equal(cellMap(staff).get("J6")?.note, excelFullDateNote(new Date(2026, 8, 1)));
+    const bytes = await estimateToXlsx(woodRiverFixture());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const book = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff)!;
+    assert.equal(book.getCell("J6").numFmt, "d-mmm");
+    assert.equal(excelNoteText(book.getCell("J6")), "Tuesday, September 1, 2026");
+    assert.equal(Number(book.getColumn(10).width), LABOR_DAY_COL_WIDTH);
+  });
+
+  it("puts craft travel on the Travel tab and keeps Misc reimbursable-only", () => {
+    const input = {
+      ...woodRiverFixture(),
+      otherCost: {
+        ...woodRiverFixture().otherCost,
+        travel: [
+          { id: "travel-staff", kind: "staff" as const, source: "crew" as const, headcount: 1, travelers: 1, perMile: 0.7, miles: 40 },
+          { id: "travel-craft", kind: "craft" as const, source: "crew" as const, headcount: 2, travelers: 2, perMile: 0.5, miles: 20 },
+        ],
+      },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const travel = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.travel)!;
+    const misc = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.misc)!;
+    const values = travel.cells.filter((cell) => cell.type === "text").map((cell) => cell.value);
+    assert.equal(values.includes("Staff"), true);
+    assert.equal(values.includes("Craft"), true);
+    assert.equal(misc.cells.some((cell) => cell.type === "text" && cell.value === "Craft travel"), false);
+    assert.equal(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.some((cell) => cell.value === "Travel $"), true);
+    assert.equal(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.some((cell) => cell.value === "Staff travel $"), false);
+  });
+
+  it("pads COE, Misc, and Equipment Rental with formula-ready spare rows", () => {
+    const input = {
+      ...woodRiverFixture(),
+      equipment: {
+        ...woodRiverFixture().equipment,
+        largeTools: [
+          {
+            id: "lt-mover",
+            itemId: "air-mover",
+            period: "daily" as const,
+            qty: 1,
+            start: "2026-09-01",
+            end: "2026-09-01",
+            enteredCost: 0,
+            freight: 0,
+          },
+        ],
+      },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const misc = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.misc)!;
+    const rental = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.rental)!;
+    const coe = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.coe)!;
+    const miscTotal = labelRow(misc, "TOTAL");
+    const rentalTotal = labelRow(rental, "TOTAL");
+    const coeTotal = labelRow(coe, "TOTAL");
+    assert.equal(miscTotal, 7 + 1 + ESTIMATE_XLSX_SPARE_ROWS);
+    assert.equal(rentalTotal, 7 + 1 + ESTIMATE_XLSX_SPARE_ROWS);
+    assert.equal(coeTotal, 7 + 1 + ESTIMATE_XLSX_SPARE_ROWS);
+    assert.match(String(cellMap(misc).get(`E${miscTotal}`)?.value), new RegExp(`SUM\\(E7:E${miscTotal - 1}\\)`));
+    assert.match(String(cellMap(rental).get(`G${rentalTotal}`)?.value), new RegExp(`SUM\\(G7:G${rentalTotal - 1}\\)`));
+    assert.match(String(cellMap(coe).get(`G${coeTotal}`)?.value), new RegExp(`SUM\\(G7:G${coeTotal - 1}\\)`));
+    assert.equal(cellMap(misc).get("E8")?.type, "formula");
+    assert.equal(misc.unlocked?.some((cell) => cell.row === 8 && cell.col === 3), true);
+    assert.equal(rental.unlocked?.some((cell) => cell.row === 8 && cell.col === 3), true);
   });
 
   it("lists daily / weekly / monthly on COE and rental Period cells", async () => {

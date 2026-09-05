@@ -48,7 +48,7 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(EXCEL_UNIT_FORMATS.hours, "#,##0");
     assert.equal(LABOR_DAY_WASH, STEEL);
     assert.equal(LABOR_DAY_WASH.includes("F2F6"), false);
-    assert.equal(LABOR_DATE_NUM_FMT, "d");
+    assert.equal(LABOR_DATE_NUM_FMT, "d-mmm");
     assert.equal(EXCEL_UNIT_FORMATS.hours.includes("."), false);
     assert.equal(EXCEL_UNIT_FORMATS.hours.includes(".##"), false);
     assert.equal(formatForHeader("Headcount"), "#,##0");
@@ -70,6 +70,7 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(summaryLineFormat("Labor $"), "$#,##0.00");
     assert.equal(summaryLineFormat("Per diem $"), "$#,##0.00");
     assert.equal(summaryLineFormat("Staff travel $"), "$#,##0.00");
+    assert.equal(summaryLineFormat("Travel $"), "$#,##0.00");
     assert.equal(summaryLineFormat("Hours"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(summaryLineFormat("Man-hours"), EXCEL_UNIT_FORMATS.hours);
     assert.equal(summaryLineFormat("Labor contingency"), "$#,##0.00");

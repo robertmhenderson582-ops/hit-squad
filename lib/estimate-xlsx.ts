@@ -226,6 +226,27 @@ export const XLSX_TYPE_NOTES = {
   PD: "Per-diem people-count for that day (yellow). Edit who gets PD that day.",
 } as const;
 
+const FULL_WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+const FULL_MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+/** Hover note on a labor date header — full date, e.g. Monday, January 11, 2027. */
+export function excelFullDateNote(date: Date): string {
+  return `${FULL_WEEKDAYS[date.getDay()]}, ${FULL_MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+}
+
 export const XLSX_INPUT_NOTES = {
   position: "Craft / role title for this block.",
   billAs: "Support billing class. Changes how this seat bills.",
@@ -324,9 +345,22 @@ export function attachEstimateComments(sheet: WorkbookSheet): WorkbookSheet {
     for (const slot of sheet.billAs ?? []) {
       add(`B${slot.valueRow}`, XLSX_INPUT_NOTES.billAs);
     }
+    const firstDate = sheet.cells.find((cell) => {
+      const parsed = parseA1(cell.ref);
+      return parsed.row === 6 && parsed.colNum === LABOR_DATE_START_COL;
+    });
+    let start: Date | null = null;
+    if (firstDate?.type === "date") start = firstDate.value;
+    else if (firstDate?.type === "text") start = parseYmd(firstDate.value);
+    const hidden = new Set(sheet.hiddenCols ?? []);
     for (const cell of sheet.cells) {
       const { colNum, row } = parseA1(cell.ref);
-      if (colNum < LABOR_DATE_START_COL) continue;
+      if (colNum < LABOR_DATE_START_COL || hidden.has(colNum)) continue;
+      if (row === 6 && start && (cell.type === "date" || cell.type === "formula")) {
+        const date = new Date(start);
+        date.setDate(start.getDate() + (colNum - LABOR_DATE_START_COL));
+        add(cell.ref, excelFullDateNote(date));
+      }
       const offset = laborRowOffset(sheet, row);
       if (offset === LABOR_HC_OFFSET) add(cell.ref, XLSX_TYPE_NOTES.HC);
       else if (offset === LABOR_HPS_OFFSET) add(cell.ref, XLSX_TYPE_NOTES.HPS);
@@ -402,6 +436,13 @@ export const ESTIMATE_XLSX_SHEETS = {
   misc: "Misc Costs",
   rates: "Rate Tables",
 } as const;
+
+/**
+ * Blank formula-ready pad after live COE / Misc / Equipment Rental (and
+ * Tension/Crane — same rental builder). SUM covers live + spare. Import
+ * scans the full block; filled pad rows become new pack lines.
+ */
+export const ESTIMATE_XLSX_SPARE_ROWS = 8;
 
 export type EstimateXlsxCrew = {
   staff?: CraftRow[];
@@ -623,7 +664,7 @@ function pushRate(cells: SheetCell[], ref: string, value: number | null | undefi
   if (typeof value === "number" && Number.isFinite(value) && value > 0) pushNum(cells, ref, value);
 }
 
-function thirdPartyBucket(item: string): "tension" | "crane" | "rental" {
+export function thirdPartyBucket(item: string): "tension" | "crane" | "rental" {
   const hay = item.toLowerCase();
   if (/tension|torqu|rad gun/.test(hay)) return "tension";
   if (/\bcrane\b|carry deck/.test(hay)) return "crane";
@@ -1373,7 +1414,14 @@ function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPa
     unlockInputCols(unlocked, excelRow, 6);
   });
   const first = 7;
-  const last = 6 + live.length;
+  const lastLive = 6 + live.length;
+  const last = lastLive + ESTIMATE_XLSX_SPARE_ROWS;
+  const markup = 1 + commercialMarkupRate(input.client, input.site);
+  for (let excelRow = lastLive + 1; excelRow <= last; excelRow += 1) {
+    pushFormula(cells, `G${excelRow}`, `C${excelRow}*D${excelRow}*E${excelRow}+F${excelRow}`);
+    pushFormula(cells, `H${excelRow}`, `G${excelRow}*${markup}`);
+    unlockInputCols(unlocked, excelRow, 6);
+  }
   const totalRow = last + 1;
   pushText(cells, `A${totalRow}`, "TOTAL");
   pushFormula(cells, `G${totalRow}`, `SUM(G${first}:G${last})`);
@@ -1412,7 +1460,12 @@ function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
     unlockInputCols(unlocked, excelRow, 6);
   });
   const first = 7;
-  const last = 6 + live.length;
+  const lastLive = 6 + live.length;
+  const last = lastLive + ESTIMATE_XLSX_SPARE_ROWS;
+  for (let excelRow = lastLive + 1; excelRow <= last; excelRow += 1) {
+    pushFormula(cells, `G${excelRow}`, `C${excelRow}*D${excelRow}*E${excelRow}+F${excelRow}`);
+    unlockInputCols(unlocked, excelRow, 6);
+  }
   const totalRow = last + 1;
   pushText(cells, `A${totalRow}`, "TOTAL");
   pushFormula(cells, `G${totalRow}`, `SUM(G${first}:G${last})`);
@@ -1456,23 +1509,13 @@ function buildTravelSheet(input: EstimateXlsxInput, lines: TravelLine[], name: s
 
 function buildMiscSheet(input: EstimateXlsxInput): BuiltSheet | null {
   const misc = (input.otherCost?.misc ?? []).filter((line) => miscAmount(line) > 0);
-  const craftTravel = (input.otherCost?.travel ?? []).filter((line) => line.kind === "craft" && liveTravel(line));
-  if (!misc.length && !craftTravel.length) return null;
+  if (!misc.length) return null;
   const cells = headerCells(input);
   ["Item", "Description", "Qty", "Each $", "Total $"].forEach((label, index) => {
     pushText(cells, `${colLetter(index + 1)}6`, label);
   });
   let excelRow = 7;
   const unlocked: Array<{ row: number; col: number }> = [];
-  for (const line of craftTravel) {
-    pushText(cells, `A${excelRow}`, "Craft travel");
-    pushText(cells, `B${excelRow}`, `${line.travelers} travelers`);
-    pushNum(cells, `C${excelRow}`, Math.min(line.travelers, line.headcount || line.travelers));
-    pushNum(cells, `D${excelRow}`, money(line.miles * line.perMile));
-    pushFormula(cells, `E${excelRow}`, `C${excelRow}*D${excelRow}`);
-    unlockInputCols(unlocked, excelRow, 4);
-    excelRow += 1;
-  }
   for (const line of misc) {
     pushText(cells, `A${excelRow}`, line.item);
     pushText(cells, `B${excelRow}`, line.description);
@@ -1483,7 +1526,12 @@ function buildMiscSheet(input: EstimateXlsxInput): BuiltSheet | null {
     excelRow += 1;
   }
   const first = 7;
-  const last = excelRow - 1;
+  const lastLive = excelRow - 1;
+  const last = lastLive + ESTIMATE_XLSX_SPARE_ROWS;
+  for (; excelRow <= last; excelRow += 1) {
+    pushFormula(cells, `E${excelRow}`, `C${excelRow}*D${excelRow}`);
+    unlockInputCols(unlocked, excelRow, 4);
+  }
   pushText(cells, `A${excelRow}`, "TOTAL");
   pushFormula(cells, `E${excelRow}`, `SUM(E${first}:E${last})`);
   return { name: ESTIMATE_XLSX_SHEETS.misc, cells, sheetTotal: `E${excelRow}`, unlocked };
@@ -1628,7 +1676,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
   }
 
   const extra: Array<[string, string]> = [
-    ["Staff travel $", ESTIMATE_XLSX_SHEETS.travel],
+    ["Travel $", ESTIMATE_XLSX_SHEETS.travel],
     ["Misc $", ESTIMATE_XLSX_SHEETS.misc],
     ["Equipment rental $", ESTIMATE_XLSX_SHEETS.rental],
     ["Tensioning / torquing $", ESTIMATE_XLSX_SHEETS.tension],
@@ -1932,11 +1980,7 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
     third.filter((line) => thirdPartyBucket(line.item) === "crane"),
   );
   const coe = buildCoeSheet(input);
-  const staffTravel = buildTravelSheet(
-    input,
-    (input.otherCost?.travel ?? []).filter((line) => line.kind === "staff"),
-    ESTIMATE_XLSX_SHEETS.travel,
-  );
+  const staffTravel = buildTravelSheet(input, input.otherCost?.travel ?? [], ESTIMATE_XLSX_SHEETS.travel);
   const misc = buildMiscSheet(input);
   const sub = buildSubSheet(input);
   const body = [staff, foremen, direct, support, rental, tension, crane, sub, coe, staffTravel, misc, rates]
