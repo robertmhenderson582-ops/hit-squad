@@ -8,8 +8,9 @@
  * CAT 2 daily itemized grid (date row from col K, 7-row HC/HPS/ST/OT/DT/PD
  * blocks, DAYSHIFT / NIGHTSHIFT). PD is a daily people-count row (live-pack
  * perDiemPeople / nightPerDiemPeople) — same calendar idea as HC, not hours.
- * Shift + Position + ST/OT/DT/PD hrs + Labor $ merge
+ * Shift + Position + ST/OT/DT/PD hrs merge
  * down the block void and center — one value, not duplicated on detail rows.
+ * Subtotal $ is labor TM $ (ST+OT+DT). There is no second Labor $ column.
  * Hours/shift and PD count stay off the Shift column (Type + PD # carry that).
  * Support shows live-pack Bill as under Position in column B (same rate title
  * as Rate Tables). Subtotal $ / Rate merge title through HC/HPS; ST/OT/DT/PD
@@ -149,9 +150,9 @@ export const ESTIMATE_SUMMARY_HOURS = "Man-hours (MH)";
 export const ESTIMATE_HOURS_LINE = "Man-hours";
 export const RATE_TOOLS_SECTION = "Large tools (COE / dry rates)";
 export const RATE_RENTAL_SECTION = "Third-party rental";
-/** First day-grid column after the A–J instrument (Shift sits next to Position). */
-export const LABOR_DATE_START_COL = 11;
-export const LABOR_INSTRUMENT_LAST_COL = 10;
+/** First day-grid column after the A–I instrument (Shift sits next to Position). */
+export const LABOR_DATE_START_COL = 10;
+export const LABOR_INSTRUMENT_LAST_COL = 9;
 /** Two short rows above the date header — live Job setup phase band. */
 export const LABOR_PHASE_ROW = 4;
 export const LABOR_PHASE_ROW_END = 5;
@@ -168,7 +169,7 @@ export const LABOR_HC_LABEL = "HC";
 export const LABOR_HPS_TYPE = "HPS";
 /** Kept for desk/source lock — not written on craft Shift. Type chip + PD # carry it. */
 export const LABOR_PD_COUNT_LABEL = "PD count";
-/** J header: daily PD people-days, not hours. */
+/** I header: daily PD people-days, not hours. */
 export const LABOR_PD_HEADER = "PD #";
 export const LABOR_PD_TYPE = "PD";
 /** Type chip on the position header row is omitted — the Position name is the title. */
@@ -183,9 +184,9 @@ export const LABOR_ST_OFFSET = 3;
 export const LABOR_OT_OFFSET = 4;
 export const LABOR_DT_OFFSET = 5;
 export const LABOR_PD_OFFSET = 6;
-/** Shift + Position + ST/OT/DT/PD hrs + Labor $ — one value centered in the block void. */
-export const LABOR_BLOCK_VOID_COLS = ["A", "B", "F", "G", "H", "I", "J"] as const;
-export const LABOR_HOUR_VOID_COLS = ["F", "G", "H", "I", "J"] as const;
+/** Shift + Position + ST/OT/DT/PD hrs — one value centered in the block void. */
+export const LABOR_BLOCK_VOID_COLS = ["A", "B", "F", "G", "H", "I"] as const;
+export const LABOR_HOUR_VOID_COLS = ["F", "G", "H", "I"] as const;
 /** Subtotal $ + Rate — title through HPS so HC/HPS are not empty holes. */
 export const LABOR_TITLE_BAND_COLS = ["C", "D"] as const;
 /** Support-only field under Position. Live pack `billedAs` — dropdown + import round-trip. */
@@ -969,7 +970,6 @@ function buildCrewSheet(
     "OT Hrs",
     "DT Hrs",
     LABOR_PD_HEADER,
-    "Labor $",
   ];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
   writeDateRow(cells, dates);
@@ -1021,7 +1021,7 @@ function buildCrewSheet(
       pushText(cells, `B${stRow}`, LABOR_BILL_AS_LABEL);
       cells.push({ ref: `B${otRow}`, type: "text", value: billAsDisplay(row, input.site ?? "") });
     }
-    pushFormula(cells, `C${titleRow}`, `J${titleRow}`);
+    pushFormula(cells, `C${titleRow}`, `C${stRow}+C${otRow}+C${dtRow}`);
     if (dates.length) {
       pushFormula(cells, `F${titleRow}`, `SUM(${firstDate}${stRow}:${lastDateCol}${stRow})`);
       pushFormula(cells, `G${titleRow}`, `SUM(${firstDate}${otRow}:${lastDateCol}${otRow})`);
@@ -1033,7 +1033,6 @@ function buildCrewSheet(
       pushNum(cells, `H${titleRow}`, 0);
       pushNum(cells, `I${titleRow}`, 0);
     }
-    pushFormula(cells, `J${titleRow}`, `C${stRow}+C${otRow}+C${dtRow}`);
 
     pushText(cells, `E${hcRow}`, LABOR_HC_LABEL);
     pushText(cells, `E${hpsRow}`, LABOR_HPS_TYPE);
@@ -1111,20 +1110,21 @@ function buildCrewSheet(
   const totalRow = excelRow;
   pushText(cells, `A${totalRow}`, "TOTAL");
   const hoursRollup = `${colLetter(LABOR_BLOCK_ID_COL)}${totalRow}`;
+  const pdRollup = `${colLetter(LABOR_CLOCK_FLAG_COL)}${totalRow}`;
   if (titleRows.length) {
-    pushFormula(cells, `C${totalRow}`, `SUM(${pdMoneyRows.map((row) => `C${row}`).join(",")})`);
+    pushFormula(cells, `C${totalRow}`, `SUM(${titleRows.map((row) => `C${row}`).join(",")})`);
     pushFormula(cells, `F${totalRow}`, `SUM(${titleRows.map((row) => `F${row}`).join(",")})`);
     pushFormula(cells, `G${totalRow}`, `SUM(${titleRows.map((row) => `G${row}`).join(",")})`);
     pushFormula(cells, `H${totalRow}`, `SUM(${titleRows.map((row) => `H${row}`).join(",")})`);
     pushFormula(cells, `I${totalRow}`, `SUM(${titleRows.map((row) => `I${row}`).join(",")})`);
-    pushFormula(cells, `J${totalRow}`, `SUM(${titleRows.map((row) => `J${row}`).join(",")})`);
+    pushFormula(cells, pdRollup, `SUM(${pdMoneyRows.map((row) => `C${row}`).join(",")})`);
     pushFormula(cells, hoursRollup, `F${totalRow}+G${totalRow}+H${totalRow}`);
   } else {
     pushNum(cells, `C${totalRow}`, 0);
     pushNum(cells, `F${totalRow}`, 0);
     pushNum(cells, `G${totalRow}`, 0);
     pushNum(cells, `H${totalRow}`, 0);
-    pushNum(cells, `J${totalRow}`, 0);
+    pushNum(cells, pdRollup, 0);
     pushNum(cells, hoursRollup, 0);
   }
 
@@ -1139,10 +1139,10 @@ function buildCrewSheet(
   return {
     name,
     cells,
-    laborTotal: `J${totalRow}`,
-    pdTotal: `C${totalRow}`,
+    laborTotal: `C${totalRow}`,
+    pdTotal: pdRollup,
     hoursTotal: hoursRollup,
-    sheetTotal: `J${totalRow}`,
+    sheetTotal: `C${totalRow}`,
     hiddenCols: [LABOR_CLOCK_FLAG_COL, LABOR_BLOCK_ID_COL],
     weekendCols,
     laborBlocks,
@@ -1156,9 +1156,9 @@ function buildCrewSheet(
       : undefined,
     validations: laborPositionValidations(name, laborBlocks, Boolean(showBillAs)),
     merges: [
-      `A1:${lastDateCol || "J"}1`,
-      `A2:${lastDateCol || "J"}2`,
-      `A3:${lastDateCol || "J"}3`,
+      `A1:${lastDateCol || "I"}1`,
+      `A2:${lastDateCol || "I"}2`,
+      `A3:${lastDateCol || "I"}3`,
       ...phaseBand.merges,
       // Full title→PD range: HC/HPS sit between the summary and ST/OT/DT/PD rows.
       // Support splits B: Position (title–HPS) + Bill as value (OT–PD).

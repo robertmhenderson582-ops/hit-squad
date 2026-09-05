@@ -21,8 +21,11 @@
  * (can differ from HC). Day cells are hard yellow inputs like HC; PD $ stays
  * count × PD rate. Empty unused day cells stay teal, not yellow.
  * Craft-sheet Billable column is dropped — it duplicated ST+OT+DT / per-row
- * totals. Day-grid sums still feed ST/OT/DT hours and PD count → $; Summary
- * hours still F+G+H. Rate Tables ST Billable is a catalog column and stays.
+ * totals. Labor $ is dropped the same way: Subtotal $ holds TM $ (ST+OT+DT);
+ * PD $ stays on the PD row. Day-grid sums still feed ST/OT/DT hours and PD
+ * count → $; Summary hours still F+G+H. Rate Tables ST Billable is a catalog
+ * column and stays. Native column outline groups A–I (collapse left; calendar
+ * stays).
  * Shift is one merged DAYSHIFT/NIGHTSHIFT block (no Hours/shift or PD count
  * in A). Craft sheets emit all DAYSHIFT blocks, then all NIGHTSHIFT blocks.
  * Subtotal $ + Rate merge title through HC/HPS so those cells are not

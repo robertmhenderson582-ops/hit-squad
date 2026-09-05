@@ -10,7 +10,7 @@
  * Unused columns past the used range are hidden. Unused rows below TOTAL
  * collapse (defaultRowHeight 0 + zeroHeight) so no white band remains.
  * Leftover white cells in the used band get Hit Squad teal, not mint/gray.
- * Craft sheets group A–J with native Excel column outline (+/−). No VBA / not xlsm.
+ * Craft sheets group A–I with native Excel column outline (+/−). No VBA / not xlsm.
  * Day-grid header is weekday (row 5) over day-of-month (row 6), white on teal.
  */
 
@@ -51,7 +51,7 @@ export const LABOR_SUN_BODY = LABOR_WEEKEND_FILL;
 
 export const LABOR_POSITION_TITLE = STEEL;
 export const LABOR_HC_HPS = "FFFFFF00";
-/** Empty A–J on HC/HPS rows — teal chrome; yellow stays on the day HC/HPS cells. */
+/** Empty A–I on HC/HPS rows — teal chrome; yellow stays on the day HC/HPS cells. */
 export const LABOR_HC_HPS_CLEAR = STEEL;
 export const LABOR_HOURS_LABEL = STEEL;
 export const LABOR_PD_LABEL = AMBER_FLARE;
@@ -94,7 +94,6 @@ export const LABOR_COL_WIDTHS: Record<string, number> = {
   G: 10,
   H: 10,
   I: 10,
-  J: 16,
 };
 /** Explicit cell xf — column alignment alone does not center Excel number cells. */
 export const LABOR_CENTER: Partial<ExcelJS.Alignment> = {
@@ -102,19 +101,19 @@ export const LABOR_CENTER: Partial<ExcelJS.Alignment> = {
   vertical: "middle",
   wrapText: false,
 };
-/** Same width on every day col (K through last date). 3 made `9.5` into ##; 3.2 persists. */
+/** Same width on every day col (J through last date). 3 made `9.5` into ##; 3.2 persists. */
 export const LABOR_DAY_COL_WIDTH = 3.2;
-/** A–J one line + unrotated day-of-month. */
+/** A–I one line + unrotated day-of-month. */
 export const LABOR_HEADER_ROW_HEIGHT = 22;
 /** Every craft HC/HPS/ST/OT/DT/PD/title row — no wrap-driven spikes. */
 export const LABOR_DATA_ROW_HEIGHT = 16;
 /** Two short Job setup phase-bar rows above the date header. */
 export const LABOR_PHASE_ROW_HEIGHT = 14;
 export const SUMMARY_COL_A_WIDTH = 28;
-export const LABOR_DATE_FIRST_COL = 11;
-/** Frozen instrument columns A–J (Shift through Labor $). */
-export const LABOR_INSTRUMENT_LAST_COL = 10;
-/** Native Excel column group on A–J (outline +/−). No VBA. */
+export const LABOR_DATE_FIRST_COL = 10;
+/** Frozen instrument columns A–I (Shift through PD #). */
+export const LABOR_INSTRUMENT_LAST_COL = 9;
+/** Native Excel column group on A–I (outline +/−). No VBA. */
 export const LABOR_INSTRUMENT_OUTLINE_LEVEL = 1;
 
 /** Empty password: Review → Unprotect Sheet with no prompt. Formula cells stay locked. */
@@ -134,7 +133,7 @@ export const SHEET_PROTECT_OPTIONS: Partial<ExcelJS.WorksheetProtection> = {
   autoFilter: false,
   pivotTables: false,
 };
-/** Craft sheets: Format columns must stay on so the A–J outline +/− works when protected. */
+/** Craft sheets: Format columns must stay on so the A–I outline +/− works when protected. */
 export const LABOR_SHEET_PROTECT_OPTIONS: Partial<ExcelJS.WorksheetProtection> = {
   ...SHEET_PROTECT_OPTIONS,
   formatColumns: true,
@@ -704,8 +703,8 @@ function pinLaborCraftAlignment(ws: ExcelJS.Worksheet, lastDateCol: number, maxR
   }
 }
 
-/** A Shift + B Position + F–J hour/money totals — merged title→PD. Skip per-row fills. */
-const LABOR_BLOCK_VOID_COL_NUMS = new Set([1, 2, 6, 7, 8, 9, 10]);
+/** A Shift + B Position + F–I hour totals — merged title→PD. Skip per-row fills. */
+const LABOR_BLOCK_VOID_COL_NUMS = new Set([1, 2, 6, 7, 8, 9]);
 /** C Subtotal $ + D Rate — merged title through HPS. */
 const LABOR_TITLE_BAND_COL_NUMS = new Set([3, 4]);
 
@@ -905,7 +904,7 @@ function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDat
 function applyLaborInstrumentOutline(ws: ExcelJS.Worksheet): void {
   const props = ws.properties as ExcelJS.WorksheetProperties;
   // ExcelJS Column.collapsed is `outlineLevel >= outlineLevelCol`. Keep the
-  // sheet threshold above the group so A–J start expanded (no collapsed="1").
+  // sheet threshold above the group so A–I start expanded (no collapsed="1").
   props.outlineLevelCol = LABOR_INSTRUMENT_OUTLINE_LEVEL + 1;
   props.outlineProperties = { summaryBelow: true, summaryRight: true };
   for (let col = 1; col <= LABOR_INSTRUMENT_LAST_COL; col += 1) {
@@ -930,7 +929,7 @@ function applyLaborChrome(
       ws.getColumn(i).alignment = { horizontal: "center", vertical: "middle" };
     }
   }
-  // Brand + subtitle bands span the day grid so K2:last / K3:last are not a white void.
+  // Brand + subtitle bands span the day grid so J2:last / J3:last are not a white void.
   for (let row = 1; row <= 3; row += 1) {
     for (let col = 1; col <= Math.max(LABOR_INSTRUMENT_LAST_COL, lastDateCol); col += 1) {
       applyRowStyle(ws.getCell(row, col), row, maxRow, false, col);
@@ -1251,7 +1250,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
         horizontalCentered: true,
         margins: { left: 0.4, right: 0.4, top: 0.65, bottom: 0.65, header: 0.28, footer: 0.28 },
         printTitlesRow: labor ? "4:6" : "6:6",
-        printTitlesColumn: labor ? "A:J" : undefined,
+        printTitlesColumn: labor ? "A:I" : undefined,
       },
       headerFooter: {
         oddHeader: printHeader(safeName),
@@ -1261,7 +1260,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       },
       views: [
         labor
-          ? { state: "frozen", xSplit: LABOR_INSTRUMENT_LAST_COL, ySplit: 6, activeCell: "K7", showGridLines: false }
+          ? { state: "frozen", xSplit: LABOR_INSTRUMENT_LAST_COL, ySplit: 6, activeCell: "J7", showGridLines: false }
           : { state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: false },
       ],
     });
