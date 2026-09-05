@@ -955,6 +955,7 @@ function applyLaborChrome(
     const last = colLetter(lastDateCol);
     const weekendRule = {
       type: "expression" as const,
+      priority: 1,
       formulae: [`OR(WEEKDAY(${first}$6,1)=7,WEEKDAY(${first}$6,1)=1)`],
       style: {
         fill: { type: "pattern" as const, pattern: "solid" as const, bgColor: { argb: LABOR_WEEKEND_FILL } },

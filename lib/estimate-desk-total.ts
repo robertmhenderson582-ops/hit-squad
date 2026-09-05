@@ -16,6 +16,7 @@ import {
   MORE_FUND_LABEL,
   SUBS_CONTINGENCY_LABEL,
   cbaIncreaseDollars,
+  hydrateJobMoney,
   moneyAdderLines,
   moreFundDollars,
   type JobMoney,
@@ -64,7 +65,7 @@ export function deskPackageBreakdown(input: DeskPackageInput): EstimateTotalBrea
   const sheet = input.subcontractor;
   const subcontractor = subcontractorTotal(sheet, subCtx);
   const labor = laborDollarsFromCrew(input.crew ?? {}, site, client, wageLookupOpts(site));
-  const cba = cbaIncreaseDollars(input.crew ?? {}, input.jobMeta ?? {}, site, client, wageLookupOpts(site));
+  const cba = cbaIncreaseDollars(input.crew ?? {}, hydrateJobMoney(input.jobMeta), site, client, wageLookupOpts(site));
   const more = moreFundDollars(input.crew ?? {}, input.jobMeta?.moreFundPerHour ?? null, site, client);
   const adders = moneyAdderLines({
     labor,

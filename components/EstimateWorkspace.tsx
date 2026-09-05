@@ -17,6 +17,7 @@ import { ModalPortal } from "@/components/ModalPortal";
 import { WageLookupDesk } from "@/components/WageLookupDesk";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
+import { hydrateSupportLines } from "@/lib/craft-labor";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
 import { viewingAsOther } from "@/lib/desk-role";
 import { readFcrPacket } from "@/lib/change-order-packet";
@@ -185,14 +186,14 @@ export function EstimateWorkspace({
         pendingImport,
       );
       pack.replaceFromImport({
-        schedule: next.schedule ?? pack.schedule,
+        schedule: next.schedule,
         crew: {
-          staff: next.crew?.staff ?? [],
-          generalForeman: next.crew?.generalForeman ?? [],
-          foreman: next.crew?.foreman ?? [],
-          direct: next.crew?.direct ?? [],
-          support: next.crew?.support ?? [],
-          otAfter8: Boolean(next.crew?.otAfter8),
+          staff: next.crew.staff ?? [],
+          generalForeman: next.crew.generalForeman ?? [],
+          foreman: next.crew.foreman ?? [],
+          direct: next.crew.direct ?? [],
+          support: hydrateSupportLines(next.crew.support ?? []),
+          otAfter8: Boolean(next.crew.otAfter8),
         },
         title: next.title,
       });

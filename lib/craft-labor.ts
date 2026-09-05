@@ -210,6 +210,8 @@ export type CraftRow = {
   clockOverride: ClockOverride;
   laborClassOverride: LaborClass | null;
   ranges: CalendarRange[];
+  /** Support-only on the desk; optional on other lanes so Excel can carry Bill as. */
+  billedAs?: string;
 };
 
 export type SupportLine = CraftRow & {

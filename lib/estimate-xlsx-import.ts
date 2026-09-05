@@ -4,7 +4,7 @@
  * the keys. Excel is never a parallel book (excel-ripple.ts).
  */
 import ExcelJS from "exceljs";
-import { blankCraftRow, hydrateSupportLine, type CalendarRange, type CraftRow, type SupportLine } from "./craft-labor.ts";
+import { blankCraftRow, hydrateSupportLine, hydrateSupportLines, type CalendarRange, type CraftRow, type SupportLine } from "./craft-labor.ts";
 import {
   SHAHAN_GENERAL_FOREMAN_TITLES,
 } from "./shahan-wood-river.ts";
@@ -509,7 +509,9 @@ function applyBlocks(
   }
   if (sheetLanes.has(ESTIMATE_XLSX_SHEETS.support)) {
     const keep = new Set((bySheet.find((item) => item.sheet === ESTIMATE_XLSX_SHEETS.support)?.blocks ?? []).map((block) => block.id));
-    next.support = (next.support ?? []).filter((row) => keep.has(row.id));
+    next.support = hydrateSupportLines((next.support ?? []).filter((row) => keep.has(row.id)));
+  } else {
+    next.support = hydrateSupportLines(next.support ?? []);
   }
   return next;
 }
@@ -546,7 +548,12 @@ function blocksBySheet(blocks: ImportedBlock[]): Array<{ sheet: string; blocks: 
     .filter((item) => item.blocks.length);
 }
 
-export function applyEstimateImport(base: EstimatePackSnapshot, imported: EstimateImport): EstimatePackSnapshot {
+export type AppliedEstimateImport = EstimatePackSnapshot & {
+  schedule: PhaseScheduleState;
+  crew: EstimateXlsxCrew;
+};
+
+export function applyEstimateImport(base: EstimatePackSnapshot, imported: EstimateImport): AppliedEstimateImport {
   const schedule = imported.schedule;
   const crew = applyBlocks(asCrew(base.crew), blocksBySheet(imported.blocks), schedule.phases);
   return {

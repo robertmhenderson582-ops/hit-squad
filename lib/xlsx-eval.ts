@@ -230,30 +230,40 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
       return 0;
     }
 
+    function takeOp(): string | undefined {
+      const tok = peek();
+      return tok?.kind === "op" ? tok.value : undefined;
+    }
+
     function parseMul(): number | string | boolean {
       let left = parsePrimary();
-      while (peek()?.kind === "op" && (peek()!.value === "*" || peek()!.value === "/")) {
-        const op = take().value;
+      let op = takeOp();
+      while (op === "*" || op === "/") {
+        take();
         const right = parsePrimary();
         left = op === "*" ? asNumber(left) * asNumber(right) : asNumber(right) === 0 ? 0 : asNumber(left) / asNumber(right);
+        op = takeOp();
       }
       return left;
     }
 
     function parseAdd(): number | string | boolean {
       let left = parseMul();
-      while (peek()?.kind === "op" && (peek()!.value === "+" || peek()!.value === "-")) {
-        const op = take().value;
+      let op = takeOp();
+      while (op === "+" || op === "-") {
+        take();
         const right = parseMul();
         left = op === "+" ? asNumber(left) + asNumber(right) : asNumber(left) - asNumber(right);
+        op = takeOp();
       }
       return left;
     }
 
     function parseCompare(): number | string | boolean {
       let left = parseAdd();
-      while (peek()?.kind === "op" && ["=", "<>", "<", ">", "<=", ">="].includes(peek()!.value)) {
-        const op = take().value;
+      let op = takeOp();
+      while (op && ["=", "<>", "<", ">", "<=", ">="].includes(op)) {
+        take();
         const right = parseAdd();
         if (op === "=") left = left === right || asNumber(left) === asNumber(right);
         else if (op === "<>") left = left !== right;
@@ -261,11 +271,13 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
         else if (op === ">") left = asNumber(left) > asNumber(right);
         else if (op === "<=") left = asNumber(left) <= asNumber(right);
         else left = asNumber(left) >= asNumber(right);
+        op = takeOp();
       }
       return left;
     }
 
-    return parseCompare();
+    const result = parseCompare();
+    return typeof result === "boolean" ? asNumber(result) : result;
   }
 
   return { evalAt, cellRaw };

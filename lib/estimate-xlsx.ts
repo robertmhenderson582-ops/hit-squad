@@ -48,7 +48,7 @@
  * Never commit source workbooks to git (Look samples excepted).
  */
 
-import type { CalendarRange, CraftRow, CraftShift } from "./craft-labor.ts";
+import type { CalendarRange, CraftRow, CraftShift, SupportLine } from "./craft-labor.ts";
 import {
   billedPeriodCount,
   largeToolAmount,
@@ -210,7 +210,7 @@ export type EstimateXlsxCrew = {
   generalForeman?: CraftRow[];
   foreman?: CraftRow[];
   direct?: CraftRow[];
-  support?: Array<CraftRow & { billedAs?: string }>;
+  support?: SupportLine[];
   otAfter8?: boolean;
 };
 
@@ -306,7 +306,7 @@ function billedRow(title: string, site = "", laborClass?: LaborClass | null): Sh
 }
 
 /** Visible Bill as — catalog craft name when the pack billedAs hits Rate Tables. */
-function billAsDisplay(row: CraftRow, site = ""): string {
+function billAsDisplay(row: CraftRow & { billedAs?: string }, site = ""): string {
   const billed = (row.billedAs ?? "").trim();
   if (!billed) return "";
   const title = shahanCrewTitle(row);
