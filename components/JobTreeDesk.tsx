@@ -9,7 +9,7 @@ import { StatusStamp } from "@/components/StatusStamp";
 import { useDisplay } from "@/components/DisplayProvider";
 import { estimateForJob } from "@/lib/estimate-open";
 import { packForJob } from "@/lib/jobs";
-import { defaultOpenCompanyId, jobEstimateHref, type JobTreeCompany } from "@/lib/job-tree";
+import { jobEstimateHref, resolveOpenCompanyId, type JobTreeCompany } from "@/lib/job-tree";
 import type { EstimateRecord, JobRecord } from "@/lib/types";
 import type { LocalPack } from "@/lib/local-estimates";
 
@@ -33,7 +33,7 @@ export function JobTreeDesk({
   const router = useRouter();
   const { resolvedTheme } = useDisplay();
   const night = resolvedTheme === "night";
-  const openId = openCompanyId || defaultOpenCompanyId(tree);
+  const openId = resolveOpenCompanyId(openCompanyId, tree);
 
   function openJob(job: JobRecord, event?: { preventDefault: () => void; stopPropagation: () => void }) {
     const href = jobEstimateHref(job, estimates, packs);

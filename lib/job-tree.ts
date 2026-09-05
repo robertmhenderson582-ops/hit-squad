@@ -47,6 +47,36 @@ export function defaultOpenCompanyId(companies: Array<{ id: CompanyId }>) {
   return companies[0]?.id;
 }
 
+/** `""` is all collapsed. Only `undefined` (first paint / omitted prop) uses the default. */
+export function resolveOpenCompanyId(
+  openCompanyId: string | undefined,
+  companies: Array<{ id: CompanyId }>,
+) {
+  if (openCompanyId === undefined) return defaultOpenCompanyId(companies) ?? "";
+  return openCompanyId;
+}
+
+/** Sticky accordion: null = first paint default; `""` stays all-collapsed. */
+export function stickyOpenCompanyId(
+  openCompanyId: string | null,
+  companies: Array<{ id: CompanyId }>,
+) {
+  if (openCompanyId === null) return defaultOpenCompanyId(companies) ?? "";
+  if (openCompanyId === "") return "";
+  if (companies.some((row) => row.id === openCompanyId)) return openCompanyId;
+  return defaultOpenCompanyId(companies) ?? "";
+}
+
+/** Single-open accordion. Collapsing the open company yields `""` (none open). */
+export function toggleOpenCompanyId(
+  current: string | null,
+  id: string,
+  companies: Array<{ id: CompanyId }>,
+) {
+  const now = current === null ? defaultOpenCompanyId(companies) ?? "" : current;
+  return now === id ? "" : id;
+}
+
 export function sitesForCompany(companyId: CompanyId, sites: SiteRecord[] = catalogSites()) {
   return sites.filter((site) => inferCompanyIdFromParts(site.client, site.name, site.family, site.city) === companyId);
 }

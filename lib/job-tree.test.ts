@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { COMPANIES, LUCKY13_ID, STANDALONE_ID, companyScopeFor } from "./companies.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
@@ -12,7 +14,10 @@ import {
   jobEstimateHref,
   jobTree,
   matchCatalogSite,
+  resolveOpenCompanyId,
   sitesForCompany,
+  stickyOpenCompanyId,
+  toggleOpenCompanyId,
   UNASSIGNED_SITE_ID,
 } from "./job-tree.ts";
 import { JAMES_EMAIL, JOHN_BEECH_EMAIL, JOHN_HENRY_EMAIL, JOSEPH_EMAIL } from "./tester-seats.ts";
@@ -168,5 +173,42 @@ describe("job tree", () => {
     const tree = jobTree({ scope: standalone, jobs: jobsOnDesk([], [cat2], false, standalone), packs: [cat2] });
     assert.deepEqual(tree.map((row) => row.id), []);
     assert.equal(tree.some((row) => row.id === STANDALONE_ID), false);
+  });
+
+  it("lets every company collapse and stays all-collapsed (empty string is not Madison)", () => {
+    const companies = COMPANIES.map((row) => ({ id: row.id }));
+    assert.equal(resolveOpenCompanyId(undefined, companies), "madison");
+    assert.equal(resolveOpenCompanyId("", companies), "");
+    assert.equal(resolveOpenCompanyId("hitsquad", companies), "hitsquad");
+    assert.equal(stickyOpenCompanyId(null, companies), "madison");
+    assert.equal(stickyOpenCompanyId("", companies), "");
+    assert.equal(stickyOpenCompanyId("hitsquad", companies), "hitsquad");
+    assert.equal(stickyOpenCompanyId("gone", companies), "madison");
+
+    assert.equal(toggleOpenCompanyId(null, "madison", companies), "");
+    assert.equal(toggleOpenCompanyId("madison", "madison", companies), "");
+    assert.equal(toggleOpenCompanyId("", "madison", companies), "madison");
+    assert.equal(toggleOpenCompanyId("madison", "hitsquad", companies), "hitsquad");
+    assert.equal(toggleOpenCompanyId("hitsquad", "hitsquad", companies), "");
+
+    const collapsed = toggleOpenCompanyId("madison", "madison", companies);
+    assert.equal(stickyOpenCompanyId(collapsed, companies), "");
+    assert.equal(resolveOpenCompanyId(collapsed, companies), "");
+    const openedHitsquad = toggleOpenCompanyId(collapsed, "hitsquad", companies);
+    assert.equal(openedHitsquad, "hitsquad");
+    assert.equal(openedHitsquad === "madison", false);
+    assert.equal(toggleOpenCompanyId(openedHitsquad, "hitsquad", companies), "");
+
+    const desk = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
+    const treeDesk = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
+    const rates = readFileSync(fileURLToPath(new URL("../components/RatesDesk.tsx", import.meta.url)), "utf8");
+    assert.match(treeDesk, /resolveOpenCompanyId\(openCompanyId, tree\)/);
+    assert.equal(/openCompanyId \|\| defaultOpenCompanyId/.test(treeDesk), false);
+    assert.match(treeDesk, /\{open \? "▴" : "▾"\}/);
+    assert.match(treeDesk, /company\.id === openId/);
+    assert.match(desk, /stickyOpenCompanyId\(openCompanyId, tree\)/);
+    assert.match(desk, /toggleOpenCompanyId\(current, id, tree\)/);
+    assert.match(rates, /writeRateCompanyOpen/);
+    assert.equal(/resolveOpenCompanyId|stickyOpenCompanyId/.test(rates), false);
   });
 });
