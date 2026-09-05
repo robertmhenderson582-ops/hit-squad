@@ -272,6 +272,8 @@ export type EstimateXlsxInput = {
   otherCost?: OtherCostSheet;
   subcontractor?: SubSheet;
   changeOrders?: number;
+  /** Live company-record logo (companyLogoSrc). Export-only; import does not store it. */
+  companyLogo?: string | null;
 };
 
 type CrewLane = "staff" | "craft";
@@ -1781,7 +1783,7 @@ export async function estimateToXlsx(input: EstimateXlsxInput = {}): Promise<Uin
   if (excel == null || Math.round(excel * 100) / 100 !== desk) {
     throw new Error("summary-total-mismatch");
   }
-  const bytes = await buildWorkbook(sheets);
+  const bytes = await buildWorkbook(sheets, { companyLogo: input.companyLogo });
   if (!bytes.byteLength) throw new Error("empty-workbook");
   return bytes;
 }

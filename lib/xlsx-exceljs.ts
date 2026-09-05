@@ -12,13 +12,17 @@
  * Leftover white cells in the used band get Hit Squad teal, not mint/gray.
  * Craft sheets group A–I with native Excel column outline (+/−). No VBA / not xlsm.
  * Day-grid header is weekday (row 5) over day-of-month (row 6), white on teal.
+ * Visible sheets take the estimate company’s live logo as a faded worksheet
+ * background splash. Hidden helpers (_JobDays / _Lists) stay unbranded.
+ * No logo on file → no splash (never invent a mark).
  */
 
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { evaluateWorkbook } from "./xlsx-eval.ts";
 import { isPhaseId, PHASE_TONE_BAND_INK, PHASE_TONE_FILLS } from "./phase-schedule.ts";
-import { colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
+import { prepareCompanyLogoSplash } from "./estimate-company-logo.ts";
+import { colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet, type WorkbookBuildOptions } from "./xlsx-minimal.ts";
 
 const WHITE = "FFFFFFFF";
 const DARK_TEXT = "FF102226";
@@ -1154,6 +1158,7 @@ async function stampUnusedRowsHidden(buffer: Uint8Array): Promise<Uint8Array> {
     const file = zip.file(name);
     if (!file) continue;
     let xml = await file.async("string");
+    const picture = xml.match(/<picture\b[^/]*\/>|<picture\b[^>]*>[\s\S]*?<\/picture>/)?.[0] ?? "";
     xml = stampSheetCols(xml);
     const hasInstrumentOutline = /<col[^>]*outlineLevel="1"/.test(xml);
     xml = xml.replace(/<sheetFormatPr\b([^>]*?)\/>/g, (_all, attrs: string) => {
@@ -1202,6 +1207,9 @@ async function stampUnusedRowsHidden(buffer: Uint8Array): Promise<Uint8Array> {
         }
       }
     }
+    if (picture && !/<picture\b/.test(xml)) {
+      xml = xml.replace("</worksheet>", `${picture}</worksheet>`);
+    }
     zip.file(name, xml);
   }
   return new Uint8Array(
@@ -1209,7 +1217,7 @@ async function stampUnusedRowsHidden(buffer: Uint8Array): Promise<Uint8Array> {
   );
 }
 
-export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8Array> {
+export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: WorkbookBuildOptions): Promise<Uint8Array> {
   const list = sheets.filter((sheet) => sheet.name.trim());
   if (!list.length) throw new Error("empty-workbook");
 
@@ -1411,6 +1419,18 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     }
     applySheetUnlocks(ws, sheet);
     await ws.protect(SHEET_PROTECT_PASSWORD, labor ? LABOR_SHEET_PROTECT_OPTIONS : SHEET_PROTECT_OPTIONS);
+  }
+
+  const splash = await prepareCompanyLogoSplash(options?.companyLogo);
+  if (splash) {
+    const imageId = wb.addImage({
+      base64: splash.base64,
+      extension: splash.extension,
+    });
+    for (const ws of wb.worksheets) {
+      if (ws.state === "veryHidden" || ws.state === "hidden") continue;
+      ws.addBackgroundImage(imageId);
+    }
   }
 
   const buffer = await wb.xlsx.writeBuffer();

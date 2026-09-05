@@ -149,9 +149,14 @@ export type WorkbookSheet = {
   veryHidden?: boolean;
 };
 
-export async function buildWorkbook(sheets: WorkbookSheet[]): Promise<Uint8Array> {
+export type WorkbookBuildOptions = {
+  /** Already-resolved company logo src. Missing / unloadable → no splash. */
+  companyLogo?: string | null;
+};
+
+export async function buildWorkbook(sheets: WorkbookSheet[], options?: WorkbookBuildOptions): Promise<Uint8Array> {
   const { buildWorkbookExcel } = await import("./xlsx-exceljs.ts");
-  return buildWorkbookExcel(sheets);
+  return buildWorkbookExcel(sheets, options);
 }
 
 export async function buildXlsx(sheetName: string, cells: SheetCell[], merges: string[] = []): Promise<Uint8Array> {

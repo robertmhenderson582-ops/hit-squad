@@ -23,6 +23,7 @@ import { viewingAsOther } from "@/lib/desk-role";
 import { readFcrPacket } from "@/lib/change-order-packet";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
+import { companyLogoFromApiPayload } from "@/lib/estimate-company-logo";
 import {
   ESTIMATE_EXPORT_ERROR,
   ESTIMATE_IMPORT_ERROR,
@@ -78,6 +79,17 @@ const ACTIONS = [
   { id: "print", label: "Print" },
   { id: "duplicate", label: "Duplicate" },
 ] as const;
+
+async function fetchEstimateCompanyLogo(client: string, site: string): Promise<string | null> {
+  try {
+    const query = new URLSearchParams({ client, site });
+    const res = await fetch(`/api/desk/company-logo?${query}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return companyLogoFromApiPayload(await res.json());
+  } catch {
+    return null;
+  }
+}
 
 export function EstimateWorkspace({
   crumb,
@@ -149,6 +161,7 @@ export function EstimateWorkspace({
         }),
         subcontractor: readSubSheet(pack.estimateKey),
         changeOrders: fcrChangeOrderTotal(readFcrPacket(pack.estimateKey)),
+        companyLogo: await fetchEstimateCompanyLogo(boundClient, boundSite),
       });
       if (!bytes.byteLength) throw new Error("empty-workbook");
       downloadXlsx(estimateXlsxFilename({ site: boundSite, title: name || crumb }), bytes);

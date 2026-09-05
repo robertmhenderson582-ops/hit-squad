@@ -2742,4 +2742,56 @@ describe("estimate excel export", () => {
     assert.equal(summary.getCell(`B${markupRow}`).numFmt, EXCEL_UNIT_FORMATS.currency);
     assert.equal(summary.getCell(`B${markupRow}`).alignment?.horizontal, "right");
   });
+
+  it("brands visible sheets with a faded company-logo splash and skips hidden helpers", async () => {
+    const logo =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const plain = await estimateToXlsx(woodRiverFixture());
+    const branded = await estimateToXlsx({ ...woodRiverFixture(), companyLogo: logo });
+    const wbPlain = new ExcelJS.Workbook();
+    const wbBrand = new ExcelJS.Workbook();
+    await wbPlain.xlsx.load(Buffer.from(plain));
+    await wbBrand.xlsx.load(Buffer.from(branded));
+    const plainBg = wbPlain.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.getBackgroundImageId();
+    assert.equal(plainBg === undefined || plainBg === null || plainBg === "", true);
+    const visible = wbBrand.worksheets.filter((sheet) => sheet.state === "visible");
+    const hidden = wbBrand.worksheets.filter((sheet) => sheet.state !== "visible");
+    assert.ok(visible.length >= 4);
+    for (const sheet of visible) {
+      const id = sheet.getBackgroundImageId();
+      assert.equal(id === undefined || id === null || id === "", false, sheet.name);
+    }
+    assert.ok(hidden.some((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.lists));
+    assert.ok(hidden.some((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.jobDays));
+    for (const sheet of hidden) {
+      const id = sheet.getBackgroundImageId();
+      assert.equal(id === undefined || id === null || id === "", true, sheet.name);
+    }
+
+    const { default: JSZip } = await import("jszip");
+    const zipPlain = await JSZip.loadAsync(plain);
+    const zipBrand = await JSZip.loadAsync(branded);
+    assert.equal(Object.keys(zipPlain.files).some((name) => name.startsWith("xl/media/")), false);
+    assert.equal(Object.keys(zipBrand.files).some((name) => name.startsWith("xl/media/")), true);
+    const sheetXml = await Promise.all(
+      Object.keys(zipBrand.files)
+        .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+        .map(async (name) => ({ name, xml: (await zipBrand.file(name)?.async("string")) ?? "" })),
+    );
+    const pictured = sheetXml.filter((row) => /<picture\b/.test(row.xml));
+    assert.equal(pictured.length, visible.length);
+    const helpers = sheetXml.filter((row) => !/<picture\b/.test(row.xml));
+    assert.ok(helpers.length >= 2);
+
+    const src = readFileSync(fileURLToPath(new URL("./estimate-xlsx.ts", import.meta.url)), "utf8");
+    const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
+    const importer = readFileSync(fileURLToPath(new URL("./estimate-xlsx-import.ts", import.meta.url)), "utf8");
+    const pack = readFileSync(fileURLToPath(new URL("./estimate-pack-xlsx.ts", import.meta.url)), "utf8");
+    assert.match(src, /companyLogo/);
+    assert.match(workspace, /\/api\/desk\/company-logo/);
+    assert.match(workspace, /companyLogo:/);
+    assert.equal(/companyDeskLogo/.test(workspace), false);
+    assert.equal(/companyLogo/.test(importer), false);
+    assert.equal(/companyLogo:/.test(pack), false);
+  });
 });
