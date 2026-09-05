@@ -21,7 +21,7 @@ import { useSession } from "@/components/SessionProvider";
 import { hydrateSupportLines } from "@/lib/craft-labor";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
 import { viewingAsOther } from "@/lib/desk-role";
-import { readFcrPacket } from "@/lib/change-order-packet";
+import { changeOrderTabLabel, readFcrPacket } from "@/lib/change-order-packet";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
 import { companyLogoFromApiPayload } from "@/lib/estimate-company-logo";
@@ -65,7 +65,9 @@ export type EstimateTab = (typeof BASE_ESTIMATE_TABS)[number]["id"] | typeof ROD
 
 export function estimateTabsForSite(site = "", client = "", status?: EstimateStatus) {
   void status;
-  const tabs: Array<{ id: EstimateTab; label: string; icon: string }> = [...BASE_ESTIMATE_TABS];
+  const tabs: Array<{ id: EstimateTab; label: string; icon: string }> = BASE_ESTIMATE_TABS.map((tab) =>
+    tab.id === "change-orders" ? { ...tab, label: changeOrderTabLabel(client, site) } : tab,
+  );
   if (showsRodeoTab(site, client)) {
     const idx = tabs.findIndex((item) => item.id === "wage-lookup");
     tabs.splice(idx < 0 ? tabs.length : idx, 0, { id: RODEO_TAB_ID, label: RODEO_TAB_LABEL, icon: "📋" });

@@ -7,7 +7,7 @@
  * sample dollars. When Misc sell-units or rod weights land, this path
  * picks them up automatically.
  */
-import { emptyFcrPacket, fcrSummary, normalizePeople, type FcrPacket } from "./change-order-packet.ts";
+import { fcrSummary, parseFcrPacket, type FcrPacket } from "./change-order-packet.ts";
 import { equipmentTotals, thirdPartyCost, type EquipmentSheet } from "./equipment-sheet.ts";
 import {
   CBA_INCREASE_LABEL,
@@ -114,16 +114,5 @@ export function fcrChangeOrderTotal(packet: FcrPacket | null | undefined): numbe
 }
 
 export function fcrFromUnknown(raw: unknown): FcrPacket {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return emptyFcrPacket();
-  const parsed = raw as Partial<FcrPacket>;
-  return {
-    ...emptyFcrPacket(),
-    ...parsed,
-    header: { ...emptyFcrPacket().header, ...parsed.header },
-    people: Array.isArray(parsed.people) ? normalizePeople(parsed.people) : [],
-    log: Array.isArray(parsed.log) ? parsed.log : [],
-    sub: Number(parsed.sub) || 0,
-    equipment: Number(parsed.equipment) || 0,
-    misc: Number(parsed.misc) || 0,
-  };
+  return parseFcrPacket(raw);
 }
