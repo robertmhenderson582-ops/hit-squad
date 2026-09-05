@@ -127,6 +127,7 @@ function isOn(value: unknown): boolean {
   return text === "ON" || text === "YES" || text === "TRUE" || text === "1" || text === "Y";
 }
 
+/** Job line on Summary A2 only. Title-block Prepared by / A3 is export-only. */
 function parseHeader(job: string): { title: string; client: string; site: string } {
   const parts = job.split(/\s+·\s+/).map((part) => part.trim()).filter(Boolean);
   return {

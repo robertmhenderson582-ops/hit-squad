@@ -369,12 +369,34 @@ export function headerMetaHeight(text: string, colWidth: number): number {
 }
 
 function applyHeaderMetaLayout(ws: ExcelJS.Worksheet, bandLastCol: number, wrap = true) {
-  for (const row of [2, 3] as const) {
+  for (const row of [1, 2, 3] as const) {
     const cell = ws.getCell(row, 1);
-    cell.alignment = { ...(cell.alignment ?? {}), vertical: "middle", wrapText: wrap };
+    cell.alignment = {
+      ...(cell.alignment ?? {}),
+      horizontal: "left",
+      vertical: "middle",
+      wrapText: wrap || row > 1,
+    };
+    if (row === 1) continue;
     ws.getRow(row).height = wrap
       ? headerMetaHeight(String(cell.value ?? ""), headerBandWidth(ws, bandLastCol))
       : HEADER_META_LINE_HEIGHT;
+  }
+}
+
+/** Keep A1–A3 readable in the instrument band after column-center pins. */
+function pinLaborTitleBlock(ws: ExcelJS.Worksheet) {
+  for (const row of [1, 2, 3] as const) {
+    const cell = ws.getCell(row, 1);
+    cell.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+    cell.font = {
+      ...(cell.font ?? {}),
+      color: { argb: WHITE },
+      name: "Calibri",
+      size: row === 1 ? 14 : 9,
+      bold: row === 1,
+      italic: row === 3,
+    };
   }
 }
 
@@ -450,7 +472,7 @@ function applyRowStyle(
   if (row === 1) {
     exCell.font = { bold: true, size: 14, color: { argb: WHITE }, name: "Calibri" };
     exCell.fill = solid(STEEL);
-    exCell.alignment = { vertical: "middle" };
+    exCell.alignment = { horizontal: "left", vertical: "middle" };
     exCell.border = { bottom: edge("medium", AMBER_FLARE) };
     return;
   }
@@ -1377,8 +1399,8 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
     }
     applyHeaderMetaLayout(
       ws,
-      labor ? Math.max(LABOR_INSTRUMENT_LAST_COL, lastVisibleColNum) : isSummary ? 3 : lastVisibleColNum,
-      !labor,
+      labor ? LABOR_INSTRUMENT_LAST_COL : isSummary ? 3 : lastVisibleColNum,
+      true,
     );
     if (!labor) ws.getRow(6).height = 20;
     ws.autoFilter = undefined;
@@ -1402,7 +1424,8 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
     }
     if (labor) {
       pinLaborCraftAlignment(ws, lastVisibleColNum, maxRow);
-      applyHeaderMetaLayout(ws, Math.max(LABOR_INSTRUMENT_LAST_COL, lastVisibleColNum), false);
+      pinLaborTitleBlock(ws);
+      applyHeaderMetaLayout(ws, LABOR_INSTRUMENT_LAST_COL, true);
       pinLaborEvenRows(ws, sheet, lastVisibleColNum, maxRow);
     }
     pinHoursAndMoney(ws, sheet, lastVisibleColNum, maxRow, labor, isSummary);

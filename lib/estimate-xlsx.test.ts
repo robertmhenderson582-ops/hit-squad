@@ -14,6 +14,8 @@ import {
   ESTIMATE_EXPORT_CONFIDENTIAL,
   ESTIMATE_EXPORT_ERROR,
   ESTIMATE_EXPORT_PRODUCER,
+  ESTIMATE_PREPARED_BY_LABEL,
+  exporterDisplayName,
   ESTIMATE_HOURS_LINE,
   ESTIMATE_SUMMARY_AMOUNT,
   ESTIMATE_SUMMARY_HOURS,
@@ -414,17 +416,20 @@ describe("estimate excel export", () => {
     assert.equal(summarySheet.getCell("A3").alignment?.wrapText, true);
     assert.equal(Number(summarySheet.getRow(2).height), HEADER_META_WRAP_HEIGHT);
     assert.equal(Number(summarySheet.getRow(3).height), HEADER_META_WRAP_HEIGHT);
-    assert.equal(Number(staffSheet.getRow(2).height), HEADER_META_LINE_HEIGHT);
-    assert.equal(Number(staffSheet.getRow(3).height), HEADER_META_LINE_HEIGHT);
-    assert.equal(Boolean(staffSheet.getCell("A2").alignment?.wrapText), false);
-    assert.equal(Boolean(staffSheet.getCell("A3").alignment?.wrapText), false);
+    assert.equal(Number(staffSheet.getRow(2).height) >= HEADER_META_LINE_HEIGHT, true);
+    assert.equal(Number(staffSheet.getRow(3).height) >= HEADER_META_LINE_HEIGHT, true);
+    assert.equal(Boolean(staffSheet.getCell("A2").alignment?.wrapText), true);
+    assert.equal(Boolean(staffSheet.getCell("A3").alignment?.wrapText), true);
+    assert.equal(staffSheet.getCell("A2").alignment?.horizontal, "left");
+    assert.equal(staffSheet.getCell("A3").alignment?.horizontal, "left");
     const staffMerges = ((staffSheet.model as { merges?: string[] }).merges ?? []) as string[];
     const brandMerge = staffMerges.find((merge) => /^A1:[A-Z]+1$/.test(merge));
     assert.ok(brandMerge);
     const lastHeaderCol = brandMerge.slice(3, -1);
-    assert.ok(lastHeaderCol !== "I");
+    assert.equal(lastHeaderCol, "I");
     assert.ok(staffMerges.includes(`A2:${lastHeaderCol}2`));
     assert.ok(staffMerges.includes(`A3:${lastHeaderCol}3`));
+    assert.equal(staffMerges.some((merge) => /^A1:[J-Z]/.test(merge)), false);
     const headerFill = (cell: ExcelJS.Cell) =>
       String((cell.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "")
         .replace(/^FF/i, "")
@@ -1213,9 +1218,10 @@ describe("estimate excel export", () => {
     assert.equal(argb(direct.getCell("A14")), LABOR_SPACER.slice(2));
     const lastDateCol = colLetter(LABOR_DATE_START_COL + laborCalendarDates(input).length - 1);
     const directMerges = ((direct.model as { merges?: string[] }).merges ?? []) as string[];
-    assert.ok(directMerges.includes(`A1:${lastDateCol}1`));
-    assert.ok(directMerges.includes(`A2:${lastDateCol}2`));
-    assert.ok(directMerges.includes(`A3:${lastDateCol}3`));
+    assert.ok(directMerges.includes("A1:I1"));
+    assert.ok(directMerges.includes("A2:I2"));
+    assert.ok(directMerges.includes("A3:I3"));
+    assert.equal(directMerges.includes(`A1:${lastDateCol}1`), false);
     for (const merge of laborBlockVoidMerges(directModel.laborBlocks ?? [])) {
       assert.ok(directMerges.includes(merge), merge);
     }
@@ -2314,17 +2320,17 @@ describe("estimate excel export", () => {
     assert.equal(staff.hiddenCols?.includes(LABOR_BLOCK_ID_COL), true);
     const lastDateCol = colLetter(LABOR_DATE_START_COL + dates.length - 1);
     assert.deepEqual(staff.merges, [
-      `A1:${lastDateCol}1`,
-      `A2:${lastDateCol}2`,
-      `A3:${lastDateCol}3`,
+      "A1:I1",
+      "A2:I2",
+      "A3:I3",
       "A4:I5",
       `J4:${lastDateCol}4`,
       ...laborBlockVoidMerges(staff.laborBlocks ?? []),
     ]);
     assert.deepEqual(direct.merges, [
-      `A1:${lastDateCol}1`,
-      `A2:${lastDateCol}2`,
-      `A3:${lastDateCol}3`,
+      "A1:I1",
+      "A2:I2",
+      "A3:I3",
       "A4:I5",
       `J4:${lastDateCol}4`,
       ...laborBlockVoidMerges(direct.laborBlocks ?? []),
@@ -2338,9 +2344,9 @@ describe("estimate excel export", () => {
     assert.equal(staff.cells.some((cell) => cell.type === "text" && cell.value === LABOR_BILL_AS_LABEL), false);
     assert.deepEqual(support.billAs, [{ labelRow: fire.st, valueRow: fire.ot }]);
     assert.deepEqual(support.merges, [
-      `A1:${lastDateCol}1`,
-      `A2:${lastDateCol}2`,
-      `A3:${lastDateCol}3`,
+      "A1:I1",
+      "A2:I2",
+      "A3:I3",
       "A4:I5",
       `J4:${lastDateCol}4`,
       ...laborBlockVoidMerges(support.laborBlocks ?? [], { billAs: true }),
@@ -2793,5 +2799,35 @@ describe("estimate excel export", () => {
     assert.equal(/companyDeskLogo/.test(workspace), false);
     assert.equal(/companyLogo/.test(importer), false);
     assert.equal(/companyLogo:/.test(pack), false);
+  });
+
+  it("fills the A–I title-block with Prepared by and does not invent a name", async () => {
+    assert.equal(exporterDisplayName("Robert Henderson", "other@example.com"), "Robert Henderson");
+    assert.equal(exporterDisplayName("  ", "nathan.boyte@example.com"), "nathan boyte");
+    assert.equal(exporterDisplayName("", ""), null);
+    const staff = sheetOf(buildEstimateWorkbook({ ...woodRiverFixture(), preparedBy: "Nathan Boyte" }), ESTIMATE_XLSX_SHEETS.staff);
+    assert.ok(staff);
+    assert.equal(staff.cells.find((cell) => cell.ref === "A1")?.value, ESTIMATE_EXPORT_BRAND);
+    assert.match(String(staff.cells.find((cell) => cell.ref === "A2")?.value), /Unit 3 mechanical/);
+    assert.match(String(staff.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(`${ESTIMATE_PREPARED_BY_LABEL}: Nathan Boyte`));
+    assert.match(String(staff.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(ESTIMATE_EXPORT_PRODUCER));
+    assert.deepEqual(
+      staff.merges?.slice(0, 3),
+      ["A1:I1", "A2:I2", "A3:I3"],
+    );
+    assert.equal(
+      staff.cells.some((cell) => cell.ref.startsWith("C") && String(cell.value ?? "").startsWith("SUM(C")),
+      true,
+    );
+    const bare = sheetOf(buildEstimateWorkbook(woodRiverFixture()), ESTIMATE_XLSX_SHEETS.summary);
+    assert.ok(bare);
+    assert.equal(/Prepared by/.test(String(bare.cells.find((cell) => cell.ref === "A3")?.value)), false);
+
+    const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
+    const importer = readFileSync(fileURLToPath(new URL("./estimate-xlsx-import.ts", import.meta.url)), "utf8");
+    assert.match(workspace, /preparedBy:/);
+    assert.match(workspace, /exporterDisplayName/);
+    assert.match(importer, /export-only/);
+    assert.equal(/preparedBy/.test(importer), false);
   });
 });

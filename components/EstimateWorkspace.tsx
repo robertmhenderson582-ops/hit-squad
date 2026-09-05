@@ -17,6 +17,7 @@ import { ModalPortal } from "@/components/ModalPortal";
 import { WageLookupDesk } from "@/components/WageLookupDesk";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useSession } from "@/components/SessionProvider";
 import { hydrateSupportLines } from "@/lib/craft-labor";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
 import { viewingAsOther } from "@/lib/desk-role";
@@ -29,6 +30,7 @@ import {
   ESTIMATE_IMPORT_ERROR,
   estimateToXlsx,
   estimateXlsxFilename,
+  exporterDisplayName,
 } from "@/lib/estimate-xlsx";
 import {
   applyEstimateImport,
@@ -125,6 +127,7 @@ export function EstimateWorkspace({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const { user } = useSession();
   const pack = useEstimatePackage();
   const desk = useOwnerDesk();
   const importBlocked = viewingAsOther(desk?.viewAs);
@@ -162,6 +165,7 @@ export function EstimateWorkspace({
         subcontractor: readSubSheet(pack.estimateKey),
         changeOrders: fcrChangeOrderTotal(readFcrPacket(pack.estimateKey)),
         companyLogo: await fetchEstimateCompanyLogo(boundClient, boundSite),
+        preparedBy: exporterDisplayName(user?.name, user?.email),
       });
       if (!bytes.byteLength) throw new Error("empty-workbook");
       downloadXlsx(estimateXlsxFilename({ site: boundSite, title: name || crumb }), bytes);

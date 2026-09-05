@@ -145,6 +145,7 @@ export const ESTIMATE_IMPORT_ERROR = "Could not import that workbook. Use a Hit 
 export const ESTIMATE_EXPORT_PRODUCER = "Produced by Hit Squad Project Controls";
 export const ESTIMATE_EXPORT_BRAND = "HIT SQUAD / PROJECT CONTROLS";
 export const ESTIMATE_EXPORT_CONFIDENTIAL = "Confidential estimate package";
+export const ESTIMATE_PREPARED_BY_LABEL = "Prepared by";
 export const ESTIMATE_SUMMARY_AMOUNT = "Amount $";
 export const ESTIMATE_SUMMARY_HOURS = "Man-hours (MH)";
 export const ESTIMATE_HOURS_LINE = "Man-hours";
@@ -274,6 +275,8 @@ export type EstimateXlsxInput = {
   changeOrders?: number;
   /** Live company-record logo (companyLogoSrc). Export-only; import does not store it. */
   companyLogo?: string | null;
+  /** Signed-in exporter display name. Export-only; import ignores it. */
+  preparedBy?: string | null;
 };
 
 type CrewLane = "staff" | "craft";
@@ -414,6 +417,25 @@ function exportProducedLabel(when = new Date()): string {
   return `Produced ${stamp}`;
 }
 
+/** Session display name, else email local-part. Never invents a person. */
+export function exporterDisplayName(name?: string | null, email?: string | null): string | null {
+  const display = (name ?? "").replace(/\s+/g, " ").trim();
+  if (display) return display;
+  const local = (email ?? "").trim().split("@")[0] ?? "";
+  const fromEmail = local.replace(/[._+]+/g, " ").replace(/\s+/g, " ").trim();
+  return fromEmail || null;
+}
+
+function headerByline(input: EstimateXlsxInput, when = new Date()): string {
+  const prepared = exporterDisplayName(input.preparedBy, null);
+  const who = prepared ? `${ESTIMATE_PREPARED_BY_LABEL}: ${prepared}  ·  ` : "";
+  return `${who}${ESTIMATE_EXPORT_PRODUCER}  ·  ${ESTIMATE_EXPORT_CONFIDENTIAL}  ·  ${exportProducedLabel(when)}`;
+}
+
+function headerTitleMerges(lastCol: string): string[] {
+  return [`A1:${lastCol}1`, `A2:${lastCol}2`, `A3:${lastCol}3`];
+}
+
 function headerCells(input: EstimateXlsxInput, when = new Date()): SheetCell[] {
   const clock = boundOtLabel(input.site ?? "", input.client ?? "", input.plantCode ?? "");
   const title = (input.title || "").trim() || "Estimate";
@@ -421,11 +443,7 @@ function headerCells(input: EstimateXlsxInput, when = new Date()): SheetCell[] {
   return [
     { ref: "A1", type: "text", value: ESTIMATE_EXPORT_BRAND },
     { ref: "A2", type: "text", value: job },
-    {
-      ref: "A3",
-      type: "text",
-      value: `${ESTIMATE_EXPORT_PRODUCER}  ·  ${ESTIMATE_EXPORT_CONFIDENTIAL}  ·  ${exportProducedLabel(when)}`,
-    },
+    { ref: "A3", type: "text", value: headerByline(input, when) },
   ];
 }
 
@@ -1158,9 +1176,7 @@ function buildCrewSheet(
       : undefined,
     validations: laborPositionValidations(name, laborBlocks, Boolean(showBillAs)),
     merges: [
-      `A1:${lastDateCol || "I"}1`,
-      `A2:${lastDateCol || "I"}2`,
-      `A3:${lastDateCol || "I"}3`,
+      ...headerTitleMerges(colLetter(LABOR_DATE_START_COL - 1)),
       ...phaseBand.merges,
       // Full title→PD range: HC/HPS sit between the summary and ST/OT/DT/PD rows.
       // Support splits B: Position (title–HPS) + Bill as value (OT–PD).
