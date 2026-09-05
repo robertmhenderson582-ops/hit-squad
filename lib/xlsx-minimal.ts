@@ -75,11 +75,32 @@ export function colLetter(index: number): string {
   return out;
 }
 
-export type SheetCell =
-  | { ref: string; type: "text"; value: string }
-  | { ref: string; type: "number"; value: number }
-  | { ref: string; type: "formula"; value: string }
-  | { ref: string; type: "date"; value: Date };
+export function colIndex(col: string): number {
+  let n = 0;
+  for (const ch of col.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n;
+}
+
+export function parseA1(ref: string): { col: string; row: number; colNum: number } {
+  const match = /^([A-Z]+)(\d+)$/i.exec(ref.trim());
+  if (!match) return { col: "A", row: 1, colNum: 1 };
+  const col = match[1].toUpperCase();
+  return { col, row: Number(match[2]), colNum: colIndex(col) };
+}
+
+/** Hover note written as an Excel comment (not VBA). Import ignores these. */
+export type WorkbookComment = { ref: string; text: string };
+
+export type SheetCell = {
+  ref: string;
+  /** Excel comment / note. Chrome only — import does not read it. */
+  note?: string;
+} & (
+  | { type: "text"; value: string }
+  | { type: "number"; value: number }
+  | { type: "formula"; value: string }
+  | { type: "date"; value: Date }
+);
 
 export function buildSheetXml(cells: SheetCell[], merges: string[] = []): string {
   const byRow = new Map<number, SheetCell[]>();
@@ -145,6 +166,8 @@ export type WorkbookSheet = {
   validations?: Array<{ sqref: string; formulae: string[] }>;
   /** Extra unlocked cells (Job setup + cost-sheet estimator inputs). */
   unlocked?: Array<{ row: number; col: number }>;
+  /** Hover comments for refs that have no cell, or extras beyond `cell.note`. */
+  comments?: WorkbookComment[];
   /** Very-hidden helper sheets (Position lists). */
   veryHidden?: boolean;
 };

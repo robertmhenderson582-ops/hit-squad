@@ -54,6 +54,8 @@ import {
   RATE_RENTAL_SECTION,
   RATE_TOOLS_SECTION,
   sheetRef,
+  XLSX_INPUT_NOTES,
+  XLSX_TYPE_NOTES,
 } from "./estimate-xlsx.ts";
 import { commercialMarkupRate } from "./estimate-total.ts";
 import {
@@ -281,6 +283,13 @@ function laborHours(sheet: WorkbookSheet, position: string, shift = LABOR_DAYSHI
     dt: title + 5,
     pd: title + 6,
   };
+}
+
+function excelNoteText(cell: ExcelJS.Cell): string {
+  const note = cell.note as string | { texts?: Array<{ text?: string }> } | undefined;
+  if (!note) return "";
+  if (typeof note === "string") return note;
+  return (note.texts ?? []).map((part) => part.text ?? "").join("");
 }
 
 function laborHrsRef(block: { title: number }, kind: "st" | "ot" | "dt") {
@@ -1618,6 +1627,84 @@ describe("estimate excel export", () => {
     const misc = sheetOf(buildEstimateWorkbook(woodRiverFixture()), ESTIMATE_XLSX_SHEETS.misc);
     assert.ok(misc?.unlocked?.some((cell) => cell.row === 7 && cell.col === 1));
     assert.equal(misc?.unlocked?.some((cell) => cell.row === 7 && cell.col === 5), false);
+  });
+
+  it("adds hover comments on Type chips and every unlocked input", async () => {
+    const input = {
+      ...woodRiverFixture(),
+      crew: {
+        ...woodRiverFixture().crew,
+        support: [craft("su-1", "Fire Watch", 10, { perDiemPeople: 1, otAfter8: true, billedAs: "Boilermaker Journeyman" })],
+      },
+    };
+    const model = buildEstimateWorkbook(input);
+    const staffModel = sheetOf(model, ESTIMATE_XLSX_SHEETS.staff)!;
+    const staffRows = laborHours(staffModel, "Superintendent 01");
+    const staffCells = cellMap(staffModel);
+    assert.equal(staffCells.get(`E${staffRows.title}`)?.note, XLSX_TYPE_NOTES[LABOR_CLOCK_AUTO]);
+    assert.equal(staffCells.get(`E${staffRows.hc}`)?.note, XLSX_TYPE_NOTES.HC);
+    assert.equal(staffCells.get(`E${staffRows.hps}`)?.note, XLSX_TYPE_NOTES.HPS);
+    assert.equal(staffCells.get(`E${staffRows.st}`)?.note, XLSX_TYPE_NOTES.ST);
+    assert.equal(staffCells.get(`E${staffRows.ot}`)?.note, XLSX_TYPE_NOTES.OT);
+    assert.equal(staffCells.get(`E${staffRows.dt}`)?.note, XLSX_TYPE_NOTES.DT);
+    assert.equal(staffCells.get(`E${staffRows.pd}`)?.note, XLSX_TYPE_NOTES.PD);
+    assert.equal(staffCells.get(`B${staffRows.title}`)?.note, XLSX_INPUT_NOTES.position);
+    assert.equal(staffCells.get(`J${staffRows.hc}`)?.note, XLSX_TYPE_NOTES.HC);
+    assert.equal(staffCells.get(`J${staffRows.hps}`)?.note, XLSX_TYPE_NOTES.HPS);
+    assert.equal(staffCells.get(`J${staffRows.pd}`)?.note, XLSX_TYPE_NOTES.PD);
+    assert.equal(staffCells.get(`J${staffRows.st}`)?.note, undefined);
+
+    const supportModel = sheetOf(model, ESTIMATE_XLSX_SHEETS.support)!;
+    const supportRows = laborHours(supportModel, "Fire Watch");
+    const billAs = supportModel.billAs?.[0];
+    assert.ok(billAs);
+    assert.equal(cellMap(supportModel).get(`B${billAs.valueRow}`)?.note, XLSX_INPUT_NOTES.billAs);
+    assert.equal(cellMap(supportModel).get(`E${supportRows.hc}`)?.note, XLSX_TYPE_NOTES.HC);
+
+    const setupModel = sheetOf(model, ESTIMATE_XLSX_SHEETS.jobSetup)!;
+    const setupCells = cellMap(setupModel);
+    assert.equal(setupCells.get("B7")?.note, XLSX_INPUT_NOTES.on);
+    assert.equal(setupCells.get("C7")?.note, XLSX_INPUT_NOTES.start);
+    assert.equal(setupCells.get("D7")?.note, XLSX_INPUT_NOTES.stop);
+    assert.equal(setupCells.get("E7")?.note, XLSX_INPUT_NOTES.daysPerWeek);
+    assert.equal(setupCells.get("F7")?.note, XLSX_INPUT_NOTES.hoursPerDay);
+    assert.equal(setupCells.get("G7")?.note, XLSX_INPUT_NOTES.ot);
+
+    const miscModel = sheetOf(model, ESTIMATE_XLSX_SHEETS.misc)!;
+    assert.equal(cellMap(miscModel).get("C7")?.note, XLSX_INPUT_NOTES.quantity);
+    assert.equal(cellMap(miscModel).get("D7")?.note, XLSX_INPUT_NOTES.rate);
+    assert.equal(cellMap(miscModel).get("E7")?.note, undefined);
+
+    const rentalModel = sheetOf(model, ESTIMATE_XLSX_SHEETS.rental)!;
+    assert.equal(cellMap(rentalModel).get("B7")?.note, XLSX_INPUT_NOTES.period);
+    assert.equal(cellMap(rentalModel).get("C7")?.note, XLSX_INPUT_NOTES.quantity);
+    assert.equal(cellMap(rentalModel).get("E7")?.note, XLSX_INPUT_NOTES.rate);
+
+    const bytes = await estimateToXlsx(input);
+    const parts = zipParts(bytes);
+    assert.equal(parts.some((part) => /xl\/comments\d+\.xml$/.test(part)), true);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const staff = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    const setup = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup);
+    const misc = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc);
+    const rental = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rental);
+    const support = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.support);
+    assert.ok(staff && setup && misc && rental && support);
+    assert.equal(excelNoteText(staff.getCell(`E${staffRows.title}`)), XLSX_TYPE_NOTES[LABOR_CLOCK_AUTO]);
+    assert.equal(excelNoteText(staff.getCell(`E${staffRows.hc}`)), XLSX_TYPE_NOTES.HC);
+    assert.equal(excelNoteText(staff.getCell(`E${staffRows.hps}`)), XLSX_TYPE_NOTES.HPS);
+    assert.equal(excelNoteText(staff.getCell(`E${staffRows.st}`)), XLSX_TYPE_NOTES.ST);
+    assert.equal(excelNoteText(staff.getCell(`E${staffRows.ot}`)), XLSX_TYPE_NOTES.OT);
+    assert.equal(excelNoteText(staff.getCell(`E${staffRows.dt}`)), XLSX_TYPE_NOTES.DT);
+    assert.equal(excelNoteText(staff.getCell(`E${staffRows.pd}`)), XLSX_TYPE_NOTES.PD);
+    assert.equal(excelNoteText(staff.getCell("J8")), XLSX_TYPE_NOTES.HC);
+    assert.equal(excelNoteText(staff.getCell("J10")), "");
+    assert.equal(excelNoteText(setup.getCell("E7")), XLSX_INPUT_NOTES.daysPerWeek);
+    assert.equal(excelNoteText(misc.getCell("C7")), XLSX_INPUT_NOTES.quantity);
+    assert.equal(excelNoteText(misc.getCell("D7")), XLSX_INPUT_NOTES.rate);
+    assert.equal(excelNoteText(rental.getCell("B7")), XLSX_INPUT_NOTES.period);
+    assert.equal(excelNoteText(support.getCell(`B${supportRows.ot}`)), XLSX_INPUT_NOTES.billAs);
   });
 
   it("lists daily / weekly / monthly on COE and rental Period cells", async () => {

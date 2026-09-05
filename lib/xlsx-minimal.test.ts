@@ -78,4 +78,28 @@ describe("xlsx-minimal Excel-strict package", () => {
     assert.equal(String(sub.getCell("A8").value), "COE item > flange");
     assert.match(String((sub.getCell("H11").value as { formula?: string }).formula ?? ""), /SUM\(H7:H10\)/);
   });
+
+  it("writes Excel comments from cell.note and sheet.comments", async () => {
+    const bytes = await buildWorkbook([
+      {
+        name: "Notes",
+        cells: [{ ref: "A1", type: "text", value: "HC", note: "Headcount for that day." }],
+        comments: [{ ref: "B2", text: "Enter quantity." }],
+      },
+    ]);
+    const parts = writeAndListZip(bytes);
+    assert.equal(parts.some((part) => /xl\/comments\d+\.xml$/.test(part)), true);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const sheet = wb.getWorksheet("Notes");
+    assert.ok(sheet);
+    const noteOf = (ref: string) => {
+      const note = sheet.getCell(ref).note as string | { texts?: Array<{ text?: string }> } | undefined;
+      if (!note) return "";
+      if (typeof note === "string") return note;
+      return (note.texts ?? []).map((part) => part.text ?? "").join("");
+    };
+    assert.equal(noteOf("A1"), "Headcount for that day.");
+    assert.equal(noteOf("B2"), "Enter quantity.");
+  });
 });

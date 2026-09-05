@@ -443,6 +443,24 @@ function applySheetUnlocks(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
   }
 }
 
+function noteText(text: string | undefined): string {
+  return (text ?? "").replace(/\s+/g, " ").trim();
+}
+
+/** Excel comments / notes — hover popups. Not VBA. Import ignores these. */
+function applySheetComments(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
+  const apply = (ref: string, text: string | undefined) => {
+    const body = noteText(text);
+    if (!body) return;
+    const { row, colNum } = parseRef(ref);
+    ws.getCell(row, colNum).note = {
+      texts: [{ font: { size: 9, name: "Calibri", color: { argb: DARK_TEXT } }, text: body }],
+    };
+  };
+  for (const cell of sheet.cells) apply(cell.ref, cell.note);
+  for (const comment of sheet.comments ?? []) apply(comment.ref, comment.text);
+}
+
 function columnWidth(col: string, header: string | undefined, sheetName: string): number {
   const lower = (header ?? "").toLowerCase();
   const colNum = colIndex(col);
@@ -1441,6 +1459,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
       }
     }
     applySheetUnlocks(ws, sheet);
+    applySheetComments(ws, sheet);
     await ws.protect(SHEET_PROTECT_PASSWORD, labor ? LABOR_SHEET_PROTECT_OPTIONS : SHEET_PROTECT_OPTIONS);
   }
 

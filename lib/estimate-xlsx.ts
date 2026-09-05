@@ -140,7 +140,15 @@ import { catalogSites } from "./desk-data.ts";
 import { clampEstimateStatus, parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { regularClientFromParts } from "./site-regular.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
-import { buildWorkbook, colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
+import {
+  buildWorkbook,
+  colLetter,
+  excelSafeSheetName,
+  parseA1,
+  type SheetCell,
+  type WorkbookComment,
+  type WorkbookSheet,
+} from "./xlsx-minimal.ts";
 
 export { EXCEL_JOB_SETUP_IMPORT_PARKED, EXCEL_RIPPLE_RETROACTIVE, EXCEL_RIPPLE_RULE } from "./excel-ripple.ts";
 export const ESTIMATE_EXPORT_ERROR = "Could not export. Try again.";
@@ -203,6 +211,145 @@ export const LABOR_CLOCK_COMP = "COMP clock";
 export const LABOR_CLOCK_PICKS = [LABOR_CLOCK_AUTO, LABOR_CLOCK_STAFF, LABOR_CLOCK_COMP] as const;
 /** Hidden per-block flag: TRUE = staff day formulas, FALSE = site COMP. */
 export const LABOR_CLOCK_FLAG_COL = LABOR_BLOCK_ID_COL - 1;
+
+/** Hover notes on Type chips — Excel comments, not VBA. Import ignores these. */
+export const XLSX_TYPE_NOTES = {
+  [LABOR_CLOCK_AUTO]:
+    "Clock pick: Auto follows the seat (staff vs COMP). Change to Staff clock or COMP clock to force one.",
+  [LABOR_CLOCK_STAFF]: "Clock pick: Staff clock forces the staff weekly-40 bank (ST then OT).",
+  [LABOR_CLOCK_COMP]: "Clock pick: COMP clock forces COMP daily OT after 8.",
+  HC: "Headcount for that day (yellow). Edit to change how many people that day.",
+  HPS: "Hours per shift that day (yellow). Edit the length of the shift.",
+  ST: "Straight-time hours (formula from HC × HPS + clock). Usually locked.",
+  OT: "Overtime hours (formula). Usually locked.",
+  DT: "Double-time hours (formula). Usually locked.",
+  PD: "Per-diem people-count for that day (yellow). Edit who gets PD that day.",
+} as const;
+
+export const XLSX_INPUT_NOTES = {
+  position: "Craft / role title for this block.",
+  billAs: "Support billing class. Changes how this seat bills.",
+  quantity: "Enter quantity.",
+  rate: "Enter unit rate.",
+  period: "daily / weekly / monthly",
+  periods: "How many periods to bill.",
+  daysPerWeek: "Days worked per week (4–7).",
+  hoursPerDay: "Hours per day (8 / 9 / 10 / 12 / 13).",
+  start: "Phase start date.",
+  stop: "Phase stop date.",
+  on: "ON = this range is working. OFF = out.",
+  ot: "OT YES/NO for this range. YES uses the OT clock.",
+  item: "Line name or catalog item.",
+  description: "What this line is.",
+  scope: "What this line covers.",
+  vendor: "Vendor or supplier name.",
+  affiliate: "Yes if affiliate (no markup).",
+  freight: "Freight or delivery cost.",
+  kind: "Staff or craft travel.",
+  travelers: "How many people traveling.",
+  miles: "Miles for this trip.",
+  notes: "Optional note.",
+  fallback: "Editable input for this line.",
+} as const;
+
+const LABOR_SHEET_NAMES = new Set(["Staff", "Foremen", "Direct", "Support"]);
+
+function textAt(cells: SheetCell[], ref: string): string {
+  const cell = cells.find((item) => item.ref === ref);
+  return cell?.type === "text" ? cell.value : "";
+}
+
+export function typeLabelNote(label: string): string | undefined {
+  const key = label.trim();
+  if (key in XLSX_TYPE_NOTES) return XLSX_TYPE_NOTES[key as keyof typeof XLSX_TYPE_NOTES];
+  return undefined;
+}
+
+export function headerInputNote(header: string): string | undefined {
+  const h = header.trim().toLowerCase();
+  if (!h) return undefined;
+  if (h === "qty" || h === "quantity") return XLSX_INPUT_NOTES.quantity;
+  if (h === "rate $" || h === "each $" || h === "$ / mile" || h === "rate") return XLSX_INPUT_NOTES.rate;
+  if (h === "period") return XLSX_INPUT_NOTES.period;
+  if (h === "periods") return XLSX_INPUT_NOTES.periods;
+  if (h === "days/wk") return XLSX_INPUT_NOTES.daysPerWeek;
+  if (h === "hrs/day") return XLSX_INPUT_NOTES.hoursPerDay;
+  if (h === "start") return XLSX_INPUT_NOTES.start;
+  if (h === "stop") return XLSX_INPUT_NOTES.stop;
+  if (h === "on") return XLSX_INPUT_NOTES.on;
+  if (h === "ot after 8") return XLSX_INPUT_NOTES.ot;
+  if (h === "item") return XLSX_INPUT_NOTES.item;
+  if (h === "description") return XLSX_INPUT_NOTES.description;
+  if (h === "scope") return XLSX_INPUT_NOTES.scope;
+  if (h === "vendor") return XLSX_INPUT_NOTES.vendor;
+  if (h === "affiliate") return XLSX_INPUT_NOTES.affiliate;
+  if (h === "freight $") return XLSX_INPUT_NOTES.freight;
+  if (h === "kind") return XLSX_INPUT_NOTES.kind;
+  if (h === "travelers") return XLSX_INPUT_NOTES.travelers;
+  if (h === "miles") return XLSX_INPUT_NOTES.miles;
+  if (h === "notes") return XLSX_INPUT_NOTES.notes;
+  return XLSX_INPUT_NOTES.fallback;
+}
+
+function laborRowOffset(sheet: WorkbookSheet, row: number): number | null {
+  for (const block of sheet.laborBlocks ?? []) {
+    if (row >= block.start && row <= block.end) return row - block.start;
+  }
+  return null;
+}
+
+/** Attach hover notes to Type chips, Position / Bill as, and every unlocked input. */
+export function attachEstimateComments(sheet: WorkbookSheet): WorkbookSheet {
+  const notes = new Map<string, string>();
+  const add = (ref: string, text: string | undefined) => {
+    const body = (text ?? "").replace(/\s+/g, " ").trim();
+    if (!ref || !body || notes.has(ref)) return;
+    notes.set(ref, body);
+  };
+
+  for (const cell of sheet.cells) add(cell.ref, cell.note);
+  for (const comment of sheet.comments ?? []) add(comment.ref, comment.text);
+
+  if (LABOR_SHEET_NAMES.has(sheet.name)) {
+    for (const block of sheet.laborBlocks ?? []) {
+      add(`E${block.start}`, typeLabelNote(textAt(sheet.cells, `E${block.start}`)) ?? XLSX_TYPE_NOTES[LABOR_CLOCK_AUTO]);
+      add(`E${block.start + LABOR_HC_OFFSET}`, XLSX_TYPE_NOTES.HC);
+      add(`E${block.start + LABOR_HPS_OFFSET}`, XLSX_TYPE_NOTES.HPS);
+      add(`E${block.start + LABOR_ST_OFFSET}`, XLSX_TYPE_NOTES.ST);
+      add(`E${block.start + LABOR_OT_OFFSET}`, XLSX_TYPE_NOTES.OT);
+      add(`E${block.start + LABOR_DT_OFFSET}`, XLSX_TYPE_NOTES.DT);
+      add(`E${block.start + LABOR_PD_OFFSET}`, XLSX_TYPE_NOTES.PD);
+      add(`B${block.start}`, XLSX_INPUT_NOTES.position);
+    }
+    for (const slot of sheet.billAs ?? []) {
+      add(`B${slot.valueRow}`, XLSX_INPUT_NOTES.billAs);
+    }
+    for (const cell of sheet.cells) {
+      const { colNum, row } = parseA1(cell.ref);
+      if (colNum < LABOR_DATE_START_COL) continue;
+      const offset = laborRowOffset(sheet, row);
+      if (offset === LABOR_HC_OFFSET) add(cell.ref, XLSX_TYPE_NOTES.HC);
+      else if (offset === LABOR_HPS_OFFSET) add(cell.ref, XLSX_TYPE_NOTES.HPS);
+      else if (offset === LABOR_PD_OFFSET) add(cell.ref, XLSX_TYPE_NOTES.PD);
+    }
+  }
+
+  for (const { row, col } of sheet.unlocked ?? []) {
+    const ref = `${colLetter(col)}${row}`;
+    if (notes.has(ref)) continue;
+    add(ref, headerInputNote(textAt(sheet.cells, `${colLetter(col)}6`)));
+  }
+
+  const leftovers: WorkbookComment[] = [];
+  const cells = sheet.cells.map((cell) => {
+    const note = notes.get(cell.ref);
+    if (!note) return cell;
+    notes.delete(cell.ref);
+    return cell.note === note ? cell : { ...cell, note };
+  });
+  for (const [ref, text] of notes) leftovers.push({ ref, text });
+  return { ...sheet, cells, comments: leftovers.length ? leftovers : undefined };
+}
 
 export function clockOverrideLabel(override: ClockOverride = "auto"): string {
   if (override === "staff") return LABOR_CLOCK_STAFF;
@@ -1799,7 +1946,13 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   const lists = { ...buildListsSheet(), name: xlsxName(ESTIMATE_XLSX_SHEETS.lists) };
   const jobDays = buildJobDaysSheet(laborCalendarDates(input));
   const helpers = jobDays ? [{ ...jobDays, name: xlsxName(ESTIMATE_XLSX_SHEETS.jobDays) }] : [];
-  return [{ ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) }, setup, ...body, lists, ...helpers];
+  return [
+    { ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) },
+    setup,
+    ...body,
+    lists,
+    ...helpers,
+  ].map(attachEstimateComments);
 }
 
 export async function estimateToXlsx(input: EstimateXlsxInput = {}): Promise<Uint8Array> {
