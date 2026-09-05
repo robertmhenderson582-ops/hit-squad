@@ -1,6 +1,19 @@
 export const BUILDERS_RISK_YATES = 0.00834;
 export const ESTIMATE_MARKUP_RATE = 0.065;
+export const YATES_MARKUP_RATE = 0.1;
 export const ESTIMATE_MARKUP_LABEL = "6.5% markup";
+
+/** RRFF / COMP commercial fee. P66 PCA plants 6.5%. Yates materials/rentals/subs 10%. Not B-2 Cost+6%. */
+export function commercialMarkupRate(client = "", site = ""): number {
+  if (isYatesGeorgiaJob(client, site)) return YATES_MARKUP_RATE;
+  return ESTIMATE_MARKUP_RATE;
+}
+
+export function commercialMarkupLabel(client = "", site = ""): string {
+  const pct = commercialMarkupRate(client, site) * 100;
+  const shown = Number.isInteger(pct) ? String(pct) : pct.toFixed(1);
+  return `${shown}% markup`;
+}
 
 export type EstimateTotalLine = {
   id: string;
@@ -54,8 +67,15 @@ export function markupBase(input: { subcontractor?: number; thirdParty?: number;
   );
 }
 
-export function estimateMarkupDollars(input: { subcontractor?: number; thirdParty?: number; misc?: number }) {
-  return Math.round(markupBase(input) * ESTIMATE_MARKUP_RATE * 100) / 100;
+export function estimateMarkupDollars(input: {
+  subcontractor?: number;
+  thirdParty?: number;
+  misc?: number;
+  client?: string;
+  site?: string;
+}) {
+  const rate = commercialMarkupRate(input.client, input.site);
+  return Math.round(markupBase(input) * rate * 100) / 100;
 }
 
 export function estimateTotalBreakdown(input: {
@@ -76,7 +96,7 @@ export function estimateTotalBreakdown(input: {
     { id: "subcontractor", label: "Subcontractor", amount: parseDeskDollars(input.subcontractor) },
     { id: "other", label: "Other Cost", amount: parseDeskDollars(input.otherCost) },
     { id: "change-orders", label: "Change orders", amount: parseDeskDollars(input.changeOrders) },
-    { id: "markup", label: ESTIMATE_MARKUP_LABEL, amount: parseDeskDollars(input.markup) },
+    { id: "markup", label: commercialMarkupLabel(input.client, input.site), amount: parseDeskDollars(input.markup) },
   ]);
   const extras = signedMoneyLines(input.extras ?? []);
   const subtotal = [...base, ...extras].reduce((sum, line) => sum + line.amount, 0);

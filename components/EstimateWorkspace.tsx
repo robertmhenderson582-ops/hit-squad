@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BrandMark } from "@/components/BrandMark";
 import { HomeCue } from "@/components/HomeCue";
@@ -12,14 +12,35 @@ import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { EstimateTotalRail } from "@/components/EstimateTotalRail";
+import { EstimateImportModal } from "@/components/EstimateImportModal";
 import { ModalPortal } from "@/components/ModalPortal";
 import { WageLookupDesk } from "@/components/WageLookupDesk";
 import { useEstimatePackage } from "@/components/EstimatePackage";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useSession } from "@/components/SessionProvider";
+import { hydrateSupportLines } from "@/lib/craft-labor";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
+import { viewingAsOther } from "@/lib/desk-role";
+import { readFcrPacket } from "@/lib/change-order-packet";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
-import { ESTIMATE_EXPORT_ERROR, estimateToXlsx, estimateXlsxFilename } from "@/lib/estimate-xlsx";
+import { fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
+import { companyLogoFromApiPayload } from "@/lib/estimate-company-logo";
+import {
+  ESTIMATE_EXPORT_ERROR,
+  ESTIMATE_IMPORT_ERROR,
+  estimateToXlsx,
+  estimateXlsxFilename,
+  exporterDisplayName,
+} from "@/lib/estimate-xlsx";
+import {
+  applyEstimateImport,
+  diffEstimateImport,
+  parseEstimateXlsx,
+  type EstimateImport,
+} from "@/lib/estimate-xlsx-import";
 import type { EstimateStatus } from "@/lib/estimate-status";
 import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
+import { mergeSchedule, type PhaseScheduleState } from "@/lib/phase-schedule";
 import { RODEO_TAB_ID, RODEO_TAB_LABEL, showsRodeoTab } from "@/lib/rodeo-form";
 import { readSubSheet } from "@/lib/subcontractor";
 import { downloadXlsx } from "@/lib/xlsx-minimal";
@@ -56,9 +77,21 @@ const ACTIONS = [
   { id: "team", label: "Team" },
   { id: "undo", label: "Undo" },
   { id: "export", label: "Export" },
+  { id: "import", label: "Import" },
   { id: "print", label: "Print" },
   { id: "duplicate", label: "Duplicate" },
 ] as const;
+
+async function fetchEstimateCompanyLogo(client: string, site: string): Promise<string | null> {
+  try {
+    const query = new URLSearchParams({ client, site });
+    const res = await fetch(`/api/desk/company-logo?${query}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return companyLogoFromApiPayload(await res.json());
+  } catch {
+    return null;
+  }
+}
 
 export function EstimateWorkspace({
   crumb,
@@ -70,9 +103,11 @@ export function EstimateWorkspace({
   jobSite,
   name,
   packageId,
-  status = "Estimate",
+  status = "Draft",
   onStatus: _onStatus,
   statusLocked: _statusLocked = false,
+  regularClient,
+  onName,
   children,
 }: {
   crumb: string;
@@ -89,11 +124,21 @@ export function EstimateWorkspace({
   status?: EstimateStatus;
   onStatus?: (next: EstimateStatus) => void;
   statusLocked?: boolean;
+  regularClient?: boolean;
+  onName?: (next: string) => void;
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const { user } = useSession();
   const pack = useEstimatePackage();
+  const desk = useOwnerDesk();
+  const importBlocked = viewingAsOther(desk?.viewAs);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [exportError, setExportError] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const [pendingImport, setPendingImport] = useState<EstimateImport | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const { resolvedTheme } = useDisplay();
   const paper = resolvedTheme === "day";
@@ -103,7 +148,9 @@ export function EstimateWorkspace({
   const tabs = estimateTabsForSite(boundSite, boundClient, status);
 
   async function exportWorkbook() {
+    if (exportBusy) return;
     setExportError("");
+    setExportBusy(true);
     try {
       const bytes = await estimateToXlsx({
         title: name || crumb,
@@ -111,7 +158,6 @@ export function EstimateWorkspace({
         site: boundSite,
         crew: pack.crew,
         schedule: pack.schedule,
-        orgChart: pack.orgChart,
         jobMeta: pack.jobMeta,
         equipment: readEquipmentSheet(pack.estimateKey),
         otherCost: syncOtherCostTravel(readOtherCost(pack.estimateKey), pack.crew, {
@@ -119,11 +165,73 @@ export function EstimateWorkspace({
           craftPerMile: pack.jobMeta.craftMileageRate,
         }),
         subcontractor: readSubSheet(pack.estimateKey),
+        changeOrders: fcrChangeOrderTotal(readFcrPacket(pack.estimateKey)),
+        companyLogo: await fetchEstimateCompanyLogo(boundClient, boundSite),
+        preparedBy: exporterDisplayName(user?.name, user?.email),
+        status: pack.status || status,
+        regularClient,
       });
       if (!bytes.byteLength) throw new Error("empty-workbook");
       downloadXlsx(estimateXlsxFilename({ site: boundSite, title: name || crumb }), bytes);
     } catch {
       setExportError(ESTIMATE_EXPORT_ERROR);
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
+  async function readWorkbook(file: File) {
+    setImportError("");
+    setExportError("");
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      setPendingImport(await parseEstimateXlsx(bytes));
+    } catch {
+      setPendingImport(null);
+      setImportError(ESTIMATE_IMPORT_ERROR);
+    }
+  }
+
+  function applyPendingImport() {
+    if (!pendingImport || importBlocked) return;
+    setImportBusy(true);
+    try {
+      const next = applyEstimateImport(
+        {
+          packId: packageId || "",
+          key: pack.estimateKey,
+          title: name || crumb,
+          client: boundClient,
+          site: boundSite,
+          siteId: "site-madison",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          ownerEmail: "",
+          schedule: pack.schedule,
+          crew: pack.crew,
+        },
+        pendingImport,
+      );
+      const schedule: PhaseScheduleState = mergeSchedule(next.schedule);
+      pack.replaceFromImport({
+        schedule,
+        crew: {
+          staff: next.crew.staff ?? [],
+          generalForeman: next.crew.generalForeman ?? [],
+          foreman: next.crew.foreman ?? [],
+          direct: next.crew.direct ?? [],
+          support: hydrateSupportLines(next.crew.support ?? []),
+          otAfter8: Boolean(next.crew.otAfter8),
+        },
+        title: next.title,
+      });
+      if (next.title) onName?.(next.title);
+      setPendingImport(null);
+      noteFeatureTrail("import workbook");
+    } catch {
+      setImportError(ESTIMATE_IMPORT_ERROR);
+    } finally {
+      setImportBusy(false);
     }
   }
 
@@ -155,18 +263,26 @@ export function EstimateWorkspace({
                 title={
                   action.id === "export"
                     ? "Export Excel workbook"
-                    : action.id === "print"
-                      ? "Print this estimate"
-                      : action.id === "duplicate"
-                        ? "Start a copy of this estimate"
-                        : action.id === "undo"
-                          ? "Undo is not wired yet"
-                          : "Team is chrome only"
+                    : action.id === "import"
+                      ? importBlocked
+                        ? "Import is off while viewing as another seat"
+                        : "Import workbook"
+                      : action.id === "print"
+                        ? "Print this estimate"
+                        : action.id === "duplicate"
+                          ? "Start a copy of this estimate"
+                          : action.id === "undo"
+                            ? "Undo is not wired yet"
+                            : "Team is chrome only"
                 }
+                disabled={action.id === "export" ? exportBusy : action.id === "import" ? importBlocked : false}
                 onClick={() => {
                   if (action.id === "export") {
-                    exportWorkbook();
+                    void exportWorkbook();
                     noteFeatureTrail("export");
+                  }
+                  if (action.id === "import" && !importBlocked) {
+                    fileRef.current?.click();
                   }
                   if (action.id === "print") {
                     window.print();
@@ -180,11 +296,23 @@ export function EstimateWorkspace({
                     router.push(`/estimates/new?${query.toString()}`);
                   }
                 }}
-                className="rounded border border-white/20 px-3 py-1.5 text-white/90"
+                className="rounded border border-white/20 px-3 py-1.5 text-white/90 disabled:opacity-60"
               >
-                {action.label}
+                {action.id === "export" && exportBusy ? "Exporting…" : action.label}
               </button>
             ))}
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx"
+              className="hidden"
+              aria-label="Upload xlsx"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void readWorkbook(file);
+              }}
+            />
             {packageId && !closed ? (
               <button
                 type="button"
@@ -228,9 +356,9 @@ export function EstimateWorkspace({
             </button>
           ))}
         </nav>
-        {exportError || pack.vaultSaveError ? (
+        {exportError || importError || pack.vaultSaveError ? (
           <p className="px-4 pb-3 text-sm text-[#f3c6a5]" role="alert">
-            {exportError || pack.vaultSaveError}
+            {exportError || importError || pack.vaultSaveError}
           </p>
         ) : null}
       </header>
@@ -268,6 +396,32 @@ export function EstimateWorkspace({
           </div>
         </div>
         </ModalPortal>
+      ) : null}
+      {pendingImport ? (
+        <EstimateImportModal
+          title="Import workbook"
+          lines={diffEstimateImport(
+            {
+              packId: packageId || "",
+              key: pack.estimateKey,
+              title: name || crumb,
+              client: boundClient,
+              site: boundSite,
+              siteId: "site-madison",
+              createdAt: 0,
+              updatedAt: 0,
+              ownerEmail: "",
+              schedule: pack.schedule,
+              crew: pack.crew,
+            },
+            pendingImport,
+          ).lines}
+          applyLabel="Apply to this pack"
+          busy={importBusy}
+          error={importError}
+          onCancel={() => setPendingImport(null)}
+          onApply={applyPendingImport}
+        />
       ) : null}
     </div>
   );

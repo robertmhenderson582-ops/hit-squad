@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   applyReturnLocally,
   applyTransferLocally,
@@ -827,9 +829,55 @@ describe("local transfer commit", () => {
       const result = await flushVaultUpsert(packId, store);
       assert.equal(result.ok, false);
       assert.equal("error" in result && result.error, "Could not store that package.");
+      assert.equal(bodies.length, 2);
       assert.equal((bodies[0]?.pack?.equipment?.largeTools || []).length, 1);
       assert.equal((bodies[0]?.pack?.otherCost?.misc || []).length, 1);
       assert.equal((bodies[0]?.pack?.subcontractor?.cards || []).length, 1);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("keeps a boot-only vault flush failure off the Could not Save banner", () => {
+    const src = readFileSync(fileURLToPath(new URL("../components/EstimatePackage.tsx", import.meta.url)), "utf8");
+    assert.match(src, /Drive sync delayed/);
+    assert.match(src, /reportVaultErrors/);
+    assert.equal(/if \(!result\.ok && "error" in result && result\.error\) setVaultSaveError/.test(src), false);
+  });
+
+  it("retries a 5xx vault PUT once and succeeds on the second try", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const packId = "new-mtj7bvtk-retry";
+    applyPackToStore(store, {
+      packId,
+      key: `new:${packId}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 2,
+      ownerEmail: OWNER_LOGIN_EMAIL,
+      equipment: { largeTools: [], thirdParty: [] },
+    });
+    let hits = 0;
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      hits += 1;
+      if (hits === 1) {
+        return new Response(JSON.stringify({ error: "Could not store that package." }), {
+          status: 502,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await flushVaultUpsert(packId, store);
+      assert.equal(result.ok, true);
+      assert.equal(hits, 2);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();

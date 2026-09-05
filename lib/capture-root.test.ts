@@ -14,6 +14,7 @@ describe("capture root", () => {
       "[data-capture-root]",
     );
     assert.equal(pickCaptureSelector(["paper-desk", "paper-page"]), ".paper-page");
+    assert.equal(pickCaptureSelector(["desk-home-root"]), ".desk-home-root");
     assert.equal(pickCaptureSelector(["paper-desk"]), "body");
   });
 

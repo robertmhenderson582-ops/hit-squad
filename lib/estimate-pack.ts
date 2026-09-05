@@ -1,3 +1,6 @@
+import { catalogSites } from "./desk-data.ts";
+import { parseEstimateStatus, resolveEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
+import { clampStatusForSite, regularClientFromParts } from "./site-regular.ts";
 import { ACTIVITY_STORE_PREFIX } from "./work-activities.ts";
 import { FCR_STORE_PREFIX } from "./change-order-packet.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
@@ -36,6 +39,8 @@ export type EstimatePackSnapshot = {
   transferredTo?: string;
   transferredToName?: string;
   transferredFromName?: string;
+  /** Desk-owned workflow status. Excel stamps this; import does not overwrite it. */
+  status?: EstimateStatus;
   schedule?: unknown;
   crew?: unknown;
   orgChart?: unknown;
@@ -307,6 +312,7 @@ export function pickPack(
     otherCost: pickOtherCost(newer.otherCost, older.otherCost),
     subcontractor: pickSubcontractor(newer.subcontractor, older.subcontractor),
     fcr: pickFcr(newer.fcr, older.fcr),
+    status: newer.status || older.status,
     createdAt: Math.min(local.createdAt || newer.createdAt, vault.createdAt || newer.createdAt) || newer.createdAt,
     ownerEmail: vault.ownerEmail || newer.ownerEmail,
     sharedWith: vault.sharedWith,
@@ -335,6 +341,7 @@ export function publicPack(pack: EstimatePackSnapshot): EstimatePackSnapshot {
     transferredTo: pack.transferredTo,
     transferredToName: pack.transferredToName,
     transferredFromName: pack.transferredFromName,
+    status: pack.status,
     schedule: pack.schedule,
     crew: pack.crew,
     orgChart: pack.orgChart,
@@ -378,6 +385,12 @@ export function collectPack(
     transferredTo: identity.transferredTo,
     transferredToName: identity.transferredToName,
     transferredFromName: identity.transferredFromName,
+    status: resolveEstimateStatus(
+      identity.status,
+      packId,
+      store as Storage,
+      regularClientFromParts(identity.site, identity.client, catalogSites()),
+    ),
     schedule: readStoreJson(store, `${PHASE_STORE_PREFIX}${key}`) ?? undefined,
     crew: readStoreJson(store, `${CREW_STORE_PREFIX}${key}`) ?? undefined,
     orgChart: readStoreJson(store, `${ORG_CHART_STORE_PREFIX}${key}`) ?? undefined,
@@ -407,6 +420,7 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
       transferredToName: pack.transferredToName,
       transferredFromName: pack.transferredFromName,
       replaceHandoff: true,
+      status: pack.status,
     },
     store,
   );
@@ -470,6 +484,7 @@ export function parseIncomingPack(input: unknown): { ok: true; pack: EstimatePac
     transferredTo: typeof row?.transferredTo === "string" ? row.transferredTo : undefined,
     transferredToName: typeof row?.transferredToName === "string" ? row.transferredToName : undefined,
     transferredFromName: typeof row?.transferredFromName === "string" ? row.transferredFromName : undefined,
+    status: row && "status" in row ? clampStatusForSite(parseEstimateStatus(row.status), site, client, catalogSites()) : undefined,
     schedule: row?.schedule,
       crew: row?.crew,
       orgChart: row?.orgChart,

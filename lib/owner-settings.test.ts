@@ -38,6 +38,16 @@ describe("owner settings vault persist", () => {
     assert.equal(again.viewAs, "nathan");
   });
 
+  it("persists Regular-client site overrides", async () => {
+    const drive = memoryDrive();
+    useOwnerSettingsVaultForTests(drive);
+    await setOwnerSettings({ regularClient: { "site-ferndale": true } });
+    forgetOwnerSettingsCacheForTests();
+    useOwnerSettingsVaultForTests(drive);
+    const again = await getOwnerSettings();
+    assert.equal(again.regularClient?.["site-ferndale"], true);
+  });
+
   it("does not vault presence", () => {
     const presence = readFileSync(fileURLToPath(new URL("./presence.ts", import.meta.url)), "utf8");
     assert.equal(/drive-data/.test(presence), false);

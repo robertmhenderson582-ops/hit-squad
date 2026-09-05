@@ -5,10 +5,15 @@ import {
   applyOtPick,
   cascadePhases,
   defaultPhaseSchedule,
+  liveJobSetupPhases,
   mergeSchedule,
   otPicksForPhase,
   patchPhase,
+  phaseBarRuns,
+  phaseOwningDate,
   PHASE_OT_PICKS,
+  PHASE_TONE_BAND_INK,
+  PHASE_TONE_FILLS,
   setMultiUnits,
   setProjectStart,
   workedDays,
@@ -153,5 +158,41 @@ describe("phase schedule", () => {
     assert.equal(off.multiUnits, false);
     assert.equal(off.units.length, 2);
     assert.equal(off.phases.find((row) => row.id === "pre")?.start, two.units[0].phases[0].start);
+  });
+
+  it("phase owning date and bar runs follow ON Job setup windows", () => {
+    const start = defaultPhaseSchedule();
+    assert.equal(phaseOwningDate(start.phases, "2026-08-21")?.id, "pre");
+    assert.equal(phaseOwningDate(start.phases, "2026-09-04")?.id, "oil-out");
+    assert.equal(phaseOwningDate(start.phases, "2026-09-07")?.id, "mech");
+    const slid = patchPhase(start, "pre", { stop: "2026-09-05" });
+    assert.equal(phaseOwningDate(slid.phases, "2026-09-05")?.id, "pre");
+    assert.equal(phaseOwningDate(slid.phases, "2026-09-06")?.id, "oil-out");
+    const offOil = {
+      ...start,
+      phases: start.phases.map((row) => (row.id === "oil-out" ? { ...row, on: false } : row)),
+    };
+    assert.equal(liveJobSetupPhases(offOil).some((row) => row.id === "oil-out"), false);
+    assert.equal(phaseOwningDate(liveJobSetupPhases(offOil), "2026-09-05"), undefined);
+    const dates = ["2026-09-04", "2026-09-05", "2026-09-06", "2026-09-07"];
+    const runs = phaseBarRuns(dates, liveJobSetupPhases(start));
+    assert.deepEqual(
+      runs.map((run) => ({ id: run.phase.id, startIndex: run.startIndex, endIndex: run.endIndex })),
+      [
+        { id: "oil-out", startIndex: 0, endIndex: 2 },
+        { id: "mech", startIndex: 3, endIndex: 3 },
+      ],
+    );
+  });
+
+  it("Excel phase bar uses hard blue / red / green with white labels", () => {
+    assert.equal(PHASE_TONE_FILLS.pre, "FF0B5CAD");
+    assert.equal(PHASE_TONE_FILLS.post, PHASE_TONE_FILLS.pre);
+    assert.equal(PHASE_TONE_FILLS["oil-out"], "FFC62828");
+    assert.equal(PHASE_TONE_FILLS["oil-in"], PHASE_TONE_FILLS["oil-out"]);
+    assert.equal(PHASE_TONE_FILLS.mech, "FF1B7F3A");
+    assert.equal(PHASE_TONE_BAND_INK, "FFFFFFFF");
+    assert.notEqual(PHASE_TONE_FILLS.pre, "FFD5E2C4");
+    assert.notEqual(PHASE_TONE_FILLS.mech, "FFC5D0D5");
   });
 });

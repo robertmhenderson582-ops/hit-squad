@@ -563,6 +563,39 @@ describe("East Coast CBA craft OT after 8", () => {
     assert.equal(weekdayTen.dt, 0);
   });
 
+  it("staff Saturday after a full Mon–Fri 40 ST week is 0 ST (weekly 40), isolated Saturday still keeps ST to 10", () => {
+    const monSatNine = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Lead Site 01",
+      phaseId: "mech",
+      start: "2027-03-15",
+      end: "2027-03-20",
+      hoursPerShift: 9,
+      days: [false, true, true, true, true, true, true],
+      otAfter8: true,
+    });
+    const satNine = monSatNine.days.find((day) => day.weekday === 6);
+    assert.equal(satNine?.st, 0);
+    assert.equal(satNine?.ot, 9);
+    assert.equal(monSatNine.st, 40);
+
+    const monSatTen = computeRangeHours({
+      ...WOOD_RIVER,
+      position: "Lead Site 01",
+      phaseId: "mech",
+      start: "2027-03-15",
+      end: "2027-03-20",
+      hoursPerShift: 10,
+      days: [false, true, true, true, true, true, true],
+      otAfter8: true,
+    });
+    const satTen = monSatTen.days.find((day) => day.weekday === 6);
+    assert.equal(satTen?.st, 0);
+    assert.equal(satTen?.ot, 10);
+    assert.equal(monSatTen.st, 40);
+
+  });
+
   it("Staff Saturday does not become all OT — staff keeps ST to 10", () => {
     const staffSat = computeRangeHours({
       ...WOOD_RIVER,

@@ -17,6 +17,72 @@ export const PHASE_TONES: Record<PhaseId, string> = {
   post: "phase-green",
 };
 
+/**
+ * Excel craft-sheet phase bar — hard colors, not pastel desk chips.
+ * Pre/Post blue, Oil Out/Oil In red, Mechanical green.
+ */
+export const PHASE_TONE_FILLS: Record<PhaseId, string> = {
+  pre: "FF0B5CAD",
+  "oil-out": "FFC62828",
+  mech: "FF1B7F3A",
+  "oil-in": "FFC62828",
+  post: "FF0B5CAD",
+};
+
+/** Dark type on the A–K Job setup label (plate wash). */
+export const PHASE_TONE_INK = "FF163038";
+/** White type on hard phase-band fills. */
+export const PHASE_TONE_BAND_INK = "FFFFFFFF";
+
+export function isPhaseId(value: string): value is PhaseId {
+  return (PHASE_IDS as readonly string[]).includes(value);
+}
+
+/** ON Job setup windows that own the calendar. Multi-unit uses unit phases when any are on. */
+export function liveJobSetupPhases(schedule?: {
+  multiUnits?: boolean;
+  phases?: PhaseRow[];
+  units?: Array<{ phases?: PhaseRow[] }>;
+}): PhaseRow[] {
+  const on = (rows: PhaseRow[] | undefined) =>
+    (rows ?? []).filter((row) => row.on && Boolean(row.start) && Boolean(row.stop));
+  if (schedule?.multiUnits && schedule.units?.length) {
+    const fromUnits = schedule.units.flatMap((unit) => on(unit.phases));
+    if (fromUnits.length) return fromUnits;
+  }
+  return on(schedule?.phases);
+}
+
+/** Inclusive start/stop. Canonical phase order wins if windows overlap. */
+export function phaseOwningDate(phases: PhaseRow[], ymd: string): PhaseRow | undefined {
+  const hits = phases.filter((row) => row.on && row.start && row.stop && ymd >= row.start && ymd <= row.stop);
+  if (!hits.length) return undefined;
+  hits.sort((a, b) => {
+    const order = PHASE_IDS.indexOf(a.id) - PHASE_IDS.indexOf(b.id);
+    if (order !== 0) return order;
+    return a.start.localeCompare(b.start);
+  });
+  return hits[0];
+}
+
+export type PhaseBarRun = { phase: PhaseRow; startIndex: number; endIndex: number };
+
+/** Contiguous same-phase days on a calendar (column index into `dates`). */
+export function phaseBarRuns(dates: string[], phases: PhaseRow[]): PhaseBarRun[] {
+  const runs: PhaseBarRun[] = [];
+  dates.forEach((ymd, index) => {
+    const phase = phaseOwningDate(phases, ymd);
+    if (!phase) return;
+    const last = runs[runs.length - 1];
+    if (last && last.endIndex === index - 1 && last.phase.id === phase.id) {
+      last.endIndex = index;
+      return;
+    }
+    runs.push({ phase, startIndex: index, endIndex: index });
+  });
+  return runs;
+}
+
 export type PhaseOtPick = "4x10-st" | "4x10-ot8" | "5x8-st" | "5x8-ot8";
 
 /** Pre-Turnaround and Post share this list. Do not shorten Pre. */

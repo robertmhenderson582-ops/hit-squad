@@ -161,10 +161,24 @@ export function hasThirdPartyPeriodRate(row: ThirdPartyRentalRow, period: ThirdP
   return typeof raw === "number" && Number.isFinite(raw) && raw !== 0;
 }
 
+export function thirdPartyPeriodsWithRates(row: ThirdPartyRentalRow): ThirdPartyRentalPeriod[] {
+  return (["daily", "weekly", "monthly"] as const).filter((period) => hasThirdPartyPeriodRate(row, period));
+}
+
 export function defaultThirdPartyPeriod(row: ThirdPartyRentalRow): ThirdPartyRentalPeriod {
   if (hasThirdPartyPeriodRate(row, "monthly")) return "monthly";
   if (hasThirdPartyPeriodRate(row, "weekly")) return "weekly";
   return "daily";
+}
+
+/** Keep a catalog period that has a rate. Otherwise first available (monthly → weekly → daily). Custom items keep the typed period. */
+export function allowedThirdPartyPeriod(
+  row: ThirdPartyRentalRow | null | undefined,
+  period: ThirdPartyRentalPeriod,
+): ThirdPartyRentalPeriod {
+  if (!row) return period;
+  if (hasThirdPartyPeriodRate(row, period)) return period;
+  return defaultThirdPartyPeriod(row);
 }
 
 export function applyThirdPartyCatalogItem<

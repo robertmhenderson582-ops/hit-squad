@@ -14,8 +14,9 @@ import { emptyRollingChart, hydrateRollingChart, type RollingChartState } from "
 import { emptyRodeoForm, hydrateRodeoForm, type RodeoFormState } from "./rodeo-form.ts";
 import { emptyJobRates, hydrateJobRates, type JobRates } from "./shahan-wood-river.ts";
 import { buildXlsx, colLetter, type SheetCell } from "./xlsx-minimal.ts";
+import { JOB_META_PREFIX } from "./job-meta-prefix.ts";
 
-export const JOB_META_PREFIX = "hs_job_v1:";
+export { JOB_META_PREFIX };
 
 export type JobMeta = {
   afeName: string;

@@ -6,21 +6,26 @@ import {
   blankLargeTool,
   blankThirdParty,
   emptyEquipmentSheet,
+  endDateForPeriodCount,
   equipmentTotals,
   jobSetupWindow,
   largeToolAmount,
   removeEquipmentLine,
   seedEmptyEquipmentWindow,
   seedLineDates,
+  resolveLargeToolLine,
+  resolveThirdPartyLine,
   thirdPartyCost,
   thirdPartyMarkedUp,
   type LargeToolLine,
 } from "./equipment-sheet.ts";
 
-test("third-party rental is typed cost + 6%, not a plant picker", () => {
+test("third-party rental is typed cost + 6.5% COMP fee, not a plant picker", () => {
   const line = { ...blankThirdParty(), item: "Crane", period: "weekly" as const, rate: 1000, freight: 200, qty: 2 };
   assert.equal(thirdPartyCost(line), 2200);
-  assert.equal(thirdPartyMarkedUp(line), 2332);
+  assert.equal(thirdPartyMarkedUp(line), 2343);
+  assert.equal(thirdPartyMarkedUp(line, "Phillips 66", "Bayway"), 2343);
+  assert.equal(thirdPartyMarkedUp(line, "Georgia Power", "Yates"), 2420);
   assert.equal("itemId" in line, false);
   assert.equal(lookupShahanEquipment("crane"), null);
 });
@@ -44,8 +49,39 @@ test("large tools use the Shahan Wood River listed rate", () => {
   sheet.thirdParty = [{ ...blankThirdParty(), rate: 100, freight: 0, qty: 1 }];
   const totals = equipmentTotals(sheet);
   assert.equal(totals.largeTools, 64);
-  assert.equal(totals.thirdParty, 106);
-  assert.equal(totals.total, 170);
+  assert.equal(totals.thirdParty, 106.5);
+  assert.equal(totals.total, 170.5);
+});
+
+test("illegal catalog periods fall back to the first period that has a rate", () => {
+  const guns = resolveThirdPartyLine({
+    ...blankThirdParty(),
+    item: "LN 25 Mig guns",
+    period: "daily",
+    rate: 0,
+    freight: 50,
+  });
+  assert.equal(guns.period, "monthly");
+  assert.equal(guns.rate, 225);
+  const custom = resolveThirdPartyLine({
+    ...blankThirdParty(),
+    item: "Made-up crane",
+    period: "weekly",
+    rate: 400,
+  });
+  assert.equal(custom.period, "weekly");
+  assert.equal(custom.rate, 400);
+  const threaders = resolveLargeToolLine({
+    id: "lt-th",
+    itemId: "PIPE THREADERS (535 AND LARGER) COST PLUS 6%",
+    period: "daily",
+    qty: 1,
+    start: "",
+    end: "",
+    enteredCost: 100,
+    freight: 0,
+  });
+  assert.equal(threaders.period, "daily");
 });
 
 test("wet and dry copies of the same description bill different Shahan dollars", () => {
@@ -109,10 +145,10 @@ test("large-tool freight is typed dollars in the line total, never +6%", () => {
   assert.equal(largeToolAmount(threader), 1110);
 });
 
-test("third-party 6% covers typed cost plus freight", () => {
+test("third-party 6.5% COMP fee covers typed cost plus freight", () => {
   const line = { ...blankThirdParty(), rate: 1000, freight: 200, qty: 2 };
   assert.equal(thirdPartyCost(line), 2200);
-  assert.equal(thirdPartyMarkedUp(line), 2332);
+  assert.equal(thirdPartyMarkedUp(line), 2343);
   const sheet = emptyEquipmentSheet();
   sheet.largeTools = [
     {
@@ -129,8 +165,8 @@ test("third-party 6% covers typed cost plus freight", () => {
   sheet.thirdParty = [line];
   const totals = equipmentTotals(sheet);
   assert.equal(totals.largeTools, 104);
-  assert.equal(totals.thirdParty, 2332);
-  assert.equal(totals.total, 2436);
+  assert.equal(totals.thirdParty, 2343);
+  assert.equal(totals.total, 2447);
 });
 
 test("empty equipment dates seed from PRE start and POST end; typed dates stick", () => {
@@ -196,7 +232,7 @@ test("Start/End bill inclusive periods; empty dates stay 1 so totals do not drop
     end: "2026-09-28",
   };
   assert.equal(thirdPartyCost(rental), 100 * 2 * 2 + 25);
-  assert.equal(thirdPartyMarkedUp(rental), 450.5);
+  assert.equal(thirdPartyMarkedUp(rental), 452.63);
   assert.equal(thirdPartyCost({ ...rental, start: "", end: "" }), 225);
 });
 
@@ -230,4 +266,16 @@ test("removing one third-party line leaves the others; last line may empty the c
   const empty = removeEquipmentLine(next, "thirdParty", "tp-keep");
   assert.deepEqual(empty.thirdParty, []);
   assert.equal(empty.largeTools[0]?.id, "lt-keep");
+});
+
+test("endDateForPeriodCount inverts billedPeriodCount for daily weekly and monthly", () => {
+  const start = "2026-09-01";
+  for (const period of ["daily", "weekly", "monthly"] as const) {
+    for (const n of [1, 2, 5, 12]) {
+      const end = endDateForPeriodCount(start, period, n);
+      assert.equal(billedPeriodCount(start, end, period), n, `${period} × ${n}`);
+    }
+  }
+  assert.equal(endDateForPeriodCount(start, "daily", 1), start);
+  assert.equal(billedPeriodCount(start, endDateForPeriodCount(start, "hourly", 8), "hourly"), 8);
 });

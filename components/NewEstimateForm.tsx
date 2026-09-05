@@ -57,6 +57,7 @@ export function NewEstimateForm() {
         size: size ?? undefined,
         ownerEmail: lens?.email || user?.email,
         estimator: lens?.name || user?.name,
+        status: existing?.status || "Draft",
       });
       scheduleVaultUpsert(pack);
       void flushVaultUpsert(pack);
@@ -115,8 +116,9 @@ function NewEstimateDesk({
       jobClient={client}
       jobSite={site}
       name={title}
+      onName={setTitle}
       packageId={pack}
-      status="Estimate"
+      status="Draft"
       statusLocked
     >
       {tab === "summary" ? (
@@ -131,7 +133,7 @@ function NewEstimateDesk({
             otRule={alias(otRule)}
             author={user?.name}
             existingClient={existingClient}
-            status="Estimate"
+            status="Draft"
             statusLocked
           />
           <PhaseSchedule />
@@ -141,7 +143,7 @@ function NewEstimateDesk({
       {tab === "crew" ? <EstimateWorkbook client={client} site={site} name={title} /> : null}
       {tab === "org-chart" ? <OrgChartDesk client={client} site={site} name={title} /> : null}
       {tab === "staffing" ? <StaffingPlanDesk client={client} site={site} name={title} /> : null}
-      {tab === "equipment" ? <EquipmentDesk /> : null}
+      {tab === "equipment" ? <EquipmentDesk client={client} site={site} /> : null}
       {tab === "subs" ? <SubcontractorDesk client={client} site={site} /> : null}
       {tab === "costs" ? <OtherCostDesk client={client} site={site} /> : null}
       {tab === "change-orders" ? <ChangeOrderPacket client={client} site={site} /> : null}

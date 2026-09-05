@@ -172,6 +172,30 @@ export async function hydrateFromVault(
   return hydratePromise;
 }
 
+function vaultPutError(data: { error?: string }) {
+  return typeof data.error === "string" && data.error.trim() ? data.error : "Could not store that package.";
+}
+
+function isTransientVaultStatus(status: number) {
+  return status >= 500 && status <= 599;
+}
+
+async function putVaultPack(body: string) {
+  return fetch("/api/desk/estimates", {
+    method: "PUT",
+    credentials: "include",
+    cache: "no-store",
+    headers: { "content-type": "application/json" },
+    body,
+  });
+}
+
+async function readVaultPutResult(response: Response) {
+  if (response.ok) return { ok: true as const };
+  const data = (await response.json().catch(() => ({}))) as { error?: string };
+  return { ok: false as const, error: vaultPutError(data) };
+}
+
 export async function flushVaultUpsert(packId: string, store?: StorageLike | null) {
   if (currentViewAs) return { ok: true as const };
   if (!isLocalPackId(packId)) return { ok: false as const };
@@ -187,26 +211,26 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   if (lastBody.get(packId) === body) return { ok: true as const };
   if (currentViewAs) return { ok: true as const };
   try {
-    const response = await fetch("/api/desk/estimates", {
-      method: "PUT",
-      credentials: "include",
-      cache: "no-store",
-      headers: { "content-type": "application/json" },
-      body,
-    });
-    if (response.ok) {
-      lastBody.set(packId, body);
-      return { ok: true as const };
+    let response = await putVaultPack(body);
+    if (!response.ok && isTransientVaultStatus(response.status)) {
+      response = await putVaultPack(body);
     }
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
-    return {
-      ok: false as const,
-      error: typeof data.error === "string" && data.error.trim() ? data.error : "Could not store that package.",
-    };
+    const result = await readVaultPutResult(response);
+    if (result.ok) lastBody.set(packId, body);
+    return result;
   } catch {
-    return { ok: false as const, error: "Could not store that package." };
+    try {
+      const response = await putVaultPack(body);
+      const result = await readVaultPutResult(response);
+      if (result.ok) lastBody.set(packId, body);
+      return result;
+    } catch {
+      return { ok: false as const, error: "Could not store that package." };
+    }
   }
 }
+
+export type VaultUpsertResult = Awaited<ReturnType<typeof flushVaultUpsert>>;
 
 function ownedByThisVault(pack: { ownerEmail?: string }, deskEmail = ownerVaultEmail()) {
   const ownerEmail = pack.ownerEmail || "";
@@ -223,10 +247,16 @@ export async function flushLocalPacksToVault(store?: StorageLike | null, opts?: 
   }
 }
 
-export function scheduleVaultUpsert(packId: string, store?: StorageLike | null) {
+export function scheduleVaultUpsert(
+  packId: string,
+  store?: StorageLike | null,
+  onResult?: (result: VaultUpsertResult) => void,
+) {
   if (!isLocalPackId(packId)) return;
   debounce(packId, () => {
-    void flushVaultUpsert(packId, store);
+    void flushVaultUpsert(packId, store).then((result) => {
+      onResult?.(result);
+    });
   });
 }
 

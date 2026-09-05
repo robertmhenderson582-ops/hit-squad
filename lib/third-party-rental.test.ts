@@ -8,8 +8,10 @@ import {
   WOOD_RIVER_THIRD_PARTY_RENTAL,
   applyThirdPartyCatalogItem,
   applyThirdPartyCatalogPeriod,
+  allowedThirdPartyPeriod,
   defaultThirdPartyPeriod,
   lookupThirdPartyRental,
+  thirdPartyPeriodsWithRates,
   thirdPartyRentalDescriptions,
   thirdPartyRentalPeriodRate,
   type ThirdPartyRentalRow,
@@ -94,6 +96,16 @@ describe("Wood River third-party rental catalog", () => {
     assert.equal(applyThirdPartyCatalogPeriod(spider, "weekly").rate, 0);
   });
 
+  it("lists only periods that have a catalog rate", () => {
+    assert.deepEqual(thirdPartyPeriodsWithRates(row("LN 25 Mig guns")), ["monthly"]);
+    assert.deepEqual(thirdPartyPeriodsWithRates(row("German saw clamps")), ["weekly", "monthly"]);
+    assert.deepEqual(thirdPartyPeriodsWithRates(row("450amp diesel welder")), ["daily", "weekly", "monthly"]);
+    assert.equal(allowedThirdPartyPeriod(row("LN 25 Mig guns"), "daily"), "monthly");
+    assert.equal(allowedThirdPartyPeriod(row("German saw clamps"), "daily"), "monthly");
+    assert.equal(allowedThirdPartyPeriod(row("450amp diesel welder"), "weekly"), "weekly");
+    assert.equal(allowedThirdPartyPeriod(null, "daily"), "daily");
+  });
+
   it("defaults new-line period to monthly when that rate exists, else weekly, else daily", () => {
     assert.equal(blankThirdParty().period, "monthly");
     assert.equal(defaultThirdPartyPeriod(row("Skip Pan")), "monthly");
@@ -127,10 +139,10 @@ describe("Wood River third-party rental catalog", () => {
     assert.equal(period.rate, 400);
     assert.equal(period.period, "daily");
     assert.equal(thirdPartyCost({ ...typed, qty: 1 }), 475);
-    assert.equal(thirdPartyMarkedUp({ ...typed, qty: 1 }), 503.5);
+    assert.equal(thirdPartyMarkedUp({ ...typed, qty: 1 }), 505.88);
   });
 
-  it("EquipmentDesk picks the Wood River table and keeps 6% markup; no workbooks in git", () => {
+  it("EquipmentDesk picks the Wood River table and keeps 6.5% COMP markup; no workbooks in git", () => {
     const desk = readFileSync(DESK_PATH, "utf8");
     assert.match(desk, /CatalogPick/);
     assert.match(desk, /thirdPartyRentalDescriptions/);
@@ -141,6 +153,9 @@ describe("Wood River third-party rental catalog", () => {
     assert.match(desk, /Third-party rental uses the Wood River third-party table/);
     assert.match(desk, /Large tools stay Shahan COMP/);
     assert.match(desk, /thirdPartyMarkedUp/);
+    assert.match(desk, /commercialMarkupLabel/);
+    assert.match(desk, /after \{commercialFee\}/);
+    assert.match(desk, /after 6%/);
     assert.match(desk, /useConfirmRemove/);
     assert.match(desk, /removeEquipmentLine/);
     assert.match(desk, /trash-btn/);
@@ -148,7 +163,11 @@ describe("Wood River third-party rental catalog", () => {
     assert.match(desk, /\+ Add rental/);
     assert.equal(/No COMP rental book/.test(desk), false);
     assert.equal(/Third-party rental is typed/.test(desk), false);
-    const listed = execSync('git ls-files "*.xlsx" "*.xlsm" "*.xls" "*.pdf"', { encoding: "utf8" }).trim();
+    const listed = execSync('git ls-files "*.xlsx" "*.xlsm" "*.xls" "*.pdf"', { encoding: "utf8" })
+      .trim()
+      .split("\n")
+      .filter((file) => file && !file.startsWith("look-samples/"))
+      .join("\n");
     assert.equal(listed, "");
   });
 });

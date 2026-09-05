@@ -112,6 +112,8 @@ export type OwnerSettings = {
   viewResponsibility: ViewResponsibility;
   viewSite: string;
   republish: RepublishState;
+  /** Owner overrides of SiteRecord.regularClient, keyed by site id. */
+  regularClient?: Record<string, boolean>;
 };
 
 export const VIEW_AS_HIDDEN_SETTINGS = [
@@ -123,6 +125,7 @@ export const VIEW_AS_HIDDEN_SETTINGS = [
   "/settings/vault",
   "/settings/republish",
   "/settings/branding",
+  "/settings/sites",
   "/settings/checks",
 ] as const;
 

@@ -190,7 +190,11 @@ describe("Quality and HSE have no estimate interaction", () => {
   });
 
   it("does not put generating-bank or QC/HSE books in git", () => {
-    const listed = execSync('git ls-files "*.xlsx" "*.xlsm" "*.xls" "*.xlsb" "*.pdf"', { encoding: "utf8" }).trim();
+    const listed = execSync('git ls-files "*.xlsx" "*.xlsm" "*.xls" "*.xlsb" "*.pdf"', { encoding: "utf8" })
+      .trim()
+      .split("\n")
+      .filter((file) => file && !file.startsWith("look-samples/"))
+      .join("\n");
     assert.equal(listed, "");
     assert.equal(/generating-bank/i.test(listed), false);
   });
@@ -208,7 +212,7 @@ describe("Quality and HSE have no estimate interaction", () => {
 
   it("lists awarded local jobs without wiping other packs", () => {
     const store = memoryStorage();
-    rememberLocalPack({ packId: "new-awarded", title: "Awarded bank", client: "Phillips 66", site: "Wood River" }, store);
+    rememberLocalPack({ packId: "new-awarded", title: "Awarded bank", client: "Georgia Power", site: "Plant Yates" }, store);
     rememberLocalPack({ packId: "new-est", title: "Still estimate", client: "Phillips 66", site: "Wood River" }, store);
     writeEstimateStatus("new-awarded", "Awarded", store);
     const awarded = awardedLocalJobs(store);

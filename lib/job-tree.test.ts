@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { COMPANIES, LUCKY13_ID, STANDALONE_ID, companyScopeFor } from "./companies.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
@@ -12,7 +14,14 @@ import {
   jobEstimateHref,
   jobTree,
   matchCatalogSite,
+  resolveOpenCompanyId,
+  resolveSiteOpen,
+  siteIsCollapsible,
+  siteTreeKey,
   sitesForCompany,
+  stickyOpenCompanyId,
+  toggleCollapsedSite,
+  toggleOpenCompanyId,
   UNASSIGNED_SITE_ID,
 } from "./job-tree.ts";
 import { JAMES_EMAIL, JOHN_BEECH_EMAIL, JOHN_HENRY_EMAIL, JOSEPH_EMAIL } from "./tester-seats.ts";
@@ -168,5 +177,78 @@ describe("job tree", () => {
     const tree = jobTree({ scope: standalone, jobs: jobsOnDesk([], [cat2], false, standalone), packs: [cat2] });
     assert.deepEqual(tree.map((row) => row.id), []);
     assert.equal(tree.some((row) => row.id === STANDALONE_ID), false);
+  });
+
+  it("lets every company collapse and stays all-collapsed (empty string is not Madison)", () => {
+    const companies = COMPANIES.map((row) => ({ id: row.id }));
+    assert.equal(resolveOpenCompanyId(undefined, companies), "madison");
+    assert.equal(resolveOpenCompanyId("", companies), "");
+    assert.equal(resolveOpenCompanyId("hitsquad", companies), "hitsquad");
+    assert.equal(stickyOpenCompanyId(null, companies), "madison");
+    assert.equal(stickyOpenCompanyId("", companies), "");
+    assert.equal(stickyOpenCompanyId("hitsquad", companies), "hitsquad");
+    assert.equal(stickyOpenCompanyId("gone", companies), "madison");
+
+    assert.equal(toggleOpenCompanyId(null, "madison", companies), "");
+    assert.equal(toggleOpenCompanyId("madison", "madison", companies), "");
+    assert.equal(toggleOpenCompanyId("", "madison", companies), "madison");
+    assert.equal(toggleOpenCompanyId("madison", "hitsquad", companies), "hitsquad");
+    assert.equal(toggleOpenCompanyId("hitsquad", "hitsquad", companies), "");
+
+    const collapsed = toggleOpenCompanyId("madison", "madison", companies);
+    assert.equal(stickyOpenCompanyId(collapsed, companies), "");
+    assert.equal(resolveOpenCompanyId(collapsed, companies), "");
+    const openedHitsquad = toggleOpenCompanyId(collapsed, "hitsquad", companies);
+    assert.equal(openedHitsquad, "hitsquad");
+    assert.equal(openedHitsquad === "madison", false);
+    assert.equal(toggleOpenCompanyId(openedHitsquad, "hitsquad", companies), "");
+
+    const desk = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
+    const treeDesk = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
+    const rates = readFileSync(fileURLToPath(new URL("../components/RatesDesk.tsx", import.meta.url)), "utf8");
+    assert.match(treeDesk, /resolveOpenCompanyId\(openCompanyId, tree\)/);
+    assert.equal(/openCompanyId \|\| defaultOpenCompanyId/.test(treeDesk), false);
+    assert.match(treeDesk, /\{open \? "▴" : "▾"\}/);
+    assert.match(treeDesk, /inline-flex h-9 w-9 shrink-0 items-center justify-center/);
+    assert.match(treeDesk, /text-xl leading-none/);
+    assert.match(treeDesk, /border-\[#3ec6d4\]\/70 bg-\[#0F5F6D\]\/55/);
+    assert.match(treeDesk, /text-paper-cream/);
+    assert.match(treeDesk, /border-\[#0F5F6D\]\/40 bg-white\/80/);
+    assert.match(treeDesk, /text-\[#0F5F6D\]/);
+    assert.equal(/font-mono text-\[11px\] tracking-\[0\.2em\] text-amber-label/.test(treeDesk), false);
+    assert.match(treeDesk, /aria-label=\{open \? "Collapse" : "Expand"\}/);
+    assert.match(treeDesk, /company\.id === openId/);
+    assert.match(desk, /stickyOpenCompanyId\(openCompanyId, tree\)/);
+    assert.match(desk, /toggleOpenCompanyId\(current, id, tree\)/);
+    assert.match(rates, /writeRateCompanyOpen/);
+    assert.equal(/resolveOpenCompanyId|stickyOpenCompanyId/.test(rates), false);
+  });
+
+  it("collapses sites with 2+ jobs and stays collapsed (missing key is expanded)", () => {
+    const one = { id: "site-one", jobs: [{ id: "a" }] };
+    const two = { id: "site-two", jobs: [{ id: "a" }, { id: "b" }] };
+    const empty = { id: "site-empty", jobs: [] };
+    assert.equal(siteIsCollapsible(one), false);
+    assert.equal(siteIsCollapsible(empty), false);
+    assert.equal(siteIsCollapsible(two), true);
+    assert.equal(siteTreeKey("madison", "site-madison"), "madison:site-madison");
+
+    const start = new Set<string>();
+    assert.equal(resolveSiteOpen(start, "madison", two), true);
+    assert.equal(resolveSiteOpen(start, "madison", one), true);
+    const collapsed = toggleCollapsedSite(start, "madison", two);
+    assert.equal(resolveSiteOpen(collapsed, "madison", two), false);
+    assert.equal(resolveSiteOpen(collapsed, "madison", one), true);
+    assert.equal(resolveSiteOpen(toggleCollapsedSite(collapsed, "madison", one), "madison", two), false);
+    assert.equal(resolveSiteOpen(toggleCollapsedSite(collapsed, "madison", two), "madison", two), true);
+
+    const treeDesk = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
+    assert.match(treeDesk, /resolveSiteOpen\(collapsedSites, company\.id, site\)/);
+    assert.match(treeDesk, /toggleCollapsedSite\(prev, company\.id, site\)/);
+    assert.match(treeDesk, /aria-label=\{siteOpen \? "Collapse" : "Expand"\}/);
+    assert.match(treeDesk, /<CollapseChip open=\{siteOpen\} night=\{night\} \/>/);
+    assert.match(treeDesk, /siteIsCollapsible\(site\)/);
+    assert.equal(/openSites\[key\] \|\| true/.test(treeDesk), false);
+    assert.match(treeDesk, /useState<Set<string>>/);
   });
 });

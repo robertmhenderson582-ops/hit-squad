@@ -1,6 +1,8 @@
 import { markup6, type B2Period } from "./b2-east-coast.ts";
-import { inclusiveDays, parseYmd } from "./phase-schedule.ts";
+import { commercialMarkupRate } from "./estimate-total.ts";
+import { addDays, inclusiveDays, parseYmd } from "./phase-schedule.ts";
 import {
+  allowedShahanPeriod,
   isShahanCostPlus,
   lookupShahanEquipment,
   rematchEquipmentSheetToShahan,
@@ -9,8 +11,15 @@ import {
   shahanPeriodRate,
 } from "./shahan-wood-river.ts";
 import { notifyEstimateSheets } from "./sheet-events.ts";
+import {
+  allowedThirdPartyPeriod,
+  hasThirdPartyPeriodRate,
+  lookupThirdPartyRental,
+  thirdPartyRentalPeriodRate,
+} from "./third-party-rental.ts";
 
 export const EQUIPMENT_STORE_PREFIX = "hs_equip_v1:";
+/** Legacy alias. Commercial third-party fee is COMP 6.5% / Yates 10%, not this 6%. B-2 Cost+6% stays on markup6(). */
 export const THIRD_PARTY_MARKUP = 0.06;
 export const THIRD_PARTY_PERIODS = ["daily", "weekly", "monthly"] as const;
 export type ThirdPartyPeriod = (typeof THIRD_PARTY_PERIODS)[number];
@@ -131,6 +140,32 @@ export function billedPeriodCount(start: string, end: string, period: B2Period |
   return count;
 }
 
+/** Inverse of billedPeriodCount — an end date that bills `count` units from start. */
+export function endDateForPeriodCount(
+  start: string,
+  period: B2Period | ThirdPartyPeriod,
+  count: number,
+): string {
+  const n = Math.max(1, Math.round(Number(count) || 1));
+  if (!parseYmd(start)) return start || "";
+  if (period === "daily") return addDays(start, n - 1);
+  if (period === "hourly") return addDays(start, Math.max(1, Math.ceil(n / 8)) - 1);
+  if (period === "weekly") return addDays(start, 7 * (n - 1));
+  let end = start;
+  let guard = 0;
+  while (billedPeriodCount(start, end, period) < n && guard < 4000) {
+    end = addDays(end, 1);
+    guard += 1;
+  }
+  while (billedPeriodCount(start, end, period) > n && guard < 4000) {
+    const prev = addDays(end, -1);
+    if (!parseYmd(prev) || prev < start) break;
+    end = prev;
+    guard += 1;
+  }
+  return end;
+}
+
 export function largeToolAmount(line: LargeToolLine) {
   const item = lookupShahanEquipment(line.itemId);
   if (!item) return 0;
@@ -153,14 +188,56 @@ export function thirdPartyCost(line: ThirdPartyLine) {
   return Math.max(0, line.rate) * Math.max(0, line.qty) * periods + Math.max(0, line.freight);
 }
 
-export function thirdPartyMarkedUp(line: ThirdPartyLine) {
-  return markup6(thirdPartyCost(line));
+/** Catalog period with no rate → first available period + that catalog rate. Custom items stay as typed. */
+export function resolveThirdPartyLine(line: ThirdPartyLine): ThirdPartyLine {
+  const catalog = lookupThirdPartyRental(line.item);
+  if (!catalog) return line;
+  if (hasThirdPartyPeriodRate(catalog, line.period)) return line;
+  const period = allowedThirdPartyPeriod(catalog, line.period);
+  return { ...line, period, rate: thirdPartyRentalPeriodRate(catalog, period) };
 }
 
-export function equipmentTotals(sheet: EquipmentSheet) {
+/** Catalog period with no positive Shahan rate → first available. Cost-plus / no-rate rows keep the typed period. */
+export function resolveLargeToolLine(line: LargeToolLine): LargeToolLine {
+  const item = lookupShahanEquipment(line.itemId);
+  if (!item) return line;
+  const period = allowedShahanPeriod(item, line.period);
+  return period === line.period ? line : { ...line, period };
+}
+
+export function resolveEquipmentSheet(sheet: EquipmentSheet | null | undefined): EquipmentSheet {
+  const largeTools = sheet?.largeTools ?? [];
+  const thirdParty = sheet?.thirdParty ?? [];
+  return {
+    largeTools: largeTools.map(resolveLargeToolLine),
+    thirdParty: thirdParty.map(resolveThirdPartyLine),
+  };
+}
+
+export function thirdPartyMarkedUp(line: ThirdPartyLine, client = "", site = "") {
+  const cost = thirdPartyCost(line);
+  return Math.round(cost * (1 + commercialMarkupRate(client, site)) * 100) / 100;
+}
+
+export function equipmentTotals(sheet: EquipmentSheet, client = "", site = "") {
   const largeTools = sheet.largeTools.reduce((sum, line) => sum + largeToolAmount(line), 0);
-  const thirdParty = sheet.thirdParty.reduce((sum, line) => sum + thirdPartyMarkedUp(line), 0);
+  const thirdParty = sheet.thirdParty.reduce((sum, line) => sum + thirdPartyMarkedUp(line, client, site), 0);
   return { largeTools, thirdParty, total: largeTools + thirdParty };
+}
+
+export function parseEquipmentSheet(raw: unknown): EquipmentSheet {
+  const parsed = (raw && typeof raw === "object" ? raw : {}) as Partial<EquipmentSheet>;
+  const sheet = {
+    largeTools: Array.isArray(parsed.largeTools)
+      ? parsed.largeTools.map((line) => ({
+          ...line,
+          itemId: rematchShahanEquipmentId(line.itemId || ""),
+          freight: Number(line.freight) || 0,
+        }))
+      : [],
+    thirdParty: Array.isArray(parsed.thirdParty) ? parsed.thirdParty : [],
+  };
+  return rematchEquipmentSheetToShahan(sheet);
 }
 
 export function readEquipmentSheet(key: string): EquipmentSheet {
@@ -168,18 +245,7 @@ export function readEquipmentSheet(key: string): EquipmentSheet {
   try {
     const raw = window.localStorage.getItem(`${EQUIPMENT_STORE_PREFIX}${key}`);
     if (!raw) return emptyEquipmentSheet();
-    const parsed = JSON.parse(raw) as Partial<EquipmentSheet>;
-    const sheet = {
-      largeTools: Array.isArray(parsed.largeTools)
-        ? parsed.largeTools.map((line) => ({
-            ...line,
-            itemId: rematchShahanEquipmentId(line.itemId || ""),
-            freight: Number(line.freight) || 0,
-          }))
-        : [],
-      thirdParty: Array.isArray(parsed.thirdParty) ? parsed.thirdParty : [],
-    };
-    return rematchEquipmentSheetToShahan(sheet);
+    return parseEquipmentSheet(JSON.parse(raw));
   } catch {
     return emptyEquipmentSheet();
   }

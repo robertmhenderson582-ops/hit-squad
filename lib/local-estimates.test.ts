@@ -14,6 +14,7 @@ import {
   PACK_TITLE_MAX,
   rememberLocalPack,
   renameLocalPackTitle,
+  writeLocalPackStatus,
   scanStoredPackIds,
   siteIdFromSite,
   storageKeyForPack,
@@ -204,5 +205,22 @@ describe("local estimate packs", () => {
     assert.equal(again?.transferredFrom, undefined);
     assert.equal(again?.transferredFromName, undefined);
     assert.equal(again?.transferredTo, undefined);
+  });
+
+  it("persists estimate status on the pack identity", () => {
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-cat2pit",
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        status: "Draft",
+      },
+      store,
+    );
+    const written = writeLocalPackStatus("new-cat2pit", "Locked", store);
+    assert.equal(written?.status, "Locked");
+    assert.equal(listLocalPacks(store)[0]?.status, "Locked");
   });
 });

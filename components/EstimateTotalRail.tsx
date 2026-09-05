@@ -2,25 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useEstimatePackage } from "@/components/EstimatePackage";
-import { fcrSummary, readFcrPacket } from "@/lib/change-order-packet";
-import { equipmentTotals, readEquipmentSheet, thirdPartyCost } from "@/lib/equipment-sheet";
-import {
-  CBA_INCREASE_LABEL,
-  EQUIPMENT_CONTINGENCY_LABEL,
-  LABOR_CONTINGENCY_LABEL,
-  MORE_FUND_LABEL,
-  SUBS_CONTINGENCY_LABEL,
-  cbaIncreaseDollars,
-  moneyAdderLines,
-  moreFundDollars,
-} from "@/lib/estimate-money";
-import { estimateMarkupDollars, estimateTotalBreakdown, signedMoneyLines } from "@/lib/estimate-total";
+import { readFcrPacket } from "@/lib/change-order-packet";
+import { readEquipmentSheet } from "@/lib/equipment-sheet";
+import { deskPackageBreakdown, fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
-import { otherCostTotals, readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
-import { laborDollarsFromCrew, perDiemDollarsFromCrew } from "@/lib/shahan-wood-river";
-import { wageLookupOpts } from "@/lib/wage-lookup";
+import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
-import { readSubSheet, subcontractorMarkupBase, subcontractorTotal } from "@/lib/subcontractor";
+import { readSubSheet } from "@/lib/subcontractor";
 
 function money(value: number) {
   return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -53,50 +41,16 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
       staffPerMile: pack.jobMeta.staffMileageRate,
       craftPerMile: pack.jobMeta.craftMileageRate,
     });
-    const fcr = readFcrPacket(pack.estimateKey);
-    const thirdCost = equipment.thirdParty.reduce((sum, line) => sum + thirdPartyCost(line), 0);
-    const tools = equipmentTotals(equipment).largeTools;
-    const rest = otherCostTotals({ ...other, perDiemRate: 0 }, 0);
-    const perDiem = perDiemDollarsFromCrew(pack.crew, pack.jobMeta, site, client);
-    const subCtx = {
+    return deskPackageBreakdown({
+      crew: pack.crew,
       site,
       client,
-      otAfter8: pack.crew.otAfter8,
-    };
-    const sheet = readSubSheet(pack.estimateKey);
-    const subcontractor = subcontractorTotal(sheet, subCtx);
-    const labor = laborDollarsFromCrew(pack.crew, site, client, wageLookupOpts(site));
-    const cba = cbaIncreaseDollars(pack.crew, pack.jobMeta, site, client, wageLookupOpts(site));
-    const more = moreFundDollars(pack.crew, pack.jobMeta.moreFundPerHour, site, client);
-    const adders = moneyAdderLines({
-      labor,
-      equipment: tools + thirdCost,
-      subcontractor,
-      money: pack.jobMeta,
-      cbaIncrease: cba,
-      moreFund: more,
-    });
-    return estimateTotalBreakdown({
-      labor,
-      equipment: tools + thirdCost,
-      subcontractor,
-      markup: estimateMarkupDollars({
-        subcontractor: subcontractorMarkupBase(sheet, subCtx),
-        thirdParty: thirdCost,
-        misc: rest.misc,
-      }),
-      otherCost: rest.total + perDiem,
-      changeOrders: fcrSummary(fcr, 0, 0).total,
+      equipment,
+      otherCost: other,
+      subcontractor: readSubSheet(pack.estimateKey),
+      jobMeta: pack.jobMeta,
+      changeOrders: fcrChangeOrderTotal(readFcrPacket(pack.estimateKey)),
       hours: hours.hours,
-      client,
-      site,
-      extras: signedMoneyLines([
-        { id: "labor-contingency", label: LABOR_CONTINGENCY_LABEL, amount: adders.laborContingency },
-        { id: "equipment-contingency", label: EQUIPMENT_CONTINGENCY_LABEL, amount: adders.equipmentContingency },
-        { id: "subs-contingency", label: SUBS_CONTINGENCY_LABEL, amount: adders.subsContingency },
-        { id: "cba-increase", label: CBA_INCREASE_LABEL, amount: adders.cbaIncrease },
-        { id: "more-fund", label: MORE_FUND_LABEL, amount: adders.moreFund },
-      ]),
     });
   }, [
     client,

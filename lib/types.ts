@@ -51,6 +51,8 @@ export type SiteRecord = {
   contract: string;
   gate: string;
   notes: string;
+  /** Regular in-facility client (budget lane). Default false = competitive bid. */
+  regularClient?: boolean;
 };
 
 export type EquipmentLine = {

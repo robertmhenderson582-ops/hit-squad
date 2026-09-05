@@ -288,7 +288,7 @@ export function qualityWorkNames(phases: PhaseRow[] = []) {
 
 /** Awarded / live hinge. Kept for a later lead ask. V1.51 does not fire this interaction. */
 export function qualityLive(status = "") {
-  return status === "Awarded" || status === "Submitted" || status === "Estimate";
+  return status === "Awarded" || status === "Submitted" || status === "Draft" || status === "Estimate";
 }
 
 /** Estimate → Quality notify hinge. Kept inactive. Do not delete. */

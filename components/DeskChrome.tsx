@@ -33,6 +33,7 @@ function ChromeInner({
   title,
   kicker = "PROJECT CONTROLS",
   hideTitle = false,
+  variant = "paper",
 }: {
   children: React.ReactNode;
   title: string;
@@ -45,6 +46,7 @@ function ChromeInner({
   const lens = useLensUser();
   const { resolvedTheme } = useDisplay();
   const paper = resolvedTheme === "day";
+  const hero = variant === "hero";
   const [menuOpen, setMenuOpen] = useState(false);
   const [modsOpen, setModsOpen] = useState(false);
 
@@ -95,15 +97,19 @@ function ChromeInner({
   });
 
   return (
-    <div className={paper ? "paper-page" : "industrial-root"} data-capture-root>
+    <div
+      className={hero ? "desk-home-root" : paper ? "paper-page" : "industrial-root"}
+      data-capture-root
+      data-desk-chrome={hero ? "hero" : "paper"}
+    >
       <FieldTrialBanner />
-      <div className="relative z-10 mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
+      <div className={`relative z-10 mx-auto max-w-6xl px-3 ${hero ? "py-3 sm:px-4 sm:py-4" : "py-4 sm:px-4 sm:py-6"}`}>
         <header className={paper ? "paper-header rounded-xl px-4 py-4 sm:px-5" : "hud-bezel steel-plate px-4 py-4 sm:px-5"}>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <Link href="/" className="brand-static header-home min-w-0" title="Home" aria-label="Home">
               {paper ? (
                 <span className="flex min-w-0 items-center gap-2">
-                  <BrandMark variant="stacked" className="h-8 w-6 shrink-0" />
+                  <BrandMark variant="stacked" className="h-8 w-8 shrink-0" />
                   <span className="min-w-0 leading-none">
                     <span className="block font-display text-2xl tracking-[0.14em] text-white">HIT SQUAD</span>
                     <span className="mt-0.5 block font-display text-[11px] tracking-[0.22em] text-white/80">
@@ -161,7 +167,7 @@ function ChromeInner({
           </nav>
         </header>
 
-        <main className="mt-5">
+        <main className={hero ? "desk-home-main" : "mt-5"}>
           <DeskBanners />
           {MODULE_HREFS.includes(pathname) || pathname === "/settings/modules" ? <UnderConstructionBanner /> : null}
           {hideTitle ? null : (

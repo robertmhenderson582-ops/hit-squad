@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   blankCraftRow,
   hydrateSupportLines,
@@ -30,8 +30,24 @@ import {
 } from "@/lib/phase-schedule";
 import { emptyJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
 import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
-import { packIdFromStoreKey, renameLocalPackTitle, touchLocalPack } from "@/lib/local-estimates";
-import { hydrateFromVault, flushVaultUpsert, scheduleVaultUpsert } from "@/lib/estimate-vault-client";
+import { packIdFromStoreKey, findLocalPack, renameLocalPackTitle, touchLocalPack, writeLocalPackStatus } from "@/lib/local-estimates";
+import { catalogSites } from "@/lib/desk-data";
+import {
+  DEFAULT_ESTIMATE_STATUS,
+  clampEstimateStatus,
+  parseEstimateStatus,
+  readEstimateStatus,
+  writeEstimateStatus,
+  type EstimateStatus,
+} from "@/lib/estimate-status";
+import { regularClientFromParts } from "@/lib/site-regular";
+import {
+  ESTIMATE_VAULT_DEBOUNCE_MS,
+  flushVaultUpsert,
+  hydrateFromVault,
+  scheduleVaultUpsert,
+  type VaultUpsertResult,
+} from "@/lib/estimate-vault-client";
 import { persistCrewTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
 import { emptyOrgChart, readOrgChart, writeOrgChart, type OrgChartState } from "@/lib/org-chart";
@@ -57,8 +73,11 @@ type EstimatePackageApi = {
   patch: (id: PhaseId, next: Partial<PhaseRow>) => void;
   pickOt: (id: PhaseId, pick: PhaseOtPick) => void;
   setCrew: (next: CrewState | ((current: CrewState) => CrewState)) => void;
+  replaceFromImport: (next: { schedule: PhaseScheduleState; crew: CrewState; title?: string }) => void;
   setOrgChart: (next: OrgChartState | ((current: OrgChartState) => OrgChartState)) => void;
   setJobMeta: (next: JobMeta | ((current: JobMeta) => JobMeta)) => void;
+  status: EstimateStatus;
+  setPackStatus: (status: EstimateStatus) => EstimateStatus | null;
   setPackTitle: (title: string) => string | null;
   setActivities: (next: WorkActivity[] | ((current: WorkActivity[]) => WorkActivity[])) => void;
   addCraftRow: () => CraftRow;
@@ -74,6 +93,38 @@ const EstimatePackageContext = createContext<EstimatePackageApi | null>(null);
 
 function emptyCrew(): CrewState {
   return { staff: [], generalForeman: [], foreman: [], direct: [], support: [], otAfter8: false };
+}
+
+function packSite(estimateKey: string) {
+  const packId = packIdFromStoreKey(estimateKey);
+  const local = packId ? findLocalPack(packId) : null;
+  const site = local?.site || "";
+  const client = local?.client || "";
+  return {
+    packId,
+    local,
+    site,
+    client,
+    regularClient: regularClientFromParts(site, client, catalogSites()),
+  };
+}
+
+function readPackStatus(estimateKey: string): EstimateStatus {
+  const { packId, local, regularClient } = packSite(estimateKey);
+  if (!packId) return DEFAULT_ESTIMATE_STATUS;
+  const raw = local?.status ? parseEstimateStatus(local.status) : readEstimateStatus(packId);
+  return clampEstimateStatus(raw, regularClient);
+}
+
+/** Write missing pack status once so vault JSON becomes source of truth. Clamp invalid lane statuses. */
+function hydratePackStatus(estimateKey: string, status: EstimateStatus) {
+  const { packId, local, regularClient } = packSite(estimateKey);
+  if (!packId) return;
+  const next = clampEstimateStatus(status, regularClient);
+  if (!local?.status || parseEstimateStatus(local.status) !== next) {
+    writeLocalPackStatus(packId, next);
+  }
+  writeEstimateStatus(packId, next);
 }
 
 function readCrew(key: string): CrewState {
@@ -130,11 +181,38 @@ export function EstimatePackageProvider({
   const [orgChart, setOrgChartState] = useState<OrgChartState>(() => readOrgChart(estimateKey));
   const [jobMeta, setJobMetaState] = useState<JobMeta>(() => readJobMeta(estimateKey));
   const [activities, setActivitiesState] = useState<WorkActivity[]>(() => readActivities(estimateKey) ?? []);
+  const [status, setStatusState] = useState<EstimateStatus>(() => readPackStatus(estimateKey));
   const [ready, setReady] = useState(false);
   const [vaultSaveError, setVaultSaveError] = useState("");
+  const aliveRef = useRef(true);
+  const reportVaultErrors = useRef(false);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  function applyVaultFlushResult(result: VaultUpsertResult, opts?: { force?: boolean }) {
+    if (!aliveRef.current) return;
+    if (result.ok) {
+      setVaultSaveError("");
+      return;
+    }
+    if ((opts?.force || reportVaultErrors.current) && "error" in result && result.error) {
+      setVaultSaveError(result.error);
+    }
+  }
+
+  function queueVaultUpsert(packId: string) {
+    scheduleVaultUpsert(packId, undefined, applyVaultFlushResult);
+  }
 
   useEffect(() => {
     let cancelled = false;
+    reportVaultErrors.current = false;
+    setVaultSaveError("");
     setReady(false);
     const packId = packIdFromStoreKey(estimateKey);
     const boot = packId ? hydrateFromVault() : Promise.resolve([]);
@@ -146,14 +224,25 @@ export function EstimatePackageProvider({
       setOrgChartState(readOrgChart(estimateKey));
       setJobMetaState(readJobMeta(estimateKey));
       setActivitiesState(readActivities(estimateKey) ?? []);
+      const nextStatus = readPackStatus(estimateKey);
+      setStatusState(nextStatus);
+      hydratePackStatus(estimateKey, nextStatus);
       setReady(true);
-      if (packId) {
-        void flushVaultUpsert(packId).then((result) => {
-          if (cancelled) return;
-          if (!result.ok && "error" in result && result.error) setVaultSaveError(result.error);
-          else setVaultSaveError("");
-        });
-      }
+      if (!packId) return;
+      void (async () => {
+        const first = await flushVaultUpsert(packId);
+        if (cancelled || !aliveRef.current) return;
+        if (first.ok) {
+          setVaultSaveError("");
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        if (cancelled || !aliveRef.current) return;
+        const retry = await flushVaultUpsert(packId);
+        if (cancelled || !aliveRef.current) return;
+        if (retry.ok) setVaultSaveError("");
+        else console.warn("Drive sync delayed", "error" in retry ? retry.error : "");
+      })();
     });
     return () => {
       cancelled = true;
@@ -163,11 +252,19 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
+    const timer = window.setTimeout(() => {
+      reportVaultErrors.current = true;
+    }, ESTIMATE_VAULT_DEBOUNCE_MS + 400);
+    return () => window.clearTimeout(timer);
+  }, [estimateKey, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
     writeSchedule(estimateKey, schedule);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
       touchLocalPack(packId);
-      scheduleVaultUpsert(packId);
+      queueVaultUpsert(packId);
     }
   }, [estimateKey, ready, schedule]);
 
@@ -181,7 +278,7 @@ export function EstimatePackageProvider({
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
       touchLocalPack(packId);
-      scheduleVaultUpsert(packId);
+      queueVaultUpsert(packId);
     }
   }, [crew, estimateKey, jobMeta.craftMileageRate, jobMeta.staffMileageRate, ready]);
 
@@ -191,7 +288,7 @@ export function EstimatePackageProvider({
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
       touchLocalPack(packId);
-      scheduleVaultUpsert(packId);
+      queueVaultUpsert(packId);
     }
   }, [estimateKey, orgChart, ready]);
 
@@ -201,7 +298,7 @@ export function EstimatePackageProvider({
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
       touchLocalPack(packId);
-      scheduleVaultUpsert(packId);
+      queueVaultUpsert(packId);
     }
   }, [estimateKey, jobMeta, ready]);
 
@@ -211,7 +308,7 @@ export function EstimatePackageProvider({
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
       touchLocalPack(packId);
-      scheduleVaultUpsert(packId);
+      queueVaultUpsert(packId);
     }
   }, [activities, estimateKey, ready]);
 
@@ -221,7 +318,7 @@ export function EstimatePackageProvider({
     if (!packId) return;
     return onEstimateSheets(() => {
       touchLocalPack(packId);
-      scheduleVaultUpsert(packId);
+      queueVaultUpsert(packId);
     });
   }, [estimateKey, ready]);
 
@@ -234,6 +331,7 @@ export function EstimatePackageProvider({
       vaultSaveError,
       jobMeta,
       activities,
+      status,
       setProjectStartDate(start) {
         setSchedule((current) => {
           const next = setProjectStart(current, start);
@@ -296,11 +394,44 @@ export function EstimatePackageProvider({
       setCrew(next) {
         setCrewState((current) => (typeof next === "function" ? next(current) : next));
       },
+      replaceFromImport(next) {
+        setSchedule(next.schedule);
+        setCrewState({
+          staff: next.crew.staff ?? [],
+          generalForeman: next.crew.generalForeman ?? [],
+          foreman: next.crew.foreman ?? [],
+          direct: next.crew.direct ?? [],
+          support: hydrateSupportLines(next.crew.support),
+          otAfter8: Boolean(next.crew.otAfter8),
+        });
+        if (next.title) {
+          const packId = packIdFromStoreKey(estimateKey);
+          if (packId) {
+            renameLocalPackTitle(packId, next.title);
+            touchLocalPack(packId);
+            queueVaultUpsert(packId);
+          }
+        }
+      },
       setOrgChart(next) {
         setOrgChartState((current) => (typeof next === "function" ? next(current) : next));
       },
       setJobMeta(next) {
         setJobMetaState((current) => (typeof next === "function" ? next(current) : next));
+      },
+      setPackStatus(next) {
+        const { packId, regularClient } = packSite(estimateKey);
+        const parsed = clampEstimateStatus(parseEstimateStatus(next), regularClient);
+        setStatusState(parsed);
+        if (!packId) return parsed;
+        const saved = writeLocalPackStatus(packId, parsed);
+        writeEstimateStatus(packId, parsed);
+        if (saved) {
+          touchLocalPack(packId);
+          queueVaultUpsert(packId);
+          return saved.status ?? parsed;
+        }
+        return parsed;
       },
       setPackTitle(title) {
         const packId = packIdFromStoreKey(estimateKey);
@@ -308,7 +439,7 @@ export function EstimatePackageProvider({
         const renamed = renameLocalPackTitle(packId, title);
         if (renamed) {
           touchLocalPack(packId);
-          scheduleVaultUpsert(packId);
+          queueVaultUpsert(packId);
           return renamed.title;
         }
         return null;
@@ -320,7 +451,7 @@ export function EstimatePackageProvider({
         return blankCraftRow();
       },
     }),
-    [activities, crew, estimateKey, jobMeta, orgChart, schedule, vaultSaveError],
+    [activities, crew, estimateKey, jobMeta, orgChart, schedule, status, vaultSaveError],
   );
 
   return <EstimatePackageContext.Provider value={api}>{children}</EstimatePackageContext.Provider>;
@@ -341,8 +472,13 @@ export function useEstimatePackage() {
       patch() {},
       pickOt() {},
       setCrew() {},
+      replaceFromImport() {},
       setOrgChart() {},
       setJobMeta() {},
+      status: DEFAULT_ESTIMATE_STATUS,
+      setPackStatus() {
+        return null;
+      },
       setPackTitle() {
         return null;
       },

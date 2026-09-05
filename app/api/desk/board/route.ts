@@ -3,6 +3,7 @@ import { readSession } from "@/lib/auth";
 import { assignedCompany } from "@/lib/companies-store";
 import { cookieValue } from "@/lib/http";
 import { boardForUser } from "@/lib/desk-data";
+import { getOwnerSettings } from "@/lib/owner-settings-store";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
   const deskUser = await scopedDeskUser(user, request);
+  await getOwnerSettings();
   const companyId = await assignedCompany(deskUser.email);
   const scope = { isOwner: deskUser.role === "owner", email: deskUser.email, companyId };
 

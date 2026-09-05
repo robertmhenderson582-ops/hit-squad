@@ -19,7 +19,7 @@ import { ensureCbiDummyPack, shouldSeedCbiDummy } from "@/lib/cbi-dummy";
 import { catalogSites } from "@/lib/desk-data";
 import { companyScopeFor, isStandaloneId, type CompanyId } from "@/lib/companies";
 import { catalogSeedsAllowedOnDesk, jobsOnDesk, omitCatalogSeedJobs, omitCatalogSeedPacks, packForJob } from "@/lib/jobs";
-import { defaultOpenCompanyId, jobTree } from "@/lib/job-tree";
+import { jobTree, stickyOpenCompanyId, toggleOpenCompanyId } from "@/lib/job-tree";
 import type { JobRecord } from "@/lib/types";
 
 export function JobsDesk() {
@@ -101,12 +101,7 @@ export function JobsDesk() {
     sites: board?.sites?.length ? board.sites : catalogSites(),
     packs: deskPacks,
   });
-  const currentOpen =
-    openCompanyId === null
-      ? defaultOpenCompanyId(tree)
-      : openCompanyId === "" || tree.some((row) => row.id === openCompanyId)
-        ? openCompanyId
-        : defaultOpenCompanyId(tree);
+  const currentOpen = stickyOpenCompanyId(openCompanyId, tree);
 
   function refresh() {
     setTick((value) => value + 1);
@@ -151,12 +146,7 @@ export function JobsDesk() {
           estimates={estimates}
           packs={deskPacks}
           openCompanyId={currentOpen}
-          onToggleCompany={(id) =>
-            setOpenCompanyId((current) => {
-              const now = current === null ? defaultOpenCompanyId(tree) : current;
-              return now === id ? "" : id;
-            })
-          }
+          onToggleCompany={(id) => setOpenCompanyId((current) => toggleOpenCompanyId(current, id, tree))}
           onMenuChange={refresh}
         />
       )}

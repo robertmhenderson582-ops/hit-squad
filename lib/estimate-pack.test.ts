@@ -428,7 +428,97 @@ describe("estimate pack snapshot", () => {
     assert.equal(responseLeaksDrive({ folder: "1y6Q3TOnpXzV-Y1oeqjjrHfSXt9hcIrgW" }), true);
     const parsed = parseIncomingPack({ packId: "new-cat2pit", title: "Cat 2 Pit Stop" });
     assert.equal(parsed.ok, true);
+    if (parsed.ok) assert.equal(parsed.pack.status, undefined);
+    const migrated = parseIncomingPack({ packId: "new-cat2pit", title: "Cat 2 Pit Stop", status: "Estimate" });
+    assert.equal(migrated.ok, true);
+    if (migrated.ok) assert.equal(migrated.pack.status, "Draft");
+    const locked = parseIncomingPack({ packId: "new-cat2pit", title: "Cat 2 Pit Stop", status: "Locked" });
+    assert.equal(locked.ok, true);
+    if (locked.ok) {
+      assert.equal(locked.pack.status, "Locked");
+      assert.equal(publicPack(locked.pack).status, "Locked");
+    }
+    const budgetAward = parseIncomingPack({
+      packId: "new-cat2pit",
+      title: "Cat 2 Pit Stop",
+      site: "Wood River — Roxana, IL",
+      status: "Awarded",
+    });
+    assert.equal(budgetAward.ok, true);
+    if (budgetAward.ok) assert.equal(budgetAward.pack.status, "Locked");
+    const bidAward = parseIncomingPack({
+      packId: "new-yates-bid",
+      title: "Yates bid",
+      client: "Georgia Power",
+      site: "Plant Yates",
+      status: "Awarded",
+    });
+    assert.equal(bidAward.ok, true);
+    if (bidAward.ok) assert.equal(bidAward.pack.status, "Awarded");
     assert.equal(parseIncomingPack({ packId: "est-u3" }).ok, false);
+  });
+
+  it("collects pack status from identity or localStorage and keeps it on apply", () => {
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-cat2pit",
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        status: "Review",
+      },
+      store,
+    );
+    const collected = collectPack(store, "new-cat2pit");
+    assert.equal(collected?.status, "Review");
+    applyPackToStore(store, { ...collected!, status: "Budgetary" });
+    assert.equal(collectPack(store, "new-cat2pit")?.status, "Budgetary");
+    const fromMirror = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-legacy-status",
+        title: "Old sheet",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+      },
+      fromMirror,
+    );
+    fromMirror.setItem("hs_estimate_status_v1:new-legacy-status", "Estimate");
+    assert.equal(collectPack(fromMirror, "new-legacy-status")?.status, "Draft");
+    rememberLocalPack(
+      {
+        packId: "new-wr-award",
+        title: "Aromatics",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        status: "Awarded",
+      },
+      store,
+    );
+    assert.equal(collectPack(store, "new-wr-award")?.status, "Locked");
+    const yates = rememberLocalPack(
+      {
+        packId: "new-yates-award",
+        title: "Yates bid",
+        client: "Georgia Power",
+        site: "Plant Yates",
+        status: "Awarded",
+      },
+      store,
+    );
+    assert.equal(yates?.status, "Awarded");
+    const ferndale = rememberLocalPack(
+      {
+        packId: "new-ferndale-award",
+        title: "Ferndale bid",
+        client: "Phillips 66",
+        site: "Ferndale",
+        status: "Awarded",
+      },
+      store,
+    );
+    assert.equal(ferndale?.status, "Awarded");
   });
 
   it("persists subcontractors on the pack without wiping crew, equipment, or Other Cost", () => {
