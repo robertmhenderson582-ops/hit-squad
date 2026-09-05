@@ -457,18 +457,19 @@ function noteText(text: string | undefined): string {
 
 /** Excel comments / notes — hover popups. Not VBA. Import ignores these. */
 function applySheetComments(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
-  const apply = (ref: string, text: string | undefined) => {
+  const known = new Set(sheet.cells.map((cell) => cell.ref));
+  const apply = (ref: string, text: string | undefined, requireCell: boolean) => {
     const body = noteText(text);
     if (!body) return;
+    if (requireCell && !known.has(ref)) return;
     const { row, colNum } = parseRef(ref);
     const cell = ws.getCell(row, colNum);
-    if (cell.value == null) cell.value = "";
     cell.note = {
       texts: [{ font: { size: 9, name: "Calibri", color: { argb: DARK_TEXT } }, text: body }],
     };
   };
-  for (const cell of sheet.cells) apply(cell.ref, cell.note);
-  for (const comment of sheet.comments ?? []) apply(comment.ref, comment.text);
+  for (const cell of sheet.cells) apply(cell.ref, cell.note, false);
+  for (const comment of sheet.comments ?? []) apply(comment.ref, comment.text, true);
 }
 
 function columnWidth(col: string, header: string | undefined, sheetName: string): number {

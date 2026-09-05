@@ -164,7 +164,6 @@ import {
   excelSafeSheetName,
   parseA1,
   type SheetCell,
-  type WorkbookComment,
   type WorkbookSheet,
 } from "./xlsx-minimal.ts";
 
@@ -391,8 +390,20 @@ function laborRowOffset(sheet: WorkbookSheet, row: number): number | null {
   return null;
 }
 
+function stripSheetComments(sheet: WorkbookSheet): WorkbookSheet {
+  return {
+    ...sheet,
+    cells: sheet.cells.map((cell) => (cell.note == null ? cell : { ...cell, note: undefined })),
+    comments: undefined,
+  };
+}
+
 /** Attach hover notes to the clock pick, Position / Bill as, day-grid HC/HPS/PD, and unlocked inputs. */
 export function attachEstimateComments(sheet: WorkbookSheet): WorkbookSheet {
+  // Job setup: no comments. Money Value / Start / Stop / holidays used to
+  // stamp notes, and leftovers without a cell painted the orphan triangle trail.
+  if (sheet.name === ESTIMATE_XLSX_SHEETS.jobSetup) return stripSheetComments(sheet);
+
   const notes = new Map<string, string>();
   const add = (ref: string, text: string | undefined) => {
     const body = (text ?? "").replace(/\s+/g, " ").trim();
@@ -437,15 +448,13 @@ export function attachEstimateComments(sheet: WorkbookSheet): WorkbookSheet {
     add(ref, headerInputNote(textAt(sheet.cells, `${colLetter(col)}6`)));
   }
 
-  const leftovers: WorkbookComment[] = [];
   const cells = sheet.cells.map((cell) => {
     const note = notes.get(cell.ref);
     if (!note) return cell;
-    notes.delete(cell.ref);
     return cell.note === note ? cell : { ...cell, note };
   });
-  for (const [ref, text] of notes) leftovers.push({ ref, text });
-  return { ...sheet, cells, comments: leftovers.length ? leftovers : undefined };
+  // Drop leftover notes that have no cell — those were the floating triangles.
+  return { ...sheet, cells, comments: undefined };
 }
 
 export function clockOverrideLabel(override: ClockOverride = "auto"): string {
@@ -2303,12 +2312,9 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
   const cells = headerCells(input);
   const headers = ["Phase", "ON", "Start", "Stop", "Days/wk", "Hrs/day", "OT after 8"];
   headers.forEach((label, index) => {
-    const ref = `${colLetter(index + 1)}6`;
-    const note = label === "Start" ? XLSX_INPUT_NOTES.start : label === "Stop" ? XLSX_INPUT_NOTES.stop : undefined;
-    cells.push({ ref, type: "text", value: label, note });
+    cells.push({ ref: `${colLetter(index + 1)}6`, type: "text", value: label });
   });
   const unlocked: Array<{ row: number; col: number }> = [];
-  const comments: WorkbookComment[] = [];
   const validations = PHASE_IDS.flatMap((_, index) => {
     const row = 7 + index;
     return [
@@ -2350,32 +2356,29 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
   const moneyRows: Array<{
     cell: string;
     label: string;
-    note: string;
     kind: "number" | "text" | "date" | "empty";
     value?: number | string | Date;
     fmt?: string;
   }> = [
-    { cell: JOB_SETUP_STAFF_PD_CELL, label: "Staff PD $ / day", note: XLSX_JOB_MONEY_NOTES.staffPd, kind: "number", value: rates.staffPerDiemRate, fmt: "$#,##0.00" },
-    { cell: JOB_SETUP_CRAFT_PD_CELL, label: "Craft PD $ / day", note: XLSX_JOB_MONEY_NOTES.craftPd, kind: "number", value: rates.craftPerDiemRate, fmt: "$#,##0.00" },
-    { cell: JOB_SETUP_STAFF_MILE_CELL, label: "Staff mileage $ / mile", note: XLSX_JOB_MONEY_NOTES.staffMile, kind: "number", value: rates.staffMileageRate, fmt: "$#,##0.00" },
-    { cell: JOB_SETUP_CRAFT_MILE_CELL, label: "Craft mileage $ / mile", note: XLSX_JOB_MONEY_NOTES.craftMile, kind: "number", value: rates.craftMileageRate, fmt: "$#,##0.00" },
-    { cell: JOB_SETUP_LABOR_CONT_CELL, label: "Labor contingency %", note: XLSX_JOB_MONEY_NOTES.laborCont, kind: "number", value: drivers.laborContingencyPct, fmt: "0.0" },
-    { cell: JOB_SETUP_EQUIP_CONT_CELL, label: "Equipment contingency %", note: XLSX_JOB_MONEY_NOTES.equipCont, kind: "number", value: drivers.equipmentContingencyPct, fmt: "0.0" },
-    { cell: JOB_SETUP_SUBS_CONT_CELL, label: "Subs contingency %", note: XLSX_JOB_MONEY_NOTES.subsCont, kind: "number", value: drivers.subsContingencyPct, fmt: "0.0" },
-    { cell: JOB_SETUP_CBA_ON_CELL, label: "CBA increase ON", note: XLSX_JOB_MONEY_NOTES.cbaOn, kind: "text", value: drivers.cbaIncreaseOn ? "YES" : "NO" },
+    { cell: JOB_SETUP_STAFF_PD_CELL, label: "Staff PD $ / day", kind: "number", value: rates.staffPerDiemRate, fmt: "$#,##0.00" },
+    { cell: JOB_SETUP_CRAFT_PD_CELL, label: "Craft PD $ / day", kind: "number", value: rates.craftPerDiemRate, fmt: "$#,##0.00" },
+    { cell: JOB_SETUP_STAFF_MILE_CELL, label: "Staff mileage $ / mile", kind: "number", value: rates.staffMileageRate, fmt: "$#,##0.00" },
+    { cell: JOB_SETUP_CRAFT_MILE_CELL, label: "Craft mileage $ / mile", kind: "number", value: rates.craftMileageRate, fmt: "$#,##0.00" },
+    { cell: JOB_SETUP_LABOR_CONT_CELL, label: "Labor contingency %", kind: "number", value: drivers.laborContingencyPct, fmt: "0.0" },
+    { cell: JOB_SETUP_EQUIP_CONT_CELL, label: "Equipment contingency %", kind: "number", value: drivers.equipmentContingencyPct, fmt: "0.0" },
+    { cell: JOB_SETUP_SUBS_CONT_CELL, label: "Subs contingency %", kind: "number", value: drivers.subsContingencyPct, fmt: "0.0" },
+    { cell: JOB_SETUP_CBA_ON_CELL, label: "CBA increase ON", kind: "text", value: drivers.cbaIncreaseOn ? "YES" : "NO" },
     {
       cell: JOB_SETUP_CBA_DATE_CELL,
       label: "CBA effective date",
-      note: XLSX_JOB_MONEY_NOTES.cbaDate,
       kind: drivers.cbaIncreaseDate && parseYmd(drivers.cbaIncreaseDate) ? "date" : "empty",
       value: drivers.cbaIncreaseDate ? parseYmd(drivers.cbaIncreaseDate) ?? undefined : undefined,
       fmt: JOB_SETUP_DATE_FMT,
     },
-    { cell: JOB_SETUP_CBA_PCT_CELL, label: "CBA increase %", note: XLSX_JOB_MONEY_NOTES.cbaPct, kind: "number", value: drivers.cbaIncreasePct, fmt: "0.0" },
+    { cell: JOB_SETUP_CBA_PCT_CELL, label: "CBA increase %", kind: "number", value: drivers.cbaIncreasePct, fmt: "0.0" },
     {
       cell: JOB_SETUP_MORE_CELL,
       label: "M.O.R.E. fund $ / hr",
-      note: XLSX_JOB_MONEY_NOTES.more,
       kind: "number",
       value: drivers.moreFundPerHour ?? 0,
       fmt: "$#,##0.00",
@@ -2386,13 +2389,11 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
     pushText(cells, `A${row}`, item.label);
     unlocked.push({ row, col: 2 });
     if (item.kind === "number" && typeof item.value === "number") {
-      cells.push({ ref: item.cell, type: "number", value: money(item.value), note: item.note, numFmt: item.fmt });
+      cells.push({ ref: item.cell, type: "number", value: money(item.value), numFmt: item.fmt });
     } else if (item.kind === "text" && typeof item.value === "string") {
-      cells.push({ ref: item.cell, type: "text", value: item.value, note: item.note });
+      cells.push({ ref: item.cell, type: "text", value: item.value });
     } else if (item.kind === "date" && item.value instanceof Date) {
-      cells.push({ ref: item.cell, type: "date", value: item.value, note: item.note, numFmt: JOB_SETUP_DATE_FMT });
-    } else {
-      comments.push({ ref: item.cell, text: item.note });
+      cells.push({ ref: item.cell, type: "date", value: item.value, numFmt: JOB_SETUP_DATE_FMT });
     }
   }
   validations.push(
@@ -2407,7 +2408,6 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
   const holidays = jobHolidays(input);
   const holidayRows = Math.min(JOB_SETUP_HOLIDAY_MAX, Math.max(holidays.length + JOB_SETUP_HOLIDAY_SPARE, JOB_SETUP_HOLIDAY_SPARE));
   pushText(cells, `A${JOB_SETUP_HOLIDAY_START_ROW}`, JOB_SETUP_HOLIDAYS_TITLE);
-  comments.push({ ref: `A${JOB_SETUP_HOLIDAY_START_ROW}`, text: XLSX_JOB_MONEY_NOTES.holidays });
   for (let index = 0; index < holidayRows; index += 1) {
     const excelRow = JOB_SETUP_HOLIDAY_START_ROW + index;
     const ymd = holidays[index];
@@ -2426,11 +2426,8 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
         ref: `B${excelRow}`,
         type: "date",
         value: date,
-        note: index === 0 ? XLSX_JOB_MONEY_NOTES.holidays : undefined,
         numFmt: JOB_SETUP_DATE_FMT,
       });
-    } else if (index === 0) {
-      comments.push({ ref: `B${excelRow}`, text: XLSX_JOB_MONEY_NOTES.holidays });
     }
   }
   return {
@@ -2439,7 +2436,6 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
     hiddenCols: [8, 9],
     unlocked,
     validations,
-    comments: comments.length ? comments : undefined,
     headerRows: [13, 14, JOB_SETUP_HOLIDAY_START_ROW],
     merges: ["A1:G1", "A2:G2", "A3:G3", "A13:B13"],
   };

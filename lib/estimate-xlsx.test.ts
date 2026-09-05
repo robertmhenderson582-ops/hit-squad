@@ -31,7 +31,6 @@ import {
   JOB_SETUP_HOLIDAYS_TITLE,
   JOB_SETUP_HOLIDAY_START_ROW,
   JOB_SETUP_STAFF_PD_CELL,
-  XLSX_JOB_MONEY_NOTES,
   ESTIMATE_XLSX_SHEETS,
   EXCEL_FORMULA_CHAR_LIMIT,
   OPTIONAL_ESTIMATE_SHEETS,
@@ -1747,12 +1746,12 @@ describe("estimate excel export", () => {
 
     const setupModel = sheetOf(model, ESTIMATE_XLSX_SHEETS.jobSetup)!;
     const setupCells = cellMap(setupModel);
-    assert.equal(setupCells.get("B7")?.note, XLSX_INPUT_NOTES.on);
-    assert.equal(setupCells.get("C7")?.note, XLSX_INPUT_NOTES.start);
-    assert.equal(setupCells.get("D7")?.note, XLSX_INPUT_NOTES.stop);
-    assert.equal(setupCells.get("E7")?.note, XLSX_INPUT_NOTES.daysPerWeek);
-    assert.equal(setupCells.get("F7")?.note, XLSX_INPUT_NOTES.hoursPerDay);
-    assert.equal(setupCells.get("G7")?.note, XLSX_INPUT_NOTES.ot);
+    assert.equal(setupCells.get("B7")?.note, undefined);
+    assert.equal(setupCells.get("C7")?.note, undefined);
+    assert.equal(setupCells.get("D7")?.note, undefined);
+    assert.equal(setupCells.get("E7")?.note, undefined);
+    assert.equal(setupCells.get("F7")?.note, undefined);
+    assert.equal(setupCells.get("G7")?.note, undefined);
 
     const miscModel = sheetOf(model, ESTIMATE_XLSX_SHEETS.misc)!;
     assert.equal(cellMap(miscModel).get("C7")?.note, XLSX_INPUT_NOTES.quantity);
@@ -1788,7 +1787,7 @@ describe("estimate excel export", () => {
     assert.equal(excelNoteText(staff.getCell("K6")), "");
     assert.equal(excelNoteText(staff.getCell("J5")), "");
     assert.equal(staff.getCell("J6").numFmt, LABOR_DATE_NUM_FMT);
-    assert.equal(excelNoteText(setup.getCell("E7")), XLSX_INPUT_NOTES.daysPerWeek);
+    assert.equal(excelNoteText(setup.getCell("E7")), "");
     assert.equal(excelNoteText(misc.getCell("C7")), XLSX_INPUT_NOTES.quantity);
     assert.equal(excelNoteText(misc.getCell("D7")), XLSX_INPUT_NOTES.rate);
     assert.equal(excelNoteText(rental.getCell("B7")), XLSX_INPUT_NOTES.period);
@@ -2562,7 +2561,7 @@ describe("estimate excel export", () => {
     assert.equal(setupCells.get(JOB_SETUP_LABOR_CONT_CELL)?.value, 10);
     assert.equal(setupCells.get(JOB_SETUP_MORE_CELL)?.type, "number");
     assert.equal(setupCells.get(JOB_SETUP_MORE_CELL)?.value, 0);
-    assert.equal(setupCells.get(JOB_SETUP_STAFF_PD_CELL)?.note, XLSX_JOB_MONEY_NOTES.staffPd);
+    assert.equal(setupCells.get(JOB_SETUP_STAFF_PD_CELL)?.note, undefined);
     const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff);
     const pdRate = staff?.cells.find((cell) => cell.ref === "D13");
     assert.match(String(pdRate?.value ?? ""), /Job setup/);
@@ -2573,6 +2572,52 @@ describe("estimate excel export", () => {
       (cell) => cell.ref.startsWith("A") && cell.value === "Labor contingency",
     );
     assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${laborRow?.ref.slice(1)}`)?.value), /Job setup/);
+  });
+
+  it("writes Job setup with zero comments and no orphan triangles", async () => {
+    const input = {
+      ...woodRiverFixture(),
+      jobMeta: {
+        ...woodRiverFixture().jobMeta,
+        cbaIncreaseOn: false,
+        cbaIncreaseDate: "",
+        holidays: [],
+      },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const setup = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.jobSetup);
+    assert.ok(setup);
+    assert.equal(setup.comments, undefined);
+    assert.equal(setup.cells.some((cell) => Boolean(cell.note)), false);
+    const setupCells = cellMap(setup);
+    assert.equal(setupCells.get("B14")?.note, undefined);
+    assert.equal(setupCells.get(JOB_SETUP_STAFF_PD_CELL)?.note, undefined);
+    assert.equal(setupCells.get(JOB_SETUP_CRAFT_PD_CELL)?.note, undefined);
+    assert.equal(setupCells.get(JOB_SETUP_MORE_CELL)?.note, undefined);
+    assert.equal(setupCells.get("C6")?.note, undefined);
+    assert.equal(setupCells.get("D6")?.note, undefined);
+    assert.equal(setupCells.get(`A${JOB_SETUP_HOLIDAY_START_ROW}`)?.note, undefined);
+    const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff);
+    assert.match(String(cellMap(staff).get("J6")?.note ?? ""), /2026/);
+
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const ws = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup);
+    assert.ok(ws);
+    let jobSetupNotes = 0;
+    for (let row = 1; row <= 48; row += 1) {
+      for (let col = 1; col <= 12; col += 1) {
+        if (excelNoteText(ws.getCell(row, col))) jobSetupNotes += 1;
+      }
+    }
+    assert.equal(jobSetupNotes, 0);
+    assert.equal(excelNoteText(ws.getCell(JOB_SETUP_STAFF_PD_CELL)), "");
+    assert.equal(excelNoteText(ws.getCell("C6")), "");
+    assert.equal(excelNoteText(ws.getCell("D6")), "");
+    const craft = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    assert.ok(craft);
+    assert.match(excelNoteText(craft.getCell("J6")), /2026/);
   });
 
   it("lists Job setup holidays and zeroes that craft day", () => {
@@ -2651,7 +2696,7 @@ describe("estimate excel export", () => {
     assert.match(String(start?.formulae[0] ?? ""), /LOOKUP/);
     assert.equal(stop?.type, "date");
     assert.equal(stop?.formulae[0], "C7");
-    assert.match(String(setup.cells.find((cell) => cell.ref === "C6")?.note ?? ""), /flow forward/);
+    assert.equal(setup.cells.find((cell) => cell.ref === "C6")?.note, undefined);
   });
 
   it("builds a CAT 2-shaped package and keeps FIELD TRIAL / Forgebook off the client file", async () => {

@@ -83,7 +83,10 @@ describe("xlsx-minimal Excel-strict package", () => {
     const bytes = await buildWorkbook([
       {
         name: "Notes",
-        cells: [{ ref: "A1", type: "text", value: "HC", note: "Headcount for that day." }],
+        cells: [
+          { ref: "A1", type: "text", value: "HC", note: "Headcount for that day." },
+          { ref: "B2", type: "text", value: "qty" },
+        ],
         comments: [{ ref: "B2", text: "Enter quantity." }],
       },
     ]);

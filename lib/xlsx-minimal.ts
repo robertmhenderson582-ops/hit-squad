@@ -199,7 +199,7 @@ export type WorkbookSheet = {
   validations?: SheetValidation[];
   /** Extra unlocked cells (Job setup + cost-sheet estimator inputs). */
   unlocked?: Array<{ row: number; col: number }>;
-  /** Hover comments for refs that have no cell, or extras beyond `cell.note`. */
+  /** Extra hover comments on existing cells (beyond `cell.note`). Refs with no cell are dropped — those paint orphan triangles. */
   comments?: WorkbookComment[];
   /** Very-hidden helper sheets (Position lists). */
   veryHidden?: boolean;
