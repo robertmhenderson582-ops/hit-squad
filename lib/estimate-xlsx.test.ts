@@ -28,6 +28,8 @@ import {
   JOB_SETUP_LABOR_CONT_CELL,
   JOB_SETUP_MORE_CELL,
   JOB_SETUP_MONEY_TITLE,
+  JOB_SETUP_HOLIDAYS_TITLE,
+  JOB_SETUP_HOLIDAY_START_ROW,
   JOB_SETUP_STAFF_PD_CELL,
   XLSX_JOB_MONEY_NOTES,
   ESTIMATE_XLSX_SHEETS,
@@ -2573,6 +2575,70 @@ describe("estimate excel export", () => {
       (cell) => cell.ref.startsWith("A") && cell.value === "Labor contingency",
     );
     assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)?.cells.find((cell) => cell.ref === `C${laborRow?.ref.slice(1)}`)?.value), /Job setup/);
+  });
+
+  it("lists Job setup holidays and zeroes that craft day", () => {
+    const holiday = "2026-09-16";
+    const input = {
+      title: "Holiday window",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      crew: {
+        direct: [
+          craft("dr-h", "Boilermaker Journeyman", 10, {
+            start: "2026-09-14",
+            end: "2026-09-18",
+            perDiemPeople: 1,
+            otAfter8: true,
+          }),
+        ],
+        otAfter8: true,
+      },
+      schedule: {
+        projectStart: "2026-09-14",
+        multiUnits: false,
+        units: [],
+        phases: [
+          {
+            id: "mech" as const,
+            name: "Mechanical Window",
+            on: true,
+            start: "2026-09-14",
+            stop: "2026-09-18",
+            daysPerWeek: 5,
+            hoursPerDay: 10,
+            otAfter8: true,
+            sundaysOff: [],
+          },
+        ],
+      },
+      jobMeta: { holidays: [holiday], staffPerDiemRate: 140, craftPerDiemRate: 130 },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const setup = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.jobSetup);
+    assert.ok(setup);
+    assert.equal(cellMap(setup).get(`A${JOB_SETUP_HOLIDAY_START_ROW}`)?.value, JOB_SETUP_HOLIDAYS_TITLE);
+    const firstHoliday = cellMap(setup).get(`B${JOB_SETUP_HOLIDAY_START_ROW}`);
+    assert.equal(firstHoliday?.type, "date");
+    const stamped = firstHoliday?.value as Date;
+    assert.equal(
+      `${stamped.getFullYear()}-${String(stamped.getMonth() + 1).padStart(2, "0")}-${String(stamped.getDate()).padStart(2, "0")}`,
+      holiday,
+    );
+    assert.equal(setup.unlocked?.some((cell) => cell.row === JOB_SETUP_HOLIDAY_START_ROW && cell.col === 2), true);
+    const direct = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.direct);
+    assert.ok(direct);
+    const dates = laborCalendarDates(input);
+    const index = dates.indexOf(holiday);
+    assert.equal(index >= 0, true);
+    const col = LABOR_DATE_START_COL + index;
+    assert.ok(direct.holidayCols?.some((item) => item.col === col && item.ymd === holiday));
+    const hours = laborHours(direct, "Boilermaker Journeyman");
+    const day = colLetter(col);
+    assert.equal(cellMap(direct).get(`${day}${hours.hc}`)?.value, 0);
+    assert.equal(cellMap(direct).get(`${day}${hours.pd}`)?.value, 0);
+    assert.match(String(cellMap(direct).get(`${day}6`)?.note ?? ""), /Holiday/);
+    assert.equal(deskEstimateTotal(input) < deskEstimateTotal({ ...input, jobMeta: { ...input.jobMeta, holidays: [] } }), true);
   });
 
   it("puts date pickers on Job setup Start/Stop and blocks back-in-time Stop", () => {

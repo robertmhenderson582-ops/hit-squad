@@ -31,6 +31,9 @@ import {
   JOB_SETUP_LABOR_CONT_CELL,
   JOB_SETUP_MONEY_TITLE,
   JOB_SETUP_MORE_CELL,
+  JOB_SETUP_HOLIDAYS_TITLE,
+  JOB_SETUP_HOLIDAY_START_ROW,
+  JOB_SETUP_HOLIDAY_MAX,
   JOB_SETUP_STAFF_MILE_CELL,
   JOB_SETUP_STAFF_PD_CELL,
   JOB_SETUP_SUBS_CONT_CELL,
@@ -75,7 +78,7 @@ import {
 } from "./equipment-sheet.ts";
 import { type MiscLine, type OtherCostSheet, type TravelKind, type TravelLine } from "./other-cost.ts";
 import type { B2Period } from "./b2-east-coast.ts";
-import { isStaffSeat, type ClockOverride } from "./hours-clock.ts";
+import { hydrateHolidays, isStaffSeat, type ClockOverride } from "./hours-clock.ts";
 import type { EstimateXlsxCrew } from "./estimate-xlsx.ts";
 import {
   cascadePhases,
@@ -381,18 +384,28 @@ function rangeShiftOf(range: CalendarRange): CalendarRange["shift"] {
   return range.shift ?? "Days";
 }
 
-function existingDayPlug(row: CraftRow, ymd: string, night: boolean): Pick<ImportedDay, "hc" | "hps" | "pd"> {
-  return laborDayPlug(row, ymd, night);
+function existingDayPlug(
+  row: CraftRow,
+  ymd: string,
+  night: boolean,
+  holidays: string[] = [],
+): Pick<ImportedDay, "hc" | "hps" | "pd"> {
+  return laborDayPlug(row, ymd, night, holidays);
 }
 
 function sameQty(left: number, right: number) {
   return Math.abs(left - right) < 0.02;
 }
 
-function existingMatchesDays(row: CraftRow | undefined, days: ImportedDay[], night: boolean): boolean {
+function existingMatchesDays(
+  row: CraftRow | undefined,
+  days: ImportedDay[],
+  night: boolean,
+  holidays: string[] = [],
+): boolean {
   if (!row?.ranges?.length) return false;
   return days.every((day) => {
-    const plug = existingDayPlug(row, day.ymd, night);
+    const plug = existingDayPlug(row, day.ymd, night, holidays);
     return sameQty(plug.hc, day.hc) && sameQty(plug.pd, day.pd) && (day.hc <= 0 || sameQty(plug.hps, day.hps) || plug.hps === 0);
   });
 }
@@ -404,19 +417,32 @@ function existingRangesForSide(row: CraftRow, night: boolean): CalendarRange[] {
   });
 }
 
-function fillBlankHps(days: ImportedDay[], night: boolean, phases: PhaseRow[], existing?: CraftRow): ImportedDay[] {
+function fillBlankHps(
+  days: ImportedDay[],
+  night: boolean,
+  phases: PhaseRow[],
+  existing?: CraftRow,
+  holidays: string[] = [],
+): ImportedDay[] {
   return days.map((day) => {
     if (day.hps > 0 || day.hc <= 0) return day;
-    const plug = existing ? existingDayPlug(existing, day.ymd, night) : { hc: 0, hps: 0, pd: 0 };
+    const plug = existing ? existingDayPlug(existing, day.ymd, night, holidays) : { hc: 0, hps: 0, pd: 0 };
     const phase = phaseOwningDate(phases, day.ymd);
     const hps = plug.hps || Number(existing?.ranges?.[0]?.hoursPerShift) || Number(phase?.hoursPerDay) || 0;
     return hps > 0 ? { ...day, hps } : day;
   });
 }
 
-function rangesFromDays(days: ImportedDay[], night: boolean, phases: PhaseRow[], existing?: CraftRow): CalendarRange[] {
-  const filled = fillBlankHps(days, night, phases, existing);
-  if (existing && existingMatchesDays(existing, filled, night)) {
+function rangesFromDays(
+  days: ImportedDay[],
+  night: boolean,
+  phases: PhaseRow[],
+  existing?: CraftRow,
+  holidays: string[] = [],
+): CalendarRange[] {
+  const holidaySet = new Set(hydrateHolidays(holidays));
+  const filled = fillBlankHps(days, night, phases, existing, holidays);
+  if (existing && existingMatchesDays(existing, filled, night, holidays)) {
     return existingRangesForSide(existing, night);
   }
   const byYmd = new Map(filled.map((day) => [day.ymd, day]));
@@ -433,7 +459,9 @@ function rangesFromDays(days: ImportedDay[], night: boolean, phases: PhaseRow[],
     });
     const firstLive = window.find(dayLive);
     const pattern = firstLive ?? { hc: 0, hps: phase.hoursPerDay || 0, pd: 0 };
-    const skipDates = window.filter((day) => !dayLive(day) || dayPattern(day) !== dayPattern(pattern)).map((day) => day.ymd);
+    const skipDates = window
+      .filter((day) => !holidaySet.has(day.ymd) && (!dayLive(day) || dayPattern(day) !== dayPattern(pattern)))
+      .map((day) => day.ymd);
     ranges.push(rangeFromPattern(window, night, phase, phase.start, phase.stop, pattern, skipDates, existing));
     const extras = window.filter((day) => dayLive(day) && dayPattern(day) !== dayPattern(pattern));
     const extraPatterns = new Map<string, ImportedDay[]>();
@@ -446,7 +474,7 @@ function rangesFromDays(days: ImportedDay[], night: boolean, phases: PhaseRow[],
     for (const group of extraPatterns.values()) {
       const start = group[0].ymd;
       const end = group[group.length - 1].ymd;
-      const skip = eachYmd(start, end).filter((ymd) => !group.some((day) => day.ymd === ymd));
+      const skip = eachYmd(start, end).filter((ymd) => !holidaySet.has(ymd) && !group.some((day) => day.ymd === ymd));
       ranges.push(rangeFromPattern(group, night, phase, start, end, group[0], skip, existing));
     }
   }
@@ -461,7 +489,7 @@ function rangesFromDays(days: ImportedDay[], night: boolean, phases: PhaseRow[],
   for (const group of leftoverPatterns.values()) {
     const start = group[0].ymd;
     const end = group[group.length - 1].ymd;
-    const skip = eachYmd(start, end).filter((ymd) => !group.some((day) => day.ymd === ymd));
+    const skip = eachYmd(start, end).filter((ymd) => !holidaySet.has(ymd) && !group.some((day) => day.ymd === ymd));
     ranges.push(rangeFromPattern(group, night, phaseOwningDate(phases, start), start, end, group[0], skip, existing));
   }
   return ranges;
@@ -530,7 +558,20 @@ function parseJobSetupMoney(ws: ExcelJS.Worksheet | undefined): Partial<JobRates
     cbaIncreaseDate: cellYmd(jobSetupCell(ws, JOB_SETUP_CBA_DATE_CELL).value),
     cbaIncreasePct: asNum(jobSetupCell(ws, JOB_SETUP_CBA_PCT_CELL).value),
     moreFundPerHour: moreEmpty ? null : asNum(moreRaw),
+    holidays: parseJobSetupHolidays(ws),
   };
+}
+
+function parseJobSetupHolidays(ws: ExcelJS.Worksheet): string[] {
+  const title = asText(ws.getCell(JOB_SETUP_HOLIDAY_START_ROW, 1).value);
+  if (title && title !== JOB_SETUP_HOLIDAYS_TITLE) return [];
+  const dates: string[] = [];
+  const last = JOB_SETUP_HOLIDAY_START_ROW + JOB_SETUP_HOLIDAY_MAX - 1;
+  for (let row = JOB_SETUP_HOLIDAY_START_ROW; row <= last; row += 1) {
+    const ymd = cellYmd(ws.getCell(row, 2).value);
+    if (ymd) dates.push(ymd);
+  }
+  return hydrateHolidays(dates);
 }
 
 function parseCraftSheet(ws: ExcelJS.Worksheet | undefined): ImportedBlock[] {
@@ -591,14 +632,19 @@ function rollupHours(days: ImportedDay[]) {
   );
 }
 
-function applyRowFromBlocks(existing: CraftRow, blocks: ImportedBlock[], phases: PhaseRow[]): CraftRow {
+function applyRowFromBlocks(
+  existing: CraftRow,
+  blocks: ImportedBlock[],
+  phases: PhaseRow[],
+  holidays: string[] = [],
+): CraftRow {
   const dayBlocks = blocks.filter((block) => !block.night);
   const nightBlocks = blocks.filter((block) => block.night);
   const position = blocks.find((block) => block.position.trim())?.position || existing.position;
   const seeded = { ...existing, position };
   const ranges = [
-    ...dayBlocks.flatMap((block) => rangesFromDays(block.days, false, phases, seeded)),
-    ...nightBlocks.flatMap((block) => rangesFromDays(block.days, true, phases, seeded)),
+    ...dayBlocks.flatMap((block) => rangesFromDays(block.days, false, phases, seeded, holidays)),
+    ...nightBlocks.flatMap((block) => rangesFromDays(block.days, true, phases, seeded, holidays)),
   ];
   const hours = rollupHours(blocks.flatMap((block) => block.days));
   const night = ranges.some((range) => range.shift === "Nights");
@@ -631,6 +677,7 @@ function applyBlocks(
   bySheet: Array<{ sheet: string; blocks: ImportedBlock[] }>,
   phases: PhaseRow[],
   storedRanges?: Record<string, CalendarRange[]>,
+  holidays: string[] = [],
 ): EstimateXlsxCrew {
   const next: EstimateXlsxCrew = {
     staff: [...(base.staff ?? [])],
@@ -658,7 +705,7 @@ function applyBlocks(
         id: group[0].id,
         ranges: storedRangesForRow(storedRanges, group[0].id),
       };
-      const row = applyRowFromBlocks(existing, group, phases);
+      const row = applyRowFromBlocks(existing, group, phases, holidays);
       const list = [...(next[lane] as CraftRow[])];
       const index = list.findIndex((item) => item.id === row.id);
       const written = lane === "support" ? hydrateSupportLine({ ...row, billedAs: (row as SupportLine).billedAs ?? "" }) : row;
@@ -884,7 +931,7 @@ export async function parseEstimateXlsx(bytes: Uint8Array): Promise<EstimateImpo
   const blocks = typed.blocks;
   if (!blocks.length && !wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup)) throw new Error(ESTIMATE_IMPORT_ERROR);
   const crewRanges = parseCrewRanges(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crewRanges));
-  const crew = applyBlocks({}, bySheet, schedule.phases, crewRanges);
+  const crew = applyBlocks({}, bySheet, schedule.phases, crewRanges, jobMeta?.holidays ?? []);
   return {
     ...header,
     schedule,
@@ -1247,7 +1294,13 @@ function asRecordish(raw: unknown): Partial<SubSheet> | null {
 
 export function applyEstimateImport(base: EstimatePackSnapshot, imported: EstimateImport): AppliedEstimateImport {
   const schedule = mergeSchedule(imported.schedule);
-  const crew = applyBlocks(asCrew(base.crew), blocksBySheet(imported.blocks), schedule.phases, imported.crewRanges);
+  const holidays = hydrateHolidays(
+    imported.jobMeta?.holidays ??
+      (base.jobMeta && typeof base.jobMeta === "object" && "holidays" in base.jobMeta
+        ? (base.jobMeta as { holidays?: unknown }).holidays
+        : []),
+  );
+  const crew = applyBlocks(asCrew(base.crew), blocksBySheet(imported.blocks), schedule.phases, imported.crewRanges, holidays);
   const costs = applyImportedCosts(base, imported, schedule);
   return {
     ...base,

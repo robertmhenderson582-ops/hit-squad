@@ -48,6 +48,8 @@ const FMT_DATE = "YYYY-MM-DD";
 
 /** Sat/Sun day-grid fill. Robert’s CAT 2: WEEKDAY=7 or 1 → #C9C9C9. Clock math unchanged. */
 export const LABOR_WEEKEND_FILL = "FFC9C9C9";
+/** Holiday day-grid — muted, not weekend gray and not yellow HC. */
+export const LABOR_HOLIDAY_FILL = "FFB7B4AE";
 export const LABOR_SAT_HEADER = LABOR_WEEKEND_FILL;
 export const LABOR_SAT_BODY = LABOR_WEEKEND_FILL;
 export const LABOR_SUN_HEADER = LABOR_WEEKEND_FILL;
@@ -412,6 +414,7 @@ function isLaborSheet(name: string) {
 /** Yellow HC / HPS / PD count day-grid — same unlocked edit surface as HC. */
 export function isLaborDayInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
   if (!isLaborSheet(sheet.name) || colNum < LABOR_DATE_FIRST_COL) return false;
+  if (sheet.holidayCols?.some((item) => item.col === colNum)) return false;
   const kind = laborRowKind(sheet.cells, row);
   return kind === "hc" || kind === "hps" || kind === "pd";
 }
@@ -898,6 +901,7 @@ function paintLaborDayCalendar(
 ) {
   if (lastDateCol < LABOR_DATE_FIRST_COL) return;
   const weekend = new Set((sheet.weekendCols ?? []).map((item) => item.col));
+  const holiday = new Set((sheet.holidayCols ?? []).map((item) => item.col));
   const spacers = new Set(sheet.spacerRows ?? []);
   for (let row = 7; row <= maxRow; row += 1) {
     const kind = laborRowKind(sheet.cells, row);
@@ -905,6 +909,11 @@ function paintLaborDayCalendar(
       const cell = ws.getCell(row, col);
       if (spacers.has(row) || totalRows.has(row)) {
         cell.fill = solid(spacers.has(row) ? LABOR_SPACER : SHEET_VOID_WASH);
+        continue;
+      }
+      if (holiday.has(col)) {
+        cell.fill = solid(LABOR_HOLIDAY_FILL);
+        cell.font = { ...(cell.font ?? {}), color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
         continue;
       }
       if (weekend.has(col)) {
@@ -1035,6 +1044,17 @@ function applyLaborChrome(
       }
     }
   }
+  for (const holiday of sheet.holidayCols ?? []) {
+    for (let row = 6; row <= maxRow; row += 1) {
+      if (totalRows.has(row)) continue;
+      if (sheet.spacerRows?.includes(row)) continue;
+      const exCell = ws.getCell(row, holiday.col);
+      exCell.fill = solid(LABOR_HOLIDAY_FILL);
+      if (row === 6) {
+        exCell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 7 };
+      }
+    }
+  }
 
   if (lastDateCol >= LABOR_DATE_FIRST_COL) {
     const first = colLetter(LABOR_DATE_FIRST_COL);
@@ -1058,6 +1078,7 @@ function applyLaborChrome(
 
   paintLaborDayCalendar(ws, sheet, lastDateCol, maxRow, totalRows);
   const weekendCols = new Set((sheet.weekendCols ?? []).map((item) => item.col));
+  const holidayCols = new Set((sheet.holidayCols ?? []).map((item) => item.col));
   for (let col = LABOR_DATE_FIRST_COL; col <= lastDateCol; col += 1) {
     const weekday = ws.getCell(5, col);
     centerLaborCell(weekday);
@@ -1066,14 +1087,15 @@ function applyLaborChrome(
     const header = ws.getCell(6, col);
     centerLaborCell(header);
     header.numFmt = LABOR_DATE_NUM_FMT;
-    const weekend = weekendCols.has(col);
+    const muted = weekendCols.has(col) || holidayCols.has(col);
     header.font = {
       bold: true,
-      color: { argb: weekend ? DARK_TEXT : WHITE },
+      color: { argb: muted ? DARK_TEXT : WHITE },
       name: "Calibri",
       size: 9,
     };
-    if (!weekend) header.fill = solid(STEEL_DEEP);
+    if (holidayCols.has(col)) header.fill = solid(LABOR_HOLIDAY_FILL);
+    else if (!weekendCols.has(col)) header.fill = solid(STEEL_DEEP);
   }
   for (let col = 1; col <= LABOR_INSTRUMENT_LAST_COL; col += 1) {
     centerLaborCell(ws.getCell(6, col));

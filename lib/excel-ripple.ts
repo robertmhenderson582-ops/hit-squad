@@ -40,6 +40,8 @@
  * the phase bar; edits to that card, Position dropdowns, hour cells, and
  * Bill as import back into the live desk pack. The Look pass shipped the
  * phase bar as a view of Job setup only — this compile adds the card + path.
+ * Job setup holidays (jobMeta.holidays YYYY-MM-DD) skip billable hours the same
+ * way range skipDates do. Excel Job setup lists them; craft day-grid marks those columns.
  */
 export const EXCEL_RIPPLE_RETROACTIVE = true;
 export const EXCEL_RIPPLE_RULE =

@@ -593,6 +593,7 @@ export function laborDollarsFromCrew(
   site = "",
   client = "",
   opts: ShahanLookupOpts = {},
+  holidays: string[] = [],
 ): number {
   const rows = [
     ...(crew.staff ?? []),
@@ -604,7 +605,7 @@ export function laborDollarsFromCrew(
   return (
     Math.round(
       rows.reduce((sum, row) => {
-        const hours = computeRowHours(row, site, client, crew.otAfter8);
+        const hours = computeRowHours(row, site, client, crew.otAfter8, "", holidays);
         const title = shahanCrewTitle(row);
         return sum + shahanCrewCostAmount(title, hours, {
           ...opts,
@@ -626,11 +627,12 @@ export function perDiemDaysFromCrew(
   },
   site = "",
   client = "",
+  holidays: string[] = [],
 ): { staff: number; craft: number } {
   const staffRows = [...(crew.staff ?? []), ...(crew.generalForeman ?? [])];
   const craftRows = [...(crew.foreman ?? []), ...(crew.direct ?? []), ...(crew.support ?? [])];
-  const staff = staffRows.reduce((sum, row) => sum + computeRowHours(row, site, client, crew.otAfter8).pd, 0);
-  const craft = craftRows.reduce((sum, row) => sum + computeRowHours(row, site, client, crew.otAfter8).pd, 0);
+  const staff = staffRows.reduce((sum, row) => sum + computeRowHours(row, site, client, crew.otAfter8, "", holidays).pd, 0);
+  const craft = craftRows.reduce((sum, row) => sum + computeRowHours(row, site, client, crew.otAfter8, "", holidays).pd, 0);
   return { staff, craft };
 }
 
@@ -639,8 +641,9 @@ export function perDiemDollarsFromCrew(
   rates: { staffPerDiemRate: number; craftPerDiemRate: number },
   site = "",
   client = "",
+  holidays: string[] = [],
 ): number {
-  const days = perDiemDaysFromCrew(crew, site, client);
+  const days = perDiemDaysFromCrew(crew, site, client, holidays);
   return Math.round((days.staff * Math.max(0, rates.staffPerDiemRate) + days.craft * Math.max(0, rates.craftPerDiemRate)) * 100) / 100;
 }
 
