@@ -2639,9 +2639,9 @@ describe("estimate excel export", () => {
         .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
         .map((name) => zip.file(name)?.async("string") ?? Promise.resolve("")),
     );
-    const laborXml = staffXmls.find((xml) => /min="10" max="10" width="3.2"/.test(xml));
-    assert.ok(laborXml, "each day col must be its own 3.2 width tag so Excel does not leave M+ at default");
-    assert.equal(/min="10" max="1[1-9]" width="3.2"/.test(laborXml), false);
+    const laborXml = staffXmls.find((xml) => /min="10" max="10" width="7"/.test(xml));
+    assert.ok(laborXml, "each day col must be its own 7 width tag so Excel does not leave M+ at default");
+    assert.equal(/min="10" max="1[1-9]" width="7"/.test(laborXml), false);
     assert.equal(staffBook.getColumn(LABOR_DATE_START_COL + dates.length).hidden, true);
     assert.equal(staffBook.getColumn(200).hidden, true);
     const lastStaffRow = Math.max(...staff.cells.map((cell) => Number(cell.ref.replace(/^[A-Z]+/, ""))));
@@ -2886,7 +2886,7 @@ describe("estimate excel export", () => {
       assert.match(xml, /outlineLevelCol="1"/);
       assert.match(xml, /<outlinePr[^>]*summaryRight="1"/);
       assert.match(xml, /formatColumns="1"/);
-      assert.match(xml, /min="10" max="10" width="3.2"/);
+      assert.match(xml, /min="10" max="10" width="7"/);
     }
     const nonLabor = sheetXml.filter((xml) => !/min="1" max="1"[^>]*outlineLevel="1"/.test(xml));
     assert.ok(nonLabor.length);

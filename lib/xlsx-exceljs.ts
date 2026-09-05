@@ -453,7 +453,9 @@ function applySheetComments(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
     const body = noteText(text);
     if (!body) return;
     const { row, colNum } = parseRef(ref);
-    ws.getCell(row, colNum).note = {
+    const cell = ws.getCell(row, colNum);
+    if (cell.value == null) cell.value = "";
+    cell.note = {
       texts: [{ font: { size: 9, name: "Calibri", color: { argb: DARK_TEXT } }, text: body }],
     };
   };
