@@ -30,8 +30,8 @@ export function EstimateWorkbook({
     [direct, foreman, generalForeman, staff],
   );
   const labor = useMemo(
-    () => sumSplits(craftRows.map((row) => computeRowHours(row, site, client))),
-    [client, craftRows, site],
+    () => sumSplits(craftRows.map((row) => computeRowHours(row, site, client, false, "", pack.jobMeta.holidays ?? []))),
+    [client, craftRows, pack.jobMeta.holidays, site],
   );
 
   return (

@@ -33,8 +33,9 @@ export function StaffingPlanDesk({
         client,
         phases: staffingPhasesFromSchedule(pack.schedule),
         crew: pack.crew,
+        holidays: pack.jobMeta.holidays,
       }),
-    [client, pack.crew, pack.schedule, site],
+    [client, pack.crew, pack.jobMeta.holidays, pack.schedule, site],
   );
   const rows = visibleStaffingRows(plan, showFull);
   const coastLabel = plan.coast === "west" ? "West Coast (John)" : "East Coast (Nathan)";

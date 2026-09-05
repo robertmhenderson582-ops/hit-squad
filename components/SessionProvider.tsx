@@ -111,18 +111,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         throw new Error(message);
       }
 
-      const confirmed = await fetchSession();
-      if (!confirmed) {
-        const message = "Session was not established. Stay on this screen.";
-        setError(message);
-        setStatus("unauthenticated");
-        setUser(null);
-        throw new Error(message);
-      }
-
-      setUser(confirmed);
+      // Login JSON + Set-Cookie is enough to open the desk. Do not block on a
+      // second session GET. Soft-verify in the background and overlay live flags.
+      setUser(data.user);
       setStatus("authenticated");
       setError(null);
+      void fetchSession()
+        .then((confirmed) => {
+          if (confirmed) setUser(confirmed);
+        })
+        .catch(() => undefined);
     },
     [],
   );

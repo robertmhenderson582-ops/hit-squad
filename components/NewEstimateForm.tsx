@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DeskChrome } from "@/components/DeskChrome";
 import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
-import { EstimatePackageProvider } from "@/components/EstimatePackage";
+import { EstimatePackageProvider, useEstimatePackage } from "@/components/EstimatePackage";
+import { HoldScreen } from "@/components/HoldScreen";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
 import { EquipmentDesk } from "@/components/EquipmentDesk";
@@ -47,18 +48,18 @@ export function NewEstimateForm() {
 
   useEffect(() => {
     if (!pack || size === "shop") return;
+    const existing = findLocalPack(pack);
+    rememberLocalPack({
+      packId: pack,
+      title: existing?.title || name,
+      client,
+      site,
+      size: size ?? undefined,
+      ownerEmail: lens?.email || user?.email,
+      estimator: lens?.name || user?.name,
+      status: existing?.status || "Draft",
+    });
     void hydrateFromVault(undefined, { viewAs: seat }).then(() => {
-      const existing = findLocalPack(pack);
-      rememberLocalPack({
-        packId: pack,
-        title: existing?.title || name,
-        client,
-        site,
-        size: size ?? undefined,
-        ownerEmail: lens?.email || user?.email,
-        estimator: lens?.name || user?.name,
-        status: existing?.status || "Draft",
-      });
       scheduleVaultUpsert(pack);
       void flushVaultUpsert(pack);
     });
@@ -73,7 +74,7 @@ export function NewEstimateForm() {
   }
 
   if (!pack) {
-    return <p className="p-6 text-sm text-[#5b6f73]">Opening package</p>;
+    return <HoldScreen label="OPENING PACKAGE" variant="panel" />;
   }
 
   return <NewEstimateDesk client={client} site={site} name={name} size={size} pack={pack} />;
@@ -104,9 +105,79 @@ function NewEstimateDesk({
 
   const existingClient = size !== "other";
   const estimateKey = newEstimateKey(pack);
+  const existing = findLocalPack(pack);
+  rememberLocalPack({
+    packId: pack,
+    title: existing?.title || name,
+    client,
+    site,
+    size: size ?? undefined,
+    ownerEmail: lens?.email || user?.email,
+    estimator: lens?.name || user?.name,
+    status: existing?.status || "Draft",
+  });
 
   return (
     <EstimatePackageProvider estimateKey={estimateKey}>
+    <NewEstimateDeskBody
+      client={client}
+      site={site}
+      title={title}
+      setTitle={setTitle}
+      pack={pack}
+      tab={tab}
+      setTab={setTab}
+      alias={alias}
+      user={user}
+      lens={lens}
+      plant={plant}
+      otRule={otRule}
+      needsRates={needsRates}
+      existingClient={existingClient}
+      setRatesTick={setRatesTick}
+    />
+    </EstimatePackageProvider>
+  );
+}
+
+function NewEstimateDeskBody({
+  client,
+  site,
+  title,
+  setTitle,
+  pack,
+  tab,
+  setTab,
+  alias,
+  user,
+  plant,
+  otRule,
+  needsRates,
+  existingClient,
+  setRatesTick,
+}: {
+  client: string;
+  site: string;
+  title: string;
+  setTitle: (next: string) => void;
+  pack: string;
+  tab: EstimateTab;
+  setTab: (next: EstimateTab) => void;
+  alias: (value: string) => string;
+  user: ReturnType<typeof useSession>["user"];
+  lens: ReturnType<typeof useDeskLens>["lens"];
+  plant: string;
+  otRule: string;
+  needsRates: boolean;
+  existingClient: boolean;
+  setRatesTick: (next: (value: number) => number) => void;
+}) {
+  const estimate = useEstimatePackage();
+  if (!estimate.ready) {
+    return <HoldScreen label="OPENING PACKAGE" variant="panel" />;
+  }
+
+  return (
     <EstimateWorkspace
       crumb={`${alias(plant)} / ${title}`}
       tab={tab}
@@ -149,6 +220,5 @@ function NewEstimateDesk({
       {tab === "change-orders" ? <ChangeOrderPacket client={client} site={site} /> : null}
       {tab === "rodeo" ? <RodeoFormDesk client={client} site={site} name={title} /> : null}
     </EstimateWorkspace>
-    </EstimatePackageProvider>
   );
 }

@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { HoldScreen } from "@/components/HoldScreen";
 import { PasswordField } from "@/components/PasswordField";
 import { useSession } from "@/components/SessionProvider";
 import { isOwnerLoginEmail } from "@/lib/owner-login";
@@ -36,6 +37,7 @@ export function LoginForm() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting) return;
     setLocalError(null);
 
     if (!acknowledged) {
@@ -102,13 +104,18 @@ export function LoginForm() {
         body: JSON.stringify({ kind: "failed", who: email }),
       }).catch(() => undefined);
       setLocalError(err instanceof Error ? err.message : "Sign-in failed.");
-    } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-5" noValidate>
+    <form onSubmit={onSubmit} className="relative space-y-5" noValidate>
+      {submitting ? (
+        <div className="absolute inset-0 z-20 flex items-center justify-center rounded bg-ink/80">
+          <HoldScreen label="CHECKING SESSION" variant="compact" />
+        </div>
+      ) : null}
+      <fieldset disabled={submitting} className="space-y-5 border-0 p-0 disabled:opacity-40">
       <section className="rounded border border-amber-flare/40 bg-black/25 p-4">
         <p className="font-mono text-[10px] tracking-[0.28em] text-amber-label">CONFIDENTIAL</p>
         <p className="mt-2 text-sm leading-6 text-paper-cream/90">
@@ -125,6 +132,7 @@ export function LoginForm() {
           type="checkbox"
           checked={acknowledged}
           onChange={(event) => setAcknowledged(event.target.checked)}
+          disabled={submitting}
           className="mt-1 h-4 w-4 accent-steel"
         />
         <span>
@@ -141,6 +149,7 @@ export function LoginForm() {
             autoComplete="username"
             value={email}
             onChange={(event) => onEmailChange(event.target.value)}
+            disabled={submitting}
             className="mt-1 w-full border border-steel-rim/40 bg-ink/70 px-3 py-2 font-mono text-sm text-paper-cream"
             required
           />
@@ -162,6 +171,7 @@ export function LoginForm() {
               onChange={setNextPassword}
               minLength={8}
               required
+              disabled={submitting}
             />
             <PasswordField
               label="CONFIRM PASSWORD"
@@ -171,6 +181,7 @@ export function LoginForm() {
               onChange={setConfirmPassword}
               minLength={8}
               required
+              disabled={submitting}
             />
           </>
         ) : null}
@@ -191,6 +202,7 @@ export function LoginForm() {
               value={password}
               onChange={setPassword}
               required
+              disabled={submitting}
             />
             {gate === "password" ? (
               <button
@@ -240,6 +252,7 @@ export function LoginForm() {
       >
         {submitting ? "CHECKING SESSION" : gate === "identify" ? "CONTINUE" : gate === "recover" ? "RECOVER THE DESK" : "ENTER THE DESK"}
       </button>
+      </fieldset>
     </form>
   );
 }

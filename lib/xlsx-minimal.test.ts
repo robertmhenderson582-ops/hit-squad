@@ -83,7 +83,10 @@ describe("xlsx-minimal Excel-strict package", () => {
     const bytes = await buildWorkbook([
       {
         name: "Notes",
-        cells: [{ ref: "A1", type: "text", value: "HC", note: "Headcount for that day." }],
+        cells: [
+          { ref: "A1", type: "text", value: "HC", note: "Headcount for that day." },
+          { ref: "B2", type: "text", value: "qty" },
+        ],
         comments: [{ ref: "B2", text: "Enter quantity." }],
       },
     ]);
@@ -101,5 +104,21 @@ describe("xlsx-minimal Excel-strict package", () => {
     };
     assert.equal(noteOf("A1"), "Headcount for that day.");
     assert.equal(noteOf("B2"), "Enter quantity.");
+  });
+
+  it("drops comments that have no cell so they cannot paint orphan triangles", async () => {
+    const bytes = await buildWorkbook([
+      {
+        name: "Notes",
+        cells: [{ ref: "A1", type: "text", value: "HC" }],
+        comments: [{ ref: "Z99", text: "orphan" }],
+      },
+    ]);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const sheet = wb.getWorksheet("Notes");
+    assert.ok(sheet);
+    const note = sheet.getCell("Z99").note;
+    assert.equal(note == null || note === "", true);
   });
 });

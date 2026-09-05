@@ -58,6 +58,9 @@
  * + Position / hour / Bill as import ships on this compile (excel-ripple.ts).
  * Phase-bar day/night/complete hour chips ship on the next Excel compile —
  * view of live calendar ST+OT+DT per Job setup phase (import does not edit chips).
+ * Each DAYSHIFT / NIGHTSHIFT title carries its own D / N / C chips on that
+ * block’s title row — phase-bounded ST+OT+DT for that position only. Not a
+ * sheet-global row-3 strip of every craft.
  * Hidden _CrewRanges is a view of live pack CalendarRange stacks for create-new.
  * Import uses those ranges only when the daily HC/HPS/PD grid still matches.
  * Look sample xlsx files are stale chrome (no _CrewRanges). Fresh export always
@@ -99,6 +102,7 @@ import {
   boundOtLabel,
   clockTitle,
   computeRangeHours,
+  hydrateHolidays,
   isStaffSeat,
   mondayKey,
   parseYmd,
@@ -156,10 +160,10 @@ import { summaryAmountAt } from "./xlsx-eval.ts";
 import {
   buildWorkbook,
   colLetter,
+  excelDateSerial,
   excelSafeSheetName,
   parseA1,
   type SheetCell,
-  type WorkbookComment,
   type WorkbookSheet,
 } from "./xlsx-minimal.ts";
 
@@ -190,6 +194,10 @@ export const JOB_SETUP_CBA_ON_CELL = "B22";
 export const JOB_SETUP_CBA_DATE_CELL = "B23";
 export const JOB_SETUP_CBA_PCT_CELL = "B24";
 export const JOB_SETUP_MORE_CELL = "B25";
+export const JOB_SETUP_HOLIDAYS_TITLE = "Holidays";
+export const JOB_SETUP_HOLIDAY_START_ROW = 27;
+export const JOB_SETUP_HOLIDAY_SPARE = 8;
+export const JOB_SETUP_HOLIDAY_MAX = 24;
 export const RATE_TOOLS_SECTION = "Large tools (COE / dry rates)";
 export const RATE_RENTAL_SECTION = "Third-party rental";
 /** First day-grid column after the A–I instrument (Shift sits next to Position). */
@@ -199,11 +207,12 @@ export const LABOR_INSTRUMENT_LAST_COL = 9;
 export const LABOR_PHASE_ROW = 4;
 export const LABOR_PHASE_ROW_END = 5;
 export const LABOR_PHASE_LABEL = "Phase";
-/** Day / night / complete hour chips sit on the unused date cells of row 3 (above the phase name). */
+/** Unused header row above the phase name. Hour chips sit on each position title row. */
 export const LABOR_PHASE_CHIP_ROW = 3;
-export const LABOR_PHASE_CHIP_DAYS_FMT = '"D"0';
-export const LABOR_PHASE_CHIP_NIGHTS_FMT = '"N"0';
-export const LABOR_PHASE_CHIP_COMPLETE_FMT = '"C"0';
+/** Spaced prefix so Excel does not read D9784 as a cell ref. */
+export const LABOR_PHASE_CHIP_DAYS_FMT = '"D "0';
+export const LABOR_PHASE_CHIP_NIGHTS_FMT = '"N "0';
+export const LABOR_PHASE_CHIP_COMPLETE_FMT = '"C "0';
 /** Two-letter weekday over the date number (row 5 / row 6). */
 export const LABOR_WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 export const LABOR_BLOCK_HEIGHT = 7;
@@ -319,6 +328,7 @@ export const XLSX_JOB_MONEY_NOTES = {
   cbaDate: "CBA increase starts on this date. Desk splits craft hours on this date.",
   cbaPct: "CBA increase percent. 3 = 3%. Applies to COMP / Shahan base wage (baseSt), not billed ST.",
   more: "M.O.R.E. fund $ per craft hour. Blank stays $0. Summary $ = desk MORE hours × this cell.",
+  holidays: "Plant / job holidays (YYYY-MM-DD). No ST/OT/DT/HC those days. Same list as Job setup on the desk.",
   cbaSummary: "CBA $ is desk hours after the effective date × base wage × %. Not billed composite. Math does not live in Excel.",
 } as const;
 
@@ -369,6 +379,7 @@ export function headerInputNote(header: string): string | undefined {
   if (h === "cba effective date") return XLSX_JOB_MONEY_NOTES.cbaDate;
   if (h === "cba increase %") return XLSX_JOB_MONEY_NOTES.cbaPct;
   if (h === "m.o.r.e. fund $ / hr") return XLSX_JOB_MONEY_NOTES.more;
+  if (h === "holidays") return XLSX_JOB_MONEY_NOTES.holidays;
   return XLSX_INPUT_NOTES.fallback;
 }
 
@@ -379,8 +390,20 @@ function laborRowOffset(sheet: WorkbookSheet, row: number): number | null {
   return null;
 }
 
+function stripSheetComments(sheet: WorkbookSheet): WorkbookSheet {
+  return {
+    ...sheet,
+    cells: sheet.cells.map((cell) => (cell.note == null ? cell : { ...cell, note: undefined })),
+    comments: undefined,
+  };
+}
+
 /** Attach hover notes to the clock pick, Position / Bill as, day-grid HC/HPS/PD, and unlocked inputs. */
 export function attachEstimateComments(sheet: WorkbookSheet): WorkbookSheet {
+  // Job setup: no comments. Money Value / Start / Stop / holidays used to
+  // stamp notes, and leftovers without a cell painted the orphan triangle trail.
+  if (sheet.name === ESTIMATE_XLSX_SHEETS.jobSetup) return stripSheetComments(sheet);
+
   const notes = new Map<string, string>();
   const add = (ref: string, text: string | undefined) => {
     const body = (text ?? "").replace(/\s+/g, " ").trim();
@@ -425,15 +448,13 @@ export function attachEstimateComments(sheet: WorkbookSheet): WorkbookSheet {
     add(ref, headerInputNote(textAt(sheet.cells, `${colLetter(col)}6`)));
   }
 
-  const leftovers: WorkbookComment[] = [];
   const cells = sheet.cells.map((cell) => {
     const note = notes.get(cell.ref);
     if (!note) return cell;
-    notes.delete(cell.ref);
     return cell.note === note ? cell : { ...cell, note };
   });
-  for (const [ref, text] of notes) leftovers.push({ ref, text });
-  return { ...sheet, cells, comments: leftovers.length ? leftovers : undefined };
+  // Drop leftover notes that have no cell — those were the floating triangles.
+  return { ...sheet, cells, comments: undefined };
 }
 
 export function clockOverrideLabel(override: ClockOverride = "auto"): string {
@@ -918,7 +939,7 @@ function jobDaysRef(index: number, row: number) {
 }
 
 function jobSetupPhaseOwns(dateRef: string, phaseId: PhaseId) {
-  return `AND(${jobSetupCell("B", phaseId)}="ON",${jobSetupCell("C", phaseId)}<=${dateRef},${jobSetupCell("D", phaseId)}>=${dateRef})`;
+  return `AND(${jobSetupCell("B", phaseId)}="ON",INT(${jobSetupCell("C", phaseId)})<=INT(${dateRef}),INT(${jobSetupCell("D", phaseId)})>=INT(${dateRef}))`;
 }
 
 function jobSetupInPhase(dateRef: string) {
@@ -952,9 +973,11 @@ function jobSetupTextEquals(expr: string, expected: string) {
   return `${expr}="${expected}"`;
 }
 
-function jobSetupExportLock(dateRef: string, owner: PhaseRow | undefined, inPhaseRef: string) {
+function jobSetupExportLock(ymd: string, owner: PhaseRow | undefined, inPhaseRef: string) {
+  const date = parseYmd(ymd);
+  const serial = date ? excelDateSerial(date) : 0;
   if (!owner) return `NOT(${inPhaseRef})`;
-  return `AND(${jobSetupCell("B", owner.id)}="ON",${jobSetupCell("C", owner.id)}<=${dateRef},${jobSetupCell("D", owner.id)}>=${dateRef},${jobSetupTextEquals(jobSetupCell("G", owner.id), owner.otAfter8 ? "YES" : "NO")})`;
+  return `AND(${jobSetupCell("B", owner.id)}="ON",INT(${jobSetupCell("C", owner.id)})<=${serial},INT(${jobSetupCell("D", owner.id)})>=${serial},${jobSetupTextEquals(jobSetupCell("G", owner.id), owner.otAfter8 ? "YES" : "NO")})`;
 }
 
 function buildJobDaysSheet(dates: string[]): WorkbookSheet | null {
@@ -1167,22 +1190,33 @@ function rowHasNightBlock(row: CraftRow) {
   });
 }
 
-function rangeCoversDay(row: CraftRow, range: CalendarRange, ymd: string, night: boolean): boolean {
+function jobHolidays(input?: Pick<EstimateXlsxInput, "jobMeta"> | string[] | null): string[] {
+  if (Array.isArray(input)) return hydrateHolidays(input);
+  return hydrateHolidays(input?.jobMeta && "holidays" in input.jobMeta ? input.jobMeta.holidays : []);
+}
+
+function rangeCoversDay(
+  row: CraftRow,
+  range: CalendarRange,
+  ymd: string,
+  night: boolean,
+  holidays: string[] = [],
+): boolean {
   if (range.off) return false;
   const shift = rangeShift(row, range);
   if (night && shift === "Days") return false;
   if (!night && shift === "Nights") return false;
   if (!range.start || !range.end) return false;
   if (ymd < range.start || ymd > range.end) return false;
-  if (range.skipDates?.includes(ymd)) return false;
+  if (range.skipDates?.includes(ymd) || holidays.includes(ymd)) return false;
   const date = parseYmd(ymd);
   if (!date) return false;
   if (Array.isArray(range.days) && range.days.length === 7 && !range.days[date.getDay()]) return false;
   return true;
 }
 
-function coveringRanges(row: CraftRow, ymd: string, night: boolean): CalendarRange[] {
-  return (row.ranges ?? []).filter((range) => rangeCoversDay(row, range, ymd, night));
+function coveringRanges(row: CraftRow, ymd: string, night: boolean, holidays: string[] = []): CalendarRange[] {
+  return (row.ranges ?? []).filter((range) => rangeCoversDay(row, range, ymd, night, holidays));
 }
 
 function rangeDayHeadcount(row: CraftRow, range: CalendarRange, ymd: string, night: boolean): number {
@@ -1210,8 +1244,13 @@ function rangeDayPd(row: CraftRow, range: CalendarRange, night: boolean): number
 }
 
 /** Sum every live range on that day — hiring-progression adds stack, same as the desk. */
-export function laborDayPlug(row: CraftRow, ymd: string, night: boolean): { hc: number; hps: number; pd: number } {
-  const ranges = coveringRanges(row, ymd, night);
+export function laborDayPlug(
+  row: CraftRow,
+  ymd: string,
+  night: boolean,
+  holidays: string[] = [],
+): { hc: number; hps: number; pd: number } {
+  const ranges = coveringRanges(row, ymd, night, holidays);
   if (!ranges.length) return { hc: 0, hps: 0, pd: 0 };
   let hourUnits = 0;
   let pd = 0;
@@ -1266,6 +1305,7 @@ function deskBlockDayHours(
       phaseId: range.phaseId,
       clockOverride: override,
       skipDates: range.skipDates,
+      holidays: jobHolidays(input),
     });
     for (const day of hours.days) {
       const prev = map.get(day.date) ?? { st: 0, ot: 0, dt: 0 };
@@ -1279,16 +1319,29 @@ function deskBlockDayHours(
   return map;
 }
 
-function writeDateRow(cells: SheetCell[], dates: string[]) {
+function holidayHeaderNote(ymd: string): string | undefined {
+  const date = parseYmd(ymd);
+  if (!date) return "Holiday — no billable hours.";
+  return `${excelFullDateNote(date)} — Holiday, no billable hours.`;
+}
+
+function writeDateRow(cells: SheetCell[], dates: string[], holidays: string[] = []) {
+  const holiday = new Set(holidays);
   dates.forEach((ymd, index) => {
     const col = colLetter(LABOR_DATE_START_COL + index);
+    const note = holiday.has(ymd) ? holidayHeaderNote(ymd) : undefined;
     if (index === 0) {
       const date = parseYmd(ymd);
-      if (date) cells.push({ ref: `${col}6`, type: "date", value: date });
-      else pushText(cells, `${col}6`, ymd);
+      if (date) cells.push({ ref: `${col}6`, type: "date", value: date, note });
+      else cells.push({ ref: `${col}6`, type: "text", value: ymd, note });
       return;
     }
-    pushFormula(cells, `${col}6`, `${colLetter(LABOR_DATE_START_COL + index - 1)}6+1`);
+    cells.push({
+      ref: `${col}6`,
+      type: "formula",
+      value: `${colLetter(LABOR_DATE_START_COL + index - 1)}6+1`,
+      note,
+    });
   });
 }
 
@@ -1333,39 +1386,47 @@ function phaseHourRollup(titles: number[], startCol: number, endCol: number): st
 function writePhaseHourChips(
   cells: SheetCell[],
   runs: NonNullable<WorkbookSheet["phaseBar"]>,
-  dayTitles: number[],
-  nightTitles: number[],
+  blocks: Array<{ titleRow: number; night: boolean }>,
 ): NonNullable<WorkbookSheet["phaseChips"]> {
   const chips: NonNullable<WorkbookSheet["phaseChips"]> = [];
-  for (const run of runs) {
-    const span = run.endCol - run.startCol + 1;
-    const daysExpr = phaseHourRollup(dayTitles, run.startCol, run.endCol);
-    const nightsExpr = phaseHourRollup(nightTitles, run.startCol, run.endCol);
-    const completeExpr =
-      daysExpr === "0" ? nightsExpr : nightsExpr === "0" ? daysExpr : `(${daysExpr})+(${nightsExpr})`;
-    const place = (col: number, kind: "days" | "nights" | "complete", formula: string, fmt: string) => {
-      cells.push({
-        ref: `${colLetter(col)}${LABOR_PHASE_CHIP_ROW}`,
-        type: "formula",
-        value: formula,
-        numFmt: fmt,
-      });
-      chips.push({ col, kind, startCol: run.startCol, endCol: run.endCol, phaseId: run.phaseId });
-    };
-    if (span >= 3) {
-      place(run.startCol, "days", daysExpr, LABOR_PHASE_CHIP_DAYS_FMT);
-      place(run.startCol + 1, "nights", nightsExpr, LABOR_PHASE_CHIP_NIGHTS_FMT);
-      place(
-        run.startCol + 2,
-        "complete",
-        `${colLetter(run.startCol)}${LABOR_PHASE_CHIP_ROW}+${colLetter(run.startCol + 1)}${LABOR_PHASE_CHIP_ROW}`,
-        LABOR_PHASE_CHIP_COMPLETE_FMT,
-      );
-    } else if (span === 2) {
-      place(run.startCol, "days", daysExpr, LABOR_PHASE_CHIP_DAYS_FMT);
-      place(run.startCol + 1, "complete", completeExpr, LABOR_PHASE_CHIP_COMPLETE_FMT);
-    } else {
-      place(run.startCol, "complete", completeExpr, LABOR_PHASE_CHIP_COMPLETE_FMT);
+  for (const block of blocks) {
+    for (const run of runs) {
+      const span = run.endCol - run.startCol + 1;
+      const blockHours = phaseHourRollup([block.titleRow], run.startCol, run.endCol);
+      const daysExpr = block.night ? "0" : blockHours;
+      const nightsExpr = block.night ? blockHours : "0";
+      const chipRow = block.titleRow;
+      const place = (col: number, kind: "days" | "nights" | "complete", formula: string, fmt: string) => {
+        cells.push({
+          ref: `${colLetter(col)}${chipRow}`,
+          type: "formula",
+          value: formula,
+          numFmt: fmt,
+        });
+        chips.push({
+          col,
+          row: chipRow,
+          kind,
+          startCol: run.startCol,
+          endCol: run.endCol,
+          phaseId: run.phaseId,
+        });
+      };
+      if (span >= 3) {
+        place(run.startCol, "days", daysExpr, LABOR_PHASE_CHIP_DAYS_FMT);
+        place(run.startCol + 1, "nights", nightsExpr, LABOR_PHASE_CHIP_NIGHTS_FMT);
+        place(
+          run.startCol + 2,
+          "complete",
+          `${colLetter(run.startCol)}${chipRow}+${colLetter(run.startCol + 1)}${chipRow}`,
+          LABOR_PHASE_CHIP_COMPLETE_FMT,
+        );
+      } else if (span === 2) {
+        place(run.startCol, "days", daysExpr, LABOR_PHASE_CHIP_DAYS_FMT);
+        place(run.startCol + 1, "complete", blockHours, LABOR_PHASE_CHIP_COMPLETE_FMT);
+      } else {
+        place(run.startCol, "complete", blockHours, LABOR_PHASE_CHIP_COMPLETE_FMT);
+      }
     }
   }
   return chips;
@@ -1398,13 +1459,13 @@ function buildCrewSheet(
     LABOR_PD_HEADER,
   ];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
-  writeDateRow(cells, dates);
+  const holidays = jobHolidays(input);
+  writeDateRow(cells, dates, holidays);
   writeWeekdayRow(cells, dates);
   const phaseBand = writePhaseBar(cells, dates, input.schedule);
 
   const titleRows: number[] = [];
-  const dayTitleRows: number[] = [];
-  const nightTitleRows: number[] = [];
+  const chipBlocks: Array<{ titleRow: number; night: boolean }> = [];
   const pdMoneyRows: number[] = [];
   const laborBlocks: Array<{ start: number; end: number }> = [];
   const spacerRows: number[] = [];
@@ -1412,8 +1473,6 @@ function buildCrewSheet(
 
   function emitBlock(row: CraftRow, night: boolean) {
     const titleRow = excelRow + LABOR_TITLE_OFFSET;
-    if (night) nightTitleRows.push(titleRow);
-    else dayTitleRows.push(titleRow);
     const hcRow = excelRow + LABOR_HC_OFFSET;
     const hpsRow = excelRow + LABOR_HPS_OFFSET;
     const stRow = excelRow + LABOR_ST_OFFSET;
@@ -1421,6 +1480,7 @@ function buildCrewSheet(
     const dtRow = excelRow + LABOR_DT_OFFSET;
     const pdRow = excelRow + LABOR_PD_OFFSET;
     titleRows.push(titleRow);
+    chipBlocks.push({ titleRow, night });
     pdMoneyRows.push(pdRow);
 
     const firstDate = dates.length ? colLetter(LABOR_DATE_START_COL) : "";
@@ -1481,11 +1541,10 @@ function buildCrewSheet(
     pushFormula(cells, `C${pdRow}`, `I${titleRow}*D${pdRow}`);
     dates.forEach((ymd, index) => {
       const col = colLetter(LABOR_DATE_START_COL + index);
-      const plug = laborDayPlug(row, ymd, night);
+      const plug = laborDayPlug(row, ymd, night, holidays);
       pushNum(cells, `${col}${hcRow}`, plug.hc);
       pushNum(cells, `${col}${hpsRow}`, plug.hps);
       const priorStRefs = priorWeekStRefs(dates, index, stRow);
-      const dateRef = `${col}$6`;
       const inPhaseRef = jobDaysRef(index, 2);
       const staffOtRef = jobDaysRef(index, 3);
       const compOtRef =
@@ -1502,10 +1561,10 @@ function buildCrewSheet(
       const hpsVal = money(plug.hps);
       const owner = phaseOwningDate(setupPhases, ymd);
       const titleLock = `${clockTitleRef}=${excelTextLiteral(clockTitle(row.position, row.billedAs ?? ""))}`;
-      const exported = `AND(${col}${hcRow}=${hcVal},${col}${hpsRow}=${hpsVal},${pickRef}=${excelTextLiteral(clockPick)},${titleLock},${jobSetupExportLock(dateRef, owner, inPhaseRef)})`;
-      pushFormula(cells, `${col}${stRow}`, `IF(${exported},${desk.st},${hours.st})`);
-      pushFormula(cells, `${col}${otRow}`, `IF(${exported},${desk.ot},${hours.ot})`);
-      pushFormula(cells, `${col}${dtRow}`, `IF(${exported},${desk.dt},${hours.dt})`);
+      const exported = `AND(${col}${hcRow}=${hcVal},${col}${hpsRow}=${hpsVal},${pickRef}=${excelTextLiteral(clockPick)},${titleLock},${jobSetupExportLock(ymd, owner, inPhaseRef)})`;
+      pushFormula(cells, `${col}${stRow}`, `IFERROR(IF(${exported},${desk.st},${hours.st}),${desk.st})`);
+      pushFormula(cells, `${col}${otRow}`, `IFERROR(IF(${exported},${desk.ot},${hours.ot}),${desk.ot})`);
+      pushFormula(cells, `${col}${dtRow}`, `IFERROR(IF(${exported},${desk.dt},${hours.dt}),${desk.dt})`);
       pushNum(cells, `${col}${pdRow}`, plug.pd);
     });
 
@@ -1558,6 +1617,9 @@ function buildCrewSheet(
       return { col: LABOR_DATE_START_COL + index, weekday: dow as 0 | 6 };
     })
     .filter((item): item is { col: number; weekday: 0 | 6 } => Boolean(item));
+  const holidayCols = dates
+    .map((ymd, index) => (holidays.includes(ymd) ? { col: LABOR_DATE_START_COL + index, ymd } : null))
+    .filter((item): item is { col: number; ymd: string } => Boolean(item));
 
   return {
     name,
@@ -1568,10 +1630,11 @@ function buildCrewSheet(
     sheetTotal: `C${totalRow}`,
     hiddenCols: [LABOR_CLOCK_FLAG_COL, LABOR_BLOCK_ID_COL],
     weekendCols,
+    holidayCols,
     laborBlocks,
     spacerRows,
     phaseBar: phaseBand.phaseBar,
-    phaseChips: writePhaseHourChips(cells, phaseBand.phaseBar, dayTitleRows, nightTitleRows),
+    phaseChips: writePhaseHourChips(cells, phaseBand.phaseBar, chipBlocks),
     billAs: showBillAs
       ? laborBlocks.map((block) => ({
           labelRow: block.start + LABOR_ST_OFFSET,
@@ -2249,12 +2312,9 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
   const cells = headerCells(input);
   const headers = ["Phase", "ON", "Start", "Stop", "Days/wk", "Hrs/day", "OT after 8"];
   headers.forEach((label, index) => {
-    const ref = `${colLetter(index + 1)}6`;
-    const note = label === "Start" ? XLSX_INPUT_NOTES.start : label === "Stop" ? XLSX_INPUT_NOTES.stop : undefined;
-    cells.push({ ref, type: "text", value: label, note });
+    cells.push({ ref: `${colLetter(index + 1)}6`, type: "text", value: label });
   });
   const unlocked: Array<{ row: number; col: number }> = [];
-  const comments: WorkbookComment[] = [];
   const validations = PHASE_IDS.flatMap((_, index) => {
     const row = 7 + index;
     return [
@@ -2296,32 +2356,29 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
   const moneyRows: Array<{
     cell: string;
     label: string;
-    note: string;
     kind: "number" | "text" | "date" | "empty";
     value?: number | string | Date;
     fmt?: string;
   }> = [
-    { cell: JOB_SETUP_STAFF_PD_CELL, label: "Staff PD $ / day", note: XLSX_JOB_MONEY_NOTES.staffPd, kind: "number", value: rates.staffPerDiemRate, fmt: "$#,##0.00" },
-    { cell: JOB_SETUP_CRAFT_PD_CELL, label: "Craft PD $ / day", note: XLSX_JOB_MONEY_NOTES.craftPd, kind: "number", value: rates.craftPerDiemRate, fmt: "$#,##0.00" },
-    { cell: JOB_SETUP_STAFF_MILE_CELL, label: "Staff mileage $ / mile", note: XLSX_JOB_MONEY_NOTES.staffMile, kind: "number", value: rates.staffMileageRate, fmt: "$#,##0.00" },
-    { cell: JOB_SETUP_CRAFT_MILE_CELL, label: "Craft mileage $ / mile", note: XLSX_JOB_MONEY_NOTES.craftMile, kind: "number", value: rates.craftMileageRate, fmt: "$#,##0.00" },
-    { cell: JOB_SETUP_LABOR_CONT_CELL, label: "Labor contingency %", note: XLSX_JOB_MONEY_NOTES.laborCont, kind: "number", value: drivers.laborContingencyPct, fmt: "0.0" },
-    { cell: JOB_SETUP_EQUIP_CONT_CELL, label: "Equipment contingency %", note: XLSX_JOB_MONEY_NOTES.equipCont, kind: "number", value: drivers.equipmentContingencyPct, fmt: "0.0" },
-    { cell: JOB_SETUP_SUBS_CONT_CELL, label: "Subs contingency %", note: XLSX_JOB_MONEY_NOTES.subsCont, kind: "number", value: drivers.subsContingencyPct, fmt: "0.0" },
-    { cell: JOB_SETUP_CBA_ON_CELL, label: "CBA increase ON", note: XLSX_JOB_MONEY_NOTES.cbaOn, kind: "text", value: drivers.cbaIncreaseOn ? "YES" : "NO" },
+    { cell: JOB_SETUP_STAFF_PD_CELL, label: "Staff PD $ / day", kind: "number", value: rates.staffPerDiemRate, fmt: "$#,##0.00" },
+    { cell: JOB_SETUP_CRAFT_PD_CELL, label: "Craft PD $ / day", kind: "number", value: rates.craftPerDiemRate, fmt: "$#,##0.00" },
+    { cell: JOB_SETUP_STAFF_MILE_CELL, label: "Staff mileage $ / mile", kind: "number", value: rates.staffMileageRate, fmt: "$#,##0.00" },
+    { cell: JOB_SETUP_CRAFT_MILE_CELL, label: "Craft mileage $ / mile", kind: "number", value: rates.craftMileageRate, fmt: "$#,##0.00" },
+    { cell: JOB_SETUP_LABOR_CONT_CELL, label: "Labor contingency %", kind: "number", value: drivers.laborContingencyPct, fmt: "0.0" },
+    { cell: JOB_SETUP_EQUIP_CONT_CELL, label: "Equipment contingency %", kind: "number", value: drivers.equipmentContingencyPct, fmt: "0.0" },
+    { cell: JOB_SETUP_SUBS_CONT_CELL, label: "Subs contingency %", kind: "number", value: drivers.subsContingencyPct, fmt: "0.0" },
+    { cell: JOB_SETUP_CBA_ON_CELL, label: "CBA increase ON", kind: "text", value: drivers.cbaIncreaseOn ? "YES" : "NO" },
     {
       cell: JOB_SETUP_CBA_DATE_CELL,
       label: "CBA effective date",
-      note: XLSX_JOB_MONEY_NOTES.cbaDate,
       kind: drivers.cbaIncreaseDate && parseYmd(drivers.cbaIncreaseDate) ? "date" : "empty",
       value: drivers.cbaIncreaseDate ? parseYmd(drivers.cbaIncreaseDate) ?? undefined : undefined,
       fmt: JOB_SETUP_DATE_FMT,
     },
-    { cell: JOB_SETUP_CBA_PCT_CELL, label: "CBA increase %", note: XLSX_JOB_MONEY_NOTES.cbaPct, kind: "number", value: drivers.cbaIncreasePct, fmt: "0.0" },
+    { cell: JOB_SETUP_CBA_PCT_CELL, label: "CBA increase %", kind: "number", value: drivers.cbaIncreasePct, fmt: "0.0" },
     {
       cell: JOB_SETUP_MORE_CELL,
       label: "M.O.R.E. fund $ / hr",
-      note: XLSX_JOB_MONEY_NOTES.more,
       kind: "number",
       value: drivers.moreFundPerHour ?? 0,
       fmt: "$#,##0.00",
@@ -2332,13 +2389,11 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
     pushText(cells, `A${row}`, item.label);
     unlocked.push({ row, col: 2 });
     if (item.kind === "number" && typeof item.value === "number") {
-      cells.push({ ref: item.cell, type: "number", value: money(item.value), note: item.note, numFmt: item.fmt });
+      cells.push({ ref: item.cell, type: "number", value: money(item.value), numFmt: item.fmt });
     } else if (item.kind === "text" && typeof item.value === "string") {
-      cells.push({ ref: item.cell, type: "text", value: item.value, note: item.note });
+      cells.push({ ref: item.cell, type: "text", value: item.value });
     } else if (item.kind === "date" && item.value instanceof Date) {
-      cells.push({ ref: item.cell, type: "date", value: item.value, note: item.note, numFmt: JOB_SETUP_DATE_FMT });
-    } else {
-      comments.push({ ref: item.cell, text: item.note });
+      cells.push({ ref: item.cell, type: "date", value: item.value, numFmt: JOB_SETUP_DATE_FMT });
     }
   }
   validations.push(
@@ -2350,14 +2405,38 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
       "Choose the CBA effective date from the calendar.",
     ),
   );
+  const holidays = jobHolidays(input);
+  const holidayRows = Math.min(JOB_SETUP_HOLIDAY_MAX, Math.max(holidays.length + JOB_SETUP_HOLIDAY_SPARE, JOB_SETUP_HOLIDAY_SPARE));
+  pushText(cells, `A${JOB_SETUP_HOLIDAY_START_ROW}`, JOB_SETUP_HOLIDAYS_TITLE);
+  for (let index = 0; index < holidayRows; index += 1) {
+    const excelRow = JOB_SETUP_HOLIDAY_START_ROW + index;
+    const ymd = holidays[index];
+    const date = ymd ? parseYmd(ymd) : null;
+    unlocked.push({ row: excelRow, col: 2 });
+    validations.push(
+      jobSetupDateValidation(
+        `B${excelRow}`,
+        "DATE(1990,1,1)",
+        "Pick a holiday",
+        "Choose a holiday date. Blank stays empty. No billable hours that day.",
+      ),
+    );
+    if (date) {
+      cells.push({
+        ref: `B${excelRow}`,
+        type: "date",
+        value: date,
+        numFmt: JOB_SETUP_DATE_FMT,
+      });
+    }
+  }
   return {
     name: ESTIMATE_XLSX_SHEETS.jobSetup,
     cells,
     hiddenCols: [8, 9],
     unlocked,
     validations,
-    comments: comments.length ? comments : undefined,
-    headerRows: [13, 14],
+    headerRows: [13, 14, JOB_SETUP_HOLIDAY_START_ROW],
     merges: ["A1:G1", "A2:G2", "A3:G3", "A13:B13"],
   };
 }

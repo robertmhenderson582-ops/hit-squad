@@ -410,6 +410,23 @@ export async function hydrateSeatStore() {
 
 const SEATS_WRITE_ATTEMPTS = 4;
 
+async function ownerHashAlreadyOnVault(): Promise<boolean> {
+  const drive = resolveAdapter();
+  if (!drive) return false;
+  const local = ownerHashRow(loadPersisted(), ownerEmail());
+  if (!local?.passwordHash) return false;
+  try {
+    const raw = await readVaultJson(drive, SEATS_VAULT_NAME, SEATS_VAULT_KIND);
+    const vault = ownerHashRow(parseSeatHashes(raw), ownerEmail());
+    return (
+      vault?.passwordHash === local.passwordHash &&
+      Boolean(vault.mustChangePassword) === Boolean(local.mustChangePassword)
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function ownerHashLandedInVault(): Promise<boolean> {
   const drive = resolveAdapter();
   if (!drive) return !expectVaultConfirm();
@@ -479,6 +496,9 @@ export async function persistExistingOwnerHash(input?: {
   if (alreadyCleared || !user.mustChangePassword) {
     user.mustChangePassword = false;
   }
+  // Cookie restore still has to land. Skip the write loop only when Drive
+  // already has this hash and this call is not a claim migrate.
+  if (!ownerClaim && (await ownerHashAlreadyOnVault())) return true;
   let lastError: unknown;
   for (let attempt = 0; attempt < SEATS_WRITE_ATTEMPTS; attempt++) {
     persistHashes(ownerUsers(), { replaceEmails: [ownerEmail()], confirm: true });

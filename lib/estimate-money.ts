@@ -1,4 +1,4 @@
-import { computeRangeHours, type HoursSplit } from "./hours-clock.ts";
+import { computeRangeHours, hydrateHolidays, type HoursSplit } from "./hours-clock.ts";
 import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
 import { shahanCrewTitle, type ShahanLookupOpts } from "./shahan-wood-river.ts";
 import { lookupCompWageRow } from "./wage-lookup.ts";
@@ -18,6 +18,8 @@ export type JobMoney = {
   cbaIncreaseDate: string;
   /** Empty default. Never seeded. Credit or cost. */
   moreFundPerHour: number | null;
+  /** Plant / job holidays (YYYY-MM-DD). No billable hours those days. */
+  holidays: string[];
 };
 
 export type MoneyCrewLane = "staff" | "generalForeman" | "foreman" | "direct" | "support";
@@ -75,6 +77,7 @@ export function emptyJobMoney(): JobMoney {
     cbaIncreasePct: 0,
     cbaIncreaseDate: "",
     moreFundPerHour: null,
+    holidays: [],
   };
 }
 
@@ -103,6 +106,7 @@ export function hydrateJobMoney(raw: Partial<JobMoney> | Record<string, unknown>
     cbaIncreasePct: nonNeg(row.cbaIncreasePct, defaults.cbaIncreasePct),
     cbaIncreaseDate: typeof row.cbaIncreaseDate === "string" ? row.cbaIncreaseDate : "",
     moreFundPerHour: more,
+    holidays: hydrateHolidays(row.holidays),
   };
 }
 
@@ -163,6 +167,7 @@ function splitHoursOnDate(
   site: string,
   client: string,
   otAfter8 = false,
+  holidays: string[] = [],
 ): { before: HoursSplit; after: HoursSplit } {
   const before = emptySplit();
   const after = emptySplit();
@@ -191,6 +196,7 @@ function splitHoursOnDate(
       phaseId: range.phaseId,
       clockOverride: row.clockOverride ?? "auto",
       skipDates: range.skipDates,
+      holidays,
     });
     for (const day of hours.days) {
       if (day.date >= effectiveDate) {
@@ -220,7 +226,7 @@ function rowOpts(row: MoneyHourRow, opts: ShahanLookupOpts = {}): ShahanLookupOp
 /** CBA % of COMP / Shahan baseSt × hours on/after the date. Never billed ST/OT/DT. */
 export function cbaIncreaseDollars(
   crew: MoneyCrew,
-  money: Pick<JobMoney, "cbaIncreaseOn" | "cbaIncreasePct" | "cbaIncreaseDate">,
+  money: Pick<JobMoney, "cbaIncreaseOn" | "cbaIncreasePct" | "cbaIncreaseDate" | "holidays">,
   site = "",
   client = "",
   opts: ShahanLookupOpts = {},
@@ -237,7 +243,14 @@ export function cbaIncreaseDollars(
   for (const [lane, rows] of lanes) {
     for (const row of rows ?? []) {
       if (!isCbaCraftLane(lane, row)) continue;
-      const { after } = splitHoursOnDate(row, money.cbaIncreaseDate, site, client, crew.otAfter8);
+      const { after } = splitHoursOnDate(
+        row,
+        money.cbaIncreaseDate,
+        site,
+        client,
+        crew.otAfter8,
+        money.holidays,
+      );
       if (after.hours <= 0) continue;
       const title = shahanCrewTitle(row);
       const wage = lookupCompWageRow(title, site, rowOpts(row, opts).laborClass);
@@ -254,15 +267,17 @@ export function moreFundDollars(
   moreFundPerHour: number | null | undefined,
   site = "",
   client = "",
+  holidays: string[] = [],
 ): number {
   if (moreFundIsEmpty(moreFundPerHour) || moreFundPerHour == null) return 0;
-  return roundCents(moreFundHours(crew, site, client) * moreFundPerHour);
+  return roundCents(moreFundHours(crew, site, client, holidays) * moreFundPerHour);
 }
 
 export function moreFundHours(
   crew: MoneyCrew,
   site = "",
   client = "",
+  holidays: string[] = [],
 ): number {
   const lanes: Array<[MoneyCrewLane, MoneyHourRow[] | undefined]> = [
     ["generalForeman", crew.generalForeman],
@@ -296,6 +311,7 @@ export function moreFundHours(
           phaseId: range.phaseId,
           clockOverride: row.clockOverride ?? "auto",
           skipDates: range.skipDates,
+          holidays,
         }).hours;
       }
     }

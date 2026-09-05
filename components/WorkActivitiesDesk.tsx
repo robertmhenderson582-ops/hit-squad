@@ -17,8 +17,8 @@ export function WorkActivitiesDesk({ site = "", client = "" }: { site?: string; 
   const pack = useEstimatePackage();
   const crewHours = useMemo(() => {
     const rows = [...pack.crew.staff, ...pack.crew.generalForeman, ...pack.crew.foreman, ...pack.crew.direct];
-    return sumSplits(rows.map((row) => computeRowHours(row, site, client))).hours;
-  }, [client, pack.crew, site]);
+    return sumSplits(rows.map((row) => computeRowHours(row, site, client, false, "", pack.jobMeta.holidays ?? []))).hours;
+  }, [client, pack.crew, pack.jobMeta.holidays, site]);
   const workHours = activityHours(pack.activities);
 
   function addActivity() {

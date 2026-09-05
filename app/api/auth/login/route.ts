@@ -8,7 +8,8 @@ import {
   signSeatClaim,
   signSession,
 } from "@/lib/auth";
-import { cookieValue } from "@/lib/http";
+import { cookieValue, serverTiming } from "@/lib/http";
+import { isOwnerLoginEmail } from "@/lib/owner-login";
 import {
   flushSeatVault,
   hydrateSeatStore,
@@ -38,20 +39,24 @@ export async function POST(request: Request) {
 
   if (body.acknowledged !== true) {
     return NextResponse.json(
-      { error: "Confidentiality acknowledgement is required before sign-in." },
+      { error: "Confidentiality acknowledgement is required before signing in." },
       { status: 400 },
     );
   }
 
   const email = typeof body.email === "string" ? body.email : "";
+  const hydrateStarted = Date.now();
   await hydrateSeatStore();
+  const hydrateMs = Date.now() - hydrateStarted;
   const incomingClaim = await readSeatClaim(cookieValue(request, SEAT_CLAIM_COOKIE));
   restoreSeatHash(email, incomingClaim);
+  const persistStarted = Date.now();
   try {
     await persistExistingOwnerHash({ email, claim: incomingClaim });
   } catch {
     // Keep sign-in. Vault retry is best-effort.
   }
+  const persistMs = Date.now() - persistStarted;
 
   const outcome = loginOutcome({
     email,
@@ -60,15 +65,20 @@ export async function POST(request: Request) {
     confirmPassword: typeof body.confirmPassword === "string" ? body.confirmPassword : "",
   });
   const createdPassword = typeof body.newPassword === "string" ? body.newPassword : "";
-  try {
-    await flushSeatVault();
-  } catch {
-    if (createdPassword) {
+  // Normal password auth: hydrate already read Drive seats. Skip awaiting a
+  // seats.json write when this request did not create/migrate a password.
+  let flushMs = 0;
+  if (createdPassword) {
+    const flushStarted = Date.now();
+    try {
+      await flushSeatVault();
+    } catch {
       return NextResponse.json(
         { error: "Password was not saved.", vaultPersisted: false },
         { status: 503 },
       );
     }
+    flushMs = Date.now() - flushStarted;
   }
   if (createdPassword && outcome.status === "authenticated") {
     if (!(await passwordWriteLanded(email, createdPassword))) {
@@ -90,6 +100,14 @@ export async function POST(request: Request) {
   }
   const token = await signSession(outcome.user);
   const response = NextResponse.json({ user: outcome.user });
+  response.headers.set("Server-Timing", serverTiming([
+    ["seat-hydrate", hydrateMs],
+    ["seat-persist", persistMs],
+    ["seat-flush", flushMs],
+  ]));
+  if (isOwnerLoginEmail(email)) {
+    console.info("[hs-auth] login", { hydrateMs, persistMs, flushMs, flushed: Boolean(createdPassword) });
+  }
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
   const claim = seatHashClaimFor(outcome.user.email);
   if (claim) {

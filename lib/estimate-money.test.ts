@@ -12,6 +12,7 @@ import {
   subsContingencyDollars,
 } from "./estimate-money.ts";
 import { laborDollarsFromCrew } from "./shahan-wood-river.ts";
+import { deskPackageTotal } from "./estimate-desk-total.ts";
 import { computeRangeHours } from "./hours-clock.ts";
 import { lookupCompWageRow } from "./wage-lookup.ts";
 import { emptyJobMeta } from "./staffing-plan.ts";
@@ -37,6 +38,31 @@ describe("M.O.R.E. fund", () => {
     assert.equal(moreFundIsEmpty(null), true);
     assert.equal(moreFundIsEmpty(0), true);
     assert.equal(moreFundDollars({ direct: [] }, null), 0);
+    assert.deepEqual(emptyJobMoney().holidays, []);
+    assert.deepEqual(hydrateJobMoney({ holidays: ["2026-09-16", "nope", "2026-09-16"] }).holidays, [
+      "2026-09-16",
+    ]);
+    assert.deepEqual(emptyJobMeta().holidays, []);
+  });
+});
+
+describe("job holidays", () => {
+  it("drops desk labor dollars the same as range skipDates", () => {
+    const site = "Wood River — Roxana, IL";
+    const client = "Phillips 66";
+    const crew = { direct: [{ position: "Boilermaker Journeyman", ranges: [WEEK] }] };
+    const full = laborDollarsFromCrew(crew, site, client);
+    const holiday = laborDollarsFromCrew(crew, site, client, {}, ["2026-09-16"]);
+    const skipped = laborDollarsFromCrew(
+      { direct: [{ position: "Boilermaker Journeyman", ranges: [{ ...WEEK, skipDates: ["2026-09-16"] }] }] },
+      site,
+      client,
+    );
+    assert.equal(full > holiday, true);
+    assert.equal(holiday, skipped);
+    const open = deskPackageTotal({ crew, site, client, jobMeta: {} });
+    const closed = deskPackageTotal({ crew, site, client, jobMeta: { holidays: ["2026-09-16"] } });
+    assert.equal(closed < open, true);
   });
 });
 

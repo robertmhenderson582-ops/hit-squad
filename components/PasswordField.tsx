@@ -10,6 +10,7 @@ export function PasswordField({
   variant = "paper",
   required,
   minLength,
+  disabled,
 }: {
   label: string;
   value: string;
@@ -18,6 +19,7 @@ export function PasswordField({
   variant?: "paper" | "night";
   required?: boolean;
   minLength?: number;
+  disabled?: boolean;
 }) {
   const [show, setShow] = useState(false);
   const night = variant === "night";
@@ -35,6 +37,7 @@ export function PasswordField({
           onChange={(event) => onChange(event.target.value)}
           required={required}
           minLength={minLength}
+          disabled={disabled}
           className={
             night
               ? "w-full border border-steel-rim/40 bg-ink/70 px-3 py-2 pr-12 font-mono text-sm text-paper-cream"
@@ -45,6 +48,7 @@ export function PasswordField({
           type="button"
           className={`password-eye ${night ? "password-eye-night" : ""}`}
           onClick={() => setShow((on) => !on)}
+          disabled={disabled}
           aria-label={show ? "Hide password" : "Show password"}
         >
           {show ? "hide" : "eye"}

@@ -174,6 +174,8 @@ export type WorkbookSheet = {
   hiddenCols?: number[];
   /** Labor date columns: JS weekday 0 = Sunday, 6 = Saturday. */
   weekendCols?: Array<{ col: number; weekday: 0 | 6 }>;
+  /** Labor date columns that are Job setup holidays (no billable hours). */
+  holidayCols?: Array<{ col: number; ymd: string }>;
   /** 7-row position blocks on Staff / Foremen / Direct / Support (title…PD). */
   laborBlocks?: Array<{ start: number; end: number }>;
   /** Gray break rows between position blocks. */
@@ -182,9 +184,10 @@ export type WorkbookSheet = {
   headerRows?: number[];
   /** Job setup phase runs on labor rows 4–5 (day-grid columns). */
   phaseBar?: Array<{ startCol: number; endCol: number; phaseId: string }>;
-  /** Row-3 day/night/complete hour chips aligned to each phase run (view of calendar math). */
+  /** Per-position title-row day/night/complete hour chips (view of that block’s phase hours). */
   phaseChips?: Array<{
     col: number;
+    row: number;
     kind: "days" | "nights" | "complete";
     startCol: number;
     endCol: number;
@@ -196,7 +199,7 @@ export type WorkbookSheet = {
   validations?: SheetValidation[];
   /** Extra unlocked cells (Job setup + cost-sheet estimator inputs). */
   unlocked?: Array<{ row: number; col: number }>;
-  /** Hover comments for refs that have no cell, or extras beyond `cell.note`. */
+  /** Extra hover comments on existing cells (beyond `cell.note`). Refs with no cell are dropped — those paint orphan triangles. */
   comments?: WorkbookComment[];
   /** Very-hidden helper sheets (Position lists). */
   veryHidden?: boolean;

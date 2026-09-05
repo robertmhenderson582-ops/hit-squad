@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { cookieValue } from "@/lib/http";
+import { cookieValue, serverTiming } from "@/lib/http";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { archiveVisiblePack, deleteVisiblePack, getVisiblePack } from "@/lib/estimate-vault";
 
@@ -10,9 +10,16 @@ export async function GET(request: Request, context: { params: Promise<{ packId:
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   const { packId } = await context.params;
+  const started = Date.now();
   const pack = await getVisiblePack(await scopedDeskUser(user, request), packId);
+  const ms = Date.now() - started;
   if (!pack) return NextResponse.json({ error: "That package is not on this desk." }, { status: 404 });
-  return NextResponse.json({ pack });
+  const response = NextResponse.json({ pack });
+  response.headers.set("Server-Timing", serverTiming([["estimate-pack", ms]]));
+  if (user.role === "owner") {
+    console.info("[hs-vault] pack GET", { packId, ms });
+  }
+  return response;
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ packId: string }> }) {

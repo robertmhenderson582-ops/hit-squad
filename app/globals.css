@@ -45,6 +45,23 @@ body {
   background-size: 28px 28px;
 }
 
+@keyframes hs-hold-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hs-hold-spin {
+  display: block;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+  border: 3px solid #0f5f6d;
+  border-top-color: #3ec6d4;
+  box-shadow: 0 0 14px rgba(62, 198, 212, 0.32);
+  animation: hs-hold-spin 0.85s linear infinite;
+}
+
 .login-og {
   position: relative;
   overflow: hidden;

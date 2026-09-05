@@ -2,15 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { HoldScreen } from "@/components/HoldScreen";
 import { useSession } from "@/components/SessionProvider";
-
-function HoldScreen({ label }: { label: string }) {
-  return (
-    <div className="industrial-root flex min-h-screen items-center justify-center">
-      <div className="font-mono text-xs tracking-[0.28em] text-steel-glow">{label}</div>
-    </div>
-  );
-}
 
 export function AuthGate({
   children,

@@ -45,7 +45,9 @@ import {
   ESTIMATE_VAULT_DEBOUNCE_MS,
   flushVaultUpsert,
   hydrateFromVault,
+  hydrateOpenPack,
   scheduleVaultUpsert,
+  vaultListHydratePending,
   type VaultUpsertResult,
 } from "@/lib/estimate-vault-client";
 import { persistCrewTravel } from "@/lib/other-cost";
@@ -63,6 +65,7 @@ type CrewState = {
 
 type EstimatePackageApi = {
   estimateKey: string;
+  ready: boolean;
   schedule: PhaseScheduleState;
   crew: CrewState;
   jobMeta: JobMeta;
@@ -182,7 +185,10 @@ export function EstimatePackageProvider({
   const [jobMeta, setJobMetaState] = useState<JobMeta>(() => readJobMeta(estimateKey));
   const [activities, setActivitiesState] = useState<WorkActivity[]>(() => readActivities(estimateKey) ?? []);
   const [status, setStatusState] = useState<EstimateStatus>(() => readPackStatus(estimateKey));
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(() => {
+    const packId = packIdFromStoreKey(estimateKey);
+    return Boolean(packId && findLocalPack(packId));
+  });
   const [vaultSaveError, setVaultSaveError] = useState("");
   const aliveRef = useRef(true);
   const reportVaultErrors = useRef(false);
@@ -213,11 +219,9 @@ export function EstimatePackageProvider({
     let cancelled = false;
     reportVaultErrors.current = false;
     setVaultSaveError("");
-    setReady(false);
     const packId = packIdFromStoreKey(estimateKey);
-    const boot = packId ? hydrateFromVault() : Promise.resolve([]);
-    void boot.finally(() => {
-      if (cancelled) return;
+    const hasLocal = Boolean(packId && findLocalPack(packId));
+    const paintFromLocal = () => {
       const next = readSchedule(estimateKey);
       setSchedule(next);
       setCrewState(syncCrew(readCrew(estimateKey), next));
@@ -228,21 +232,36 @@ export function EstimatePackageProvider({
       setStatusState(nextStatus);
       hydratePackStatus(estimateKey, nextStatus);
       setReady(true);
+    };
+    if (hasLocal) paintFromLocal();
+    else setReady(false);
+    const boot = packId
+      ? hasLocal || vaultListHydratePending()
+        ? hydrateFromVault()
+        : hydrateOpenPack(packId)
+      : Promise.resolve([]);
+    void boot.finally(() => {
+      if (cancelled) return;
+      paintFromLocal();
       if (!packId) return;
-      void (async () => {
-        const first = await flushVaultUpsert(packId);
-        if (cancelled || !aliveRef.current) return;
-        if (first.ok) {
-          setVaultSaveError("");
-          return;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        if (cancelled || !aliveRef.current) return;
-        const retry = await flushVaultUpsert(packId);
-        if (cancelled || !aliveRef.current) return;
-        if (retry.ok) setVaultSaveError("");
-        else console.warn("Drive sync delayed", "error" in retry ? retry.error : "");
-      })();
+      const runBootFlush = () => {
+        void (async () => {
+          const first = await flushVaultUpsert(packId);
+          if (cancelled || !aliveRef.current) return;
+          if (first.ok) {
+            setVaultSaveError("");
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          if (cancelled || !aliveRef.current) return;
+          const retry = await flushVaultUpsert(packId);
+          if (cancelled || !aliveRef.current) return;
+          if (retry.ok) setVaultSaveError("");
+          else console.warn("Drive sync delayed", "error" in retry ? retry.error : "");
+        })();
+      };
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(runBootFlush);
+      else setTimeout(runBootFlush, 0);
     });
     return () => {
       cancelled = true;
@@ -325,6 +344,7 @@ export function EstimatePackageProvider({
   const api = useMemo<EstimatePackageApi>(
     () => ({
       estimateKey,
+      ready,
       schedule,
       crew,
       orgChart,
@@ -451,7 +471,7 @@ export function EstimatePackageProvider({
         return blankCraftRow();
       },
     }),
-    [activities, crew, estimateKey, jobMeta, orgChart, schedule, status, vaultSaveError],
+    [activities, crew, estimateKey, jobMeta, orgChart, ready, schedule, status, vaultSaveError],
   );
 
   return <EstimatePackageContext.Provider value={api}>{children}</EstimatePackageContext.Provider>;
@@ -462,6 +482,7 @@ export function useEstimatePackage() {
   if (!ctx) {
     return {
       estimateKey: "",
+      ready: true,
       schedule: defaultPhaseSchedule(),
       crew: emptyCrew(),
       orgChart: emptyOrgChart(),

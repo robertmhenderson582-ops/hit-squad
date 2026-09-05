@@ -1249,6 +1249,57 @@ test("confirmOwnPasswordWrite succeeds when listJson and readJson throw and seat
   await assertPasswordSaveAgainstUnlistableFolder(drive);
 });
 
+test("login skips seat vault flush on normal password auth", () => {
+  const route = readFileSync(fileURLToPath(new URL("../app/api/auth/login/route.ts", import.meta.url)), "utf8");
+  assert.match(route, /await hydrateSeatStore/);
+  assert.match(route, /persistExistingOwnerHash/);
+  assert.match(route, /createdPassword/);
+  assert.match(route, /if \(createdPassword\)/);
+  assert.match(route, /Server-Timing|serverTiming/);
+  assert.match(route, /seat-hydrate/);
+  assert.match(route, /passwordWriteLanded/);
+  assert.equal(route.split("await flushSeatVault").length - 1, 1);
+  assert.match(route, /if \(createdPassword\) \{[\s\S]*await flushSeatVault/);
+});
+
+test("persistExistingOwnerHash skips Drive write when seats.json already has the owner hash", async () => {
+  const ownerHash = bcrypt.hashSync(CHOSEN, 12);
+  writeFileSync(
+    seatFile,
+    `${JSON.stringify({
+      hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: ownerHash, mustChangePassword: false } },
+      extras: [],
+    })}\n`,
+  );
+  const inner = memoryDrive();
+  inner.files.set(SEATS_VAULT_FILE_ID, {
+    file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+    content: `${JSON.stringify({
+      hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: ownerHash, mustChangePassword: false } },
+      extras: [],
+    })}\n`,
+  });
+  let writes = 0;
+  useSeatVaultForTests({
+    configured: true,
+    listJson: (folderId) => inner.listJson(folderId),
+    readJson: (fileId) => inner.readJson(fileId),
+    async createJson(folderId, name, content, properties) {
+      writes += 1;
+      return inner.createJson(folderId, name, content, properties);
+    },
+    async updateJson(fileId, content, name, properties) {
+      writes += 1;
+      return inner.updateJson(fileId, content, name, properties);
+    },
+    deleteJson: (fileId) => inner.deleteJson(fileId),
+  });
+  const persisted = await persistExistingOwnerHash({ email: OWNER_LOGIN_EMAIL });
+  assert.equal(persisted, true);
+  assert.equal(writes, 0);
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+});
+
 test("persistExistingOwnerHash writes the local owner hash to seats.json and leaves testers", async () => {
   const ownerHash = bcrypt.hashSync(CHOSEN, 12);
   const testerHash = bcrypt.hashSync(ISSUED, 12);
@@ -1447,6 +1498,15 @@ test("forced setOwnPassword confirms the hash from seats.json before ok and does
   assert.equal(seatsFiles.length, 1);
   assert.equal(seatsFiles[0]?.file.id, SEATS_VAULT_FILE_ID);
   assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
+});
+
+test("sign-in uses the login user without a mandatory session GET", () => {
+  const session = readFileSync(fileURLToPath(new URL("../components/SessionProvider.tsx", import.meta.url)), "utf8");
+  const signIn = session.slice(session.indexOf("const signIn"));
+  assert.match(signIn, /setStatus\("authenticated"\)/);
+  assert.match(signIn, /setUser\(data\.user\)/);
+  assert.doesNotMatch(signIn, /const confirmed = await fetchSession/);
+  assert.match(signIn, /void fetchSession/);
 });
 
 test("session GET overlays live mustChange and heals stale cookies", () => {

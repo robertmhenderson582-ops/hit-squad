@@ -14,8 +14,8 @@ export function craftRowsFromCrew(crew: CrewLanes): CraftRow[] {
   return [...(crew.staff ?? []), ...(crew.generalForeman ?? []), ...(crew.foreman ?? []), ...(crew.direct ?? [])];
 }
 
-export function hoursFromCrewRows(rows: CraftRow[], site = "", client = "") {
-  return sumSplits(rows.map((row) => computeRowHours(row, site, client))).hours;
+export function hoursFromCrewRows(rows: CraftRow[], site = "", client = "", holidays: string[] = []) {
+  return sumSplits(rows.map((row) => computeRowHours(row, site, client, false, "", holidays))).hours;
 }
 
 export function readStoredCrew(estimateKey: string): CrewLanes {

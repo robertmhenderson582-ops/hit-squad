@@ -6,6 +6,7 @@ import {
   computeRangeHours,
   computeRowHours,
   eastCoastCraftOtAfter8,
+  hydrateHolidays,
   runningClock,
   seatKind,
   siteClockFromText,
@@ -753,5 +754,27 @@ describe("East Coast CBA craft OT after 8", () => {
     assert.equal(labeled.dt, result.dt);
     assert.equal(labeled.pd, result.pd);
     assert.equal(labeled.hours, result.hours);
+  });
+
+  it("job holidays skip the day the same as skipDates", () => {
+    const week = {
+      ...WOOD_RIVER,
+      position: "Boilermaker Journeyman",
+      start: "2026-09-14",
+      end: "2026-09-18",
+      hoursPerShift: 10,
+      headcount: 1,
+      days: [false, true, true, true, true, true, false],
+    };
+    const full = computeRangeHours(week);
+    const holiday = computeRangeHours({ ...week, holidays: ["2026-09-16"] });
+    const skipped = computeRangeHours({ ...week, skipDates: ["2026-09-16"] });
+    assert.equal(full.hours > holiday.hours, true);
+    assert.equal(holiday.hours, skipped.hours);
+    assert.equal(holiday.days.some((day) => day.date === "2026-09-16"), false);
+    assert.deepEqual(hydrateHolidays(["2026-09-16", "nope", "2026-09-16", "2026-01-01"]), [
+      "2026-01-01",
+      "2026-09-16",
+    ]);
   });
 });

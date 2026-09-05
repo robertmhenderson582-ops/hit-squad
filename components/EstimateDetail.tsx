@@ -13,6 +13,7 @@ import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { OrgChartDesk } from "@/components/OrgChartDesk";
 import { RodeoFormDesk } from "@/components/RodeoFormDesk";
 import { EstimatePackageProvider, useEstimatePackage } from "@/components/EstimatePackage";
+import { HoldScreen } from "@/components/HoldScreen";
 import { JobSetupCard } from "@/components/JobSetupCard";
 import { PhaseSchedule } from "@/components/PhaseSchedule";
 import { useAlias } from "@/components/OwnerDeskContext";
@@ -42,7 +43,7 @@ export function EstimateDetail({ estimateId }: { estimateId: string }) {
   }, [estimateId]);
 
   if (error && !estimate) return <p className="p-6 text-amber-flare">{error}</p>;
-  if (!board && !estimate) return <p className="p-6 font-mono text-xs tracking-[0.2em] text-steel">LOADING PACKAGE</p>;
+  if (!board && !estimate) return <HoldScreen label="LOADING ESTIMATE" variant="panel" />;
   if (!estimate) {
     return (
       <p className="p-6">
@@ -100,6 +101,10 @@ function EstimateDetailBody({
   const pack = useEstimatePackage();
   const status: EstimateStatus = pack.status || DEFAULT_ESTIMATE_STATUS;
   const shown = title || estimate.title;
+
+  if (!pack.ready) {
+    return <HoldScreen label="OPENING PACKAGE" variant="panel" />;
+  }
 
   return (
     <EstimateWorkspace
