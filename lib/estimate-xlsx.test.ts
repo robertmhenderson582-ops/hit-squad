@@ -2831,6 +2831,16 @@ describe("estimate excel export", () => {
     );
     assert.ok(review);
     assert.match(String(review.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(`${ESTIMATE_STATUS_LABEL}: Review`));
+    const budgetAward = sheetOf(
+      buildEstimateWorkbook({ ...woodRiverFixture(), status: "Awarded" }),
+      ESTIMATE_XLSX_SHEETS.summary,
+    );
+    assert.match(String(budgetAward?.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(`${ESTIMATE_STATUS_LABEL}: Locked`));
+    const bidAward = sheetOf(
+      buildEstimateWorkbook({ ...woodRiverFixture(), client: "Georgia Power", site: "Plant Yates", status: "Awarded" }),
+      ESTIMATE_XLSX_SHEETS.summary,
+    );
+    assert.match(String(bidAward?.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(`${ESTIMATE_STATUS_LABEL}: Awarded`));
 
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
     const importer = readFileSync(fileURLToPath(new URL("./estimate-xlsx-import.ts", import.meta.url)), "utf8");

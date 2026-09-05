@@ -5,6 +5,8 @@ import { CreatedBy } from "@/components/CreatedBy";
 import { useAlias, useLensUser } from "@/components/OwnerDeskContext";
 import { StatusStamp } from "@/components/StatusStamp";
 import {
+  clampEstimateStatus,
+  estimateStatusLane,
   isEstimateLocked,
   needsStatusConfirm,
   statusConfirmCopy,
@@ -95,12 +97,15 @@ export function JobSetupCard({
   }
   const offer = offerRateBookForSite(site || "");
   const canAward = isProjectManagerOrAbove(lens);
+  const lane = estimateStatusLane(site || "", client);
+  const options = statusOptionsForSite(site || "", client);
+  const liveStatus = clampEstimateStatus(status, site || "", client);
 
   function requestStatus(next: EstimateStatus) {
     if (statusLocked && next !== "Draft") return;
-    if (statusNeedsManager(status, next) && !canAward) return;
-    if (next === status) return;
-    if (needsStatusConfirm(status, next)) {
+    if (statusNeedsManager(liveStatus, next) && !canAward) return;
+    if (next === liveStatus) return;
+    if (needsStatusConfirm(liveStatus, next)) {
       setPendingStatus(next);
       return;
     }
@@ -111,6 +116,10 @@ export function JobSetupCard({
     pack.setPackStatus(next);
     onStatus?.(next);
   }
+
+  useEffect(() => {
+    if (liveStatus !== status) commitStatus(liveStatus);
+  }, [liveStatus, status]);
 
   function requestUpdateRates() {
     if (!offer.ok) {
@@ -143,13 +152,13 @@ export function JobSetupCard({
       <div className="mt-5">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">STATUS</span>
-          <StatusStamp value={status.toUpperCase()} />
+          <StatusStamp value={liveStatus.toUpperCase()} />
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          {statusOptionsForSite(site || "").map((item) => {
+          {options.map((item) => {
             const locked =
-              (statusLocked && item !== "Draft") || (statusNeedsManager(status, item) && !canAward);
-            const active = status === item;
+              (statusLocked && item !== "Draft") || (statusNeedsManager(liveStatus, item) && !canAward);
+            const active = liveStatus === item;
             return (
               <button
                 key={item}
@@ -158,8 +167,10 @@ export function JobSetupCard({
                 title={
                   statusLocked && item !== "Draft"
                     ? "New sheet stays Draft"
-                    : statusNeedsManager(status, item) && !canAward
-                      ? "Project Manager or above can set Locked, Submitted, or Awarded"
+                    : statusNeedsManager(liveStatus, item) && !canAward
+                      ? lane === "budget"
+                        ? "Project Manager or above can set Locked"
+                        : "Project Manager or above can set Locked, Submitted, or Awarded"
                       : undefined
                 }
                 onClick={() => requestStatus(item)}
@@ -173,17 +184,18 @@ export function JobSetupCard({
           })}
         </div>
         <p className="mt-1 text-xs text-[#5b6f73]">
-          Draft, In progress, Budgetary, Review, Locked, Submitted, Awarded. Project Manager or
-          above sets Locked, Submitted, or Awarded.
+          {lane === "budget"
+            ? "Draft, In progress, Budgetary, Review, Locked. Budget lane — set budgets; no Submitted or Awarded."
+            : "Draft, In progress, Budgetary, Review, Locked, Submitted, Awarded. Project Manager or above sets Locked, Submitted, or Awarded."}
         </p>
-        {isEstimateLocked(status) ? (
+        {isEstimateLocked(liveStatus) ? (
           <p className="mt-1 text-xs text-[#5b6f73]">
             Locked — stamped on the desk and Excel. This pass does not block edits.
           </p>
         ) : null}
         {pendingStatus ? (
           <div className="mt-3 rounded-lg border border-[#c5d4d4] bg-white px-3 py-3">
-            <p className="text-sm text-[#163038]">{statusConfirmCopy(status, pendingStatus)}</p>
+            <p className="text-sm text-[#163038]">{statusConfirmCopy(liveStatus, pendingStatus)}</p>
             <div className="mt-3 flex justify-end gap-3">
               <button
                 type="button"

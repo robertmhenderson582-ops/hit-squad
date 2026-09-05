@@ -438,6 +438,23 @@ describe("estimate pack snapshot", () => {
       assert.equal(locked.pack.status, "Locked");
       assert.equal(publicPack(locked.pack).status, "Locked");
     }
+    const budgetAward = parseIncomingPack({
+      packId: "new-cat2pit",
+      title: "Cat 2 Pit Stop",
+      site: "Wood River — Roxana, IL",
+      status: "Awarded",
+    });
+    assert.equal(budgetAward.ok, true);
+    if (budgetAward.ok) assert.equal(budgetAward.pack.status, "Locked");
+    const bidAward = parseIncomingPack({
+      packId: "new-yates-bid",
+      title: "Yates bid",
+      client: "Georgia Power",
+      site: "Plant Yates",
+      status: "Awarded",
+    });
+    assert.equal(bidAward.ok, true);
+    if (bidAward.ok) assert.equal(bidAward.pack.status, "Awarded");
     assert.equal(parseIncomingPack({ packId: "est-u3" }).ok, false);
   });
 
@@ -469,6 +486,28 @@ describe("estimate pack snapshot", () => {
     );
     fromMirror.setItem("hs_estimate_status_v1:new-legacy-status", "Estimate");
     assert.equal(collectPack(fromMirror, "new-legacy-status")?.status, "Draft");
+    rememberLocalPack(
+      {
+        packId: "new-wr-award",
+        title: "Aromatics",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        status: "Awarded",
+      },
+      store,
+    );
+    assert.equal(collectPack(store, "new-wr-award")?.status, "Locked");
+    const yates = rememberLocalPack(
+      {
+        packId: "new-yates-award",
+        title: "Yates bid",
+        client: "Georgia Power",
+        site: "Plant Yates",
+        status: "Awarded",
+      },
+      store,
+    );
+    assert.equal(yates?.status, "Awarded");
   });
 
   it("persists subcontractors on the pack without wiping crew, equipment, or Other Cost", () => {

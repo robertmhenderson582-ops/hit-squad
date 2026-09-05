@@ -4,8 +4,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { isProjectManager, isProjectManagerOrAbove, canLookupRates, canUseRateBuilder } from "./desk-role.ts";
 import {
+  BUDGET_ESTIMATE_STATUSES,
   DEFAULT_ESTIMATE_STATUS,
   ESTIMATE_STATUSES,
+  clampEstimateStatus,
+  estimateStatusLane,
   isEstimateLocked,
   needsStatusConfirm,
   parseEstimateStatus,
@@ -46,8 +49,29 @@ describe("estimate status", () => {
     assert.equal(parseEstimateStatus("Execute"), "Draft");
     assert.equal(parseEstimateStatus("Budgetary"), "Budgetary");
     assert.equal(parseEstimateStatus("In progress"), "In progress");
-    assert.deepEqual(statusOptionsForSite("Wood River — Roxana, IL"), ESTIMATE_STATUSES);
-    assert.deepEqual(statusOptionsForSite("Ferndale"), ESTIMATE_STATUSES);
+    assert.deepEqual(statusOptionsForSite("Wood River — Roxana, IL"), [...BUDGET_ESTIMATE_STATUSES]);
+    assert.deepEqual(statusOptionsForSite("Bayway"), [...BUDGET_ESTIMATE_STATUSES]);
+    assert.deepEqual(statusOptionsForSite("Rodeo"), [...BUDGET_ESTIMATE_STATUSES]);
+    assert.deepEqual(statusOptionsForSite("Ferndale"), [...BUDGET_ESTIMATE_STATUSES]);
+    assert.deepEqual(statusOptionsForSite("Billings"), [...BUDGET_ESTIMATE_STATUSES]);
+    assert.deepEqual(statusOptionsForSite("Plant Yates"), [...ESTIMATE_STATUSES]);
+    assert.deepEqual(statusOptionsForSite("Monroe Energy"), [...ESTIMATE_STATUSES]);
+    assert.equal(statusOptionsForSite("Wood River — Roxana, IL").includes("Submitted"), false);
+    assert.equal(statusOptionsForSite("Wood River — Roxana, IL").includes("Awarded"), false);
+    assert.equal(statusOptionsForSite("Plant Yates").includes("Submitted"), true);
+    assert.equal(statusOptionsForSite("Monroe Energy").includes("Awarded"), true);
+    assert.equal(estimateStatusLane("Wood River — Roxana, IL"), "budget");
+    assert.equal(estimateStatusLane("Bayway"), "budget");
+    assert.equal(estimateStatusLane("Rodeo"), "budget");
+    assert.equal(estimateStatusLane("Plant Yates"), "bid");
+    assert.equal(estimateStatusLane("Monroe Energy"), "bid");
+    assert.equal(estimateStatusLane("Unknown plant"), "bid");
+    assert.equal(clampEstimateStatus("Awarded", "Wood River — Roxana, IL"), "Locked");
+    assert.equal(clampEstimateStatus("Submitted", "Bayway"), "Locked");
+    assert.equal(clampEstimateStatus("Review", "Rodeo"), "Review");
+    assert.equal(clampEstimateStatus("Awarded", "Plant Yates"), "Awarded");
+    assert.equal(clampEstimateStatus("Submitted", "Monroe Energy"), "Submitted");
+    assert.equal(resolveEstimateStatus("Awarded", "new-wr", undefined, "Wood River — Roxana, IL"), "Locked");
     assert.equal(needsStatusConfirm("Draft", "In progress"), false);
     assert.equal(needsStatusConfirm("In progress", "Budgetary"), false);
     assert.equal(needsStatusConfirm("Budgetary", "Review"), false);
@@ -82,6 +106,8 @@ describe("estimate status", () => {
     assert.match(setup, /AFE \/ TA NAME/);
     assert.match(setup, /CLIENT[\s\S]{0,120}readOnly/);
     assert.match(setup, /does not block edits/);
+    assert.match(setup, /estimateStatusLane/);
+    assert.match(setup, /Budget lane/);
     assert.equal(/ESTIMATE NAME[\s\S]{0,80}readOnly/.test(setup), false);
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
     assert.doesNotMatch(workspace, /\(\["Estimate", "Submitted", "Awarded"\]/);

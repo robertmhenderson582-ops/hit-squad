@@ -1,4 +1,4 @@
-import { parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
+import { clampEstimateStatus, parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { ACTIVITY_STORE_PREFIX } from "./work-activities.ts";
 import { newEstimateKey } from "./estimate-open.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
@@ -206,12 +206,13 @@ export function rememberLocalPack(
   const client = input.client || existing?.client || "Phillips 66";
   const site = input.site || existing?.site || "Wood River — Roxana, IL";
   const size = input.size ?? existing?.size;
-  const status =
+  const rawStatus =
     input.status !== undefined
       ? parseEstimateStatus(input.status)
       : existing?.status
         ? parseEstimateStatus(existing.status)
         : undefined;
+  const status = rawStatus ? clampEstimateStatus(rawStatus, site, client) : undefined;
   const unchanged =
     existing &&
     existing.title === title &&

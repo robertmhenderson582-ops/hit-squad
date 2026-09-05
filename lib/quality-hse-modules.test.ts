@@ -212,7 +212,7 @@ describe("Quality and HSE have no estimate interaction", () => {
 
   it("lists awarded local jobs without wiping other packs", () => {
     const store = memoryStorage();
-    rememberLocalPack({ packId: "new-awarded", title: "Awarded bank", client: "Phillips 66", site: "Wood River" }, store);
+    rememberLocalPack({ packId: "new-awarded", title: "Awarded bank", client: "Georgia Power", site: "Plant Yates" }, store);
     rememberLocalPack({ packId: "new-est", title: "Still estimate", client: "Phillips 66", site: "Wood River" }, store);
     writeEstimateStatus("new-awarded", "Awarded", store);
     const awarded = awardedLocalJobs(store);

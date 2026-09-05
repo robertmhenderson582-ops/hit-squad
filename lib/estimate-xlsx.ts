@@ -136,7 +136,7 @@ import {
 } from "./third-party-rental.ts";
 import { emptySubSheet, lineAmount, subCardTotal, type SubSheet } from "./subcontractor.ts";
 import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
-import { parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
+import { clampEstimateStatus, parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
 import { buildWorkbook, colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 
@@ -431,7 +431,7 @@ export function exporterDisplayName(name?: string | null, email?: string | null)
 }
 
 function headerByline(input: EstimateXlsxInput, when = new Date()): string {
-  const stamp = `${ESTIMATE_STATUS_LABEL}: ${parseEstimateStatus(input.status)}`;
+  const stamp = `${ESTIMATE_STATUS_LABEL}: ${clampEstimateStatus(parseEstimateStatus(input.status), input.site, input.client)}`;
   const prepared = exporterDisplayName(input.preparedBy, null);
   const who = prepared ? `${ESTIMATE_PREPARED_BY_LABEL}: ${prepared}  ·  ` : "";
   return `${stamp}  ·  ${who}${ESTIMATE_EXPORT_PRODUCER}  ·  ${ESTIMATE_EXPORT_CONFIDENTIAL}  ·  ${exportProducedLabel(when)}`;

@@ -68,7 +68,10 @@ export function awardedLocalJobs(
 ): AwardedJobPick[] {
   const target = store ?? (typeof window === "undefined" ? null : window.localStorage);
   return packs
-    .filter((pack) => resolveEstimateStatus(pack.status, pack.packId, target as Storage | null) === "Awarded")
+    .filter(
+      (pack) =>
+        resolveEstimateStatus(pack.status, pack.packId, target as Storage | null, pack.site, pack.client) === "Awarded",
+    )
     .map((pack) => ({
       id: pack.packId,
       title: pack.title,
