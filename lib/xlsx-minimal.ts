@@ -141,7 +141,7 @@ export type WorkbookSheet = {
   phaseBar?: Array<{ startCol: number; endCol: number; phaseId: string }>;
   /** Support Bill as field — label + value rows in column B under Position. */
   billAs?: Array<{ labelRow: number; valueRow: number }>;
-  /** Excel list validations (Position / Bill as / Job setup OT pick). */
+  /** Excel list validations (Position / Bill as / Job setup / Period). */
   validations?: Array<{ sqref: string; formulae: string[] }>;
   /** Extra unlocked cells (Job setup + cost-sheet estimator inputs). */
   unlocked?: Array<{ row: number; col: number }>;

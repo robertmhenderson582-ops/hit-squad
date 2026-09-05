@@ -1602,6 +1602,64 @@ describe("estimate excel export", () => {
     assert.equal(misc?.unlocked?.some((cell) => cell.row === 7 && cell.col === 5), false);
   });
 
+  it("lists daily / weekly / monthly on COE and rental Period cells", async () => {
+    const line = (id: string, item: string, period: "daily" | "weekly" | "monthly") => ({
+      id,
+      item,
+      period,
+      rate: 100,
+      freight: 10,
+      qty: 1,
+      start: "2026-09-01",
+      end: "2026-09-01",
+    });
+    const bytes = await estimateToXlsx({
+      ...woodRiverFixture(),
+      equipment: {
+        largeTools: [
+          {
+            id: "lt-mover",
+            itemId: "air-mover",
+            period: "weekly" as const,
+            qty: 1,
+            start: "2026-09-01",
+            end: "2026-09-01",
+            enteredCost: 0,
+            freight: 0,
+          },
+        ],
+        thirdParty: [
+          ...(woodRiverFixture().equipment.thirdParty ?? []),
+          line("tp-tens", "Hydraulic tensioner", "monthly"),
+          line("tp-crane", "Carry deck crane", "weekly"),
+        ],
+      },
+    });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const lists = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.lists);
+    assert.ok(lists);
+    assert.equal(lists.getCell("J1").value, "daily");
+    assert.equal(lists.getCell("J2").value, "weekly");
+    assert.equal(lists.getCell("J3").value, "monthly");
+    const listRef = /_Lists!\$J\$1:\$J\$3/;
+    for (const name of [
+      ESTIMATE_XLSX_SHEETS.rental,
+      ESTIMATE_XLSX_SHEETS.coe,
+      ESTIMATE_XLSX_SHEETS.tension,
+      ESTIMATE_XLSX_SHEETS.crane,
+    ]) {
+      const ws = wb.getWorksheet(name);
+      assert.ok(ws, name);
+      assert.equal(ws.getCell("B7").protection?.locked, false, name);
+      assert.ok(ws.getCell("B7").dataValidation, name);
+      assert.match(String(ws.getCell("B7").dataValidation?.formulae?.[0] ?? ""), listRef);
+    }
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.coe)?.getCell("B7").value, "weekly");
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.tension)?.getCell("B7").value, "monthly");
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crane)?.getCell("B7").value, "weekly");
+  });
+
   it("unlocks Subcontractor estimator inputs and keeps formula totals locked", async () => {
     const bytes = await estimateToXlsx({
       ...woodRiverFixture(),

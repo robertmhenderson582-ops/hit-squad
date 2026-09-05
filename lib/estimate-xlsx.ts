@@ -62,6 +62,7 @@ import {
   billedPeriodCount,
   largeToolAmount,
   thirdPartyCost,
+  THIRD_PARTY_PERIODS,
   type EquipmentSheet,
   type LargeToolLine,
   type ThirdPartyLine,
@@ -1155,7 +1156,14 @@ function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPa
   pushText(cells, `A${totalRow}`, "TOTAL");
   pushFormula(cells, `G${totalRow}`, `SUM(G${first}:G${last})`);
   pushFormula(cells, `H${totalRow}`, `SUM(H${first}:H${last})`);
-  return { name, cells, costTotal: `G${totalRow}`, sheetTotal: `G${totalRow}`, unlocked };
+  return {
+    name,
+    cells,
+    costTotal: `G${totalRow}`,
+    sheetTotal: `G${totalRow}`,
+    unlocked,
+    validations: periodValidations(first, last),
+  };
 }
 
 function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
@@ -1186,7 +1194,13 @@ function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
   const totalRow = last + 1;
   pushText(cells, `A${totalRow}`, "TOTAL");
   pushFormula(cells, `G${totalRow}`, `SUM(G${first}:G${last})`);
-  return { name: ESTIMATE_XLSX_SHEETS.coe, cells, sheetTotal: `G${totalRow}`, unlocked };
+  return {
+    name: ESTIMATE_XLSX_SHEETS.coe,
+    cells,
+    sheetTotal: `G${totalRow}`,
+    unlocked,
+    validations: periodValidations(first, last),
+  };
 }
 
 function liveTravel(line: TravelLine) {
@@ -1520,6 +1534,17 @@ function listFormula(col: string, count: number) {
   return `=${ESTIMATE_XLSX_SHEETS.lists}!$${col}$1:$${col}$${Math.max(1, count)}`;
 }
 
+const PERIOD_LIST_COL = "J";
+
+function periodValidations(firstRow: number, lastRow: number) {
+  const formulae = [listFormula(PERIOD_LIST_COL, THIRD_PARTY_PERIODS.length)];
+  const next: Array<{ sqref: string; formulae: string[] }> = [];
+  for (let row = firstRow; row <= lastRow; row += 1) {
+    next.push({ sqref: `B${row}`, formulae });
+  }
+  return next;
+}
+
 function laborPositionValidations(
   name: string,
   blocks: Array<{ start: number; end: number }>,
@@ -1579,6 +1604,7 @@ function buildListsSheet(): WorkbookSheet {
     ["4", "5", "6", "7"],
     ["8", "9", "10", "12", "13"],
     ["YES", "NO"],
+    [...THIRD_PARTY_PERIODS],
   ];
   const cells: SheetCell[] = [];
   columns.forEach((list, index) => {
