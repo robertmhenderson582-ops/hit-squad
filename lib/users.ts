@@ -623,6 +623,16 @@ export function liveSessionUser(session: PublicUser): PublicUser {
   return seat ? toPublicUser(seat) : session;
 }
 
+/**
+ * Best-effort seats.json catch-up for GET /api/auth/session.
+ * Callers must not await this — hung Drive left AuthGate on CHECKING DESK SESSION.
+ */
+export function scheduleSessionVaultCatchUp(work: () => Promise<void>): void {
+  void work().catch(() => {
+    // Keep the signed-in session. Vault retry already exhausted.
+  });
+}
+
 export function findUserByEmail(email: string): StoredUser | undefined {
   const wanted = (canonicalEmail(email) || email.trim().toLowerCase()).trim();
   if (!wanted) return undefined;
