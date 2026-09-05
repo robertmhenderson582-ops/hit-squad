@@ -10,10 +10,10 @@ export function BrandMark({
 }) {
   if (variant === "stacked" || variant === "jets") {
     return (
-      <svg className={className} viewBox="0 0 54 48" fill="none" aria-hidden="true">
+      <svg className={className} viewBox="0 0 76 58" fill="none" aria-hidden="true">
         <g fill="#ffffff" stroke="#ffffff" strokeWidth="0.7" strokeLinejoin="round">
-          <path d={JET} transform="translate(16 0)" />
-          <path d={JET} transform="translate(2 18) scale(0.86)" />
+          <path d={JET} transform="translate(42 2) rotate(12 20 13.5)" />
+          <path d={JET} transform="translate(2 28) rotate(18 20 13.5) scale(0.76)" />
         </g>
       </svg>
     );

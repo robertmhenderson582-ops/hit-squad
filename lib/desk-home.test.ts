@@ -51,9 +51,12 @@ describe("home doors", () => {
     assert.match(chrome, /variant="stacked"/);
     assert.match(mark, /variant === "stacked" \|\| variant === "jets"/);
     assert.equal(/M20 2\.5 34 16\.5 20 30\.5 6 16\.5Z/.test(mark), false);
-    assert.match(mark, /translate\(16 0\)/);
-    assert.match(mark, /translate\(2 18\) scale\(0\.86\)/);
+    assert.match(mark, /viewBox="0 0 76 58"/);
+    assert.match(mark, /translate\(42 2\) rotate\(12 20 13\.5\)/);
+    assert.match(mark, /translate\(2 28\) rotate\(18 20 13\.5\) scale\(0\.76\)/);
     assert.equal(/translate\(0 24\)/.test(mark), false);
+    assert.equal(/translate\(16 0\)/.test(mark), false);
+    assert.equal(/translate\(2 18\)/.test(mark), false);
     assert.equal(/Forgebook|Estimators/.test(hero), false);
     assert.equal(/Forgebook|Estimators/.test(home), false);
     assert.equal(/New .*estimate|Simple shop|shop job|Other client/i.test(hero), false);
