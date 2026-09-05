@@ -4,7 +4,16 @@
  * the keys. Excel is never a parallel book (excel-ripple.ts).
  */
 import ExcelJS from "exceljs";
-import { blankCraftRow, hydrateSupportLine, hydrateSupportLines, type CalendarRange, type CraftRow, type SupportLine } from "./craft-labor.ts";
+import {
+  blankCraftRow,
+  CRAFT_SHIFTS,
+  hydrateSupportLine,
+  hydrateSupportLines,
+  type CalendarRange,
+  type CraftRow,
+  type CraftShift,
+  type SupportLine,
+} from "./craft-labor.ts";
 import {
   SHAHAN_GENERAL_FOREMAN_TITLES,
 } from "./shahan-wood-river.ts";
@@ -36,6 +45,7 @@ import {
   LABOR_ST_OFFSET,
   clockLabelOverride,
   laborBlockId,
+  laborDayPlug,
   thirdPartyBucket,
 } from "./estimate-xlsx.ts";
 import { hydrateJobMeta } from "./staffing-plan.ts";
@@ -134,6 +144,8 @@ export type EstimateImport = {
   coe?: ImportedCostLine[];
   subs?: ImportedCostLine[];
   jobMeta?: Partial<JobRates & JobMoney>;
+  /** Hidden _CrewRanges stacks, keyed by craft row id. Create-new only when the daily grid still matches. */
+  crewRanges?: Record<string, CalendarRange[]>;
 };
 
 export type EstimateImportDiff = {
@@ -314,37 +326,8 @@ function rangeShiftOf(range: CalendarRange): CalendarRange["shift"] {
   return range.shift ?? "Days";
 }
 
-function rangeCoversImported(range: CalendarRange, ymd: string, night: boolean): boolean {
-  const shift = rangeShiftOf(range);
-  if (range.off) return false;
-  if (night && shift === "Days") return false;
-  if (!night && shift === "Nights") return false;
-  if (!range.start || !range.end || ymd < range.start || ymd > range.end) return false;
-  if (range.skipDates?.includes(ymd)) return false;
-  const date = parseYmd(ymd);
-  if (!date) return false;
-  if (Array.isArray(range.days) && range.days.length === 7 && !range.days[date.getDay()]) return false;
-  return true;
-}
-
 function existingDayPlug(row: CraftRow, ymd: string, night: boolean): Pick<ImportedDay, "hc" | "hps" | "pd"> {
-  const ranges = (row.ranges ?? []).filter((range) => rangeCoversImported(range, ymd, night));
-  if (!ranges.length) return { hc: 0, hps: 0, pd: 0 };
-  let hourUnits = 0;
-  let pd = 0;
-  let hps = 0;
-  for (const range of ranges) {
-    const shift = rangeShiftOf(range);
-    const nightsOnly = night && shift === "Nights";
-    const hc = nightsOnly ? range.headcount : night ? range.nightHeadcount : range.headcount;
-    const rangeHps = Number(range.hoursPerShift) || 0;
-    hourUnits += (Number(hc) || 0) * rangeHps;
-    pd += nightsOnly || !night ? Number(range.perDiemPeople) || 0 : Number(range.nightPerDiemPeople) || 0;
-    if (rangeHps > 0) hps = rangeHps;
-  }
-  const hc = hps > 0 ? hourUnits / hps : 0;
-  if (hc <= 0 && pd <= 0) return { hc: 0, hps: 0, pd: 0 };
-  return { hc, hps, pd };
+  return laborDayPlug(row, ymd, night);
 }
 
 function sameQty(left: number, right: number) {
@@ -583,10 +566,15 @@ function applyRowFromBlocks(existing: CraftRow, blocks: ImportedBlock[], phases:
   } as CraftRow;
 }
 
+function storedRangesForRow(stored: Record<string, CalendarRange[]> | undefined, id: string): CalendarRange[] {
+  return stored?.[id] ?? [];
+}
+
 function applyBlocks(
   base: EstimateXlsxCrew,
   bySheet: Array<{ sheet: string; blocks: ImportedBlock[] }>,
   phases: PhaseRow[],
+  storedRanges?: Record<string, CalendarRange[]>,
 ): EstimateXlsxCrew {
   const next: EstimateXlsxCrew = {
     staff: [...(base.staff ?? [])],
@@ -609,7 +597,11 @@ function applyBlocks(
       const found = findRow(next, group[0].id);
       const lane = found?.lane ?? laneForNewBlock(group[0], sheet);
       lanes.add(lane);
-      const existing = found?.row ?? { ...blankCraftRow(), id: group[0].id };
+      const existing = found?.row ?? {
+        ...blankCraftRow(),
+        id: group[0].id,
+        ranges: storedRangesForRow(storedRanges, group[0].id),
+      };
       const row = applyRowFromBlocks(existing, group, phases);
       const list = [...(next[lane] as CraftRow[])];
       const index = list.findIndex((item) => item.id === row.id);
@@ -718,6 +710,77 @@ function parseRentalLikeSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLi
   return lines;
 }
 
+function parseDaysMask(raw: string): boolean[] {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length !== 7) return [true, true, true, true, true, true, true];
+  return [...digits].map((digit) => digit === "1");
+}
+
+function parseSkipDates(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => /^\d{4}-\d{2}-\d{2}$/.test(part));
+}
+
+function parseYesNoFlag(value: unknown): boolean | undefined {
+  const text = asText(value).toUpperCase();
+  if (!text) return undefined;
+  if (text === "YES" || text === "TRUE" || text === "1" || text === "Y" || text === "ON") return true;
+  if (text === "NO" || text === "FALSE" || text === "0" || text === "N" || text === "OFF") return false;
+  return undefined;
+}
+
+function parseOptNum(value: unknown): number | undefined {
+  if (value == null || value === "") return undefined;
+  if (typeof value === "string" && !value.trim()) return undefined;
+  return asNum(value);
+}
+
+function parseCrewShift(raw: string): CraftShift | undefined {
+  return (CRAFT_SHIFTS as readonly string[]).includes(raw) ? (raw as CraftShift) : undefined;
+}
+
+function parseCrewRanges(ws: ExcelJS.Worksheet | undefined): Record<string, CalendarRange[]> {
+  const byRow: Record<string, CalendarRange[]> = {};
+  if (!ws) return byRow;
+  const last = Math.max(ws.rowCount || 2, 2);
+  for (let row = 2; row <= last; row += 1) {
+    const blockRaw = asText(ws.getCell(row, 1).value);
+    const parsed = parseBlockId(blockRaw);
+    const rowId = parsed?.id || (blockRaw.includes("|") ? "" : blockRaw);
+    const start = cellYmd(ws.getCell(row, 3).value);
+    const end = cellYmd(ws.getCell(row, 4).value);
+    if (!rowId || (!start && !end)) continue;
+    const shift = parseCrewShift(asText(ws.getCell(row, 13).value));
+    const sundayHeadcount = parseOptNum(ws.getCell(row, 17).value);
+    const nightSundayHeadcount = parseOptNum(ws.getCell(row, 18).value);
+    const range: CalendarRange = {
+      id: asText(ws.getCell(row, 2).value) || `rg-${start || "x"}-${rowId}`,
+      start: start || end,
+      end: end || start,
+      headcount: asNum(ws.getCell(row, 5).value),
+      nightHeadcount: asNum(ws.getCell(row, 6).value),
+      hoursPerShift: asNum(ws.getCell(row, 7).value),
+      perDiemPeople: asNum(ws.getCell(row, 8).value),
+      nightPerDiemPeople: asNum(ws.getCell(row, 9).value),
+      days: parseDaysMask(asText(ws.getCell(row, 10).value)),
+      skipDates: parseSkipDates(asText(ws.getCell(row, 11).value)),
+      phaseId: asText(ws.getCell(row, 12).value) || undefined,
+      shift,
+      otAfter8: parseYesNoFlag(ws.getCell(row, 14).value),
+      off: parseYesNoFlag(ws.getCell(row, 15).value),
+      unitId: asText(ws.getCell(row, 16).value) || undefined,
+    };
+    if (sundayHeadcount != null) range.sundayHeadcount = sundayHeadcount;
+    if (nightSundayHeadcount != null) range.nightSundayHeadcount = nightSundayHeadcount;
+    const list = byRow[rowId] ?? [];
+    list.push(range);
+    byRow[rowId] = list;
+  }
+  return byRow;
+}
+
 function parseSubsSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLine[] | undefined {
   if (!ws) return undefined;
   const lines: ImportedCostLine[] = [];
@@ -756,12 +819,14 @@ export async function parseEstimateXlsx(bytes: Uint8Array): Promise<EstimateImpo
   const bySheet = sheets.map((name) => ({ sheet: name, blocks: parseCraftSheet(wb.getWorksheet(name)) }));
   const blocks = bySheet.flatMap((item) => item.blocks);
   if (!blocks.length && !wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup)) throw new Error(ESTIMATE_IMPORT_ERROR);
-  const crew = applyBlocks({}, bySheet, schedule.phases);
+  const crewRanges = parseCrewRanges(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crewRanges));
+  const crew = applyBlocks({}, bySheet, schedule.phases, crewRanges);
   return {
     ...header,
     schedule,
     crew,
     blocks,
+    crewRanges,
     travel: parseTravelSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.travel)),
     misc: parseMiscSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc)),
     rental: parseRentalLikeSheet(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rental)),
@@ -1033,7 +1098,7 @@ function asRecordish(raw: unknown): Partial<SubSheet> | null {
 
 export function applyEstimateImport(base: EstimatePackSnapshot, imported: EstimateImport): AppliedEstimateImport {
   const schedule = mergeSchedule(imported.schedule);
-  const crew = applyBlocks(asCrew(base.crew), blocksBySheet(imported.blocks), schedule.phases);
+  const crew = applyBlocks(asCrew(base.crew), blocksBySheet(imported.blocks), schedule.phases, imported.crewRanges);
   const costs = applyImportedCosts(base, imported, schedule);
   return {
     ...base,

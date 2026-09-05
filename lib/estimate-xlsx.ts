@@ -58,6 +58,8 @@
  * + Position / hour / Bill as import ships on this compile (excel-ripple.ts).
  * Phase-bar day/night/complete hour chips ship on the next Excel compile —
  * view of live calendar ST+OT+DT per Job setup phase (import does not edit chips).
+ * Hidden _CrewRanges is a view of live pack CalendarRange stacks for create-new.
+ * Import uses those ranges only when the daily HC/HPS/PD grid still matches.
  * Never commit source workbooks to git (Look samples excepted).
  */
 
@@ -465,6 +467,7 @@ export const ESTIMATE_XLSX_SHEETS = {
   summary: "Summary Page",
   jobSetup: "Job setup",
   jobDays: "_JobDays",
+  crewRanges: "_CrewRanges",
   lists: "_Lists",
   org: "ORG Chart",
   slicer: "Slicer Hrs",
@@ -886,6 +889,16 @@ function jobDaysSheet() {
   return quoteSheet(xlsxName(ESTIMATE_XLSX_SHEETS.jobDays));
 }
 
+function crewRangesSheetName() {
+  return ESTIMATE_XLSX_SHEETS.crewRanges;
+}
+
+/** Sunday-first 7-bit mask, same order as `CalendarRange.days` / `Date#getDay`. */
+export function formatCrewDaysMask(days: CalendarRange["days"] | undefined): string {
+  const mask = Array.isArray(days) && days.length === 7 ? days : [true, true, true, true, true, true, true];
+  return mask.map((on) => (on ? "1" : "0")).join("");
+}
+
 function jobSetupPhaseRow(phaseId: PhaseId) {
   return 7 + PHASE_IDS.indexOf(phaseId);
 }
@@ -956,6 +969,64 @@ function buildJobDaysSheet(dates: string[]): WorkbookSheet | null {
     pushFormula(cells, `${col}4`, jobSetupEastCoastCraftOtExpr(dateRef));
   });
   return { name: ESTIMATE_XLSX_SHEETS.jobDays, cells, veryHidden: true };
+}
+
+const CREW_RANGE_HEADERS = [
+  "blockId",
+  "rangeId",
+  "start",
+  "end",
+  "headcount",
+  "nightHeadcount",
+  "hoursPerShift",
+  "perDiemPeople",
+  "nightPerDiemPeople",
+  "days",
+  "skipDates",
+  "phaseId",
+  "shift",
+  "otAfter8",
+  "off",
+  "unitId",
+  "sundayHeadcount",
+  "nightSundayHeadcount",
+] as const;
+
+function yesNo(value: boolean | undefined): string {
+  if (value == null) return "";
+  return value ? "YES" : "NO";
+}
+
+function buildCrewRangesSheet(input: EstimateXlsxInput): WorkbookSheet | null {
+  const cells: SheetCell[] = [];
+  CREW_RANGE_HEADERS.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}1`, label));
+  let excelRow = 2;
+  for (const row of allCrewRows(input.crew)) {
+    for (const range of row.ranges ?? []) {
+      const night = (range.shift ?? row.shift) === "Nights";
+      pushText(cells, `A${excelRow}`, laborBlockId(row, night));
+      pushText(cells, `B${excelRow}`, range.id || "");
+      pushText(cells, `C${excelRow}`, range.start || "");
+      pushText(cells, `D${excelRow}`, range.end || "");
+      pushNum(cells, `E${excelRow}`, Number(range.headcount) || 0);
+      pushNum(cells, `F${excelRow}`, Number(range.nightHeadcount) || 0);
+      pushNum(cells, `G${excelRow}`, Number(range.hoursPerShift) || 0);
+      pushNum(cells, `H${excelRow}`, Number(range.perDiemPeople) || 0);
+      pushNum(cells, `I${excelRow}`, Number(range.nightPerDiemPeople) || 0);
+      pushText(cells, `J${excelRow}`, formatCrewDaysMask(range.days));
+      pushText(cells, `K${excelRow}`, (range.skipDates ?? []).filter(Boolean).join(","));
+      pushText(cells, `L${excelRow}`, range.phaseId || "");
+      pushText(cells, `M${excelRow}`, range.shift || row.shift || "Days");
+      pushText(cells, `N${excelRow}`, yesNo(range.otAfter8));
+      pushText(cells, `O${excelRow}`, yesNo(range.off));
+      pushText(cells, `P${excelRow}`, range.unitId || "");
+      if (range.sundayHeadcount != null) pushNum(cells, `Q${excelRow}`, Number(range.sundayHeadcount) || 0);
+      if (range.nightSundayHeadcount != null) pushNum(cells, `R${excelRow}`, Number(range.nightSundayHeadcount) || 0);
+      excelRow += 1;
+    }
+  }
+  if (excelRow === 2) return null;
+  return { name: crewRangesSheetName(), cells, veryHidden: true };
 }
 
 function mondayStamp(ymd: string) {
@@ -1133,7 +1204,7 @@ function rangeDayPd(row: CraftRow, range: CalendarRange, night: boolean): number
 }
 
 /** Sum every live range on that day — hiring-progression adds stack, same as the desk. */
-function dayPlug(row: CraftRow, ymd: string, night: boolean): { hc: number; hps: number; pd: number } {
+export function laborDayPlug(row: CraftRow, ymd: string, night: boolean): { hc: number; hps: number; pd: number } {
   const ranges = coveringRanges(row, ymd, night);
   if (!ranges.length) return { hc: 0, hps: 0, pd: 0 };
   let hourUnits = 0;
@@ -1404,7 +1475,7 @@ function buildCrewSheet(
     pushFormula(cells, `C${pdRow}`, `I${titleRow}*D${pdRow}`);
     dates.forEach((ymd, index) => {
       const col = colLetter(LABOR_DATE_START_COL + index);
-      const plug = dayPlug(row, ymd, night);
+      const plug = laborDayPlug(row, ymd, night);
       pushNum(cells, `${col}${hcRow}`, plug.hc);
       pushNum(cells, `${col}${hpsRow}`, plug.hps);
       const priorStRefs = priorWeekStRefs(dates, index, stRow);
@@ -2329,6 +2400,8 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   const lists = { ...buildListsSheet(), name: xlsxName(ESTIMATE_XLSX_SHEETS.lists) };
   const jobDays = buildJobDaysSheet(laborCalendarDates(input));
   const helpers = jobDays ? [{ ...jobDays, name: xlsxName(ESTIMATE_XLSX_SHEETS.jobDays) }] : [];
+  const crewRanges = buildCrewRangesSheet(input);
+  if (crewRanges) helpers.push({ ...crewRanges, name: xlsxName(ESTIMATE_XLSX_SHEETS.crewRanges) });
   return [
     { ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) },
     setup,

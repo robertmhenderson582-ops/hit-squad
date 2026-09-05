@@ -245,6 +245,7 @@ describe("estimate pack JSON → xlsx", () => {
       ESTIMATE_XLSX_SHEETS.rates,
       ESTIMATE_XLSX_SHEETS.lists,
       ESTIMATE_XLSX_SHEETS.jobDays,
+      ESTIMATE_XLSX_SHEETS.crewRanges,
     ]);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.crane), false);
     assert.equal(names.includes(excelSafeSheetName(ESTIMATE_XLSX_SHEETS.sub)), false);

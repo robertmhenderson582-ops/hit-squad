@@ -13,7 +13,7 @@
  * Craft sheets group A–I with native Excel column outline (+/−). No VBA / not xlsm.
  * Day-grid header is weekday (row 5) over day-of-month (row 6), white on teal.
  * Visible sheets take the estimate company’s live logo as a faded worksheet
- * background splash. Hidden helpers (_JobDays / _Lists) stay unbranded.
+ * background splash. Hidden helpers (_JobDays / _CrewRanges / _Lists) stay unbranded.
  * No logo on file → no splash (never invent a mark).
  */
 

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import ExcelJS from "exceljs";
 import { syncCraftRows } from "./craft-labor.ts";
-import { deskPackageBreakdown, deskPackageTotal } from "./estimate-desk-total.ts";
+import { deskPackageTotal } from "./estimate-desk-total.ts";
 import {
   applyEstimateImport,
   createPackFromImport,
@@ -974,7 +974,7 @@ describe("estimate excel import", () => {
     assert.equal(money.desk, money.summary);
   });
 
-  it("DOWN: create-new from Aromatics and CAT 2 workbooks keeps the desk rail", async () => {
+  it("Robert create-new from Aromatics and CAT 2 must hit the same desk rail", async () => {
     const vaults = [
       { file: "/tmp/vault-estimates/wood-river-2027-aromatics-turnaround.json", total: 25324671.97 },
       { file: "/tmp/vault-estimates/wood-river-madison-cat-2-pit-stop.json", total: 1435365.66 },
@@ -985,30 +985,7 @@ describe("estimate excel import", () => {
       const pack = createPackFromImport(await parseEstimateXlsx(await estimateToXlsx(input)));
       const money = livePackMoney(pack);
       assert.equal(money.desk, money.summary, `${file} create-new desk===Summary`);
-      if (file.includes("cat-2")) {
-        assert.equal(money.desk, total, `${file} create-new desk`);
-        continue;
-      }
-      const orig = deskPackageBreakdown(input);
-      const next = deskPackageBreakdown({
-        title: pack.title,
-        client: pack.client,
-        site: pack.site,
-        crew: pack.crew,
-        schedule: pack.schedule,
-        jobMeta: pack.jobMeta,
-        equipment: pack.equipment,
-        otherCost: pack.otherCost,
-        subcontractor: pack.subcontractor,
-      });
-      const cents = (n: number) => Math.round(n * 100) / 100;
-      for (const id of ["equipment", "subcontractor", "other", "markup"]) {
-        assert.equal(
-          cents(next.lines.find((line) => line.id === id)?.amount ?? 0),
-          cents(orig.lines.find((line) => line.id === id)?.amount ?? 0),
-          `${file} ${id}`,
-        );
-      }
+      assert.equal(money.desk, total, `${file} create-new desk`);
     }
   });
 
@@ -1537,5 +1514,119 @@ describe("estimate excel import", () => {
     assert.equal(twice.desk, once.desk);
     assert.equal(twice.desk, twice.summary);
     assert.equal(secondUpFrom(second), twice.desk);
+  });
+
+  function stackedHiring(): EstimateXlsxInput {
+    const base = fixture();
+    return {
+      ...base,
+      crew: {
+        staff: [
+          {
+            ...craft("st-stack", "Superintendent 01", { start: "2026-09-01", end: "2026-09-10", otAfter8: false }),
+            ranges: [
+              {
+                id: "rg-base",
+                start: "2026-09-01",
+                end: "2026-09-10",
+                headcount: 2,
+                nightHeadcount: 0,
+                hoursPerShift: 10,
+                perDiemPeople: 2,
+                days: [false, true, true, true, true, true, false],
+                otAfter8: false,
+                phaseId: "mech",
+                shift: "Days",
+              },
+              {
+                id: "rg-hire",
+                start: "2026-09-03",
+                end: "2026-09-10",
+                headcount: 3,
+                nightHeadcount: 0,
+                hoursPerShift: 8,
+                perDiemPeople: 3,
+                days: [false, true, true, true, true, true, false],
+                otAfter8: true,
+                phaseId: "mech",
+                shift: "Days",
+              },
+            ],
+          },
+        ],
+        direct: [],
+        support: [],
+        otAfter8: true,
+      },
+      schedule: {
+        ...base.schedule,
+        phases: defaultPhases().map((phase) =>
+          phase.id === "mech"
+            ? { ...phase, on: true, start: "2026-09-01", stop: "2026-09-10", daysPerWeek: 5, hoursPerDay: 10, otAfter8: true }
+            : { ...phase, on: false },
+        ),
+      },
+    };
+  }
+
+  it("UP: hidden _CrewRanges is a view of live hiring-progression stacks", async () => {
+    const bytes = await estimateToXlsx(stackedHiring());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const helper = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crewRanges);
+    assert.ok(helper);
+    assert.equal(helper.state, "veryHidden");
+    const ids: string[] = [];
+    helper.eachRow((row, index) => {
+      if (index === 1) return;
+      ids.push(String(row.getCell(2).value ?? ""));
+    });
+    assert.equal(ids.includes("rg-base"), true);
+    assert.equal(ids.includes("rg-hire"), true);
+  });
+
+  it("Robert create-new keeps stacked hiring-progression Hours/shift and OT after 8", async () => {
+    const input = stackedHiring();
+    const before = deskPackageTotal(input);
+    const pack = createPackFromImport(await parseEstimateXlsx(await estimateToXlsx(input)));
+    const ranges = (pack.crew as { staff: CraftRow[] }).staff[0].ranges;
+    assert.equal(ranges.some((range) => range.id === "rg-base" && range.hoursPerShift === 10 && range.otAfter8 === false), true);
+    assert.equal(ranges.some((range) => range.id === "rg-hire" && range.hoursPerShift === 8 && range.otAfter8 === true && range.headcount === 3), true);
+    const money = livePackMoney(pack);
+    assert.equal(money.desk, before);
+    assert.equal(money.desk, money.summary);
+  });
+
+  it("Nathan edits stacked HC: create-new follows the grid, not the hidden stacks", async () => {
+    const input = stackedHiring();
+    const before = deskPackageTotal(input);
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const staff = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    assert.ok(staff);
+    staff.getCell(`${dayCol(2)}${7 + LABOR_HC_OFFSET}`).value = 1;
+    const pack = createPackFromImport(await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    const ranges = (pack.crew as { staff: CraftRow[] }).staff[0].ranges;
+    assert.equal(ranges.some((range) => range.id === "rg-hire" && range.headcount === 3), false);
+    const money = assertFiniteMoney(pack, "nathan-edit-stacked-hc");
+    assert.notEqual(money.desk, before);
+    assert.equal(money.desk, money.summary);
+  });
+
+  it("Nathan deletes _CrewRanges: create-new still imports; Aromatics labor leaves the desk rail", async () => {
+    const file = "/tmp/vault-estimates/wood-river-2027-aromatics-turnaround.json";
+    if (!existsSync(file)) return;
+    const { input } = estimateJsonToXlsxInput(JSON.parse(readFileSync(file, "utf8")));
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const helper = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crewRanges);
+    assert.ok(helper);
+    wb.removeWorksheet(helper.id);
+    const pack = createPackFromImport(await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    const money = assertFiniteMoney(pack, "nathan-delete-crew-ranges");
+    assert.equal(money.desk, money.summary);
+    assert.notEqual(money.desk, 25324671.97);
   });
 });

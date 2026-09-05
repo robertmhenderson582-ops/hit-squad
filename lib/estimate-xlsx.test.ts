@@ -894,6 +894,7 @@ describe("estimate excel export", () => {
       ESTIMATE_XLSX_SHEETS.rates,
       ESTIMATE_XLSX_SHEETS.lists,
       ESTIMATE_XLSX_SHEETS.jobDays,
+      ESTIMATE_XLSX_SHEETS.crewRanges,
     ]);
     for (const name of [
       ESTIMATE_XLSX_SHEETS.foremen,
@@ -923,6 +924,7 @@ describe("estimate excel export", () => {
         ESTIMATE_XLSX_SHEETS.rates,
         ESTIMATE_XLSX_SHEETS.lists,
         ESTIMATE_XLSX_SHEETS.jobDays,
+        ESTIMATE_XLSX_SHEETS.crewRanges,
       ],
     );
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crane), undefined);
@@ -2663,8 +2665,9 @@ describe("estimate excel export", () => {
     };
     const sheets = buildEstimateWorkbook(input);
     const names = sheets.map((sheet) => sheet.name);
-    assert.equal(names.length, 16);
+    assert.equal(names.length, 17);
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.jobDays), true);
+    assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.crewRanges), true);
     assert.equal(names[0], ESTIMATE_XLSX_SHEETS.summary);
     assert.deepEqual(
       ["Staff", "Foremen", "Direct", "Support"].every((name) => names.includes(name)),
@@ -2692,8 +2695,9 @@ describe("estimate excel export", () => {
     }
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));
-    assert.equal(wb.worksheets.length, 16);
+    assert.equal(wb.worksheets.length, 17);
     assert.ok(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobDays));
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crewRanges)?.state, "veryHidden");
     assert.ok(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader?.includes("HIT SQUAD"));
     assert.equal(/field trial|forgebook/i.test(String(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader)), false);
     const lead = laborHours(staffSheet, "Lead Safety 01");
@@ -3438,6 +3442,7 @@ describe("estimate excel export", () => {
     }
     assert.ok(hidden.some((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.lists));
     assert.ok(hidden.some((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.jobDays));
+    assert.ok(hidden.some((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.crewRanges));
     for (const sheet of hidden) {
       const id = sheet.getBackgroundImageId();
       assert.equal(id === undefined || id === null || id === "", true, sheet.name);
