@@ -22,8 +22,10 @@ import {
   LABOR_OT_OFFSET,
   LABOR_PD_OFFSET,
   LABOR_ST_OFFSET,
+  clockLabelOverride,
   laborBlockId,
 } from "./estimate-xlsx.ts";
+import type { ClockOverride } from "./hours-clock.ts";
 import type { EstimateXlsxCrew } from "./estimate-xlsx.ts";
 import {
   formatYmd,
@@ -59,6 +61,7 @@ export type ImportedBlock = {
   position: string;
   sheet: string;
   billedAs?: string;
+  clockOverride?: ClockOverride;
   days: ImportedDay[];
 };
 
@@ -392,12 +395,14 @@ function parseCraftSheet(ws: ExcelJS.Worksheet | undefined): ImportedBlock[] {
     const position = asText(ws.getCell(row, 2).value);
     const billLabel = asText(ws.getCell(row + LABOR_ST_OFFSET, 2).value);
     const billedAs = billLabel.toLowerCase() === "bill as" ? asText(ws.getCell(row + LABOR_OT_OFFSET, 2).value) : undefined;
+    const clockOverride = clockLabelOverride(asText(ws.getCell(row, 5).value));
     blocks.push({
       id: parsed.id,
       night: parsed.night,
       position,
       sheet: ws.name,
       billedAs,
+      clockOverride,
       days: readBlockDays(ws, row, dates),
     });
   }
@@ -444,6 +449,7 @@ function applyRowFromBlocks(existing: CraftRow, blocks: ImportedBlock[], phases:
   const day = ranges.some((range) => (range.shift ?? "Days") !== "Nights");
   const position = blocks.find((block) => block.position)?.position || existing.position;
   const billedAs = blocks.find((block) => block.billedAs)?.billedAs ?? (existing as SupportLine).billedAs ?? "";
+  const clockOverride = blocks.find((block) => block.clockOverride)?.clockOverride ?? existing.clockOverride ?? "auto";
   return {
     ...existing,
     id: blocks[0]?.id || existing.id,
@@ -456,6 +462,7 @@ function applyRowFromBlocks(existing: CraftRow, blocks: ImportedBlock[], phases:
     pd: hours.pd,
     hours: hours.st + hours.ot + hours.dt,
     billedAs,
+    clockOverride,
   } as CraftRow;
 }
 
@@ -620,6 +627,9 @@ export function diffEstimateImport(base: EstimatePackSnapshot | null, imported: 
     }
     if (block.billedAs && block.billedAs !== (found.row as SupportLine).billedAs) {
       lines.push(`${block.position || found.row.position} Bill as → ${block.billedAs}`);
+    }
+    if (block.clockOverride && block.clockOverride !== (found.row.clockOverride ?? "auto")) {
+      lines.push(`${block.position || found.row.position} clock → ${block.clockOverride}`);
     }
     const hc = block.days.reduce((sum, day) => sum + day.hc, 0);
     const prevHc = (found.row.ranges ?? []).reduce((sum, range) => {

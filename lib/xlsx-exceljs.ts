@@ -401,6 +401,11 @@ export function isLaborPositionInput(sheet: WorkbookSheet, row: number, colNum: 
   return colNum === 2 && (sheet.laborBlocks?.some((block) => block.start === row) ?? false);
 }
 
+/** Title-row clock pick (Auto / Staff clock / COMP clock). */
+export function isLaborClockInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
+  return colNum === 5 && (sheet.laborBlocks?.some((block) => block.start === row) ?? false);
+}
+
 /** Job setup + Misc/Travel/Equipment/COE estimator inputs (not formula totals). */
 export function isSheetUnlockedInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
   return sheet.unlocked?.some((item) => item.row === row && item.col === colNum) ?? false;
@@ -1261,7 +1266,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
       ],
     });
 
-    const merges = sheet.merges?.length ? sheet.merges : defaultMerges(sheet.cells);
+    const merges = sheet.merges ?? defaultMerges(sheet.cells);
     for (const merge of merges) ws.mergeCells(merge);
 
     const headers = headerByColumn(sheet.cells, 6);
@@ -1317,6 +1322,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
           isLaborDayInput(sheet, row, colNum) ||
           isLaborBillAsInput(sheet, row, colNum) ||
           isLaborPositionInput(sheet, row, colNum) ||
+          isLaborClockInput(sheet, row, colNum) ||
           isSheetUnlockedInput(sheet, row, colNum)
         ),
       };
@@ -1385,6 +1391,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[]): Promise<Uint8
     }
     for (const block of sheet.laborBlocks ?? []) {
       ws.getCell(block.start, 2).protection = { locked: false };
+      ws.getCell(block.start, 5).protection = { locked: false };
     }
     if (labor) {
       pinLaborCraftAlignment(ws, lastVisibleColNum, maxRow);

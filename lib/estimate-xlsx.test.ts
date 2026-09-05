@@ -22,7 +22,12 @@ import {
   OPTIONAL_ESTIMATE_SHEETS,
   LABOR_BLOCK_HEIGHT,
   LABOR_BLOCK_ID_COL,
+  LABOR_CLOCK_AUTO,
+  LABOR_CLOCK_COMP,
+  LABOR_CLOCK_FLAG_COL,
+  LABOR_CLOCK_STAFF,
   LABOR_BLOCK_VOID_COLS,
+  excelBlockClock,
   laborBlockVoidMerges,
   LABOR_BILL_AS_LABEL,
   LABOR_DATE_START_COL,
@@ -1523,6 +1528,9 @@ describe("estimate excel export", () => {
     assert.equal(staff.getCell("A4").protection?.locked !== false, true);
     assert.equal(staff.getCell("K4").protection?.locked !== false, true);
     assert.equal(staff.getCell("K5").protection?.locked !== false, true);
+    assert.equal(staff.getCell("E7").protection?.locked, false);
+    assert.ok(staff.getCell("E7").dataValidation);
+    assert.equal(staff.getCell("E7").value, LABOR_CLOCK_AUTO);
     const setup = wb.getWorksheet("Job setup");
     const misc = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.misc);
     const travel = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.travel);
@@ -1642,7 +1650,7 @@ describe("estimate excel export", () => {
     assert.equal(lists.getCell("J1").value, "daily");
     assert.equal(lists.getCell("J2").value, "weekly");
     assert.equal(lists.getCell("J3").value, "monthly");
-    const listRef = /_Lists!\$J\$1:\$J\$3/;
+    const listRef = /_Lists'!\$J\$1:\$J\$3/;
     for (const name of [
       ESTIMATE_XLSX_SHEETS.rental,
       ESTIMATE_XLSX_SHEETS.coe,
@@ -1914,6 +1922,48 @@ describe("estimate excel export", () => {
     assert.ok(satGf.title);
     assert.equal(satAt(ESTIMATE_XLSX_SHEETS.staff, laborHrsRef(satGf, "st")), 0);
     assert.equal(satAt(ESTIMATE_XLSX_SHEETS.staff, laborHrsRef(satGf, "ot")), 10);
+  });
+
+  it("puts union-coded Staff rows on the COMP clock under Auto and follows the clock pick", () => {
+    const input = {
+      ...woodRiverFixture(),
+      crew: {
+        staff: [
+          craft("union-bm", "Boilermaker BM", 10, { otAfter8: true }),
+          craft("super-pf", "Superintendent General PF 01", 10, { otAfter8: false }),
+        ],
+        otAfter8: true,
+      },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff)!;
+    const union = laborHours(staff, "Boilermaker BM");
+    const superPf = laborHours(staff, "Superintendent General PF 01");
+    assert.equal(excelBlockClock({ ...craft("union-bm", "Boilermaker BM", 10), clockOverride: "auto" }, input), "east-coast");
+    assert.equal(
+      excelBlockClock({ ...craft("super-pf", "Superintendent General PF 01", 10), clockOverride: "auto" }, input),
+      "staff",
+    );
+    const { evalAt } = evaluateWorkbook(sheets);
+    assert.equal(cellMap(staff).get(`E${union.title}`)?.value, LABOR_CLOCK_AUTO);
+    assert.match(String(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.jobDays)?.cells.find((cell) => cell.ref === "A4")?.value), /\$B\$9/);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.jobDays, "A4"), 1);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, laborHrsRef(union, "st")), 8);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, laborHrsRef(union, "ot")), 2);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, laborHrsRef(superPf, "st")), 10);
+    assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.staff, laborHrsRef(superPf, "ot")), 0);
+    const clockCell = staff.cells.find((cell) => cell.ref === `E${union.title}`);
+    assert.ok(clockCell && clockCell.type === "text");
+    clockCell.value = LABOR_CLOCK_STAFF;
+    const afterStaff = evaluateWorkbook(sheets);
+    assert.equal(afterStaff.evalAt(ESTIMATE_XLSX_SHEETS.staff, laborHrsRef(union, "st")), 10);
+    assert.equal(afterStaff.evalAt(ESTIMATE_XLSX_SHEETS.staff, laborHrsRef(union, "ot")), 0);
+    clockCell.value = LABOR_CLOCK_COMP;
+    const afterComp = evaluateWorkbook(sheets);
+    assert.equal(afterComp.evalAt(ESTIMATE_XLSX_SHEETS.staff, laborHrsRef(union, "st")), 8);
+    assert.equal(afterComp.evalAt(ESTIMATE_XLSX_SHEETS.staff, laborHrsRef(union, "ot")), 2);
+    assert.match(String(cellMap(staff).get(`K${union.st}`)?.value), /IF\(/);
+    assert.match(String(staff.validations?.find((rule) => rule.sqref === `E${union.title}`)?.formulae[0] ?? ""), /_Lists'!\$L\$1:\$L\$3/);
   });
 
   it("labels contingency, CBA, M.O.R.E., and 6.5% markup on Summary Amount $ — not in MH", () => {
@@ -2217,7 +2267,7 @@ describe("estimate excel export", () => {
     assert.equal(staff.cells.some((cell) => cell.value === LABOR_HPS_LABEL), false);
     assert.equal(staff.cells.some((cell) => cell.value === LABOR_PD_COUNT_LABEL), false);
     assert.equal(staff.cells.find((cell) => cell.ref === "I6")?.value, LABOR_PD_HEADER);
-    assert.equal(staffMap.get(`E${lead.title}`), undefined);
+    assert.equal(staffMap.get(`E${lead.title}`)?.value, LABOR_CLOCK_AUTO);
     assert.equal(staffMap.get(`B${lead.title}`)?.value, "Lead Safety 01");
     assert.equal(staff.cells.some((cell) => cell.type === "text" && cell.value === "TITLE"), false);
     assert.equal(staffMap.get(`E${lead.st}`)?.value, "ST");
@@ -2258,6 +2308,7 @@ describe("estimate excel export", () => {
     assert.equal(staffMap.get(`${idCol}${lead.hps}`)?.value, leadId);
     assert.equal(staffMap.get(`${idCol}${lead.pd}`)?.value, leadId);
     assert.equal(cellMap(direct).get(`${idCol}${night.title}`)?.value, nightId);
+    assert.equal(staff.hiddenCols?.includes(LABOR_CLOCK_FLAG_COL), true);
     assert.equal(staff.hiddenCols?.includes(LABOR_BLOCK_ID_COL), true);
     const lastDateCol = colLetter(LABOR_DATE_START_COL + dates.length - 1);
     assert.deepEqual(staff.merges, [

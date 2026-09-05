@@ -137,6 +137,7 @@ describe("estimate excel import", () => {
     staff.getCell(`${dayCol()}8`).value = 3;
     staff.getCell(`${dayCol()}13`).value = 2;
     staff.getCell("B7").value = "Lead Safety 01";
+    staff.getCell("E7").value = "COMP clock";
     support.getCell("B11").value = "Pipefitter Journeyman";
     setup.getCell("B7").value = "ON";
     setup.getCell("C7").value = new Date(2026, 8, 1);
@@ -149,6 +150,7 @@ describe("estimate excel import", () => {
     const applied = applyEstimateImport(asPack(input), imported);
     const crew = applied.crew as { staff: CraftRow[]; support: Array<CraftRow & { billedAs?: string }> };
     assert.equal(crew.staff[0].position, "Lead Safety 01");
+    assert.equal(crew.staff[0].clockOverride, "comp");
     assert.equal(crew.staff[0].ranges.some((range) => range.headcount === 3), true);
     assert.equal(crew.staff[0].ranges.some((range) => range.perDiemPeople === 2), true);
     assert.equal(crew.support[0].billedAs, "Pipefitter Journeyman");

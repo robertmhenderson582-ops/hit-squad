@@ -30,7 +30,8 @@
  * labor grids are shaded. Daily ST/OT/DT cells are live HC×HPS formulas
  * (OT-after-N / Sunday DT / Saturday OT / weekly-40 via prior ST cells)
  * tied to Job setup ON / Start / Stop / OT after 8 (direct B–G cells).
- * Long Job setup gates live on hidden _JobDays (in-phase / OT after 8). Craft
+ * Long Job setup gates live on hidden _JobDays (in-phase / staff OT after 8 /
+ * east-coast COMP OT after 8). Craft
  * day ST/OT/DT only reference those shorts plus Job setup lock cells — keep
  * every formula under 4096 chars so Excel does not repair-strip Staff–Support.
  * Calendar column count is baked at export — Start/Stop beyond that window
@@ -86,9 +87,11 @@ import {
   boundOtLabel,
   clockTitle,
   computeRangeHours,
+  isStaffSeat,
   mondayKey,
   parseYmd,
   runningClock,
+  siteClockFromText,
   type ClockOverride,
   type RunningClock,
 } from "./hours-clock.ts";
@@ -108,6 +111,7 @@ import {
   type PhaseScheduleState,
 } from "./phase-schedule.ts";
 import { SUPPORT_BILLED_AS_TITLES } from "./crew-lanes.ts";
+import { WOOD_RIVER_STAFF_TITLES } from "./wood-river-positions.ts";
 import {
   hasShahanBillRate,
   isShahanCostPlus,
@@ -186,6 +190,25 @@ export const LABOR_HOUR_VOID_COLS = ["F", "G", "H", "I", "J"] as const;
 export const LABOR_TITLE_BAND_COLS = ["C", "D"] as const;
 /** Support-only field under Position. Live pack `billedAs` — dropdown + import round-trip. */
 export const LABOR_BILL_AS_LABEL = "Bill as";
+/** Per-block clock pick — live pack `clockOverride`. Title-row Type cell. */
+export const LABOR_CLOCK_AUTO = "Auto";
+export const LABOR_CLOCK_STAFF = "Staff clock";
+export const LABOR_CLOCK_COMP = "COMP clock";
+export const LABOR_CLOCK_PICKS = [LABOR_CLOCK_AUTO, LABOR_CLOCK_STAFF, LABOR_CLOCK_COMP] as const;
+/** Hidden per-block flag: TRUE = staff day formulas, FALSE = site COMP. */
+export const LABOR_CLOCK_FLAG_COL = LABOR_BLOCK_ID_COL - 1;
+
+export function clockOverrideLabel(override: ClockOverride = "auto"): string {
+  if (override === "staff") return LABOR_CLOCK_STAFF;
+  if (override === "comp") return LABOR_CLOCK_COMP;
+  return LABOR_CLOCK_AUTO;
+}
+
+export function clockLabelOverride(label: string): ClockOverride {
+  if (label === LABOR_CLOCK_STAFF) return "staff";
+  if (label === LABOR_CLOCK_COMP) return "comp";
+  return "auto";
+}
 
 export function laborBlockVoidMerges(
   blocks: ReadonlyArray<{ start: number; end: number }>,
@@ -301,16 +324,9 @@ function liveCrewRows(rows: CraftRow[] | undefined) {
   return (rows ?? []).filter(rowHasPosition);
 }
 
-function withLaneClock(row: CraftRow, lane: CrewLane): CraftRow {
-  if (lane === "staff" && row.clockOverride !== "comp") {
-    return { ...row, clockOverride: "staff" satisfies ClockOverride };
-  }
-  return row;
-}
-
 function allCrewRows(crew: EstimateXlsxCrew = {}) {
   return [
-    ...liveCrewRows(crew.staff).map((row) => withLaneClock(row, "staff")),
+    ...liveCrewRows(crew.staff),
     ...liveCrewRows(crew.generalForeman),
     ...liveCrewRows(crew.foreman),
     ...liveCrewRows(crew.direct),
@@ -620,6 +636,12 @@ function jobSetupOtAfter8Expr(dateRef: string) {
   return expr;
 }
 
+/** Desk `eastCoastCraftOtAfter8`: Pre/Post follow G; Oil Out / Mechanical / Oil In always OT after 8. */
+function jobSetupEastCoastCraftOtExpr(dateRef: string) {
+  const mid = (["oil-out", "mech", "oil-in"] as const).map((id) => jobSetupPhaseOwns(dateRef, id)).join(",");
+  return `OR(${mid},AND(${jobSetupPhaseOwns(dateRef, "pre")},${jobSetupOtFlag("pre")}),AND(${jobSetupPhaseOwns(dateRef, "post")},${jobSetupOtFlag("post")}))`;
+}
+
 function jobSetupTextEquals(expr: string, expected: string) {
   if (!expected) return `OR(${expr}="",${expr}=0)`;
   return `${expr}="${expected}"`;
@@ -645,6 +667,7 @@ function buildJobDaysSheet(dates: string[]): WorkbookSheet | null {
     const dateRef = `${col}$1`;
     pushFormula(cells, `${col}2`, jobSetupInPhase(dateRef));
     pushFormula(cells, `${col}3`, jobSetupOtAfter8Expr(dateRef));
+    pushFormula(cells, `${col}4`, jobSetupEastCoastCraftOtExpr(dateRef));
   });
   return { name: ESTIMATE_XLSX_SHEETS.jobDays, cells, veryHidden: true };
 }
@@ -654,12 +677,16 @@ function mondayStamp(ymd: string) {
   return date ? mondayKey(date) : ymd;
 }
 
-function excelBlockClock(row: CraftRow, input: EstimateXlsxInput): RunningClock {
+function excelTextLiteral(value: string) {
+  return `"${String(value).replaceAll('"', '""')}"`;
+}
+
+export function excelBlockClock(row: CraftRow, input: EstimateXlsxInput): RunningClock {
   return runningClock(
     clockTitle(row.position, row.billedAs ?? ""),
     input.site ?? "",
     input.client ?? "",
-    row.clockOverride === "comp" ? "comp" : "auto",
+    row.clockOverride ?? "auto",
     input.plantCode ?? "",
   );
 }
@@ -832,7 +859,7 @@ function deskBlockDayHours(
   input: EstimateXlsxInput,
 ): Map<string, { st: number; ot: number; dt: number }> {
   const map = new Map<string, { st: number; ot: number; dt: number }>();
-  const override = row.clockOverride === "comp" ? "comp" : "auto";
+  const override = row.clockOverride ?? "auto";
   for (const range of row.ranges ?? []) {
     if (range.off) continue;
     const shift = rangeShift(row, range);
@@ -923,10 +950,10 @@ function buildCrewSheet(
   rows: CraftRow[],
   keys: RateKey[],
   staffPdOf: (row: CraftRow) => boolean,
-  lane: CrewLane = "craft",
+  _lane: CrewLane = "craft",
   lastRateRow = 0,
 ): BuiltSheet | null {
-  const live = liveCrewRows(rows).map((row) => withLaneClock(row, lane));
+  const live = liveCrewRows(rows);
   if (!live.length) return null;
   const showBillAs = name === ESTIMATE_XLSX_SHEETS.support;
   const dates = laborCalendarDates(input);
@@ -968,8 +995,16 @@ function buildCrewSheet(
 
     const firstDate = dates.length ? colLetter(LABOR_DATE_START_COL) : "";
     const rateName = showBillAs ? `IF(TRIM(B${otRow})<>"",B${otRow},B${titleRow})` : `B${titleRow}`;
-    const clock = excelBlockClock(row, input);
     const deskHours = deskBlockDayHours(row, night, input);
+    const siteClock = siteClockFromText(input.site ?? "", input.client ?? "", input.plantCode ?? "");
+    const clockPick = clockOverrideLabel(row.clockOverride);
+    const pickRef = `E${titleRow}`;
+    const clockTitleRef = showBillAs ? `IF(TRIM(B${otRow})<>"",B${otRow},B${titleRow})` : `B${titleRow}`;
+    const seatCount = staffSeatListTitles().length;
+    const autoStaff = `ISNUMBER(MATCH(${clockTitleRef},'${ESTIMATE_XLSX_SHEETS.lists}'!$${STAFF_SEAT_LIST_COL}$1:$${STAFF_SEAT_LIST_COL}$${Math.max(1, seatCount)},0))`;
+    const useStaffExpr = `OR(${pickRef}=${excelTextLiteral(LABOR_CLOCK_STAFF)},AND(OR(${pickRef}=${excelTextLiteral(LABOR_CLOCK_AUTO)},${pickRef}=""),${autoStaff}))`;
+    const flagCol = colLetter(LABOR_CLOCK_FLAG_COL);
+    const useStaffRef = `${flagCol}${titleRow}`;
     const setupPhases = mergeSchedule(input.schedule).phases;
 
     const blockId = laborBlockId(row, night);
@@ -980,6 +1015,8 @@ function buildCrewSheet(
 
     pushText(cells, `A${titleRow}`, night ? LABOR_NIGHTSHIFT : LABOR_DAYSHIFT);
     pushText(cells, `B${titleRow}`, row.position.trim());
+    pushText(cells, `E${titleRow}`, clockPick);
+    pushFormula(cells, `${flagCol}${titleRow}`, useStaffExpr);
     if (showBillAs) {
       pushText(cells, `B${stRow}`, LABOR_BILL_AS_LABEL);
       cells.push({ ref: `B${otRow}`, type: "text", value: billAsDisplay(row, input.site ?? "") });
@@ -1028,13 +1065,22 @@ function buildCrewSheet(
         .map((item) => item.ref);
       const dateRef = `${col}$6`;
       const inPhaseRef = jobDaysRef(index, 2);
-      const otAfter8Ref = clock === "ca-daily" ? "FALSE" : jobDaysRef(index, 3);
-      const hours = dayHourFormulas(col, hcRow, hpsRow, clock, otAfter8Ref, inPhaseRef, priorStRefs);
+      const staffOtRef = jobDaysRef(index, 3);
+      const compOtRef =
+        siteClock === "ca-daily" ? "FALSE" : siteClock === "east-coast" ? jobDaysRef(index, 4) : staffOtRef;
+      const staffHours = dayHourFormulas(col, hcRow, hpsRow, "staff", staffOtRef, inPhaseRef, priorStRefs);
+      const compHours = dayHourFormulas(col, hcRow, hpsRow, siteClock, compOtRef, inPhaseRef, priorStRefs);
+      const hours = {
+        st: `IF(${useStaffRef},${staffHours.st},${compHours.st})`,
+        ot: `IF(${useStaffRef},${staffHours.ot},${compHours.ot})`,
+        dt: `IF(${useStaffRef},${staffHours.dt},${compHours.dt})`,
+      };
       const desk = deskHours.get(ymd) ?? { st: 0, ot: 0, dt: 0 };
       const hcVal = money(plug.hc);
       const hpsVal = money(plug.hps);
       const owner = phaseOwningDate(setupPhases, ymd);
-      const exported = `AND(${col}${hcRow}=${hcVal},${col}${hpsRow}=${hpsVal},${jobSetupExportLock(dateRef, owner, inPhaseRef)})`;
+      const titleLock = `${clockTitleRef}=${excelTextLiteral(clockTitle(row.position, row.billedAs ?? ""))}`;
+      const exported = `AND(${col}${hcRow}=${hcVal},${col}${hpsRow}=${hpsVal},${pickRef}=${excelTextLiteral(clockPick)},${titleLock},${jobSetupExportLock(dateRef, owner, inPhaseRef)})`;
       pushFormula(cells, `${col}${stRow}`, `IF(${exported},${desk.st},${hours.st})`);
       pushFormula(cells, `${col}${otRow}`, `IF(${exported},${desk.ot},${hours.ot})`);
       pushFormula(cells, `${col}${dtRow}`, `IF(${exported},${desk.dt},${hours.dt})`);
@@ -1097,7 +1143,7 @@ function buildCrewSheet(
     pdTotal: `C${totalRow}`,
     hoursTotal: hoursRollup,
     sheetTotal: `J${totalRow}`,
-    hiddenCols: [LABOR_BLOCK_ID_COL],
+    hiddenCols: [LABOR_CLOCK_FLAG_COL, LABOR_BLOCK_ID_COL],
     weekendCols,
     laborBlocks,
     spacerRows,
@@ -1531,10 +1577,24 @@ export const OPTIONAL_ESTIMATE_SHEETS = [
 ] as const;
 
 function listFormula(col: string, count: number) {
-  return `=${ESTIMATE_XLSX_SHEETS.lists}!$${col}$1:$${col}$${Math.max(1, count)}`;
+  return `='${ESTIMATE_XLSX_SHEETS.lists}'!$${col}$1:$${col}$${Math.max(1, count)}`;
 }
 
 const PERIOD_LIST_COL = "J";
+const STAFF_SEAT_LIST_COL = "K";
+const CLOCK_PICK_LIST_COL = "L";
+
+function staffSeatListTitles() {
+  return uniqueTitles([
+    ...WOOD_RIVER_STAFF_TITLES,
+    ...SHAHAN_STAFF_TITLES,
+    ...SHAHAN_GENERAL_FOREMAN_TITLES,
+    ...SHAHAN_FOREMAN_TITLES,
+    ...SHAHAN_CRAFT_TITLES,
+    ...SHAHAN_SUPPORT_TITLES,
+    ...SUPPORT_BILLED_AS_TITLES,
+  ]).filter((title) => isStaffSeat(title));
+}
 
 function periodValidations(firstRow: number, lastRow: number) {
   const formulae = [listFormula(PERIOD_LIST_COL, THIRD_PARTY_PERIODS.length)];
@@ -1578,6 +1638,12 @@ function laborPositionValidations(
       })),
     );
   }
+  next.push(
+    ...blocks.map((block) => ({
+      sqref: `E${block.start}`,
+      formulae: [listFormula(CLOCK_PICK_LIST_COL, LABOR_CLOCK_PICKS.length)],
+    })),
+  );
   return next;
 }
 
@@ -1605,13 +1671,15 @@ function buildListsSheet(): WorkbookSheet {
     ["8", "9", "10", "12", "13"],
     ["YES", "NO"],
     [...THIRD_PARTY_PERIODS],
+    staffSeatListTitles(),
+    [...LABOR_CLOCK_PICKS],
   ];
   const cells: SheetCell[] = [];
   columns.forEach((list, index) => {
     const col = colLetter(index + 1);
     list.forEach((title, row) => pushText(cells, `${col}${row + 1}`, title));
   });
-  return { name: ESTIMATE_XLSX_SHEETS.lists, cells, veryHidden: true };
+  return { name: ESTIMATE_XLSX_SHEETS.lists, cells, veryHidden: true, merges: [] };
 }
 
 function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
@@ -1657,7 +1725,7 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   const keys = used.length ? rateCatalogKeys(used) : [];
   const lastRateRow = keys.length ? 6 + keys.length : 0;
   const rates = buildRateSheet(input, keys);
-  const staffCardRows = (input.crew?.staff ?? []).map((row) => withLaneClock(row, "staff"));
+  const staffCardRows = input.crew?.staff ?? [];
   const gfRows = input.crew?.generalForeman ?? [];
   const staff = buildCrewSheet(
     input,
