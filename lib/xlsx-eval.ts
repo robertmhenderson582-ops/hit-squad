@@ -38,6 +38,23 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
   }
   const cache = new Map<string, number | string>();
 
+  type RangeRef = { kind: "range"; sheet?: string; from: string; to: string };
+  type Token =
+    | { kind: "num"; value: number }
+    | { kind: "str"; value: string }
+    | { kind: "id"; value: string }
+    | { kind: "ref"; sheet?: string; ref: string }
+    | RangeRef
+    | { kind: "op"; value: string }
+    | { kind: "lp" }
+    | { kind: "rp" }
+    | { kind: "comma" };
+  type EvalValue = number | string | boolean | RangeRef;
+
+  function isRange(value: EvalValue): value is RangeRef {
+    return Boolean(value && typeof value === "object" && value.kind === "range");
+  }
+
   function cellRaw(sheet: string, ref: string): number | string {
     const key = `${sheet}!${ref.replaceAll("$", "")}`;
     if (cache.has(key)) return cache.get(key)!;
@@ -51,7 +68,8 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
     return value;
   }
 
-  function asNumber(value: number | string | boolean): number {
+  function asNumber(value: EvalValue): number {
+    if (isRange(value)) return 0;
     if (typeof value === "boolean") return value ? 1 : 0;
     if (typeof value === "number") return value;
     if (value === "") return 0;
@@ -79,23 +97,6 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
 
   function evalAt(sheet: string, ref: string): number {
     return asNumber(cellRaw(sheet, ref));
-  }
-
-  type RangeRef = { kind: "range"; sheet?: string; from: string; to: string };
-  type Token =
-    | { kind: "num"; value: number }
-    | { kind: "str"; value: string }
-    | { kind: "id"; value: string }
-    | { kind: "ref"; sheet?: string; ref: string }
-    | RangeRef
-    | { kind: "op"; value: string }
-    | { kind: "lp" }
-    | { kind: "rp" }
-    | { kind: "comma" };
-  type EvalValue = number | string | boolean | RangeRef;
-
-  function isRange(value: EvalValue): value is RangeRef {
-    return Boolean(value && typeof value === "object" && value.kind === "range");
   }
 
   function rangeCells(range: RangeRef, fallbackSheet: string) {
