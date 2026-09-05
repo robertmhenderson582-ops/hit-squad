@@ -54,7 +54,7 @@ export function SupportCrewCard({
   const computed = useMemo(
     () =>
       lines.map((row) => {
-        const hours = computeRowHours(row, site, client, pack.crew.otAfter8);
+        const hours = computeRowHours(row, site, client, pack.crew.otAfter8, "", pack.jobMeta.holidays ?? []);
         const title = shahanCrewTitle(row);
         const opts = wageLookupOpts(site, { laborClass: row.laborClassOverride ?? defaultLaborClass(title) });
         return {
@@ -64,7 +64,7 @@ export function SupportCrewCard({
           cost: formatShahanCrewCost(title, hours, opts),
         };
       }),
-    [client, lines, pack.crew.otAfter8, site],
+    [client, lines, pack.crew.otAfter8, pack.jobMeta.holidays, site],
   );
   const totals = useMemo(() => sumSplits(computed), [computed]);
   const costTotal = useMemo(

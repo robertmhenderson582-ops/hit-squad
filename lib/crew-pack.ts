@@ -46,6 +46,7 @@ export function dayNightHours(
   site = "",
   client = "",
   otAfter8 = false,
+  holidays: string[] = [],
 ): { day: HoursSplit; night: HoursSplit } {
   let day = emptySplit();
   let night = emptySplit();
@@ -72,6 +73,7 @@ export function dayNightHours(
       phaseId: range.phaseId,
       clockOverride: row.clockOverride ?? "auto",
       skipDates: range.skipDates,
+      holidays,
     };
     if (shift === "Days & nights") {
       day = sumSplits([

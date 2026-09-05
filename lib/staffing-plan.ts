@@ -158,11 +158,11 @@ function allCraftRows(crew: StaffingCrewInput): CraftRow[] {
   return [...(crew.staff ?? []), ...(crew.generalForeman ?? []), ...(crew.foreman ?? []), ...(crew.direct ?? [])];
 }
 
-function rangeCovers(range: CalendarRange, ymd: string): boolean {
+function rangeCovers(range: CalendarRange, ymd: string, holidays: string[] = []): boolean {
   if (range.off) return false;
   if (!range.start || !range.end) return false;
   if (ymd < range.start || ymd > range.end) return false;
-  if (range.skipDates?.includes(ymd)) return false;
+  if (range.skipDates?.includes(ymd) || holidays.includes(ymd)) return false;
   const date = parseYmd(ymd);
   if (!date) return false;
   if (Array.isArray(range.days) && range.days.length === 7 && !range.days[date.getDay()]) return false;
@@ -199,6 +199,7 @@ export function generateStaffingPlan(input: {
   plantCode?: string;
   phases: PhaseRow[];
   crew: StaffingCrewInput;
+  holidays?: string[];
 }): StaffingPlan {
   const coast = staffingCoastFromSite(input.site, input.client, input.plantCode);
   const template = craftsForCoast(coast);
@@ -225,7 +226,7 @@ export function generateStaffingPlan(input: {
     for (const range of row.ranges ?? []) {
       const shift = range.shift ?? row.shift ?? "Days";
       for (const date of dates) {
-        if (!rangeCovers(range, date.ymd)) continue;
+        if (!rangeCovers(range, date.ymd, input.holidays)) continue;
         const add = shiftCounts(shift, range);
         if (!hasCounts(add)) continue;
         target.cells[date.ymd] = addCounts(target.cells[date.ymd] ?? {}, add);

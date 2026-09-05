@@ -59,7 +59,7 @@ export function CraftLaborGrid({
   const computed = useMemo(
     () =>
       rows.map((row) => {
-        const hours = computeRowHours(row, site, client, pack.crew.otAfter8);
+        const hours = computeRowHours(row, site, client, pack.crew.otAfter8, "", pack.jobMeta.holidays ?? []);
         const title = row.position || ("billedAs" in row ? String(row.billedAs || "") : "");
         return {
           ...row,
@@ -72,7 +72,7 @@ export function CraftLaborGrid({
           })),
         };
       }),
-    [client, pack.crew.otAfter8, rows, site],
+    [client, pack.crew.otAfter8, pack.jobMeta.holidays, rows, site],
   );
 
   const totals = useMemo(() => sumSplits(computed), [computed]);

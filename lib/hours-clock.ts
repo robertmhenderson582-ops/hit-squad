@@ -35,6 +35,8 @@ export type ComputeRangeInput = {
   billedAs?: string;
   clockOverride?: ClockOverride;
   skipDates?: string[];
+  /** Job-level holidays (YYYY-MM-DD). Unioned with skipDates — no billable hours that day. */
+  holidays?: string[];
 };
 
 export type RangeDay = {
@@ -60,6 +62,28 @@ function staffTitleKey(value: string): string {
 }
 
 const B1_STAFF_KEYS = new Set(WOOD_RIVER_STAFF_TITLES.map(staffTitleKey));
+
+/** Unique sorted YYYY-MM-DD dates. Invalid stamps drop. */
+export function hydrateHolidays(raw: unknown): string[] {
+  const items = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.split(/[,;]+/)
+      : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of items) {
+    const text = typeof item === "string" ? item.trim() : "";
+    if (!parseYmd(text) || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+  }
+  return out.sort();
+}
+
+export function unionSkipDates(skipDates?: readonly string[] | null, holidays?: readonly string[] | null): string[] {
+  return hydrateHolidays([...(skipDates ?? []), ...(holidays ?? [])]);
+}
 
 export function parseYmd(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -312,7 +336,7 @@ export function computeRangeDaySplits(input: ComputeRangeInput): {
   const raw: WeekDaySplit[] = [];
   let workedDays = 0;
   const workedInWeek = new Map<string, number>();
-  const skip = new Set(input.skipDates ?? []);
+  const skip = new Set(unionSkipDates(input.skipDates, input.holidays));
   for (const date of dates) {
     const stamp = ymd(date);
     if (skip.has(stamp)) continue;
@@ -398,6 +422,7 @@ export function computeRowHours(
   client = "",
   crewOtAfter8 = false,
   plantCode = "",
+  holidays: string[] = [],
 ): HoursSplit {
   if (!row.position.trim()) {
     return { st: 0, ot: 0, dt: 0, pd: 0, hours: 0, workedDays: 0 };
@@ -427,6 +452,7 @@ export function computeRowHours(
         phaseId: range.phaseId,
         clockOverride: row.clockOverride ?? "auto",
         skipDates: range.skipDates,
+        holidays,
       }),
     ),
   );

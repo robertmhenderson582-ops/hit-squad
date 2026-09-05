@@ -27,6 +27,7 @@ import {
   JOB_SETUP_CRAFT_PD_CELL,
   JOB_SETUP_LABOR_CONT_CELL,
   JOB_SETUP_MORE_CELL,
+  JOB_SETUP_HOLIDAY_START_ROW,
   JOB_SETUP_STAFF_MILE_CELL,
   JOB_SETUP_STAFF_PD_CELL,
   LABOR_DATE_START_COL,
@@ -270,6 +271,50 @@ describe("estimate excel import", () => {
     assert.equal(meta.equipmentContingencyPct, 5);
     assert.equal(meta.subsContingencyPct, 4);
     assert.equal(meta.moreFundPerHour, 2);
+  });
+
+  it("export→import keeps Job setup holidays and desk total follows the skip", async () => {
+    const holiday = "2026-09-16";
+    const added = "2026-09-17";
+    const input: EstimateXlsxInput = {
+      title: "Holiday import",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      crew: {
+        direct: [craft("dr-h", "Boilermaker Journeyman", { start: "2026-09-14", end: "2026-09-18", otAfter8: true })],
+        otAfter8: true,
+      },
+      schedule: {
+        projectStart: "2026-09-14",
+        multiUnits: false,
+        units: [],
+        phases: defaultPhases().map((phase) =>
+          phase.id === "mech"
+            ? { ...phase, on: true, start: "2026-09-14", stop: "2026-09-18", daysPerWeek: 5, hoursPerDay: 10, otAfter8: true }
+            : { ...phase, on: false },
+        ),
+      },
+      jobMeta: { holidays: [holiday], staffPerDiemRate: 140, craftPerDiemRate: 130 },
+    };
+    const before = deskPackageTotal(input);
+    const open = deskPackageTotal({ ...input, jobMeta: { ...input.jobMeta, holidays: [] } });
+    assert.equal(before < open, true);
+    const imported = await parseEstimateXlsx(await estimateToXlsx(input));
+    assert.deepEqual(imported.jobMeta?.holidays, [holiday]);
+    const applied = applyEstimateImport(asPack(input), imported);
+    assert.deepEqual((applied.jobMeta as { holidays?: string[] }).holidays, [holiday]);
+    assert.equal(deskPackageTotal({ ...input, crew: applied.crew, jobMeta: applied.jobMeta }), before);
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const setup = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup);
+    assert.ok(setup);
+    setup.getCell(JOB_SETUP_HOLIDAY_START_ROW + 1, 2).value = new Date(2026, 8, 17);
+    const edited = await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer()));
+    assert.deepEqual(edited.jobMeta?.holidays, [holiday, added]);
+    const next = applyEstimateImport(asPack(input), edited);
+    assert.deepEqual((next.jobMeta as { holidays?: string[] }).holidays, [holiday, added]);
+    assert.equal(deskPackageTotal({ ...input, crew: next.crew, jobMeta: next.jobMeta }) < before, true);
   });
 
   it("cascades illegal back-in-time ON dates on import", async () => {

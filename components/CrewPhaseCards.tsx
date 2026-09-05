@@ -125,6 +125,7 @@ function PhaseWindowCard({
   units: JobUnit[];
 }) {
   const confirmRemove = useConfirmRemove();
+  const pack = useEstimatePackage();
   const jobOff = ranges.length === 0 && !phase.on;
   const killed = phaseIsOff(ranges, phase.id);
   const off = jobOff || killed;
@@ -134,7 +135,14 @@ function PhaseWindowCard({
   const phaseName = PHASE_NAMES[phase.id as PhaseId];
 
   async function turnOff() {
-    const billed = computeRowHours({ ...row, ranges: ranges.filter((range) => !range.off) }, site, client);
+    const billed = computeRowHours(
+      { ...row, ranges: ranges.filter((range) => !range.off) },
+      site,
+      client,
+      false,
+      "",
+      pack.jobMeta?.holidays ?? [],
+    );
     if (billed.hours > 0) {
       const ok = await confirmRemove(
         `${phaseName} hours leave this position only. Restore brings them back. Job setup stays on.`,
@@ -254,6 +262,7 @@ function CalendarPattern({
   onPatch: (patch: Partial<CalendarRange>) => void;
   onRemove: () => void;
 }) {
+  const pack = useEstimatePackage();
   const shift = range.shift ?? row.shift;
   const two = shift === "Days & nights";
   const sundays = range.days[0] ? sundaysInRange(range.start, range.end) : [];
@@ -278,6 +287,7 @@ function CalendarPattern({
     billedAs: "billedAs" in row ? String(row.billedAs || "") : undefined,
     clockOverride: row.clockOverride,
     skipDates: range.skipDates,
+    holidays: pack.jobMeta.holidays ?? [],
   });
 
   function toggleDay(index: number) {

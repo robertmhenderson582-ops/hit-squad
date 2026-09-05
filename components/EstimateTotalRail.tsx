@@ -31,8 +31,11 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     [pack.crew],
   );
   const hours = useMemo(
-    () => sumSplits(crewRows.map((row) => computeRowHours(row, site, client, pack.crew.otAfter8))),
-    [client, crewRows, pack.crew.otAfter8, site],
+    () =>
+      sumSplits(
+        crewRows.map((row) => computeRowHours(row, site, client, pack.crew.otAfter8, "", pack.jobMeta.holidays ?? [])),
+      ),
+    [client, crewRows, pack.crew.otAfter8, pack.jobMeta.holidays, site],
   );
 
   const breakdown = useMemo(() => {

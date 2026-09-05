@@ -99,6 +99,7 @@ import {
   boundOtLabel,
   clockTitle,
   computeRangeHours,
+  hydrateHolidays,
   isStaffSeat,
   mondayKey,
   parseYmd,
@@ -190,6 +191,10 @@ export const JOB_SETUP_CBA_ON_CELL = "B22";
 export const JOB_SETUP_CBA_DATE_CELL = "B23";
 export const JOB_SETUP_CBA_PCT_CELL = "B24";
 export const JOB_SETUP_MORE_CELL = "B25";
+export const JOB_SETUP_HOLIDAYS_TITLE = "Holidays";
+export const JOB_SETUP_HOLIDAY_START_ROW = 27;
+export const JOB_SETUP_HOLIDAY_SPARE = 8;
+export const JOB_SETUP_HOLIDAY_MAX = 24;
 export const RATE_TOOLS_SECTION = "Large tools (COE / dry rates)";
 export const RATE_RENTAL_SECTION = "Third-party rental";
 /** First day-grid column after the A–I instrument (Shift sits next to Position). */
@@ -319,6 +324,7 @@ export const XLSX_JOB_MONEY_NOTES = {
   cbaDate: "CBA increase starts on this date. Desk splits craft hours on this date.",
   cbaPct: "CBA increase percent. 3 = 3%. Applies to COMP / Shahan base wage (baseSt), not billed ST.",
   more: "M.O.R.E. fund $ per craft hour. Blank stays $0. Summary $ = desk MORE hours × this cell.",
+  holidays: "Plant / job holidays (YYYY-MM-DD). No ST/OT/DT/HC those days. Same list as Job setup on the desk.",
   cbaSummary: "CBA $ is desk hours after the effective date × base wage × %. Not billed composite. Math does not live in Excel.",
 } as const;
 
@@ -369,6 +375,7 @@ export function headerInputNote(header: string): string | undefined {
   if (h === "cba effective date") return XLSX_JOB_MONEY_NOTES.cbaDate;
   if (h === "cba increase %") return XLSX_JOB_MONEY_NOTES.cbaPct;
   if (h === "m.o.r.e. fund $ / hr") return XLSX_JOB_MONEY_NOTES.more;
+  if (h === "holidays") return XLSX_JOB_MONEY_NOTES.holidays;
   return XLSX_INPUT_NOTES.fallback;
 }
 
@@ -1167,22 +1174,33 @@ function rowHasNightBlock(row: CraftRow) {
   });
 }
 
-function rangeCoversDay(row: CraftRow, range: CalendarRange, ymd: string, night: boolean): boolean {
+function jobHolidays(input?: Pick<EstimateXlsxInput, "jobMeta"> | string[] | null): string[] {
+  if (Array.isArray(input)) return hydrateHolidays(input);
+  return hydrateHolidays(input?.jobMeta && "holidays" in input.jobMeta ? input.jobMeta.holidays : []);
+}
+
+function rangeCoversDay(
+  row: CraftRow,
+  range: CalendarRange,
+  ymd: string,
+  night: boolean,
+  holidays: string[] = [],
+): boolean {
   if (range.off) return false;
   const shift = rangeShift(row, range);
   if (night && shift === "Days") return false;
   if (!night && shift === "Nights") return false;
   if (!range.start || !range.end) return false;
   if (ymd < range.start || ymd > range.end) return false;
-  if (range.skipDates?.includes(ymd)) return false;
+  if (range.skipDates?.includes(ymd) || holidays.includes(ymd)) return false;
   const date = parseYmd(ymd);
   if (!date) return false;
   if (Array.isArray(range.days) && range.days.length === 7 && !range.days[date.getDay()]) return false;
   return true;
 }
 
-function coveringRanges(row: CraftRow, ymd: string, night: boolean): CalendarRange[] {
-  return (row.ranges ?? []).filter((range) => rangeCoversDay(row, range, ymd, night));
+function coveringRanges(row: CraftRow, ymd: string, night: boolean, holidays: string[] = []): CalendarRange[] {
+  return (row.ranges ?? []).filter((range) => rangeCoversDay(row, range, ymd, night, holidays));
 }
 
 function rangeDayHeadcount(row: CraftRow, range: CalendarRange, ymd: string, night: boolean): number {
@@ -1210,8 +1228,13 @@ function rangeDayPd(row: CraftRow, range: CalendarRange, night: boolean): number
 }
 
 /** Sum every live range on that day — hiring-progression adds stack, same as the desk. */
-export function laborDayPlug(row: CraftRow, ymd: string, night: boolean): { hc: number; hps: number; pd: number } {
-  const ranges = coveringRanges(row, ymd, night);
+export function laborDayPlug(
+  row: CraftRow,
+  ymd: string,
+  night: boolean,
+  holidays: string[] = [],
+): { hc: number; hps: number; pd: number } {
+  const ranges = coveringRanges(row, ymd, night, holidays);
   if (!ranges.length) return { hc: 0, hps: 0, pd: 0 };
   let hourUnits = 0;
   let pd = 0;
@@ -1266,6 +1289,7 @@ function deskBlockDayHours(
       phaseId: range.phaseId,
       clockOverride: override,
       skipDates: range.skipDates,
+      holidays: jobHolidays(input),
     });
     for (const day of hours.days) {
       const prev = map.get(day.date) ?? { st: 0, ot: 0, dt: 0 };
@@ -1279,16 +1303,29 @@ function deskBlockDayHours(
   return map;
 }
 
-function writeDateRow(cells: SheetCell[], dates: string[]) {
+function holidayHeaderNote(ymd: string): string | undefined {
+  const date = parseYmd(ymd);
+  if (!date) return "Holiday — no billable hours.";
+  return `${excelFullDateNote(date)} — Holiday, no billable hours.`;
+}
+
+function writeDateRow(cells: SheetCell[], dates: string[], holidays: string[] = []) {
+  const holiday = new Set(holidays);
   dates.forEach((ymd, index) => {
     const col = colLetter(LABOR_DATE_START_COL + index);
+    const note = holiday.has(ymd) ? holidayHeaderNote(ymd) : undefined;
     if (index === 0) {
       const date = parseYmd(ymd);
-      if (date) cells.push({ ref: `${col}6`, type: "date", value: date });
-      else pushText(cells, `${col}6`, ymd);
+      if (date) cells.push({ ref: `${col}6`, type: "date", value: date, note });
+      else cells.push({ ref: `${col}6`, type: "text", value: ymd, note });
       return;
     }
-    pushFormula(cells, `${col}6`, `${colLetter(LABOR_DATE_START_COL + index - 1)}6+1`);
+    cells.push({
+      ref: `${col}6`,
+      type: "formula",
+      value: `${colLetter(LABOR_DATE_START_COL + index - 1)}6+1`,
+      note,
+    });
   });
 }
 
@@ -1398,7 +1435,8 @@ function buildCrewSheet(
     LABOR_PD_HEADER,
   ];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
-  writeDateRow(cells, dates);
+  const holidays = jobHolidays(input);
+  writeDateRow(cells, dates, holidays);
   writeWeekdayRow(cells, dates);
   const phaseBand = writePhaseBar(cells, dates, input.schedule);
 
@@ -1481,7 +1519,7 @@ function buildCrewSheet(
     pushFormula(cells, `C${pdRow}`, `I${titleRow}*D${pdRow}`);
     dates.forEach((ymd, index) => {
       const col = colLetter(LABOR_DATE_START_COL + index);
-      const plug = laborDayPlug(row, ymd, night);
+      const plug = laborDayPlug(row, ymd, night, holidays);
       pushNum(cells, `${col}${hcRow}`, plug.hc);
       pushNum(cells, `${col}${hpsRow}`, plug.hps);
       const priorStRefs = priorWeekStRefs(dates, index, stRow);
@@ -1558,6 +1596,9 @@ function buildCrewSheet(
       return { col: LABOR_DATE_START_COL + index, weekday: dow as 0 | 6 };
     })
     .filter((item): item is { col: number; weekday: 0 | 6 } => Boolean(item));
+  const holidayCols = dates
+    .map((ymd, index) => (holidays.includes(ymd) ? { col: LABOR_DATE_START_COL + index, ymd } : null))
+    .filter((item): item is { col: number; ymd: string } => Boolean(item));
 
   return {
     name,
@@ -1568,6 +1609,7 @@ function buildCrewSheet(
     sheetTotal: `C${totalRow}`,
     hiddenCols: [LABOR_CLOCK_FLAG_COL, LABOR_BLOCK_ID_COL],
     weekendCols,
+    holidayCols,
     laborBlocks,
     spacerRows,
     phaseBar: phaseBand.phaseBar,
@@ -2350,6 +2392,35 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
       "Choose the CBA effective date from the calendar.",
     ),
   );
+  const holidays = jobHolidays(input);
+  const holidayRows = Math.min(JOB_SETUP_HOLIDAY_MAX, Math.max(holidays.length + JOB_SETUP_HOLIDAY_SPARE, JOB_SETUP_HOLIDAY_SPARE));
+  pushText(cells, `A${JOB_SETUP_HOLIDAY_START_ROW}`, JOB_SETUP_HOLIDAYS_TITLE);
+  comments.push({ ref: `A${JOB_SETUP_HOLIDAY_START_ROW}`, text: XLSX_JOB_MONEY_NOTES.holidays });
+  for (let index = 0; index < holidayRows; index += 1) {
+    const excelRow = JOB_SETUP_HOLIDAY_START_ROW + index;
+    const ymd = holidays[index];
+    const date = ymd ? parseYmd(ymd) : null;
+    unlocked.push({ row: excelRow, col: 2 });
+    validations.push(
+      jobSetupDateValidation(
+        `B${excelRow}`,
+        "DATE(1990,1,1)",
+        "Pick a holiday",
+        "Choose a holiday date. Blank stays empty. No billable hours that day.",
+      ),
+    );
+    if (date) {
+      cells.push({
+        ref: `B${excelRow}`,
+        type: "date",
+        value: date,
+        note: index === 0 ? XLSX_JOB_MONEY_NOTES.holidays : undefined,
+        numFmt: JOB_SETUP_DATE_FMT,
+      });
+    } else if (index === 0) {
+      comments.push({ ref: `B${excelRow}`, text: XLSX_JOB_MONEY_NOTES.holidays });
+    }
+  }
   return {
     name: ESTIMATE_XLSX_SHEETS.jobSetup,
     cells,
@@ -2357,7 +2428,7 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
     unlocked,
     validations,
     comments: comments.length ? comments : undefined,
-    headerRows: [13, 14],
+    headerRows: [13, 14, JOB_SETUP_HOLIDAY_START_ROW],
     merges: ["A1:G1", "A2:G2", "A3:G3", "A13:B13"],
   };
 }

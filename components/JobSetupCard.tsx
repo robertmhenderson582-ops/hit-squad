@@ -40,6 +40,7 @@ import {
   MORE_FUND_LABEL,
   SUBS_CONTINGENCY_LABEL,
 } from "@/lib/estimate-money";
+import { hydrateHolidays } from "@/lib/hours-clock";
 
 export function JobSetupCard({
   type,
@@ -78,6 +79,7 @@ export function JobSetupCard({
   const alias = useAlias();
   const lens = useLensUser();
   const [estimateType, setEstimateType] = useState<EstimateType>(displayEstimateType(type));
+  const [holidayDraft, setHolidayDraft] = useState("");
   const [rateStatus, setRateStatus] = useState("");
   const [confirmRates, setConfirmRates] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<EstimateStatus | null>(null);
@@ -505,6 +507,61 @@ export function JobSetupCard({
             Typed $/hr. Empty is $0 and stays off the rail. Credit or cost. Craft hours only. Never seeded.
           </p>
         </label>
+      </div>
+      <div className="mt-6 rounded-lg border border-[#d5e0de] bg-[#f4f1e8] px-4 py-4">
+        <h2 className="text-sm font-semibold tracking-[0.12em] text-[#5b6f73]">HOLIDAYS</h2>
+        <p className="mt-1 text-sm text-[#5b6f73]">
+          Plant / job holidays. No billable ST/OT/DT or HC those days. Same list as the Excel Job setup sheet.
+        </p>
+        {(pack.jobMeta.holidays ?? []).length ? (
+          <ul className="mt-3 space-y-2">
+            {(pack.jobMeta.holidays ?? []).map((ymd) => (
+              <li key={ymd} className="flex items-center justify-between gap-3">
+                <span className="text-sm text-[#163038]">{ymd}</span>
+                <button
+                  type="button"
+                  className="text-xs font-semibold tracking-[0.12em] text-[#5b6f73] underline"
+                  onClick={() =>
+                    pack.setJobMeta((current) => ({
+                      ...current,
+                      holidays: hydrateHolidays((current.holidays ?? []).filter((item) => item !== ymd)),
+                    }))
+                  }
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-sm text-[#5b6f73]">No holidays on this estimate yet.</p>
+        )}
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="block">
+            <span className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">ADD DATE</span>
+            <DateField
+              className="mt-2"
+              value={holidayDraft}
+              aria-label="Add holiday date"
+              onChange={setHolidayDraft}
+            />
+          </label>
+          <button
+            type="button"
+            className="paper-field px-3 py-2 text-xs font-semibold tracking-[0.12em]"
+            disabled={!holidayDraft}
+            onClick={() => {
+              if (!holidayDraft) return;
+              pack.setJobMeta((current) => ({
+                ...current,
+                holidays: hydrateHolidays([...(current.holidays ?? []), holidayDraft]),
+              }));
+              setHolidayDraft("");
+            }}
+          >
+            Add holiday
+          </button>
+        </div>
       </div>
     </section>
   );

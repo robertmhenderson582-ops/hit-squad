@@ -60,13 +60,15 @@ export function deskPackageBreakdown(input: DeskPackageInput): EstimateTotalBrea
     staffPerDiemRate: Number(input.jobMeta?.staffPerDiemRate) || 0,
     craftPerDiemRate: Number(input.jobMeta?.craftPerDiemRate) || 0,
   };
-  const perDiem = perDiemDollarsFromCrew(input.crew ?? {}, rates, site, client);
+  const money = hydrateJobMoney(input.jobMeta);
+  const holidays = money.holidays;
+  const perDiem = perDiemDollarsFromCrew(input.crew ?? {}, rates, site, client, holidays);
   const subCtx = { site, client, otAfter8: Boolean(input.crew?.otAfter8) };
   const sheet = input.subcontractor;
   const subcontractor = subcontractorTotal(sheet, subCtx);
-  const labor = laborDollarsFromCrew(input.crew ?? {}, site, client, wageLookupOpts(site));
-  const cba = cbaIncreaseDollars(input.crew ?? {}, hydrateJobMoney(input.jobMeta), site, client, wageLookupOpts(site));
-  const more = moreFundDollars(input.crew ?? {}, input.jobMeta?.moreFundPerHour ?? null, site, client);
+  const labor = laborDollarsFromCrew(input.crew ?? {}, site, client, wageLookupOpts(site), holidays);
+  const cba = cbaIncreaseDollars(input.crew ?? {}, money, site, client, wageLookupOpts(site));
+  const more = moreFundDollars(input.crew ?? {}, input.jobMeta?.moreFundPerHour ?? null, site, client, holidays);
   const adders = moneyAdderLines({
     labor,
     equipment: tools + thirdCost,
