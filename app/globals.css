@@ -575,7 +575,8 @@ textarea:focus {
     0 10px 24px rgba(0, 0, 0, 0.28);
 }
 
-.industrial-root .bg-\[\#f4f1e8\] {
+.industrial-root .bg-\[\#f4f1e8\],
+.industrial-root .bg-\[\#fbf8f0\] {
   background: rgba(8, 34, 40, 0.88);
 }
 

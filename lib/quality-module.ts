@@ -7,6 +7,7 @@ import {
 } from "./quality-day1.ts";
 import { emptyRollingChart, hydrateRollingChart, type RollingChartState } from "./rolling-chart.ts";
 import {
+  CLIENT_FOLDERS,
   clientFolderId,
   emptyRegisterRow,
   hydrateRegisterRows,
@@ -23,6 +24,9 @@ export const QUALITY_SECTIONS = [
     board: "Open NCRs",
     fields: [
       { id: "ncr", label: "Number", kind: "text" },
+      { id: "client", label: "Client", kind: "text" },
+      { id: "job", label: "Job", kind: "text" },
+      { id: "unit", label: "Unit", kind: "text" },
       { id: "area", label: "Area", kind: "text" },
       { id: "description", label: "Description", kind: "text" },
       { id: "disposition", label: "Disposition", kind: "text" },
@@ -94,6 +98,24 @@ export const QUALITY_SECTIONS = [
 
 export type QualitySectionId = (typeof QUALITY_SECTIONS)[number]["id"];
 
+export const QUALITY_DESK_TABS = [
+  { id: "board", label: "Board" },
+  { id: "ncrs", label: "NCRs" },
+  { id: "welds-nde", label: "Welds/NDE" },
+  { id: "connections", label: "Connections" },
+  { id: "travelers", label: "Travelers" },
+  { id: "welders", label: "Welders" },
+  { id: "calibration", label: "Gauges" },
+  { id: "day1", label: "Day-1 package" },
+  { id: "rolling", label: "Rolling chart" },
+] as const;
+
+export type QualityDeskTabId = (typeof QUALITY_DESK_TABS)[number]["id"];
+
+export function isQualityDeskTab(value: string): value is QualityDeskTabId {
+  return QUALITY_DESK_TABS.some((tab) => tab.id === value);
+}
+
 export type QualityModuleState = {
   day1: QualityDay1;
   workNames: string;
@@ -128,6 +150,13 @@ export function qualityModuleKey(folder: ClientFolderId | string) {
 function migrateNcrCells(row: ModuleRegisterRow): ModuleRegisterRow {
   const cells = { ...row.cells };
   if (!cells.description?.trim() && cells.note?.trim()) cells.description = cells.note;
+  if (!cells.client?.trim() && cells.company?.trim()) cells.client = clientFolderId(cells.company);
+  if (cells.client?.trim() && !CLIENT_FOLDERS.some((item) => item.id === cells.client)) {
+    cells.client = clientFolderId(cells.client);
+  }
+  if (!cells.client) cells.client = "";
+  if (!cells.job) cells.job = "";
+  if (!cells.unit) cells.unit = "";
   return { ...row, cells };
 }
 
