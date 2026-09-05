@@ -1398,7 +1398,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
         showInputMessage: false,
         errorTitle: rule.errorTitle,
         error: rule.error,
-        errorStyle: type === "list" ? undefined : "stop",
+        errorStyle: rule.showErrorMessage || type !== "list" ? "stop" : undefined,
       };
     }
 

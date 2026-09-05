@@ -2,6 +2,7 @@ import { markup6, type B2Period } from "./b2-east-coast.ts";
 import { commercialMarkupRate } from "./estimate-total.ts";
 import { inclusiveDays, parseYmd } from "./phase-schedule.ts";
 import {
+  allowedShahanPeriod,
   isShahanCostPlus,
   lookupShahanEquipment,
   rematchEquipmentSheetToShahan,
@@ -10,6 +11,12 @@ import {
   shahanPeriodRate,
 } from "./shahan-wood-river.ts";
 import { notifyEstimateSheets } from "./sheet-events.ts";
+import {
+  allowedThirdPartyPeriod,
+  hasThirdPartyPeriodRate,
+  lookupThirdPartyRental,
+  thirdPartyRentalPeriodRate,
+} from "./third-party-rental.ts";
 
 export const EQUIPMENT_STORE_PREFIX = "hs_equip_v1:";
 /** Legacy alias. Commercial third-party fee is COMP 6.5% / Yates 10%, not this 6%. B-2 Cost+6% stays on markup6(). */
@@ -153,6 +160,32 @@ export function largeToolAmount(line: LargeToolLine) {
 export function thirdPartyCost(line: ThirdPartyLine) {
   const periods = billedPeriodCount(line.start, line.end, line.period);
   return Math.max(0, line.rate) * Math.max(0, line.qty) * periods + Math.max(0, line.freight);
+}
+
+/** Catalog period with no rate → first available period + that catalog rate. Custom items stay as typed. */
+export function resolveThirdPartyLine(line: ThirdPartyLine): ThirdPartyLine {
+  const catalog = lookupThirdPartyRental(line.item);
+  if (!catalog) return line;
+  if (hasThirdPartyPeriodRate(catalog, line.period)) return line;
+  const period = allowedThirdPartyPeriod(catalog, line.period);
+  return { ...line, period, rate: thirdPartyRentalPeriodRate(catalog, period) };
+}
+
+/** Catalog period with no positive Shahan rate → first available. Cost-plus / no-rate rows keep the typed period. */
+export function resolveLargeToolLine(line: LargeToolLine): LargeToolLine {
+  const item = lookupShahanEquipment(line.itemId);
+  if (!item) return line;
+  const period = allowedShahanPeriod(item, line.period);
+  return period === line.period ? line : { ...line, period };
+}
+
+export function resolveEquipmentSheet(sheet: EquipmentSheet | null | undefined): EquipmentSheet {
+  const largeTools = sheet?.largeTools ?? [];
+  const thirdParty = sheet?.thirdParty ?? [];
+  return {
+    largeTools: largeTools.map(resolveLargeToolLine),
+    thirdParty: thirdParty.map(resolveThirdPartyLine),
+  };
 }
 
 export function thirdPartyMarkedUp(line: ThirdPartyLine, client = "", site = "") {

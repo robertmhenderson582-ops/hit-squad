@@ -63,6 +63,9 @@ import type { CalendarRange, CraftRow, CraftShift, SupportLine } from "./craft-l
 import {
   billedPeriodCount,
   largeToolAmount,
+  resolveEquipmentSheet,
+  resolveLargeToolLine,
+  resolveThirdPartyLine,
   thirdPartyCost,
   THIRD_PARTY_PERIODS,
   type EquipmentSheet,
@@ -119,6 +122,7 @@ import {
   isShahanCostPlus,
   lookupShahanEquipment,
   lookupShahanLabor,
+  shahanPeriodsWithRates,
   SHAHAN_CRAFT_TITLES,
   SHAHAN_FOREMAN_TITLES,
   SHAHAN_GENERAL_FOREMAN_TITLES,
@@ -133,6 +137,7 @@ import {
 import {
   hasThirdPartyPeriodRate,
   lookupThirdPartyRental,
+  thirdPartyPeriodsWithRates,
   thirdPartyRentalPeriodRate,
 } from "./third-party-rental.ts";
 import { emptySubSheet, lineAmount, subCardTotal, type SubSheet } from "./subcontractor.ts";
@@ -1453,15 +1458,17 @@ function liveLargeTool(line: LargeToolLine) {
 }
 
 function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPartyLine[]): BuiltSheet | null {
-  const live = lines.filter(liveThirdParty);
+  const live = lines.filter(liveThirdParty).map(resolveThirdPartyLine);
   if (!live.length) return null;
   const cells = headerCells(input);
   ["Item", "Period", "Qty", "Periods", "Rate $", "Freight $", "Cost $", "Total $"].forEach((label, index) => {
     pushText(cells, `${colLetter(index + 1)}6`, label);
   });
   const unlocked: Array<{ row: number; col: number }> = [];
+  const periodRows: PeriodValidationRow[] = [];
   live.forEach((line, index) => {
     const excelRow = 7 + index;
+    const catalog = lookupThirdPartyRental(line.item);
     const periods = billedPeriodCount(line.start, line.end, line.period);
     pushText(cells, `A${excelRow}`, line.item);
     pushText(cells, `B${excelRow}`, line.period);
@@ -1472,6 +1479,10 @@ function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPa
     pushFormula(cells, `G${excelRow}`, rentalLineTotal(excelRow));
     pushFormula(cells, `H${excelRow}`, `G${excelRow}*${1 + commercialMarkupRate(input.client, input.site)}`);
     unlockInputCols(unlocked, excelRow, 6);
+    periodRows.push({
+      row: excelRow,
+      periods: catalog ? thirdPartyPeriodsWithRates(catalog) : [...THIRD_PARTY_PERIODS],
+    });
   });
   const first = 7;
   const lastLive = 6 + live.length;
@@ -1481,6 +1492,7 @@ function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPa
     pushFormula(cells, `G${excelRow}`, rentalLineTotal(excelRow));
     pushFormula(cells, `H${excelRow}`, `G${excelRow}*${markup}`);
     unlockInputCols(unlocked, excelRow, 6);
+    periodRows.push({ row: excelRow, periods: [...THIRD_PARTY_PERIODS] });
   }
   const totalRow = last + 1;
   pushText(cells, `A${totalRow}`, "TOTAL");
@@ -1492,18 +1504,19 @@ function buildRentalSheet(input: EstimateXlsxInput, name: string, lines: ThirdPa
     costTotal: `G${totalRow}`,
     sheetTotal: `G${totalRow}`,
     unlocked,
-    validations: periodValidations(first, last),
+    validations: periodValidations(periodRows),
   };
 }
 
 function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
-  const live = (input.equipment?.largeTools ?? []).filter(liveLargeTool);
+  const live = (input.equipment?.largeTools ?? []).filter(liveLargeTool).map(resolveLargeToolLine);
   if (!live.length) return null;
   const cells = headerCells(input);
   ["Item", "Period", "Qty", "Periods", "Rate $", "Freight $", "Total $"].forEach((label, index) => {
     pushText(cells, `${colLetter(index + 1)}6`, label);
   });
   const unlocked: Array<{ row: number; col: number }> = [];
+  const periodRows: PeriodValidationRow[] = [];
   live.forEach((line, index) => {
     const excelRow = 7 + index;
     const item = lookupShahanEquipment(line.itemId);
@@ -1518,6 +1531,10 @@ function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
     pushNum(cells, `F${excelRow}`, line.freight);
     pushFormula(cells, `G${excelRow}`, rentalLineTotal(excelRow));
     unlockInputCols(unlocked, excelRow, 6);
+    periodRows.push({
+      row: excelRow,
+      periods: item ? shahanPeriodsWithRates(item) : [...THIRD_PARTY_PERIODS],
+    });
   });
   const first = 7;
   const lastLive = 6 + live.length;
@@ -1525,6 +1542,7 @@ function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
   for (let excelRow = lastLive + 1; excelRow <= last; excelRow += 1) {
     pushFormula(cells, `G${excelRow}`, rentalLineTotal(excelRow));
     unlockInputCols(unlocked, excelRow, 6);
+    periodRows.push({ row: excelRow, periods: [...THIRD_PARTY_PERIODS] });
   }
   const totalRow = last + 1;
   pushText(cells, `A${totalRow}`, "TOTAL");
@@ -1534,7 +1552,7 @@ function buildCoeSheet(input: EstimateXlsxInput): BuiltSheet | null {
     cells,
     sheetTotal: `G${totalRow}`,
     unlocked,
-    validations: periodValidations(first, last),
+    validations: periodValidations(periodRows),
   };
 }
 
@@ -1901,6 +1919,18 @@ function listFormula(col: string, count: number) {
 const PERIOD_LIST_COL = "J";
 const STAFF_SEAT_LIST_COL = "K";
 const CLOCK_PICK_LIST_COL = "L";
+/** Unique non-full period subsets — one helper column each so live rows can drop missing rates. */
+const PERIOD_SUBSET_LISTS = [
+  ["daily"],
+  ["weekly"],
+  ["monthly"],
+  ["daily", "weekly"],
+  ["daily", "monthly"],
+  ["weekly", "monthly"],
+] as const;
+const PERIOD_SUBSET_START_COL = 13;
+
+type PeriodValidationRow = { row: number; periods: readonly string[] };
 
 function staffSeatListTitles() {
   return uniqueTitles([
@@ -1914,11 +1944,40 @@ function staffSeatListTitles() {
   ]).filter((title) => isStaffSeat(title));
 }
 
-function periodValidations(firstRow: number, lastRow: number) {
-  const formulae = [listFormula(PERIOD_LIST_COL, THIRD_PARTY_PERIODS.length)];
-  const next: Array<{ sqref: string; formulae: string[] }> = [];
-  for (let row = firstRow; row <= lastRow; row += 1) {
-    next.push({ sqref: `B${row}`, formulae });
+function listedPeriods(periods: readonly string[]) {
+  return THIRD_PARTY_PERIODS.filter((period) => periods.includes(period));
+}
+
+function periodListRef(periods: readonly string[]): { col: string; count: number } | null {
+  const listed = listedPeriods(periods);
+  if (!listed.length) return null;
+  if (listed.length === THIRD_PARTY_PERIODS.length) {
+    return { col: PERIOD_LIST_COL, count: THIRD_PARTY_PERIODS.length };
+  }
+  const key = listed.join("|");
+  const index = PERIOD_SUBSET_LISTS.findIndex((item) => item.join("|") === key);
+  if (index < 0) return { col: PERIOD_LIST_COL, count: THIRD_PARTY_PERIODS.length };
+  return { col: colLetter(PERIOD_SUBSET_START_COL + index), count: listed.length };
+}
+
+function periodValidations(rows: PeriodValidationRow[]) {
+  const next: Array<{
+    sqref: string;
+    formulae: string[];
+    showErrorMessage?: boolean;
+    errorTitle?: string;
+    error?: string;
+  }> = [];
+  for (const { row, periods } of rows) {
+    const list = periodListRef(periods);
+    if (!list) continue;
+    next.push({
+      sqref: `B${row}`,
+      formulae: [listFormula(list.col, list.count)],
+      showErrorMessage: true,
+      errorTitle: "Period",
+      error: "That period has no rate for this item.",
+    });
   }
   return next;
 }
@@ -1991,6 +2050,7 @@ function buildListsSheet(): WorkbookSheet {
     [...THIRD_PARTY_PERIODS],
     staffSeatListTitles(),
     [...LABOR_CLOCK_PICKS],
+    ...PERIOD_SUBSET_LISTS.map((list) => [...list]),
   ];
   const cells: SheetCell[] = [];
   columns.forEach((list, index) => {
@@ -2146,6 +2206,7 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
 
 /** Summary always. Job setup + Position lists always (import compile). Optional tabs when live. */
 export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSheet[] {
+  input = { ...input, equipment: resolveEquipmentSheet(input.equipment) };
   const used = usedRateKeys(input.crew);
   const keys = used.length ? rateCatalogKeys(used) : [];
   const lastRateRow = keys.length ? 6 + keys.length : 0;
@@ -2201,10 +2262,11 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
 }
 
 export async function estimateToXlsx(input: EstimateXlsxInput = {}): Promise<Uint8Array> {
-  const sheets = buildEstimateWorkbook(input);
+  const resolved = { ...input, equipment: resolveEquipmentSheet(input.equipment) };
+  const sheets = buildEstimateWorkbook(resolved);
   if (!sheets.length) throw new Error("empty-workbook");
   const excel = summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "ESTIMATE TOTAL $");
-  const desk = deskPackageTotal(input);
+  const desk = deskPackageTotal(resolved);
   if (excel == null || Math.round(excel * 100) / 100 !== desk) {
     throw new Error("summary-total-mismatch");
   }

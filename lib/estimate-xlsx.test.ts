@@ -1907,6 +1907,9 @@ describe("estimate excel export", () => {
     assert.equal(lists.getCell("J1").value, "daily");
     assert.equal(lists.getCell("J2").value, "weekly");
     assert.equal(lists.getCell("J3").value, "monthly");
+    assert.equal(lists.getCell("O1").value, "monthly");
+    assert.equal(lists.getCell("R1").value, "weekly");
+    assert.equal(lists.getCell("R2").value, "monthly");
     const listRef = /_Lists'!\$J\$1:\$J\$3/;
     for (const name of [
       ESTIMATE_XLSX_SHEETS.rental,
@@ -1923,6 +1926,101 @@ describe("estimate excel export", () => {
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.coe)?.getCell("B7").value, "weekly");
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.tension)?.getCell("B7").value, "monthly");
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crane)?.getCell("B7").value, "weekly");
+  });
+
+  it("restricts Period dropdowns to catalog rates and remaps illegal periods", async () => {
+    const weekday = { start: "2026-09-01", end: "2026-09-01" };
+    const input = {
+      ...woodRiverFixture(),
+      equipment: {
+        largeTools: [
+          {
+            id: "lt-mover",
+            itemId: "air-mover",
+            period: "weekly" as const,
+            qty: 1,
+            ...weekday,
+            enteredCost: 0,
+            freight: 0,
+          },
+          {
+            id: "lt-th",
+            itemId: "PIPE THREADERS (535 AND LARGER) COST PLUS 6%",
+            period: "daily" as const,
+            qty: 1,
+            ...weekday,
+            enteredCost: 200,
+            freight: 0,
+          },
+        ],
+        thirdParty: [
+          {
+            id: "tp-ln",
+            item: "LN 25 Mig guns",
+            period: "daily" as const,
+            rate: 0,
+            freight: 50,
+            qty: 1,
+            ...weekday,
+          },
+          {
+            id: "tp-clamp",
+            item: "German saw clamps",
+            period: "daily" as const,
+            rate: 0,
+            freight: 25,
+            qty: 1,
+            ...weekday,
+          },
+          {
+            id: "tp-weld",
+            item: "450amp diesel welder",
+            period: "daily" as const,
+            rate: 134,
+            freight: 100,
+            qty: 1,
+            ...weekday,
+          },
+        ],
+      },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const rental = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.rental);
+    const coe = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.coe);
+    const lists = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.lists);
+    assert.ok(rental && coe && lists);
+    const rentalMap = cellMap(rental);
+    assert.equal(rentalMap.get("A7")?.value, "LN 25 Mig guns");
+    assert.equal(rentalMap.get("B7")?.value, "monthly");
+    assert.equal(rentalMap.get("E7")?.value, 225);
+    assert.equal(rentalMap.get("A8")?.value, "German saw clamps");
+    assert.equal(rentalMap.get("B8")?.value, "monthly");
+    assert.equal(rentalMap.get("E8")?.value, 112);
+    assert.match(String(rental.validations?.find((rule) => rule.sqref === "B7")?.formulae[0]), /_Lists'!\$O\$1:\$O\$1/);
+    assert.match(String(rental.validations?.find((rule) => rule.sqref === "B8")?.formulae[0]), /_Lists'!\$R\$1:\$R\$2/);
+    assert.match(String(rental.validations?.find((rule) => rule.sqref === "B9")?.formulae[0]), /_Lists'!\$J\$1:\$J\$3/);
+    assert.match(String(rental.validations?.find((rule) => rule.sqref === "B10")?.formulae[0]), /_Lists'!\$J\$1:\$J\$3/);
+    assert.equal(cellMap(lists).get("O1")?.value, "monthly");
+    assert.equal(cellMap(lists).get("R1")?.value, "weekly");
+    assert.equal(cellMap(lists).get("R2")?.value, "monthly");
+    assert.match(String(coe.validations?.find((rule) => rule.sqref === "B7")?.formulae[0]), /_Lists'!\$J\$1:\$J\$3/);
+    assert.equal(coe.validations?.find((rule) => rule.sqref === "B8"), undefined);
+    assert.equal(cellMap(coe).get("B7")?.value, "weekly");
+    assert.equal(cellMap(coe).get("B8")?.value, "daily");
+
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const rentalWs = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rental);
+    assert.ok(rentalWs);
+    assert.match(String(rentalWs.getCell("B7").dataValidation?.formulae?.[0] ?? ""), /_Lists'!\$O\$1:\$O\$1/);
+    assert.equal(rentalWs.getCell("B7").dataValidation?.showErrorMessage, true);
+    assert.equal(rentalWs.getCell("B7").value, "monthly");
+    assert.equal(rentalWs.getCell("E7").value, 225);
+    assert.match(String(rentalWs.getCell("B10").dataValidation?.formulae?.[0] ?? ""), /_Lists'!\$J\$1:\$J\$3/);
+    const coeWs = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.coe);
+    assert.ok(coeWs);
+    assert.equal(coeWs.getCell("B8").dataValidation, undefined);
   });
 
   it("unlocks Subcontractor estimator inputs and keeps formula totals locked", async () => {

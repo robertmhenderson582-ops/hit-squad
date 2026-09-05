@@ -22,7 +22,7 @@ import {
   type EstimateXlsxInput,
 } from "./estimate-xlsx.ts";
 import type { MiscLine } from "./other-cost.ts";
-import type { ThirdPartyLine } from "./equipment-sheet.ts";
+import type { LargeToolLine, ThirdPartyLine } from "./equipment-sheet.ts";
 import { colLetter } from "./xlsx-minimal.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import type { CraftRow } from "./craft-labor.ts";
@@ -311,6 +311,56 @@ describe("estimate excel import", () => {
     assert.equal(rentals.some((line) => line.item === "Light tower" && line.qty === 2), true);
     assert.equal((applied.equipment as { largeTools: Array<{ itemId: string }> }).largeTools.length, 2);
     assert.equal(miscLines.some((line) => /craft travel/i.test(line.item)), false);
+  });
+
+  it("remaps a Period that has no catalog rate on import", async () => {
+    const weekday = { start: "2026-09-01", end: "2026-09-01" };
+    const input: EstimateXlsxInput = {
+      ...fixture(),
+      equipment: {
+        largeTools: [
+          {
+            id: "lt-mover",
+            itemId: "air-mover",
+            period: "weekly",
+            qty: 1,
+            ...weekday,
+            enteredCost: 0,
+            freight: 0,
+          },
+        ],
+        thirdParty: [
+          {
+            id: "tp-ln",
+            item: "LN 25 Mig guns",
+            period: "monthly",
+            rate: 225,
+            freight: 50,
+            qty: 1,
+            ...weekday,
+          },
+        ],
+      },
+    };
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const rental = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.rental);
+    const coe = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.coe);
+    assert.ok(rental && coe);
+    rental.getCell("B7").value = "daily";
+    coe.getCell("B7").value = "hourly";
+    const imported = await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer()));
+    const applied = applyEstimateImport(
+      { ...asPack(input), equipment: input.equipment, otherCost: input.otherCost },
+      imported,
+    );
+    const rentals = (applied.equipment as { thirdParty: ThirdPartyLine[] }).thirdParty;
+    const tools = (applied.equipment as { largeTools: LargeToolLine[] }).largeTools;
+    const guns = rentals.find((line) => line.item === "LN 25 Mig guns");
+    assert.equal(guns?.period, "monthly");
+    assert.equal(guns?.rate, 225);
+    assert.equal(tools[0]?.period, "monthly");
   });
 
   it("rejects a workbook that is not a Hit Squad export", async () => {

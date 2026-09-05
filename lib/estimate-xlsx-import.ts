@@ -42,7 +42,14 @@ import { hydrateJobMeta } from "./staffing-plan.ts";
 import type { JobMoney } from "./estimate-money.ts";
 import type { JobRates } from "./shahan-wood-river.ts";
 import { rematchShahanEquipmentId } from "./shahan-wood-river.ts";
-import { jobSetupWindow, type LargeToolLine, type ThirdPartyLine, type ThirdPartyPeriod } from "./equipment-sheet.ts";
+import {
+  jobSetupWindow,
+  resolveLargeToolLine,
+  resolveThirdPartyLine,
+  type LargeToolLine,
+  type ThirdPartyLine,
+  type ThirdPartyPeriod,
+} from "./equipment-sheet.ts";
 import { type MiscLine, type OtherCostSheet, type TravelKind, type TravelLine } from "./other-cost.ts";
 import type { B2Period } from "./b2-east-coast.ts";
 import type { ClockOverride } from "./hours-clock.ts";
@@ -621,6 +628,12 @@ function parsePeriod(value: unknown): ThirdPartyPeriod {
   return "daily";
 }
 
+function parseCoePeriod(value: unknown): B2Period {
+  const text = asText(value).toLowerCase();
+  if (text === "hourly" || text === "weekly" || text === "monthly" || text === "daily") return text;
+  return "daily";
+}
+
 function parseMiscSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLine[] | undefined {
   if (!ws) return undefined;
   const lines: ImportedCostLine[] = [];
@@ -657,7 +670,7 @@ function parseRentalLikeSheet(ws: ExcelJS.Worksheet | undefined): ImportedCostLi
   const lines: ImportedCostLine[] = [];
   for (const row of scanCostRows(ws)) {
     const item = asText(ws.getCell(row, 1).value);
-    const period = parsePeriod(ws.getCell(row, 2).value);
+    const period = asText(ws.getCell(row, 2).value).toLowerCase();
     const qty = asNum(ws.getCell(row, 3).value);
     const rate = asNum(ws.getCell(row, 5).value);
     const freight = asNum(ws.getCell(row, 6).value);
@@ -783,16 +796,18 @@ function applyRentalBucket(
 ): ThirdPartyLine[] {
   const prev = existing.filter((line) => thirdPartyBucket(line.item) === bucket);
   if (!incoming) return prev;
-  return incoming.map((row, index) => ({
-    id: prev[index]?.id ?? `${bucket}-imp-${index + 1}`,
-    item: row.item,
-    period: parsePeriod(row.period),
-    rate: row.rate,
-    freight: row.freight ?? 0,
-    qty: row.qty,
-    start: prev[index]?.start || dates.start,
-    end: prev[index]?.end || dates.end,
-  }));
+  return incoming.map((row, index) =>
+    resolveThirdPartyLine({
+      id: prev[index]?.id ?? `${bucket}-imp-${index + 1}`,
+      item: row.item,
+      period: parsePeriod(row.period),
+      rate: row.rate,
+      freight: row.freight ?? 0,
+      qty: row.qty,
+      start: prev[index]?.start || dates.start,
+      end: prev[index]?.end || dates.end,
+    }),
+  );
 }
 
 function applyCoeLines(
@@ -804,18 +819,16 @@ function applyCoeLines(
   return incoming.map((row, index) => {
     const prev = existing[index];
     const itemId = rematchShahanEquipmentId(row.item) || prev?.itemId || row.item;
-    return {
+    return resolveLargeToolLine({
       id: prev?.id ?? `lt-imp-${index + 1}`,
       itemId,
-      period: (["hourly", "weekly", "monthly"].includes((row.period ?? "").toLowerCase())
-        ? (row.period as B2Period)
-        : prev?.period || "daily"),
+      period: parseCoePeriod(row.period ?? prev?.period),
       qty: row.qty,
       start: prev?.start || dates.start,
       end: prev?.end || dates.end,
       enteredCost: 0,
       freight: row.freight ?? 0,
-    };
+    });
   });
 }
 

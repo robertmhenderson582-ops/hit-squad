@@ -29,6 +29,8 @@ import {
   rematchCrewToShahan,
   rematchEquipmentSheetToShahan,
   rematchShahanEquipmentId,
+  allowedShahanPeriod,
+  hasShahanPeriodRate,
   shahanCrewCostAmount,
   shahanCrewTitle,
   shahanEquipmentByFuel,
@@ -36,6 +38,7 @@ import {
   shahanEquipmentRows,
   shahanLaborByGroup,
   shahanPeriodRate,
+  shahanPeriodsWithRates,
   shahanTitleHasNoRate,
 } from "./shahan-wood-river.ts";
 import { emptyJobMeta } from "./staffing-plan.ts";
@@ -345,6 +348,13 @@ describe("Shahan TM OCIP — Wood River", () => {
       { daily: 496, weekly: 1488, monthly: 4464, wet: false },
     );
     assert.equal(shahanPeriodRate(rad!, "hourly"), null);
+    assert.equal(hasShahanPeriodRate(rad, "hourly"), false);
+    assert.deepEqual(shahanPeriodsWithRates(rad!), ["daily", "weekly", "monthly"]);
+    assert.equal(allowedShahanPeriod(rad, "hourly"), "monthly");
+    const threaders = lookupShahanEquipment("PIPE THREADERS (535 AND LARGER) COST PLUS 6%");
+    assert.ok(threaders);
+    assert.deepEqual(shahanPeriodsWithRates(threaders), []);
+    assert.equal(allowedShahanPeriod(threaders, "daily"), "daily");
   });
 
   it("Update rates sets Wood River PD 140/130, binds the book, and does not wipe hours", () => {

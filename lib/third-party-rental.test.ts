@@ -8,8 +8,10 @@ import {
   WOOD_RIVER_THIRD_PARTY_RENTAL,
   applyThirdPartyCatalogItem,
   applyThirdPartyCatalogPeriod,
+  allowedThirdPartyPeriod,
   defaultThirdPartyPeriod,
   lookupThirdPartyRental,
+  thirdPartyPeriodsWithRates,
   thirdPartyRentalDescriptions,
   thirdPartyRentalPeriodRate,
   type ThirdPartyRentalRow,
@@ -92,6 +94,16 @@ describe("Wood River third-party rental catalog", () => {
     assert.equal(spider.freight, 150);
     assert.equal(applyThirdPartyCatalogPeriod(spider, "daily").rate, 0);
     assert.equal(applyThirdPartyCatalogPeriod(spider, "weekly").rate, 0);
+  });
+
+  it("lists only periods that have a catalog rate", () => {
+    assert.deepEqual(thirdPartyPeriodsWithRates(row("LN 25 Mig guns")), ["monthly"]);
+    assert.deepEqual(thirdPartyPeriodsWithRates(row("German saw clamps")), ["weekly", "monthly"]);
+    assert.deepEqual(thirdPartyPeriodsWithRates(row("450amp diesel welder")), ["daily", "weekly", "monthly"]);
+    assert.equal(allowedThirdPartyPeriod(row("LN 25 Mig guns"), "daily"), "monthly");
+    assert.equal(allowedThirdPartyPeriod(row("German saw clamps"), "daily"), "monthly");
+    assert.equal(allowedThirdPartyPeriod(row("450amp diesel welder"), "weekly"), "weekly");
+    assert.equal(allowedThirdPartyPeriod(null, "daily"), "daily");
   });
 
   it("defaults new-line period to monthly when that rate exists, else weekly, else daily", () => {

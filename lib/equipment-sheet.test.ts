@@ -12,6 +12,8 @@ import {
   removeEquipmentLine,
   seedEmptyEquipmentWindow,
   seedLineDates,
+  resolveLargeToolLine,
+  resolveThirdPartyLine,
   thirdPartyCost,
   thirdPartyMarkedUp,
   type LargeToolLine,
@@ -48,6 +50,37 @@ test("large tools use the Shahan Wood River listed rate", () => {
   assert.equal(totals.largeTools, 64);
   assert.equal(totals.thirdParty, 106.5);
   assert.equal(totals.total, 170.5);
+});
+
+test("illegal catalog periods fall back to the first period that has a rate", () => {
+  const guns = resolveThirdPartyLine({
+    ...blankThirdParty(),
+    item: "LN 25 Mig guns",
+    period: "daily",
+    rate: 0,
+    freight: 50,
+  });
+  assert.equal(guns.period, "monthly");
+  assert.equal(guns.rate, 225);
+  const custom = resolveThirdPartyLine({
+    ...blankThirdParty(),
+    item: "Made-up crane",
+    period: "weekly",
+    rate: 400,
+  });
+  assert.equal(custom.period, "weekly");
+  assert.equal(custom.rate, 400);
+  const threaders = resolveLargeToolLine({
+    id: "lt-th",
+    itemId: "PIPE THREADERS (535 AND LARGER) COST PLUS 6%",
+    period: "daily",
+    qty: 1,
+    start: "",
+    end: "",
+    enteredCost: 100,
+    freight: 0,
+  });
+  assert.equal(threaders.period, "daily");
 });
 
 test("wet and dry copies of the same description bill different Shahan dollars", () => {

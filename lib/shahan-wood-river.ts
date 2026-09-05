@@ -799,6 +799,35 @@ export function shahanPeriodRate(row: ShahanEquipmentRow, period: "hourly" | "da
   return row.monthly;
 }
 
+export function hasShahanPeriodRate(
+  row: ShahanEquipmentRow | null | undefined,
+  period: "hourly" | "daily" | "weekly" | "monthly",
+): boolean {
+  return Boolean(row && priced(shahanPeriodRate(row, period)));
+}
+
+export function shahanPeriodsWithRates(row: ShahanEquipmentRow): Array<"daily" | "weekly" | "monthly"> {
+  return (["daily", "weekly", "monthly"] as const).filter((period) => hasShahanPeriodRate(row, period));
+}
+
+export function defaultShahanPeriod(row: ShahanEquipmentRow): "daily" | "weekly" | "monthly" {
+  if (hasShahanPeriodRate(row, "monthly")) return "monthly";
+  if (hasShahanPeriodRate(row, "weekly")) return "weekly";
+  if (hasShahanPeriodRate(row, "daily")) return "daily";
+  return "daily";
+}
+
+/** Cost-plus / no-rate items keep the typed period. Hourly never has a Shahan rate. */
+export function allowedShahanPeriod(
+  row: ShahanEquipmentRow | null | undefined,
+  period: "hourly" | "daily" | "weekly" | "monthly",
+): "hourly" | "daily" | "weekly" | "monthly" {
+  if (!row) return period === "hourly" ? "daily" : period;
+  if (!shahanPeriodsWithRates(row).length) return period === "hourly" ? "daily" : period;
+  if (period !== "hourly" && hasShahanPeriodRate(row, period)) return period;
+  return defaultShahanPeriod(row);
+}
+
 function equipmentNameKey(value: string): string {
   return normalizeTitle(value.replace(/^(wet|dry):\d+:/i, "").replace(/-/g, " "));
 }
