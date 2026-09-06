@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { thirdPartyCost } from "./equipment-sheet.ts";
 import {
   BUILDERS_RISK_YATES,
+  ESTIMATE_MARKUP_BASE_NOTE,
   ESTIMATE_MARKUP_LABEL,
   ESTIMATE_MARKUP_RATE,
   buildersRiskPct,
@@ -10,6 +11,7 @@ import {
   commercialMarkupRate,
   estimateMarkupDollars,
   estimateTotalBreakdown,
+  impliedMarkupBase,
   markupBase,
   moneyLines,
   parseDeskDollars,
@@ -181,6 +183,33 @@ test("Subcontractor is its own rail line, not inside Labor or Other Cost", () =>
   assert.equal(next.lines.find((line) => line.id === "labor")?.amount, 1000);
   assert.equal(next.lines.find((line) => line.id === "other")?.amount, 50);
   assert.equal(next.total, 1600);
+});
+
+test("6.5% markup is not 6.5% of Labor + Equipment + Subcontractor + Other Cost", () => {
+  const labor = 682_935.47;
+  const equipment = 405_656.5;
+  const subcontractor = 3_722_511;
+  const otherCost = 504_148;
+  const shownMarkup = 56_547.95;
+  const stack = labor + equipment + subcontractor + otherCost;
+  assert.equal(Math.round(stack * 100) / 100, 5_315_250.97);
+  assert.equal(Math.round((stack + shownMarkup) * 100) / 100, 5_371_798.92);
+  assert.notEqual(Math.round(stack * ESTIMATE_MARKUP_RATE * 100) / 100, shownMarkup);
+  assert.equal(Math.round(stack * ESTIMATE_MARKUP_RATE * 100) / 100, 345_491.31);
+  assert.equal(impliedMarkupBase(shownMarkup), 869_968.46);
+  assert.equal(estimateMarkupDollars({ subcontractor: 869_968.46 }), shownMarkup);
+  assert.match(ESTIMATE_MARKUP_BASE_NOTE, /non-affiliate subs \+ 3rd-party \+ misc/);
+  const next = estimateTotalBreakdown({
+    labor,
+    equipment,
+    subcontractor,
+    otherCost,
+    markup: shownMarkup,
+    markupBase: 869_968.46,
+  });
+  assert.equal(next.total, 5_371_798.92);
+  assert.equal(next.markupBase, 869_968.46);
+  assert.equal(next.lines.find((line) => line.id === "markup")?.amount, shownMarkup);
 });
 
 test("labor dollars stay hidden until a crew cost is actually on the row", () => {

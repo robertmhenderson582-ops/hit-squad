@@ -5,6 +5,7 @@ import { useEstimatePackage } from "@/components/EstimatePackage";
 import { readFcrPacket } from "@/lib/change-order-packet";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { deskPackageBreakdown, fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
+import { ESTIMATE_MARKUP_BASE_NOTE } from "@/lib/estimate-total";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
@@ -73,8 +74,15 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
       {breakdown.lines.length ? (
         <ul>
           {breakdown.lines.map((line) => (
-            <li key={line.id}>
-              <span>{line.label}</span>
+            <li key={line.id} className={line.id === "markup" ? "est-total-rail-markup" : undefined}>
+              <span>
+                {line.label}
+                {line.id === "markup" && breakdown.markupBase ? (
+                  <small className="est-total-rail-note" title={ESTIMATE_MARKUP_BASE_NOTE}>
+                    on {money(breakdown.markupBase)} markable
+                  </small>
+                ) : null}
+              </span>
               <span className="hud-readout">{money(line.amount)}</span>
             </li>
           ))}
