@@ -397,8 +397,9 @@ export function applyTurnipPaste(book: CostReportBook, kind: TurnipExportKind, r
 
 export function costActualsFromPastes(export15: TurnipPaste, export16: TurnipPaste, throughDate = ""): CostActuals {
   const byDate: CostActuals["byDate"] = {};
+  const asOf = parseLooseDate(throughDate) || throughDate;
   const bump = (date: string, patch: Partial<CostActuals["byDate"][string]>) => {
-    if (throughDate && date && date > throughDate) return;
+    if (asOf && date && date > asOf) return;
     const key = date || "_";
     const cur = byDate[key] ?? { hours: 0, dollars: 0, headcount: 0 };
     byDate[key] = {
@@ -538,12 +539,13 @@ export function buildCostCurve(
   actuals: CostActuals,
   throughDate = "",
 ): CostCurvePoint[] {
+  const asOf = parseLooseDate(throughDate) || throughDate;
   const dates = new Set<string>();
   for (const row of estimate) {
-    if (!throughDate || row.date <= throughDate) dates.add(row.date);
+    if (!asOf || row.date <= asOf) dates.add(row.date);
   }
   for (const date of Object.keys(actuals.byDate)) {
-    if (date !== "_" && (!throughDate || date <= throughDate)) dates.add(date);
+    if (date !== "_" && (!asOf || date <= asOf)) dates.add(date);
   }
   const estBy = new Map(estimate.map((row) => [row.date, row]));
   let cumEst = 0;
@@ -594,7 +596,7 @@ export function saveCostSnapshot(
   budget: CostBudget,
   savedAt = Date.now(),
 ): CostReportBook {
-  const statusDate = parseLooseDate(book.statusDate) || todayYmd();
+  const statusDate = parseLooseDate(book.statusDate) || parseLooseDate(todayYmd()) || todayYmd();
   const actuals = costActualsFromPastes(book.export15, book.export16, statusDate);
   const snapshot: CostReportSnapshot = {
     id: uid("ppr"),

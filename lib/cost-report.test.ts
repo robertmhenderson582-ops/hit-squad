@@ -97,6 +97,15 @@ describe("Turnip T3 Export 15 / 16 paste", () => {
     assert.equal(actuals.byDate["2026-09-01"]?.dollars, 12500.5);
   });
 
+  it("counts actuals through a typed US status date", () => {
+    const hours = parseTurnipPaste("Date\tHours\n09/01/2026\t10\n09/06/2026\t10", "15");
+    const dollars = parseTurnipPaste("Date\tAmount\n09/01/2026\t8000\n09/06/2026\t2000", "16");
+    const through = costActualsFromPastes(hours, dollars, "9/5/2026");
+    assert.equal(through.hours, 10);
+    assert.equal(through.dollars, 8000);
+    assert.equal(through.byDate["2026-09-06"], undefined);
+  });
+
   it("does not invent rows from a blank paste", () => {
     assert.deepEqual(parseTurnipPaste("", "15").rows, []);
     assert.equal(costReportHasWork(emptyCostReportBook()), false);

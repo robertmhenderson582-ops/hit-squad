@@ -13,6 +13,8 @@ import {
   costActualsFromPastes,
   deskBudgetFromPack,
   emptyCostReportBook,
+  parseLooseDate,
+  todayYmd,
   estimateCurveFromCrew,
   openCostSnapshot,
   readCostReport,
@@ -218,10 +220,17 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
           <label className="block text-sm">
             Status date
             <input
-              type="date"
               className="paper-field mt-1"
+              inputMode="numeric"
+              placeholder="YYYY-MM-DD or 9/5/2026"
               value={book.statusDate}
               onChange={(event) => persist({ ...book, statusDate: event.target.value })}
+              onBlur={() =>
+                persist({
+                  ...book,
+                  statusDate: parseLooseDate(book.statusDate) || todayYmd(),
+                })
+              }
             />
           </label>
           <div className="flex flex-wrap gap-2">
