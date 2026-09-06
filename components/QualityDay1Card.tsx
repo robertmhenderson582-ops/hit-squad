@@ -56,8 +56,8 @@ export function QualityDay1Card({
 
   return (
     <div className="plant-card px-4 py-4">
-      <h2 className="font-display text-xl text-[#163038]">{QUALITY_DAY1_LABEL}</h2>
-      <p className="mt-2 text-sm text-[#163038]">
+      <h2 className="font-display text-xl">{QUALITY_DAY1_LABEL}</h2>
+      <p className="mt-2 text-sm">
         Chance’s named package. Open a form and type. No invented hold points. Files stay off this desk.
       </p>
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -88,7 +88,7 @@ export function QualityDay1Card({
             value={packState.travelerCount}
             onChange={(event) => patch({ travelerCount: event.target.value })}
           />
-          <p className="mt-1 text-sm text-[#163038]">
+          <p className="mt-1 text-sm">
             Board has {travelerRows} traveler{travelerRows === 1 ? "" : "s"}. Adding a traveler row updates this
             count. Typing here does not invent travelers.
           </p>
@@ -105,7 +105,7 @@ export function QualityDay1Card({
       <QualityFormJump activeId={openForm} onPick={(id) => setOpenForm(id)} />
       <QualityFormScreens value={packState} onChange={onChange} openForm={openForm} onOpenForm={setOpenForm} />
       {drops.length ? (
-        <ul className="mt-3 space-y-1 text-sm text-[#163038]">
+        <ul className="mt-3 space-y-1 text-sm">
           {drops.map((drop) => (
             <li key={drop.name}>
               {drop.name}
@@ -114,7 +114,7 @@ export function QualityDay1Card({
           ))}
         </ul>
       ) : null}
-      {manuals ? <p className="mt-3 text-sm text-[#163038]">{madisonManualLabel("quality")}</p> : null}
+      {manuals ? <p className="mt-3 text-sm">{madisonManualLabel("quality")}</p> : null}
       <p className="sr-only">{QUALITY_PACKAGE_FORMS.map((item) => item.label).join(" ")}</p>
     </div>
   );

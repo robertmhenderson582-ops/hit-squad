@@ -3,7 +3,47 @@
 import { FieldMark } from "@/components/FieldMark";
 import type { ModuleRegisterRow } from "@/lib/quality-hse-modules";
 
-export type RegisterField = { id: string; label: string; kind: "text" | "date" };
+export type RegisterField = {
+  id: string;
+  label: string;
+  kind: "text" | "date" | "select";
+  options?: readonly { value: string; label: string }[];
+};
+
+function RegisterCell({
+  field,
+  value,
+  onChange,
+}: {
+  field: RegisterField;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  if (field.kind === "select") {
+    const options = field.options ?? [];
+    const missing = value && !options.some((item) => item.value === value);
+    return (
+      <select className="paper-field" value={value} aria-label={field.label} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Blank</option>
+        {missing ? <option value={value}>{value}</option> : null}
+        {options.map((item) => (
+          <option key={item.value} value={item.value}>
+            {item.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return (
+    <input
+      className="paper-field"
+      type={field.kind === "date" ? "date" : "text"}
+      value={value}
+      aria-label={field.label}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
 
 export function ModuleRegister({
   id,
@@ -28,8 +68,8 @@ export function ModuleRegister({
     <section id={id} className="plant-card scroll-mt-24 px-4 py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-display text-lg text-[#163038]">{title}</h3>
-          {note ? <p className="mt-1 text-sm text-[#163038]">{note}</p> : null}
+          <h3 className="font-display text-lg">{title}</h3>
+          {note ? <p className="mt-1 text-sm">{note}</p> : null}
         </div>
         <button type="button" onClick={onAdd} className="rounded-sm bg-steel px-3 py-1.5 text-sm text-white">
           + Add row
@@ -52,7 +92,7 @@ export function ModuleRegister({
           <tbody>
             {rows.length === 0 ? (
               <tr className="border-t border-[#c5d4d4]">
-                <td colSpan={fields.length + 1} className="px-2 py-5 text-sm text-[#163038]">
+                <td colSpan={fields.length + 1} className="px-2 py-5 text-sm">
                   Empty. Add a row to type.
                 </td>
               </tr>
@@ -61,12 +101,10 @@ export function ModuleRegister({
                 <tr key={row.id} className="border-t border-[#c5d4d4]">
                   {fields.map((field) => (
                     <td key={field.id} className="px-2 py-2">
-                      <input
-                        className="paper-field"
-                        type={field.kind === "date" ? "date" : "text"}
+                      <RegisterCell
+                        field={field}
                         value={row.cells[field.id] || ""}
-                        aria-label={field.label}
-                        onChange={(event) => onPatch(row.id, field.id, event.target.value)}
+                        onChange={(next) => onPatch(row.id, field.id, next)}
                       />
                     </td>
                   ))}
