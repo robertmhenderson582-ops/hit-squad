@@ -171,6 +171,8 @@ describe("Purchasing Day-1 ledger", () => {
     const estimateXlsx = readFileSync(fileURLToPath(new URL("./estimate-xlsx.ts", import.meta.url)), "utf8");
     assert.match(workspace, /id: "purchasing"/);
     assert.match(workspace, /label: "Purchasing"/);
+    assert.match(workspace, /item.id === "purchasing" \? " print-hide"/);
+    assert.doesNotMatch(workspace, /readPurchasing|purchasingCostSlice/);
     assert.match(detail, /tab === "purchasing"/);
     assert.match(fresh, /tab === "purchasing"/);
     assert.match(desk, /purchasingCostSlice|purchasingTotals/);
@@ -194,6 +196,7 @@ describe("Purchasing Day-1 ledger", () => {
     assert.match(purchasingSrc, /PURCHASING_INTERNAL_NOTE/);
     assert.match(desk, /PURCHASING_INTERNAL_NOTE/);
     assert.match(cost, /not written into client Cost \/ PPR Excel/);
+    assert.match(cost, /print-hide/);
     assert.equal(/purchas|consumable|small.?tool/i.test(costXlsx), false);
     assert.equal(/purchas/i.test(estimateXlsx), false);
   });

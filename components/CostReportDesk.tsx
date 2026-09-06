@@ -602,7 +602,7 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
             note={`${pct(spentPct(budget.hours, actuals.hours))} spent`}
           />
         </div>
-        <div className="mt-4 rounded-sm border border-[#c5d4d4] bg-[#fbf8f0] px-4 py-3">
+        <div className="print-hide mt-4 rounded-sm border border-[#c5d4d4] bg-[#fbf8f0] px-4 py-3">
           <p className="text-xs tracking-[0.12em] text-[#5b6f73]">Purchases / consumables</p>
           <p className="mt-2 text-sm text-[#163038]">
             Live Purchasing tab: {money(purchases.grandTotal)}
