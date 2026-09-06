@@ -3,7 +3,7 @@ import { readSession } from "@/lib/auth";
 import { DRIVE_WRITE_ERROR } from "@/lib/drive-data";
 import { cookieValue } from "@/lib/http";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
-import { canUseInbox, inboxCircleById, inboxCirclePerson } from "@/lib/inbox-circle";
+import { canUseInbox, inboxCircleById, inboxCirclePerson, INBOX_CIRCLE_COPY } from "@/lib/inbox-circle";
 import {
   hideInboxFor,
   inboxPeopleFor,
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   const user = await scopedDeskUser(session, request);
   if (!canUseInbox(user)) {
-    return NextResponse.json({ error: "Inbox is those six only." }, { status: 403 });
+    return NextResponse.json({ error: INBOX_CIRCLE_COPY }, { status: 403 });
   }
   return NextResponse.json({
     threads: await listInboxFor(user.email),
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   const user = await scopedDeskUser(session, request);
   if (!canUseInbox(user)) {
-    return NextResponse.json({ error: "Inbox is those six only." }, { status: 403 });
+    return NextResponse.json({ error: INBOX_CIRCLE_COPY }, { status: 403 });
   }
 
   const body = (await request.json().catch(() => ({}))) as {

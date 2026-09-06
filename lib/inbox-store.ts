@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { INBOX_VAULT_KIND, INBOX_VAULT_NAME, readVaultJson, writeVaultJson } from "./drive-data.ts";
 import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import {
+  INBOX_CIRCLE_COPY,
   inboxCirclePerson,
   inboxContactsFor,
   inboxThreadKey,
@@ -253,7 +254,7 @@ export async function postInboxMessage(input: {
   const fromEmail = normalizeInboxEmail(input.fromEmail);
   const toEmail = normalizeInboxEmail(input.toEmail);
   if (!isInboxCircleEmail(fromEmail) || !isInboxCircleEmail(toEmail)) {
-    return { ok: false, status: 403, error: "Inbox is those six only." };
+    return { ok: false, status: 403, error: INBOX_CIRCLE_COPY };
   }
   if (fromEmail === toEmail) {
     return { ok: false, status: 400, error: "Pick a person." };
