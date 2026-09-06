@@ -22,6 +22,16 @@ import {
   writeCostReport,
 } from "./cost-report.ts";
 import {
+  PURCHASING_STORE_PREFIX,
+  addPurchaseLine,
+  emptyPurchasingBook,
+  hydratePurchasing,
+  purchasingHasWork,
+  readPurchasing,
+  savePurchasingSnapshot,
+  writePurchasing,
+} from "./purchasing.ts";
+import {
     applyPackToStore,
   collectPack,
   crewHasRows,
@@ -801,5 +811,55 @@ describe("estimate pack snapshot", () => {
     assert.equal(hydrated.snapshots[0]?.notes, "Friday PPR");
     assert.equal(hydrated.snapshots[0]?.budget.total, 88000);
     assert.ok(desktop.getItem(`${COST_REPORT_STORE_PREFIX}${key}`));
+  });
+
+  it("collects purchasing lines with the pack and hydrates them onto an empty device store", () => {
+    const phone = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-cat2pit",
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+      },
+      phone,
+    );
+    const key = newEstimateKey("new-cat2pit");
+    writePurchasing(
+      key,
+      savePurchasingSnapshot(
+        addPurchaseLine(
+          { ...emptyPurchasingBook(), statusDate: "2026-09-06", notes: "Saturday buys" },
+          {
+            id: "po-vault-1",
+            date: "2026-09-06",
+            vendor: "Airgas",
+            description: "C-25 bottles",
+            category: "consumables",
+            amount: 75,
+            status: "charged",
+          },
+        ),
+        { amount: 150, hasBudget: true },
+        9,
+      ),
+      phone,
+    );
+    const collected = collectPack(phone, "new-cat2pit");
+    assert.equal(purchasingHasWork(collected?.purchasing), true);
+    assert.equal(
+      ((collected?.purchasing as { notes: string }).notes),
+      "Saturday buys",
+    );
+
+    const desktop = memoryStore();
+    assert.equal(mergeVaultIntoLocal(desktop, collected!), "vault");
+    const hydrated = readPurchasing(key, desktop);
+    assert.equal(hydrated.lines.length, 1);
+    assert.equal(hydrated.lines[0]?.vendor, "Airgas");
+    assert.equal(hydrated.lines[0]?.amount, 75);
+    assert.equal(hydrated.snapshots[0]?.totals.grand, 75);
+    assert.ok(desktop.getItem(`${PURCHASING_STORE_PREFIX}${key}`));
+    assert.equal(purchasingHasWork(hydratePurchasing(collected?.purchasing)), true);
   });
 });

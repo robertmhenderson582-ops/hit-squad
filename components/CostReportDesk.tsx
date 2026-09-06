@@ -53,6 +53,13 @@ import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
 import { readSubSheet } from "@/lib/subcontractor";
 import { downloadXlsx } from "@/lib/xlsx-minimal";
+import {
+  emptyPurchasingBook,
+  miscBudgetFromSheet,
+  purchasingCostSlice,
+  readPurchasing,
+  type PurchasingBook,
+} from "@/lib/purchasing";
 
 function money(value: number) {
   return value
@@ -161,6 +168,7 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
   const pack = useEstimatePackage();
   const { user } = useSession();
   const [book, setBook] = useState<CostReportBook>(emptyCostReportBook);
+  const [purchasing, setPurchasing] = useState<PurchasingBook>(emptyPurchasingBook);
   const [exportError, setExportError] = useState("");
   const [exportBusy, setExportBusy] = useState(false);
   const file15 = useRef<HTMLInputElement>(null);
@@ -174,9 +182,11 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
     function load() {
       if (!pack.estimateKey) {
         setBook(emptyCostReportBook());
+        setPurchasing(emptyPurchasingBook());
         return;
       }
       setBook(readCostReport(pack.estimateKey));
+      setPurchasing(readPurchasing(pack.estimateKey));
     }
     load();
     return onEstimateSheets(load);
@@ -212,6 +222,15 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
     () => buildCostCurve(estimate, actuals, book.statusDate),
     [actuals, book.statusDate, estimate],
   );
+  const purchases = useMemo(() => {
+    const other = pack.estimateKey
+      ? syncOtherCostTravel(readOtherCost(pack.estimateKey), pack.crew, {
+          staffPerMile: pack.jobMeta.staffMileageRate,
+          craftPerMile: pack.jobMeta.craftMileageRate,
+        })
+      : null;
+    return purchasingCostSlice(purchasing, miscBudgetFromSheet(other ?? undefined));
+  }, [pack.crew, pack.estimateKey, pack.jobMeta.craftMileageRate, pack.jobMeta.staffMileageRate, pack.ready, purchasing]);
   const history = snapshotList(book);
   const local = findLocalPack(packIdFromEstimateKey(pack.estimateKey) || "");
   const jobTitle = local?.title || "Working estimate";
@@ -582,6 +601,24 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
             value={hours(actuals.hours)}
             note={`${pct(spentPct(budget.hours, actuals.hours))} spent`}
           />
+        </div>
+        <div className="mt-4 rounded-sm border border-[#c5d4d4] bg-[#fbf8f0] px-4 py-3">
+          <p className="text-xs tracking-[0.12em] text-[#5b6f73]">PURCHASES / CONSUMABLES</p>
+          <p className="mt-2 text-sm text-[#163038]">
+            Live Purchasing tab: {money(purchases.grandTotal)}
+            {purchases.lineCount
+              ? ` · ${purchases.lineCount} line${purchases.lineCount === 1 ? "" : "s"}`
+              : ""}
+            {purchases.toolsConsumables
+              ? ` · tools + consumables ${money(purchases.toolsConsumables)}`
+              : ""}
+            {purchases.vsBudget.hasMiscBudget
+              ? ` vs Misc ${money(purchases.vsBudget.miscBudget)} (var ${money(purchases.vsBudget.variance)})`
+              : purchases.lineCount
+                ? " · Misc compare waits for Other Cost dollars"
+                : " · no buys typed yet"}
+            . PPR chart slice is parked.
+          </p>
         </div>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
