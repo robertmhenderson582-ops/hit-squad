@@ -272,13 +272,14 @@ export const EXCEL_UNIT_FORMATS = {
 } as const;
 
 function tabColorArgb(name: string): string {
-  if (name === "Summary Page") return STEEL_DEEP;
+  if (name === "Summary Page" || name === "Cover" || name === "Total Project PPR") return STEEL_DEEP;
   if (name === "Staff" || name === "Foremen" || name === "Direct" || name === "Support" || name === "Laydown") {
     return STEEL;
   }
   if (name.includes("Rental") || name === "COE" || name === "Tensioning Torquing equipment") return AMBER_FLARE;
-  if (name === "Rate Tables") return STEEL_DEEP;
+  if (name === "Rate Tables" || name === "Hrs S-curve" || name === "Report log") return STEEL_DEEP;
   if (name.includes("Subcontractor") || name === "Staff Travel Cost" || name === "Misc Costs") return "FF1A7A88";
+  if (name.includes("Turnip")) return "FF1A7A88";
   return STEEL;
 }
 
@@ -316,7 +317,7 @@ function isTotalRow(cells: SheetCell[], row: number): boolean {
 function isSectionRow(cells: SheetCell[], row: number): boolean {
   const label = cells.find((cell) => cell.ref === `A${row}`);
   return (
-    label?.type === "text" && /^(Labor \$|Large tools|Third-party rental)/i.test(label.value)
+    label?.type === "text" && /^(Labor \$|Large tools|Third-party rental|Notes)$/i.test(label.value)
   );
 }
 

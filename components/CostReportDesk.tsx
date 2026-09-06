@@ -28,6 +28,7 @@ import {
 } from "@/lib/cost-report";
 import { costReportToXlsx, costReportXlsxFilename } from "@/lib/cost-report-xlsx";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
+import { companyLogoFromApiPayload } from "@/lib/estimate-company-logo";
 import { fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
 import { packIdFromEstimateKey } from "@/lib/estimate-pack";
 import { exporterDisplayName } from "@/lib/estimate-xlsx";
@@ -92,6 +93,17 @@ function CostCurveChart({
       </text>
     </svg>
   );
+}
+
+async function fetchCostReportCompanyLogo(client: string, site: string): Promise<string | null> {
+  try {
+    const query = new URLSearchParams({ client, site });
+    const res = await fetch(`/api/desk/company-logo?${query}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return companyLogoFromApiPayload(await res.json());
+  } catch {
+    return null;
+  }
 }
 
 async function textFromUpload(file: File): Promise<string> {
@@ -191,6 +203,8 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
         book,
         curve,
         preparedBy: exporterDisplayName(user?.name, user?.email) ?? undefined,
+        status: pack.status,
+        companyLogo: await fetchCostReportCompanyLogo(client, site),
       });
       downloadXlsx(
         costReportXlsxFilename({
