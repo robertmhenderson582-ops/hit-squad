@@ -225,10 +225,10 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
               placeholder="YYYY-MM-DD or 9/5/2026"
               value={book.statusDate}
               onChange={(event) => persist({ ...book, statusDate: event.target.value })}
-              onBlur={() =>
+              onBlur={(event) =>
                 persist({
                   ...book,
-                  statusDate: parseLooseDate(book.statusDate) || todayYmd(),
+                  statusDate: parseLooseDate(event.target.value) || todayYmd(),
                 })
               }
             />
