@@ -21,7 +21,6 @@ describe("crew card grand totals", () => {
     const rail = read("../components/EstimateTotalRail.tsx");
     assert.match(rail, /Estimate total/);
     assert.match(rail, /deskPackageBreakdown/);
-    assert.match(rail, /markable/);
     assert.match(rail, /Hide/);
     assert.match(rail, /Show estimate total/);
 

@@ -2,8 +2,6 @@ export const BUILDERS_RISK_YATES = 0.00834;
 export const ESTIMATE_MARKUP_RATE = 0.065;
 export const YATES_MARKUP_RATE = 0.1;
 export const ESTIMATE_MARKUP_LABEL = "6.5% markup";
-/** Phone-rail hint. 6.5% is the COMP commercial fee, not 6.5% of Labor+Equip+Sub+Other. */
-export const ESTIMATE_MARKUP_BASE_NOTE = "on markable (non-affiliate subs + 3rd-party + misc)";
 
 /** RRFF / COMP commercial fee. P66 PCA plants 6.5%. Yates materials/rentals/subs 10%. Not B-2 Cost+6%. */
 export function commercialMarkupRate(client = "", site = ""): number {
@@ -27,8 +25,6 @@ export type EstimateTotalBreakdown = {
   lines: EstimateTotalLine[];
   hours: number;
   total: number;
-  /** Dollars the commercial fee was applied to. Omitted when there is no markup line. */
-  markupBase?: number;
 };
 
 export function parseDeskDollars(value: string | number | undefined | null): number {
@@ -82,12 +78,6 @@ export function estimateMarkupDollars(input: {
   return Math.round(markupBase(input) * rate * 100) / 100;
 }
 
-/** Inverse of estimateMarkupDollars for rail audit. Cents in, cents out. */
-export function impliedMarkupBase(markupDollars: number, rate = ESTIMATE_MARKUP_RATE): number {
-  if (!(rate > 0)) return 0;
-  return Math.round((parseDeskDollars(markupDollars) / rate) * 100) / 100;
-}
-
 export function estimateTotalBreakdown(input: {
   labor?: number;
   equipment?: number;
@@ -99,7 +89,6 @@ export function estimateTotalBreakdown(input: {
   client?: string;
   site?: string;
   extras?: EstimateTotalLine[];
-  markupBase?: number;
 }): EstimateTotalBreakdown {
   const base = moneyLines([
     { id: "labor", label: "Labor", amount: parseDeskDollars(input.labor) },
@@ -113,11 +102,9 @@ export function estimateTotalBreakdown(input: {
   const subtotal = [...base, ...extras].reduce((sum, line) => sum + line.amount, 0);
   const risk = Math.round(Math.max(0, subtotal) * buildersRiskPct(input.client, input.site) * 100) / 100;
   const lines = risk > 0 ? [...base, ...extras, { id: "risk", label: "Builder's risk", amount: risk }] : [...base, ...extras];
-  const markable = parseDeskDollars(input.markupBase);
   return {
     lines,
     hours: Math.max(0, input.hours ?? 0),
     total: lines.reduce((sum, line) => sum + line.amount, 0),
-    markupBase: markable > 0 && lines.some((line) => line.id === "markup") ? markable : undefined,
   };
 }

@@ -8,7 +8,6 @@ import {
   readEstimateTotalRailPhoneHidden,
   writeEstimateTotalRailPhoneHidden,
 } from "./estimate-total-rail.ts";
-import { estimateMarkupDollars, impliedMarkupBase } from "./estimate-total.ts";
 
 function memoryStore(seed: Record<string, string> = {}) {
   const data = { ...seed };
@@ -39,10 +38,7 @@ test("phone hide persist is off by default and stays until shown again", () => {
   assert.equal(JSON.parse(store.getItem(ESTIMATE_TOTAL_RAIL_PHONE_KEY) || "{}").hidden, false);
 });
 
-test("phone hide is UI only — 6.5% markable math is unchanged", () => {
-  const shown = 56_547.95;
-  assert.equal(impliedMarkupBase(shown), 869_968.46);
-  assert.equal(estimateMarkupDollars({ subcontractor: 869_968.46 }), shown);
+test("phone hide is UI only — Estimate Total math files stay off the hide path", () => {
   const railPref = read("./estimate-total-rail.ts");
   const railUi = read("../components/EstimateTotalRail.tsx");
   const desk = read("./estimate-desk-total.ts");
@@ -53,7 +49,6 @@ test("phone hide is UI only — 6.5% markable math is unchanged", () => {
   assert.match(railUi, /Hide/);
   assert.match(railUi, /Show estimate total/);
   assert.match(railUi, /ESTIMATE_TOTAL_RAIL_PHONE_QUERY/);
-  assert.match(railUi, /markable/);
   assert.doesNotMatch(desk, /ESTIMATE_TOTAL_RAIL_PHONE|phone hidden|railPhone/);
   assert.doesNotMatch(total, /ESTIMATE_TOTAL_RAIL_PHONE/);
   assert.doesNotMatch(railUi, /purchasing/i);

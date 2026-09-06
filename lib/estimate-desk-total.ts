@@ -21,13 +21,7 @@ import {
   moreFundDollars,
   type JobMoney,
 } from "./estimate-money.ts";
-import {
-  estimateMarkupDollars,
-  estimateTotalBreakdown,
-  markupBase,
-  signedMoneyLines,
-  type EstimateTotalBreakdown,
-} from "./estimate-total.ts";
+import { estimateMarkupDollars, estimateTotalBreakdown, signedMoneyLines, type EstimateTotalBreakdown } from "./estimate-total.ts";
 import { otherCostTotals, type OtherCostSheet } from "./other-cost.ts";
 import { laborDollarsFromCrew, perDiemDollarsFromCrew, type JobRates } from "./shahan-wood-river.ts";
 import { subcontractorMarkupBase, subcontractorTotal, type SubSheet } from "./subcontractor.ts";
@@ -83,11 +77,6 @@ export function deskPackageBreakdown(input: DeskPackageInput): EstimateTotalBrea
     cbaIncrease: cba,
     moreFund: more,
   });
-  const markable = markupBase({
-    subcontractor: subcontractorMarkupBase(sheet, subCtx),
-    thirdParty: thirdCost,
-    misc: rest.misc,
-  });
   return estimateTotalBreakdown({
     labor,
     equipment: tools + thirdCost,
@@ -99,7 +88,6 @@ export function deskPackageBreakdown(input: DeskPackageInput): EstimateTotalBrea
       client,
       site,
     }),
-    markupBase: markable,
     otherCost: rest.total + perDiem,
     changeOrders: input.changeOrders ?? 0,
     hours: input.hours ?? 0,
