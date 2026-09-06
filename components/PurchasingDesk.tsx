@@ -14,6 +14,7 @@ import {
   purchaseTieOptions,
   PURCHASE_CATEGORIES,
   PURCHASE_STATUSES,
+  PURCHASING_INTERNAL_NOTE,
   PURCHASING_LIVE_NOTE,
   PURCHASING_NOUN,
   PURCHASING_PARKED,
@@ -100,8 +101,8 @@ export function PurchasingDesk({ client = "", site = "" }: { client?: string; si
   return (
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        {PURCHASING_NOUN} for this live estimate. {PURCHASING_LIVE_NOTE} Same pack store as Cost
-        report / ECR — not a second AP book.
+        {PURCHASING_NOUN} for this live estimate. {PURCHASING_LIVE_NOTE} {PURCHASING_INTERNAL_NOTE}{" "}
+        Same pack store as Cost report / ECR — not a second AP book.
       </p>
 
       <section className="plant-card px-5 py-5">

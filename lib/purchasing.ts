@@ -17,6 +17,8 @@ export const PURCHASING_TAB_LABEL = "Purchasing";
 export const PURCHASING_NOUN = "Purchasing Control Center";
 export const PURCHASING_LIVE_NOTE =
   "Buys on this job — small tools, consumables, materials, rental, other. Totals come from lines you type. No invented dollars.";
+export const PURCHASING_INTERNAL_NOTE =
+  "Internal Execute only — owner/PM profit. Not a client Cost / PPR Excel sheet and not mixed into the client package.";
 
 export const PURCHASING_PARKED = [
   "AP / three-way match",

@@ -617,7 +617,8 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
               : purchases.lineCount
                 ? " · Misc compare waits for Other Cost dollars"
                 : " · no buys typed yet"}
-            . PPR chart slice is parked.
+            . Internal desk tile only — not written into client Cost / PPR Excel. PPR chart slice is
+            parked.
           </p>
         </div>
         <div className="mt-4 overflow-x-auto">

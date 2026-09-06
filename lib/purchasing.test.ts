@@ -167,6 +167,8 @@ describe("Purchasing Day-1 ledger", () => {
     const pack = readFileSync(fileURLToPath(new URL("./estimate-pack.ts", import.meta.url)), "utf8");
     const purchasingSrc = readFileSync(fileURLToPath(new URL("./purchasing.ts", import.meta.url)), "utf8");
     const prefix = readFileSync(fileURLToPath(new URL("./purchasing-prefix.ts", import.meta.url)), "utf8");
+    const costXlsx = readFileSync(fileURLToPath(new URL("./cost-report-xlsx.ts", import.meta.url)), "utf8");
+    const estimateXlsx = readFileSync(fileURLToPath(new URL("./estimate-xlsx.ts", import.meta.url)), "utf8");
     assert.match(workspace, /id: "purchasing"/);
     assert.match(workspace, /label: "Purchasing"/);
     assert.match(detail, /tab === "purchasing"/);
@@ -189,5 +191,10 @@ describe("Purchasing Day-1 ledger", () => {
     ]);
     assert.equal(/three-way match automation|barcode scanner|auto-email/i.test(desk), false);
     assert.equal(/P66 client|PCA000110/.test(purchasingSrc), false);
+    assert.match(purchasingSrc, /PURCHASING_INTERNAL_NOTE/);
+    assert.match(desk, /PURCHASING_INTERNAL_NOTE/);
+    assert.match(cost, /not written into client Cost \/ PPR Excel/);
+    assert.equal(/purchas|consumable|small.?tool/i.test(costXlsx), false);
+    assert.equal(/purchas/i.test(estimateXlsx), false);
   });
 });
