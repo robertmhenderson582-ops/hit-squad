@@ -13,6 +13,7 @@ import { EquipmentDesk } from "@/components/EquipmentDesk";
 import { OtherCostDesk } from "@/components/OtherCostDesk";
 import { SubcontractorDesk } from "@/components/SubcontractorDesk";
 import { ChangeOrderPacket } from "@/components/ChangeOrderPacket";
+import { CostReportDesk } from "@/components/CostReportDesk";
 import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { OrgChartDesk } from "@/components/OrgChartDesk";
@@ -219,6 +220,7 @@ function NewEstimateDeskBody({
       {tab === "subs" ? <SubcontractorDesk client={client} site={site} /> : null}
       {tab === "costs" ? <OtherCostDesk client={client} site={site} /> : null}
       {tab === "change-orders" ? <ChangeOrderPacket client={client} site={site} /> : null}
+      {tab === "cost-report" ? <CostReportDesk client={client} site={site} /> : null}
       {tab === "rodeo" ? <RodeoFormDesk client={client} site={site} name={title} /> : null}
     </EstimateWorkspace>
   );

@@ -14,6 +14,14 @@ import {
   writeFcrPacket,
 } from "./change-order-packet.ts";
 import {
+  COST_REPORT_STORE_PREFIX,
+  costReportHasWork,
+  emptyCostReportBook,
+  readCostReport,
+  saveCostSnapshot,
+  writeCostReport,
+} from "./cost-report.ts";
+import {
     applyPackToStore,
   collectPack,
   crewHasRows,
@@ -755,5 +763,43 @@ describe("estimate pack snapshot", () => {
     assert.equal(hydrated.log[0]?.scope, "Add night craft for hydrotest");
     assert.equal(hydrated.log[0]?.requestedBy, "Ben Peffley");
     assert.ok(desktop.getItem(`${FCR_STORE_PREFIX}${key}`));
+  });
+
+  it("collects a cost report snapshot with the pack and hydrates it onto an empty device store", () => {
+    const phone = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-cat2pit",
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+      },
+      phone,
+    );
+    const key = newEstimateKey("new-cat2pit");
+    writeCostReport(
+      key,
+      saveCostSnapshot(
+        { ...emptyCostReportBook(), statusDate: "2026-09-05", notes: "Friday PPR" },
+        { total: 88000, hours: 240, lines: [] },
+        9,
+      ),
+      phone,
+    );
+    const collected = collectPack(phone, "new-cat2pit");
+    assert.equal(costReportHasWork(collected?.costReport), true);
+    assert.equal(
+      ((collected?.costReport as { snapshots: Array<{ notes: string }> }).snapshots || [])[0]?.notes,
+      "Friday PPR",
+    );
+
+    const desktop = memoryStore();
+    assert.equal(mergeVaultIntoLocal(desktop, collected!), "vault");
+    const hydrated = readCostReport(key, desktop);
+    assert.equal(hydrated.snapshots.length, 1);
+    assert.equal(hydrated.snapshots[0]?.statusDate, "2026-09-05");
+    assert.equal(hydrated.snapshots[0]?.notes, "Friday PPR");
+    assert.equal(hydrated.snapshots[0]?.budget.total, 88000);
+    assert.ok(desktop.getItem(`${COST_REPORT_STORE_PREFIX}${key}`));
   });
 });

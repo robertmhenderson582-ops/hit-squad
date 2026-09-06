@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
 import { ChangeOrderPacket } from "@/components/ChangeOrderPacket";
+import { CostReportDesk } from "@/components/CostReportDesk";
 import { EquipmentDesk } from "@/components/EquipmentDesk";
 import { OtherCostDesk } from "@/components/OtherCostDesk";
 import { SubcontractorDesk } from "@/components/SubcontractorDesk";
@@ -181,6 +182,8 @@ function EstimateDetailBody({
       {tab === "costs" ? <OtherCostDesk client={estimate.client} site={siteName} /> : null}
 
       {tab === "change-orders" ? <ChangeOrderPacket client={estimate.client} site={siteName} /> : null}
+
+      {tab === "cost-report" ? <CostReportDesk client={estimate.client} site={siteName} /> : null}
 
       {tab === "rodeo" ? <RodeoFormDesk client={estimate.client} site={siteName} name={shown} /> : null}
     </EstimateWorkspace>
