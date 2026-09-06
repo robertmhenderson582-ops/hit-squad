@@ -7,6 +7,8 @@
  * (01 DailyReport_TOTAL Earned Mhr) when entered; otherwise Day-0
  * stand-in (Direct earned = expended). Charts lead the send package;
  * Cover + PPR + Hrs S-curve + Report log follow.
+ * INTERNAL FIREWALL: Purchasing / small tools / consumables / vs-Misc stay
+ * off this workbook. Owner/PM profit lives on the desk tab only.
  */
 import {
   ESTIMATE_EXPORT_BRAND,

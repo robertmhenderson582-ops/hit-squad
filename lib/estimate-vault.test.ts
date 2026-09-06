@@ -607,4 +607,56 @@ describe("estimate vault service", () => {
       assert.equal(((emptyFlush.pack.costReport as { snapshots: unknown[] }).snapshots || []).length, 1);
     }
   });
+
+  it("upserts Wood River purchasing lines on the pack and reads them back from the vault", async () => {
+    const drive = memoryDrive();
+    const saved = await upsertVisiblePack(
+      owner,
+      cat2({
+        purchasing: {
+          statusDate: "2026-09-06",
+          notes: "Saturday buys",
+          lines: [
+            {
+              id: "po-1",
+              date: "2026-09-06",
+              vendor: "Airgas",
+              description: "C-25 bottles",
+              category: "consumables",
+              amount: 75,
+              status: "charged",
+            },
+          ],
+          snapshots: [
+            {
+              id: "buy-1",
+              statusDate: "2026-09-06",
+              savedAt: 9,
+              notes: "Saturday buys",
+              totals: { grand: 75, toolsConsumables: 75, lineCount: 1 },
+              vsBudget: { toolsConsumables: 75, miscBudget: 150, variance: 75, hasMiscBudget: true },
+              lineCount: 1,
+            },
+          ],
+        },
+      }),
+      drive,
+    );
+    assert.equal(saved.ok, true);
+    const got = await getVisiblePack(owner, "new-cat2pit", drive);
+    assert.equal(((got?.purchasing as { notes: string }).notes), "Saturday buys");
+    assert.equal(((got?.purchasing as { lines: Array<{ vendor: string }> }).lines || [])[0]?.vendor, "Airgas");
+    const emptyFlush = await upsertVisiblePack(
+      owner,
+      cat2({
+        updatedAt: 50,
+        purchasing: { statusDate: "", notes: "", lines: [], snapshots: [] },
+      }),
+      drive,
+    );
+    assert.equal(emptyFlush.ok, true);
+    if (emptyFlush.ok) {
+      assert.equal(((emptyFlush.pack.purchasing as { lines: unknown[] }).lines || []).length, 1);
+    }
+  });
 });

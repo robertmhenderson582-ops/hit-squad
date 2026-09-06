@@ -59,6 +59,7 @@ export const BASE_ESTIMATE_TABS = [
   { id: "costs", label: "Other Cost", icon: "▤" },
   { id: "change-orders", label: "Change orders", icon: "⚖" },
   { id: "cost-report", label: "Cost report", icon: "📊" },
+  { id: "purchasing", label: "Purchasing", icon: "🧾" },
   { id: "wage-lookup", label: "Wage lookup", icon: "＄" },
 ] as const;
 
@@ -350,7 +351,7 @@ export function EstimateWorkspace({
               }}
               className={`rounded-t px-3 py-2 text-sm ${
                 tab === item.id ? "bg-[#0f5f6d] text-white" : "text-white/75 hover:text-white"
-              }`}
+              }${item.id === "purchasing" ? " print-hide" : ""}`}
             >
               <span className="mr-1.5 opacity-80" aria-hidden="true">
                 {item.icon}

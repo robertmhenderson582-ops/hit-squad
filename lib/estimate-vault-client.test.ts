@@ -26,6 +26,13 @@ import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-
 import { applyPackToStore, collectPack } from "./estimate-pack.ts";
 import { addLogRow, emptyFcrPacket, readFcrPacket, writeFcrPacket } from "./change-order-packet.ts";
 import { emptyCostReportBook, readCostReport, saveCostSnapshot, writeCostReport } from "./cost-report.ts";
+import {
+  addPurchaseLine,
+  emptyPurchasingBook,
+  readPurchasing,
+  savePurchasingSnapshot,
+  writePurchasing,
+} from "./purchasing.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { SUB_STORE_PREFIX } from "./subcontractor.ts";
@@ -1014,6 +1021,122 @@ describe("local transfer commit", () => {
       assert.equal(read.snapshots[0]?.id, "ppr-hydrate-1");
       assert.equal(read.snapshots[0]?.notes, "Friday PPR");
       assert.equal(read.snapshots[0]?.budget.total, 88000);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("flushVaultUpsert sends purchasing lines with the live pack", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const packId = "new-cat2pit";
+    rememberLocalPack(
+      {
+        packId,
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: OWNER_LOGIN_EMAIL,
+      },
+      store,
+    );
+    writePurchasing(
+      newEstimateKey(packId),
+      savePurchasingSnapshot(
+        addPurchaseLine(
+          { ...emptyPurchasingBook(), statusDate: "2026-09-06", notes: "Saturday buys" },
+          {
+            id: "po-vault-1",
+            vendor: "Airgas",
+            description: "C-25 bottles",
+            category: "consumables",
+            amount: 75,
+            status: "charged",
+          },
+        ),
+        { amount: 150, hasBudget: true },
+        9,
+      ),
+      store,
+    );
+    const bodies: Array<{ pack?: { purchasing?: { notes?: string; lines?: Array<{ vendor?: string }> } } }> = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const raw = typeof init?.body === "string" ? init.body : "";
+      if (raw) bodies.push(JSON.parse(raw) as (typeof bodies)[number]);
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await flushVaultUpsert(packId, store);
+      assert.equal(result.ok, true);
+      assert.equal(bodies[0]?.pack?.purchasing?.notes, "Saturday buys");
+      assert.equal(bodies[0]?.pack?.purchasing?.lines?.[0]?.vendor, "Airgas");
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("hydrates purchasing lines from the vault onto an empty browser", async () => {
+    resetVaultHydrateForTests();
+    const empty = memoryStore();
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          persisted: true,
+          packs: [
+            {
+              packId: "new-cat2pit",
+              key: "new:new-cat2pit",
+              title: "Cat 2 Pit Stop",
+              client: "Phillips 66",
+              site: "Wood River — Roxana, IL",
+              siteId: "site-madison",
+              createdAt: 1,
+              updatedAt: 2,
+              ownerEmail: OWNER_LOGIN_EMAIL,
+              purchasing: {
+                statusDate: "2026-09-06",
+                notes: "Saturday buys",
+                lines: [
+                  {
+                    id: "po-hydrate-1",
+                    date: "2026-09-06",
+                    vendor: "Airgas",
+                    description: "C-25 bottles",
+                    category: "consumables",
+                    amount: 75,
+                    status: "charged",
+                  },
+                ],
+                snapshots: [
+                  {
+                    id: "buy-hydrate-1",
+                    statusDate: "2026-09-06",
+                    savedAt: 9,
+                    notes: "Saturday buys",
+                    totals: { grand: 75, toolsConsumables: 75, lineCount: 1 },
+                    vsBudget: { toolsConsumables: 75, miscBudget: 150, variance: 75, hasMiscBudget: true },
+                    lineCount: 1,
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    try {
+      const packs = await hydrateFromVault(empty);
+      assert.equal(((packs[0]?.purchasing as { notes: string }).notes), "Saturday buys");
+      const read = readPurchasing(newEstimateKey("new-cat2pit"), empty);
+      assert.equal(read.lines.length, 1);
+      assert.equal(read.lines[0]?.id, "po-hydrate-1");
+      assert.equal(read.lines[0]?.vendor, "Airgas");
+      assert.equal(read.snapshots[0]?.totals.grand, 75);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();
