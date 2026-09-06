@@ -3,6 +3,7 @@ import { parseEstimateStatus, resolveEstimateStatus, type EstimateStatus } from 
 import { clampStatusForSite, regularClientFromParts } from "./site-regular.ts";
 import { ACTIVITY_STORE_PREFIX } from "./work-activities.ts";
 import { FCR_STORE_PREFIX, fcrPacketHasWork } from "./change-order-packet.ts";
+import { COST_REPORT_STORE_PREFIX, costReportHasWork } from "./cost-report.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { notifyEstimateSheets } from "./sheet-events.ts";
@@ -50,6 +51,7 @@ export type EstimatePackSnapshot = {
   otherCost?: unknown;
   subcontractor?: unknown;
   fcr?: unknown;
+  costReport?: unknown;
 };
 
 const CREW_LANES = ["staff", "generalForeman", "foreman", "direct", "support"] as const;
@@ -146,6 +148,8 @@ export function fcrHasWork(value: unknown) {
   return fcrPacketHasWork(value);
 }
 
+export { costReportHasWork };
+
 function pickEquipment(newer: unknown, older: unknown) {
   if (equipmentHasWork(newer)) return newer;
   if (equipmentHasWork(older)) return older;
@@ -178,6 +182,12 @@ function pickFcr(newer: unknown, older: unknown) {
   return newer ?? older;
 }
 
+function pickCostReport(newer: unknown, older: unknown) {
+  if (costReportHasWork(newer)) return newer;
+  if (costReportHasWork(older)) return older;
+  return newer ?? older;
+}
+
 function writeSheetIfRicher(
   store: StorageLike,
   key: string,
@@ -199,6 +209,7 @@ export function packHasSheets(pack: EstimatePackSnapshot | null | undefined) {
     otherCostHasWork(pack.otherCost) ||
     subcontractorHasWork(pack.subcontractor) ||
     fcrHasWork(pack.fcr) ||
+    costReportHasWork(pack.costReport) ||
     (Array.isArray(pack.activities) &&
       pack.activities.some((row) => {
         const item = asRecord(row);
@@ -217,6 +228,7 @@ export function packHasWork(pack: EstimatePackSnapshot | null | undefined) {
   if (otherCostHasWork(pack.otherCost)) return true;
   if (subcontractorHasWork(pack.subcontractor)) return true;
   if (fcrHasWork(pack.fcr)) return true;
+  if (costReportHasWork(pack.costReport)) return true;
   if (Array.isArray(pack.activities) && pack.activities.some((row) => {
     const item = asRecord(row);
     return Boolean(item && (item.name || Number(item.hours) > 0));
@@ -236,7 +248,8 @@ function packSheetScore(pack: EstimatePackSnapshot) {
     (otherCostHasWork(pack.otherCost) ? 1 : 0) +
     (subcontractorHasWork(pack.subcontractor) ? 1 : 0) +
     (crewHasRows(pack.crew) ? 1 : 0) +
-    (fcrHasWork(pack.fcr) ? 1 : 0)
+    (fcrHasWork(pack.fcr) ? 1 : 0) +
+    (costReportHasWork(pack.costReport) ? 1 : 0)
   );
 }
 
@@ -305,6 +318,7 @@ export function pickPack(
     otherCost: pickOtherCost(newer.otherCost, older.otherCost),
     subcontractor: pickSubcontractor(newer.subcontractor, older.subcontractor),
     fcr: pickFcr(newer.fcr, older.fcr),
+    costReport: pickCostReport(newer.costReport, older.costReport),
     status: newer.status || older.status,
     createdAt: Math.min(local.createdAt || newer.createdAt, vault.createdAt || newer.createdAt) || newer.createdAt,
     ownerEmail: vault.ownerEmail || newer.ownerEmail,
@@ -344,6 +358,7 @@ export function publicPack(pack: EstimatePackSnapshot): EstimatePackSnapshot {
     otherCost: pack.otherCost,
     subcontractor: pack.subcontractor,
     fcr: pack.fcr,
+    costReport: pack.costReport,
   };
 }
 
@@ -393,6 +408,7 @@ export function collectPack(
     otherCost: readStoreJson(store, `${OTHER_COST_STORE_PREFIX}${key}`) ?? undefined,
     subcontractor: readStoreJson(store, `${SUB_STORE_PREFIX}${key}`) ?? undefined,
     fcr: readStoreJson(store, `${FCR_STORE_PREFIX}${key}`) ?? undefined,
+    costReport: readStoreJson(store, `${COST_REPORT_STORE_PREFIX}${key}`) ?? undefined,
   };
 }
 
@@ -434,6 +450,7 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
   }
   writeSheetIfRicher(store, `${SUB_STORE_PREFIX}${key}`, pack.subcontractor, subcontractorHasWork);
   writeSheetIfRicher(store, `${FCR_STORE_PREFIX}${key}`, pack.fcr, fcrHasWork);
+  writeSheetIfRicher(store, `${COST_REPORT_STORE_PREFIX}${key}`, pack.costReport, costReportHasWork);
   notifyEstimateSheets();
 }
 
@@ -487,6 +504,7 @@ export function parseIncomingPack(input: unknown): { ok: true; pack: EstimatePac
       otherCost: row?.otherCost,
       subcontractor: row?.subcontractor,
       fcr: row?.fcr,
+      costReport: row?.costReport,
     },
   };
 }

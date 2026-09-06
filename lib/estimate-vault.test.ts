@@ -565,4 +565,46 @@ describe("estimate vault service", () => {
       assert.equal(((emptyFlush.pack.fcr as { log: unknown[] }).log || []).length, 1);
     }
   });
+
+  it("upserts a Wood River cost report snapshot on the pack and reads it back from the vault", async () => {
+    const drive = memoryDrive();
+    const saved = await upsertVisiblePack(
+      owner,
+      cat2({
+        costReport: {
+          statusDate: "2026-09-05",
+          notes: "Friday PPR",
+          export15: { raw: "Date\tHours\n09/05/2026\t20", rows: [{ date: "2026-09-05", hours: 20 }] },
+          export16: { raw: "", rows: [] },
+          snapshots: [
+            {
+              id: "ppr-1",
+              statusDate: "2026-09-05",
+              savedAt: 9,
+              notes: "Friday PPR",
+              budget: { total: 88000, hours: 240, lines: [] },
+              actuals: { hours: 20, dollars: 0, headcount: 2, byDate: {} },
+            },
+          ],
+        },
+      }),
+      drive,
+    );
+    assert.equal(saved.ok, true);
+    const got = await getVisiblePack(owner, "new-cat2pit", drive);
+    assert.equal(((got?.costReport as { snapshots: Array<{ id: string }> }).snapshots || [])[0]?.id, "ppr-1");
+    assert.equal(((got?.costReport as { notes: string }).notes), "Friday PPR");
+    const emptyFlush = await upsertVisiblePack(
+      owner,
+      cat2({
+        updatedAt: 50,
+        costReport: { statusDate: "", notes: "", export15: { raw: "", rows: [] }, export16: { raw: "", rows: [] }, snapshots: [] },
+      }),
+      drive,
+    );
+    assert.equal(emptyFlush.ok, true);
+    if (emptyFlush.ok) {
+      assert.equal(((emptyFlush.pack.costReport as { snapshots: unknown[] }).snapshots || []).length, 1);
+    }
+  });
 });

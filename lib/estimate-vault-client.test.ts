@@ -25,6 +25,7 @@ import { deleteLocalPack, findLocalPack, rememberLocalPack, type StorageLike } f
 import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-menu.ts";
 import { applyPackToStore, collectPack } from "./estimate-pack.ts";
 import { addLogRow, emptyFcrPacket, readFcrPacket, writeFcrPacket } from "./change-order-packet.ts";
+import { emptyCostReportBook, readCostReport, saveCostSnapshot, writeCostReport } from "./cost-report.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { SUB_STORE_PREFIX } from "./subcontractor.ts";
@@ -918,6 +919,101 @@ describe("local transfer commit", () => {
       assert.equal(read.log[0]?.id, "ecr-hydrate-1");
       assert.equal(read.log[0]?.scope, "Extra weld");
       assert.equal(read.header.pm, "Ben Peffley");
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("flushVaultUpsert sends the cost report snapshot with the live pack", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const packId = "new-cat2pit";
+    rememberLocalPack(
+      {
+        packId,
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: OWNER_LOGIN_EMAIL,
+      },
+      store,
+    );
+    writeCostReport(
+      newEstimateKey(packId),
+      saveCostSnapshot(
+        { ...emptyCostReportBook(), statusDate: "2026-09-05", notes: "Friday PPR" },
+        { total: 88000, hours: 240, lines: [] },
+        9,
+      ),
+      store,
+    );
+    const bodies: Array<{ pack?: { costReport?: { snapshots?: Array<{ notes?: string }> } } }> = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const raw = typeof init?.body === "string" ? init.body : "";
+      if (raw) bodies.push(JSON.parse(raw) as (typeof bodies)[number]);
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await flushVaultUpsert(packId, store);
+      assert.equal(result.ok, true);
+      assert.equal((bodies[0]?.pack?.costReport?.snapshots || [])[0]?.notes, "Friday PPR");
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("hydrates a cost report snapshot from the vault onto an empty browser", async () => {
+    resetVaultHydrateForTests();
+    const empty = memoryStore();
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          persisted: true,
+          packs: [
+            {
+              packId: "new-cat2pit",
+              key: "new:new-cat2pit",
+              title: "Cat 2 Pit Stop",
+              client: "Phillips 66",
+              site: "Wood River — Roxana, IL",
+              siteId: "site-madison",
+              createdAt: 1,
+              updatedAt: 2,
+              ownerEmail: OWNER_LOGIN_EMAIL,
+              costReport: {
+                statusDate: "2026-09-05",
+                notes: "Friday PPR",
+                export15: { raw: "Date\tHours\n09/05/2026\t20", rows: [{ date: "2026-09-05", hours: 20 }] },
+                export16: { raw: "", rows: [] },
+                snapshots: [
+                  {
+                    id: "ppr-hydrate-1",
+                    statusDate: "2026-09-05",
+                    savedAt: 9,
+                    notes: "Friday PPR",
+                    budget: { total: 88000, hours: 240, lines: [] },
+                    actuals: { hours: 20, dollars: 0, headcount: 2, byDate: {} },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    try {
+      const packs = await hydrateFromVault(empty);
+      assert.equal(((packs[0]?.costReport as { notes: string }).notes), "Friday PPR");
+      const read = readCostReport(newEstimateKey("new-cat2pit"), empty);
+      assert.equal(read.snapshots.length, 1);
+      assert.equal(read.snapshots[0]?.id, "ppr-hydrate-1");
+      assert.equal(read.snapshots[0]?.notes, "Friday PPR");
+      assert.equal(read.snapshots[0]?.budget.total, 88000);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();
