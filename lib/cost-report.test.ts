@@ -238,6 +238,10 @@ describe("hydrate + live job list", () => {
     assert.match(report, /deskBudgetFromPack/);
     assert.match(report, /applyTurnipPaste/);
     assert.match(report, /saveCostSnapshot/);
+    assert.match(report, /costReportToXlsx/);
+    assert.match(report, /downloadXlsx/);
+    assert.match(report, /Excel export/);
+    assert.match(report, /company-logo/);
     assert.equal(/DT after 12 rewrite|turn 12s into DT/.test(report), true);
   });
 });
