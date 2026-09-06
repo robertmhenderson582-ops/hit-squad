@@ -19,6 +19,41 @@ import { hydrateJobMoney } from "./estimate-money.ts";
 import type { EstimateTotalBreakdown, EstimateTotalLine } from "./estimate-total.ts";
 import { computeRangeHours } from "./hours-clock.ts";
 import { notifyEstimateSheets } from "./sheet-events.ts";
+import { pprLaneFromChargeCode, pprLanesFromPack, type CostBudgetLane, type PprLaneId } from "./cost-report-ppr.ts";
+import {
+  emptyScheduleKpi,
+  hydrateScheduleKpi,
+  scheduleKpiEntered,
+  scheduleKpiFromDailyReport,
+  type ScheduleKpi,
+} from "./cost-report-schedule.ts";
+import type { DailyReportParse } from "./daily-report-total.ts";
+
+export {
+  emptyScheduleKpi,
+  hydrateScheduleKpi,
+  parsePhysicalPct,
+  resolveScheduleEarned,
+  scheduleAreaHours,
+  scheduleKpiFromDailyReport,
+  scheduleKpiEntered,
+  scheduleUnitHours,
+  SCHEDULE_KPI_ACTIVE_NOTE,
+  SCHEDULE_KPI_STANDIN_NOTE,
+  SCHEDULE_KPI_UPLOAD_NOTE,
+  type ResolvedScheduleEarned,
+  type ScheduleKpi,
+  type ScheduleKpiArea,
+  type ScheduleKpiUnit,
+} from "./cost-report-schedule.ts";
+
+export {
+  DAILY_REPORT_DESK_FIELDS,
+  DAILY_REPORT_PHASES,
+  DAILY_REPORT_TOTAL_FILE,
+  DAILY_REPORT_UPLOAD_NOTE,
+  type DailyReportParse,
+} from "./daily-report-total.ts";
 
 export { COST_REPORT_STORE_PREFIX };
 export const COST_REPORT_TAB_ID = "cost-report";
@@ -30,6 +65,7 @@ export const COST_REPORT_PARKED = [
   "Full CPI / SPI earned-value table",
   "SCR page",
   "P66 Progress book",
+  "Slicer Hrs tab (until later DailyReport_TOTAL sheets exist)",
   "Typed time-entry UI (Turnip 15 / 16 paste stays the ingest)",
 ] as const;
 
@@ -44,24 +80,38 @@ export type TurnipRow = {
   date: string;
   craft: string;
   employee: string;
+  /** Charge / WO code from Export 15 col A (100 Direct, 400 Foremen, …). */
+  code: string;
   st: number;
   ot: number;
   dt: number;
   hours: number;
   dollars: number;
+  pdDollars: number;
+  otherUnits: number;
   headcount: number;
   note: string;
+  lane: PprLaneId | "";
 };
 
 export type TurnipPaste = {
   raw: string;
   rows: TurnipRow[];
+  /** Wide Turnip headers when the paste carried them. */
+  headers: string[];
+  /** Raw row cells aligned to headers (export writes these, not a 2-column stub). */
+  grid: string[][];
 };
 
 export type CostBudget = {
   total: number;
   hours: number;
   lines: EstimateTotalLine[];
+  /** Live-pack $ / hours mapped into PPR buckets (Direct / Foremen / …). */
+  lanes?: CostBudgetLane[];
+  /** Pack total before change orders — PPR Original column. */
+  originalTotal?: number;
+  changeOrders?: number;
 };
 
 export type CostActuals = {
@@ -90,6 +140,7 @@ export type CostReportSnapshot = {
   actuals: CostActuals;
   export15: TurnipPaste;
   export16: TurnipPaste;
+  schedule: ScheduleKpi;
 };
 
 export type CostReportBook = {
@@ -98,6 +149,7 @@ export type CostReportBook = {
   export15: TurnipPaste;
   export16: TurnipPaste;
   snapshots: CostReportSnapshot[];
+  schedule: ScheduleKpi;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -158,11 +210,11 @@ export function parseDeskNumber(value: unknown): number {
 }
 
 function emptyPaste(): TurnipPaste {
-  return { raw: "", rows: [] };
+  return { raw: "", rows: [], headers: [], grid: [] };
 }
 
 export function emptyCostBudget(): CostBudget {
-  return { total: 0, hours: 0, lines: [] };
+  return { total: 0, hours: 0, lines: [], lanes: [], originalTotal: 0, changeOrders: 0 };
 }
 
 export function emptyCostActuals(): CostActuals {
@@ -176,17 +228,37 @@ export function emptyCostReportBook(): CostReportBook {
     export15: emptyPaste(),
     export16: emptyPaste(),
     snapshots: [],
+    schedule: emptyScheduleKpi(),
   };
+}
+
+function normalizeHeaders(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.map((cell) => String(cell ?? "").trim()) : [];
+}
+
+function normalizeGrid(raw: unknown): string[][] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((row) => Array.isArray(row))
+    .map((row) => (row as unknown[]).map((cell) => String(cell ?? "")));
 }
 
 function normalizePaste(raw: unknown): TurnipPaste {
   const row = asRecord(raw);
   const text = typeof row?.raw === "string" ? row.raw : typeof raw === "string" ? raw : "";
   const listed = Array.isArray(row?.rows) ? row.rows : [];
+  const parsed = parseTurnipPaste(text);
   const rows = listed
     .map((item) => normalizeTurnipRow(item))
-    .filter((item) => item.date || item.hours || item.dollars || item.craft || item.employee);
-  return { raw: text, rows: rows.length ? rows : parseTurnipPaste(text).rows };
+    .filter((item) => item.date || item.hours || item.dollars || item.craft || item.employee || item.code);
+  const headers = normalizeHeaders(row?.headers);
+  const grid = normalizeGrid(row?.grid);
+  return {
+    raw: text,
+    rows: rows.length ? rows : parsed.rows,
+    headers: headers.length ? headers : parsed.headers,
+    grid: grid.length ? grid : parsed.grid,
+  };
 }
 
 function normalizeTurnipRow(raw: unknown): TurnipRow {
@@ -195,17 +267,23 @@ function normalizeTurnipRow(raw: unknown): TurnipRow {
   const st = Math.max(0, parseDeskNumber(row.st));
   const ot = Math.max(0, parseDeskNumber(row.ot));
   const dt = Math.max(0, parseDeskNumber(row.dt));
+  const code = typeof row.code === "string" ? row.code.trim() : "";
+  const laneRaw = typeof row.lane === "string" ? row.lane.trim() : "";
   return {
     date: parseLooseDate(typeof row.date === "string" ? row.date : "") || "",
     craft: typeof row.craft === "string" ? row.craft.trim() : "",
     employee: typeof row.employee === "string" ? row.employee.trim() : "",
+    code,
     st,
     ot,
     dt,
     hours: hours || money(st + ot + dt),
     dollars: Math.max(0, money(parseDeskNumber(row.dollars))),
+    pdDollars: Math.max(0, money(parseDeskNumber(row.pdDollars))),
+    otherUnits: Math.max(0, parseDeskNumber(row.otherUnits)),
     headcount: Math.max(0, parseDeskNumber(row.headcount)),
     note: typeof row.note === "string" ? row.note : "",
+    lane: laneRaw as TurnipRow["lane"],
   };
 }
 
@@ -218,6 +296,7 @@ export function costReportHasWork(value: unknown) {
   const exp16 = asRecord(row.export16);
   if (filledText(exp15?.raw) || (Array.isArray(exp15?.rows) && exp15.rows.length > 0)) return true;
   if (filledText(exp16?.raw) || (Array.isArray(exp16?.rows) && exp16.rows.length > 0)) return true;
+  if (scheduleKpiEntered(hydrateScheduleKpi(row.schedule))) return true;
   return false;
 }
 
@@ -235,6 +314,7 @@ export function hydrateCostReport(raw: unknown): CostReportBook {
     export15: normalizePaste(parsed.export15),
     export16: normalizePaste(parsed.export16),
     snapshots,
+    schedule: hydrateScheduleKpi(parsed.schedule),
   };
 }
 
@@ -250,19 +330,37 @@ function hydrateSnapshot(raw: unknown): CostReportSnapshot | null {
     statusDate,
     savedAt: Number(row.savedAt) || 0,
     notes: typeof row.notes === "string" ? row.notes : "",
-    budget: {
-      total: money(parseDeskNumber(budget?.total)),
-      hours: Math.max(0, parseDeskNumber(budget?.hours)),
-      lines: Array.isArray(budget?.lines)
-        ? budget.lines
-            .map((line) => {
-              const item = asRecord(line);
-              if (!item || typeof item.id !== "string" || typeof item.label !== "string") return null;
-              return { id: item.id, label: item.label, amount: money(parseDeskNumber(item.amount)) };
-            })
-            .filter((line): line is EstimateTotalLine => Boolean(line))
-        : [],
-    },
+        budget: {
+          total: money(parseDeskNumber(budget?.total)),
+          hours: Math.max(0, parseDeskNumber(budget?.hours)),
+          originalTotal: money(parseDeskNumber(budget?.originalTotal ?? budget?.total)),
+          changeOrders: money(parseDeskNumber(budget?.changeOrders)),
+          lines: Array.isArray(budget?.lines)
+            ? budget.lines
+                .map((line) => {
+                  const item = asRecord(line);
+                  if (!item || typeof item.id !== "string" || typeof item.label !== "string") return null;
+                  return { id: item.id, label: item.label, amount: money(parseDeskNumber(item.amount)) };
+                })
+                .filter((line): line is EstimateTotalLine => Boolean(line))
+            : [],
+          lanes: Array.isArray(budget?.lanes)
+            ? budget.lanes
+                .map((line) => {
+                  const item = asRecord(line);
+                  if (!item || typeof item.id !== "string" || typeof item.label !== "string") return null;
+                  const lane = typeof item.lane === "string" ? item.lane : "";
+                  return {
+                    id: item.id,
+                    lane: lane as CostBudgetLane["lane"],
+                    label: item.label,
+                    dollars: money(parseDeskNumber(item.dollars)),
+                    hours: Math.max(0, parseDeskNumber(item.hours)),
+                  };
+                })
+                .filter((line): line is CostBudgetLane => Boolean(line))
+            : [],
+        },
     actuals: {
       hours: Math.max(0, parseDeskNumber(actuals?.hours)),
       dollars: money(parseDeskNumber(actuals?.dollars)),
@@ -285,6 +383,7 @@ function hydrateSnapshot(raw: unknown): CostReportSnapshot | null {
     },
     export15: normalizePaste(row.export15),
     export16: normalizePaste(row.export16),
+    schedule: hydrateScheduleKpi(row.schedule),
   };
 }
 
@@ -318,15 +417,19 @@ export function writeCostReport(key: string, book: CostReportBook, store?: CostR
   }
 }
 
-const HEADER_DATE = /^(date|work\s*date|day|worked)$/i;
-const HEADER_CRAFT = /^(craft|trade|class|position|cost\s*code)$/i;
+const HEADER_DATE = /^(date|work[_ ]?date|day|worked|event_dt|event[_ ]?date)$/i;
+const HEADER_CRAFT = /^(craft|trade|class|position|wo_description)$/i;
 const HEADER_EMPLOYEE = /^(employee|name|badge|emp)/i;
-const HEADER_ST = /^(st|reg|regular|straight)/i;
-const HEADER_OT = /^(ot|overtime|o\.t)/i;
-const HEADER_DT = /^(dt|double)/i;
-const HEADER_HOURS = /^(hours|hrs|mh|man[\s-]*hours|total\s*hrs)$/i;
-const HEADER_DOLLARS = /^(dollars?|amount|cost|total\s*\$|\$|pay|wages)$/i;
+const HEADER_CODE = /^(chargecode|charge|cost[_ ]?code|wo|work[_ ]?order|account|code)$/i;
+const HEADER_ST = /^(st|reg|regular|straight|st_units)$/i;
+const HEADER_OT = /^(ot|overtime|o\.t|ot_units)$/i;
+const HEADER_DT = /^(dt|double|dt_units)$/i;
+const HEADER_HOURS = /^(hours|hrs|mh|man[_-]?hours|total[_ ]?hrs|units|labortotal_clientactual_units)$/i;
+const HEADER_DOLLARS = /^(dollars?|amount|cost|total[_ ]?\$|\$|pay|wages|labortotal_clientactual_dollars|totaldollars_clientactual)$/i;
+const HEADER_PD = /pd_clientactual/i;
+const HEADER_OTHER = /other_clientactual/i;
 const HEADER_HC = /^(hc|headcount|heads|people|qty)$/i;
+const HEADER_TURNIP = /clientactual|event_dt|chargecode/i;
 
 function splitLine(line: string): string[] {
   if (line.includes("\t")) return line.split("\t").map((cell) => cell.trim());
@@ -335,12 +438,32 @@ function splitLine(line: string): string[] {
   return line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, ""));
 }
 
+function headerNorm(cell: string) {
+  return cell.replace(/[\s/]+/g, "_").replace(/_+/g, "_").trim();
+}
+
 function looksLikeHeader(cells: string[]) {
-  return cells.some((cell) => HEADER_DATE.test(cell) || HEADER_HOURS.test(cell) || HEADER_DOLLARS.test(cell) || HEADER_CRAFT.test(cell));
+  return cells.some(
+    (cell) =>
+      HEADER_DATE.test(headerNorm(cell)) ||
+      HEADER_HOURS.test(headerNorm(cell)) ||
+      HEADER_DOLLARS.test(headerNorm(cell)) ||
+      HEADER_CRAFT.test(headerNorm(cell)) ||
+      HEADER_CODE.test(headerNorm(cell)) ||
+      HEADER_TURNIP.test(cell),
+  );
 }
 
 function headerIndex(cells: string[], test: RegExp) {
-  return cells.findIndex((cell) => test.test(cell));
+  return cells.findIndex((cell) => test.test(headerNorm(cell)));
+}
+
+function preferHeader(cells: string[], tests: RegExp[]) {
+  for (const test of tests) {
+    const idx = headerIndex(cells, test);
+    if (idx >= 0) return idx;
+  }
+  return -1;
 }
 
 /** Turnip T3 Export 15 / 16 — tab/CSV paste the way Mike drops them. No invented columns. */
@@ -352,42 +475,67 @@ export function parseTurnipPaste(raw: string, kind: TurnipExportKind = "15"): Tu
   const first = splitLine(lines[0]);
   const headed = looksLikeHeader(first);
   const headers = headed ? first : [];
-  const dateCol = headed ? headerIndex(headers, HEADER_DATE) : 0;
-  const craftCol = headed ? headerIndex(headers, HEADER_CRAFT) : 1;
-  const employeeCol = headed ? headerIndex(headers, HEADER_EMPLOYEE) : -1;
-  const stCol = headed ? headerIndex(headers, HEADER_ST) : -1;
-  const otCol = headed ? headerIndex(headers, HEADER_OT) : -1;
-  const dtCol = headed ? headerIndex(headers, HEADER_DT) : -1;
-  const hoursCol = headed ? headerIndex(headers, HEADER_HOURS) : kind === "15" ? 2 : -1;
-  const dollarCol = headed ? headerIndex(headers, HEADER_DOLLARS) : kind === "16" ? 2 : -1;
-  const hcCol = headed ? headerIndex(headers, HEADER_HC) : -1;
+  const dateCol = headed ? preferHeader(headers, [HEADER_DATE]) : 0;
+  const craftCol = headed ? preferHeader(headers, [HEADER_CRAFT]) : 1;
+  const employeeCol = headed ? preferHeader(headers, [HEADER_EMPLOYEE]) : -1;
+  const codeCol = headed ? preferHeader(headers, [HEADER_CODE]) : kind === "15" ? 0 : -1;
+  const stCol = headed ? preferHeader(headers, [HEADER_ST]) : -1;
+  const otCol = headed ? preferHeader(headers, [HEADER_OT]) : -1;
+  const dtCol = headed ? preferHeader(headers, [HEADER_DT]) : -1;
+  const hoursCol = headed
+    ? preferHeader(headers, [/labortotal_clientactual_units/i, HEADER_HOURS])
+    : kind === "15"
+      ? 2
+      : -1;
+  const laborDollarCol = headed ? preferHeader(headers, [/labortotal_clientactual_dollars/i]) : -1;
+  const totalDollarCol = headed ? preferHeader(headers, [/totaldollars_clientactual/i, HEADER_DOLLARS]) : -1;
+  const dollarCol = headed
+    ? laborDollarCol >= 0
+      ? laborDollarCol
+      : totalDollarCol
+    : kind === "16"
+      ? 2
+      : -1;
+  const pdCol = headed ? preferHeader(headers, [HEADER_PD]) : -1;
+  const otherCol = headed ? preferHeader(headers, [HEADER_OTHER]) : -1;
+  const hcCol = headed ? preferHeader(headers, [HEADER_HC]) : -1;
   const body = headed ? lines.slice(1) : lines;
   const rows: TurnipRow[] = [];
+  const grid: string[][] = [];
   for (const line of body) {
     const cells = splitLine(line);
     if (!cells.some((cell) => cell)) continue;
-    const date = parseLooseDate(dateCol >= 0 ? cells[dateCol] ?? "" : cells[0] ?? "");
+    grid.push(cells);
+    const date = parseLooseDate(dateCol >= 0 ? cells[dateCol] ?? "" : "");
     const st = stCol >= 0 ? parseDeskNumber(cells[stCol]) : 0;
     const ot = otCol >= 0 ? parseDeskNumber(cells[otCol]) : 0;
     const dt = dtCol >= 0 ? parseDeskNumber(cells[dtCol]) : 0;
-    const hours = hoursCol >= 0 ? parseDeskNumber(cells[hoursCol]) : money(st + ot + dt);
+    const hoursVal = hoursCol >= 0 ? parseDeskNumber(cells[hoursCol]) : money(st + ot + dt);
     const dollars = dollarCol >= 0 ? parseDeskNumber(cells[dollarCol]) : 0;
+    const pdDollars = pdCol >= 0 ? parseDeskNumber(cells[pdCol]) : 0;
+    const otherUnits = otherCol >= 0 ? parseDeskNumber(cells[otherCol]) : 0;
     const headcount = hcCol >= 0 ? parseDeskNumber(cells[hcCol]) : 0;
-    if (!date && !hours && !dollars && !st && !ot && !dt) continue;
+    const code = (codeCol >= 0 ? cells[codeCol] ?? "" : "").trim();
+    if (!date && !hoursVal && !dollars && !st && !ot && !dt && !pdDollars && !code) continue;
+    const lane = pprLaneFromChargeCode(code);
     rows.push({
       date,
-      craft: craftCol >= 0 ? cells[craftCol] ?? "" : "",
-      employee: employeeCol >= 0 ? cells[employeeCol] ?? "" : "",
+      craft: craftCol >= 0 ? (cells[craftCol] ?? "").trim() : "",
+      employee: employeeCol >= 0 ? (cells[employeeCol] ?? "").trim() : "",
+      code,
       st: Math.max(0, st),
       ot: Math.max(0, ot),
       dt: Math.max(0, dt),
-      hours: Math.max(0, hours || money(st + ot + dt)),
+      hours: Math.max(0, hoursVal || money(st + ot + dt)),
       dollars: Math.max(0, money(dollars)),
+      pdDollars: Math.max(0, money(pdDollars)),
+      otherUnits: Math.max(0, otherUnits),
       headcount: Math.max(0, headcount),
       note: "",
+      lane,
     });
   }
-  return { raw: text, rows };
+  return { raw: text, rows, headers, grid };
 }
 
 export function applyTurnipPaste(book: CostReportBook, kind: TurnipExportKind, raw: string): CostReportBook {
@@ -408,19 +556,37 @@ export function costActualsFromPastes(export15: TurnipPaste, export16: TurnipPas
       headcount: cur.headcount + (patch.headcount ?? 0),
     };
   };
+  const export15Hours = export15.rows.reduce((sum, row) => {
+    if (asOf && row.date && row.date > asOf) return sum;
+    return sum + row.hours;
+  }, 0);
+  const export15Dollars = export15.rows.reduce((sum, row) => {
+    if (asOf && row.date && row.date > asOf) return sum;
+    return sum + row.dollars + (row.pdDollars || 0);
+  }, 0);
   for (const row of export15.rows) {
+    if (row.date) {
+      bump(row.date, {
+        hours: row.hours,
+        dollars: money(row.dollars + (row.pdDollars || 0)),
+        headcount: row.headcount || (row.hours > 0 ? 1 : 0),
+      });
+    }
+  }
+  const export15DatedHours = export15.rows.some((row) => row.date && row.hours);
+  for (const row of export16.rows) {
     bump(row.date, {
-      hours: row.hours,
+      hours: export15DatedHours ? 0 : row.hours,
+      dollars: export15Dollars ? 0 : row.dollars,
       headcount: row.headcount || (row.hours > 0 ? 1 : 0),
     });
   }
-  for (const row of export16.rows) {
-    bump(row.date, { dollars: row.dollars, hours: row.hours && !export15.rows.length ? row.hours : 0 });
-  }
   const days = Object.entries(byDate).filter(([date]) => date !== "_");
+  const datedHours = days.reduce((sum, [, day]) => sum + day.hours, 0);
+  const datedDollars = days.reduce((sum, [, day]) => sum + day.dollars, 0);
   return {
-    hours: money(days.reduce((sum, [, day]) => sum + day.hours, 0) + (byDate._?.hours ?? 0)),
-    dollars: money(days.reduce((sum, [, day]) => sum + day.dollars, 0) + (byDate._?.dollars ?? 0)),
+    hours: money(export15Hours || datedHours),
+    dollars: money(export15Dollars || datedDollars),
     headcount: days.reduce((sum, [, day]) => Math.max(sum, day.headcount), 0),
     byDate,
   };
@@ -440,10 +606,14 @@ export function deskBudgetFromPack(input: DeskPackageInput): CostBudget {
     hours,
     changeOrders: input.changeOrders ?? 0,
   });
+  const changeOrders = money(input.changeOrders ?? 0);
   return {
     total: money(breakdown.total),
     hours: Math.max(0, breakdown.hours),
     lines: breakdown.lines,
+    lanes: pprLanesFromPack(input),
+    originalTotal: money(breakdown.total - changeOrders),
+    changeOrders,
   };
 }
 
@@ -605,8 +775,19 @@ export function saveCostSnapshot(
     notes: book.notes,
     budget,
     actuals,
-    export15: { raw: book.export15.raw, rows: book.export15.rows.map((row) => ({ ...row })) },
-    export16: { raw: book.export16.raw, rows: book.export16.rows.map((row) => ({ ...row })) },
+    export15: {
+      raw: book.export15.raw,
+      rows: book.export15.rows.map((row) => ({ ...row })),
+      headers: [...(book.export15.headers ?? [])],
+      grid: (book.export15.grid ?? []).map((row) => [...row]),
+    },
+    export16: {
+      raw: book.export16.raw,
+      rows: book.export16.rows.map((row) => ({ ...row })),
+      headers: [...(book.export16.headers ?? [])],
+      grid: (book.export16.grid ?? []).map((row) => [...row]),
+    },
+    schedule: hydrateScheduleKpi(book.schedule),
   };
   const snapshots = [snapshot, ...book.snapshots.filter((row) => row.statusDate !== statusDate)];
   return { ...book, statusDate, snapshots };
@@ -619,9 +800,25 @@ export function openCostSnapshot(book: CostReportBook, snapshotId: string): Cost
     ...book,
     statusDate: shot.statusDate,
     notes: shot.notes,
-    export15: { raw: shot.export15.raw, rows: shot.export15.rows.map((row) => ({ ...row })) },
-    export16: { raw: shot.export16.raw, rows: shot.export16.rows.map((row) => ({ ...row })) },
+    export15: {
+      raw: shot.export15.raw,
+      rows: shot.export15.rows.map((row) => ({ ...row })),
+      headers: [...(shot.export15.headers ?? [])],
+      grid: (shot.export15.grid ?? []).map((row) => [...row]),
+    },
+    export16: {
+      raw: shot.export16.raw,
+      rows: shot.export16.rows.map((row) => ({ ...row })),
+      headers: [...(shot.export16.headers ?? [])],
+      grid: (shot.export16.grid ?? []).map((row) => [...row]),
+    },
+    schedule: hydrateScheduleKpi(shot.schedule),
   };
+}
+
+/** Fill existing Schedule KPI fields from a parsed 01 DailyReport_TOTAL Summary. */
+export function applyDailyReportTotal(book: CostReportBook, parsed: DailyReportParse): CostReportBook {
+  return { ...book, schedule: scheduleKpiFromDailyReport(parsed, book.schedule) };
 }
 
 export type LiveCostJob = {

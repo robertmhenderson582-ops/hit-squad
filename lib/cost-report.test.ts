@@ -10,18 +10,22 @@ import {
   costActualsFromPastes,
   costReportHasWork,
   deskBudgetFromPack,
+  applyDailyReportTotal,
   emptyCostReportBook,
   estimateCurveFromCrew,
   hydrateCostReport,
+  hydrateScheduleKpi,
   latestSnapshotForDate,
   liveCostJobs,
   openCostSnapshot,
   parseTurnipPaste,
   readCostReport,
   saveCostSnapshot,
+  scheduleKpiEntered,
   writeCostReport,
   COST_REPORT_STORE_PREFIX,
 } from "./cost-report.ts";
+import { parseDailyReportSummaryGrid } from "./daily-report-total.ts";
 import { deskPackageBreakdown, deskPackageTotal } from "./estimate-desk-total.ts";
 import { computeRangeHours } from "./hours-clock.ts";
 
@@ -90,6 +94,23 @@ describe("Turnip T3 Export 15 / 16 paste", () => {
     assert.equal(paste.rows[0]?.ot, 2);
   });
 
+  it("parses T3 Export 15 ClientActual field names and WO codes", () => {
+    const paste = parseTurnipPaste(
+      [
+        "ChargeCode\tWO_Description\tLaborTotal_ClientActual_Units\tLaborTotal_ClientActual_Dollars\tPD_ClientActual_Dollars\tOther_ClientActual_Units\tTotalDollars_ClientActual",
+        "100\tDirect\t20\t2200\t0\t0\t2200",
+        "505\tPer Diem\t0\t0\t390\t0\t390",
+      ].join("\n"),
+      "15",
+    );
+    assert.equal(paste.rows[0]?.code, "100");
+    assert.equal(paste.rows[0]?.hours, 20);
+    assert.equal(paste.rows[0]?.dollars, 2200);
+    assert.equal(paste.rows[0]?.lane, "direct");
+    assert.equal(paste.rows[1]?.pdDollars, 390);
+    assert.ok(paste.headers.includes("LaborTotal_ClientActual_Units"));
+  });
+
   it("parses Export 16 dollars", () => {
     const paste = parseTurnipPaste("Date,Craft,Amount\n09/01/2026,PF,$12500.50\n09/02/2026,PF,8000", "16");
     const actuals = costActualsFromPastes({ raw: "", rows: [] }, paste, "2026-09-02");
@@ -140,6 +161,78 @@ describe("dated history snapshots", () => {
     assert.equal(reopened.notes, "Monday PPR");
     assert.equal(reopened.export15.rows.length, 1);
     assert.equal(costReportHasWork(reopened), true);
+  });
+
+  it("saves and reloads scheduler earned KPIs with the daily snapshot", () => {
+    const schedule = hydrateScheduleKpi({
+      earnedHours: 126,
+      plannedHours: 168,
+      targetHours: 280,
+      incEarned: 42,
+      notes: "01 DailyReport_TOTAL Grand Total",
+      areas: [{ area: "Boiler A", earnedHours: 80, planPct: 0.4 }],
+    });
+    let book = {
+      ...emptyCostReportBook(),
+      statusDate: "2026-09-03",
+      notes: "Wednesday",
+      schedule,
+    };
+    book = saveCostSnapshot(book, { total: 100, hours: 280, lines: [] }, 3);
+    assert.equal(book.snapshots[0]?.schedule.earnedHours, 126);
+    assert.equal(book.snapshots[0]?.schedule.incEarned, 42);
+    assert.equal(book.snapshots[0]?.schedule.plannedHours, 168);
+    assert.equal(book.snapshots[0]?.schedule.areas[0]?.area, "Boiler A");
+    const store = memoryStore();
+    writeCostReport("new:kpi-job", book, store);
+    const got = readCostReport("new:kpi-job", store);
+    assert.equal(got.schedule.earnedHours, 126);
+    assert.equal(got.snapshots[0]?.schedule.earnedHours, 126);
+    const opened = openCostSnapshot(got, got.snapshots[0]!.id);
+    assert.equal(opened.schedule.incEarned, 42);
+    assert.equal(scheduleKpiEntered(opened.schedule), true);
+  });
+
+  it("upload of DailyReport_TOTAL fills the same Schedule KPI store", () => {
+    const grid: unknown[][] = [];
+    grid[33] = [];
+    grid[33][2] = "Phase";
+    grid[33][3] = "Target Mhr";
+    grid[33][7] = "Planned Mhr";
+    grid[33][8] = "Earned Mhr";
+    grid[33][9] = "Plan %";
+    grid[33][10] = "Actual %";
+    grid[33][13] = "Inc Actual";
+    for (const [index, code] of ["PRE", "SD", "TA", "SU", "POST"].entries()) {
+      grid[34 + index] = [];
+      grid[34 + index]![2] = code;
+      grid[34 + index]![8] = 10;
+    }
+    grid[39] = [];
+    grid[39][2] = "Grand Total";
+    grid[39][3] = 200;
+    grid[39][7] = 168;
+    grid[39][8] = 126;
+    grid[39][9] = 0.6;
+    grid[39][10] = 0.45;
+    grid[39][13] = 42;
+    const book = applyDailyReportTotal(emptyCostReportBook(), parseDailyReportSummaryGrid(grid));
+    assert.equal(book.schedule.earnedHours, 126);
+    assert.equal(book.schedule.plannedHours, 168);
+    assert.equal(book.schedule.targetHours, 200);
+    assert.equal(book.schedule.incEarned, 42);
+    assert.equal(book.schedule.earnedPct, 0.45);
+    assert.equal(scheduleKpiEntered(book.schedule), true);
+    const stored = saveCostSnapshot(book, { total: 100, hours: 280, lines: [] }, 4);
+    assert.equal(stored.snapshots[0]?.schedule.earnedHours, 126);
+  });
+
+  it("counts typed scheduler KPI as cost-report work", () => {
+    assert.equal(costReportHasWork(emptyCostReportBook()), false);
+    assert.equal(
+      costReportHasWork(hydrateCostReport({ schedule: { earnedHours: 12 } })),
+      true,
+    );
   });
 
   it("read/write persists the book on the estimate key", () => {
@@ -230,6 +323,7 @@ describe("hydrate + live job list", () => {
     const detail = readFileSync(fileURLToPath(new URL("../components/EstimateDetail.tsx", import.meta.url)), "utf8");
     const desk = readFileSync(fileURLToPath(new URL("../components/CostDesk.tsx", import.meta.url)), "utf8");
     const report = readFileSync(fileURLToPath(new URL("../components/CostReportDesk.tsx", import.meta.url)), "utf8");
+    const parked = readFileSync(fileURLToPath(new URL("./cost-report.ts", import.meta.url)), "utf8");
     assert.match(workspace, /id: "cost-report"/);
     assert.match(workspace, /label: "Cost report"/);
     assert.match(detail, /tab === "cost-report"/);
@@ -242,6 +336,22 @@ describe("hydrate + live job list", () => {
     assert.match(report, /downloadXlsx/);
     assert.match(report, /Excel export/);
     assert.match(report, /company-logo/);
+    assert.match(report, /Schedule \/ Progress/);
+    assert.match(report, /Earned Mhr/);
+    assert.match(report, /Planned Mhr/);
+    assert.match(report, /Target Mhr/);
+    assert.match(report, /Earned % \/ Actual %/);
+    assert.match(report, /Plan %/);
+    assert.match(report, /DAILY_REPORT_TOTAL_FILE/);
+    assert.match(report, /Upload DailyReport_TOTAL/);
+    assert.match(report, /applyDailyReportTotal/);
+    assert.match(report, /parseDailyReportTotalXlsx/);
+    assert.match(report, /SCHEDULE_KPI_STANDIN_NOTE/);
+    assert.match(report, /SCHEDULE_KPI_UPLOAD_NOTE/);
+    assert.match(report, /DAILY_REPORT_PHASES/);
+    assert.match(parked, /Slicer Hrs tab/);
+    assert.equal(/DailyReport_TOTAL upload \(Summary/.test(parked), false);
+    assert.equal(/un-hide Slicer|unhide Slicer/i.test(report), false);
     assert.equal(/DT after 12 rewrite|turn 12s into DT/.test(report), true);
   });
 });
