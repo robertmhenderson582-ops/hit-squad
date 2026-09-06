@@ -2,7 +2,7 @@
  * HTML preview of the SAMPLE PPR workbook for Look screenshots.
  * Reads the generated .xlsx — does not invent a second layout.
  * Excel charts are native OOXML; this page draws SVG from _ChartData so
- * Robert can see the subcontractor pie without opening Excel.
+ * Robert can see the full cost-area board without opening Excel.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -174,8 +174,17 @@ const vendors = pairs(data, "A", "B");
 const mixLabels = pairs(data, "D", "E").map((item) => item.label);
 const mixBudget = pairs(data, "D", "E").map((item) => item.value);
 const mixActual = pairs(data, "D", "F").map((item) => item.value);
-const expended = pairs(data, "H", "I");
-const crafts = pairs(data, "K", "L");
+const directCrafts = pairs(data, "H", "I");
+const indirect = pairs(data, "L", "M");
+const pdLabels = pairs(data, "P", "Q").map((item) => item.label);
+const pdBudget = pairs(data, "P", "Q").map((item) => item.value);
+const pdActual = pairs(data, "P", "R").map((item) => item.value);
+const equipLabels = pairs(data, "T", "U").map((item) => item.label);
+const equipBudget = pairs(data, "T", "U").map((item) => item.value);
+const equipActual = pairs(data, "T", "V").map((item) => item.value);
+const materials = pairs(data, "X", "Y");
+const hours = pairs(data, "AB", "AC");
+const headcount = pairs(data, "AB", "AD");
 
 const html = `<!doctype html>
 <html><head><meta charset="utf-8"><title>SAMPLE Cost PPR preview</title>
@@ -184,7 +193,7 @@ const html = `<!doctype html>
   header.dash { background: ${STEEL}; color: #fff; padding: 18px 22px; }
   header.dash h1 { margin: 0 0 6px; font-size: 28px; }
   header.dash p { margin: 0; opacity: .9; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; padding: 16px; }
   .tile { background: #fff; margin: 0; padding: 10px 12px 14px; box-shadow: 0 1px 6px rgba(0,0,0,.12); }
   .tile h2 { color: ${STEEL}; font-size: 15px; margin: 0 0 8px; }
   .legend { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
@@ -201,20 +210,34 @@ const html = `<!doctype html>
   <p>${shown(charts.getCell("A3"))} · ${shown(charts.getCell("A5"))}</p>
 </header>
 <div class="grid" id="charts">
-  ${doughnutSvg(vendors, "Subcontractor costs — live pack by vendor")}
+  ${doughnutSvg(mixLabels.map((label, i) => ({ label, value: mixBudget[i] ?? 0 })), "Job cost mix — Current Forecast by area")}
   ${barSvg(mixLabels, [
     { name: "Current Forecast $", values: mixBudget, color: STEEL },
     { name: "Expended $", values: mixActual, color: AMBER },
-  ], "Cost element mix — Current Forecast vs Expended")}
+  ], "Forecast vs Expended — all cost areas")}
+  ${doughnutSvg(directCrafts, "Direct craft labor — by craft (Forecast $)")}
+  ${doughnutSvg(indirect, "Indirect labor — Foremen / Support / Staff")}
+  ${barSvg(pdLabels, [
+    { name: "Current Forecast $", values: pdBudget, color: STEEL },
+    { name: "Expended $", values: pdActual, color: AMBER },
+  ], "Per diem and travel — Forecast vs Expended")}
+  ${doughnutSvg(vendors, "Subcontractor costs — live pack by vendor")}
+  ${barSvg(equipLabels, [
+    { name: "Current Forecast $", values: equipBudget, color: STEEL },
+    { name: "Expended $", values: equipActual, color: AMBER },
+  ], "Equipment and rentals — COE vs 3rd Party")}
+  ${doughnutSvg(materials, "Materials and other reimbursables — Forecast $")}
+  ${doughnutSvg(mixLabels.map((label, i) => ({ label, value: mixActual[i] ?? 0 })), "Where the money went — expended by area")}
   ${barSvg(
-    expended.map((item) => item.label),
-    [{ name: "Expended $", values: expended.map((item) => item.value), color: STEEL }],
-    "Dollars expended to date — major PPR rows",
+    hours.map((item) => item.label),
+    [{ name: "Hours", values: hours.map((item) => item.value), color: AMBER }],
+    "Hours by craft — T3 Export 16 Units",
+    false,
   )}
   ${barSvg(
-    crafts.map((item) => item.label),
-    [{ name: "Hours", values: crafts.map((item) => item.value), color: AMBER }],
-    "Hours by craft — T3 Export 16 Units",
+    headcount.map((item) => item.label),
+    [{ name: "Headcount", values: headcount.map((item) => item.value), color: STEEL }],
+    "Peak headcount by craft — T3 Export 16",
     false,
   )}
 </div>
