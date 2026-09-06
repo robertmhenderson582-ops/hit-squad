@@ -14,6 +14,7 @@ import {
 } from "./cost-report.ts";
 import { TURNIP15_HEADERS, TURNIP16_HEADERS } from "./cost-report-ppr.ts";
 import type { CostReportXlsxInput } from "./cost-report-xlsx.ts";
+import type { SubSheet } from "./subcontractor.ts";
 
 const SITE = "Wood River — Roxana, IL";
 const CLIENT = "Sample Refinery";
@@ -51,7 +52,7 @@ export function sampleCostReportInput(): CostReportXlsxInput {
     support: [craft("Firewatch", "2026-09-01", "2026-09-04", 2, 10)],
     otAfter8: true,
   };
-  const subcontractor = {
+  const subcontractor: SubSheet = {
     lines: [
       { id: "sub-nde", vendor: "SAMPLE NDE", scope: "RT / PT", qty: 1, unit: "LS", rate: 6500 },
       { id: "sub-insul", vendor: "SAMPLE Insulation", scope: "Boiler wrap", qty: 1, unit: "LS", rate: 4200 },

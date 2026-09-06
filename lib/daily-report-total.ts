@@ -245,7 +245,7 @@ function readRow(grid: unknown[][], row: number, labelCol: number, cols: ColMap,
   };
 }
 
-export function parseDailyReportSummaryGrid(grid: unknown[][], sheet = DAILY_REPORT_TOTAL_SHEETS.summary): DailyReportParse {
+export function parseDailyReportSummaryGrid(grid: unknown[][], sheet: string = DAILY_REPORT_TOTAL_SHEETS.summary): DailyReportParse {
   const hits: Array<{ row: number; col: number; token: { code: DailyReportPhaseCode | null; grandTotal: boolean } }> = [];
   for (let row = 1; row < grid.length; row += 1) {
     const line = grid[row] ?? [];

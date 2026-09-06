@@ -235,8 +235,8 @@ function crewLaneHoursDollars(
   let dollars = 0;
   const crafts: CostBudgetLane[] = [];
   const opts = wageLookupOpts(site);
-  for (const row of rows ?? []) {
-    if (!row.position?.trim()) continue;
+  (rows ?? []).forEach((row, index) => {
+    if (!row.position?.trim()) return;
     const split = computeRowHours(row, site, client, otAfter8, "", holidays);
     const title = shahanCrewTitle(row);
     const amount = shahanCrewCostAmount(title, split, {
@@ -246,13 +246,13 @@ function crewLaneHoursDollars(
     hrs += split.hours;
     dollars += amount;
     crafts.push({
-      id: `craft:${row.id || title}`,
+      id: `craft:${title || row.position.trim()}:${index}`,
       lane: "craft",
       label: row.position.trim(),
       dollars: money(amount),
       hours: hours(split.hours),
     });
-  }
+  });
   return { hours: hours(hrs), dollars: money(dollars), crafts };
 }
 
