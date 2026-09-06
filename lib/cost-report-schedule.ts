@@ -6,6 +6,8 @@
  */
 import {
   DAILY_REPORT_UPLOAD_NOTE,
+  dailyReportToKpiPatch,
+  type DailyReportParse,
   type DailyReportPhaseCode,
 } from "./daily-report-total.ts";
 
@@ -204,6 +206,15 @@ export const SCHEDULE_KPI_ACTIVE_NOTE =
   "Earned Mhr from 01 DailyReport_TOTAL KPI on Cost report (Summary Phase Grand Total). Physical % = earned / Direct budget hours (hours win if Earned % was also typed). Support earned = Direct % × Support budget hours.";
 
 export const SCHEDULE_KPI_UPLOAD_NOTE = DAILY_REPORT_UPLOAD_NOTE;
+
+export function scheduleKpiFromDailyReport(parsed: DailyReportParse, prior?: ScheduleKpi | null): ScheduleKpi {
+  const patch = dailyReportToKpiPatch(parsed);
+  return hydrateScheduleKpi({
+    ...(prior ?? emptyScheduleKpi()),
+    ...patch,
+    notes: prior?.notes?.trim() || `${parsed.sheet} Phase Grand Total`,
+  });
+}
 
 /** @deprecated Day-1 alias — prefer ScheduleKpiArea */
 export type ScheduleKpiUnit = ScheduleKpiArea;

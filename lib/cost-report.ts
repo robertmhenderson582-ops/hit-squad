@@ -24,8 +24,10 @@ import {
   emptyScheduleKpi,
   hydrateScheduleKpi,
   scheduleKpiEntered,
+  scheduleKpiFromDailyReport,
   type ScheduleKpi,
 } from "./cost-report-schedule.ts";
+import type { DailyReportParse } from "./daily-report-total.ts";
 
 export {
   emptyScheduleKpi,
@@ -33,6 +35,7 @@ export {
   parsePhysicalPct,
   resolveScheduleEarned,
   scheduleAreaHours,
+  scheduleKpiFromDailyReport,
   scheduleKpiEntered,
   scheduleUnitHours,
   SCHEDULE_KPI_ACTIVE_NOTE,
@@ -49,6 +52,7 @@ export {
   DAILY_REPORT_PHASES,
   DAILY_REPORT_TOTAL_FILE,
   DAILY_REPORT_UPLOAD_NOTE,
+  type DailyReportParse,
 } from "./daily-report-total.ts";
 
 export { COST_REPORT_STORE_PREFIX };
@@ -61,8 +65,7 @@ export const COST_REPORT_PARKED = [
   "Full CPI / SPI earned-value table",
   "SCR page",
   "P66 Progress book",
-  "01 DailyReport_TOTAL upload (Summary Phase Grand Total → KPI)",
-  "Slicer Hrs tab (until DailyReport_TOTAL upload exists)",
+  "Slicer Hrs tab (until later DailyReport_TOTAL sheets exist)",
   "Typed time-entry UI (Turnip 15 / 16 paste stays the ingest)",
 ] as const;
 
@@ -811,6 +814,11 @@ export function openCostSnapshot(book: CostReportBook, snapshotId: string): Cost
     },
     schedule: hydrateScheduleKpi(shot.schedule),
   };
+}
+
+/** Fill existing Schedule KPI fields from a parsed 01 DailyReport_TOTAL Summary. */
+export function applyDailyReportTotal(book: CostReportBook, parsed: DailyReportParse): CostReportBook {
+  return { ...book, schedule: scheduleKpiFromDailyReport(parsed, book.schedule) };
 }
 
 export type LiveCostJob = {

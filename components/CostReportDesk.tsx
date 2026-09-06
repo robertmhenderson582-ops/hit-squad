@@ -11,6 +11,7 @@ import {
   DAILY_REPORT_PHASES,
   DAILY_REPORT_TOTAL_FILE,
   SCHEDULE_KPI_UPLOAD_NOTE,
+  applyDailyReportTotal,
   applyTurnipPaste,
   buildCostCurve,
   costActualsFromPastes,
@@ -34,6 +35,13 @@ import {
   type ScheduleKpiArea,
   type TurnipExportKind,
 } from "@/lib/cost-report";
+import {
+  DAILY_REPORT_PARSE_ERROR,
+  DailyReportParseError,
+  dailyReportPreviewLines,
+  parseDailyReportTotalXlsx,
+  type DailyReportParse,
+} from "@/lib/daily-report-total";
 import { costReportToXlsx, costReportXlsxFilename } from "@/lib/cost-report-xlsx";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { companyLogoFromApiPayload } from "@/lib/estimate-company-logo";
@@ -157,6 +165,10 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
   const [exportBusy, setExportBusy] = useState(false);
   const file15 = useRef<HTMLInputElement>(null);
   const file16 = useRef<HTMLInputElement>(null);
+  const fileDaily = useRef<HTMLInputElement>(null);
+  const [dailyError, setDailyError] = useState("");
+  const [dailyBusy, setDailyBusy] = useState(false);
+  const [pendingDaily, setPendingDaily] = useState<DailyReportParse | null>(null);
 
   useEffect(() => {
     function load() {
@@ -236,6 +248,29 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
   async function ingest(kind: TurnipExportKind, file: File | null) {
     if (!file) return;
     persist(applyTurnipPaste(book, kind, await textFromUpload(file)));
+  }
+
+  async function ingestDailyReport(file: File | null) {
+    if (!file || dailyBusy) return;
+    setDailyError("");
+    setPendingDaily(null);
+    setDailyBusy(true);
+    try {
+      const parsed = await parseDailyReportTotalXlsx(await file.arrayBuffer());
+      setPendingDaily(parsed);
+    } catch (error) {
+      setPendingDaily(null);
+      setDailyError(error instanceof DailyReportParseError ? error.message : DAILY_REPORT_PARSE_ERROR);
+    } finally {
+      setDailyBusy(false);
+    }
+  }
+
+  function applyPendingDaily() {
+    if (!pendingDaily) return;
+    persist(applyDailyReportTotal(book, pendingDaily));
+    setPendingDaily(null);
+    setDailyError("");
   }
 
   async function exportWorkbook() {
@@ -336,6 +371,57 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
           typed).
         </p>
         <p className="mt-2 text-sm text-[#5b6f73]">{SCHEDULE_KPI_UPLOAD_NOTE}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => fileDaily.current?.click()}
+            disabled={dailyBusy}
+            className="rounded-lg border border-steel px-3 py-1.5 text-sm text-steel"
+          >
+            {dailyBusy ? "Reading…" : "Upload DailyReport_TOTAL"}
+          </button>
+          <input
+            ref={fileDaily}
+            type="file"
+            accept=".xlsx,.xls,.xlsm"
+            className="hidden"
+            onChange={(event) => {
+              void ingestDailyReport(event.target.files?.[0] ?? null);
+              event.target.value = "";
+            }}
+          />
+        </div>
+        {dailyError ? (
+          <p className="mt-2 text-sm text-amber-flare" role="alert">
+            {dailyError}
+          </p>
+        ) : null}
+        {pendingDaily ? (
+          <div className="mt-3 rounded-sm border border-[#c5d4d4] bg-[#fbf8f0] px-4 py-3">
+            <p className="text-xs tracking-[0.1em] text-[#5b6f73]">PREVIEW — APPLY TO OVERWRITE KPI FIELDS</p>
+            <ul className="mt-2 space-y-1 text-sm text-[#163038]">
+              {dailyReportPreviewLines(pendingDaily).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={applyPendingDaily}
+                className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white"
+              >
+                Apply Grand Total
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingDaily(null)}
+                className="rounded-lg border border-steel px-3 py-1.5 text-sm text-steel"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
         {!kpiOn ? (
           <p className="mt-3 text-sm text-[#5b6f73]">{SCHEDULE_KPI_STANDIN_NOTE}</p>
         ) : (

@@ -6,6 +6,7 @@ import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { blankCraftRow, blankRange } from "./craft-labor.ts";
 import {
+  applyDailyReportTotal,
   applyTurnipPaste,
   deskBudgetFromPack,
   emptyCostReportBook,
@@ -14,6 +15,7 @@ import {
   parseTurnipPaste,
   saveCostSnapshot,
 } from "./cost-report.ts";
+import { parseDailyReportSummaryGrid } from "./daily-report-total.ts";
 import {
   PPR_EARNED_NOTE,
   PPR_REPORT_TITLE,
@@ -258,6 +260,36 @@ describe("cost report Excel export", () => {
     const craft = parseTurnipPaste("event_dt\tUnits\n09/01/2026\t12", "16");
     assert.equal(craft.rows[0]?.date, "2026-09-01");
     assert.equal(craft.rows[0]?.hours, 12);
+  });
+
+  it("DailyReport_TOTAL Grand Total upload drives PPR Earned off expended", () => {
+    const input = fixtureBook();
+    const grid: unknown[][] = [];
+    grid[33] = [];
+    grid[33][2] = "Phase";
+    grid[33][3] = "Target Mhr";
+    grid[33][7] = "Planned Mhr";
+    grid[33][8] = "Earned Mhr";
+    grid[33][10] = "Actual %";
+    grid[33][13] = "Inc Actual";
+    for (const [index, code] of ["PRE", "SD", "TA", "SU", "POST"].entries()) {
+      grid[34 + index] = [];
+      grid[34 + index]![2] = code;
+      grid[34 + index]![8] = 2;
+    }
+    grid[39] = [];
+    grid[39][2] = "Grand Total";
+    grid[39][3] = 40;
+    grid[39][7] = 20;
+    grid[39][8] = 10;
+    grid[39][10] = 0.25;
+    grid[39][13] = 4;
+    const book = applyDailyReportTotal(input.book, parseDailyReportSummaryGrid(grid));
+    const lines = buildPprLines(input.budget, book);
+    const craft = lines.find((line) => line.label === "Pipefitter Journeyman");
+    assert.ok(craft);
+    assert.equal(craft.earnedHoursToDate, 10);
+    assert.notEqual(craft.earnedHoursToDate, craft.expendedHoursToDate);
   });
 
   it("scheduler KPI drives Direct earned off the expended stand-in", () => {
