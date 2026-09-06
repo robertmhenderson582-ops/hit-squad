@@ -22,6 +22,8 @@ describe("crew card grand totals", () => {
     assert.match(rail, /Estimate total/);
     assert.match(rail, /deskPackageBreakdown/);
     assert.match(rail, /markable/);
+    assert.match(rail, /Hide/);
+    assert.match(rail, /Show estimate total/);
 
     const hours = { st: 10, ot: 2, dt: 0 };
     const amount = shahanCrewCostAmount("Manager, Project 01", hours);
