@@ -197,7 +197,8 @@ describe("Purchasing Day-1 ledger", () => {
     assert.match(desk, /PURCHASING_INTERNAL_NOTE/);
     assert.match(cost, /not written into client Cost \/ PPR Excel/);
     assert.match(cost, /print-hide/);
-    assert.equal(/purchas|consumable|small.?tool/i.test(costXlsx), false);
+    assert.match(costXlsx, /INTERNAL FIREWALL/);
+    assert.doesNotMatch(costXlsx, /purchasingCostSlice|PURCHASING_|PurchaseLine|hs_purchasing|Purchases sheet/);
     assert.equal(/purchas/i.test(estimateXlsx), false);
   });
 });
