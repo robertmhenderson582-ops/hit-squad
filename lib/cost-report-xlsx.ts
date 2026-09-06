@@ -3,7 +3,7 @@
  * Total Project PPR is Mike’s dense multi-header print sheet.
  * Budget cells are values from the live desk pack — never Mike’s Estimate
  * Summary Excel links. Actuals / earned come from Turnip 15 / 16 ClientActual
- * fields. Cover + PPR + Hrs S-curve + Report log are the send package.
+ * fields. Charts lead the send package; Cover + PPR + Hrs S-curve + Report log follow.
  */
 import {
   ESTIMATE_EXPORT_BRAND,
@@ -34,20 +34,24 @@ import {
   pprTotalLine,
   type PprComputedLine,
 } from "./cost-report-ppr.ts";
+import { lineAmount, subCardTotal, type SubSheet } from "./subcontractor.ts";
 import { buildWorkbook, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
-import { embedHoursSCurveChart } from "./xlsx-s-curve-chart.ts";
+import { CHART_AMBER, CHART_STEEL, embedWorkbookCharts, type ChartEmbed } from "./xlsx-charts.ts";
 import { slugify } from "./estimate-pack.ts";
 
 export const COST_XLSX_SHEETS = {
+  charts: "Charts",
   cover: "Cover",
   ppr: "Total Project PPR",
   curve: "Hrs S-curve",
   log: "Report log",
   export15: "T3 Export 15",
   export16: "T3 Export 16",
+  chartData: "_ChartData",
 } as const;
 
 export const COST_XLSX_CLIENT_SHEETS = [
+  COST_XLSX_SHEETS.charts,
   COST_XLSX_SHEETS.cover,
   COST_XLSX_SHEETS.ppr,
   COST_XLSX_SHEETS.curve,
@@ -55,6 +59,7 @@ export const COST_XLSX_CLIENT_SHEETS = [
 ] as const;
 
 export const COST_XLSX_APPENDIX_SHEETS = [COST_XLSX_SHEETS.export15, COST_XLSX_SHEETS.export16] as const;
+export const COST_XLSX_HIDDEN_SHEETS = [COST_XLSX_SHEETS.chartData] as const;
 
 export const COST_EXPORT_BRAND = ESTIMATE_EXPORT_BRAND;
 export const COST_EXPORT_PRODUCER = ESTIMATE_EXPORT_PRODUCER;
@@ -82,6 +87,8 @@ export type CostReportXlsxInput = {
   companyLogo?: string | null;
   /** Synthetic Look QA package — watermark only, never real P66 dollars. */
   sample?: boolean;
+  /** Live pack Subcontractor sheet — vendor slices for the doughnut. */
+  subcontractor?: SubSheet;
 };
 
 function pushText(cells: SheetCell[], ref: string, value: string) {
@@ -122,6 +129,79 @@ function quoteSheet(name: string) {
 
 export function pprSheetRef(ref: string) {
   return `${quoteSheet(COST_XLSX_SHEETS.ppr)}!${ref}`;
+}
+
+export function chartDataRange(col: string, first: number, last: number) {
+  return `${quoteSheet(COST_XLSX_SHEETS.chartData)}!$${col}$${first}:$${col}$${last}`;
+}
+
+function curveSheetRange(col: string, first: number, last: number) {
+  return `${quoteSheet(COST_XLSX_SHEETS.curve)}!$${col}$${first}:$${col}$${last}`;
+}
+
+const MIX_ELEMENTS: Array<{ label: string; ids: string[] }> = [
+  { label: "Direct Labor", ids: ["sub-direct"] },
+  { label: "Indirect", ids: ["foremen", "support", "staff", "perDiem", "travel", "weather", "onboarding"] },
+  { label: "Equipment", ids: ["coe"] },
+  { label: "Subcontractors", ids: ["subs"] },
+  { label: "Materials", ids: ["materials"] },
+  { label: "Other", ids: ["rentals"] },
+];
+
+const EXPENDED_ROWS: Array<{ label: string; ids: string[] }> = [
+  { label: "Direct Labor", ids: ["sub-direct"] },
+  { label: "Indirect", ids: ["foremen", "support", "staff", "perDiem", "travel", "weather", "onboarding"] },
+  { label: "Equipment", ids: ["coe"] },
+  { label: "Subcontractors", ids: ["subs"] },
+  { label: "Materials", ids: ["materials"] },
+  { label: "3rd Party Rentals", ids: ["rentals"] },
+];
+
+function pprRowById(input: CostReportXlsxInput) {
+  const { lines, first } = pprLayout(input);
+  const map = new Map<string, number>();
+  lines.forEach((line, index) => map.set(line.id, first + index));
+  return map;
+}
+
+function pprSumFormula(col: string, rows: number[]) {
+  const refs = rows.filter((row) => row > 0).map((row) => pprSheetRef(`${col}${row}`));
+  if (!refs.length) return "0";
+  if (refs.length === 1) return refs[0]!;
+  return `SUM(${refs.join(",")})`;
+}
+
+export function subcontractorSlices(input: CostReportXlsxInput): { vendor: string; amount: number }[] {
+  const map = new Map<string, number>();
+  for (const line of input.subcontractor?.lines ?? []) {
+    const vendor = (line.vendor || line.scope || "Subcontractor").trim();
+    const amount = lineAmount(line);
+    if (!vendor || !(amount > 0)) continue;
+    map.set(vendor, (map.get(vendor) ?? 0) + amount);
+  }
+  for (const card of input.subcontractor?.cards ?? []) {
+    const vendor = (card.vendor || "Subcontractor").trim();
+    const amount = subCardTotal(card, { site: input.site, client: input.client });
+    if (!vendor || !(amount > 0)) continue;
+    map.set(vendor, (map.get(vendor) ?? 0) + amount);
+  }
+  return [...map.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([vendor, amount]) => ({ vendor, amount }));
+}
+
+export function craftHoursSlices(paste: TurnipPaste): { craft: string; hours: number }[] {
+  const map = new Map<string, number>();
+  for (const row of paste.rows) {
+    const craft = (row.craft || "").trim();
+    const hours = row.hours || 0;
+    if (!craft || !(hours > 0)) continue;
+    map.set(craft, (map.get(craft) ?? 0) + hours);
+  }
+  return [...map.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 12)
+    .map(([craft, hours]) => ({ craft, hours }));
 }
 
 function jobLine(input: CostReportXlsxInput) {
@@ -225,7 +305,7 @@ function buildCoverSheet(input: CostReportXlsxInput): WorkbookSheet {
   pushText(
     cells,
     "A18",
-    "Budget from this job’s live estimate pack. Actuals from Turnip T3 Export 15 / 16 through the Status Date. Yellow = Expended. Cyan = Earned.",
+    "Charts lead the package. Budget from this job’s live estimate pack. Actuals from Turnip T3 Export 15 / 16 through the Status Date. Yellow = Expended. Cyan = Earned.",
   );
   return {
     name: COST_XLSX_SHEETS.cover,
@@ -578,17 +658,234 @@ function buildLogSheet(input: CostReportXlsxInput): WorkbookSheet {
   };
 }
 
+function rowsForIds(rowOf: Map<string, number>, ids: string[]) {
+  return ids.map((id) => rowOf.get(id) ?? 0).filter((row) => row > 0);
+}
+
+/** Chart source tables start on row 7 so instrument chrome (rows 1–6) cannot eat them. */
+const CHART_DATA_FIRST = 7;
+
+function buildChartDataSheet(input: CostReportXlsxInput): WorkbookSheet {
+  const cells: SheetCell[] = [];
+  const rowOf = pprRowById(input);
+  const vendors = subcontractorSlices(input);
+  const crafts = craftHoursSlices(input.book.export16);
+  const subsRow = rowOf.get("subs") ?? 0;
+
+  pushText(cells, "A1", COST_EXPORT_BRAND);
+  pushText(cells, "A2", "Chart source — hidden helper");
+  pushText(cells, "A3", "Ranges referenced by the Charts dashboard and Hrs S-curve.");
+  pushText(cells, "A6", "Vendor");
+  pushText(cells, "B6", "Amount");
+  if (vendors.length) {
+    vendors.forEach((slice, index) => {
+      const row = CHART_DATA_FIRST + index;
+      pushText(cells, `A${row}`, slice.vendor);
+      pushNum(cells, `B${row}`, slice.amount, moneyFmt());
+    });
+  } else {
+    pushText(cells, `A${CHART_DATA_FIRST}`, "Subcontractors");
+    pushFormula(cells, `B${CHART_DATA_FIRST}`, subsRow ? pprSheetRef(`D${subsRow}`) : "0", moneyFmt());
+  }
+
+  pushText(cells, "D6", "Cost element");
+  pushText(cells, "E6", "Budget $");
+  pushText(cells, "F6", "Actual $");
+  MIX_ELEMENTS.forEach((element, index) => {
+    const row = CHART_DATA_FIRST + index;
+    const pprRows = rowsForIds(rowOf, element.ids);
+    pushText(cells, `D${row}`, element.label);
+    pushFormula(cells, `E${row}`, pprSumFormula("D", pprRows), moneyFmt());
+    pushFormula(cells, `F${row}`, pprSumFormula("M", pprRows), moneyFmt());
+  });
+
+  pushText(cells, "H6", "PPR row");
+  pushText(cells, "I6", "Expended $");
+  EXPENDED_ROWS.forEach((element, index) => {
+    const row = CHART_DATA_FIRST + index;
+    const pprRows = rowsForIds(rowOf, element.ids);
+    pushText(cells, `H${row}`, element.label);
+    pushFormula(cells, `I${row}`, pprSumFormula("M", pprRows), moneyFmt());
+  });
+
+  pushText(cells, "K6", "Craft");
+  pushText(cells, "L6", "Hours");
+  if (crafts.length) {
+    crafts.forEach((slice, index) => {
+      const row = CHART_DATA_FIRST + index;
+      pushText(cells, `K${row}`, slice.craft);
+      pushNum(cells, `L${row}`, slice.hours, hoursFmt());
+    });
+  } else {
+    pushText(cells, `K${CHART_DATA_FIRST}`, "Craft hours");
+    pushNum(cells, `L${CHART_DATA_FIRST}`, 0, hoursFmt());
+  }
+
+  return {
+    name: COST_XLSX_SHEETS.chartData,
+    cells,
+    headerRows: [6],
+    veryHidden: true,
+  };
+}
+
+function buildChartsSheet(input: CostReportXlsxInput): WorkbookSheet {
+  const cells: SheetCell[] = [];
+  const { totalRow } = pprLayout(input);
+  const vendors = subcontractorSlices(input);
+  pushText(cells, "A1", COST_EXPORT_BRAND);
+  pushText(cells, "A2", jobLine(input) || COST_REPORT_NOUN);
+  pushText(cells, "A3", PPR_REPORT_TITLE);
+  pushText(cells, "A4", `${PPR_SHEET_ROLE}  ·  Job ${jobNumberOf(input)}  ·  ${yearOf(input)}  ·  ${input.site || ""}`);
+  pushText(
+    cells,
+    "A5",
+    [
+      `Status Date ${statusDateOf(input) || "—"}`,
+      estimateStatusOf(input) ? `${ESTIMATE_STATUS_LABEL}: ${estimateStatusOf(input)}` : "",
+      preparedByOf(input) ? `${ESTIMATE_PREPARED_BY_LABEL}: ${preparedByOf(input)}` : "",
+    ]
+      .filter(Boolean)
+      .join("  ·  "),
+  );
+  pushText(cells, "A6", sampleLabel(input) || COST_EXPORT_CONFIDENTIAL);
+  pushText(cells, "A7", "Visuals first. Dense PPR field grid and Turnip ClientActual pastes follow as the working appendix.");
+  pushText(cells, "A8", "Current Forecast $");
+  pushText(cells, "C8", "Dollars Expended To Date");
+  pushText(cells, "E8", "Physical % Complete");
+  pushText(cells, "G8", "Hours To Go");
+  pushFormula(cells, "A9", pprSheetRef(`D${totalRow}`), moneyFmt());
+  pushFormula(cells, "C9", pprSheetRef(`M${totalRow}`), moneyFmt());
+  pushFormula(cells, "E9", pprSheetRef(`Q${totalRow}`), pctFmt());
+  pushFormula(cells, "G9", pprSheetRef(`T${totalRow}`), hoursFmt());
+  pushText(cells, "A45", "Steel = live-pack estimate / budget  ·  Amber = Turnip expended  ·  Subcontractor doughnut from the live pack vendor sheet.");
+  pushText(cells, "P45", vendors[0]?.vendor || "Subcontractors");
+  return {
+    name: COST_XLSX_SHEETS.charts,
+    cells,
+    merges: ["A1:P1", "A2:P2", "A3:P3", "A4:P4", "A5:P5", "A6:P6", "A7:P7", "A45:O45"],
+    headerRows: [8],
+    chrome: "cover",
+    freeze: { ySplit: 6 },
+    printTitlesRow: "1:6",
+    fitToHeight: 1,
+  };
+}
+
+function vendorCount(input: CostReportXlsxInput) {
+  return Math.max(1, subcontractorSlices(input).length);
+}
+
+function craftCount(input: CostReportXlsxInput) {
+  return Math.max(1, craftHoursSlices(input.book.export16).length);
+}
+
+export function costReportChartEmbeds(input: CostReportXlsxInput, curve: CostCurvePoint[]): ChartEmbed[] {
+  const vendors = vendorCount(input);
+  const crafts = craftCount(input);
+  const mixLast = CHART_DATA_FIRST - 1 + MIX_ELEMENTS.length;
+  const expLast = CHART_DATA_FIRST - 1 + EXPENDED_ROWS.length;
+  const vendorLast = CHART_DATA_FIRST - 1 + vendors;
+  const craftLast = CHART_DATA_FIRST - 1 + crafts;
+  const embeds: ChartEmbed[] = [
+    {
+      kind: "doughnut",
+      title: "Subcontractor costs — live pack by vendor",
+      sheetName: COST_XLSX_SHEETS.charts,
+      catRef: chartDataRange("A", CHART_DATA_FIRST, vendorLast),
+      series: [{ name: "Subcontractor $", valRef: chartDataRange("B", CHART_DATA_FIRST, vendorLast) }],
+      fromCol: 0,
+      fromRow: 9,
+      toCol: 8,
+      toRow: 26,
+      showVal: true,
+      showPercent: true,
+      showCatName: false,
+      valFormat: "$#,##0",
+      sliceCount: vendors,
+    },
+    {
+      kind: "bar",
+      title: "Cost element mix — Current Forecast vs Expended",
+      sheetName: COST_XLSX_SHEETS.charts,
+      catRef: chartDataRange("D", CHART_DATA_FIRST, mixLast),
+      series: [
+        { name: "Current Forecast $", nameRef: chartDataRange("E", 6, 6), valRef: chartDataRange("E", CHART_DATA_FIRST, mixLast), color: CHART_STEEL },
+        { name: "Expended $", nameRef: chartDataRange("F", 6, 6), valRef: chartDataRange("F", CHART_DATA_FIRST, mixLast), color: CHART_AMBER },
+      ],
+      fromCol: 8,
+      fromRow: 9,
+      toCol: 16,
+      toRow: 26,
+      showVal: true,
+      valFormat: "$#,##0",
+      barDir: "col",
+      grouping: "clustered",
+    },
+    {
+      kind: "bar",
+      title: "Dollars expended to date — major PPR rows",
+      sheetName: COST_XLSX_SHEETS.charts,
+      catRef: chartDataRange("H", CHART_DATA_FIRST, expLast),
+      series: [{ name: "Expended $", valRef: chartDataRange("I", CHART_DATA_FIRST, expLast), color: CHART_STEEL }],
+      fromCol: 0,
+      fromRow: 26,
+      toCol: 8,
+      toRow: 43,
+      showVal: true,
+      valFormat: "$#,##0",
+      barDir: "col",
+    },
+    {
+      kind: "bar",
+      title: "Hours by craft — T3 Export 16 Units",
+      sheetName: COST_XLSX_SHEETS.charts,
+      catRef: chartDataRange("K", CHART_DATA_FIRST, craftLast),
+      series: [{ name: "Hours", valRef: chartDataRange("L", CHART_DATA_FIRST, craftLast), color: CHART_AMBER }],
+      fromCol: 8,
+      fromRow: 26,
+      toCol: 16,
+      toRow: 43,
+      showVal: true,
+      valFormat: "#,##0.0",
+      barDir: "col",
+    },
+  ];
+  const range = curveRange(curve);
+  if (range && range.lastRow >= range.firstRow + 1) {
+    embeds.push({
+      kind: "line",
+      title: "Hours S-curve — live-pack estimate vs T3 Export 16 actuals",
+      sheetName: COST_XLSX_SHEETS.curve,
+      catRef: curveSheetRange("A", range.firstRow, range.lastRow),
+      series: [
+        { name: "Estimate hours", valRef: curveSheetRange("D", range.firstRow, range.lastRow), color: CHART_STEEL },
+        { name: "Actual hours", valRef: curveSheetRange("E", range.firstRow, range.lastRow), color: CHART_AMBER },
+      ],
+      fromCol: 0,
+      fromRow: range.fromRow,
+      toCol: 7,
+      toRow: range.toRow,
+      valFormat: "#,##0.0",
+      catFormat: "YYYY-MM-DD",
+    });
+  }
+  return embeds;
+}
+
 export function buildCostReportWorkbook(input: CostReportXlsxInput): WorkbookSheet[] {
   const curve =
     input.curve ??
     buildCostCurve([], costActualsFromPastes(input.book.export15, input.book.export16, input.book.statusDate), input.book.statusDate);
   return [
+    buildChartsSheet(input),
     buildCoverSheet(input),
     buildPprSheet(input),
     buildCurveSheet(input, curve),
     buildLogSheet(input),
     buildTurnipSheet(COST_XLSX_SHEETS.export15, TURNIP15_TITLE, "15", input, input.book.export15),
     buildTurnipSheet(COST_XLSX_SHEETS.export16, TURNIP16_TITLE, "16", input, input.book.export16),
+    buildChartDataSheet(input),
   ];
 }
 
@@ -617,18 +914,7 @@ export async function costReportToXlsx(input: CostReportXlsxInput): Promise<Uint
   const curve =
     input.curve ??
     buildCostCurve([], costActualsFromPastes(input.book.export15, input.book.export16, input.book.statusDate), input.book.statusDate);
-  const range = curveRange(curve);
-  if (!range || range.lastRow < range.firstRow + 1) return bytes;
-  return embedHoursSCurveChart(bytes, {
-    sheetName: COST_XLSX_SHEETS.curve,
-    firstRow: range.firstRow,
-    lastRow: range.lastRow,
-    fromCol: 0,
-    fromRow: range.fromRow,
-    toCol: 7,
-    toRow: range.toRow,
-    title: "Hours S-curve — estimate vs actuals",
-  });
+  return embedWorkbookCharts(bytes, costReportChartEmbeds(input, curve));
 }
 
 export { pprTotalLine };

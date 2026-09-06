@@ -50,6 +50,15 @@ export function sampleCostReportInput(): CostReportXlsxInput {
     support: [craft("Firewatch", "2026-09-01", "2026-09-04", 2, 10)],
     otAfter8: true,
   };
+  const subcontractor = {
+    lines: [
+      { id: "sub-nde", vendor: "SAMPLE NDE", scope: "RT / PT", qty: 1, unit: "LS", rate: 6500 },
+      { id: "sub-insul", vendor: "SAMPLE Insulation", scope: "Boiler wrap", qty: 1, unit: "LS", rate: 4200 },
+      { id: "sub-scaffold", vendor: "SAMPLE Scaffold", scope: "Access", qty: 1, unit: "LS", rate: 3800 },
+      { id: "sub-crane", vendor: "SAMPLE Crane", scope: "Pick days", qty: 2, unit: "day", rate: 1850 },
+    ],
+    cards: [],
+  };
   const budget = deskBudgetFromPack({
     crew,
     client: CLIENT,
@@ -88,10 +97,7 @@ export function sampleCostReportInput(): CostReportXlsxInput {
       ],
       misc: [{ id: "misc-rod", item: "Welding rod", description: "SAMPLE rod", qty: 12, each: 85 }],
     },
-    subcontractor: {
-      lines: [{ id: "sub-nde", vendor: "SAMPLE NDE", scope: "RT / PT", qty: 1, unit: "LS", rate: 6500 }],
-      cards: [],
-    },
+    subcontractor,
     jobMeta: { staffPerDiemRate: 140, craftPerDiemRate: 130 },
   });
 
@@ -104,6 +110,7 @@ export function sampleCostReportInput(): CostReportXlsxInput {
     [721, "Materials", 0, 0, 0, 12, 980],
     [725, "3rd Party General Rentals", 0, 0, 0, 1, 2100],
     [727, "Company Owned Equipment", 0, 0, 0, 2, 1600],
+    [730, "Subcontractors", 0, 8200, 0, 0, 8200],
   ]);
   const export15Prior = tsv(TURNIP15_HEADERS, [
     [100, "Direct Labor", 84, 9240, 0, 0, 9240],
@@ -114,6 +121,7 @@ export function sampleCostReportInput(): CostReportXlsxInput {
     [721, "Materials", 0, 0, 0, 6, 490],
     [725, "3rd Party General Rentals", 0, 0, 0, 1, 1050],
     [727, "Company Owned Equipment", 0, 0, 0, 1, 800],
+    [730, "Subcontractors", 0, 4100, 0, 0, 4100],
   ]);
   const export16 = tsv(TURNIP16_HEADERS, [
     ["2026-09-01", "Pipefitter Journeyman", "SAMPLE-101", 40, 32, 8, 0, 100, 4],
@@ -175,5 +183,6 @@ export function sampleCostReportInput(): CostReportXlsxInput {
     preparedBy: "Hit Squad Project Controls",
     status: "In progress",
     sample: true,
+    subcontractor,
   };
 }

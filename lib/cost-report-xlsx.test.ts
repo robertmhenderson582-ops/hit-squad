@@ -26,6 +26,7 @@ import {
   COST_EXPORT_CONFIDENTIAL,
   COST_XLSX_APPENDIX_SHEETS,
   COST_XLSX_CLIENT_SHEETS,
+  COST_XLSX_HIDDEN_SHEETS,
   COST_XLSX_SHEETS,
   buildCostReportWorkbook,
   costReportToXlsx,
@@ -102,8 +103,9 @@ describe("cost report Excel export", () => {
       })),
     });
     const names = sheets.map((sheet) => sheet.name);
-    assert.deepEqual(names, [...COST_XLSX_CLIENT_SHEETS, ...COST_XLSX_APPENDIX_SHEETS]);
-    const cover = sheets[0]!;
+    assert.deepEqual(names, [...COST_XLSX_CLIENT_SHEETS, ...COST_XLSX_APPENDIX_SHEETS, ...COST_XLSX_HIDDEN_SHEETS]);
+    assert.equal(names[0], COST_XLSX_SHEETS.charts);
+    const cover = sheets.find((sheet) => sheet.name === COST_XLSX_SHEETS.cover)!;
     assert.ok(cover.cells.some((cell) => cell.type === "text" && cell.value === COST_EXPORT_BRAND));
     assert.ok(cover.cells.some((cell) => cell.type === "text" && cell.value === PPR_REPORT_TITLE));
     assert.ok(cover.cells.some((cell) => cell.type === "text" && cell.value === "Cat 2 Pit Stop"));
@@ -120,7 +122,7 @@ describe("cost report Excel export", () => {
     const coverForecast = cover.cells.find((cell) => cell.ref === "E9");
     assert.equal(coverForecast?.type, "formula");
     assert.equal(coverForecast && "value" in coverForecast ? coverForecast.value : "", pprSheetRef(`D${totalRow}`));
-    const ppr = sheets[1]!;
+    const ppr = sheets.find((sheet) => sheet.name === COST_XLSX_SHEETS.ppr)!;
     assert.ok(ppr.cells.some((cell) => cell.type === "text" && cell.value === PPR_REPORT_TITLE));
     assert.ok(ppr.cells.some((cell) => cell.type === "text" && cell.value === "Dollars Budget"));
     assert.ok(ppr.cells.some((cell) => cell.type === "text" && cell.value === "Current Forecast"));
@@ -176,8 +178,9 @@ describe("cost report Excel export", () => {
     await wb.xlsx.load(bytes as unknown as ArrayBuffer);
     assert.deepEqual(
       wb.worksheets.map((sheet) => sheet.name),
-      [...COST_XLSX_CLIENT_SHEETS, ...COST_XLSX_APPENDIX_SHEETS],
+      [...COST_XLSX_CLIENT_SHEETS, ...COST_XLSX_APPENDIX_SHEETS, ...COST_XLSX_HIDDEN_SHEETS],
     );
+    assert.equal(wb.worksheets[0]?.name, COST_XLSX_SHEETS.charts);
     const cover = wb.getWorksheet(COST_XLSX_SHEETS.cover)!;
     const ppr = wb.getWorksheet(COST_XLSX_SHEETS.ppr)!;
     const curve = wb.getWorksheet(COST_XLSX_SHEETS.curve)!;
@@ -197,10 +200,17 @@ describe("cost report Excel export", () => {
       /hit-squad-wood-river-cat-2-pit-stop-ppr-2026-09-01\.xlsx$/,
     );
     const zip = await JSZip.loadAsync(bytes);
-    assert.ok(zip.file("xl/charts/chart1.xml"));
-    const chartXml = await zip.file("xl/charts/chart1.xml")!.async("string");
-    assert.match(chartXml, new RegExp(S_CURVE_STEEL));
-    assert.match(chartXml, new RegExp(S_CURVE_AMBER));
+    const chartFiles = Object.keys(zip.files).filter((name) => /^xl\/charts\/chart\d+\.xml$/.test(name));
+    assert.ok(chartFiles.length >= 5);
+    const chartXmls = await Promise.all(chartFiles.map((name) => zip.file(name)!.async("string")));
+    const joined = chartXmls.join("\n");
+    assert.ok(chartXmls.some((xml) => /doughnutChart/.test(xml) && /Subcontractor/.test(xml)));
+    assert.ok(chartXmls.some((xml) => /lineChart/.test(xml)));
+    assert.match(joined, new RegExp(S_CURVE_STEEL));
+    assert.match(joined, new RegExp(S_CURVE_AMBER));
+    assert.match(joined, /Cost element mix/);
+    assert.match(joined, /Dollars expended to date/);
+    assert.match(joined, /Hours by craft/);
     const source = readFileSync(fileURLToPath(new URL("./cost-report-xlsx.ts", import.meta.url)), "utf8");
     assert.equal(/field trial|forgebook|not a release/i.test(source), false);
     assert.match(source, /companyLogo/);
@@ -209,6 +219,7 @@ describe("cost report Excel export", () => {
     assert.match(desk, /downloadXlsx/);
     assert.match(desk, /company-logo/);
     assert.match(desk, /status: pack\.status/);
+    assert.match(desk, /subcontractor: readSubSheet/);
     assert.match(String(COST_EXPORT_CONFIDENTIAL), /Confidential/);
   });
 
@@ -236,6 +247,7 @@ describe("cost report Excel export", () => {
     assert.equal(pprLaneFromChargeCode("721"), "materials");
     assert.equal(pprLaneFromChargeCode("725"), "rentals");
     assert.equal(pprLaneFromChargeCode("727"), "coe");
+    assert.equal(pprLaneFromChargeCode("730"), "subs");
     const craft = parseTurnipPaste("event_dt\tUnits\n09/01/2026\t12", "16");
     assert.equal(craft.rows[0]?.date, "2026-09-01");
     assert.equal(craft.rows[0]?.hours, 12);
@@ -269,6 +281,22 @@ describe("cost report Excel export", () => {
     assert.equal(t15.getCell("C6").value, "LaborTotal_ClientActual_Units");
     assert.equal(Number(t15.getCell("A7").value), 100);
     assert.notEqual(String(t15.getCell("A6").value), "Date");
+    const charts = wb.getWorksheet(COST_XLSX_SHEETS.charts)!;
+    const data = wb.getWorksheet(COST_XLSX_SHEETS.chartData)!;
+    assert.equal(wb.worksheets[0]?.name, COST_XLSX_SHEETS.charts);
+    assert.match(String(charts.getCell("A3").value ?? ""), /Cost, Progress/);
+    assert.equal(data.getCell("A7").value, "SAMPLE NDE");
+    assert.equal(data.getCell("A8").value, "SAMPLE Insulation");
+    assert.equal(data.getCell("A9").value, "SAMPLE Scaffold");
+    assert.equal(data.getCell("A10").value, "SAMPLE Crane");
+    assert.ok(Number(data.getCell("B7").value) > 0);
+    const zip = await JSZip.loadAsync(bytes);
+    const chartXmls = await Promise.all(
+      Object.keys(zip.files)
+        .filter((name) => /^xl\/charts\/chart\d+\.xml$/.test(name))
+        .map((name) => zip.file(name)!.async("string")),
+    );
+    assert.ok(chartXmls.some((xml) => /doughnutChart/.test(xml) && /Subcontractor costs/.test(xml)));
     const source = readFileSync(fileURLToPath(new URL("./cost-report-sample.ts", import.meta.url)), "utf8");
     assert.equal(/PCA000110|mike-cost-report-map|\.xls\b/i.test(source), false);
   });

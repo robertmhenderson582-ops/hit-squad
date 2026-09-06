@@ -280,6 +280,7 @@ export const EXCEL_UNIT_FORMATS = {
 } as const;
 
 function tabColorArgb(name: string): string {
+  if (name === "Charts") return AMBER_FLARE;
   if (name === "Summary Page" || name === "Cover" || /total project ppr/i.test(name)) return STEEL_DEEP;
   if (name === "Staff" || name === "Foremen" || name === "Direct" || name === "Support" || name === "Laydown") {
     return STEEL;
@@ -1455,7 +1456,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
       state: sheet.veryHidden ? "veryHidden" : "visible",
       properties: { tabColor: { argb: tabColorArgb(sheet.name) }, defaultRowHeight: 0 },
       pageSetup: {
-        orientation: chrome === "cover" ? "portrait" : "landscape",
+        orientation: chrome === "cover" && sheet.name !== "Charts" ? "portrait" : "landscape",
         fitToPage: !labor,
         fitToWidth: labor ? undefined : 1,
         fitToHeight: labor ? undefined : (sheet.fitToHeight ?? (chrome === "ppr" || chrome === "cover" ? 1 : 20)),

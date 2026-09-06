@@ -205,6 +205,7 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
         preparedBy: exporterDisplayName(user?.name, user?.email) ?? undefined,
         status: pack.status,
         companyLogo: await fetchCostReportCompanyLogo(client, site),
+        subcontractor: readSubSheet(pack.estimateKey),
       });
       downloadXlsx(
         costReportXlsxFilename({

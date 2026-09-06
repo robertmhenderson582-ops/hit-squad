@@ -136,6 +136,7 @@ export function pprLaneFromChargeCode(code: string): PprLaneId | "" {
   if (n === 721) return "materials";
   if (n === 725) return "rentals";
   if (n === 727) return "coe";
+  if (n === 730) return "subs";
   if (n >= 702 && n < 720) return "staff";
   if (n >= 700 && n < 800) return "staff";
   return "";
