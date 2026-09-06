@@ -2,7 +2,7 @@ import { catalogSites } from "./desk-data.ts";
 import { parseEstimateStatus, resolveEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { clampStatusForSite, regularClientFromParts } from "./site-regular.ts";
 import { ACTIVITY_STORE_PREFIX } from "./work-activities.ts";
-import { FCR_STORE_PREFIX } from "./change-order-packet.ts";
+import { FCR_STORE_PREFIX, fcrPacketHasWork } from "./change-order-packet.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { notifyEstimateSheets } from "./sheet-events.ts";
@@ -143,15 +143,7 @@ export function subcontractorHasWork(value: unknown) {
 }
 
 export function fcrHasWork(value: unknown) {
-  const row = asRecord(value);
-  if (!row) return false;
-  return Boolean(
-    arrayLen(row.log) ||
-      arrayLen(row.people) ||
-      Number(row.sub) > 0 ||
-      Number(row.equipment) > 0 ||
-      Number(row.misc) > 0,
-  );
+  return fcrPacketHasWork(value);
 }
 
 function pickEquipment(newer: unknown, older: unknown) {
@@ -243,7 +235,8 @@ function packSheetScore(pack: EstimatePackSnapshot) {
     (equipmentHasWork(pack.equipment) ? 1 : 0) +
     (otherCostHasWork(pack.otherCost) ? 1 : 0) +
     (subcontractorHasWork(pack.subcontractor) ? 1 : 0) +
-    (crewHasRows(pack.crew) ? 1 : 0)
+    (crewHasRows(pack.crew) ? 1 : 0) +
+    (fcrHasWork(pack.fcr) ? 1 : 0)
   );
 }
 

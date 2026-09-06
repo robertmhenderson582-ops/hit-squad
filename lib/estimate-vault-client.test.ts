@@ -24,6 +24,7 @@ import { packsForViewedDesk, readLensPacks, snapshotLensPack, writeLensPacks } f
 import { deleteLocalPack, findLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-menu.ts";
 import { applyPackToStore, collectPack } from "./estimate-pack.ts";
+import { addLogRow, emptyFcrPacket, readFcrPacket, writeFcrPacket } from "./change-order-packet.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { SUB_STORE_PREFIX } from "./subcontractor.ts";
@@ -834,6 +835,89 @@ describe("local transfer commit", () => {
       assert.equal((bodies[0]?.pack?.equipment?.largeTools || []).length, 1);
       assert.equal((bodies[0]?.pack?.otherCost?.misc || []).length, 1);
       assert.equal((bodies[0]?.pack?.subcontractor?.cards || []).length, 1);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("flushVaultUpsert sends the ECR log with the live pack", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const packId = "new-cat2pit";
+    rememberLocalPack(
+      {
+        packId,
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: OWNER_LOGIN_EMAIL,
+      },
+      store,
+    );
+    writeFcrPacket(
+      newEstimateKey(packId),
+      addLogRow(emptyFcrPacket(), { id: "ecr-flush-1", scope: "Night extra", requestedBy: "Ben Peffley" }),
+      store,
+    );
+    const bodies: Array<{ pack?: { fcr?: { log?: Array<{ scope?: string }> } } }> = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const raw = typeof init?.body === "string" ? init.body : "";
+      if (raw) bodies.push(JSON.parse(raw) as (typeof bodies)[number]);
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await flushVaultUpsert(packId, store);
+      assert.equal(result.ok, true);
+      assert.equal((bodies[0]?.pack?.fcr?.log || [])[0]?.scope, "Night extra");
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("hydrates an ECR log from the vault onto an empty browser", async () => {
+    resetVaultHydrateForTests();
+    const empty = memoryStore();
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          persisted: true,
+          packs: [
+            {
+              packId: "new-cat2pit",
+              key: "new:new-cat2pit",
+              title: "Cat 2 Pit Stop",
+              client: "Phillips 66",
+              site: "Wood River — Roxana, IL",
+              siteId: "site-madison",
+              createdAt: 1,
+              updatedAt: 2,
+              ownerEmail: OWNER_LOGIN_EMAIL,
+              fcr: {
+                header: { pm: "Ben Peffley", costTracker: "", publishDate: "", nte: "", projectScope: "" },
+                log: [{ id: "ecr-hydrate-1", scr: "ECR-12", scope: "Extra weld", status: "Open" }],
+                people: [],
+                sub: 0,
+                equipment: 0,
+                misc: 0,
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    try {
+      const packs = await hydrateFromVault(empty);
+      assert.equal(((packs[0]?.fcr as { log: Array<{ scope: string }> }).log || [])[0]?.scope, "Extra weld");
+      const read = readFcrPacket(newEstimateKey("new-cat2pit"), empty);
+      assert.equal(read.log.length, 1);
+      assert.equal(read.log[0]?.id, "ecr-hydrate-1");
+      assert.equal(read.log[0]?.scope, "Extra weld");
+      assert.equal(read.header.pm, "Ben Peffley");
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();

@@ -6,13 +6,20 @@ import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { newEstimateKey } from "./estimate-open.ts";
 import { SUB_STORE_PREFIX } from "./subcontractor.ts";
-import { FCR_STORE_PREFIX } from "./change-order-packet.ts";
 import {
-  applyPackToStore,
+  addLogRow,
+  emptyFcrPacket,
+  FCR_STORE_PREFIX,
+  readFcrPacket,
+  writeFcrPacket,
+} from "./change-order-packet.ts";
+import {
+    applyPackToStore,
   collectPack,
   crewHasRows,
   estimateFileName,
   equipmentHasWork,
+  fcrHasWork,
   mergeVaultIntoLocal,
   otherCostHasWork,
   packHasWork,
@@ -712,5 +719,41 @@ describe("estimate pack snapshot", () => {
     assert.equal(((restored?.otherCost as { misc: Array<{ qty: number; each: number }> }).misc || []).some((row) => row.qty === 65 && row.each === 1000), true);
     assert.equal((restored?.crew as { support: unknown[] }).support.length, 7);
     assert.equal(restored?.ownerEmail, "nathanboyte@gmail.com");
+  });
+
+  it("collects an ECR log with the pack and hydrates it onto an empty device store", () => {
+    const phone = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-cat2pit",
+        title: "Cat 2 Pit Stop",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+      },
+      phone,
+    );
+    const key = newEstimateKey("new-cat2pit");
+    writeFcrPacket(
+      key,
+      addLogRow(emptyFcrPacket(), {
+        id: "ecr-vault-1",
+        scr: "ECR-7",
+        scope: "Add night craft for hydrotest",
+        requestedBy: "Ben Peffley",
+      }),
+      phone,
+    );
+    const collected = collectPack(phone, "new-cat2pit");
+    assert.equal(fcrHasWork(collected?.fcr), true);
+    assert.equal(((collected?.fcr as { log: Array<{ scope: string }> }).log || [])[0]?.scope, "Add night craft for hydrotest");
+
+    const desktop = memoryStore();
+    assert.equal(mergeVaultIntoLocal(desktop, collected!), "vault");
+    const hydrated = readFcrPacket(key, desktop);
+    assert.equal(hydrated.log.length, 1);
+    assert.equal(hydrated.log[0]?.id, "ecr-vault-1");
+    assert.equal(hydrated.log[0]?.scope, "Add night craft for hydrotest");
+    assert.equal(hydrated.log[0]?.requestedBy, "Ben Peffley");
+    assert.ok(desktop.getItem(`${FCR_STORE_PREFIX}${key}`));
   });
 });

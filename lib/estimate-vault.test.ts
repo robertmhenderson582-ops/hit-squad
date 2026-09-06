@@ -529,4 +529,40 @@ describe("estimate vault service", () => {
     assert.equal(nathanList.packs[0]?.ownerEmail, tester.email);
     assert.equal(nathanList.packs[0]?.transferredFrom, OWNER_LOGIN_EMAIL);
   });
+
+  it("upserts a Wood River ECR log on the pack and reads it back from the vault", async () => {
+    const drive = memoryDrive();
+    const saved = await upsertVisiblePack(
+      owner,
+      cat2({
+        fcr: {
+          header: { pm: "Ben Peffley", costTracker: "", publishDate: "2026-09-05", nte: "", projectScope: "Pit stop extras" },
+          log: [{ id: "ecr-1", scr: "ECR-12", scope: "Extra weld", status: "Open", requestedBy: "Ben Peffley" }],
+          people: [],
+          sub: 0,
+          equipment: 0,
+          misc: 0,
+          scr: { taRm: "", categories: "", moc: "", sap: "", costNote: "", scheduleNote: "", signOff: "" },
+        },
+      }),
+      drive,
+    );
+    assert.equal(saved.ok, true);
+    const got = await getVisiblePack(owner, "new-cat2pit", drive);
+    assert.equal(((got?.fcr as { log: Array<{ id: string; scope: string }> }).log || [])[0]?.id, "ecr-1");
+    assert.equal(((got?.fcr as { log: Array<{ scope: string }> }).log || [])[0]?.scope, "Extra weld");
+    assert.equal(((got?.fcr as { header: { pm: string } }).header || {}).pm, "Ben Peffley");
+    const emptyFlush = await upsertVisiblePack(
+      owner,
+      cat2({
+        updatedAt: 50,
+        fcr: { log: [], people: [], sub: 0, equipment: 0, misc: 0 },
+      }),
+      drive,
+    );
+    assert.equal(emptyFlush.ok, true);
+    if (emptyFlush.ok) {
+      assert.equal(((emptyFlush.pack.fcr as { log: unknown[] }).log || []).length, 1);
+    }
+  });
 });

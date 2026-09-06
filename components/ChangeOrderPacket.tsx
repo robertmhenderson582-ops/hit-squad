@@ -4,7 +4,9 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import {
   APPROVAL_STATUSES,
-  blankLogRow,
+  addLogRow,
+  changeOrderNoun,
+  DEFAULT_CHANGE_ORDER_SHELL,
   emptyFcrPacket,
   FCR_BLOCKS,
   FCR_DAY_LABELS,
@@ -19,6 +21,7 @@ import {
   type FcrPacket,
   type FcrPeopleRow,
 } from "@/lib/change-order-packet";
+import { onEstimateSheets } from "@/lib/sheet-events";
 
 const SHELLS = ["Log", "Estimate", "SCR"] as const;
 
@@ -28,7 +31,8 @@ function money(value: number) {
 
 export function ChangeOrderPacket({ client, site }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
-  const [shell, setShell] = useState<(typeof SHELLS)[number]>("Log");
+  const noun = changeOrderNoun(client, site);
+  const [shell, setShell] = useState<(typeof SHELLS)[number]>(DEFAULT_CHANGE_ORDER_SHELL);
   const [packet, setPacket] = useState<FcrPacket>(emptyFcrPacket);
 
   const jobPeople = useMemo(() => {
@@ -37,10 +41,18 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
   }, [client, pack.crew, site]);
 
   useEffect(() => {
-    const saved = readFcrPacket(pack.estimateKey);
-    if (!saved.people.length && jobPeople.length) saved.people = jobPeople;
-    setPacket(saved);
-  }, [jobPeople, pack.estimateKey]);
+    function load() {
+      if (!pack.estimateKey) {
+        setPacket(emptyFcrPacket());
+        return;
+      }
+      const saved = readFcrPacket(pack.estimateKey);
+      if (!saved.people.length && jobPeople.length) saved.people = jobPeople;
+      setPacket(saved);
+    }
+    load();
+    return onEstimateSheets(load);
+  }, [jobPeople, pack.estimateKey, pack.ready]);
 
   function persist(next: FcrPacket) {
     setPacket(next);
@@ -52,10 +64,11 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
   return (
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        On-job FCR packet. Hours come from this job’s Crew. Mileage Yes is a flat ${MILEAGE_YES_FLAT},
-        not times headcount. East Coast still does not turn 12s into DT.
+        On-job {noun} packet. Hours come from this job’s Crew billable rates. Mileage Yes is a
+        flat ${MILEAGE_YES_FLAT}, not times headcount. East Coast still does not turn 12s into DT.
+        Log is the field home — rows stay on this estimate after refresh or another device.
       </p>
-      <nav className="flex flex-wrap gap-2 text-sm">
+      <nav className="flex flex-wrap gap-2 text-sm" aria-label={`${noun} packet`}>
         {SHELLS.map((item) => (
           <button
             key={item}
@@ -63,14 +76,29 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
             onClick={() => setShell(item)}
             className={`rounded px-3 py-1.5 ${shell === item ? "bg-steel text-white" : "border border-steel text-steel"}`}
           >
-            {item}
+            {item === "Log" ? `${noun} log` : item}
           </button>
         ))}
       </nav>
 
       {shell === "Log" ? (
         <section className="plant-card px-5 py-5">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-semibold text-[#163038]">{noun} log</h2>
+              <p className="mt-1 text-sm text-[#5b6f73]">
+                Monroe-style header, then one row per {noun}. Adding a row writes the live pack.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => persist(addLogRow(packet))}
+              className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white"
+            >
+              + Add {noun}
+            </button>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {(
               [
                 ["pm", "PM"],
@@ -101,15 +129,6 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
                 }
               />
             </label>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <button
-              type="button"
-              onClick={() => persist({ ...packet, log: [...packet.log, blankLogRow()] })}
-              className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white"
-            >
-              + Add FCR
-            </button>
           </div>
           <div className="mt-3 overflow-x-auto">
             <table className="min-w-full text-left text-sm">
@@ -143,8 +162,15 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
               <tbody>
                 {packet.log.length === 0 ? (
                   <tr>
-                    <td colSpan={17} className="px-2 py-4 text-[#5b6f73]">
-                      No FCRs on this job.
+                    <td colSpan={17} className="px-2 py-6 text-[#5b6f73]">
+                      <p>No {noun}s on this job yet.</p>
+                      <button
+                        type="button"
+                        onClick={() => persist(addLogRow(packet))}
+                        className="mt-3 rounded-lg bg-steel px-3 py-1.5 text-sm text-white"
+                      >
+                        + Add {noun}
+                      </button>
                     </td>
                   </tr>
                 ) : (

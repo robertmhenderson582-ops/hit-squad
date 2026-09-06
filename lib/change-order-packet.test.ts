@@ -1,20 +1,33 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   APPROVAL_STATUSES,
+  addLogRow,
   blankLogRow,
+  changeOrderNoun,
+  changeOrderTabLabel,
+  DEFAULT_CHANGE_ORDER_SHELL,
   emptyFcrHeader,
+  emptyFcrPacket,
   emptyScr,
   emptyWeek,
   fcrBlockFor,
+  fcrPacketHasWork,
   fcrSummary,
   FCR_BLOCKS,
+  FCR_STORE_PREFIX,
   IMPACT_LEVELS,
   LOG_STATUSES,
   mileageDollars,
   MILEAGE_YES_FLAT,
+  parseFcrPacket,
   peopleFromJob,
   peopleHours,
+  readFcrPacket,
+  usesEcrCopy,
+  writeFcrPacket,
 } from "./change-order-packet.ts";
 
 const WOOD = "Wood River — Roxana, IL";
@@ -273,4 +286,83 @@ test("summary uses this job hours and PD, not a shipped rate tab", () => {
   assert.equal(summary.mileage, 2500);
   assert.equal(summary.sub, 100);
   assert.equal(peopleHours(people[0]), 50);
+});
+
+function memoryStore(seed: Record<string, string> = {}) {
+  const data = { ...seed };
+  return {
+    getItem(key: string) {
+      return key in data ? data[key] : null;
+    },
+    setItem(key: string, value: string) {
+      data[key] = value;
+    },
+  };
+}
+
+test("P66 / Wood River and the unset default read ECR; Log is the field home", () => {
+  assert.equal(DEFAULT_CHANGE_ORDER_SHELL, "Log");
+  assert.equal(usesEcrCopy(), true);
+  assert.equal(usesEcrCopy("Phillips 66", "Wood River — Roxana, IL"), true);
+  assert.equal(usesEcrCopy("P66", "Madison"), true);
+  assert.equal(changeOrderNoun("Phillips 66", WOOD), "ECR");
+  assert.equal(changeOrderTabLabel("Phillips 66", WOOD), "ECR");
+  assert.equal(changeOrderNoun("Georgia Power", "Plant Yates"), "FCR");
+  assert.equal(changeOrderTabLabel("Georgia Power", "Plant Yates"), "Change orders");
+  const packet = readFileSync(fileURLToPath(new URL("../components/ChangeOrderPacket.tsx", import.meta.url)), "utf8");
+  assert.match(packet, /changeOrderNoun/);
+  assert.match(packet, /DEFAULT_CHANGE_ORDER_SHELL/);
+  assert.match(packet, /onEstimateSheets/);
+  assert.match(packet, /addLogRow/);
+  assert.doesNotMatch(packet, /On-job FCR packet/);
+  assert.doesNotMatch(packet, /\+ Add FCR/);
+  const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
+  assert.match(workspace, /changeOrderTabLabel/);
+});
+
+test("adding an ECR log row persists on the store and survives a re-read", () => {
+  const store = memoryStore();
+  const key = "new:new-cat2pit";
+  const next = addLogRow(emptyFcrPacket(), {
+    id: "ecr-1",
+    scr: "ECR-12",
+    scope: "Extra weld on exchanger",
+    requestedBy: "Ben Peffley",
+    loggedBy: "Ben Peffley",
+  });
+  writeFcrPacket(key, next, store);
+  assert.equal(store.getItem(`${FCR_STORE_PREFIX}${key}`)?.includes("Extra weld on exchanger"), true);
+  const read = readFcrPacket(key, store);
+  assert.equal(read.log.length, 1);
+  assert.equal(read.log[0]?.id, "ecr-1");
+  assert.equal(read.log[0]?.scr, "ECR-12");
+  assert.equal(read.log[0]?.scope, "Extra weld on exchanger");
+  assert.equal(read.log[0]?.requestedBy, "Ben Peffley");
+  assert.equal(fcrPacketHasWork(read), true);
+});
+
+test("parse + store round-trip keeps Monroe header and log after a fresh device cache", () => {
+  const phone = memoryStore();
+  const key = "new:new-cat2pit";
+  const packet = parseFcrPacket({
+    header: { pm: "Ben Peffley", costTracker: "CT-4", publishDate: "2026-09-05", nte: "25000", projectScope: "Pit stop extras" },
+    log: [{ id: "ecr-2", status: "Open", scope: "Night hydrotest", impactLevel: "High" }],
+    people: [],
+    sub: 0,
+    equipment: 0,
+    misc: 0,
+    scr: { taRm: "TA-9" },
+  });
+  writeFcrPacket(key, packet, phone);
+  const desktop = memoryStore();
+  const raw = phone.getItem(`${FCR_STORE_PREFIX}${key}`);
+  assert.ok(raw);
+  desktop.setItem(`${FCR_STORE_PREFIX}${key}`, raw);
+  const hydrated = readFcrPacket(key, desktop);
+  assert.equal(hydrated.header.pm, "Ben Peffley");
+  assert.equal(hydrated.header.nte, "25000");
+  assert.equal(hydrated.log[0]?.scope, "Night hydrotest");
+  assert.equal(hydrated.log[0]?.impactLevel, "High");
+  assert.equal(hydrated.scr.taRm, "TA-9");
+  assert.equal(fcrPacketHasWork({ header: { pm: "Ben" } }), true);
 });

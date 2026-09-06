@@ -3,6 +3,13 @@ import { notifyEstimateSheets } from "./sheet-events.ts";
 
 export const FCR_STORE_PREFIX = "hs_fcr_v1:";
 export const MILEAGE_YES_FLAT = 2500;
+export const DEFAULT_CHANGE_ORDER_SHELL = "Log";
+
+/** Browser cache or a test store. Vault hydrate writes this key; vault is source of truth after merge. */
+export type FcrStoreLike = {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+};
 
 export const LOG_STATUSES = ["Open", "Pending", "Cancelled"] as const;
 export const IMPACT_LEVELS = ["Low", "High", "Critical"] as const;
@@ -176,6 +183,84 @@ export function blankLogRow(): FcrLogRow {
   };
 }
 
+/** P66 / Wood River field path — and the default when site/client are unset. */
+export function usesEcrCopy(client = "", site = ""): boolean {
+  const hay = `${client} ${site}`.toLowerCase();
+  if (!hay.trim()) return true;
+  return /wood river|phillips 66|\bp66\b/.test(hay);
+}
+
+export function changeOrderNoun(client = "", site = ""): "ECR" | "FCR" {
+  return usesEcrCopy(client, site) ? "ECR" : "FCR";
+}
+
+export function changeOrderTabLabel(client = "", site = ""): string {
+  return usesEcrCopy(client, site) ? "ECR" : "Change orders";
+}
+
+export function addLogRow(packet: FcrPacket, patch: Partial<FcrLogRow> = {}): FcrPacket {
+  return { ...packet, log: [...packet.log, { ...blankLogRow(), ...patch }] };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function filledText(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+export function fcrPacketHasWork(value: unknown) {
+  const row = asRecord(value);
+  if (!row) return false;
+  if (Array.isArray(row.log) && row.log.length > 0) return true;
+  if (Array.isArray(row.people) && row.people.length > 0) return true;
+  if (Number(row.sub) > 0 || Number(row.equipment) > 0 || Number(row.misc) > 0) return true;
+  const header = asRecord(row.header);
+  if (header && Object.values(header).some(filledText)) return true;
+  const scr = asRecord(row.scr);
+  return Boolean(scr && Object.values(scr).some(filledText));
+}
+
+function normalizeLogRow(row: Partial<FcrLogRow> | null | undefined): FcrLogRow {
+  const blank = blankLogRow();
+  if (!row || typeof row !== "object") return blank;
+  return {
+    ...blank,
+    ...row,
+    id: typeof row.id === "string" && row.id.trim() ? row.id : blank.id,
+    status: LOG_STATUSES.includes(row.status as LogStatus) ? (row.status as LogStatus) : blank.status,
+    impactLevel: IMPACT_LEVELS.includes(row.impactLevel as ImpactLevel)
+      ? (row.impactLevel as ImpactLevel)
+      : blank.impactLevel,
+    approvalStatus: APPROVAL_STATUSES.includes(row.approvalStatus as ApprovalStatus)
+      ? (row.approvalStatus as ApprovalStatus)
+      : blank.approvalStatus,
+    approvedMh: Number(row.approvedMh) || 0,
+    approvedCost: Number(row.approvedCost) || 0,
+  };
+}
+
+export function parseFcrPacket(raw: unknown): FcrPacket {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return emptyFcrPacket();
+  const parsed = raw as Partial<FcrPacket>;
+  return {
+    header: { ...emptyFcrHeader(), ...parsed.header },
+    log: Array.isArray(parsed.log) ? parsed.log.map((row) => normalizeLogRow(row)) : [],
+    people: Array.isArray(parsed.people) ? normalizePeople(parsed.people) : [],
+    sub: Number(parsed.sub) || 0,
+    equipment: Number(parsed.equipment) || 0,
+    misc: Number(parsed.misc) || 0,
+    scr: { ...emptyScr(), ...parsed.scr },
+  };
+}
+
+function browserStore(store?: FcrStoreLike | null): FcrStoreLike | null {
+  if (store) return store;
+  if (typeof window === "undefined") return null;
+  return window.localStorage;
+}
+
 export function emptyScr(): FcrScr {
   return { taRm: "", categories: "", moc: "", sap: "", costNote: "", scheduleNote: "", signOff: "" };
 }
@@ -335,30 +420,24 @@ export function fcrSummary(packet: FcrPacket, laborRate = 0, pdRate = 0) {
   };
 }
 
-export function readFcrPacket(key: string): FcrPacket {
-  if (typeof window === "undefined" || !key) return emptyFcrPacket();
+export function readFcrPacket(key: string, store?: FcrStoreLike | null): FcrPacket {
+  const target = browserStore(store);
+  if (!target || !key) return emptyFcrPacket();
   try {
-    const raw = window.localStorage.getItem(`${FCR_STORE_PREFIX}${key}`);
+    const raw = target.getItem(`${FCR_STORE_PREFIX}${key}`);
     if (!raw) return emptyFcrPacket();
-    const parsed = JSON.parse(raw) as Partial<FcrPacket>;
-    return {
-      header: { ...emptyFcrHeader(), ...parsed.header },
-      log: Array.isArray(parsed.log) ? parsed.log : [],
-      people: Array.isArray(parsed.people) ? normalizePeople(parsed.people) : [],
-      sub: Number(parsed.sub) || 0,
-      equipment: Number(parsed.equipment) || 0,
-      misc: Number(parsed.misc) || 0,
-      scr: { ...emptyScr(), ...parsed.scr },
-    };
+    return parseFcrPacket(JSON.parse(raw));
   } catch {
     return emptyFcrPacket();
   }
 }
 
-export function writeFcrPacket(key: string, packet: FcrPacket) {
-  if (typeof window === "undefined" || !key) return;
+/** Cache locally, then notify the live pack so vault upsert follows the estimate — not a parallel book. */
+export function writeFcrPacket(key: string, packet: FcrPacket, store?: FcrStoreLike | null) {
+  const target = browserStore(store);
+  if (!target || !key) return;
   try {
-    window.localStorage.setItem(`${FCR_STORE_PREFIX}${key}`, JSON.stringify(packet));
+    target.setItem(`${FCR_STORE_PREFIX}${key}`, JSON.stringify(parseFcrPacket(packet)));
     notifyEstimateSheets();
   } catch {
     // keep the previous copy
