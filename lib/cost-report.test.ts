@@ -90,6 +90,23 @@ describe("Turnip T3 Export 15 / 16 paste", () => {
     assert.equal(paste.rows[0]?.ot, 2);
   });
 
+  it("parses T3 Export 15 ClientActual field names and WO codes", () => {
+    const paste = parseTurnipPaste(
+      [
+        "ChargeCode\tWO_Description\tLaborTotal_ClientActual_Units\tLaborTotal_ClientActual_Dollars\tPD_ClientActual_Dollars\tOther_ClientActual_Units\tTotalDollars_ClientActual",
+        "100\tDirect\t20\t2200\t0\t0\t2200",
+        "505\tPer Diem\t0\t0\t390\t0\t390",
+      ].join("\n"),
+      "15",
+    );
+    assert.equal(paste.rows[0]?.code, "100");
+    assert.equal(paste.rows[0]?.hours, 20);
+    assert.equal(paste.rows[0]?.dollars, 2200);
+    assert.equal(paste.rows[0]?.lane, "direct");
+    assert.equal(paste.rows[1]?.pdDollars, 390);
+    assert.ok(paste.headers.includes("LaborTotal_ClientActual_Units"));
+  });
+
   it("parses Export 16 dollars", () => {
     const paste = parseTurnipPaste("Date,Craft,Amount\n09/01/2026,PF,$12500.50\n09/02/2026,PF,8000", "16");
     const actuals = costActualsFromPastes({ raw: "", rows: [] }, paste, "2026-09-02");

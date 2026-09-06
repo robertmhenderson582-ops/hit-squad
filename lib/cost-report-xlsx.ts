@@ -1,10 +1,9 @@
 /**
  * Client-facing Cost / Progress / Performance workbook.
- * Budget cells are values from the live desk pack. Variance / remaining / % spent
- * are Excel formulas. Look chrome is the same Hit Squad instrument path as the
- * estimate export — not Mike’s old Estimate Summary book.
- * Cover + Total Project PPR + Hrs S-curve + Report log are the send package.
- * Turnip 15/16 stay as a polished appendix after the presentation sheets.
+ * Total Project PPR is Mike’s dense multi-header print sheet.
+ * Budget cells are values from the live desk pack — never Mike’s Estimate
+ * Summary Excel links. Actuals / earned come from Turnip 15 / 16 ClientActual
+ * fields. Cover + PPR + Hrs S-curve + Report log are the send package.
  */
 import {
   ESTIMATE_EXPORT_BRAND,
@@ -23,6 +22,18 @@ import {
   type CostReportBook,
   type TurnipPaste,
 } from "./cost-report.ts";
+import {
+  PPR_EARNED_NOTE,
+  PPR_REPORT_TITLE,
+  PPR_SHEET_ROLE,
+  TURNIP15_HEADERS,
+  TURNIP15_TITLE,
+  TURNIP16_HEADERS,
+  TURNIP16_TITLE,
+  buildPprLines,
+  pprTotalLine,
+  type PprComputedLine,
+} from "./cost-report-ppr.ts";
 import { buildWorkbook, type SheetCell, type WorkbookSheet } from "./xlsx-minimal.ts";
 import { embedHoursSCurveChart } from "./xlsx-s-curve-chart.ts";
 import { slugify } from "./estimate-pack.ts";
@@ -32,8 +43,8 @@ export const COST_XLSX_SHEETS = {
   ppr: "Total Project PPR",
   curve: "Hrs S-curve",
   log: "Report log",
-  export15: "Turnip 15",
-  export16: "Turnip 16",
+  export15: "T3 Export 15",
+  export16: "T3 Export 16",
 } as const;
 
 export const COST_XLSX_CLIENT_SHEETS = [
@@ -49,10 +60,16 @@ export const COST_EXPORT_BRAND = ESTIMATE_EXPORT_BRAND;
 export const COST_EXPORT_PRODUCER = ESTIMATE_EXPORT_PRODUCER;
 export const COST_EXPORT_CONFIDENTIAL = "Confidential cost / progress / performance report";
 
+/** PPR data starts under the 3-row multi-header (rows 7–9). */
+export const PPR_HEADER_ROWS = [7, 8, 9] as const;
+export const PPR_FIRST_DATA_ROW = 10;
+export const PPR_LAST_COL = "T";
+
 export type CostReportXlsxInput = {
   title?: string;
   client?: string;
   site?: string;
+  jobNumber?: string;
   statusDate?: string;
   budget: CostBudget;
   book: CostReportBook;
@@ -63,6 +80,8 @@ export type CostReportXlsxInput = {
   regularClient?: boolean;
   /** Live company-record logo (same path as estimate export). */
   companyLogo?: string | null;
+  /** Synthetic Look QA package — watermark only, never real P66 dollars. */
+  sample?: boolean;
 };
 
 function pushText(cells: SheetCell[], ref: string, value: string) {
@@ -85,8 +104,16 @@ function hoursFmt() {
   return "#,##0.00";
 }
 
+function rateFmt() {
+  return "$#,##0.00";
+}
+
 function pctFmt() {
   return "0.0%";
+}
+
+function factorFmt() {
+  return "0.00";
 }
 
 function quoteSheet(name: string) {
@@ -98,11 +125,20 @@ export function pprSheetRef(ref: string) {
 }
 
 function jobLine(input: CostReportXlsxInput) {
-  return [input.title, input.client, input.site].filter((part) => String(part || "").trim()).join("  ·  ");
+  return [input.client, input.title, input.site].filter((part) => String(part || "").trim()).join("  ·  ");
 }
 
 function statusDateOf(input: CostReportXlsxInput) {
   return input.statusDate || input.book.statusDate || "";
+}
+
+function yearOf(input: CostReportXlsxInput) {
+  const stamp = statusDateOf(input);
+  return /^\d{4}/.test(stamp) ? stamp.slice(0, 4) : String(new Date().getFullYear());
+}
+
+function jobNumberOf(input: CostReportXlsxInput) {
+  return (input.jobNumber || "").trim() || `${yearOf(input)}-${slugify(input.site || "job").slice(0, 12) || "job"}`;
 }
 
 function estimateStatusOf(input: CostReportXlsxInput) {
@@ -114,148 +150,274 @@ function preparedByOf(input: CostReportXlsxInput) {
   return (input.preparedBy || "").replace(/\s+/g, " ").trim();
 }
 
-function headerByline(input: CostReportXlsxInput, subtitle: string) {
-  const status = estimateStatusOf(input);
-  const prepared = preparedByOf(input);
-  return [
-    subtitle,
-    statusDateOf(input) ? `Status date ${statusDateOf(input)}` : "",
-    status ? `${ESTIMATE_STATUS_LABEL}: ${status}` : "",
-    prepared ? `${ESTIMATE_PREPARED_BY_LABEL}: ${prepared}` : "",
-    COST_EXPORT_PRODUCER,
-    COST_EXPORT_CONFIDENTIAL,
-  ]
-    .filter(Boolean)
-    .join("  ·  ");
+function sampleLabel(input: CostReportXlsxInput) {
+  return input.sample ? "SAMPLE — synthetic hours and dollars for Look QA. Not a client actual." : "";
 }
 
-function headerBlock(input: CostReportXlsxInput, subtitle: string): SheetCell[] {
-  return [
-    { ref: "A1", type: "text", value: COST_EXPORT_BRAND },
-    { ref: "A2", type: "text", value: jobLine(input) || COST_REPORT_NOUN },
-    { ref: "A3", type: "text", value: headerByline(input, subtitle) },
-  ];
+function pprLinesOf(input: CostReportXlsxInput) {
+  return buildPprLines(input.budget, { ...input.book, statusDate: statusDateOf(input) });
 }
 
-function pprLayout(input: CostReportXlsxInput) {
-  const costRow = 7;
-  const lineCount = input.budget.lines.length;
-  const hoursRow = costRow + 1 + lineCount;
-  const totalRow = hoursRow + 1;
+export function pprLayout(input: CostReportXlsxInput) {
+  const lines = pprLinesOf(input);
+  const first = PPR_FIRST_DATA_ROW;
+  const totalIndex = lines.findIndex((line) => line.kind === "total");
+  const totalRow = first + (totalIndex >= 0 ? totalIndex : lines.length - 1);
   const notesRow = totalRow + 2;
-  return { costRow, hoursRow, totalRow, notesRow };
+  return { lines, first, totalRow, notesRow };
 }
 
 function buildCoverSheet(input: CostReportXlsxInput): WorkbookSheet {
-  const cells: SheetCell[] = headerBlock(input, `${COST_REPORT_NOUN}  ·  client report`);
-  const { costRow, hoursRow } = pprLayout(input);
+  const cells: SheetCell[] = [];
+  const { totalRow } = pprLayout(input);
   const status = estimateStatusOf(input);
   const prepared = preparedByOf(input) || COST_EXPORT_PRODUCER;
-  pushText(cells, "A6", "Field");
-  pushText(cells, "B6", "Detail");
-  pushText(cells, "D6", "Snapshot");
-  pushText(cells, "E6", "Value");
+  pushText(cells, "A1", COST_EXPORT_BRAND);
+  pushText(cells, "A2", jobLine(input) || COST_REPORT_NOUN);
+  pushText(cells, "A3", PPR_REPORT_TITLE);
+  pushText(cells, "A4", `${PPR_SHEET_ROLE}  ·  Job ${jobNumberOf(input)}  ·  ${yearOf(input)}`);
+  pushText(
+    cells,
+    "A5",
+    [
+      statusDateOf(input) ? `Status Date ${statusDateOf(input)}` : "",
+      status ? `${ESTIMATE_STATUS_LABEL}: ${status}` : "",
+      prepared ? `${ESTIMATE_PREPARED_BY_LABEL}: ${prepared}` : "",
+    ]
+      .filter(Boolean)
+      .join("  ·  "),
+  );
+  pushText(cells, "A6", sampleLabel(input) || COST_EXPORT_CONFIDENTIAL);
+  pushText(cells, "A8", "Field");
+  pushText(cells, "B8", "Detail");
+  pushText(cells, "D8", "PPR snapshot");
+  pushText(cells, "E8", "Value");
   const fields: Array<[string, string]> = [
-    ["Job", (input.title || "").trim() || COST_REPORT_NOUN],
     ["Client", (input.client || "").trim() || "—"],
+    ["Job", (input.title || "").trim() || COST_REPORT_NOUN],
     ["Site", (input.site || "").trim() || "—"],
-    ["Status date", statusDateOf(input) || "—"],
+    ["Job #", jobNumberOf(input)],
+    ["Status Date", statusDateOf(input) || "—"],
     ["Estimate status", status || "—"],
     [ESTIMATE_PREPARED_BY_LABEL, prepared],
     ["Notes", input.book.notes.trim() || "—"],
   ];
   fields.forEach(([label, value], index) => {
-    const row = 7 + index;
+    const row = 9 + index;
     pushText(cells, `A${row}`, label);
     pushText(cells, `B${row}`, value);
   });
   const snaps: Array<{ label: string; formula: string; fmt: string }> = [
-    { label: "Budget $", formula: pprSheetRef(`B${costRow}`), fmt: moneyFmt() },
-    { label: "Actual $", formula: pprSheetRef(`C${costRow}`), fmt: moneyFmt() },
-    { label: "Variance", formula: "E7-E8", fmt: moneyFmt() },
-    { label: "Remaining", formula: "E7-E8", fmt: moneyFmt() },
-    { label: "% Spent", formula: "IF(E7=0,0,E8/E7)", fmt: pctFmt() },
-    { label: "Budget hours", formula: pprSheetRef(`B${hoursRow}`), fmt: hoursFmt() },
-    { label: "Actual hours", formula: pprSheetRef(`C${hoursRow}`), fmt: hoursFmt() },
-    { label: "Hours % spent", formula: "IF(E12=0,0,E13/E12)", fmt: pctFmt() },
+    { label: "Current Forecast $", formula: pprSheetRef(`D${totalRow}`), fmt: moneyFmt() },
+    { label: "Dollars Expended To Date", formula: pprSheetRef(`M${totalRow}`), fmt: moneyFmt() },
+    { label: "Workhours Budget", formula: pprSheetRef(`G${totalRow}`), fmt: hoursFmt() },
+    { label: "Hours Expended To Date", formula: pprSheetRef(`K${totalRow}`), fmt: hoursFmt() },
+    { label: "Hours Earned To Date", formula: pprSheetRef(`O${totalRow}`), fmt: hoursFmt() },
+    { label: "Physical % Complete", formula: pprSheetRef(`Q${totalRow}`), fmt: pctFmt() },
+    { label: "Performance To Date", formula: pprSheetRef(`S${totalRow}`), fmt: factorFmt() },
+    { label: "Hours To Go", formula: pprSheetRef(`T${totalRow}`), fmt: hoursFmt() },
   ];
   snaps.forEach((snap, index) => {
-    const row = 7 + index;
+    const row = 9 + index;
     pushText(cells, `D${row}`, snap.label);
     pushFormula(cells, `E${row}`, snap.formula, snap.fmt);
   });
-  pushText(cells, "A16", "Budget from this job’s live estimate pack. Actuals from Turnip 15 / 16 through the status date.");
+  pushText(
+    cells,
+    "A18",
+    "Budget from this job’s live estimate pack. Actuals from Turnip T3 Export 15 / 16 through the Status Date. Yellow = Expended. Cyan = Earned.",
+  );
   return {
     name: COST_XLSX_SHEETS.cover,
     cells,
-    merges: ["A1:E1", "A2:E2", "A3:E3", "A16:E16"],
-    headerRows: [6],
+    merges: ["A1:E1", "A2:E2", "A3:E3", "A4:E4", "A5:E5", "A6:E6", "A18:E18"],
+    headerRows: [8],
+    chrome: "cover",
+    freeze: { ySplit: 6 },
+    printTitlesRow: "1:6",
+    fitToHeight: 1,
   };
 }
 
-function buildPprSheet(input: CostReportXlsxInput): WorkbookSheet {
-  const cells: SheetCell[] = headerBlock(
-    input,
-    `${COST_REPORT_NOUN}  ·  Budget from live estimate pack`,
-  );
-  const budget = input.budget;
-  const actuals = costActualsFromPastes(input.book.export15, input.book.export16, input.book.statusDate);
-  const { costRow, hoursRow, totalRow, notesRow } = pprLayout(input);
-  pushText(cells, "A6", "Line");
-  pushText(cells, "B6", "Budget");
-  pushText(cells, "C6", "Actual");
-  pushText(cells, "D6", "Variance");
-  pushText(cells, "E6", "Remaining");
-  pushText(cells, "F6", "% Spent");
-
-  const moneyLines = [
-    { label: "Cost $", budget: budget.total, actual: actuals.dollars },
-    ...budget.lines.map((line) => ({
-      label: line.label,
-      budget: line.amount,
-      actual: 0,
-    })),
+function writePprHeaders(cells: SheetCell[]) {
+  const groups: Array<{ start: string; end: string; title: string; unit: string }> = [
+    { start: "B", end: "D", title: "Dollars Budget", unit: "$" },
+    { start: "E", end: "G", title: "Workhours Budget", unit: "Hrs" },
+    { start: "H", end: "I", title: "Wage Rate", unit: "$ / Hr" },
+    { start: "J", end: "K", title: "Work Hours Expended", unit: "Hrs" },
+    { start: "L", end: "M", title: "Dollars Expended", unit: "$" },
+    { start: "N", end: "O", title: "Work Hours Earned", unit: "Hrs" },
+    { start: "P", end: "Q", title: "Physical % Complete", unit: "%" },
+    { start: "R", end: "T", title: "Performance", unit: "" },
   ];
-  // Keep cost rollup + live pack lines. Actual dollars sit on Cost $ only
-  // (Turnip 16 is a job total, not a split). Line actuals stay 0 so formulas still show.
-  let row = costRow;
-  for (const line of moneyLines) {
-    const actual = line.label === "Cost $" ? actuals.dollars : 0;
-    pushText(cells, `A${row}`, line.label);
-    pushNum(cells, `B${row}`, line.budget, moneyFmt());
-    pushNum(cells, `C${row}`, actual, moneyFmt());
-    pushFormula(cells, `D${row}`, `B${row}-C${row}`, moneyFmt());
-    pushFormula(cells, `E${row}`, `B${row}-C${row}`, moneyFmt());
-    pushFormula(cells, `F${row}`, `IF(B${row}=0,0,C${row}/B${row})`, pctFmt());
-    row += 1;
+  pushText(cells, "A7", "Account / Description");
+  pushText(cells, "A8", "");
+  pushText(cells, "A9", "");
+  for (const group of groups) {
+    pushText(cells, `${group.start}7`, group.title);
+    pushText(cells, `${group.start}8`, group.unit);
   }
-  pushText(cells, `A${hoursRow}`, "Hours");
-  pushNum(cells, `B${hoursRow}`, budget.hours, hoursFmt());
-  pushNum(cells, `C${hoursRow}`, actuals.hours, hoursFmt());
-  pushFormula(cells, `D${hoursRow}`, `B${hoursRow}-C${hoursRow}`, hoursFmt());
-  pushFormula(cells, `E${hoursRow}`, `B${hoursRow}-C${hoursRow}`, hoursFmt());
-  pushFormula(cells, `F${hoursRow}`, `IF(B${hoursRow}=0,0,C${hoursRow}/B${hoursRow})`, pctFmt());
-  pushText(cells, `A${totalRow}`, "TOTAL");
-  pushFormula(cells, `B${totalRow}`, `B${costRow}`, moneyFmt());
-  pushFormula(cells, `C${totalRow}`, `C${costRow}`, moneyFmt());
-  pushFormula(cells, `D${totalRow}`, `B${totalRow}-C${totalRow}`, moneyFmt());
-  pushFormula(cells, `E${totalRow}`, `B${totalRow}-C${totalRow}`, moneyFmt());
-  pushFormula(cells, `F${totalRow}`, `IF(B${totalRow}=0,0,C${totalRow}/B${totalRow})`, pctFmt());
+  const detail: Array<[string, string]> = [
+    ["B", "Original"],
+    ["C", "Revised"],
+    ["D", "Current Forecast"],
+    ["E", "Original"],
+    ["F", "Revised"],
+    ["G", "Current Forecast"],
+    ["H", "Budget Rate"],
+    ["I", "Actual Rate"],
+    ["J", "Daily"],
+    ["K", "To Date"],
+    ["L", "Daily"],
+    ["M", "To Date"],
+    ["N", "Daily"],
+    ["O", "To Date"],
+    ["P", "Daily"],
+    ["Q", "To Date"],
+    ["R", "To Go Forecast"],
+    ["S", "To Date"],
+    ["T", "Hours To Go"],
+  ];
+  for (const [col, label] of detail) pushText(cells, `${col}9`, label);
+}
+
+function writePprLine(cells: SheetCell[], row: number, line: PprComputedLine, memberRows?: number[]) {
+  pushText(cells, `A${row}`, line.label);
+  if (line.kind === "section") return;
+  if (line.kind === "subtotal" || line.kind === "total") {
+    const span = memberRows?.length ? memberRows : [row];
+    const sum = (col: string) => (span.length ? `SUM(${span.map((item) => `${col}${item}`).join(",")})` : "0");
+    pushFormula(cells, `B${row}`, sum("B"), moneyFmt());
+    pushFormula(cells, `C${row}`, sum("C"), moneyFmt());
+    pushFormula(cells, `D${row}`, sum("D"), moneyFmt());
+    pushFormula(cells, `E${row}`, sum("E"), hoursFmt());
+    pushFormula(cells, `F${row}`, sum("F"), hoursFmt());
+    pushFormula(cells, `G${row}`, sum("G"), hoursFmt());
+    pushFormula(cells, `H${row}`, `IF(G${row}=0,0,D${row}/G${row})`, rateFmt());
+    pushFormula(cells, `I${row}`, `IF(K${row}=0,0,M${row}/K${row})`, rateFmt());
+    pushFormula(cells, `J${row}`, sum("J"), hoursFmt());
+    pushFormula(cells, `K${row}`, sum("K"), hoursFmt());
+    pushFormula(cells, `L${row}`, sum("L"), moneyFmt());
+    pushFormula(cells, `M${row}`, sum("M"), moneyFmt());
+    pushFormula(cells, `N${row}`, sum("N"), hoursFmt());
+    pushFormula(cells, `O${row}`, sum("O"), hoursFmt());
+    pushFormula(cells, `P${row}`, `IF(G${row}=0,0,N${row}/G${row})`, pctFmt());
+    pushFormula(cells, `Q${row}`, `IF(G${row}=0,0,O${row}/G${row})`, pctFmt());
+    pushFormula(cells, `R${row}`, `D${row}-M${row}`, moneyFmt());
+    pushFormula(cells, `S${row}`, `IF(K${row}=0,0,O${row}/K${row})`, factorFmt());
+    pushFormula(cells, `T${row}`, `G${row}-O${row}`, hoursFmt());
+    return;
+  }
+  pushNum(cells, `B${row}`, line.originalDollars, moneyFmt());
+  pushNum(cells, `C${row}`, line.revisedDollars, moneyFmt());
+  pushNum(cells, `D${row}`, line.forecastDollars, moneyFmt());
+  pushNum(cells, `E${row}`, line.originalHours, hoursFmt());
+  pushNum(cells, `F${row}`, line.revisedHours, hoursFmt());
+  pushNum(cells, `G${row}`, line.forecastHours, hoursFmt());
+  pushFormula(cells, `H${row}`, `IF(G${row}=0,0,D${row}/G${row})`, rateFmt());
+  pushFormula(cells, `I${row}`, `IF(K${row}=0,0,M${row}/K${row})`, rateFmt());
+  pushNum(cells, `J${row}`, line.expendedHoursDaily, hoursFmt());
+  pushNum(cells, `K${row}`, line.expendedHoursToDate, hoursFmt());
+  pushNum(cells, `L${row}`, line.expendedDollarsDaily, moneyFmt());
+  pushNum(cells, `M${row}`, line.expendedDollarsToDate, moneyFmt());
+  pushNum(cells, `N${row}`, line.earnedHoursDaily, hoursFmt());
+  pushNum(cells, `O${row}`, line.earnedHoursToDate, hoursFmt());
+  pushFormula(cells, `P${row}`, `IF(G${row}=0,0,N${row}/G${row})`, pctFmt());
+  pushFormula(cells, `Q${row}`, `IF(G${row}=0,0,O${row}/G${row})`, pctFmt());
+  pushFormula(cells, `R${row}`, `D${row}-M${row}`, moneyFmt());
+  pushFormula(cells, `S${row}`, `IF(K${row}=0,0,O${row}/K${row})`, factorFmt());
+  pushFormula(cells, `T${row}`, `G${row}-O${row}`, hoursFmt());
+}
+
+function buildPprSheet(input: CostReportXlsxInput): WorkbookSheet {
+  const cells: SheetCell[] = [];
+  const { lines, first, totalRow, notesRow } = pprLayout(input);
+  pushText(cells, "A1", COST_EXPORT_BRAND);
+  pushText(cells, "A2", jobLine(input) || COST_REPORT_NOUN);
+  pushText(cells, "A3", PPR_REPORT_TITLE);
+  pushText(cells, "A4", `${PPR_SHEET_ROLE}  ·  Job ${jobNumberOf(input)}  ·  ${yearOf(input)}  ·  ${input.site || ""}`);
+  pushText(
+    cells,
+    "A5",
+    [
+      `Status Date ${statusDateOf(input) || "—"}`,
+      estimateStatusOf(input) ? `${ESTIMATE_STATUS_LABEL}: ${estimateStatusOf(input)}` : "",
+      preparedByOf(input) ? `${ESTIMATE_PREPARED_BY_LABEL}: ${preparedByOf(input)}` : "",
+      COST_EXPORT_PRODUCER,
+    ]
+      .filter(Boolean)
+      .join("  ·  "),
+  );
+  pushText(cells, "A6", sampleLabel(input) || "Yellow = Expended  ·  Cyan = Earned  ·  Budget from live estimate pack");
+  writePprHeaders(cells);
+
+  const rowOf = new Map<string, number>();
+  lines.forEach((line, index) => rowOf.set(line.id, first + index));
+  const craftRows = lines.filter((line) => line.lane === "craft" || line.id === "direct-line" || line.id === "direct-unassigned").map((line) => rowOf.get(line.id)!);
+  const indirectRows = ["foremen", "support", "staff", "perDiem", "travel", "weather", "onboarding"]
+    .map((id) => rowOf.get(id))
+    .filter((row): row is number => Boolean(row));
+  const matRows = ["materials", "coe", "subs", "rentals"]
+    .map((id) => rowOf.get(id))
+    .filter((row): row is number => Boolean(row));
+  const laborMembers = [...craftRows, ...indirectRows];
+  const totalMembers = [rowOf.get("sub-labor"), rowOf.get("sub-mat")].filter((row): row is number => Boolean(row));
+
+  lines.forEach((line, index) => {
+    const row = first + index;
+    if (line.id === "sub-direct") writePprLine(cells, row, line, craftRows);
+    else if (line.id === "sub-labor") writePprLine(cells, row, line, laborMembers);
+    else if (line.id === "sub-mat") writePprLine(cells, row, line, matRows);
+    else if (line.kind === "total") writePprLine(cells, row, line, totalMembers);
+    else writePprLine(cells, row, line);
+  });
+
   pushText(cells, `A${notesRow}`, "Notes");
-  pushText(cells, `B${notesRow}`, input.book.notes.trim() || "—");
+  pushText(cells, `B${notesRow}`, [input.book.notes.trim(), PPR_EARNED_NOTE].filter(Boolean).join("  ·  "));
+  const merges = [
+    "A1:T1",
+    "A2:T2",
+    "A3:T3",
+    "A4:T4",
+    "A5:T5",
+    "A6:T6",
+    "A7:A9",
+    "B7:D7",
+    "E7:G7",
+    "H7:I7",
+    "J7:K7",
+    "L7:M7",
+    "N7:O7",
+    "P7:Q7",
+    "R7:T7",
+    "B8:D8",
+    "E8:G8",
+    "H8:I8",
+    "J8:K8",
+    "L8:M8",
+    "N8:O8",
+    "P8:Q8",
+    "R8:T8",
+    `B${notesRow}:T${notesRow}`,
+  ];
   return {
     name: COST_XLSX_SHEETS.ppr,
     cells,
-    merges: ["A1:F1", "A2:F2", "A3:F3", `B${notesRow}:F${notesRow}`],
-    headerRows: [6, notesRow],
+    merges,
+    headerRows: [...PPR_HEADER_ROWS],
+    chrome: "ppr",
+    freeze: { xSplit: 1, ySplit: 9 },
+    printTitlesRow: "7:9",
+    fitToHeight: 1,
+    comments: [{ ref: `A${totalRow}`, text: PPR_EARNED_NOTE }],
   };
 }
 
 function buildCurveSheet(input: CostReportXlsxInput, curve: CostCurvePoint[]): WorkbookSheet {
-  const cells: SheetCell[] = headerBlock(
-    input,
-    "Hours S-curve  ·  steel = live-pack estimate  ·  amber = Turnip 15 actuals",
-  );
+  const cells: SheetCell[] = [];
+  pushText(cells, "A1", COST_EXPORT_BRAND);
+  pushText(cells, "A2", jobLine(input) || COST_REPORT_NOUN);
+  pushText(cells, "A3", "Hours S-curve  ·  steel = live-pack estimate  ·  amber = T3 Export 16 spent");
   pushText(cells, "A6", "Date");
   pushText(cells, "B6", "Est hours");
   pushText(cells, "C6", "Act hours");
@@ -264,7 +426,7 @@ function buildCurveSheet(input: CostReportXlsxInput, curve: CostCurvePoint[]): W
   pushText(cells, "F6", "Est headcount");
   pushText(cells, "G6", "Act headcount");
   if (!curve.length) {
-    pushText(cells, "A7", "Paste Turnip 15 or set crew dates to draw the S-curve.");
+    pushText(cells, "A7", "Paste T3 Export 16 (event_dt + Units) or set crew dates to draw the S-curve.");
   }
   curve.forEach((point, index) => {
     const row = 7 + index;
@@ -283,7 +445,7 @@ function buildCurveSheet(input: CostReportXlsxInput, curve: CostCurvePoint[]): W
   pushText(
     cells,
     `A${footnoteRow}`,
-    "Steel = live-pack estimate  ·  Amber = Turnip 15 actuals  ·  chart-ready columns D / E",
+    "Steel = live-pack estimate  ·  Amber = T3 Export 16 Units  ·  chart-ready columns D / E",
   );
   return {
     name: COST_XLSX_SHEETS.curve,
@@ -293,48 +455,106 @@ function buildCurveSheet(input: CostReportXlsxInput, curve: CostCurvePoint[]): W
   };
 }
 
-function buildTurnipSheet(name: string, subtitle: string, input: CostReportXlsxInput, paste: TurnipPaste): WorkbookSheet {
-  const cells: SheetCell[] = headerBlock(input, subtitle);
-  pushText(cells, "A6", "Date");
-  pushText(cells, "B6", "Craft");
-  pushText(cells, "C6", "Employee");
-  pushText(cells, "D6", "ST");
-  pushText(cells, "E6", "OT");
-  pushText(cells, "F6", "DT");
-  pushText(cells, "G6", "Hours");
-  pushText(cells, "H6", "Dollars");
-  pushText(cells, "I6", "Headcount");
-  if (!paste.rows.length) {
+function turnipHeaders(kind: "15" | "16", paste: TurnipPaste) {
+  if (paste.headers?.length) return paste.headers;
+  return kind === "15" ? [...TURNIP15_HEADERS] : [...TURNIP16_HEADERS];
+}
+
+function colLetterFromIndex(index: number) {
+  let n = index;
+  let out = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    out = String.fromCharCode(65 + rem) + out;
+    n = Math.floor((n - 1) / 26);
+  }
+  return out;
+}
+
+function buildTurnipSheet(
+  name: string,
+  subtitle: string,
+  kind: "15" | "16",
+  input: CostReportXlsxInput,
+  paste: TurnipPaste,
+): WorkbookSheet {
+  const cells: SheetCell[] = [];
+  const headers = turnipHeaders(kind, paste);
+  const lastCol = colLetterFromIndex(Math.max(headers.length, 1));
+  pushText(cells, "A1", COST_EXPORT_BRAND);
+  pushText(cells, "A2", jobLine(input) || COST_REPORT_NOUN);
+  pushText(cells, "A3", `${subtitle}  ·  Status Date ${statusDateOf(input) || "—"}`);
+  headers.forEach((header, index) => {
+    pushText(cells, `${colLetterFromIndex(index + 1)}6`, header);
+  });
+  const grid = paste.grid?.length
+    ? paste.grid
+    : paste.rows.map((row) =>
+        kind === "15"
+          ? [
+              row.code,
+              row.craft,
+              String(row.hours || ""),
+              String(row.dollars || ""),
+              String(row.pdDollars || ""),
+              String(row.otherUnits || ""),
+              String(moneyOf(row)),
+            ]
+          : [
+              row.date,
+              row.craft,
+              row.employee,
+              String(row.hours || ""),
+              String(row.st || ""),
+              String(row.ot || ""),
+              String(row.dt || ""),
+              row.code,
+              String(row.headcount || ""),
+            ],
+      );
+  if (!grid.length) {
     pushText(cells, "A7", "No paste on this estimate yet. Upload stays on the desk — not in git.");
   }
-  paste.rows.forEach((row, index) => {
+  grid.forEach((row, index) => {
     const excelRow = 7 + index;
-    pushText(cells, `A${excelRow}`, row.date);
-    pushText(cells, `B${excelRow}`, row.craft);
-    pushText(cells, `C${excelRow}`, row.employee);
-    pushNum(cells, `D${excelRow}`, row.st, hoursFmt());
-    pushNum(cells, `E${excelRow}`, row.ot, hoursFmt());
-    pushNum(cells, `F${excelRow}`, row.dt, hoursFmt());
-    pushNum(cells, `G${excelRow}`, row.hours, hoursFmt());
-    pushNum(cells, `H${excelRow}`, row.dollars, moneyFmt());
-    pushNum(cells, `I${excelRow}`, row.headcount, hoursFmt());
+    row.forEach((value, col) => {
+      const ref = `${colLetterFromIndex(col + 1)}${excelRow}`;
+      const header = headers[col] ?? "";
+      if (looksNumericHeader(header) && value !== "" && Number.isFinite(Number(String(value).replace(/[^0-9.-]/g, "")))) {
+        const n = Number(String(value).replace(/[^0-9.-]/g, ""));
+        pushNum(cells, ref, n, /dollar|amount|\$/i.test(header) ? moneyFmt() : hoursFmt());
+      } else {
+        pushText(cells, ref, value);
+      }
+    });
   });
   return {
     name,
     cells,
-    merges: ["A1:I1", "A2:I2", "A3:I3"],
+    merges: [`A1:${lastCol}1`, `A2:${lastCol}2`, `A3:${lastCol}3`],
     headerRows: [6],
   };
 }
 
+function moneyOf(row: { dollars: number; pdDollars?: number }) {
+  return Math.round((row.dollars + (row.pdDollars || 0)) * 100) / 100;
+}
+
+function looksNumericHeader(header: string) {
+  return /units|dollars|amount|hours|headcount|qty|\$|chargecode|^code$/i.test(header);
+}
+
 function buildLogSheet(input: CostReportXlsxInput): WorkbookSheet {
-  const cells: SheetCell[] = headerBlock(input, "Dated daily report log");
+  const cells: SheetCell[] = [];
+  pushText(cells, "A1", COST_EXPORT_BRAND);
+  pushText(cells, "A2", jobLine(input) || COST_REPORT_NOUN);
+  pushText(cells, "A3", "Dated daily report log");
   pushText(cells, "A6", "Status date");
   pushText(cells, "B6", "Saved");
-  pushText(cells, "C6", "Budget $");
-  pushText(cells, "D6", "Actual $");
+  pushText(cells, "C6", "Forecast $");
+  pushText(cells, "D6", "Expended $");
   pushText(cells, "E6", "Budget hours");
-  pushText(cells, "F6", "Actual hours");
+  pushText(cells, "F6", "Expended hours");
   pushText(cells, "G6", "Notes");
   const shots = snapshotList(input.book);
   if (!shots.length) {
@@ -367,18 +587,8 @@ export function buildCostReportWorkbook(input: CostReportXlsxInput): WorkbookShe
     buildPprSheet(input),
     buildCurveSheet(input, curve),
     buildLogSheet(input),
-    buildTurnipSheet(
-      COST_XLSX_SHEETS.export15,
-      "Appendix  ·  Turnip T3 Export 15 hours  ·  internal paste",
-      input,
-      input.book.export15,
-    ),
-    buildTurnipSheet(
-      COST_XLSX_SHEETS.export16,
-      "Appendix  ·  Turnip T3 Export 16 dollars  ·  internal paste",
-      input,
-      input.book.export16,
-    ),
+    buildTurnipSheet(COST_XLSX_SHEETS.export15, TURNIP15_TITLE, "15", input, input.book.export15),
+    buildTurnipSheet(COST_XLSX_SHEETS.export16, TURNIP16_TITLE, "16", input, input.book.export16),
   ];
 }
 
@@ -420,3 +630,5 @@ export async function costReportToXlsx(input: CostReportXlsxInput): Promise<Uint
     title: "Hours S-curve — estimate vs actuals",
   });
 }
+
+export { pprTotalLine };

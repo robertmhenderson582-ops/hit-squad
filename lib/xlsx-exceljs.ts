@@ -79,6 +79,14 @@ export const EXCEL_MAX_ROW = 1048576;
 export const USED_ROW_HEIGHT = 16;
 export const SUMMARY_SECTION = STEEL;
 export const SUMMARY_TOTAL = AMBER_FLARE;
+/** Mike PPR Definitions: yellow expended, cyan earned. */
+export const PPR_EXPENDED_FILL = "FFFFFF00";
+export const PPR_EARNED_FILL = "FF00B0F0";
+export const PPR_BODY_A = "FFF4F6F6";
+export const PPR_BODY_B = "FFFFFFFF";
+export const PPR_SECTION_FILL = "FF1F4E5A";
+export const PPR_SUBTOTAL_FILL = "FFD6E3E3";
+export const PPR_INK = "FF102226";
 export const SUMMARY_ZEBRA_A = STEEL;
 export const SUMMARY_ZEBRA_B = STEEL_DEEP;
 
@@ -272,14 +280,14 @@ export const EXCEL_UNIT_FORMATS = {
 } as const;
 
 function tabColorArgb(name: string): string {
-  if (name === "Summary Page" || name === "Cover" || name === "Total Project PPR") return STEEL_DEEP;
+  if (name === "Summary Page" || name === "Cover" || /total project ppr/i.test(name)) return STEEL_DEEP;
   if (name === "Staff" || name === "Foremen" || name === "Direct" || name === "Support" || name === "Laydown") {
     return STEEL;
   }
   if (name.includes("Rental") || name === "COE" || name === "Tensioning Torquing equipment") return AMBER_FLARE;
   if (name === "Rate Tables" || name === "Hrs S-curve" || name === "Report log") return STEEL_DEEP;
   if (name.includes("Subcontractor") || name === "Staff Travel Cost" || name === "Misc Costs") return "FF1A7A88";
-  if (name.includes("Turnip")) return "FF1A7A88";
+  if (name.includes("Turnip") || name.includes("T3 Export")) return "FF1A7A88";
   return STEEL;
 }
 
@@ -311,13 +319,14 @@ function cellFormat(
 
 function isTotalRow(cells: SheetCell[], row: number): boolean {
   const label = cells.find((cell) => cell.ref === `A${row}`);
-  return label?.type === "text" && /^(TOTAL|ESTIMATE TOTAL|MAN-HOURS)/i.test(label.value);
+  return label?.type === "text" && /^(TOTAL|ESTIMATE TOTAL|MAN-HOURS|TOTAL PROJECT)/i.test(label.value);
 }
 
 function isSectionRow(cells: SheetCell[], row: number): boolean {
   const label = cells.find((cell) => cell.ref === `A${row}`);
   return (
-    label?.type === "text" && /^(Labor \$|Large tools|Third-party rental|Notes)$/i.test(label.value)
+    label?.type === "text" &&
+    /^(Labor \$|Large tools|Third-party rental|Notes|DIRECT LABOR|INDIRECT LABOR|MATERIALS)/i.test(label.value)
   );
 }
 
@@ -563,6 +572,110 @@ function applyTotalBar(ws: ExcelJS.Worksheet, row: number, lastColNum: number) {
   for (let col = 1; col <= lastColNum; col += 1) {
     applyTotalStyle(ws.getCell(row, col));
   }
+}
+
+function sheetChrome(sheet: WorkbookSheet): "cover" | "ppr" | "instrument" {
+  if (sheet.chrome) return sheet.chrome;
+  if (sheet.name === "Cover") return "cover";
+  if (/total project ppr/i.test(sheet.name)) return "ppr";
+  return "instrument";
+}
+
+function applyCoverChrome(ws: ExcelJS.Worksheet, lastColNum: number, maxRow: number) {
+  for (let row = 1; row <= Math.max(maxRow, 8); row += 1) {
+    for (let col = 1; col <= lastColNum; col += 1) {
+      const cell = ws.getCell(row, col);
+      if (row <= 6) {
+        cell.fill = solid(row === 1 || row === 3 ? STEEL : row === 6 ? AMBER_FLARE : STEEL_DEEP);
+        cell.font = {
+          bold: row === 1 || row === 3,
+          color: { argb: row === 6 ? DARK_TEXT : WHITE },
+          name: "Calibri",
+          size: row === 1 ? 22 : row === 3 ? 18 : 11,
+        };
+        cell.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+      } else if (row === 8) {
+        cell.fill = solid(STEEL_DEEP);
+        cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
+      }
+    }
+  }
+  ws.getRow(1).height = 32;
+  ws.getRow(3).height = 28;
+  ws.getRow(6).height = 10;
+}
+
+function applyPprChrome(
+  ws: ExcelJS.Worksheet,
+  sheet: WorkbookSheet,
+  lastColNum: number,
+  maxRow: number,
+  totalRows: Set<number>,
+  sectionRows: Set<number>,
+) {
+  const headerRows = new Set(sheet.headerRows ?? [7, 8, 9]);
+  const expendedCols = new Set([10, 11, 12, 13]);
+  const earnedCols = new Set([14, 15]);
+  for (let row = 1; row <= 6; row += 1) {
+    for (let col = 1; col <= lastColNum; col += 1) {
+      const cell = ws.getCell(row, col);
+      cell.fill = solid(row === 1 || row === 3 ? STEEL : STEEL_DEEP);
+      cell.font = {
+        bold: row === 1 || row === 3,
+        color: { argb: WHITE },
+        name: "Calibri",
+        size: row === 1 ? 14 : row === 3 ? 16 : 9,
+      };
+      cell.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+    }
+  }
+  hairGrid(ws, 7, maxRow, 1, lastColNum);
+  for (const headerRow of headerRows) {
+    for (let col = 1; col <= lastColNum; col += 1) {
+      const cell = ws.getCell(headerRow, col);
+      const expended = expendedCols.has(col);
+      const earned = earnedCols.has(col);
+      cell.fill = solid(expended ? PPR_EXPENDED_FILL : earned ? PPR_EARNED_FILL : STEEL_DEEP);
+      cell.font = {
+        bold: true,
+        color: { argb: expended || earned ? PPR_INK : WHITE },
+        name: "Calibri",
+        size: 8,
+      };
+      cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      patchBorder(cell, { bottom: edge("medium", expended || earned ? BLACK : AMBER_FLARE) });
+    }
+  }
+  for (let row = 10; row <= maxRow; row += 1) {
+    if (totalRows.has(row) || sectionRows.has(row) || headerRows.has(row)) continue;
+    const wash = row % 2 === 0 ? PPR_BODY_A : PPR_BODY_B;
+    const label = String(ws.getCell(row, 1).value ?? "");
+    const subtotal = /^subtotal/i.test(label);
+    for (let col = 1; col <= lastColNum; col += 1) {
+      const cell = ws.getCell(row, col);
+      cell.fill = solid(subtotal ? PPR_SUBTOTAL_FILL : wash);
+      cell.font = {
+        bold: col === 1 || subtotal,
+        color: { argb: PPR_INK },
+        name: "Calibri",
+        size: 9,
+      };
+      if (col > 1) cell.alignment = { horizontal: "center", vertical: "middle" };
+    }
+  }
+  for (const row of sectionRows) {
+    for (let col = 1; col <= lastColNum; col += 1) {
+      const cell = ws.getCell(row, col);
+      cell.fill = solid(PPR_SECTION_FILL);
+      cell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 9 };
+    }
+  }
+  ws.getColumn(1).width = 32;
+  for (let col = 2; col <= lastColNum; col += 1) ws.getColumn(col).width = 12;
+  ws.getRow(3).height = 22;
+  ws.getRow(7).height = 18;
+  ws.getRow(8).height = 16;
+  ws.getRow(9).height = 28;
 }
 
 /** Rate Tables / cost tabs: steel header stack + zebra, no plain white grid. */
@@ -1334,21 +1447,22 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
 
     const isSummary = sheet.name === "Summary Page";
     const labor = isLaborSheet(sheet.name);
-    const lastCol = maxHeaderCol(sheet.cells, sheet.headerRows?.length ? sheet.headerRows : 6);
+    const chrome = sheetChrome(sheet);
+    const lastCol = maxHeaderCol(sheet.cells, sheet.headerRows?.length ? sheet.headerRows : chrome === "ppr" ? [7, 8, 9] : 6);
     const lastColNum = colIndex(lastCol);
     const lastVisibleColNum = lastVisibleContentCol(sheet, lastColNum);
     const ws = wb.addWorksheet(safeName, {
       state: sheet.veryHidden ? "veryHidden" : "visible",
       properties: { tabColor: { argb: tabColorArgb(sheet.name) }, defaultRowHeight: 0 },
       pageSetup: {
-        orientation: "landscape",
+        orientation: chrome === "cover" ? "portrait" : "landscape",
         fitToPage: !labor,
         fitToWidth: labor ? undefined : 1,
-        fitToHeight: labor ? undefined : 20,
+        fitToHeight: labor ? undefined : (sheet.fitToHeight ?? (chrome === "ppr" || chrome === "cover" ? 1 : 20)),
         horizontalCentered: true,
         margins: { left: 0.4, right: 0.4, top: 0.65, bottom: 0.65, header: 0.28, footer: 0.28 },
-        printTitlesRow: labor ? "4:6" : "6:6",
-        printTitlesColumn: labor ? "A:I" : undefined,
+        printTitlesRow: sheet.printTitlesRow ?? (labor ? "4:6" : chrome === "ppr" ? "7:9" : "6:6"),
+        printTitlesColumn: labor ? "A:I" : chrome === "ppr" ? "A:A" : undefined,
       },
       headerFooter: {
         oddHeader: printHeader(safeName),
@@ -1359,7 +1473,13 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
       views: [
         labor
           ? { state: "frozen", xSplit: LABOR_INSTRUMENT_LAST_COL, ySplit: 6, activeCell: "J7", showGridLines: false }
-          : { state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: false },
+          : {
+              state: "frozen",
+              xSplit: sheet.freeze?.xSplit ?? 0,
+              ySplit: sheet.freeze?.ySplit ?? (chrome === "ppr" ? 9 : 6),
+              activeCell: chrome === "ppr" ? "A10" : "A7",
+              showGridLines: chrome === "ppr" ? true : false,
+            },
       ],
     });
 
@@ -1450,11 +1570,13 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
     }
     if (labor) applyLaborChrome(ws, sheet, maxRow, lastVisibleColNum, totalRows);
     else if (isSummary) applySummaryChrome(ws, maxRow, totalRows, sectionRows);
+    else if (chrome === "cover") applyCoverChrome(ws, lastVisibleColNum, maxRow);
+    else if (chrome === "ppr") applyPprChrome(ws, sheet, lastVisibleColNum, maxRow, totalRows, sectionRows);
     else applyInstrumentChrome(ws, maxRow, lastVisibleColNum, totalRows, sectionRows, extraHeaders);
 
     const totalWidth = labor ? LABOR_INSTRUMENT_LAST_COL : lastVisibleColNum;
     for (const row of totalRows) applyTotalBar(ws, row, totalWidth);
-    applySoftUsedBand(ws, lastVisibleColNum, maxRow);
+    if (chrome !== "ppr" && chrome !== "cover") applySoftUsedBand(ws, lastVisibleColNum, maxRow);
 
     for (const col of sheet.hiddenCols ?? []) {
       ws.getColumn(col).hidden = true;

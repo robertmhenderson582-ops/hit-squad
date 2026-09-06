@@ -203,6 +203,12 @@ export type WorkbookSheet = {
   comments?: WorkbookComment[];
   /** Very-hidden helper sheets (Position lists). */
   veryHidden?: boolean;
+  /** Cover splash / industrial PPR body. Default is estimate instrument chrome. */
+  chrome?: "cover" | "ppr" | "instrument";
+  /** Override freeze panes (PPR freezes under the multi-header). */
+  freeze?: { xSplit?: number; ySplit?: number };
+  printTitlesRow?: string;
+  fitToHeight?: number;
 };
 
 export type WorkbookBuildOptions = {

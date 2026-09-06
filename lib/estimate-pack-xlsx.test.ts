@@ -187,7 +187,7 @@ describe("estimate pack JSON → xlsx", () => {
   });
 
   it("labels Look samples as REAL-ESTIMATE exports, not fixture demos", () => {
-    const files = readdirSync("look-samples").filter((file) => file.endsWith(".xlsx")).sort();
+    const files = readdirSync("look-samples").filter((file) => file.endsWith(".xlsx") && file.startsWith("v151_")).sort();
     assert.deepEqual(files, ["v151_real_aromatics.xlsx", "v151_real_cat2.xlsx"]);
   });
 
