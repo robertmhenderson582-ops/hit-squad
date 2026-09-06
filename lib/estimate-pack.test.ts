@@ -34,24 +34,29 @@ import {
 import {
     applyPackToStore,
   collectPack,
+  crewHasCustomClock,
   crewHasRows,
   estimateFileName,
   equipmentHasWork,
   fcrHasWork,
   mergeVaultIntoLocal,
   otherCostHasWork,
+  packClockIsSeedSmashed,
   packHasWork,
   parseIncomingPack,
   collapsePacksById,
   pickPack,
   preferCanonicalPack,
   publicPack,
+  restorePackClock,
   responseLeaksDrive,
+  scheduleHasWork,
   scheduleOnce,
   slugify,
   subcontractorHasWork,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
+import { defaultPhaseSchedule } from "./phase-schedule.ts";
 import { estimateMarkupDollars, estimateTotalBreakdown } from "./estimate-total.ts";
 import { rememberLocalPack, renameLocalPackTitle, type StorageLike } from "./local-estimates.ts";
 
@@ -667,6 +672,52 @@ describe("estimate pack snapshot", () => {
     assert.equal(equipmentHasWork(aromaticsSheets().equipment), true);
     assert.equal(subcontractorHasWork({ lines: [], cards: [] }), false);
     assert.equal(subcontractorHasWork(aromaticsSheets().subcontractor), true);
+  });
+
+  it("default 2026 seed schedule is not work and cannot smash a 2027 Aromatics clock", () => {
+    const seed = defaultPhaseSchedule();
+    const job2027 = {
+      projectStart: "2027-01-11",
+      phases: seed.phases.map((row) => {
+        if (row.id === "pre") return { ...row, start: "2027-01-11", stop: "2027-02-28" };
+        if (row.id === "oil-out") return { ...row, start: "2027-03-01", stop: "2027-03-10" };
+        if (row.id === "mech") return { ...row, start: "2027-03-11", stop: "2027-04-17" };
+        if (row.id === "oil-in") return { ...row, start: "2027-04-18", stop: "2027-05-03" };
+        return { ...row, start: "2027-05-04", stop: "2027-05-21" };
+      }),
+    };
+    const smashedCrew = {
+      staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-09-03", end: "2026-09-03" }] }],
+    };
+    const clockCrew = {
+      staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-02-28" }] }],
+    };
+    assert.equal(scheduleHasWork(seed), false);
+    assert.equal(scheduleHasWork(job2027), true);
+    assert.equal(crewHasCustomClock(smashedCrew), false);
+    assert.equal(crewHasCustomClock(clockCrew), true);
+
+    const local = aromatics({
+      updatedAt: 99_000,
+      schedule: seed,
+      crew: smashedCrew,
+    });
+    const vault = aromatics({
+      updatedAt: 400,
+      schedule: job2027,
+      crew: clockCrew,
+    });
+    assert.equal(packClockIsSeedSmashed(local), true);
+    assert.equal(packClockIsSeedSmashed(vault), false);
+    const picked = pickPack(local, vault);
+    assert.equal((picked?.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    assert.equal(
+      ((picked?.crew as { staff: Array<{ ranges: Array<{ start: string }> }> }).staff[0]?.ranges[0]?.start),
+      "2027-01-11",
+    );
+    const restored = restorePackClock(local, vault);
+    assert.equal((restored.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    assert.equal(packClockIsSeedSmashed(restored), false);
   });
 
   it("a thin title-only vault stub cannot wipe local Aromatics sheets", () => {

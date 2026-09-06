@@ -78,7 +78,14 @@ export const HIS_AROMATICS_FILE_ID = "1KLhPczzj-BHMqT8uOI5VxUkSJUagj7rz";
 export const HIS_CAT2_FILE_ID = "1wa1bH4SgGlkMg2sUX7kLeyZXooI0aD-d";
 export const HIS_TM_FILE_ID = "1bBWKw2aCy3fVKm0rQAWcoCi8OXzahoPI";
 export const HIS_AROMATICS_STUB_ID = "1AEf_Shk8SEvMsdGodNSpaNgUCytXSLZ9";
-export const HIS_SNAPSHOTS_FOLDER_ID = "1yMOHR4ES9Ba7Y0G5C2wFcpwH34i0sJ7m";
+/**
+ * Sep 2 2027 Aromatics freeze.json — a FILE, not a folder. Read-only restore
+ * snapshot for the last steady Estimate Total. Never write this id. Pack has
+ * no estimate-total undo history; Purchasing / PPR snapshots are not the clock.
+ */
+export const HIS_AROMATICS_FREEZE_FILE_ID = "1yMOHR4ES9Ba7Y0G5C2wFcpwH34i0sJ7m";
+/** @deprecated misnomer — this id is the Aromatics freeze file, not a folder. */
+export const HIS_SNAPSHOTS_FOLDER_ID = HIS_AROMATICS_FREEZE_FILE_ID;
 
 export function hisKnownEstimateFiles() {
   return HIS_WOOD_RIVER_FILES.filter((row) => row.fileId !== HIS_AROMATICS_STUB_ID);

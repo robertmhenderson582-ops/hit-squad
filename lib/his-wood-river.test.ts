@@ -21,6 +21,7 @@ import { jobTree } from "./job-tree.ts";
 import { JAMES_EMAIL } from "./tester-seats.ts";
 import {
   HIS_AROMATICS_FILE_ID,
+  HIS_AROMATICS_FREEZE_FILE_ID,
   HIS_AROMATICS_PACK_ID,
   HIS_AROMATICS_STUB_ID,
   HIS_CAT2_FILE_ID,
@@ -67,6 +68,8 @@ test("HIS known files include Aromatics + CAT + T&M by file id, never the thin s
   assert.ok(ids.includes(HIS_CAT2_FILE_ID));
   assert.ok(ids.includes(HIS_TM_FILE_ID));
   assert.ok(!ids.includes(HIS_AROMATICS_STUB_ID));
+  assert.ok(!ids.includes(HIS_AROMATICS_FREEZE_FILE_ID));
+  assert.notEqual(HIS_AROMATICS_FREEZE_FILE_ID, HIS_AROMATICS_FILE_ID);
   assert.equal(hisFileForPackId(HIS_AROMATICS_PACK_ID)?.fileId, HIS_AROMATICS_FILE_ID);
   assert.equal(hisFileForPackId(HIS_CAT2_PACK_ID)?.fileId, HIS_CAT2_FILE_ID);
   assert.equal(hisFileForPackId(HIS_TM_PACK_ID)?.fileId, HIS_TM_FILE_ID);

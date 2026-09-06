@@ -3,12 +3,25 @@ import { SignJWT, importPKCS8 } from "jose";
 import {
   collapsePacksById,
   estimateFileName,
+  packClockIsSeedSmashed,
   parseIncomingPack,
   preferCanonicalPack,
   publicPack,
+  restorePackClock,
+  scheduleHasWork,
+  crewHasCustomClock,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
-import { applyHisIdentity, hisFileForPackId, hisKnownEstimateFiles, hisMatchForPack, NATHAN_DESK_EMAIL } from "./his-wood-river.ts";
+import {
+  applyHisIdentity,
+  HIS_AROMATICS_FILE_ID,
+  HIS_AROMATICS_FREEZE_FILE_ID,
+  HIS_AROMATICS_PACK_ID,
+  hisFileForPackId,
+  hisKnownEstimateFiles,
+  hisMatchForPack,
+  NATHAN_DESK_EMAIL,
+} from "./his-wood-river.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 
 export type DriveFile = {
@@ -757,6 +770,29 @@ export async function findDrivePackByPackId(adapter: DriveAdapter, folderId: str
   return pickCanonicalMatch(matches).file;
 }
 
+async function restoreAromaticsClockIfSmashed(
+  adapter: DriveAdapter,
+  pack: EstimatePackSnapshot,
+  fileId: string,
+): Promise<EstimatePackSnapshot> {
+  if (fileId === HIS_AROMATICS_FREEZE_FILE_ID) return pack;
+  if (fileId !== HIS_AROMATICS_FILE_ID && pack.packId !== HIS_AROMATICS_PACK_ID) return pack;
+  if (!packClockIsSeedSmashed(pack)) return pack;
+  try {
+    const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(HIS_AROMATICS_FREEZE_FILE_ID)));
+    if (!parsed.ok || !scheduleHasWork(parsed.pack.schedule) || !crewHasCustomClock(parsed.pack.crew)) {
+      return pack;
+    }
+    const restored = restorePackClock(pack, parsed.pack);
+    if (fileId === HIS_AROMATICS_FILE_ID) {
+      await adapter.updateJson(fileId, JSON.stringify(publicPack(restored), null, 2));
+    }
+    return restored;
+  } catch {
+    return pack;
+  }
+}
+
 export async function readDrivePackById(
   adapter: DriveAdapter,
   packId: string,
@@ -765,7 +801,8 @@ export async function readDrivePackById(
   const file = await findDrivePackByPackId(adapter, resolveEstimatesFolder(folderId), packId);
   if (!file) return null;
   const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
-  return parsed.ok ? publicPack(parsed.pack) : null;
+  if (!parsed.ok) return null;
+  return publicPack(await restoreAromaticsClockIfSmashed(adapter, parsed.pack, file.id));
 }
 
 export async function deleteEstimateInDrive(
@@ -875,10 +912,13 @@ export async function listDrivePacks(adapter: DriveAdapter, folderId = estimates
   const files = await listedOrKnownFiles(adapter, resolveEstimatesFolder(folderId));
   const packs: EstimatePackSnapshot[] = [];
   for (const file of files) {
-    if (isThinDriveStub(file.id)) continue;
+    if (isThinDriveStub(file.id) || file.id === HIS_AROMATICS_FREEZE_FILE_ID) continue;
     try {
       const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
-      if (parsed.ok) packs.push(reclaimListedPack(parsed.pack));
+      if (parsed.ok) {
+        const pack = await restoreAromaticsClockIfSmashed(adapter, reclaimListedPack(parsed.pack), file.id);
+        packs.push(pack);
+      }
     } catch {
       // skip
     }
@@ -895,5 +935,6 @@ export async function readDrivePack(
   const file = await findDrivePackFile(adapter, resolveEstimatesFolder(folderId), packId, ownerEmail);
   if (!file) return null;
   const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
-  return parsed.ok ? publicPack(parsed.pack) : null;
+  if (!parsed.ok) return null;
+  return publicPack(await restoreAromaticsClockIfSmashed(adapter, parsed.pack, file.id));
 }

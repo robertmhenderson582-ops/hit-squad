@@ -2,9 +2,11 @@ import type { ClockOverride } from "./hours-clock";
 import type { LaborClass } from "./labor-class";
 import {
   PHASE_IDS,
+  isDefaultSeedSchedule,
   phaseForRange,
   rangeSeedFromPhase,
   rangeSeedsFromPhases,
+  rangesHaveCustomClock,
   type JobUnit,
   type PhaseRow,
 } from "./phase-schedule.ts";
@@ -479,6 +481,9 @@ export function syncCraftRows(
   units: JobUnit[] = [],
   multiUnits = false,
 ): CraftRow[] {
+  if (isDefaultSeedSchedule({ phases }) && rows.some((row) => rangesHaveCustomClock(row.ranges))) {
+    return rows;
+  }
   return rows.map((row) => {
     if (!row.position.trim() && row.ranges.length === 0) return row;
     return { ...row, ranges: rangesFromPhases(phases, row.ranges, units, multiUnits) };
@@ -576,7 +581,11 @@ export function syncSupportRows(
   units: JobUnit[] = [],
   multiUnits = false,
 ): SupportLine[] {
-  return hydrateSupportLines(rows).map((row) => ({
+  const hydrated = hydrateSupportLines(rows);
+  if (isDefaultSeedSchedule({ phases }) && hydrated.some((row) => rangesHaveCustomClock(row.ranges))) {
+    return hydrated;
+  }
+  return hydrated.map((row) => ({
     ...row,
     ranges: rangesFromPhases(phases, row.ranges, units, multiUnits),
   }));

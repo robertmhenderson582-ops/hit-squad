@@ -114,6 +114,18 @@ describe("crew ranges are per position", () => {
     assert.equal(/Shift/.test(job), false);
   });
 
+  it("sync does not remap a 2027 calendar onto the 2026 demo seed", () => {
+    const row = craftRowFromPhases(defaultPhases());
+    row.position = "Boilermaker Journeyman";
+    row.ranges = row.ranges.map((range) =>
+      range.phaseId === "pre" ? { ...range, start: "2027-01-11", end: "2027-02-28" } : range,
+    );
+    const synced = syncCraftRows([row], defaultPhases())[0];
+    const pre = synced.ranges.find((range) => range.phaseId === "pre");
+    assert.equal(pre?.start, "2027-01-11");
+    assert.equal(pre?.end, "2027-02-28");
+  });
+
   it("changing Shift on a range still sticks through sync", () => {
     const phases = defaultPhases();
     const row = assignCraftPosition(blankCraftRow(), "Pipefitter Journeyman", phases);

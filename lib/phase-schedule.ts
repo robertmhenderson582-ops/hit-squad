@@ -265,6 +265,47 @@ export function defaultPhaseSchedule(): PhaseScheduleState {
   return { projectStart: phases[0].start, phases, multiUnits: false, units: [] };
 }
 
+/** Inclusive span of `defaultPhases()` demo dates. A 2027 Job setup falls outside this. */
+export function defaultSeedDateSpan() {
+  const seed = defaultPhases();
+  return { start: seed[0].start, stop: seed[seed.length - 1].stop };
+}
+
+function asScheduleRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+/**
+ * True when saved Job setup is missing or still the 2026 demo seed.
+ * Opening a real 2027 pack must not treat this as worked schedule.
+ */
+export function isDefaultSeedSchedule(schedule: unknown): boolean {
+  const row = asScheduleRecord(schedule);
+  const incoming = Array.isArray(row?.phases) ? row.phases : [];
+  if (incoming.length === 0) return true;
+  const seed = defaultPhases();
+  return seed.every((phase) => {
+    const hit = incoming.find((item) => asScheduleRecord(item)?.id === phase.id);
+    const item = asScheduleRecord(hit);
+    if (!item) return true;
+    const start = typeof item.start === "string" ? item.start : "";
+    const stop = typeof item.stop === "string" ? item.stop : typeof item.end === "string" ? item.end : "";
+    return start === phase.start && stop === phase.stop;
+  });
+}
+
+export function ymdOutsideDefaultSeed(ymd: string): boolean {
+  if (!ymd) return false;
+  const { start, stop } = defaultSeedDateSpan();
+  return ymd < start || ymd > stop;
+}
+
+export function rangesHaveCustomClock(ranges: Array<{ start?: string; end?: string }> | undefined): boolean {
+  return (ranges ?? []).some(
+    (range) => ymdOutsideDefaultSeed(range.start || "") || ymdOutsideDefaultSeed(range.end || ""),
+  );
+}
+
 function unitUid() {
   return `unit-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }

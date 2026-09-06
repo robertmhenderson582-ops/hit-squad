@@ -5,8 +5,11 @@ import {
   applyOtPick,
   cascadePhases,
   defaultPhaseSchedule,
+  defaultPhases,
+  isDefaultSeedSchedule,
   liveJobSetupPhases,
   mergeSchedule,
+  rangesHaveCustomClock,
   otPicksForPhase,
   patchPhase,
   phaseBarRuns,
@@ -183,6 +186,24 @@ describe("phase schedule", () => {
         { id: "mech", startIndex: 3, endIndex: 3 },
       ],
     );
+  });
+
+  it("default 2026 demo seed is not a worked 2027 Job setup", () => {
+    assert.equal(isDefaultSeedSchedule(null), true);
+    assert.equal(isDefaultSeedSchedule({ phases: [] }), true);
+    assert.equal(isDefaultSeedSchedule(defaultPhaseSchedule()), true);
+    assert.equal(isDefaultSeedSchedule({ phases: defaultPhases() }), true);
+    assert.equal(
+      isDefaultSeedSchedule({
+        projectStart: "2027-01-11",
+        phases: defaultPhases().map((row) =>
+          row.id === "pre" ? { ...row, start: "2027-01-11", stop: "2027-02-28" } : row,
+        ),
+      }),
+      false,
+    );
+    assert.equal(rangesHaveCustomClock([{ start: "2027-01-11", end: "2027-02-28" }]), true);
+    assert.equal(rangesHaveCustomClock([{ start: "2026-09-03", end: "2026-09-03" }]), false);
   });
 
   it("Excel phase bar uses hard blue / red / green with white labels", () => {
