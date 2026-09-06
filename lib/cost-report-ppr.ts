@@ -2,9 +2,10 @@
  * Mike-shaped Total Project PPR model.
  * Budget $ / hours come from the live estimate pack (deskBudgetFromPack + crew
  * calendars). Actuals come from Turnip T3 Export 15 / 16 ClientActual fields.
- * Day-1 earned: Direct earned hours track expended when there is no P6.
+ * Earned hours come from Schedule / Progress KPI on the Cost report book.
+ * Empty KPI falls back to Day-1 stand-in: Direct earned tracks expended.
  * Support earned = Direct physical % complete × Support budget hours.
- * Do not invent P6 progress. Variance is not the star column.
+ * Variance is not the star column.
  */
 import { computeRowHours } from "./hours-clock.ts";
 import { defaultLaborClass } from "./labor-class.ts";
@@ -16,11 +17,20 @@ import { perDiemDollarsFromCrew, shahanCrewCostAmount, shahanCrewTitle } from ".
 import { subcontractorTotal, type SubSheet } from "./subcontractor.ts";
 import { wageLookupOpts } from "./wage-lookup.ts";
 import type { CostBudget, CostReportBook, TurnipPaste, TurnipRow } from "./cost-report.ts";
+import {
+  resolveScheduleEarned,
+  SCHEDULE_KPI_ACTIVE_NOTE,
+  SCHEDULE_KPI_STANDIN_NOTE,
+} from "./cost-report-schedule.ts";
 
 export const PPR_SHEET_ROLE = "(1) Total Project PPR";
 export const PPR_REPORT_TITLE = "Cost, Progress & Performance Report";
-export const PPR_EARNED_NOTE =
-  "Day-1 earned hours: Direct earned tracks expended (no P6 this pass). Support earned = Direct physical % complete × Support budget hours. Budget from the live Hit Squad estimate pack — not Mike’s Estimate Summary links.";
+export const PPR_EARNED_NOTE = `${SCHEDULE_KPI_STANDIN_NOTE} Budget from the live Hit Squad estimate pack — not Mike’s Estimate Summary links.`;
+
+export function pprEarnedNote(fromKpi: boolean) {
+  const body = fromKpi ? SCHEDULE_KPI_ACTIVE_NOTE : SCHEDULE_KPI_STANDIN_NOTE;
+  return `${body} Budget from the live Hit Squad estimate pack — not Mike’s Estimate Summary links.`;
+}
 
 export const TURNIP15_TITLE = "T3 Export 15 — Client Cost Analysis";
 export const TURNIP16_TITLE = "T3 Export 16 — Client Craft Analysis";
@@ -401,7 +411,9 @@ function zeroActual(): LaneActual {
 
 /**
  * Build the print-sheet rows. Craft lines keep live-pack titles.
- * Direct earned = expended (no P6). Support earned uses Direct % complete.
+ * Scheduler KPI earned (when entered) drives Direct earned / % complete.
+ * Empty KPI falls back to Day-1 stand-in: Direct earned = expended.
+ * Support earned = Direct physical % complete × Support budget hours.
  */
 export function buildPprLines(budget: CostBudget, book: CostReportBook): PprComputedLine[] {
   const current = laneActualsFromPaste(book.export15);
@@ -412,6 +424,9 @@ export function buildPprLines(budget: CostBudget, book: CostReportBook): PprComp
   const crafts = craftsOf(budget);
   const directBudget = laneOf(budget, "direct");
   const changeOrders = money(budget.changeOrders ?? 0);
+  const priorKpi = resolveScheduleEarned(priorShot?.schedule, directBudget.hours, 0);
+  const kpi = resolveScheduleEarned(book.schedule, directBudget.hours, priorKpi.toDate);
+  const useKpi = kpi.fromKpi;
 
   const craftLines: PprComputedLine[] = crafts.map((craft) => {
     const key = craftKey(craft.label);
@@ -420,8 +435,8 @@ export function buildPprLines(budget: CostBudget, book: CostReportBook): PprComp
     const share = directBudget.hours > 0 ? craft.hours / directBudget.hours : crafts.length ? 1 / crafts.length : 0;
     const expD = money((current.direct.dollars || 0) * share);
     const priorD = money((prior.direct.dollars || 0) * share);
-    const earned = expH;
-    const earnedDaily = hours(Math.max(0, expH - priorH));
+    const earned = useKpi ? hours(kpi.toDate * share) : expH;
+    const earnedDaily = useKpi ? hours(kpi.daily * share) : hours(Math.max(0, expH - priorH));
     const line = computedLine(
       craft.id,
       "line",
@@ -437,8 +452,8 @@ export function buildPprLines(budget: CostBudget, book: CostReportBook): PprComp
   });
 
   if (!craftLines.length) {
-    const earned = current.direct.hours;
-    const earnedDaily = hours(Math.max(0, current.direct.hours - prior.direct.hours));
+    const earned = useKpi ? kpi.toDate : current.direct.hours;
+    const earnedDaily = useKpi ? kpi.daily : hours(Math.max(0, current.direct.hours - prior.direct.hours));
     craftLines.push(
       computedLine(
         "direct-line",
@@ -456,7 +471,10 @@ export function buildPprLines(budget: CostBudget, book: CostReportBook): PprComp
     const leftoverH = hours(Math.max(0, current.direct.hours - assignedH));
     const assignedD = craftLines.reduce((sum, line) => sum + line.expendedDollarsToDate, 0);
     const leftoverD = money(Math.max(0, current.direct.dollars - assignedD));
-    if (leftoverH > 0 || leftoverD > 0) {
+    const assignedEarned = craftLines.reduce((sum, line) => sum + line.earnedHoursToDate, 0);
+    const leftoverEarned = useKpi ? hours(Math.max(0, kpi.toDate - assignedEarned)) : leftoverH;
+    const leftoverEarnedDaily = useKpi ? hours(Math.max(0, kpi.daily - craftLines.reduce((sum, line) => sum + line.earnedHoursDaily, 0))) : leftoverH;
+    if (leftoverH > 0 || leftoverD > 0 || leftoverEarned > 0) {
       craftLines.push(
         computedLine(
           "direct-unassigned",
@@ -465,36 +483,48 @@ export function buildPprLines(budget: CostBudget, book: CostReportBook): PprComp
           { dollars: 0, hours: 0 },
           { hours: leftoverH, dollars: leftoverD },
           zeroActual(),
-          leftoverH,
-          leftoverH,
+          leftoverEarned,
+          leftoverEarnedDaily,
         ),
       );
     }
   }
 
-  const directPct = directBudget.hours > 0 ? ratio(current.direct.hours, directBudget.hours) : 0;
+  const standInPct = directBudget.hours > 0 ? ratio(current.direct.hours, directBudget.hours) : 0;
+  const directPct = useKpi ? kpi.pct : standInPct;
+  const supportPriorPct = useKpi
+    ? priorKpi.fromKpi
+      ? priorKpi.pct
+      : 0
+    : directBudget.hours > 0
+      ? ratio(prior.direct.hours, directBudget.hours)
+      : 0;
 
-  const supportBudget = laneOf(budget, "support");
-  const supportEarned = hours(directPct * supportBudget.hours);
-  const supportPriorPct = directBudget.hours > 0 ? ratio(prior.direct.hours, directBudget.hours) : 0;
-  const supportEarnedPrior = hours(supportPriorPct * supportBudget.hours);
-
-  function laborLine(id: PprLaneId, label: string, earnedMode: "expended" | "support-pct"): PprComputedLine {
+  function laborLine(id: PprLaneId, label: string, earnedMode: "expended" | "progress-pct"): PprComputedLine {
     const b = laneOf(budget, id);
     const exp = current[id];
     const prev = prior[id];
-    let earned = earnedMode === "support-pct" ? supportEarned : exp.hours;
-    let earnedDaily =
-      earnedMode === "support-pct" ? hours(Math.max(0, supportEarned - supportEarnedPrior)) : hours(Math.max(0, exp.hours - prev.hours));
+    let earned: number;
+    let earnedDaily: number;
+    if (earnedMode === "progress-pct") {
+      earned = hours(directPct * b.hours);
+      earnedDaily = hours(Math.max(0, earned - hours(supportPriorPct * b.hours)));
+    } else if (useKpi) {
+      earned = 0;
+      earnedDaily = 0;
+    } else {
+      earned = exp.hours;
+      earnedDaily = hours(Math.max(0, exp.hours - prev.hours));
+    }
     const line = computedLine(id, "line", label, { dollars: b.dollars, hours: b.hours }, exp, prev, earned, earnedDaily);
     line.lane = id;
     return line;
   }
 
   const indirect = [
-    laborLine("foremen", "Foremen", "expended"),
-    laborLine("support", "Support", "support-pct"),
-    laborLine("staff", "Staff", "expended"),
+    laborLine("foremen", "Foremen", useKpi ? "progress-pct" : "expended"),
+    laborLine("support", "Support", "progress-pct"),
+    laborLine("staff", "Staff", useKpi ? "progress-pct" : "expended"),
     laborLine("perDiem", "Per Diem", "expended"),
     laborLine("travel", "Mileage / Travel", "expended"),
     laborLine("weather", "Weather Delays", "expended"),

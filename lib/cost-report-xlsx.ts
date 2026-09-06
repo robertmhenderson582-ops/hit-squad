@@ -3,7 +3,9 @@
  * Total Project PPR is Mike’s dense multi-header print sheet.
  * Budget cells are values from the live desk pack — never Mike’s Estimate
  * Summary Excel links. Actuals / earned come from Turnip 15 / 16 ClientActual
- * fields. Charts lead the send package; Cover + PPR + Hrs S-curve + Report log follow.
+ * fields. Earned / % complete bind to Schedule / Progress KPI when entered;
+ * otherwise Day-1 stand-in (Direct earned = expended). Charts lead the send
+ * package; Cover + PPR + Hrs S-curve + Report log follow.
  */
 import {
   ESTIMATE_EXPORT_BRAND,
@@ -16,6 +18,7 @@ import {
   COST_REPORT_NOUN,
   buildCostCurve,
   costActualsFromPastes,
+  scheduleKpiEntered,
   snapshotList,
   type CostBudget,
   type CostCurvePoint,
@@ -23,7 +26,6 @@ import {
   type TurnipPaste,
 } from "./cost-report.ts";
 import {
-  PPR_EARNED_NOTE,
   PPR_REPORT_TITLE,
   PPR_SHEET_ROLE,
   TURNIP15_HEADERS,
@@ -31,6 +33,7 @@ import {
   TURNIP16_HEADERS,
   TURNIP16_TITLE,
   buildPprLines,
+  pprEarnedNote,
   pprTotalLine,
   type PprComputedLine,
 } from "./cost-report-ppr.ts";
@@ -456,6 +459,7 @@ function writePprLine(cells: SheetCell[], row: number, line: PprComputedLine, me
 function buildPprSheet(input: CostReportXlsxInput): WorkbookSheet {
   const cells: SheetCell[] = [];
   const { lines, first, totalRow, notesRow } = pprLayout(input);
+  const earnedNote = pprEarnedNote(scheduleKpiEntered(input.book.schedule));
   pushText(cells, "A1", COST_EXPORT_BRAND);
   pushText(cells, "A2", jobLine(input) || COST_REPORT_NOUN);
   pushText(cells, "A3", PPR_REPORT_TITLE);
@@ -497,7 +501,7 @@ function buildPprSheet(input: CostReportXlsxInput): WorkbookSheet {
   });
 
   pushText(cells, `A${notesRow}`, "Notes");
-  pushText(cells, `B${notesRow}`, [input.book.notes.trim(), PPR_EARNED_NOTE].filter(Boolean).join("  ·  "));
+  pushText(cells, `B${notesRow}`, [input.book.notes.trim(), earnedNote].filter(Boolean).join("  ·  "));
   const merges = [
     "A1:T1",
     "A2:T2",
@@ -533,7 +537,7 @@ function buildPprSheet(input: CostReportXlsxInput): WorkbookSheet {
     freeze: { xSplit: 1, ySplit: 9 },
     printTitlesRow: "7:9",
     fitToHeight: 1,
-    comments: [{ ref: `A${totalRow}`, text: PPR_EARNED_NOTE }],
+    comments: [{ ref: `A${totalRow}`, text: earnedNote }],
   };
 }
 

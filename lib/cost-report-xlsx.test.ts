@@ -10,6 +10,7 @@ import {
   deskBudgetFromPack,
   emptyCostReportBook,
   estimateCurveFromCrew,
+  hydrateScheduleKpi,
   parseTurnipPaste,
   saveCostSnapshot,
 } from "./cost-report.ts";
@@ -151,7 +152,7 @@ describe("cost report Excel export", () => {
     const t16 = sheets.find((sheet) => sheet.name === COST_XLSX_SHEETS.export16);
     assert.ok(t16?.cells.some((cell) => cell.type === "text" && cell.value === "event_dt"));
     assert.ok(t16?.cells.some((cell) => cell.type === "text" && cell.value === "Units"));
-    assert.match(PPR_EARNED_NOTE, /no P6/i);
+    assert.match(PPR_EARNED_NOTE, /Day-1 stand-in/i);
   });
 
   it("writes a real xlsx with industrial PPR chrome and does not leak field-trial copy", async () => {
@@ -259,6 +260,24 @@ describe("cost report Excel export", () => {
     assert.equal(craft.rows[0]?.hours, 12);
   });
 
+  it("scheduler KPI drives Direct earned off the expended stand-in", () => {
+    const input = fixtureBook();
+    const empty = buildPprLines(input.budget, input.book);
+    const craft = empty.find((line) => line.label === "Pipefitter Journeyman");
+    assert.ok(craft);
+    assert.equal(craft.earnedHoursToDate, craft.expendedHoursToDate);
+    const withKpi = buildPprLines(input.budget, {
+      ...input.book,
+      schedule: hydrateScheduleKpi({ earnedHoursToDate: 10, earnedHoursDaily: 4 }),
+    });
+    const earnedCraft = withKpi.find((line) => line.label === "Pipefitter Journeyman");
+    assert.ok(earnedCraft);
+    assert.equal(earnedCraft.earnedHoursToDate, 10);
+    assert.equal(earnedCraft.earnedHoursDaily, 4);
+    assert.notEqual(earnedCraft.earnedHoursToDate, earnedCraft.expendedHoursToDate);
+    assert.equal(earnedCraft.expendedHoursToDate, 16);
+  });
+
   it("Day-1 earned tracks expended on Direct and uses Direct % for Support", () => {
     const input = fixtureBook();
     const lines = buildPprLines(input.budget, input.book);
@@ -315,5 +334,21 @@ describe("cost report Excel export", () => {
     assert.equal(data.getCell("X7").value, "Materials");
     const source = readFileSync(fileURLToPath(new URL("./cost-report-sample.ts", import.meta.url)), "utf8");
     assert.equal(/PCA000110|mike-cost-report-map|\.xls\b/i.test(source), false);
+    const lines = buildPprLines(sample.budget, sample.book);
+    const craftEarned = lines
+      .filter((line) => line.lane === "craft" || line.id === "direct-unassigned" || line.id === "direct-line")
+      .reduce((sum, line) => sum + line.earnedHoursToDate, 0);
+    const craftExpended = lines
+      .filter((line) => line.lane === "craft" || line.id === "direct-unassigned" || line.id === "direct-line")
+      .reduce((sum, line) => sum + line.expendedHoursToDate, 0);
+    assert.equal(craftEarned, 126);
+    assert.notEqual(craftEarned, craftExpended);
+    const { first, notesRow } = pprLayout(sample);
+    const pfIndex = lines.findIndex((line) => line.label === "Pipefitter Journeyman");
+    assert.ok(pfIndex >= 0);
+    const pfRow = first + pfIndex;
+    assert.equal(Number(ppr.getCell(`O${pfRow}`).value), lines[pfIndex]?.earnedHoursToDate);
+    assert.notEqual(Number(ppr.getCell(`O${pfRow}`).value), Number(ppr.getCell(`K${pfRow}`).value));
+    assert.match(String(ppr.getCell(`B${notesRow}`).value ?? ""), /scheduler KPI/i);
   });
 });

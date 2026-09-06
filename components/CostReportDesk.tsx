@@ -13,17 +13,22 @@ import {
   costActualsFromPastes,
   deskBudgetFromPack,
   emptyCostReportBook,
+  hydrateScheduleKpi,
   parseLooseDate,
   todayYmd,
   estimateCurveFromCrew,
   openCostSnapshot,
   readCostReport,
+  resolveScheduleEarned,
   saveCostSnapshot,
+  scheduleKpiEntered,
   snapshotList,
   spentPct,
+  SCHEDULE_KPI_STANDIN_NOTE,
   variance,
   writeCostReport,
   type CostReportBook,
+  type ScheduleKpiUnit,
   type TurnipExportKind,
 } from "@/lib/cost-report";
 import { costReportToXlsx, costReportXlsxFilename } from "@/lib/cost-report-xlsx";
@@ -46,6 +51,23 @@ function money(value: number) {
 
 function hours(value: number) {
   return value ? value.toLocaleString("en-US", { maximumFractionDigits: 1 }) : "—";
+}
+
+function numberField(value: number | null | undefined) {
+  return value == null || !Number.isFinite(value) ? "" : String(value);
+}
+
+function optionalNumber(raw: string): number | null {
+  const text = raw.trim();
+  if (!text) return null;
+  const n = Number(text.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function pctField(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "";
+  const shown = value > 1 ? value : value * 100;
+  return String(Math.round(shown * 1000) / 1000);
 }
 
 function pct(value: number) {
@@ -178,10 +200,34 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
   const history = snapshotList(book);
   const local = findLocalPack(packIdFromEstimateKey(pack.estimateKey) || "");
   const jobTitle = local?.title || "Working estimate";
+  const directBudgetHours = budget.lanes?.find((lane) => lane.id === "direct")?.hours ?? 0;
+  const priorEarned = (() => {
+    const prior = history.find((shot) => shot.statusDate < (parseLooseDate(book.statusDate) || book.statusDate));
+    return prior ? resolveScheduleEarned(prior.schedule, directBudgetHours).toDate : 0;
+  })();
+  const earned = resolveScheduleEarned(book.schedule, directBudgetHours, priorEarned);
+  const kpiOn = scheduleKpiEntered(book.schedule);
+  const unitRows: ScheduleKpiUnit[] = [
+    ...(book.schedule.units ?? []),
+    { unit: "", earnedHours: 0, planPct: null },
+  ];
 
   function persist(next: CostReportBook) {
     setBook(next);
     writeCostReport(pack.estimateKey, next);
+  }
+
+  function persistSchedule(patch: Partial<CostReportBook["schedule"]>) {
+    persist({ ...book, schedule: hydrateScheduleKpi({ ...book.schedule, ...patch }) });
+  }
+
+  function persistUnit(index: number, patch: Partial<ScheduleKpiUnit>) {
+    const units = [...(book.schedule.units ?? [])];
+    if (index < units.length) units[index] = { ...units[index], ...patch };
+    else units.push({ unit: "", earnedHours: 0, planPct: null, ...patch });
+    persistSchedule({
+      units: units.filter((row) => row.unit.trim() || row.earnedHours > 0),
+    });
   }
 
   async function ingest(kind: TurnipExportKind, file: File | null) {
@@ -279,6 +325,125 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
       </section>
 
       <section className="plant-card px-5 py-5">
+        <h2 className="text-2xl font-semibold text-[#163038]">Schedule / Progress</h2>
+        <p className="mt-1 text-sm text-[#5b6f73]">
+          Scheduler KPI from Primavera / customer progress. Uses the Cost report status date
+          above. To-date earned workhours are the source of truth for PPR Earned and Physical %
+          Complete (hours win if a % is also typed).
+        </p>
+        {!kpiOn ? (
+          <p className="mt-3 text-sm text-[#5b6f73]">{SCHEDULE_KPI_STANDIN_NOTE}</p>
+        ) : (
+          <p className="mt-3 text-sm text-[#0077a3]">
+            {earned.toDate.toLocaleString("en-US", { maximumFractionDigits: 1 })} earned hours
+            {directBudgetHours > 0
+              ? ` → ${(earned.pct * 100).toFixed(1)}% of Direct budget hours`
+              : ""}
+            {earned.hoursAreSource ? " (hours are source of truth)" : " (from typed physical %)"}.
+          </p>
+        )}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="block text-sm">
+            To Date Earned workhours
+            <input
+              className="paper-field mt-1 border-[#00B0F0] text-[#0077a3]"
+              inputMode="decimal"
+              placeholder="Required — scheduler earned"
+              value={numberField(book.schedule.earnedHoursToDate)}
+              onChange={(event) => persistSchedule({ earnedHoursToDate: optionalNumber(event.target.value) })}
+            />
+          </label>
+          <label className="block text-sm">
+            Daily Earned
+            <input
+              className="paper-field mt-1"
+              inputMode="decimal"
+              placeholder="Optional — else vs prior save"
+              value={numberField(book.schedule.earnedHoursDaily)}
+              onChange={(event) => persistSchedule({ earnedHoursDaily: optionalNumber(event.target.value) })}
+            />
+          </label>
+          <label className="block text-sm">
+            Physical % Complete To Date
+            <input
+              className="paper-field mt-1"
+              inputMode="decimal"
+              placeholder="Optional — 45 or 45%"
+              value={pctField(book.schedule.physicalPctToDate)}
+              onChange={(event) =>
+                persistSchedule({
+                  physicalPctToDate: event.target.value.trim()
+                    ? optionalNumber(event.target.value)
+                    : null,
+                })
+              }
+            />
+          </label>
+        </div>
+        <label className="mt-4 block text-sm">
+          Progress notes
+          <textarea
+            rows={2}
+            className="paper-field mt-1"
+            placeholder="Optional — what the scheduler sent"
+            value={book.schedule.notes}
+            onChange={(event) => persistSchedule({ notes: event.target.value })}
+          />
+        </label>
+        <div className="mt-4 overflow-x-auto">
+          <p className="text-xs tracking-[0.1em] text-[#5b6f73]">UNITS (OPTIONAL)</p>
+          <table className="mt-2 min-w-full text-left text-sm">
+            <thead className="text-xs tracking-[0.1em] text-[#5b6f73]">
+              <tr>
+                {["Unit", "Earned Mhr", "Plan %"].map((header) => (
+                  <th key={header} className="px-2 py-2">
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {unitRows.map((row, index) => (
+                <tr key={`unit-${index}`} className="border-t border-[#d5e0de]">
+                  <td className="px-2 py-2">
+                    <input
+                      className="paper-field w-full"
+                      placeholder="Boiler A"
+                      value={row.unit}
+                      onChange={(event) => persistUnit(index, { unit: event.target.value })}
+                    />
+                  </td>
+                  <td className="px-2 py-2">
+                    <input
+                      className="paper-field w-full border-[#00B0F0] text-[#0077a3]"
+                      inputMode="decimal"
+                      value={row.earnedHours ? String(row.earnedHours) : ""}
+                      onChange={(event) =>
+                        persistUnit(index, { earnedHours: optionalNumber(event.target.value) ?? 0 })
+                      }
+                    />
+                  </td>
+                  <td className="px-2 py-2">
+                    <input
+                      className="paper-field w-full"
+                      inputMode="decimal"
+                      placeholder="40"
+                      value={pctField(row.planPct)}
+                      onChange={(event) =>
+                        persistUnit(index, {
+                          planPct: event.target.value.trim() ? optionalNumber(event.target.value) : null,
+                        })
+                      }
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Estimate vs actuals</h2>
         <p className="mt-1 text-sm text-[#5b6f73]">Live pack budget. Turnip actuals through the status date.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -361,7 +526,7 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
             <table className="min-w-full text-left text-sm">
               <thead className="text-xs tracking-[0.1em] text-[#5b6f73]">
                 <tr>
-                  {["Status date", "Budget $", "Actual $", "Hours", "Notes", ""].map((header) => (
+                  {["Status date", "Budget $", "Actual $", "Hours", "Earned Mhr", "Notes", ""].map((header) => (
                     <th key={header || "open"} className="px-2 py-2">
                       {header}
                     </th>
@@ -375,6 +540,13 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
                     <td className="px-2 py-2 font-mono">{money(shot.budget.total)}</td>
                     <td className="px-2 py-2 font-mono">{money(shot.actuals.dollars)}</td>
                     <td className="px-2 py-2 font-mono">{hours(shot.actuals.hours)}</td>
+                    <td className="px-2 py-2 font-mono">
+                      {shot.schedule.earnedHoursToDate == null
+                        ? "—"
+                        : shot.schedule.earnedHoursToDate.toLocaleString("en-US", {
+                            maximumFractionDigits: 1,
+                          })}
+                    </td>
                     <td className="px-2 py-2">{shot.notes || "—"}</td>
                     <td className="px-2 py-2">
                       <button

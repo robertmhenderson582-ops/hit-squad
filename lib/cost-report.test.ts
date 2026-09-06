@@ -13,12 +13,14 @@ import {
   emptyCostReportBook,
   estimateCurveFromCrew,
   hydrateCostReport,
+  hydrateScheduleKpi,
   latestSnapshotForDate,
   liveCostJobs,
   openCostSnapshot,
   parseTurnipPaste,
   readCostReport,
   saveCostSnapshot,
+  scheduleKpiEntered,
   writeCostReport,
   COST_REPORT_STORE_PREFIX,
 } from "./cost-report.ts";
@@ -159,6 +161,41 @@ describe("dated history snapshots", () => {
     assert.equal(costReportHasWork(reopened), true);
   });
 
+  it("saves and reloads scheduler earned KPIs with the daily snapshot", () => {
+    const schedule = hydrateScheduleKpi({
+      earnedHoursToDate: 126,
+      earnedHoursDaily: 42,
+      notes: "P6 progress",
+      units: [{ unit: "Boiler A", earnedHours: 80, planPct: 0.4 }],
+    });
+    let book = {
+      ...emptyCostReportBook(),
+      statusDate: "2026-09-03",
+      notes: "Wednesday",
+      schedule,
+    };
+    book = saveCostSnapshot(book, { total: 100, hours: 280, lines: [] }, 3);
+    assert.equal(book.snapshots[0]?.schedule.earnedHoursToDate, 126);
+    assert.equal(book.snapshots[0]?.schedule.earnedHoursDaily, 42);
+    assert.equal(book.snapshots[0]?.schedule.units[0]?.unit, "Boiler A");
+    const store = memoryStore();
+    writeCostReport("new:kpi-job", book, store);
+    const got = readCostReport("new:kpi-job", store);
+    assert.equal(got.schedule.earnedHoursToDate, 126);
+    assert.equal(got.snapshots[0]?.schedule.earnedHoursToDate, 126);
+    const opened = openCostSnapshot(got, got.snapshots[0]!.id);
+    assert.equal(opened.schedule.earnedHoursDaily, 42);
+    assert.equal(scheduleKpiEntered(opened.schedule), true);
+  });
+
+  it("counts typed scheduler KPI as cost-report work", () => {
+    assert.equal(costReportHasWork(emptyCostReportBook()), false);
+    assert.equal(
+      costReportHasWork(hydrateCostReport({ schedule: { earnedHoursToDate: 12 } })),
+      true,
+    );
+  });
+
   it("read/write persists the book on the estimate key", () => {
     const store = memoryStore();
     const book = saveCostSnapshot(
@@ -259,6 +296,9 @@ describe("hydrate + live job list", () => {
     assert.match(report, /downloadXlsx/);
     assert.match(report, /Excel export/);
     assert.match(report, /company-logo/);
+    assert.match(report, /Schedule \/ Progress/);
+    assert.match(report, /To Date Earned workhours/);
+    assert.match(report, /SCHEDULE_KPI_STANDIN_NOTE/);
     assert.equal(/DT after 12 rewrite|turn 12s into DT/.test(report), true);
   });
 });

@@ -10,6 +10,7 @@ import {
   estimateCurveFromCrew,
   saveCostSnapshot,
   type CostReportBook,
+  type ScheduleKpi,
 } from "./cost-report.ts";
 import { TURNIP15_HEADERS, TURNIP16_HEADERS } from "./cost-report-ppr.ts";
 import type { CostReportXlsxInput } from "./cost-report-xlsx.ts";
@@ -140,14 +141,45 @@ export function sampleCostReportInput(): CostReportXlsxInput {
     ["2026-09-01", "Firewatch", "SAMPLE-301", 20, 16, 4, 0, 500, 2],
   ]);
 
+  const scheduleDay1: ScheduleKpi = {
+    earnedHoursToDate: 60,
+    earnedHoursDaily: 60,
+    physicalPctToDate: null,
+    notes: "SAMPLE scheduler progress — invented earned hours",
+    units: [
+      { unit: "Boiler A", earnedHours: 36, planPct: null },
+      { unit: "Boiler B", earnedHours: 24, planPct: null },
+    ],
+  };
+  const scheduleStatus: ScheduleKpi = {
+    earnedHoursToDate: 126,
+    earnedHoursDaily: 42,
+    physicalPctToDate: null,
+    notes: "SAMPLE scheduler progress — invented earned hours",
+    units: [
+      { unit: "Boiler A", earnedHours: 80, planPct: 0.4 },
+      { unit: "Boiler B", earnedHours: 46, planPct: 0.35 },
+    ],
+  };
+
   let book: CostReportBook = emptyCostReportBook();
   book = applyTurnipPaste(book, "15", export15Prior);
   book = applyTurnipPaste(book, "16", export16Prior);
-  book = { ...book, statusDate: "2026-09-01", notes: "SAMPLE day 1 — synthetic Turnip paste" };
+  book = {
+    ...book,
+    statusDate: "2026-09-01",
+    notes: "SAMPLE day 1 — synthetic Turnip paste",
+    schedule: scheduleDay1,
+  };
   book = saveCostSnapshot(book, budget, 1);
   book = applyTurnipPaste(book, "15", export15);
   book = applyTurnipPaste(book, "16", export16);
-  book = { ...book, statusDate: "2026-09-03", notes: "SAMPLE status — invented hours and dollars only" };
+  book = {
+    ...book,
+    statusDate: "2026-09-03",
+    notes: "SAMPLE status — invented hours and dollars only",
+    schedule: scheduleStatus,
+  };
   book = saveCostSnapshot(book, budget, 2);
 
   const actualsByDate = {

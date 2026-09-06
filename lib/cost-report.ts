@@ -20,6 +20,26 @@ import type { EstimateTotalBreakdown, EstimateTotalLine } from "./estimate-total
 import { computeRangeHours } from "./hours-clock.ts";
 import { notifyEstimateSheets } from "./sheet-events.ts";
 import { pprLaneFromChargeCode, pprLanesFromPack, type CostBudgetLane, type PprLaneId } from "./cost-report-ppr.ts";
+import {
+  emptyScheduleKpi,
+  hydrateScheduleKpi,
+  scheduleKpiEntered,
+  type ScheduleKpi,
+} from "./cost-report-schedule.ts";
+
+export {
+  emptyScheduleKpi,
+  hydrateScheduleKpi,
+  parsePhysicalPct,
+  resolveScheduleEarned,
+  scheduleKpiEntered,
+  scheduleUnitHours,
+  SCHEDULE_KPI_ACTIVE_NOTE,
+  SCHEDULE_KPI_STANDIN_NOTE,
+  type ResolvedScheduleEarned,
+  type ScheduleKpi,
+  type ScheduleKpiUnit,
+} from "./cost-report-schedule.ts";
 
 export { COST_REPORT_STORE_PREFIX };
 export const COST_REPORT_TAB_ID = "cost-report";
@@ -105,6 +125,7 @@ export type CostReportSnapshot = {
   actuals: CostActuals;
   export15: TurnipPaste;
   export16: TurnipPaste;
+  schedule: ScheduleKpi;
 };
 
 export type CostReportBook = {
@@ -113,6 +134,7 @@ export type CostReportBook = {
   export15: TurnipPaste;
   export16: TurnipPaste;
   snapshots: CostReportSnapshot[];
+  schedule: ScheduleKpi;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -191,6 +213,7 @@ export function emptyCostReportBook(): CostReportBook {
     export15: emptyPaste(),
     export16: emptyPaste(),
     snapshots: [],
+    schedule: emptyScheduleKpi(),
   };
 }
 
@@ -258,6 +281,7 @@ export function costReportHasWork(value: unknown) {
   const exp16 = asRecord(row.export16);
   if (filledText(exp15?.raw) || (Array.isArray(exp15?.rows) && exp15.rows.length > 0)) return true;
   if (filledText(exp16?.raw) || (Array.isArray(exp16?.rows) && exp16.rows.length > 0)) return true;
+  if (scheduleKpiEntered(hydrateScheduleKpi(row.schedule))) return true;
   return false;
 }
 
@@ -275,6 +299,7 @@ export function hydrateCostReport(raw: unknown): CostReportBook {
     export15: normalizePaste(parsed.export15),
     export16: normalizePaste(parsed.export16),
     snapshots,
+    schedule: hydrateScheduleKpi(parsed.schedule),
   };
 }
 
@@ -343,6 +368,7 @@ function hydrateSnapshot(raw: unknown): CostReportSnapshot | null {
     },
     export15: normalizePaste(row.export15),
     export16: normalizePaste(row.export16),
+    schedule: hydrateScheduleKpi(row.schedule),
   };
 }
 
@@ -746,6 +772,7 @@ export function saveCostSnapshot(
       headers: [...(book.export16.headers ?? [])],
       grid: (book.export16.grid ?? []).map((row) => [...row]),
     },
+    schedule: hydrateScheduleKpi(book.schedule),
   };
   const snapshots = [snapshot, ...book.snapshots.filter((row) => row.statusDate !== statusDate)];
   return { ...book, statusDate, snapshots };
@@ -770,6 +797,7 @@ export function openCostSnapshot(book: CostReportBook, snapshotId: string): Cost
       headers: [...(shot.export16.headers ?? [])],
       grid: (shot.export16.grid ?? []).map((row) => [...row]),
     },
+    schedule: hydrateScheduleKpi(shot.schedule),
   };
 }
 
