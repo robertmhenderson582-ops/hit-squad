@@ -230,7 +230,7 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
         })
       : null;
     return purchasingCostSlice(purchasing, miscBudgetFromSheet(other ?? undefined));
-  }, [pack.crew, pack.estimateKey, pack.jobMeta.craftMileageRate, pack.jobMeta.staffMileageRate, pack.ready, purchasing]);
+  }, [pack.crew, pack.estimateKey, pack.jobMeta.craftMileageRate, pack.jobMeta.staffMileageRate, purchasing]);
   const history = snapshotList(book);
   const local = findLocalPack(packIdFromEstimateKey(pack.estimateKey) || "");
   const jobTitle = local?.title || "Working estimate";
@@ -603,7 +603,7 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
           />
         </div>
         <div className="mt-4 rounded-sm border border-[#c5d4d4] bg-[#fbf8f0] px-4 py-3">
-          <p className="text-xs tracking-[0.12em] text-[#5b6f73]">PURCHASES / CONSUMABLES</p>
+          <p className="text-xs tracking-[0.12em] text-[#5b6f73]">Purchases / consumables</p>
           <p className="mt-2 text-sm text-[#163038]">
             Live Purchasing tab: {money(purchases.grandTotal)}
             {purchases.lineCount

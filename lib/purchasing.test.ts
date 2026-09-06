@@ -165,7 +165,8 @@ describe("Purchasing Day-1 ledger", () => {
     const desk = readFileSync(fileURLToPath(new URL("../components/PurchasingDesk.tsx", import.meta.url)), "utf8");
     const cost = readFileSync(fileURLToPath(new URL("../components/CostReportDesk.tsx", import.meta.url)), "utf8");
     const pack = readFileSync(fileURLToPath(new URL("./estimate-pack.ts", import.meta.url)), "utf8");
-    const module = readFileSync(fileURLToPath(new URL("./purchasing.ts", import.meta.url)), "utf8");
+    const purchasingSrc = readFileSync(fileURLToPath(new URL("./purchasing.ts", import.meta.url)), "utf8");
+    const prefix = readFileSync(fileURLToPath(new URL("./purchasing-prefix.ts", import.meta.url)), "utf8");
     assert.match(workspace, /id: "purchasing"/);
     assert.match(workspace, /label: "Purchasing"/);
     assert.match(detail, /tab === "purchasing"/);
@@ -176,7 +177,9 @@ describe("Purchasing Day-1 ledger", () => {
     assert.match(cost, /Purchases \/ consumables/);
     assert.match(pack, /purchasing\?:/);
     assert.match(pack, /PURCHASING_STORE_PREFIX/);
-    assert.match(module, /PURCHASING_STORE_PREFIX = "hs_purchasing_v1:"/);
+    assert.match(purchasingSrc, /PURCHASING_STORE_PREFIX/);
+    assert.match(purchasingSrc, /from "\.\/purchasing-prefix.ts"/);
+    assert.match(prefix, /hs_purchasing_v1:/);
     assert.deepEqual([...PURCHASING_PARKED], [
       "AP / three-way match",
       "Invoice PDF vault upload",
@@ -185,6 +188,6 @@ describe("Purchasing Day-1 ledger", () => {
       "PPR chart purchases slice",
     ]);
     assert.equal(/three-way match automation|barcode scanner|auto-email/i.test(desk), false);
-    assert.equal(/P66 client|PCA000110/.test(module), false);
+    assert.equal(/P66 client|PCA000110/.test(purchasingSrc), false);
   });
 });

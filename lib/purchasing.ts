@@ -8,9 +8,10 @@ import { parseDeskNumber, parseLooseDate, todayYmd } from "./cost-report.ts";
 import { lookupShahanEquipment } from "./shahan-wood-river.ts";
 import { readEquipmentSheet, type EquipmentSheet } from "./equipment-sheet.ts";
 import { miscAmount, readOtherCost, type OtherCostSheet } from "./other-cost.ts";
+import { PURCHASING_STORE_PREFIX } from "./purchasing-prefix.ts";
 import { notifyEstimateSheets } from "./sheet-events.ts";
 
-export const PURCHASING_STORE_PREFIX = "hs_purchasing_v1:";
+export { PURCHASING_STORE_PREFIX };
 export const PURCHASING_TAB_ID = "purchasing";
 export const PURCHASING_TAB_LABEL = "Purchasing";
 export const PURCHASING_NOUN = "Purchasing Control Center";

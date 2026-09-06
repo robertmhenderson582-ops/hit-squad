@@ -49,27 +49,24 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
 export function PurchasingDesk({ client = "", site = "" }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
   const [book, setBook] = useState<PurchasingBook>(() => readPurchasing(""));
+  const [otherCost, setOtherCost] = useState(() => (pack.estimateKey ? readOtherCost(pack.estimateKey) : null));
+  const [equipment, setEquipment] = useState(() => (pack.estimateKey ? readEquipmentSheet(pack.estimateKey) : null));
 
   useEffect(() => {
     function load() {
       if (!pack.estimateKey) {
         setBook(readPurchasing(""));
+        setOtherCost(null);
+        setEquipment(null);
         return;
       }
       setBook(readPurchasing(pack.estimateKey));
+      setOtherCost(readOtherCost(pack.estimateKey));
+      setEquipment(readEquipmentSheet(pack.estimateKey));
     }
     load();
     return onEstimateSheets(load);
   }, [pack.estimateKey, pack.ready]);
-
-  const otherCost = useMemo(
-    () => (pack.estimateKey ? readOtherCost(pack.estimateKey) : null),
-    [pack.estimateKey, pack.ready],
-  );
-  const equipment = useMemo(
-    () => (pack.estimateKey ? readEquipmentSheet(pack.estimateKey) : null),
-    [pack.estimateKey, pack.ready],
-  );
   const misc = useMemo(() => miscBudgetFromSheet(otherCost ?? undefined), [otherCost]);
   const totals = useMemo(() => purchasingTotals(book.lines), [book.lines]);
   const slice = useMemo(() => purchasingCostSlice(book, misc), [book, misc]);
