@@ -3,9 +3,10 @@
  * Total Project PPR is Mike’s dense multi-header print sheet.
  * Budget cells are values from the live desk pack — never Mike’s Estimate
  * Summary Excel links. Actuals / earned come from Turnip 15 / 16 ClientActual
- * fields. Earned / % complete bind to Schedule / Progress KPI when entered;
- * otherwise Day-1 stand-in (Direct earned = expended). Charts lead the send
- * package; Cover + PPR + Hrs S-curve + Report log follow.
+ * fields. Earned / % complete bind to Schedule / Progress KPI
+ * (01 DailyReport_TOTAL Earned Mhr) when entered; otherwise Day-0
+ * stand-in (Direct earned = expended). Charts lead the send package;
+ * Cover + PPR + Hrs S-curve + Report log follow.
  */
 import {
   ESTIMATE_EXPORT_BRAND,

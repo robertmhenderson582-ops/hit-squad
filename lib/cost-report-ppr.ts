@@ -2,8 +2,9 @@
  * Mike-shaped Total Project PPR model.
  * Budget $ / hours come from the live estimate pack (deskBudgetFromPack + crew
  * calendars). Actuals come from Turnip T3 Export 15 / 16 ClientActual fields.
- * Earned hours come from Schedule / Progress KPI on the Cost report book.
- * Empty KPI falls back to Day-1 stand-in: Direct earned tracks expended.
+ * Earned hours come from Schedule / Progress KPI (01 DailyReport_TOTAL
+ * Summary Phase Grand Total fields). Empty KPI falls back to Day-0
+ * stand-in: Direct earned tracks expended.
  * Support earned = Direct physical % complete × Support budget hours.
  * Variance is not the star column.
  */
@@ -412,7 +413,7 @@ function zeroActual(): LaneActual {
 /**
  * Build the print-sheet rows. Craft lines keep live-pack titles.
  * Scheduler KPI earned (when entered) drives Direct earned / % complete.
- * Empty KPI falls back to Day-1 stand-in: Direct earned = expended.
+ * Empty KPI falls back to Day-0 stand-in: Direct earned = expended.
  * Support earned = Direct physical % complete × Support budget hours.
  */
 export function buildPprLines(budget: CostBudget, book: CostReportBook): PprComputedLine[] {

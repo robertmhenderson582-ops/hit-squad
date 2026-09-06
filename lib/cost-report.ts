@@ -32,14 +32,24 @@ export {
   hydrateScheduleKpi,
   parsePhysicalPct,
   resolveScheduleEarned,
+  scheduleAreaHours,
   scheduleKpiEntered,
   scheduleUnitHours,
   SCHEDULE_KPI_ACTIVE_NOTE,
   SCHEDULE_KPI_STANDIN_NOTE,
+  SCHEDULE_KPI_UPLOAD_NOTE,
   type ResolvedScheduleEarned,
   type ScheduleKpi,
+  type ScheduleKpiArea,
   type ScheduleKpiUnit,
 } from "./cost-report-schedule.ts";
+
+export {
+  DAILY_REPORT_DESK_FIELDS,
+  DAILY_REPORT_PHASES,
+  DAILY_REPORT_TOTAL_FILE,
+  DAILY_REPORT_UPLOAD_NOTE,
+} from "./daily-report-total.ts";
 
 export { COST_REPORT_STORE_PREFIX };
 export const COST_REPORT_TAB_ID = "cost-report";
@@ -51,6 +61,8 @@ export const COST_REPORT_PARKED = [
   "Full CPI / SPI earned-value table",
   "SCR page",
   "P66 Progress book",
+  "01 DailyReport_TOTAL upload (Summary Phase Grand Total → KPI)",
+  "Slicer Hrs tab (until DailyReport_TOTAL upload exists)",
   "Typed time-entry UI (Turnip 15 / 16 paste stays the ingest)",
 ] as const;
 

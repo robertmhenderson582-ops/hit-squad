@@ -152,7 +152,7 @@ describe("cost report Excel export", () => {
     const t16 = sheets.find((sheet) => sheet.name === COST_XLSX_SHEETS.export16);
     assert.ok(t16?.cells.some((cell) => cell.type === "text" && cell.value === "event_dt"));
     assert.ok(t16?.cells.some((cell) => cell.type === "text" && cell.value === "Units"));
-    assert.match(PPR_EARNED_NOTE, /Day-1 stand-in/i);
+    assert.match(PPR_EARNED_NOTE, /Day-0 stand-in/i);
   });
 
   it("writes a real xlsx with industrial PPR chrome and does not leak field-trial copy", async () => {
@@ -268,7 +268,7 @@ describe("cost report Excel export", () => {
     assert.equal(craft.earnedHoursToDate, craft.expendedHoursToDate);
     const withKpi = buildPprLines(input.budget, {
       ...input.book,
-      schedule: hydrateScheduleKpi({ earnedHoursToDate: 10, earnedHoursDaily: 4 }),
+      schedule: hydrateScheduleKpi({ earnedHours: 10, incEarned: 4 }),
     });
     const earnedCraft = withKpi.find((line) => line.label === "Pipefitter Journeyman");
     assert.ok(earnedCraft);
@@ -349,6 +349,10 @@ describe("cost report Excel export", () => {
     const pfRow = first + pfIndex;
     assert.equal(Number(ppr.getCell(`O${pfRow}`).value), lines[pfIndex]?.earnedHoursToDate);
     assert.notEqual(Number(ppr.getCell(`O${pfRow}`).value), Number(ppr.getCell(`K${pfRow}`).value));
-    assert.match(String(ppr.getCell(`B${notesRow}`).value ?? ""), /scheduler KPI/i);
+    assert.match(String(ppr.getCell(`B${notesRow}`).value ?? ""), /DailyReport_TOTAL/i);
+    assert.equal(
+      wb.worksheets.some((sheet) => /slicer/i.test(sheet.name)),
+      false,
+    );
   });
 });

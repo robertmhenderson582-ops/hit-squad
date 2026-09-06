@@ -5,8 +5,8 @@ import {
   hydrateScheduleKpi,
   parsePhysicalPct,
   resolveScheduleEarned,
+  scheduleAreaHours,
   scheduleKpiEntered,
-  scheduleUnitHours,
 } from "./cost-report-schedule.ts";
 
 describe("schedule / progress KPI", () => {
@@ -18,10 +18,12 @@ describe("schedule / progress KPI", () => {
     assert.equal(parsePhysicalPct(-1), null);
   });
 
-  it("hours win over typed % when both are present", () => {
+  it("hours win over typed Earned % when both are present", () => {
     const kpi = hydrateScheduleKpi({
-      earnedHoursToDate: 126,
-      physicalPctToDate: 0.9,
+      earnedHours: 126,
+      earnedPct: 0.9,
+      plannedHours: 168,
+      targetHours: 280,
     });
     const resolved = resolveScheduleEarned(kpi, 280, 60);
     assert.equal(resolved.fromKpi, true);
@@ -31,27 +33,41 @@ describe("schedule / progress KPI", () => {
     assert.equal(resolved.pct, 0.45);
   });
 
-  it("rolls unit hours when the job total is blank", () => {
+  it("accepts Day-1 aliases earnedHoursToDate / physicalPctToDate", () => {
     const kpi = hydrateScheduleKpi({
-      units: [
-        { unit: "Boiler A", earnedHours: 80 },
-        { unit: "Boiler B", earnedHours: 46 },
-      ],
+      earnedHoursToDate: 126,
+      physicalPctToDate: 0.9,
+      earnedHoursDaily: 42,
+      units: [{ unit: "Boiler A", earnedHours: 80 }],
     });
-    assert.equal(scheduleKpiEntered(kpi), true);
-    assert.equal(scheduleUnitHours(kpi), 126);
+    assert.equal(kpi.earnedHours, 126);
+    assert.equal(kpi.earnedPct, 0.9);
+    assert.equal(kpi.incEarned, 42);
+    assert.equal(kpi.areas[0]?.area, "Boiler A");
     assert.equal(resolveScheduleEarned(kpi, 280).toDate, 126);
   });
 
-  it("derives earned from physical % when no hours are typed", () => {
-    const kpi = hydrateScheduleKpi({ physicalPctToDate: 45 });
+  it("rolls Area hours when the job total is blank", () => {
+    const kpi = hydrateScheduleKpi({
+      areas: [
+        { area: "Boiler A", earnedHours: 80 },
+        { area: "Boiler B", earnedHours: 46 },
+      ],
+    });
+    assert.equal(scheduleKpiEntered(kpi), true);
+    assert.equal(scheduleAreaHours(kpi), 126);
+    assert.equal(resolveScheduleEarned(kpi, 280).toDate, 126);
+  });
+
+  it("derives earned from Earned % when no hours are typed", () => {
+    const kpi = hydrateScheduleKpi({ earnedPct: 45 });
     const resolved = resolveScheduleEarned(kpi, 200);
     assert.equal(resolved.toDate, 90);
     assert.equal(resolved.hoursAreSource, false);
     assert.equal(resolved.pct, 0.45);
   });
 
-  it("empty KPI is not entered", () => {
+  it("empty KPI is not entered — Day-0 stand-in path", () => {
     assert.equal(scheduleKpiEntered(emptyScheduleKpi()), false);
     assert.equal(resolveScheduleEarned(emptyScheduleKpi(), 200).fromKpi, false);
   });

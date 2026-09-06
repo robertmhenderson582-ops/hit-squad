@@ -142,23 +142,36 @@ export function sampleCostReportInput(): CostReportXlsxInput {
   ]);
 
   const scheduleDay1: ScheduleKpi = {
-    earnedHoursToDate: 60,
-    earnedHoursDaily: 60,
-    physicalPctToDate: null,
-    notes: "SAMPLE scheduler progress — invented earned hours",
-    units: [
-      { unit: "Boiler A", earnedHours: 36, planPct: null },
-      { unit: "Boiler B", earnedHours: 24, planPct: null },
+    earnedHours: 60,
+    plannedHours: 80,
+    targetHours: 280,
+    earnedPct: null,
+    planPct: 0.29,
+    incEarned: 60,
+    notes: "SAMPLE 01 DailyReport_TOTAL Summary Phase Grand Total — invented earned hours",
+    areas: [
+      { area: "Boiler A", earnedHours: 36, planPct: null },
+      { area: "Boiler B", earnedHours: 24, planPct: null },
+    ],
+    phases: [
+      { code: "TA", earnedHours: 60, plannedHours: 80, planPct: 0.29, earnedPct: null },
     ],
   };
   const scheduleStatus: ScheduleKpi = {
-    earnedHoursToDate: 126,
-    earnedHoursDaily: 42,
-    physicalPctToDate: null,
-    notes: "SAMPLE scheduler progress — invented earned hours",
-    units: [
-      { unit: "Boiler A", earnedHours: 80, planPct: 0.4 },
-      { unit: "Boiler B", earnedHours: 46, planPct: 0.35 },
+    earnedHours: 126,
+    plannedHours: 168,
+    targetHours: 280,
+    earnedPct: null,
+    planPct: 0.6,
+    incEarned: 42,
+    notes: "SAMPLE 01 DailyReport_TOTAL Summary Phase Grand Total — invented earned hours",
+    areas: [
+      { area: "Boiler A", earnedHours: 80, planPct: 0.4 },
+      { area: "Boiler B", earnedHours: 46, planPct: 0.35 },
+    ],
+    phases: [
+      { code: "PRE", earnedHours: 12, plannedHours: 20, planPct: 0.2, earnedPct: null },
+      { code: "TA", earnedHours: 114, plannedHours: 148, planPct: 0.55, earnedPct: null },
     ],
   };
 

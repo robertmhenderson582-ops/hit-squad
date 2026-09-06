@@ -8,6 +8,9 @@ import {
   COST_REPORT_LIVE_NOTE,
   COST_REPORT_NOUN,
   COST_REPORT_PARKED,
+  DAILY_REPORT_PHASES,
+  DAILY_REPORT_TOTAL_FILE,
+  SCHEDULE_KPI_UPLOAD_NOTE,
   applyTurnipPaste,
   buildCostCurve,
   costActualsFromPastes,
@@ -28,7 +31,7 @@ import {
   variance,
   writeCostReport,
   type CostReportBook,
-  type ScheduleKpiUnit,
+  type ScheduleKpiArea,
   type TurnipExportKind,
 } from "@/lib/cost-report";
 import { costReportToXlsx, costReportXlsxFilename } from "@/lib/cost-report-xlsx";
@@ -207,9 +210,9 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
   })();
   const earned = resolveScheduleEarned(book.schedule, directBudgetHours, priorEarned);
   const kpiOn = scheduleKpiEntered(book.schedule);
-  const unitRows: ScheduleKpiUnit[] = [
-    ...(book.schedule.units ?? []),
-    { unit: "", earnedHours: 0, planPct: null },
+  const areaRows: ScheduleKpiArea[] = [
+    ...(book.schedule.areas ?? []),
+    { area: "", earnedHours: 0, planPct: null },
   ];
 
   function persist(next: CostReportBook) {
@@ -221,12 +224,12 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
     persist({ ...book, schedule: hydrateScheduleKpi({ ...book.schedule, ...patch }) });
   }
 
-  function persistUnit(index: number, patch: Partial<ScheduleKpiUnit>) {
-    const units = [...(book.schedule.units ?? [])];
-    if (index < units.length) units[index] = { ...units[index], ...patch };
-    else units.push({ unit: "", earnedHours: 0, planPct: null, ...patch });
+  function persistArea(index: number, patch: Partial<ScheduleKpiArea>) {
+    const areas = [...(book.schedule.areas ?? [])];
+    if (index < areas.length) areas[index] = { ...areas[index], ...patch };
+    else areas.push({ area: "", earnedHours: 0, planPct: null, ...patch });
     persistSchedule({
-      units: units.filter((row) => row.unit.trim() || row.earnedHours > 0),
+      areas: areas.filter((row) => row.area.trim() || row.earnedHours > 0),
     });
   }
 
@@ -327,59 +330,97 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Schedule / Progress</h2>
         <p className="mt-1 text-sm text-[#5b6f73]">
-          Scheduler KPI from Primavera / customer progress. Uses the Cost report status date
-          above. To-date earned workhours are the source of truth for PPR Earned and Physical %
-          Complete (hours win if a % is also typed).
+          {DAILY_REPORT_TOTAL_FILE} Summary Phase Grand Total — the scheduler file Hit Squad
+          uses (not a new format). Uses the Cost report status date above. Earned Mhr is the
+          source of truth for PPR Earned and Physical % Complete (hours win if Earned % is also
+          typed).
         </p>
+        <p className="mt-2 text-sm text-[#5b6f73]">{SCHEDULE_KPI_UPLOAD_NOTE}</p>
         {!kpiOn ? (
           <p className="mt-3 text-sm text-[#5b6f73]">{SCHEDULE_KPI_STANDIN_NOTE}</p>
         ) : (
           <p className="mt-3 text-sm text-[#0077a3]">
-            {earned.toDate.toLocaleString("en-US", { maximumFractionDigits: 1 })} earned hours
+            {earned.toDate.toLocaleString("en-US", { maximumFractionDigits: 1 })} Earned Mhr
             {directBudgetHours > 0
               ? ` → ${(earned.pct * 100).toFixed(1)}% of Direct budget hours`
               : ""}
-            {earned.hoursAreSource ? " (hours are source of truth)" : " (from typed physical %)"}.
+            {earned.hoursAreSource ? " (hours are source of truth)" : " (from typed Earned %)"}.
           </p>
         )}
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <label className="block text-sm">
-            To Date Earned workhours
+            Earned Mhr
             <input
               className="paper-field mt-1 border-[#00B0F0] text-[#0077a3]"
               inputMode="decimal"
-              placeholder="Required — scheduler earned"
-              value={numberField(book.schedule.earnedHoursToDate)}
-              onChange={(event) => persistSchedule({ earnedHoursToDate: optionalNumber(event.target.value) })}
+              placeholder="Summary Phase Grand Total"
+              value={numberField(book.schedule.earnedHours)}
+              onChange={(event) => persistSchedule({ earnedHours: optionalNumber(event.target.value) })}
             />
           </label>
           <label className="block text-sm">
-            Daily Earned
+            Planned Mhr
             <input
               className="paper-field mt-1"
               inputMode="decimal"
-              placeholder="Optional — else vs prior save"
-              value={numberField(book.schedule.earnedHoursDaily)}
-              onChange={(event) => persistSchedule({ earnedHoursDaily: optionalNumber(event.target.value) })}
+              placeholder="Planned Mhr"
+              value={numberField(book.schedule.plannedHours)}
+              onChange={(event) => persistSchedule({ plannedHours: optionalNumber(event.target.value) })}
             />
           </label>
           <label className="block text-sm">
-            Physical % Complete To Date
+            Target Mhr
+            <input
+              className="paper-field mt-1"
+              inputMode="decimal"
+              placeholder="Target Mhr"
+              value={numberField(book.schedule.targetHours)}
+              onChange={(event) => persistSchedule({ targetHours: optionalNumber(event.target.value) })}
+            />
+          </label>
+          <label className="block text-sm">
+            Earned % / Actual %
             <input
               className="paper-field mt-1"
               inputMode="decimal"
               placeholder="Optional — 45 or 45%"
-              value={pctField(book.schedule.physicalPctToDate)}
+              value={pctField(book.schedule.earnedPct)}
               onChange={(event) =>
                 persistSchedule({
-                  physicalPctToDate: event.target.value.trim()
-                    ? optionalNumber(event.target.value)
-                    : null,
+                  earnedPct: event.target.value.trim() ? optionalNumber(event.target.value) : null,
                 })
               }
             />
           </label>
+          <label className="block text-sm">
+            Plan %
+            <input
+              className="paper-field mt-1"
+              inputMode="decimal"
+              placeholder="Optional — 45 or 45%"
+              value={pctField(book.schedule.planPct)}
+              onChange={(event) =>
+                persistSchedule({
+                  planPct: event.target.value.trim() ? optionalNumber(event.target.value) : null,
+                })
+              }
+            />
+          </label>
+          <label className="block text-sm">
+            Inc Earned
+            <input
+              className="paper-field mt-1"
+              inputMode="decimal"
+              placeholder="Optional — else vs prior save"
+              value={numberField(book.schedule.incEarned)}
+              onChange={(event) => persistSchedule({ incEarned: optionalNumber(event.target.value) })}
+            />
+          </label>
         </div>
+        <p className="mt-4 text-xs tracking-[0.1em] text-[#5b6f73]">
+          PHASE MAP · PRE / SD / TA / SU / POST →{" "}
+          {DAILY_REPORT_PHASES.map((row) => `${row.code}=${row.label}`).join(" · ")}
+        </p>
         <label className="mt-4 block text-sm">
           Progress notes
           <textarea
@@ -391,11 +432,11 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
           />
         </label>
         <div className="mt-4 overflow-x-auto">
-          <p className="text-xs tracking-[0.1em] text-[#5b6f73]">UNITS (OPTIONAL)</p>
+          <p className="text-xs tracking-[0.1em] text-[#5b6f73]">AREA (OPTIONAL — SUMMARY AREA ROLLUP)</p>
           <table className="mt-2 min-w-full text-left text-sm">
             <thead className="text-xs tracking-[0.1em] text-[#5b6f73]">
               <tr>
-                {["Unit", "Earned Mhr", "Plan %"].map((header) => (
+                {["Area", "Earned Mhr", "Plan %"].map((header) => (
                   <th key={header} className="px-2 py-2">
                     {header}
                   </th>
@@ -403,14 +444,14 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
               </tr>
             </thead>
             <tbody>
-              {unitRows.map((row, index) => (
-                <tr key={`unit-${index}`} className="border-t border-[#d5e0de]">
+              {areaRows.map((row, index) => (
+                <tr key={`area-${index}`} className="border-t border-[#d5e0de]">
                   <td className="px-2 py-2">
                     <input
                       className="paper-field w-full"
-                      placeholder="Boiler A"
-                      value={row.unit}
-                      onChange={(event) => persistUnit(index, { unit: event.target.value })}
+                      placeholder="Area"
+                      value={row.area}
+                      onChange={(event) => persistArea(index, { area: event.target.value })}
                     />
                   </td>
                   <td className="px-2 py-2">
@@ -419,7 +460,7 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
                       inputMode="decimal"
                       value={row.earnedHours ? String(row.earnedHours) : ""}
                       onChange={(event) =>
-                        persistUnit(index, { earnedHours: optionalNumber(event.target.value) ?? 0 })
+                        persistArea(index, { earnedHours: optionalNumber(event.target.value) ?? 0 })
                       }
                     />
                   </td>
@@ -430,7 +471,7 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
                       placeholder="40"
                       value={pctField(row.planPct)}
                       onChange={(event) =>
-                        persistUnit(index, {
+                        persistArea(index, {
                           planPct: event.target.value.trim() ? optionalNumber(event.target.value) : null,
                         })
                       }
@@ -541,9 +582,9 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
                     <td className="px-2 py-2 font-mono">{money(shot.actuals.dollars)}</td>
                     <td className="px-2 py-2 font-mono">{hours(shot.actuals.hours)}</td>
                     <td className="px-2 py-2 font-mono">
-                      {shot.schedule.earnedHoursToDate == null
+                      {shot.schedule.earnedHours == null
                         ? "—"
-                        : shot.schedule.earnedHoursToDate.toLocaleString("en-US", {
+                        : shot.schedule.earnedHours.toLocaleString("en-US", {
                             maximumFractionDigits: 1,
                           })}
                     </td>
