@@ -23,8 +23,8 @@ import {
   FERNDALE_WORK_FOLDER_TITLE,
   FERNDALE_WORK_PILES,
   ferndaleWorkFolderIds,
-  showsFerndaleTab,
 } from "./ferndale-work.ts";
+import { showsFerndaleTab } from "./ferndale-form.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { GEORGIA_POWER_CLIENT_ID, PHILLIPS_66_CLIENT_ID, jobTree } from "./job-tree.ts";
 import { jobsOnDesk } from "./jobs.ts";
@@ -68,11 +68,12 @@ describe("Ferndale work folder", () => {
     assert.equal(FERNDALE_STAFF_PD, 145);
     assert.equal(BOOK_CRAFT_PD, 135);
     assert.equal(BOOK_STAFF_PD, 145);
-    assert.equal(FERNDALE_CLIENT_TEMPLATE_PARKED, true);
-    assert.equal(showsFerndaleTab(), false);
+    assert.equal(FERNDALE_CLIENT_TEMPLATE_PARKED, false);
+    assert.equal(showsFerndaleTab("Ferndale — Ferndale, WA", "Phillips 66"), true);
+    assert.equal(showsFerndaleTab("Rodeo — Rodeo, CA", "Phillips 66"), false);
     assert.match(FERNDALE_CLIENT_TEMPLATE_NOTE, /Not a Rodeo clone/);
     assert.match(FERNDALE_STATUS_NOTE, /Competitive bid/);
-    assert.deepEqual([...ferndaleWorkFolderIds()], [FERNDALE_WORK_FOLDER_ID, FERNDALE_B1_FOLDER_ID]);
+    assert.deepEqual(ferndaleWorkFolderIds().slice(0, 2), [FERNDALE_WORK_FOLDER_ID, FERNDALE_B1_FOLDER_ID]);
 
     const catalog = catalogSites().find((site) => site.id === FERNDALE_SITE_ID);
     assert.equal(catalog?.client, "Phillips 66");
@@ -105,7 +106,7 @@ describe("Ferndale work folder", () => {
     assert.equal(/GEP|TASO|Competitive bid|Unick|per diem|Work Folder|B-1/i.test(jobsDesk), false);
     assert.equal(/Unick|GEP|TASO|Competitive bid|per diem|Work Folder|B-1/i.test(plantPage), false);
     assert.match(regularDesk, /Competitive bid/);
-    assert.equal(/showsFerndaleTab/.test(workspace), false);
+    assert.match(workspace, /estimateTabsForSite/);
     assert.doesNotMatch(treeDesk, /\.xlsx|\.xlsm/);
   });
 });

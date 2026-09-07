@@ -27,8 +27,10 @@ describe("Rodeo tab gate", () => {
     assert.equal(RODEO_TAB_ID, "rodeo");
     assert.equal(RODEO_TAB_LABEL, "Rodeo");
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
+    const tabs = readFileSync(fileURLToPath(new URL("./estimate-tabs.ts", import.meta.url)), "utf8");
     assert.match(workspace, /showsRodeoTab|estimateTabsForSite/);
-    assert.match(workspace, /RODEO_TAB/);
+    assert.match(tabs, /RODEO_TAB/);
+    assert.match(tabs, /showsRodeoTab/);
     assert.doesNotMatch(workspace, /id: "rodeo"/);
   });
 });

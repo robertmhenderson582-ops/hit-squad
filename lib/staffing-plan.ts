@@ -11,6 +11,7 @@ import { emptyJobMoney, hydrateJobMoney, type JobMoney } from "./estimate-money.
 import { eachYmd, parseYmd, PHASE_NAMES, type PhaseRow } from "./phase-schedule.ts";
 import { emptyQualityDay1, hydrateQualityDay1, type QualityDay1 } from "./quality-day1.ts";
 import { emptyRollingChart, hydrateRollingChart, type RollingChartState } from "./rolling-chart.ts";
+import { emptyFerndaleForm, hydrateFerndaleForm, type FerndaleFormState } from "./ferndale-form.ts";
 import { emptyRodeoForm, hydrateRodeoForm, type RodeoFormState } from "./rodeo-form.ts";
 import { emptyJobRates, hydrateJobRates, type JobRates } from "./shahan-wood-river.ts";
 import { buildXlsx, colLetter, type SheetCell } from "./xlsx-minimal.ts";
@@ -27,6 +28,7 @@ export type JobMeta = {
   hseDay1: HseDay1;
   rollingChart: RollingChartState;
   rodeoForm: RodeoFormState;
+  ferndaleForm: FerndaleFormState;
 } & JobRates &
   JobMoney;
 
@@ -82,6 +84,7 @@ export function hydrateJobMeta(raw: Partial<JobMeta> | Record<string, unknown> |
     hseDay1: hydrateHseDay1(parsed.hseDay1),
     rollingChart: hydrateRollingChart(parsed.rollingChart),
     rodeoForm: hydrateRodeoForm(parsed.rodeoForm),
+    ferndaleForm: hydrateFerndaleForm(parsed.ferndaleForm),
   };
 }
 
@@ -96,6 +99,7 @@ export function emptyJobMeta(): JobMeta {
     hseDay1: emptyHseDay1(),
     rollingChart: emptyRollingChart(),
     rodeoForm: emptyRodeoForm(),
+    ferndaleForm: emptyFerndaleForm(),
   });
 }
 

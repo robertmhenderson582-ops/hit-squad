@@ -18,6 +18,7 @@ import { PurchasingDesk } from "@/components/PurchasingDesk";
 import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { OrgChartDesk } from "@/components/OrgChartDesk";
+import { FerndaleFormDesk } from "@/components/FerndaleFormDesk";
 import { RodeoFormDesk } from "@/components/RodeoFormDesk";
 import { NoRatesNotice } from "@/components/NoRatesNotice";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
@@ -224,6 +225,7 @@ function NewEstimateDeskBody({
       {tab === "cost-report" ? <CostReportDesk client={client} site={site} /> : null}
       {tab === "purchasing" ? <PurchasingDesk client={client} site={site} /> : null}
       {tab === "rodeo" ? <RodeoFormDesk client={client} site={site} name={title} /> : null}
+      {tab === "ferndale" ? <FerndaleFormDesk client={client} site={site} name={title} /> : null}
     </EstimateWorkspace>
   );
 }

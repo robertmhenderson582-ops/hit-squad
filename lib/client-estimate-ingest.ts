@@ -66,6 +66,9 @@ const RODEO_WORKBOOK_RE = /p66\s+rodeo\s+estimate\s+workbook/i;
 const CLIENT_FORM_RE = /client\s+estimate\s+form|\bu240\b/i;
 const MONROE_WORKBOOK_RE = /monroe\s+energy.*estimate\s+workbook|u541\s+vac|541v.*post\s+review/i;
 const WOOD_RIVER_B1_RE = /boiler\s*17/i;
+const FERNDALE_WORKBOOK_RE = /ferndale\s+estimate\s+workbook/i;
+const FERNDALE_FRN_RFX_RE = /\bfrn\b/i;
+const FERNDALE_RFX_RE = /rfx\s*0*26[67]|rfx\s*0*270/i;
 
 function sheetKey(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -123,6 +126,13 @@ export function looksLikeWoodRiverB1(sheets: string[], fileName = "") {
   return WOOD_RIVER_B1_RE.test(fileName) && keys.some((name) => name.includes("summary page") || name === "summary page");
 }
 
+/** Ferndale GEP / TASO EST workbooks. Not a Rodeo family. */
+export function looksLikeFerndaleGep(sheets: string[], fileName = "") {
+  void sheets;
+  if (FERNDALE_WORKBOOK_RE.test(fileName)) return true;
+  return FERNDALE_FRN_RFX_RE.test(fileName) && FERNDALE_RFX_RE.test(fileName);
+}
+
 export function classifyFromSheetsAndName(sheets: string[], fileName = ""): ClientWorkbookClass {
   const name = fileName.trim();
   if (looksLikeHitSquadPack(sheets)) {
@@ -134,6 +144,17 @@ export function classifyFromSheetsAndName(sheets: string[], fileName = ""): Clie
       staged: false,
       families: [],
       note: "Native Hit Squad xlsx. Import writes the live pack (excel-ripple).",
+    };
+  }
+  if (looksLikeFerndaleGep(sheets, name)) {
+    return {
+      kind: "ferndale-gep",
+      label: "Ferndale GEP / TASO estimate workbook",
+      sheets,
+      fileName: name,
+      staged: true,
+      families: ["ferndale-gep"],
+      note: "Ferndale GEP / TASO face. Staged only. Not a Rodeo clone. Official RFX totals stay on Drive.",
     };
   }
   if (looksLikeP66RodeoWorkbook(sheets, name)) {
@@ -313,6 +334,14 @@ export const CLIENT_FACE_MAPPER_SPEC = {
     buckets: ["Direct", "Foremen", "Support", "Staff"],
     tabs: ["Summary Page"],
     exportAs: "Hit Squad live pack — B-1 ingest stays staged",
+    ingest: "stage-metadata",
+  },
+  "ferndale-gep": {
+    family: "ferndale",
+    clock: "GEP / TASO RFQ letter + EST workbook",
+    buckets: ["live pack fill — unread RFX cells stay TODO"],
+    tabs: ["RFQ letter", "GEP pack"],
+    exportAs: "Ferndale RFQ pack hinge — estimate fills the letter/pack map; official EST workbook stays on Drive",
     ingest: "stage-metadata",
   },
 } as const;
