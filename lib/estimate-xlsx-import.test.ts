@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import ExcelJS from "exceljs";
 import { syncCraftRows } from "./craft-labor.ts";
 import { deskPackageTotal } from "./estimate-desk-total.ts";
@@ -37,9 +38,12 @@ import {
   LABOR_OT_OFFSET,
   LABOR_PD_OFFSET,
   LABOR_ST_OFFSET,
+  LABOR_HPS_LABEL,
   estimateToXlsx,
   type EstimateXlsxInput,
 } from "./estimate-xlsx.ts";
+import { emptyFerndaleForm } from "./ferndale-form.ts";
+import { hydrateJobMeta } from "./staffing-plan.ts";
 import type { MiscLine } from "./other-cost.ts";
 import { billedPeriodCount, type LargeToolLine, type ThirdPartyLine } from "./equipment-sheet.ts";
 import { colLetter } from "./xlsx-minimal.ts";
@@ -224,6 +228,8 @@ describe("estimate excel import", () => {
     const diff = diffEstimateImport(asPack(input), imported);
     assert.equal(diff.createsNew, false);
     assert.equal(diff.lines.some((line) => /Lead Safety|headcount|Bill as|Pre/i.test(line)), true);
+    assert.equal(diff.lines.some((line) => /\[st-1\]/.test(line)), true);
+    assert.equal(diff.lines.some((line) => /\[su-1\]/.test(line) && /Bill as/.test(line)), true);
   });
 
   it("imports HPS yellow edits onto hoursPerShift", async () => {
@@ -238,6 +244,8 @@ describe("estimate excel import", () => {
     const applied = applyEstimateImport(asPack(input), imported);
     const row = (applied.crew as { staff: CraftRow[] }).staff[0];
     assert.equal(row.ranges.some((range) => range.hoursPerShift === 12), true);
+    const hpsDiff = diffEstimateImport(asPack(input), imported);
+    assert.equal(hpsDiff.lines.some((line) => line.includes(LABOR_HPS_LABEL) && /12/.test(line) && /\[st-1\]/.test(line)), true);
   });
 
   it("imports Job setup money drivers onto jobMeta", async () => {
@@ -285,6 +293,39 @@ describe("estimate excel import", () => {
     assert.equal(meta.equipmentContingencyPct, 5);
     assert.equal(meta.subsContingencyPct, 4);
     assert.equal(meta.moreFundPerHour, 2);
+    const moneyDiff = diffEstimateImport(asPack(input), imported);
+    assert.equal(moneyDiff.lines.some((line) => /Staff PD \$ \/ day/.test(line) && /155/.test(line)), true);
+    assert.equal(moneyDiff.lines.some((line) => /CBA increase/i.test(line)), true);
+  });
+
+  it("DOWN: Job setup money merge keeps Ferndale / Boiler 17 live fields", async () => {
+    const input = fixture();
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const setup = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup);
+    assert.ok(setup);
+    setup.getCell("B15").value = 155;
+    const imported = await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer()));
+    const live = {
+      ...asPack(input),
+      jobMeta: hydrateJobMeta({
+        ...input.jobMeta,
+        jobNumber: "108451",
+        area: "Boiler 17",
+        ferndaleForm: { ...emptyFerndaleForm(), scope: "GEP turnaround", rfx: "RFQ-KEEP" },
+      }),
+    };
+    const applied = applyEstimateImport(live, imported);
+    const kept = hydrateJobMeta(applied.jobMeta as Record<string, unknown>);
+    assert.equal(kept.staffPerDiemRate, 155);
+    assert.equal(kept.jobNumber, "108451");
+    assert.equal(kept.area, "Boiler 17");
+    assert.equal(kept.ferndaleForm.scope, "GEP turnaround");
+    assert.equal(kept.ferndaleForm.rfx, "RFQ-KEEP");
+    const thin = hydrateJobMeta(applyEstimateImport(asPack(input), imported).jobMeta as Record<string, unknown>);
+    assert.equal(thin.jobNumber, "");
+    assert.notEqual(thin.ferndaleForm.scope, "GEP turnaround");
   });
 
   it("export→import keeps Job setup holidays and desk total follows the skip", async () => {
@@ -359,7 +400,10 @@ describe("estimate excel import", () => {
     assert.match(pack.packId, /^new-/);
     assert.equal(pack.title, input.title);
     assert.equal((pack.crew as { staff: CraftRow[] }).staff[0].position, "Superintendent 01");
-    assert.equal(diffEstimateImport(null, imported).createsNew, true);
+    const created = diffEstimateImport(null, imported);
+    assert.equal(created.createsNew, true);
+    assert.equal(created.lines.some((line) => /Hidden crew ids/.test(line) && /st-1/.test(line)), true);
+    assert.equal(created.lines.some((line) => /Job setup money/.test(line)), true);
     const money = livePackMoney(pack);
     assert.equal(money.desk, deskPackageTotal(input));
     assert.equal(money.desk, money.summary);
@@ -1782,6 +1826,9 @@ describe("estimate excel import", () => {
     const money = livePackMoney(applied);
     assert.equal(money.desk, money.summary);
     assert.notEqual(money.desk, deskPackageTotal(input));
+    const subDiff = diffEstimateImport(asPack(input), await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    assert.equal(subDiff.lines.some((line) => /Sub \[sb-1\]/.test(line) && /qty 2 → 3/.test(line) && /rate 500 → 600/.test(line)), true);
+    assert.equal(subDiff.lines.some((line) => /Sub \[sc-aff\]/.test(line)), true);
   });
 
   it("DOWN: same-kind Travel reorder keeps staff identity after re-export", async () => {
@@ -1834,6 +1881,37 @@ describe("estimate excel import", () => {
     assert.equal(twice.find((line) => line.miles === 12)?.id, "travel-pm");
     assert.equal(twice.find((line) => line.miles === 40)?.id, "travel-lead");
     assert.equal(livePackMoney(again).desk, money.desk);
+    const travelDiff = diffEstimateImport(asPack(input), await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer())));
+    assert.equal(travelDiff.lines.some((line) => /Travel reorder/.test(line) && /travel-pm/.test(line) && /travel-lead/.test(line)), true);
+  });
+
+  it("desk apply commits Job setup money, Equipment, Other Cost, and Subs — not only crew", () => {
+    const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
+    const pack = readFileSync(fileURLToPath(new URL("../components/EstimatePackage.tsx", import.meta.url)), "utf8");
+    const modal = readFileSync(fileURLToPath(new URL("../components/NewEstimateModal.tsx", import.meta.url)), "utf8");
+    const preview = readFileSync(fileURLToPath(new URL("../components/EstimateImportModal.tsx", import.meta.url)), "utf8");
+    assert.match(workspace, /function liveImportBase/);
+    assert.match(workspace, /jobMeta: pack\.jobMeta/);
+    assert.match(workspace, /readEquipmentSheet\(pack\.estimateKey\)/);
+    assert.match(workspace, /readOtherCost\(pack\.estimateKey\)/);
+    assert.match(workspace, /readSubSheet\(pack\.estimateKey\)/);
+    assert.match(workspace, /jobMeta: next\.jobMeta/);
+    assert.match(workspace, /equipment: next\.equipment/);
+    assert.match(workspace, /otherCost: next\.otherCost/);
+    assert.match(workspace, /subcontractor: next\.subcontractor/);
+    assert.match(pack, /writeEquipmentSheet/);
+    assert.match(pack, /writeOtherCost/);
+    assert.match(pack, /writeSubSheet/);
+    assert.match(pack, /writeJobMeta/);
+    assert.match(pack, /setJobMetaState/);
+    assert.match(modal, /diffEstimateImport\(null, pendingCreate\)/);
+    assert.match(modal, /Create live pack/);
+    assert.match(preview, /Hidden row ids/);
+    assert.doesNotMatch(preview, /\bHPS\b/);
+    const importer = readFileSync(fileURLToPath(new URL("./estimate-xlsx-import.ts", import.meta.url)), "utf8");
+    assert.match(importer, /LABOR_HPS_LABEL/);
+    assert.match(importer, /Omit<EstimatePackSnapshot, "schedule" \| "crew" \| "jobMeta">/);
+    assert.match(importer, /jobMeta\?: JobMeta \| Record<string, unknown>/);
   });
 });
 

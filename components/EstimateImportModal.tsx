@@ -28,10 +28,16 @@ export function EstimateImportModal({
           </h2>
           <p className="mt-2 text-sm text-[#5b6f73]">
             Preview the workbook, then apply. Excel writes the live estimate pack — never a parallel book.
+            Hidden row ids keep the same desk cards through Job setup, Subs, Travel, and COE.
           </p>
           <ul className="mt-4 max-h-64 space-y-1 overflow-auto text-sm text-[#163038]">
-            {lines.map((line) => (
-              <li key={line}>{line}</li>
+            {lines.map((line, index) => (
+              <li
+                key={`${index}-${line}`}
+                className={/typed ST\/OT\/DT|ignored — hours follow/i.test(line) ? "text-[#b42318]" : undefined}
+              >
+                {line}
+              </li>
             ))}
           </ul>
           {error ? (

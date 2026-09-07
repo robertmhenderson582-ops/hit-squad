@@ -9,8 +9,9 @@ import { newEstimateNeedsRatesNotice } from "@/lib/estimate-rates-gate";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
 import { defaultEstimateName, isDefaultEstimateName, startJobEventLabel } from "@/lib/job-event";
 import { applyPackToStore } from "@/lib/estimate-pack";
+import { EstimateImportModal } from "@/components/EstimateImportModal";
 import { ESTIMATE_IMPORT_ERROR } from "@/lib/estimate-xlsx";
-import { createPackFromImport, parseEstimateXlsx } from "@/lib/estimate-xlsx-import";
+import { createPackFromImport, diffEstimateImport, parseEstimateXlsx, type EstimateImport } from "@/lib/estimate-xlsx-import";
 import { classifyEstimateWorkbook, CLIENT_TEMPLATE_STAGED, shouldStageClientWorkbook } from "@/lib/client-estimate-ingest";
 import { newEstimatePackId } from "@/lib/estimate-open";
 import { scheduleVaultUpsert } from "@/lib/estimate-vault-client";
@@ -57,6 +58,8 @@ export function NewEstimateModal({
   const [site, setSite] = useState(startSite);
   const [name, setName] = useState(defaultEstimateName(startClient, startSite, startSize));
   const [importError, setImportError] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const [pendingCreate, setPendingCreate] = useState<EstimateImport | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const rule = boundOtLabel(site, client);
   const eastCoast = siteClockFromText(site, client) === "east-coast";
@@ -100,6 +103,7 @@ export function NewEstimateModal({
 
   async function createFromWorkbook(file: File) {
     setImportError("");
+    setPendingCreate(null);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const classified = await classifyEstimateWorkbook(bytes, file.name);
@@ -107,10 +111,21 @@ export function NewEstimateModal({
         setImportError(CLIENT_TEMPLATE_STAGED);
         return;
       }
-      const imported = await parseEstimateXlsx(bytes);
-      const pack = createPackFromImport(imported, lens?.email || "");
+      setPendingCreate(await parseEstimateXlsx(bytes));
+    } catch {
+      setPendingCreate(null);
+      setImportError(ESTIMATE_IMPORT_ERROR);
+    }
+  }
+
+  function applyPendingCreate() {
+    if (!pendingCreate || importBusy) return;
+    setImportBusy(true);
+    try {
+      const pack = createPackFromImport(pendingCreate, lens?.email || "");
       applyPackToStore(window.localStorage, pack);
       scheduleVaultUpsert(pack.packId);
+      setPendingCreate(null);
       onClose();
       const query = new URLSearchParams({
         client: pack.client,
@@ -123,6 +138,8 @@ export function NewEstimateModal({
       router.push(`/estimates/new?${query.toString()}`);
     } catch {
       setImportError(ESTIMATE_IMPORT_ERROR);
+    } finally {
+      setImportBusy(false);
     }
   }
 
@@ -265,7 +282,7 @@ export function NewEstimateModal({
           <div className="mt-4">
             <p className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">OR UPLOAD WORKBOOK</p>
             <p className="mt-1 text-xs text-[#5b6f73]">
-              John&apos;s filled Hit Squad xlsx seeds a new live pack — Job setup, crew, and Bill as.
+              John&apos;s filled Hit Squad xlsx seeds a new live pack — Job setup, crew, Bill as, Subs, Travel, and Equipment/COE.
             </p>
             <input
               ref={fileRef}
@@ -308,6 +325,17 @@ export function NewEstimateModal({
           </button>
         </div>
       </form>
+      {pendingCreate ? (
+        <EstimateImportModal
+          title="Create from workbook"
+          lines={diffEstimateImport(null, pendingCreate).lines}
+          applyLabel="Create live pack"
+          busy={importBusy}
+          error={importError}
+          onCancel={() => setPendingCreate(null)}
+          onApply={applyPendingCreate}
+        />
+      ) : null}
     </div>
     </ModalPortal>
   );

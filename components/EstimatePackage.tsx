@@ -31,7 +31,7 @@ import {
 } from "@/lib/phase-schedule";
 import { BOILER17_JOB_NUMBER, defaultStatusForBoiler17, isBoiler17PackId } from "@/lib/boiler-17";
 import { seedBoiler17LocalDefaults } from "@/lib/his-wood-river";
-import { emptyJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
+import { emptyJobMeta, hydrateJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
 import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
 import { packIdFromStoreKey, findLocalPack, renameLocalPackTitle, touchLocalPack, writeLocalPackStatus } from "@/lib/local-estimates";
 import { catalogSites } from "@/lib/desk-data";
@@ -57,7 +57,9 @@ import {
 import { aromaticsStateLooksSmashed } from "@/lib/aromatics-freeze";
 import { crewHasRows } from "@/lib/estimate-pack";
 import { HIS_AROMATICS_PACK_ID } from "@/lib/his-wood-river";
-import { persistCrewTravel } from "@/lib/other-cost";
+import { parseOtherCostJson, persistCrewTravel, writeOtherCost } from "@/lib/other-cost";
+import { parseEquipmentSheet, writeEquipmentSheet } from "@/lib/equipment-sheet";
+import { normalizeSubSheet, writeSubSheet, type SubSheet } from "@/lib/subcontractor";
 import { onEstimateSheets } from "@/lib/sheet-events";
 import { emptyOrgChart, readOrgChart, writeOrgChart, type OrgChartState } from "@/lib/org-chart";
 
@@ -83,7 +85,15 @@ type EstimatePackageApi = {
   patch: (id: PhaseId, next: Partial<PhaseRow>) => void;
   pickOt: (id: PhaseId, pick: PhaseOtPick) => void;
   setCrew: (next: CrewState | ((current: CrewState) => CrewState)) => void;
-  replaceFromImport: (next: { schedule: PhaseScheduleState; crew: CrewState; title?: string }) => void;
+  replaceFromImport: (next: {
+    schedule: PhaseScheduleState;
+    crew: CrewState;
+    title?: string;
+    jobMeta?: JobMeta | Record<string, unknown> | null;
+    equipment?: unknown;
+    otherCost?: unknown;
+    subcontractor?: unknown;
+  }) => void;
   setOrgChart: (next: OrgChartState | ((current: OrgChartState) => OrgChartState)) => void;
   setJobMeta: (next: JobMeta | ((current: JobMeta) => JobMeta)) => void;
   status: EstimateStatus;
@@ -464,6 +474,19 @@ export function EstimatePackageProvider({
         setCrewState((current) => (typeof next === "function" ? next(current) : next));
       },
       replaceFromImport(next) {
+        if (next.equipment != null) writeEquipmentSheet(estimateKey, parseEquipmentSheet(next.equipment));
+        if (next.otherCost != null) writeOtherCost(estimateKey, parseOtherCostJson(next.otherCost));
+        if (next.subcontractor != null) {
+          writeSubSheet(
+            estimateKey,
+            normalizeSubSheet(next.subcontractor && typeof next.subcontractor === "object" ? (next.subcontractor as Partial<SubSheet>) : null),
+          );
+        }
+        if (next.jobMeta != null && typeof next.jobMeta === "object") {
+          const meta = hydrateJobMeta(next.jobMeta);
+          writeJobMeta(estimateKey, meta);
+          setJobMetaState(meta);
+        }
         setSchedule(next.schedule);
         setCrewState({
           staff: next.crew.staff ?? [],
