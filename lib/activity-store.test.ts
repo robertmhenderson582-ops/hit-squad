@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { after, beforeEach, describe, it } from "node:test";
 
 import { activityWhoNames, filterActivityByWho } from "./activity-filter.ts";
+import { formatActivityWhen } from "./activity-when.ts";
 import {
   addActivity,
   clearActivity,
@@ -178,6 +179,20 @@ describe("activity name filter", () => {
     assert.match(desk, /filterActivityByWho/);
     assert.equal(/paper-field|type="search"|placeholder="Search/.test(desk), false);
     assert.match(desk, /Filter Activity by name/);
+  });
+});
+
+describe("activity WHEN / through date", () => {
+  it("displays mm/dd/yyyy on the America/Chicago desk clock", () => {
+    assert.equal(formatActivityWhen(Date.parse("2026-09-07T17:00:00.000Z")), "09/07/2026, 12:00:00");
+    assert.equal(formatActivityWhen(Date.parse("2026-01-15T18:00:00.000Z")), "01/15/2026, 12:00:00");
+    assert.match(formatActivityWhen(Date.parse("2026-09-08T04:59:00.000Z")), /^09\/07\/2026,/);
+    assert.match(formatActivityWhen(Date.parse("2026-09-08T05:00:00.000Z")), /^09\/08\/2026,/);
+    assert.equal(formatActivityWhen(Number.NaN), "");
+    const desk = readFileSync(fileURLToPath(new URL("../components/ActivityDesk.tsx", import.meta.url)), "utf8");
+    assert.match(desk, /formatActivityWhen\(row\.at\)/);
+    assert.equal(/toLocaleString\(\s*["']en-GB["']/.test(desk), false);
+    assert.equal(/toLocaleDateString|September|yyyy-mm-dd/.test(desk), false);
   });
 });
 

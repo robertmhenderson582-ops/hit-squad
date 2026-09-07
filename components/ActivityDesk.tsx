@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { GripToPan } from "@/components/GripToPan";
 import { activityWhoNames, filterActivityByWho } from "@/lib/activity-filter";
+import { formatActivityWhen } from "@/lib/activity-when";
 import type { ActivityKind, ActivityRow } from "@/lib/activity-store";
 
 const KIND: Record<ActivityKind, string> = {
@@ -13,10 +14,6 @@ const KIND: Record<ActivityKind, string> = {
   feature: "FEATURE",
   error: "ERROR",
 };
-
-function when(at: number) {
-  return new Date(at).toLocaleString("en-GB", { hour12: false });
-}
 
 export function ActivityDesk() {
   const confirmRemove = useConfirmRemove();
@@ -66,7 +63,7 @@ export function ActivityDesk() {
     }
     const header = "when,kind,who,detail";
     const lines = rows.map((row) =>
-      [when(row.at), row.kind, row.who, row.detail].map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
+      [formatActivityWhen(row.at), row.kind, row.who, row.detail].map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
     );
     saveBlob(new Blob([[header, ...lines].join("\n")], { type: "text/csv" }), `hit-squad-activity-${stamp}.csv`);
   }
@@ -163,7 +160,7 @@ export function ActivityDesk() {
               ) : (
                 visible.map((row) => (
                   <tr key={row.id} className="border-t border-[#d5e0de]">
-                    <td className="whitespace-nowrap px-2 py-2 font-mono text-xs">{when(row.at)}</td>
+                    <td className="whitespace-nowrap px-2 py-2 font-mono text-xs">{formatActivityWhen(row.at)}</td>
                     <td className="px-2 py-2">
                       <span
                         className={`rounded-full px-2 py-1 text-[10px] tracking-[0.12em] ${
