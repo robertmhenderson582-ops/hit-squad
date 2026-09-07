@@ -300,6 +300,18 @@ export function ymdOutsideDefaultSeed(ymd: string): boolean {
   return ymd < start || ymd > stop;
 }
 
+export function scheduleProjectStart(schedule: unknown): string {
+  const row = asScheduleRecord(schedule);
+  return typeof row?.projectStart === "string" ? row.projectStart : "";
+}
+
+/** Demo seed Job setup, or a remapped clock whose projectStart is still in that 2026 span. */
+export function scheduleIsDemoSeedClock(schedule: unknown): boolean {
+  if (isDefaultSeedSchedule(schedule)) return true;
+  const start = scheduleProjectStart(schedule);
+  return Boolean(start) && !ymdOutsideDefaultSeed(start);
+}
+
 export function rangesHaveCustomClock(ranges: Array<{ start?: string; end?: string }> | undefined): boolean {
   return (ranges ?? []).some(
     (range) => ymdOutsideDefaultSeed(range.start || "") || ymdOutsideDefaultSeed(range.end || ""),

@@ -7,6 +7,7 @@ import {
   defaultPhaseSchedule,
   defaultPhases,
   isDefaultSeedSchedule,
+  scheduleIsDemoSeedClock,
   liveJobSetupPhases,
   mergeSchedule,
   rangesHaveCustomClock,
@@ -204,6 +205,25 @@ describe("phase schedule", () => {
     );
     assert.equal(rangesHaveCustomClock([{ start: "2027-01-11", end: "2027-02-28" }]), true);
     assert.equal(rangesHaveCustomClock([{ start: "2026-09-03", end: "2026-09-03" }]), false);
+    assert.equal(scheduleIsDemoSeedClock(defaultPhaseSchedule()), true);
+    assert.equal(
+      scheduleIsDemoSeedClock({
+        projectStart: "2026-08-21",
+        phases: defaultPhases().map((row) =>
+          row.id === "pre" ? { ...row, start: "2026-08-24", stop: "2026-09-04" } : row,
+        ),
+      }),
+      true,
+    );
+    assert.equal(
+      scheduleIsDemoSeedClock({
+        projectStart: "2027-01-11",
+        phases: defaultPhases().map((row) =>
+          row.id === "pre" ? { ...row, start: "2027-01-11", stop: "2027-02-28" } : row,
+        ),
+      }),
+      false,
+    );
   });
 
   it("Excel phase bar uses hard blue / red / green with white labels", () => {

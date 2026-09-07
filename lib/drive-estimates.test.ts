@@ -16,6 +16,7 @@ import {
   parseOAuthClient,
   parseServiceAccount,
   readDrivePack,
+  readDrivePackById,
   resetDriveTokenCache,
   resolveEstimatesFolder,
   upsertEstimateInDrive,
@@ -697,6 +698,19 @@ describe("drive estimate upsert", () => {
         return { ...row, start: "2027-05-04", stop: "2027-05-21" };
       }),
     };
+    const smashedOther = {
+      perDiemRate: 0,
+      travel: [{ id: "travel-staff", kind: "staff", travelers: 2, miles: 80, perMile: 0.76 }],
+      misc: [{ id: "mc-thin", item: "Seed leftover", qty: 1, each: 50 }],
+    };
+    const freezeOther = {
+      perDiemRate: 0,
+      travel: [
+        { id: "travel-staff", kind: "staff", travelers: 39, miles: 1700, perMile: 0.76 },
+        { id: "travel-craft", kind: "craft", travelers: 100, miles: 800, perMile: 0.76 },
+      ],
+      misc: [{ id: "mc-1", item: "Alloy rod", qty: 65, each: 1000 }],
+    };
     const smashed = {
       packId: HIS_AROMATICS_PACK_ID,
       key: `new:${HIS_AROMATICS_PACK_ID}`,
@@ -707,14 +721,27 @@ describe("drive estimate upsert", () => {
       createdAt: 50,
       updatedAt: 9000,
       ownerEmail: "nathanboyte@gmail.com",
+      sharedWith: ["robertmhenderson582@gmail.com"],
+      status: "Budgetary" as const,
       schedule: seed,
       crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-09-03", end: "2026-09-03" }] }] },
+      otherCost: smashedOther,
+      equipment: { largeTools: [], thirdParty: [] },
     };
     const freeze = {
       ...smashed,
       updatedAt: 400,
+      ownerEmail: "freeze-should-not-win@example.com",
+      sharedWith: [],
+      status: "Draft" as const,
       schedule: job2027,
       crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-02-28" }] }] },
+      otherCost: freezeOther,
+      equipment: { largeTools: [{ id: "lt-1", itemId: "wet:8:truck-crew", qty: 1 }], thirdParty: [] },
+      subcontractor: { lines: [], cards: [{ id: "sc-1", vendor: "Hartford" }] },
+      jobMeta: { staffPerDiemRate: 185 },
+      orgChart: { names: { "st-1": { days: "Lee" } } },
+      activities: [{ id: "act-1", name: "Tray work", hours: 40 }],
     };
     drive.files.set(HIS_AROMATICS_FILE_ID, {
       file: {
@@ -739,8 +766,223 @@ describe("drive estimate upsert", () => {
       "2027-01-11",
     );
     assert.equal(listed.some((row) => JSON.stringify(row.schedule).includes("2026-08-21")), false);
+    assert.equal(((pack?.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
+    assert.equal(((pack?.equipment as { largeTools: unknown[] }).largeTools || []).length, 1);
+    assert.equal(pack?.ownerEmail, "nathanboyte@gmail.com");
+    assert.deepEqual(pack?.sharedWith, ["robertmhenderson582@gmail.com"]);
+    assert.equal(pack?.status, "Budgetary");
     const liveWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FILE_ID));
     assert.equal((liveWritten.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    assert.equal(((liveWritten.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
+    assert.equal(liveWritten.ownerEmail, "nathanboyte@gmail.com");
+    const freezeWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FREEZE_FILE_ID));
+    assert.equal(freezeWritten.updatedAt, 400);
+    assert.equal(freezeWritten.ownerEmail, "freeze-should-not-win@example.com");
+    assert.equal(((freezeWritten.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
+  });
+
+  it("refuses to persist a smashed Aromatics upsert and writes the freeze sheets onto the live file only", async () => {
+    const drive = memoryDrive();
+    const seed = defaultPhaseSchedule();
+    const remapped = {
+      projectStart: "2026-08-21",
+      phases: seed.phases.map((row) =>
+        row.id === "pre" ? { ...row, start: "2026-08-24", stop: "2026-09-04" } : row,
+      ),
+    };
+    const job2027 = {
+      projectStart: "2027-01-11",
+      phases: seed.phases.map((row) => {
+        if (row.id === "pre") return { ...row, start: "2027-01-11", stop: "2027-02-28" };
+        if (row.id === "oil-out") return { ...row, start: "2027-03-01", stop: "2027-03-10" };
+        if (row.id === "mech") return { ...row, start: "2027-03-11", stop: "2027-04-17" };
+        if (row.id === "oil-in") return { ...row, start: "2027-04-18", stop: "2027-05-03" };
+        return { ...row, start: "2027-05-04", stop: "2027-05-21" };
+      }),
+    };
+    const smashed = {
+      packId: HIS_AROMATICS_PACK_ID,
+      key: `new:${HIS_AROMATICS_PACK_ID}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 12_000,
+      ownerEmail: "nathanboyte@gmail.com",
+      sharedWith: ["robertmhenderson582@gmail.com"],
+      schedule: remapped,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-08-24", end: "2026-09-04" }] }] },
+      otherCost: {
+        travel: [{ id: "travel-staff", travelers: 2, miles: 80, perMile: 0.76 }],
+        misc: [{ id: "mc-thin", item: "Seed leftover", qty: 1, each: 50 }],
+      },
+    };
+    const freeze = {
+      ...smashed,
+      updatedAt: 400,
+      ownerEmail: "freeze-should-not-win@example.com",
+      schedule: job2027,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-02-28" }] }] },
+      otherCost: {
+        travel: [{ id: "travel-staff", travelers: 39, miles: 1700, perMile: 0.76 }],
+        misc: [{ id: "mc-1", item: "Alloy rod", qty: 65, each: 1000 }],
+      },
+    };
+    drive.files.set(HIS_AROMATICS_FILE_ID, {
+      file: {
+        id: HIS_AROMATICS_FILE_ID,
+        name: "wood-river-2027-aromatics-turnaround.json",
+        properties: { packId: HIS_AROMATICS_PACK_ID, ownerEmail: smashed.ownerEmail },
+      },
+      content: JSON.stringify(smashed),
+    });
+    drive.files.set(HIS_AROMATICS_FREEZE_FILE_ID, {
+      file: {
+        id: HIS_AROMATICS_FREEZE_FILE_ID,
+        name: "2026-09-02 2027 Aromatics freeze.json",
+      },
+      content: JSON.stringify(freeze),
+    });
+    const saved = await upsertEstimateInDrive(drive, smashed, "folder");
+    assert.equal(saved.id, HIS_AROMATICS_FILE_ID);
+    const liveWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FILE_ID));
+    assert.equal((liveWritten.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    assert.equal(((liveWritten.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
+    assert.equal(
+      ((liveWritten.crew as { staff: Array<{ ranges: Array<{ start: string }> }> }).staff[0]?.ranges[0]?.start),
+      "2027-01-11",
+    );
+    assert.equal(liveWritten.ownerEmail, "nathanboyte@gmail.com");
+    assert.deepEqual(liveWritten.sharedWith, ["robertmhenderson582@gmail.com"]);
+    const freezeWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FREEZE_FILE_ID));
+    assert.equal(freezeWritten.updatedAt, 400);
+    assert.equal(freezeWritten.ownerEmail, "freeze-should-not-win@example.com");
+    assert.equal((freezeWritten.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+  });
+
+  it("Jobs list retries a timed-out live restore write onto the Aromatics file id only", async () => {
+    const drive = memoryDrive();
+    const seed = defaultPhaseSchedule();
+    const job2027 = {
+      projectStart: "2027-01-11",
+      phases: seed.phases.map((row) => {
+        if (row.id === "pre") return { ...row, start: "2027-01-11", stop: "2027-02-28" };
+        if (row.id === "oil-out") return { ...row, start: "2027-03-01", stop: "2027-03-10" };
+        if (row.id === "mech") return { ...row, start: "2027-03-11", stop: "2027-04-17" };
+        if (row.id === "oil-in") return { ...row, start: "2027-04-18", stop: "2027-05-03" };
+        return { ...row, start: "2027-05-04", stop: "2027-05-21" };
+      }),
+    };
+    const smashed = {
+      packId: HIS_AROMATICS_PACK_ID,
+      key: `new:${HIS_AROMATICS_PACK_ID}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 9000,
+      ownerEmail: "nathanboyte@gmail.com",
+      schedule: seed,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-09-03", end: "2026-09-03" }] }] },
+      otherCost: { misc: [{ id: "mc-thin", item: "Seed leftover", qty: 1, each: 50 }] },
+    };
+    const freeze = {
+      ...smashed,
+      updatedAt: 400,
+      schedule: job2027,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-02-28" }] }] },
+      otherCost: { misc: [{ id: "mc-1", item: "Alloy rod", qty: 65, each: 1000 }] },
+    };
+    drive.files.set(HIS_AROMATICS_FILE_ID, {
+      file: {
+        id: HIS_AROMATICS_FILE_ID,
+        name: "wood-river-2027-aromatics-turnaround.json",
+        properties: { packId: HIS_AROMATICS_PACK_ID, ownerEmail: smashed.ownerEmail },
+      },
+      content: JSON.stringify(smashed),
+    });
+    drive.files.set(HIS_AROMATICS_FREEZE_FILE_ID, {
+      file: { id: HIS_AROMATICS_FREEZE_FILE_ID, name: "2026-09-02 2027 Aromatics freeze.json" },
+      content: JSON.stringify(freeze),
+    });
+    const writes: string[] = [];
+    const inner = drive.updateJson.bind(drive);
+    drive.updateJson = async (fileId, content, name, properties) => {
+      writes.push(fileId);
+      if (writes.length === 1) throw new Error("timeout");
+      return inner(fileId, content, name, properties);
+    };
+    const listed = await listDrivePacks(drive, "folder");
+    const pack = listed.find((row) => row.packId === HIS_AROMATICS_PACK_ID);
+    assert.deepEqual(writes, [HIS_AROMATICS_FILE_ID, HIS_AROMATICS_FILE_ID]);
+    assert.equal((pack?.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    assert.equal(((pack?.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
+    const liveWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FILE_ID));
+    assert.equal((liveWritten.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    assert.equal(((liveWritten.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
+    const freezeWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FREEZE_FILE_ID));
+    assert.equal(freezeWritten.updatedAt, 400);
+    assert.equal(writes.includes(HIS_AROMATICS_FREEZE_FILE_ID), false);
+  });
+
+  it("Jobs open still returns the freeze restore when both live write attempts time out", async () => {
+    const drive = memoryDrive();
+    const seed = defaultPhaseSchedule();
+    const job2027 = {
+      projectStart: "2027-01-11",
+      phases: seed.phases.map((row) =>
+        row.id === "pre" ? { ...row, start: "2027-01-11", stop: "2027-02-28" } : row,
+      ),
+    };
+    const smashed = {
+      packId: HIS_AROMATICS_PACK_ID,
+      key: `new:${HIS_AROMATICS_PACK_ID}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 9000,
+      ownerEmail: "nathanboyte@gmail.com",
+      schedule: seed,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-09-03", end: "2026-09-03" }] }] },
+      otherCost: { misc: [{ id: "mc-thin", item: "Seed leftover", qty: 1, each: 50 }] },
+    };
+    const freeze = {
+      ...smashed,
+      updatedAt: 400,
+      schedule: job2027,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-02-28" }] }] },
+      otherCost: { misc: [{ id: "mc-1", item: "Alloy rod", qty: 65, each: 1000 }] },
+    };
+    drive.files.set(HIS_AROMATICS_FILE_ID, {
+      file: {
+        id: HIS_AROMATICS_FILE_ID,
+        name: "wood-river-2027-aromatics-turnaround.json",
+        properties: { packId: HIS_AROMATICS_PACK_ID, ownerEmail: smashed.ownerEmail },
+      },
+      content: JSON.stringify(smashed),
+    });
+    drive.files.set(HIS_AROMATICS_FREEZE_FILE_ID, {
+      file: { id: HIS_AROMATICS_FREEZE_FILE_ID, name: "2026-09-02 2027 Aromatics freeze.json" },
+      content: JSON.stringify(freeze),
+    });
+    const writes: string[] = [];
+    drive.updateJson = async (fileId) => {
+      writes.push(fileId);
+      throw new Error("timeout");
+    };
+    const opened = await readDrivePackById(drive, HIS_AROMATICS_PACK_ID, "folder");
+    const listed = await listDrivePacks(drive, "folder");
+    assert.equal(writes.every((id) => id === HIS_AROMATICS_FILE_ID), true);
+    assert.ok(writes.length >= 2);
+    assert.equal((opened?.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    assert.equal(((opened?.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
+    assert.equal((listed.find((row) => row.packId === HIS_AROMATICS_PACK_ID)?.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    const liveWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FILE_ID));
+    assert.equal((liveWritten.schedule as { projectStart?: string }).projectStart, "2026-08-21");
     const freezeWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FREEZE_FILE_ID));
     assert.equal(freezeWritten.updatedAt, 400);
   });

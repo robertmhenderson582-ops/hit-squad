@@ -2,6 +2,7 @@ import { VIEW_AS_HEADER, viewAsInit, viewAsSeatFromValue } from "./desk-scope.ts
 import {
   collectPack,
   mergeVaultIntoLocal,
+  packClockIsSeedSmashed,
   scheduleOnce,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
@@ -261,6 +262,9 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   }
   const pack = collectPack(target, packId);
   if (!pack) return { ok: false as const };
+  if (packClockIsSeedSmashed(pack)) {
+    return { ok: true as const, skipped: true as const };
+  }
   const body = JSON.stringify({ pack });
   if (lastBody.get(packId) === body) return { ok: true as const };
   if (currentViewAs) return { ok: true as const };
