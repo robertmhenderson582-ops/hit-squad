@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { useSession } from "@/components/SessionProvider";
 import { readFcrPacket } from "@/lib/change-order-packet";
@@ -37,11 +38,16 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
   const railRef = useRef<HTMLElement>(null);
   const drag = useRef<{ ox: number; oy: number; sl: number; st: number } | null>(null);
   const posRef = useRef<EstimateTotalRailPosition | null>(null);
+  const [host, setHost] = useState<HTMLElement | null>(null);
   const [tick, setTick] = useState(0);
   const [phone, setPhone] = useState(false);
   const [phoneHidden, setPhoneHidden] = useState(false);
   const [pos, setPos] = useState<EstimateTotalRailPosition | null>(null);
   const [dragging, setDragging] = useState(false);
+
+  useLayoutEffect(() => {
+    setHost(document.body);
+  }, []);
 
   useEffect(() => onEstimateSheets(() => setTick((n) => n + 1)), []);
 
@@ -89,6 +95,37 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     return () => window.removeEventListener("resize", onResize);
   }, [seat]);
 
+  useEffect(() => {
+    if (!dragging) return;
+    function move(event: { clientX: number; clientY: number }) {
+      if (!drag.current) return;
+      applyPos(
+        clampLive({
+          left: drag.current.sl + event.clientX - drag.current.ox,
+          top: drag.current.st + event.clientY - drag.current.oy,
+        }),
+      );
+    }
+    function up() {
+      if (!drag.current) return;
+      drag.current = null;
+      setDragging(false);
+      if (posRef.current) applyPos(posRef.current, true);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+  }, [dragging, seat]);
+
   function hideOnPhone() {
     writeEstimateTotalRailPhoneHidden(true);
     setPhoneHidden(true);
@@ -103,32 +140,19 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     applyPos(null, true);
   }
 
-  function onPointerDown(event: PointerEvent<HTMLElement>) {
+  function startDrag(clientX: number, clientY: number) {
+    const el = railRef.current;
+    if (!el || drag.current) return;
+    const rect = el.getBoundingClientRect();
+    drag.current = { ox: clientX, oy: clientY, sl: rect.left, st: rect.top };
+    setDragging(true);
+  }
+
+  function onPointerDown(event: ReactPointerEvent<HTMLElement>) {
     if (event.button !== 0) return;
     if ((event.target as HTMLElement | null)?.closest("button")) return;
-    const el = railRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    drag.current = { ox: event.clientX, oy: event.clientY, sl: rect.left, st: rect.top };
-    setDragging(true);
-    el.setPointerCapture(event.pointerId);
-  }
-
-  function onPointerMove(event: PointerEvent<HTMLElement>) {
-    if (!drag.current) return;
-    applyPos(
-      clampLive({
-        left: drag.current.sl + event.clientX - drag.current.ox,
-        top: drag.current.st + event.clientY - drag.current.oy,
-      }),
-    );
-  }
-
-  function onPointerUp() {
-    if (!drag.current) return;
-    drag.current = null;
-    setDragging(false);
-    if (posRef.current) applyPos(posRef.current, true);
+    event.preventDefault();
+    startDrag(event.clientX, event.clientY);
   }
 
   const crewRows = useMemo(
@@ -180,25 +204,24 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
   const movedClass = pos ? " est-total-rail-moved" : "";
   const dragClass = dragging ? " est-total-rail-dragging" : "";
 
-  if (phone && phoneHidden) {
-    return (
-      <button
-        ref={(el) => {
-          railRef.current = el;
-        }}
-        type="button"
-        className={`est-total-rail-chip hud-tile print-hide${movedClass}`}
-        style={railStyle(pos)}
-        onClick={showOnPhone}
-        aria-label="Show estimate total"
-      >
-        <span>Estimate total</span>
-        <span className="hud-readout">{breakdown.total ? money(breakdown.total) : "—"}</span>
-      </button>
-    );
-  }
+  const chip = (
+    <button
+      ref={(el) => {
+        railRef.current = el;
+      }}
+      type="button"
+      className={`est-total-rail-chip hud-tile print-hide${movedClass}`}
+      style={railStyle(pos)}
+      onClick={showOnPhone}
+      aria-label="Show estimate total"
+      data-testid="estimate-total-rail-chip"
+    >
+      <span>Estimate total</span>
+      <span className="hud-readout">{breakdown.total ? money(breakdown.total) : "—"}</span>
+    </button>
+  );
 
-  return (
+  const rail = (
     <aside
       ref={railRef}
       className={`est-total-rail hud-tile print-hide${movedClass}${dragClass}`}
@@ -206,13 +229,22 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
       aria-label="Estimate total"
       aria-grabbed={dragging}
       title="Drag to move"
+      data-testid="estimate-total-rail"
       onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onMouseDown={(event) => {
+        if (event.button !== 0) return;
+        if ((event.target as HTMLElement | null)?.closest("button")) return;
+        event.preventDefault();
+        startDrag(event.clientX, event.clientY);
+      }}
     >
       <div className="est-total-rail-head">
-        <h2>Estimate total</h2>
+        <h2>
+          <span className="est-total-rail-move" aria-hidden="true">
+            Move
+          </span>
+          Estimate total
+        </h2>
         <div className="est-total-rail-actions">
           {pos ? (
             <button type="button" className="est-total-rail-reset" onClick={resetPosition}>
@@ -245,4 +277,7 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
       </p>
     </aside>
   );
+
+  const node = phone && phoneHidden ? chip : rail;
+  return host ? createPortal(node, host) : node;
 }
