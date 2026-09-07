@@ -10,6 +10,7 @@ import {
   type CompanyScope,
 } from "./companies.ts";
 import { catalogSites } from "./desk-data.ts";
+import { FERNDALE_CLIENT_TEMPLATE_NOTE, FERNDALE_SITE_ID, FERNDALE_STATUS_NOTE } from "./ferndale-work.ts";
 import { estimateForJob, estimateHref } from "./estimate-open.ts";
 import { isHisWoodRiverJob, isHisWoodRiverPack } from "./his-wood-river.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
@@ -32,12 +33,10 @@ export const JOB_TREE_CLIENT_SITE_IDS = {
   [MONROE_ENERGY_CLIENT_ID]: ["site-monroe"],
 } as const;
 
-/** Ferndale has its own GEP / TASO client estimate template — not a Rodeo clone. */
-export const FERNDALE_CLIENT_TEMPLATE_NOTE =
-  "Own client estimate / RFQ template (GEP / TASO) — not a Rodeo clone";
+export { FERNDALE_CLIENT_TEMPLATE_NOTE } from "./ferndale-work.ts";
 
 export const SITE_TREE_NOTES: Record<string, string> = {
-  "site-ferndale": FERNDALE_CLIENT_TEMPLATE_NOTE,
+  [FERNDALE_SITE_ID]: `${FERNDALE_STATUS_NOTE}. ${FERNDALE_CLIENT_TEMPLATE_NOTE}`,
 };
 
 const MADISON_CLIENT_ORDER = [PHILLIPS_66_CLIENT_ID, GEORGIA_POWER_CLIENT_ID, MONROE_ENERGY_CLIENT_ID] as const;
@@ -234,7 +233,7 @@ export function clientIdForSite(site: { id?: string; client?: string; name?: str
 
 export function siteTreeNote(siteId: string, name = "") {
   if (SITE_TREE_NOTES[siteId]) return SITE_TREE_NOTES[siteId];
-  if (/\bferndale\b/i.test(name)) return FERNDALE_CLIENT_TEMPLATE_NOTE;
+  if (/\bferndale\b/i.test(name) || siteId === FERNDALE_SITE_ID) return SITE_TREE_NOTES[FERNDALE_SITE_ID];
   return undefined;
 }
 

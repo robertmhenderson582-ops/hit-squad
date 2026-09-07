@@ -310,7 +310,9 @@ describe("job tree", () => {
     assert.equal(p66?.sites.some((site) => site.name === "Yates"), false);
     assert.equal(georgia?.sites.some((site) => site.name === "Yates"), true);
     assert.equal(georgia?.sites.some((site) => /bowen|scherer/i.test(site.name)), false);
-    assert.equal(p66?.sites.find((site) => site.id === "site-ferndale")?.note, FERNDALE_CLIENT_TEMPLATE_NOTE);
+    assert.match(p66?.sites.find((site) => site.id === "site-ferndale")?.note || "", /GEP \/ TASO/);
+    assert.match(p66?.sites.find((site) => site.id === "site-ferndale")?.note || "", /Competitive bid/);
+    assert.match(p66?.sites.find((site) => site.id === "site-ferndale")?.note || "", new RegExp(FERNDALE_CLIENT_TEMPLATE_NOTE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.equal(p66?.sites.find((site) => site.id === "site-ferndale")?.name, "Ferndale");
     assert.equal(
       madison?.clients.some((client) => client.sites.some((site) => site.name === "Not assigned")),
