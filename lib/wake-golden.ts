@@ -29,7 +29,7 @@ import {
 
 export const GOLDEN_MONEY_TOLERANCE = 0.5;
 
-export type GoldenMoneyStatus = "locked" | "formula-unavailable";
+export type GoldenMoneyStatus = "locked" | "formula-unavailable" | "pending-workbook-eval";
 
 export type ContractorGoldenBuckets = {
   directHours: number;
@@ -170,12 +170,58 @@ export const MONROE_541V_GOLDEN: WakeGoldenFixture = {
   },
 };
 
+/** Family B filled U110 workbook — additional face. Totals not invented. */
+export const U110_RODEO_WORKBOOK_GOLDEN: WakeGoldenFixture = {
+  packId: RODEO_U110_PACK_ID,
+  unit: "U110",
+  family: "p66-rodeo-workbook",
+  officialRevisionId: RODEO_WORKBOOK_U110_ID,
+  officialRevisionName: "P66 RODEO ESTIMATE WORKBOOK Unit 110  1508 07222026 RH.xlsx",
+  extraTemplateIds: [RODEO_WORKBOOK_BLANK_ID],
+  extractedFrom: "drive-text",
+  dollarsStatus: "pending-workbook-eval",
+  note: "Family B additional face. 4.5MB book has no Drive text extract. Do not invent SUMMARY $ or collapse into family A.",
+  buckets: null,
+};
+
+/** Family B filled U250 workbook — additional face. Totals not invented. */
+export const U250_RODEO_WORKBOOK_GOLDEN: WakeGoldenFixture = {
+  packId: RODEO_U250_PACK_ID,
+  unit: "U250",
+  family: "p66-rodeo-workbook",
+  officialRevisionId: RODEO_WORKBOOK_U250_ID,
+  officialRevisionName: "Copy of P66 RODEO ESTIMATE WORKBOOK  U-250  07.23.25 JB.xlsx",
+  extraTemplateIds: [RODEO_WORKBOOK_BLANK_ID],
+  extractedFrom: "drive-text",
+  dollarsStatus: "pending-workbook-eval",
+  note: "Family B additional face. 4.5MB book has no Drive text extract. Do not invent SUMMARY $ or collapse into family A.",
+  buckets: null,
+};
+
+export const RODEO_WORKBOOK_BLANK_GOLDEN: WakeGoldenFixture = {
+  packId: "",
+  unit: "",
+  family: "p66-rodeo-workbook",
+  officialRevisionId: RODEO_WORKBOOK_BLANK_ID,
+  officialRevisionName: "P66 RODEO ESTIMATE WORKBOOK Blank Needs Rates updated.xlsx",
+  extraTemplateIds: [],
+  extractedFrom: "drive-text",
+  dollarsStatus: "pending-workbook-eval",
+  note: "Family B blank Needs Rates. Not an official filled lock. Do not invent rates or totals.",
+  buckets: null,
+};
+
 export function wakeGoldenFixtures(): WakeGoldenFixture[] {
   return [U110_CONTRACTOR_GOLDEN, U250_CONTRACTOR_GOLDEN, MONROE_541V_GOLDEN];
 }
 
+/** Official lock per reserved pack — family A for Rodeo, Monroe POST REVIEW for 541V. */
 export function goldenForPackId(packId = "") {
   return wakeGoldenFixtures().find((row) => row.packId === packId) ?? null;
+}
+
+export function familyBWorkbookFixtures(): WakeGoldenFixture[] {
+  return [U110_RODEO_WORKBOOK_GOLDEN, U250_RODEO_WORKBOOK_GOLDEN, RODEO_WORKBOOK_BLANK_GOLDEN];
 }
 
 export function materialsTotal(buckets: ContractorGoldenBuckets) {
@@ -204,7 +250,14 @@ export type HydratedWakeCheck = {
 /** Once a reserved slot is hydrated, desk totals must match the official fixture. */
 export function checkHydratedWakeGolden(
   pack: WakePackHint | null | undefined,
-  desk: { grandTotal?: number; totalHours?: number } | null | undefined,
+  desk: {
+    grandTotal?: number;
+    totalHours?: number;
+    directHours?: number;
+    indirectHours?: number;
+    directDollars?: number;
+    indirectDollars?: number;
+  } | null | undefined,
 ): HydratedWakeCheck {
   if (!pack) return { ok: true, skipped: "identity-only", reason: "no pack" };
   const fixture = goldenForPackId(pack.packId);
@@ -229,6 +282,18 @@ export function checkHydratedWakeGolden(
       ok: false,
       reason: `desk ${desk.totalHours} hrs ≠ official ${fixture.unit} ${fixture.buckets.totalHours} hrs`,
     };
+  }
+  if (desk.directHours != null && !moneyEqual(desk.directHours, fixture.buckets.directHours, 0.05)) {
+    return { ok: false, reason: `desk direct hours drifted from official ${fixture.unit}` };
+  }
+  if (desk.indirectHours != null && !moneyEqual(desk.indirectHours, fixture.buckets.indirectHours, 0.05)) {
+    return { ok: false, reason: `desk indirect hours drifted from official ${fixture.unit}` };
+  }
+  if (desk.directDollars != null && !moneyEqual(desk.directDollars, fixture.buckets.directDollars)) {
+    return { ok: false, reason: `desk direct $ drifted from official ${fixture.unit}` };
+  }
+  if (desk.indirectDollars != null && !moneyEqual(desk.indirectDollars, fixture.buckets.indirectDollars)) {
+    return { ok: false, reason: `desk indirect $ drifted from official ${fixture.unit}` };
   }
   return { ok: true };
 }

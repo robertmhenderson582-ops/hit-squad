@@ -84,7 +84,7 @@ U110 buckets: Direct 16,730 / $2,746,343 · Indirect 9,711 / $1,735,592 · PD $4
 
 U250 buckets: Direct 8,315 / $1,383,800 · Indirect 4,566 / $767,540 · PD $188,740 · Mob $101,000 · Materials $20,000 · Equipment $9,600.
 
-Family B (~4.5MB P66 RODEO ESTIMATE WORKBOOK) is an additional face. Official lock for U110 / U250 is family A.
+Family B (~4.5MB P66 RODEO ESTIMATE WORKBOOK) is an additional face. Official lock for U110 / U250 is family A. Family B SUMMARY $ is pending workbook eval (no Drive text extract on the 4.5MB books) — do not invent those totals. Committed snapshot: `lib/wake-golden/fixtures.json`.
 
 ## Export (Rodeo V1)
 

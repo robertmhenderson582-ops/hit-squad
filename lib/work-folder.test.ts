@@ -50,6 +50,7 @@ describe("Work Folder ids", () => {
     const doc = readFileSync(fileURLToPath(new URL("../docs/rodeo-monroe-work-folder.md", import.meta.url)), "utf8");
     assert.match(doc, /Do not git client xlsx/);
     assert.match(doc, /MULTIPLE templates/);
+    assert.match(doc, /lib\/wake-golden\/fixtures\.json/);
     assert.equal(/\.(xlsx|pdf)\n/.test(doc), false);
   });
 });
