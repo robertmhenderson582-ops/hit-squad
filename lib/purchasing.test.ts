@@ -177,6 +177,11 @@ describe("Purchasing Day-1 ledger", () => {
     assert.match(fresh, /tab === "purchasing"/);
     assert.match(desk, /purchasingCostSlice|purchasingTotals/);
     assert.match(desk, /Save dated totals/);
+    const modulePage = readFileSync(fileURLToPath(new URL("../app/purchasing/page.tsx", import.meta.url)), "utf8");
+    const moduleDesk = readFileSync(fileURLToPath(new URL("../components/PurchasingModuleDesk.tsx", import.meta.url)), "utf8");
+    assert.match(modulePage, /PurchasingModuleDesk/);
+    assert.match(moduleDesk, /PurchasingDesk/);
+    assert.match(moduleDesk, /liveCostJobs/);
     assert.match(cost, /purchasingCostSlice/);
     assert.match(cost, /Purchases \/ consumables/);
     assert.match(pack, /purchasing\?:/);

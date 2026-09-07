@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
-import { DESK_NAV, deskNavHasSiblingWorkTabs, deskNavLabels } from "./desk-nav.ts";
+import { DESK_NAV, deskNavHasHeaderModules, deskNavHasSiblingWorkTabs, deskNavLabels } from "./desk-nav.ts";
 
 describe("desk chrome nav", () => {
   it("drops sibling Jobs / Sites / Estimates tabs", () => {
@@ -19,5 +19,13 @@ describe("desk chrome nav", () => {
     assert.equal(/href: "\/jobs"/.test(chrome), false);
     assert.equal(/href: "\/sites"/.test(chrome), false);
     assert.equal(/href: "\/estimates"/.test(chrome), false);
+  });
+
+  it("strips module links from the header and keeps Settings", () => {
+    assert.deepEqual(deskNavLabels(), ["Settings"]);
+    assert.equal(deskNavHasHeaderModules(), false);
+    assert.equal(DESK_NAV.some((item) => item.href === "/settings"), true);
+    const chrome = readFileSync(fileURLToPath(new URL("../components/DeskChrome.tsx", import.meta.url)), "utf8");
+    assert.equal(/Change orders|Future Modules|Cost \/ PPR/.test(chrome), false);
   });
 });

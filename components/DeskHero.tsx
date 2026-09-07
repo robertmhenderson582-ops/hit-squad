@@ -1,21 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { BrandMark } from "@/components/BrandMark";
-import { COMPANY_DESK_DOOR, HOME_KICKER, HOME_WORDMARK } from "@/lib/desk-home";
+import { HomeDock } from "@/components/HomeDock";
+import { HOME_KICKER, HOME_WORDMARK } from "@/lib/desk-home";
 
-export function DeskHero({
-  href = COMPANY_DESK_DOOR.href,
-  label = COMPANY_DESK_DOOR.label,
-  logo = null,
-}: {
-  href?: string;
-  label?: string;
-  logo?: string | null;
-}) {
+export function DeskHero({ logo = null }: { logo?: string | null }) {
   return (
-    <section className="desk-hero desk-hero-home px-4 py-10 text-center sm:py-12">
-      <Link href={href} aria-label={label} className="hero-mark brand-static relative z-10">
+    <section className="desk-hero desk-hero-home px-2 py-8 text-center sm:px-4 sm:py-10">
+      <div className="hero-mark brand-static relative z-10">
         <BrandMark variant="stacked" className="mx-auto h-14 w-14" />
         <p className="mt-3 font-display text-5xl font-semibold tracking-[0.16em] text-white sm:text-6xl">
           {HOME_WORDMARK}
@@ -28,7 +20,8 @@ export function DeskHero({
             <img src={logo} alt="" />
           </span>
         ) : null}
-      </Link>
+      </div>
+      <HomeDock />
     </section>
   );
 }

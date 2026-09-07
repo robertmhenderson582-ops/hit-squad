@@ -48,11 +48,9 @@ function ChromeInner({
   const paper = resolvedTheme === "day";
   const hero = variant === "hero";
   const [menuOpen, setMenuOpen] = useState(false);
-  const [modsOpen, setModsOpen] = useState(false);
 
   useEffect(() => {
     setMenuOpen(false);
-    setModsOpen(false);
   }, [pathname]);
 
   const rail = (active: boolean) =>
@@ -60,35 +58,6 @@ function ChromeInner({
 
   const links = NAV.filter((item) => item.href !== "/rates" || canOpenRates(lens)).map((item) => {
     const active = navActive(pathname, item.href, item.modules);
-    if (item.modules) {
-      return (
-        <div key={item.href} className="future-mods relative">
-          <button
-            type="button"
-            className={`${rail(active)} flex items-center gap-1`}
-            aria-expanded={modsOpen}
-            aria-haspopup="true"
-            onClick={() => setModsOpen((open) => !open)}
-          >
-            {item.label.toUpperCase()}
-            <span aria-hidden="true">{modsOpen ? "▴" : "▾"}</span>
-          </button>
-          {modsOpen ? (
-            <div className="future-mods-menu" role="menu">
-              <Link href={item.href} className="future-mods-item" role="menuitem">
-                All modules
-              </Link>
-              {FUTURE_MODULES.map((mod) => (
-                <Link key={mod.href} href={mod.href} className="future-mods-item" role="menuitem">
-                  <span>{mod.name}</span>
-                  <span className="future-mods-note">{mod.note}</span>
-                </Link>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      );
-    }
     return (
       <Link key={item.href} href={item.href} className={rail(active)}>
         {item.label.toUpperCase()}
@@ -148,19 +117,21 @@ function ChromeInner({
             </div>
           </div>
           <nav className="mt-4 font-mono text-[11px] tracking-[0.16em]">
-            <button
-              type="button"
-              className={`desk-nav-toggle sm:hidden ${paper ? "paper-rail" : "hud-rail"}`}
-              aria-expanded={menuOpen}
-              aria-controls="desk-nav"
-              onClick={() => setMenuOpen((open) => !open)}
-            >
-              <span className="desk-nav-burger" aria-hidden="true" />
-              {menuOpen ? "CLOSE" : "MENU"}
-            </button>
+            {links.length > 1 ? (
+              <button
+                type="button"
+                className={`desk-nav-toggle sm:hidden ${paper ? "paper-rail" : "hud-rail"}`}
+                aria-expanded={menuOpen}
+                aria-controls="desk-nav"
+                onClick={() => setMenuOpen((open) => !open)}
+              >
+                <span className="desk-nav-burger" aria-hidden="true" />
+                {menuOpen ? "CLOSE" : "MENU"}
+              </button>
+            ) : null}
             <div
               id="desk-nav"
-              className={`${menuOpen ? "flex" : "hidden"} mt-2 flex-col gap-2 sm:mt-0 sm:flex sm:flex-row sm:flex-wrap`}
+              className={`${links.length > 1 && !menuOpen ? "hidden sm:flex" : "flex"} mt-2 flex-col gap-2 sm:mt-0 sm:flex-row sm:flex-wrap`}
             >
               {links}
             </div>
