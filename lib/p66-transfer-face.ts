@@ -1,15 +1,13 @@
 /**
- * Rodeo export: the Hit Squad estimate fills out the P66 template.
+ * Rodeo V1: estimate fills P66-shaped export → Robert pastes into official file.
  *
- * Direction of truth:
- *   Source = live pack (Robert look-alike)
- *   Target = P66 official-shaped contractor face (hours × composite)
- *   Flow   = estimate → fills P66 template
- * Not reverse. Not two equal books fighting.
+ * Source = Hit Squad live pack (look-alike).
+ * Export includes a P66-shaped transfer face (hours × composite SUMMARY +
+ * Direct/Indirect and money tabs) filled from that pack, easy to copy.
+ * Destination = their official P66 file (manual paste). Do not block wake-up
+ * on cloning or protecting the locked official xlsx binary.
  *
- * The xlsx may still contain both sheet groups. The product story is
- * "my estimate fills out the P66 template."
- * Family B workbook fill is later. Do not git the locked official binary.
+ * Golden: Hit Squad totals ↔ this face ↔ Work Folder fixtures.
  */
 
 import { deskPackageTotal, type DeskPackageInput } from "./estimate-desk-total.ts";
@@ -31,7 +29,7 @@ export const P66_TRANSFER_EQUIPMENT = "P66 Equipment";
 export const P66_TRANSFER_THIRD = "P66 Third Party";
 export const P66_TRANSFER_OTHER = "P66 Other";
 export const P66_TRANSFER_NOTE =
-  "My estimate fills out the P66 template. Source = Hit Squad live pack. Not the locked official file.";
+  "Estimate fills this P66-shaped export. Copy these values into the official P66 file. Not the locked official workbook.";
 
 export type P66TransferTotals = ContractorGoldenBuckets & {
   unit: string;

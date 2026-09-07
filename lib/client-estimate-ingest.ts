@@ -10,7 +10,7 @@
  *
  * Monroe 541V official lock is its own POST REVIEW workbook — not A or B.
  *
- * John loop: Robert Excel → Hit Squad live pack → estimate fills the P66 template.
+ * John loop: Robert Excel → Hit Squad live pack → estimate fills P66-shaped export → Robert pastes into official file.
  *
  * This path classifies and returns seed metadata only. It does not create
  * crew calendars or remap live pack totals. Native Hit Squad xlsx still
@@ -256,7 +256,7 @@ export const CLIENT_FACE_MAPPER_SPEC = {
     clock: "hours × one composite rate",
     buckets: ["Direct", "Indirect"],
     tabs: ["INSTRUCTIONS", "SUMMARY", "1–9"],
-    exportAs: "estimate fills the P66 template",
+    exportAs: "estimate fills P66-shaped export → Robert pastes into official file",
     ingest: "stage-metadata",
   },
   "p66-rodeo-workbook": {

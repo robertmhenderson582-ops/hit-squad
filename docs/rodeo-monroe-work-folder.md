@@ -49,7 +49,7 @@ Official U110 and U250 Gmail revisions are this family.
 
 **C — Client Estimate Form family** (U240 examples under Rodeo/U240).
 
-John loop: Robert Excel → Hit Squad live pack → **estimate fills out the P66 template**.
+John loop: Robert Excel → Hit Squad live pack → **estimate fills P66-shaped export → Robert pastes into official file**.
 
 ## Commercial stack (same idea as Wood River)
 
@@ -88,4 +88,4 @@ Family B (~4.5MB P66 RODEO ESTIMATE WORKBOOK) is an additional face. Official lo
 
 ## Export (Rodeo V1)
 
-**My estimate fills out the P66 template.** Source = Hit Squad live pack. Target = official-shaped contractor face (hours × composite). Flow is estimate → fills P66, not reverse, not two equal books fighting. The export may still contain both sheet groups. After fill, P66 SUMMARY/hours must match the Hit Squad rail and the Work Folder goldens. Family B workbook fill is later. This PR does not clone or git the locked official xlsx. Bayway stays its own ST/OT/DT form later.
+**Estimate fills P66-shaped export → Robert pastes into official file.** Source = Hit Squad live pack. The export includes a P66-shaped transfer face (hours × composite SUMMARY + Direct/Indirect and money tabs) filled from that pack. Destination is their official P66 file — manual paste for V1. Do not block wake-up on cloning the locked official xlsx. Auto-write into an official template copy is later. Golden: Hit Squad totals ↔ this face ↔ Work Folder fixtures. Family B workbook fill is later. Bayway stays its own ST/OT/DT form later.
