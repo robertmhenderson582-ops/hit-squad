@@ -115,7 +115,7 @@ export function JobsDesk() {
         <p className="max-w-3xl text-sm leading-6 text-[#163038]">
           {standaloneLane
             ? "This seat is on Standalone. Company jobs stay on the company door."
-            : "Company, then site, then the job. Open a card to open that estimate. Archive hides a job. Delete removes your copy after you confirm."}
+            : "Client, then site, then the job. Open a card to open that estimate. Archive hides a job. Delete removes your copy after you confirm."}
         </p>
         {standaloneLane ? (
           <Link href="/standalone" className="rounded-lg bg-steel px-4 py-2 text-white">
