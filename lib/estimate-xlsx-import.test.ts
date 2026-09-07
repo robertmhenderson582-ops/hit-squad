@@ -43,9 +43,23 @@ import {
 import type { MiscLine } from "./other-cost.ts";
 import { billedPeriodCount, type LargeToolLine, type ThirdPartyLine } from "./equipment-sheet.ts";
 import { colLetter } from "./xlsx-minimal.ts";
-import type { EstimatePackSnapshot } from "./estimate-pack.ts";
+import { packClockIsSeedSmashed, parseIncomingPack, restorePackClock, type EstimatePackSnapshot } from "./estimate-pack.ts";
 import type { CraftRow } from "./craft-labor.ts";
 import { defaultPhases, type PhaseScheduleState } from "./phase-schedule.ts";
+
+const AROMATICS_FREEZE = "/tmp/vault-estimates/aromatics-freeze-2026-09-02.json";
+
+function readVaultJson(file: string): unknown {
+  const raw = JSON.parse(readFileSync(file, "utf8"));
+  const parsed = parseIncomingPack(raw);
+  if (!parsed.ok) return raw;
+  if (!file.includes("wood-river-2027-aromatics-turnaround") || !packClockIsSeedSmashed(parsed.pack)) {
+    return parsed.pack;
+  }
+  if (!existsSync(AROMATICS_FREEZE)) return parsed.pack;
+  const freeze = parseIncomingPack(JSON.parse(readFileSync(AROMATICS_FREEZE, "utf8")));
+  return freeze.ok ? restorePackClock(parsed.pack, freeze.pack) : parsed.pack;
+}
 
 function craft(
   id: string,
@@ -520,7 +534,7 @@ describe("estimate excel import", () => {
     ];
     for (const { file, total } of vaults) {
       if (!existsSync(file)) continue;
-      const { pack, input } = estimateJsonToXlsxInput(JSON.parse(readFileSync(file, "utf8")));
+      const { pack, input } = estimateJsonToXlsxInput(readVaultJson(file));
       assert.equal(deskEstimateTotal(input), total, file);
       const imported = await parseEstimateXlsx(await estimateToXlsx(input));
       const applied = applyEstimateImport(pack, imported);
@@ -539,7 +553,7 @@ describe("estimate excel import", () => {
     const loaded = vaults.filter((row) => existsSync(row.file));
     const cases = loaded.length
       ? loaded.map((row) => {
-          const { pack, input } = estimateJsonToXlsxInput(JSON.parse(readFileSync(row.file, "utf8")));
+          const { pack, input } = estimateJsonToXlsxInput(readVaultJson(row.file));
           return { label: row.file, pack, input, lock: row.total };
         })
       : [
@@ -1028,7 +1042,7 @@ describe("estimate excel import", () => {
     ];
     for (const { file, total } of vaults) {
       if (!existsSync(file)) continue;
-      const { input } = estimateJsonToXlsxInput(JSON.parse(readFileSync(file, "utf8")));
+      const { input } = estimateJsonToXlsxInput(readVaultJson(file));
       const pack = createPackFromImport(await parseEstimateXlsx(await estimateToXlsx(input)));
       const money = livePackMoney(pack);
       assert.equal(money.desk, money.summary, `${file} create-new desk===Summary`);
@@ -1043,7 +1057,7 @@ describe("estimate excel import", () => {
     ];
     for (const { file, total } of vaults) {
       if (!existsSync(file)) continue;
-      const { pack, input } = estimateJsonToXlsxInput(JSON.parse(readFileSync(file, "utf8")));
+      const { pack, input } = estimateJsonToXlsxInput(readVaultJson(file));
       assert.equal(deskEstimateTotal(input), total, file);
       assert.equal(estimateWorkbookSummaryTotal(input), total, `${file} first UP`);
       const imported = await parseEstimateXlsx(await estimateToXlsx(input));
@@ -1334,7 +1348,7 @@ describe("estimate excel import", () => {
     ];
     for (const { file, total } of vaults) {
       if (!existsSync(file)) continue;
-      const { pack, input } = estimateJsonToXlsxInput(JSON.parse(readFileSync(file, "utf8")));
+      const { pack, input } = estimateJsonToXlsxInput(readVaultJson(file));
       const bytes = await estimateToXlsx(input);
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(Buffer.from(bytes));
@@ -1682,7 +1696,7 @@ describe("estimate excel import", () => {
   it("Nathan deletes _CrewRanges: create-new still imports; Aromatics labor leaves the desk rail", async () => {
     const file = "/tmp/vault-estimates/wood-river-2027-aromatics-turnaround.json";
     if (!existsSync(file)) return;
-    const { input } = estimateJsonToXlsxInput(JSON.parse(readFileSync(file, "utf8")));
+    const { input } = estimateJsonToXlsxInput(readVaultJson(file));
     const bytes = await estimateToXlsx(input);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));

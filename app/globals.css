@@ -900,12 +900,61 @@ textarea:focus {
   color: #efe6d4;
 }
 
+.est-total-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
 .est-total-rail h2 {
   margin: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   color: #f0a13a;
+}
+
+.est-total-rail-hide {
+  flex: 0 0 auto;
+  min-height: 2.25rem;
+  min-width: 3.4rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid rgba(62, 198, 212, 0.35);
+  border-radius: 999px;
+  background: rgba(6, 22, 26, 0.45);
+  color: #efe6d4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.est-total-rail-chip {
+  position: fixed;
+  top: 7.4rem;
+  right: 0.85rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  max-width: calc(100vw - 1.7rem);
+  min-height: 2.75rem;
+  padding: 0.55rem 0.85rem;
+  color: #efe6d4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.est-total-rail-chip .hud-readout {
+  font-size: 0.95rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #fff;
 }
 
 .est-total-rail-grand {
@@ -962,7 +1011,8 @@ textarea:focus {
 }
 
 @media (max-width: 1099px) {
-  .est-total-rail {
+  .est-total-rail,
+  .est-total-rail-chip {
     top: 13.75rem;
   }
 }
@@ -2285,7 +2335,8 @@ html[data-theme="night"] .rfq-sheet {
   .steel-plate,
   .est-chrome,
   .est-total-card,
-  .est-total-rail {
+  .est-total-rail,
+  .est-total-rail-chip {
     background: #fff !important;
     box-shadow: none !important;
     border-color: #c5d4d4 !important;

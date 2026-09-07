@@ -21,7 +21,7 @@ import {
   writeStoreJson,
   type StorageLike,
 } from "./local-estimates.ts";
-import { CREW_STORE_PREFIX, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
+import { CREW_STORE_PREFIX, PHASE_STORE_PREFIX, isDefaultSeedSchedule, rangesHaveCustomClock } from "./phase-schedule.ts";
 import { JOB_META_PREFIX } from "./staffing-plan.ts";
 import { ORG_CHART_STORE_PREFIX } from "./org-chart.ts";
 
@@ -96,6 +96,7 @@ export function crewHasRows(crew: unknown) {
 }
 
 export function scheduleHasWork(schedule: unknown) {
+  if (isDefaultSeedSchedule(schedule)) return false;
   const row = asRecord(schedule);
   if (!row) return false;
   const phases = Array.isArray(row.phases) ? row.phases : [];
@@ -103,6 +104,44 @@ export function scheduleHasWork(schedule: unknown) {
     const item = asRecord(phase);
     return Boolean(item && (item.on || item.start || item.stop));
   });
+}
+
+export function crewHasCustomClock(crew: unknown) {
+  const row = asRecord(crew);
+  if (!row) return false;
+  return CREW_LANES.some((lane) => {
+    const list = row[lane];
+    if (!Array.isArray(list)) return false;
+    return list.some((item) => rangesHaveCustomClock((asRecord(item)?.ranges as Array<{ start?: string; end?: string }>) ?? []));
+  });
+}
+
+/** Live pack whose Job setup / crew calendars were remapped onto the 2026 demo seed. */
+export function packClockIsSeedSmashed(pack: EstimatePackSnapshot | null | undefined) {
+  if (!pack?.packId) return false;
+  return isDefaultSeedSchedule(pack.schedule) && crewHasRows(pack.crew) && !crewHasCustomClock(pack.crew);
+}
+
+/** Overlay baseline Job setup + crew. Keep live identity, sheets, and later jobMeta. */
+export function restorePackClock(live: EstimatePackSnapshot, baseline: EstimatePackSnapshot): EstimatePackSnapshot {
+  return {
+    ...live,
+    schedule: baseline.schedule ?? live.schedule,
+    crew: baseline.crew ?? live.crew,
+    updatedAt: Math.max(live.updatedAt || 0, baseline.updatedAt || 0, Date.now()),
+  };
+}
+
+function pickSchedule(newer: unknown, older: unknown) {
+  if (scheduleHasWork(newer)) return newer;
+  if (scheduleHasWork(older)) return older;
+  return newer ?? older;
+}
+
+function pickCrew(newer: unknown, older: unknown) {
+  if (crewHasCustomClock(newer)) return newer;
+  if (crewHasCustomClock(older)) return older;
+  return crewHasRows(newer) ? newer : older ?? newer;
 }
 
 export function equipmentHasWork(value: unknown) {
@@ -321,9 +360,9 @@ export function pickPack(
   const older = newer === local ? vault : local;
   return {
     ...newer,
-    crew: crewHasRows(newer.crew) ? newer.crew : older.crew ?? newer.crew,
+    crew: pickCrew(newer.crew, older.crew),
     orgChart: newer.orgChart ?? older.orgChart,
-    schedule: scheduleHasWork(newer.schedule) ? newer.schedule : older.schedule ?? newer.schedule,
+    schedule: pickSchedule(newer.schedule, older.schedule),
     jobMeta: newer.jobMeta ?? older.jobMeta,
     activities: newer.activities ?? older.activities,
     equipment: pickEquipment(newer.equipment, older.equipment),
@@ -450,8 +489,18 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
   );
   touchLocalPack(pack.packId, pack.updatedAt || Date.now(), store, pack.createdAt);
   const key = storageKeyForPack(pack.packId);
-  if (pack.schedule != null) writeStoreJson(store, `${PHASE_STORE_PREFIX}${key}`, pack.schedule);
-  if (pack.crew != null) writeStoreJson(store, `${CREW_STORE_PREFIX}${key}`, pack.crew);
+  if (pack.schedule != null) {
+    const existing = readStoreJson(store, `${PHASE_STORE_PREFIX}${key}`);
+    if (scheduleHasWork(pack.schedule) || !scheduleHasWork(existing)) {
+      writeStoreJson(store, `${PHASE_STORE_PREFIX}${key}`, pack.schedule);
+    }
+  }
+  if (pack.crew != null) {
+    const existing = readStoreJson(store, `${CREW_STORE_PREFIX}${key}`);
+    if (crewHasCustomClock(pack.crew) || !crewHasCustomClock(existing)) {
+      writeStoreJson(store, `${CREW_STORE_PREFIX}${key}`, pack.crew);
+    }
+  }
   if (pack.orgChart != null) writeStoreJson(store, `${ORG_CHART_STORE_PREFIX}${key}`, pack.orgChart);
   if (pack.jobMeta != null) writeStoreJson(store, `${JOB_META_PREFIX}${key}`, pack.jobMeta);
   if (pack.activities != null) writeStoreJson(store, `${ACTIVITY_STORE_PREFIX}${key}`, pack.activities);

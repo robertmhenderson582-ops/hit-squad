@@ -5,6 +5,11 @@ import { useEstimatePackage } from "@/components/EstimatePackage";
 import { readFcrPacket } from "@/lib/change-order-packet";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { deskPackageBreakdown, fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
+import {
+  ESTIMATE_TOTAL_RAIL_PHONE_QUERY,
+  readEstimateTotalRailPhoneHidden,
+  writeEstimateTotalRailPhoneHidden,
+} from "@/lib/estimate-total-rail";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
@@ -17,8 +22,29 @@ function money(value: number) {
 export function EstimateTotalRail({ client = "", site = "" }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
   const [tick, setTick] = useState(0);
+  const [phone, setPhone] = useState(false);
+  const [phoneHidden, setPhoneHidden] = useState(false);
 
   useEffect(() => onEstimateSheets(() => setTick((n) => n + 1)), []);
+
+  useEffect(() => {
+    setPhoneHidden(readEstimateTotalRailPhoneHidden());
+    const media = window.matchMedia(ESTIMATE_TOTAL_RAIL_PHONE_QUERY);
+    const sync = () => setPhone(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  function hideOnPhone() {
+    writeEstimateTotalRailPhoneHidden(true);
+    setPhoneHidden(true);
+  }
+
+  function showOnPhone() {
+    writeEstimateTotalRailPhoneHidden(false);
+    setPhoneHidden(false);
+  }
 
   const crewRows = useMemo(
     () => [
@@ -66,9 +92,30 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     tick,
   ]);
 
+  if (phone && phoneHidden) {
+    return (
+      <button
+        type="button"
+        className="est-total-rail-chip hud-tile print-hide"
+        onClick={showOnPhone}
+        aria-label="Show estimate total"
+      >
+        <span>Estimate total</span>
+        <span className="hud-readout">{breakdown.total ? money(breakdown.total) : "—"}</span>
+      </button>
+    );
+  }
+
   return (
     <aside className="est-total-rail hud-tile print-hide" aria-label="Estimate total">
-      <h2>Estimate total</h2>
+      <div className="est-total-rail-head">
+        <h2>Estimate total</h2>
+        {phone ? (
+          <button type="button" className="est-total-rail-hide" onClick={hideOnPhone}>
+            Hide
+          </button>
+        ) : null}
+      </div>
       <p className="est-total-rail-grand hud-readout">{breakdown.total ? money(breakdown.total) : "—"}</p>
       {breakdown.lines.length ? (
         <ul>

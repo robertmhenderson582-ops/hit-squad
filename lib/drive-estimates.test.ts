@@ -24,6 +24,8 @@ import {
   SEATS_SA_OPEN_ERROR,
 } from "./drive-estimates.ts";
 import { estimateFileName, parseIncomingPack, publicPack, responseLeaksDrive, type EstimatePackSnapshot } from "./estimate-pack.ts";
+import { defaultPhaseSchedule } from "./phase-schedule.ts";
+import { HIS_AROMATICS_FILE_ID, HIS_AROMATICS_FREEZE_FILE_ID, HIS_AROMATICS_PACK_ID } from "./his-wood-river.ts";
 
 function cat2(over: Partial<EstimatePackSnapshot> = {}): EstimatePackSnapshot {
   return {
@@ -680,6 +682,67 @@ describe("drive estimate upsert", () => {
     const listed = await listDrivePacks(drive, "folder");
     assert.equal(listed.some((pack) => pack.packId === packId), true);
     assert.equal(listed.find((pack) => pack.packId === packId)?.ownerEmail, "nathanboyte@gmail.com");
+  });
+
+  it("lists smashed live Aromatics and writes the Sep 2 freeze clock back onto the live file only", async () => {
+    const drive = memoryDrive();
+    const seed = defaultPhaseSchedule();
+    const job2027 = {
+      projectStart: "2027-01-11",
+      phases: seed.phases.map((row) => {
+        if (row.id === "pre") return { ...row, start: "2027-01-11", stop: "2027-02-28" };
+        if (row.id === "oil-out") return { ...row, start: "2027-03-01", stop: "2027-03-10" };
+        if (row.id === "mech") return { ...row, start: "2027-03-11", stop: "2027-04-17" };
+        if (row.id === "oil-in") return { ...row, start: "2027-04-18", stop: "2027-05-03" };
+        return { ...row, start: "2027-05-04", stop: "2027-05-21" };
+      }),
+    };
+    const smashed = {
+      packId: HIS_AROMATICS_PACK_ID,
+      key: `new:${HIS_AROMATICS_PACK_ID}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 9000,
+      ownerEmail: "nathanboyte@gmail.com",
+      schedule: seed,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-09-03", end: "2026-09-03" }] }] },
+    };
+    const freeze = {
+      ...smashed,
+      updatedAt: 400,
+      schedule: job2027,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-02-28" }] }] },
+    };
+    drive.files.set(HIS_AROMATICS_FILE_ID, {
+      file: {
+        id: HIS_AROMATICS_FILE_ID,
+        name: "wood-river-2027-aromatics-turnaround.json",
+        properties: { packId: HIS_AROMATICS_PACK_ID, ownerEmail: smashed.ownerEmail },
+      },
+      content: JSON.stringify(smashed),
+    });
+    drive.files.set(HIS_AROMATICS_FREEZE_FILE_ID, {
+      file: {
+        id: HIS_AROMATICS_FREEZE_FILE_ID,
+        name: "2026-09-02 2027 Aromatics freeze.json",
+      },
+      content: JSON.stringify(freeze),
+    });
+    const listed = await listDrivePacks(drive, "folder");
+    const pack = listed.find((row) => row.packId === HIS_AROMATICS_PACK_ID);
+    assert.equal((pack?.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    assert.equal(
+      ((pack?.crew as { staff: Array<{ ranges: Array<{ start: string }> }> }).staff[0]?.ranges[0]?.start),
+      "2027-01-11",
+    );
+    assert.equal(listed.some((row) => JSON.stringify(row.schedule).includes("2026-08-21")), false);
+    const liveWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FILE_ID));
+    assert.equal((liveWritten.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    const freezeWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FREEZE_FILE_ID));
+    assert.equal(freezeWritten.updatedAt, 400);
   });
 
   it("pins Aromatics writes to the known file id instead of minting a stub", async () => {

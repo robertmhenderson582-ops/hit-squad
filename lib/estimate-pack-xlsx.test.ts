@@ -12,7 +12,7 @@ import {
   estimateWorkbookSummaryTotal,
   packSnapshotToXlsxInput,
 } from "./estimate-pack-xlsx.ts";
-import { parseIncomingPack } from "./estimate-pack.ts";
+import { packClockIsSeedSmashed, parseIncomingPack, restorePackClock } from "./estimate-pack.ts";
 import { largeToolAmount, thirdPartyCost } from "./equipment-sheet.ts";
 import { deskPackageBreakdown } from "./estimate-desk-total.ts";
 import {
@@ -34,6 +34,20 @@ import { subcontractorMarkupBase, subcontractorTotal } from "./subcontractor.ts"
 import { wageLookupOpts } from "./wage-lookup.ts";
 import { excelSafeSheetName } from "./xlsx-minimal.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
+
+const AROMATICS_FREEZE = "/tmp/vault-estimates/aromatics-freeze-2026-09-02.json";
+
+function readVaultJson(file: string): unknown {
+  const raw = JSON.parse(readFileSync(file, "utf8"));
+  const parsed = parseIncomingPack(raw);
+  if (!parsed.ok) return raw;
+  if (!file.includes("wood-river-2027-aromatics-turnaround") || !packClockIsSeedSmashed(parsed.pack)) {
+    return parsed.pack;
+  }
+  if (!existsSync(AROMATICS_FREEZE)) return parsed.pack;
+  const freeze = parseIncomingPack(JSON.parse(readFileSync(AROMATICS_FREEZE, "utf8")));
+  return freeze.ok ? restorePackClock(parsed.pack, freeze.pack) : parsed.pack;
+}
 
 const SAMPLE_PACK = {
   packId: "new-mtfixture-pack01",
@@ -271,6 +285,23 @@ describe("estimate pack JSON → xlsx", () => {
     assert.equal(names.includes(ESTIMATE_XLSX_SHEETS.misc), false);
   });
 
+  it("Sep 2 freeze clock restores smashed live Aromatics to the locked desk total", () => {
+    const liveFile = "/tmp/vault-estimates/wood-river-2027-aromatics-turnaround.json";
+    if (!existsSync(liveFile) || !existsSync(AROMATICS_FREEZE)) return;
+    const live = parseIncomingPack(JSON.parse(readFileSync(liveFile, "utf8")));
+    const freeze = parseIncomingPack(JSON.parse(readFileSync(AROMATICS_FREEZE, "utf8")));
+    assert.equal(live.ok && freeze.ok, true);
+    if (!live.ok || !freeze.ok) return;
+    const freezeDesk = deskEstimateTotal(estimateJsonToXlsxInput(freeze.pack).input);
+    assert.equal(freezeDesk, 25324671.97);
+    if (packClockIsSeedSmashed(live.pack)) {
+      const smashed = deskEstimateTotal(estimateJsonToXlsxInput(live.pack).input);
+      assert.equal(smashed, 5371798.92);
+    }
+    const restored = restorePackClock(live.pack, freeze.pack);
+    assert.equal(deskEstimateTotal(estimateJsonToXlsxInput(restored).input), 25324671.97);
+  });
+
   it("live Aromatics and CAT 2 vault packs match desk ESTIMATE TOTAL $", () => {
     const expected = [
       {
@@ -293,7 +324,7 @@ describe("estimate pack JSON → xlsx", () => {
     };
     for (const { file, total, labor } of expected) {
       if (!existsSync(file)) continue;
-      const { input } = estimateJsonToXlsxInput(JSON.parse(readFileSync(file, "utf8")));
+      const { input } = estimateJsonToXlsxInput(readVaultJson(file));
       const desk = deskEstimateTotal(input);
       const excel = estimateWorkbookSummaryTotal(input);
       assert.equal(desk, total, file);

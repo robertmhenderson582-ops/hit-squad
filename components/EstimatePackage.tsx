@@ -15,6 +15,7 @@ import {
   applyOtPick,
   applyUnitOtPick,
   defaultPhaseSchedule,
+  isDefaultSeedSchedule,
   patchPhase,
   patchUnitPhase,
   readSchedule,
@@ -50,6 +51,7 @@ import {
   vaultListHydratePending,
   type VaultUpsertResult,
 } from "@/lib/estimate-vault-client";
+import { crewHasRows } from "@/lib/estimate-pack";
 import { persistCrewTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
 import { emptyOrgChart, readOrgChart, writeOrgChart, type OrgChartState } from "@/lib/org-chart";
@@ -187,7 +189,11 @@ export function EstimatePackageProvider({
   const [status, setStatusState] = useState<EstimateStatus>(() => readPackStatus(estimateKey));
   const [ready, setReady] = useState(() => {
     const packId = packIdFromStoreKey(estimateKey);
-    return Boolean(packId && findLocalPack(packId));
+    if (!packId || !findLocalPack(packId)) return false;
+    const localSchedule = readSchedule(estimateKey);
+    const localCrew = readCrew(estimateKey);
+    if (isDefaultSeedSchedule(localSchedule) && crewHasRows(localCrew)) return false;
+    return true;
   });
   const [vaultSaveError, setVaultSaveError] = useState("");
   const aliveRef = useRef(true);
@@ -221,6 +227,8 @@ export function EstimatePackageProvider({
     setVaultSaveError("");
     const packId = packIdFromStoreKey(estimateKey);
     const hasLocal = Boolean(packId && findLocalPack(packId));
+    const seedPendingVault =
+      Boolean(packId) && isDefaultSeedSchedule(readSchedule(estimateKey)) && crewHasRows(readCrew(estimateKey));
     const paintFromLocal = () => {
       const next = readSchedule(estimateKey);
       setSchedule(next);
@@ -233,7 +241,7 @@ export function EstimatePackageProvider({
       hydratePackStatus(estimateKey, nextStatus);
       setReady(true);
     };
-    if (hasLocal) paintFromLocal();
+    if (hasLocal && !seedPendingVault) paintFromLocal();
     else setReady(false);
     const boot = packId
       ? hasLocal || vaultListHydratePending()
