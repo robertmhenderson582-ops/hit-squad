@@ -1910,6 +1910,8 @@ describe("estimate excel import", () => {
     assert.doesNotMatch(preview, /\bHPS\b/);
     const importer = readFileSync(fileURLToPath(new URL("./estimate-xlsx-import.ts", import.meta.url)), "utf8");
     assert.match(importer, /LABOR_HPS_LABEL/);
+    assert.match(importer, /Omit<EstimatePackSnapshot, "schedule" \| "crew" \| "jobMeta">/);
+    assert.match(importer, /jobMeta\?: JobMeta \| Record<string, unknown>/);
   });
 });
 

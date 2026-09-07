@@ -482,7 +482,7 @@ export function EstimatePackageProvider({
             normalizeSubSheet(next.subcontractor && typeof next.subcontractor === "object" ? (next.subcontractor as Partial<SubSheet>) : null),
           );
         }
-        if (next.jobMeta != null) {
+        if (next.jobMeta != null && typeof next.jobMeta === "object") {
           const meta = hydrateJobMeta(next.jobMeta);
           writeJobMeta(estimateKey, meta);
           setJobMetaState(meta);

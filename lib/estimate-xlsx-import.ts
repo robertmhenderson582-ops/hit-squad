@@ -55,7 +55,7 @@ import {
   laborDayPlug,
   thirdPartyBucket,
 } from "./estimate-xlsx.ts";
-import { hydrateJobMeta } from "./staffing-plan.ts";
+import { hydrateJobMeta, type JobMeta } from "./staffing-plan.ts";
 import {
   CBA_INCREASE_LABEL,
   EQUIPMENT_CONTINGENCY_LABEL,
@@ -971,10 +971,15 @@ function blocksBySheet(blocks: ImportedBlock[]): Array<{ sheet: string; blocks: 
     .filter((item) => item.blocks.length);
 }
 
-export type AppliedEstimateImport = Omit<EstimatePackSnapshot, "schedule" | "crew"> & {
+export type AppliedEstimateImport = Omit<EstimatePackSnapshot, "schedule" | "crew" | "jobMeta"> & {
   schedule: PhaseScheduleState;
   crew: EstimateXlsxCrew;
+  jobMeta?: JobMeta | Record<string, unknown>;
 };
+
+function asMetaRecord(raw: unknown): Record<string, unknown> | undefined {
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : undefined;
+}
 
 function asEquipment(raw: unknown): { largeTools: LargeToolLine[]; thirdParty: ThirdPartyLine[] } {
   const row = (raw && typeof raw === "object" ? raw : {}) as {
@@ -1321,10 +1326,10 @@ export function applyEstimateImport(base: EstimatePackSnapshot, imported: Estima
     crew,
     jobMeta: imported.jobMeta
       ? hydrateJobMeta({
-          ...((base.jobMeta && typeof base.jobMeta === "object" ? base.jobMeta : {}) as Record<string, unknown>),
+          ...(asMetaRecord(base.jobMeta) ?? {}),
           ...imported.jobMeta,
         })
-      : base.jobMeta,
+      : asMetaRecord(base.jobMeta),
     ...costs,
   };
 }
