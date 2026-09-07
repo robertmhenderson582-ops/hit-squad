@@ -10,8 +10,10 @@ import {
   ownerDemoThreads,
   readInboxHides,
   readThreads,
+  remoteInboxHides,
   storeKey,
   stripDemoThreads,
+  unionInboxHides,
   writeInboxHides,
   writeThreads,
   type InboxThread,
@@ -120,6 +122,13 @@ describe("inbox demo wipe", () => {
     };
     const note = deskWhatsNewThread(true);
     assert.deepEqual(omitHiddenPersonThreads([note, leftover], hides.personIds), [note]);
+
+    const vault = remoteInboxHides({ hiddenMessageIds: ["im-chance-quali"], hiddenPersonIds: ["tester-chance", "desk"] });
+    const merged = unionInboxHides(hides, vault);
+    assert.equal(merged.messageIds.includes("im-old"), true);
+    assert.equal(merged.messageIds.includes("im-chance-quali"), true);
+    assert.equal(merged.personIds.includes("tester-chance"), true);
+    assert.equal(merged.personIds.includes("desk"), false);
   });
 
   it("Desk note stays V1.51.1 and tester-safe", () => {

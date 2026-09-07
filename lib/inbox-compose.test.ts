@@ -190,6 +190,34 @@ describe("inbox compose stays on the thread", () => {
     );
   });
 
+  it("another device does not resurrect a vault-hidden Chance thread from leftover local rows", () => {
+    const leftover = circleThread(
+      { id: "tester-chance", name: "Chance Middlebrooks", company: "Hit Squad" },
+      {
+        messages: [
+          {
+            id: "im-chance-quali",
+            from: "them",
+            author: "Chance Middlebrooks",
+            text: "Chance — got your question about making Quali…",
+            photo: null,
+            sentAt: "",
+            readAt: null,
+          },
+        ],
+      },
+    );
+    const next = reconcileInboxDesk([DESK, leftover], [], null, {
+      hiddenPersonIds: ["tester-chance"],
+      hiddenMessageIds: ["im-chance-quali"],
+    });
+    assert.equal(next.threads.some((thread) => thread.personId === "tester-chance"), false);
+    assert.equal(
+      next.threads.some((thread) => thread.messages.some((message) => message.id === "im-chance-quali")),
+      false,
+    );
+  });
+
   it("does not resurrect a deleted message from the remote poll", () => {
     const created = makeThread(NATHAN);
     const remote = [
@@ -279,6 +307,10 @@ describe("inbox compose stays on the thread", () => {
     assert.match(source, /startInboxThread/);
     assert.match(source, /writeInboxHides/);
     assert.match(source, /omitHiddenPersonThreads/);
+    assert.match(source, /unionInboxHides/);
+    assert.match(source, /remoteInboxHides/);
+    assert.match(source, /hiddenMessageIds/);
+    assert.match(source, /hiddenPersonIds/);
     assert.match(source, /messageId: pending\.id/);
     assert.doesNotMatch(source, /\.then\(\(\) => \{\s*hiddenPersonIdsRef\.current\.delete/);
   });

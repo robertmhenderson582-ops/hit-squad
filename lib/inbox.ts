@@ -141,6 +141,21 @@ export function writeInboxHides(seat: string, hides: InboxHides) {
   );
 }
 
+/** Vault hides union into the local seat. A stale device cannot drop a deleted id. */
+export function unionInboxHides(current: InboxHides, incoming?: Partial<InboxHides> | null): InboxHides {
+  return {
+    personIds: stringIds([...(current.personIds ?? []), ...(incoming?.personIds ?? [])]).filter((id) => id !== DESK_PERSON_ID),
+    messageIds: stringIds([...(current.messageIds ?? []), ...(incoming?.messageIds ?? [])]),
+  };
+}
+
+export function remoteInboxHides(raw?: { hiddenMessageIds?: unknown; hiddenPersonIds?: unknown } | null): InboxHides {
+  return {
+    personIds: stringIds(raw?.hiddenPersonIds).filter((id) => id !== DESK_PERSON_ID),
+    messageIds: stringIds(raw?.hiddenMessageIds),
+  };
+}
+
 export function omitHiddenPersonThreads(threads: InboxThread[], hiddenPersonIds: Iterable<string>): InboxThread[] {
   const hidden = new Set(hiddenPersonIds);
   return threads.filter((thread) => thread.personId === DESK_PERSON_ID || !hidden.has(thread.personId));
@@ -308,6 +323,7 @@ function mergePeerThread(
  * returns that same person under a stable id, remap activeId so the
  * textarea stays on that conversation.
  * Hidden ids stay gone even if a poll still has the vault copy.
+ * Vault hide tombstones on another device drop leftover local rows.
  * A deleted thread stays off this seat: New/startThread must not remap
  * onto the vault conversation for that person.
  */
@@ -340,7 +356,11 @@ export function reconcileInboxDesk(
       ...thread,
       unread: hiddenPersonIds.has(thread.personId) ? 0 : thread.unread,
       messages: thread.messages.filter((message) => !hiddenMessageIds.has(message.id)),
-    }));
+    }))
+    .filter(
+      (thread) =>
+        thread.messages.length > 0 || !hiddenPersonIds.has(thread.personId) || thread.id === activeId,
+    );
   const threads = [...desk, ...mergedRemote, ...localOnlyPeers];
 
   if (!activeId) return { threads, activeId: null };

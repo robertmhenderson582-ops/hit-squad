@@ -1,17 +1,20 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { INBOX_VAULT_KIND, INBOX_VAULT_NAME, readVaultJson } from "./drive-data.ts";
 import { memoryDrive } from "./drive-estimates.ts";
-import { NOVUS_INBOX_EMAIL } from "./inbox-circle.ts";
+import { inboxThreadKey, NOVUS_INBOX_EMAIL } from "./inbox-circle.ts";
 import { acceptedInboxPhoto } from "./inbox.ts";
 import { JOSEPH_EMAIL } from "./tester-seats.ts";
 import {
+  applyInboxHideTombstones,
   forgetInboxCacheForTests,
   hideInboxFor,
+  inboxHidesFor,
   listInboxFor,
+  mergeInboxHides,
   mergeInboxMessages,
   postInboxMessage,
   resetInboxStoreForTests,
@@ -23,6 +26,7 @@ import {
 const dir = mkdtempSync(join(tmpdir(), "hs-inbox-"));
 const OWNER = "robertmhenderson582@gmail.com";
 const NATHAN = "nathanboyte@gmail.com";
+const CHANCE = "chancec318@yahoo.com";
 
 afterEach(() => {
   forgetInboxCacheForTests();
@@ -359,6 +363,117 @@ describe("inbox store", { concurrency: 1 }, () => {
     assert.equal(acceptedInboxPhoto(photo), photo);
   });
 
+  it("union hides keep a vault tombstone when a stale device has none", () => {
+    const vault = [{ email: OWNER, messageIds: ["im-chance-quali"], personIds: ["tester-chance"] }];
+    const stale = [{ email: OWNER, messageIds: [], personIds: [] }];
+    const merged = mergeInboxHides(vault, stale);
+    assert.deepEqual(merged.find((row) => row.email === OWNER)?.messageIds, ["im-chance-quali"]);
+    assert.deepEqual(merged.find((row) => row.email === OWNER)?.personIds, ["tester-chance"]);
+    const applied = applyInboxHideTombstones(
+      [row("im-chance-quali", { fromEmail: CHANCE, fromName: "Chance Middlebrooks", toEmail: OWNER, hiddenBy: [] })],
+      merged,
+    );
+    assert.equal(applied[0]?.hiddenBy.includes(OWNER), true);
+  });
+
+  it("a deleted Chance thread stays gone after another device hydrates a stale cache", async () => {
+    const drive = memoryDrive();
+    const path = join(dir, "chance-hide.json");
+    resetInboxStoreForTests(path);
+    useInboxVaultForTests(drive);
+
+    const posted = await postInboxMessage({
+      fromEmail: CHANCE,
+      fromName: "Chance Middlebrooks",
+      toEmail: OWNER,
+      text: "Chance — got your question about making Quali…",
+      id: "im-chance-quali",
+    });
+    assert.equal(posted.ok, true);
+
+    await hideInboxFor(OWNER, { personId: "tester-chance" });
+    assert.equal((await listInboxFor(OWNER)).some((thread) => thread.personId === "tester-chance"), false);
+    assert.equal(inboxHidesFor(OWNER).messageIds.includes("im-chance-quali"), true);
+    assert.equal(inboxHidesFor(OWNER).personIds.includes("tester-chance"), true);
+
+    staleWarmInboxInstanceForTests();
+    const deviceB = await listInboxFor(OWNER);
+    assert.equal(deviceB.some((thread) => thread.personId === "tester-chance"), false);
+    assert.equal(
+      deviceB.some((thread) => thread.messages.some((message) => message.id === "im-chance-quali")),
+      false,
+    );
+    assert.equal(inboxHidesFor(OWNER).messageIds.includes("im-chance-quali"), true);
+
+    writeFileSync(
+      path,
+      JSON.stringify({
+        messages: [
+          {
+            id: "im-chance-quali",
+            threadKey: inboxThreadKey(CHANCE, OWNER),
+            fromEmail: CHANCE,
+            fromName: "Chance Middlebrooks",
+            toEmail: OWNER,
+            text: "Chance — got your question about making Quali…",
+            photo: null,
+            sentAt: "2026-09-01T00:00:00",
+            readBy: [CHANCE],
+            hiddenBy: [],
+          },
+        ],
+        hides: [],
+      }),
+    );
+    resetInboxStoreForTests(path);
+    useInboxVaultForTests(drive);
+    const afterSmash = await listInboxFor(OWNER);
+    assert.equal(afterSmash.some((thread) => thread.personId === "tester-chance"), false);
+    assert.equal(
+      afterSmash.some((thread) => thread.messages.some((message) => message.id === "im-chance-quali")),
+      false,
+    );
+
+    const vault = await readVaultHides(drive);
+    assert.equal(
+      vault.some((row) => row.email === OWNER && (row.messageIds ?? []).includes("im-chance-quali")),
+      true,
+    );
+    assert.equal(
+      vault.some((row) => row.email === OWNER && (row.personIds ?? []).includes("tester-chance")),
+      true,
+    );
+
+    staleWarmInboxInstanceForTests();
+    const chance = await listInboxFor(CHANCE);
+    assert.equal(
+      chance.some((thread) => thread.messages.some((message) => message.id === "im-chance-quali")),
+      true,
+    );
+  });
+
+  it("Empty inbox tombstones survive a second-device hydrate", async () => {
+    const drive = memoryDrive();
+    resetInboxStoreForTests(join(dir, "empty-hide.json"));
+    useInboxVaultForTests(drive);
+    const posted = await postInboxMessage({
+      fromEmail: NATHAN,
+      fromName: "Nathan Boyte",
+      toEmail: OWNER,
+      text: "Clear me on every device",
+      id: "im-empty-me",
+    });
+    assert.equal(posted.ok, true);
+    await hideInboxFor(OWNER, { empty: true });
+    staleWarmInboxInstanceForTests();
+    assert.deepEqual(await listInboxFor(OWNER), []);
+    assert.equal(inboxHidesFor(OWNER).messageIds.includes("im-empty-me"), true);
+    assert.equal(
+      (await listInboxFor(NATHAN)).some((thread) => thread.messages.some((message) => message.id === "im-empty-me")),
+      true,
+    );
+  });
+
   it("a failed Drive write throws on Inbox persist", async () => {
     resetInboxStoreForTests(join(dir, "inbox-fail.json"));
     useInboxVaultForTests({
@@ -397,4 +512,13 @@ async function readVaultMessages(drive: ReturnType<typeof memoryDrive>) {
     INBOX_VAULT_KIND,
   );
   return raw?.messages ?? [];
+}
+
+async function readVaultHides(drive: ReturnType<typeof memoryDrive>) {
+  const raw = await readVaultJson<{ hides?: Array<{ email: string; messageIds?: string[]; personIds?: string[] }> }>(
+    drive,
+    INBOX_VAULT_NAME,
+    INBOX_VAULT_KIND,
+  );
+  return raw?.hides ?? [];
 }
