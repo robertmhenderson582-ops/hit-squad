@@ -795,6 +795,19 @@ async function restoreAromaticsFromFreeze(
   return restorePackClock(pack, freeze);
 }
 
+async function writeAromaticsLiveRestore(adapter: DriveAdapter, restored: EstimatePackSnapshot) {
+  const ownerEmail = restored.ownerEmail.trim().toLowerCase();
+  const payload = JSON.stringify(publicPack({ ...restored, ownerEmail }), null, 2);
+  const name = estimateFileName(restored);
+  const properties = { packId: restored.packId, ownerEmail };
+  const write = () => adapter.updateJson(HIS_AROMATICS_FILE_ID, payload, name, properties);
+  try {
+    await write();
+  } catch {
+    await write();
+  }
+}
+
 async function restoreAromaticsClockIfSmashed(
   adapter: DriveAdapter,
   pack: EstimatePackSnapshot,
@@ -805,8 +818,10 @@ async function restoreAromaticsClockIfSmashed(
   if (!packClockIsSeedSmashed(pack)) return pack;
   const restored = await restoreAromaticsFromFreeze(adapter, pack);
   if (packClockIsSeedSmashed(restored)) return pack;
-  if (fileId === HIS_AROMATICS_FILE_ID) {
-    await adapter.updateJson(fileId, JSON.stringify(publicPack(restored), null, 2));
+  try {
+    await writeAromaticsLiveRestore(adapter, restored);
+  } catch {
+    // Jobs list/open still returns the freeze restore. Smash flush stays blocked.
   }
   return restored;
 }
