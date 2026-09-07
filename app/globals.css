@@ -224,11 +224,11 @@ textarea:focus {
 }
 
 .desk-home-root main {
-  padding-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
 }
 
 .desk-home-main {
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
 }
 
 .desk-hero {
@@ -243,9 +243,93 @@ textarea:focus {
 
 .desk-home-root .desk-hero {
   background: transparent;
-  min-height: calc(100dvh - 14rem);
-  display: grid;
-  place-items: center;
+  min-height: calc(100dvh - 11rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding-bottom: 7.25rem;
+}
+
+.home-dock {
+  position: absolute;
+  left: 0.25rem;
+  right: 0.25rem;
+  bottom: 0.65rem;
+  z-index: 4;
+}
+
+.home-dock-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem;
+}
+
+.home-dock-tile {
+  display: flex;
+  min-width: 7.4rem;
+  max-width: 11.5rem;
+  flex: 1 1 7.4rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.18rem;
+  padding: 0.62rem 0.85rem 0.68rem;
+  border-radius: 999px;
+  color: #efe6d4;
+  text-align: left;
+  background: rgba(8, 28, 32, 0.34);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(62, 198, 212, 0.42);
+  box-shadow:
+    inset 0 0 0 1px rgba(227, 139, 42, 0.22),
+    0 10px 22px rgba(0, 0, 0, 0.28);
+}
+
+.home-dock-tile:hover,
+.home-dock-tile:focus-visible {
+  background: rgba(15, 95, 109, 0.38);
+  border-color: rgba(62, 198, 212, 0.7);
+}
+
+.home-dock-label {
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 1px 10px rgba(6, 22, 26, 0.7);
+}
+
+.home-dock-note {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  color: rgba(239, 230, 212, 0.78);
+}
+
+@media (max-width: 640px) {
+  .desk-home-root .desk-hero {
+    min-height: calc(100dvh - 10rem);
+    padding-bottom: 6.4rem;
+  }
+
+  .home-dock-row {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding: 0.15rem 0.2rem 0.35rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .home-dock-tile {
+    flex: 0 0 8.4rem;
+    max-width: 8.4rem;
+  }
 }
 
 .desk-hero::before,

@@ -20,7 +20,8 @@ describe("home tree look batch", () => {
     const hero = readFileSync(fileURLToPath(new URL("../components/DeskHero.tsx", import.meta.url)), "utf8");
     assert.match(home, /companyDeskLogo/);
     assert.match(hero, /hero-company-logo/);
-    assert.match(hero, /COMPANY_DESK_DOOR/);
+    assert.match(hero, /HomeDock/);
+    assert.match(hero, /HOME_WORDMARK/);
     assert.match(css, /\.org-chart-desk \{/);
     assert.match(css, /\.org-chart-card \{/);
     assert.match(css, /\.org-chart-logo img \{/);

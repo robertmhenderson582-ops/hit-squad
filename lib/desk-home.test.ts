@@ -40,9 +40,9 @@ describe("home doors", () => {
     const cue = readFileSync(fileURLToPath(new URL("../components/HomeCue.tsx", import.meta.url)), "utf8");
     assert.match(hero, /HOME_WORDMARK/);
     assert.match(hero, /HOME_KICKER/);
-    assert.match(hero, /COMPANY_DESK_DOOR/);
+    assert.match(hero, /HomeDock/);
     assert.match(hero, /hero-company-logo/);
-    assert.match(hero, /href=\{href\}/);
+    assert.equal(/COMPANY_DESK_DOOR/.test(hero), false);
     assert.match(wordmark, /HIT SQUAD/);
     assert.match(wordmark, /PROJECT CONTROLS/);
     assert.match(wordmark, /variant="stacked"/);
