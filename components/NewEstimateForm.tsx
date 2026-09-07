@@ -182,7 +182,7 @@ function NewEstimateDeskBody({
 
   return (
     <EstimateWorkspace
-      crumb={`${alias(plant)} / ${title}`}
+      crumb={title}
       tab={tab}
       onTab={setTab}
       client={alias(client)}

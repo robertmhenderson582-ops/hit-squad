@@ -1,7 +1,7 @@
 import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
-import { listLocalPacks, rememberLocalPack, type LocalPack, type StorageLike } from "./local-estimates.ts";
+import { deleteLocalPack, listLocalPacks, rememberLocalPack, type LocalPack, type StorageLike } from "./local-estimates.ts";
 
 /** Nathan’s Wood River HIS cards. Identity only — no dollars, no sheet contents. */
 export const NATHAN_DESK_EMAIL = "nathanboyte@gmail.com";
@@ -58,25 +58,18 @@ export const HIS_WOOD_RIVER_FILES: HisWoodRiverFile[] = [
     siteId: "site-madison",
     ownerEmail: NATHAN_DESK_EMAIL,
   },
-  {
-    // Live job code EST-MTJ5D6 = first six of packId after `new-`. Not a guessed longer id.
-    packId: "new-mtj5d6",
-    fileId: "1bBWKw2aCy3fVKm0rQAWcoCi8OXzahoPI",
-    fileName: "wood-river-wood-river-t-m-2027-01-to-06.json",
-    title: "Wood River / T&M 2027-01 to 06",
-    client: "Phillips 66",
-    site: "Wood River — Roxana, IL",
-    siteId: "site-madison",
-    ownerEmail: NATHAN_DESK_EMAIL,
-  },
 ];
 
 export const HIS_AROMATICS_PACK_ID = "new-mtj7bvtk-akmei";
 export const HIS_CAT2_PACK_ID = "new-mtaajdwa-f7539";
+/** Purged leftover. Trashed Drive file — never restamp, first-paint, or hydrate. */
 export const HIS_TM_PACK_ID = "new-mtj5d6";
 export const HIS_AROMATICS_FILE_ID = "1KLhPczzj-BHMqT8uOI5VxUkSJUagj7rz";
 export const HIS_CAT2_FILE_ID = "1wa1bH4SgGlkMg2sUX7kLeyZXooI0aD-d";
+/** Purged leftover file id. Keep for drop/skip only. */
 export const HIS_TM_FILE_ID = "1bBWKw2aCy3fVKm0rQAWcoCi8OXzahoPI";
+export const HIS_TM_TITLE = "Wood River / T&M 2027-01 to 06";
+export const HIS_TM_JOB_CODE = "EST-MTJ5D6";
 export const HIS_AROMATICS_STUB_ID = "1AEf_Shk8SEvMsdGodNSpaNgUCytXSLZ9";
 /**
  * Sep 2 2027 Aromatics freeze.json — a FILE, not a folder. Read-only restore
@@ -95,7 +88,7 @@ function normPackId(value = "") {
   return value.trim().toLowerCase();
 }
 
-/** EST-MTJ5D6 from a new- packId, a job-code leftover, or any id that already contains EST-XXXXXX. */
+/** EST-XXXXXX from a new- packId, a job-code leftover, or any id that already contains EST-XXXXXX. */
 export function jobCodeFromPackId(packId = "") {
   const id = packId.trim();
   if (!id) return "";
@@ -104,25 +97,34 @@ export function jobCodeFromPackId(packId = "") {
   return `EST-${id.replace(/^new-/i, "").slice(0, 6).toUpperCase()}`;
 }
 
-function hisTmFile() {
-  return hisKnownEstimateFiles().find((row) => row.fileId === HIS_TM_FILE_ID) ?? null;
+function hisNeedle(value = "") {
+  return `${value}`.toLowerCase();
+}
+
+/** Trashed HIS leftover EST-MTJ5D6 / T&M card. Never restamp, first-paint, or hydrate. */
+export function isPurgedHisLeftover(pack?: HisIdentityPack | null): boolean {
+  if (!pack) return false;
+  if (pack.fileId === HIS_TM_FILE_ID || pack.fileId === HIS_AROMATICS_STUB_ID) return true;
+  const ids = [pack.packId, pack.code, pack.fileId].filter(Boolean).join(" ");
+  if (hisNeedle(ids).includes("mtj5d6") || jobCodeFromPackId(pack.packId || pack.code || "") === HIS_TM_JOB_CODE) {
+    return true;
+  }
+  return hisTitleKey(pack.title) === hisTitleKey(HIS_TM_TITLE);
+}
+
+export function omitPurgedHisLeftovers<T extends HisIdentityPack>(packs: T[] | undefined | null): T[] {
+  return (packs ?? []).filter((pack) => !isPurgedHisLeftover(pack));
 }
 
 export function hisFileForPackId(packId: string) {
   const id = (packId || "").trim();
-  if (!id) return null;
+  if (!id || isPurgedHisLeftover({ packId: id })) return null;
   const needle = normPackId(id);
   const exact = hisKnownEstimateFiles().find((row) => row.packId && normPackId(row.packId) === needle);
   if (exact) return exact;
-  const byPrefix = hisKnownEstimateFiles().find(
-    (row) => row.packId && needle.startsWith(normPackId(row.packId)) && normPackId(row.packId).length >= HIS_TM_PACK_ID.length,
+  return (
+    hisKnownEstimateFiles().find((row) => row.packId && needle.startsWith(normPackId(row.packId))) ?? null
   );
-  if (byPrefix) return byPrefix;
-  // Live leftover is often EST-MTJ5D6 or new-MTJ5D6-… — not only exact new-mtj5d6.
-  if (needle.includes("mtj5d6") || jobCodeFromPackId(id) === "EST-MTJ5D6") {
-    return hisTmFile();
-  }
-  return null;
 }
 
 export function hisFileByDriveId(fileId: string) {
@@ -135,22 +137,17 @@ function hisTitleKey(value = "") {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-/** Known Nathan Wood River jobs only. "New Turnaround estimate" is never a match. */
+/** Known Nathan Wood River jobs only. Purged T&M leftover and "New Turnaround estimate" never match. */
 export function hisMatchForPack(pack?: HisIdentityPack | null) {
-  if (!pack) return null;
+  if (!pack || isPurgedHisLeftover(pack)) return null;
   if (pack.fileId) {
     const byFile = hisFileByDriveId(pack.fileId);
     if (byFile) return byFile;
   }
   const byId = pack.packId ? hisFileForPackId(pack.packId) : null;
   if (byId) return byId;
-  const code = (pack.code || "").trim().toUpperCase();
-  if (code === "EST-MTJ5D6" || jobCodeFromPackId(pack.packId || "") === "EST-MTJ5D6") {
-    return hisTmFile();
-  }
   const title = hisTitleKey(pack.title);
   if (!title) return null;
-  // Exact HIS title is enough. Leftover T&M often has an empty site until rememberLocalPack defaults it.
   return hisKnownEstimateFiles().find((row) => hisTitleKey(row.title) === title) ?? null;
 }
 
@@ -158,14 +155,13 @@ export function isHisWoodRiverPack(pack?: HisIdentityPack | null) {
   return Boolean(hisMatchForPack(pack));
 }
 
-export function isHisWoodRiverJob(job?: { title?: string; code?: string } | null) {
-  if (!job) return false;
-  if ((job.code || "").trim().toUpperCase() === "EST-MTJ5D6") return true;
+export function isHisWoodRiverJob(job?: { title?: string; code?: string; packId?: string; id?: string } | null) {
+  if (!job || isPurgedHisLeftover({ packId: job.packId || job.id, title: job.title, code: job.code })) return false;
   const title = hisTitleKey(job.title);
   return Boolean(title && hisKnownEstimateFiles().some((row) => hisTitleKey(row.title) === title));
 }
 
-/** Job-menu leftover ids: packId, job-{packId}, EST-MTJ5D6, or a HIS title. */
+/** Job-menu leftover ids: packId, job-{packId}, or a live HIS title. Purged T&M is not protected. */
 export function isHisProtectedMenuItem(item?: { id?: string; packId?: string; title?: string } | null) {
   if (!item) return false;
   const rawId = (item.id || "").trim();
@@ -204,7 +200,7 @@ function hisDeskOwnerEmail(pack: HisIdentityPack) {
   return NATHAN_DESK_EMAIL;
 }
 
-export const HIS_LEFTOVER_GEN = "4";
+export const HIS_LEFTOVER_GEN = "5";
 export const HIS_LEFTOVER_GEN_KEY = "hs_his_leftover_gen";
 
 function isJamesStamp(value?: string) {
@@ -242,6 +238,14 @@ export function isStaleHisLeftoverIdentity(pack?: HisIdentityPack | null) {
 
 export function leftoverHasStaleHisIdentity(packs: HisIdentityPack[]): boolean {
   return packs.some((pack) => isStaleHisLeftoverIdentity(pack));
+}
+
+export function leftoverHasPurgedHisCards(packs: HisIdentityPack[]): boolean {
+  return packs.some((pack) => isPurgedHisLeftover(pack));
+}
+
+export function leftoverNeedsRewrite(packs: HisIdentityPack[]): boolean {
+  return leftoverHasStaleHisIdentity(packs) || leftoverHasPurgedHisCards(packs);
 }
 
 export function leftoverGenIsCurrent(store?: StorageLike | null) {
@@ -306,16 +310,13 @@ function hisCardAlreadyPresent(packs: LocalPack[], card: LocalPack) {
     if (normPackId(row.packId) === normPackId(card.packId)) return true;
     const match = hisMatchForPack(row);
     if (match && match.packId && normPackId(match.packId) === normPackId(card.packId)) return true;
-    if (jobCodeFromPackId(row.packId) === jobCodeFromPackId(card.packId) && jobCodeFromPackId(card.packId) === "EST-MTJ5D6") {
-      return true;
-    }
     return hisTitleKey(row.title) === hisTitleKey(card.title);
   });
 }
 
-/** Identity cards only when the desk does not already have that job (by packId, job code, or title). */
+/** Identity cards only when the desk does not already have that job (by packId or title). Drops purged T&M leftover. */
 export function mergeHisWoodRiverCards(packs: LocalPack[]): LocalPack[] {
-  const next = packs.map((pack) => {
+  const next = omitPurgedHisLeftovers(packs).map((pack) => {
     const his = hisMatchForPack(pack);
     return his ? applyHisIdentity(pack, his) : pack;
   });
@@ -342,9 +343,10 @@ export function mergeHisWoodRiverCards(packs: LocalPack[]): LocalPack[] {
   return [...kept, ...extras];
 }
 
-/** Rewrite stale local HIS leftover rows in place. Does not add extras or clear other keys. */
+/** Rewrite stale local HIS leftover rows in place. Drops purged T&M. Does not add extras or clear other keys. */
 export function rewriteStaleHisLocalLeftover(store?: StorageLike | null): LocalPack[] {
   if (!store) return [];
+  dropPurgedHisLocalLeftover(store);
   for (const pack of listLocalPacks(store)) {
     if (!isStaleHisLeftoverIdentity(pack)) continue;
     const next = applyHisIdentity(pack);
@@ -371,9 +373,17 @@ export function rewriteStaleHisLocalLeftover(store?: StorageLike | null): LocalP
   return listLocalPacks(store);
 }
 
-/** After leftover hydrate, restamp matches and keep Aromatics / CAT / T&M on the desk. Identity only. */
+function dropPurgedHisLocalLeftover(store: StorageLike) {
+  for (const pack of listLocalPacks(store)) {
+    if (!isPurgedHisLeftover(pack)) continue;
+    deleteLocalPack(pack.packId, store);
+  }
+}
+
+/** After leftover hydrate, restamp live HIS matches and keep Aromatics / CAT on the desk. Drops purged T&M. */
 export function persistHisWoodRiverCards(store?: StorageLike | null): LocalPack[] {
   if (!store) return [];
+  dropPurgedHisLocalLeftover(store);
   const painted = mergeHisWoodRiverCards(listLocalPacks(store));
   for (const pack of painted) {
     if (!hisMatchForPack(pack)) continue;

@@ -110,7 +110,7 @@ function EstimateDetailBody({
 
   return (
     <EstimateWorkspace
-      crumb={`${alias(siteName)} / ${shown}`}
+      crumb={shown}
       tab={tab}
       onTab={setTab}
       client={alias(estimate.client)}

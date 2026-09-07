@@ -70,7 +70,7 @@ describe("estimate vault scope", () => {
         "jameshcainjr@gmail.com",
         { packId: "new-mtj5d6", title: "Wood River / T&M 2027-01 to 06", site: "Wood River — Roxana, IL" },
       ),
-      "nathanboyte@gmail.com",
+      "jameshcainjr@gmail.com",
     );
     assert.equal(canWritePack(tester, ownerPack), false);
     assert.equal(canWritePack(tester, testerPack), true);
@@ -207,7 +207,7 @@ describe("estimate vault scope", () => {
     assert.equal(viewedAsNathan.includes("new-owner1"), false);
     assert.equal(viewedAsNathan.includes("new-mtj7bvtk-akmei"), true);
     assert.equal(viewedAsNathan.includes("new-mtaajdwa-f7539"), true);
-    assert.equal(viewedAsNathan.includes("new-mtj5d6"), true);
+    assert.equal(viewedAsNathan.includes("new-mtj5d6"), false);
     const nathanLive = visibleDeskPacks(tester, false, store).map((row) => row.packId);
     assert.equal(nathanLive.includes("new-archived1"), true);
     assert.equal(nathanLive.includes("new-mtj7bvtk-akmei"), true);

@@ -97,12 +97,12 @@ describe("job menu archive and delete", () => {
     deleteMenuItem(tm, store);
     clearHisJobMenuLeftover(store);
     const menu = readJobMenu(store);
-    assert.equal(menu.deleted.length, 0);
     assert.equal(menu.archived.length, 0);
+    assert.equal(menu.deleted.includes(aromatics.id) || menu.deleted.includes(aromatics.packId), false);
+    assert.equal(omitDeletedJobs([aromatics, cat2, tm], menu, true).some((row) => row.id === tm.id), false);
     assert.deepEqual(omitDeletedJobs([aromatics, cat2, tm], menu, true).map((row) => row.id), [
       aromatics.id,
       cat2.id,
-      tm.id,
     ]);
   });
 

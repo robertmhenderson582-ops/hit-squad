@@ -7,6 +7,7 @@ import { BrandMark } from "@/components/BrandMark";
 import { HomeCue } from "@/components/HomeCue";
 import { DeskBanners } from "@/components/DeskBanners";
 import { useDisplay } from "@/components/DisplayProvider";
+import { estimatePackageHeader } from "@/lib/display";
 import { ShareTurnover } from "@/components/ShareTurnover";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { ThemeFlip } from "@/components/ThemeFlip";
@@ -149,6 +150,7 @@ export function EstimateWorkspace({
   const closed = packageId ? isClosed(packageId) : false;
   const boundClient = jobClient || client || "";
   const boundSite = jobSite || site || "";
+  const header = estimatePackageHeader(name || crumb, boundSite);
   const tabs = estimateTabsForSite(boundSite, boundClient, status);
 
   async function exportWorkbook() {
@@ -255,7 +257,16 @@ export function EstimateWorkspace({
                 <HomeCue tight />
               </span>
             </Link>
-            <p className="truncate text-sm text-white/70">{crumb}</p>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-white" title={header.title}>
+                {header.title}
+              </p>
+              {header.site ? (
+                <p className="truncate text-xs text-white/55" title={header.site}>
+                  {header.site}
+                </p>
+              ) : null}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <ThemeFlip />

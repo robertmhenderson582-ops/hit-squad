@@ -27,14 +27,19 @@ import {
   HIS_CAT2_FILE_ID,
   HIS_CAT2_PACK_ID,
   HIS_TM_FILE_ID,
+  HIS_TM_JOB_CODE,
   HIS_TM_PACK_ID,
+  HIS_TM_TITLE,
   NATHAN_DESK_EMAIL,
   applyHisIdentity,
   hisFileForPackId,
   hisKnownEstimateFiles,
   hisMatchForPack,
   hisWoodRiverCards,
+  isPurgedHisLeftover,
   jobCodeFromPackId,
+  leftoverHasPurgedHisCards,
+  leftoverNeedsRewrite,
   mergeHisWoodRiverCards,
   HIS_LEFTOVER_GEN,
   HIS_LEFTOVER_GEN_KEY,
@@ -62,35 +67,36 @@ function memoryStore(seed: Record<string, string> = {}): StorageLike {
   };
 }
 
-test("HIS known files include Aromatics + CAT + T&M by file id, never the thin stub", () => {
+test("HIS known files include Aromatics + CAT only, never purged T&M or the thin stub", () => {
   const ids = hisKnownEstimateFiles().map((row) => row.fileId);
   assert.ok(ids.includes(HIS_AROMATICS_FILE_ID));
   assert.ok(ids.includes(HIS_CAT2_FILE_ID));
-  assert.ok(ids.includes(HIS_TM_FILE_ID));
+  assert.ok(!ids.includes(HIS_TM_FILE_ID));
   assert.ok(!ids.includes(HIS_AROMATICS_STUB_ID));
   assert.ok(!ids.includes(HIS_AROMATICS_FREEZE_FILE_ID));
   assert.notEqual(HIS_AROMATICS_FREEZE_FILE_ID, HIS_AROMATICS_FILE_ID);
   assert.equal(hisFileForPackId(HIS_AROMATICS_PACK_ID)?.fileId, HIS_AROMATICS_FILE_ID);
   assert.equal(hisFileForPackId(HIS_CAT2_PACK_ID)?.fileId, HIS_CAT2_FILE_ID);
-  assert.equal(hisFileForPackId(HIS_TM_PACK_ID)?.fileId, HIS_TM_FILE_ID);
-  assert.equal(hisFileForPackId("new-mtj5d6-longer-vault")?.fileId, HIS_TM_FILE_ID);
-  assert.equal(hisFileForPackId("new-mtj5d6-tm2027")?.fileId, HIS_TM_FILE_ID);
+  assert.equal(hisFileForPackId(HIS_TM_PACK_ID), null);
+  assert.equal(hisFileForPackId("new-mtj5d6-longer-vault"), null);
+  assert.equal(hisFileForPackId("new-mtj5d6-tm2027"), null);
+  assert.equal(hisFileForPackId(HIS_TM_JOB_CODE), null);
 });
 
-test("HIS cards stay on Nathan's desk and paint EST-MTJ5D6 without extra share rows", () => {
+test("HIS cards stay on Nathan's desk as Aromatics + CAT only", () => {
   const cards = hisWoodRiverCards();
   assert.deepEqual(
     cards.map((row) => row.packId).sort(),
-    [HIS_AROMATICS_PACK_ID, HIS_CAT2_PACK_ID, HIS_TM_PACK_ID].sort(),
+    [HIS_AROMATICS_PACK_ID, HIS_CAT2_PACK_ID].sort(),
   );
   for (const card of cards) {
     assert.equal(card.ownerEmail, NATHAN_DESK_EMAIL);
     assert.equal(card.sharedWith, undefined);
   }
-  assert.equal(localPackToJob(cards.find((row) => row.packId === HIS_TM_PACK_ID)!).code, "EST-MTJ5D6");
+  assert.equal(cards.some((row) => row.packId === HIS_TM_PACK_ID || row.title === HIS_TM_TITLE), false);
 });
 
-test("owner first paint with empty local still shows Aromatics, CAT, and T&M", () => {
+test("owner first paint with empty local still shows Aromatics and CAT, never T&M", () => {
   const store = memoryStore();
   const cards = hisWoodRiverCards();
   assert.ok(cards.every((card) => localPackVisibleTo(owner, card)));
@@ -98,11 +104,11 @@ test("owner first paint with empty local still shows Aromatics, CAT, and T&M", (
   const titles = desk.map((row) => row.title);
   assert.ok(titles.includes("2027 Aromatics Turnaround"));
   assert.ok(titles.includes("Madison CAT 2 (Pit Stop)"));
-  assert.ok(titles.includes("Wood River / T&M 2027-01 to 06"));
+  assert.ok(!titles.includes(HIS_TM_TITLE));
   const jobs = jobsOnDesk(undefined, desk, false);
   assert.ok(jobs.some((job) => job.title === "2027 Aromatics Turnaround"));
   assert.ok(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"));
-  assert.ok(jobs.some((job) => job.code === "EST-MTJ5D6"));
+  assert.ok(!jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE));
 });
 
 test("empty leftover cannot drop HIS cards already on the desk", () => {
@@ -110,11 +116,11 @@ test("empty leftover cannot drop HIS cards already on the desk", () => {
   const merged = mergeHisWoodRiverCards(existing);
   assert.ok(merged.some((row) => row.packId === HIS_AROMATICS_PACK_ID));
   assert.ok(merged.some((row) => row.packId === HIS_CAT2_PACK_ID));
-  assert.ok(merged.some((row) => row.packId === HIS_TM_PACK_ID));
+  assert.ok(!merged.some((row) => row.packId === HIS_TM_PACK_ID || row.title === HIS_TM_TITLE));
   assert.equal(merged.filter((row) => row.title === "2027 Aromatics Turnaround").length, 1);
 });
 
-test("James sample on Wood River does not steal Nathan T&M or hide Aromatics and CAT", () => {
+test("James sample on Wood River does not hide Aromatics and CAT; purged T&M stays off the desk", () => {
   const store = memoryStore();
   rememberLocalPack(
     {
@@ -129,7 +135,7 @@ test("James sample on Wood River does not steal Nathan T&M or hide Aromatics and
   rememberLocalPack(
     {
       packId: HIS_TM_PACK_ID,
-      title: "Wood River / T&M 2027-01 to 06",
+      title: HIS_TM_TITLE,
       client: "Phillips 66",
       site: "Wood River — Roxana, IL",
       ownerEmail: JAMES_EMAIL,
@@ -155,18 +161,16 @@ test("James sample on Wood River does not steal Nathan T&M or hide Aromatics and
   );
 
   const painted = packsForViewedDesk(owner, false, null, store);
-  const tm = painted.find((row) => row.title === "Wood River / T&M 2027-01 to 06");
+  const tm = painted.find((row) => row.title === HIS_TM_TITLE || row.packId === HIS_TM_PACK_ID);
   const jamesSample = painted.find((row) => row.packId === "new-mtkigb-james");
   assert.equal(hisMatchForPack(jamesSample), null);
   assert.equal(localPackToJob(jamesSample!).code, "EST-MTKIGB");
-  assert.equal(tm?.ownerEmail, NATHAN_DESK_EMAIL);
-  assert.deepEqual(tm?.sharedWith ?? [], []);
-  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(tm, undefined);
   assert.equal(handoffMarkText(jamesSample!, owner.email), "James Cain's desk.");
   assert.ok(painted.some((row) => row.packId === HIS_AROMATICS_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
   assert.ok(painted.some((row) => row.packId === HIS_CAT2_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
-  assert.equal(painted.filter((row) => row.title === "Wood River / T&M 2027-01 to 06").length, 1);
-  assert.equal(applyHisIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: JAMES_EMAIL }).ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(applyHisIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: JAMES_EMAIL }).ownerEmail, JAMES_EMAIL);
+  assert.equal(isPurgedHisLeftover({ packId: HIS_TM_PACK_ID, title: HIS_TM_TITLE }), true);
 
   const jobs = jobsOnDesk(undefined, painted, false, companyScopeFor(owner), undefined, { includeSeeds: false });
   const tree = jobTree({ scope: { isOwner: true, email: owner.email, companyId: "hitsquad" }, jobs, packs: painted });
@@ -174,16 +178,16 @@ test("James sample on Wood River does not steal Nathan T&M or hide Aromatics and
   const cbi = tree.find((row) => row.id === "cbi");
   assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
-  assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), true);
+  assert.equal(wood?.jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE), false);
   assert.equal(wood?.jobs.some((job) => job.title === "New Turnaround estimate"), false);
   assert.equal(cbi?.sites.some((site) => site.jobs.some((job) => job.title === "New Turnaround estimate")), true);
 });
 
-test("vault T&M with a longer packId replaces the paint card instead of duplicating", () => {
+test("vault T&M leftover is dropped instead of painted", () => {
   const vault = {
     packId: "new-mtj5d6-from-vault",
     key: "new:new-mtj5d6-from-vault",
-    title: "Wood River / T&M 2027-01 to 06",
+    title: HIS_TM_TITLE,
     client: "Phillips 66",
     site: "Wood River — Roxana, IL",
     siteId: "site-madison",
@@ -193,37 +197,35 @@ test("vault T&M with a longer packId replaces the paint card instead of duplicat
     sharedWith: ["robertmhenderson582@gmail.com"],
   };
   const merged = mergeHisWoodRiverCards([vault]);
-  assert.equal(merged.filter((row) => row.title === vault.title).length, 1);
-  assert.equal(merged.find((row) => row.title === vault.title)?.packId, vault.packId);
+  assert.equal(merged.filter((row) => row.title === vault.title).length, 0);
+  assert.equal(merged.some((row) => row.packId === vault.packId), false);
   assert.ok(merged.some((row) => row.packId === HIS_AROMATICS_PACK_ID));
   assert.ok(merged.some((row) => row.packId === HIS_CAT2_PACK_ID));
 });
 
-test("live leftover T&M matches without an exact new-mtj5d6 packId or a site", () => {
-  assert.equal(jobCodeFromPackId("new-MTJ5D6"), "EST-MTJ5D6");
-  assert.equal(jobCodeFromPackId("new-MTJ5D6-live"), "EST-MTJ5D6");
-  assert.equal(jobCodeFromPackId("EST-MTJ5D6"), "EST-MTJ5D6");
-  assert.equal(jobCodeFromPackId("est-mtj5d6"), "EST-MTJ5D6");
-  assert.equal(hisFileForPackId("new-MTJ5D6")?.fileId, HIS_TM_FILE_ID);
-  assert.equal(hisFileForPackId("new-MTJ5D6-live")?.fileId, HIS_TM_FILE_ID);
-  assert.equal(hisFileForPackId("EST-MTJ5D6")?.fileId, HIS_TM_FILE_ID);
-  assert.equal(hisFileForPackId("new-MTJ5D6-something")?.fileId, HIS_TM_FILE_ID);
-  assert.equal(hisMatchForPack({ packId: "new-MTJ5D6-live", ownerEmail: JAMES_EMAIL })?.fileId, HIS_TM_FILE_ID);
-  assert.equal(hisMatchForPack({ packId: "EST-MTJ5D6", ownerEmail: JAMES_EMAIL })?.fileId, HIS_TM_FILE_ID);
-  assert.equal(
-    hisMatchForPack({ packId: "new-other", title: "Wood River / T&M 2027-01 to 06", ownerEmail: JAMES_EMAIL })?.fileId,
-    HIS_TM_FILE_ID,
-  );
+test("purged leftover T&M never matches a HIS file", () => {
+  assert.equal(jobCodeFromPackId("new-MTJ5D6"), HIS_TM_JOB_CODE);
+  assert.equal(jobCodeFromPackId("new-MTJ5D6-live"), HIS_TM_JOB_CODE);
+  assert.equal(jobCodeFromPackId(HIS_TM_JOB_CODE), HIS_TM_JOB_CODE);
+  assert.equal(jobCodeFromPackId("est-mtj5d6"), HIS_TM_JOB_CODE);
+  assert.equal(hisFileForPackId("new-MTJ5D6"), null);
+  assert.equal(hisFileForPackId("new-MTJ5D6-live"), null);
+  assert.equal(hisFileForPackId(HIS_TM_JOB_CODE), null);
+  assert.equal(hisFileForPackId("new-MTJ5D6-something"), null);
+  assert.equal(hisMatchForPack({ packId: "new-MTJ5D6-live", ownerEmail: JAMES_EMAIL }), null);
+  assert.equal(hisMatchForPack({ packId: HIS_TM_JOB_CODE, ownerEmail: JAMES_EMAIL }), null);
+  assert.equal(hisMatchForPack({ packId: "new-other", title: HIS_TM_TITLE, ownerEmail: JAMES_EMAIL }), null);
+  assert.equal(isPurgedHisLeftover({ packId: HIS_TM_JOB_CODE, title: HIS_TM_TITLE }), true);
   assert.equal(hisMatchForPack({ packId: "new-mtkigb-james", title: "New Turnaround estimate", ownerEmail: JAMES_EMAIL }), null);
   assert.equal(shouldPaintHisCards({ email: "Robert Henderson" }), true);
   assert.equal(shouldPaintHisCards({ email: owner.email }), true);
 });
 
-test("leftover T&M occupying the slot still keeps Aromatics and CAT on Nathan's desk", () => {
+test("leftover T&M occupying the slot is dropped and Aromatics and CAT stay on Nathan's desk", () => {
   const leftover = {
     packId: "new-MTJ5D6-live",
     key: "new:new-MTJ5D6-live",
-    title: "Wood River / T&M 2027-01 to 06",
+    title: HIS_TM_TITLE,
     client: "",
     site: "",
     siteId: "",
@@ -234,24 +236,19 @@ test("leftover T&M occupying the slot still keeps Aromatics and CAT on Nathan's 
     estimator: "James Cain",
   };
   const painted = mergeHisWoodRiverCards([leftover]);
-  const tm = painted.find((row) => row.title === leftover.title);
-  assert.equal(painted.filter((row) => row.title === leftover.title).length, 1);
-  assert.equal(tm?.packId, leftover.packId);
-  assert.equal(tm?.ownerEmail, NATHAN_DESK_EMAIL);
-  assert.equal(tm?.transferredToName, undefined);
-  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(painted.filter((row) => row.title === leftover.title).length, 0);
   assert.ok(painted.some((row) => row.packId === HIS_AROMATICS_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
   assert.ok(painted.some((row) => row.packId === HIS_CAT2_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
-  assert.equal(applyHisIdentity(leftover).ownerEmail, NATHAN_DESK_EMAIL);
-  assert.equal(handoffMarkText(applyHisIdentity({ ...leftover, ownerEmail: JAMES_EMAIL }), owner.email), "Nathan Boyte's desk.");
+  assert.equal(applyHisIdentity(leftover).ownerEmail, JAMES_EMAIL);
+  assert.equal(isPurgedHisLeftover(leftover), true);
 });
 
-test("after leftover hydrate, persisted HIS extras still name Nathan's desk", () => {
+test("after leftover hydrate, persisted HIS extras still name Nathan's desk and drop T&M", () => {
   const store = memoryStore();
   rememberLocalPack(
     {
       packId: "new-MTJ5D6-live",
-      title: "Wood River / T&M 2027-01 to 06",
+      title: HIS_TM_TITLE,
       client: "",
       site: "",
       ownerEmail: JAMES_EMAIL,
@@ -265,37 +262,34 @@ test("after leftover hydrate, persisted HIS extras still name Nathan's desk", ()
   const tree = jobTree({ scope: { isOwner: true, email: owner.email, companyId: "hitsquad" }, jobs, packs: desk });
   const wood = tree.find((row) => row.id === "madison")?.sites.find((site) => site.id === "site-madison");
   assert.equal(persisted.some((row) => row.title === "2027 Aromatics Turnaround"), true);
-  assert.equal(desk.filter((row) => row.title === "Wood River / T&M 2027-01 to 06").length, 1);
-  assert.equal(desk.find((row) => row.title === "Wood River / T&M 2027-01 to 06")?.ownerEmail, NATHAN_DESK_EMAIL);
-  assert.equal(handoffMarkText(desk.find((row) => row.title === "Wood River / T&M 2027-01 to 06")!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(desk.filter((row) => row.title === HIS_TM_TITLE).length, 0);
   assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
-  assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), true);
+  assert.equal(wood?.jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE), false);
 });
 
-test("stale HIS leftover is James or any non-Nathan non-owner identity", () => {
-  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: JAMES_EMAIL }), true);
+test("stale HIS leftover is James or any non-Nathan non-owner identity on live cards only", () => {
+  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_CAT2_PACK_ID, ownerEmail: JAMES_EMAIL }), true);
   assert.equal(
-    isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: NATHAN_DESK_EMAIL, transferredTo: JAMES_EMAIL }),
+    isStaleHisLeftoverIdentity({ packId: HIS_CAT2_PACK_ID, ownerEmail: NATHAN_DESK_EMAIL, transferredTo: JAMES_EMAIL }),
     true,
   );
-  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: "bccamp2@gmail.com" }), true);
-  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: NATHAN_DESK_EMAIL }), false);
-  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: owner.email }), false);
-  assert.equal(isStaleHisLeftoverIdentity({ packId: "EST-MTJ5D6", ownerEmail: JAMES_EMAIL, transferredToName: "James Cain" }), true);
-  assert.equal(
-    isStaleHisLeftoverIdentity({ packId: "EST-MTJ5D6", ownerEmail: owner.email, transferredToName: "James Cain" }),
-    true,
-  );
+  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_CAT2_PACK_ID, ownerEmail: "bccamp2@gmail.com" }), true);
+  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_CAT2_PACK_ID, ownerEmail: NATHAN_DESK_EMAIL }), false);
+  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_CAT2_PACK_ID, ownerEmail: owner.email }), false);
+  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_PACK_ID, ownerEmail: JAMES_EMAIL }), false);
+  assert.equal(isStaleHisLeftoverIdentity({ packId: HIS_TM_JOB_CODE, ownerEmail: JAMES_EMAIL, transferredToName: "James Cain" }), false);
+  assert.equal(leftoverHasPurgedHisCards([{ packId: HIS_TM_PACK_ID, title: HIS_TM_TITLE }]), true);
+  assert.equal(leftoverNeedsRewrite([{ packId: HIS_TM_JOB_CODE, title: HIS_TM_TITLE }]), true);
   assert.equal(isStaleHisLeftoverIdentity({ packId: "new-mtkigb-james", ownerEmail: JAMES_EMAIL, title: "New Turnaround estimate" }), false);
 });
 
-test("desktop leftover generation bust restamps HIS cards and leaves session keys", () => {
+test("desktop leftover generation bust drops purged T&M and leaves session keys", () => {
   const sessionKey = "hs_whats_new:1.51.1:owner";
   const jamesTm = {
     packId: "new-MTJ5D6-live",
     key: "new:new-MTJ5D6-live",
-    title: "Wood River / T&M 2027-01 to 06",
+    title: HIS_TM_TITLE,
     client: "",
     site: "",
     siteId: "",
@@ -345,7 +339,7 @@ test("desktop leftover generation bust restamps HIS cards and leaves session key
   );
 
   const painted = packsForViewedDesk(owner, false, null, store);
-  const tm = painted.find((row) => row.title === "Wood River / T&M 2027-01 to 06");
+  const tm = painted.find((row) => row.title === HIS_TM_TITLE);
   const sample = painted.find((row) => row.packId === jamesSample.packId);
   const jobs = jobsOnDesk(undefined, painted, false, companyScopeFor(owner), undefined, { includeSeeds: false });
   const tree = jobTree({ scope: { isOwner: true, email: owner.email, companyId: "hitsquad" }, jobs, packs: painted });
@@ -355,35 +349,32 @@ test("desktop leftover generation bust restamps HIS cards and leaves session key
   assert.equal(leftoverGenIsCurrent(store), true);
   assert.equal(store.getItem(HIS_LEFTOVER_GEN_KEY), HIS_LEFTOVER_GEN);
   assert.equal(store.getItem(sessionKey), "1");
-  assert.equal(tm?.ownerEmail, NATHAN_DESK_EMAIL);
-  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(tm, undefined);
   assert.equal(sample?.ownerEmail, JAMES_EMAIL);
   assert.equal(handoffMarkText(sample!, owner.email), "James Cain's desk.");
   assert.ok(painted.some((row) => row.packId === HIS_AROMATICS_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
   assert.ok(painted.some((row) => row.packId === HIS_CAT2_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
   assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
-  assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), true);
+  assert.equal(wood?.jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE), false);
   assert.equal(wood?.jobs.some((job) => job.title === "New Turnaround estimate"), false);
   assert.equal(cbi?.sites.some((site) => site.jobs.some((job) => job.title === "New Turnaround estimate")), true);
 
   const persisted = readOwnerPacks(store);
   assert.equal(OWNER_PACKS_KEY, OWNER_PACKS_LEGACY_KEY);
-  assert.equal(persisted.find((row) => row.title === "Wood River / T&M 2027-01 to 06")?.ownerEmail, NATHAN_DESK_EMAIL);
-  assert.ok(store.getItem(OWNER_PACKS_KEY)?.includes(NATHAN_DESK_EMAIL));
-  assert.equal(store.getItem(OWNER_PACKS_KEY)?.includes(JAMES_EMAIL), false);
+  assert.equal(persisted.some((row) => row.title === HIS_TM_TITLE), false);
+  assert.equal(store.getItem(OWNER_PACKS_KEY)?.includes(HIS_TM_TITLE), false);
 
   const again = packsForViewedDesk(owner, false, null, store);
-  assert.equal(again.find((row) => row.title === "Wood River / T&M 2027-01 to 06")?.ownerEmail, NATHAN_DESK_EMAIL);
-  assert.equal(handoffMarkText(again.find((row) => row.title === "Wood River / T&M 2027-01 to 06")!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(again.some((row) => row.title === HIS_TM_TITLE), false);
   assert.equal(store.getItem(sessionKey), "1");
 });
 
 test("stale HIS leftover restamps on every owner paint when leftover gen is already current", () => {
-  const staleTm = {
-    packId: "new-MTJ5D6-live",
-    key: "new:new-MTJ5D6-live",
-    title: "Wood River / T&M 2027-01 to 06",
+  const staleCat = {
+    packId: HIS_CAT2_PACK_ID,
+    key: `new:${HIS_CAT2_PACK_ID}`,
+    title: "Madison CAT 2 (Pit Stop)",
     client: "",
     site: "",
     siteId: "",
@@ -395,35 +386,36 @@ test("stale HIS leftover restamps on every owner paint when leftover gen is alre
   };
   const store = memoryStore({
     [HIS_LEFTOVER_GEN_KEY]: "2",
-    [OWNER_PACKS_LEGACY_KEY]: JSON.stringify([staleTm]),
+    [OWNER_PACKS_LEGACY_KEY]: JSON.stringify([staleCat]),
   });
   rememberLocalPack(
     {
-      packId: staleTm.packId,
-      title: staleTm.title,
+      packId: staleCat.packId,
+      title: staleCat.title,
       ownerEmail: JAMES_EMAIL,
       transferredTo: JAMES_EMAIL,
       transferredToName: "James Cain",
     },
     store,
   );
-  assert.equal(leftoverHasStaleHisIdentity([staleTm]), true);
+  assert.equal(leftoverHasStaleHisIdentity([staleCat]), true);
   assert.equal(leftoverGenIsCurrent(store), false);
 
   const painted = packsForViewedDesk(owner, false, null, store);
-  const tm = painted.find((row) => row.title === staleTm.title);
-  assert.equal(tm?.ownerEmail, NATHAN_DESK_EMAIL);
-  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+  const cat = painted.find((row) => row.title === staleCat.title);
+  assert.equal(cat?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(handoffMarkText(cat!, owner.email), "Nathan Boyte's desk.");
   assert.ok(painted.some((row) => row.packId === HIS_AROMATICS_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
   assert.ok(painted.some((row) => row.packId === HIS_CAT2_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
+  assert.equal(painted.some((row) => row.title === HIS_TM_TITLE), false);
   assert.equal(store.getItem(HIS_LEFTOVER_GEN_KEY), HIS_LEFTOVER_GEN);
   assert.equal(leftoverGenIsCurrent(store), true);
-  assert.equal(readOwnerPacks(store).find((row) => row.title === staleTm.title)?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(readOwnerPacks(store).find((row) => row.title === staleCat.title)?.ownerEmail, NATHAN_DESK_EMAIL);
 
   writeOwnerPacks(
     [
       {
-        ...staleTm,
+        ...staleCat,
         ownerEmail: JAMES_EMAIL,
         transferredTo: JAMES_EMAIL,
         transferredToName: "James Cain",
@@ -433,8 +425,8 @@ test("stale HIS leftover restamps on every owner paint when leftover gen is alre
   );
   rememberLocalPack(
     {
-      packId: staleTm.packId,
-      title: staleTm.title,
+      packId: staleCat.packId,
+      title: staleCat.title,
       ownerEmail: JAMES_EMAIL,
       transferredTo: JAMES_EMAIL,
       transferredToName: "James Cain",
@@ -446,21 +438,21 @@ test("stale HIS leftover restamps on every owner paint when leftover gen is alre
   assert.equal(leftoverHasStaleHisIdentity(readOwnerPacks(store)), true);
 
   const restamped = packsForViewedDesk(owner, false, null, store);
-  const again = restamped.find((row) => row.title === staleTm.title);
+  const again = restamped.find((row) => row.title === staleCat.title);
   assert.equal(again?.ownerEmail, NATHAN_DESK_EMAIL);
   assert.equal(handoffMarkText(again!, owner.email), "Nathan Boyte's desk.");
   assert.equal(store.getItem(HIS_LEFTOVER_GEN_KEY), HIS_LEFTOVER_GEN);
-  assert.equal(readOwnerPacks(store).find((row) => row.title === staleTm.title)?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(readOwnerPacks(store).find((row) => row.title === staleCat.title)?.ownerEmail, NATHAN_DESK_EMAIL);
   assert.equal(leftoverHasStaleHisIdentity(readOwnerPacks(store)), false);
 });
 
-test("Benny leftover on HIS T&M is rewritten the same as James leftover", () => {
+test("Benny leftover on purged T&M is dropped, not restamped", () => {
   const store = memoryStore({
     [OWNER_PACKS_LEGACY_KEY]: JSON.stringify([
       {
         packId: HIS_TM_PACK_ID,
         key: `new:${HIS_TM_PACK_ID}`,
-        title: "Wood River / T&M 2027-01 to 06",
+        title: HIS_TM_TITLE,
         client: "Phillips 66",
         site: "Wood River — Roxana, IL",
         siteId: "site-madison",
@@ -473,19 +465,16 @@ test("Benny leftover on HIS T&M is rewritten the same as James leftover", () => 
   });
   bustHisLeftoverOnce(store);
   const desk = packsForViewedDesk(owner, false, null, store);
-  const tm = desk.find((row) => row.packId === HIS_TM_PACK_ID);
-  assert.equal(tm?.ownerEmail, NATHAN_DESK_EMAIL);
-  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(desk.some((row) => row.packId === HIS_TM_PACK_ID || row.title === HIS_TM_TITLE), false);
   assert.ok(desk.some((row) => row.packId === HIS_AROMATICS_PACK_ID));
   assert.ok(desk.some((row) => row.packId === HIS_CAT2_PACK_ID));
 });
 
 function assertOwnerWoodRiverHis(store: StorageLike, leftoverPackId: string) {
   const painted = packsForViewedDesk(owner, false, null, store);
-  const tm = painted.find((row) => row.title === "Wood River / T&M 2027-01 to 06");
-  assert.equal(tm?.ownerEmail, NATHAN_DESK_EMAIL);
-  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
-  assert.equal(applyHisIdentity({ packId: leftoverPackId, ownerEmail: JAMES_EMAIL }).ownerEmail, NATHAN_DESK_EMAIL);
+  const tm = painted.find((row) => row.title === HIS_TM_TITLE || row.packId === leftoverPackId);
+  assert.equal(tm, undefined);
+  assert.equal(applyHisIdentity({ packId: leftoverPackId, ownerEmail: JAMES_EMAIL }).ownerEmail, JAMES_EMAIL);
   const jobs = jobsOnDesk(undefined, painted, false, companyScopeFor(owner), menuForViewedDesk(false, store), {
     includeSeeds: false,
   });
@@ -494,7 +483,7 @@ function assertOwnerWoodRiverHis(store: StorageLike, leftoverPackId: string) {
   const cbi = tree.find((row) => row.id === "cbi");
   assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
-  assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6" || job.title === "Wood River / T&M 2027-01 to 06"), true);
+  assert.equal(wood?.jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE), false);
   assert.equal(wood?.jobs.some((job) => job.code === "EST-MTKIGB" || job.title === "New Turnaround estimate"), false);
   assert.equal(
     cbi?.sites.some((site) => site.jobs.some((job) => job.code === "EST-MTKIGB" || job.title === "New Turnaround estimate")) ?? false,
@@ -503,11 +492,11 @@ function assertOwnerWoodRiverHis(store: StorageLike, leftoverPackId: string) {
   return { painted, wood, tm };
 }
 
-test("production leftover packId EST-MTJ5D6 restamps to Nathan and paints three Wood River cards", () => {
+test("production leftover packId EST-MTJ5D6 is dropped and only Aromatics + CAT paint", () => {
   const leftover = {
-    packId: "EST-MTJ5D6",
-    key: "job:EST-MTJ5D6",
-    title: "Wood River / T&M 2027-01 to 06",
+    packId: HIS_TM_JOB_CODE,
+    key: `job:${HIS_TM_JOB_CODE}`,
+    title: HIS_TM_TITLE,
     client: "",
     site: "",
     siteId: "",
@@ -520,21 +509,23 @@ test("production leftover packId EST-MTJ5D6 restamps to Nathan and paints three 
     [HIS_LEFTOVER_GEN_KEY]: HIS_LEFTOVER_GEN,
     [OWNER_PACKS_LEGACY_KEY]: JSON.stringify([leftover]),
   });
-  assert.equal(jobCodeFromPackId("EST-MTJ5D6"), "EST-MTJ5D6");
-  assert.equal(hisFileForPackId("EST-MTJ5D6")?.fileId, HIS_TM_FILE_ID);
-  assert.equal(leftoverHasStaleHisIdentity([leftover]), true);
+  assert.equal(jobCodeFromPackId(HIS_TM_JOB_CODE), HIS_TM_JOB_CODE);
+  assert.equal(hisFileForPackId(HIS_TM_JOB_CODE), null);
+  assert.equal(leftoverHasStaleHisIdentity([leftover]), false);
+  assert.equal(leftoverHasPurgedHisCards([leftover]), true);
+  assert.equal(leftoverNeedsRewrite([leftover]), true);
   assert.equal(leftoverGenIsCurrent(store), true);
   const { painted, tm } = assertOwnerWoodRiverHis(store, leftover.packId);
-  assert.equal(painted.filter((row) => row.title === leftover.title).length, 1);
-  assert.equal(tm?.packId, leftover.packId);
-  assert.equal(readOwnerPacks(store).find((row) => row.title === leftover.title)?.ownerEmail, NATHAN_DESK_EMAIL);
+  assert.equal(painted.filter((row) => row.title === leftover.title).length, 0);
+  assert.equal(tm, undefined);
+  assert.equal(readOwnerPacks(store).some((row) => row.title === leftover.title), false);
 });
 
-test("production leftover packId new-MTJ5D6-something restamps the same as EST-MTJ5D6", () => {
+test("production leftover packId new-MTJ5D6-something is dropped the same as EST-MTJ5D6", () => {
   const leftover = {
     packId: "new-MTJ5D6-something",
     key: "new:new-MTJ5D6-something",
-    title: "Wood River / T&M 2027-01 to 06",
+    title: HIS_TM_TITLE,
     client: "",
     site: "",
     siteId: "",
@@ -556,17 +547,16 @@ test("production leftover packId new-MTJ5D6-something restamps the same as EST-M
     },
     store,
   );
-  assert.equal(leftoverHasStaleHisIdentity([leftover]), true);
+  assert.equal(leftoverHasPurgedHisCards([leftover]), true);
   const { tm } = assertOwnerWoodRiverHis(store, leftover.packId);
-  assert.equal(tm?.packId, leftover.packId);
-  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(tm, undefined);
 });
 
-test("owner-stamped leftover with James transferredToName still restamps to Nathan", () => {
+test("owner-stamped purged T&M leftover is dropped, not restamped to Nathan", () => {
   const leftover = {
-    packId: "EST-MTJ5D6",
-    key: "job:EST-MTJ5D6",
-    title: "Wood River / T&M 2027-01 to 06",
+    packId: HIS_TM_JOB_CODE,
+    key: `job:${HIS_TM_JOB_CODE}`,
+    title: HIS_TM_TITLE,
     client: "",
     site: "",
     siteId: "",
@@ -579,16 +569,16 @@ test("owner-stamped leftover with James transferredToName still restamps to Nath
     [HIS_LEFTOVER_GEN_KEY]: HIS_LEFTOVER_GEN,
     [OWNER_PACKS_LEGACY_KEY]: JSON.stringify([leftover]),
   });
-  assert.equal(applyHisIdentity(leftover).ownerEmail, NATHAN_DESK_EMAIL);
-  assert.equal(applyHisIdentity(leftover).transferredToName, undefined);
+  assert.equal(applyHisIdentity(leftover).ownerEmail, owner.email);
+  assert.equal(applyHisIdentity(leftover).transferredToName, "James Cain");
   assertOwnerWoodRiverHis(store, leftover.packId);
 });
 
-test("job-menu leftover cannot hide HIS Aromatics, CAT 2, or T&M on owner Jobs", () => {
+test("job-menu leftover cannot hide HIS Aromatics or CAT 2 on owner Jobs", () => {
   const leftover = {
-    packId: "EST-MTJ5D6",
-    key: "job:EST-MTJ5D6",
-    title: "Wood River / T&M 2027-01 to 06",
+    packId: HIS_TM_JOB_CODE,
+    key: `job:${HIS_TM_JOB_CODE}`,
+    title: HIS_TM_TITLE,
     client: "",
     site: "",
     siteId: "",
@@ -608,18 +598,15 @@ test("job-menu leftover cannot hide HIS Aromatics, CAT 2, or T&M on owner Jobs",
   });
   assertOwnerWoodRiverHis(store, leftover.packId);
   const menu = menuForViewedDesk(false, store);
-  assert.equal(
-    menu.deleted.some((id) => id === HIS_CAT2_PACK_ID || id === leftover.packId || id === HIS_TM_PACK_ID),
-    false,
-  );
+  assert.equal(menu.deleted.some((id) => id === HIS_CAT2_PACK_ID), false);
   assert.equal(menu.archived.some((id) => id === HIS_AROMATICS_PACK_ID), false);
 });
 
-test("James CBI sample EST-MTKIGB stays off Wood River after production leftover restamp", () => {
+test("James CBI sample EST-MTKIGB stays off Wood River after purged T&M leftover is dropped", () => {
   const leftover = {
-    packId: "EST-MTJ5D6",
-    key: "job:EST-MTJ5D6",
-    title: "Wood River / T&M 2027-01 to 06",
+    packId: HIS_TM_JOB_CODE,
+    key: `job:${HIS_TM_JOB_CODE}`,
+    title: HIS_TM_TITLE,
     client: "",
     site: "",
     siteId: "",
@@ -682,18 +669,18 @@ function assertHisWoodRiverDesk(
     ?.sites.find((site) => site.id === "site-unassigned");
   assert.equal(jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   assert.equal(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
-  assert.equal(jobs.some((job) => job.code === "EST-MTJ5D6" || job.title === "Wood River / T&M 2027-01 to 06"), true);
+  assert.equal(jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE), false);
   assert.equal(jobs.some((job) => SEED_CODES.includes(job.code)), false);
   assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
-  assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6" || job.title === "Wood River / T&M 2027-01 to 06"), true);
+  assert.equal(wood?.jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE), false);
   assert.equal(unassigned?.jobs.some((job) => job.code === "HS-8622") ?? false, false);
   const aromatics = painted.find((row) => row.title === "2027 Aromatics Turnaround");
   const cat = painted.find((row) => row.title === "Madison CAT 2 (Pit Stop)");
-  const tm = painted.find((row) => row.title === "Wood River / T&M 2027-01 to 06");
+  const tm = painted.find((row) => row.title === HIS_TM_TITLE);
   assert.equal(handoffMarkText(aromatics!, owner.email), "Nathan Boyte's desk.");
   assert.equal(handoffMarkText(cat!, owner.email), "Nathan Boyte's desk.");
-  assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(tm, undefined);
   return { jobs, tree, wood };
 }
 
@@ -751,7 +738,7 @@ test("owner leftover catalog samples stay off View as Nathan and Back to me", ()
   assert.equal(back.some((pack) => /walkdown|unit 3/i.test(pack.title)), false);
 });
 
-test("View as Nathan paints three HIS Wood River jobs and no catalog seeds", () => {
+test("View as Nathan paints Aromatics + CAT HIS jobs and no catalog seeds", () => {
   const store = memoryStore();
   rememberLocalPack(
     {
@@ -777,13 +764,13 @@ test("View as Nathan paints three HIS Wood River jobs and no catalog seeds", () 
   assertHisWoodRiverDesk(painted, true, nathan);
 });
 
-test("Nathan login paints the same three HIS Wood River jobs and no catalog seeds", () => {
+test("Nathan login paints the same Aromatics + CAT HIS jobs and no catalog seeds", () => {
   const store = memoryStore();
   const painted = packsForViewedDesk(nathan, false, null, store);
   assertHisWoodRiverDesk(painted, false, nathan);
 });
 
-test("owner Back-to-me Jobs shows the three HIS cards as Nathan's desk and no seeds", () => {
+test("owner Back-to-me Jobs shows the two HIS cards as Nathan's desk and no seeds", () => {
   const store = memoryStore();
   const painted = packsForViewedDesk(owner, false, null, store);
   assertHisWoodRiverDesk(painted, false, owner);
