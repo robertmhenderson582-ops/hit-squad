@@ -10,7 +10,6 @@ import {
   type CompanyScope,
 } from "./companies.ts";
 import { catalogSites } from "./desk-data.ts";
-import { FERNDALE_CLIENT_TEMPLATE_NOTE, FERNDALE_SITE_ID, FERNDALE_STATUS_NOTE } from "./ferndale-work.ts";
 import { estimateForJob, estimateHref } from "./estimate-open.ts";
 import { isHisWoodRiverJob, isHisWoodRiverPack } from "./his-wood-river.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
@@ -33,12 +32,6 @@ export const JOB_TREE_CLIENT_SITE_IDS = {
   [MONROE_ENERGY_CLIENT_ID]: ["site-monroe"],
 } as const;
 
-export { FERNDALE_CLIENT_TEMPLATE_NOTE } from "./ferndale-work.ts";
-
-export const SITE_TREE_NOTES: Record<string, string> = {
-  [FERNDALE_SITE_ID]: `${FERNDALE_STATUS_NOTE}. ${FERNDALE_CLIENT_TEMPLATE_NOTE}`,
-};
-
 const MADISON_CLIENT_ORDER = [PHILLIPS_66_CLIENT_ID, GEORGIA_POWER_CLIENT_ID, MONROE_ENERGY_CLIENT_ID] as const;
 
 export type JobTreeSite = {
@@ -48,7 +41,6 @@ export type JobTreeSite = {
   client: string;
   assigned: boolean;
   jobs: JobRecord[];
-  note?: string;
 };
 
 export type JobTreeClient = {
@@ -231,12 +223,6 @@ export function clientIdForSite(site: { id?: string; client?: string; name?: str
   return jobTreeClientId(site.client, site.name, site.family);
 }
 
-export function siteTreeNote(siteId: string, name = "") {
-  if (SITE_TREE_NOTES[siteId]) return SITE_TREE_NOTES[siteId];
-  if (/\bferndale\b/i.test(name) || siteId === FERNDALE_SITE_ID) return SITE_TREE_NOTES[FERNDALE_SITE_ID];
-  return undefined;
-}
-
 export function matchCatalogSite(text: string, sites: SiteRecord[] = catalogSites()) {
   const hay = norm(text);
   if (!hay) return undefined;
@@ -299,7 +285,6 @@ function liveSiteFromPack(pack?: Pick<LocalPack, "site" | "siteId" | "client">):
     client: pack?.client || "",
     assigned: true,
     jobs: [],
-    note: siteTreeNote(id, name),
   };
 }
 
@@ -355,7 +340,6 @@ function placeJob(
     existing.assigned = true;
     existing.jobs.push(job);
     if (!existing.client && site.client) existing.client = site.client;
-    if (!existing.note && site.note) existing.note = site.note;
     return existing;
   }
   const next = { ...site, assigned: true, jobs: [...site.jobs, job] };
@@ -427,7 +411,6 @@ export function jobTree(input: {
           client: site.client,
           assigned: site.openJobs > 0,
           jobs: [],
-          note: siteTreeNote(site.id, site.name),
         });
       }
       if (company.id === "madison") {
@@ -470,7 +453,6 @@ export function jobTree(input: {
             client: matched.client,
             assigned: true,
             jobs: [],
-            note: siteTreeNote(matched.id, matched.name),
           },
           job,
           client.id,

@@ -89,14 +89,22 @@ describe("Ferndale work folder", () => {
     assert.equal(p66?.sites.some((site) => site.name === "Not assigned"), false);
     assert.equal(georgia?.sites.some((site) => site.id === FERNDALE_SITE_ID), false);
     assert.equal(p66?.sites.some((site) => site.name === "Yates"), false);
-    assert.match(ferndale?.note || "", /GEP \/ TASO/);
+    assert.equal("note" in (ferndale || {}), false);
     assert.equal(ferndale?.jobs.length, 0);
 
     const treeDesk = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
+    const jobsDesk = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
+    const plantPage = readFileSync(fileURLToPath(new URL("../components/JobPlantPage.tsx", import.meta.url)), "utf8");
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
+    const regularDesk = readFileSync(fileURLToPath(new URL("../components/SitesRegularDesk.tsx", import.meta.url)), "utf8");
     assert.equal(treeDesk.includes(FERNDALE_WORK_FOLDER_ID), false);
     assert.equal(treeDesk.includes(FERNDALE_B1_FOLDER_ID), false);
     assert.equal(treeDesk.includes(FERNDALE_B1_FILENAME), false);
+    assert.equal(/site\.note/.test(treeDesk), false);
+    assert.equal(/GEP|TASO|Competitive bid|Unick|per diem|Work Folder|B-1/i.test(treeDesk), false);
+    assert.equal(/GEP|TASO|Competitive bid|Unick|per diem|Work Folder|B-1/i.test(jobsDesk), false);
+    assert.equal(/Unick|GEP|TASO|Competitive bid|per diem|Work Folder|B-1/i.test(plantPage), false);
+    assert.match(regularDesk, /Competitive bid/);
     assert.equal(/showsFerndaleTab/.test(workspace), false);
     assert.doesNotMatch(treeDesk, /\.xlsx|\.xlsm/);
   });
