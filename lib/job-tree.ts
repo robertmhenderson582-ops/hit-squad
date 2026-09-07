@@ -15,7 +15,7 @@ import { isHisWoodRiverJob, isHisWoodRiverPack } from "./his-wood-river.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 import { jobPlantHref, packForJob, plantSlugForSite } from "./jobs.ts";
 import type { LocalPack } from "./local-estimates.ts";
-import { isWakeIdentityOnly } from "./rodeo-monroe-wake.ts";
+import { isWakeIdentityOnly, wakeMatchForPack, type WakePackHint } from "./rodeo-monroe-wake.ts";
 import type { EstimateRecord, JobRecord, SiteRecord } from "./types.ts";
 
 export const UNASSIGNED_SITE_ID = "site-unassigned";
@@ -232,7 +232,7 @@ export function matchCatalogSite(text: string, sites: SiteRecord[] = catalogSite
     return rodeo;
   }
   const monroe = sites.find((site) => site.id === "site-monroe");
-  if (monroe && /\b541v\b|u541|\bvac\b/.test(hay) && !/wood river|roxana/.test(hay)) return monroe;
+  if (monroe && /\b541v\b|u541|u541\s+vac/.test(hay) && !/wood river|roxana/.test(hay)) return monroe;
   const woodRiver = sites.find((site) => site.id === "site-madison");
   if (woodRiver && /wood river|roxana|cat 2|mtaajd|unit 3|\bcoker\b/.test(hay)) return woodRiver;
   return sites.find((site) => {
@@ -271,12 +271,17 @@ export function companyIdForJob(
 export function jobEstimateHref(
   job: JobRecord,
   estimates: EstimateRecord[] = [],
-  packs: Array<{ packId: string }> = [],
+  packs: WakePackHint[] = [],
 ) {
   const estimate = estimateForJob(job, estimates);
   const pack = packForJob(job, packs, estimate?.id);
   if (pack && isWakeIdentityOnly(pack)) {
-    return jobPlantHref(job.code, undefined, plantSlugForSite(pack.siteId, pack.site));
+    const shell = wakeMatchForPack(pack);
+    return jobPlantHref(
+      job.code,
+      undefined,
+      plantSlugForSite(pack.siteId || shell?.siteId, pack.site || shell?.site) || shell?.plantSlug,
+    );
   }
   if (pack) return estimateHref(pack.packId);
   if (estimate) return estimateHref(estimate.id);

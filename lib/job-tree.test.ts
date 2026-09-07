@@ -178,6 +178,7 @@ describe("job tree", () => {
     const wakeJob = jobsOnDesk([], [wake], false, owner).find((row) => row.id === `job-${RODEO_U110_PACK_ID}`);
     assert.ok(wakeJob);
     assert.equal(jobEstimateHref(wakeJob, [], [wake]), "/jobs/rodeo?job=EST-U11026");
+    assert.equal(jobEstimateHref(wakeJob, [], [{ packId: RODEO_U110_PACK_ID }]), "/jobs/rodeo?job=EST-U11026");
   });
 
   it("keeps a James Wood River sample under CBI on the owner tree", () => {

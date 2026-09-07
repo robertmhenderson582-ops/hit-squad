@@ -30,6 +30,7 @@ describe("Abiding documents + West Coast clock bind", () => {
     assert.equal(canSeeAbidingDocuments({ isOwner: false, email: JAMES_EMAIL, companyId: "cbi" }), false);
     assert.equal(abidingDocumentsForScope({ isOwner: false, email: JAMES_EMAIL, companyId: "cbi" }).length, 0);
     assert.equal(abidingDocumentsForSiteName("Rodeo").every((row) => row.siteId === "site-rodeo"), true);
+    assert.equal(abidingDocumentsForSiteName("Monroe Energy").every((row) => row.siteId === "site-monroe"), true);
     assert.equal(abidingDocumentsForSiteName("Wood River").length, 0);
   });
 

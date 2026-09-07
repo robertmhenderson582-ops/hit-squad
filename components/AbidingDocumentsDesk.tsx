@@ -2,7 +2,7 @@
 
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
 import { useDeskBoard } from "@/components/useDeskBoard";
-import { abidingDocumentsForScope, type AbidingDocument } from "@/lib/abiding-documents";
+import { abidingDocumentsForScope, abidingDocumentsForSiteName, type AbidingDocument } from "@/lib/abiding-documents";
 import { companyScopeFor } from "@/lib/companies";
 
 function kindLabel(kind: AbidingDocument["kind"]) {
@@ -26,7 +26,11 @@ export function AbidingDocumentsDesk({
   const { lens } = useDeskLens();
   const { companyId } = useDeskBoard();
   const scope = companyScopeFor(lens, companyId);
-  const rows = abidingDocumentsForScope(scope, siteId);
+  const rows = siteId
+    ? abidingDocumentsForScope(scope, siteId)
+    : siteName
+      ? abidingDocumentsForSiteName(siteName, scope)
+      : abidingDocumentsForScope(scope);
   const title = siteName ? `${heading} · ${alias(siteName)}` : heading;
 
   if (!rows.length) {

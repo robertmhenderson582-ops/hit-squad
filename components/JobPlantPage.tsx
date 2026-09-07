@@ -123,9 +123,9 @@ export function JobPlantPage({ slug }: { slug: string }) {
     ...localJobs,
   ]);
   const openedEstimate = openedJob ? estimateForJob(openedJob, board?.estimates ?? []) : undefined;
-  const plantSite = (board?.sites?.length ? board.sites : catalogSites()).find(
-    (row) => row.name.toLowerCase() === plant.name.toLowerCase(),
-  );
+  const plantSite =
+    (board?.sites ?? []).find((row) => row.name.toLowerCase() === plant.name.toLowerCase()) ??
+    catalogSites().find((row) => row.name.toLowerCase() === plant.name.toLowerCase());
   const westNote = westCoastClockNote(plant.name, plant.folder);
   const openedWake = openedJob
     ? wakeShells().find((row) => row.jobCode === openedJob.code || row.title === openedJob.title)

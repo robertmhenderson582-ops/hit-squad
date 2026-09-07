@@ -124,7 +124,11 @@ export function wakeShellByPackId(packId = "") {
   return wakeShells().find((row) => normId(row.packId) === id) ?? null;
 }
 
-export function wakeMatchForPack(pack?: Pick<LocalPack, "packId" | "title" | "siteId"> | null) {
+/** Job-tree hrefs often pass a packId-only hint. Match by id/code first; title/site are optional. */
+export type WakePackHint = Pick<LocalPack, "packId"> &
+  Partial<Pick<LocalPack, "title" | "siteId" | "site" | "createdAt" | "updatedAt">>;
+
+export function wakeMatchForPack(pack?: WakePackHint | null) {
   if (!pack) return null;
   const byId = wakeShellByPackId(pack.packId);
   if (byId) return byId;
@@ -136,12 +140,12 @@ export function wakeMatchForPack(pack?: Pick<LocalPack, "packId" | "title" | "si
   return wakeShells().find((row) => titleKey(row.title) === title) ?? null;
 }
 
-export function isRodeoMonroeWakePack(pack?: Pick<LocalPack, "packId" | "title" | "siteId"> | null) {
+export function isRodeoMonroeWakePack(pack?: WakePackHint | null) {
   return Boolean(wakeMatchForPack(pack));
 }
 
 /** Identity-only card (createdAt/updatedAt ≤ 1). A later vault write is the live pack. */
-export function isWakeIdentityOnly(pack?: Pick<LocalPack, "packId" | "title" | "createdAt" | "updatedAt"> | null) {
+export function isWakeIdentityOnly(pack?: WakePackHint | null) {
   if (!wakeMatchForPack(pack)) return false;
   return (pack?.createdAt || 0) <= 1 && (pack?.updatedAt || 0) <= 1;
 }
