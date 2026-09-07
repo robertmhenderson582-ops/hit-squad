@@ -19,6 +19,7 @@
 
 import ExcelJS from "exceljs";
 import { ESTIMATE_XLSX_SHEETS } from "./estimate-xlsx.ts";
+import { BOILER17_PACK_ID } from "./boiler-17.ts";
 import {
   MONROE_541V_PACK_ID,
   RODEO_U110_PACK_ID,
@@ -31,6 +32,7 @@ import { P66_V1_EXPORT_LINE } from "./p66-v1.ts";
 import {
   isOfficialRevisionId,
   isRodeoWorkbookFamilyId,
+  OFFICIAL_BOILER17_B1_REVISION_NAME,
   OFFICIAL_MONROE_541V_REVISION_NAME,
   OFFICIAL_U110_REVISION_NAME,
   OFFICIAL_U250_REVISION_NAME,
@@ -63,6 +65,7 @@ const CONTRACTOR_TEMPLATE_RE = /turnaround\s+contractor\s+estimate\s+template/i;
 const RODEO_WORKBOOK_RE = /p66\s+rodeo\s+estimate\s+workbook/i;
 const CLIENT_FORM_RE = /client\s+estimate\s+form|\bu240\b/i;
 const MONROE_WORKBOOK_RE = /monroe\s+energy.*estimate\s+workbook|u541\s+vac|541v.*post\s+review/i;
+const WOOD_RIVER_B1_RE = /boiler\s*17/i;
 
 function sheetKey(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -113,6 +116,13 @@ export function looksLikeMonroeWorkbook(sheets: string[], fileName = "") {
   return keys.some((name) => name.includes("541v") || name.includes("u541") || name.includes("post review"));
 }
 
+/** Official Wood River B-1 (Boiler 17 RH). Staged — do not invent crew from #REF labor $. */
+export function looksLikeWoodRiverB1(sheets: string[], fileName = "") {
+  if (WOOD_RIVER_B1_RE.test(fileName) && /b-?1/i.test(fileName)) return true;
+  const keys = sheets.map(sheetKey);
+  return WOOD_RIVER_B1_RE.test(fileName) && keys.some((name) => name.includes("summary page") || name === "summary page");
+}
+
 export function classifyFromSheetsAndName(sheets: string[], fileName = ""): ClientWorkbookClass {
   const name = fileName.trim();
   if (looksLikeHitSquadPack(sheets)) {
@@ -161,6 +171,18 @@ export function classifyFromSheetsAndName(sheets: string[], fileName = ""): Clie
       staged: true,
       families: ["client-estimate-form"],
       note: "Family C. Client Estimate Form (U240 examples). Staged only. Do not collapse into A or B.",
+    };
+  }
+  if (looksLikeWoodRiverB1(sheets, name)) {
+    return {
+      kind: "wood-river-b1",
+      label: "Wood River B-1 (Boiler 17)",
+      sheets,
+      fileName: name,
+      staged: true,
+      packId: BOILER17_PACK_ID,
+      families: ["wood-river-b1"],
+      note: "Official RH B-1. Hours lock from Drive text. Labor $ formulas were #REF — staged only. Cost wires to Mike CPPR 108451.",
     };
   }
   if (looksLikeMonroeWorkbook(sheets, name)) {
@@ -236,6 +258,7 @@ export function clientFaceNames() {
     OFFICIAL_U110_REVISION_NAME,
     OFFICIAL_U250_REVISION_NAME,
     OFFICIAL_MONROE_541V_REVISION_NAME,
+    OFFICIAL_BOILER17_B1_REVISION_NAME,
     RODEO_WORKBOOK_BLANK_NAME,
     RODEO_WORKBOOK_U110_NAME,
     RODEO_WORKBOOK_U250_NAME,
@@ -282,6 +305,14 @@ export const CLIENT_FACE_MAPPER_SPEC = {
     buckets: ["official lock"],
     tabs: ["POST REVIEW"],
     exportAs: "Monroe workbook",
+    ingest: "stage-metadata",
+  },
+  "wood-river-b1": {
+    family: "wood-river-b1",
+    clock: "Wood River B-1 Summary Page hours",
+    buckets: ["Direct", "Foremen", "Support", "Staff"],
+    tabs: ["Summary Page"],
+    exportAs: "Hit Squad live pack — B-1 ingest stays staged",
     ingest: "stage-metadata",
   },
 } as const;

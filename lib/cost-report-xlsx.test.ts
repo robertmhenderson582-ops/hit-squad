@@ -228,6 +228,8 @@ describe("cost report Excel export", () => {
     assert.match(desk, /downloadXlsx/);
     assert.match(desk, /company-logo/);
     assert.match(desk, /status: pack\.status/);
+    assert.match(desk, /jobNumberForPack/);
+    assert.match(desk, /jobNumber: costJobNumber/);
     assert.match(desk, /subcontractor: readSubSheet/);
     assert.match(String(COST_EXPORT_CONFIDENTIAL), /Confidential/);
   });

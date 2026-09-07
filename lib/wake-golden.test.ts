@@ -81,6 +81,8 @@ describe("Rodeo / Monroe golden fixtures", () => {
       u110RodeoWorkbook: { officialRevisionId: string; family: string; buckets: null };
       u250RodeoWorkbook: { officialRevisionId: string; family: string; buckets: null };
       rodeoWorkbookBlank: { officialRevisionId: string };
+      boiler17B1: { officialRevisionId: string; dollarsStatus: string; boiler17Hours: { targetCraftHours: number } };
+      mikeCppr108451: { jobNumber: string; mayLaborPdTravel: number; mayWithThirdAndCoe: number };
     };
     assert.equal(raw.u110Contractor.officialRevisionId, OFFICIAL_U110_REVISION_ID);
     assert.equal(raw.u250Contractor.officialRevisionId, OFFICIAL_U250_REVISION_ID);
@@ -92,6 +94,12 @@ describe("Rodeo / Monroe golden fixtures", () => {
     assert.equal(raw.u110RodeoWorkbook.buckets, null);
     assert.equal(raw.u250RodeoWorkbook.officialRevisionId, RODEO_WORKBOOK_U250_ID);
     assert.equal(raw.rodeoWorkbookBlank.officialRevisionId, RODEO_WORKBOOK_BLANK_ID);
+    assert.equal(raw.boiler17B1.officialRevisionId, "1sMay67BNvtkW6fFLygPtymnIkFqrvvHT");
+    assert.equal(raw.boiler17B1.dollarsStatus, "formula-unavailable");
+    assert.equal(raw.boiler17B1.boiler17Hours.targetCraftHours, 21422);
+    assert.equal(raw.mikeCppr108451.jobNumber, "108451");
+    assert.equal(raw.mikeCppr108451.mayLaborPdTravel, 191802);
+    assert.equal(raw.mikeCppr108451.mayWithThirdAndCoe, 225256);
   });
 
   it("skips identity-only shells and fails a hydrated pack that drifts from the official lock", () => {

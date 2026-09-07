@@ -28,6 +28,15 @@ export const OFFICIAL_MONROE_541V_REVISION_ID = "15NhD45FUvdFmfynkbqYGGsy0muhIcx
 export const OFFICIAL_MONROE_541V_REVISION_NAME =
   "Monroe Energy U541 VAC  Estimate Workbook POST REVIEW 1204 06162026.xlsx";
 
+/** Official RH Wood River B-1 — Gmail / Drive lock. Do not commit the xlsx. */
+export const WORK_FOLDER_BOILER17_PARENT_ID = "1jZc07jJjn3i4fodUhl6ieMvsmeOC-7XJ";
+export const WORK_FOLDER_BOILER17_FOLDER_ID = "1dXCJaNmi0EMzTattY3Ad2rVqHOwcdIq-";
+export const OFFICIAL_BOILER17_B1_REVISION_ID = "1sMay67BNvtkW6fFLygPtymnIkFqrvvHT";
+export const OFFICIAL_BOILER17_B1_REVISION_NAME = "Boiler 17 2026  B-1 1019 071326RH.xlsx";
+/** Mike CPPR golden lives on Gmail — no Drive file id. */
+export const MIKE_CPPR_108451_FILE_NAME =
+  "Madison_CPPR_108451_P66 WR_Boiler 17_05.30.26.rev.xxx.xls";
+
 /**
  * Rodeo has MULTIPLE templates. Do not collapse.
  * A = Madison Turnaround Contractor Estimate Template (hours × composite rate).
@@ -72,7 +81,12 @@ export function workFolderRoots(): WorkFolderNode[] {
 }
 
 export function officialRevisionIds() {
-  return [OFFICIAL_U110_REVISION_ID, OFFICIAL_U250_REVISION_ID, OFFICIAL_MONROE_541V_REVISION_ID];
+  return [
+    OFFICIAL_U110_REVISION_ID,
+    OFFICIAL_U250_REVISION_ID,
+    OFFICIAL_MONROE_541V_REVISION_ID,
+    OFFICIAL_BOILER17_B1_REVISION_ID,
+  ];
 }
 
 export function rodeoWorkbookFamilyIds() {

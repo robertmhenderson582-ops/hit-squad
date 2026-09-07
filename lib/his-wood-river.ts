@@ -1,7 +1,33 @@
+import {
+  BOILER17_COST_NOTE,
+  BOILER17_JOB_NUMBER,
+  BOILER17_PACK_ID,
+  BOILER17_SITE,
+  BOILER17_SITE_ID,
+  BOILER17_STATUS,
+  BOILER17_TITLE,
+  BOILER17_WINDOW,
+  isBoiler17PackId,
+  MIKE_CPPR_108451_STATUS_DATE,
+} from "./boiler-17.ts";
+import { COST_REPORT_STORE_PREFIX } from "./cost-report-prefix.ts";
+import { emptyCostReportBook, hydrateCostReport } from "./cost-report.ts";
+import type { EstimateStatus } from "./estimate-status.ts";
 import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
+import { JOB_META_PREFIX } from "./job-meta-prefix.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
-import { deleteLocalPack, listLocalPacks, rememberLocalPack, type LocalPack, type StorageLike } from "./local-estimates.ts";
+import {
+  deleteLocalPack,
+  listLocalPacks,
+  rememberLocalPack,
+  readStoreJson,
+  storageKeyForPack,
+  writeStoreJson,
+  type LocalPack,
+  type StorageLike,
+} from "./local-estimates.ts";
+import { hydrateJobMeta, type JobMeta } from "./staffing-plan.ts";
 
 /** Nathan’s Wood River HIS cards. Identity only — no dollars, no sheet contents. */
 export const NATHAN_DESK_EMAIL = "nathanboyte@gmail.com";
@@ -17,6 +43,9 @@ export type HisWoodRiverFile = {
   site: string;
   siteId: string;
   ownerEmail: string;
+  /** Awarded Regular work paints Locked. Bid HIS cards leave this unset. */
+  status?: EstimateStatus;
+  window?: string;
 };
 
 export type HisIdentityPack = {
@@ -34,6 +63,7 @@ export type HisIdentityPack = {
   transferredFrom?: string;
   transferredFromName?: string;
   sharedWith?: string[];
+  status?: EstimateStatus;
 };
 
 /** Live Drive files. Never the thin Aromatics stub. Snapshots folder is frozen and omitted. */
@@ -58,10 +88,25 @@ export const HIS_WOOD_RIVER_FILES: HisWoodRiverFile[] = [
     siteId: "site-madison",
     ownerEmail: NATHAN_DESK_EMAIL,
   },
+  {
+    packId: BOILER17_PACK_ID,
+    fileId: "1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y",
+    fileName: "wood-river-boiler-17-2026.json",
+    title: BOILER17_TITLE,
+    client: "Phillips 66",
+    site: BOILER17_SITE,
+    siteId: BOILER17_SITE_ID,
+    ownerEmail: NATHAN_DESK_EMAIL,
+    status: BOILER17_STATUS,
+    window: BOILER17_WINDOW,
+  },
 ];
 
 export const HIS_AROMATICS_PACK_ID = "new-mtj7bvtk-akmei";
 export const HIS_CAT2_PACK_ID = "new-mtaajdwa-f7539";
+export const HIS_BOILER17_PACK_ID = BOILER17_PACK_ID;
+export const HIS_BOILER17_FILE_ID = "1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y";
+export const HIS_BOILER17_JOB_CODE = "EST-B1726";
 /** Purged leftover. Trashed Drive file — never restamp, first-paint, or hydrate. */
 export const HIS_TM_PACK_ID = "new-mtj5d6";
 export const HIS_AROMATICS_FILE_ID = "1KLhPczzj-BHMqT8uOI5VxUkSJUagj7rz";
@@ -270,6 +315,7 @@ export function applyHisIdentity<T extends HisIdentityPack>(pack: T, his?: HisWo
     site: row.site,
     siteId: row.siteId,
     ownerEmail,
+    status: pack.status || row.status,
   };
   return {
     ...next,
@@ -295,6 +341,7 @@ function cardFromHis(row: HisWoodRiverFile & { packId: string }): LocalPack {
     createdAt: 1,
     updatedAt: 1,
     ownerEmail: row.ownerEmail,
+    status: row.status,
   };
 }
 
@@ -403,11 +450,50 @@ export function persistHisWoodRiverCards(store?: StorageLike | null): LocalPack[
         transferredToName: pack.transferredToName,
         transferredFromName: pack.transferredFromName,
         replaceHandoff: true,
+        status: pack.status,
+      },
+      store,
+    );
+    seedBoiler17LocalDefaults(store, pack.packId);
+  }
+  return mergeHisWoodRiverCards(listLocalPacks(store));
+}
+
+/** Job # 108451 + Mike CPPR May notes when Cost has not been pasted yet. */
+export function seedBoiler17LocalDefaults(store: StorageLike, packId: string) {
+  if (!isBoiler17PackId(packId)) return;
+  const pack = listLocalPacks(store).find((row) => row.packId === packId);
+  if (pack && !pack.status) {
+    rememberLocalPack(
+      {
+        packId,
+        title: pack.title || BOILER17_TITLE,
+        client: pack.client || "Phillips 66",
+        site: pack.site || BOILER17_SITE,
+        ownerEmail: pack.ownerEmail,
+        status: BOILER17_STATUS,
       },
       store,
     );
   }
-  return mergeHisWoodRiverCards(listLocalPacks(store));
+  const key = storageKeyForPack(packId);
+  const meta = hydrateJobMeta(readStoreJson<Partial<JobMeta>>(store, `${JOB_META_PREFIX}${key}`));
+  if (!meta.jobNumber.trim()) {
+    writeStoreJson(store, `${JOB_META_PREFIX}${key}`, {
+      ...meta,
+      jobNumber: BOILER17_JOB_NUMBER,
+      area: meta.area || "Boiler 17",
+    });
+  }
+  const book = hydrateCostReport(readStoreJson(store, `${COST_REPORT_STORE_PREFIX}${key}`));
+  if (!book.notes.trim()) {
+    writeStoreJson(store, `${COST_REPORT_STORE_PREFIX}${key}`, {
+      ...emptyCostReportBook(),
+      ...book,
+      statusDate: MIKE_CPPR_108451_STATUS_DATE,
+      notes: BOILER17_COST_NOTE,
+    });
+  }
 }
 
 export function hisCardToSnapshot(row: HisWoodRiverFile & { packId: string }): EstimatePackSnapshot {
@@ -421,5 +507,6 @@ export function hisCardToSnapshot(row: HisWoodRiverFile & { packId: string }): E
     createdAt: 1,
     updatedAt: 1,
     ownerEmail: row.ownerEmail,
+    status: row.status,
   };
 }

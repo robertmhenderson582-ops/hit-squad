@@ -29,6 +29,8 @@ import {
   type PhaseRow,
   type PhaseScheduleState,
 } from "@/lib/phase-schedule";
+import { BOILER17_JOB_NUMBER, defaultStatusForBoiler17, isBoiler17PackId } from "@/lib/boiler-17";
+import { seedBoiler17LocalDefaults } from "@/lib/his-wood-river";
 import { emptyJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
 import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
 import { packIdFromStoreKey, findLocalPack, renameLocalPackTitle, touchLocalPack, writeLocalPackStatus } from "@/lib/local-estimates";
@@ -38,6 +40,7 @@ import {
   clampEstimateStatus,
   parseEstimateStatus,
   readEstimateStatus,
+  statusStoreKey,
   writeEstimateStatus,
   type EstimateStatus,
 } from "@/lib/estimate-status";
@@ -119,8 +122,15 @@ function packSite(estimateKey: string) {
 function readPackStatus(estimateKey: string): EstimateStatus {
   const { packId, local, regularClient } = packSite(estimateKey);
   if (!packId) return DEFAULT_ESTIMATE_STATUS;
-  const raw = local?.status ? parseEstimateStatus(local.status) : readEstimateStatus(packId);
-  return clampEstimateStatus(raw, regularClient);
+  if (local?.status) return clampEstimateStatus(parseEstimateStatus(local.status), regularClient);
+  const stored =
+    typeof window !== "undefined" ? window.localStorage.getItem(statusStoreKey(packId)) : null;
+  if (stored != null && stored.trim() !== "") {
+    return clampEstimateStatus(parseEstimateStatus(stored), regularClient);
+  }
+  const boiler = defaultStatusForBoiler17(packId, undefined, regularClient);
+  if (boiler) return boiler;
+  return clampEstimateStatus(readEstimateStatus(packId), regularClient);
 }
 
 /** Write missing pack status once so vault JSON becomes source of truth. Clamp invalid lane statuses. */
@@ -243,7 +253,17 @@ export function EstimatePackageProvider({
       setSchedule(next);
       setCrewState(syncCrew(readCrew(estimateKey), next));
       setOrgChartState(readOrgChart(estimateKey));
-      setJobMetaState(readJobMeta(estimateKey));
+      if (packId && isBoiler17PackId(packId) && typeof window !== "undefined") {
+        seedBoiler17LocalDefaults(window.localStorage, packId);
+      }
+      const nextMeta = readJobMeta(estimateKey);
+      if (packId && isBoiler17PackId(packId) && !nextMeta.jobNumber.trim()) {
+        const seeded = { ...nextMeta, jobNumber: BOILER17_JOB_NUMBER, area: nextMeta.area || "Boiler 17" };
+        writeJobMeta(estimateKey, seeded);
+        setJobMetaState(seeded);
+      } else {
+        setJobMetaState(nextMeta);
+      }
       setActivitiesState(readActivities(estimateKey) ?? []);
       const nextStatus = readPackStatus(estimateKey);
       setStatusState(nextStatus);

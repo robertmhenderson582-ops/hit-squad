@@ -31,7 +31,12 @@ export const RODEO_U110_JOB_CODE = "EST-U11026";
 export const RODEO_U250_JOB_CODE = "EST-U25026";
 export const MONROE_541V_JOB_CODE = "EST-541V26";
 
-export type WakeTemplateFamily = "madison-contractor" | "p66-rodeo-workbook" | "client-estimate-form" | "monroe-workbook";
+export type WakeTemplateFamily =
+  | "madison-contractor"
+  | "p66-rodeo-workbook"
+  | "client-estimate-form"
+  | "monroe-workbook"
+  | "wood-river-b1";
 
 export type WakeJobShell = {
   packId: string;

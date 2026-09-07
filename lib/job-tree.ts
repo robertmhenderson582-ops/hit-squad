@@ -234,7 +234,7 @@ export function matchCatalogSite(text: string, sites: SiteRecord[] = catalogSite
   const monroe = sites.find((site) => site.id === "site-monroe");
   if (monroe && /\b541v\b|u541|u541\s+vac/.test(hay) && !/wood river|roxana/.test(hay)) return monroe;
   const woodRiver = sites.find((site) => site.id === "site-madison");
-  if (woodRiver && /wood river|roxana|cat 2|mtaajd|unit 3|\bcoker\b/.test(hay)) return woodRiver;
+  if (woodRiver && /wood river|roxana|cat 2|mtaajd|unit 3|\bcoker\b|boiler 17|b1726/.test(hay)) return woodRiver;
   return sites.find((site) => {
     const name = norm(site.name);
     const city = norm((site.city || "").split(",")[0] || "");

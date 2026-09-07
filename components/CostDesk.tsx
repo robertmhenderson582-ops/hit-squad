@@ -4,14 +4,22 @@ import { useMemo, useState } from "react";
 import { CostReportDesk } from "@/components/CostReportDesk";
 import { EstimatePackageProvider } from "@/components/EstimatePackage";
 import { useDeskBoard } from "@/components/useDeskBoard";
+import { useSession } from "@/components/SessionProvider";
 import { COST_REPORT_LIVE_NOTE, COST_REPORT_PARKED, liveCostJobs } from "@/lib/cost-report";
 import { estimateStorageKey } from "@/lib/estimate-open";
+import { mergeHisWoodRiverCards, persistHisWoodRiverCards, shouldPaintHisCards } from "@/lib/his-wood-river";
 import { listLocalPacks } from "@/lib/local-estimates";
 
 export function CostDesk() {
+  const { user } = useSession();
   const { board, error } = useDeskBoard();
   const jobs = useMemo(() => {
-    const local = listLocalPacks().map((pack) => ({
+    const painted = shouldPaintHisCards(user)
+      ? typeof window !== "undefined"
+        ? persistHisWoodRiverCards(window.localStorage)
+        : mergeHisWoodRiverCards(listLocalPacks())
+      : listLocalPacks();
+    const local = painted.map((pack) => ({
       packId: pack.packId,
       title: pack.title,
       client: pack.client,
@@ -26,7 +34,7 @@ export function CostDesk() {
       key: estimateStorageKey(row.id),
     }));
     return liveCostJobs([...local, ...fromBoard]);
-  }, [board]);
+  }, [board, user]);
   const [picked, setPicked] = useState(jobs[0]?.id ?? "");
   const job = jobs.find((row) => row.id === picked) ?? jobs[0];
 
