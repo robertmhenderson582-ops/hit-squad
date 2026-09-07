@@ -245,7 +245,7 @@ export const BOILER17_B1_GOLDEN: WakeGoldenFixture = {
   extraTemplateIds: [],
   extractedFrom: "drive-text",
   dollarsStatus: "formula-unavailable",
-  note: "Hours locked from official RH B-1 Drive text. Labor $ cells were #REF. Do not invent a desk grand total. Cost wires to Mike CPPR 108451 May lock, not this B-1 face.",
+  note: "Hours locked from official RH B-1 Drive text (Summary cached K). Typed HC×HPS calendars may run slightly higher where ST formulas were cleared. Labor $ cells were #REF. Do not invent a desk grand total. Cost wires to Mike CPPR 108451 May lock, not this B-1 face.",
   buckets: null,
   jobNumber: BOILER17_JOB_NUMBER,
   boiler17Hours: {

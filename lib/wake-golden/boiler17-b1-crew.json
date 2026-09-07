@@ -1,0 +1,2013 @@
+{
+  "extractedFrom": "drive-text",
+  "officialRevisionId": "1sMay67BNvtkW6fFLygPtymnIkFqrvvHT",
+  "officialRevisionName": "Boiler 17 2026  B-1 1019 071326RH.xlsx",
+  "window": {
+    "start": "2026-08-10",
+    "end": "2026-12-06"
+  },
+  "summaryHours": {
+    "directHours": 16860.0,
+    "foremenHours": 2134.0,
+    "supportHours": 2428.0,
+    "targetCraftHours": 21422.0,
+    "staffHours": 6826.0,
+    "craftPerDiem": 228150.0,
+    "materials": 104100,
+    "heatInduction": 152880.0,
+    "staffPerDiem": 127400.0,
+    "staffTravel": 8400,
+    "original6x20": 4014660.0,
+    "revised7x20": 4164721.0
+  },
+  "typedHours": {
+    "staffHours": 6635.0,
+    "generalForemanHours": 599.0,
+    "foremenHours": 2134.0,
+    "directHours": 16946.0,
+    "supportHours": 2428.0,
+    "staffPdDays": 910.0,
+    "craftPdDays": 1755.0,
+    "targetCraftHours": 21508.0,
+    "staffPlusGfHours": 7234.0
+  },
+  "misc": [
+    {
+      "item": "Welding Rod",
+      "qty": 1,
+      "each": 25000.0
+    },
+    {
+      "item": "Misc Steel",
+      "qty": 1,
+      "each": 10000.0
+    },
+    {
+      "item": "Grinding Wheels - Alloy",
+      "qty": 1,
+      "each": 15000.0
+    },
+    {
+      "item": "Anti sieze",
+      "qty": 1,
+      "each": 2500.0
+    },
+    {
+      "item": "welding gas",
+      "qty": 1,
+      "each": 15000.0
+    },
+    {
+      "item": "fire blanket",
+      "qty": 1,
+      "each": 6000.0
+    },
+    {
+      "item": "NTD Boilermaker Travel",
+      "qty": 50,
+      "each": 612
+    },
+    {
+      "item": "Heat Induction",
+      "qty": 1,
+      "each": 152880
+    },
+    {
+      "item": "Staff Travel Cost",
+      "qty": 1,
+      "each": 8400
+    }
+  ],
+  "positions": [
+    {
+      "sheet": "staff",
+      "lane": "staff",
+      "position": "SR PROJECT MGR M 1",
+      "night": false,
+      "name": "Nathan",
+      "ranges": [
+        {
+          "start": "2026-08-17",
+          "end": "2026-09-11",
+          "hc": 1.0,
+          "hps": 9.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-10-23",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "skipDates": [
+            "2026-09-20",
+            "2026-10-04",
+            "2026-10-11",
+            "2026-10-17",
+            "2026-10-18"
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-22",
+          "end": "2026-10-18",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-19",
+            "2026-09-26",
+            "2026-09-27",
+            "2026-10-03",
+            "2026-10-10"
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 565.0,
+      "pdDays": 68.0
+    },
+    {
+      "sheet": "staff",
+      "lane": "staff",
+      "position": "LEAD SAFETY M 01",
+      "night": false,
+      "name": "Benny",
+      "ranges": [
+        {
+          "start": "2026-08-10",
+          "end": "2026-09-11",
+          "hc": 1.0,
+          "hps": 9.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-10-23",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "skipDates": [
+            "2026-09-20",
+            "2026-10-04",
+            "2026-10-11",
+            "2026-10-17",
+            "2026-10-18"
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-15",
+          "end": "2026-10-18",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-19",
+            "2026-09-26",
+            "2026-09-27",
+            "2026-10-03",
+            "2026-10-10"
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 610.0,
+      "pdDays": 75.0
+    },
+    {
+      "sheet": "staff",
+      "lane": "staff",
+      "position": "GEN SUPERINTENDENT M 01",
+      "night": false,
+      "name": "Zeke",
+      "ranges": [
+        {
+          "start": "2026-08-10",
+          "end": "2026-09-11",
+          "hc": 1.0,
+          "hps": 9.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-09-24",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-25",
+          "end": "2026-09-25",
+          "hc": 1.0,
+          "hps": 1.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-26",
+          "end": "2026-10-23",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "skipDates": [
+            "2026-10-04",
+            "2026-10-11",
+            "2026-10-17",
+            "2026-10-18"
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-15",
+          "end": "2026-10-18",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-19",
+            "2026-09-26",
+            "2026-09-27",
+            "2026-10-03",
+            "2026-10-10"
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 600.0,
+      "pdDays": 75.0
+    },
+    {
+      "sheet": "staff",
+      "lane": "staff",
+      "position": "LEAD QA/QC BM 01",
+      "night": false,
+      "name": "Clint",
+      "ranges": [
+        {
+          "start": "2026-08-10",
+          "end": "2026-09-11",
+          "hc": 1.0,
+          "hps": 9.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-09-26",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-27",
+          "end": "2026-09-27",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 0.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-28",
+          "end": "2026-10-09",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-10-10",
+          "end": "2026-10-10",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 0.0,
+          "days": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-10-12",
+          "end": "2026-10-23",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-15",
+          "end": "2026-10-18",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-19",
+            "2026-09-20",
+            "2026-09-26",
+            "2026-09-27",
+            "2026-10-03",
+            "2026-10-04",
+            "2026-10-10",
+            "2026-10-11"
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 610.0,
+      "pdDays": 70.0
+    },
+    {
+      "sheet": "staff",
+      "lane": "generalForeman",
+      "position": "PIPEFITTER GENERAL FOREMAN",
+      "night": false,
+      "name": "",
+      "ranges": [
+        {
+          "start": "2026-08-10",
+          "end": "2026-09-11",
+          "hc": 1.0,
+          "hps": 9.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-09-26",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-27",
+          "end": "2026-09-27",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 0.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-28",
+          "end": "2026-10-23",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "skipDates": [
+            "2026-10-10",
+            "2026-10-17"
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-15",
+          "end": "2026-10-18",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-19",
+            "2026-09-20",
+            "2026-09-26",
+            "2026-09-27",
+            "2026-10-03"
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 599.0,
+      "pdDays": 73.0
+    },
+    {
+      "sheet": "staff",
+      "lane": "staff",
+      "position": "COORDINATOR QA/QC M 01",
+      "night": false,
+      "name": "",
+      "ranges": [
+        {
+          "start": "2026-08-10",
+          "end": "2026-09-02",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-03",
+          "end": "2026-09-03",
+          "hc": 1.0,
+          "hps": 1.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            false,
+            false,
+            false,
+            true,
+            false,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-04",
+          "end": "2026-09-11",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-10-14",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "skipDates": [
+            "2026-09-20",
+            "2026-10-04",
+            "2026-10-11"
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-15",
+          "end": "2026-10-11",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-19",
+            "2026-09-26",
+            "2026-09-27",
+            "2026-10-03",
+            "2026-10-10"
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 501.0,
+      "pdDays": 66.0
+    },
+    {
+      "sheet": "staff",
+      "lane": "staff",
+      "position": "MANAGER OFFICE M 01",
+      "night": false,
+      "name": "Debbie",
+      "ranges": [
+        {
+          "start": "2026-08-10",
+          "end": "2026-09-11",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-09-22",
+          "hc": 1.0,
+          "hps": 10.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-23",
+          "end": "2026-09-23",
+          "hc": 1.0,
+          "hps": 1.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            false,
+            false,
+            true,
+            false,
+            false,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-24",
+          "end": "2026-10-07",
+          "hc": 1.0,
+          "hps": 10.0,
+          "pd": 1.0,
+          "days": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "skipDates": [
+            "2026-10-04"
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-10-08",
+          "end": "2026-10-23",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-15",
+          "end": "2026-10-18",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-19",
+            "2026-09-26",
+            "2026-09-27",
+            "2026-10-03"
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 507.0,
+      "pdDays": 75.0
+    },
+    {
+      "sheet": "staff",
+      "lane": "staff",
+      "position": "Empty",
+      "night": false,
+      "name": "",
+      "ranges": [
+        {
+          "start": "2026-10-01",
+          "end": "2026-10-16",
+          "hc": 12.0,
+          "hps": 8.0,
+          "pd": 12.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        }
+      ],
+      "hours": 1152.0,
+      "pdDays": 144.0
+    },
+    {
+      "sheet": "staff",
+      "lane": "staff",
+      "position": "GEN SUP'T BM 01",
+      "night": true,
+      "name": "",
+      "ranges": [
+        {
+          "start": "2026-08-20",
+          "end": "2026-09-11",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-10-14",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-22",
+          "end": "2026-10-11",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-19",
+            "2026-09-26",
+            "2026-10-03",
+            "2026-10-10"
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 433.0,
+      "pdDays": 56.0
+    },
+    {
+      "sheet": "staff",
+      "lane": "staff",
+      "position": "COORDINATOR QA/QC M 01",
+      "night": true,
+      "name": "Clint",
+      "ranges": [
+        {
+          "start": "2026-08-20",
+          "end": "2026-09-11",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-10-14",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-22",
+          "end": "2026-10-11",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-19",
+            "2026-09-26",
+            "2026-10-03",
+            "2026-10-10"
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 433.0,
+      "pdDays": 56.0
+    },
+    {
+      "sheet": "staff",
+      "lane": "staff",
+      "position": "LEAD SAFETY M 01",
+      "night": true,
+      "name": "Sterlierng",
+      "ranges": [
+        {
+          "start": "2026-08-31",
+          "end": "2026-09-11",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-10-14",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-05",
+          "end": "2026-10-11",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-19",
+            "2026-09-26",
+            "2026-10-03",
+            "2026-10-10"
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 377.0,
+      "pdDays": 45.0
+    },
+    {
+      "sheet": "staff",
+      "lane": "staff",
+      "position": "COORDINATOR QA/QC M 01",
+      "night": true,
+      "name": "Frankie Rivers",
+      "ranges": [
+        {
+          "start": "2026-08-24",
+          "end": "2026-09-11",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-10-14",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-29",
+          "end": "2026-10-11",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-19",
+            "2026-09-26",
+            "2026-10-03",
+            "2026-10-10"
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 417.0,
+      "pdDays": 52.0
+    },
+    {
+      "sheet": "staff",
+      "lane": "staff",
+      "position": "ASST SUPERINTENDENT M 01",
+      "night": true,
+      "name": "Ben P. move to days",
+      "ranges": [
+        {
+          "start": "2026-08-17",
+          "end": "2026-09-11",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-10-14",
+          "hc": 1.0,
+          "hps": 10.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-22",
+          "end": "2026-10-11",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-13",
+            "2026-09-19",
+            "2026-09-20",
+            "2026-09-26",
+            "2026-09-27",
+            "2026-10-03",
+            "2026-10-04",
+            "2026-10-10"
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 430.0,
+      "pdDays": 55.0
+    },
+    {
+      "sheet": "foremen",
+      "lane": "foreman",
+      "position": "BOILERMAKER FOREMAN",
+      "night": false,
+      "name": "",
+      "ranges": [
+        {
+          "start": "2026-08-10",
+          "end": "2026-08-14",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-17",
+          "end": "2026-08-21",
+          "hc": 1.0,
+          "hps": 9.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-24",
+          "end": "2026-09-04",
+          "hc": 1.0,
+          "hps": 9.0,
+          "pd": 2.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-07",
+          "end": "2026-09-12",
+          "hc": 2.0,
+          "hps": 9.0,
+          "pd": 2.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-10-14",
+          "hc": 2.0,
+          "hps": 11.0,
+          "pd": 2.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-10-15",
+          "end": "2026-10-16",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-10-19",
+          "end": "2026-10-23",
+          "hc": 1.0,
+          "hps": 9.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-15",
+          "end": "2026-08-23",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "kind": "pd"
+        },
+        {
+          "start": "2026-08-29",
+          "end": "2026-10-11",
+          "hc": 0,
+          "hps": 0,
+          "pd": 2.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-12",
+            "2026-09-19",
+            "2026-09-26",
+            "2026-10-03",
+            "2026-10-10"
+          ],
+          "kind": "pd"
+        },
+        {
+          "start": "2026-10-17",
+          "end": "2026-10-18",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 944.0,
+      "pdDays": 127.0
+    },
+    {
+      "sheet": "foremen",
+      "lane": "foreman",
+      "position": "BOILERMAKER FOREMAN",
+      "night": false,
+      "name": "",
+      "ranges": [
+        {
+          "start": "2026-08-24",
+          "end": "2026-09-04",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 0.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        }
+      ],
+      "hours": 80.0,
+      "pdDays": 0.0
+    },
+    {
+      "sheet": "foremen",
+      "lane": "foreman",
+      "position": "PIPEFITTER FOREMAN",
+      "night": false,
+      "name": "",
+      "ranges": [
+        {
+          "start": "2026-09-07",
+          "end": "2026-10-16",
+          "hc": 1.0,
+          "hps": 11.0,
+          "pd": 0.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        }
+      ],
+      "hours": 330.0,
+      "pdDays": 0.0
+    },
+    {
+      "sheet": "foremen",
+      "lane": "foreman",
+      "position": "BOILERMAKER FOREMAN",
+      "night": true,
+      "name": "/ Jonathan Williams",
+      "ranges": [
+        {
+          "start": "2026-09-03",
+          "end": "2026-09-04",
+          "hc": 2.0,
+          "hps": 8.0,
+          "pd": 2.0,
+          "days": [
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-07",
+          "end": "2026-10-14",
+          "hc": 2.0,
+          "hps": 11.0,
+          "pd": 2.0,
+          "days": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "skipDates": [
+            "2026-09-13",
+            "2026-09-20",
+            "2026-10-04",
+            "2026-10-11"
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-05",
+          "end": "2026-10-11",
+          "hc": 0,
+          "hps": 0,
+          "pd": 2.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-12",
+            "2026-09-19",
+            "2026-09-26",
+            "2026-09-27",
+            "2026-10-03",
+            "2026-10-10"
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 780.0,
+      "pdDays": 84.0
+    },
+    {
+      "sheet": "direct",
+      "lane": "direct",
+      "position": "BOILERMAKER JOURNEYMAN",
+      "night": false,
+      "name": "",
+      "ranges": [
+        {
+          "start": "2026-08-17",
+          "end": "2026-09-11",
+          "hc": 13.0,
+          "hps": 10.0,
+          "pd": 13.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-09-18",
+          "hc": 23.0,
+          "hps": 10.0,
+          "pd": 16.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-19",
+          "end": "2026-10-14",
+          "hc": 22.0,
+          "hps": 10.0,
+          "pd": 16.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-10-15",
+          "end": "2026-10-23",
+          "hc": 6.0,
+          "hps": 8.0,
+          "pd": 6.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-22",
+          "end": "2026-09-13",
+          "hc": 0,
+          "hps": 0,
+          "pd": 13.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "kind": "pd"
+        },
+        {
+          "start": "2026-09-20",
+          "end": "2026-10-11",
+          "hc": 0,
+          "hps": 0,
+          "pd": 16.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "skipDates": [
+            "2026-10-04"
+          ],
+          "kind": "pd"
+        },
+        {
+          "start": "2026-10-17",
+          "end": "2026-10-18",
+          "hc": 0,
+          "hps": 0,
+          "pd": 6.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 8926.0,
+      "pdDays": 898.0
+    },
+    {
+      "sheet": "direct",
+      "lane": "direct",
+      "position": "PIPEFITTER JOURNEYMAN",
+      "night": false,
+      "name": "",
+      "ranges": [
+        {
+          "start": "2026-09-07",
+          "end": "2026-09-11",
+          "hc": 6.0,
+          "hps": 8.0,
+          "pd": 0.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-10-16",
+          "hc": 6.0,
+          "hps": 10.0,
+          "pd": 0.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        }
+      ],
+      "hours": 1740.0,
+      "pdDays": 0.0
+    },
+    {
+      "sheet": "direct",
+      "lane": "direct",
+      "position": "BOILERMAKER JOURNEYMAN",
+      "night": true,
+      "name": "",
+      "ranges": [
+        {
+          "start": "2026-09-14",
+          "end": "2026-09-17",
+          "hc": 23.0,
+          "hps": 10.0,
+          "pd": 16.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            false,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-18",
+          "end": "2026-10-10",
+          "hc": 22.0,
+          "hps": 10.0,
+          "pd": 16.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-10-12",
+          "end": "2026-10-14",
+          "hc": 22.0,
+          "hps": 10.0,
+          "pd": 0.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-20",
+          "end": "2026-10-11",
+          "hc": 0,
+          "hps": 0,
+          "pd": 16.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 5980.0,
+      "pdDays": 448.0
+    },
+    {
+      "sheet": "direct",
+      "lane": "direct",
+      "position": "Empty",
+      "night": true,
+      "name": "",
+      "ranges": [
+        {
+          "start": "2026-09-07",
+          "end": "2026-09-11",
+          "hc": 6.0,
+          "hps": 10.0,
+          "pd": 0.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        }
+      ],
+      "hours": 300.0,
+      "pdDays": 0.0
+    },
+    {
+      "sheet": "support",
+      "lane": "support",
+      "position": "TEAMSTERS GRP 06",
+      "night": false,
+      "name": "",
+      "ranges": [
+        {
+          "start": "2026-08-10",
+          "end": "2026-09-09",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 0.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-10",
+          "end": "2026-09-11",
+          "hc": 2.0,
+          "hps": 8.0,
+          "pd": 0.0,
+          "days": [
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-10-16",
+          "hc": 2.0,
+          "hps": 10.0,
+          "pd": 0.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-10-19",
+          "end": "2026-10-23",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 0.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        }
+      ],
+      "hours": 836.0,
+      "pdDays": 0.0
+    },
+    {
+      "sheet": "support",
+      "lane": "support",
+      "position": "BOILERMAKER JOURNEYMAN",
+      "night": false,
+      "name": "Tool Room",
+      "ranges": [
+        {
+          "start": "2026-08-10",
+          "end": "2026-09-02",
+          "hc": 1.0,
+          "hps": 8.0,
+          "pd": 1.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-03",
+          "end": "2026-09-12",
+          "hc": 2.0,
+          "hps": 8.0,
+          "pd": 2.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "skipDates": [
+            "2026-09-05"
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-09-14",
+          "end": "2026-10-16",
+          "hc": 4.0,
+          "hps": 10.0,
+          "pd": 4.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-10-19",
+          "end": "2026-10-23",
+          "hc": 4.0,
+          "hps": 8.0,
+          "pd": 4.0,
+          "days": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          "kind": "work"
+        },
+        {
+          "start": "2026-08-15",
+          "end": "2026-08-30",
+          "hc": 0,
+          "hps": 0,
+          "pd": 1.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "kind": "pd"
+        },
+        {
+          "start": "2026-09-05",
+          "end": "2026-09-13",
+          "hc": 0,
+          "hps": 0,
+          "pd": 2.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "skipDates": [
+            "2026-09-12"
+          ],
+          "kind": "pd"
+        },
+        {
+          "start": "2026-09-20",
+          "end": "2026-10-11",
+          "hc": 0,
+          "hps": 0,
+          "pd": 4.0,
+          "days": [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "kind": "pd"
+        }
+      ],
+      "hours": 1592.0,
+      "pdDays": 198.0
+    }
+  ]
+}

@@ -103,7 +103,7 @@ describe("Wood River Boiler 17 Locked wake", () => {
     );
     assert.equal(classified.kind, "wood-river-b1");
     assert.equal(classified.packId, BOILER17_PACK_ID);
-    assert.equal(classified.staged, true);
+    assert.equal(classified.staged, false);
   });
 
   it("does not commit Excel binaries or smash Aromatics identity", () => {

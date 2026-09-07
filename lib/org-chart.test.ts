@@ -258,13 +258,15 @@ describe("org chart store", () => {
 describe("org chart tab chrome", () => {
   it("puts Org chart on the estimate and keeps Rate builder off Joseph", () => {
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
+    const tabs = readFileSync(fileURLToPath(new URL("./estimate-tabs.ts", import.meta.url)), "utf8");
     const detail = readFileSync(fileURLToPath(new URL("../components/EstimateDetail.tsx", import.meta.url)), "utf8");
     const fresh = readFileSync(fileURLToPath(new URL("../components/NewEstimateForm.tsx", import.meta.url)), "utf8");
     const desk = readFileSync(fileURLToPath(new URL("../components/OrgChartDesk.tsx", import.meta.url)), "utf8");
     const rates = readFileSync(fileURLToPath(new URL("../components/RatesDesk.tsx", import.meta.url)), "utf8");
     assert.equal(ORG_CHART_TAB_LABEL, "Org chart");
-    assert.match(workspace, /label: "Org chart"/);
-    assert.match(workspace, /id: "org-chart"/);
+    assert.match(tabs, /label: "Org chart"/);
+    assert.match(tabs, /id: "org-chart"/);
+    assert.match(workspace, /estimateTabsForSite|BASE_ESTIMATE_TABS/);
     assert.match(detail, /OrgChartDesk/);
     assert.match(fresh, /OrgChartDesk/);
     assert.match(desk, /ORG_CHART_TAB_LABEL/);

@@ -13,6 +13,9 @@ import {
 import { COST_REPORT_STORE_PREFIX } from "./cost-report-prefix.ts";
 import { emptyCostReportBook, hydrateCostReport } from "./cost-report.ts";
 import type { EstimateStatus } from "./estimate-status.ts";
+import { applyPackToStore, crewHasRows } from "./estimate-pack.ts";
+import { CREW_STORE_PREFIX } from "./phase-schedule.ts";
+import { boiler17B1FilledSnapshot } from "./wood-river-b1.ts";
 import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
 import { JOB_META_PREFIX } from "./job-meta-prefix.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
@@ -493,6 +496,16 @@ export function seedBoiler17LocalDefaults(store: StorageLike, packId: string) {
       statusDate: MIKE_CPPR_108451_STATUS_DATE,
       notes: BOILER17_COST_NOTE,
     });
+  }
+  const crew = readStoreJson(store, `${CREW_STORE_PREFIX}${key}`);
+  if (!crewHasRows(crew)) {
+    const filled = boiler17B1FilledSnapshot({
+      createdAt: pack?.createdAt,
+      ownerEmail: pack?.ownerEmail,
+      jobMeta: meta,
+      costReport: book.notes.trim() ? book : { ...emptyCostReportBook(), ...book, statusDate: MIKE_CPPR_108451_STATUS_DATE, notes: BOILER17_COST_NOTE },
+    });
+    applyPackToStore(store, filled);
   }
 }
 

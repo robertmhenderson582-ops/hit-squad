@@ -12,9 +12,11 @@ import { applyPackToStore } from "@/lib/estimate-pack";
 import { EstimateImportModal } from "@/components/EstimateImportModal";
 import { ESTIMATE_IMPORT_ERROR } from "@/lib/estimate-xlsx";
 import { createPackFromImport, diffEstimateImport, parseEstimateXlsx, type EstimateImport } from "@/lib/estimate-xlsx-import";
+import { BOILER17_PACK_ID } from "@/lib/boiler-17";
 import { classifyEstimateWorkbook, CLIENT_TEMPLATE_STAGED, shouldStageClientWorkbook } from "@/lib/client-estimate-ingest";
 import { newEstimatePackId } from "@/lib/estimate-open";
 import { scheduleVaultUpsert } from "@/lib/estimate-vault-client";
+import { boiler17B1FilledSnapshot, ingestWoodRiverB1 } from "@/lib/wood-river-b1";
 
 const CLIENTS = ["Phillips 66", "Georgia Power", "Monroe Energy", "Shop"];
 const SITES = [
@@ -107,6 +109,15 @@ export function NewEstimateModal({
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const classified = await classifyEstimateWorkbook(bytes, file.name);
+      if (classified.kind === "wood-river-b1") {
+        const ingested = await ingestWoodRiverB1(bytes, file.name);
+        const pack = boiler17B1FilledSnapshot({ ownerEmail: lens?.email || "" }, ingested);
+        applyPackToStore(window.localStorage, pack);
+        scheduleVaultUpsert(BOILER17_PACK_ID);
+        onClose();
+        router.push(`/estimates/${BOILER17_PACK_ID}`);
+        return;
+      }
       if (shouldStageClientWorkbook(classified)) {
         setImportError(CLIENT_TEMPLATE_STAGED);
         return;

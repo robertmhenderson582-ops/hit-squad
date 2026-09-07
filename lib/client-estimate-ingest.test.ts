@@ -27,7 +27,7 @@ describe("client estimate ingest (staged)", () => {
     assert.equal(CLIENT_FACE_MAPPER_SPEC["madison-contractor"].family, "A");
     assert.equal(CLIENT_FACE_MAPPER_SPEC["p66-rodeo-workbook"].family, "B");
     assert.equal(CLIENT_FACE_MAPPER_SPEC["client-estimate-form"].family, "C");
-    assert.equal(CLIENT_FACE_MAPPER_SPEC["wood-river-b1"].ingest, "stage-metadata");
+    assert.equal(CLIENT_FACE_MAPPER_SPEC["wood-river-b1"].ingest, "apply-hours");
     assert.equal(CLIENT_FACE_MAPPER_SPEC["madison-contractor"].ingest, "stage-metadata");
     assert.equal(CLIENT_FACE_MAPPER_SPEC["p66-rodeo-workbook"].ingest, "stage-metadata");
 

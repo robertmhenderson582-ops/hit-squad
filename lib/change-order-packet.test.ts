@@ -317,7 +317,9 @@ test("P66 / Wood River and the unset default read ECR; Log is the field home", (
   assert.doesNotMatch(packet, /On-job FCR packet/);
   assert.doesNotMatch(packet, /\+ Add FCR/);
   const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
-  assert.match(workspace, /changeOrderTabLabel/);
+  const tabs = readFileSync(fileURLToPath(new URL("./estimate-tabs.ts", import.meta.url)), "utf8");
+  assert.match(tabs, /changeOrderTabLabel/);
+  assert.match(workspace, /estimateTabsForSite|BASE_ESTIMATE_TABS/);
 });
 
 test("adding an ECR log row persists on the store and survives a re-read", () => {
