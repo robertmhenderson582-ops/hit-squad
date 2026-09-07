@@ -18,8 +18,8 @@ import {
 } from "./p66-transfer-face.ts";
 import { U110_CONTRACTOR_GOLDEN, U250_CONTRACTOR_GOLDEN } from "./wake-golden.ts";
 
-describe("P66-shaped transfer face", () => {
-  it("fills the contractor SUMMARY from official fixtures so Robert can paste", () => {
+describe("estimate fills out the P66 template", () => {
+  it("fills P66 SUMMARY from the Hit Squad source and matches official goldens", () => {
     const u110 = p66TotalsFromBuckets(U110_CONTRACTOR_GOLDEN.buckets!, { unit: "U110" });
     const u250 = p66TotalsFromBuckets(U250_CONTRACTOR_GOLDEN.buckets!, { unit: "U250" });
     assert.equal(p66FaceMatchesGolden(u110, U110_CONTRACTOR_GOLDEN.buckets!), true);
@@ -30,8 +30,7 @@ describe("P66-shaped transfer face", () => {
     const read = readP66SummaryTotals(sheets[0]!);
     assert.equal(read.grandTotal, 5_247_587);
     assert.equal(read.totalHours, 26441);
-    assert.match(sheets[0]!.cells.find((cell) => cell.ref === "A2")?.type === "text" ? sheets[0]!.cells.find((cell) => cell.ref === "A2")!.value as string : "", /copy-paste/i);
-    assert.match(P66_TRANSFER_NOTE, /official contractor template/i);
+    assert.match(P66_TRANSFER_NOTE, /fills out the P66 template/i);
   });
 
   it("keeps transfer grand equal to the Hit Squad desk rail on a live Rodeo pack", () => {

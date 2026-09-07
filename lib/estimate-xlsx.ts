@@ -2510,6 +2510,7 @@ export async function estimateToXlsx(input: EstimateXlsxInput = {}): Promise<Uin
   if (excel == null || Math.round(excel * 100) / 100 !== desk) {
     throw new Error("summary-total-mismatch");
   }
+  // Rodeo: estimate fills the P66-shaped template from this same pack.
   const extras = shouldAttachP66TransferFace(resolved.site, resolved.client)
     ? buildP66TransferFaceSheets(p66TotalsFromDesk(resolved))
     : [];

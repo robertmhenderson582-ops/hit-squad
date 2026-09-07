@@ -41,7 +41,7 @@ describe("Rodeo / Monroe golden fixtures", () => {
     assert.equal(MONROE_541V_GOLDEN.dollarsStatus, "formula-unavailable");
     assert.equal(MONROE_541V_GOLDEN.buckets, null);
     assert.equal(MONROE_541V_GOLDEN.monroeHours?.totalLabor, 8483);
-    assert.equal(CLIENT_FACE_MAPPER_SPEC["madison-contractor"].exportAs.includes("paste"), true);
+    assert.match(CLIENT_FACE_MAPPER_SPEC["madison-contractor"].exportAs, /fills the P66 template/);
     assert.notEqual(
       CLIENT_FACE_MAPPER_SPEC["p66-rodeo-workbook"].family,
       CLIENT_FACE_MAPPER_SPEC["madison-contractor"].family,
