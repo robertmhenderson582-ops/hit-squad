@@ -95,37 +95,6 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     return () => window.removeEventListener("resize", onResize);
   }, [seat]);
 
-  useEffect(() => {
-    if (!dragging) return;
-    function move(event: { clientX: number; clientY: number }) {
-      if (!drag.current) return;
-      applyPos(
-        clampLive({
-          left: drag.current.sl + event.clientX - drag.current.ox,
-          top: drag.current.st + event.clientY - drag.current.oy,
-        }),
-      );
-    }
-    function up() {
-      if (!drag.current) return;
-      drag.current = null;
-      setDragging(false);
-      if (posRef.current) applyPos(posRef.current, true);
-    }
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", up);
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", up);
-      window.removeEventListener("mousemove", move);
-      window.removeEventListener("mouseup", up);
-    };
-  }, [dragging, seat]);
-
   function hideOnPhone() {
     writeEstimateTotalRailPhoneHidden(true);
     setPhoneHidden(true);
@@ -146,6 +115,32 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     const rect = el.getBoundingClientRect();
     drag.current = { ox: clientX, oy: clientY, sl: rect.left, st: rect.top };
     setDragging(true);
+
+    function move(event: { clientX: number; clientY: number }) {
+      if (!drag.current) return;
+      applyPos(
+        clampLive({
+          left: drag.current.sl + event.clientX - drag.current.ox,
+          top: drag.current.st + event.clientY - drag.current.oy,
+        }),
+      );
+    }
+    function up() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      if (!drag.current) return;
+      drag.current = null;
+      setDragging(false);
+      if (posRef.current) applyPos(posRef.current, true);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLElement>) {

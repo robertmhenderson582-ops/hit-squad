@@ -61,6 +61,8 @@ test("phone hide is UI only — Estimate Total math files stay off the hide path
   assert.match(railUi, /clampEstimateTotalRailPosition/);
   assert.match(railUi, /onPointerDown/);
   assert.match(railUi, /createPortal/);
+  assert.match(railUi, /addEventListener\("pointermove"/);
+  assert.match(railUi, /addEventListener\("mousemove"/);
   assert.match(railUi, /Reset/);
   assert.match(railUi, /Hide/);
   assert.match(railUi, /Show estimate total/);
