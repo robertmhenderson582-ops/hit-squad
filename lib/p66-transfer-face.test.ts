@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import ExcelJS from "exceljs";
-import { estimateToXlsx } from "./estimate-xlsx.ts";
+import { deskPackageTotal } from "./estimate-desk-total.ts";
+import { ESTIMATE_XLSX_SHEETS, estimateToXlsx } from "./estimate-xlsx.ts";
 import {
   buildP66TransferFaceSheets,
   P66_TRANSFER_NOTE,
@@ -10,7 +11,9 @@ import {
   p66FaceMatchesGolden,
   p66TotalsFromBuckets,
   p66TotalsFromDesk,
+  p66TransferSheetNames,
   readP66SummaryTotals,
+  rodeoFacesLock,
   shouldAttachP66TransferFace,
 } from "./p66-transfer-face.ts";
 import { U110_CONTRACTOR_GOLDEN, U250_CONTRACTOR_GOLDEN } from "./wake-golden.ts";
@@ -22,7 +25,8 @@ describe("P66-shaped transfer face", () => {
     assert.equal(p66FaceMatchesGolden(u110, U110_CONTRACTOR_GOLDEN.buckets!), true);
     assert.equal(p66FaceMatchesGolden(u250, U250_CONTRACTOR_GOLDEN.buckets!), true);
     const sheets = buildP66TransferFaceSheets(u110);
-    assert.deepEqual(sheets.map((row) => row.name), ["P66 SUMMARY", "P66 Direct", "P66 Indirect"]);
+    assert.deepEqual(sheets.map((row) => row.name), p66TransferSheetNames());
+    assert.equal(rodeoFacesLock({ face: u110, golden: U110_CONTRACTOR_GOLDEN.buckets! }), true);
     const read = readP66SummaryTotals(sheets[0]!);
     assert.equal(read.grandTotal, 5_247_587);
     assert.equal(read.totalHours, 26441);
@@ -53,6 +57,8 @@ describe("P66-shaped transfer face", () => {
     assert.equal(shouldAttachP66TransferFace("Wood River — Roxana, IL", "Phillips 66"), false);
     const face = p66TotalsFromDesk(input);
     assert.equal(p66FaceMatchesDesk(face, input), true);
+    assert.equal(rodeoFacesLock({ face, desk: input }), true);
+    assert.equal(face.grandTotal, deskPackageTotal(input));
   });
 
   it("attaches the transfer face on Rodeo export and leaves Wood River sheets alone", async () => {
@@ -71,7 +77,22 @@ describe("P66-shaped transfer face", () => {
     await rodeoWb.xlsx.load(rodeo as unknown as ArrayBuffer);
     const woodWb = new ExcelJS.Workbook();
     await woodWb.xlsx.load(wood as unknown as ArrayBuffer);
+    assert.equal(rodeoWb.worksheets.some((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.summary), true);
     assert.equal(rodeoWb.worksheets.some((sheet) => sheet.name === P66_TRANSFER_SUMMARY), true);
+    assert.equal(
+      p66TransferSheetNames().every((name) => rodeoWb.worksheets.some((sheet) => sheet.name === name)),
+      true,
+    );
     assert.equal(woodWb.worksheets.some((sheet) => sheet.name === P66_TRANSFER_SUMMARY), false);
+    assert.equal(shouldAttachP66TransferFace("Bayway — Linden, NJ", "Phillips 66"), false);
+    const faceSheet = rodeoWb.getWorksheet(P66_TRANSFER_SUMMARY);
+    assert.ok(faceSheet);
+    const input = {
+      title: "Rodeo U110 2026 TA",
+      client: "Phillips 66",
+      site: "Rodeo — Rodeo, CA",
+      crew: { direct: [], otAfter8: true },
+    };
+    assert.equal(Number(faceSheet.getCell("M17").value || 0), deskPackageTotal(input));
   });
 });

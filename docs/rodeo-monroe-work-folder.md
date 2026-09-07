@@ -88,4 +88,4 @@ Family B (~4.5MB P66 RODEO ESTIMATE WORKBOOK) is an additional face. Official lo
 
 ## Export (Rodeo V1)
 
-Hit Squad estimate is the source. Export includes the familiar look-alike sheets **plus** a P66-shaped transfer face (`P66 SUMMARY` / `P66 Direct` / `P66 Indirect`) filled from the live pack. Robert copy-pastes that face into the official P66 file. This PR does not clone or git the locked official xlsx.
+Hit Squad estimate is the source. One Rodeo xlsx, two faces: the familiar look-alike sheets **plus** a code-generated official-shaped contractor template (SUMMARY + tabs 1–9) filled from the same pack. Robert copy-pastes that face into the official P66 file. Family B workbook fill is later. This PR does not clone or git the locked official xlsx. Bayway stays its own ST/OT/DT form later.

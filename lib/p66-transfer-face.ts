@@ -1,12 +1,13 @@
 /**
- * P66-shaped transfer face for Rodeo export.
+ * Rodeo dual-face export (one xlsx, two faces).
  *
- * Source of truth: Hit Squad live pack (Robert look-alike).
- * This face is filled FROM the pack so Robert can copy-paste into the
- * official Madison Turnaround Contractor Estimate Template.
- * It is not the locked official xlsx and does not clone that binary.
+ * 1. Hit Squad look-alike — existing pack sheets from estimate-xlsx.
+ * 2. Official-shaped contractor template — code-generated SUMMARY + tabs 1–9
+ *    (hours × composite; Direct vs Indirect). Filled FROM the live pack.
  *
- * Family B (P66 RODEO ESTIMATE WORKBOOK) stays a separate later face.
+ * Not two parallel books. Numbers transfer look-alike → this face.
+ * Family B (P66 RODEO ESTIMATE WORKBOOK) is a later face — do not collapse.
+ * Do not git the locked official binary.
  */
 
 import { deskPackageTotal, type DeskPackageInput } from "./estimate-desk-total.ts";
@@ -21,8 +22,14 @@ import { excelSafeSheetName, type SheetCell, type WorkbookSheet } from "./xlsx-m
 export const P66_TRANSFER_SUMMARY = "P66 SUMMARY";
 export const P66_TRANSFER_DIRECT = "P66 Direct";
 export const P66_TRANSFER_INDIRECT = "P66 Indirect";
+export const P66_TRANSFER_PER_DIEM = "P66 Per Diem";
+export const P66_TRANSFER_MOB = "P66 Mob Demob";
+export const P66_TRANSFER_MATERIALS = "P66 Materials";
+export const P66_TRANSFER_EQUIPMENT = "P66 Equipment";
+export const P66_TRANSFER_THIRD = "P66 Third Party";
+export const P66_TRANSFER_OTHER = "P66 Other";
 export const P66_TRANSFER_NOTE =
-  "Hit Squad estimate fills this P66-shaped face. Copy-paste into the official contractor template. Not the locked official file.";
+  "Hit Squad estimate fills this official-shaped face. One export, two faces. Copy-paste into the official contractor template. Not the locked official file.";
 
 export type P66TransferTotals = ContractorGoldenBuckets & {
   unit: string;
@@ -35,7 +42,17 @@ function money(value: number) {
 }
 
 export function p66TransferSheetNames() {
-  return [P66_TRANSFER_SUMMARY, P66_TRANSFER_DIRECT, P66_TRANSFER_INDIRECT];
+  return [
+    P66_TRANSFER_SUMMARY,
+    P66_TRANSFER_DIRECT,
+    P66_TRANSFER_INDIRECT,
+    P66_TRANSFER_PER_DIEM,
+    P66_TRANSFER_MOB,
+    P66_TRANSFER_MATERIALS,
+    P66_TRANSFER_EQUIPMENT,
+    P66_TRANSFER_THIRD,
+    P66_TRANSFER_OTHER,
+  ];
 }
 
 export function shouldAttachP66TransferFace(site = "", client = "") {
@@ -111,6 +128,16 @@ export function p66TotalsFromDesk(
 
 export function p66FaceMatchesDesk(face: P66TransferTotals, input: DeskPackageInput) {
   return moneyEqual(face.grandTotal, deskPackageTotal(input));
+}
+
+export function rodeoFacesLock(input: {
+  face: P66TransferTotals;
+  desk?: DeskPackageInput;
+  golden?: ContractorGoldenBuckets;
+}) {
+  if (input.desk && !p66FaceMatchesDesk(input.face, input.desk)) return false;
+  if (input.golden && !p66FaceMatchesGolden(input.face, input.golden)) return false;
+  return Boolean(input.desk || input.golden);
 }
 
 export function p66FaceMatchesGolden(face: P66TransferTotals, buckets: ContractorGoldenBuckets) {
@@ -208,6 +235,20 @@ function buildSummarySheet(totals: P66TransferTotals): WorkbookSheet {
   return { name: excelSafeSheetName(P66_TRANSFER_SUMMARY), cells };
 }
 
+function moneySheet(name: string, title: string, amount: number): WorkbookSheet {
+  return {
+    name: excelSafeSheetName(name),
+    cells: [
+      cell("A1", title),
+      cell("A2", P66_TRANSFER_NOTE),
+      cell("A4", "AMOUNT"),
+      cell("B4", amount),
+      cell("A6", "TOTALS"),
+      cell("B6", amount),
+    ],
+  };
+}
+
 function buildLaborSheet(name: string, totals: P66TransferTotals, bucket: "direct" | "indirect"): WorkbookSheet {
   const hours = bucket === "direct" ? totals.directHours : totals.indirectHours;
   const dollars = bucket === "direct" ? totals.directDollars : totals.indirectDollars;
@@ -238,6 +279,12 @@ export function buildP66TransferFaceSheets(totals: P66TransferTotals): WorkbookS
     buildSummarySheet(totals),
     buildLaborSheet(P66_TRANSFER_DIRECT, totals, "direct"),
     buildLaborSheet(P66_TRANSFER_INDIRECT, totals, "indirect"),
+    moneySheet(P66_TRANSFER_PER_DIEM, "3. PER DIEM (IC.L)", totals.perDiem),
+    moneySheet(P66_TRANSFER_MOB, "4. MOB / DEMOB (IC.L)", totals.mobDemob),
+    moneySheet(P66_TRANSFER_MATERIALS, "5–6. MATERIALS", money(totals.materialsDirect + totals.materialsIndirect)),
+    moneySheet(P66_TRANSFER_EQUIPMENT, "7. EQUIPMENT (RC.O)", totals.equipment),
+    moneySheet(P66_TRANSFER_THIRD, "8. THIRD PARTY (IC.O)", totals.thirdParty),
+    moneySheet(P66_TRANSFER_OTHER, "9. OTHER", totals.other),
   ];
 }
 
