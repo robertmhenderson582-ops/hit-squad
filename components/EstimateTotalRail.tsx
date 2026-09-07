@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { useEstimatePackage } from "@/components/EstimatePackage";
+import { useSession } from "@/components/SessionProvider";
 import { readFcrPacket } from "@/lib/change-order-packet";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { deskPackageBreakdown, fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
 import {
   ESTIMATE_TOTAL_RAIL_PHONE_QUERY,
+  clampEstimateTotalRailPosition,
+  clearEstimateTotalRailPosition,
   readEstimateTotalRailPhoneHidden,
+  readEstimateTotalRailPosition,
   writeEstimateTotalRailPhoneHidden,
+  writeEstimateTotalRailPosition,
+  type EstimateTotalRailPosition,
 } from "@/lib/estimate-total-rail";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
@@ -19,11 +25,23 @@ function money(value: number) {
   return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function railStyle(pos: EstimateTotalRailPosition | null): CSSProperties | undefined {
+  if (!pos) return undefined;
+  return { left: pos.left, top: pos.top, right: "auto" };
+}
+
 export function EstimateTotalRail({ client = "", site = "" }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
+  const { user, status } = useSession();
+  const seat = user?.email ?? "";
+  const railRef = useRef<HTMLElement>(null);
+  const drag = useRef<{ ox: number; oy: number; sl: number; st: number } | null>(null);
+  const posRef = useRef<EstimateTotalRailPosition | null>(null);
   const [tick, setTick] = useState(0);
   const [phone, setPhone] = useState(false);
   const [phoneHidden, setPhoneHidden] = useState(false);
+  const [pos, setPos] = useState<EstimateTotalRailPosition | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   useEffect(() => onEstimateSheets(() => setTick((n) => n + 1)), []);
 
@@ -36,6 +54,41 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     return () => media.removeEventListener("change", sync);
   }, []);
 
+  function clampLive(next: EstimateTotalRailPosition): EstimateTotalRailPosition {
+    const el = railRef.current;
+    return clampEstimateTotalRailPosition(
+      next,
+      { width: window.innerWidth, height: window.innerHeight },
+      { width: el?.offsetWidth || 268, height: el?.offsetHeight || 200 },
+    );
+  }
+
+  function applyPos(next: EstimateTotalRailPosition | null, persist = false) {
+    posRef.current = next;
+    setPos(next);
+    if (!persist) return;
+    if (next) writeEstimateTotalRailPosition(next, undefined, seat);
+    else clearEstimateTotalRailPosition(undefined, seat);
+  }
+
+  useEffect(() => {
+    if (status === "loading") return;
+    const stored = readEstimateTotalRailPosition(undefined, seat);
+    if (!stored) return;
+    const next = clampLive(stored);
+    posRef.current = next;
+    setPos(next);
+  }, [seat, status]);
+
+  useEffect(() => {
+    function onResize() {
+      if (!posRef.current) return;
+      applyPos(clampLive(posRef.current), true);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [seat]);
+
   function hideOnPhone() {
     writeEstimateTotalRailPhoneHidden(true);
     setPhoneHidden(true);
@@ -44,6 +97,38 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
   function showOnPhone() {
     writeEstimateTotalRailPhoneHidden(false);
     setPhoneHidden(false);
+  }
+
+  function resetPosition() {
+    applyPos(null, true);
+  }
+
+  function onPointerDown(event: PointerEvent<HTMLElement>) {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement | null)?.closest("button")) return;
+    const el = railRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    drag.current = { ox: event.clientX, oy: event.clientY, sl: rect.left, st: rect.top };
+    setDragging(true);
+    el.setPointerCapture(event.pointerId);
+  }
+
+  function onPointerMove(event: PointerEvent<HTMLElement>) {
+    if (!drag.current) return;
+    applyPos(
+      clampLive({
+        left: drag.current.sl + event.clientX - drag.current.ox,
+        top: drag.current.st + event.clientY - drag.current.oy,
+      }),
+    );
+  }
+
+  function onPointerUp() {
+    if (!drag.current) return;
+    drag.current = null;
+    setDragging(false);
+    if (posRef.current) applyPos(posRef.current, true);
   }
 
   const crewRows = useMemo(
@@ -92,11 +177,18 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
     tick,
   ]);
 
+  const movedClass = pos ? " est-total-rail-moved" : "";
+  const dragClass = dragging ? " est-total-rail-dragging" : "";
+
   if (phone && phoneHidden) {
     return (
       <button
+        ref={(el) => {
+          railRef.current = el;
+        }}
         type="button"
-        className="est-total-rail-chip hud-tile print-hide"
+        className={`est-total-rail-chip hud-tile print-hide${movedClass}`}
+        style={railStyle(pos)}
         onClick={showOnPhone}
         aria-label="Show estimate total"
       >
@@ -107,14 +199,32 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
   }
 
   return (
-    <aside className="est-total-rail hud-tile print-hide" aria-label="Estimate total">
+    <aside
+      ref={railRef}
+      className={`est-total-rail hud-tile print-hide${movedClass}${dragClass}`}
+      style={railStyle(pos)}
+      aria-label="Estimate total"
+      aria-grabbed={dragging}
+      title="Drag to move"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    >
       <div className="est-total-rail-head">
         <h2>Estimate total</h2>
-        {phone ? (
-          <button type="button" className="est-total-rail-hide" onClick={hideOnPhone}>
-            Hide
-          </button>
-        ) : null}
+        <div className="est-total-rail-actions">
+          {pos ? (
+            <button type="button" className="est-total-rail-reset" onClick={resetPosition}>
+              Reset
+            </button>
+          ) : null}
+          {phone ? (
+            <button type="button" className="est-total-rail-hide" onClick={hideOnPhone}>
+              Hide
+            </button>
+          ) : null}
+        </div>
       </div>
       <p className="est-total-rail-grand hud-readout">{breakdown.total ? money(breakdown.total) : "—"}</p>
       {breakdown.lines.length ? (

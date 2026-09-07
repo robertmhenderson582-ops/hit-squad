@@ -982,6 +982,18 @@ textarea:focus {
   width: 16.75rem;
   padding: 0.85rem 0.95rem 1rem;
   color: #efe6d4;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.est-total-rail.est-total-rail-dragging {
+  cursor: grabbing;
+}
+
+.est-total-rail.est-total-rail-moved,
+.est-total-rail-chip.est-total-rail-moved {
+  right: auto;
 }
 
 .est-total-rail-head {
@@ -989,6 +1001,12 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 0.55rem;
+}
+
+.est-total-rail-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .est-total-rail h2 {
@@ -999,7 +1017,8 @@ textarea:focus {
   color: #f0a13a;
 }
 
-.est-total-rail-hide {
+.est-total-rail-hide,
+.est-total-rail-reset {
   flex: 0 0 auto;
   min-height: 2.25rem;
   min-width: 3.4rem;
@@ -1012,6 +1031,7 @@ textarea:focus {
   font-size: 0.68rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  cursor: pointer;
 }
 
 .est-total-rail-chip {
