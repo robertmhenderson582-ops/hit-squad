@@ -875,6 +875,134 @@ describe("local transfer commit", () => {
     }
   });
 
+  it("opens Aromatics from the pack GET even while list hydrate is in flight", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const packId = "new-mtj7bvtk-akmei";
+    const job2027 = {
+      projectStart: "2027-01-11",
+      phases: defaultPhaseSchedule().phases.map((row) =>
+        row.id === "pre" ? { ...row, start: "2027-01-11", stop: "2027-02-28" } : row,
+      ),
+    };
+    applyPackToStore(store, {
+      packId,
+      key: `new:${packId}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 99_000,
+      ownerEmail: OWNER_LOGIN_EMAIL,
+      schedule: job2027,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-01-11" }] }] },
+      otherCost: { misc: [{ id: "mc-thin", item: "Seed leftover", qty: 1, each: 50 }] },
+    });
+    const urls: string[] = [];
+    let releaseList: ((value: Response) => void) | undefined;
+    const listGate = new Promise<Response>((resolve) => {
+      releaseList = resolve;
+    });
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.includes(`/api/desk/estimates/${packId}`)) {
+        return new Response(
+          JSON.stringify({
+            pack: {
+              packId,
+              key: `new:${packId}`,
+              title: "2027 Aromatics Turnaround",
+              client: "Phillips 66",
+              site: "Wood River — Roxana, IL",
+              siteId: "site-madison",
+              createdAt: 1,
+              updatedAt: 400,
+              ownerEmail: "nathanboyte@gmail.com",
+              schedule: job2027,
+              crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-02-28" }] }] },
+              otherCost: { misc: [{ id: "mc-1", item: "Alloy rod", qty: 65, each: 1000 }] },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return listGate;
+    }) as typeof fetch;
+    try {
+      const listPromise = hydrateFromVault(store);
+      const opened = await hydrateOpenPack(packId, store);
+      assert.equal(urls.some((url) => url.includes(`/api/desk/estimates/${packId}`)), true);
+      assert.equal(
+        ((opened[0]?.crew as { staff: Array<{ ranges: Array<{ end: string }> }> }).staff[0]?.ranges[0]?.end),
+        "2027-02-28",
+      );
+      const local = collectPack(store, packId);
+      assert.equal(
+        ((local?.crew as { staff: Array<{ ranges: Array<{ end: string }> }> }).staff[0]?.ranges[0]?.end),
+        "2027-02-28",
+      );
+      assert.equal(((local?.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
+      releaseList?.(
+        new Response(JSON.stringify({ persisted: true, packs: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+      await listPromise;
+      const afterList = collectPack(store, packId);
+      assert.equal(
+        ((afterList?.crew as { staff: Array<{ ranges: Array<{ end: string }> }> }).staff[0]?.ranges[0]?.end),
+        "2027-02-28",
+      );
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("does not flush a 2027 stub-smashed Aromatics pack to Drive", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const packId = "new-mtj7bvtk-akmei";
+    applyPackToStore(store, {
+      packId,
+      key: `new:${packId}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 99_000,
+      ownerEmail: OWNER_LOGIN_EMAIL,
+      schedule: {
+        projectStart: "2027-01-11",
+        phases: defaultPhaseSchedule().phases.map((row) =>
+          row.id === "pre" ? { ...row, start: "2027-01-11", stop: "2027-02-28" } : row,
+        ),
+      },
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-01-11" }] }] },
+    });
+    const bodies: unknown[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const raw = typeof init?.body === "string" ? init.body : "";
+      if (raw) bodies.push(JSON.parse(raw));
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await flushVaultUpsert(packId, store);
+      assert.equal(result.ok, true);
+      assert.equal("skipped" in result && result.skipped, true);
+      assert.equal(bodies.length, 0);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
   it("does not flush a seed-smashed Aromatics pack to Drive", async () => {
     resetVaultHydrateForTests();
     const store = memoryStore();
@@ -1252,6 +1380,10 @@ describe("local transfer commit", () => {
     const src = readFileSync(fileURLToPath(new URL("../components/EstimatePackage.tsx", import.meta.url)), "utf8");
     assert.match(src, /Drive sync delayed/);
     assert.match(src, /reportVaultErrors/);
+    assert.match(src, /HIS_AROMATICS_PACK_ID \|\| !\(hasLocal \|\| vaultListHydratePending\(\)\)/);
+    assert.match(src, /hydrateOpenPack\(packId\)/);
+    assert.match(src, /aromaticsStateLooksSmashed/);
+    assert.match(src, /skipSmashedAromaticsWrite/);
     assert.equal(/if \(!result\.ok && "error" in result && result\.error\) setVaultSaveError/.test(src), false);
   });
 

@@ -788,6 +788,62 @@ describe("estimate pack snapshot", () => {
     assert.equal(((kept?.otherCost as { misc: Array<{ qty: number }> }).misc || []).some((row) => row.qty === 65), true);
   });
 
+  it("2027 Aromatics single-day stub crew is smash and cannot beat a healthy Drive pack", () => {
+    const job2027 = {
+      projectStart: "2027-01-11",
+      phases: defaultPhaseSchedule().phases.map((row) => {
+        if (row.id === "pre") return { ...row, start: "2027-01-11", stop: "2027-02-28" };
+        if (row.id === "oil-out") return { ...row, start: "2027-03-01", stop: "2027-03-10" };
+        if (row.id === "mech") return { ...row, start: "2027-03-11", stop: "2027-04-17" };
+        if (row.id === "oil-in") return { ...row, start: "2027-04-18", stop: "2027-05-03" };
+        return { ...row, start: "2027-05-04", stop: "2027-05-21" };
+      }),
+    };
+    const stubCrew = {
+      staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-01-11" }] }],
+    };
+    const freezeCrew = {
+      staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-02-28" }] }],
+    };
+    const local = aromatics({
+      updatedAt: 99_000,
+      schedule: job2027,
+      crew: stubCrew,
+      otherCost: { misc: [{ id: "mc-thin", item: "Seed leftover", qty: 1, each: 50 }] },
+    });
+    const vault = aromatics({
+      updatedAt: 400,
+      schedule: job2027,
+      crew: freezeCrew,
+    });
+    assert.equal(packClockIsSeedSmashed(local), true);
+    assert.equal(packClockIsSeedSmashed(vault), false);
+    const picked = pickPack(local, vault);
+    assert.equal((picked?.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    assert.equal(
+      ((picked?.crew as { staff: Array<{ ranges: Array<{ start: string; end: string }> }> }).staff[0]?.ranges[0]?.end),
+      "2027-02-28",
+    );
+    assert.equal(((picked?.otherCost as { misc: Array<{ qty: number }> }).misc || []).some((row) => row.qty === 65), true);
+
+    const thin = thinAromaticsStub({ updatedAt: 12_000 });
+    const fromThin = pickPack(local, thin);
+    assert.equal(
+      ((fromThin?.crew as { staff: Array<{ ranges: Array<{ end: string }> }> }).staff[0]?.ranges[0]?.end),
+      "2027-01-11",
+    );
+
+    const seeded = memoryStore();
+    applyPackToStore(seeded, vault);
+    applyPackToStore(seeded, local);
+    const kept = collectPack(seeded, AROMATICS_ID);
+    assert.equal(
+      ((kept?.crew as { staff: Array<{ ranges: Array<{ end: string }> }> }).staff[0]?.ranges[0]?.end),
+      "2027-02-28",
+    );
+    assert.equal(packClockIsSeedSmashed(cat2({ schedule: job2027, crew: stubCrew })), false);
+  });
+
   it("a thin title-only vault stub cannot wipe local Aromatics sheets", () => {
     const local = aromatics();
     const stub = thinAromaticsStub({ updatedAt: 99_000 });
