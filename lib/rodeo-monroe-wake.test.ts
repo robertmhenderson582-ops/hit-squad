@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { HIS_AROMATICS_PACK_ID, HIS_CAT2_PACK_ID, HIS_TM_PACK_ID } from "./his-wood-river.ts";
+import { HIS_AROMATICS_PACK_ID, HIS_BOILER17_PACK_ID, HIS_CAT2_PACK_ID, HIS_TM_PACK_ID } from "./his-wood-river.ts";
 import { jobCodeFromPackId } from "./his-wood-river.ts";
 import { localPackToJob } from "./local-estimates.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
@@ -33,6 +33,7 @@ describe("Rodeo + Monroe wake shells", () => {
     assert.equal(ids.includes(HIS_AROMATICS_PACK_ID), false);
     assert.equal(ids.includes(HIS_CAT2_PACK_ID), false);
     assert.equal(ids.includes(HIS_TM_PACK_ID), false);
+    assert.equal(ids.includes(HIS_BOILER17_PACK_ID), false);
     assert.equal(
       RODEO_MONROE_WAKE_SHELLS.every((row) => row.families.length >= 1 && row.officialRevisionId),
       true,

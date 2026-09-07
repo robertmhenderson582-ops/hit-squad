@@ -46,6 +46,7 @@ import { costReportToXlsx, costReportXlsxFilename } from "@/lib/cost-report-xlsx
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { companyLogoFromApiPayload } from "@/lib/estimate-company-logo";
 import { fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
+import { jobNumberForPack } from "@/lib/boiler-17";
 import { packIdFromEstimateKey } from "@/lib/estimate-pack";
 import { exporterDisplayName } from "@/lib/estimate-xlsx";
 import { findLocalPack } from "@/lib/local-estimates";
@@ -234,6 +235,10 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
   const history = snapshotList(book);
   const local = findLocalPack(packIdFromEstimateKey(pack.estimateKey) || "");
   const jobTitle = local?.title || "Working estimate";
+  const costJobNumber = jobNumberForPack(
+    { packId: packIdFromEstimateKey(pack.estimateKey) || "", title: jobTitle },
+    pack.jobMeta,
+  );
   const directBudgetHours = budget.lanes?.find((lane) => lane.id === "direct")?.hours ?? 0;
   const priorEarned = (() => {
     const prior = history.find((shot) => shot.statusDate < (parseLooseDate(book.statusDate) || book.statusDate));
@@ -301,6 +306,7 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
         title: jobTitle,
         client,
         site,
+        jobNumber: costJobNumber,
         statusDate: book.statusDate,
         budget,
         book,
@@ -370,6 +376,12 @@ export function CostReportDesk({ client = "", site = "" }: { client?: string; si
           </div>
         </div>
         {exportError ? <p className="mt-2 text-sm text-amber-flare">{exportError}</p> : null}
+        {costJobNumber ? (
+          <p className="mt-3 text-sm text-[#163038]">
+            Job # {costJobNumber}
+            {book.statusDate ? ` · status ${book.statusDate}` : ""}
+          </p>
+        ) : null}
         <label className="mt-4 block text-sm">
           Notes
           <textarea

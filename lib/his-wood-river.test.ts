@@ -22,6 +22,8 @@ import { JAMES_EMAIL } from "./tester-seats.ts";
 import {
   HIS_AROMATICS_FILE_ID,
   HIS_AROMATICS_FREEZE_FILE_ID,
+  HIS_BOILER17_FILE_ID,
+  HIS_BOILER17_PACK_ID,
   HIS_AROMATICS_PACK_ID,
   HIS_AROMATICS_STUB_ID,
   HIS_CAT2_FILE_ID,
@@ -67,27 +69,29 @@ function memoryStore(seed: Record<string, string> = {}): StorageLike {
   };
 }
 
-test("HIS known files include Aromatics + CAT only, never purged T&M or the thin stub", () => {
+test("HIS known files include Aromatics + CAT + Boiler 17, never purged T&M or the thin stub", () => {
   const ids = hisKnownEstimateFiles().map((row) => row.fileId);
   assert.ok(ids.includes(HIS_AROMATICS_FILE_ID));
   assert.ok(ids.includes(HIS_CAT2_FILE_ID));
+  assert.ok(ids.includes(HIS_BOILER17_FILE_ID));
   assert.ok(!ids.includes(HIS_TM_FILE_ID));
   assert.ok(!ids.includes(HIS_AROMATICS_STUB_ID));
   assert.ok(!ids.includes(HIS_AROMATICS_FREEZE_FILE_ID));
   assert.notEqual(HIS_AROMATICS_FREEZE_FILE_ID, HIS_AROMATICS_FILE_ID);
   assert.equal(hisFileForPackId(HIS_AROMATICS_PACK_ID)?.fileId, HIS_AROMATICS_FILE_ID);
   assert.equal(hisFileForPackId(HIS_CAT2_PACK_ID)?.fileId, HIS_CAT2_FILE_ID);
+  assert.equal(hisFileForPackId(HIS_BOILER17_PACK_ID)?.fileId, HIS_BOILER17_FILE_ID);
   assert.equal(hisFileForPackId(HIS_TM_PACK_ID), null);
   assert.equal(hisFileForPackId("new-mtj5d6-longer-vault"), null);
   assert.equal(hisFileForPackId("new-mtj5d6-tm2027"), null);
   assert.equal(hisFileForPackId(HIS_TM_JOB_CODE), null);
 });
 
-test("HIS cards stay on Nathan's desk as Aromatics + CAT only", () => {
+test("HIS cards stay on Nathan's desk as Aromatics + CAT + Boiler 17", () => {
   const cards = hisWoodRiverCards();
   assert.deepEqual(
     cards.map((row) => row.packId).sort(),
-    [HIS_AROMATICS_PACK_ID, HIS_CAT2_PACK_ID].sort(),
+    [HIS_AROMATICS_PACK_ID, HIS_BOILER17_PACK_ID, HIS_CAT2_PACK_ID].sort(),
   );
   for (const card of cards) {
     assert.equal(card.ownerEmail, NATHAN_DESK_EMAIL);
@@ -104,10 +108,12 @@ test("owner first paint with empty local still shows Aromatics and CAT, never T&
   const titles = desk.map((row) => row.title);
   assert.ok(titles.includes("2027 Aromatics Turnaround"));
   assert.ok(titles.includes("Madison CAT 2 (Pit Stop)"));
+  assert.ok(titles.includes("Boiler 17 2026"));
   assert.ok(!titles.includes(HIS_TM_TITLE));
   const jobs = jobsOnDesk(undefined, desk, false);
   assert.ok(jobs.some((job) => job.title === "2027 Aromatics Turnaround"));
   assert.ok(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"));
+  assert.ok(jobs.some((job) => job.title === "Boiler 17 2026" && job.workingFigure.includes("Locked")));
   assert.ok(!jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE));
 });
 
@@ -116,6 +122,7 @@ test("empty leftover cannot drop HIS cards already on the desk", () => {
   const merged = mergeHisWoodRiverCards(existing);
   assert.ok(merged.some((row) => row.packId === HIS_AROMATICS_PACK_ID));
   assert.ok(merged.some((row) => row.packId === HIS_CAT2_PACK_ID));
+  assert.ok(merged.some((row) => row.packId === HIS_BOILER17_PACK_ID && row.status === "Locked"));
   assert.ok(!merged.some((row) => row.packId === HIS_TM_PACK_ID || row.title === HIS_TM_TITLE));
   assert.equal(merged.filter((row) => row.title === "2027 Aromatics Turnaround").length, 1);
 });
@@ -239,6 +246,7 @@ test("leftover T&M occupying the slot is dropped and Aromatics and CAT stay on N
   assert.equal(painted.filter((row) => row.title === leftover.title).length, 0);
   assert.ok(painted.some((row) => row.packId === HIS_AROMATICS_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
   assert.ok(painted.some((row) => row.packId === HIS_CAT2_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
+  assert.ok(painted.some((row) => row.packId === HIS_BOILER17_PACK_ID && row.status === "Locked"));
   assert.equal(applyHisIdentity(leftover).ownerEmail, JAMES_EMAIL);
   assert.equal(isPurgedHisLeftover(leftover), true);
 });
@@ -265,6 +273,10 @@ test("after leftover hydrate, persisted HIS extras still name Nathan's desk and 
   assert.equal(desk.filter((row) => row.title === HIS_TM_TITLE).length, 0);
   assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(
+    wood?.jobs.some((job) => job.title === "Boiler 17 2026" && job.workingFigure.includes("Locked")),
+    true,
+  );
   assert.equal(wood?.jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE), false);
 });
 
@@ -483,6 +495,7 @@ function assertOwnerWoodRiverHis(store: StorageLike, leftoverPackId: string) {
   const cbi = tree.find((row) => row.id === "cbi");
   assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(wood?.jobs.some((job) => job.title === "Boiler 17 2026"), true);
   assert.equal(wood?.jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE), false);
   assert.equal(wood?.jobs.some((job) => job.code === "EST-MTKIGB" || job.title === "New Turnaround estimate"), false);
   assert.equal(
@@ -669,17 +682,26 @@ function assertHisWoodRiverDesk(
     ?.sites.find((site) => site.id === "site-unassigned");
   assert.equal(jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   assert.equal(jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(
+    jobs.some((job) => job.title === "Boiler 17 2026" && job.workingFigure.includes("JN 108451 · Locked")),
+    true,
+  );
   assert.equal(jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE), false);
   assert.equal(jobs.some((job) => SEED_CODES.includes(job.code)), false);
   assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
+  assert.equal(wood?.jobs.some((job) => job.title === "Boiler 17 2026"), true);
   assert.equal(wood?.jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE), false);
   assert.equal(unassigned?.jobs.some((job) => job.code === "HS-8622") ?? false, false);
   const aromatics = painted.find((row) => row.title === "2027 Aromatics Turnaround");
   const cat = painted.find((row) => row.title === "Madison CAT 2 (Pit Stop)");
+  const boiler = painted.find((row) => row.title === "Boiler 17 2026");
   const tm = painted.find((row) => row.title === HIS_TM_TITLE);
   assert.equal(handoffMarkText(aromatics!, owner.email), "Nathan Boyte's desk.");
   assert.equal(handoffMarkText(cat!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(handoffMarkText(boiler!, owner.email), "Nathan Boyte's desk.");
+  assert.equal(boiler?.status, "Locked");
+  assert.equal(boiler?.packId, HIS_BOILER17_PACK_ID);
   assert.equal(tm, undefined);
   return { jobs, tree, wood };
 }
@@ -791,6 +813,7 @@ test("James CBI sample EST-MTKIGB stays under CBI and View as James does not pai
   const jamesDesk = packsForViewedDesk(james, true, "james", store);
   assert.equal(jamesDesk.some((row) => row.title === "2027 Aromatics Turnaround"), false);
   assert.equal(jamesDesk.some((row) => row.title === "Madison CAT 2 (Pit Stop)"), false);
+  assert.equal(jamesDesk.some((row) => row.title === "Boiler 17 2026"), false);
   assert.equal(jamesDesk.some((row) => row.title === "Wood River / T&M 2027-01 to 06"), false);
   assert.equal(shouldPaintHisCards(james), false);
 
@@ -840,5 +863,7 @@ test("live Aromatics and CAT leftovers are not replaced by identity-only stubs",
     assert.equal(cat?.size, "live-cat-crew");
     assert.equal(painted.filter((row) => row.title === "2027 Aromatics Turnaround").length, 1);
     assert.equal(painted.filter((row) => row.title === "Madison CAT 2 (Pit Stop)").length, 1);
+    assert.equal(painted.find((row) => row.title === "Boiler 17 2026")?.status, "Locked");
+    assert.equal(painted.find((row) => row.title === "Boiler 17 2026")?.size, undefined);
   }
 });

@@ -33,6 +33,7 @@ import {
   toggleOpenCompanyId,
   UNASSIGNED_SITE_ID,
 } from "./job-tree.ts";
+import { BOILER17_PACK_ID, BOILER17_TITLE } from "./boiler-17.ts";
 import { RODEO_U110_PACK_ID, rodeoMonroeWakeCards } from "./rodeo-monroe-wake.ts";
 import { JAMES_EMAIL, JOHN_BEECH_EMAIL, JOHN_HENRY_EMAIL, JOSEPH_EMAIL } from "./tester-seats.ts";
 
@@ -54,6 +55,19 @@ const cat2 = {
   updatedAt: 2,
   ownerEmail: "nathanboyte@gmail.com",
   sharedWith: [OWNER_LOGIN_EMAIL],
+};
+
+const boiler17 = {
+  packId: BOILER17_PACK_ID,
+  key: `new:${BOILER17_PACK_ID}`,
+  title: BOILER17_TITLE,
+  client: "Phillips 66",
+  site: "Wood River — Roxana, IL",
+  siteId: "site-madison",
+  createdAt: 1,
+  updatedAt: 2,
+  ownerEmail: "nathanboyte@gmail.com",
+  status: "Locked" as const,
 };
 
 describe("job tree", () => {
@@ -87,6 +101,22 @@ describe("job tree", () => {
     assert.equal(matchCatalogSite("Rodeo U110 2026 TA")?.id, "site-rodeo");
     assert.equal(matchCatalogSite("U250 Fall 2026")?.id, "site-rodeo");
     assert.equal(matchCatalogSite("Monroe 541V POST REVIEW")?.id, "site-monroe");
+    assert.equal(matchCatalogSite("Boiler 17 2026")?.id, "site-madison");
+    assert.equal(matchCatalogSite("EST-B1726 b1726")?.id, "site-madison");
+  });
+
+  it("places Locked Boiler 17 under Phillips 66 → Wood River", () => {
+    const jobs = jobsOnDesk([], [boiler17], false, owner, undefined, { includeSeeds: false });
+    const tree = jobTree({ scope: owner, jobs, packs: [boiler17] });
+    const madison = tree.find((row) => row.id === "madison");
+    const p66 = madison?.clients.find((client) => client.id === PHILLIPS_66_CLIENT_ID);
+    const wood = p66?.sites.find((site) => site.id === "site-madison");
+    const job = wood?.jobs.find((row) => row.id === `job-${BOILER17_PACK_ID}`);
+    assert.equal(job?.title, BOILER17_TITLE);
+    assert.equal(job?.workingFigure, "JN 108451 · Locked");
+    assert.equal(jobEstimateHref(job, [], [boiler17]), `/estimates/${BOILER17_PACK_ID}`);
+    assert.equal(p66?.name, "Phillips 66");
+    assert.equal(wood?.name.includes("Wood River") || wood?.name.includes("Madison"), true);
   });
 
   it("lets the owner see every company and testers only the one they are on", () => {

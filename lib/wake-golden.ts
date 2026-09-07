@@ -19,6 +19,14 @@ import {
   RODEO_WORKBOOK_U250_ID,
 } from "./work-folder.ts";
 import {
+  BOILER17_JOB_NUMBER,
+  BOILER17_PACK_ID,
+  MIKE_CPPR_108451_FILE,
+  MIKE_CPPR_108451_MAY_LABOR_PD_TRAVEL,
+  MIKE_CPPR_108451_MAY_WITH_THIRD_COE,
+  MIKE_CPPR_108451_STATUS_DATE,
+} from "./boiler-17.ts";
+import {
   isWakeIdentityOnly,
   MONROE_541V_PACK_ID,
   RODEO_U110_PACK_ID,
@@ -26,6 +34,7 @@ import {
   type WakePackHint,
   type WakeTemplateFamily,
 } from "./rodeo-monroe-wake.ts";
+import { OFFICIAL_BOILER17_B1_REVISION_ID, OFFICIAL_BOILER17_B1_REVISION_NAME } from "./work-folder.ts";
 
 export const GOLDEN_MONEY_TOLERANCE = 0.5;
 
@@ -71,6 +80,21 @@ export type WakeGoldenFixture = {
     misc: number;
     pivotManhours: number;
   };
+  boiler17Hours?: {
+    directHours: number;
+    foremenHours: number;
+    supportHours: number;
+    targetCraftHours: number;
+    staffHours: number;
+    craftPerDiem: number;
+    materials: number;
+    heatInduction: number;
+    staffPerDiem: number;
+    staffTravel: number;
+    original6x20: number;
+    revised7x20: number;
+  };
+  jobNumber?: string;
 };
 
 function money(value: number) {
@@ -211,8 +235,51 @@ export const RODEO_WORKBOOK_BLANK_GOLDEN: WakeGoldenFixture = {
   buckets: null,
 };
 
+/** Official RH B-1 hours from Drive text. Labor $ were #REF — do not invent a grand total. */
+export const BOILER17_B1_GOLDEN: WakeGoldenFixture = {
+  packId: BOILER17_PACK_ID,
+  unit: "Boiler 17",
+  family: "wood-river-b1",
+  officialRevisionId: OFFICIAL_BOILER17_B1_REVISION_ID,
+  officialRevisionName: OFFICIAL_BOILER17_B1_REVISION_NAME,
+  extraTemplateIds: [],
+  extractedFrom: "drive-text",
+  dollarsStatus: "formula-unavailable",
+  note: "Hours locked from official RH B-1 Drive text. Labor $ cells were #REF. Do not invent a desk grand total. Cost wires to Mike CPPR 108451 May lock, not this B-1 face.",
+  buckets: null,
+  jobNumber: BOILER17_JOB_NUMBER,
+  boiler17Hours: {
+    directHours: 16860,
+    foremenHours: 2134,
+    supportHours: 2428,
+    targetCraftHours: 21422,
+    staffHours: 6826,
+    craftPerDiem: 228150,
+    materials: 104100,
+    heatInduction: 152880,
+    staffPerDiem: 127400,
+    staffTravel: 8400,
+    original6x20: 4_014_660,
+    revised7x20: 4_164_721,
+  },
+};
+
+export const MIKE_CPPR_108451_GOLDEN = {
+  packId: BOILER17_PACK_ID,
+  jobNumber: BOILER17_JOB_NUMBER,
+  fileName: MIKE_CPPR_108451_FILE,
+  statusDate: MIKE_CPPR_108451_STATUS_DATE,
+  mayLaborPdTravel: MIKE_CPPR_108451_MAY_LABOR_PD_TRAVEL,
+  mayWithThirdAndCoe: MIKE_CPPR_108451_MAY_WITH_THIRD_COE,
+  note: "Owner lock from Mike Clunn Gmail. May period actuals — not the B-1 estimate total.",
+} as const;
+
 export function wakeGoldenFixtures(): WakeGoldenFixture[] {
   return [U110_CONTRACTOR_GOLDEN, U250_CONTRACTOR_GOLDEN, MONROE_541V_GOLDEN];
+}
+
+export function woodRiverGoldenFixtures(): WakeGoldenFixture[] {
+  return [BOILER17_B1_GOLDEN];
 }
 
 /** Official lock per reserved pack — family A for Rodeo, Monroe POST REVIEW for 541V. */

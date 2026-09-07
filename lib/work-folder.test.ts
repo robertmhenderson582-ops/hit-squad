@@ -7,6 +7,7 @@ import {
   driveViewUrl,
   isOfficialRevisionId,
   isRodeoWorkbookFamilyId,
+  OFFICIAL_BOILER17_B1_REVISION_ID,
   OFFICIAL_MONROE_541V_REVISION_ID,
   OFFICIAL_U110_REVISION_ID,
   OFFICIAL_U250_REVISION_ID,
@@ -31,7 +32,9 @@ describe("Work Folder ids", () => {
       OFFICIAL_U110_REVISION_ID,
       OFFICIAL_U250_REVISION_ID,
       OFFICIAL_MONROE_541V_REVISION_ID,
+      OFFICIAL_BOILER17_B1_REVISION_ID,
     ]);
+    assert.equal(isOfficialRevisionId(OFFICIAL_BOILER17_B1_REVISION_ID), true);
     assert.equal(isOfficialRevisionId(OFFICIAL_U110_REVISION_ID), true);
     assert.equal(isRodeoWorkbookFamilyId(RODEO_WORKBOOK_BLANK_ID), true);
     assert.equal(isRodeoWorkbookFamilyId(RODEO_WORKBOOK_U110_ID), true);
@@ -47,6 +50,12 @@ describe("Work Folder ids", () => {
     assert.match(ignore, /\*P66\*\.xlsx/);
     assert.match(ignore, /\*Monroe\*\.xlsx/);
     assert.match(ignore, /\*RODEO\*ESTIMATE\*\.xlsx/);
+    assert.match(ignore, /\*CPPR\*/);
+    const boilerDoc = readFileSync(fileURLToPath(new URL("../docs/boiler-17-work-folder.md", import.meta.url)), "utf8");
+    assert.match(boilerDoc, /Do not git client xlsx/);
+    assert.match(boilerDoc, /108451/);
+    assert.match(boilerDoc, /Locked/);
+    assert.equal(/\.(xlsx|xls)\n/.test(boilerDoc), false);
     const doc = readFileSync(fileURLToPath(new URL("../docs/rodeo-monroe-work-folder.md", import.meta.url)), "utf8");
     assert.match(doc, /Do not git client xlsx/);
     assert.match(doc, /MULTIPLE templates/);

@@ -12,6 +12,7 @@ import { CREW_STORE_PREFIX, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
 import { SUB_STORE_PREFIX } from "./subcontractor.ts";
 import { JOB_META_PREFIX } from "./job-meta-prefix.ts";
 import { ORG_CHART_STORE_PREFIX } from "./org-chart.ts";
+import { boiler17WorkingFigure, isBoiler17Identity } from "./boiler-17.ts";
 import { isWakeIdentityOnly, wakeMatchForPack } from "./rodeo-monroe-wake.ts";
 import type { EstimateRecord, ForgebookBoard, JobRecord } from "./types.ts";
 
@@ -372,6 +373,7 @@ export function localPackToEstimate(pack: LocalPack, ownerId = "owner-robert-hen
 export function localPackToJob(pack: LocalPack, ownerId = "owner-robert-henderson"): JobRecord {
   const estimate = localPackToEstimate(pack, ownerId);
   const wake = wakeMatchForPack(pack);
+  const boiler = isBoiler17Identity(pack);
   return {
     id: `job-${pack.packId}`,
     ownerId,
@@ -381,8 +383,10 @@ export function localPackToJob(pack: LocalPack, ownerId = "owner-robert-henderso
     discipline: "mechanical",
     kind: "estimate",
     status: "OPEN",
-    window: wake?.window || "This job",
-    workingFigure: wake && isWakeIdentityOnly(pack) ? "Official revision locked" : "Working",
+    window: wake?.window || (boiler ? "2026" : "This job"),
+    workingFigure:
+      boiler17WorkingFigure(pack) ||
+      (wake && isWakeIdentityOnly(pack) ? "Official revision locked" : "Working"),
     hseNote: "On this desk",
   };
 }

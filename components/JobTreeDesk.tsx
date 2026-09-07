@@ -192,7 +192,7 @@ export function JobTreeDesk({
                                         >
                                           <div className="flex flex-wrap items-baseline justify-between gap-2">
                                             <p className="font-mono text-xs text-steel">{job.code}</p>
-                                            <StatusStamp value={job.status} />
+                                            <StatusStamp value={(pack?.status || job.status).toUpperCase()} />
                                           </div>
                                           <h4 className="mt-1 font-display text-2xl tracking-wide">{alias(job.title)}</h4>
                                           <JobHandoffMark pack={pack} email={lens?.email} />
