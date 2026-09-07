@@ -616,6 +616,8 @@ describe("drive estimate upsert", () => {
     const { isThinDriveStub, THIN_DRIVE_STUB_IDS } = await import("./drive-estimates.ts");
     assert.equal(isThinDriveStub("1AEf_Shk8SEvMsdGodNSpaNgUCytXSLZ9"), true);
     assert.equal(THIN_DRIVE_STUB_IDS.has("1AEf_Shk8SEvMsdGodNSpaNgUCytXSLZ9"), true);
+    assert.equal(isThinDriveStub("1bBWKw2aCy3fVKm0rQAWcoCi8OXzahoPI"), true);
+    assert.equal(THIN_DRIVE_STUB_IDS.has("1bBWKw2aCy3fVKm0rQAWcoCi8OXzahoPI"), true);
     const drive = memoryDrive();
     const packId = "new-mtj7bvtk-akmei";
     const stub = {

@@ -269,13 +269,13 @@ describe("desk counts", () => {
     assert.equal(hasCatalogSeed(firstPaint), false);
     assert.equal(firstPaint.some((job) => job.title === "2027 Aromatics Turnaround"), true);
     assert.equal(firstPaint.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
-    assert.equal(firstPaint.some((job) => job.code === "EST-MTJ5D6"), true);
+    assert.equal(firstPaint.some((job) => job.code === "EST-MTJ5D6"), false);
 
     const nathanLogin = jobsOnDesk(seedJobs(), his, false, nathan);
     assert.equal(hasCatalogSeed(nathanLogin), false);
     assert.equal(nathanLogin.some((job) => job.title.includes("Aromatics")), true);
     assert.equal(nathanLogin.some((job) => job.title.includes("CAT 2")), true);
-    assert.equal(nathanLogin.some((job) => job.code === "EST-MTJ5D6"), true);
+    assert.equal(nathanLogin.some((job) => job.code === "EST-MTJ5D6"), false);
 
     const viewAsNathan = jobsOnDesk(seedJobs(), his, true, nathan, undefined, { includeSeeds: true, seat: "nathan" });
     assert.equal(hasCatalogSeed(viewAsNathan), false);

@@ -75,7 +75,7 @@ describe("handoff seats", () => {
       handoffMarkText({ ownerEmail: "nathanboyte@gmail.com" }, OWNER_LOGIN_EMAIL),
       "Nathan Boyte's desk.",
     );
-    assert.equal(
+    assert.notEqual(
       handoffMarkText(
         {
           packId: "new-MTJ5D6-live",
@@ -87,7 +87,7 @@ describe("handoff seats", () => {
       ),
       "Nathan Boyte's desk.",
     );
-    assert.equal(
+    assert.notEqual(
       handoffMarkText(
         {
           packId: "EST-MTJ5D6",

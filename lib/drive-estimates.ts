@@ -17,6 +17,8 @@ import {
   HIS_AROMATICS_FILE_ID,
   HIS_AROMATICS_FREEZE_FILE_ID,
   HIS_AROMATICS_PACK_ID,
+  HIS_AROMATICS_STUB_ID,
+  HIS_TM_FILE_ID,
   hisFileForPackId,
   hisKnownEstimateFiles,
   hisMatchForPack,
@@ -480,7 +482,7 @@ function unconfiguredDrive(): DriveAdapter {
 }
 
 /** Thin Drive leftover. Never let this file overlay a richer Aromatics / CAT copy. */
-export const THIN_DRIVE_STUB_IDS = new Set(["1AEf_Shk8SEvMsdGodNSpaNgUCytXSLZ9"]);
+export const THIN_DRIVE_STUB_IDS = new Set([HIS_AROMATICS_STUB_ID, HIS_TM_FILE_ID]);
 
 export function isThinDriveStub(fileId?: string | null) {
   return Boolean(fileId && THIN_DRIVE_STUB_IDS.has(fileId));

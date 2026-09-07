@@ -1317,7 +1317,7 @@ describe("local transfer commit", () => {
     }
   });
 
-  it("leftover T&M hydrate restamps Nathan and keeps Aromatics and CAT", async () => {
+  it("leftover T&M hydrate drops purged T&M and keeps Aromatics and CAT", async () => {
     resetVaultHydrateForTests();
     const store = memoryStore();
     const previous = globalThis.fetch;
@@ -1348,15 +1348,14 @@ describe("local transfer commit", () => {
       const owner = { email: OWNER_LOGIN_EMAIL, role: "owner" as const };
       const desk = packsForViewedDesk(owner, false, null, store);
       const tm = desk.find((row) => row.title === "Wood River / T&M 2027-01 to 06");
-      assert.equal(tm?.ownerEmail, NATHAN_DESK_EMAIL);
-      assert.equal(handoffMarkText(tm!, owner.email), "Nathan Boyte's desk.");
-      assert.equal(desk.filter((row) => row.title === "Wood River / T&M 2027-01 to 06").length, 1);
+      assert.equal(tm, undefined);
+      assert.equal(desk.filter((row) => row.title === "Wood River / T&M 2027-01 to 06").length, 0);
       const jobs = jobsOnDesk(undefined, desk, false, companyScopeFor(owner), undefined, { includeSeeds: false });
       const tree = jobTree({ scope: { isOwner: true, email: owner.email, companyId: "hitsquad" }, jobs, packs: desk });
       const wood = tree.find((row) => row.id === "madison")?.sites.find((site) => site.id === "site-madison");
       assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
       assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
-      assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), true);
+      assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), false);
       assert.equal(store.getItem("hs_his_leftover_gen"), HIS_LEFTOVER_GEN);
     } finally {
       globalThis.fetch = previous;

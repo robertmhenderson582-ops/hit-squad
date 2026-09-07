@@ -1,7 +1,7 @@
 import { catalogVisibleTo, type CompanyScope } from "./companies.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { boardForUser } from "./desk-data.ts";
-import { shouldPaintHisCards } from "./his-wood-river.ts";
+import { isPurgedHisLeftover, omitPurgedHisLeftovers, shouldPaintHisCards } from "./his-wood-river.ts";
 import { isOwnerIdentity } from "./identity.ts";
 import { mergeLocalJobs, type LocalPack } from "./local-estimates.ts";
 import { omitDeletedJobs, type JobMenuState } from "./job-menu.ts";
@@ -158,10 +158,12 @@ export function jobsOnDesk(
   // Missing scope, View as Nathan, and protected seats never merge catalog samples.
   const includeSeeds = allowed && opts?.includeSeeds === true;
   const fromServer = includeSeeds ? (serverJobs ?? []) : omitCatalogSeedJobs(serverJobs);
-  const nextPacks = omitCatalogSeedPacks([
-    ...packs,
-    ...dummyPacksForUser(scope).filter((pack) => !packs.some((row) => row.packId === pack.packId)),
-  ]);
+  const nextPacks = omitPurgedHisLeftovers(
+    omitCatalogSeedPacks([
+      ...packs,
+      ...dummyPacksForUser(scope).filter((pack) => !packs.some((row) => row.packId === pack.packId)),
+    ]),
+  );
   const merged = includeSeeds
     ? (() => {
         const seeds = visibleSeedJobs(scope);
@@ -169,7 +171,9 @@ export function jobsOnDesk(
         return mergeLocalJobs([...seeds.filter((job) => !seen.has(job.id)), ...fromServer], nextPacks);
       })()
     : mergeLocalJobs(fromServer, nextPacks);
-  const painted = includeSeeds ? merged : omitCatalogSeedJobs(merged);
+  const painted = (includeSeeds ? merged : omitCatalogSeedJobs(merged)).filter(
+    (job) => !isPurgedHisLeftover({ packId: job.id, title: job.title, code: job.code }),
+  );
   const keepHis =
     !viewingAs ||
     shouldPaintHisCards(scope ? { email: scope.email, role: scope.isOwner ? "owner" : undefined } : null);

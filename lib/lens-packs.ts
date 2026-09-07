@@ -4,9 +4,10 @@ import {
   applyHisIdentity,
   hisMatchForPack,
   leftoverGenIsCurrent,
-  leftoverHasStaleHisIdentity,
+  leftoverNeedsRewrite,
   markLeftoverGen,
   mergeHisWoodRiverCards,
+  omitPurgedHisLeftovers,
   rewriteStaleHisLocalLeftover,
   shouldPaintHisCards,
 } from "./his-wood-river.ts";
@@ -190,12 +191,13 @@ function mergeDeskPacks(...lists: LocalPack[][]): LocalPack[] {
 }
 
 function rewriteHisLeftoverList(packs: LocalPack[]): LocalPack[] {
-  return packs.map((pack) => (hisMatchForPack(pack) ? applyHisIdentity(pack) : pack));
+  return omitPurgedHisLeftovers(packs).map((pack) => (hisMatchForPack(pack) ? applyHisIdentity(pack) : pack));
 }
 
 function dropHisFromOtherLens(seat: string, packs: LocalPack[]): LocalPack[] {
-  if (seat === "nathan") return rewriteHisLeftoverList(packs);
-  return packs.filter((pack) => !hisMatchForPack(pack));
+  const next = omitPurgedHisLeftovers(packs);
+  if (seat === "nathan") return rewriteHisLeftoverList(next);
+  return next.filter((pack) => !hisMatchForPack(pack));
 }
 
 function leftoverPacksForStaleCheck(store: StorageLike): LocalPack[] {
@@ -210,7 +212,7 @@ function leftoverPacksForStaleCheck(store: StorageLike): LocalPack[] {
 export function bustHisLeftoverOnce(store?: StorageLike | null) {
   const target = asStore(store);
   if (!target) return;
-  const stale = leftoverHasStaleHisIdentity(leftoverPacksForStaleCheck(target));
+  const stale = leftoverNeedsRewrite(leftoverPacksForStaleCheck(target));
   if (leftoverGenIsCurrent(target) && !stale) return;
   rewriteStaleHisLocalLeftover(target);
 

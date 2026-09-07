@@ -61,6 +61,13 @@ export function writeDisplay(prefs: DisplayPrefs) {
   window.localStorage.setItem(DISPLAY_KEY, JSON.stringify(prefs));
 }
 
+/** Phone header: job title first so truncate cannot hide which estimate is open. */
+export function estimatePackageHeader(title = "", site = "") {
+  const name = title.trim();
+  const plant = site.trim();
+  return { title: name, site: plant && plant !== name ? plant : "" };
+}
+
 export function applyDisplay(prefs: DisplayPrefs) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
