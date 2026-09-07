@@ -1,16 +1,25 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import ExcelJS from "exceljs";
 import { isAromaticsIdentity } from "./aromatics-freeze.ts";
 import {
+  BOILER17_CLIENT,
   BOILER17_COST_NOTE,
   BOILER17_PACK_ID,
+  BOILER17_SITE,
   checkMikeCppr108451,
 } from "./boiler-17.ts";
 import { classifyFromSheetsAndName, CLIENT_FACE_MAPPER_SPEC, shouldStageClientWorkbook } from "./client-estimate-ingest.ts";
+import { CREW_LANES } from "./crew-lanes.ts";
 import { crewHasRows } from "./estimate-pack.ts";
+import { packSnapshotToXlsxInput } from "./estimate-pack-xlsx.ts";
+import { estimateTabIdsForSite } from "./estimate-tabs.ts";
+import { applyEstimateImport, createPackFromImport, parseEstimateXlsx } from "./estimate-xlsx-import.ts";
+import { ESTIMATE_XLSX_SHEETS, LABOR_BLOCK_ID_COL, LABOR_HPS_TYPE, estimateToXlsx } from "./estimate-xlsx.ts";
 import { HIS_AROMATICS_PACK_ID, persistHisWoodRiverCards } from "./his-wood-river.ts";
-import { CREW_STORE_PREFIX, isDefaultSeedSchedule, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
+import { CREW_STORE_PREFIX, isDefaultSeedSchedule, PHASE_IDS, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
 import { readStoreJson, storageKeyForPack, type StorageLike } from "./local-estimates.ts";
 import { BOILER17_B1_GOLDEN } from "./wake-golden.ts";
 import {
@@ -163,5 +172,78 @@ describe("wood-river-b1 ingest", () => {
     assert.equal(ingested.fixture.typedHours.supportHours, 2428);
     assert.equal(ingested.fixture.positions.some((row) => row.lane === "generalForeman"), true);
     assert.equal(ingested.fixture.positions.some((row) => row.night), true);
+  });
+
+  it("stays on the Wood River five-card desk — Rodeo / Ferndale stay additive tabs", () => {
+    const pack = boiler17B1FilledSnapshot();
+    const wood = estimateTabIdsForSite(BOILER17_SITE, BOILER17_CLIENT);
+    const aromatics = estimateTabIdsForSite("Wood River — Roxana, IL", "Phillips 66");
+    assert.deepEqual(wood, aromatics);
+    assert.equal(wood.includes("rodeo"), false);
+    assert.equal(wood.includes("ferndale"), false);
+    assert.deepEqual(
+      CREW_LANES.map((lane) => lane.id),
+      ["staff", "general-foreman", "foreman", "direct", "support"],
+    );
+    const crew = pack.crew as {
+      staff: unknown[];
+      generalForeman: unknown[];
+      foreman: unknown[];
+      direct: unknown[];
+      support: unknown[];
+    };
+    assert.ok(crew.staff.length && crew.generalForeman.length && crew.foreman.length && crew.direct.length && crew.support.length);
+    const workbook = readFileSync(fileURLToPath(new URL("../components/EstimateWorkbook.tsx", import.meta.url)), "utf8");
+    const detail = readFileSync(fileURLToPath(new URL("../components/EstimateDetail.tsx", import.meta.url)), "utf8");
+    assert.match(workbook, /CREW_LANES/);
+    assert.match(detail, /tab === "crew"[\s\S]*EstimateWorkbook/);
+    assert.match(detail, /tab === "rodeo"[\s\S]*RodeoFormDesk/);
+    assert.match(detail, /tab === "ferndale"[\s\S]*FerndaleFormDesk/);
+  });
+
+  it("desk sync keeps B-1 hours on Hit Squad phase stacks", () => {
+    const pack = boiler17B1FilledSnapshot();
+    const input = packSnapshotToXlsxInput(pack);
+    assert.equal(checkBoiler17PackHours(pack.crew as never).ok, true);
+    assert.equal(checkBoiler17PackHours(input.crew).ok, true);
+    const staff = input.crew.staff?.[0];
+    assert.ok(staff);
+    const phaseIds = new Set((staff.ranges ?? []).map((range) => range.phaseId));
+    for (const id of PHASE_IDS) assert.equal(phaseIds.has(id), true, id);
+  });
+
+  it("UP→DOWN Hit Squad export/import keeps Boiler 17 hours, hidden ids, and Hours/shift", async () => {
+    const pack = boiler17B1FilledSnapshot();
+    const input = packSnapshotToXlsxInput(pack);
+    const before = boiler17HoursFromCrew(input.crew);
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const staff = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    assert.ok(staff);
+    let hps = false;
+    staff.eachRow((row) => {
+      row.eachCell((cell) => {
+        if (String(cell.value ?? "") === LABOR_HPS_TYPE) hps = true;
+      });
+    });
+    assert.equal(hps, true);
+    assert.equal(staff.getColumn(LABOR_BLOCK_ID_COL).hidden, true);
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crewRanges)?.state, "veryHidden");
+
+    const imported = await parseEstimateXlsx(bytes);
+    assert.ok(imported.blocks.some((block) => block.id.startsWith("b17-")));
+    assert.ok(Object.keys(imported.crewRanges ?? {}).some((id) => id.startsWith("b17-")));
+    const up = applyEstimateImport(pack, imported);
+    const down = createPackFromImport(imported);
+    assert.equal(checkBoiler17PackHours(up.crew).ok, true);
+    assert.equal(checkBoiler17PackHours(down.crew).ok, true);
+    const upHours = boiler17HoursFromCrew(up.crew);
+    const downHours = boiler17HoursFromCrew(down.crew);
+    assert.equal(Math.round(upHours.staffHours), Math.round(before.staffHours));
+    assert.equal(Math.round(downHours.staffHours), Math.round(before.staffHours));
+    assert.equal(Math.round(upHours.foremenHours), 2134);
+    assert.equal(Math.round(upHours.supportHours), 2428);
+    assert.equal(up.schedule && "projectStart" in up.schedule && up.schedule.projectStart, WOOD_RIVER_B1_WINDOW_START);
   });
 });

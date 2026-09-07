@@ -53,7 +53,7 @@ These are May period actuals. They are not the B-1 estimate total.
 | Status | Locked |
 | Job setup | 2026-08-10 → 2026-12-06 (Staff date row) |
 
-Wake / HIS persist fills Staff / GF / Foreman / Direct / Support calendars from the official B-1 HC × Hours/shift / PD grids (`lib/wake-golden/boiler17-b1-crew.json`). Excel binary is never committed.
+Wake / HIS persist fills Staff / GF / Foreman / Direct / Support calendars from the official B-1 HC × Hours/shift / PD grids (`lib/wake-golden/boiler17-b1-crew.json`). Same Wood River five-card desk as Aromatics / CAT 2 — not a Rodeo layout. Rodeo / Ferndale stay additive tabs. Ranges are Hit Squad phase stacks so export/import UP→DOWN round-trips. Excel binary is never committed.
 
 ### Hours: Summary face vs typed grids
 

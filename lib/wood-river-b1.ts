@@ -7,6 +7,11 @@
  * #REF are not invented — Rate Tables / Shahan titles resolve billable $.
  * Numeric Summary / Misc lines (PD face, materials, heat, staff travel)
  * may seed Other Cost. Excel binaries stay on Drive.
+ *
+ * Owner lock 2026-09-07: same Wood River five-card calendar desk as
+ * Aromatics / CAT 2. Rodeo / Ferndale stay additive tabs — not a different
+ * crew layout. Ranges are Hit Squad phase stacks so export/import UP→DOWN
+ * round-trips through estimate-xlsx (hidden ids, Hours/shift).
  */
 
 import { readFileSync } from "node:fs";
@@ -32,10 +37,11 @@ const HIS_BOILER17_FILE_ID = "1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y";
 const NATHAN_DESK_EMAIL = "nathanboyte@gmail.com";
 import { blankMisc, emptyOtherCost, type MiscLine, type OtherCostSheet } from "./other-cost.ts";
 import {
+  PHASE_IDS,
   defaultPhases,
   formatYmd,
   parseYmd,
-  phaseOwningDate,
+  type PhaseRow,
   type PhaseScheduleState,
 } from "./phase-schedule.ts";
 import { SHAHAN_CRAFT_PD, SHAHAN_STAFF_PD } from "./shahan-wood-river.ts";
@@ -344,11 +350,11 @@ function parseSummaryHours(ws: ExcelJS.Worksheet | undefined): Boiler17B1Hours |
 
 export function boiler17B1Schedule(): PhaseScheduleState {
   const dates: Record<string, { start: string; stop: string; daysPerWeek: number; hoursPerDay: number }> = {
-    pre: { start: "2026-08-10", stop: "2026-09-06", daysPerWeek: 5, hoursPerDay: 9 },
-    "oil-out": { start: "2026-09-07", stop: "2026-09-13", daysPerWeek: 6, hoursPerDay: 10 },
-    mech: { start: "2026-09-14", stop: "2026-10-25", daysPerWeek: 6, hoursPerDay: 10 },
-    "oil-in": { start: "2026-10-26", stop: "2026-11-15", daysPerWeek: 6, hoursPerDay: 11 },
-    post: { start: "2026-11-16", stop: "2026-12-06", daysPerWeek: 5, hoursPerDay: 10 },
+    pre: { start: "2026-08-10", stop: "2026-09-06", daysPerWeek: 7, hoursPerDay: 9 },
+    "oil-out": { start: "2026-09-07", stop: "2026-09-13", daysPerWeek: 7, hoursPerDay: 10 },
+    mech: { start: "2026-09-14", stop: "2026-10-25", daysPerWeek: 7, hoursPerDay: 10 },
+    "oil-in": { start: "2026-10-26", stop: "2026-11-15", daysPerWeek: 7, hoursPerDay: 11 },
+    post: { start: "2026-11-16", stop: "2026-12-06", daysPerWeek: 7, hoursPerDay: 10 },
   };
   return {
     projectStart: WOOD_RIVER_B1_WINDOW_START,
@@ -361,24 +367,120 @@ export function boiler17B1Schedule(): PhaseScheduleState {
   };
 }
 
-function rangeFromCompressed(row: B1CompressedRange, night: boolean, index: number): CalendarRange {
-  const phase = phaseOwningDate(boiler17B1Schedule().phases, row.start);
-  const work = row.kind !== "pd" && row.hc > 0;
+type B1DayPlug = { ymd: string; hc: number; hps: number; pd: number };
+
+function deskDayPlug(plug: B1DayPlug): B1DayPlug {
+  if (plug.hc <= 0 && plug.pd > 0) return { ...plug, hc: 1, hps: 0 };
+  return plug;
+}
+
+function plugKey(plug: Pick<B1DayPlug, "hc" | "hps" | "pd">) {
+  return `${plug.hc}|${plug.hps}|${plug.pd}`;
+}
+
+function plugsFromCompressed(ranges: B1CompressedRange[]): B1DayPlug[] {
+  const plugs: B1DayPlug[] = [];
+  for (const range of ranges) {
+    const skip = new Set(range.skipDates ?? []);
+    for (const ymd of eachYmd(range.start, range.end)) {
+      if (skip.has(ymd)) continue;
+      if (!range.days[jsDow(ymd)]) continue;
+      const work = range.kind !== "pd" && range.hc > 0;
+      plugs.push(deskDayPlug({ ymd, hc: work ? range.hc : 0, hps: work ? range.hps : 0, pd: range.pd }));
+    }
+  }
+  return plugs;
+}
+
+function daysMaskFrom(plugs: B1DayPlug[]): boolean[] {
+  const days = [false, false, false, false, false, false, false];
+  for (const plug of plugs) days[jsDow(plug.ymd)] = true;
+  return days;
+}
+
+function emptyPhaseRange(phase: PhaseRow, night: boolean, rowId: string): CalendarRange {
   return {
-    id: `b17-${row.start}-${night ? "n" : "d"}-${index}`,
-    start: row.start,
-    end: row.end,
-    headcount: work ? row.hc : 1,
+    id: `${rowId}-${phase.id}-empty`,
+    start: phase.start,
+    end: phase.stop,
+    headcount: 0,
     nightHeadcount: 0,
-    hoursPerShift: work ? row.hps : 0,
-    perDiemPeople: row.pd,
+    hoursPerShift: 0,
+    perDiemPeople: 0,
     nightPerDiemPeople: 0,
-    days: row.days,
-    skipDates: row.skipDates,
-    phaseId: phase?.id,
+    days: [false, false, false, false, false, false, false],
+    phaseId: phase.id,
     shift: night ? "Nights" : "Days",
-    otAfter8: phase?.id === "pre" || phase?.id === "post" ? false : true,
+    otAfter8: phase.id === "pre" || phase.id === "post" ? false : true,
+    off: true,
   };
+}
+
+function rangeFromPattern(
+  plugs: B1DayPlug[],
+  phase: PhaseRow,
+  night: boolean,
+  rowId: string,
+  suffix: string,
+  start: string,
+  end: string,
+  skipDates: string[],
+): CalendarRange {
+  const pattern = plugs[0];
+  return {
+    id: `${rowId}-${phase.id}-${suffix}`,
+    start,
+    end,
+    headcount: pattern.hc,
+    nightHeadcount: 0,
+    hoursPerShift: pattern.hps,
+    perDiemPeople: pattern.pd,
+    nightPerDiemPeople: 0,
+    days: daysMaskFrom(plugs),
+    skipDates: skipDates.length ? skipDates : undefined,
+    phaseId: phase.id,
+    shift: night ? "Nights" : "Days",
+    otAfter8: phase.id === "pre" || phase.id === "post" ? false : true,
+  };
+}
+
+/** Five-card Hit Squad stacks (one first range per Job setup phase). Empty phases stay off so desk sync cannot mint HC=1. */
+export function hitSquadRangesFromB1(item: B1FixturePosition, rowId: string): CalendarRange[] {
+  const byYmd = new Map(plugsFromCompressed(item.ranges).map((plug) => [plug.ymd, plug]));
+  const night = item.night;
+  const ranges: CalendarRange[] = [];
+  for (const phase of boiler17B1Schedule().phases.filter((row) => row.on && PHASE_IDS.includes(row.id as (typeof PHASE_IDS)[number]))) {
+    const window = eachYmd(phase.start, phase.stop);
+    const live = window.map((ymd) => byYmd.get(ymd)).filter((plug): plug is B1DayPlug => Boolean(plug));
+    if (!live.length) {
+      ranges.push(emptyPhaseRange(phase, night, rowId));
+      continue;
+    }
+    const pattern = live[0];
+    const key = plugKey(pattern);
+    const matching = live.filter((plug) => plugKey(plug) === key);
+    const skipDates = window.filter((ymd) => {
+      const plug = byYmd.get(ymd);
+      return !plug || plugKey(plug) !== key;
+    });
+    ranges.push(rangeFromPattern(matching, phase, night, rowId, "a", phase.start, phase.stop, skipDates));
+    const extras = new Map<string, B1DayPlug[]>();
+    for (const plug of live) {
+      if (plugKey(plug) === key) continue;
+      const list = extras.get(plugKey(plug)) ?? [];
+      list.push(plug);
+      extras.set(plugKey(plug), list);
+    }
+    let extraIndex = 0;
+    for (const group of extras.values()) {
+      extraIndex += 1;
+      const start = group[0].ymd;
+      const end = group[group.length - 1].ymd;
+      const skip = eachYmd(start, end).filter((ymd) => !group.some((plug) => plug.ymd === ymd));
+      ranges.push(rangeFromPattern(group, phase, night, rowId, `x${extraIndex}`, start, end, skip));
+    }
+  }
+  return ranges;
 }
 
 export function crewFromB1Positions(positions: B1FixturePosition[]): EstimateXlsxCrew {
@@ -391,13 +493,13 @@ export function crewFromB1Positions(positions: B1FixturePosition[]): EstimateXls
     otAfter8: false,
   };
   positions.forEach((item, index) => {
-    const ranges = item.ranges.map((range, rangeIndex) => rangeFromCompressed(range, item.night, rangeIndex));
+    const id = `b17-${item.sheet}-${index + 1}`;
     const row: CraftRow = {
       ...blankCraftRow(),
-      id: `b17-${item.sheet}-${index + 1}`,
+      id,
       position: item.position,
       shift: item.night ? "Nights" : "Days",
-      ranges,
+      ranges: hitSquadRangesFromB1(item, id),
     };
     const list = crew[item.lane] ?? [];
     (crew[item.lane] as CraftRow[]) = [...list, row];
