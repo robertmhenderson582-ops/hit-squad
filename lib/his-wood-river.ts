@@ -490,7 +490,7 @@ export function seedBoiler17LocalDefaults(store: StorageLike, packId: string) {
     writeStoreJson(store, `${COST_REPORT_STORE_PREFIX}${key}`, {
       ...emptyCostReportBook(),
       ...book,
-      statusDate: book.statusDate || MIKE_CPPR_108451_STATUS_DATE,
+      statusDate: MIKE_CPPR_108451_STATUS_DATE,
       notes: BOILER17_COST_NOTE,
     });
   }
