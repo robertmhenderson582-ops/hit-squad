@@ -770,27 +770,59 @@ export async function findDrivePackByPackId(adapter: DriveAdapter, folderId: str
   return pickCanonicalMatch(matches).file;
 }
 
+async function readAromaticsFreezePack(adapter: DriveAdapter): Promise<EstimatePackSnapshot | null> {
+  try {
+    const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(HIS_AROMATICS_FREEZE_FILE_ID)));
+    if (!parsed.ok || !scheduleHasWork(parsed.pack.schedule) || !crewHasCustomClock(parsed.pack.crew)) {
+      return null;
+    }
+    return parsed.pack;
+  } catch {
+    return null;
+  }
+}
+
+function isAromaticsLiveTarget(fileId: string | undefined, pack: EstimatePackSnapshot) {
+  return fileId === HIS_AROMATICS_FILE_ID || pack.packId === HIS_AROMATICS_PACK_ID;
+}
+
+async function restoreAromaticsFromFreeze(
+  adapter: DriveAdapter,
+  pack: EstimatePackSnapshot,
+): Promise<EstimatePackSnapshot> {
+  const freeze = await readAromaticsFreezePack(adapter);
+  if (!freeze) return pack;
+  return restorePackClock(pack, freeze);
+}
+
 async function restoreAromaticsClockIfSmashed(
   adapter: DriveAdapter,
   pack: EstimatePackSnapshot,
   fileId: string,
 ): Promise<EstimatePackSnapshot> {
   if (fileId === HIS_AROMATICS_FREEZE_FILE_ID) return pack;
-  if (fileId !== HIS_AROMATICS_FILE_ID && pack.packId !== HIS_AROMATICS_PACK_ID) return pack;
+  if (!isAromaticsLiveTarget(fileId, pack)) return pack;
   if (!packClockIsSeedSmashed(pack)) return pack;
-  try {
-    const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(HIS_AROMATICS_FREEZE_FILE_ID)));
-    if (!parsed.ok || !scheduleHasWork(parsed.pack.schedule) || !crewHasCustomClock(parsed.pack.crew)) {
-      return pack;
-    }
-    const restored = restorePackClock(pack, parsed.pack);
-    if (fileId === HIS_AROMATICS_FILE_ID) {
-      await adapter.updateJson(fileId, JSON.stringify(publicPack(restored), null, 2));
-    }
-    return restored;
-  } catch {
-    return pack;
+  const restored = await restoreAromaticsFromFreeze(adapter, pack);
+  if (packClockIsSeedSmashed(restored)) return pack;
+  if (fileId === HIS_AROMATICS_FILE_ID) {
+    await adapter.updateJson(fileId, JSON.stringify(publicPack(restored), null, 2));
   }
+  return restored;
+}
+
+/** Auto-restore smashed Aromatics, or refuse the write so seed smash cannot persist. Never target the freeze file. */
+async function packForAromaticsWrite(
+  adapter: DriveAdapter,
+  pack: EstimatePackSnapshot,
+  fileId: string | undefined,
+): Promise<EstimatePackSnapshot | null> {
+  if (fileId === HIS_AROMATICS_FREEZE_FILE_ID) return null;
+  if (!isAromaticsLiveTarget(fileId, pack)) return pack;
+  if (!packClockIsSeedSmashed(pack)) return pack;
+  const restored = await restoreAromaticsFromFreeze(adapter, pack);
+  if (packClockIsSeedSmashed(restored)) return null;
+  return restored;
 }
 
 export async function readDrivePackById(
@@ -834,17 +866,24 @@ async function writePackFile(
   folderId: string,
   existing: DriveFile | null,
 ) {
-  const ownerEmail = pack.ownerEmail.trim().toLowerCase();
-  const payload = JSON.stringify(publicPack({ ...pack, ownerEmail }), null, 2);
-  const properties = { packId: pack.packId, ownerEmail };
-  const target =
-    existing && !isThinDriveStub(existing.id) ? existing : knownHisFile(pack.packId);
+  let target =
+    existing && !isThinDriveStub(existing.id) && existing.id !== HIS_AROMATICS_FREEZE_FILE_ID
+      ? existing
+      : knownHisFile(pack.packId);
+  if (target?.id === HIS_AROMATICS_FREEZE_FILE_ID) target = knownHisFile(pack.packId);
+  const outgoing = await packForAromaticsWrite(adapter, pack, target?.id);
+  if (!outgoing) {
+    throw new Error("AROMATICS_SEED_SMASH");
+  }
+  const ownerEmail = outgoing.ownerEmail.trim().toLowerCase() || pack.ownerEmail.trim().toLowerCase();
+  const payload = JSON.stringify(publicPack({ ...outgoing, ownerEmail }), null, 2);
+  const properties = { packId: outgoing.packId, ownerEmail };
   if (target) {
-    const name = estimateFileName(pack);
+    const name = estimateFileName(outgoing);
     return adapter.updateJson(target.id, payload, name === target.name ? target.name : name, properties);
   }
   const taken = (await adapter.listJson(folderId)).map((file) => file.name);
-  const name = estimateFileName(pack, taken);
+  const name = estimateFileName(outgoing, taken);
   return adapter.createJson(folderId, name, payload, properties);
 }
 

@@ -16,6 +16,7 @@ import {
   applyUnitOtPick,
   defaultPhaseSchedule,
   isDefaultSeedSchedule,
+  scheduleIsDemoSeedClock,
   patchPhase,
   patchUnitPhase,
   readSchedule,
@@ -52,6 +53,7 @@ import {
   type VaultUpsertResult,
 } from "@/lib/estimate-vault-client";
 import { crewHasRows } from "@/lib/estimate-pack";
+import { HIS_AROMATICS_PACK_ID } from "@/lib/his-wood-river";
 import { persistCrewTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
 import { emptyOrgChart, readOrgChart, writeOrgChart, type OrgChartState } from "@/lib/org-chart";
@@ -192,6 +194,7 @@ export function EstimatePackageProvider({
     if (!packId || !findLocalPack(packId)) return false;
     const localSchedule = readSchedule(estimateKey);
     const localCrew = readCrew(estimateKey);
+    if (packId === HIS_AROMATICS_PACK_ID && scheduleIsDemoSeedClock(localSchedule)) return false;
     if (isDefaultSeedSchedule(localSchedule) && crewHasRows(localCrew)) return false;
     return true;
   });
@@ -227,8 +230,12 @@ export function EstimatePackageProvider({
     setVaultSaveError("");
     const packId = packIdFromStoreKey(estimateKey);
     const hasLocal = Boolean(packId && findLocalPack(packId));
+    const localSchedule = readSchedule(estimateKey);
     const seedPendingVault =
-      Boolean(packId) && isDefaultSeedSchedule(readSchedule(estimateKey)) && crewHasRows(readCrew(estimateKey));
+      Boolean(packId) &&
+      (packId === HIS_AROMATICS_PACK_ID
+        ? scheduleIsDemoSeedClock(localSchedule)
+        : isDefaultSeedSchedule(localSchedule) && crewHasRows(readCrew(estimateKey)));
     const paintFromLocal = () => {
       const next = readSchedule(estimateKey);
       setSchedule(next);

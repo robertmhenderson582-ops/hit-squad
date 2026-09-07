@@ -123,6 +123,9 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
     if (error instanceof Error && error.message === "PACK_OWNED_ELSEWHERE") {
       return { ok: false as const, status: 404, error: "That package is not on this desk." };
     }
+    if (error instanceof Error && error.message === "AROMATICS_SEED_SMASH") {
+      return { ok: false as const, status: 409, error: "Could not store that package." };
+    }
     throw error;
   }
   return { ok: true as const, stored: true, store: "drive" as const, pack };

@@ -21,9 +21,28 @@ import {
   writeStoreJson,
   type StorageLike,
 } from "./local-estimates.ts";
-import { CREW_STORE_PREFIX, PHASE_STORE_PREFIX, isDefaultSeedSchedule, rangesHaveCustomClock } from "./phase-schedule.ts";
+import {
+  CREW_STORE_PREFIX,
+  PHASE_STORE_PREFIX,
+  isDefaultSeedSchedule,
+  rangesHaveCustomClock,
+  scheduleIsDemoSeedClock,
+} from "./phase-schedule.ts";
 import { JOB_META_PREFIX } from "./staffing-plan.ts";
 import { ORG_CHART_STORE_PREFIX } from "./org-chart.ts";
+
+const AROMATICS_PACK_ID = "new-mtj7bvtk-akmei";
+
+function isAromaticsPack(pack: { packId?: string } | null | undefined) {
+  return pack?.packId === AROMATICS_PACK_ID;
+}
+
+function scheduleHasPayload(schedule: unknown) {
+  const row = asRecord(schedule);
+  if (!row) return false;
+  if (typeof row.projectStart === "string" && row.projectStart.trim()) return true;
+  return Array.isArray(row.phases) && row.phases.length > 0;
+}
 
 export type EstimatePackSnapshot = {
   packId: string;
@@ -119,17 +138,44 @@ export function crewHasCustomClock(crew: unknown) {
 /** Live pack whose Job setup / crew calendars were remapped onto the 2026 demo seed. */
 export function packClockIsSeedSmashed(pack: EstimatePackSnapshot | null | undefined) {
   if (!pack?.packId) return false;
+  if (isAromaticsPack(pack)) {
+    if (!scheduleHasPayload(pack.schedule)) return false;
+    return scheduleIsDemoSeedClock(pack.schedule);
+  }
   return isDefaultSeedSchedule(pack.schedule) && crewHasRows(pack.crew) && !crewHasCustomClock(pack.crew);
 }
 
-/** Overlay baseline Job setup + crew. Keep live identity, sheets, and later jobMeta. */
-export function restorePackClock(live: EstimatePackSnapshot, baseline: EstimatePackSnapshot): EstimatePackSnapshot {
+function keepLiveIdentity(live: EstimatePackSnapshot, restored: EstimatePackSnapshot): EstimatePackSnapshot {
   return {
+    ...restored,
+    packId: live.packId,
+    key: live.key,
+    ownerEmail: live.ownerEmail,
+    sharedWith: live.sharedWith,
+    transferredFrom: live.transferredFrom,
+    transferredTo: live.transferredTo,
+    transferredToName: live.transferredToName,
+    transferredFromName: live.transferredFromName,
+    status: live.status,
+    archived: live.archived,
+  };
+}
+
+/** Overlay freeze Job setup, crew, and smashed sheets. Keep live identity. */
+export function restorePackClock(live: EstimatePackSnapshot, baseline: EstimatePackSnapshot): EstimatePackSnapshot {
+  const restored: EstimatePackSnapshot = {
     ...live,
     schedule: baseline.schedule ?? live.schedule,
     crew: baseline.crew ?? live.crew,
+    otherCost: baseline.otherCost ?? live.otherCost,
+    equipment: baseline.equipment ?? live.equipment,
+    subcontractor: baseline.subcontractor ?? live.subcontractor,
+    activities: baseline.activities ?? live.activities,
+    jobMeta: baseline.jobMeta ?? live.jobMeta,
+    orgChart: baseline.orgChart ?? live.orgChart,
     updatedAt: Math.max(live.updatedAt || 0, baseline.updatedAt || 0, Date.now()),
   };
+  return keepLiveIdentity(live, restored);
 }
 
 function pickSchedule(newer: unknown, older: unknown) {
@@ -338,6 +384,21 @@ export function pickPack(
 ): EstimatePackSnapshot | null {
   if (!vault?.packId) return local ?? null;
   if (!local?.packId) return packHasWork(vault) ? vault : local ?? null;
+  if (packClockIsSeedSmashed(local) && !packClockIsSeedSmashed(vault)) {
+    return {
+      ...restorePackClock(local, vault),
+      ownerEmail: vault.ownerEmail || local.ownerEmail,
+      sharedWith: vault.sharedWith,
+      transferredFrom: vault.transferredFrom,
+      transferredTo: vault.transferredTo,
+      transferredToName: vault.transferredToName,
+      transferredFromName: vault.transferredFromName,
+      status: vault.status || local.status,
+    };
+  }
+  if (packClockIsSeedSmashed(vault) && !packClockIsSeedSmashed(local)) {
+    return restorePackClock(vault, local);
+  }
   const vaultMoved =
     packWasTransferred(vault) ||
     Boolean(
@@ -468,6 +529,12 @@ export function collectPack(
 
 export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot) {
   if (!isLocalPackId(pack.packId)) return;
+  if (packClockIsSeedSmashed(pack)) {
+    const existing = collectPack(store, pack.packId);
+    if (existing && !packClockIsSeedSmashed(existing) && scheduleHasWork(existing.schedule)) {
+      pack = restorePackClock(pack, existing);
+    }
+  }
   rememberLocalPack(
     {
       packId: pack.packId,

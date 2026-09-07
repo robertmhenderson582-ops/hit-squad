@@ -24,6 +24,7 @@ import { packsForViewedDesk, readLensPacks, snapshotLensPack, writeLensPacks } f
 import { deleteLocalPack, findLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
 import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-menu.ts";
 import { applyPackToStore, collectPack } from "./estimate-pack.ts";
+import { defaultPhaseSchedule } from "./phase-schedule.ts";
 import { addLogRow, emptyFcrPacket, readFcrPacket, writeFcrPacket } from "./change-order-packet.ts";
 import { emptyCostReportBook, readCostReport, saveCostSnapshot, writeCostReport } from "./cost-report.ts";
 import {
@@ -800,6 +801,110 @@ describe("local transfer commit", () => {
       assert.equal(((local?.subcontractor as { cards: unknown[] }).cards || []).length, 1);
       assert.equal(((local?.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
       assert.equal((local?.crew as { staff: unknown[] }).staff.length, 15);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("hydrates smashed local Aromatics from the 2027 vault including otherCost", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const packId = "new-mtj7bvtk-akmei";
+    const seed = defaultPhaseSchedule();
+    const job2027 = {
+      projectStart: "2027-01-11",
+      phases: seed.phases.map((row) => {
+        if (row.id === "pre") return { ...row, start: "2027-01-11", stop: "2027-02-28" };
+        return row;
+      }),
+    };
+    applyPackToStore(store, {
+      packId,
+      key: `new:${packId}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 99_000,
+      ownerEmail: OWNER_LOGIN_EMAIL,
+      schedule: seed,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-09-03", end: "2026-09-03" }] }] },
+      otherCost: {
+        travel: [{ id: "travel-staff", travelers: 2, miles: 80, perMile: 0.76 }],
+        misc: [{ id: "mc-thin", item: "Seed leftover", qty: 1, each: 50 }],
+      },
+    });
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          persisted: true,
+          packs: [
+            {
+              packId,
+              key: `new:${packId}`,
+              title: "2027 Aromatics Turnaround",
+              client: "Phillips 66",
+              site: "Wood River — Roxana, IL",
+              siteId: "site-madison",
+              createdAt: 1,
+              updatedAt: 400,
+              ownerEmail: "nathanboyte@gmail.com",
+              schedule: job2027,
+              crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-02-28" }] }] },
+              otherCost: {
+                travel: [{ id: "travel-staff", travelers: 39, miles: 1700, perMile: 0.76 }],
+                misc: [{ id: "mc-1", item: "Alloy rod", qty: 65, each: 1000 }],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    try {
+      await hydrateFromVault(store);
+      const local = collectPack(store, packId);
+      assert.equal((local?.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+      assert.equal(((local?.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("does not flush a seed-smashed Aromatics pack to Drive", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const packId = "new-mtj7bvtk-akmei";
+    applyPackToStore(store, {
+      packId,
+      key: `new:${packId}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 1,
+      updatedAt: 99_000,
+      ownerEmail: OWNER_LOGIN_EMAIL,
+      schedule: defaultPhaseSchedule(),
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-09-03", end: "2026-09-03" }] }] },
+      otherCost: { misc: [{ id: "mc-thin", item: "Seed leftover", qty: 1, each: 50 }] },
+    });
+    const bodies: unknown[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const raw = typeof init?.body === "string" ? init.body : "";
+      if (raw) bodies.push(JSON.parse(raw));
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await flushVaultUpsert(packId, store);
+      assert.equal(result.ok, true);
+      assert.equal("skipped" in result && result.skipped, true);
+      assert.equal(bodies.length, 0);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();

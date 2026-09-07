@@ -720,6 +720,74 @@ describe("estimate pack snapshot", () => {
     assert.equal(packClockIsSeedSmashed(restored), false);
   });
 
+  it("Aromatics remapped 2026 projectStart is smash and restore copies freeze otherCost", () => {
+    const remapped = {
+      projectStart: "2026-08-21",
+      phases: defaultPhaseSchedule().phases.map((row) =>
+        row.id === "pre" ? { ...row, start: "2026-08-24", stop: "2026-09-04" } : row,
+      ),
+    };
+    const job2027 = {
+      projectStart: "2027-01-11",
+      phases: defaultPhaseSchedule().phases.map((row) => {
+        if (row.id === "pre") return { ...row, start: "2027-01-11", stop: "2027-02-28" };
+        if (row.id === "oil-out") return { ...row, start: "2027-03-01", stop: "2027-03-10" };
+        if (row.id === "mech") return { ...row, start: "2027-03-11", stop: "2027-04-17" };
+        if (row.id === "oil-in") return { ...row, start: "2027-04-18", stop: "2027-05-03" };
+        return { ...row, start: "2027-05-04", stop: "2027-05-21" };
+      }),
+    };
+    const smashedOther = {
+      perDiemRate: 0,
+      travel: [{ id: "travel-staff", kind: "staff", travelers: 2, miles: 100, perMile: 0.76 }],
+      misc: [{ id: "mc-thin", item: "Seed leftover", qty: 1, each: 10 }],
+    };
+    const local = aromatics({
+      updatedAt: 99_000,
+      ownerEmail: "robertmhenderson582@gmail.com",
+      sharedWith: ["desk@example.com"],
+      status: "Draft",
+      schedule: remapped,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-08-24", end: "2026-09-04" }] }] },
+      otherCost: smashedOther,
+      equipment: { largeTools: [], thirdParty: [] },
+      jobMeta: { staffPerDiemRate: 1 },
+      orgChart: { names: {} },
+      activities: [{ id: "act-seed", name: "Seed" }],
+    });
+    const vault = aromatics({
+      updatedAt: 400,
+      schedule: job2027,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-02-28" }] }] },
+    });
+    assert.equal(packClockIsSeedSmashed(local), true);
+    assert.equal(packClockIsSeedSmashed(vault), false);
+    assert.equal(packClockIsSeedSmashed(cat2({ schedule: remapped, crew: { staff: [{ id: "st-1" }] } })), false);
+
+    const restored = restorePackClock(local, vault);
+    assert.equal(restored.ownerEmail, "robertmhenderson582@gmail.com");
+    assert.deepEqual(restored.sharedWith, ["desk@example.com"]);
+    assert.equal(restored.status, "Draft");
+    assert.equal(restored.packId, AROMATICS_ID);
+    assert.equal((restored.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    assert.equal(((restored.otherCost as { misc: Array<{ qty: number; each: number }> }).misc || []).some((row) => row.qty === 65 && row.each === 1000), true);
+    assert.equal(((restored.equipment as { largeTools: unknown[] }).largeTools || []).length, 3);
+    assert.equal(((restored.subcontractor as { cards: unknown[] }).cards || []).length, 4);
+    assert.equal(packClockIsSeedSmashed(restored), false);
+
+    const picked = pickPack(local, vault);
+    assert.equal(((picked?.otherCost as { misc: Array<{ qty: number }> }).misc || []).some((row) => row.qty === 65), true);
+    assert.equal((picked?.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    assert.equal(picked?.ownerEmail, "nathanboyte@gmail.com");
+
+    const seeded = memoryStore();
+    applyPackToStore(seeded, vault);
+    applyPackToStore(seeded, local);
+    const kept = collectPack(seeded, AROMATICS_ID);
+    assert.equal((kept?.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    assert.equal(((kept?.otherCost as { misc: Array<{ qty: number }> }).misc || []).some((row) => row.qty === 65), true);
+  });
+
   it("a thin title-only vault stub cannot wipe local Aromatics sheets", () => {
     const local = aromatics();
     const stub = thinAromaticsStub({ updatedAt: 99_000 });
