@@ -978,10 +978,22 @@ textarea:focus {
   position: fixed;
   top: 7.4rem;
   right: 0.85rem;
-  z-index: 20;
+  z-index: 42;
   width: 16.75rem;
   padding: 0.85rem 0.95rem 1rem;
   color: #efe6d4;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.est-total-rail.est-total-rail-dragging {
+  cursor: grabbing;
+}
+
+.est-total-rail.est-total-rail-moved,
+.est-total-rail-chip.est-total-rail-moved {
+  right: auto;
 }
 
 .est-total-rail-head {
@@ -991,15 +1003,37 @@ textarea:focus {
   gap: 0.55rem;
 }
 
+.est-total-rail-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .est-total-rail h2 {
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   color: #f0a13a;
 }
 
-.est-total-rail-hide {
+.est-total-rail-move {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.4rem;
+  border: 1px solid rgba(62, 198, 212, 0.28);
+  border-radius: 999px;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c5d4d4;
+}
+
+.est-total-rail-hide,
+.est-total-rail-reset {
   flex: 0 0 auto;
   min-height: 2.25rem;
   min-width: 3.4rem;
@@ -1012,13 +1046,14 @@ textarea:focus {
   font-size: 0.68rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  cursor: pointer;
 }
 
 .est-total-rail-chip {
   position: fixed;
   top: 7.4rem;
   right: 0.85rem;
-  z-index: 20;
+  z-index: 42;
   display: flex;
   align-items: center;
   justify-content: space-between;
