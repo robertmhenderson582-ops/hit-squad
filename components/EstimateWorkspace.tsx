@@ -22,7 +22,7 @@ import { useSession } from "@/components/SessionProvider";
 import { hydrateSupportLines } from "@/lib/craft-labor";
 import { closePackage, isClosed } from "@/lib/desk-closeout";
 import { viewingAsOther } from "@/lib/desk-role";
-import { changeOrderTabLabel, readFcrPacket } from "@/lib/change-order-packet";
+import { readFcrPacket } from "@/lib/change-order-packet";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
 import { companyLogoFromApiPayload } from "@/lib/estimate-company-logo";
@@ -51,41 +51,13 @@ import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
 import { mergeSchedule, type PhaseScheduleState } from "@/lib/phase-schedule";
 import { shouldAttachP66TransferFace } from "@/lib/p66-transfer-face";
 import { P66_V1_EXPORT_LINE } from "@/lib/p66-v1";
-import { RODEO_TAB_ID, RODEO_TAB_LABEL, showsRodeoTab } from "@/lib/rodeo-form";
+import { BASE_ESTIMATE_TABS, estimateTabsForSite, type EstimateTab } from "@/lib/estimate-tabs";
 import { readSubSheet } from "@/lib/subcontractor";
 import { downloadXlsx } from "@/lib/xlsx-minimal";
 import type { StaffingLine } from "@/lib/types";
 
-export type { EstimateStatus };
-
-export const BASE_ESTIMATE_TABS = [
-  { id: "summary", label: "Job setup", icon: "📄" },
-  { id: "activities", label: "Activities", icon: "∿" },
-  { id: "crew", label: "Crew", icon: "⛑" },
-  { id: "org-chart", label: "Org chart", icon: "⬡" },
-  { id: "staffing", label: "Staffing", icon: "▦" },
-  { id: "equipment", label: "Equipment", icon: "⛟" },
-  { id: "subs", label: "Subcontractor", icon: "▣" },
-  { id: "costs", label: "Other Cost", icon: "▤" },
-  { id: "change-orders", label: "Change orders", icon: "⚖" },
-  { id: "cost-report", label: "Cost report", icon: "📊" },
-  { id: "purchasing", label: "Purchasing", icon: "🧾" },
-  { id: "wage-lookup", label: "Wage lookup", icon: "＄" },
-] as const;
-
-export type EstimateTab = (typeof BASE_ESTIMATE_TABS)[number]["id"] | typeof RODEO_TAB_ID;
-
-export function estimateTabsForSite(site = "", client = "", status?: EstimateStatus) {
-  void status;
-  const tabs: Array<{ id: EstimateTab; label: string; icon: string }> = BASE_ESTIMATE_TABS.map((tab) =>
-    tab.id === "change-orders" ? { ...tab, label: changeOrderTabLabel(client, site) } : tab,
-  );
-  if (showsRodeoTab(site, client)) {
-    const idx = tabs.findIndex((item) => item.id === "wage-lookup");
-    tabs.splice(idx < 0 ? tabs.length : idx, 0, { id: RODEO_TAB_ID, label: RODEO_TAB_LABEL, icon: "📋" });
-  }
-  return tabs;
-}
+export type { EstimateStatus, EstimateTab };
+export { BASE_ESTIMATE_TABS, estimateTabsForSite };
 
 const ACTIONS = [
   { id: "team", label: "Team" },

@@ -13,6 +13,7 @@ import { SubcontractorDesk } from "@/components/SubcontractorDesk";
 import { WorkActivitiesDesk } from "@/components/WorkActivitiesDesk";
 import { StaffingPlanDesk } from "@/components/StaffingPlanDesk";
 import { OrgChartDesk } from "@/components/OrgChartDesk";
+import { FerndaleFormDesk } from "@/components/FerndaleFormDesk";
 import { RodeoFormDesk } from "@/components/RodeoFormDesk";
 import { EstimatePackageProvider, useEstimatePackage } from "@/components/EstimatePackage";
 import { HoldScreen } from "@/components/HoldScreen";
@@ -189,6 +190,8 @@ function EstimateDetailBody({
       {tab === "purchasing" ? <PurchasingDesk client={estimate.client} site={siteName} /> : null}
 
       {tab === "rodeo" ? <RodeoFormDesk client={estimate.client} site={siteName} name={shown} /> : null}
+
+      {tab === "ferndale" ? <FerndaleFormDesk client={estimate.client} site={siteName} name={shown} /> : null}
     </EstimateWorkspace>
   );
 }

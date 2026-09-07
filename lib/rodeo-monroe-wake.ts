@@ -36,7 +36,8 @@ export type WakeTemplateFamily =
   | "p66-rodeo-workbook"
   | "client-estimate-form"
   | "monroe-workbook"
-  | "wood-river-b1";
+  | "wood-river-b1"
+  | "ferndale-gep";
 
 export type WakeJobShell = {
   packId: string;
