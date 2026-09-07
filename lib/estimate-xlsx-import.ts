@@ -49,13 +49,21 @@ import {
   LABOR_ST_OFFSET,
   SUB_HIDDEN_ID_COL,
   TRAVEL_HIDDEN_ID_COL,
+  LABOR_HPS_LABEL,
   clockLabelOverride,
   laborBlockId,
   laborDayPlug,
   thirdPartyBucket,
 } from "./estimate-xlsx.ts";
 import { hydrateJobMeta } from "./staffing-plan.ts";
-import type { JobMoney } from "./estimate-money.ts";
+import {
+  CBA_INCREASE_LABEL,
+  EQUIPMENT_CONTINGENCY_LABEL,
+  LABOR_CONTINGENCY_LABEL,
+  MORE_FUND_LABEL,
+  SUBS_CONTINGENCY_LABEL,
+  type JobMoney,
+} from "./estimate-money.ts";
 import type { JobRates } from "./shahan-wood-river.ts";
 import { lookupShahanEquipment, rematchShahanEquipmentId } from "./shahan-wood-river.ts";
 import {
@@ -1348,13 +1356,180 @@ export function createPackFromImport(imported: EstimateImport, ownerEmail = ""):
   };
 }
 
+function hiddenIdTag(id: string | undefined) {
+  const value = String(id ?? "").trim();
+  return value ? ` [${value}]` : "";
+}
+
+function summarizeIds(ids: Array<string | undefined>, limit = 6) {
+  const clean = ids.map((id) => String(id ?? "").trim()).filter(Boolean);
+  if (!clean.length) return "";
+  const shown = clean.slice(0, limit);
+  const extra = clean.length - shown.length;
+  return ` (${shown.join(", ")}${extra > 0 ? `, +${extra} more` : ""})`;
+}
+
+function asMoneyMeta(raw: unknown): Partial<JobRates & JobMoney> {
+  return raw && typeof raw === "object" ? (raw as Partial<JobRates & JobMoney>) : {};
+}
+
+function pushNumChange(lines: string[], label: string, before: number | null | undefined, after: number | null | undefined) {
+  const left = before ?? null;
+  const right = after ?? null;
+  if (left == null && right == null) return;
+  if (Number(left ?? 0) === Number(right ?? 0) && (left == null) === (right == null)) return;
+  lines.push(`${label} ${left ?? "—"} → ${right ?? "—"}`);
+}
+
+function pushMoneyDiff(lines: string[], before: Partial<JobRates & JobMoney>, after: Partial<JobRates & JobMoney> | undefined) {
+  if (!after) return;
+  pushNumChange(lines, "Staff PD $ / day", before.staffPerDiemRate, after.staffPerDiemRate);
+  pushNumChange(lines, "Craft PD $ / day", before.craftPerDiemRate, after.craftPerDiemRate);
+  pushNumChange(lines, "Staff mileage", before.staffMileageRate, after.staffMileageRate);
+  pushNumChange(lines, "Craft mileage", before.craftMileageRate, after.craftMileageRate);
+  pushNumChange(lines, LABOR_CONTINGENCY_LABEL, before.laborContingencyPct, after.laborContingencyPct);
+  pushNumChange(lines, EQUIPMENT_CONTINGENCY_LABEL, before.equipmentContingencyPct, after.equipmentContingencyPct);
+  pushNumChange(lines, SUBS_CONTINGENCY_LABEL, before.subsContingencyPct, after.subsContingencyPct);
+  if (Boolean(before.cbaIncreaseOn) !== Boolean(after.cbaIncreaseOn) || before.cbaIncreaseDate !== after.cbaIncreaseDate || Number(before.cbaIncreasePct ?? 0) !== Number(after.cbaIncreasePct ?? 0)) {
+    lines.push(
+      `${CBA_INCREASE_LABEL} ${before.cbaIncreaseOn ? "ON" : "OFF"} ${before.cbaIncreaseDate || "—"} ${before.cbaIncreasePct ?? 0}% → ${after.cbaIncreaseOn ? "ON" : "OFF"} ${after.cbaIncreaseDate || "—"} ${after.cbaIncreasePct ?? 0}%`,
+    );
+  }
+  pushNumChange(lines, MORE_FUND_LABEL, before.moreFundPerHour, after.moreFundPerHour);
+  const prevHolidays = (before.holidays ?? []).join(",");
+  const nextHolidays = (after.holidays ?? []).join(",");
+  if (prevHolidays !== nextHolidays) lines.push(`Holidays → ${nextHolidays || "none"}`);
+}
+
+function travelFingerprint(line: { kind?: string; travelers?: number; miles?: number; rate?: number; perMile?: number }) {
+  return `${line.kind === "craft" ? "craft" : "staff"}|${line.travelers ?? 0}|${line.miles ?? 0}|${money2(line.rate ?? line.perMile ?? 0)}`;
+}
+
+function pushCostLineDiffs(
+  lines: string[],
+  sheet: string,
+  previous: Array<{ id?: string; item?: string; qty?: number; rate?: number; miles?: number; travelers?: number; kind?: string; period?: string; periods?: number }>,
+  incoming: ImportedCostLine[] | undefined,
+) {
+  if (!incoming) return;
+  const used = new Set<number>();
+  incoming.forEach((row, index) => {
+    const byId = row.itemId
+      ? previous.findIndex((line, i) => !used.has(i) && line.id === row.itemId)
+      : -1;
+    const byName = previous.findIndex(
+      (line, i) => !used.has(i) && (line.item || "").trim().toLowerCase() === row.item.trim().toLowerCase(),
+    );
+    const found = byId >= 0 ? byId : byName >= 0 ? byName : !used.has(index) && previous[index] ? index : -1;
+    if (found < 0) {
+      lines.push(`Add ${sheet}${hiddenIdTag(row.itemId)} ${row.item || row.kind || "row"}`);
+      return;
+    }
+    used.add(found);
+    const prev = previous[found];
+    const label = `${sheet}${hiddenIdTag(row.itemId || prev.id)} ${row.item || prev.item || row.kind || "row"}`;
+    const changes: string[] = [];
+    if (row.item && prev.item && row.item !== prev.item) changes.push(`${prev.item} → ${row.item}`);
+    if (row.qty != null && prev.qty != null && !sameQty(row.qty, prev.qty)) changes.push(`qty ${prev.qty} → ${row.qty}`);
+    if (sheet !== "COE" && row.rate != null && prev.rate != null && !sameQty(row.rate, prev.rate)) {
+      changes.push(`rate ${prev.rate} → ${row.rate}`);
+    }
+    if (row.miles != null && prev.miles != null && !sameQty(row.miles, prev.miles)) changes.push(`miles ${prev.miles} → ${row.miles}`);
+    if (row.travelers != null && prev.travelers != null && !sameQty(row.travelers, prev.travelers)) {
+      changes.push(`travelers ${prev.travelers} → ${row.travelers}`);
+    }
+    if (row.period && prev.period && row.period !== prev.period) changes.push(`Period ${prev.period} → ${row.period}`);
+    if (row.periods != null && prev.periods != null && !sameQty(row.periods, prev.periods)) {
+      changes.push(`Periods ${prev.periods} → ${row.periods}`);
+    }
+    if (changes.length) lines.push(`${label} ${changes.join(", ")}`);
+  });
+  previous.forEach((line, index) => {
+    if (used.has(index)) return;
+    if (!line.item && !line.id) return;
+    lines.push(`Remove ${sheet}${hiddenIdTag(line.id)} ${line.item || "row"}`);
+  });
+}
+
+function travelRowsFromPack(raw: unknown) {
+  return asOtherCost(raw).travel.map((line) => ({
+    id: line.id,
+    item: line.kind,
+    kind: line.kind,
+    travelers: line.travelers,
+    miles: line.miles,
+    rate: line.perMile,
+  }));
+}
+
+function miscRowsFromPack(raw: unknown) {
+  return asOtherCost(raw).misc.map((line) => ({
+    id: line.id,
+    item: line.item,
+    qty: line.qty,
+    rate: line.each,
+  }));
+}
+
+function subRowsFromPack(raw: unknown) {
+  const sheet = normalizeSubSheet(asRecordish(raw));
+  return [
+    ...sheet.lines.map((line) => ({ id: line.id, item: line.vendor, qty: line.qty, rate: line.rate })),
+    ...sheet.cards.map((card) => ({ id: card.id, item: card.vendor, qty: 1, rate: subCardTotal(card, { site: "", client: "", otAfter8: false }) })),
+  ];
+}
+
+function rentalRowsFromPack(raw: unknown, bucket: "rental" | "tension" | "crane" | "coe") {
+  const equipment = asEquipment(raw);
+  if (bucket === "coe") {
+    return equipment.largeTools.map((line) => ({
+      id: line.itemId || line.id,
+      item: lookupShahanEquipment(line.itemId)?.description || line.itemId,
+      qty: line.qty,
+      period: line.period,
+      periods: billedPeriodCount(line.start, line.end, line.period),
+      rate: line.enteredCost,
+    }));
+  }
+  return equipment.thirdParty
+    .filter((line) => thirdPartyBucket(line.item) === bucket)
+    .map((line) => ({
+      id: line.id,
+      item: line.item,
+      qty: line.qty,
+      period: line.period,
+      periods: billedPeriodCount(line.start, line.end, line.period),
+      rate: line.rate,
+    }));
+}
+
+function pushCreateSummary(lines: string[], imported: EstimateImport) {
+  lines.push(`New estimate: ${imported.title || "untitled"}`);
+  const seats = ["staff", "generalForeman", "foreman", "direct", "support"] as const;
+  const count = seats.reduce((sum, lane) => sum + (imported.crew[lane]?.length ?? 0), 0);
+  lines.push(`${count} crew block${count === 1 ? "" : "s"} from the workbook`);
+  const crewIds = imported.blocks.map((block) => block.id).filter(Boolean);
+  if (crewIds.length) lines.push(`Hidden crew ids${summarizeIds(crewIds)}`);
+  if (imported.jobMeta) lines.push("Job setup money + holidays from the card");
+  const sheets: Array<[string, ImportedCostLine[] | undefined]> = [
+    ["Travel", imported.travel],
+    ["Misc", imported.misc],
+    ["Equipment rental", imported.rental],
+    ["Tension", imported.tension],
+    ["Crane", imported.crane],
+    ["COE", imported.coe],
+    ["Subs", imported.subs],
+  ];
+  for (const [label, rows] of sheets) {
+    if (!rows?.length) continue;
+    lines.push(`${label} ${rows.length} line${rows.length === 1 ? "" : "s"}${summarizeIds(rows.map((row) => row.itemId || row.item))}`);
+  }
+}
+
 export function diffEstimateImport(base: EstimatePackSnapshot | null, imported: EstimateImport): EstimateImportDiff {
   const lines: string[] = [...(imported.warnings ?? [])];
   if (!base) {
-    lines.push(`New estimate: ${imported.title || "untitled"}`);
-    const seats = ["staff", "generalForeman", "foreman", "direct", "support"] as const;
-    const count = seats.reduce((sum, lane) => sum + (imported.crew[lane]?.length ?? 0), 0);
-    lines.push(`${count} crew block${count === 1 ? "" : "s"} from the workbook`);
+    pushCreateSummary(lines, imported);
     return { lines, createsNew: true };
   }
   if (imported.title && imported.title !== base.title) lines.push(`Title → ${imported.title}`);
@@ -1371,26 +1546,53 @@ export function diffEstimateImport(base: EstimatePackSnapshot | null, imported: 
   for (const block of imported.blocks) {
     const found = findRow(current, block.id);
     if (!found) {
-      lines.push(`Add ${block.position || block.id}`);
+      lines.push(`Add ${block.position || block.id}${hiddenIdTag(block.id)}`);
       continue;
     }
+    const seat = `${block.position || found.row.position}${hiddenIdTag(block.id)}`;
     if (block.position && block.position !== found.row.position) {
-      lines.push(`${found.row.position} → ${block.position}`);
+      lines.push(`${found.row.position}${hiddenIdTag(block.id)} → ${block.position}`);
     }
     if (block.billedAs && block.billedAs !== (found.row as SupportLine).billedAs) {
-      lines.push(`${block.position || found.row.position} Bill as → ${block.billedAs}`);
+      lines.push(`${seat} Bill as → ${block.billedAs}`);
     }
     if (block.clockOverride && block.clockOverride !== (found.row.clockOverride ?? "auto")) {
-      lines.push(`${block.position || found.row.position} clock → ${block.clockOverride}`);
+      lines.push(`${seat} clock → ${block.clockOverride}`);
     }
     const hc = block.days.reduce((sum, day) => sum + day.hc, 0);
     const prevHc = (found.row.ranges ?? []).reduce((sum, range) => {
       const span = Math.max(1, Math.round(((parseYmd(range.end)?.getTime() ?? 0) - (parseYmd(range.start)?.getTime() ?? 0)) / 86_400_000) + 1);
       return sum + (block.night ? range.nightHeadcount : range.headcount) * span;
     }, 0);
-    if (hc !== prevHc) lines.push(`${block.position || found.row.position} headcount days ${prevHc} → ${hc}`);
+    if (hc !== prevHc) lines.push(`${seat} headcount days ${prevHc} → ${hc}`);
+    const liveHps = block.days.find((day) => day.hc > 0)?.hps;
+    const prevHps = found.row.ranges?.find((range) => (block.night ? range.nightHeadcount : range.headcount) > 0)?.hoursPerShift
+      ?? found.row.ranges?.[0]?.hoursPerShift;
+    if (liveHps && prevHps && !sameQty(liveHps, prevHps)) {
+      lines.push(`${seat} ${LABOR_HPS_LABEL} ${prevHps} → ${liveHps}`);
+    }
   }
-  if (!lines.length) lines.push("No crew or Job setup changes.");
+  pushMoneyDiff(lines, asMoneyMeta(base.jobMeta), imported.jobMeta);
+  pushCostLineDiffs(lines, "Travel", travelRowsFromPack(base.otherCost), imported.travel);
+  pushCostLineDiffs(lines, "Misc", miscRowsFromPack(base.otherCost), imported.misc);
+  pushCostLineDiffs(lines, "Equipment rental", rentalRowsFromPack(base.equipment, "rental"), imported.rental);
+  pushCostLineDiffs(lines, "Tension", rentalRowsFromPack(base.equipment, "tension"), imported.tension);
+  pushCostLineDiffs(lines, "Crane", rentalRowsFromPack(base.equipment, "crane"), imported.crane);
+  pushCostLineDiffs(lines, "COE", rentalRowsFromPack(base.equipment, "coe"), imported.coe);
+  pushCostLineDiffs(lines, "Sub", subRowsFromPack(base.subcontractor), imported.subs);
+  const travelPrev = travelRowsFromPack(base.otherCost);
+  if (imported.travel && imported.travel.length === travelPrev.length && imported.travel.length > 1) {
+    const prevOrder = travelPrev.map((line) => line.id).join("|");
+    const nextOrder = imported.travel.map((row, index) => row.itemId || travelPrev[index]?.id || "").join("|");
+    const samePrints = imported.travel.every((row, index) => {
+      const prev = travelPrev.find((line) => line.id === row.itemId) ?? travelPrev[index];
+      return prev && travelFingerprint(prev) === travelFingerprint(row);
+    });
+    if (samePrints && prevOrder && nextOrder && prevOrder !== nextOrder) {
+      lines.push(`Travel reorder${summarizeIds(imported.travel.map((row) => row.itemId))}`);
+    }
+  }
+  if (!lines.length) lines.push("No crew, Job setup, or sheet changes.");
   return { lines, createsNew: false };
 }
 

@@ -168,6 +168,29 @@ export function EstimateWorkspace({
     }
   }
 
+  function liveImportBase() {
+    return {
+      packId: packageId || "",
+      key: pack.estimateKey,
+      title: name || crumb,
+      client: boundClient,
+      site: boundSite,
+      siteId: siteIdFromSite(boundSite, boundClient),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      ownerEmail: "",
+      schedule: pack.schedule,
+      crew: pack.crew,
+      jobMeta: pack.jobMeta,
+      equipment: readEquipmentSheet(pack.estimateKey),
+      otherCost: syncOtherCostTravel(readOtherCost(pack.estimateKey), pack.crew, {
+        staffPerMile: pack.jobMeta.staffMileageRate,
+        craftPerMile: pack.jobMeta.craftMileageRate,
+      }),
+      subcontractor: readSubSheet(pack.estimateKey),
+    };
+  }
+
   async function readWorkbook(file: File) {
     setImportError("");
     setExportError("");
@@ -192,22 +215,7 @@ export function EstimateWorkspace({
     if (!pendingImport || importBlocked) return;
     setImportBusy(true);
     try {
-      const next = applyEstimateImport(
-        {
-          packId: packageId || "",
-          key: pack.estimateKey,
-          title: name || crumb,
-          client: boundClient,
-          site: boundSite,
-          siteId: siteIdFromSite(boundSite, boundClient),
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          ownerEmail: "",
-          schedule: pack.schedule,
-          crew: pack.crew,
-        },
-        pendingImport,
-      );
+      const next = applyEstimateImport(liveImportBase(), pendingImport);
       const schedule: PhaseScheduleState = mergeSchedule(next.schedule);
       pack.replaceFromImport({
         schedule,
@@ -220,6 +228,10 @@ export function EstimateWorkspace({
           otAfter8: Boolean(next.crew.otAfter8),
         },
         title: next.title,
+        jobMeta: next.jobMeta,
+        equipment: next.equipment,
+        otherCost: next.otherCost,
+        subcontractor: next.subcontractor,
       });
       if (next.title) onName?.(next.title);
       setPendingImport(null);
@@ -422,22 +434,7 @@ export function EstimateWorkspace({
       {pendingImport ? (
         <EstimateImportModal
           title="Import workbook"
-          lines={diffEstimateImport(
-            {
-              packId: packageId || "",
-              key: pack.estimateKey,
-              title: name || crumb,
-              client: boundClient,
-              site: boundSite,
-              siteId: siteIdFromSite(boundSite, boundClient),
-              createdAt: 0,
-              updatedAt: 0,
-              ownerEmail: "",
-              schedule: pack.schedule,
-              crew: pack.crew,
-            },
-            pendingImport,
-          ).lines}
+          lines={diffEstimateImport(liveImportBase(), pendingImport).lines}
           applyLabel="Apply to this pack"
           busy={importBusy}
           error={importError}
