@@ -181,7 +181,7 @@ export function canSeeCompany(scope: CompanyScope | null | undefined, companyId:
 
 /**
  * Infer which contractor a catalog job / site / board estimate belongs to.
- * Madison plant clients (P66, Yates, Georgia Power, Wood River) sit under Madison.
+ * Madison plant clients (Phillips 66 plants + Georgia Power Yates + Monroe) sit under Madison.
  * CBI is only the CBI label — no invented CBI sites.
  * Lucky 13 matches that name only — no invented Lucky 13 sites.
  */

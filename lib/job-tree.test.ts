@@ -14,7 +14,9 @@ import {
   companyIdForJob,
   defaultCollapsedClientKeys,
   defaultOpenCompanyId,
+  FERNDALE_CLIENT_TEMPLATE_NOTE,
   GEORGIA_POWER_CLIENT_ID,
+  JOB_TREE_CLIENT_SITE_IDS,
   jobEstimateHref,
   jobTree,
   jobTreeClientId,
@@ -55,7 +57,7 @@ const cat2 = {
 };
 
 describe("job tree", () => {
-  it("opens Madison by default and keeps P66 / Yates as Madison sites", () => {
+  it("opens Madison by default and keeps Yates as a Madison catalog site", () => {
     assert.equal(defaultOpenCompanyId(COMPANIES), "madison");
     assert.equal(defaultOpenCompanyId([{ id: "cbi" }]), "cbi");
     assert.equal(sitesForCompany("madison").some((site) => site.id === "site-madison"), true);
@@ -67,8 +69,21 @@ describe("job tree", () => {
     assert.equal(matchCatalogSite("Coker drum valve package — T&M")?.id, "site-madison");
     assert.equal(jobTreeClientId("Phillips 66", "Wood River — Roxana, IL"), PHILLIPS_66_CLIENT_ID);
     assert.equal(jobTreeClientId("Georgia Power", "Yates"), GEORGIA_POWER_CLIENT_ID);
+    assert.equal(jobTreeClientId("Phillips 66", "Yates"), GEORGIA_POWER_CLIENT_ID);
+    assert.equal(jobTreeClientId("P66", "Bowen"), GEORGIA_POWER_CLIENT_ID);
+    assert.equal(jobTreeClientId("Scherer"), GEORGIA_POWER_CLIENT_ID);
+    assert.equal(clientIdForSite({ id: "site-yates", client: "Phillips 66", name: "Yates" }), GEORGIA_POWER_CLIENT_ID);
     assert.equal(clientIdForSite({ client: "Georgia Power", name: "Yates", family: "Georgia Power" }), GEORGIA_POWER_CLIENT_ID);
-    assert.equal(clientIdForSite({ client: "Phillips 66", name: "Rodeo", family: "Phillips 66" }), PHILLIPS_66_CLIENT_ID);
+    assert.equal(clientIdForSite({ id: "site-ferndale", client: "Phillips 66", name: "Ferndale", family: "Phillips 66" }), PHILLIPS_66_CLIENT_ID);
+    assert.deepEqual(JOB_TREE_CLIENT_SITE_IDS[PHILLIPS_66_CLIENT_ID], [
+      "site-madison",
+      "site-rodeo",
+      "site-bayway",
+      "site-ferndale",
+      "site-billings",
+    ]);
+    assert.deepEqual(JOB_TREE_CLIENT_SITE_IDS[GEORGIA_POWER_CLIENT_ID], ["site-yates"]);
+    assert.equal(JOB_TREE_CLIENT_SITE_IDS[PHILLIPS_66_CLIENT_ID].includes("site-yates"), false);
   });
 
   it("lets the owner see every company and testers only the one they are on", () => {
@@ -289,11 +304,14 @@ describe("job tree", () => {
       madison?.clients.map((client) => client.id).slice(0, 2),
       [PHILLIPS_66_CLIENT_ID, GEORGIA_POWER_CLIENT_ID],
     );
-    for (const name of ["Wood River", "Rodeo", "Bayway", "Ferndale"]) {
+    for (const name of ["Wood River", "Rodeo", "Bayway", "Ferndale", "Billings"]) {
       assert.equal(p66?.sites.some((site) => site.name === name), true, name);
     }
     assert.equal(p66?.sites.some((site) => site.name === "Yates"), false);
     assert.equal(georgia?.sites.some((site) => site.name === "Yates"), true);
+    assert.equal(georgia?.sites.some((site) => /bowen|scherer/i.test(site.name)), false);
+    assert.equal(p66?.sites.find((site) => site.id === "site-ferndale")?.note, FERNDALE_CLIENT_TEMPLATE_NOTE);
+    assert.equal(p66?.sites.find((site) => site.id === "site-ferndale")?.name, "Ferndale");
     assert.equal(
       madison?.clients.some((client) => client.sites.some((site) => site.name === "Not assigned")),
       false,
@@ -303,6 +321,7 @@ describe("job tree", () => {
     const treeDesk = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
     assert.match(desk, /Client, then site, then the job/);
     assert.match(treeDesk, /company\.clients\.map/);
+    assert.match(treeDesk, /site\.note/);
     assert.equal(/Not assigned/.test(treeDesk), false);
     assert.equal(/site\.assigned \? alias\(site\.name\) : "Not assigned"/.test(treeDesk), false);
   });
