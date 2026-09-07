@@ -49,6 +49,8 @@ import { siteIdFromSite } from "@/lib/local-estimates";
 import type { EstimateStatus } from "@/lib/estimate-status";
 import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
 import { mergeSchedule, type PhaseScheduleState } from "@/lib/phase-schedule";
+import { shouldAttachP66TransferFace } from "@/lib/p66-transfer-face";
+import { P66_V1_EXPORT_LINE } from "@/lib/p66-v1";
 import { RODEO_TAB_ID, RODEO_TAB_LABEL, showsRodeoTab } from "@/lib/rodeo-form";
 import { readSubSheet } from "@/lib/subcontractor";
 import { downloadXlsx } from "@/lib/xlsx-minimal";
@@ -293,7 +295,9 @@ export function EstimateWorkspace({
                 type="button"
                 title={
                   action.id === "export"
-                    ? "Export Excel workbook"
+                    ? shouldAttachP66TransferFace(boundSite, boundClient)
+                      ? `Export Excel workbook — ${P66_V1_EXPORT_LINE}`
+                      : "Export Excel workbook"
                     : action.id === "import"
                       ? importBlocked
                         ? "Import is off while viewing as another seat"

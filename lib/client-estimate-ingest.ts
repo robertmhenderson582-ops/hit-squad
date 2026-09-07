@@ -27,6 +27,7 @@ import {
   type WakeJobShell,
   type WakeTemplateFamily,
 } from "./rodeo-monroe-wake.ts";
+import { P66_V1_EXPORT_LINE } from "./p66-v1.ts";
 import {
   isOfficialRevisionId,
   isRodeoWorkbookFamilyId,
@@ -256,7 +257,7 @@ export const CLIENT_FACE_MAPPER_SPEC = {
     clock: "hours × one composite rate",
     buckets: ["Direct", "Indirect"],
     tabs: ["INSTRUCTIONS", "SUMMARY", "1–9"],
-    exportAs: "estimate fills P66-shaped export → Robert pastes into official file",
+    exportAs: P66_V1_EXPORT_LINE,
     ingest: "stage-metadata",
   },
   "p66-rodeo-workbook": {
