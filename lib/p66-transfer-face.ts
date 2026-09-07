@@ -440,7 +440,7 @@ export function readP66PasteMapValue(sheet: { cells: SheetCell[] }, officialFiel
     if (item.type !== "text" || item.value !== officialField) continue;
     const row = item.ref.replace(/^[A-Z]+/, "");
     const value = byRef.get(`C${row}`);
-    if (!value) return undefined;
+    if (!value || (value.type !== "text" && value.type !== "number")) return undefined;
     return value.value;
   }
   return undefined;
