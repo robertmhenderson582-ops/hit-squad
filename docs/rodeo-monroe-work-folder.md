@@ -69,3 +69,23 @@ Rate-book samples on the desk still read Amendment 8 figures. Amend 9 is the abi
 | Monroe 541V | `new-541v26-monroe` | EST-541V26 |
 
 One live pack per job. Shells do not invent crew calendars or totals. Aromatics / Wood River packs are untouched.
+
+## Golden locks (official SUMMARY)
+
+Extracted from Drive text of the official books. Binaries stay out of git. Unexplained drift is a P0 bug.
+
+| Job | Face | Hours | Grand $ |
+| --- | --- | ---: | ---: |
+| U110 | Family A contractor R1 | 26,441 | $5,247,587 |
+| U250 | Family A contractor R2 | 12,881 | $2,470,680 |
+| Monroe 541V | POST REVIEW SUMMARY | 8,483 labor (pivot 9,267) | formula — do not invent |
+
+U110 buckets: Direct 16,730 / $2,746,343 · Indirect 9,711 / $1,735,592 · PD $429,790 · Mob $150,000 · Materials $50,000 · Equipment $10,862 · 3rd party $125,000.
+
+U250 buckets: Direct 8,315 / $1,383,800 · Indirect 4,566 / $767,540 · PD $188,740 · Mob $101,000 · Materials $20,000 · Equipment $9,600.
+
+Family B (~4.5MB P66 RODEO ESTIMATE WORKBOOK) is an additional face. Official lock for U110 / U250 is family A.
+
+## Export (Rodeo V1)
+
+Hit Squad estimate is the source. Export includes the familiar look-alike sheets **plus** a P66-shaped transfer face (`P66 SUMMARY` / `P66 Direct` / `P66 Indirect`) filled from the live pack. Robert copy-pastes that face into the official P66 file. This PR does not clone or git the locked official xlsx.

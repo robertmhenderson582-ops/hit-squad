@@ -97,6 +97,7 @@ import {
 } from "./estimate-money.ts";
 import { slugify } from "./estimate-pack.ts";
 import { deskPackageTotal } from "./estimate-desk-total.ts";
+import { buildP66TransferFaceSheets, p66TotalsFromDesk, shouldAttachP66TransferFace } from "./p66-transfer-face.ts";
 import { commercialMarkupLabel, commercialMarkupRate, estimateMarkupDollars } from "./estimate-total.ts";
 import {
   boundOtLabel,
@@ -2509,7 +2510,10 @@ export async function estimateToXlsx(input: EstimateXlsxInput = {}): Promise<Uin
   if (excel == null || Math.round(excel * 100) / 100 !== desk) {
     throw new Error("summary-total-mismatch");
   }
-  const bytes = await buildWorkbook(sheets, { companyLogo: input.companyLogo });
+  const extras = shouldAttachP66TransferFace(resolved.site, resolved.client)
+    ? buildP66TransferFaceSheets(p66TotalsFromDesk(resolved))
+    : [];
+  const bytes = await buildWorkbook([...sheets, ...extras], { companyLogo: input.companyLogo });
   if (!bytes.byteLength) throw new Error("empty-workbook");
   return bytes;
 }

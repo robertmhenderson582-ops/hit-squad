@@ -68,10 +68,6 @@ function sheetKey(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-function hasSheet(sheets: string[], needle: RegExp) {
-  return sheets.some((name) => needle.test(sheetKey(name)) || needle.test(name));
-}
-
 export function looksLikeHitSquadPack(sheets: string[]) {
   const names = new Set(sheets.map((name) => name.trim()));
   if (names.has(ESTIMATE_XLSX_SHEETS.summary) && names.has(ESTIMATE_XLSX_SHEETS.jobSetup)) return true;
@@ -261,7 +257,7 @@ export const CLIENT_FACE_MAPPER_SPEC = {
     clock: "hours × one composite rate",
     buckets: ["Direct", "Indirect"],
     tabs: ["INSTRUCTIONS", "SUMMARY", "1–9"],
-    exportAs: "contractor fill",
+    exportAs: "P66-shaped transfer face — estimate fills it; Robert pastes into the official file",
     ingest: "stage-metadata",
   },
   "p66-rodeo-workbook": {
@@ -269,7 +265,7 @@ export const CLIENT_FACE_MAPPER_SPEC = {
     clock: "P66 RODEO ESTIMATE WORKBOOK",
     buckets: ["workbook modules — not collapsed into A"],
     tabs: ["Blank Needs Rates + filled unit books"],
-    exportAs: "Rodeo workbook",
+    exportAs: "later face — do not collapse into A; V1 paste is the contractor SUMMARY",
     ingest: "stage-metadata",
   },
   "client-estimate-form": {
