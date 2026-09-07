@@ -170,9 +170,6 @@ export function JobTreeDesk({
                                     </p>
                                   ) : null}
                                 </div>
-                                {site.note ? (
-                                  <p className="mt-1 font-mono text-[11px] tracking-[0.12em] text-steel-glow">{site.note}</p>
-                                ) : null}
                                 {siteOpen
                                   ? site.jobs.map((job) => {
                                       const estimate = estimateForJob(job, estimates);

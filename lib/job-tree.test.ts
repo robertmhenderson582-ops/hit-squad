@@ -14,7 +14,6 @@ import {
   companyIdForJob,
   defaultCollapsedClientKeys,
   defaultOpenCompanyId,
-  FERNDALE_CLIENT_TEMPLATE_NOTE,
   GEORGIA_POWER_CLIENT_ID,
   JOB_TREE_CLIENT_SITE_IDS,
   jobEstimateHref,
@@ -310,10 +309,8 @@ describe("job tree", () => {
     assert.equal(p66?.sites.some((site) => site.name === "Yates"), false);
     assert.equal(georgia?.sites.some((site) => site.name === "Yates"), true);
     assert.equal(georgia?.sites.some((site) => /bowen|scherer/i.test(site.name)), false);
-    assert.match(p66?.sites.find((site) => site.id === "site-ferndale")?.note || "", /GEP \/ TASO/);
-    assert.match(p66?.sites.find((site) => site.id === "site-ferndale")?.note || "", /Competitive bid/);
-    assert.match(p66?.sites.find((site) => site.id === "site-ferndale")?.note || "", new RegExp(FERNDALE_CLIENT_TEMPLATE_NOTE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.equal(p66?.sites.find((site) => site.id === "site-ferndale")?.name, "Ferndale");
+    assert.equal("note" in (p66?.sites.find((site) => site.id === "site-ferndale") || {}), false);
     assert.equal(
       madison?.clients.some((client) => client.sites.some((site) => site.name === "Not assigned")),
       false,
@@ -321,9 +318,13 @@ describe("job tree", () => {
 
     const desk = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
     const treeDesk = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
+    const plantPage = readFileSync(fileURLToPath(new URL("../components/JobPlantPage.tsx", import.meta.url)), "utf8");
     assert.match(desk, /Client, then site, then the job/);
     assert.match(treeDesk, /company\.clients\.map/);
-    assert.match(treeDesk, /site\.note/);
+    assert.equal(/site\.note/.test(treeDesk), false);
+    assert.equal(/GEP|TASO|Competitive bid|Regular|Unick|per diem|Work Folder|B-1/i.test(treeDesk), false);
+    assert.equal(/GEP|TASO|Competitive bid|Unick|per diem|Work Folder|B-1/i.test(desk), false);
+    assert.equal(/Unick|GEP|TASO|Competitive bid|per diem|Work Folder|B-1/i.test(plantPage), false);
     assert.equal(/Not assigned/.test(treeDesk), false);
     assert.equal(/site\.assigned \? alias\(site\.name\) : "Not assigned"/.test(treeDesk), false);
   });
