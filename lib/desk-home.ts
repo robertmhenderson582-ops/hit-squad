@@ -7,7 +7,7 @@ export const COMPANY_DESK_DOOR = {
   href: "/jobs",
   key: "company",
   label: "Company desk",
-  note: "Your companies, then site, then jobs",
+  note: "Your companies, then client, then site, then jobs",
 } as const;
 
 /** Buried on home — keep exported so the owner can unbury later. `/standalone` still works. */

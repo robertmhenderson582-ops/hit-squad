@@ -59,7 +59,7 @@ const PLANTS: Record<string, { client: string; folder: string; name: string; cit
     folder: "Phillips 66",
     name: "Ferndale",
     city: "Ferndale, WA",
-    plant: "Ferndale refinery",
+    plant: "Ferndale refinery · 3901 Unick Rd",
     site: "Ferndale — Ferndale, WA",
   },
   billings: {

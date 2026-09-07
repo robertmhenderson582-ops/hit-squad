@@ -61,12 +61,12 @@ npm run auth:check
 
 One Next.js app. Set the env vars on the host, use HTTPS, and set `AUTH_COOKIE_SECURE=true`. There is no Google sign-in yet.
 
-Login uses the night-refinery brand hero with HIT SQUAD over PROJECT CONTROLS. After sign-in home is two doors — Company desk (company → site → jobs) and a quiet Standalone door. All records stay owner-scoped.
+Login uses the night-refinery brand hero with HIT SQUAD over PROJECT CONTROLS. After sign-in home is two doors — Company desk (client → site → jobs under the assigned company) and a quiet Standalone door. All records stay owner-scoped.
 
 ## Rebuild list (do not regress)
 
 - Home (`/`) is two doors under the HIT SQUAD / PROJECT CONTROLS wordmark: Company desk and Standalone. No splash shortcuts (no new Phillips 66 estimate / Simple shop job), no sample jobs on home, not Forgebook / Estimators.
-- Header does not keep sibling Jobs / Sites / Estimates tabs. A PM digs company → site → job. Standalone is the quiet door for a one-off estimate, change-order log, or tool not tied to a client site.
+- Header does not keep sibling Jobs / Sites / Estimates tabs. A PM digs client → site → job under the assigned company (Madison is the operator; Phillips 66 and Georgia Power are clients). Standalone is the quiet door for a one-off estimate, change-order log, or tool not tied to a client site.
 - Brand: HIT SQUAD over PROJECT CONTROLS, steel `#0f5f6d`, amber FIELD TRIAL — NOT A RELEASE, Madison confidentiality checkbox, original night-refinery hero.
 - Do not touch auth files (`/api/auth/*`, session cookie, AuthGate). No Google/X, no public Create account, no GET-submit login, no `sessionStorage` fake sessions.
 - B-1 ingest is parked. Do not invent Submit/ticket permission UI this turn; do not block adding it later.
