@@ -6,6 +6,7 @@ import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { canUseInbox, inboxCircleById, inboxCirclePerson } from "@/lib/inbox-circle";
 import {
   hideInboxFor,
+  inboxHidesFor,
   inboxPeopleFor,
   inboxStoreKind,
   listInboxFor,
@@ -15,6 +16,17 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function inboxResponse(email: string, threads: Awaited<ReturnType<typeof listInboxFor>>) {
+  const hides = inboxHidesFor(email);
+  return NextResponse.json({
+    threads,
+    contacts: inboxPeopleFor(email),
+    store: inboxStoreKind(),
+    hiddenMessageIds: hides.messageIds,
+    hiddenPersonIds: hides.personIds,
+  });
+}
+
 export async function GET(request: Request) {
   const session = await readSession(cookieValue(request));
   if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
@@ -22,11 +34,7 @@ export async function GET(request: Request) {
   if (!canUseInbox(user)) {
     return NextResponse.json({ error: "Inbox is those six only." }, { status: 403 });
   }
-  return NextResponse.json({
-    threads: await listInboxFor(user.email),
-    contacts: inboxPeopleFor(user.email),
-    store: inboxStoreKind(),
-  });
+  return inboxResponse(user.email, await listInboxFor(user.email));
 }
 
 export async function POST(request: Request) {
@@ -52,11 +60,7 @@ export async function POST(request: Request) {
 
   try {
     if (typeof body.readPersonId === "string" && body.readPersonId.trim()) {
-      return NextResponse.json({
-        threads: await markInboxThreadRead(user.email, body.readPersonId.trim()),
-        contacts: inboxPeopleFor(user.email),
-        store: inboxStoreKind(),
-      });
+      return inboxResponse(user.email, await markInboxThreadRead(user.email, body.readPersonId.trim()));
     }
 
     if (
@@ -65,16 +69,15 @@ export async function POST(request: Request) {
       Array.isArray(body.hidePersonIds) ||
       body.emptyInbox === true
     ) {
-      return NextResponse.json({
-        threads: await hideInboxFor(user.email, {
+      return inboxResponse(
+        user.email,
+        await hideInboxFor(user.email, {
           messageId: body.hideMessageId,
           personId: body.hidePersonId,
           personIds: body.hidePersonIds,
           empty: body.emptyInbox === true,
         }),
-        contacts: inboxPeopleFor(user.email),
-        store: inboxStoreKind(),
-      });
+      );
     }
   } catch {
     return NextResponse.json({ error: DRIVE_WRITE_ERROR }, { status: 503 });
@@ -97,11 +100,7 @@ export async function POST(request: Request) {
       id: body.messageId,
     });
     if (!posted.ok) return NextResponse.json({ error: posted.error }, { status: posted.status });
-    return NextResponse.json({
-      threads: posted.threads,
-      contacts: inboxPeopleFor(user.email),
-      store: inboxStoreKind(),
-    });
+    return inboxResponse(user.email, posted.threads);
   } catch {
     return NextResponse.json({ error: DRIVE_WRITE_ERROR }, { status: 503 });
   }
