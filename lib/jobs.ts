@@ -63,7 +63,7 @@ const JOBS: JobRecord[] = [
   },
 ];
 
-export const PLANT_TABS = ["Overview", "Estimates", "Change orders", "People"] as const;
+export const PLANT_TABS = ["Overview", "Estimates", "Abiding", "Change orders", "People"] as const;
 export type PlantTab = (typeof PLANT_TABS)[number];
 
 export function jobByCode(code: string | null | undefined, extras: JobRecord[] = []): JobRecord | undefined {
@@ -198,6 +198,7 @@ export function plantJobsLine(tally = plantJobTally()) {
 export function plantTabFromQuery(value: string | null | undefined): PlantTab {
   const key = (value || "").trim().toLowerCase().replace(/[\s_]+/g, "-");
   if (key === "estimates") return "Estimates";
+  if (key === "abiding") return "Abiding";
   if (key === "change-orders" || key === "changeorders") return "Change orders";
   if (key === "people") return "People";
   return "Overview";
@@ -209,7 +210,18 @@ export function plantTabQuery(tab: PlantTab) {
   return tab.toLowerCase();
 }
 
-export function jobPlantHref(code: string, tab?: PlantTab | string | null) {
+export function plantSlugForSite(siteId = "", siteName = "") {
+  const hay = `${siteId} ${siteName}`.toLowerCase();
+  if (hay.includes("site-rodeo") || /\brodeo\b/.test(hay)) return "rodeo";
+  if (hay.includes("site-monroe") || /monroe/.test(hay)) return "monroe-energy";
+  if (hay.includes("site-yates") || /yates/.test(hay)) return "yates";
+  if (hay.includes("site-bayway") || /bayway/.test(hay)) return "bayway";
+  if (hay.includes("site-ferndale") || /ferndale/.test(hay)) return "ferndale";
+  if (hay.includes("site-billings") || /billings/.test(hay)) return "billings";
+  return "wood-river";
+}
+
+export function jobPlantHref(code: string, tab?: PlantTab | string | null, plantSlug = "wood-river") {
   const params = new URLSearchParams({ job: code });
   const next = tab
     ? PLANT_TABS.includes(tab as PlantTab)
@@ -218,7 +230,8 @@ export function jobPlantHref(code: string, tab?: PlantTab | string | null) {
     : undefined;
   const query = next ? plantTabQuery(next) : null;
   if (query) params.set("tab", query);
-  return `/jobs/wood-river?${params.toString()}`;
+  const slug = (plantSlug || "wood-river").replace(/[^a-z0-9-]+/g, "") || "wood-river";
+  return `/jobs/${slug}?${params.toString()}`;
 }
 
 export function deskForUser(userId: string, scope?: CompanyScope | null): DeskBoard {

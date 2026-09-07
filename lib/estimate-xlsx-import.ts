@@ -18,6 +18,7 @@ import {
   SHAHAN_GENERAL_FOREMAN_TITLES,
 } from "./shahan-wood-river.ts";
 import { newEstimateKey, newEstimatePackId } from "./estimate-open.ts";
+import { siteIdFromSite } from "./local-estimates.ts";
 import { type EstimatePackSnapshot } from "./estimate-pack.ts";
 import {
   ESTIMATE_IMPORT_ERROR,
@@ -1333,7 +1334,7 @@ export function createPackFromImport(imported: EstimateImport, ownerEmail = ""):
     title: imported.title || "Working estimate",
     client: imported.client || "Phillips 66",
     site: imported.site || "Wood River — Roxana, IL",
-    siteId: "site-madison",
+    siteId: siteIdFromSite(imported.site || "Wood River — Roxana, IL", imported.client || "Phillips 66"),
     createdAt: Date.now(),
     updatedAt: Date.now(),
     ownerEmail,

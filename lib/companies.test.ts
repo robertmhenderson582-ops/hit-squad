@@ -163,6 +163,7 @@ describe("assign and visibility", () => {
     assert.equal(inferCompanyId("Madison / P66"), "madison");
     assert.equal(inferCompanyId("Monroe Energy"), "madison");
     assert.equal(inferCompanyId("Trainer, PA"), "madison");
+    assert.equal(inferCompanyId("Rodeo U110"), "madison");
     assert.equal(inferCompanyId("CBI"), "cbi");
     assert.equal(catalogVisibleTo(nathan, "Madison / P66", "TA-8841"), true);
     assert.equal(catalogVisibleTo(james, "Madison / P66", "TA-8841"), false);

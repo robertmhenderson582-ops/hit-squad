@@ -57,7 +57,9 @@ describe("desk counts", () => {
     assert.equal(job?.window, "12 Sep → 04 Oct 2026");
     assert.equal(jobPlantHref("TA-8841"), "/jobs/wood-river?job=TA-8841");
     assert.equal(jobPlantHref("TA-8841", "Estimates"), "/jobs/wood-river?job=TA-8841&tab=estimates");
+    assert.equal(jobPlantHref("EST-U11026", "Abiding", "rodeo"), "/jobs/rodeo?job=EST-U11026&tab=abiding");
     assert.equal(plantTabFromQuery("change-orders"), "Change orders");
+    assert.equal(plantTabFromQuery("abiding"), "Abiding");
     assert.equal(jobByCode("NO-SUCH"), undefined);
   });
 

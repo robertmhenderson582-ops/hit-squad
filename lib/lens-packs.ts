@@ -16,6 +16,7 @@ import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import { JOB_MENU_KEY, clearHisJobMenuLeftover } from "./job-menu.ts";
 import { omitCatalogSeedPacks } from "./jobs.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
+import { mergeRodeoMonroeWakeCards, shouldPaintWakeCards } from "./rodeo-monroe-wake.ts";
 
 /** Live leftover keys already on the signed-in desktop. Rewrite these in place. */
 export const LENS_PACKS_KEY = "hs_lens_packs_v1";
@@ -277,13 +278,15 @@ export function packsForViewedDesk(
     const next = seat ? mergeDeskPacks(live, readLensPacks(seat, store)) : live;
     // View as Nathan still injects HIS Wood River cards. James / CBI stay off this merge.
     const painted = shouldPaintHisCards(user) ? mergeHisWoodRiverCards(next) : next;
-    return omitCatalogSeedPacks(painted);
+    const woken = shouldPaintWakeCards(user) ? mergeRodeoMonroeWakeCards(painted) : painted;
+    return omitCatalogSeedPacks(woken);
   }
   const extras = [readOwnerPacks(store)];
   if (user) extras.push(localPacksOwnerShouldSee(user, store), lensPacksOwnerShouldSee(user, store));
   const merged = mergeDeskPacks(live, ...extras);
   const painted = shouldPaintHisCards(user) ? mergeHisWoodRiverCards(merged) : merged;
-  return omitCatalogSeedPacks(painted);
+  const woken = shouldPaintWakeCards(user) ? mergeRodeoMonroeWakeCards(painted) : painted;
+  return omitCatalogSeedPacks(woken);
 }
 
 export function snapshotOwnerDesk(_user?: ScopeUser | null, store?: StorageLike | null) {

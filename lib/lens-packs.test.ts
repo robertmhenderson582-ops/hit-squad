@@ -220,6 +220,12 @@ test("owner first paint with empty local still has Wood River HIS cards", () => 
   assert.equal(wood?.jobs.some((job) => job.title === "2027 Aromatics Turnaround"), true);
   assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
   assert.equal(wood?.jobs.some((job) => job.code === "EST-MTJ5D6"), false);
+  assert.equal(ownerDesk.some((pack) => pack.packId === "new-u11026-rodeo"), true);
+  assert.equal(ownerDesk.some((pack) => pack.packId === "new-u25026-rodeo"), true);
+  assert.equal(ownerDesk.some((pack) => pack.packId === "new-541v26-monroe"), true);
+  const madison = tree.find((row) => row.id === "madison");
+  assert.equal(madison?.sites.some((site) => site.id === "site-rodeo" && site.jobs.some((job) => job.title === "Rodeo U110 2026 TA")), true);
+  assert.equal(madison?.sites.some((site) => site.id === "site-monroe" && site.jobs.some((job) => job.title === "Monroe 541V")), true);
 });
 
 test("empty vault leftover cannot drop existing packs from the Jobs tree", () => {
