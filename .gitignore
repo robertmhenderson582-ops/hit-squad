@@ -21,6 +21,10 @@ data/
 **/*Madison*.xlsx
 **/*P66*.pdf
 **/*P66*.xlsx
+**/*Monroe*.pdf
+**/*Monroe*.xlsx
+**/*RODEO*ESTIMATE*.xlsx
+**/*Contractor Estimate Template*.xlsx
 # Generating-bank / rolling-chart source books — never commit
 **/*.xlsb
 **/*generating-bank*.xlsx

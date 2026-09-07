@@ -33,6 +33,7 @@ import {
   toggleOpenCompanyId,
   UNASSIGNED_SITE_ID,
 } from "./job-tree.ts";
+import { RODEO_U110_PACK_ID, rodeoMonroeWakeCards } from "./rodeo-monroe-wake.ts";
 import { JAMES_EMAIL, JOHN_BEECH_EMAIL, JOHN_HENRY_EMAIL, JOSEPH_EMAIL } from "./tester-seats.ts";
 
 const owner = { isOwner: true, email: OWNER_LOGIN_EMAIL, companyId: "hitsquad" as const };
@@ -83,6 +84,9 @@ describe("job tree", () => {
     ]);
     assert.deepEqual(JOB_TREE_CLIENT_SITE_IDS[GEORGIA_POWER_CLIENT_ID], ["site-yates"]);
     assert.equal(JOB_TREE_CLIENT_SITE_IDS[PHILLIPS_66_CLIENT_ID].includes("site-yates"), false);
+    assert.equal(matchCatalogSite("Rodeo U110 2026 TA")?.id, "site-rodeo");
+    assert.equal(matchCatalogSite("U250 Fall 2026")?.id, "site-rodeo");
+    assert.equal(matchCatalogSite("Monroe 541V POST REVIEW")?.id, "site-monroe");
   });
 
   it("lets the owner see every company and testers only the one they are on", () => {
@@ -170,6 +174,10 @@ describe("job tree", () => {
     const unit3 = seedJobs().find((row) => row.code === "TA-8841");
     assert.ok(unit3);
     assert.equal(jobEstimateHref(unit3, catalogEstimates()), "/estimates/est-u3");
+    const wake = rodeoMonroeWakeCards().find((row) => row.packId === RODEO_U110_PACK_ID)!;
+    const wakeJob = jobsOnDesk([], [wake], false, owner).find((row) => row.id === `job-${RODEO_U110_PACK_ID}`);
+    assert.ok(wakeJob);
+    assert.equal(jobEstimateHref(wakeJob, [], [wake]), "/jobs/rodeo?job=EST-U11026");
   });
 
   it("keeps a James Wood River sample under CBI on the owner tree", () => {

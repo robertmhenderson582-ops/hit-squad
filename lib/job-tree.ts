@@ -13,8 +13,9 @@ import { catalogSites } from "./desk-data.ts";
 import { estimateForJob, estimateHref } from "./estimate-open.ts";
 import { isHisWoodRiverJob, isHisWoodRiverPack } from "./his-wood-river.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
-import { packForJob } from "./jobs.ts";
+import { jobPlantHref, packForJob, plantSlugForSite } from "./jobs.ts";
 import type { LocalPack } from "./local-estimates.ts";
+import { isWakeIdentityOnly } from "./rodeo-monroe-wake.ts";
 import type { EstimateRecord, JobRecord, SiteRecord } from "./types.ts";
 
 export const UNASSIGNED_SITE_ID = "site-unassigned";
@@ -226,6 +227,12 @@ export function clientIdForSite(site: { id?: string; client?: string; name?: str
 export function matchCatalogSite(text: string, sites: SiteRecord[] = catalogSites()) {
   const hay = norm(text);
   if (!hay) return undefined;
+  const rodeo = sites.find((site) => site.id === "site-rodeo");
+  if (rodeo && /\bu110\b|\bu250\b|u-250|unit 110|unit 250/.test(hay) && !/wood river|roxana|cat 2|mtaajd/.test(hay)) {
+    return rodeo;
+  }
+  const monroe = sites.find((site) => site.id === "site-monroe");
+  if (monroe && /\b541v\b|u541|\bvac\b/.test(hay) && !/wood river|roxana/.test(hay)) return monroe;
   const woodRiver = sites.find((site) => site.id === "site-madison");
   if (woodRiver && /wood river|roxana|cat 2|mtaajd|unit 3|\bcoker\b/.test(hay)) return woodRiver;
   return sites.find((site) => {
@@ -268,6 +275,9 @@ export function jobEstimateHref(
 ) {
   const estimate = estimateForJob(job, estimates);
   const pack = packForJob(job, packs, estimate?.id);
+  if (pack && isWakeIdentityOnly(pack)) {
+    return jobPlantHref(job.code, undefined, plantSlugForSite(pack.siteId, pack.site));
+  }
   if (pack) return estimateHref(pack.packId);
   if (estimate) return estimateHref(estimate.id);
   if (job.id.startsWith("job-new-")) return estimateHref(job.id.slice(4));

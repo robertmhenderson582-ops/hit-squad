@@ -12,6 +12,7 @@ import { CREW_STORE_PREFIX, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
 import { SUB_STORE_PREFIX } from "./subcontractor.ts";
 import { JOB_META_PREFIX } from "./job-meta-prefix.ts";
 import { ORG_CHART_STORE_PREFIX } from "./org-chart.ts";
+import { isWakeIdentityOnly, wakeMatchForPack } from "./rodeo-monroe-wake.ts";
 import type { EstimateRecord, ForgebookBoard, JobRecord } from "./types.ts";
 
 export const PACK_INDEX_KEY = "hs_pack_index_v1";
@@ -370,17 +371,18 @@ export function localPackToEstimate(pack: LocalPack, ownerId = "owner-robert-hen
 
 export function localPackToJob(pack: LocalPack, ownerId = "owner-robert-henderson"): JobRecord {
   const estimate = localPackToEstimate(pack, ownerId);
+  const wake = wakeMatchForPack(pack);
   return {
     id: `job-${pack.packId}`,
     ownerId,
-    code: estimate.code,
+    code: wake?.jobCode || estimate.code,
     title: pack.title,
     client: pack.client,
     discipline: "mechanical",
     kind: "estimate",
     status: "OPEN",
-    window: "This job",
-    workingFigure: "Working",
+    window: wake?.window || "This job",
+    workingFigure: wake && isWakeIdentityOnly(pack) ? "Official revision locked" : "Working",
     hseNote: "On this desk",
   };
 }

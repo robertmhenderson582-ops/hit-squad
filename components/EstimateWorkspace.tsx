@@ -39,6 +39,13 @@ import {
   parseEstimateXlsx,
   type EstimateImport,
 } from "@/lib/estimate-xlsx-import";
+import {
+  classifyEstimateWorkbook,
+  CLIENT_TEMPLATE_STAGED,
+  shouldStageClientWorkbook,
+  type ClientWorkbookClass,
+} from "@/lib/client-estimate-ingest";
+import { siteIdFromSite } from "@/lib/local-estimates";
 import type { EstimateStatus } from "@/lib/estimate-status";
 import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
 import { mergeSchedule, type PhaseScheduleState } from "@/lib/phase-schedule";
@@ -144,6 +151,7 @@ export function EstimateWorkspace({
   const [importError, setImportError] = useState("");
   const [importBusy, setImportBusy] = useState(false);
   const [pendingImport, setPendingImport] = useState<EstimateImport | null>(null);
+  const [pendingClientFace, setPendingClientFace] = useState<ClientWorkbookClass | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const { resolvedTheme } = useDisplay();
   const paper = resolvedTheme === "day";
@@ -189,11 +197,19 @@ export function EstimateWorkspace({
   async function readWorkbook(file: File) {
     setImportError("");
     setExportError("");
+    setPendingClientFace(null);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
+      const classified = await classifyEstimateWorkbook(bytes, file.name);
+      if (shouldStageClientWorkbook(classified)) {
+        setPendingImport(null);
+        setPendingClientFace(classified);
+        return;
+      }
       setPendingImport(await parseEstimateXlsx(bytes));
     } catch {
       setPendingImport(null);
+      setPendingClientFace(null);
       setImportError(ESTIMATE_IMPORT_ERROR);
     }
   }
@@ -209,7 +225,7 @@ export function EstimateWorkspace({
           title: name || crumb,
           client: boundClient,
           site: boundSite,
-          siteId: "site-madison",
+          siteId: siteIdFromSite(boundSite, boundClient),
           createdAt: Date.now(),
           updatedAt: Date.now(),
           ownerEmail: "",
@@ -412,6 +428,21 @@ export function EstimateWorkspace({
         </div>
         </ModalPortal>
       ) : null}
+      {pendingClientFace ? (
+        <EstimateImportModal
+          title="Client face staged"
+          lines={[
+            pendingClientFace.label,
+            pendingClientFace.note,
+            pendingClientFace.packId ? `Reserved pack ${pendingClientFace.packId}` : "No reserved pack slot",
+            CLIENT_TEMPLATE_STAGED,
+          ]}
+          applyLabel="Keep staged"
+          busy={false}
+          onCancel={() => setPendingClientFace(null)}
+          onApply={() => setPendingClientFace(null)}
+        />
+      ) : null}
       {pendingImport ? (
         <EstimateImportModal
           title="Import workbook"
@@ -422,7 +453,7 @@ export function EstimateWorkspace({
               title: name || crumb,
               client: boundClient,
               site: boundSite,
-              siteId: "site-madison",
+              siteId: siteIdFromSite(boundSite, boundClient),
               createdAt: 0,
               updatedAt: 0,
               ownerEmail: "",

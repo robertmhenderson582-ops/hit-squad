@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AbidingDocumentsDesk } from "@/components/AbidingDocumentsDesk";
 
 const ROOMS: { name: string; note: string }[] = [
   { name: "Clients", note: "Plant and agreement names. Ids stay real underneath." },
@@ -9,6 +10,7 @@ const ROOMS: { name: string; note: string }[] = [
   { name: "Tickets", note: "Filed Ticket button items. Not Inbox." },
   { name: "Workbooks", note: "Gut-check sheets. Live packs stay in Estimates." },
   { name: "Snapshots", note: "Dated dumps before an outage-window republish." },
+  { name: "Contracts / Agreements", note: "Abiding PLA, CBA, MSA, and rate sheets. List + open per site, company-scoped." },
 ];
 
 export function VaultDesk() {
@@ -48,6 +50,9 @@ export function VaultDesk() {
             <p className="mt-1 text-xs text-[#5b6f73]">{room.note}</p>
           </article>
         ))}
+      </div>
+      <div className="mt-5">
+        <AbidingDocumentsDesk heading="Contracts / Agreements" />
       </div>
     </section>
   );

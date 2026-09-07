@@ -11,10 +11,11 @@ import { defaultEstimateName, isDefaultEstimateName, startJobEventLabel } from "
 import { applyPackToStore } from "@/lib/estimate-pack";
 import { ESTIMATE_IMPORT_ERROR } from "@/lib/estimate-xlsx";
 import { createPackFromImport, parseEstimateXlsx } from "@/lib/estimate-xlsx-import";
+import { classifyEstimateWorkbook, CLIENT_TEMPLATE_STAGED, shouldStageClientWorkbook } from "@/lib/client-estimate-ingest";
 import { newEstimatePackId } from "@/lib/estimate-open";
 import { scheduleVaultUpsert } from "@/lib/estimate-vault-client";
 
-const CLIENTS = ["Phillips 66", "Georgia Power", "Shop"];
+const CLIENTS = ["Phillips 66", "Georgia Power", "Monroe Energy", "Shop"];
 const SITES = [
   "Wood River — Roxana, IL",
   "Rodeo — Rodeo, CA",
@@ -22,6 +23,7 @@ const SITES = [
   "Ferndale — Ferndale, WA",
   "Billings — Billings, MT",
   "Yates — Newnan, GA",
+  "Monroe Energy — Trainer, PA",
 ];
 export type EstimateSize = "outage" | "other" | "shop";
 
@@ -99,7 +101,13 @@ export function NewEstimateModal({
   async function createFromWorkbook(file: File) {
     setImportError("");
     try {
-      const imported = await parseEstimateXlsx(new Uint8Array(await file.arrayBuffer()));
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const classified = await classifyEstimateWorkbook(bytes, file.name);
+      if (shouldStageClientWorkbook(classified)) {
+        setImportError(CLIENT_TEMPLATE_STAGED);
+        return;
+      }
+      const imported = await parseEstimateXlsx(bytes);
       const pack = createPackFromImport(imported, lens?.email || "");
       applyPackToStore(window.localStorage, pack);
       scheduleVaultUpsert(pack.packId);

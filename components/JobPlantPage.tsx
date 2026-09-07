@@ -15,11 +15,16 @@ import { useAlias, useDeskLens, useOwnerDesk } from "@/components/OwnerDeskConte
 import { useSession } from "@/components/SessionProvider";
 import { hasBuildDesk } from "@/lib/desk-role";
 import { companyScopeFor } from "@/lib/companies";
-import { visibleDeskPacks } from "@/lib/estimate-scope";
 import { VIEW_RESPONSIBILITIES, VISUAL_ROSTER } from "@/lib/owner-desk";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
-import { catalogSeedsAllowedOnDesk, jobByCode, plantJobTally, plantJobsLine, plantTabFromQuery, plantTabQuery, visibleSeedJobs, type PlantTab } from "@/lib/jobs";
-import { listLocalPacks, localPackToJob } from "@/lib/local-estimates";
+import { catalogSeedsAllowedOnDesk, jobByCode, plantJobTally, plantJobsLine, plantTabFromQuery, plantTabQuery, PLANT_TABS, visibleSeedJobs, type PlantTab } from "@/lib/jobs";
+import { localPackToJob } from "@/lib/local-estimates";
+import { westCoastClockNote } from "@/lib/abiding-documents";
+import { AbidingDocumentsDesk } from "@/components/AbidingDocumentsDesk";
+import { packsForViewedDesk } from "@/lib/lens-packs";
+import { catalogSites } from "@/lib/desk-data";
+import { wakeShells } from "@/lib/rodeo-monroe-wake";
+import { driveViewUrl } from "@/lib/work-folder";
 
 const PLANTS: Record<string, { client: string; folder: string; name: string; city: string; plant: string; site: string }> = {
   "wood-river": {
@@ -70,9 +75,15 @@ const PLANTS: Record<string, { client: string; folder: string; name: string; cit
     plant: "Billings refinery",
     site: "Billings — Billings, MT",
   },
+  "monroe-energy": {
+    client: "MADISON · MONROE ENERGY",
+    folder: "Monroe Energy",
+    name: "Monroe Energy",
+    city: "Trainer, PA",
+    plant: "Trainer refinery",
+    site: "Monroe Energy — Trainer, PA",
+  },
 };
-
-const TABS = ["Overview", "Estimates", "Change orders", "People"] as const;
 
 export function JobPlantPage({ slug }: { slug: string }) {
   const plant = PLANTS[slug] ?? PLANTS["wood-river"];
@@ -96,9 +107,9 @@ export function JobPlantPage({ slug }: { slug: string }) {
   lensRef.current = lens;
   useEffect(() => {
     const current = lensRef.current;
-    const packs = current ? visibleDeskPacks(current, viewingAs, undefined, companyScopeFor(current, companyId)) : [];
+    const packs = current ? packsForViewedDesk(current, viewingAs, seat) : [];
     setLocalJobs(packs.map((pack) => localPackToJob(pack)));
-  }, [board, companyId, lensKey, viewingAs]);
+  }, [board, companyId, lensKey, viewingAs, seat]);
   const openedJob = jobByCode(jobCode, localJobs);
   const closed = readClosed().filter((item) => item.kind === "estimate").map((item) => item.id);
   const plantEstimates = estimatesForPlant(
@@ -112,6 +123,13 @@ export function JobPlantPage({ slug }: { slug: string }) {
     ...localJobs,
   ]);
   const openedEstimate = openedJob ? estimateForJob(openedJob, board?.estimates ?? []) : undefined;
+  const plantSite = (board?.sites?.length ? board.sites : catalogSites()).find(
+    (row) => row.name.toLowerCase() === plant.name.toLowerCase(),
+  );
+  const westNote = westCoastClockNote(plant.name, plant.folder);
+  const openedWake = openedJob
+    ? wakeShells().find((row) => row.jobCode === openedJob.code || row.title === openedJob.title)
+    : undefined;
 
   function setTab(next: PlantTab) {
     const params = new URLSearchParams(searchParams.toString());
@@ -169,6 +187,21 @@ export function JobPlantPage({ slug }: { slug: string }) {
             <Link href={estimateHref(openedEstimate.id)} className="job-action mt-4 inline-flex">
               Open estimate
             </Link>
+          ) : openedWake ? (
+            <p className="mt-4 text-sm text-[#5b6f73]">
+              Live pack is reserved ({openedWake.packId}). Official revision locks filled totals —
+              ingest is staged so this card does not invent calendars.
+            </p>
+          ) : null}
+          {openedWake ? (
+            <a
+              href={driveViewUrl(openedWake.officialRevisionId)}
+              target="_blank"
+              rel="noreferrer"
+              className="job-action mt-3 inline-flex"
+            >
+              Open official revision
+            </a>
           ) : null}
         </article>
       ) : jobCode ? (
@@ -176,7 +209,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
       ) : null}
 
       <div className="mt-5 flex flex-wrap gap-2">
-        {TABS.map((item) => (
+        {PLANT_TABS.map((item) => (
           <button
             key={item}
             type="button"
@@ -211,6 +244,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
               {siteClockFromText(plant.name, plant.folder) === "east-coast" ? (
                 <p className="mt-1 text-xs text-[#5b6f73]">{alias("PCA0001103")} — never PA or Mid-Atlantic</p>
               ) : null}
+              {westNote ? <p className="mt-1 text-xs text-[#5b6f73]">{alias(westNote)}</p> : null}
             </article>
           </div>
           <p className="mt-5 text-sm text-[#5b6f73]">
@@ -219,6 +253,12 @@ export function JobPlantPage({ slug }: { slug: string }) {
             {alias(plant.name)}.
           </p>
         </>
+      ) : null}
+
+      {tab === "Abiding" ? (
+        <div className="mt-6">
+          <AbidingDocumentsDesk siteId={plantSite?.id} siteName={plant.name} />
+        </div>
       ) : null}
 
       {tab === "Estimates" ? (
