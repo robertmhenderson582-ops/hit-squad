@@ -6,6 +6,8 @@ import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { JOSEPH_EMAIL, SHANE_EMAIL } from "./tester-seats.ts";
 import { memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
 import { responseLeaksDrive, type EstimatePackSnapshot } from "./estimate-pack.ts";
+import { HIS_AROMATICS_FILE_ID, HIS_AROMATICS_FREEZE_FILE_ID, HIS_AROMATICS_PACK_ID } from "./his-wood-river.ts";
+import { defaultPhaseSchedule } from "./phase-schedule.ts";
 import {
   archiveVisiblePack,
   deleteVisiblePack,
@@ -658,5 +660,67 @@ describe("estimate vault service", () => {
     if (emptyFlush.ok) {
       assert.equal(((emptyFlush.pack.purchasing as { lines: unknown[] }).lines || []).length, 1);
     }
+  });
+
+  it("upsert of stub-smashed local Aromatics restores from healthy Drive and does not persist stubs", async () => {
+    const drive = memoryDrive();
+    const job2027 = {
+      projectStart: "2027-01-11",
+      phases: defaultPhaseSchedule().phases.map((row) => {
+        if (row.id === "pre") return { ...row, start: "2027-01-11", stop: "2027-02-28" };
+        if (row.id === "oil-out") return { ...row, start: "2027-03-01", stop: "2027-03-10" };
+        if (row.id === "mech") return { ...row, start: "2027-03-11", stop: "2027-04-17" };
+        if (row.id === "oil-in") return { ...row, start: "2027-04-18", stop: "2027-05-03" };
+        return { ...row, start: "2027-05-04", stop: "2027-05-21" };
+      }),
+    };
+    const healthy = {
+      packId: HIS_AROMATICS_PACK_ID,
+      key: `new:${HIS_AROMATICS_PACK_ID}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 400,
+      ownerEmail: tester.email,
+      schedule: job2027,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-02-28" }] }] },
+      otherCost: { misc: [{ id: "mc-1", item: "Alloy rod", qty: 65, each: 1000 }] },
+    };
+    drive.files.set(HIS_AROMATICS_FILE_ID, {
+      file: {
+        id: HIS_AROMATICS_FILE_ID,
+        name: "wood-river-2027-aromatics-turnaround.json",
+        properties: { packId: HIS_AROMATICS_PACK_ID, ownerEmail: tester.email },
+      },
+      content: JSON.stringify(healthy),
+    });
+    drive.files.set(HIS_AROMATICS_FREEZE_FILE_ID, {
+      file: { id: HIS_AROMATICS_FREEZE_FILE_ID, name: "2026-09-02 2027 Aromatics freeze.json" },
+      content: JSON.stringify({ ...healthy, ownerEmail: "freeze-should-not-win@example.com" }),
+    });
+    const smashed = {
+      ...healthy,
+      updatedAt: Date.now() + 5_000,
+      ownerEmail: OWNER_LOGIN_EMAIL,
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-01-11" }] }] },
+      otherCost: { misc: [{ id: "mc-thin", item: "Seed leftover", qty: 1, each: 50 }] },
+    };
+    const saved = await upsertVisiblePack(owner, smashed, drive);
+    assert.equal(saved.ok, true);
+    if (!saved.ok) return;
+    assert.equal(
+      ((saved.pack.crew as { staff: Array<{ ranges: Array<{ end: string }> }> }).staff[0]?.ranges[0]?.end),
+      "2027-02-28",
+    );
+    const liveWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FILE_ID));
+    assert.equal(
+      ((liveWritten.crew as { staff: Array<{ ranges: Array<{ end: string }> }> }).staff[0]?.ranges[0]?.end),
+      "2027-02-28",
+    );
+    assert.equal(((liveWritten.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
+    const freezeWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FREEZE_FILE_ID));
+    assert.equal(freezeWritten.ownerEmail, "freeze-should-not-win@example.com");
   });
 });

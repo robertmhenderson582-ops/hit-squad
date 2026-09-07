@@ -1,3 +1,9 @@
+import {
+  aromaticsPackIsThinner,
+  aromaticsPackLooksSmashed,
+  aromaticsSourceCanRestore,
+  isAromaticsIdentity,
+} from "./aromatics-freeze.ts";
 import { catalogSites } from "./desk-data.ts";
 import { parseEstimateStatus, resolveEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { clampStatusForSite, regularClientFromParts } from "./site-regular.ts";
@@ -26,15 +32,14 @@ import {
   PHASE_STORE_PREFIX,
   isDefaultSeedSchedule,
   rangesHaveCustomClock,
-  scheduleIsDemoSeedClock,
 } from "./phase-schedule.ts";
 import { JOB_META_PREFIX } from "./staffing-plan.ts";
 import { ORG_CHART_STORE_PREFIX } from "./org-chart.ts";
 
 const AROMATICS_PACK_ID = "new-mtj7bvtk-akmei";
 
-function isAromaticsPack(pack: { packId?: string } | null | undefined) {
-  return pack?.packId === AROMATICS_PACK_ID;
+function isAromaticsPack(pack: { packId?: string; title?: string } | null | undefined) {
+  return isAromaticsIdentity(pack);
 }
 
 function scheduleHasPayload(schedule: unknown) {
@@ -138,10 +143,7 @@ export function crewHasCustomClock(crew: unknown) {
 /** Live pack whose Job setup / crew calendars were remapped onto the 2026 demo seed. */
 export function packClockIsSeedSmashed(pack: EstimatePackSnapshot | null | undefined) {
   if (!pack?.packId) return false;
-  if (isAromaticsPack(pack)) {
-    if (!scheduleHasPayload(pack.schedule)) return false;
-    return scheduleIsDemoSeedClock(pack.schedule);
-  }
+  if (isAromaticsPack(pack)) return aromaticsPackLooksSmashed(pack);
   return isDefaultSeedSchedule(pack.schedule) && crewHasRows(pack.crew) && !crewHasCustomClock(pack.crew);
 }
 
@@ -384,7 +386,47 @@ export function pickPack(
 ): EstimatePackSnapshot | null {
   if (!vault?.packId) return local ?? null;
   if (!local?.packId) return packHasWork(vault) ? vault : local ?? null;
-  if (packClockIsSeedSmashed(local) && !packClockIsSeedSmashed(vault)) {
+  if (isAromaticsPack(local) || isAromaticsPack(vault)) {
+    if (packClockIsSeedSmashed(local) && aromaticsSourceCanRestore(vault)) {
+      return {
+        ...restorePackClock(local, vault),
+        ownerEmail: vault.ownerEmail || local.ownerEmail,
+        sharedWith: vault.sharedWith,
+        transferredFrom: vault.transferredFrom,
+        transferredTo: vault.transferredTo,
+        transferredToName: vault.transferredToName,
+        transferredFromName: vault.transferredFromName,
+        status: vault.status || local.status,
+      };
+    }
+    if (packClockIsSeedSmashed(local) && !aromaticsSourceCanRestore(vault)) {
+      return {
+        ...local,
+        ownerEmail: vault.ownerEmail || local.ownerEmail,
+        sharedWith: vault.sharedWith ?? local.sharedWith,
+        transferredFrom: vault.transferredFrom ?? local.transferredFrom,
+        transferredTo: vault.transferredTo ?? local.transferredTo,
+        transferredToName: vault.transferredToName ?? local.transferredToName,
+        transferredFromName: vault.transferredFromName ?? local.transferredFromName,
+        status: vault.status || local.status,
+      };
+    }
+    if (packClockIsSeedSmashed(vault) && !packClockIsSeedSmashed(local)) {
+      return restorePackClock(vault, local);
+    }
+    if (aromaticsPackIsThinner(local, vault) && aromaticsSourceCanRestore(vault)) {
+      return {
+        ...restorePackClock(local, vault),
+        ownerEmail: vault.ownerEmail || local.ownerEmail,
+        sharedWith: vault.sharedWith,
+        transferredFrom: vault.transferredFrom,
+        transferredTo: vault.transferredTo,
+        transferredToName: vault.transferredToName,
+        transferredFromName: vault.transferredFromName,
+        status: vault.status || local.status,
+      };
+    }
+  } else if (packClockIsSeedSmashed(local) && !packClockIsSeedSmashed(vault)) {
     return {
       ...restorePackClock(local, vault),
       ownerEmail: vault.ownerEmail || local.ownerEmail,
@@ -395,8 +437,7 @@ export function pickPack(
       transferredFromName: vault.transferredFromName,
       status: vault.status || local.status,
     };
-  }
-  if (packClockIsSeedSmashed(vault) && !packClockIsSeedSmashed(local)) {
+  } else if (packClockIsSeedSmashed(vault) && !packClockIsSeedSmashed(local)) {
     return restorePackClock(vault, local);
   }
   const vaultMoved =
@@ -531,7 +572,7 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
   if (!isLocalPackId(pack.packId)) return;
   if (packClockIsSeedSmashed(pack)) {
     const existing = collectPack(store, pack.packId);
-    if (existing && !packClockIsSeedSmashed(existing) && scheduleHasWork(existing.schedule)) {
+    if (existing && !packClockIsSeedSmashed(existing) && (scheduleHasWork(existing.schedule) || aromaticsSourceCanRestore(existing))) {
       pack = restorePackClock(pack, existing);
     }
   }

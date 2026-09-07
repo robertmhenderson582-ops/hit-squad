@@ -16,7 +16,6 @@ import {
   applyUnitOtPick,
   defaultPhaseSchedule,
   isDefaultSeedSchedule,
-  scheduleIsDemoSeedClock,
   patchPhase,
   patchUnitPhase,
   readSchedule,
@@ -52,6 +51,7 @@ import {
   vaultListHydratePending,
   type VaultUpsertResult,
 } from "@/lib/estimate-vault-client";
+import { aromaticsStateLooksSmashed } from "@/lib/aromatics-freeze";
 import { crewHasRows } from "@/lib/estimate-pack";
 import { HIS_AROMATICS_PACK_ID } from "@/lib/his-wood-river";
 import { persistCrewTravel } from "@/lib/other-cost";
@@ -194,7 +194,9 @@ export function EstimatePackageProvider({
     if (!packId || !findLocalPack(packId)) return false;
     const localSchedule = readSchedule(estimateKey);
     const localCrew = readCrew(estimateKey);
-    if (packId === HIS_AROMATICS_PACK_ID && scheduleIsDemoSeedClock(localSchedule)) return false;
+    if (packId === HIS_AROMATICS_PACK_ID && aromaticsStateLooksSmashed(packId, localSchedule, localCrew, findLocalPack(packId)?.title)) {
+      return false;
+    }
     if (isDefaultSeedSchedule(localSchedule) && crewHasRows(localCrew)) return false;
     return true;
   });
@@ -234,7 +236,7 @@ export function EstimatePackageProvider({
     const seedPendingVault =
       Boolean(packId) &&
       (packId === HIS_AROMATICS_PACK_ID
-        ? scheduleIsDemoSeedClock(localSchedule)
+        ? aromaticsStateLooksSmashed(packId, localSchedule, readCrew(estimateKey), findLocalPack(packId)?.title)
         : isDefaultSeedSchedule(localSchedule) && crewHasRows(readCrew(estimateKey)));
     const paintFromLocal = () => {
       const next = readSchedule(estimateKey);
@@ -251,9 +253,9 @@ export function EstimatePackageProvider({
     if (hasLocal && !seedPendingVault) paintFromLocal();
     else setReady(false);
     const boot = packId
-      ? hasLocal || vaultListHydratePending()
-        ? hydrateFromVault()
-        : hydrateOpenPack(packId)
+      ? packId === HIS_AROMATICS_PACK_ID || !(hasLocal || vaultListHydratePending())
+        ? hydrateOpenPack(packId)
+        : hydrateFromVault()
       : Promise.resolve([]);
     void boot.finally(() => {
       if (cancelled) return;
@@ -292,8 +294,15 @@ export function EstimatePackageProvider({
     return () => window.clearTimeout(timer);
   }, [estimateKey, ready]);
 
+  function skipSmashedAromaticsWrite() {
+    const packId = packIdFromStoreKey(estimateKey);
+    if (!packId) return false;
+    return aromaticsStateLooksSmashed(packId, schedule, crew, findLocalPack(packId)?.title);
+  }
+
   useEffect(() => {
     if (!ready) return;
+    if (skipSmashedAromaticsWrite()) return;
     writeSchedule(estimateKey, schedule);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
@@ -304,6 +313,7 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
+    if (skipSmashedAromaticsWrite()) return;
     writeCrew(estimateKey, crew);
     persistCrewTravel(estimateKey, crew, {
       staffPerMile: jobMeta.staffMileageRate,
@@ -318,6 +328,7 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
+    if (skipSmashedAromaticsWrite()) return;
     writeOrgChart(estimateKey, orgChart);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
@@ -328,6 +339,7 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
+    if (skipSmashedAromaticsWrite()) return;
     writeJobMeta(estimateKey, jobMeta);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
@@ -338,6 +350,7 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
+    if (skipSmashedAromaticsWrite()) return;
     writeActivities(estimateKey, activities);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
@@ -351,6 +364,7 @@ export function EstimatePackageProvider({
     const packId = packIdFromStoreKey(estimateKey);
     if (!packId) return;
     return onEstimateSheets(() => {
+      if (skipSmashedAromaticsWrite()) return;
       touchLocalPack(packId);
       queueVaultUpsert(packId);
     });

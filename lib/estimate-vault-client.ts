@@ -195,9 +195,6 @@ export async function hydrateOpenPack(
   const target = browserStore(store);
   if (!target || !packId) return [];
   const seat = requestedVaultSeat(opts) || "owner";
-  if (hydratePromise && hydrateSeat === seat) {
-    return hydrateFromVault(store, opts);
-  }
   const list = hydrateFromVault(store, opts);
   try {
     const started = Date.now();
