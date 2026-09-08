@@ -6,6 +6,7 @@ import { after, beforeEach, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  CBI_ID,
   COMPANIES,
   LUCKY13_ID,
   LUCKY13_NAME,
@@ -18,6 +19,8 @@ import {
   COMPANY_LOGO_MAX_ENCODED,
   COMPANY_LOGO_TOO_LARGE,
   inferCompanyId,
+  isRetiredPeerCompany,
+  isRetiredPeerPack,
   assignmentChoices,
   isStandaloneId,
   mergeCompanies,
@@ -73,16 +76,22 @@ after(() => {
 });
 
 describe("company catalog and seed", () => {
-  it("lists Hit Squad, Madison, CBI, and Lucky 13", () => {
+  it("lists Hit Squad and Madison only — CBI and Lucky 13 stay off the catalog", () => {
     assert.deepEqual(
       COMPANIES.map((row) => row.id),
-      ["hitsquad", "madison", "cbi", LUCKY13_ID],
+      ["hitsquad", "madison"],
     );
-    assert.equal(COMPANIES.find((row) => row.id === "cbi")?.name, "CBI");
-    assert.equal(COMPANIES.find((row) => row.id === LUCKY13_ID)?.name, LUCKY13_NAME);
+    assert.equal(COMPANIES.some((row) => row.id === CBI_ID || row.id === LUCKY13_ID), false);
+    assert.equal(isRetiredPeerCompany(CBI_ID), true);
+    assert.equal(isRetiredPeerCompany(LUCKY13_ID), true);
+    assert.equal(mergeCompanies([{ id: CBI_ID, name: "CBI" }, { id: LUCKY13_ID, name: LUCKY13_NAME }]).some((row) => row.id === CBI_ID || row.id === LUCKY13_ID), false);
+    assert.equal(assignmentChoices().some((row) => row.id === CBI_ID || row.id === LUCKY13_ID), false);
+    assert.equal(isRetiredPeerPack({ packId: "new-cbi-shape-1", client: "CBI", title: "Shop sketch" }), true);
+    assert.equal(isRetiredPeerPack({ client: LUCKY13_NAME, title: "Yard fab" }), true);
+    assert.equal(isRetiredPeerPack({ client: "Phillips 66", title: "Madison CAT 2 (Pit Stop)", site: "Wood River" }), false);
   });
 
-  it("seeds Nathan and John on Madison, James on CBI, everyone else Hit Squad", () => {
+  it("keeps James and John Henry seats parked off Madison, everyone else Hit Squad or Madison", () => {
     assert.equal(seedCompanyForEmail("nathanboyte@gmail.com"), "madison");
     assert.equal(seedCompanyForEmail(JOHN_BEECH_EMAIL), "madison");
     assert.equal(seedCompanyForEmail(JAMES_EMAIL), "cbi");
@@ -130,10 +139,10 @@ describe("assign and visibility", () => {
     assert.equal(peekAssignedCompany(JAMES_EMAIL), "hitsquad");
   });
 
-  it("lets the owner see every company and testers only their assigned one", () => {
+  it("lets the owner see Hit Squad and Madison, and parks retired peer seats off the catalog", () => {
     assert.deepEqual(
       companiesForScope(owner).map((row) => row.id),
-      ["hitsquad", "madison", "cbi", LUCKY13_ID],
+      ["hitsquad", "madison"],
     );
     assert.deepEqual(
       companiesForScope(nathan).map((row) => row.id),
@@ -141,21 +150,19 @@ describe("assign and visibility", () => {
     );
     assert.deepEqual(
       companiesForScope(james).map((row) => row.id),
-      ["cbi"],
+      [],
     );
     assert.equal(canSeeCompany(joseph, "madison"), false);
-    assert.equal(canSeeCompany(joseph, "cbi"), false);
+    assert.equal(canSeeCompany(joseph, CBI_ID), false);
     assert.equal(canSeeCompany(novus, "hitsquad"), true);
-    assert.equal(canSeeCompany(owner, "cbi"), true);
-    assert.equal(canSeeCompany(owner, LUCKY13_ID), true);
     assert.equal(canSeeCompany(johnHenry, LUCKY13_ID), true);
     assert.equal(canSeeCompany(johnHenry, "madison"), false);
     assert.equal(canSeeCompany(nathan, LUCKY13_ID), false);
     assert.equal(canSeeCompany(john, "madison"), true);
-    assert.equal(canSeeCompany(john, "cbi"), false);
+    assert.equal(canSeeCompany(john, CBI_ID), false);
     assert.deepEqual(
       companiesForScope(johnHenry).map((row) => row.id),
-      [LUCKY13_ID],
+      [],
     );
   });
 
@@ -192,7 +199,8 @@ describe("assign and visibility", () => {
 
     const jamesDesk = jobsOnDesk([], [], false, james);
     assert.equal(jamesDesk.some((job) => job.code === "TA-8841"), false);
-    assert.equal(jamesDesk.some((job) => job.title === "Shop sketch"), true);
+    assert.equal(jamesDesk.some((job) => job.title === "Shop sketch"), false);
+    assert.equal(jamesDesk.some((job) => /cbi|lucky\s*13/i.test(`${job.client} ${job.title}`)), false);
 
     const transferred = {
       packId: "new-handed-1",
@@ -219,14 +227,11 @@ describe("assign and visibility", () => {
     assert.equal(ownerBoard.sites.length > 0, true);
   });
 
-  it("seeds a CBI shop sketch on James only, without live Cat 2 or plant dollars", () => {
-    const dummy = dummyPacksForUser(james);
-    assert.equal(dummy.length, 1);
-    assert.equal(dummy[0].client, "CBI");
-    assert.equal(dummy[0].packId, "new-cbi-shape-1");
-    assert.equal(/shahan|comp|p66|madison|mtaajd/i.test(JSON.stringify(dummy[0])), false);
+  it("does not seed a CBI shop sketch on any seat", () => {
+    assert.deepEqual(dummyPacksForUser(james), []);
     assert.deepEqual(dummyPacksForUser(nathan), []);
     assert.deepEqual(dummyPacksForUser(owner), []);
+    assert.deepEqual(dummyPacksForUser(johnHenry), []);
   });
 
   it("lets the owner add a company onto the live list and assign it", async () => {
@@ -235,12 +240,15 @@ describe("assign and visibility", () => {
     if (!("ok" in added)) return;
     assert.equal(added.company.name, "Acme Field Services");
     assert.equal((await listCompanies()).some((row) => row.id === added.company.id), true);
-    assert.equal((await listCompanies()).some((row) => row.name === LUCKY13_NAME), true);
+    assert.equal((await listCompanies()).some((row) => row.name === LUCKY13_NAME), false);
     await setAssignedCompany(JOHN_HENRY_EMAIL, added.company.id);
     assert.equal(await assignedCompany(JOHN_HENRY_EMAIL), added.company.id);
     const again = await addCompany(LUCKY13_NAME);
-    assert.equal("ok" in again, true);
-    if ("ok" in again) assert.equal(again.company.id, LUCKY13_ID);
+    assert.equal("error" in again, true);
+    assert.equal((await listCompanies()).some((row) => row.id === LUCKY13_ID), false);
+    const cbi = await addCompany("CBI");
+    assert.equal("error" in cbi, true);
+    assert.equal((await listCompanies()).some((row) => row.id === CBI_ID), false);
   });
 
   it("keeps a custom company and assignment after the local cache is wiped", async () => {
@@ -272,7 +280,7 @@ describe("company desk logo on file", () => {
       ],
     });
     assert.equal(parsed.companies.find((row) => row.id === "madison")?.logo, "/madison.png");
-    assert.equal(parsed.companies.find((row) => row.id === "cbi")?.logo, undefined);
+    assert.equal(parsed.companies.some((row) => row.id === "cbi" || row.id === LUCKY13_ID), false);
 
     const merged = mergeCompanies(parsed.companies);
     assert.equal(merged.find((row) => row.id === "madison")?.logo, "/madison.png");

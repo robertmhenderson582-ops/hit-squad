@@ -8,6 +8,7 @@ import {
   canSeeCompany,
   companyLogoSrc,
   inferCompanyIdFromParts,
+  isRetiredPeerCompany,
   type Company,
   type CompanyScope,
 } from "./companies.ts";
@@ -27,6 +28,7 @@ export function resolveEstimateCompanyLogo(
   scope?: CompanyScope | null,
 ): string | null {
   const id = inferCompanyIdFromParts(client, site);
+  if (isRetiredPeerCompany(id)) return null;
   if (scope && !canSeeCompany(scope, id)) return null;
   const row = companies.find((company) => company.id === id);
   return companyLogoSrc(row?.logo);
