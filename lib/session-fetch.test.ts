@@ -48,3 +48,15 @@ test("fetchJsonWithDeadline throws a recoverable error when fetch hangs", async 
   });
   assert.ok(Date.now() - started < 300, "hung fetch must abort within the deadline");
 });
+
+test("fetchJsonWithDeadline can use a custom timeout message", async () => {
+  globalThis.fetch = (() => new Promise(() => {})) as typeof fetch;
+  await assert.rejects(
+    () => fetchJsonWithDeadline("/api/desk/seats", { method: "POST" }, 40, "Add user timed out. Try again."),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message, "Add user timed out. Try again.");
+      return true;
+    },
+  );
+});

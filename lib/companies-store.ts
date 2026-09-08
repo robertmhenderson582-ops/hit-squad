@@ -166,6 +166,11 @@ export async function listCompanies(): Promise<Company[]> {
   return mergeCompanies((await hydrateCompanyStore()).companies);
 }
 
+/** Local cache / seed only. Add-user success must not wait on Drive again. */
+export function peekCompanies(): Company[] {
+  return mergeCompanies(readCache().companies);
+}
+
 export async function isKnownCompany(id: string): Promise<boolean> {
   if (id === STANDALONE_ID) return true;
   return (await listCompanies()).some((row) => row.id === id);

@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import bcrypt from "bcryptjs";
-import { assignedCompany, isKnownCompany, setAssignedCompany } from "./companies-store.ts";
+import { assignedCompany, isKnownCompany, peekAssignedCompany, setAssignedCompany } from "./companies-store.ts";
 import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
 import { peekPrivileges } from "./privileges-store.ts";
 import {
@@ -1011,14 +1011,16 @@ export function seatHasPassword(email: string): boolean {
   return Boolean(findUserByEmail(email)?.passwordHash);
 }
 
-export async function listSeatRows(): Promise<Array<PublicUser & { passwordIssued: boolean; companyId: string }>> {
-  await hydrateSeatStore();
+export async function listSeatRows(options?: {
+  hydrate?: boolean;
+}): Promise<Array<PublicUser & { passwordIssued: boolean; companyId: string }>> {
+  if (options?.hydrate !== false) await hydrateSeatStore();
   const rows = ownerUsers();
   return Promise.all(
     rows.map(async (user) => ({
       ...toPublicUser(user),
       passwordIssued: Boolean(user.passwordHash),
-      companyId: await assignedCompany(user.email),
+      companyId: options?.hydrate === false ? peekAssignedCompany(user.email) : await assignedCompany(user.email),
     })),
   );
 }
