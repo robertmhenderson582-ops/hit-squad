@@ -31,6 +31,7 @@ import {
 } from "@/lib/phase-schedule";
 import { BOILER17_JOB_NUMBER, defaultStatusForBoiler17, isBoiler17PackId } from "@/lib/boiler-17";
 import { seedBoiler17LocalDefaults } from "@/lib/his-wood-river";
+import { isRodeoU110PackId, seedRodeoU110LocalDefaults } from "@/lib/madison-u110";
 import { emptyJobMeta, hydrateJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
 import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
 import { packIdFromStoreKey, findLocalPack, renameLocalPackTitle, touchLocalPack, writeLocalPackStatus } from "@/lib/local-estimates";
@@ -259,13 +260,16 @@ export function EstimatePackageProvider({
         ? aromaticsStateLooksSmashed(packId, localSchedule, readCrew(estimateKey), findLocalPack(packId)?.title)
         : isDefaultSeedSchedule(localSchedule) && crewHasRows(readCrew(estimateKey)));
     const paintFromLocal = () => {
+      if (packId && isBoiler17PackId(packId) && typeof window !== "undefined") {
+        seedBoiler17LocalDefaults(window.localStorage, packId);
+      }
+      if (packId && isRodeoU110PackId(packId) && typeof window !== "undefined") {
+        seedRodeoU110LocalDefaults(window.localStorage, packId);
+      }
       const next = readSchedule(estimateKey);
       setSchedule(next);
       setCrewState(syncCrew(readCrew(estimateKey), next));
       setOrgChartState(readOrgChart(estimateKey));
-      if (packId && isBoiler17PackId(packId) && typeof window !== "undefined") {
-        seedBoiler17LocalDefaults(window.localStorage, packId);
-      }
       const nextMeta = readJobMeta(estimateKey);
       if (packId && isBoiler17PackId(packId) && !nextMeta.jobNumber.trim()) {
         const seeded = { ...nextMeta, jobNumber: BOILER17_JOB_NUMBER, area: nextMeta.area || "Boiler 17" };

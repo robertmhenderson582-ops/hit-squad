@@ -28,7 +28,7 @@ describe("client estimate ingest (staged)", () => {
     assert.equal(CLIENT_FACE_MAPPER_SPEC["p66-rodeo-workbook"].family, "B");
     assert.equal(CLIENT_FACE_MAPPER_SPEC["client-estimate-form"].family, "C");
     assert.equal(CLIENT_FACE_MAPPER_SPEC["wood-river-b1"].ingest, "apply-hours");
-    assert.equal(CLIENT_FACE_MAPPER_SPEC["madison-contractor"].ingest, "stage-metadata");
+    assert.equal(CLIENT_FACE_MAPPER_SPEC["madison-contractor"].ingest, "apply-hours-u110");
     assert.equal(CLIENT_FACE_MAPPER_SPEC["p66-rodeo-workbook"].ingest, "stage-metadata");
 
     assert.equal(
@@ -58,7 +58,7 @@ describe("client estimate ingest (staged)", () => {
     assert.equal(familyA.kind, "madison-contractor");
     assert.equal(familyA.staged, true);
     assert.equal(familyA.packId, RODEO_U110_PACK_ID);
-    assert.equal(shouldStageClientWorkbook(familyA), true);
+    assert.equal(shouldStageClientWorkbook(familyA), false);
 
     const familyB = classifyFromSheetsAndName(
       ["Index"],
