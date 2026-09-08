@@ -69,11 +69,11 @@ describe("Joseph full desk", () => {
     assert.doesNotMatch(quality, /Joseph chrome/);
   });
 
-  it("stays off Inbox six and only sees his own tickets", () => {
-    assert.equal(isInboxCircleEmail(JOSEPH_EMAIL), false);
-    assert.equal(canUseInbox(joseph), false);
-    assert.equal(canUseSuggestionBox(joseph), false);
-    assert.equal(canReceiveDeskBot(joseph), false);
+  it("is on the Inbox circle and only sees his own tickets", () => {
+    assert.equal(isInboxCircleEmail(JOSEPH_EMAIL), true);
+    assert.equal(canUseInbox(joseph), true);
+    assert.equal(canUseSuggestionBox(joseph), true);
+    assert.equal(canReceiveDeskBot(joseph), true);
     assert.deepEqual(
       INBOX_CIRCLE.map((row) => row.email),
       [
@@ -83,6 +83,7 @@ describe("Joseph full desk", () => {
         "shane@apcontrolsllc.com",
         "wlanderno@yahoo.com",
         "chancec318@yahoo.com",
+        JOSEPH_EMAIL,
         "novus@hitsquad.local",
       ],
     );

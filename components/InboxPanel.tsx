@@ -5,6 +5,7 @@ import { useConfirmRemove } from "@/components/ConfirmDialog";
 import { PhotoViewer } from "@/components/PhotoViewer";
 import { useInbox } from "@/components/InboxProvider";
 import { attachInboxPhoto, compressCapture, shootViewport } from "@/lib/capture";
+import { INBOX_CIRCLE_COPY } from "@/lib/inbox-circle";
 
 export function InboxPanel({ compact = false }: { compact?: boolean }) {
   const inbox = useInbox();
@@ -141,7 +142,7 @@ export function InboxPanel({ compact = false }: { compact?: boolean }) {
         {inbox.composing ? (
           <div className="mt-4 rounded-xl bg-[#f4f1e8] px-3 py-3">
             <p className="text-sm text-[#163038]">
-              Pick a person. Inbox is those six only.
+              Pick a person. {INBOX_CIRCLE_COPY}
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               {inbox.contacts.map((person) => (
