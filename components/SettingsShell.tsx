@@ -31,6 +31,7 @@ const SECTIONS: {
   { href: "/settings/vault", label: "Data vault", buildDesk: true, privilege: "vault-wipe" },
   { href: "/settings/branding", label: "Branding", workingDesk: true },
   { href: "/settings/sites", label: "Sites", buildDesk: true, privilege: "designer-ship" },
+  { href: "/settings/divisions", label: "Divisions", workingDesk: true },
   { href: "/settings/checks", label: "Checks", ownerOnly: true },
   { href: "/settings/modules", label: "Future modules" },
 ];
