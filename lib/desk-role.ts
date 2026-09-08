@@ -11,6 +11,11 @@ export function isOwner(user?: { role?: string } | null): boolean {
   return user?.role === "owner";
 }
 
+/** Job card Archive / Delete / Restore. Owner desk only. View-as uses the lens. */
+export function canArchiveDeleteJobs(user?: { role?: string } | null): boolean {
+  return isOwner(user);
+}
+
 export function isOperator(user?: { role?: string } | null): boolean {
   return user?.role === "operator";
 }

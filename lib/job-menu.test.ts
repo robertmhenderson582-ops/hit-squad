@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   archiveMenuItem,
   clearHisJobMenuLeftover,
@@ -104,6 +106,23 @@ describe("job menu archive and delete", () => {
       aromatics.id,
       cat2.id,
     ]);
+  });
+
+  it("JobMenuActions shows Archive / Delete / Restore only for the owner lens", () => {
+    const menu = readFileSync(fileURLToPath(new URL("../components/JobMenuActions.tsx", import.meta.url)), "utf8");
+    const tree = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
+    const jobs = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
+    const api = readFileSync(fileURLToPath(new URL("../app/api/desk/estimates/[packId]/route.ts", import.meta.url)), "utf8");
+    assert.match(menu, /canArchiveDeleteJobs\(lens\)/);
+    assert.match(menu, /const ownerMunitions = canArchiveDeleteJobs\(lens\)/);
+    assert.match(menu, /\{ownerMunitions \? \([\s\S]*ARCHIVE[\s\S]*\) : null\}/);
+    assert.match(menu, /\{ownerMunitions \? \([\s\S]*DELETE[\s\S]*\) : null\}/);
+    assert.match(menu, /ownerMunitions \? \([\s\S]*RESTORE[\s\S]*\) : null/);
+    assert.match(menu, /if \(!ownerMunitions && !showHandoff\) return null/);
+    assert.match(tree, /<JobMenuActions/);
+    assert.match(jobs, /<JobMenuActions/);
+    assert.match(api, /canArchiveDeleteJobs\(user\)/);
+    assert.match(api, /Owner tools stay with the owner/);
   });
 
   it("evicts packs that left this desk on the vault list", () => {

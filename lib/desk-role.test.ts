@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildDeskChrome,
+  canArchiveDeleteJobs,
   canUseFollow,
   canLookupRates,
   canOpenRates,
@@ -42,6 +43,30 @@ test("Novus is never a visual tester peer", () => {
   assert.equal(isViewAsSeat("operator-novus"), false);
   assert.equal(isViewAsSeat("novus"), false);
   assert.equal(isFollowSeat("owner"), true);
+});
+
+test("Archive / Delete / Restore stay on the owner desk and hide from testers and View as", () => {
+  const owner = {
+    id: "owner-robert-henderson",
+    email: "robertmhenderson582@gmail.com",
+    name: "Robert Henderson",
+    role: "owner" as const,
+  };
+  const nathan = { role: "tester" as const, email: "nathanboyte@gmail.com" };
+  const chance = { role: "tester" as const, email: "chancec318@yahoo.com" };
+  const joseph = { role: "tester" as const, email: JOSEPH_EMAIL };
+  assert.equal(canArchiveDeleteJobs(owner), true);
+  assert.equal(canArchiveDeleteJobs(nathan), false);
+  assert.equal(canArchiveDeleteJobs(chance), false);
+  assert.equal(canArchiveDeleteJobs(joseph), false);
+  assert.equal(canArchiveDeleteJobs({ role: "operator" }), false);
+  assert.equal(canArchiveDeleteJobs(null), false);
+  assert.equal(canArchiveDeleteJobs(lensUser(owner, "nathan")), false);
+  assert.equal(canArchiveDeleteJobs(lensUser(owner, "chance")), false);
+  assert.equal(canArchiveDeleteJobs(lensUser(owner, "joseph")), false);
+  assert.equal(canArchiveDeleteJobs(lensUser(owner, "owner")), true);
+  assert.equal(pageAllowedForSeat(owner, { ownerOnly: true }), canArchiveDeleteJobs(owner));
+  assert.equal(pageAllowedForSeat(nathan, { ownerOnly: true }), canArchiveDeleteJobs(nathan));
 });
 
 test("operator has build desk; testers do not", () => {

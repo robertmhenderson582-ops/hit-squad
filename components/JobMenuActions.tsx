@@ -18,6 +18,7 @@ import { canReturnPack, canSharePack, packSharedEmails } from "@/lib/estimate-sc
 import { findHandoffSeat, type HandoffSeat } from "@/lib/handoff";
 import { findDeskPack } from "@/lib/lens-packs";
 import { isLocalPackId, deleteLocalPack } from "@/lib/local-estimates";
+import { canArchiveDeleteJobs } from "@/lib/desk-role";
 import { archiveMenuItem, deleteMenuItem, unarchiveMenuItem } from "@/lib/job-menu";
 
 export function vaultPackIdOf(id: string, packId?: string) {
@@ -42,6 +43,7 @@ export function JobMenuActions({
 }) {
   const { lens, seat, viewingAs } = useDeskLens();
   const extras = useHandoffPeople();
+  const ownerMunitions = canArchiveDeleteJobs(lens);
   const menuSeat = viewingAs ? seat : undefined;
   const [handoff, setHandoff] = useState<"share" | "unshare" | "turnover" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -55,41 +57,48 @@ export function JobMenuActions({
   const canShare = Boolean(deskUser && pack && canSharePack(deskUser, pack));
   const canReturn = Boolean(deskUser && pack && canReturnPack(deskUser, pack));
   const sharedWith = sharedEmails.map((email) => findHandoffSeat(email, extras) ?? { name: email, email }) as HandoffSeat[];
+  const showHandoff = Boolean(vaultId && !archived && (canShare || canReturn));
 
   async function refresh() {
     onChange?.();
   }
 
+  if (!ownerMunitions && !showHandoff) return null;
+
   return (
     <div className="relative z-20 flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
       {archived ? (
-        <button
-          type="button"
-          className="job-action"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            unarchiveMenuItem(item, undefined, menuSeat);
-            if (vaultId) void archiveVaultPack(vaultId, false);
-            void refresh();
-          }}
-        >
-          RESTORE
-        </button>
-      ) : (
-        <>
+        ownerMunitions ? (
           <button
             type="button"
             className="job-action"
-            title="Hide this job from the active list. You can find it under Archived."
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              setConfirmArchive(true);
+              unarchiveMenuItem(item, undefined, menuSeat);
+              if (vaultId) void archiveVaultPack(vaultId, false);
+              void refresh();
             }}
           >
-            ARCHIVE
+            RESTORE
           </button>
+        ) : null
+      ) : (
+        <>
+          {ownerMunitions ? (
+            <button
+              type="button"
+              className="job-action"
+              title="Hide this job from the active list. You can find it under Archived."
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setConfirmArchive(true);
+              }}
+            >
+              ARCHIVE
+            </button>
+          ) : null}
           {vaultId && canShare ? (
             <button
               type="button"
@@ -168,18 +177,20 @@ export function JobMenuActions({
           ) : null}
         </>
       )}
-      <button
-        type="button"
-        className="job-action"
-        title="Remove this job from your list. Confirm first."
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setConfirmDelete(true);
-        }}
-      >
-        DELETE
-      </button>
+      {ownerMunitions ? (
+        <button
+          type="button"
+          className="job-action"
+          title="Remove this job from your list. Confirm first."
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setConfirmDelete(true);
+          }}
+        >
+          DELETE
+        </button>
+      ) : null}
       {note ? <p className="w-full text-[11px] text-[#5b6f73]">{note}</p> : null}
       <HandoffDialog
         title={title}
