@@ -60,15 +60,15 @@ John loop: Robert Excel → Hit Squad live pack → **estimate fills P66-shaped 
 
 Rate-book samples on the desk still read Amendment 8 figures. Amend 9 is the abiding signed PDF until Robert remaps wages.
 
-## Reserved live-pack slots (identity only)
+## Reserved live-pack slots
 
-| Job | Pack id | Job code |
-| --- | --- | --- |
-| Rodeo U110 2026 TA | `new-u11026-rodeo` | EST-U11026 |
-| Rodeo U250 Fall 2026 | `new-u25026-rodeo` | EST-U25026 |
-| Monroe 541V | `new-541v26-monroe` | EST-541V26 |
+| Job | Pack id | Job code | Crew |
+| --- | --- | --- | --- |
+| Rodeo U110 2026 TA | `new-u11026-rodeo` | EST-U11026 | Madison R1 five-card fill (`lib/wake-golden/rodeo-u110-crew.json`) |
+| Rodeo U250 Fall 2026 | `new-u25026-rodeo` | EST-U25026 | Identity only — next |
+| Monroe 541V | `new-541v26-monroe` | EST-541V26 | Identity only — later |
 
-One live pack per job. Shells do not invent crew calendars or totals. Aromatics / Wood River packs are untouched.
+One live pack per job. U110 wake seeds Staff / GF / Foreman / Direct / Support from official Madison R1 hours × rate lines. There is no day grid in that book — hours plug on the official revision date (2026-07-22), not an invented TA window. U250 / Monroe shells still do not invent crew. Aromatics / Wood River packs are untouched.
 
 ## Golden locks (official SUMMARY)
 
@@ -84,7 +84,16 @@ U110 buckets: Direct 16,730 / $2,746,343 · Indirect 9,711 / $1,735,592 · PD $4
 
 U250 buckets: Direct 8,315 / $1,383,800 · Indirect 4,566 / $767,540 · PD $188,740 · Mob $101,000 · Materials $20,000 · Equipment $9,600.
 
-Family B (~4.5MB P66 RODEO ESTIMATE WORKBOOK) is an additional face. Official lock for U110 / U250 is family A. Family B SUMMARY $ is pending workbook eval (no Drive text extract on the 4.5MB books) — do not invent those totals. Committed snapshot: `lib/wake-golden/fixtures.json`.
+Family B (~4.5MB P66 RODEO ESTIMATE WORKBOOK) is an additional face. Official lock for U110 / U250 is family A. Family B SUMMARY $ is pending workbook eval (no Drive text extract on the 4.5MB books) — do not invent those totals. Committed snapshot: `lib/wake-golden/fixtures.json`. U110 crew extract: `lib/wake-golden/rodeo-u110-crew.json`.
+
+### Official-sheet findings (Madison U110 R1)
+
+- SUMMARY CONTRACTOR (B3) and BLOCK / EVENT (B4) are blank — do not invent them.
+- Filename stamps `072222026R1` (extra 2). Drive created/modified 2026-07-22.
+- INSTRUCTIONS say tabs 1 through 10; the book has nine numbered tabs plus Lookups.
+- Defined names leftover from another workbook (`wrn.*`, `sss`, `abc`, `_Fill`) resolve to `#N/A` / `#REF!`. Labor $ cells themselves are hours × typed composite rate — not `#REF`.
+- Two Boilermaker rows and two Foreman rows kept as separate seats (different book rates).
+- Tab 6 MATERIAL 1 is a $0 leftover; Freight $10,000 sits on MATERIAL 7. Tab 4 row 28 is labeled MOB _DEMOB 21 (skips 20) with $0.
 
 ## Export (Rodeo V1)
 

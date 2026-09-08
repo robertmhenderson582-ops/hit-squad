@@ -16,6 +16,7 @@ import { BOILER17_PACK_ID } from "@/lib/boiler-17";
 import { classifyEstimateWorkbook, CLIENT_TEMPLATE_STAGED, shouldStageClientWorkbook } from "@/lib/client-estimate-ingest";
 import { newEstimatePackId } from "@/lib/estimate-open";
 import { scheduleVaultUpsert } from "@/lib/estimate-vault-client";
+import { RODEO_U110_PACK_ID, rodeoU110FilledSnapshot } from "@/lib/madison-u110";
 import { boiler17B1FilledSnapshot } from "@/lib/wood-river-b1";
 
 const CLIENTS = ["Phillips 66", "Georgia Power", "Monroe Energy", "Shop"];
@@ -117,6 +118,16 @@ export function NewEstimateModal({
         scheduleVaultUpsert(BOILER17_PACK_ID);
         onClose();
         router.push(`/estimates/${BOILER17_PACK_ID}`);
+        return;
+      }
+      if (classified.kind === "madison-contractor" && classified.packId === RODEO_U110_PACK_ID) {
+        const { ingestMadisonU110 } = await import("@/lib/madison-u110-xlsx");
+        const ingested = await ingestMadisonU110(bytes, file.name);
+        const pack = rodeoU110FilledSnapshot({ ownerEmail: lens?.email || "" }, ingested);
+        applyPackToStore(window.localStorage, pack);
+        scheduleVaultUpsert(RODEO_U110_PACK_ID);
+        onClose();
+        router.push(`/estimates/${RODEO_U110_PACK_ID}`);
         return;
       }
       if (shouldStageClientWorkbook(classified)) {

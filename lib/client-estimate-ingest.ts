@@ -186,7 +186,10 @@ export function classifyFromSheetsAndName(sheets: string[], fileName = ""): Clie
       staged: true,
       packId,
       families: ["madison-contractor"],
-      note: "Family A. Hours × composite rate, Direct vs Indirect. Staged — official revision locks totals.",
+      note:
+        packId === RODEO_U110_PACK_ID
+          ? "Family A. Hours × composite rate apply onto the Wood River five-card desk. Official revision locks SUMMARY totals."
+          : "Family A. Hours × composite rate, Direct vs Indirect. Staged — official revision locks totals.",
     };
   }
   if (looksLikeClientEstimateForm(sheets, name)) {
@@ -294,6 +297,7 @@ export function clientFaceNames() {
 
 export function shouldStageClientWorkbook(classified: ClientWorkbookClass) {
   if (classified.kind === "wood-river-b1") return false;
+  if (classified.kind === "madison-contractor" && classified.packId === RODEO_U110_PACK_ID) return false;
   return classified.staged || classified.kind !== "hitsquad-live-pack";
 }
 
@@ -309,7 +313,7 @@ export const CLIENT_FACE_MAPPER_SPEC = {
     buckets: ["Direct", "Indirect"],
     tabs: ["INSTRUCTIONS", "SUMMARY", "1–9"],
     exportAs: P66_V1_EXPORT_LINE,
-    ingest: "stage-metadata",
+    ingest: "apply-hours-u110",
   },
   "p66-rodeo-workbook": {
     family: "B",

@@ -40,6 +40,7 @@ import {
   type EstimateImport,
 } from "@/lib/estimate-xlsx-import";
 import { BOILER17_CLIENT, BOILER17_SITE, BOILER17_TITLE } from "@/lib/boiler-17";
+import { RODEO_U110_PACK_ID, RODEO_U110_SHELL } from "@/lib/rodeo-monroe-wake";
 import {
   classifyEstimateWorkbook,
   CLIENT_TEMPLATE_STAGED,
@@ -207,6 +208,22 @@ export function EstimateWorkspace({
           title: BOILER17_TITLE,
           client: BOILER17_CLIENT,
           site: BOILER17_SITE,
+          schedule: ingested.schedule,
+          crew: ingested.crew,
+          blocks: [],
+          jobMeta: ingested.jobMeta,
+          otherCost: ingested.otherCost,
+        });
+        return;
+      }
+      if (classified.kind === "madison-contractor" && classified.packId === RODEO_U110_PACK_ID) {
+        const { ingestMadisonU110 } = await import("@/lib/madison-u110-xlsx");
+        const ingested = await ingestMadisonU110(bytes, file.name);
+        setPendingClientFace(null);
+        setPendingImport({
+          title: RODEO_U110_SHELL.title,
+          client: RODEO_U110_SHELL.client,
+          site: RODEO_U110_SHELL.site,
           schedule: ingested.schedule,
           crew: ingested.crew,
           blocks: [],

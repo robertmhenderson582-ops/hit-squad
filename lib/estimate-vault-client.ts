@@ -8,6 +8,7 @@ import {
 } from "./estimate-pack.ts";
 import { ownerVaultEmail, packSharedEmails } from "./estimate-scope.ts";
 import { applyHisIdentity, hisFileForPackId, hisMatchForPack, persistHisWoodRiverCards } from "./his-wood-river.ts";
+import { persistRodeoU110Wake } from "./madison-u110.ts";
 import { canonicalEmail, isSamePerson } from "./identity.ts";
 import { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import {
@@ -109,9 +110,13 @@ export async function hydrateFromVault(
     for (const pack of packs) mergeVaultIntoLocal(target, hisMatchForPack(pack) ? applyHisIdentity(pack) : pack);
     if (seat !== "owner") {
       writeLensPacks(seat, packs.map((pack) => snapshotLensPack(hisMatchForPack(pack) ? applyHisIdentity(pack) : pack)), target);
-      if (seat === "nathan") persistHisWoodRiverCards(target);
+      if (seat === "nathan") {
+        persistHisWoodRiverCards(target);
+        persistRodeoU110Wake(target);
+      }
     } else {
       persistHisWoodRiverCards(target);
+      persistRodeoU110Wake(target);
       snapshotOwnerDesk({ email: ownerVaultEmail(), role: "owner" }, target);
     }
     return packs;
@@ -144,7 +149,10 @@ export async function hydrateFromVault(
           }
         }
       }
-      if (!viewingAs || seat === "nathan") persistHisWoodRiverCards(target);
+      if (!viewingAs || seat === "nathan") {
+        persistHisWoodRiverCards(target);
+        persistRodeoU110Wake(target);
+      }
       if (data.persisted && !viewingAs) {
         const deskEmail = ownerVaultEmail();
         const namedLocal = listLocalPacks(target).filter((pack) => (pack.title || "").trim());
