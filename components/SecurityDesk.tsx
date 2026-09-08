@@ -5,7 +5,7 @@ import type { LockMinutes } from "@/lib/display";
 import { useDisplay } from "@/components/DisplayProvider";
 import { PasswordField } from "@/components/PasswordField";
 import { useLensUser } from "@/components/OwnerDeskContext";
-import { isOwner } from "@/lib/desk-role";
+import { canSecurityBilling } from "@/lib/desk-role";
 
 const OPTIONS: { value: LockMinutes; label: string; ownerOnly?: boolean }[] = [
   { value: 5, label: "5 minutes" },
@@ -19,7 +19,7 @@ const OPTIONS: { value: LockMinutes; label: string; ownerOnly?: boolean }[] = [
 export function SecurityDesk() {
   const lens = useLensUser();
   const { prefs, setPrefs } = useDisplay();
-  const owner = isOwner(lens);
+  const owner = canSecurityBilling(lens);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [message, setMessage] = useState<string | null>(null);

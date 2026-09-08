@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { hasBuildDesk } from "@/lib/desk-role";
+import { canSeeHitSquadSeats, hasWorkingDesk } from "@/lib/desk-role";
+import { peekAssignedCompany } from "@/lib/companies-store";
+import { OWNER_LOGIN_EMAIL } from "@/lib/owner-login";
 import { cookieValue } from "@/lib/http";
 import { addActivity } from "@/lib/activity-store";
 import { beatPresence, listSeats, markSignedOut, pingPresence, seatFor, takeArrivals } from "@/lib/presence";
@@ -35,10 +37,22 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (!hasBuildDesk(user)) return NextResponse.json({ arrivals: [], seats: [] });
+  if (!hasWorkingDesk(user)) return NextResponse.json({ arrivals: [], seats: [] });
+  const arrivals = takeArrivals(user.email);
+  const seats = listSeats(user.email);
+  if (canSeeHitSquadSeats(user)) {
+    return NextResponse.json({ arrivals, seats });
+  }
+  function madisonPresence<T extends { email: string }>(rows: T[]) {
+    return rows.filter((row) => {
+      const email = row.email.trim().toLowerCase();
+      if (email === OWNER_LOGIN_EMAIL) return true;
+      return peekAssignedCompany(email) === "madison";
+    });
+  }
   return NextResponse.json({
-    arrivals: takeArrivals(user.email),
-    seats: listSeats(user.email),
+    arrivals: madisonPresence(arrivals),
+    seats: madisonPresence(seats),
   });
 }
 

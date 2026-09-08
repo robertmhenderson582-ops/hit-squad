@@ -1,19 +1,16 @@
-import type { PublicUser } from "@/lib/types";
+import type { PrivilegeId, PublicUser } from "@/lib/types";
+import { hasPrivilege, type PrivilegeViewer } from "./privileges.ts";
 import { VISUAL_ROSTER } from "./owner-desk.ts";
 import { isJosephEmail, testerByEmail, TESTER_SEATS, type TesterSeatDef } from "./tester-seats.ts";
 
 export { OWNER_LOGIN_EMAIL, isOwnerLoginEmail } from "./owner-login.ts";
+export { hasPrivilege } from "./privileges.ts";
 
 export const NOVUS_EMAIL = "robertmhenderson582+novus@gmail.com";
 export const NOVUS_ID = "operator-novus";
 
 export function isOwner(user?: { role?: string } | null): boolean {
   return user?.role === "owner";
-}
-
-/** Job card Archive / Delete / Restore. Owner desk only. View-as uses the lens. */
-export function canArchiveDeleteJobs(user?: { role?: string } | null): boolean {
-  return isOwner(user);
 }
 
 export function isOperator(user?: { role?: string } | null): boolean {
@@ -24,16 +21,68 @@ export function isTester(user?: { role?: string } | null): boolean {
   return user?.role === "tester";
 }
 
-export function hasBuildDesk(user?: { role?: string } | null): boolean {
+export function isPresident(user?: { role?: string } | null): boolean {
+  return user?.role === "president";
+}
+
+/** Owner + Novus ship tools. President stays off unless Privileges grants designer-ship. */
+export function hasBuildDesk(user?: PrivilegeViewer | null): boolean {
   return isOwner(user) || isOperator(user);
 }
 
-/** Owner, Novus, and rates seats (Joseph’s full desk). Other testers stay off the builder. */
+/** Owner, Novus, and President — Madison work modules, Activity view, presence. */
+export function hasWorkingDesk(user?: PrivilegeViewer | null): boolean {
+  return hasBuildDesk(user) || isPresident(user);
+}
+
+/** Job card Archive / Delete / Restore. Owner desk, or a temporary Privileges grant. */
+export function canArchiveDeleteJobs(user?: PrivilegeViewer | null): boolean {
+  return isOwner(user) || hasPrivilege(user, "archive-delete");
+}
+
+export function canSeeHitSquadSeats(user?: PrivilegeViewer | null): boolean {
+  if (isOwner(user) || isOperator(user)) return true;
+  return hasPrivilege(user, "hitsquad-seats");
+}
+
+export function canManageUsers(user?: PrivilegeViewer | null): boolean {
+  return hasBuildDesk(user) || hasPrivilege(user, "manage-users");
+}
+
+export function canExpandInbox(user?: PrivilegeViewer | null): boolean {
+  return isOwner(user) || hasPrivilege(user, "inbox-expand");
+}
+
+export function canSeeOwnerLog(user?: PrivilegeViewer | null): boolean {
+  return isOwner(user) || hasPrivilege(user, "owner-log");
+}
+
+export function canUseVaultWipe(user?: PrivilegeViewer | null): boolean {
+  return hasBuildDesk(user) || hasPrivilege(user, "vault-wipe");
+}
+
+export function canConfigAliases(user?: PrivilegeViewer | null): boolean {
+  return hasBuildDesk(user) || hasPrivilege(user, "alias-config");
+}
+
+export function canUnaliasedExport(user?: PrivilegeViewer | null): boolean {
+  return isOwner(user) || hasPrivilege(user, "unaliased-export");
+}
+
+export function canDesignerShip(user?: PrivilegeViewer | null): boolean {
+  return hasBuildDesk(user) || hasPrivilege(user, "designer-ship");
+}
+
+export function canSecurityBilling(user?: PrivilegeViewer | null): boolean {
+  return isOwner(user) || hasPrivilege(user, "security-billing");
+}
+
+/** Owner, Novus, President, and rates seats (Joseph’s full desk). Other testers stay off the builder. */
 export function canUseRateBuilder(user?: { email?: string; role?: string } | null): boolean {
   if (!user) return false;
   if (isJosephEmail(user.email)) return true;
   if (isTester(user)) return false;
-  return hasBuildDesk(user);
+  return hasWorkingDesk(user);
 }
 
 /** Nathan / John Beech roster label is "PM / estimator". Owner and Novus sit above that. */
@@ -46,7 +95,7 @@ export function isProjectManager(user?: { email?: string; role?: string } | null
 
 export function isProjectManagerOrAbove(user?: { email?: string; role?: string } | null): boolean {
   if (!user) return false;
-  if (hasBuildDesk(user)) return true;
+  if (hasWorkingDesk(user)) return true;
   return isProjectManager(user);
 }
 
@@ -60,11 +109,13 @@ export function canOpenRates(user?: { email?: string; role?: string } | null): b
   return canLookupRates(user) || canUseRateBuilder(user);
 }
 
-export function canUseViewAs(user?: { email?: string; role?: string } | null): boolean {
+export function canUseViewAs(user?: PrivilegeViewer & { email?: string } | null): boolean {
+  if (hasPrivilege(user, "view-as")) return true;
+  if (isPresident(user)) return false;
   return hasBuildDesk(user) || isJosephEmail(user?.email);
 }
 
-export function canUseFollow(user?: { role?: string } | null): boolean {
+export function canUseFollow(user?: PrivilegeViewer | null): boolean {
   return hasBuildDesk(user);
 }
 
@@ -129,10 +180,24 @@ export function deskLensKey(user?: { id?: string; email?: string; role?: string 
 
 export function pageAllowedForSeat(
   user: PublicUser | null | undefined,
-  flags: { ownerOnly?: boolean; buildDesk?: boolean; viewAs?: boolean },
+  flags: {
+    ownerOnly?: boolean;
+    buildDesk?: boolean;
+    viewAs?: boolean;
+    workingDesk?: boolean;
+    privilege?: PrivilegeId;
+  },
 ) {
+  if (flags.privilege) {
+    return (
+      hasPrivilege(user, flags.privilege) ||
+      (Boolean(flags.buildDesk) && hasBuildDesk(user)) ||
+      (Boolean(flags.workingDesk) && hasWorkingDesk(user))
+    );
+  }
   if (flags.ownerOnly) return isOwner(user);
   if (flags.viewAs) return canUseViewAs(user);
+  if (flags.workingDesk) return hasWorkingDesk(user);
   if (flags.buildDesk) return hasBuildDesk(user);
   return true;
 }

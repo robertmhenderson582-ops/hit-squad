@@ -68,6 +68,6 @@ describe("site Regular-client flag", () => {
     assert.match(page, /SettingsGate buildDesk/);
     assert.match(api, /setSiteRegularClient/);
     assert.match(api, /isOwner\(user\)/);
-    assert.match(api, /hasBuildDesk\(user\)/);
+    assert.match(api, /canDesignerShip\(user\)/);
   });
 });

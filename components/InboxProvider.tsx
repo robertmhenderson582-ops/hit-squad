@@ -74,7 +74,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
     ? user?.id || "owner"
     : watched || viewed || user?.id || user?.email || "tester";
   const inboxEmail = lens?.email || user?.email || "";
-  const inboxOn = canUseInbox({ email: inboxEmail });
+  const inboxOn = canUseInbox(lens || user);
 
   const [open, setOpen] = useState(false);
   const [composing, setComposing] = useState(false);
@@ -157,7 +157,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       hiddenMessageIdsRef.current = new Set(hides.messageIds);
       hiddenPersonIdsRef.current = new Set(hides.personIds);
       const stored = omitHiddenPersonThreads(readThreads(seat, ownerChrome), hides.personIds);
-      const local = canReceiveDeskBot({ email: inboxEmail })
+      const local = canReceiveDeskBot(lens || user)
         ? applyWhatsNew(stored, seat, ownerChrome, inboxEmail)
         : stored.filter((thread) => thread.personId !== DESK_PERSON_ID);
       setThreads(local);
@@ -190,7 +190,10 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   }, [ready, seat, status, threads, user]);
 
   const unread = unreadCount(threads);
-  const contacts = useMemo(() => contactsFor(ownerChrome, inboxEmail), [inboxEmail, ownerChrome]);
+  const contacts = useMemo(
+    () => contactsFor(ownerChrome, inboxEmail, lens || user),
+    [inboxEmail, lens, ownerChrome, user],
+  );
 
   const announce = useCallback(
     (preview: string) => {

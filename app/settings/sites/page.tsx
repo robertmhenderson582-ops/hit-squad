@@ -5,7 +5,7 @@ import { SitesRegularDesk } from "@/components/SitesRegularDesk";
 
 export default function SettingsSitesPage() {
   return (
-    <SettingsGate buildDesk>
+    <SettingsGate buildDesk privilege="designer-ship">
       <SitesRegularDesk />
     </SettingsGate>
   );

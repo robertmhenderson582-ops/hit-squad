@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { addCompany, isKnownCompany, listCompanies, setAssignedCompany } from "@/lib/companies-store";
-import { hasBuildDesk, isOwner } from "@/lib/desk-role";
+import { canManageUsers, hasWorkingDesk, isOwner } from "@/lib/desk-role";
+import { seatsVisibleTo } from "@/lib/desk-people";
 import { cookieValue } from "@/lib/http";
 import {
   createSeat,
@@ -18,10 +19,12 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (!hasBuildDesk(user)) return NextResponse.json({ error: "Build desk only." }, { status: 403 });
+  if (!hasWorkingDesk(user) && !canManageUsers(user)) {
+    return NextResponse.json({ error: "Build desk only." }, { status: 403 });
+  }
   await hydrateSeatStore();
   return NextResponse.json({
-    seats: await listSeatRows(),
+    seats: seatsVisibleTo(user, await listSeatRows()),
     companies: await listCompanies(),
     note: "Owner-created seats. Testers never see this list. No invite is sent.",
   });
@@ -39,6 +42,7 @@ export async function POST(request: Request) {
     companyId?: string;
     addCompany?: string;
     recover?: boolean;
+    role?: string;
   };
 
   if (typeof body.addCompany === "string") {
@@ -59,6 +63,7 @@ export async function POST(request: Request) {
       email: body.email,
       password: body.password,
       companyId: body.companyId,
+      role: body.role,
     });
     if ("error" in created) {
       const status = created.error.startsWith("Password was not saved") ? 503 : 400;

@@ -1,5 +1,5 @@
 import { companyIdForEmail, peopleLane, type CompanyId } from "./companies.ts";
-import { NOVUS_EMAIL } from "./desk-role.ts";
+import { canSeeHitSquadSeats, isPresident, NOVUS_EMAIL } from "./desk-role.ts";
 import { normalizeEmails, ownerVaultEmail, type ScopeUser } from "./estimate-scope.ts";
 import { isHisWoodRiverPack, NATHAN_DESK_EMAIL, NATHAN_DESK_NAME } from "./his-wood-river.ts";
 import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
@@ -127,6 +127,9 @@ export function handoffTargetsFor(
     if (seat.email === email) return false;
     if (user.role === "owner") return true;
     if (seat.email === owner) return true;
+    if (isPresident(user) && !canSeeHitSquadSeats(user)) {
+      return companyIdForEmail(seat.email, map) === "madison";
+    }
     return peopleLane(companyIdForEmail(seat.email, map)) === lane;
   });
 }

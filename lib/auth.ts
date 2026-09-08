@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
+import { peekPrivileges } from "./privileges-store.ts";
 import type { DeskRole, PublicUser, SeatHashClaim } from "./types.ts";
 
 export type { SeatHashClaim };
@@ -108,13 +109,20 @@ export async function readSession(token: string | undefined): Promise<PublicUser
       return null;
     }
     const role: DeskRole =
-      payload.role === "operator" ? "operator" : payload.role === "tester" ? "tester" : "owner";
+      payload.role === "operator"
+        ? "operator"
+        : payload.role === "tester"
+          ? "tester"
+          : payload.role === "president"
+            ? "president"
+            : "owner";
     return {
       id: payload.sub,
       email: payload.email,
       name: payload.name,
       role,
       mustChangePassword: Boolean(payload.mustChangePassword),
+      privileges: role === "owner" ? undefined : peekPrivileges(payload.email),
     };
   } catch {
     return null;

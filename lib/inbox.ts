@@ -247,7 +247,19 @@ export function makeMessage(input: {
   };
 }
 
-export function contactsFor(ownerChrome: boolean, email = ""): InboxPerson[] {
+export function contactsFor(
+  ownerChrome: boolean,
+  email = "",
+  viewer?: { role?: string; privileges?: readonly string[] } | null,
+): InboxPerson[] {
+  const circle = inboxContactsFor(email, viewer);
+  if (circle.length) {
+    return circle.map((row) => ({
+      id: row.id,
+      name: row.name,
+      company: row.company,
+    }));
+  }
   if (isInboxCircleEmail(email)) {
     return inboxContactsFor(email).map((row) => ({
       id: row.id,

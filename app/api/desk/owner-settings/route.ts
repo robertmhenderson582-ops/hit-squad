@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { hasBuildDesk, isTester } from "@/lib/desk-role";
+import { canDesignerShip, hasBuildDesk, isTester } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
 import type { RepublishWait } from "@/lib/owner-desk";
 import { clearRepublish, getOwnerSettings, setOwnerSettings, startRepublish } from "@/lib/owner-settings-store";
@@ -29,10 +29,10 @@ export async function POST(request: Request) {
     waitMinutes?: RepublishWait;
     note?: string;
   };
-  if (body.action === "republish" && hasBuildDesk(user)) {
+  if (body.action === "republish" && canDesignerShip(user)) {
     return NextResponse.json(await startRepublish(body.waitMinutes ?? 5, body.note || ""));
   }
-  if (body.action === "back" && hasBuildDesk(user)) {
+  if (body.action === "back" && canDesignerShip(user)) {
     return NextResponse.json(await clearRepublish());
   }
   if (!hasBuildDesk(user)) {

@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import bcrypt from "bcryptjs";
 import { assignedCompany, isKnownCompany, setAssignedCompany } from "./companies-store.ts";
 import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
+import { peekPrivileges } from "./privileges-store.ts";
 import {
   SEATS_VAULT_KIND,
   SEATS_VAULT_NAME,
@@ -30,6 +31,7 @@ export type ExtraSeat = {
   id: string;
   email: string;
   name: string;
+  role?: "tester" | "president";
 };
 
 type SeatHashRow = {
@@ -222,7 +224,8 @@ export function parseExtraSeats(raw: unknown): ExtraSeat[] {
       continue;
     }
     if (name.length < 2 || name.length > 80) continue;
-    extras.push({ id, email, name });
+    const role = row.role === "president" ? ("president" as const) : undefined;
+    extras.push({ id, email, name, ...(role ? { role } : {}) });
     seen.add(email);
     seen.add(id);
     seen.add(bucket);
@@ -252,8 +255,15 @@ function extrasFromUsers(users: StoredUser[]): ExtraSeat[] {
   const extras: ExtraSeat[] = [];
   const seen = new Set<string>();
   for (const user of users) {
-    if (user.role !== "tester" || reserved.has(user.email) || seen.has(user.email)) continue;
-    extras.push({ id: user.id, email: user.email, name: user.name });
+    if ((user.role !== "tester" && user.role !== "president") || reserved.has(user.email) || seen.has(user.email)) {
+      continue;
+    }
+    extras.push({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role === "president" ? "president" : "tester",
+    });
     seen.add(user.email);
   }
   return extras;
@@ -608,7 +618,7 @@ function seedUsers(): StoredUser[] {
         id: seat.id,
         email: seat.email,
         name: seat.name,
-        role: "tester" as const,
+        role: seat.role === "president" ? ("president" as const) : ("tester" as const),
         mustChangePassword: saved ? Boolean(saved.mustChangePassword) : true,
         passwordHash: saved?.passwordHash,
         previousHashes: saved?.previousHashes,
@@ -634,6 +644,7 @@ export function toPublicUser(user: StoredUser): PublicUser {
     name: user.name,
     role: user.role,
     mustChangePassword: Boolean(user.mustChangePassword),
+    privileges: user.role === "owner" ? undefined : peekPrivileges(user.email),
   };
 }
 
@@ -935,17 +946,24 @@ function extraSeatId(email: string, taken: Set<string>): string {
   return id;
 }
 
-/** Owner-created tester login. Persists in the same seats vault as hashes. */
+/** Owner-created tester or President login. Persists in the same seats vault as hashes. */
 export async function createSeat(input: {
   name?: string;
   email?: string;
   password?: string;
   companyId?: string;
+  role?: string;
 }): Promise<{ ok: true; user: PublicUser } | { error: string }> {
   const name = typeof input.name === "string" ? input.name.trim().replace(/\s+/g, " ") : "";
   const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
   const password = typeof input.password === "string" ? input.password : "";
-  const companyId = typeof input.companyId === "string" && input.companyId.trim() ? input.companyId.trim() : "hitsquad";
+  const role = input.role === "president" ? ("president" as const) : ("tester" as const);
+  const companyId =
+    typeof input.companyId === "string" && input.companyId.trim()
+      ? input.companyId.trim()
+      : role === "president"
+        ? "madison"
+        : "hitsquad";
 
   if (name.length < 2) return { error: "Type a name." };
   if (name.length > 80) return { error: "That name is too long." };
@@ -970,7 +988,7 @@ export async function createSeat(input: {
     id: extraSeatId(email, new Set(users.map((row) => row.id))),
     email,
     name,
-    role: "tester",
+    role,
     passwordHash: bcrypt.hashSync(password, 12),
     mustChangePassword: true,
   };

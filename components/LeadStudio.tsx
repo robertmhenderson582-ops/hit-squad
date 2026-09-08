@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { useSession } from "@/components/SessionProvider";
-import { hasBuildDesk } from "@/lib/desk-role";
+import { canDesignerShip } from "@/lib/desk-role";
 import { fileToLead, leadToBytes, readBrief, writeBrief, type LeadFile, type PublicLeadBrief } from "@/lib/lead-briefs";
 import { buildZip } from "@/lib/zip";
 
@@ -19,7 +19,7 @@ type Screen = "welcome" | Job;
 export function LeadStudio({ title, kind, jobId = "" }: { title: string; kind: "hse" | "quality"; jobId?: string }) {
   const [screen, setScreen] = useState<Screen>("welcome");
   const { user } = useSession();
-  const canSeeAll = hasBuildDesk(user);
+  const canSeeAll = canDesignerShip(user);
   const [describe, setDescribe] = useState("");
   const [files, setFiles] = useState<LeadFile[]>([]);
   const [savedAt, setSavedAt] = useState<string | null>(null);

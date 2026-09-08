@@ -3,7 +3,7 @@ import { readSession } from "@/lib/auth";
 import { DRIVE_WRITE_ERROR } from "@/lib/drive-data";
 import { cookieValue } from "@/lib/http";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
-import { canUseInbox, inboxCircleById, inboxCirclePerson } from "@/lib/inbox-circle";
+import { canUseInbox, inboxCircleById, inboxCirclePerson, inboxContactsFor, inboxPeerFor } from "@/lib/inbox-circle";
 import {
   hideInboxFor,
   inboxHidesFor,
@@ -16,11 +16,14 @@ import {
 
 export const dynamic = "force-dynamic";
 
-function inboxResponse(email: string, threads: Awaited<ReturnType<typeof listInboxFor>>) {
-  const hides = inboxHidesFor(email);
+function inboxResponse(
+  user: { email: string; role?: string; privileges?: readonly string[] },
+  threads: Awaited<ReturnType<typeof listInboxFor>>,
+) {
+  const hides = inboxHidesFor(user.email);
   return NextResponse.json({
     threads,
-    contacts: inboxPeopleFor(email),
+    contacts: inboxPeopleFor(user.email, user),
     store: inboxStoreKind(),
     hiddenMessageIds: hides.messageIds,
     hiddenPersonIds: hides.personIds,
@@ -34,7 +37,7 @@ export async function GET(request: Request) {
   if (!canUseInbox(user)) {
     return NextResponse.json({ error: "Inbox is those six only." }, { status: 403 });
   }
-  return inboxResponse(user.email, await listInboxFor(user.email));
+  return inboxResponse(user, await listInboxFor(user.email, user));
 }
 
 export async function POST(request: Request) {
@@ -60,7 +63,7 @@ export async function POST(request: Request) {
 
   try {
     if (typeof body.readPersonId === "string" && body.readPersonId.trim()) {
-      return inboxResponse(user.email, await markInboxThreadRead(user.email, body.readPersonId.trim()));
+      return inboxResponse(user, await markInboxThreadRead(user.email, body.readPersonId.trim(), user));
     }
 
     if (
@@ -70,23 +73,36 @@ export async function POST(request: Request) {
       body.emptyInbox === true
     ) {
       return inboxResponse(
-        user.email,
-        await hideInboxFor(user.email, {
-          messageId: body.hideMessageId,
-          personId: body.hidePersonId,
-          personIds: body.hidePersonIds,
-          empty: body.emptyInbox === true,
-        }),
+        user,
+        await hideInboxFor(
+          user.email,
+          {
+            messageId: body.hideMessageId,
+            personId: body.hidePersonId,
+            personIds: body.hidePersonIds,
+            empty: body.emptyInbox === true,
+          },
+          user,
+        ),
       );
     }
   } catch {
     return NextResponse.json({ error: DRIVE_WRITE_ERROR }, { status: 503 });
   }
 
+  const wantedEmail = typeof body.toEmail === "string" ? body.toEmail : "";
+  const wantedId = typeof body.personId === "string" ? body.personId : "";
   const recipient =
-    inboxCirclePerson(typeof body.toEmail === "string" ? body.toEmail : "") ||
-    inboxCircleById(typeof body.personId === "string" ? body.personId : "");
+    inboxContactsFor(user.email, user).find(
+      (row) => row.email === wantedEmail.trim().toLowerCase() || row.id === wantedId,
+    ) ||
+    inboxCirclePerson(wantedEmail) ||
+    inboxCircleById(wantedId) ||
+    inboxPeerFor(wantedEmail);
   if (!recipient) {
+    return NextResponse.json({ error: "Pick a person." }, { status: 400 });
+  }
+  if (!inboxContactsFor(user.email, user).some((row) => row.email === recipient.email)) {
     return NextResponse.json({ error: "Pick a person." }, { status: 400 });
   }
 
@@ -98,9 +114,10 @@ export async function POST(request: Request) {
       text: body.text,
       photo: body.photo,
       id: body.messageId,
+      viewer: user,
     });
     if (!posted.ok) return NextResponse.json({ error: posted.error }, { status: posted.status });
-    return inboxResponse(user.email, posted.threads);
+    return inboxResponse(user, posted.threads);
   } catch {
     return NextResponse.json({ error: DRIVE_WRITE_ERROR }, { status: 503 });
   }

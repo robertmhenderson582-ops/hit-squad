@@ -16,6 +16,7 @@ export const INBOX_VAULT_NAME = "inbox.json";
 export const RATES_VAULT_NAME = "rates.json";
 export const QUALITY_BRIEFS_VAULT_NAME = "quality-briefs.json";
 export const HSE_BRIEFS_VAULT_NAME = "hse-briefs.json";
+export const PRIVILEGES_VAULT_NAME = "privileges.json";
 export const COMPANIES_VAULT_KIND = "companies";
 export const ACTIVITY_VAULT_KIND = "activity";
 export const TICKETS_VAULT_KIND = "tickets";
@@ -25,6 +26,7 @@ export const INBOX_VAULT_KIND = "inbox";
 export const RATES_VAULT_KIND = "rates";
 export const QUALITY_BRIEFS_VAULT_KIND = "quality-briefs";
 export const HSE_BRIEFS_VAULT_KIND = "hse-briefs";
+export const PRIVILEGES_VAULT_KIND = "privileges";
 
 export const DRIVE_WRITE_ERROR = "Could not save. Try again.";
 

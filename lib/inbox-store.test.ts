@@ -79,6 +79,39 @@ describe("inbox store", { concurrency: 1 }, () => {
     assert.deepEqual(await listInboxFor(JOSEPH_EMAIL), []);
   });
 
+  it("President writes Madison Inbox only unless inbox-expand is granted", async () => {
+    resetInboxStoreForTests(join(dir, "president-inbox.json"));
+    const president = { role: "president" as const, email: "president.example@example.com" };
+    const steal = await postInboxMessage({
+      fromEmail: president.email,
+      fromName: "Freddy Grimland",
+      toEmail: "bccamp2@gmail.com",
+      text: "Hit Squad stay hidden",
+      viewer: president,
+    });
+    assert.equal(steal.ok, false);
+    if (steal.ok) return;
+    assert.equal(steal.status, 403);
+
+    const madison = await postInboxMessage({
+      fromEmail: president.email,
+      fromName: "Freddy Grimland",
+      toEmail: NATHAN,
+      text: "Madison only",
+      viewer: president,
+    });
+    assert.equal(madison.ok, true);
+
+    const expanded = await postInboxMessage({
+      fromEmail: president.email,
+      fromName: "Freddy Grimland",
+      toEmail: "bccamp2@gmail.com",
+      text: "Expanded circle",
+      viewer: { ...president, privileges: ["inbox-expand"] },
+    });
+    assert.equal(expanded.ok, true);
+  });
+
   it("two posts from different hydrate resets keep both messages in the vault", async () => {
     const drive = memoryDrive();
     resetInboxStoreForTests(join(dir, "wipe.json"));

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { cookieValue, serverTiming } from "@/lib/http";
-import { hasBuildDesk } from "@/lib/desk-role";
+import { hasWorkingDesk } from "@/lib/desk-role";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { listVisiblePacks, packsResponse, upsertVisiblePack } from "@/lib/estimate-vault";
 
@@ -37,7 +37,7 @@ export async function PUT(request: Request) {
       stored: result.stored,
       pack: result.pack,
     };
-    if (hasBuildDesk(user)) payload.store = result.store;
+    if (hasWorkingDesk(user)) payload.store = result.store;
     return NextResponse.json(payload);
   } catch {
     return NextResponse.json({ error: "Could not store that package." }, { status: 502 });

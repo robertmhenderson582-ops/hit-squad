@@ -16,7 +16,7 @@ import { noteSessionEnd } from "@/components/FeatureTrail";
 import { FUTURE_MODULES } from "@/components/FutureModulesDesk";
 import { useLensUser } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { canOpenRates, isOperator, isTester } from "@/lib/desk-role";
+import { canOpenRates, isOperator, isPresident, isTester } from "@/lib/desk-role";
 import { DESK_NAV } from "@/lib/desk-nav";
 
 const NAV = DESK_NAV;
@@ -56,7 +56,13 @@ function ChromeInner({
   const rail = (active: boolean) =>
     paper ? `rounded px-3 py-2 ${active ? "paper-rail-active" : "paper-rail"}` : `hud-rail px-3 py-2 ${active ? "hud-rail-active" : ""}`;
 
-  const deskLabel = isTester(lens) ? "DESK" : isOperator(user) ? "OPERATOR DESK" : "OWNER DESK";
+  const deskLabel = isTester(lens)
+    ? "DESK"
+    : isPresident(user)
+      ? "PRESIDENT DESK"
+      : isOperator(user)
+        ? "OPERATOR DESK"
+        : "OWNER DESK";
   const displayName = lens?.name || user?.name;
   const displayEmail = lens?.email || user?.email;
   const navItems = NAV.filter((item) => item.href !== "/rates" || canOpenRates(lens));

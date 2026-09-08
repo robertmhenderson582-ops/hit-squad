@@ -10,6 +10,11 @@ import {
   canUseViewAs,
   isProjectManagerOrAbove,
   hasBuildDesk,
+  hasWorkingDesk,
+  isPresident,
+  canSeeHitSquadSeats,
+  canManageUsers,
+  canSeeOwnerLog,
   isOwnerLoginEmail,
   deskLensKey,
   lensUser,
@@ -73,10 +78,12 @@ test("operator has build desk; testers do not", () => {
   assert.equal(hasBuildDesk({ role: "owner" }), true);
   assert.equal(hasBuildDesk({ role: "operator" }), true);
   assert.equal(hasBuildDesk({ role: "tester" }), false);
+  assert.equal(hasBuildDesk({ role: "president" }), false);
   assert.equal(hasBuildDesk(null), false);
   assert.equal(canUseFollow({ role: "owner" }), true);
   assert.equal(canUseFollow({ role: "operator" }), true);
   assert.equal(canUseFollow({ role: "tester" }), false);
+  assert.equal(canUseFollow({ role: "president" }), false);
   assert.equal(canUseFollow(null), false);
 });
 
@@ -221,4 +228,38 @@ test("Follow applies the desk lens and wins over View as", () => {
   const realMark = { id: "tester-mark", email: "marks544@yahoo.com", name: "Mark Schneider", role: "tester" as const };
   assert.equal(lensUser(realMark, "cody", "nathan")?.email, realMark.email);
   assert.equal(canUseFollow(realMark), false);
+});
+
+test("President has the working desk and locked owner-only gates", () => {
+  const president = {
+    id: "custom-freddy",
+    email: "president.example@example.com",
+    name: "Freddy Grimland",
+    role: "president" as const,
+  };
+  assert.equal(isPresident(president), true);
+  assert.equal(hasWorkingDesk(president), true);
+  assert.equal(hasBuildDesk(president), false);
+  assert.equal(canUseRateBuilder(president), true);
+  assert.equal(canLookupRates(president), true);
+  assert.equal(isProjectManagerOrAbove(president), true);
+  assert.equal(canArchiveDeleteJobs(president), false);
+  assert.equal(canUseViewAs(president), false);
+  assert.equal(canUseFollow(president), false);
+  assert.equal(canSeeHitSquadSeats(president), false);
+  assert.equal(canManageUsers(president), false);
+  assert.equal(canSeeOwnerLog(president), false);
+  assert.equal(pageAllowedForSeat(president, { workingDesk: true }), true);
+  assert.equal(pageAllowedForSeat(president, { buildDesk: true }), false);
+  assert.equal(pageAllowedForSeat(president, { ownerOnly: true }), false);
+  assert.equal(pageAllowedForSeat(president, { viewAs: true }), false);
+  assert.equal(pageAllowedForSeat(president, { privilege: "manage-users" }), false);
+  assert.equal(
+    pageAllowedForSeat({ ...president, privileges: ["manage-users"] }, { privilege: "manage-users", buildDesk: true }),
+    true,
+  );
+  assert.equal(canArchiveDeleteJobs({ ...president, privileges: ["archive-delete"] }), true);
+  assert.equal(canSeeHitSquadSeats({ ...president, privileges: ["hitsquad-seats"] }), true);
+  assert.equal(canUseViewAs({ ...president, privileges: ["view-as"] }), true);
+  assert.equal(lensUser(president, "nathan")?.email, president.email);
 });

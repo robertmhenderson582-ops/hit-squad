@@ -14,7 +14,7 @@ export default function InboxPage() {
         {canUseInbox(lens) ? (
           <InboxDesk />
         ) : (
-          <section className="plant-card px-5 py-5 text-[#5b6f73]">Inbox is those six only.</section>
+          <section className="plant-card px-5 py-5 text-[#5b6f73]">Inbox is the Madison circle on this desk.</section>
         )}
       </DeskChrome>
     </AuthGate>

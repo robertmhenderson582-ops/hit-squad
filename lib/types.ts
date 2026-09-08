@@ -1,4 +1,17 @@
-export type DeskRole = "owner" | "operator" | "tester";
+export type DeskRole = "owner" | "operator" | "tester" | "president";
+
+export type PrivilegeId =
+  | "manage-users"
+  | "hitsquad-seats"
+  | "inbox-expand"
+  | "archive-delete"
+  | "view-as"
+  | "owner-log"
+  | "vault-wipe"
+  | "alias-config"
+  | "unaliased-export"
+  | "designer-ship"
+  | "security-billing";
 
 export type PublicUser = {
   id: string;
@@ -6,6 +19,7 @@ export type PublicUser = {
   name: string;
   role: DeskRole;
   mustChangePassword?: boolean;
+  privileges?: PrivilegeId[];
 };
 
 export type SeatHashClaim = {

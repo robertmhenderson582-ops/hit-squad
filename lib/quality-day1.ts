@@ -1,5 +1,5 @@
 import { canSeeCompany, companyScopeFor, type CompanyScope } from "./companies.ts";
-import { hasBuildDesk, isOwner } from "./desk-role.ts";
+import { hasWorkingDesk, isOwner } from "./desk-role.ts";
 import type { PublicLeadBrief } from "./lead-briefs.ts";
 import { PHASE_IDS, PHASE_NAMES, type PhaseRow } from "./phase-schedule.ts";
 import { emptyRegisterRow, hydrateRegisterRows, type ModuleRegisterRow } from "./register-rows.ts";
@@ -300,7 +300,7 @@ export function canSeeMadisonManuals(
   user?: { email?: string; role?: string } | null,
   scope?: CompanyScope | null,
 ) {
-  if (isOwner(user) || hasBuildDesk(user)) return true;
+  if (isOwner(user) || hasWorkingDesk(user)) return true;
   const next = scope ?? companyScopeFor(user);
   return canSeeCompany(next, "madison");
 }

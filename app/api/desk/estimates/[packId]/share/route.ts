@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
-import { hasBuildDesk } from "@/lib/desk-role";
+import { hasWorkingDesk } from "@/lib/desk-role";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { SHARE_WRITE_ERROR, shareVisiblePack, unshareVisiblePack } from "@/lib/estimate-vault";
 
@@ -27,7 +27,7 @@ export async function POST(request: Request, context: { params: Promise<{ packId
       pack: result.pack,
       to: result.to,
     };
-    if (hasBuildDesk(user)) payload.store = result.store;
+    if (hasWorkingDesk(user)) payload.store = result.store;
     return NextResponse.json(payload);
   } catch {
     return NextResponse.json({ error: SHARE_WRITE_ERROR }, { status: 502 });

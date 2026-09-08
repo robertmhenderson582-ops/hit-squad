@@ -202,9 +202,10 @@ describe("activity stays on the build desk", () => {
     const api = readFileSync(fileURLToPath(new URL("../app/api/desk/activity/route.ts", import.meta.url)), "utf8");
     const shell = readFileSync(fileURLToPath(new URL("../components/SettingsShell.tsx", import.meta.url)), "utf8");
     const follow = readFileSync(fileURLToPath(new URL("../components/FollowDesk.tsx", import.meta.url)), "utf8");
-    assert.match(page, /SettingsGate buildDesk/);
-    assert.match(api, /hasBuildDesk\(user\)/);
-    assert.match(shell, /href: "\/settings\/activity".*buildDesk: true/);
+    assert.match(page, /SettingsGate workingDesk/);
+    assert.match(api, /hasWorkingDesk\(user\)/);
+    assert.match(api, /canSeeOwnerLog\(user\)/);
+    assert.match(shell, /href: "\/settings\/activity".*workingDesk: true/);
     assert.match(follow, /NOVUS_EMAIL/);
     assert.match(follow, /seat\.email\.toLowerCase\(\) !== NOVUS_EMAIL/);
   });

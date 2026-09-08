@@ -1,5 +1,5 @@
 import { canSeeCompany, companyScopeFor, type CompanyScope } from "./companies.ts";
-import { hasBuildDesk, isOwner } from "./desk-role.ts";
+import { hasWorkingDesk, isOwner } from "./desk-role.ts";
 import { qualitySurfaceLeaks } from "./quality-day1.ts";
 import { PHASE_IDS, PHASE_NAMES, type PhaseRow } from "./phase-schedule.ts";
 
@@ -99,14 +99,14 @@ export function hseNotify(status = "") {
 }
 
 export function canSeeHesRoster(user?: { role?: string } | null) {
-  return isOwner(user) || hasBuildDesk(user);
+  return isOwner(user) || hasWorkingDesk(user);
 }
 
 export function canSeeMadisonSafetyManuals(
   user?: { email?: string; role?: string } | null,
   scope?: CompanyScope | null,
 ) {
-  if (isOwner(user) || hasBuildDesk(user)) return true;
+  if (isOwner(user) || hasWorkingDesk(user)) return true;
   const next = scope ?? companyScopeFor(user);
   return canSeeCompany(next, "madison");
 }

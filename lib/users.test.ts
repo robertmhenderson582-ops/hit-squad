@@ -11,8 +11,9 @@ import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { hasForbiddenSeed } from "./tester-seats.ts";
 import { JOSEPH_EMAIL, SHANE_EMAIL, TESTER_SEATS } from "./tester-seats.ts";
 import { assignedCompany, resetCompanyAssignmentsForTests } from "./companies-store.ts";
-import { lensPeopleFromSeats } from "./desk-people.ts";
-import { canLookupRates, canUseRateBuilder, canUseViewAs } from "./desk-role.ts";
+import { lensPeopleFromSeats, peopleVisibleTo } from "./desk-people.ts";
+import { canLookupRates, canUseRateBuilder, canUseViewAs, hasWorkingDesk, isPresident } from "./desk-role.ts";
+import { resetPrivilegesForTests } from "./privileges-store.ts";
 import { SEATS_VAULT_FILE_ID, SEATS_VAULT_KIND, SEATS_VAULT_NAME, writeVaultJson } from "./drive-data.ts";
 import { DriveApiError, SEATS_SA_OPEN_ERROR, memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
 import {
@@ -62,11 +63,13 @@ const UNKNOWN = "not-on-this-desk@example.com";
 const dir = mkdtempSync(join(tmpdir(), "hs-seats-"));
 const seatFile = join(dir, "seats.json");
 const companyFile = join(dir, "companies.json");
+const privilegeFile = join(dir, "privileges.json");
 
 process.env.OWNER_PASSWORD = OWNER_SECRET;
 process.env.OWNER_EMAIL = OWNER_LOGIN_EMAIL;
 process.env.SEAT_PASSWORD_PATH = seatFile;
 process.env.COMPANY_ASSIGNMENT_PATH = companyFile;
+process.env.PRIVILEGE_STORE_PATH = privilegeFile;
 process.env.AUTH_SECRET = "test-auth-secret-16chars";
 
 async function wipePersisted() {
@@ -81,6 +84,7 @@ async function wipePersisted() {
   if (existsSync(seatFile)) unlinkSync(seatFile);
   resetUsersForTests();
   resetCompanyAssignmentsForTests();
+  resetPrivilegesForTests();
 }
 
 beforeEach(async () => {
@@ -440,6 +444,45 @@ test("added tester persists in the seats vault after the local cache is wiped", 
   assert.match(vaultRaw, /"extras"/);
   assert.match(vaultRaw, /vault tester/i);
   assert.equal(loginOutcome({ email: TESTER }).status, "needsCreate");
+});
+
+test("owner can add a President seat without inventing an email", async () => {
+  const email = "president.example@example.com";
+  const created = await createSeat({
+    name: "Freddy Grimland",
+    email,
+    password: ISSUED,
+    role: "president",
+  });
+  assert.equal("ok" in created, true);
+  if (!("ok" in created)) return;
+
+  const user = findUserByEmail(email);
+  assert.ok(user);
+  assert.equal(user.role, "president");
+  assert.equal(isPresident(user), true);
+  assert.equal(hasWorkingDesk(user), true);
+  assert.equal(canUseViewAs(user), false);
+  assert.equal(await assignedCompany(email), "madison");
+  assert.equal(email.includes("madisonltd.com"), false);
+  assert.equal(TESTER_SEATS.some((row) => row.email === email), false);
+
+  const rows = await listSeatRows();
+  assert.equal(rows.some((row) => row.email === email && row.role === "president" && row.companyId === "madison"), true);
+  const people = peopleVisibleTo(user, lensPeopleFromSeats(rows));
+  assert.equal(people.some((row) => row.email === "nathanboyte@gmail.com"), true);
+  assert.equal(people.some((row) => row.email === SHANE_EMAIL), false);
+
+  const persisted = readFileSync(seatFile, "utf8");
+  assert.match(persisted, /president\.example@example\.com/);
+  assert.match(persisted, /"president"/);
+  assert.doesNotMatch(persisted, /madisonltd\.com/);
+
+  resetUsersForTests();
+  const reloaded = findUserByEmail(email);
+  assert.ok(reloaded);
+  assert.equal(reloaded.role, "president");
+  assert.equal(reloaded.name, "Freddy Grimland");
 });
 
 test("createSeat rejects owner, Novus, duplicates, and a short password", async () => {

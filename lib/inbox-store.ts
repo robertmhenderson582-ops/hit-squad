@@ -1,14 +1,18 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { NOVUS_EMAIL } from "./desk-role.ts";
 import { INBOX_VAULT_KIND, INBOX_VAULT_NAME, readVaultJson, writeVaultJson } from "./drive-data.ts";
 import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import {
   inboxCirclePerson,
   inboxContactsFor,
+  inboxPeerFor,
   inboxThreadKey,
   isInboxCircleEmail,
+  keepInboxPair,
   normalizeInboxEmail,
 } from "./inbox-circle.ts";
+import type { PrivilegeViewer } from "./privileges.ts";
 import {
   acceptedInboxMessageId,
   acceptedInboxPhoto,
@@ -68,7 +72,7 @@ function stringIds(value: unknown): string[] {
 function normalizeHideRow(row: Partial<StoredInboxHides> | null | undefined): StoredInboxHides | null {
   if (!row || typeof row !== "object") return null;
   const email = normalizeInboxEmail(String(row.email ?? ""));
-  if (!isInboxCircleEmail(email)) return null;
+  if (!email.includes("@") || email === NOVUS_EMAIL) return null;
   return {
     email,
     messageIds: stringIds(row.messageIds),
@@ -93,7 +97,7 @@ export function mergeInboxHides(vault: StoredInboxHides[], incoming: StoredInbox
   const map = new Map<string, StoredInboxHides>();
   for (const row of [...vault, ...incoming]) {
     const email = normalizeInboxEmail(row.email);
-    if (!isInboxCircleEmail(email)) continue;
+    if (!email.includes("@") || email === NOVUS_EMAIL) continue;
     const existing = map.get(email) ?? { email, messageIds: [], personIds: [] };
     map.set(email, {
       email,
@@ -170,7 +174,7 @@ export function parseInboxFile(raw: unknown): StoredInboxMessage[] {
     if (typeof row.id !== "string" || !row.id.trim()) continue;
     const fromEmail = normalizeInboxEmail(row.fromEmail);
     const toEmail = normalizeInboxEmail(row.toEmail);
-    if (!isInboxCircleEmail(fromEmail) || !isInboxCircleEmail(toEmail)) continue;
+    if (!keepInboxPair(fromEmail, toEmail)) continue;
     if (fromEmail === toEmail) continue;
     messages.push({
       id: row.id,
@@ -333,9 +337,14 @@ function otherEmail(message: StoredInboxMessage, me: string) {
   return message.fromEmail === me ? message.toEmail : message.fromEmail;
 }
 
-export function threadsForInboxEmail(email: string, messages: StoredInboxMessage[]): InboxThread[] {
+export function threadsForInboxEmail(
+  email: string,
+  messages: StoredInboxMessage[],
+  viewer?: PrivilegeViewer | null,
+): InboxThread[] {
   const me = normalizeInboxEmail(email);
-  if (!isInboxCircleEmail(me)) return [];
+  if (!isInboxCircleEmail(me) && viewer?.role !== "president") return [];
+  const allowed = new Set(inboxContactsFor(me, viewer).map((row) => row.email));
   const hiddenIds = new Set(inboxHidesFor(me).messageIds);
   const grouped = new Map<string, StoredInboxMessage[]>();
   for (const message of messages) {
@@ -348,7 +357,8 @@ export function threadsForInboxEmail(email: string, messages: StoredInboxMessage
   const threads: InboxThread[] = [];
   for (const [threadKey, rows] of grouped) {
     const peerEmail = otherEmail(rows[0], me);
-    const peer = inboxCirclePerson(peerEmail);
+    if (allowed.size && !allowed.has(peerEmail) && viewer?.role === "president") continue;
+    const peer = inboxCirclePerson(peerEmail) || inboxPeerFor(peerEmail);
     if (!peer) continue;
     const sorted = [...rows].sort((a, b) => a.sentAt.localeCompare(b.sentAt) || a.id.localeCompare(b.id));
     const mapped: InboxMessage[] = sorted.map((row) => ({
@@ -373,9 +383,9 @@ export function threadsForInboxEmail(email: string, messages: StoredInboxMessage
   return threads.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function listInboxFor(email: string): Promise<InboxThread[]> {
-  if (!isInboxCircleEmail(email)) return [];
-  return threadsForInboxEmail(email, await hydrateInboxStore());
+export async function listInboxFor(email: string, viewer?: PrivilegeViewer | null): Promise<InboxThread[]> {
+  if (!isInboxCircleEmail(email) && viewer?.role !== "president") return [];
+  return threadsForInboxEmail(email, await hydrateInboxStore(), viewer);
 }
 
 export async function postInboxMessage(input: {
@@ -385,11 +395,20 @@ export async function postInboxMessage(input: {
   text?: string;
   photo?: string | null;
   id?: string;
+  viewer?: PrivilegeViewer | null;
 }): Promise<{ ok: true; threads: InboxThread[] } | { ok: false; status: number; error: string }> {
   const fromEmail = normalizeInboxEmail(input.fromEmail);
   const toEmail = normalizeInboxEmail(input.toEmail);
-  if (!isInboxCircleEmail(fromEmail) || !isInboxCircleEmail(toEmail)) {
-    return { ok: false, status: 403, error: "Inbox is those six only." };
+  const fromCircle = isInboxCircleEmail(fromEmail);
+  const toCircle = isInboxCircleEmail(toEmail);
+  if (!fromCircle || !toCircle) {
+    if (input.viewer?.role !== "president" || !keepInboxPair(fromEmail, toEmail)) {
+      return { ok: false, status: 403, error: "Inbox is those six only." };
+    }
+    const allowed = new Set(inboxContactsFor(fromEmail, input.viewer).map((row) => row.email));
+    if (!allowed.has(toEmail)) {
+      return { ok: false, status: 403, error: "Inbox is those six only." };
+    }
   }
   if (fromEmail === toEmail) {
     return { ok: false, status: 400, error: "Pick a person." };
@@ -412,7 +431,7 @@ export async function postInboxMessage(input: {
   const messages = await hydrateInboxStore();
   if (messages.some((row) => row.id === id)) {
     const next = await persist(messages);
-    return { ok: true, threads: threadsForInboxEmail(fromEmail, next) };
+    return { ok: true, threads: threadsForInboxEmail(fromEmail, next, input.viewer) };
   }
   const next = await persist([
     ...messages,
@@ -429,7 +448,7 @@ export async function postInboxMessage(input: {
       hiddenBy: [],
     },
   ]);
-  return { ok: true, threads: threadsForInboxEmail(fromEmail, next) };
+  return { ok: true, threads: threadsForInboxEmail(fromEmail, next, input.viewer) };
 }
 
 function hideRowsFor(messages: StoredInboxMessage[], me: string, match: (row: StoredInboxMessage) => boolean) {
@@ -445,9 +464,10 @@ function hideRowsFor(messages: StoredInboxMessage[], me: string, match: (row: St
 export async function hideInboxFor(
   email: string,
   input: { messageId?: string; personId?: string; personIds?: string[]; empty?: boolean },
+  viewer?: PrivilegeViewer | null,
 ): Promise<InboxThread[]> {
   const me = normalizeInboxEmail(email);
-  if (!isInboxCircleEmail(me)) return [];
+  if (!isInboxCircleEmail(me) && viewer?.role !== "president") return [];
   const messages = await hydrateInboxStore();
   const hidesBefore = hideFingerprint(hideCache);
   let changed = false;
@@ -475,7 +495,7 @@ export async function hideInboxFor(
     ];
     const peers = new Set(
       personIds
-        .map((id) => inboxContactsFor(me).find((row) => row.id === id)?.email)
+        .map((id) => inboxContactsFor(me, viewer).find((row) => row.id === id)?.email)
         .filter((value): value is string => Boolean(value)),
     );
     if (peers.size) {
@@ -489,20 +509,24 @@ export async function hideInboxFor(
       );
       rememberHide(me, {
         messageIds: mine.map((row) => row.id),
-        personIds: personIds.filter((id) => inboxContactsFor(me).some((row) => row.id === id)),
+        personIds: personIds.filter((id) => inboxContactsFor(me, viewer).some((row) => row.id === id)),
       });
     }
   }
   const hideChanged = hideFingerprint(hideCache) !== hidesBefore;
   const next = changed || hideChanged ? await persist(messages) : messages;
-  return threadsForInboxEmail(me, next);
+  return threadsForInboxEmail(me, next, viewer);
 }
 
-export async function markInboxThreadRead(email: string, personId: string): Promise<InboxThread[]> {
+export async function markInboxThreadRead(
+  email: string,
+  personId: string,
+  viewer?: PrivilegeViewer | null,
+): Promise<InboxThread[]> {
   const me = normalizeInboxEmail(email);
-  if (!isInboxCircleEmail(me)) return [];
-  const peer = inboxContactsFor(me).find((row) => row.id === personId);
-  if (!peer) return listInboxFor(me);
+  if (!isInboxCircleEmail(me) && viewer?.role !== "president") return [];
+  const peer = inboxContactsFor(me, viewer).find((row) => row.id === personId);
+  if (!peer) return listInboxFor(me, viewer);
   const messages = await hydrateInboxStore();
   let changed = false;
   for (const row of messages) {
@@ -512,11 +536,11 @@ export async function markInboxThreadRead(email: string, personId: string): Prom
     changed = true;
   }
   const next = changed ? await persist(messages) : messages;
-  return threadsForInboxEmail(me, next);
+  return threadsForInboxEmail(me, next, viewer);
 }
 
-export function inboxPeopleFor(email: string): InboxPerson[] {
-  return inboxContactsFor(email).map((row) => ({
+export function inboxPeopleFor(email: string, viewer?: PrivilegeViewer | null): InboxPerson[] {
+  return inboxContactsFor(email, viewer).map((row) => ({
     id: row.id,
     name: row.name,
     company: row.company,
