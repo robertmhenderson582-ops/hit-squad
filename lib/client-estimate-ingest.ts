@@ -187,7 +187,7 @@ export function classifyFromSheetsAndName(sheets: string[], fileName = ""): Clie
       packId,
       families: ["madison-contractor"],
       note:
-        packId === RODEO_U110_PACK_ID
+        packId === RODEO_U110_PACK_ID || packId === RODEO_U250_PACK_ID
           ? "Family A. Hours × composite rate apply onto the Wood River five-card desk. Official revision locks SUMMARY totals."
           : "Family A. Hours × composite rate, Direct vs Indirect. Staged — official revision locks totals.",
     };
@@ -297,7 +297,12 @@ export function clientFaceNames() {
 
 export function shouldStageClientWorkbook(classified: ClientWorkbookClass) {
   if (classified.kind === "wood-river-b1") return false;
-  if (classified.kind === "madison-contractor" && classified.packId === RODEO_U110_PACK_ID) return false;
+  if (
+    classified.kind === "madison-contractor" &&
+    (classified.packId === RODEO_U110_PACK_ID || classified.packId === RODEO_U250_PACK_ID)
+  ) {
+    return false;
+  }
   return classified.staged || classified.kind !== "hitsquad-live-pack";
 }
 
@@ -305,7 +310,7 @@ export function knownClientFaceId(fileId = "") {
   return isOfficialRevisionId(fileId) || isRodeoWorkbookFamilyId(fileId);
 }
 
-/** Mapper spec: family → Hit Squad surfaces. Export later; ingest is staged. */
+/** Mapper spec: family → Hit Squad surfaces. U110 / U250 Family A apply hours; other faces stay staged. */
 export const CLIENT_FACE_MAPPER_SPEC = {
   "madison-contractor": {
     family: "A",
@@ -313,7 +318,7 @@ export const CLIENT_FACE_MAPPER_SPEC = {
     buckets: ["Direct", "Indirect"],
     tabs: ["INSTRUCTIONS", "SUMMARY", "1–9"],
     exportAs: P66_V1_EXPORT_LINE,
-    ingest: "apply-hours-u110",
+    ingest: "apply-hours-u110-u250",
   },
   "p66-rodeo-workbook": {
     family: "B",
