@@ -104,8 +104,11 @@ function ChromeInner({
           <div className="home-corner-chrome">
             <header className="home-title-card">
               <Link href="/" className="home-title-brand brand-static" title="Home" aria-label="Home">
-                <span className="home-title-word">HIT SQUAD</span>
-                <span className="home-title-kicker">PROJECT CONTROLS</span>
+                <BrandMark className="home-title-mark" />
+                <span className="home-title-copy">
+                  <span className="home-title-word">HIT SQUAD</span>
+                  <span className="home-title-kicker">PROJECT CONTROLS</span>
+                </span>
               </Link>
               <nav className="home-title-actions" aria-label="Home">
                 <Link href="/" className="home-corner-home brand-static" title="Home" aria-label="Home">
@@ -141,7 +144,7 @@ function ChromeInner({
               <Link href="/" className="brand-static header-home min-w-0" title="Home" aria-label="Home">
                 {paper ? (
                   <span className="flex min-w-0 items-center gap-2">
-                    <BrandMark variant="stacked" className="h-8 w-8 shrink-0" />
+                    <BrandMark className="h-8 w-8 shrink-0" />
                     <span className="min-w-0 leading-none">
                       <span className="block font-display text-2xl tracking-[0.14em] text-white">HIT SQUAD</span>
                       <span className="mt-0.5 block font-display text-[11px] tracking-[0.22em] text-white/80">
