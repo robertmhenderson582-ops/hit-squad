@@ -71,9 +71,12 @@ process.env.AUTH_SECRET = "test-auth-secret-16chars";
 
 async function wipePersisted() {
   try {
-    await flushSeatVault();
+    await Promise.race([
+      flushSeatVault(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("flush")), 500)),
+    ]);
   } catch {
-    // A prior confirm write may have rejected; drop that adapter before the next test.
+    // A prior confirm write may have rejected or hung; drop that adapter before the next test.
   }
   if (existsSync(seatFile)) unlinkSync(seatFile);
   resetUsersForTests();
@@ -1262,8 +1265,8 @@ test("login skips seat vault flush on normal password auth", () => {
   assert.match(route, /Server-Timing|serverTiming/);
   assert.match(route, /seat-hydrate/);
   assert.match(route, /passwordWriteLanded/);
-  assert.equal(route.split("flushSeatVault").length - 1, 1);
-  assert.match(route, /if \(createdPassword\) \{[\s\S]*flushSeatVault/);
+  assert.equal(route.split("flushSeatVault()").length - 1, 1);
+  assert.match(route, /if \(createdPassword\) \{[\s\S]*flushSeatVault\(\)/);
 });
 
 test("persistExistingOwnerHash skips Drive write when seats.json already has the owner hash", async () => {
@@ -1532,15 +1535,23 @@ test("session GET overlays live mustChange and heals stale cookies", () => {
   assert.doesNotMatch(getFn, /await assignedCompany/);
 });
 
-test("scheduleSessionVaultCatchUp returns while Drive hydrate is still hung", async () => {
-  useSeatVaultForTests({
+function hangDrive(ms = 150): DriveAdapter {
+  const later = () =>
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("drive hung")), ms);
+    });
+  return {
     configured: true,
-    listJson: () => new Promise(() => {}),
-    readJson: () => new Promise(() => {}),
-    createJson: () => new Promise(() => {}),
-    updateJson: () => new Promise(() => {}),
-    deleteJson: () => new Promise(() => {}),
-  });
+    listJson: later,
+    readJson: later,
+    createJson: later,
+    updateJson: later,
+    deleteJson: later,
+  };
+}
+
+test("scheduleSessionVaultCatchUp returns while Drive hydrate is still hung", async () => {
+  useSeatVaultForTests(hangDrive());
   const started = Date.now();
   scheduleSessionVaultCatchUp(() => hydrateSeatStore());
   assert.ok(Date.now() - started < 100, "session catch-up must not await Drive");
@@ -1565,14 +1576,7 @@ test("awaitSeatDeadline returns timedOut while the work is still hung", async ()
 });
 
 test("prepareLoginSeats returns while Drive hydrate is hung and owner can still login", async () => {
-  useSeatVaultForTests({
-    configured: true,
-    listJson: () => new Promise(() => {}),
-    readJson: () => new Promise(() => {}),
-    createJson: () => new Promise(() => {}),
-    updateJson: () => new Promise(() => {}),
-    deleteJson: () => new Promise(() => {}),
-  });
+  useSeatVaultForTests(hangDrive());
   const started = Date.now();
   const prep = await prepareLoginSeats({ email: OWNER_LOGIN_EMAIL, deadlineMs: 80 });
   assert.equal(prep.hydrated, false);

@@ -13,17 +13,30 @@ export async function fetchJsonWithDeadline<T>(
   ms: number,
 ): Promise<{ ok: boolean; status: number; data: T }> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(AUTH_TIMEOUT_ERROR));
+    }, ms);
+  });
   try {
-    const response = await fetch(input, { ...init, signal: controller.signal });
-    const data = (await response.json()) as T;
+    const response = await Promise.race([
+      fetch(input, { ...init, signal: controller.signal }),
+      timeout,
+    ]);
+    const data = (await Promise.race([response.json() as Promise<T>, timeout])) as T;
     return { ok: response.ok, status: response.status, data };
   } catch (error) {
-    if (isDeadlineAbort(error) || controller.signal.aborted) {
+    if (
+      isDeadlineAbort(error) ||
+      controller.signal.aborted ||
+      (error instanceof Error && error.message === AUTH_TIMEOUT_ERROR)
+    ) {
       throw new Error(AUTH_TIMEOUT_ERROR);
     }
     throw error;
   } finally {
-    clearTimeout(timer);
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
