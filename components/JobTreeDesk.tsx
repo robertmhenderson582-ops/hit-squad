@@ -12,13 +12,17 @@ import { estimateForJob } from "@/lib/estimate-open";
 import { packForJob } from "@/lib/jobs";
 import {
   clientIsCollapsible,
+  divisionIsCollapsible,
   jobEstimateHref,
   resolveClientOpen,
+  resolveDivisionOpen,
   resolveOpenCompanyId,
   resolveSiteOpen,
   siteIsCollapsible,
   toggleCollapsedClient,
+  toggleCollapsedDivision,
   toggleCollapsedSite,
+  type JobTreeClient,
   type JobTreeCompany,
 } from "@/lib/job-tree";
 import type { EstimateRecord, JobRecord } from "@/lib/types";
@@ -60,8 +64,150 @@ export function JobTreeDesk({
   const { resolvedTheme } = useDisplay();
   const night = resolvedTheme === "night";
   const openId = resolveOpenCompanyId(openCompanyId, tree);
+  const [collapsedDivisions, setCollapsedDivisions] = useState<Set<string>>(() => new Set());
   const [collapsedClients, setCollapsedClients] = useState<Set<string>>(() => new Set());
   const [collapsedSites, setCollapsedSites] = useState<Set<string>>(() => new Set());
+
+  function renderClients(company: JobTreeCompany, clients: JobTreeClient[], keyPrefix: string) {
+    return clients.map((client) => {
+      const clientOpen = resolveClientOpen(collapsedClients, company.id, client);
+      const clientTitle = alias(client.name);
+      return (
+        <div key={`${keyPrefix}-${client.id}`} className="space-y-3">
+          {clientIsCollapsible() ? (
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-3 text-left"
+              aria-expanded={clientOpen}
+              aria-label={clientOpen ? "Collapse" : "Expand"}
+              onClick={() => setCollapsedClients((prev) => toggleCollapsedClient(prev, company.id, client))}
+            >
+              <h3
+                className={`font-display text-xl tracking-[0.14em] ${
+                  night ? "text-paper-cream" : "text-[#163038]"
+                }`}
+              >
+                {clientTitle.toUpperCase()}
+              </h3>
+              <CollapseChip open={clientOpen} night={night} />
+            </button>
+          ) : (
+            <h3
+              className={`font-display text-xl tracking-[0.14em] ${
+                night ? "text-paper-cream" : "text-[#163038]"
+              }`}
+            >
+              {clientTitle.toUpperCase()}
+            </h3>
+          )}
+          {clientOpen ? (
+            <div className="space-y-4 pl-1">
+              {client.sites.length === 0 ? (
+                <p className="font-mono text-[11px] tracking-[0.14em] text-steel-glow">
+                  No sites on this client yet
+                </p>
+              ) : null}
+              {client.sites.map((site) => {
+                const collapsible = siteIsCollapsible(site);
+                const siteOpen = resolveSiteOpen(collapsedSites, company.id, site);
+                const title = alias(site.name);
+                const titleClass = `font-display text-lg tracking-wide ${
+                  site.assigned ? (night ? "text-paper-cream" : "text-[#163038]") : "text-steel-glow"
+                }`;
+                return (
+                  <div key={`${keyPrefix}-${client.id}-${site.id}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      {collapsible ? (
+                        <button
+                          type="button"
+                          className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+                          aria-expanded={siteOpen}
+                          aria-label={siteOpen ? "Collapse" : "Expand"}
+                          onClick={() => setCollapsedSites((prev) => toggleCollapsedSite(prev, company.id, site))}
+                        >
+                          <h4 className={titleClass}>{title}</h4>
+                          <CollapseChip open={siteOpen} night={night} />
+                        </button>
+                      ) : (
+                        <h4 className={titleClass}>{title}</h4>
+                      )}
+                      {site.city ? (
+                        <p className="font-mono text-[10px] tracking-[0.16em] text-steel-glow">
+                          {alias(site.city)}
+                        </p>
+                      ) : null}
+                    </div>
+                    {siteOpen
+                      ? site.jobs.map((job) => {
+                          const estimate = estimateForJob(job, estimates);
+                          const pack = packForJob(job, packs, estimate?.id);
+                          const href = jobEstimateHref(job, estimates, packs);
+                          return (
+                            <article
+                              key={job.id}
+                              className={`site-plate plant-card estimate-card mt-3 px-4 py-5 ${href ? "cursor-pointer" : ""}`}
+                              role={href ? "link" : undefined}
+                              tabIndex={href ? 0 : undefined}
+                              onClick={href ? () => openJob(job) : undefined}
+                              onKeyDown={(event) => {
+                                if (!href) return;
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  openJob(job);
+                                }
+                              }}
+                            >
+                              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                <p className="font-mono text-xs text-steel">{job.code}</p>
+                                <StatusStamp value={(pack?.status || job.status).toUpperCase()} />
+                              </div>
+                              <h4 className="mt-1 font-display text-2xl tracking-wide">{alias(job.title)}</h4>
+                              <JobHandoffMark pack={pack} email={lens?.email} />
+                              <p className="mt-2 text-sm text-[#5b6f73]">
+                                {alias(job.client)} · {job.discipline} · {job.kind.toUpperCase()}
+                              </p>
+                              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+                                <div>
+                                  <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">WINDOW</dt>
+                                  <dd className="mt-1 font-mono text-xs">{job.window}</dd>
+                                </div>
+                                <div>
+                                  <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">
+                                    WORKING FIGURE
+                                  </dt>
+                                  <dd className="mt-1 font-mono text-xs text-amber-label">{job.workingFigure}</dd>
+                                </div>
+                                <div>
+                                  <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">HSE</dt>
+                                  <dd className="mt-1 font-mono text-xs">{job.hseNote}</dd>
+                                </div>
+                              </dl>
+                              <div className="relative z-20 mt-3" onClick={(event) => event.stopPropagation()}>
+                                <JobMenuActions
+                                  id={job.id}
+                                  title={job.title}
+                                  packId={pack?.packId || estimate?.id}
+                                  onChange={onMenuChange}
+                                />
+                              </div>
+                              {href ? (
+                                <Link href={href} className="sr-only" onClick={(event) => openJob(job, event)}>
+                                  Open estimate
+                                </Link>
+                              ) : null}
+                            </article>
+                          );
+                        })
+                      : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      );
+    });
+  }
 
   function openJob(job: JobRecord, event?: { preventDefault: () => void; stopPropagation: () => void }) {
     const href = jobEstimateHref(job, estimates, packs);
@@ -91,155 +237,64 @@ export function JobTreeDesk({
             </button>
             {open ? (
               <div className="space-y-5 px-4 pb-5 pt-2">
-                {company.clients.length === 0 ? (
+                {company.divisions.length === 0 && company.clients.length === 0 ? (
                   <p className="font-mono text-[11px] tracking-[0.14em] text-steel-glow">No client jobs on this desk yet</p>
                 ) : null}
-                {company.clients.map((client) => {
-                  const clientOpen = resolveClientOpen(collapsedClients, company.id, client);
-                  const clientTitle = alias(client.name);
-                  return (
-                    <div key={`${company.id}-${client.id}`} className="space-y-3">
-                      {clientIsCollapsible() ? (
-                        <button
-                          type="button"
-                          className="flex w-full items-center justify-between gap-3 text-left"
-                          aria-expanded={clientOpen}
-                          aria-label={clientOpen ? "Collapse" : "Expand"}
-                          onClick={() =>
-                            setCollapsedClients((prev) => toggleCollapsedClient(prev, company.id, client))
-                          }
-                        >
-                          <h3
-                            className={`font-display text-xl tracking-[0.14em] ${
-                              night ? "text-paper-cream" : "text-[#163038]"
-                            }`}
-                          >
-                            {clientTitle.toUpperCase()}
-                          </h3>
-                          <CollapseChip open={clientOpen} night={night} />
-                        </button>
-                      ) : (
-                        <h3
-                          className={`font-display text-xl tracking-[0.14em] ${
-                            night ? "text-paper-cream" : "text-[#163038]"
-                          }`}
-                        >
-                          {clientTitle.toUpperCase()}
-                        </h3>
-                      )}
-                      {clientOpen ? (
-                        <div className="space-y-4 pl-1">
-                          {client.sites.length === 0 ? (
-                            <p className="font-mono text-[11px] tracking-[0.14em] text-steel-glow">
-                              No sites on this client yet
-                            </p>
-                          ) : null}
-                          {client.sites.map((site) => {
-                            const collapsible = siteIsCollapsible(site);
-                            const siteOpen = resolveSiteOpen(collapsedSites, company.id, site);
-                            const title = alias(site.name);
-                            const titleClass = `font-display text-lg tracking-wide ${
-                              site.assigned
-                                ? night
-                                  ? "text-paper-cream"
-                                  : "text-[#163038]"
-                                : "text-steel-glow"
-                            }`;
-                            return (
-                              <div key={`${company.id}-${client.id}-${site.id}`}>
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  {collapsible ? (
-                                    <button
-                                      type="button"
-                                      className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
-                                      aria-expanded={siteOpen}
-                                      aria-label={siteOpen ? "Collapse" : "Expand"}
-                                      onClick={() =>
-                                        setCollapsedSites((prev) => toggleCollapsedSite(prev, company.id, site))
-                                      }
-                                    >
-                                      <h4 className={titleClass}>{title}</h4>
-                                      <CollapseChip open={siteOpen} night={night} />
-                                    </button>
-                                  ) : (
-                                    <h4 className={titleClass}>{title}</h4>
-                                  )}
-                                  {site.city ? (
-                                    <p className="font-mono text-[10px] tracking-[0.16em] text-steel-glow">
-                                      {alias(site.city)}
-                                    </p>
-                                  ) : null}
-                                </div>
-                                {siteOpen
-                                  ? site.jobs.map((job) => {
-                                      const estimate = estimateForJob(job, estimates);
-                                      const pack = packForJob(job, packs, estimate?.id);
-                                      const href = jobEstimateHref(job, estimates, packs);
-                                      return (
-                                        <article
-                                          key={job.id}
-                                          className={`site-plate plant-card estimate-card mt-3 px-4 py-5 ${href ? "cursor-pointer" : ""}`}
-                                          role={href ? "link" : undefined}
-                                          tabIndex={href ? 0 : undefined}
-                                          onClick={href ? () => openJob(job) : undefined}
-                                          onKeyDown={(event) => {
-                                            if (!href) return;
-                                            if (event.key === "Enter" || event.key === " ") {
-                                              event.preventDefault();
-                                              openJob(job);
-                                            }
-                                          }}
-                                        >
-                                          <div className="flex flex-wrap items-baseline justify-between gap-2">
-                                            <p className="font-mono text-xs text-steel">{job.code}</p>
-                                            <StatusStamp value={(pack?.status || job.status).toUpperCase()} />
-                                          </div>
-                                          <h4 className="mt-1 font-display text-2xl tracking-wide">{alias(job.title)}</h4>
-                                          <JobHandoffMark pack={pack} email={lens?.email} />
-                                          <p className="mt-2 text-sm text-[#5b6f73]">
-                                            {alias(job.client)} · {job.discipline} · {job.kind.toUpperCase()}
-                                          </p>
-                                          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-                                            <div>
-                                              <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">WINDOW</dt>
-                                              <dd className="mt-1 font-mono text-xs">{job.window}</dd>
-                                            </div>
-                                            <div>
-                                              <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">
-                                                WORKING FIGURE
-                                              </dt>
-                                              <dd className="mt-1 font-mono text-xs text-amber-label">{job.workingFigure}</dd>
-                                            </div>
-                                            <div>
-                                              <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">HSE</dt>
-                                              <dd className="mt-1 font-mono text-xs">{job.hseNote}</dd>
-                                            </div>
-                                          </dl>
-                                          <div className="relative z-20 mt-3" onClick={(event) => event.stopPropagation()}>
-                                            <JobMenuActions
-                                              id={job.id}
-                                              title={job.title}
-                                              packId={pack?.packId || estimate?.id}
-                                              onChange={onMenuChange}
-                                            />
-                                          </div>
-                                          {href ? (
-                                            <Link href={href} className="sr-only" onClick={(event) => openJob(job, event)}>
-                                              Open estimate
-                                            </Link>
-                                          ) : null}
-                                        </article>
-                                      );
-                                    })
-                                  : null}
+                {company.divisions.length
+                  ? company.divisions.map((division) => {
+                      const divisionOpen = resolveDivisionOpen(collapsedDivisions, company.id, division);
+                      const divisionTitle = alias(division.name);
+                      return (
+                        <div key={`${company.id}-${division.id}`} className="space-y-3">
+                          {divisionIsCollapsible() ? (
+                            <button
+                              type="button"
+                              className="flex w-full items-center justify-between gap-3 text-left"
+                              aria-expanded={divisionOpen}
+                              aria-label={divisionOpen ? "Collapse" : "Expand"}
+                              onClick={() =>
+                                setCollapsedDivisions((prev) => toggleCollapsedDivision(prev, company.id, division))
+                              }
+                            >
+                              <div className="min-w-0">
+                                <h3
+                                  className={`font-display text-xl tracking-[0.14em] ${
+                                    night ? "text-paper-cream" : "text-[#163038]"
+                                  }`}
+                                >
+                                  {divisionTitle.toUpperCase()}
+                                </h3>
+                                {division.code ? (
+                                  <p className="font-mono text-[10px] tracking-[0.16em] text-steel-glow">
+                                    {division.code}
+                                  </p>
+                                ) : null}
                               </div>
-                            );
-                          })}
+                              <CollapseChip open={divisionOpen} night={night} />
+                            </button>
+                          ) : (
+                            <h3
+                              className={`font-display text-xl tracking-[0.14em] ${
+                                night ? "text-paper-cream" : "text-[#163038]"
+                              }`}
+                            >
+                              {divisionTitle.toUpperCase()}
+                            </h3>
+                          )}
+                          {divisionOpen ? (
+                            <div className="space-y-4 pl-1">
+                              {division.clients.length === 0 ? (
+                                <p className="font-mono text-[11px] tracking-[0.14em] text-steel-glow">
+                                  No client sites on this division yet
+                                </p>
+                              ) : null}
+                              {renderClients(company, division.clients, `${company.id}-${division.id}`)}
+                            </div>
+                          ) : null}
                         </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
+                      );
+                    })
+                  : company.clients.map((client) => renderClients(company, [client], company.id))}
               </div>
             ) : null}
           </section>

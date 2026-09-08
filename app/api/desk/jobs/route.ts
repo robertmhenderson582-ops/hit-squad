@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { assignedCompaniesForEmail, assignedCompany, companyDeskLogoForEmail } from "@/lib/companies-store";
+import { assignedCompaniesForEmail, assignedCompany, companyDeskLogoForEmail, listDivisionsForScope } from "@/lib/companies-store";
 import { cookieValue } from "@/lib/http";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { deskForUser, omitCatalogSeedJobs, seedJobsAllowed } from "@/lib/jobs";
@@ -25,5 +25,6 @@ export async function GET(request: Request) {
     companyId,
     companyName: assigned[0]?.name ?? "",
     companyDeskLogo: await companyDeskLogoForEmail(deskUser.email),
+    divisions: await listDivisionsForScope(scope),
   });
 }

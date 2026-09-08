@@ -19,6 +19,7 @@ import { isHisProtectedMenuItem, shouldPaintHisCards } from "@/lib/his-wood-rive
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
 import { catalogSites } from "@/lib/desk-data";
 import { companyScopeFor, isStandaloneId, type CompanyId } from "@/lib/companies";
+import type { Division } from "@/lib/divisions";
 import { catalogSeedsAllowedOnDesk, jobsOnDesk, omitCatalogSeedJobs, omitCatalogSeedPacks, packForJob } from "@/lib/jobs";
 import { jobTree, stickyOpenCompanyId, toggleOpenCompanyId } from "@/lib/job-tree";
 import type { JobRecord } from "@/lib/types";
@@ -33,6 +34,7 @@ export function JobsDesk() {
   const estimates = board?.estimates ?? [];
   const [serverJobs, setServerJobs] = useState<JobRecord[]>([]);
   const [companyId, setCompanyId] = useState<CompanyId | undefined>();
+  const [divisions, setDivisions] = useState<Division[] | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [packTick, setPackTick] = useState(0);
@@ -71,6 +73,7 @@ export function JobsDesk() {
       const nextScope = companyScopeFor(lens, typeof data.companyId === "string" ? (data.companyId as CompanyId) : companyId);
       setServerJobs(catalogSeedsAllowedOnDesk(nextScope, seat) ? incoming : omitCatalogSeedJobs(incoming));
       if (typeof data.companyId === "string") setCompanyId(data.companyId as CompanyId);
+      if (Array.isArray(data.divisions)) setDivisions(data.divisions as Division[]);
     })();
     return () => {
       cancelled = true;
@@ -100,6 +103,7 @@ export function JobsDesk() {
     jobs: active,
     sites: board?.sites?.length ? board.sites : catalogSites(),
     packs: deskPacks,
+    divisions,
   });
   const currentOpen = stickyOpenCompanyId(openCompanyId, tree);
 
@@ -114,7 +118,7 @@ export function JobsDesk() {
         <p className="max-w-3xl text-sm leading-6 text-[#163038]">
           {standaloneLane
             ? "This seat is on Standalone. Company jobs stay on the company door."
-            : "Client, then site, then the job. Open a card to open that estimate. Archive hides a job. Delete removes your copy after you confirm."}
+            : "Division, then client, then site, then the job. Open a card to open that estimate. Archive hides a job. Delete removes your copy after you confirm."}
         </p>
         {standaloneLane ? (
           <Link href="/standalone" className="rounded-lg bg-steel px-4 py-2 text-white">

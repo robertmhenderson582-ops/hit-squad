@@ -12,6 +12,15 @@ import {
   type CompanyScope,
 } from "./companies.ts";
 import { catalogSites } from "./desk-data.ts";
+import {
+  divisionsForCompany,
+  inferDivisionId,
+  MECHANICAL_DIVISION_ID,
+  POWER_DIVISION_ID,
+  PULP_AND_PAPER_DIVISION_ID,
+  seedDivisions,
+  type Division,
+} from "./divisions.ts";
 import { estimateForJob, estimateHref } from "./estimate-open.ts";
 import { isHisWoodRiverJob, isHisWoodRiverPack } from "./his-wood-river.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
@@ -51,13 +60,24 @@ export type JobTreeClient = {
   sites: JobTreeSite[];
 };
 
+export type JobTreeDivision = {
+  id: string;
+  name: string;
+  code: string;
+  clients: JobTreeClient[];
+};
+
 export type JobTreeCompany = {
   id: CompanyId;
   name: string;
+  divisions: JobTreeDivision[];
+  /** Flattened clients across divisions — Quality / HSE still cascade Client → Site → Job. */
   clients: JobTreeClient[];
   /** Flattened sites across clients — HIS / cards still look up Wood River here. */
   sites: JobTreeSite[];
 };
+
+type ClientHost = { clients: JobTreeClient[] };
 
 function norm(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -100,8 +120,17 @@ export function clientTreeKey(companyId: string, clientId: string) {
   return `${companyId}:client:${clientId}`;
 }
 
+export function divisionTreeKey(companyId: string, divisionId: string) {
+  return `${companyId}:division:${divisionId}`;
+}
+
 /** Clients always collapse so a PM can hide a whole owner (P66 / Georgia Power). */
 export function clientIsCollapsible() {
+  return true;
+}
+
+/** Divisions always collapse so a PM can hide Mechanical / Power / Pulp and Paper. */
+export function divisionIsCollapsible() {
   return true;
 }
 
@@ -116,6 +145,55 @@ export function defaultCollapsedClientKeys(tree: Array<{ id: string; clients: Jo
     }
   }
   return keys;
+}
+
+function divisionHasWork(division: { clients: readonly { sites: readonly { jobs: readonly unknown[] }[] }[] }) {
+  return division.clients.some((client) => client.sites.some((site) => site.jobs.length > 0));
+}
+
+/** Empty divisions start collapsed. Divisions with jobs start open. Explicit keys win. */
+export function defaultCollapsedDivisionKeys(tree: Array<{ id: string; divisions: JobTreeDivision[] }>) {
+  const keys = new Set<string>();
+  for (const company of tree) {
+    for (const division of company.divisions) {
+      if (!divisionHasWork(division)) {
+        keys.add(divisionTreeKey(company.id, division.id));
+      }
+    }
+  }
+  return keys;
+}
+
+export function resolveDivisionOpen(
+  collapsed: ReadonlySet<string>,
+  companyId: string,
+  division: { id: string; clients: readonly { sites: readonly { jobs: readonly unknown[] }[] }[] },
+) {
+  const key = divisionTreeKey(companyId, division.id);
+  if (collapsed.has(key)) return false;
+  if (!divisionHasWork(division) && !collapsed.has(`open:${key}`)) {
+    return false;
+  }
+  return true;
+}
+
+export function toggleCollapsedDivision(
+  collapsed: ReadonlySet<string>,
+  companyId: string,
+  division: { id: string; clients: readonly { sites: readonly { jobs: readonly unknown[] }[] }[] },
+) {
+  const next = new Set(collapsed);
+  const key = divisionTreeKey(companyId, division.id);
+  const openKey = `open:${key}`;
+  const open = resolveDivisionOpen(collapsed, companyId, division);
+  if (open) {
+    next.add(key);
+    next.delete(openKey);
+  } else {
+    next.delete(key);
+    next.add(openKey);
+  }
+  return next;
 }
 
 export function resolveClientOpen(
@@ -316,35 +394,54 @@ function emptyUnassigned(): JobTreeSite {
 }
 
 function emptyCompany(id: CompanyId, name: string): JobTreeCompany {
-  return { id, name, clients: [], sites: [] };
+  return { id, name, divisions: [], clients: [], sites: [] };
 }
 
-function ensureClient(company: JobTreeCompany, id: string, name: string): JobTreeClient {
-  let client = company.clients.find((row) => row.id === id);
+function ensureDivision(company: JobTreeCompany, row: Pick<Division, "id" | "name" | "code">): JobTreeDivision {
+  let division = company.divisions.find((item) => item.id === row.id);
+  if (!division) {
+    division = { id: row.id, name: row.name, code: row.code || "", clients: [] };
+    company.divisions.push(division);
+  } else {
+    if (!division.name && row.name) division.name = row.name;
+    if (!division.code && row.code) division.code = row.code;
+  }
+  return division;
+}
+
+function ensureClient(host: ClientHost, id: string, name: string): JobTreeClient {
+  let client = host.clients.find((row) => row.id === id);
   if (!client) {
     client = { id, name, sites: [] };
-    company.clients.push(client);
+    host.clients.push(client);
   } else if (!client.name && name) {
     client.name = name;
   }
   return client;
 }
 
+function hostsOnCompany(company: JobTreeCompany): ClientHost[] {
+  return company.divisions.length ? company.divisions : [company];
+}
+
 function findSiteOnCompany(company: JobTreeCompany, pred: (site: JobTreeSite) => boolean): JobTreeSite | undefined {
-  for (const client of company.clients) {
-    const hit = client.sites.find(pred);
-    if (hit) return hit;
+  for (const host of hostsOnCompany(company)) {
+    for (const client of host.clients) {
+      const hit = client.sites.find(pred);
+      if (hit) return hit;
+    }
   }
   return undefined;
 }
 
-function pushSite(company: JobTreeCompany, clientId: string, clientName: string, site: JobTreeSite) {
-  const client = ensureClient(company, clientId, clientName);
+function pushSite(host: ClientHost, clientId: string, clientName: string, site: JobTreeSite) {
+  const client = ensureClient(host, clientId, clientName);
   client.sites.push(site);
   return site;
 }
 
 function placeJob(
+  host: ClientHost,
   company: JobTreeCompany,
   site: JobTreeSite,
   job: JobRecord,
@@ -359,7 +456,15 @@ function placeJob(
     return existing;
   }
   const next = { ...site, assigned: true, jobs: [...site.jobs, job] };
-  return pushSite(company, clientId, clientName, next);
+  return pushSite(host, clientId, clientName, next);
+}
+
+function hostForDivision(company: JobTreeCompany, catalog: Division[], ...parts: Array<string | undefined | null>): ClientHost {
+  const rows = divisionsForCompany(company.id, catalog);
+  if (!rows.length) return company;
+  const inferred = inferDivisionId(company.id, ...parts);
+  const match = rows.find((row) => row.id === inferred) || rows[0];
+  return ensureDivision(company, match);
 }
 
 function clientMetaForSite(
@@ -376,12 +481,15 @@ function clientMetaForSite(
   return { id, name };
 }
 
-function flattenCompanySites(company: JobTreeCompany) {
+function flattenCompanyTree(company: JobTreeCompany) {
+  if (company.divisions.length) {
+    company.clients = company.divisions.flatMap((division) => division.clients);
+  }
   company.sites = company.clients.flatMap((client) => client.sites);
 }
 
-function sortClients(company: JobTreeCompany) {
-  company.clients.sort((a, b) => {
+function sortClientList(clients: JobTreeClient[]) {
+  clients.sort((a, b) => {
     const aIdx = MADISON_CLIENT_ORDER.indexOf(a.id as (typeof MADISON_CLIENT_ORDER)[number]);
     const bIdx = MADISON_CLIENT_ORDER.indexOf(b.id as (typeof MADISON_CLIENT_ORDER)[number]);
     const aRank = aIdx === -1 ? 100 : aIdx;
@@ -389,7 +497,7 @@ function sortClients(company: JobTreeCompany) {
     if (aRank !== bRank) return aRank - bRank;
     return a.name.localeCompare(b.name);
   });
-  for (const client of company.clients) {
+  for (const client of clients) {
     client.sites.sort((a, b) => {
       const aWork = a.jobs.length > 0 ? 0 : 1;
       const bWork = b.jobs.length > 0 ? 0 : 1;
@@ -399,16 +507,36 @@ function sortClients(company: JobTreeCompany) {
   }
 }
 
+function sortDivisions(company: JobTreeCompany) {
+  const order = [MECHANICAL_DIVISION_ID, POWER_DIVISION_ID, PULP_AND_PAPER_DIVISION_ID];
+  company.divisions.sort((a, b) => {
+    const aIdx = order.indexOf(a.id);
+    const bIdx = order.indexOf(b.id);
+    const aRank = aIdx === -1 ? 100 : aIdx;
+    const bRank = bIdx === -1 ? 100 : bIdx;
+    if (aRank !== bRank) return aRank - bRank;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function sortClients(company: JobTreeCompany) {
+  sortDivisions(company);
+  for (const division of company.divisions) sortClientList(division.clients);
+  sortClientList(company.clients);
+}
+
 export function jobTree(input: {
   scope?: CompanyScope | null;
   jobs: JobRecord[];
   sites?: SiteRecord[];
   packs?: LocalPack[];
   catalog?: Company[];
+  divisions?: Division[];
 }): JobTreeCompany[] {
   const sites = input.sites ?? catalogSites();
   const packs = input.packs ?? [];
   const companies = companiesForScope(input.scope, input.catalog);
+  const divisionCatalog = input.divisions ?? seedDivisions();
   const ownerSeesAll = !input.scope || input.scope.isOwner;
   const buckets = new Map<string, JobTreeCompany>();
 
@@ -417,10 +545,14 @@ export function jobTree(input: {
       canSeeCompany(input.scope, inferCompanyIdFromParts(site.client, site.name, site.family, site.city)),
     );
     const bucket = emptyCompany(company.id, company.name);
+    for (const division of divisionsForCompany(company.id, divisionCatalog)) {
+      ensureDivision(bucket, division);
+    }
     if (ownerSeesAll) {
       for (const site of catalog) {
         const client = clientMetaForSite(site);
-        pushSite(bucket, client.id, client.name, {
+        const host = hostForDivision(bucket, divisionCatalog, site.client, site.name, site.family, site.city);
+        pushSite(host, client.id, client.name, {
           id: site.id,
           name: site.name,
           city: site.city,
@@ -430,8 +562,14 @@ export function jobTree(input: {
         });
       }
       if (company.id === "madison") {
-        ensureClient(bucket, PHILLIPS_66_CLIENT_ID, jobTreeClientLabel(PHILLIPS_66_CLIENT_ID));
-        ensureClient(bucket, GEORGIA_POWER_CLIENT_ID, jobTreeClientLabel(GEORGIA_POWER_CLIENT_ID));
+        const mechanical = ensureDivision(bucket, {
+          id: MECHANICAL_DIVISION_ID,
+          name: "Mechanical",
+          code: "307000",
+        });
+        const power = ensureDivision(bucket, { id: POWER_DIVISION_ID, name: "Power", code: "303000" });
+        ensureClient(mechanical, PHILLIPS_66_CLIENT_ID, jobTreeClientLabel(PHILLIPS_66_CLIENT_ID));
+        ensureClient(power, GEORGIA_POWER_CLIENT_ID, jobTreeClientLabel(GEORGIA_POWER_CLIENT_ID));
       }
     }
     buckets.set(company.id, bucket);
@@ -456,6 +594,9 @@ export function jobTree(input: {
     if (!bucket) {
       const name = companies.find((row) => row.id === companyId)?.name || companyId;
       bucket = emptyCompany(companyId, name);
+      for (const division of divisionsForCompany(companyId, divisionCatalog)) {
+        ensureDivision(bucket, division);
+      }
       buckets.set(companyId, bucket);
     }
     const hay = haystack(job.client, job.title, job.code, pack?.site, pack?.client, pack?.siteId);
@@ -463,6 +604,19 @@ export function jobTree(input: {
       (pack?.siteId ? findSiteOnCompany(bucket, (site) => site.id === pack.siteId) : undefined) ||
       (pack?.siteId ? sites.find((site) => site.id === pack.siteId) : undefined) ||
       matchCatalogSite(hay, sites);
+    const place = (site: JobTreeSite, clientId: string, clientName: string) => {
+      const host = hostForDivision(
+        bucket!,
+        divisionCatalog,
+        site.client,
+        site.name,
+        pack?.client,
+        pack?.site,
+        job.client,
+        job.title,
+      );
+      placeJob(host, bucket!, site, job, clientId, clientName);
+    };
     if (matched) {
       const visible = canSeeCompany(
         input.scope,
@@ -470,8 +624,7 @@ export function jobTree(input: {
       );
       if (visible || findSiteOnCompany(bucket, (site) => site.id === matched.id)) {
         const client = clientMetaForSite(matched, pack);
-        placeJob(
-          bucket,
+        place(
           {
             id: matched.id,
             name: matched.name,
@@ -480,7 +633,6 @@ export function jobTree(input: {
             assigned: true,
             jobs: [],
           },
-          job,
           client.id,
           client.name,
         );
@@ -489,31 +641,32 @@ export function jobTree(input: {
       const live = liveSiteFromPack(pack);
       if (live) {
         const client = clientMetaForSite(live, pack);
-        placeJob(bucket, live, job, client.id, client.name);
+        place(live, client.id, client.name);
       } else {
         const client = clientMetaForSite({ client: pack?.client, name: pack?.site }, pack);
-        placeJob(bucket, emptyUnassigned(), job, client.id, client.name);
+        place(emptyUnassigned(), client.id, client.name);
       }
       continue;
     }
     const live = liveSiteFromPack(pack);
     if (live) {
       const client = clientMetaForSite(live, pack);
-      placeJob(bucket, live, job, client.id, client.name);
+      place(live, client.id, client.name);
       continue;
     }
     const client = clientMetaForSite({ client: pack?.client || job.client, name: pack?.site }, pack);
-    placeJob(bucket, emptyUnassigned(), job, client.id, client.name);
+    place(emptyUnassigned(), client.id, client.name);
   }
 
   for (const company of buckets.values()) {
-    if (!ownerSeesAll) {
-      for (const client of company.clients) {
-        client.sites = client.sites.filter((site) => site.jobs.length > 0);
+    const filterClients = (clients: JobTreeClient[]) => {
+      if (!ownerSeesAll) {
+        for (const client of clients) {
+          client.sites = client.sites.filter((site) => site.jobs.length > 0);
+        }
+        return clients.filter((client) => client.sites.length > 0);
       }
-      company.clients = company.clients.filter((client) => client.sites.length > 0);
-    } else {
-      company.clients = company.clients.filter((client) => {
+      const next = clients.filter((client) => {
         const seededMadison =
           company.id === "madison" &&
           (client.id === PHILLIPS_66_CLIENT_ID || client.id === GEORGIA_POWER_CLIENT_ID);
@@ -526,17 +679,32 @@ export function jobTree(input: {
         }
         return hasSites && client.sites.some((site) => site.id !== UNASSIGNED_SITE_ID);
       });
-      for (const client of company.clients) {
+      for (const client of next) {
         client.sites = client.sites.filter((site) => site.jobs.length > 0 || site.id !== UNASSIGNED_SITE_ID);
       }
+      return next;
+    };
+
+    if (company.divisions.length) {
+      for (const division of company.divisions) {
+        division.clients = filterClients(division.clients);
+      }
+      if (!ownerSeesAll) {
+        company.divisions = company.divisions.filter((division) => division.clients.length > 0);
+      }
+    } else {
+      company.clients = filterClients(company.clients);
     }
-    for (const client of company.clients) {
-      for (const site of client.sites) {
-        if (!site.jobs.length) site.assigned = false;
+    for (const host of hostsOnCompany(company)) {
+      for (const client of host.clients) {
+        for (const site of client.sites) {
+          if (!site.jobs.length) site.assigned = false;
+        }
       }
     }
     sortClients(company);
-    flattenCompanySites(company);
+    flattenCompanyTree(company);
+    sortClientList(company.clients);
   }
 
   return companies.map((company) => buckets.get(company.id)).filter((row): row is JobTreeCompany => Boolean(row));
@@ -549,6 +717,7 @@ export function assignedSiteIds(input: {
   sites?: SiteRecord[];
   packs?: LocalPack[];
   catalog?: Company[];
+  divisions?: Division[];
   companyId?: CompanyId;
 }): string[] {
   const tree = jobTree(input);

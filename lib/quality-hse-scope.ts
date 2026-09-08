@@ -15,7 +15,8 @@ import type { JobRecord, SiteRecord } from "./types.ts";
  *
  * Now the live key is the Jobs-tree job id (`hs_*_module_v1:job:job-new-b1726`).
  * Client → Site → Job picks reuse `jobTree` identities (Phillips 66 / Wood River /
- * Boiler 17), not a second client list.
+ * Boiler 17), not a second client list. Jobs shows Division above Client;
+ * these picks stay Client → Site → Job so Quality / HSE keys do not change.
  *
  * Legacy client-folder blobs stay readable under the old key. The first job
  * opened on that client gets a one-time copy; a claim key stops a second job

@@ -15,15 +15,30 @@ import {
   mergeCompanies,
   seedCompanyForEmail,
   validateCompanyLogoInput,
+  canSeeCompany,
   type Company,
   type CompanyId,
+  type CompanyScope,
 } from "./companies.ts";
+import {
+  divisionKey,
+  divisionOverlay,
+  hydrateDivision,
+  mergeDivisions,
+  parseDivisionCode,
+  parseDivisionName,
+  uniqueDivisionId,
+  WOOD_RIVER_MOLD_ID,
+  type Division,
+} from "./divisions.ts";
 import { COMPANIES_VAULT_KIND, COMPANIES_VAULT_NAME, readVaultJson, writeVaultJson } from "./drive-data.ts";
 import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 
 export type AssignmentFile = {
   assignments: Record<string, CompanyId>;
   companies?: Company[];
+  divisions?: Division[];
+  removedDivisionKeys?: string[];
 };
 
 let memoryOverride: AssignmentFile | null = null;
@@ -54,23 +69,46 @@ export function parseAssignmentFile(raw: unknown): AssignmentFile {
       });
     }
   }
-  return { assignments, companies };
+  const divisions: Division[] = [];
+  for (const row of parsed.divisions ?? []) {
+    const next = hydrateDivision(row);
+    if (next) divisions.push(divisionOverlay(next));
+  }
+  const removedDivisionKeys = [
+    ...new Set(
+      (parsed.removedDivisionKeys ?? [])
+        .map((key) => (typeof key === "string" ? key.trim() : ""))
+        .filter(Boolean),
+    ),
+  ];
+  return { assignments, companies, divisions, removedDivisionKeys };
 }
 
 function emptyFile(): AssignmentFile {
-  return { assignments: {}, companies: [] };
+  return { assignments: {}, companies: [], divisions: [], removedDivisionKeys: [] };
 }
 
 function hasDeskData(data: AssignmentFile) {
-  return Object.keys(data.assignments).length > 0 || (data.companies?.length ?? 0) > 0;
+  return (
+    Object.keys(data.assignments).length > 0 ||
+    (data.companies?.length ?? 0) > 0 ||
+    (data.divisions?.length ?? 0) > 0 ||
+    (data.removedDivisionKeys?.length ?? 0) > 0
+  );
+}
+
+function cloneFile(data: AssignmentFile): AssignmentFile {
+  return {
+    assignments: { ...data.assignments },
+    companies: [...(data.companies ?? [])],
+    divisions: [...(data.divisions ?? [])],
+    removedDivisionKeys: [...(data.removedDivisionKeys ?? [])],
+  };
 }
 
 function readCache(): AssignmentFile {
   if (memoryOverride) {
-    return {
-      assignments: { ...memoryOverride.assignments },
-      companies: [...(memoryOverride.companies ?? [])],
-    };
+    return cloneFile(memoryOverride);
   }
   try {
     return parseAssignmentFile(JSON.parse(readFileSync(companyAssignmentPath(), "utf8")));
@@ -81,10 +119,7 @@ function readCache(): AssignmentFile {
 
 function writeCache(data: AssignmentFile) {
   if (memoryOverride) {
-    memoryOverride = {
-      assignments: { ...data.assignments },
-      companies: [...(data.companies ?? [])],
-    };
+    memoryOverride = cloneFile(data);
     return;
   }
   const path = companyAssignmentPath();
@@ -208,6 +243,98 @@ export async function addCompany(name: string): Promise<{ ok: true; company: Com
   return { ok: true, company: { id, name: trimmed } };
 }
 
+export async function listDivisions(): Promise<Division[]> {
+  const data = await hydrateCompanyStore();
+  return mergeDivisions(data.divisions, data.removedDivisionKeys);
+}
+
+export async function listDivisionsForScope(scope?: CompanyScope | null): Promise<Division[]> {
+  const rows = await listDivisions();
+  return rows.filter((row) => canSeeCompany(scope, row.companyId));
+}
+
+export async function addDivision(
+  companyId: string,
+  name: string,
+  code?: string | null,
+): Promise<{ ok: true; division: Division } | { error: string }> {
+  const id = companyId.trim();
+  if (!isCompanyId(id) || isStandaloneId(id) || isRetiredPeerCompany(id)) {
+    return { error: "Pick a company on this desk." };
+  }
+  const company = (await listCompanies()).find((row) => row.id === id);
+  if (!company) return { error: "Pick a company on this desk." };
+  const named = parseDivisionName(name);
+  if ("error" in named) return named;
+  const coded = parseDivisionCode(code);
+  if ("error" in coded) return coded;
+  const existing = await listDivisions();
+  const sameName = existing.find(
+    (row) => row.companyId === id && row.name.toLowerCase() === named.name.toLowerCase(),
+  );
+  if (sameName) return { ok: true, division: sameName };
+  const next: Division = {
+    id: uniqueDivisionId(named.name, existing, id),
+    companyId: id,
+    name: named.name,
+    code: coded.code,
+    mold: WOOD_RIVER_MOLD_ID,
+  };
+  const data = await hydrateCompanyStore();
+  const key = divisionKey(next.companyId, next.id);
+  data.removedDivisionKeys = (data.removedDivisionKeys ?? []).filter((row) => row !== key);
+  data.divisions = [...(data.divisions ?? []).filter((row) => divisionKey(row.companyId, row.id) !== key), next];
+  await persist(data);
+  return { ok: true, division: next };
+}
+
+export async function renameDivision(
+  companyId: string,
+  divisionId: string,
+  name: string,
+  code?: string | null,
+): Promise<{ ok: true; division: Division } | { error: string }> {
+  const existing = (await listDivisions()).find((row) => row.companyId === companyId && row.id === divisionId);
+  if (!existing) return { error: "Pick a division on this desk." };
+  const named = parseDivisionName(name);
+  if ("error" in named) return named;
+  const coded = parseDivisionCode(code);
+  if ("error" in coded) return coded;
+  const clash = (await listDivisions()).find(
+    (row) =>
+      row.companyId === companyId &&
+      row.id !== divisionId &&
+      row.name.toLowerCase() === named.name.toLowerCase(),
+  );
+  if (clash) return { error: "That division is already on this company." };
+  const next: Division = {
+    ...existing,
+    name: named.name,
+    code: coded.code,
+    mold: WOOD_RIVER_MOLD_ID,
+  };
+  const data = await hydrateCompanyStore();
+  const key = divisionKey(next.companyId, next.id);
+  data.removedDivisionKeys = (data.removedDivisionKeys ?? []).filter((row) => row !== key);
+  data.divisions = [...(data.divisions ?? []).filter((row) => divisionKey(row.companyId, row.id) !== key), next];
+  await persist(data);
+  return { ok: true, division: next };
+}
+
+export async function removeDivision(
+  companyId: string,
+  divisionId: string,
+): Promise<{ ok: true; divisionId: string } | { error: string }> {
+  const existing = (await listDivisions()).find((row) => row.companyId === companyId && row.id === divisionId);
+  if (!existing) return { error: "Pick a division on this desk." };
+  const data = await hydrateCompanyStore();
+  const key = divisionKey(companyId, divisionId);
+  data.divisions = (data.divisions ?? []).filter((row) => divisionKey(row.companyId, row.id) !== key);
+  data.removedDivisionKeys = [...new Set([...(data.removedDivisionKeys ?? []), key])];
+  await persist(data);
+  return { ok: true, divisionId };
+}
+
 export function resetCompanyAssignmentsForTests() {
   memoryOverride = null;
   hydrated = false;
@@ -232,7 +359,7 @@ export function useCompanyVaultForTests(adapter: DriveAdapter | null) {
 }
 
 export function useMemoryCompanyAssignments() {
-  memoryOverride = { assignments: {}, companies: [] };
+  memoryOverride = { assignments: {}, companies: [], divisions: [], removedDivisionKeys: [] };
   hydrated = true;
   injectedAdapter = null;
 }

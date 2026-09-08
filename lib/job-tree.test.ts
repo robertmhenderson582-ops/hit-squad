@@ -23,6 +23,7 @@ import {
   matchCatalogSite,
   PHILLIPS_66_CLIENT_ID,
   resolveClientOpen,
+  resolveDivisionOpen,
   resolveOpenCompanyId,
   resolveSiteOpen,
   siteIsCollapsible,
@@ -30,6 +31,7 @@ import {
   sitesForCompany,
   stickyOpenCompanyId,
   toggleCollapsedClient,
+  toggleCollapsedDivision,
   toggleCollapsedSite,
   toggleOpenCompanyId,
   UNASSIGNED_SITE_ID,
@@ -400,8 +402,10 @@ describe("job tree", () => {
     const desk = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
     const treeDesk = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
     const plantPage = readFileSync(fileURLToPath(new URL("../components/JobPlantPage.tsx", import.meta.url)), "utf8");
-    assert.match(desk, /Client, then site, then the job/);
-    assert.match(treeDesk, /company\.clients\.map/);
+  assert.match(desk, /Division, then client, then site, then the job/);
+  assert.match(treeDesk, /company\.clients\.map/);
+  assert.match(treeDesk, /company\.divisions\.map/);
+  assert.match(treeDesk, /resolveDivisionOpen/);
     assert.equal(/site\.note/.test(treeDesk), false);
     assert.equal(/GEP|TASO|Competitive bid|Regular|Unick|per diem|Work Folder|B-1/i.test(treeDesk), false);
     assert.equal(/GEP|TASO|Competitive bid|Unick|per diem|Work Folder|B-1/i.test(desk), false);
@@ -438,6 +442,48 @@ describe("job tree", () => {
     assert.match(treeDesk, /toggleCollapsedClient\(prev, company\.id, client\)/);
     assert.match(treeDesk, /<CollapseChip open=\{clientOpen\} night=\{night\} \/>/);
     assert.match(treeDesk, /clientIsCollapsible\(\)/);
+  });
+
+  it("sits Division between Company and Client and maps Madison plants without moving packs", () => {
+    const ownerTree = jobTree({ scope: owner, jobs: jobsOnDesk([], [cat2], false, owner), packs: [cat2] });
+    const madison = ownerTree.find((row) => row.id === "madison");
+    assert.deepEqual(
+      madison?.divisions.map((row) => `${row.id}:${row.code}`),
+      ["mechanical:307000", "power:303000", "pulp-and-paper:305000"],
+    );
+    const mechanical = madison?.divisions.find((row) => row.id === "mechanical");
+    const power = madison?.divisions.find((row) => row.id === "power");
+    const pulp = madison?.divisions.find((row) => row.id === "pulp-and-paper");
+    assert.equal(mechanical?.clients.some((client) => client.id === PHILLIPS_66_CLIENT_ID), true);
+    assert.equal(mechanical?.clients.some((client) => client.id === "monroe-energy"), true);
+    assert.equal(
+      mechanical?.clients
+        .find((client) => client.id === PHILLIPS_66_CLIENT_ID)
+        ?.sites.some((site) => site.id === "site-madison" && site.jobs.some((job) => job.id === "job-new-mtaajdwa-f7539")),
+      true,
+    );
+    assert.equal(power?.clients.some((client) => client.id === GEORGIA_POWER_CLIENT_ID), true);
+    assert.equal(power?.clients.some((client) => client.sites.some((site) => site.id === "site-yates")), true);
+    assert.equal(pulp?.clients.length, 0);
+    assert.equal(madison?.clients.some((client) => client.id === PHILLIPS_66_CLIENT_ID), true);
+
+    const nathanTree = jobTree({
+      scope: nathan,
+      jobs: jobsOnDesk([], [cat2], true, nathan),
+      packs: [cat2],
+    });
+    assert.deepEqual(nathanTree[0]?.divisions.map((row) => row.id), ["mechanical"]);
+    assert.equal(nathanTree[0]?.divisions.some((row) => row.id === "power" || row.id === "pulp-and-paper"), false);
+
+    const empty = { id: "pulp-and-paper", clients: [] };
+    const busy = {
+      id: "mechanical",
+      clients: [{ id: PHILLIPS_66_CLIENT_ID, sites: [{ id: "site-madison", jobs: [{ id: "a" }] }] }],
+    };
+    assert.equal(resolveDivisionOpen(new Set(), "madison", empty), false);
+    assert.equal(resolveDivisionOpen(new Set(), "madison", busy), true);
+    const opened = toggleCollapsedDivision(new Set(), "madison", empty);
+    assert.equal(resolveDivisionOpen(opened, "madison", empty), true);
   });
 
   it("keeps James off Madison P66 / Georgia Power and does not list CBI", () => {
