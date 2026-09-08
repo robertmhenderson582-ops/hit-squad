@@ -29,7 +29,7 @@ import {
   type PhaseRow,
   type PhaseScheduleState,
 } from "@/lib/phase-schedule";
-import { BOILER17_JOB_NUMBER, defaultStatusForBoiler17, isBoiler17PackId } from "@/lib/boiler-17";
+import { BOILER17_JOB_NUMBER, boiler17NeedsB1Fill, defaultStatusForBoiler17, isBoiler17PackId } from "@/lib/boiler-17";
 import { seedBoiler17LocalDefaults } from "@/lib/his-wood-river";
 import { emptyJobMeta, hydrateJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
 import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
@@ -217,6 +217,9 @@ export function EstimatePackageProvider({
     if (packId === HIS_AROMATICS_PACK_ID && aromaticsStateLooksSmashed(packId, localSchedule, localCrew, findLocalPack(packId)?.title)) {
       return false;
     }
+    if (isBoiler17PackId(packId) && boiler17NeedsB1Fill({ packId, crew: localCrew, schedule: localSchedule, title: findLocalPack(packId)?.title })) {
+      return false;
+    }
     if (isDefaultSeedSchedule(localSchedule) && crewHasRows(localCrew)) return false;
     return true;
   });
@@ -257,15 +260,22 @@ export function EstimatePackageProvider({
       Boolean(packId) &&
       (packId === HIS_AROMATICS_PACK_ID
         ? aromaticsStateLooksSmashed(packId, localSchedule, readCrew(estimateKey), findLocalPack(packId)?.title)
-        : isDefaultSeedSchedule(localSchedule) && crewHasRows(readCrew(estimateKey)));
+        : isBoiler17PackId(packId)
+          ? boiler17NeedsB1Fill({
+              packId,
+              crew: readCrew(estimateKey),
+              schedule: localSchedule,
+              title: findLocalPack(packId)?.title,
+            })
+          : isDefaultSeedSchedule(localSchedule) && crewHasRows(readCrew(estimateKey)));
     const paintFromLocal = () => {
+      if (packId && isBoiler17PackId(packId) && typeof window !== "undefined") {
+        seedBoiler17LocalDefaults(window.localStorage, packId);
+      }
       const next = readSchedule(estimateKey);
       setSchedule(next);
       setCrewState(syncCrew(readCrew(estimateKey), next));
       setOrgChartState(readOrgChart(estimateKey));
-      if (packId && isBoiler17PackId(packId) && typeof window !== "undefined") {
-        seedBoiler17LocalDefaults(window.localStorage, packId);
-      }
       const nextMeta = readJobMeta(estimateKey);
       if (packId && isBoiler17PackId(packId) && !nextMeta.jobNumber.trim()) {
         const seeded = { ...nextMeta, jobNumber: BOILER17_JOB_NUMBER, area: nextMeta.area || "Boiler 17" };
@@ -283,7 +293,7 @@ export function EstimatePackageProvider({
     if (hasLocal && !seedPendingVault) paintFromLocal();
     else setReady(false);
     const boot = packId
-      ? packId === HIS_AROMATICS_PACK_ID || !(hasLocal || vaultListHydratePending())
+      ? packId === HIS_AROMATICS_PACK_ID || isBoiler17PackId(packId) || !(hasLocal || vaultListHydratePending())
         ? hydrateOpenPack(packId)
         : hydrateFromVault()
       : Promise.resolve([]);
@@ -330,9 +340,19 @@ export function EstimatePackageProvider({
     return aromaticsStateLooksSmashed(packId, schedule, crew, findLocalPack(packId)?.title);
   }
 
+  function skipSmashedBoiler17Write() {
+    const packId = packIdFromStoreKey(estimateKey);
+    if (!packId || !isBoiler17PackId(packId)) return false;
+    return boiler17NeedsB1Fill({ packId, crew, schedule, title: findLocalPack(packId)?.title });
+  }
+
+  function skipSmashedVaultWrite() {
+    return skipSmashedAromaticsWrite() || skipSmashedBoiler17Write();
+  }
+
   useEffect(() => {
     if (!ready) return;
-    if (skipSmashedAromaticsWrite()) return;
+    if (skipSmashedVaultWrite()) return;
     writeSchedule(estimateKey, schedule);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
@@ -343,7 +363,7 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
-    if (skipSmashedAromaticsWrite()) return;
+    if (skipSmashedVaultWrite()) return;
     writeCrew(estimateKey, crew);
     persistCrewTravel(estimateKey, crew, {
       staffPerMile: jobMeta.staffMileageRate,
@@ -358,7 +378,7 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
-    if (skipSmashedAromaticsWrite()) return;
+    if (skipSmashedVaultWrite()) return;
     writeOrgChart(estimateKey, orgChart);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
@@ -369,7 +389,7 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
-    if (skipSmashedAromaticsWrite()) return;
+    if (skipSmashedVaultWrite()) return;
     writeJobMeta(estimateKey, jobMeta);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
@@ -380,7 +400,7 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
-    if (skipSmashedAromaticsWrite()) return;
+    if (skipSmashedVaultWrite()) return;
     writeActivities(estimateKey, activities);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
@@ -394,7 +414,7 @@ export function EstimatePackageProvider({
     const packId = packIdFromStoreKey(estimateKey);
     if (!packId) return;
     return onEstimateSheets(() => {
-      if (skipSmashedAromaticsWrite()) return;
+      if (skipSmashedVaultWrite()) return;
       touchLocalPack(packId);
       queueVaultUpsert(packId);
     });

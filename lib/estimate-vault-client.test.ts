@@ -21,10 +21,12 @@ import { jobsOnDesk } from "./jobs.ts";
 import { packsMissingFromVault, writeVaultSeen } from "./job-menu.ts";
 import { handoffMarkText, TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import { packsForViewedDesk, readLensPacks, snapshotLensPack, writeLensPacks } from "./lens-packs.ts";
-import { deleteLocalPack, findLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
+import { deleteLocalPack, findLocalPack, rememberLocalPack, storageKeyForPack, type StorageLike } from "./local-estimates.ts";
 import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-menu.ts";
+import { BOILER17_COST_NOTE, BOILER17_JOB_NUMBER, BOILER17_PACK_ID } from "./boiler-17.ts";
 import { applyPackToStore, collectPack } from "./estimate-pack.ts";
-import { defaultPhaseSchedule } from "./phase-schedule.ts";
+import { CREW_STORE_PREFIX, defaultPhaseSchedule, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
+import { checkBoiler17PackHours } from "./wood-river-b1.ts";
 import { addLogRow, emptyFcrPacket, readFcrPacket, writeFcrPacket } from "./change-order-packet.ts";
 import { emptyCostReportBook, readCostReport, saveCostSnapshot, writeCostReport } from "./cost-report.ts";
 import {
@@ -1003,6 +1005,89 @@ describe("local transfer commit", () => {
     }
   });
 
+  it("hydrates empty Drive Boiler 17 into typed B-1 crew hours", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const packId = BOILER17_PACK_ID;
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const empty = {
+        packId,
+        key: `new:${packId}`,
+        title: "Boiler 17 2026",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        siteId: "site-madison",
+        createdAt: 50,
+        updatedAt: 99_000,
+        ownerEmail: NATHAN_DESK_EMAIL,
+        status: "Locked",
+        schedule: defaultPhaseSchedule(),
+        crew: { staff: [], generalForeman: [], foreman: [], direct: [], support: [] },
+        jobMeta: { jobNumber: BOILER17_JOB_NUMBER, area: "Boiler 17" },
+        costReport: { statusDate: "2026-05-30", notes: BOILER17_COST_NOTE },
+      };
+      if (url.includes(`/api/desk/estimates/${encodeURIComponent(packId)}`)) {
+        return new Response(JSON.stringify({ pack: empty }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ persisted: true, packs: [empty] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      const opened = await hydrateOpenPack(packId, store);
+      assert.equal(checkBoiler17PackHours(opened[0]?.crew as never).ok, true);
+      const local = collectPack(store, packId);
+      assert.equal(checkBoiler17PackHours(local?.crew as never).ok, true);
+      assert.equal((local?.schedule as { projectStart?: string }).projectStart, "2026-08-10");
+      assert.equal((local?.costReport as { notes?: string })?.notes?.includes("108451"), true);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("does not flush empty Boiler 17 crew back to Drive", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const packId = BOILER17_PACK_ID;
+    rememberLocalPack(
+      {
+        packId,
+        title: "Boiler 17 2026",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: OWNER_LOGIN_EMAIL,
+        status: "Locked",
+      },
+      store,
+    );
+    const key = storageKeyForPack(packId);
+    store.setItem(`${CREW_STORE_PREFIX}${key}`, JSON.stringify({ staff: [], generalForeman: [], foreman: [], direct: [], support: [] }));
+    store.setItem(`${PHASE_STORE_PREFIX}${key}`, JSON.stringify(defaultPhaseSchedule()));
+    const bodies: unknown[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const raw = typeof init?.body === "string" ? init.body : "";
+      if (raw) bodies.push(JSON.parse(raw));
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await flushVaultUpsert(packId, store);
+      assert.equal(result.ok, true);
+      assert.equal("skipped" in result && result.skipped, true);
+      assert.equal(bodies.length, 0);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
   it("does not flush a seed-smashed Aromatics pack to Drive", async () => {
     resetVaultHydrateForTests();
     const store = memoryStore();
@@ -1380,10 +1465,12 @@ describe("local transfer commit", () => {
     const src = readFileSync(fileURLToPath(new URL("../components/EstimatePackage.tsx", import.meta.url)), "utf8");
     assert.match(src, /Drive sync delayed/);
     assert.match(src, /reportVaultErrors/);
-    assert.match(src, /HIS_AROMATICS_PACK_ID \|\| !\(hasLocal \|\| vaultListHydratePending\(\)\)/);
+    assert.match(src, /HIS_AROMATICS_PACK_ID \|\| isBoiler17PackId\(packId\) \|\| !\(hasLocal \|\| vaultListHydratePending\(\)\)/);
     assert.match(src, /hydrateOpenPack\(packId\)/);
     assert.match(src, /aromaticsStateLooksSmashed/);
     assert.match(src, /skipSmashedAromaticsWrite/);
+    assert.match(src, /skipSmashedBoiler17Write/);
+    assert.match(src, /boiler17NeedsB1Fill/);
     assert.equal(/if \(!result\.ok && "error" in result && result\.error\) setVaultSaveError/.test(src), false);
   });
 

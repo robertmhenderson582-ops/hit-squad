@@ -6,8 +6,10 @@ import {
   scheduleOnce,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
+import { boiler17NeedsB1Fill } from "./boiler-17.ts";
 import { ownerVaultEmail, packSharedEmails } from "./estimate-scope.ts";
-import { applyHisIdentity, hisFileForPackId, hisMatchForPack, persistHisWoodRiverCards } from "./his-wood-river.ts";
+import { applyHisIdentity, hisFileForPackId, hisMatchForPack, persistHisWoodRiverCards, seedBoiler17LocalDefaults } from "./his-wood-river.ts";
+import { fillBoiler17FromB1 } from "./wood-river-b1.ts";
 import { canonicalEmail, isSamePerson } from "./identity.ts";
 import { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import {
@@ -213,8 +215,10 @@ export async function hydrateOpenPack(
     if (response.ok) {
       const data = (await response.json()) as { pack?: EstimatePackSnapshot };
       if (data.pack?.packId === packId) {
-        const pack = hisMatchForPack(data.pack) ? applyHisIdentity(data.pack) : data.pack;
+        let pack = hisMatchForPack(data.pack) ? applyHisIdentity(data.pack) : data.pack;
+        if (boiler17NeedsB1Fill(pack)) pack = fillBoiler17FromB1(pack);
         mergeVaultIntoLocal(target, pack);
+        seedBoiler17LocalDefaults(target, packId);
         return [pack];
       }
     }

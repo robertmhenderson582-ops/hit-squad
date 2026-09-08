@@ -26,7 +26,10 @@ import {
 } from "./drive-estimates.ts";
 import { estimateFileName, parseIncomingPack, publicPack, responseLeaksDrive, type EstimatePackSnapshot } from "./estimate-pack.ts";
 import { defaultPhaseSchedule } from "./phase-schedule.ts";
-import { HIS_AROMATICS_FILE_ID, HIS_AROMATICS_FREEZE_FILE_ID, HIS_AROMATICS_PACK_ID } from "./his-wood-river.ts";
+import { HIS_AROMATICS_FILE_ID, HIS_AROMATICS_FREEZE_FILE_ID, HIS_AROMATICS_PACK_ID, HIS_BOILER17_FILE_ID } from "./his-wood-river.ts";
+import { BOILER17_COST_NOTE, BOILER17_JOB_NUMBER, BOILER17_PACK_ID } from "./boiler-17.ts";
+import { checkBoiler17PackHours } from "./wood-river-b1.ts";
+import { isAromaticsIdentity } from "./aromatics-freeze.ts";
 
 function cat2(over: Partial<EstimatePackSnapshot> = {}): EstimatePackSnapshot {
   return {
@@ -781,6 +784,109 @@ describe("drive estimate upsert", () => {
     assert.equal(freezeWritten.updatedAt, 400);
     assert.equal(freezeWritten.ownerEmail, "freeze-should-not-win@example.com");
     assert.equal(((freezeWritten.otherCost as { misc: Array<{ qty: number }> }).misc || [])[0]?.qty, 65);
+  });
+
+  it("lists empty Boiler 17 vault and writes the official B-1 fill back via overwrite", async () => {
+    const drive = memoryDrive();
+    const empty = {
+      packId: BOILER17_PACK_ID,
+      key: `new:${BOILER17_PACK_ID}`,
+      title: "Boiler 17 2026",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 9000,
+      ownerEmail: "nathanboyte@gmail.com",
+      status: "Locked" as const,
+      schedule: defaultPhaseSchedule(),
+      crew: { staff: [], generalForeman: [], foreman: [], direct: [], support: [] },
+      jobMeta: { jobNumber: BOILER17_JOB_NUMBER, area: "Boiler 17" },
+      costReport: { statusDate: "2026-05-30", notes: BOILER17_COST_NOTE },
+    };
+    drive.files.set(HIS_BOILER17_FILE_ID, {
+      file: {
+        id: HIS_BOILER17_FILE_ID,
+        name: "wood-river-boiler-17-2026.json",
+        properties: { packId: BOILER17_PACK_ID, ownerEmail: empty.ownerEmail },
+      },
+      content: JSON.stringify(empty),
+    });
+    const aromatics = {
+      packId: HIS_AROMATICS_PACK_ID,
+      key: `new:${HIS_AROMATICS_PACK_ID}`,
+      title: "2027 Aromatics Turnaround",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 400,
+      ownerEmail: "nathanboyte@gmail.com",
+      schedule: {
+        projectStart: "2027-01-11",
+        phases: defaultPhaseSchedule().phases.map((row) =>
+          row.id === "pre" ? { ...row, start: "2027-01-11", stop: "2027-02-28" } : row,
+        ),
+      },
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-02-28" }] }] },
+    };
+    drive.files.set(HIS_AROMATICS_FILE_ID, {
+      file: {
+        id: HIS_AROMATICS_FILE_ID,
+        name: "wood-river-2027-aromatics-turnaround.json",
+        properties: { packId: HIS_AROMATICS_PACK_ID, ownerEmail: aromatics.ownerEmail },
+      },
+      content: JSON.stringify(aromatics),
+    });
+    const listed = await listDrivePacks(drive, "folder");
+    const pack = listed.find((row) => row.packId === BOILER17_PACK_ID);
+    assert.equal(checkBoiler17PackHours(pack?.crew as never).ok, true);
+    assert.equal((pack?.schedule as { projectStart?: string }).projectStart, "2026-08-10");
+    const written = JSON.parse(await drive.readJson(HIS_BOILER17_FILE_ID));
+    assert.equal(checkBoiler17PackHours(written.crew).ok, true);
+    assert.equal((written.schedule as { projectStart?: string }).projectStart, "2026-08-10");
+    assert.equal(written.jobMeta.jobNumber, BOILER17_JOB_NUMBER);
+    assert.match(written.costReport.notes, /108451/);
+    const opened = await readDrivePackById(drive, BOILER17_PACK_ID, "folder");
+    assert.equal(checkBoiler17PackHours(opened?.crew as never).ok, true);
+    const aroma = listed.find((row) => row.packId === HIS_AROMATICS_PACK_ID);
+    assert.equal(isAromaticsIdentity(aroma), true);
+    assert.equal((aroma?.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    const aromaWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FILE_ID));
+    assert.equal((aromaWritten.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    assert.equal(aromaWritten.updatedAt, 400);
+  });
+
+  it("upsert of empty Boiler 17 writes the B-1 fill instead of flushing empty crew", async () => {
+    const drive = memoryDrive();
+    const empty = {
+      packId: BOILER17_PACK_ID,
+      key: `new:${BOILER17_PACK_ID}`,
+      title: "Boiler 17 2026",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 9000,
+      ownerEmail: "nathanboyte@gmail.com",
+      schedule: defaultPhaseSchedule(),
+      crew: { staff: [], generalForeman: [], foreman: [], direct: [], support: [] },
+      jobMeta: { jobNumber: BOILER17_JOB_NUMBER },
+      costReport: { statusDate: "2026-05-30", notes: BOILER17_COST_NOTE },
+    };
+    drive.files.set(HIS_BOILER17_FILE_ID, {
+      file: {
+        id: HIS_BOILER17_FILE_ID,
+        name: "wood-river-boiler-17-2026.json",
+        properties: { packId: BOILER17_PACK_ID, ownerEmail: empty.ownerEmail },
+      },
+      content: JSON.stringify(empty),
+    });
+    const saved = await upsertEstimateInDrive(drive, empty, "folder");
+    assert.equal(saved.id, HIS_BOILER17_FILE_ID);
+    const written = JSON.parse(await drive.readJson(HIS_BOILER17_FILE_ID));
+    assert.equal(checkBoiler17PackHours(written.crew).ok, true);
+    assert.equal((written.crew.staff || []).length > 0, true);
   });
 
   it("refuses to persist a smashed Aromatics upsert and writes the freeze sheets onto the live file only", async () => {

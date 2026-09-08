@@ -4,6 +4,8 @@ import {
   aromaticsSourceCanRestore,
   isAromaticsIdentity,
 } from "./aromatics-freeze.ts";
+import { boiler17NeedsB1Fill, isBoiler17Identity } from "./boiler-17.ts";
+import { fillBoiler17FromB1 } from "./wood-river-b1.ts";
 import { catalogSites } from "./desk-data.ts";
 import { parseEstimateStatus, resolveEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { clampStatusForSite, regularClientFromParts } from "./site-regular.ts";
@@ -144,6 +146,7 @@ export function crewHasCustomClock(crew: unknown) {
 export function packClockIsSeedSmashed(pack: EstimatePackSnapshot | null | undefined) {
   if (!pack?.packId) return false;
   if (isAromaticsPack(pack)) return aromaticsPackLooksSmashed(pack);
+  if (isBoiler17Identity(pack)) return boiler17NeedsB1Fill(pack);
   return isDefaultSeedSchedule(pack.schedule) && crewHasRows(pack.crew) && !crewHasCustomClock(pack.crew);
 }
 
@@ -385,8 +388,42 @@ export function pickPack(
   vault: EstimatePackSnapshot | null | undefined,
 ): EstimatePackSnapshot | null {
   if (!vault?.packId) return local ?? null;
-  if (!local?.packId) return packHasWork(vault) ? vault : local ?? null;
-  if (isAromaticsPack(local) || isAromaticsPack(vault)) {
+  if (!local?.packId) {
+    if (isBoiler17Identity(vault) && packClockIsSeedSmashed(vault)) return fillBoiler17FromB1(vault);
+    return packHasWork(vault) ? vault : local ?? null;
+  }
+  if (isBoiler17Identity(local) || isBoiler17Identity(vault)) {
+    if (packClockIsSeedSmashed(local) && !packClockIsSeedSmashed(vault) && vault) {
+      return {
+        ...restorePackClock(local, vault),
+        ownerEmail: vault.ownerEmail || local.ownerEmail,
+        sharedWith: vault.sharedWith,
+        transferredFrom: vault.transferredFrom,
+        transferredTo: vault.transferredTo,
+        transferredToName: vault.transferredToName,
+        transferredFromName: vault.transferredFromName,
+        status: vault.status || local.status,
+      };
+    }
+    if (packClockIsSeedSmashed(vault) && local && !packClockIsSeedSmashed(local)) {
+      return restorePackClock(vault, local);
+    }
+    if (packClockIsSeedSmashed(vault) && (!local || packClockIsSeedSmashed(local))) {
+      const live = local ?? vault;
+      return fillBoiler17FromB1({
+        ...live,
+        ownerEmail: vault.ownerEmail || live.ownerEmail,
+        sharedWith: vault.sharedWith ?? live.sharedWith,
+        transferredFrom: vault.transferredFrom ?? live.transferredFrom,
+        transferredTo: vault.transferredTo ?? live.transferredTo,
+        transferredToName: vault.transferredToName ?? live.transferredToName,
+        transferredFromName: vault.transferredFromName ?? live.transferredFromName,
+        status: vault.status || live.status,
+        costReport: live.costReport ?? vault.costReport,
+        jobMeta: live.jobMeta ?? vault.jobMeta,
+      });
+    }
+  } else if (isAromaticsPack(local) || isAromaticsPack(vault)) {
     if (packClockIsSeedSmashed(local) && aromaticsSourceCanRestore(vault)) {
       return {
         ...restorePackClock(local, vault),
@@ -574,6 +611,8 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
     const existing = collectPack(store, pack.packId);
     if (existing && !packClockIsSeedSmashed(existing) && (scheduleHasWork(existing.schedule) || aromaticsSourceCanRestore(existing))) {
       pack = restorePackClock(pack, existing);
+    } else if (isBoiler17Identity(pack)) {
+      pack = fillBoiler17FromB1(pack);
     }
   }
   rememberLocalPack(
@@ -605,7 +644,9 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
   }
   if (pack.crew != null) {
     const existing = readStoreJson(store, `${CREW_STORE_PREFIX}${key}`);
-    if (crewHasCustomClock(pack.crew) || !crewHasCustomClock(existing)) {
+    if (isBoiler17Identity(pack) && !crewHasRows(pack.crew) && crewHasRows(existing)) {
+      // Empty vault crew cannot wipe a filled B-1 pack.
+    } else if (crewHasCustomClock(pack.crew) || !crewHasCustomClock(existing)) {
       writeStoreJson(store, `${CREW_STORE_PREFIX}${key}`, pack.crew);
     }
   }
