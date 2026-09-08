@@ -7,7 +7,7 @@ export const COMPANY_DESK_DOOR = {
   href: "/jobs",
   key: "company",
   label: "Company desk",
-  note: "Your companies, then client, then site, then jobs",
+  note: "Your companies, then division, then client, then site, then jobs",
 } as const;
 
 /** Buried on home — keep exported so the owner can unbury later. `/standalone` still works. */
@@ -32,7 +32,7 @@ export const SCOREBOARD_DOOR = {
 /** Ease-in bury: not a home door. Do not add back to HOME_DOORS without an owner ask. */
 export const BURIED_HOME_DOORS = [STANDALONE_DOOR] as const;
 
-/** Visible home doors. Jobs still enters the Client → Site → Jobs directory. */
+/** Visible home doors. Jobs still enters the Company → Division → Client → Site → Job directory. */
 export const HOME_DOORS = [COMPANY_DESK_DOOR] as const;
 
 export type HomeDockTile = {
@@ -48,7 +48,7 @@ export type HomeDockTile = {
  * Sample A corner cards + HUD A BrandMark stay. No invented Scoreboard feeds.
  */
 export const HOME_DOCK_TILES: readonly HomeDockTile[] = [
-  { href: "/jobs", key: "jobs", label: "Jobs", note: "Client → Site → Jobs" },
+  { href: "/jobs", key: "jobs", label: "Jobs", note: "Company → Division → Client → Site → Job" },
   { href: "/quality", key: "quality", label: "Quality", note: "Quality studio" },
   { href: "/hse", key: "hse", label: "HSE", note: "Site safety" },
   { href: "/accounting", key: "accounting", label: "Accounting", note: "Not open for trial" },

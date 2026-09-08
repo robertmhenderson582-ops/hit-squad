@@ -25,6 +25,8 @@ describe("home doors", () => {
     assert.deepEqual(homeDoorHrefs(), ["/jobs"]);
     assert.equal(HOME_DOORS.length, 1);
     assert.equal(HOME_DOORS[0], COMPANY_DESK_DOOR);
+    assert.match(COMPANY_DESK_DOOR.note, /division/i);
+    assert.equal(HOME_DOCK_TILES.find((tile) => tile.key === "jobs")?.note, "Company → Division → Client → Site → Job");
     assert.equal(STANDALONE_DOOR.href, "/standalone");
     assert.deepEqual(BURIED_HOME_DOORS, [STANDALONE_DOOR]);
     assert.equal(SCOREBOARD_DOOR.href, "/scoreboard");

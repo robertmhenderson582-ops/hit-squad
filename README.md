@@ -61,11 +61,11 @@ npm run auth:check
 
 One Next.js app. Set the env vars on the host, use HTTPS, and set `AUTH_COOKIE_SECURE=true`. There is no Google sign-in yet.
 
-Login uses the night-refinery brand hero with HIT SQUAD over PROJECT CONTROLS. After sign-in Home is Sample A corner cards + HUD A BrandMark over the night-refinery hero, with four Home doors: Jobs · Quality · HSE · Accounting. Jobs opens the Client → Site → Jobs directory. Rates, Cost / PPR, Change Orders, and Purchasing stay on Jobs / the open estimate. Standalone stays a quiet buried route. All records stay owner-scoped.
+Login uses the night-refinery brand hero with HIT SQUAD over PROJECT CONTROLS. After sign-in Home is Sample A corner cards + HUD A BrandMark over the night-refinery hero, with four Home doors: Jobs · Quality · HSE · Accounting. Jobs opens the Company → Division → Client → Site → Job directory. Rates, Cost / PPR, Change Orders, and Purchasing stay on Jobs / the open estimate. Standalone stays a quiet buried route. All records stay owner-scoped.
 
 ## Rebuild list (do not regress)
 
-- Home (`/`) is four doors only: Jobs · Quality · HSE · Accounting. Quality and HSE stay separate tiles — never “Quality / HSE”. Jobs opens the Client → Site → Jobs directory. Rates, Cost/PPR, Change Orders, and Purchasing are not Home peers — they open from Jobs tools or the estimate tabs. Scoreboard HUD is parked (no invented metrics). No splash shortcuts, no sample jobs on home, not Forgebook / Estimators. Standalone stays buried.
+- Home (`/`) is four doors only: Jobs · Quality · HSE · Accounting. Quality and HSE stay separate tiles — never “Quality / HSE”. Jobs opens the Company → Division → Client → Site → Job directory. Rates, Cost/PPR, Change Orders, and Purchasing are not Home peers — they open from Jobs tools or the estimate tabs. Scoreboard HUD is parked (no invented metrics). No splash shortcuts, no sample jobs on home, not Forgebook / Estimators. Standalone stays buried.
 - Header keeps branding, FIELD TRIAL, Home, owner chip, and Settings. Change Orders, Rates, Cost/PPR, Quality, HSE, Purchasing, and Future Modules leave the top nav. Inbox / Suggestion stay as they exist today. A PM still digs client → site → job under the assigned company (Madison is the operator; Phillips 66 and Georgia Power are clients).
 - Brand: HIT SQUAD over PROJECT CONTROLS, steel `#0f5f6d`, amber FIELD TRIAL — NOT A RELEASE, Madison confidentiality checkbox, original night-refinery hero.
 - Do not touch auth files (`/api/auth/*`, session cookie, AuthGate). No Google/X, no public Create account, no GET-submit login, no `sessionStorage` fake sessions.
