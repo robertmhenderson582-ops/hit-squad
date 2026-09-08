@@ -20,6 +20,8 @@ import {
 import type { SubSheet } from "./subcontractor.ts";
 import {
   ESTIMATE_XLSX_SHEETS,
+  LABOR_BLOCK_ID_COL,
+  spareLaborRowId,
   SUB_HIDDEN_ID_COL,
   TRAVEL_HIDDEN_ID_COL,
   JOB_SETUP_CBA_DATE_CELL,
@@ -163,6 +165,15 @@ function livePackMoney(applied: ReturnType<typeof applyEstimateImport>) {
 
 function dayCol(index = 0) {
   return colLetter(LABOR_DATE_START_COL + index);
+}
+
+function spareTitleRow(ws: ExcelJS.Worksheet, sheetName: string, index = 0) {
+  const id = `${spareLaborRowId(sheetName, index)}|day`;
+  const last = Math.max(ws.rowCount || 7, 7);
+  for (let row = 7; row <= last; row += 1) {
+    if (String(ws.getCell(row, LABOR_BLOCK_ID_COL).value ?? "") === id) return row;
+  }
+  return 0;
 }
 
 describe("estimate excel import", () => {
@@ -512,6 +523,88 @@ describe("estimate excel import", () => {
     const money = livePackMoney(applied);
     assert.equal(money.desk, money.summary);
     assert.equal(money.desk > deskPackageTotal(input), true);
+  });
+
+  it("imports filled spare crew positions and ignores blank pad blocks", async () => {
+    const input: EstimateXlsxInput = {
+      ...fixture(),
+      crew: {
+        ...fixture().crew,
+        generalForeman: [craft("gf-1", "General Foreman 01", { otAfter8: false })],
+        foreman: [craft("fm-1", "Foreman 01", { otAfter8: true })],
+      },
+    };
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const staff = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
+    const foremen = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.foremen);
+    const direct = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.direct);
+    const support = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.support);
+    assert.ok(staff && foremen && direct && support);
+    const staffSpare = spareTitleRow(staff, ESTIMATE_XLSX_SHEETS.staff);
+    const gfSpare = spareTitleRow(staff, ESTIMATE_XLSX_SHEETS.staff, 1);
+    const fmSpare = spareTitleRow(foremen, ESTIMATE_XLSX_SHEETS.foremen);
+    const directSpare = spareTitleRow(direct, ESTIMATE_XLSX_SHEETS.direct);
+    const supportSpare = spareTitleRow(support, ESTIMATE_XLSX_SHEETS.support);
+    assert.ok(staffSpare && gfSpare && fmSpare && directSpare && supportSpare);
+    staff.getCell(`B${staffSpare}`).value = "Project Manager 01";
+    staff.getCell(`${dayCol()}${staffSpare + LABOR_HC_OFFSET}`).value = 1;
+    staff.getCell(`B${gfSpare}`).value = "Pipefitter General Foreman";
+    staff.getCell(`${dayCol()}${gfSpare + LABOR_HC_OFFSET}`).value = 1;
+    foremen.getCell(`B${fmSpare}`).value = "Foreman 02";
+    foremen.getCell(`${dayCol()}${fmSpare + LABOR_HC_OFFSET}`).value = 1;
+    direct.getCell(`B${directSpare}`).value = "Pipefitter Journeyman";
+    direct.getCell(`${dayCol()}${directSpare + LABOR_HC_OFFSET}`).value = 2;
+    support.getCell(`B${supportSpare}`).value = "Hole Watch";
+    support.getCell(`B${supportSpare + LABOR_OT_OFFSET}`).value = "Boilermaker Journeyman";
+    support.getCell(`${dayCol()}${supportSpare + LABOR_HC_OFFSET}`).value = 1;
+    const imported = await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer()));
+    assert.equal(imported.blocks.some((block) => block.id.startsWith("xlsx-spare-") && !block.position.trim()), false);
+    assert.equal(imported.blocks.filter((block) => block.position === "Pipefitter Journeyman").length, 1);
+    assert.equal(imported.crew.staff?.some((row) => row.position === "Project Manager 01"), true);
+    assert.equal(imported.crew.generalForeman?.some((row) => row.position === "Pipefitter General Foreman"), true);
+    assert.equal(imported.crew.foreman?.some((row) => row.position === "Foreman 02"), true);
+    assert.equal(imported.crew.direct?.some((row) => row.position === "Pipefitter Journeyman"), true);
+    assert.equal(imported.crew.support?.some((row) => row.position === "Hole Watch"), true);
+    const applied = applyEstimateImport(asPack(input), imported);
+    const crew = applied.crew as {
+      staff: CraftRow[];
+      generalForeman: CraftRow[];
+      foreman: CraftRow[];
+      direct: CraftRow[];
+      support: Array<CraftRow & { billedAs?: string }>;
+    };
+    assert.equal(crew.staff.some((row) => row.position === "Project Manager 01"), true);
+    assert.equal(crew.generalForeman.some((row) => row.position === "Pipefitter General Foreman"), true);
+    assert.equal(crew.foreman.some((row) => row.position === "Foreman 02"), true);
+    assert.equal(crew.direct.some((row) => row.position === "Pipefitter Journeyman" && row.ranges.some((range) => range.headcount === 2)), true);
+    const hole = crew.support.find((row) => row.position === "Hole Watch");
+    assert.equal(hole?.billedAs, "Boilermaker Journeyman");
+    assert.equal(crew.staff.length, 2);
+    assert.equal(crew.generalForeman.length, 2);
+    assert.equal(crew.foreman.length, 2);
+    assert.equal(crew.direct.length, 2);
+    assert.equal(crew.support.length, 2);
+    assert.equal(
+      imported.blocks.filter((block) =>
+        ["Project Manager 01", "Pipefitter General Foreman", "Foreman 02", "Pipefitter Journeyman", "Hole Watch"].includes(
+          block.position,
+        ),
+      ).length,
+      5,
+    );
+    const preview = diffEstimateImport(asPack(input), imported);
+    assert.equal(preview.lines.some((line) => /Add Project Manager 01/.test(line)), true);
+    assert.equal(preview.lines.some((line) => /Add Pipefitter General Foreman/.test(line)), true);
+    assert.equal(preview.lines.some((line) => /Add Foreman 02/.test(line)), true);
+    assert.equal(preview.lines.some((line) => /Add Pipefitter Journeyman/.test(line)), true);
+    assert.equal(preview.lines.some((line) => /Add Hole Watch/.test(line)), true);
+    assert.equal(preview.lines.some((line) => /Add xlsx-spare-/.test(line)), false);
+    const money = livePackMoney(applied);
+    assert.equal(money.desk, money.summary);
+    assert.equal(money.desk > deskPackageTotal(input), true);
+    assert.equal(Number.isFinite(money.desk), true);
   });
 
   it("remaps a Period that has no catalog rate on import", async () => {

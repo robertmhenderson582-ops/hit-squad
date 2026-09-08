@@ -36,6 +36,8 @@ import {
   OPTIONAL_ESTIMATE_SHEETS,
   LABOR_BLOCK_HEIGHT,
   LABOR_BLOCK_ID_COL,
+  LABOR_OT_OFFSET,
+  LABOR_ST_OFFSET,
   LABOR_CLOCK_AUTO,
   LABOR_CLOCK_COMP,
   LABOR_CLOCK_FLAG_COL,
@@ -69,7 +71,9 @@ import {
   RATE_RENTAL_SECTION,
   RATE_TOOLS_SECTION,
   sheetRef,
+  ESTIMATE_XLSX_SPARE_POSITIONS,
   ESTIMATE_XLSX_SPARE_ROWS,
+  spareLaborRowId,
   excelFullDateNote,
   XLSX_INPUT_NOTES,
   XLSX_TYPE_NOTES,
@@ -357,7 +361,9 @@ describe("estimate excel export", () => {
     assert.match(String(staff.cells.find((cell) => cell.ref === "D10")?.value), /INDEX\(/);
     assert.match(String(staff.cells.find((cell) => cell.ref === "D10")?.value), /MATCH\(B7,/);
     assert.match(String(staff.cells.find((cell) => cell.ref === "D10")?.value), /Rate Tables/);
-    assert.match(String(staff.cells.find((cell) => cell.ref === "C14")?.value), /^SUM\(C7\)$/);
+    const staffTotal = labelRow(staff, "TOTAL");
+    const directTotal = labelRow(direct, "TOTAL");
+    assert.match(String(staff.cells.find((cell) => cell.ref === `C${staffTotal}`)?.value), /^SUM\(C7,/);
     assert.equal(summary.cells.some((cell) => cell.ref === "A7" && cell.value === "Staff labor $"), true);
     assert.equal(summary.cells.some((cell) => cell.ref.startsWith("A") && cell.value === ESTIMATE_HOURS_LINE), true);
     assert.equal(summary.cells.find((cell) => cell.ref === "B6")?.value, ESTIMATE_SUMMARY_HOURS);
@@ -381,11 +387,10 @@ describe("estimate excel export", () => {
       assert.ok(row, label);
       return evalAt(ESTIMATE_XLSX_SHEETS.summary, `B${row}`);
     };
-    const staffLabor = evalAt(ESTIMATE_XLSX_SHEETS.staff, "C14");
-    const directLabor = evalAt(ESTIMATE_XLSX_SHEETS.direct, "C14");
-    const pdRollup = `${colLetter(LABOR_CLOCK_FLAG_COL)}14`;
-    const staffPd = evalAt(ESTIMATE_XLSX_SHEETS.staff, pdRollup);
-    const directPd = evalAt(ESTIMATE_XLSX_SHEETS.direct, pdRollup);
+    const staffLabor = evalAt(ESTIMATE_XLSX_SHEETS.staff, `C${staffTotal}`);
+    const directLabor = evalAt(ESTIMATE_XLSX_SHEETS.direct, `C${directTotal}`);
+    const staffPd = evalAt(ESTIMATE_XLSX_SHEETS.staff, `${colLetter(LABOR_CLOCK_FLAG_COL)}${staffTotal}`);
+    const directPd = evalAt(ESTIMATE_XLSX_SHEETS.direct, `${colLetter(LABOR_CLOCK_FLAG_COL)}${directTotal}`);
     const rentalTotalRow = labelRow(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.rental)!, "TOTAL");
     const miscTotalRow = labelRow(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.misc)!, "TOTAL");
     const travelTotalRow = labelRow(sheetOf(sheets, ESTIMATE_XLSX_SHEETS.travel)!, "TOTAL");
@@ -407,12 +412,12 @@ describe("estimate excel export", () => {
     assert.equal(hoursAt(ESTIMATE_HOURS_LINE) > 0, true);
     assert.equal(
       hoursAt("ESTIMATE TOTAL $"),
-      evalAt(ESTIMATE_XLSX_SHEETS.staff, "F14") +
-        evalAt(ESTIMATE_XLSX_SHEETS.staff, "G14") +
-        evalAt(ESTIMATE_XLSX_SHEETS.staff, "H14") +
-        evalAt(ESTIMATE_XLSX_SHEETS.direct, "F14") +
-        evalAt(ESTIMATE_XLSX_SHEETS.direct, "G14") +
-        evalAt(ESTIMATE_XLSX_SHEETS.direct, "H14"),
+      evalAt(ESTIMATE_XLSX_SHEETS.staff, `F${staffTotal}`) +
+        evalAt(ESTIMATE_XLSX_SHEETS.staff, `G${staffTotal}`) +
+        evalAt(ESTIMATE_XLSX_SHEETS.staff, `H${staffTotal}`) +
+        evalAt(ESTIMATE_XLSX_SHEETS.direct, `F${directTotal}`) +
+        evalAt(ESTIMATE_XLSX_SHEETS.direct, `G${directTotal}`) +
+        evalAt(ESTIMATE_XLSX_SHEETS.direct, `H${directTotal}`),
     );
 
     const staffHours = computeRowHours(input.crew.staff[0], input.site, input.client, true);
@@ -1202,11 +1207,13 @@ describe("estimate excel export", () => {
     const sheets = buildEstimateWorkbook(input);
     const directModel = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.direct);
     assert.ok(directModel);
-    assert.deepEqual(directModel.laborBlocks, [
+    assert.deepEqual(directModel.laborBlocks?.slice(0, 2), [
       { start: 7, end: 13 },
       { start: 15, end: 21 },
     ]);
-    assert.deepEqual(directModel.spacerRows, [14]);
+    assert.equal(directModel.laborBlocks?.length, 2 + ESTIMATE_XLSX_SPARE_POSITIONS);
+    assert.equal(directModel.spacerRows?.[0], 14);
+    assert.equal(directModel.spacerRows?.length, 1 + ESTIMATE_XLSX_SPARE_POSITIONS);
 
     const bytes = await estimateToXlsx(input);
     const wb = new ExcelJS.Workbook();
@@ -1907,6 +1914,55 @@ describe("estimate excel export", () => {
     assert.match(summaryAmount("COE $"), /^IFERROR\(N\(/);
     assert.match(summaryAmount("Travel $"), /^IFERROR\(N\(/);
     assert.match(summaryAmount("Subcontractor $"), /^IFERROR\(N\(/);
+  });
+
+  it("pads Staff, Foremen, Direct, and Support with formula-ready spare position blocks", () => {
+    const input = {
+      ...woodRiverFixture(),
+      crew: {
+        ...woodRiverFixture().crew,
+        generalForeman: [craft("gf-1", "General Foreman 01", 10, { perDiemPeople: 1, otAfter8: false })],
+        foreman: [craft("fm-1", "Foreman 01", 10, { perDiemPeople: 1, otAfter8: true })],
+        support: [craft("su-1", "Fire Watch", 10, { billedAs: "Boilermaker Journeyman", perDiemPeople: 1, otAfter8: true })],
+      },
+    };
+    const sheets = buildEstimateWorkbook(input);
+    const names = [
+      ESTIMATE_XLSX_SHEETS.staff,
+      ESTIMATE_XLSX_SHEETS.foremen,
+      ESTIMATE_XLSX_SHEETS.direct,
+      ESTIMATE_XLSX_SHEETS.support,
+    ];
+    for (const name of names) {
+      const sheet = sheetOf(sheets, name);
+      assert.ok(sheet, name);
+      const live = name === ESTIMATE_XLSX_SHEETS.staff ? 2 : 1;
+      assert.equal(sheet.laborBlocks?.length, live + ESTIMATE_XLSX_SPARE_POSITIONS, name);
+      const spareTitle = sheet.laborBlocks![live].start;
+      const spareId = laborBlockId({ id: spareLaborRowId(name, 0) }, false);
+      assert.equal(cellMap(sheet).get(`B${spareTitle}`)?.value, "");
+      assert.equal(cellMap(sheet).get(`A${spareTitle}`)?.value, LABOR_DAYSHIFT);
+      const idCol = colLetter(LABOR_BLOCK_ID_COL);
+      assert.equal(cellMap(sheet).get(`${idCol}${spareTitle}`)?.value, spareId);
+      assert.equal(cellMap(sheet).get(`C${spareTitle}`)?.type, "formula");
+      assert.match(String(cellMap(sheet).get(`C${spareTitle + LABOR_ST_OFFSET}`)?.value ?? ""), /N\(D/);
+      assert.ok(sheet.validations?.some((item) => item.sqref === `B${spareTitle}`), name);
+      const total = labelRow(sheet, "TOTAL");
+      assert.match(String(cellMap(sheet).get(`C${total}`)?.value ?? ""), new RegExp(`C${spareTitle}`));
+    }
+    const support = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.support)!;
+    const supportSpare = support.laborBlocks![1].start;
+    assert.equal(cellMap(support).get(`B${supportSpare + LABOR_ST_OFFSET}`)?.value, LABOR_BILL_AS_LABEL);
+    assert.ok(support.billAs?.some((slot) => slot.valueRow === supportSpare + LABOR_OT_OFFSET));
+    const evaluated = evaluateWorkbook(sheets);
+    const directSpare = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.direct)!.laborBlocks![1].start;
+    assert.equal(evaluated.evalAt(ESTIMATE_XLSX_SHEETS.direct, `C${directSpare}`), 0);
+    const staffLabor = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.summary)!
+      .cells.find((cell) => cell.ref.startsWith("A") && cell.value === "Staff labor $")
+      ?.ref.replace("A", "");
+    assert.ok(staffLabor);
+    assert.equal(typeof evaluated.evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${staffLabor}`), "number");
+    assert.equal(String(evaluated.evalAt(ESTIMATE_XLSX_SHEETS.summary, `C${staffLabor}`)).includes("#"), false);
   });
 
   it("keeps spare-pad and empty MORE numeric so Summary Amount $ is not #VALUE!", async () => {
@@ -3026,7 +3082,8 @@ describe("estimate excel export", () => {
     assert.equal(supportMap.get(`B${fire.st}`)?.value, LABOR_BILL_AS_LABEL);
     assert.equal(supportMap.get(`B${fire.ot}`)?.value, "Boilermaker Journeyman");
     assert.equal(staff.cells.some((cell) => cell.type === "text" && cell.value === LABOR_BILL_AS_LABEL), false);
-    assert.deepEqual(support.billAs, [{ labelRow: fire.st, valueRow: fire.ot }]);
+    assert.deepEqual(support.billAs?.[0], { labelRow: fire.st, valueRow: fire.ot });
+    assert.equal(support.billAs?.length, 1 + ESTIMATE_XLSX_SPARE_POSITIONS);
     assert.deepEqual(support.merges, [
       "A1:I1",
       "A2:I2",
