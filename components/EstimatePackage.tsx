@@ -32,6 +32,7 @@ import {
 import { BOILER17_JOB_NUMBER, defaultStatusForBoiler17, isBoiler17PackId } from "@/lib/boiler-17";
 import { seedBoiler17LocalDefaults } from "@/lib/his-wood-river";
 import { isRodeoU110PackId, seedRodeoU110LocalDefaults } from "@/lib/madison-u110";
+import { isRodeoU250PackId, seedRodeoU250LocalDefaults } from "@/lib/madison-u250";
 import { emptyJobMeta, hydrateJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
 import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
 import { packIdFromStoreKey, findLocalPack, renameLocalPackTitle, touchLocalPack, writeLocalPackStatus } from "@/lib/local-estimates";
@@ -265,6 +266,9 @@ export function EstimatePackageProvider({
       }
       if (packId && isRodeoU110PackId(packId) && typeof window !== "undefined") {
         seedRodeoU110LocalDefaults(window.localStorage, packId);
+      }
+      if (packId && isRodeoU250PackId(packId) && typeof window !== "undefined") {
+        seedRodeoU250LocalDefaults(window.localStorage, packId);
       }
       const next = readSchedule(estimateKey);
       setSchedule(next);

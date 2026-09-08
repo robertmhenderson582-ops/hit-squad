@@ -1,0 +1,205 @@
+{
+  "extractedFrom": "official-xlsx",
+  "officialRevisionId": "1JNH2TwVz-iiubkr86i9CUwVETQFVSQlg",
+  "officialRevisionName": "MADISON U250 2026 Turnaround Contractor Estimate Template R2_08_17_2026_RH.xlsx",
+  "hoursPlugDate": "2026-08-17",
+  "hoursPlugNote": "Madison R2 has no calendar grid. Hours plug is the official revision date (filename R2_08_17_2026 / Gmail 2026-08-17), not a TA window. Drive created/modified 2026-08-27. CBA/PLA clock is later.",
+  "summaryBuckets": {
+    "directHours": 8315,
+    "directDollars": 1383800,
+    "directRate": 166.42,
+    "indirectHours": 4566,
+    "indirectDollars": 767540,
+    "indirectRate": 168.1,
+    "perDiem": 188740,
+    "mobDemob": 101000,
+    "materialsDirect": 20000,
+    "materialsIndirect": 0,
+    "equipment": 9600,
+    "thirdParty": 0,
+    "other": 0,
+    "totalHours": 12881,
+    "grandTotal": 2470680,
+    "allInRate": 297.14
+  },
+  "typedHours": {
+    "staffHours": 2892.0,
+    "generalForemanHours": 0.0,
+    "foremenHours": 1674.0,
+    "directHours": 7599.0,
+    "supportHours": 716.0,
+    "directBucketHours": 8315.0,
+    "indirectBucketHours": 4566.0
+  },
+  "jobMeta": {
+    "area": "U250",
+    "staffPerDiemRate": 155,
+    "craftPerDiemRate": 145
+  },
+  "misc": [
+    {
+      "item": "Alloy Welding rods",
+      "qty": 50,
+      "each": 150,
+      "bucket": "materialsDirect"
+    },
+    {
+      "item": "Welding supplies",
+      "qty": 50,
+      "each": 150,
+      "bucket": "materialsDirect"
+    },
+    {
+      "item": "Gasses",
+      "qty": 50,
+      "each": 100,
+      "bucket": "materialsDirect"
+    },
+    {
+      "item": "TRUCK, JOB, 1/2 & 3/4 TON, PU",
+      "qty": 4,
+      "each": 1500,
+      "bucket": "equipment"
+    },
+    {
+      "item": "TRAILER TOOL UNDER 36'",
+      "qty": 2,
+      "each": 1800,
+      "bucket": "equipment"
+    },
+    {
+      "item": "Staff Mileage",
+      "qty": 1,
+      "each": 18000,
+      "bucket": "mobDemob"
+    },
+    {
+      "item": "Craft Mileage",
+      "qty": 1,
+      "each": 75000,
+      "bucket": "mobDemob"
+    },
+    {
+      "item": "Freight",
+      "qty": 1,
+      "each": 8000,
+      "bucket": "mobDemob"
+    },
+    {
+      "item": "Per Diem (Direct)",
+      "qty": 656,
+      "each": 145,
+      "bucket": "perDiem"
+    },
+    {
+      "item": "Per Diem (Indirect)",
+      "qty": 604,
+      "each": 155,
+      "bucket": "perDiem"
+    }
+  ],
+  "positions": [
+    {
+      "sheet": "direct",
+      "lane": "direct",
+      "position": "Boilermaker",
+      "hours": 3714.0,
+      "bookRate": 167.74,
+      "bookAmount": 622986.36
+    },
+    {
+      "sheet": "direct",
+      "lane": "direct",
+      "position": "Pipefitter",
+      "hours": 2373.0,
+      "bookRate": 191.49,
+      "bookAmount": 454405.77
+    },
+    {
+      "sheet": "direct",
+      "lane": "direct",
+      "position": "Laborer",
+      "hours": 718.0,
+      "bookRate": 104.15,
+      "bookAmount": 74779.7
+    },
+    {
+      "sheet": "direct",
+      "lane": "support",
+      "position": "Hole Watch/Fire Watch",
+      "hours": 716.0,
+      "bookRate": 146.25,
+      "bookAmount": 104715.0
+    },
+    {
+      "sheet": "direct",
+      "lane": "direct",
+      "position": "Boilermaker",
+      "hours": 794.0,
+      "bookRate": 159.84,
+      "bookAmount": 126912.96
+    },
+    {
+      "sheet": "indirect",
+      "lane": "staff",
+      "position": "QA/QC",
+      "hours": 994.0,
+      "bookRate": 150.17,
+      "bookAmount": 149268.98
+    },
+    {
+      "sheet": "indirect",
+      "lane": "staff",
+      "position": "Safety",
+      "hours": 848.0,
+      "bookRate": 157.1,
+      "bookAmount": 133220.8
+    },
+    {
+      "sheet": "indirect",
+      "lane": "staff",
+      "position": "Warehouse",
+      "hours": 680.0,
+      "bookRate": 157.95,
+      "bookAmount": 107406.0
+    },
+    {
+      "sheet": "indirect",
+      "lane": "staff",
+      "position": "Fork Lift Operator",
+      "hours": 370.0,
+      "bookRate": 145.36,
+      "bookAmount": 53783.2
+    },
+    {
+      "sheet": "indirect",
+      "lane": "foreman",
+      "position": "Foreman",
+      "hours": 962.0,
+      "bookRate": 177.69,
+      "bookAmount": 170937.78
+    },
+    {
+      "sheet": "indirect",
+      "lane": "foreman",
+      "position": "Foreman",
+      "hours": 712.0,
+      "bookRate": 214.78,
+      "bookAmount": 152923.36
+    }
+  ],
+  "findings": [
+    "SUMMARY CONTRACTOR (B3) and BLOCK / EVENT (B4) are blank \u2014 do not invent Madison or a block name. Other tabs formula-link those cells and show 0.",
+    "Filename stamps R2_08_17_2026. Gmail thread 1a079325d30a2c45 is 17 Aug 2026. Drive created/modified 2026-08-27. Hours-plug date uses that revision day, not an invented TA window.",
+    "INSTRUCTIONS say tabs 1 through 10; the book has nine numbered tabs (1\u20139) plus Lookups.",
+    "Defined names leftover from another workbook (wrn.*, sss, abc, xyz, DRE, mgmt) resolve to #N/A / #REF! (_Fill). No labor $ cells were #REF \u2014 amounts are hours \u00d7 typed composite rate.",
+    "No external links. Workbook absPath leftover points at a Zachry SharePoint Rodeo folder \u2014 not a data link. No day-by-day HC \u00d7 Hours/shift grid \u2014 Family A is hours \u00d7 one composite rate.",
+    "Two Boilermaker rows (3,714 @ $167.74 and 794 @ $159.84) and two Foreman rows (962 @ $177.69 and 712 @ $214.78) kept as separate seats \u2014 different book rates.",
+    "Gmail R2 note said Tool Room / Trailer Attendant 794.0 @ $159.84 was moved to Directs (Night Shift Operator removed). Official Direct tab labels that 794h row Boilermaker \u2014 kept as typed. Do not relabel.",
+    "No General Foreman / PM / Superintendent rows. GF card stays empty \u2014 do not invent a seat.",
+    "Tab 6 MATERIAL 1 has a $0 unit rate and empty qty \u2014 not counted. Freight $8,000 sits on Mob/Demob, not materials.",
+    "Tab 4 row 28 is labeled MOB _DEMOB 21 (skips 20) with $0 \u2014 template numbering leftover.",
+    "Tab 8 header still says 7. THIRD PARTY AMT; tab 9 header says 8. OTHER \u2014 template numbering leftover.",
+    "P66 RODEO ESTIMATE WORKBOOK U-250 (Family B, 4.5MB) has no Drive text extract. Not used as a second crew desk. Golden totals stay Family A. Do not seed EST-MTN9RM or any second U250 pack."
+  ]
+}

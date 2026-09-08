@@ -92,7 +92,7 @@ describe("madison-u110 ingest", () => {
     assert.equal(madisonLaneFor("indirect", "Foreman"), "foreman");
     assert.equal(madisonLaneFor("direct", "Boilermaker"), "direct");
     assert.equal(madisonLaneFor("direct", "Hole Watch/Fire Watch"), "support");
-    assert.equal(CLIENT_FACE_MAPPER_SPEC["madison-contractor"].ingest, "apply-hours-u110");
+    assert.equal(CLIENT_FACE_MAPPER_SPEC["madison-contractor"].ingest, "apply-hours-u110-u250");
     const classified = classifyFromSheetsAndName(
       ["INSTRUCTIONS", "SUMMARY", "1. Direct Labor (DC.L)", "2. Indirect Labor (IC.L)"],
       "MADISON U110 2026 Turnaround Contractor Estimate Template 1540 072222026R1.xlsx",
@@ -105,7 +105,7 @@ describe("madison-u110 ingest", () => {
       "MADISON U250 2026 Turnaround Contractor Estimate Template R2.xlsx",
     );
     assert.equal(u250.packId, RODEO_U250_PACK_ID);
-    assert.equal(shouldStageClientWorkbook(u250), true);
+    assert.equal(shouldStageClientWorkbook(u250), false);
   });
 
   it("parses a Madison contractor buffer without inventing a calendar or #REF labor $", async () => {

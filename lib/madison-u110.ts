@@ -159,6 +159,7 @@ function hoursPlugRange(hours: number, rowId: string, phase: PhaseRow, plug: str
 export function crewFromMadisonPositions(
   positions: MadisonFixturePosition[],
   plug = loadRodeoU110Fixture().hoursPlugDate,
+  idPrefix = "u110",
 ): EstimateXlsxCrew {
   const schedule = rodeoU110Schedule(plug);
   const mech = schedule.phases.find((row) => row.id === "mech") ?? schedule.phases[0];
@@ -171,7 +172,7 @@ export function crewFromMadisonPositions(
     otAfter8: false,
   };
   positions.forEach((item, index) => {
-    const id = `u110-${item.sheet}-${index + 1}`;
+    const id = `${idPrefix}-${item.sheet}-${index + 1}`;
     const row: CraftRow = {
       ...blankCraftRow(),
       id,

@@ -9,6 +9,7 @@ import {
 import { ownerVaultEmail, packSharedEmails } from "./estimate-scope.ts";
 import { applyHisIdentity, hisFileForPackId, hisMatchForPack, persistHisWoodRiverCards } from "./his-wood-river.ts";
 import { persistRodeoU110Wake } from "./madison-u110.ts";
+import { persistRodeoU250Wake } from "./madison-u250.ts";
 import { canonicalEmail, isSamePerson } from "./identity.ts";
 import { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import {
@@ -113,10 +114,12 @@ export async function hydrateFromVault(
       if (seat === "nathan") {
         persistHisWoodRiverCards(target);
         persistRodeoU110Wake(target);
+        persistRodeoU250Wake(target);
       }
     } else {
       persistHisWoodRiverCards(target);
       persistRodeoU110Wake(target);
+      persistRodeoU250Wake(target);
       snapshotOwnerDesk({ email: ownerVaultEmail(), role: "owner" }, target);
     }
     return packs;
@@ -152,6 +155,7 @@ export async function hydrateFromVault(
       if (!viewingAs || seat === "nathan") {
         persistHisWoodRiverCards(target);
         persistRodeoU110Wake(target);
+        persistRodeoU250Wake(target);
       }
       if (data.persisted && !viewingAs) {
         const deskEmail = ownerVaultEmail();
