@@ -38,6 +38,7 @@ describe("Sample A home header chrome", () => {
     assert.match(css, /\.home-corner-chrome \{[\s\S]{0,220}pointer-events: none;/);
     assert.doesNotMatch(css, /\.desk-home-root \.paper-header/);
     assert.doesNotMatch(css, /\.home-corner-chrome \{[^}]*background:/);
+    assert.match(css, /@media \(max-width: 640px\) \{[\s\S]{0,180}\.home-corner-chrome \{[\s\S]{0,80}flex-direction: column;/);
 
     const heroHeader = chrome.slice(chrome.indexOf("{hero ? ("), chrome.indexOf(") : ("));
     assert.match(heroHeader, /home-title-card/);
