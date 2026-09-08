@@ -6,6 +6,8 @@ import {
   type ClientFolderId,
   type ModuleRegisterRow,
 } from "./quality-hse-modules.ts";
+import { attachLegacyClientModule, moduleJobKey, moduleLegacyClaimKey } from "./quality-hse-scope.ts";
+import type { StorageLike } from "./local-estimates.ts";
 
 export const HSE_MODULE_PREFIX = "hs_hse_module_v1:";
 
@@ -131,6 +133,14 @@ export function hseModuleKey(folder: ClientFolderId | string) {
   return `${HSE_MODULE_PREFIX}${clientFolderId(folder)}`;
 }
 
+export function hseModuleJobKey(jobId: string) {
+  return moduleJobKey(HSE_MODULE_PREFIX, jobId);
+}
+
+export function hseLegacyClaimKey(folder: ClientFolderId | string) {
+  return moduleLegacyClaimKey(HSE_MODULE_PREFIX, folder);
+}
+
 export function hydrateHseModule(raw: unknown): HseModuleState {
   const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const incoming = row.lanes && typeof row.lanes === "object" ? (row.lanes as Record<string, unknown>) : {};
@@ -167,6 +177,42 @@ export function writeHseModule(
   if (!store) return;
   try {
     store.setItem(hseModuleKey(folder), JSON.stringify(hydrateHseModule(state)));
+  } catch {
+    // keep the previous copy
+  }
+}
+
+export function readHseModuleForJob(
+  jobId: string,
+  store: StorageLike | null = typeof window === "undefined" ? null : window.localStorage,
+  folder?: ClientFolderId | string,
+): HseModuleState {
+  if (!store || !jobId.trim()) return emptyHseModule();
+  try {
+    const raw = store.getItem(hseModuleJobKey(jobId));
+    if (raw) return hydrateHseModule(JSON.parse(raw));
+    if (folder) {
+      const attached = attachLegacyClientModule(store, {
+        jobKey: hseModuleJobKey(jobId),
+        folderKey: hseModuleKey(folder),
+        claimKey: hseLegacyClaimKey(folder),
+      });
+      if (attached) return hydrateHseModule(JSON.parse(attached));
+    }
+    return emptyHseModule();
+  } catch {
+    return emptyHseModule();
+  }
+}
+
+export function writeHseModuleForJob(
+  jobId: string,
+  state: HseModuleState,
+  store: { setItem(key: string, value: string): void } | null = typeof window === "undefined" ? null : window.localStorage,
+) {
+  if (!store || !jobId.trim()) return;
+  try {
+    store.setItem(hseModuleJobKey(jobId), JSON.stringify(hydrateHseModule(state)));
   } catch {
     // keep the previous copy
   }

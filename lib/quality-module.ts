@@ -14,6 +14,8 @@ import {
   type ClientFolderId,
   type ModuleRegisterRow,
 } from "./quality-hse-modules.ts";
+import { attachLegacyClientModule, moduleJobKey, moduleLegacyClaimKey } from "./quality-hse-scope.ts";
+import type { StorageLike } from "./local-estimates.ts";
 
 export const QUALITY_MODULE_PREFIX = "hs_quality_module_v1:";
 
@@ -147,6 +149,14 @@ export function qualityModuleKey(folder: ClientFolderId | string) {
   return `${QUALITY_MODULE_PREFIX}${clientFolderId(folder)}`;
 }
 
+export function qualityModuleJobKey(jobId: string) {
+  return moduleJobKey(QUALITY_MODULE_PREFIX, jobId);
+}
+
+export function qualityLegacyClaimKey(folder: ClientFolderId | string) {
+  return moduleLegacyClaimKey(QUALITY_MODULE_PREFIX, folder);
+}
+
 function migrateNcrCells(row: ModuleRegisterRow): ModuleRegisterRow {
   const cells = { ...row.cells };
   if (!cells.description?.trim() && cells.note?.trim()) cells.description = cells.note;
@@ -223,6 +233,42 @@ export function writeQualityModule(
   if (!store) return;
   try {
     store.setItem(qualityModuleKey(folder), JSON.stringify(hydrateQualityModule(state)));
+  } catch {
+    // keep the previous copy
+  }
+}
+
+export function readQualityModuleForJob(
+  jobId: string,
+  store: StorageLike | null = typeof window === "undefined" ? null : window.localStorage,
+  folder?: ClientFolderId | string,
+): QualityModuleState {
+  if (!store || !jobId.trim()) return emptyQualityModule();
+  try {
+    const raw = store.getItem(qualityModuleJobKey(jobId));
+    if (raw) return hydrateQualityModule(JSON.parse(raw));
+    if (folder) {
+      const attached = attachLegacyClientModule(store, {
+        jobKey: qualityModuleJobKey(jobId),
+        folderKey: qualityModuleKey(folder),
+        claimKey: qualityLegacyClaimKey(folder),
+      });
+      if (attached) return hydrateQualityModule(JSON.parse(attached));
+    }
+    return emptyQualityModule();
+  } catch {
+    return emptyQualityModule();
+  }
+}
+
+export function writeQualityModuleForJob(
+  jobId: string,
+  state: QualityModuleState,
+  store: { setItem(key: string, value: string): void } | null = typeof window === "undefined" ? null : window.localStorage,
+) {
+  if (!store || !jobId.trim()) return;
+  try {
+    store.setItem(qualityModuleJobKey(jobId), JSON.stringify(hydrateQualityModule(state)));
   } catch {
     // keep the previous copy
   }

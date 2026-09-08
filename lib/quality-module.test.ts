@@ -11,10 +11,13 @@ import {
   isQualityDeskTab,
   patchQualityRow,
   qualityBoardCounts,
+  qualityModuleJobKey,
   qualityModuleKey,
   readQualityModule,
+  readQualityModuleForJob,
   welderExpired,
   writeQualityModule,
+  writeQualityModuleForJob,
 } from "./quality-module.ts";
 
 function memoryStorage() {
@@ -85,6 +88,10 @@ describe("Quality module store", () => {
     assert.equal(board.travelers, 1);
     assert.equal(board.welders, 1);
     assert.equal(board.calibration, 1);
+    assert.equal(qualityModuleJobKey("job-new-b1726"), `${QUALITY_MODULE_PREFIX}job:job-new-b1726`);
+    writeQualityModuleForJob("job-new-b1726", state, store);
+    assert.equal(readQualityModuleForJob("job-new-b1726", store).sections.ncrs[0]?.cells.ncr, "NCR-1");
+    assert.equal(readQualityModuleForJob("job-other", store).sections.ncrs.length, 0);
   });
 
   it("migrates old NCR rows and keeps Client / Job / Unit on the log", () => {
