@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { HoldScreen } from "@/components/HoldScreen";
 import { JobMenuActions } from "@/components/JobMenuActions";
+import { JobScopedTools } from "@/components/JobScopedTools";
 import { JobTreeDesk } from "@/components/JobTreeDesk";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
 import { useDeskBoard } from "@/components/useDeskBoard";
@@ -127,6 +128,7 @@ export function JobsDesk() {
           </button>
         )}
       </div>
+      {standaloneLane ? null : <JobScopedTools />}
       {error ? <p className="mt-3 text-amber-flare">{error}</p> : null}
       {hydrating ? (
         <div className="mt-6">

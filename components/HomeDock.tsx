@@ -1,13 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useLensUser } from "@/components/OwnerDeskContext";
-import { canOpenRates } from "@/lib/desk-role";
 import { homeDockTiles } from "@/lib/desk-home";
 
 export function HomeDock() {
-  const lens = useLensUser();
-  const tiles = homeDockTiles(canOpenRates(lens));
+  const tiles = homeDockTiles();
 
   return (
     <nav className="home-dock" aria-label="Desk modules">

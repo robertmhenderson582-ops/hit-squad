@@ -1,23 +1,34 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useDisplay } from "@/components/DisplayProvider";
-import { useAlias } from "@/components/OwnerDeskContext";
+import { useAlias, useLensUser } from "@/components/OwnerDeskContext";
+import { canOpenRates } from "@/lib/desk-role";
 import { formatWageRate, lookupWageRate, wageLookupBook } from "@/lib/wage-lookup";
 
 export function WageLookupDesk({ client, site }: { client?: string; site?: string }) {
   const alias = useAlias();
+  const lens = useLensUser();
   const { resolvedTheme } = useDisplay();
   const night = resolvedTheme === "night";
   const book = useMemo(() => wageLookupBook(site || "", client || ""), [client, site]);
   const [positionId, setPositionId] = useState("");
   const selected = book ? lookupWageRate(site || "", client || "", positionId) : null;
+  const rateBooks = canOpenRates(lens);
 
   return (
     <section className={night ? "steel-plate paper-grain" : "plant-card"}>
       <div className={`flex items-center justify-between gap-3 px-5 py-4 ${night ? "hud-rail hud-rail-active" : "paper-rail paper-rail-active"}`}>
         <h2 className="font-display text-2xl tracking-[0.14em]">{alias("Wage lookup").toUpperCase()}</h2>
-        <span className="font-mono text-[11px] tracking-[0.2em] text-amber-label">READ-ONLY</span>
+        <span className="flex items-center gap-3">
+          {rateBooks ? (
+            <Link href="/rates" className="font-mono text-[11px] tracking-[0.14em] text-amber-label underline underline-offset-4">
+              Rate books
+            </Link>
+          ) : null}
+          <span className="font-mono text-[11px] tracking-[0.2em] text-amber-label">READ-ONLY</span>
+        </span>
       </div>
       <div className="space-y-4 px-5 pb-5">
         {book ? (

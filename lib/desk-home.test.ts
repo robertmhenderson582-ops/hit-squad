@@ -6,9 +6,11 @@ import { assignedCompaniesForId, companyDeskLogoSrc, companyLogoSrc, mergeCompan
 import {
   BURIED_HOME_DOORS,
   COMPANY_DESK_DOOR,
+  HOME_DOCK_TILES,
   HOME_DOORS,
   HOME_KICKER,
   HOME_WORDMARK,
+  SCOREBOARD_DOOR,
   STANDALONE_DOOR,
   companyDoorLogoSrc,
   homeDoorHrefs,
@@ -25,6 +27,8 @@ describe("home doors", () => {
     assert.equal(HOME_DOORS[0], COMPANY_DESK_DOOR);
     assert.equal(STANDALONE_DOOR.href, "/standalone");
     assert.deepEqual(BURIED_HOME_DOORS, [STANDALONE_DOOR]);
+    assert.equal(SCOREBOARD_DOOR.href, "/scoreboard");
+    assert.equal(HOME_DOCK_TILES.some((tile) => tile.key === "scoreboard"), false);
     assert.equal(
       HOME_DOORS.some((door) => door.key === "standalone" || door.href === "/standalone"),
       false,
