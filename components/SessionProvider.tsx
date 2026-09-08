@@ -2,6 +2,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { isOwnerLoginEmail } from "@/lib/owner-login";
+import {
+  AUTH_REQUEST_DEADLINE_MS,
+  AUTH_TIMEOUT_ERROR,
+  SESSION_LOAD_DEADLINE_MS,
+  fetchJsonWithDeadline,
+} from "@/lib/session-fetch";
 import type { PublicUser } from "@/lib/types";
 
 type SessionStatus = "loading" | "authenticated" | "unauthenticated";
@@ -27,15 +33,23 @@ type SessionContextValue = {
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 async function fetchSession(): Promise<PublicUser | null> {
-  const response = await fetch("/api/auth/session", {
-    method: "GET",
-    credentials: "include",
-    cache: "no-store",
-    headers: { Accept: "application/json" },
-  });
-  if (!response.ok) return null;
-  const data = (await response.json()) as { user?: PublicUser | null };
-  return data.user ?? null;
+  try {
+    const { ok, data } = await fetchJsonWithDeadline<{ user?: PublicUser | null }>(
+      "/api/auth/session",
+      {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      },
+      SESSION_LOAD_DEADLINE_MS,
+    );
+    if (!ok) return null;
+    return data.user ?? null;
+  } catch {
+    // Hung session GET must not leave AuthGate on CHECKING DESK SESSION.
+    return null;
+  }
 }
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
@@ -67,19 +81,32 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     async (input: { email: string; acknowledged: boolean }): Promise<"create" | "password"> => {
       if (isOwnerLoginEmail(input.email)) return "password";
       setError(null);
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ email: input.email, acknowledged: input.acknowledged }),
-      });
-      const data = (await response.json()) as {
-        needsCreate?: boolean;
-        needsPassword?: boolean;
-        error?: string;
-      };
-      if (!response.ok) {
+      let data: { needsCreate?: boolean; needsPassword?: boolean; error?: string };
+      let ok = false;
+      try {
+        const result = await fetchJsonWithDeadline<{
+          needsCreate?: boolean;
+          needsPassword?: boolean;
+          error?: string;
+        }>(
+          "/api/auth/login",
+          {
+            method: "POST",
+            credentials: "include",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ email: input.email, acknowledged: input.acknowledged }),
+          },
+          AUTH_REQUEST_DEADLINE_MS,
+        );
+        ok = result.ok;
+        data = result.data;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : AUTH_TIMEOUT_ERROR;
+        setError(message);
+        throw new Error(message);
+      }
+      if (!ok) {
         const message = data.error || "Sign-in failed. Check the email and password.";
         setError(message);
         throw new Error(message);
@@ -95,15 +122,30 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       const body: SignInInput = isOwnerLoginEmail(input.email)
         ? { email: input.email, password: input.password, acknowledged: input.acknowledged }
         : input;
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = (await response.json()) as { user?: PublicUser; error?: string };
-      if (!response.ok || !data.user) {
+      let data: { user?: PublicUser; error?: string };
+      let ok = false;
+      try {
+        const result = await fetchJsonWithDeadline<{ user?: PublicUser; error?: string }>(
+          "/api/auth/login",
+          {
+            method: "POST",
+            credentials: "include",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify(body),
+          },
+          AUTH_REQUEST_DEADLINE_MS,
+        );
+        ok = result.ok;
+        data = result.data;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : AUTH_TIMEOUT_ERROR;
+        setError(message);
+        setStatus("unauthenticated");
+        setUser(null);
+        throw new Error(message);
+      }
+      if (!ok || !data.user) {
         const message = data.error || "Sign-in failed. Check the email and password.";
         setError(message);
         setStatus("unauthenticated");

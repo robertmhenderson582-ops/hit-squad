@@ -104,6 +104,7 @@ export function LoginForm() {
         body: JSON.stringify({ kind: "failed", who: email }),
       }).catch(() => undefined);
       setLocalError(err instanceof Error ? err.message : "Sign-in failed.");
+    } finally {
       setSubmitting(false);
     }
   }
