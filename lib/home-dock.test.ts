@@ -106,7 +106,7 @@ describe("Home four doors", () => {
     assert.match(chrome, /home-owner-card/);
     assert.match(css, /\.home-dock \{/);
     assert.match(css, /\.home-dock \{\n  position: relative;/);
-    assert.match(css, /\.home-dock \{\n  position: relative;[\s\S]{0,120}width: min\(44\.5rem/);
+    assert.match(css, /\.home-dock \{\n  position: relative;[\s\S]{0,120}width: min\(49\.5rem/);
     assert.match(css, /\.desk-home-root \.desk-hero \{[\s\S]{0,220}justify-content: flex-start;/);
     assert.match(css, /\.desk-home-root \.desk-hero \{[\s\S]{0,240}gap: 0\.85rem;/);
     assert.doesNotMatch(css, /\.home-dock \{[\s\S]{0,160}bottom: 0\.65rem;/);
@@ -114,10 +114,10 @@ describe("Home four doors", () => {
     assert.match(css, /backdrop-filter: blur\(12px\)/);
     assert.match(css, /rgba\(62, 198, 212/);
     assert.match(css, /rgba\(227, 139, 42/);
-    assert.match(css, /\.home-dock-tile \{[\s\S]{0,220}min-width: 10\.55rem;/);
+    assert.match(css, /\.home-dock-tile \{[\s\S]{0,220}min-width: 11\.6rem;/);
     assert.match(css, /\.home-dock-tile \{[\s\S]{0,280}min-height: 6\.25rem;/);
     assert.match(css, /\.home-dock-tile \{[\s\S]{0,300}height: 6\.25rem;/);
-    assert.match(css, /\.home-dock-tile \{[\s\S]{0,280}flex: 0 0 10\.55rem;/);
+    assert.match(css, /\.home-dock-tile \{[\s\S]{0,280}flex: 0 0 11\.6rem;/);
     assert.match(css, /\.home-dock-tile \{[\s\S]{0,360}align-items: center;/);
     assert.match(css, /\.home-dock-tile \{[\s\S]{0,380}justify-content: center;/);
     assert.match(css, /\.home-dock-tile \{[\s\S]{0,420}text-align: center;/);
