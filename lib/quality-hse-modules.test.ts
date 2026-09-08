@@ -119,7 +119,7 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.match(quality, /QualityDay1Card/);
     assert.match(quality, /RollingChartMap/);
     assert.match(quality, /QUALITY_SECTIONS/);
-    assert.match(quality, /Client folder/);
+    assert.match(quality, /JobScopePicks/);
     assert.match(hse, /HseDay1Card/);
     assert.match(hse, /HSE_EXECUTE_LANES/);
     assert.match(qualityCard, /QUALITY_PACKAGE_FORMS/);
@@ -162,7 +162,7 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.match(quality, /BOARD/);
     assert.match(quality, /QUALITY_DESK_TABS/);
     assert.match(quality, /role="tablist"/);
-    assert.match(quality, /awardedLocalJobs/);
+    assert.match(quality, /useQualityHseJobTree/);
     assert.match(moduleLib, /Day-1 package/);
     assert.match(moduleLib, /Rolling chart/);
     assert.match(moduleLib, /id: "client"/);

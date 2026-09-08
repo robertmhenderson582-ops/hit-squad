@@ -16,7 +16,7 @@ const JOBS = [
 type Job = (typeof JOBS)[number]["id"];
 type Screen = "welcome" | Job;
 
-export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "quality" }) {
+export function LeadStudio({ title, kind, jobId = "" }: { title: string; kind: "hse" | "quality"; jobId?: string }) {
   const [screen, setScreen] = useState<Screen>("welcome");
   const { user } = useSession();
   const canSeeAll = hasBuildDesk(user);
@@ -28,11 +28,11 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
   const [savedBriefs, setSavedBriefs] = useState<PublicLeadBrief[]>([]);
 
   useEffect(() => {
-    const brief = readBrief(kind);
+    const brief = readBrief(kind, jobId);
     setDescribe(brief.describe);
     setFiles(brief.files);
     setSavedAt(brief.savedAt);
-  }, [kind]);
+  }, [kind, jobId]);
 
   useEffect(() => {
     void fetch(`/api/desk/briefs?kind=${kind}`, { credentials: "include" })
@@ -54,7 +54,7 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
       files: next.files ?? files,
       savedAt: next.savedAt === undefined ? savedAt : next.savedAt,
     };
-    writeBrief(kind, brief);
+    writeBrief(kind, brief, jobId);
   }
 
   async function onSave(event: FormEvent) {
@@ -77,7 +77,7 @@ export function LeadStudio({ title, kind }: { title: string; kind: "hse" | "qual
       describe: next.describe ?? describe,
       files: next.files ?? files,
     };
-    writeBrief(kind, { ...body, savedAt: savedAt });
+    writeBrief(kind, { ...body, savedAt: savedAt }, jobId);
     const response = await fetch("/api/desk/briefs", {
       method: "POST",
       credentials: "include",

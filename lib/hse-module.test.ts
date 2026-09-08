@@ -6,10 +6,13 @@ import {
   HSE_MODULE_PREFIX,
   addHseLaneRow,
   emptyHseModule,
+  hseModuleJobKey,
   hseModuleKey,
   patchHseLaneRow,
   readHseModule,
+  readHseModuleForJob,
   writeHseModule,
+  writeHseModuleForJob,
 } from "./hse-module.ts";
 
 function memoryStorage() {
@@ -43,5 +46,9 @@ describe("HSE module store", () => {
     assert.equal(read.day1.slots.orientation?.note, "done");
     assert.equal(read.day1.slots.orientation?.marked, true);
     assert.equal(read.lanes.incidents[0]?.cells.note, "near miss");
+    assert.equal(hseModuleJobKey("job-new-b1726"), `${HSE_MODULE_PREFIX}job:job-new-b1726`);
+    writeHseModuleForJob("job-new-b1726", state, store);
+    assert.equal(readHseModuleForJob("job-new-b1726", store).lanes.incidents[0]?.cells.note, "near miss");
+    assert.equal(readHseModuleForJob("job-other", store).lanes.incidents.length, 0);
   });
 });
