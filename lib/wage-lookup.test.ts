@@ -267,10 +267,11 @@ describe("wage lookup plants", () => {
 describe("estimate wage lookup tab", () => {
   it("puts Wage lookup on the estimate and keeps Rate builder on Rates", () => {
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
+    const tabs = readFileSync(fileURLToPath(new URL("./estimate-tabs.ts", import.meta.url)), "utf8");
     const desk = readFileSync(fileURLToPath(new URL("../components/WageLookupDesk.tsx", import.meta.url)), "utf8");
     const ratesDesk = readFileSync(fileURLToPath(new URL("../components/RatesDesk.tsx", import.meta.url)), "utf8");
-    assert.match(workspace, /label: "Wage lookup"/);
-    assert.match(workspace, /id: "wage-lookup"/);
+    assert.match(tabs, /label: "Wage lookup"/);
+    assert.match(tabs, /id: "wage-lookup"/);
     assert.match(workspace, /WageLookupDesk/);
     assert.doesNotMatch(workspace, /RatesDesk/);
     assert.match(desk, /Wage lookup/);

@@ -39,6 +39,7 @@ import {
   parseEstimateXlsx,
   type EstimateImport,
 } from "@/lib/estimate-xlsx-import";
+import { BOILER17_CLIENT, BOILER17_SITE, BOILER17_TITLE } from "@/lib/boiler-17";
 import {
   classifyEstimateWorkbook,
   CLIENT_TEMPLATE_STAGED,
@@ -47,7 +48,7 @@ import {
 } from "@/lib/client-estimate-ingest";
 import { siteIdFromSite } from "@/lib/local-estimates";
 import type { EstimateStatus } from "@/lib/estimate-status";
-import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
+import { readOtherCost, syncOtherCostTravel, type OtherCostSheet } from "@/lib/other-cost";
 import { mergeSchedule, type PhaseScheduleState } from "@/lib/phase-schedule";
 import { shouldAttachP66TransferFace } from "@/lib/p66-transfer-face";
 import { P66_V1_EXPORT_LINE } from "@/lib/p66-v1";
@@ -124,7 +125,7 @@ export function EstimateWorkspace({
   const [exportBusy, setExportBusy] = useState(false);
   const [importError, setImportError] = useState("");
   const [importBusy, setImportBusy] = useState(false);
-  const [pendingImport, setPendingImport] = useState<EstimateImport | null>(null);
+  const [pendingImport, setPendingImport] = useState<(EstimateImport & { otherCost?: OtherCostSheet }) | null>(null);
   const [pendingClientFace, setPendingClientFace] = useState<ClientWorkbookClass | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const { resolvedTheme } = useDisplay();
@@ -198,6 +199,22 @@ export function EstimateWorkspace({
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const classified = await classifyEstimateWorkbook(bytes, file.name);
+      if (classified.kind === "wood-river-b1") {
+        const { ingestWoodRiverB1 } = await import("@/lib/wood-river-b1-xlsx");
+        const ingested = await ingestWoodRiverB1(bytes, file.name);
+        setPendingClientFace(null);
+        setPendingImport({
+          title: BOILER17_TITLE,
+          client: BOILER17_CLIENT,
+          site: BOILER17_SITE,
+          schedule: ingested.schedule,
+          crew: ingested.crew,
+          blocks: [],
+          jobMeta: ingested.jobMeta,
+          otherCost: ingested.otherCost,
+        });
+        return;
+      }
       if (shouldStageClientWorkbook(classified)) {
         setPendingImport(null);
         setPendingClientFace(classified);
@@ -215,7 +232,16 @@ export function EstimateWorkspace({
     if (!pendingImport || importBlocked) return;
     setImportBusy(true);
     try {
-      const next = applyEstimateImport(liveImportBase(), pendingImport);
+      const next = pendingImport.blocks.length
+        ? applyEstimateImport(liveImportBase(), pendingImport)
+        : {
+            ...liveImportBase(),
+            title: pendingImport.title,
+            schedule: pendingImport.schedule,
+            crew: pendingImport.crew,
+            jobMeta: pendingImport.jobMeta,
+            otherCost: pendingImport.otherCost ?? liveImportBase().otherCost,
+          };
       const schedule: PhaseScheduleState = mergeSchedule(next.schedule);
       pack.replaceFromImport({
         schedule,

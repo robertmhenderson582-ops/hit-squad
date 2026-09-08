@@ -69,4 +69,4 @@ Login uses the night-refinery brand hero with HIT SQUAD over PROJECT CONTROLS. A
 - Header keeps branding, FIELD TRIAL, Home, owner chip, and Settings. Change Orders, Rates, Cost/PPR, Quality, HSE, Purchasing, and Future Modules leave the top nav. Inbox / Suggestion stay as they exist today. A PM still digs client → site → job under the assigned company (Madison is the operator; Phillips 66 and Georgia Power are clients).
 - Brand: HIT SQUAD over PROJECT CONTROLS, steel `#0f5f6d`, amber FIELD TRIAL — NOT A RELEASE, Madison confidentiality checkbox, original night-refinery hero.
 - Do not touch auth files (`/api/auth/*`, session cookie, AuthGate). No Google/X, no public Create account, no GET-submit login, no `sessionStorage` fake sessions.
-- B-1 ingest is parked. Do not invent Submit/ticket permission UI this turn; do not block adding it later.
+- Wood River B-1 ingest applies Staff / Foremen / Direct / Support calendars onto Boiler 17. Do not invent #REF labor $. Do not invent Submit/ticket permission UI this turn; do not block adding it later.

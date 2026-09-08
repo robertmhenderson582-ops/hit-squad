@@ -320,12 +320,14 @@ describe("hydrate + live job list", () => {
 
   it("Cost report is an on-job estimate tab and /cost reads the live pack", () => {
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
+    const tabs = readFileSync(fileURLToPath(new URL("./estimate-tabs.ts", import.meta.url)), "utf8");
     const detail = readFileSync(fileURLToPath(new URL("../components/EstimateDetail.tsx", import.meta.url)), "utf8");
     const desk = readFileSync(fileURLToPath(new URL("../components/CostDesk.tsx", import.meta.url)), "utf8");
     const report = readFileSync(fileURLToPath(new URL("../components/CostReportDesk.tsx", import.meta.url)), "utf8");
     const parked = readFileSync(fileURLToPath(new URL("./cost-report.ts", import.meta.url)), "utf8");
-    assert.match(workspace, /id: "cost-report"/);
-    assert.match(workspace, /label: "Cost report"/);
+    assert.match(tabs, /id: "cost-report"/);
+    assert.match(tabs, /label: "Cost report"/);
+    assert.match(workspace, /estimateTabsForSite|BASE_ESTIMATE_TABS/);
     assert.match(detail, /tab === "cost-report"/);
     assert.match(desk, /listLocalPacks/);
     assert.match(desk, /CostReportDesk/);

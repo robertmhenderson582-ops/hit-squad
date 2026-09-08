@@ -12,9 +12,9 @@
  *
  * John loop: Robert Excel → Hit Squad live pack → estimate fills P66-shaped export → Robert pastes into official file.
  *
- * This path classifies and returns seed metadata only. It does not create
- * crew calendars or remap live pack totals. Native Hit Squad xlsx still
- * uses estimate-xlsx-import.
+ * Most client faces stay staged metadata. Wood River B-1 is the exception:
+ * Staff / Foremen / Direct / Support calendars apply onto pack new-b1726.
+ * Native Hit Squad xlsx still uses estimate-xlsx-import.
  */
 
 import ExcelJS from "exceljs";
@@ -78,6 +78,7 @@ export function looksLikeHitSquadPack(sheets: string[]) {
   const names = new Set(sheets.map((name) => name.trim()));
   if (names.has(ESTIMATE_XLSX_SHEETS.summary) && names.has(ESTIMATE_XLSX_SHEETS.jobSetup)) return true;
   return (
+    names.has(ESTIMATE_XLSX_SHEETS.jobSetup) &&
     names.has(ESTIMATE_XLSX_SHEETS.direct) &&
     names.has(ESTIMATE_XLSX_SHEETS.staff) &&
     names.has(ESTIMATE_XLSX_SHEETS.summary)
@@ -119,10 +120,15 @@ export function looksLikeMonroeWorkbook(sheets: string[], fileName = "") {
   return keys.some((name) => name.includes("541v") || name.includes("u541") || name.includes("post review"));
 }
 
-/** Official Wood River B-1 (Boiler 17 RH). Staged — do not invent crew from #REF labor $. */
+/** Official Wood River B-1 (Boiler 17 RH). Hours apply; do not invent #REF labor $. */
 export function looksLikeWoodRiverB1(sheets: string[], fileName = "") {
   if (WOOD_RIVER_B1_RE.test(fileName) && /b-?1/i.test(fileName)) return true;
   const keys = sheets.map(sheetKey);
+  const labor = ["staff", "foremen", "direct", "support"].filter((name) =>
+    keys.some((key) => key === name || key === `${name} page` || key.endsWith(` ${name}`)),
+  );
+  const summary = keys.some((name) => name.includes("summary"));
+  if (labor.length >= 3 && summary) return true;
   return WOOD_RIVER_B1_RE.test(fileName) && keys.some((name) => name.includes("summary page") || name === "summary page");
 }
 
@@ -200,10 +206,10 @@ export function classifyFromSheetsAndName(sheets: string[], fileName = ""): Clie
       label: "Wood River B-1 (Boiler 17)",
       sheets,
       fileName: name,
-      staged: true,
+      staged: false,
       packId: BOILER17_PACK_ID,
       families: ["wood-river-b1"],
-      note: "Official RH B-1. Hours lock from Drive text. Labor $ formulas were #REF — staged only. Cost wires to Mike CPPR 108451.",
+      note: "Official RH B-1. Staff/Foremen/Direct/Support calendars apply. Labor $ stay on Rate Tables — do not invent #REF. Cost wires to Mike CPPR 108451.",
     };
   }
   if (looksLikeMonroeWorkbook(sheets, name)) {
@@ -287,6 +293,7 @@ export function clientFaceNames() {
 }
 
 export function shouldStageClientWorkbook(classified: ClientWorkbookClass) {
+  if (classified.kind === "wood-river-b1") return false;
   return classified.staged || classified.kind !== "hitsquad-live-pack";
 }
 
@@ -330,11 +337,11 @@ export const CLIENT_FACE_MAPPER_SPEC = {
   },
   "wood-river-b1": {
     family: "wood-river-b1",
-    clock: "Wood River B-1 Summary Page hours",
-    buckets: ["Direct", "Foremen", "Support", "Staff"],
-    tabs: ["Summary Page"],
-    exportAs: "Hit Squad live pack — B-1 ingest stays staged",
-    ingest: "stage-metadata",
+    clock: "Wood River B-1 HC × Hours/shift day grids",
+    buckets: ["Staff", "GF", "Foreman", "Direct Craft", "Support"],
+    tabs: ["Summary Page", "Staff", "Foremen", "Direct", "Support"],
+    exportAs: "Hit Squad live pack — B-1 hours apply; labor $ from Rate Tables",
+    ingest: "apply-hours",
   },
   "ferndale-gep": {
     family: "ferndale",
