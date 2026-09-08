@@ -9,6 +9,8 @@ import {
   companyIdFromName,
   companyLogoSrc,
   isCompanyId,
+  isRetiredPeerCompany,
+  isRetiredPeerCompanyName,
   isStandaloneId,
   mergeCompanies,
   seedCompanyForEmail,
@@ -43,6 +45,7 @@ export function parseAssignmentFile(raw: unknown): AssignmentFile {
   const companies: Company[] = [];
   for (const row of parsed.companies ?? []) {
     if (row && isCompanyId(row.id) && typeof row.name === "string" && row.name.trim()) {
+      if (isRetiredPeerCompany(row.id) || isRetiredPeerCompanyName(row.name)) continue;
       const logo = companyLogoSrc(typeof row.logo === "string" ? row.logo : null);
       companies.push({
         id: row.id,
@@ -185,6 +188,9 @@ export async function addCompany(name: string): Promise<{ ok: true; company: Com
   if (trimmed.length > 80) return { error: "That name is too long." };
   if (trimmed.toLowerCase() === STANDALONE_NAME.toLowerCase() || companyIdFromName(trimmed) === STANDALONE_ID) {
     return { error: "Standalone is a door, not a company." };
+  }
+  if (isRetiredPeerCompanyName(trimmed) || isRetiredPeerCompany(companyIdFromName(trimmed))) {
+    return { error: "That company is not on this desk." };
   }
   const existing = await listCompanies();
   const sameName = existing.find((row) => row.name.toLowerCase() === trimmed.toLowerCase());

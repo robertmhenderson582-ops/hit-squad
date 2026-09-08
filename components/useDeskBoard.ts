@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useDeskLens } from "@/components/OwnerDeskContext";
-import { ensureCbiDummyPack, shouldSeedCbiDummy } from "@/lib/cbi-dummy";
 import { companyScopeFor, type CompanyId } from "@/lib/companies";
 import { viewAsInit } from "@/lib/desk-scope";
 import { visibleDeskPacks } from "@/lib/estimate-scope";
@@ -38,7 +37,6 @@ export function useDeskBoard() {
       const nextCompany = typeof data.companyId === "string" ? data.companyId : undefined;
       if (nextCompany) setCompanyId(nextCompany as CompanyId);
       const scope = companyScopeFor(current, nextCompany as CompanyId | undefined);
-      if (shouldSeedCbiDummy(scope)) ensureCbiDummyPack();
       const packs = visibleDeskPacks(current, viewingAs, undefined, scope);
       setBoard(mergeLocalBoard(data.board as ForgebookBoard, packs));
     })();

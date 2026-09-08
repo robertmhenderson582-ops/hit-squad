@@ -11,8 +11,13 @@ export type Company = {
   logo?: string;
 };
 
+export const CBI_ID = "cbi";
+export const CBI_NAME = "CBI";
 export const LUCKY13_ID = "lucky13";
 export const LUCKY13_NAME = "Lucky 13 Welding & Fabrication";
+
+/** Peer contractors, not plant clients. Kept as assignment homes only — never catalog rows. */
+export const RETIRED_PEER_COMPANY_IDS = [CBI_ID, LUCKY13_ID] as const;
 
 /** Quiet one-off lane. Not a client company and not a second product. */
 export const STANDALONE_ID = "standalone";
@@ -22,8 +27,6 @@ export const STANDALONE_NAME = "Standalone";
 export const COMPANIES: Company[] = [
   { id: "hitsquad", name: "Hit Squad" },
   { id: "madison", name: "Madison" },
-  { id: "cbi", name: "CBI" },
-  { id: LUCKY13_ID, name: LUCKY13_NAME },
 ];
 
 export const COMPANY_IDS = COMPANIES.map((row) => row.id);
@@ -53,6 +56,16 @@ export function isStandaloneId(id?: string | null): boolean {
   return (id ?? "").trim().toLowerCase() === STANDALONE_ID;
 }
 
+export function isRetiredPeerCompany(id?: string | null): boolean {
+  return RETIRED_PEER_COMPANY_IDS.includes((id ?? "").trim().toLowerCase() as (typeof RETIRED_PEER_COMPANY_IDS)[number]);
+}
+
+export function isRetiredPeerCompanyName(name?: string | null): boolean {
+  const t = (name ?? "").trim().toLowerCase();
+  if (!t) return false;
+  return /\bcbi\b/.test(t) || /lucky\s*13/.test(t);
+}
+
 export function peopleLane(companyId?: string | null): "company" | "standalone" {
   return isStandaloneId(companyId) ? "standalone" : "company";
 }
@@ -62,7 +75,7 @@ export function samePeopleLane(a?: string | null, b?: string | null): boolean {
 }
 
 export function assignmentChoices(catalog: Company[] = COMPANIES): Company[] {
-  const rows = catalog.filter((row) => !isStandaloneId(row.id));
+  const rows = catalog.filter((row) => !isStandaloneId(row.id) && !isRetiredPeerCompany(row.id));
   return [...rows, { id: STANDALONE_ID, name: STANDALONE_NAME }];
 }
 
@@ -110,7 +123,7 @@ export function withCompanyLogo(row: Company): Company {
 export function mergeCompanies(extra: Company[] = []): Company[] {
   const seen = new Map<string, Company>();
   for (const row of [...COMPANIES, ...extra]) {
-    if (!row?.id || !row?.name || !isCompanyId(row.id) || isStandaloneId(row.id)) continue;
+    if (!row?.id || !row?.name || !isCompanyId(row.id) || isStandaloneId(row.id) || isRetiredPeerCompany(row.id)) continue;
     const next = withCompanyLogo(row);
     const prev = seen.get(row.id);
     if (prev) {
@@ -165,10 +178,10 @@ export function assignedCompanyId(scope?: CompanyScope | null): CompanyId {
 }
 
 export function companiesForScope(scope?: CompanyScope | null, catalog: Company[] = COMPANIES): Company[] {
-  const rows = catalog.filter((row) => !isStandaloneId(row.id));
+  const rows = catalog.filter((row) => !isStandaloneId(row.id) && !isRetiredPeerCompany(row.id));
   if (!scope || scope.isOwner) return rows;
   const id = assignedCompanyId(scope);
-  if (isStandaloneId(id)) return [];
+  if (isStandaloneId(id) || isRetiredPeerCompany(id)) return [];
   return rows.filter((row) => row.id === id);
 }
 
@@ -182,13 +195,13 @@ export function canSeeCompany(scope: CompanyScope | null | undefined, companyId:
 /**
  * Infer which contractor a catalog job / site / board estimate belongs to.
  * Madison plant clients (Phillips 66 plants + Georgia Power Yates + Monroe) sit under Madison.
- * CBI is only the CBI label — no invented CBI sites.
- * Lucky 13 matches that name only — no invented Lucky 13 sites.
+ * Retired peer labels (CBI / Lucky 13) stay off the Madison/Hit Squad catalog —
+ * leftover packs must not land on the owner Madison desk.
  */
 export function inferCompanyId(text: string | undefined | null): CompanyId {
   const t = (text ?? "").toLowerCase();
   if (/lucky\s*13/.test(t)) return LUCKY13_ID;
-  if (/\bcbi\b/.test(t)) return "cbi";
+  if (/\bcbi\b/.test(t)) return CBI_ID;
   if (/\bmadison\b|\bp66\b|phillips 66|wood river|\byates\b|georgia power|monroe energy|\bmonroe\b|\btrainer\b|\brodeo\b/.test(t)) {
     return "madison";
   }
@@ -201,6 +214,23 @@ export function inferCompanyIdFromParts(...parts: Array<string | undefined | nul
     if (id !== "hitsquad") return id;
   }
   return inferCompanyId(parts.filter(Boolean).join(" "));
+}
+
+/** Leftover CBI / Lucky 13 dummy packs — never list them on the Madison-facing desk. */
+export function isRetiredPeerPack(pack?: {
+  packId?: string;
+  client?: string;
+  site?: string;
+  title?: string;
+} | null): boolean {
+  if (!pack) return false;
+  const packId = (pack.packId || "").trim();
+  if (/(?:^|job-)new-cbi-shape-1$/.test(packId)) return true;
+  return (
+    isRetiredPeerCompanyName(pack.client) ||
+    isRetiredPeerCompanyName(pack.title) ||
+    isRetiredPeerCompany(inferCompanyIdFromParts(pack.client, pack.site, pack.title))
+  );
 }
 
 export function catalogVisibleTo(scope: CompanyScope | null | undefined, ...parts: Array<string | undefined | null>): boolean {

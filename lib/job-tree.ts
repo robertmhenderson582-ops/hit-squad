@@ -3,6 +3,8 @@ import {
   canSeeCompany,
   companiesForScope,
   inferCompanyIdFromParts,
+  isRetiredPeerCompany,
+  isRetiredPeerCompanyName,
   isStandaloneId,
   seedCompanyForEmail,
   type Company,
@@ -23,7 +25,6 @@ export const UNASSIGNED_SITE_ID = "site-unassigned";
 export const PHILLIPS_66_CLIENT_ID = "phillips-66";
 export const GEORGIA_POWER_CLIENT_ID = "georgia-power";
 export const MONROE_ENERGY_CLIENT_ID = "monroe-energy";
-export const CBI_CLIENT_ID = "cbi";
 export const OTHER_CLIENT_ID = "other";
 
 /** Yates is Georgia Power. Never list it under Phillips 66. */
@@ -199,7 +200,7 @@ export function jobTreeClientId(...parts: Array<string | undefined | null>) {
     return PHILLIPS_66_CLIENT_ID;
   }
   if (/monroe|trainer/.test(hay)) return MONROE_ENERGY_CLIENT_ID;
-  if (/\bcbi\b/.test(hay)) return CBI_CLIENT_ID;
+  if (/\bcbi\b/.test(hay) || /lucky\s*13/.test(hay)) return OTHER_CLIENT_ID;
   if (!hay) return OTHER_CLIENT_ID;
   return `client-${norm(hay).replace(/\s+/g, "-").slice(0, 40)}`;
 }
@@ -208,8 +209,8 @@ export function jobTreeClientLabel(id: string, fallback = "") {
   if (id === PHILLIPS_66_CLIENT_ID) return "Phillips 66";
   if (id === GEORGIA_POWER_CLIENT_ID) return "Georgia Power";
   if (id === MONROE_ENERGY_CLIENT_ID) return "Monroe Energy";
-  if (id === CBI_CLIENT_ID) return "CBI";
   if (id === OTHER_CLIENT_ID) return fallback.trim() || "Other";
+  if (isRetiredPeerCompany(id) || isRetiredPeerCompanyName(fallback)) return "Other";
   return fallback.trim() || "Other";
 }
 
@@ -259,7 +260,7 @@ export function companyIdForJob(
   }
   const inferred = inferCompanyIdFromParts(pack?.client, pack?.site, job.client, job.title, job.code);
   const home = packOwnerHomeCompany(pack?.ownerEmail);
-  // CBI-only (and other non-Madison) seats cannot stand in for Madison Wood River.
+  // Retired peer seats (and other non-Madison homes) cannot stand in for Madison Wood River.
   if (home && home !== inferred && inferred === "madison") {
     if (canSeeCompany(scope, home)) return home;
     return assignedCompanyId(scope);
@@ -440,7 +441,17 @@ export function jobTree(input: {
     const estimateId = undefined;
     const pack = packForJob(job, packs, estimateId);
     const companyId = companyIdForJob(job, input.scope, pack);
-    if (isStandaloneId(companyId) || !canSeeCompany(input.scope, companyId)) continue;
+    const inferred = inferCompanyIdFromParts(pack?.client, pack?.site, job.client, job.title, job.code);
+    if (
+      isStandaloneId(companyId) ||
+      isRetiredPeerCompany(companyId) ||
+      isRetiredPeerCompany(inferred) ||
+      isRetiredPeerCompanyName(pack?.client) ||
+      isRetiredPeerCompanyName(job.client) ||
+      !canSeeCompany(input.scope, companyId)
+    ) {
+      continue;
+    }
     let bucket = buckets.get(companyId);
     if (!bucket) {
       const name = companies.find((row) => row.id === companyId)?.name || companyId;

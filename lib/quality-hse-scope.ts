@@ -2,7 +2,7 @@ import { catalogSites } from "./desk-data.ts";
 import { catalogSeedsAllowedOnDesk, jobsOnDesk, omitCatalogSeedJobs } from "./jobs.ts";
 import { clientFolderId } from "./quality-hse-modules.ts";
 import { jobTree, type JobTreeCompany } from "./job-tree.ts";
-import type { CompanyScope } from "./companies.ts";
+import { isRetiredPeerCompany, isRetiredPeerCompanyName, type CompanyScope } from "./companies.ts";
 import type { JobMenuState } from "./job-menu.ts";
 import type { LocalPack, StorageLike } from "./local-estimates.ts";
 import type { JobRecord, SiteRecord } from "./types.ts";
@@ -85,7 +85,9 @@ export function applyScopeJob(pick: JobScopePick, jobId: string): JobScopePick {
 export function cascadeClients(tree: JobTreeCompany[]): JobScopeClient[] {
   const seen = new Map<string, JobScopeClient>();
   for (const company of tree) {
+    if (isRetiredPeerCompany(company.id) || isRetiredPeerCompanyName(company.name)) continue;
     for (const client of company.clients) {
+      if (isRetiredPeerCompany(client.id) || isRetiredPeerCompanyName(client.name)) continue;
       if (!seen.has(client.id)) seen.set(client.id, { id: client.id, name: client.name });
     }
   }

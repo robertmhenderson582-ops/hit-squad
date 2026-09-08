@@ -102,6 +102,8 @@ describe("Quality / HSE job scope", () => {
     const clients = cascadeClients(tree);
     assert.equal(clients.some((row) => row.id === PHILLIPS_66_CLIENT_ID && row.name === "Phillips 66"), true);
     assert.equal(clients.some((row) => row.id === GEORGIA_POWER_CLIENT_ID && row.name === "Georgia Power"), true);
+    assert.equal(clients.some((row) => /cbi|lucky\s*13/i.test(`${row.id} ${row.name}`)), false);
+    assert.equal(tree.some((row) => /cbi|lucky\s*13/i.test(`${row.id} ${row.name}`)), false);
     const wood = cascadeSites(tree, PHILLIPS_66_CLIENT_ID).find((row) => row.id === "site-madison");
     assert.equal(Boolean(wood?.name.includes("Wood River") || wood?.name.includes("Madison")), true);
     assert.equal((wood?.jobCount ?? 0) >= 2, true);

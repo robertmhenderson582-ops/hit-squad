@@ -1,4 +1,4 @@
-import { catalogVisibleTo, type CompanyScope } from "./companies.ts";
+import { catalogVisibleTo, isRetiredPeerPack, type CompanyScope } from "./companies.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { boardForUser } from "./desk-data.ts";
 import { isPurgedHisLeftover, omitPurgedHisLeftovers, shouldPaintHisCards } from "./his-wood-river.ts";
@@ -162,7 +162,7 @@ export function jobsOnDesk(
     omitCatalogSeedPacks([
       ...packs,
       ...dummyPacksForUser(scope).filter((pack) => !packs.some((row) => row.packId === pack.packId)),
-    ]),
+    ]).filter((pack) => !isRetiredPeerPack(pack)),
   );
   const merged = includeSeeds
     ? (() => {
@@ -172,7 +172,9 @@ export function jobsOnDesk(
       })()
     : mergeLocalJobs(fromServer, nextPacks);
   const painted = (includeSeeds ? merged : omitCatalogSeedJobs(merged)).filter(
-    (job) => !isPurgedHisLeftover({ packId: job.id, title: job.title, code: job.code }),
+    (job) =>
+      !isRetiredPeerPack({ client: job.client, title: job.title, packId: job.id }) &&
+      !isPurgedHisLeftover({ packId: job.id, title: job.title, code: job.code }),
   );
   const keepHis =
     !viewingAs ||
