@@ -16,7 +16,11 @@
  * as Rate Tables). Subtotal $ / Rate merge title through HC/HPS; ST/OT/DT/PD
  * stay per-row. That grid is the stable client edit surface
  * for import. Position dropdowns + workbook import write the live pack
- * (excel-ripple.ts). Hidden block-id column keys the importer. Polish,
+ * (excel-ripple.ts). Hidden block-id column keys the importer. Each crew
+ * sheet pads ESTIMATE_XLSX_SPARE_POSITIONS empty DAYSHIFT blocks after the
+ * live seats — same instrument / day-grid / Position dropdown as live rows.
+ * Filled spare positions import as new pack seats; blank pad is ignored.
+ * Polish,
  * repair-safe package, and $ vs MH labels only. ORG Chart is a later
  * separate export — not in this workbook.
  * Slicer Hrs (IPS / P6 dump) is not in this workbook.
@@ -518,6 +522,15 @@ export const ESTIMATE_XLSX_SHEETS = {
  * become new pack lines.
  */
 export const ESTIMATE_XLSX_SPARE_ROWS = 8;
+/**
+ * Empty DAYSHIFT position blocks after live Staff / Foremen / Direct / Support
+ * seats. 4, not ESTIMATE_XLSX_SPARE_ROWS (8): each slot is a 7-row block plus
+ * spacer (~8× a COE line), so 4 is a full extra card without ballooning the
+ * day-grid formula count. Import treats xlsx-spare-* ids as pad — filled
+ * (Position / hours / PD) become new seats; blank pad is ignored.
+ */
+export const ESTIMATE_XLSX_SPARE_POSITIONS = 4;
+export const LABOR_SPARE_ID_PREFIX = "xlsx-spare-";
 /** Hidden Travel / Subcontractor row id — same idea as COE col H / labor block id. */
 export const TRAVEL_HIDDEN_ID_COL = 6;
 export const SUB_HIDDEN_ID_COL = 9;
@@ -1148,6 +1161,37 @@ export function laborBlockId(row: { id?: string; position?: string }, night: boo
   return `${raw}|${night ? "night" : "day"}`;
 }
 
+export function spareLaborRowId(sheetName: string, index: number): string {
+  const slug = sheetName.replace(/[^A-Za-z0-9]+/g, "").toLowerCase();
+  return `${LABOR_SPARE_ID_PREFIX}${slug}-${index + 1}`;
+}
+
+export function isSpareLaborRowId(id: string): boolean {
+  return id.startsWith(LABOR_SPARE_ID_PREFIX);
+}
+
+function spareCrewRow(id: string): CraftRow {
+  return {
+    id,
+    position: "",
+    shift: "Days",
+    st: 0,
+    ot: 0,
+    dt: 0,
+    pd: 0,
+    hours: 0,
+    cost: "",
+    clockOverride: "auto",
+    laborClassOverride: null,
+    ranges: [],
+  };
+}
+
+function jobHoursPerDay(input: EstimateXlsxInput): number {
+  const on = mergeSchedule(input.schedule).phases.find((phase) => phase.on && Number(phase.hoursPerDay) > 0);
+  return Number(on?.hoursPerDay) || 10;
+}
+
 export function laborCalendarDates(input: EstimateXlsxInput): string[] {
   let start = "";
   let stop = "";
@@ -1444,6 +1488,7 @@ function buildCrewSheet(
 ): BuiltSheet | null {
   const live = liveCrewRows(rows);
   if (!live.length) return null;
+  const spareHps = jobHoursPerDay(input);
   const showBillAs = name === ESTIMATE_XLSX_SHEETS.support;
   const dates = laborCalendarDates(input);
   const lastDateCol = dates.length ? colLetter(LABOR_DATE_START_COL + dates.length - 1) : "";
@@ -1505,7 +1550,7 @@ function buildCrewSheet(
     }
 
     pushText(cells, `A${titleRow}`, night ? LABOR_NIGHTSHIFT : LABOR_DAYSHIFT);
-    pushText(cells, `B${titleRow}`, row.position.trim());
+    cells.push({ ref: `B${titleRow}`, type: "text", value: row.position.trim() });
     pushText(cells, `E${titleRow}`, clockPick);
     pushFormula(cells, `${flagCol}${titleRow}`, useStaffExpr);
     if (showBillAs) {
@@ -1543,8 +1588,9 @@ function buildCrewSheet(
     dates.forEach((ymd, index) => {
       const col = colLetter(LABOR_DATE_START_COL + index);
       const plug = laborDayPlug(row, ymd, night, holidays);
+      const hps = plug.hps > 0 ? plug.hps : rowHasPosition(row) ? 0 : spareHps;
       pushNum(cells, `${col}${hcRow}`, plug.hc);
-      pushNum(cells, `${col}${hpsRow}`, plug.hps);
+      pushNum(cells, `${col}${hpsRow}`, hps);
       const priorStRefs = priorWeekStRefs(dates, index, stRow);
       const inPhaseRef = jobDaysRef(index, 2);
       const staffOtRef = jobDaysRef(index, 3);
@@ -1559,7 +1605,7 @@ function buildCrewSheet(
       };
       const desk = deskHours.get(ymd) ?? { st: 0, ot: 0, dt: 0 };
       const hcVal = money(plug.hc);
-      const hpsVal = money(plug.hps);
+      const hpsVal = money(hps);
       const owner = phaseOwningDate(setupPhases, ymd);
       const titleLock = `${clockTitleRef}=${excelTextLiteral(clockTitle(row.position, row.billedAs ?? ""))}`;
       const exported = `AND(${col}${hcRow}=${hcVal},${col}${hpsRow}=${hpsVal},${pickRef}=${excelTextLiteral(clockPick)},${titleLock},${jobSetupExportLock(ymd, owner, inPhaseRef)})`;
@@ -1581,6 +1627,9 @@ function buildCrewSheet(
   }
   for (const row of live) {
     if (rowHasNightBlock(row)) planned.push({ row, night: true });
+  }
+  for (let index = 0; index < ESTIMATE_XLSX_SPARE_POSITIONS; index += 1) {
+    planned.push({ row: spareCrewRow(spareLaborRowId(name, index)), night: false });
   }
   planned.forEach((item, index) => {
     emitBlock(item.row, item.night);

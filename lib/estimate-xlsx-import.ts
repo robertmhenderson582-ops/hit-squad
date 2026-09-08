@@ -6,6 +6,7 @@
 import ExcelJS from "exceljs";
 import {
   blankCraftRow,
+  blankSupportLine,
   CRAFT_SHIFTS,
   hydrateSupportLine,
   hydrateSupportLines,
@@ -51,6 +52,7 @@ import {
   TRAVEL_HIDDEN_ID_COL,
   LABOR_HPS_LABEL,
   clockLabelOverride,
+  isSpareLaborRowId,
   laborBlockId,
   laborDayPlug,
   thirdPartyBucket,
@@ -583,6 +585,14 @@ function parseJobSetupHolidays(ws: ExcelJS.Worksheet): string[] {
   return hydrateHolidays(dates);
 }
 
+/** Live pack blocks always apply. Spare pad applies only when Position / hours / PD is filled. */
+function importedBlockIsLive(block: ImportedBlock): boolean {
+  if (!isSpareLaborRowId(block.id)) return true;
+  if (block.position.trim()) return true;
+  if ((block.billedAs ?? "").trim()) return true;
+  return block.days.some((day) => day.hc > 0 || day.pd > 0 || day.st + day.ot + day.dt > 0);
+}
+
 function parseCraftSheet(ws: ExcelJS.Worksheet | undefined): ImportedBlock[] {
   if (!ws) return [];
   const dates = sheetDates(ws);
@@ -663,7 +673,7 @@ function applyRowFromBlocks(
   const clockOverride = blocks.find((block) => block.clockOverride)?.clockOverride ?? existing.clockOverride ?? "auto";
   return {
     ...existing,
-    id: blocks[0]?.id || existing.id,
+    id: existing.id || blocks[0]?.id,
     position,
     shift: night && day ? "Days & nights" : night ? "Nights" : "Days",
     ranges,
@@ -709,9 +719,14 @@ function applyBlocks(
       const found = findRow(next, group[0].id);
       const lane = found?.lane ?? laneForNewBlock(group[0], sheet);
       lanes.add(lane);
+      const fresh = lane === "support" ? blankSupportLine() : blankCraftRow();
+      const spareNew = !found && isSpareLaborRowId(group[0].id);
+      if (spareNew) {
+        for (const block of group) block.id = fresh.id;
+      }
       const existing = found?.row ?? {
-        ...blankCraftRow(),
-        id: group[0].id,
+        ...fresh,
+        id: spareNew ? fresh.id : group[0].id,
         ranges: storedRangesForRow(storedRanges, group[0].id),
       };
       const row = applyRowFromBlocks(existing, group, phases, holidays);
@@ -931,7 +946,10 @@ export async function parseEstimateXlsx(bytes: Uint8Array): Promise<EstimateImpo
     ESTIMATE_XLSX_SHEETS.direct,
     ESTIMATE_XLSX_SHEETS.support,
   ] as const;
-  const rawBySheet = sheets.map((name) => ({ sheet: name, blocks: parseCraftSheet(wb.getWorksheet(name)) }));
+  const rawBySheet = sheets.map((name) => ({
+    sheet: name,
+    blocks: parseCraftSheet(wb.getWorksheet(name)).filter(importedBlockIsLive),
+  }));
   const typed = applyTypedHourPolicy(rawBySheet.flatMap((item) => item.blocks));
   const bySheet = rawBySheet.map((item) => ({
     sheet: item.sheet,
