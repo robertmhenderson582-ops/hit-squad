@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
+import { canArchiveDeleteJobs } from "@/lib/desk-role";
 import { cookieValue, serverTiming } from "@/lib/http";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { archiveVisiblePack, deleteVisiblePack, getVisiblePack } from "@/lib/estimate-vault";
@@ -25,6 +26,9 @@ export async function GET(request: Request, context: { params: Promise<{ packId:
 export async function PATCH(request: Request, context: { params: Promise<{ packId: string }> }) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!canArchiveDeleteJobs(user)) {
+    return NextResponse.json({ error: "Owner tools stay with the owner." }, { status: 403 });
+  }
   const { packId } = await context.params;
   const body = (await request.json().catch(() => ({}))) as { archived?: boolean };
   if (typeof body.archived !== "boolean") {
@@ -42,6 +46,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ packI
 export async function DELETE(request: Request, context: { params: Promise<{ packId: string }> }) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!canArchiveDeleteJobs(user)) {
+    return NextResponse.json({ error: "Owner tools stay with the owner." }, { status: 403 });
+  }
   const { packId } = await context.params;
   try {
     const result = await deleteVisiblePack(user, packId);

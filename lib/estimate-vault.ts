@@ -1,4 +1,4 @@
-import { isTester } from "./desk-role.ts";
+import { canArchiveDeleteJobs, isTester } from "./desk-role.ts";
 import {
   canReturnPack,
   canSharePack,
@@ -310,6 +310,9 @@ export async function archiveVisiblePack(
   archived: boolean,
   adapter?: DriveAdapter,
 ) {
+  if (!canArchiveDeleteJobs(user)) {
+    return { ok: false as const, status: 403, error: "Owner tools stay with the owner." };
+  }
   const drive = estimateVaultAdapter(adapter);
   const current = drive.configured ? await readDrivePackById(drive, packId) : null;
   if (current && !packVisibleTo(user, current)) {
@@ -327,6 +330,9 @@ export async function archiveVisiblePack(
 }
 
 export async function deleteVisiblePack(user: ScopeUser, packId: string, adapter?: DriveAdapter) {
+  if (!canArchiveDeleteJobs(user)) {
+    return { ok: false as const, status: 403, error: "Owner tools stay with the owner." };
+  }
   const drive = estimateVaultAdapter(adapter);
   const current = drive.configured ? await readDrivePackById(drive, packId) : null;
   if (current && !packVisibleTo(user, current)) {

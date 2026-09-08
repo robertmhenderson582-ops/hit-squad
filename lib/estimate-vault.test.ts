@@ -204,21 +204,35 @@ describe("estimate vault service", () => {
     assert.equal(missing.ok, false);
   });
 
-  it("archives and deletes only the caller's pack and never auto-removes Cat 2", async () => {
+  it("archives and deletes only as the owner and never auto-removes Cat 2", async () => {
     const drive = memoryDrive();
     await upsertVisiblePack(owner, cat2(), drive);
     await upsertVisiblePack(tester, cat2({ packId: "new-nathan1", title: "Nathan trial", ownerEmail: tester.email }), drive);
-    const archived = await archiveVisiblePack(tester, "new-nathan1", true, drive);
-    assert.equal(archived.ok, true);
-    if (archived.ok) assert.equal(archived.pack?.archived, true);
-    const ownerStill = await listVisiblePacks(owner, drive);
-    assert.equal(ownerStill.packs[0]?.packId, "new-cat2pit");
-    assert.equal(ownerStill.packs[0]?.archived, false);
+    const testerArchive = await archiveVisiblePack(tester, "new-nathan1", true, drive);
+    assert.equal(testerArchive.ok, false);
+    if (!testerArchive.ok) {
+      assert.equal(testerArchive.status, 403);
+      assert.equal(testerArchive.error, "Owner tools stay with the owner.");
+    }
+    const testerRestore = await archiveVisiblePack(tester, "new-nathan1", false, drive);
+    assert.equal(testerRestore.ok, false);
+    if (!testerRestore.ok) assert.equal(testerRestore.status, 403);
+    const testerDelete = await deleteVisiblePack(tester, "new-nathan1", drive);
+    assert.equal(testerDelete.ok, false);
+    if (!testerDelete.ok) assert.equal(testerDelete.status, 403);
     const stealDelete = await deleteVisiblePack(joseph, "new-cat2pit", drive);
     assert.equal(stealDelete.ok, false);
     const stealArchive = await archiveVisiblePack(shane, "new-cat2pit", true, drive);
     assert.equal(stealArchive.ok, false);
-    const removed = await deleteVisiblePack(tester, "new-nathan1", drive);
+    const archived = await archiveVisiblePack(owner, "new-nathan1", true, drive);
+    assert.equal(archived.ok, true);
+    if (archived.ok) assert.equal(archived.pack?.archived, true);
+    const ownerStill = await listVisiblePacks(owner, drive);
+    assert.equal(ownerStill.packs.find((row) => row.packId === "new-cat2pit")?.archived, false);
+    const restored = await archiveVisiblePack(owner, "new-nathan1", false, drive);
+    assert.equal(restored.ok, true);
+    if (restored.ok) assert.equal(restored.pack?.archived, false);
+    const removed = await deleteVisiblePack(owner, "new-nathan1", drive);
     assert.equal(removed.ok, true);
     if (removed.ok) assert.equal(removed.deleted, true);
     assert.equal((await listVisiblePacks(tester, drive)).packs.length, 0);
