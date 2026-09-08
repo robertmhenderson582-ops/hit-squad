@@ -26,11 +26,11 @@ import {
   BOILER17_SITE_ID,
   BOILER17_STATUS,
   BOILER17_TITLE,
+  boiler17NeedsB1Fill,
   isBoiler17PackId,
 } from "./boiler-17.ts";
 import { blankCraftRow, hydrateSupportLines, type CalendarRange, type CraftRow } from "./craft-labor.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
-import { crewHasRows } from "./estimate-pack.ts";
 import type { EstimateXlsxCrew } from "./estimate-xlsx.ts";
 import { computeRowHours } from "./hours-clock.ts";
 const HIS_BOILER17_FILE_ID = "1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y";
@@ -520,14 +520,34 @@ export function boiler17B1FilledSnapshot(
   };
 }
 
-/** Fill empty Boiler 17 crew / smashed 2026 seed clock from the official B-1 extract. */
-export function shouldFillBoiler17B1Crew(pack?: { packId?: string; crew?: unknown; schedule?: unknown } | null) {
-  if (!isBoiler17PackId(pack?.packId)) return false;
-  return !crewHasRows(pack?.crew);
+/** Fill empty Boiler 17 crew / smashed 2026-08-21 demo clock from the official B-1 extract. */
+export function shouldFillBoiler17B1Crew(
+  pack?: { packId?: string; title?: string; code?: string; crew?: unknown; schedule?: unknown } | null,
+) {
+  return boiler17NeedsB1Fill(pack);
+}
+
+/** Overlay official B-1 crew + Job setup. Keep live identity, JN, and Cost notes. */
+export function fillBoiler17FromB1(live: EstimatePackSnapshot): EstimatePackSnapshot {
+  const filled = boiler17B1FilledSnapshot({
+    createdAt: live.createdAt,
+    ownerEmail: live.ownerEmail,
+    jobMeta: live.jobMeta,
+    costReport: live.costReport,
+  });
+  return {
+    ...live,
+    schedule: filled.schedule ?? live.schedule,
+    crew: filled.crew ?? live.crew,
+    otherCost: filled.otherCost ?? live.otherCost,
+    jobMeta: filled.jobMeta ?? live.jobMeta,
+    costReport: filled.costReport ?? live.costReport,
+    updatedAt: Math.max(live.updatedAt || 0, filled.updatedAt || 0, Date.now()),
+  };
 }
 
 export const WOOD_RIVER_B1_VAULT_APPLY =
-  "Owner OAuth vault write: open Boiler 17 so wake seeds the filled pack, then Save. overwriteEstimateInDrive writes wood-river-boiler-17-2026.json (1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y). Service-account-only isolates cannot PATCH that file — same helper Rodeo/Monroe wake uses. Do not commit the xlsx.";
+  "Open Boiler 17 on the owner desk while Drive OAuth is live. Empty / 8-21 smashed vault crew is replaced by the official B-1 fill and overwriteEstimateInDrive PATCHes wood-river-boiler-17-2026.json (1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y). Service-account-only isolates cannot PATCH that file — same helper Rodeo/Monroe wake uses. Do not commit the xlsx. If OAuth is off, the desk still paints B-1 locally; reopen once with OAuth to heal the vault.";
 
 export function boiler17VaultFileId() {
   return HIS_BOILER17_FILE_ID;

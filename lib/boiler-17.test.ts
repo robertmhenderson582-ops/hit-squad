@@ -9,6 +9,7 @@ import {
   BOILER17_PACK_ID,
   BOILER17_STATUS,
   BOILER17_TITLE,
+  boiler17NeedsB1Fill,
   boiler17WorkingFigure,
   checkMikeCppr108451,
   defaultStatusForBoiler17,
@@ -113,6 +114,8 @@ describe("Wood River Boiler 17 Locked wake", () => {
     const doc = readFileSync(fileURLToPath(new URL("../docs/boiler-17-work-folder.md", import.meta.url)), "utf8");
     assert.match(doc, /1sMay67BNvtkW6fFLygPtymnIkFqrvvHT/);
     assert.match(doc, /108451/);
+    assert.match(doc, /Drive OAuth is live/);
+    assert.match(doc, /1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y/);
     assert.equal(/\.(xlsx|xls)\n/.test(doc), false);
     assert.equal(isAromaticsIdentity({ packId: HIS_AROMATICS_PACK_ID, title: "2027 Aromatics Turnaround" }), true);
   });
@@ -132,5 +135,25 @@ describe("Wood River Boiler 17 Locked wake", () => {
     assert.equal(HIS_AROMATICS_FREEZE_FILE_ID, "1yMOHR4ES9Ba7Y0G5C2wFcpwH34i0sJ7m");
     assert.equal(painted.some((row) => row.packId === HIS_AROMATICS_PACK_ID), true);
     assert.equal(painted.some((row) => row.packId === HIS_CAT2_PACK_ID), true);
+  });
+
+  it("treats empty crew and the 8-21 demo clock as a B-1 fill", () => {
+    assert.equal(boiler17NeedsB1Fill({ packId: BOILER17_PACK_ID, crew: { staff: [], direct: [] } }), true);
+    assert.equal(
+      boiler17NeedsB1Fill({
+        packId: BOILER17_PACK_ID,
+        crew: { staff: [{ id: "st-1" }] },
+        schedule: { projectStart: "2026-08-21", phases: [] },
+      }),
+      true,
+    );
+    assert.equal(
+      boiler17NeedsB1Fill({
+        packId: HIS_AROMATICS_PACK_ID,
+        title: "2027 Aromatics Turnaround",
+        crew: { staff: [] },
+      }),
+      false,
+    );
   });
 });

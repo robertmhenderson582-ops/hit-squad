@@ -65,6 +65,8 @@ Numeric Misc / heat / staff travel seed Other Cost. Craft PD $228,150 and Staff 
 
 ### Owner vault apply
 
-Opening Jobs → Boiler 17 seeds the filled pack locally. Production Drive write uses the same `overwriteEstimateInDrive` helper as Rodeo / Monroe wake and needs owner OAuth. Service-account-only isolates cannot PATCH `1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y`. Mike CPPR May notes stay on Cost.
+Live vault `wood-river-boiler-17-2026.json` (`1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y`) can still be an empty / 8-21 smashed leftover (crew arrays empty, `projectStart: 2026-08-21`, JN 108451 + Mike CPPR notes). Opening Boiler 17 always applies the official B-1 five-card fill (Job setup 2026-08-10 → 2026-12-06). Empty Drive crew cannot overwrite a filled local pack and cannot flush back.
+
+**Robert still needs:** open Jobs → Boiler 17 on hitsquad-desk while **Drive OAuth is live** (owner session). First successful fill PATCHes the vault via `overwriteEstimateInDrive`. Service-account-only isolates cannot PATCH that file — same helper Rodeo / Monroe wake uses. If OAuth is off, the desk still paints B-1 locally; reopen once with OAuth to heal the Drive file. Do not commit the xlsx. Mike CPPR May notes stay on Cost.
 
 Aromatics and Cat 2 stay on the vault. This pack is additional true-material.

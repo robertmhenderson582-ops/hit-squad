@@ -12,12 +12,14 @@ import {
   crewHasCustomClock,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
+import { boiler17NeedsB1Fill, isBoiler17Identity } from "./boiler-17.ts";
 import {
   applyHisIdentity,
   HIS_AROMATICS_FILE_ID,
   HIS_AROMATICS_FREEZE_FILE_ID,
   HIS_AROMATICS_PACK_ID,
   HIS_AROMATICS_STUB_ID,
+  HIS_BOILER17_FILE_ID,
   HIS_TM_FILE_ID,
   hisFileForPackId,
   hisKnownEstimateFiles,
@@ -25,6 +27,7 @@ import {
   NATHAN_DESK_EMAIL,
 } from "./his-wood-river.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
+import { fillBoiler17FromB1 } from "./wood-river-b1.ts";
 
 export type DriveFile = {
   id: string;
@@ -810,6 +813,31 @@ async function writeAromaticsLiveRestore(adapter: DriveAdapter, restored: Estima
   }
 }
 
+function isBoiler17LiveTarget(fileId: string | undefined, pack: EstimatePackSnapshot) {
+  return fileId === HIS_BOILER17_FILE_ID || isBoiler17Identity(pack);
+}
+
+async function writeBoiler17LiveRestore(adapter: DriveAdapter, restored: EstimatePackSnapshot) {
+  await overwriteEstimateInDrive(adapter, restored);
+}
+
+async function restoreBoiler17IfEmpty(
+  adapter: DriveAdapter,
+  pack: EstimatePackSnapshot,
+  fileId: string,
+): Promise<EstimatePackSnapshot> {
+  if (!isBoiler17LiveTarget(fileId, pack)) return pack;
+  if (!boiler17NeedsB1Fill(pack) && !packClockIsSeedSmashed(pack)) return pack;
+  const filled = fillBoiler17FromB1(pack);
+  if (boiler17NeedsB1Fill(filled)) return pack;
+  try {
+    await writeBoiler17LiveRestore(adapter, filled);
+  } catch {
+    // Jobs list/open still returns the B-1 fill. Empty flush stays blocked.
+  }
+  return filled;
+}
+
 async function restoreAromaticsClockIfSmashed(
   adapter: DriveAdapter,
   pack: EstimatePackSnapshot,
@@ -826,6 +854,14 @@ async function restoreAromaticsClockIfSmashed(
     // Jobs list/open still returns the freeze restore. Smash flush stays blocked.
   }
   return restored;
+}
+
+function packForBoiler17Write(pack: EstimatePackSnapshot, fileId: string | undefined): EstimatePackSnapshot | null {
+  if (!isBoiler17LiveTarget(fileId, pack)) return pack;
+  if (!boiler17NeedsB1Fill(pack) && !packClockIsSeedSmashed(pack)) return pack;
+  const filled = fillBoiler17FromB1(pack);
+  if (boiler17NeedsB1Fill(filled)) return null;
+  return filled;
 }
 
 /** Auto-restore smashed Aromatics, or refuse the write so seed smash cannot persist. Never target the freeze file. */
@@ -851,7 +887,13 @@ export async function readDrivePackById(
   if (!file) return null;
   const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
   if (!parsed.ok) return null;
-  return publicPack(await restoreAromaticsClockIfSmashed(adapter, parsed.pack, file.id));
+  return publicPack(
+    await restoreBoiler17IfEmpty(
+      adapter,
+      await restoreAromaticsClockIfSmashed(adapter, parsed.pack, file.id),
+      file.id,
+    ),
+  );
 }
 
 export async function deleteEstimateInDrive(
@@ -888,9 +930,13 @@ async function writePackFile(
       ? existing
       : knownHisFile(pack.packId);
   if (target?.id === HIS_AROMATICS_FREEZE_FILE_ID) target = knownHisFile(pack.packId);
-  const outgoing = await packForAromaticsWrite(adapter, pack, target?.id);
-  if (!outgoing) {
+  const aromatics = await packForAromaticsWrite(adapter, pack, target?.id);
+  if (!aromatics) {
     throw new Error("AROMATICS_SEED_SMASH");
+  }
+  const outgoing = packForBoiler17Write(aromatics, target?.id);
+  if (!outgoing) {
+    throw new Error("BOILER17_EMPTY_CREW");
   }
   const ownerEmail = outgoing.ownerEmail.trim().toLowerCase() || pack.ownerEmail.trim().toLowerCase();
   const payload = JSON.stringify(publicPack({ ...outgoing, ownerEmail }), null, 2);
@@ -972,7 +1018,11 @@ export async function listDrivePacks(adapter: DriveAdapter, folderId = estimates
     try {
       const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
       if (parsed.ok) {
-        const pack = await restoreAromaticsClockIfSmashed(adapter, reclaimListedPack(parsed.pack), file.id);
+        const pack = await restoreBoiler17IfEmpty(
+          adapter,
+          await restoreAromaticsClockIfSmashed(adapter, reclaimListedPack(parsed.pack), file.id),
+          file.id,
+        );
         packs.push(pack);
       }
     } catch {
@@ -992,5 +1042,11 @@ export async function readDrivePack(
   if (!file) return null;
   const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(file.id)));
   if (!parsed.ok) return null;
-  return publicPack(await restoreAromaticsClockIfSmashed(adapter, parsed.pack, file.id));
+  return publicPack(
+    await restoreBoiler17IfEmpty(
+      adapter,
+      await restoreAromaticsClockIfSmashed(adapter, parsed.pack, file.id),
+      file.id,
+    ),
+  );
 }

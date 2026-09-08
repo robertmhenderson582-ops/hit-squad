@@ -7,6 +7,7 @@
  */
 
 import { clampEstimateStatus, parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
+import { scheduleIsDemoSeedClock } from "./phase-schedule.ts";
 import {
   OFFICIAL_BOILER17_B1_REVISION_ID,
   OFFICIAL_BOILER17_B1_REVISION_NAME,
@@ -52,6 +53,32 @@ export function isBoiler17Identity(pack?: { packId?: string; title?: string; cod
   if (code === BOILER17_JOB_CODE) return true;
   const title = titleKey(pack.title);
   return Boolean(title && (title === titleKey(BOILER17_TITLE) || /\bboiler\s*17\b/.test(title)));
+}
+
+const CREW_LANES = ["staff", "generalForeman", "foreman", "direct", "support"] as const;
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+export function boiler17CrewHasRows(crew: unknown) {
+  const row = asRecord(crew);
+  if (!row) return false;
+  return CREW_LANES.some((lane) => Array.isArray(row[lane]) && row[lane].length > 0);
+}
+
+/**
+ * Empty vault crew, or the smashed 2026-08-21 demo clock.
+ * Official B-1 Job setup is 2026-08-10 → 2026-12-06 — never keep 8/21 seed.
+ */
+export function boiler17NeedsB1Fill(
+  pack?: { packId?: string; title?: string; code?: string; crew?: unknown; schedule?: unknown } | null,
+) {
+  if (!isBoiler17Identity(pack)) return false;
+  if (!boiler17CrewHasRows(pack?.crew)) return true;
+  return scheduleIsDemoSeedClock(pack?.schedule);
 }
 
 export function defaultStatusForBoiler17(

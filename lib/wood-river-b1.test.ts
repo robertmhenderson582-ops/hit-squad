@@ -7,20 +7,31 @@ import { isAromaticsIdentity } from "./aromatics-freeze.ts";
 import {
   BOILER17_CLIENT,
   BOILER17_COST_NOTE,
+  BOILER17_JOB_NUMBER,
   BOILER17_PACK_ID,
   BOILER17_SITE,
+  boiler17NeedsB1Fill,
   checkMikeCppr108451,
 } from "./boiler-17.ts";
 import { classifyFromSheetsAndName, CLIENT_FACE_MAPPER_SPEC, shouldStageClientWorkbook } from "./client-estimate-ingest.ts";
 import { CREW_LANES } from "./crew-lanes.ts";
-import { crewHasRows } from "./estimate-pack.ts";
 import { packSnapshotToXlsxInput } from "./estimate-pack-xlsx.ts";
 import { estimateTabIdsForSite } from "./estimate-tabs.ts";
+import {
+  applyPackToStore,
+  collectPack,
+  crewHasRows,
+  mergeVaultIntoLocal,
+  packClockIsSeedSmashed,
+  pickPack,
+  type EstimatePackSnapshot,
+} from "./estimate-pack.ts";
 import { applyEstimateImport, createPackFromImport, parseEstimateXlsx } from "./estimate-xlsx-import.ts";
 import { ESTIMATE_XLSX_SHEETS, LABOR_BLOCK_ID_COL, LABOR_HPS_TYPE, estimateToXlsx } from "./estimate-xlsx.ts";
 import { HIS_AROMATICS_PACK_ID, persistHisWoodRiverCards } from "./his-wood-river.ts";
-import { CREW_STORE_PREFIX, isDefaultSeedSchedule, PHASE_IDS, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
-import { readStoreJson, storageKeyForPack, type StorageLike } from "./local-estimates.ts";
+import { COST_REPORT_STORE_PREFIX } from "./cost-report-prefix.ts";
+import { CREW_STORE_PREFIX, defaultPhaseSchedule, isDefaultSeedSchedule, PHASE_IDS, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
+import { readStoreJson, rememberLocalPack, storageKeyForPack, type StorageLike } from "./local-estimates.ts";
 import { BOILER17_B1_GOLDEN } from "./wake-golden.ts";
 import {
   b1LaneFor,
@@ -29,8 +40,10 @@ import {
   checkBoiler17OfficialHours,
   checkBoiler17PackHours,
   classicB1LaborSheet,
+  fillBoiler17FromB1,
   ingestFromFixture,
   loadBoiler17B1Fixture,
+  shouldFillBoiler17B1Crew,
   WOOD_RIVER_B1_WINDOW_END,
   WOOD_RIVER_B1_WINDOW_START,
 } from "./wood-river-b1.ts";
@@ -100,9 +113,12 @@ describe("wood-river-b1 ingest", () => {
     assert.doesNotMatch(src, /from ["']node:(fs|url|path)["']|from ["']exceljs["']/);
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
     const modal = readFileSync(fileURLToPath(new URL("../components/NewEstimateModal.tsx", import.meta.url)), "utf8");
+    const packUi = readFileSync(fileURLToPath(new URL("../components/EstimatePackage.tsx", import.meta.url)), "utf8");
     assert.match(workspace, /wood-river-b1-xlsx/);
     assert.match(modal, /wood-river-b1-xlsx/);
     assert.doesNotMatch(workspace, /from ["']@\/lib\/wood-river-b1["']/);
+    assert.match(packUi, /seedBoiler17LocalDefaults[\s\S]*const next = readSchedule\(estimateKey\)/);
+    assert.match(packUi, /isBoiler17PackId\(packId\) \|\| !\(hasLocal \|\| vaultListHydratePending\(\)\)/);
   });
 
   it("maps classic B-1 sheets onto the five desk cards", () => {
@@ -256,5 +272,95 @@ describe("wood-river-b1 ingest", () => {
     assert.equal(Math.round(upHours.foremenHours), 2134);
     assert.equal(Math.round(upHours.supportHours), 2428);
     assert.equal(up.schedule && "projectStart" in up.schedule && up.schedule.projectStart, WOOD_RIVER_B1_WINDOW_START);
+  });
+
+  function emptyBoiler17Vault(over: Partial<EstimatePackSnapshot> = {}): EstimatePackSnapshot {
+    return {
+      packId: BOILER17_PACK_ID,
+      key: `new:${BOILER17_PACK_ID}`,
+      title: "Boiler 17 2026",
+      client: BOILER17_CLIENT,
+      site: BOILER17_SITE,
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 99_000,
+      ownerEmail: "nathanboyte@gmail.com",
+      status: "Locked",
+      schedule: defaultPhaseSchedule(),
+      crew: { staff: [], generalForeman: [], foreman: [], direct: [], support: [] },
+      jobMeta: { jobNumber: BOILER17_JOB_NUMBER, area: "Boiler 17" },
+      costReport: { statusDate: "2026-05-30", notes: BOILER17_COST_NOTE },
+      ...over,
+    };
+  }
+
+  it("empty Drive / smashed 8-21 vault cannot leave Boiler 17 without typed B-1 crew hours", () => {
+    const vault = emptyBoiler17Vault();
+    assert.equal(shouldFillBoiler17B1Crew(vault), true);
+    assert.equal(boiler17NeedsB1Fill(vault), true);
+    assert.equal(packClockIsSeedSmashed(vault), true);
+    assert.equal((vault.schedule as { projectStart?: string }).projectStart, "2026-08-21");
+
+    const pickedEmpty = pickPack(null, vault);
+    assert.equal(checkBoiler17PackHours(pickedEmpty?.crew as never).ok, true);
+    assert.equal((pickedEmpty?.schedule as { projectStart?: string }).projectStart, WOOD_RIVER_B1_WINDOW_START);
+    assert.equal(checkMikeCppr108451(pickedEmpty?.costReport as { notes?: string; statusDate?: string }).ok, true);
+
+    const localFilled = boiler17B1FilledSnapshot({
+      createdAt: 1,
+      updatedAt: 100,
+      costReport: vault.costReport,
+    });
+    const newerEmpty = emptyBoiler17Vault({ updatedAt: 500_000 });
+    const kept = pickPack(localFilled, newerEmpty);
+    assert.equal(checkBoiler17PackHours(kept?.crew as never).ok, true);
+    assert.equal((kept?.schedule as { projectStart?: string }).projectStart, WOOD_RIVER_B1_WINDOW_START);
+    assert.equal(checkMikeCppr108451(kept?.costReport as { notes?: string; statusDate?: string }).ok, true);
+
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: BOILER17_PACK_ID,
+        title: "Boiler 17 2026",
+        client: BOILER17_CLIENT,
+        site: BOILER17_SITE,
+        ownerEmail: "nathanboyte@gmail.com",
+        status: "Locked",
+      },
+      store,
+    );
+    applyPackToStore(store, localFilled);
+    mergeVaultIntoLocal(store, newerEmpty);
+    const after = collectPack(store, BOILER17_PACK_ID);
+    assert.equal(checkBoiler17PackHours(after?.crew as never).ok, true);
+    assert.equal(isDefaultSeedSchedule(after?.schedule), false);
+    assert.equal(checkMikeCppr108451(after?.costReport as { notes?: string; statusDate?: string }).ok, true);
+
+    const emptyDevice = memoryStore();
+    assert.equal(mergeVaultIntoLocal(emptyDevice, vault), "vault");
+    const opened = collectPack(emptyDevice, BOILER17_PACK_ID);
+    assert.equal(checkBoiler17PackHours(opened?.crew as never).ok, true);
+    assert.equal((opened?.schedule as { projectStart?: string }).projectStart, WOOD_RIVER_B1_WINDOW_START);
+    const fixture = loadBoiler17B1Fixture();
+    const hours = boiler17HoursFromCrew(opened?.crew as never);
+    assert.equal(Math.round(hours.staffHours), fixture.typedHours.staffPlusGfHours);
+    assert.equal(Math.round(hours.foremenHours), fixture.typedHours.foremenHours);
+    assert.equal(Math.round(hours.directHours), fixture.typedHours.directHours);
+    assert.equal(Math.round(hours.supportHours), fixture.typedHours.supportHours);
+
+    const smashedClock = emptyBoiler17Vault({
+      crew: { staff: [{ id: "stub", ranges: [{ start: "2026-08-21", end: "2026-08-21" }] }] },
+    });
+    assert.equal(shouldFillBoiler17B1Crew(smashedClock), true);
+    const healed = fillBoiler17FromB1(smashedClock);
+    assert.equal(checkBoiler17PackHours(healed.crew as never).ok, true);
+    assert.equal(isAromaticsIdentity({ packId: HIS_AROMATICS_PACK_ID, title: "2027 Aromatics Turnaround" }), true);
+    assert.equal(isAromaticsIdentity({ packId: BOILER17_PACK_ID, title: "Boiler 17 2026" }), false);
+    assert.notEqual(BOILER17_PACK_ID, HIS_AROMATICS_PACK_ID);
+
+    persistHisWoodRiverCards(store);
+    const key = storageKeyForPack(BOILER17_PACK_ID);
+    const book = readStoreJson(store, `${COST_REPORT_STORE_PREFIX}${key}`);
+    assert.equal(checkMikeCppr108451(book as { notes?: string; statusDate?: string }).ok, true);
   });
 });
