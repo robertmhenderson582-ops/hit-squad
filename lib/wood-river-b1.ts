@@ -8,15 +8,15 @@
  * Numeric Summary / Misc lines (PD face, materials, heat, staff travel)
  * may seed Other Cost. Excel binaries stay on Drive.
  *
+ * Client-safe: static JSON fixture only. Workbook parse lives in wood-river-b1-xlsx.ts.
+ *
  * Owner lock 2026-09-07: same Wood River five-card calendar desk as
  * Aromatics / CAT 2. Rodeo / Ferndale stay additive tabs — not a different
  * crew layout. Ranges are Hit Squad phase stacks so export/import UP→DOWN
  * round-trips through estimate-xlsx (hidden ids, Hours/shift).
  */
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import ExcelJS from "exceljs";
+import boiler17B1CrewJson from "./wake-golden/boiler17-b1-crew.json" with { type: "json" };
 import {
   BOILER17_CLIENT,
   BOILER17_COST_NOTE,
@@ -45,7 +45,6 @@ import {
   type PhaseScheduleState,
 } from "./phase-schedule.ts";
 import { SHAHAN_CRAFT_PD, SHAHAN_STAFF_PD } from "./shahan-wood-river.ts";
-import { OFFICIAL_BOILER17_B1_REVISION_ID, OFFICIAL_BOILER17_B1_REVISION_NAME } from "./work-folder.ts";
 
 const GOLDEN_HOURS_TOL = 1;
 
@@ -64,8 +63,6 @@ const OFFICIAL_SUMMARY_HOURS = {
 export const WOOD_RIVER_B1_WINDOW_START = "2026-08-10";
 export const WOOD_RIVER_B1_WINDOW_END = "2026-12-06";
 export const WOOD_RIVER_B1_DATE_COL = 12;
-
-const FIXTURE_URL = new URL("./wake-golden/boiler17-b1-crew.json", import.meta.url);
 
 export type B1Lane = "staff" | "generalForeman" | "foreman" | "direct" | "support";
 
@@ -142,13 +139,8 @@ export type WoodRiverB1Ingest = {
   };
 };
 
-let cachedFixture: WoodRiverB1Fixture | null = null;
-
 export function loadBoiler17B1Fixture(): WoodRiverB1Fixture {
-  if (cachedFixture) return cachedFixture;
-  const raw = JSON.parse(readFileSync(fileURLToPath(FIXTURE_URL), "utf8")) as WoodRiverB1Fixture;
-  cachedFixture = raw;
-  return raw;
+  return boiler17B1CrewJson as WoodRiverB1Fixture;
 }
 
 function sheetKey(name: string) {
@@ -174,57 +166,6 @@ export function classicB1LaborSheet(name: string): "staff" | "foremen" | "direct
   if (key === "direct") return "direct";
   if (key === "support") return "support";
   return null;
-}
-
-function asNum(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim() && !value.trim().startsWith("=")) {
-    const next = Number(value.replace(/[$,]/g, "").trim());
-    return Number.isFinite(next) ? next : 0;
-  }
-  if (value && typeof value === "object" && "result" in value) return asNum((value as { result: unknown }).result);
-  return 0;
-}
-
-function asText(value: unknown): string {
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  if (value && typeof value === "object" && "result" in value) return asText((value as { result: unknown }).result);
-  return "";
-}
-
-function cellYmd(value: unknown): string {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return formatYmd(value);
-  if (typeof value === "number" && value > 30000) {
-    const date = new Date(Date.UTC(1899, 11, 30) + value * 86400000);
-    return formatYmd(new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  }
-  return "";
-}
-
-function ymdAdd(start: string, days: number) {
-  const date = parseYmd(start);
-  if (!date) return "";
-  date.setDate(date.getDate() + days);
-  return formatYmd(date);
-}
-
-function laborDates(ws: ExcelJS.Worksheet): string[] {
-  for (const row of [6, 5, 1]) {
-    const first = cellYmd(ws.getCell(row, WOOD_RIVER_B1_DATE_COL).value);
-    if (first) {
-      return Array.from({ length: 119 }, (_, index) => ymdAdd(first, index)).filter(Boolean);
-    }
-  }
-  return Array.from({ length: 119 }, (_, index) => ymdAdd(WOOD_RIVER_B1_WINDOW_START, index)).filter(Boolean);
-}
-
-function nightAfterRow(ws: ExcelJS.Worksheet, stRow: number) {
-  for (let row = 1; row <= stRow; row += 1) {
-    const label = asText(ws.getCell(row, 3).value).replace(/\s+/g, "");
-    if (/nightshift/i.test(label)) return true;
-  }
-  return false;
 }
 
 function compressPlugs(
@@ -285,67 +226,10 @@ function runsFrom(
   return ranges;
 }
 
-function parseLaborSheet(ws: ExcelJS.Worksheet, sheet: "staff" | "foremen" | "direct" | "support"): B1FixturePosition[] {
-  const dates = laborDates(ws);
-  const positions: B1FixturePosition[] = [];
-  const last = Math.max(ws.rowCount || 7, 7);
-  for (let row = 7; row <= last; row += 1) {
-    if (asText(ws.getCell(row, 7).value).toUpperCase() !== "ST") continue;
-    const title = asText(ws.getCell(row, 3).value);
-    const hcRow = row - 2;
-    const hpsRow = row - 1;
-    const pdRow = row + 3;
-    const plugs: Array<{ ymd: string; hc: number; hps: number; pd: number }> = [];
-    let hours = 0;
-    let pdDays = 0;
-    dates.forEach((ymd, index) => {
-      const col = WOOD_RIVER_B1_DATE_COL + index;
-      const hc = asNum(ws.getCell(hcRow, col).value);
-      const hps = asNum(ws.getCell(hpsRow, col).value);
-      const pd = asNum(ws.getCell(pdRow, col).value);
-      if (hc > 0 || pd > 0) {
-        plugs.push({ ymd, hc, hps, pd });
-        hours += hc * hps;
-        pdDays += pd;
-      }
-    });
-    if (!plugs.length) continue;
-    const nameRaw = asText(ws.getCell(row + 4, 3).value);
-    const name = nameRaw.startsWith("=") ? "" : nameRaw;
-    const lane = b1LaneFor(sheet, title);
-    positions.push({
-      sheet,
-      lane,
-      position: title || "Empty",
-      night: nightAfterRow(ws, row),
-      name,
-      ranges: compressPlugs(plugs),
-      hours,
-      pdDays,
-    });
-  }
-  return positions;
-}
-
-function parseSummaryHours(ws: ExcelJS.Worksheet | undefined): Boiler17B1Hours | null {
-  if (!ws) return null;
-  const directHours = asNum(ws.getCell("C8").value);
-  const foremenHours = asNum(ws.getCell("C9").value);
-  const supportHours = asNum(ws.getCell("C10").value);
-  const staffHours = asNum(ws.getCell("C17").value);
-  if (!directHours && !staffHours) return null;
-  return {
-    directHours,
-    foremenHours,
-    supportHours,
-    targetCraftHours: directHours + foremenHours + supportHours,
-    staffHours,
-    craftPerDiem: asNum(ws.getCell("D12").value),
-    materials: asNum(ws.getCell("D13").value) || 104100,
-    heatInduction: asNum(ws.getCell("D15").value),
-    staffPerDiem: asNum(ws.getCell("D18").value),
-    staffTravel: asNum(ws.getCell("D20").value),
-  };
+export function compressB1Plugs(
+  plugs: Array<{ ymd: string; hc: number; hps: number; pd: number }>,
+): B1CompressedRange[] {
+  return compressPlugs(plugs);
 }
 
 export function boiler17B1Schedule(): PhaseScheduleState {
@@ -554,31 +438,6 @@ export function ingestFromFixture(fixture: WoodRiverB1Fixture = loadBoiler17B1Fi
       craftPerDiemRate: SHAHAN_CRAFT_PD,
     },
   };
-}
-
-export async function ingestWoodRiverB1(bytes: Uint8Array, fileName = ""): Promise<WoodRiverB1Ingest> {
-  void fileName;
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(bytes as unknown as ArrayBuffer);
-  const positions: B1FixturePosition[] = [];
-  for (const ws of wb.worksheets) {
-    const sheet = classicB1LaborSheet(ws.name);
-    if (!sheet) continue;
-    positions.push(...parseLaborSheet(ws, sheet));
-  }
-  const summary =
-    parseSummaryHours(wb.worksheets.find((sheet) => /summary/i.test(sheet.name))) ?? loadBoiler17B1Fixture().summaryHours;
-  const fixture: WoodRiverB1Fixture = {
-    extractedFrom: "drive-text",
-    officialRevisionId: OFFICIAL_BOILER17_B1_REVISION_ID,
-    officialRevisionName: fileName || OFFICIAL_BOILER17_B1_REVISION_NAME,
-    window: { start: WOOD_RIVER_B1_WINDOW_START, end: WOOD_RIVER_B1_WINDOW_END },
-    summaryHours: summary,
-    typedHours: typedHoursFromPositions(positions),
-    misc: loadBoiler17B1Fixture().misc,
-    positions,
-  };
-  return ingestFromFixture(fixture);
 }
 
 export function boiler17HoursFromCrew(

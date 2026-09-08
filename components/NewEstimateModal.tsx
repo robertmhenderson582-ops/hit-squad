@@ -16,7 +16,7 @@ import { BOILER17_PACK_ID } from "@/lib/boiler-17";
 import { classifyEstimateWorkbook, CLIENT_TEMPLATE_STAGED, shouldStageClientWorkbook } from "@/lib/client-estimate-ingest";
 import { newEstimatePackId } from "@/lib/estimate-open";
 import { scheduleVaultUpsert } from "@/lib/estimate-vault-client";
-import { boiler17B1FilledSnapshot, ingestWoodRiverB1 } from "@/lib/wood-river-b1";
+import { boiler17B1FilledSnapshot } from "@/lib/wood-river-b1";
 
 const CLIENTS = ["Phillips 66", "Georgia Power", "Monroe Energy", "Shop"];
 const SITES = [
@@ -110,6 +110,7 @@ export function NewEstimateModal({
       const bytes = new Uint8Array(await file.arrayBuffer());
       const classified = await classifyEstimateWorkbook(bytes, file.name);
       if (classified.kind === "wood-river-b1") {
+        const { ingestWoodRiverB1 } = await import("@/lib/wood-river-b1-xlsx");
         const ingested = await ingestWoodRiverB1(bytes, file.name);
         const pack = boiler17B1FilledSnapshot({ ownerEmail: lens?.email || "" }, ingested);
         applyPackToStore(window.localStorage, pack);

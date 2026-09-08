@@ -46,7 +46,6 @@ import {
   shouldStageClientWorkbook,
   type ClientWorkbookClass,
 } from "@/lib/client-estimate-ingest";
-import { ingestWoodRiverB1 } from "@/lib/wood-river-b1";
 import { siteIdFromSite } from "@/lib/local-estimates";
 import type { EstimateStatus } from "@/lib/estimate-status";
 import { readOtherCost, syncOtherCostTravel, type OtherCostSheet } from "@/lib/other-cost";
@@ -201,6 +200,7 @@ export function EstimateWorkspace({
       const bytes = new Uint8Array(await file.arrayBuffer());
       const classified = await classifyEstimateWorkbook(bytes, file.name);
       if (classified.kind === "wood-river-b1") {
+        const { ingestWoodRiverB1 } = await import("@/lib/wood-river-b1-xlsx");
         const ingested = await ingestWoodRiverB1(bytes, file.name);
         setPendingClientFace(null);
         setPendingImport({

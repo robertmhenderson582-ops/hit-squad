@@ -30,11 +30,11 @@ import {
   checkBoiler17PackHours,
   classicB1LaborSheet,
   ingestFromFixture,
-  ingestWoodRiverB1,
   loadBoiler17B1Fixture,
   WOOD_RIVER_B1_WINDOW_END,
   WOOD_RIVER_B1_WINDOW_START,
 } from "./wood-river-b1.ts";
+import { ingestWoodRiverB1 } from "./wood-river-b1-xlsx.ts";
 
 function memoryStore(seed: Record<string, string> = {}): StorageLike {
   const data = { ...seed };
@@ -94,6 +94,17 @@ async function miniB1Bytes() {
 }
 
 describe("wood-river-b1 ingest", () => {
+  it("client wake module loads the fixture as static JSON and never touches node:fs", () => {
+    const src = readFileSync(fileURLToPath(new URL("./wood-river-b1.ts", import.meta.url)), "utf8");
+    assert.match(src, /wake-golden\/boiler17-b1-crew\.json/);
+    assert.doesNotMatch(src, /from ["']node:(fs|url|path)["']|from ["']exceljs["']/);
+    const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
+    const modal = readFileSync(fileURLToPath(new URL("../components/NewEstimateModal.tsx", import.meta.url)), "utf8");
+    assert.match(workspace, /wood-river-b1-xlsx/);
+    assert.match(modal, /wood-river-b1-xlsx/);
+    assert.doesNotMatch(workspace, /from ["']@\/lib\/wood-river-b1["']/);
+  });
+
   it("maps classic B-1 sheets onto the five desk cards", () => {
     assert.equal(classicB1LaborSheet(" Staff"), "staff");
     assert.equal(classicB1LaborSheet(" Foremen"), "foremen");
