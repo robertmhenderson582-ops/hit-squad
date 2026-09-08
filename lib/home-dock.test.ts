@@ -28,7 +28,9 @@ describe("Home four doors", () => {
     assert.deepEqual(homeDockLabels(), ["Jobs", "Quality", "HSE", "Accounting"]);
     assert.deepEqual(homeDockHrefs(), ["/jobs", "/quality", "/hse", "/accounting"]);
     assert.equal(HOME_DOCK_TILES.find((tile) => tile.key === "jobs")?.href, COMPANY_DESK_DOOR.href);
-    assert.equal(HOME_DOCK_TILES.find((tile) => tile.key === "jobs")?.note, "Client → Site → Jobs");
+    assert.equal(HOME_DOCK_TILES.find((tile) => tile.key === "jobs")?.note, "Company → Division → Client → Site → Job");
+    assert.match(HOME_DOCK_TILES.find((tile) => tile.key === "jobs")?.note ?? "", /Division/);
+    assert.equal(HOME_DOCK_TILES.some((tile) => tile.key === "divisions" || tile.label === "Divisions"), false);
     assert.equal(homeDockHasCombinedQualityHse(), false);
     assert.equal(homeDockOmitsDeadDoors(), true);
     assert.equal(homeDockOmitsJobScopedPeers(), true);
@@ -127,7 +129,7 @@ describe("Home four doors", () => {
     assert.match(css, /\.home-dock-label \{[\s\S]{0,520}white-space: nowrap;/);
     assert.match(css, /\.home-dock-label \{[\s\S]{0,280}overflow: hidden;/);
     assert.match(css, /\.home-dock-note \{[\s\S]{0,360}text-align: center;/);
-    assert.match(css, /\.home-dock-note \{[\s\S]{0,420}white-space: nowrap;/);
+    assert.match(css, /\.home-dock-note \{[\s\S]{0,420}white-space: normal;/);
     assert.doesNotMatch(css, /\.home-dock-tile \{[\s\S]{0,360}align-items: flex-start;/);
     assert.doesNotMatch(css, /\.home-dock-tile \{[\s\S]{0,420}text-align: left;/);
     assert.doesNotMatch(css, /\.home-dock-row \{[\s\S]{0,80}grid-template-columns: repeat\(3/);

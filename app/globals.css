@@ -489,7 +489,7 @@ textarea:focus {
   line-height: 1.15;
   letter-spacing: 0.02em;
   text-align: center;
-  white-space: nowrap;
+  white-space: normal;
   text-overflow: ellipsis;
   color: rgba(239, 230, 212, 0.78);
 }
