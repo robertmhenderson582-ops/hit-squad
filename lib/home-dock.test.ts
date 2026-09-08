@@ -74,6 +74,9 @@ describe("Sample C home dock", () => {
     assert.doesNotMatch(dock, /Quality \/ HSE/);
     assert.doesNotMatch(chrome, /future-mods-menu|All modules/);
     assert.doesNotMatch(chrome, /href: "\/change-orders"|href: "\/rates"|href: "\/cost"/);
+    assert.match(chrome, /home-corner-chrome/);
+    assert.match(chrome, /home-title-card/);
+    assert.match(chrome, /home-owner-card/);
     assert.match(css, /\.home-dock \{/);
     assert.match(css, /\.home-dock \{\n  position: relative;/);
     assert.match(css, /\.home-dock \{\n  position: relative;[\s\S]{0,120}width: min\(44\.5rem/);

@@ -85,6 +85,9 @@ describe("home doors", () => {
     assert.match(chrome, /variant = "paper"/);
     assert.match(chrome, /const hero = variant === "hero"/);
     assert.match(chrome, /desk-home-root/);
+    assert.match(chrome, /home-corner-chrome/);
+    assert.match(chrome, /home-title-card/);
+    assert.match(chrome, /home-owner-card/);
     assert.match(css, /\.desk-home-root \{/);
     assert.match(css, /url\("\/brand-hero\.jpg"\)/);
     assert.match(css, /\.hero-company-logo img \{/);
