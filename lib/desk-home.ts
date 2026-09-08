@@ -18,6 +18,17 @@ export const STANDALONE_DOOR = {
   note: "One-off estimate, change-order log, or a tool not tied to a client site",
 } as const;
 
+/**
+ * Parked HUD rollup. Not a Home door until real feeds exist.
+ * Do not invent Scoreboard metrics. Do not add to HOME_DOCK_TILES without an owner ask.
+ */
+export const SCOREBOARD_DOOR = {
+  href: "/scoreboard",
+  key: "scoreboard",
+  label: "Scoreboard",
+  note: "Read-only rollup — parked until live feeds",
+} as const;
+
 /** Ease-in bury: not a home door. Do not add back to HOME_DOORS without an owner ask. */
 export const BURIED_HOME_DOORS = [STANDALONE_DOOR] as const;
 
@@ -33,20 +44,29 @@ export type HomeDockTile = {
 };
 
 /**
- * Sample C lower-third dock. Live modules only — no dead doors, no combined Quality/HSE.
- * Jobs is the Client → Site → Jobs directory (PR 154/155).
+ * Locked Home doors (Robert 2026-09-08): Jobs · Quality · HSE · Accounting.
+ * Sample A corner cards + HUD A BrandMark stay. No invented Scoreboard feeds.
  */
 export const HOME_DOCK_TILES: readonly HomeDockTile[] = [
   { href: "/jobs", key: "jobs", label: "Jobs", note: "Client → Site → Jobs" },
+  { href: "/quality", key: "quality", label: "Quality", note: "Quality studio" },
+  { href: "/hse", key: "hse", label: "HSE", note: "Site safety" },
+  { href: "/accounting", key: "accounting", label: "Accounting", note: "Not open for trial" },
+] as const;
+
+/**
+ * Job-scoped tools. Not Home peers — open from Jobs / an estimate tab.
+ * Progressive disclosure: Nathan still reaches Rates from Jobs or Wage lookup.
+ */
+export const JOB_SCOPED_TILES: readonly HomeDockTile[] = [
   { href: "/rates", key: "rates", label: "Rates", note: "Wage books", rates: true },
   { href: "/cost", key: "cost", label: "Cost / PPR", note: "On-job cost report" },
   { href: "/change-orders", key: "change-orders", label: "Change orders", note: "ECR / FCR log" },
-  { href: "/quality", key: "quality", label: "Quality", note: "Quality studio" },
-  { href: "/hse", key: "hse", label: "HSE", note: "Site safety" },
   { href: "/purchasing", key: "purchasing", label: "Purchasing", note: "Tools and consumables" },
 ] as const;
 
-const DEAD_HOME_DOORS = ["/standalone", "/accounting", "/payroll", "/team", "/scheduling", "/modules"] as const;
+const DEAD_HOME_DOORS = ["/standalone", "/payroll", "/team", "/scheduling", "/modules", "/scoreboard"] as const;
+const BURIED_JOB_HREFS = new Set(JOB_SCOPED_TILES.map((tile) => tile.href));
 
 export function companyDoorLogoSrc(companies: Array<{ logo?: string | null }> = []) {
   return companyDeskLogoSrc(companies);
@@ -60,8 +80,8 @@ export function homeDoorLabels(doors = HOME_DOORS) {
   return doors.map((door) => door.label);
 }
 
-export function homeDockTiles(canRates = true) {
-  return HOME_DOCK_TILES.filter((tile) => !tile.rates || canRates);
+export function homeDockTiles(_canRates = true) {
+  return HOME_DOCK_TILES.slice();
 }
 
 export function homeDockHrefs(canRates = true) {
@@ -72,10 +92,26 @@ export function homeDockLabels(canRates = true) {
   return homeDockTiles(canRates).map((tile) => tile.label);
 }
 
+export function jobScopedTiles(canRates = true) {
+  return JOB_SCOPED_TILES.filter((tile) => !tile.rates || canRates);
+}
+
+export function jobScopedHrefs(canRates = true) {
+  return jobScopedTiles(canRates).map((tile) => tile.href);
+}
+
+export function jobScopedLabels(canRates = true) {
+  return jobScopedTiles(canRates).map((tile) => tile.label);
+}
+
 export function homeDockHasCombinedQualityHse(tiles = HOME_DOCK_TILES) {
   return tiles.some((tile) => /quality\s*\/\s*hse/i.test(`${tile.label} ${tile.note}`));
 }
 
 export function homeDockOmitsDeadDoors(tiles = HOME_DOCK_TILES) {
   return tiles.every((tile) => !DEAD_HOME_DOORS.includes(tile.href as (typeof DEAD_HOME_DOORS)[number]));
+}
+
+export function homeDockOmitsJobScopedPeers(tiles = HOME_DOCK_TILES) {
+  return tiles.every((tile) => !BURIED_JOB_HREFS.has(tile.href));
 }

@@ -66,6 +66,7 @@ describe("Sample A home header chrome", () => {
     assert.match(hero, /HOME_KICKER/);
     assert.match(dock, /homeDockTiles/);
     assert.match(dock, /aria-label="Desk modules"/);
+    assert.doesNotMatch(dock, /canOpenRates/);
     assert.doesNotMatch(hero, /home-title-card|home-owner-card/);
     assert.doesNotMatch(home, /home-title-card|paper-header/);
   });

@@ -426,7 +426,8 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   gap: 0.18rem;
-  padding: 0;
+  padding: 0 0.55rem;
+  overflow: hidden;
   border-radius: 999px;
   color: #efe6d4;
   text-align: center;
@@ -447,9 +448,12 @@ textarea:focus {
 
 .home-dock-label {
   display: block;
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
   margin: 0;
-  padding: 0 0.7rem;
+  padding: 0 0.15rem;
+  overflow: hidden;
   font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
   font-size: 1.28rem;
   font-weight: 600;
@@ -458,22 +462,34 @@ textarea:focus {
   text-align: center;
   text-transform: uppercase;
   white-space: nowrap;
+  text-overflow: ellipsis;
   color: #fff;
   text-shadow: 0 1px 10px rgba(6, 22, 26, 0.7);
 }
 
 .home-dock-note {
   display: block;
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
   margin: 0;
-  padding: 0 0.65rem;
+  padding: 0 0.1rem;
+  overflow: hidden;
   font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 0.64rem;
   line-height: 1.15;
   letter-spacing: 0.02em;
   text-align: center;
   white-space: nowrap;
+  text-overflow: ellipsis;
   color: rgba(239, 230, 212, 0.78);
+}
+
+.job-scoped-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 @media (max-width: 640px) {

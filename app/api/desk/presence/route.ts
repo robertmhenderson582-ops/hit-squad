@@ -48,6 +48,12 @@ function screenName(path: string) {
   if (path.startsWith("/jobs") || path.startsWith("/sites")) return "Jobs";
   if (path.startsWith("/standalone")) return "Standalone";
   if (path.startsWith("/rates")) return "Rates";
+  if (path.startsWith("/quality")) return "Quality";
+  if (path.startsWith("/hse")) return "HSE";
+  if (path.startsWith("/accounting")) return "Accounting";
+  if (path.startsWith("/cost")) return "Cost";
+  if (path.startsWith("/change-orders")) return "Change orders";
+  if (path.startsWith("/purchasing")) return "Purchasing";
   if (path.startsWith("/tickets")) return "Tickets";
   if (path.startsWith("/settings")) return "Settings";
   return path.replace(/^\//, "") || "Home";
