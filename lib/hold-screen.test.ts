@@ -30,6 +30,7 @@ describe("hold screen lock", () => {
     assert.match(login, /CHECKING SESSION/);
     assert.match(login, /disabled=\{submitting\}/);
     assert.match(login, /if \(submitting\) return/);
+    assert.match(login, /finally \{\s*setSubmitting\(false\);/);
     assert.match(detail, /LOADING ESTIMATE/);
     assert.match(detail, /OPENING PACKAGE/);
     assert.match(detail, /!pack\.ready/);

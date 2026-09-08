@@ -653,6 +653,67 @@ export function scheduleSessionVaultCatchUp(work: () => Promise<void>): void {
   });
 }
 
+/** Soft bound for login Drive reads/writes. Healthy vaults finish well under this. */
+export const LOGIN_SEAT_DEADLINE_MS = 2500;
+
+export async function awaitSeatDeadline<T>(
+  work: Promise<T>,
+  ms = LOGIN_SEAT_DEADLINE_MS,
+): Promise<{ timedOut: false; value: T } | { timedOut: true }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work.then((value) => ({ timedOut: false as const, value })),
+      new Promise<{ timedOut: true }>((resolve) => {
+        timer = setTimeout(() => resolve({ timedOut: true }), ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/**
+ * Hydrate + owner-hash persist for login. Drive work is awaited only up to
+ * LOGIN_SEAT_DEADLINE_MS; a hung seats.json read/write must not block
+ * loginOutcome. Timed-out work keeps running in the background.
+ */
+export async function prepareLoginSeats(input: {
+  email: string;
+  claim?: SeatHashClaim | null;
+  deadlineMs?: number;
+}): Promise<{ hydrateMs: number; persistMs: number; hydrated: boolean }> {
+  const deadline = input.deadlineMs ?? LOGIN_SEAT_DEADLINE_MS;
+  const hydrateWork = hydrateSeatStore();
+  const hydrateStarted = Date.now();
+  const hydrated = await awaitSeatDeadline(hydrateWork, deadline);
+  const hydrateMs = Date.now() - hydrateStarted;
+  restoreSeatHash(input.email, input.claim ?? null);
+
+  if (hydrated.timedOut) {
+    scheduleSessionVaultCatchUp(async () => {
+      await hydrateWork;
+      try {
+        await persistExistingOwnerHash({ email: input.email, claim: input.claim });
+      } catch {
+        // Keep sign-in. Vault retry is best-effort.
+      }
+    });
+    return { hydrateMs, persistMs: 0, hydrated: false };
+  }
+
+  const persistWork = persistExistingOwnerHash({ email: input.email, claim: input.claim }).catch(() => false);
+  const persistStarted = Date.now();
+  const persisted = await awaitSeatDeadline(persistWork, deadline);
+  const persistMs = Date.now() - persistStarted;
+  if (persisted.timedOut) {
+    scheduleSessionVaultCatchUp(async () => {
+      await persistWork;
+    });
+  }
+  return { hydrateMs, persistMs, hydrated: true };
+}
+
 export function findUserByEmail(email: string): StoredUser | undefined {
   const wanted = (canonicalEmail(email) || email.trim().toLowerCase()).trim();
   if (!wanted) return undefined;

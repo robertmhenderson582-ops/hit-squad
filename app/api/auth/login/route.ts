@@ -11,12 +11,12 @@ import {
 import { cookieValue, serverTiming } from "@/lib/http";
 import { isOwnerLoginEmail } from "@/lib/owner-login";
 import {
+  LOGIN_SEAT_DEADLINE_MS,
+  awaitSeatDeadline,
   flushSeatVault,
-  hydrateSeatStore,
   loginOutcome,
-  persistExistingOwnerHash,
   passwordWriteLanded,
-  restoreSeatHash,
+  prepareLoginSeats,
   seatHashClaimFor,
 } from "@/lib/users";
 
@@ -45,18 +45,10 @@ export async function POST(request: Request) {
   }
 
   const email = typeof body.email === "string" ? body.email : "";
-  const hydrateStarted = Date.now();
-  await hydrateSeatStore();
-  const hydrateMs = Date.now() - hydrateStarted;
   const incomingClaim = await readSeatClaim(cookieValue(request, SEAT_CLAIM_COOKIE));
-  restoreSeatHash(email, incomingClaim);
-  const persistStarted = Date.now();
-  try {
-    await persistExistingOwnerHash({ email, claim: incomingClaim });
-  } catch {
-    // Keep sign-in. Vault retry is best-effort.
-  }
-  const persistMs = Date.now() - persistStarted;
+  // Cookie / local seats can authenticate if Drive stalls. Soft-timeout hydrate
+  // + persist — hung seats.json left LoginForm submitting on CHECKING SESSION.
+  const { hydrateMs, persistMs } = await prepareLoginSeats({ email, claim: incomingClaim });
 
   const outcome = loginOutcome({
     email,
@@ -70,18 +62,23 @@ export async function POST(request: Request) {
   let flushMs = 0;
   if (createdPassword) {
     const flushStarted = Date.now();
-    try {
-      await flushSeatVault();
-    } catch {
+    const flushed = await awaitSeatDeadline(
+      flushSeatVault()
+        .then(() => true as const)
+        .catch(() => false as const),
+      LOGIN_SEAT_DEADLINE_MS,
+    );
+    flushMs = Date.now() - flushStarted;
+    if (flushed.timedOut || !("value" in flushed) || flushed.value !== true) {
       return NextResponse.json(
         { error: "Password was not saved.", vaultPersisted: false },
         { status: 503 },
       );
     }
-    flushMs = Date.now() - flushStarted;
   }
   if (createdPassword && outcome.status === "authenticated") {
-    if (!(await passwordWriteLanded(email, createdPassword))) {
+    const landed = await awaitSeatDeadline(passwordWriteLanded(email, createdPassword), LOGIN_SEAT_DEADLINE_MS);
+    if (landed.timedOut || !("value" in landed) || landed.value !== true) {
       return NextResponse.json(
         { error: "Password was not saved.", vaultPersisted: false },
         { status: 503 },

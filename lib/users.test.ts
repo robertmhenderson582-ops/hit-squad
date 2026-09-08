@@ -45,6 +45,9 @@ import {
   mergeHashRows,
   liveSessionUser,
   scheduleSessionVaultCatchUp,
+  LOGIN_SEAT_DEADLINE_MS,
+  awaitSeatDeadline,
+  prepareLoginSeats,
 } from "./users.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 
@@ -1251,15 +1254,16 @@ test("confirmOwnPasswordWrite succeeds when listJson and readJson throw and seat
 
 test("login skips seat vault flush on normal password auth", () => {
   const route = readFileSync(fileURLToPath(new URL("../app/api/auth/login/route.ts", import.meta.url)), "utf8");
-  assert.match(route, /await hydrateSeatStore/);
-  assert.match(route, /persistExistingOwnerHash/);
+  assert.match(route, /prepareLoginSeats/);
+  assert.match(route, /awaitSeatDeadline/);
+  assert.match(route, /LOGIN_SEAT_DEADLINE_MS/);
   assert.match(route, /createdPassword/);
   assert.match(route, /if \(createdPassword\)/);
   assert.match(route, /Server-Timing|serverTiming/);
   assert.match(route, /seat-hydrate/);
   assert.match(route, /passwordWriteLanded/);
-  assert.equal(route.split("await flushSeatVault").length - 1, 1);
-  assert.match(route, /if \(createdPassword\) \{[\s\S]*await flushSeatVault/);
+  assert.equal(route.split("flushSeatVault").length - 1, 1);
+  assert.match(route, /if \(createdPassword\) \{[\s\S]*flushSeatVault/);
 });
 
 test("persistExistingOwnerHash skips Drive write when seats.json already has the owner hash", async () => {
@@ -1503,6 +1507,9 @@ test("forced setOwnPassword confirms the hash from seats.json before ok and does
 test("sign-in uses the login user without a mandatory session GET", () => {
   const session = readFileSync(fileURLToPath(new URL("../components/SessionProvider.tsx", import.meta.url)), "utf8");
   const signIn = session.slice(session.indexOf("const signIn"));
+  assert.match(session, /fetchJsonWithDeadline/);
+  assert.match(session, /SESSION_LOAD_DEADLINE_MS/);
+  assert.match(session, /AUTH_REQUEST_DEADLINE_MS/);
   assert.match(signIn, /setStatus\("authenticated"\)/);
   assert.match(signIn, /setUser\(data\.user\)/);
   assert.doesNotMatch(signIn, /const confirmed = await fetchSession/);
@@ -1543,6 +1550,60 @@ test("scheduleSessionVaultCatchUp returns while Drive hydrate is still hung", as
     new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 80)),
   ]);
   assert.equal(raced, "timeout");
+});
+
+test("awaitSeatDeadline returns timedOut while the work is still hung", async () => {
+  assert.ok(LOGIN_SEAT_DEADLINE_MS <= 3000);
+  assert.ok(LOGIN_SEAT_DEADLINE_MS >= 1000);
+  const finished = await awaitSeatDeadline(Promise.resolve("ok"), 80);
+  assert.equal(finished.timedOut, false);
+  if (!finished.timedOut) assert.equal(finished.value, "ok");
+  const started = Date.now();
+  const result = await awaitSeatDeadline(new Promise(() => {}), 40);
+  assert.equal(result.timedOut, true);
+  assert.ok(Date.now() - started < 200, "deadline must not wait on hung work");
+});
+
+test("prepareLoginSeats returns while Drive hydrate is hung and owner can still login", async () => {
+  useSeatVaultForTests({
+    configured: true,
+    listJson: () => new Promise(() => {}),
+    readJson: () => new Promise(() => {}),
+    createJson: () => new Promise(() => {}),
+    updateJson: () => new Promise(() => {}),
+    deleteJson: () => new Promise(() => {}),
+  });
+  const started = Date.now();
+  const prep = await prepareLoginSeats({ email: OWNER_LOGIN_EMAIL, deadlineMs: 80 });
+  assert.equal(prep.hydrated, false);
+  assert.ok(Date.now() - started < 400, "login seat prep must not hang on Drive");
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: OWNER_SECRET }).status, "authenticated");
+});
+
+test("prepareLoginSeats still hydrates and persists when Drive is healthy", async () => {
+  const ownerHash = bcrypt.hashSync(CHOSEN, 12);
+  writeFileSync(
+    seatFile,
+    `${JSON.stringify({
+      hashes: { [OWNER_LOGIN_EMAIL]: { passwordHash: ownerHash, mustChangePassword: false } },
+      extras: [],
+    })}\n`,
+  );
+  const drive = memoryDrive();
+  drive.files.set(SEATS_VAULT_FILE_ID, {
+    file: { id: SEATS_VAULT_FILE_ID, name: SEATS_VAULT_NAME, properties: { kind: SEATS_VAULT_KIND } },
+    content: `${JSON.stringify({ hashes: {}, extras: [] })}\n`,
+  });
+  useSeatVaultForTests(drive);
+  const prep = await prepareLoginSeats({ email: OWNER_LOGIN_EMAIL });
+  assert.equal(prep.hydrated, true);
+  await flushSeatVault();
+  const vault = JSON.parse(await drive.readJson(SEATS_VAULT_FILE_ID)) as {
+    hashes?: Record<string, { passwordHash?: string; mustChangePassword?: boolean }>;
+  };
+  assert.equal(vault.hashes?.[OWNER_LOGIN_EMAIL]?.passwordHash, ownerHash);
+  assert.equal(vault.hashes?.[OWNER_LOGIN_EMAIL]?.mustChangePassword, false);
+  assert.equal(loginOutcome({ email: OWNER_LOGIN_EMAIL, password: CHOSEN }).status, "authenticated");
 });
 
 test("password route re-issues session and seat-claim cookies with mustChange false", () => {
