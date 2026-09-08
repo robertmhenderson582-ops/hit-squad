@@ -50,7 +50,7 @@ describe("Sample C home dock", () => {
     assert.equal(homeDockLabels().filter((label) => label === "HSE").length, 1);
   });
 
-  it("strips module links from the header and paints a lower-third glass dock", () => {
+  it("strips module links from the header and paints a clustered glass dock under the title", () => {
     assert.deepEqual(deskNavLabels(), ["Settings"]);
     assert.equal(deskNavHasHeaderModules(), false);
     assert.equal(DESK_NAV.some((item) => item.modules), false);
@@ -64,6 +64,8 @@ describe("Sample C home dock", () => {
     const purchasingDesk = source("../components/PurchasingModuleDesk.tsx");
 
     assert.match(hero, /HomeDock/);
+    assert.match(hero, /hero-mark[\s\S]*HomeDock/);
+    assert.doesNotMatch(hero, /py-8|sm:py-10/);
     assert.match(dock, /homeDockTiles/);
     assert.match(dock, /canOpenRates/);
     assert.match(dock, /aria-label="Desk modules"/);
@@ -73,10 +75,29 @@ describe("Sample C home dock", () => {
     assert.doesNotMatch(chrome, /future-mods-menu|All modules/);
     assert.doesNotMatch(chrome, /href: "\/change-orders"|href: "\/rates"|href: "\/cost"/);
     assert.match(css, /\.home-dock \{/);
-    assert.match(css, /position: absolute;/);
+    assert.match(css, /\.home-dock \{\n  position: relative;/);
+    assert.match(css, /\.home-dock \{\n  position: relative;[\s\S]{0,120}width: min\(44\.5rem/);
+    assert.match(css, /\.desk-home-root \.desk-hero \{[\s\S]{0,220}justify-content: flex-start;/);
+    assert.match(css, /\.desk-home-root \.desk-hero \{[\s\S]{0,240}gap: 0\.85rem;/);
+    assert.doesNotMatch(css, /\.home-dock \{[\s\S]{0,160}bottom: 0\.65rem;/);
+    assert.doesNotMatch(css, /\.home-dock \{[\s\S]{0,120}left: 0\.25rem;/);
     assert.match(css, /backdrop-filter: blur\(12px\)/);
     assert.match(css, /rgba\(62, 198, 212/);
     assert.match(css, /rgba\(227, 139, 42/);
+    assert.match(css, /\.home-dock-tile \{[\s\S]{0,220}min-width: 10\.55rem;/);
+    assert.match(css, /\.home-dock-tile \{[\s\S]{0,280}min-height: 6\.25rem;/);
+    assert.match(css, /\.home-dock-tile \{[\s\S]{0,300}height: 6\.25rem;/);
+    assert.match(css, /\.home-dock-tile \{[\s\S]{0,280}flex: 0 0 10\.55rem;/);
+    assert.match(css, /\.home-dock-tile \{[\s\S]{0,360}align-items: center;/);
+    assert.match(css, /\.home-dock-tile \{[\s\S]{0,380}justify-content: center;/);
+    assert.match(css, /\.home-dock-tile \{[\s\S]{0,420}text-align: center;/);
+    assert.match(css, /\.home-dock-label \{[\s\S]{0,240}font-size: 1\.28rem;/);
+    assert.match(css, /\.home-dock-label \{[\s\S]{0,280}text-align: center;/);
+    assert.match(css, /\.home-dock-label \{[\s\S]{0,320}white-space: nowrap;/);
+    assert.match(css, /\.home-dock-note \{[\s\S]{0,220}text-align: center;/);
+    assert.match(css, /\.home-dock-note \{[\s\S]{0,280}white-space: nowrap;/);
+    assert.doesNotMatch(css, /\.home-dock-tile \{[\s\S]{0,360}align-items: flex-start;/);
+    assert.doesNotMatch(css, /\.home-dock-tile \{[\s\S]{0,420}text-align: left;/);
     assert.doesNotMatch(css, /\.home-dock-row \{[\s\S]{0,80}grid-template-columns: repeat\(3/);
     assert.match(purchasingPage, /PurchasingModuleDesk/);
     assert.match(purchasingDesk, /PurchasingDesk/);
