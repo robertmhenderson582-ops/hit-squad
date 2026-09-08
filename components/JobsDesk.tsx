@@ -17,7 +17,6 @@ import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
 import { isHisProtectedMenuItem, shouldPaintHisCards } from "@/lib/his-wood-river";
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
-import { ensureCbiDummyPack, shouldSeedCbiDummy } from "@/lib/cbi-dummy";
 import { catalogSites } from "@/lib/desk-data";
 import { companyScopeFor, isStandaloneId, type CompanyId } from "@/lib/companies";
 import { catalogSeedsAllowedOnDesk, jobsOnDesk, omitCatalogSeedJobs, omitCatalogSeedPacks, packForJob } from "@/lib/jobs";
@@ -72,7 +71,6 @@ export function JobsDesk() {
       const nextScope = companyScopeFor(lens, typeof data.companyId === "string" ? (data.companyId as CompanyId) : companyId);
       setServerJobs(catalogSeedsAllowedOnDesk(nextScope, seat) ? incoming : omitCatalogSeedJobs(incoming));
       if (typeof data.companyId === "string") setCompanyId(data.companyId as CompanyId);
-      if (shouldSeedCbiDummy(nextScope)) ensureCbiDummyPack();
     })();
     return () => {
       cancelled = true;

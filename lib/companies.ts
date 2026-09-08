@@ -11,8 +11,13 @@ export type Company = {
   logo?: string;
 };
 
+export const CBI_ID = "cbi";
+export const CBI_NAME = "CBI";
 export const LUCKY13_ID = "lucky13";
 export const LUCKY13_NAME = "Lucky 13 Welding & Fabrication";
+
+/** Peer contractors — not Madison plant clients. Kept for leftover routing only. */
+export const WIPED_PEER_IDS = [CBI_ID, LUCKY13_ID] as const;
 
 /** Quiet one-off lane. Not a client company and not a second product. */
 export const STANDALONE_ID = "standalone";
@@ -22,8 +27,6 @@ export const STANDALONE_NAME = "Standalone";
 export const COMPANIES: Company[] = [
   { id: "hitsquad", name: "Hit Squad" },
   { id: "madison", name: "Madison" },
-  { id: "cbi", name: "CBI" },
-  { id: LUCKY13_ID, name: LUCKY13_NAME },
 ];
 
 export const COMPANY_IDS = COMPANIES.map((row) => row.id);
@@ -53,6 +56,23 @@ export function isStandaloneId(id?: string | null): boolean {
   return (id ?? "").trim().toLowerCase() === STANDALONE_ID;
 }
 
+export function isWipedPeerCompany(id?: string | null): boolean {
+  const key = (id ?? "").trim().toLowerCase();
+  return key === CBI_ID || key === LUCKY13_ID;
+}
+
+/** CBI / Lucky 13 names must not re-enter the shared catalog. */
+export function isWipedPeerName(name?: string | null): boolean {
+  const t = (name ?? "").trim().toLowerCase();
+  if (!t) return false;
+  if (/\bcbi\b/.test(t) || /lucky\s*13/.test(t)) return true;
+  return isWipedPeerCompany(companyIdFromName(t));
+}
+
+export function catalogCompanies(catalog: Company[] = COMPANIES): Company[] {
+  return catalog.filter((row) => !isStandaloneId(row.id) && !isWipedPeerCompany(row.id));
+}
+
 export function peopleLane(companyId?: string | null): "company" | "standalone" {
   return isStandaloneId(companyId) ? "standalone" : "company";
 }
@@ -62,12 +82,14 @@ export function samePeopleLane(a?: string | null, b?: string | null): boolean {
 }
 
 export function assignmentChoices(catalog: Company[] = COMPANIES): Company[] {
-  const rows = catalog.filter((row) => !isStandaloneId(row.id));
+  const rows = catalogCompanies(catalog);
   return [...rows, { id: STANDALONE_ID, name: STANDALONE_NAME }];
 }
 
 export function companyName(id: CompanyId, catalog: Company[] = COMPANIES): string {
   if (isStandaloneId(id)) return STANDALONE_NAME;
+  if (id === CBI_ID) return CBI_NAME;
+  if (id === LUCKY13_ID) return LUCKY13_NAME;
   return catalog.find((row) => row.id === id)?.name ?? id;
 }
 
@@ -110,7 +132,8 @@ export function withCompanyLogo(row: Company): Company {
 export function mergeCompanies(extra: Company[] = []): Company[] {
   const seen = new Map<string, Company>();
   for (const row of [...COMPANIES, ...extra]) {
-    if (!row?.id || !row?.name || !isCompanyId(row.id) || isStandaloneId(row.id)) continue;
+    if (!row?.id || !row?.name || !isCompanyId(row.id) || isStandaloneId(row.id) || isWipedPeerCompany(row.id)) continue;
+    if (isWipedPeerName(row.name)) continue;
     const next = withCompanyLogo(row);
     const prev = seen.get(row.id);
     if (prev) {
@@ -124,8 +147,8 @@ export function mergeCompanies(extra: Company[] = []): Company[] {
 
 /** Assigned contractor only — not every company an owner can see. */
 export function assignedCompaniesForId(assignedId?: CompanyId | null, catalog: Company[] = COMPANIES): Company[] {
-  if (!assignedId || isStandaloneId(assignedId)) return [];
-  return catalog.filter((row) => row.id === assignedId && !isStandaloneId(row.id)).map(withCompanyLogo);
+  if (!assignedId || isStandaloneId(assignedId) || isWipedPeerCompany(assignedId)) return [];
+  return catalogCompanies(catalog).filter((row) => row.id === assignedId).map(withCompanyLogo);
 }
 
 /** Exactly one assigned company with a logo on file. Otherwise keep the text door. */
@@ -165,30 +188,29 @@ export function assignedCompanyId(scope?: CompanyScope | null): CompanyId {
 }
 
 export function companiesForScope(scope?: CompanyScope | null, catalog: Company[] = COMPANIES): Company[] {
-  const rows = catalog.filter((row) => !isStandaloneId(row.id));
+  const rows = catalogCompanies(catalog);
   if (!scope || scope.isOwner) return rows;
   const id = assignedCompanyId(scope);
-  if (isStandaloneId(id)) return [];
+  if (isStandaloneId(id) || isWipedPeerCompany(id)) return [];
   return rows.filter((row) => row.id === id);
 }
 
 export function canSeeCompany(scope: CompanyScope | null | undefined, companyId: CompanyId): boolean {
-  if (isStandaloneId(companyId)) return false;
+  if (isStandaloneId(companyId) || isWipedPeerCompany(companyId)) return false;
   if (!scope || scope.isOwner) return true;
-  if (isStandaloneId(assignedCompanyId(scope))) return false;
+  if (isStandaloneId(assignedCompanyId(scope)) || isWipedPeerCompany(assignedCompanyId(scope))) return false;
   return assignedCompanyId(scope) === companyId;
 }
 
 /**
  * Infer which contractor a catalog job / site / board estimate belongs to.
  * Madison plant clients (Phillips 66 plants + Georgia Power Yates + Monroe) sit under Madison.
- * CBI is only the CBI label — no invented CBI sites.
- * Lucky 13 matches that name only — no invented Lucky 13 sites.
+ * CBI / Lucky 13 labels stay off Madison so leftovers never paint as plant clients.
  */
 export function inferCompanyId(text: string | undefined | null): CompanyId {
   const t = (text ?? "").toLowerCase();
   if (/lucky\s*13/.test(t)) return LUCKY13_ID;
-  if (/\bcbi\b/.test(t)) return "cbi";
+  if (/\bcbi\b/.test(t)) return CBI_ID;
   if (/\bmadison\b|\bp66\b|phillips 66|wood river|\byates\b|georgia power|monroe energy|\bmonroe\b|\btrainer\b|\brodeo\b/.test(t)) {
     return "madison";
   }

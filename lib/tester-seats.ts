@@ -112,7 +112,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     rateBuilder: true,
     viewAs: false,
     shop: "field",
-    company: "cbi",
+    company: "standalone",
   },
   {
     id: "tester-joseph",
@@ -132,7 +132,7 @@ export const TESTER_SEATS: TesterSeatDef[] = [
     rateBuilder: true,
     viewAs: false,
     shop: "field",
-    company: "lucky13",
+    company: "standalone",
   },
 ];
 

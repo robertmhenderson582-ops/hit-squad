@@ -29,20 +29,22 @@ test("John Beech is only the madison gmail", () => {
 test("seeds company homes without inventing extra seats", () => {
   assert.equal(testerByEmail("nathanboyte@gmail.com")?.company, "madison");
   assert.equal(testerByEmail(JOHN_BEECH_EMAIL)?.company, "madison");
-  assert.equal(testerByEmail(JAMES_EMAIL)?.company, "cbi");
+  assert.equal(testerByEmail(JAMES_EMAIL)?.company, "standalone");
   assert.equal(testerByEmail(JAMES_EMAIL)?.email, "jameshcainjr@gmail.com");
   assert.equal(testerByEmail(JOSEPH_EMAIL)?.company, "hitsquad");
   assert.equal(testerByEmail("marks544@yahoo.com")?.company, "hitsquad");
-  assert.equal(testerByEmail(JOHN_HENRY_EMAIL)?.company, "lucky13");
+  assert.equal(testerByEmail(JOHN_HENRY_EMAIL)?.company, "standalone");
   assert.equal(testerByEmail("JohnHenry484@gmail.com")?.email, JOHN_HENRY_EMAIL);
   assert.equal(testerByEmail(JOHN_HENRY_EMAIL)?.aliased, true);
   assert.equal(testerByEmail(JOHN_HENRY_EMAIL)?.rateBuilder, true);
   assert.equal(testerByEmail(JOHN_HENRY_EMAIL)?.shop, "field");
   assert.equal(testerByEmail(JOHN_HENRY_EMAIL)?.viewAs, false);
   assert.equal(
-    TESTER_SEATS.filter((row) => row.company === "cbi").map((row) => row.email).join(),
-    JAMES_EMAIL,
+    TESTER_SEATS.filter((row) => row.company === "cbi" || row.company === "lucky13").length,
+    0,
   );
+  assert.equal(testerByEmail(JAMES_EMAIL)?.company, "standalone");
+  assert.equal(testerByEmail(JOHN_HENRY_EMAIL)?.company, "standalone");
 });
 
 test("does not seed the held-out people", () => {

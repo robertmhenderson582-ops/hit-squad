@@ -187,7 +187,8 @@ test("James sample on Wood River does not hide Aromatics and CAT; purged T&M sta
   assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
   assert.equal(wood?.jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE), false);
   assert.equal(wood?.jobs.some((job) => job.title === "New Turnaround estimate"), false);
-  assert.equal(cbi?.sites.some((site) => site.jobs.some((job) => job.title === "New Turnaround estimate")), true);
+  assert.equal(cbi, undefined);
+  assert.equal(tree.some((row) => row.id === "lucky13"), false);
 });
 
 test("vault T&M leftover is dropped instead of painted", () => {
@@ -370,7 +371,8 @@ test("desktop leftover generation bust drops purged T&M and leaves session keys"
   assert.equal(wood?.jobs.some((job) => job.title === "Madison CAT 2 (Pit Stop)"), true);
   assert.equal(wood?.jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE), false);
   assert.equal(wood?.jobs.some((job) => job.title === "New Turnaround estimate"), false);
-  assert.equal(cbi?.sites.some((site) => site.jobs.some((job) => job.title === "New Turnaround estimate")), true);
+  assert.equal(cbi, undefined);
+  assert.equal(tree.some((row) => row.id === "cbi" || row.id === "lucky13"), false);
 
   const persisted = readOwnerPacks(store);
   assert.equal(OWNER_PACKS_KEY, OWNER_PACKS_LEGACY_KEY);
@@ -498,10 +500,8 @@ function assertOwnerWoodRiverHis(store: StorageLike, leftoverPackId: string) {
   assert.equal(wood?.jobs.some((job) => job.title === "Boiler 17 2026"), true);
   assert.equal(wood?.jobs.some((job) => job.code === HIS_TM_JOB_CODE || job.title === HIS_TM_TITLE), false);
   assert.equal(wood?.jobs.some((job) => job.code === "EST-MTKIGB" || job.title === "New Turnaround estimate"), false);
-  assert.equal(
-    cbi?.sites.some((site) => site.jobs.some((job) => job.code === "EST-MTKIGB" || job.title === "New Turnaround estimate")) ?? false,
-    painted.some((row) => row.packId === "new-mtkigb-james"),
-  );
+  assert.equal(cbi, undefined);
+  assert.equal(tree.some((row) => row.id === "cbi" || row.id === "lucky13"), false);
   return { painted, wood, tm };
 }
 
@@ -798,7 +798,7 @@ test("owner Back-to-me Jobs shows the two HIS cards as Nathan's desk and no seed
   assertHisWoodRiverDesk(painted, false, owner);
 });
 
-test("James CBI sample EST-MTKIGB stays under CBI and View as James does not paint HIS cards", () => {
+test("James leftover EST-MTKIGB stays off Wood River and View as James does not paint HIS cards", () => {
   const store = memoryStore();
   rememberLocalPack(
     {
@@ -824,7 +824,8 @@ test("James CBI sample EST-MTKIGB stays under CBI and View as James does not pai
   const cbi = tree.find((row) => row.id === "cbi");
   assert.equal(localPackToJob(ownerDesk.find((row) => row.packId === "new-mtkigb-james")!).code, "EST-MTKIGB");
   assert.equal(wood?.jobs.some((job) => job.code === "EST-MTKIGB"), false);
-  assert.equal(cbi?.sites.some((site) => site.jobs.some((job) => job.code === "EST-MTKIGB")), true);
+  assert.equal(cbi, undefined);
+  assert.equal(tree.some((row) => row.id === "cbi" || row.id === "lucky13"), false);
 });
 
 test("live Aromatics and CAT leftovers are not replaced by identity-only stubs", () => {

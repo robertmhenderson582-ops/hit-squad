@@ -1,5 +1,5 @@
-import { catalogVisibleTo, type CompanyScope } from "./companies.ts";
-import { dummyPacksForUser } from "./cbi-dummy.ts";
+import { catalogVisibleTo, inferCompanyId, isWipedPeerCompany, type CompanyScope } from "./companies.ts";
+import { dummyPacksForUser, isCbiDummyPack } from "./cbi-dummy.ts";
 import { boardForUser } from "./desk-data.ts";
 import { isPurgedHisLeftover, omitPurgedHisLeftovers, shouldPaintHisCards } from "./his-wood-river.ts";
 import { isOwnerIdentity } from "./identity.ts";
@@ -162,7 +162,7 @@ export function jobsOnDesk(
     omitCatalogSeedPacks([
       ...packs,
       ...dummyPacksForUser(scope).filter((pack) => !packs.some((row) => row.packId === pack.packId)),
-    ]),
+    ]).filter((pack) => !isCbiDummyPack(pack) && !isWipedPeerCompany(inferCompanyId(pack.client))),
   );
   const merged = includeSeeds
     ? (() => {
@@ -172,7 +172,9 @@ export function jobsOnDesk(
       })()
     : mergeLocalJobs(fromServer, nextPacks);
   const painted = (includeSeeds ? merged : omitCatalogSeedJobs(merged)).filter(
-    (job) => !isPurgedHisLeftover({ packId: job.id, title: job.title, code: job.code }),
+    (job) =>
+      !isPurgedHisLeftover({ packId: job.id, title: job.title, code: job.code }) &&
+      !isWipedPeerCompany(inferCompanyId(job.client)),
   );
   const keepHis =
     !viewingAs ||

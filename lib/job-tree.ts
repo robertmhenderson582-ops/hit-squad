@@ -4,6 +4,7 @@ import {
   companiesForScope,
   inferCompanyIdFromParts,
   isStandaloneId,
+  isWipedPeerCompany,
   seedCompanyForEmail,
   type Company,
   type CompanyId,
@@ -259,7 +260,11 @@ export function companyIdForJob(
   }
   const inferred = inferCompanyIdFromParts(pack?.client, pack?.site, job.client, job.title, job.code);
   const home = packOwnerHomeCompany(pack?.ownerEmail);
-  // CBI-only (and other non-Madison) seats cannot stand in for Madison Wood River.
+  // Wiped peer leftovers never land on Madison or Hit Squad catalogs.
+  if (isWipedPeerCompany(inferred)) return inferred;
+  if (home && (isWipedPeerCompany(home) || isStandaloneId(home)) && inferred === "madison") {
+    return home;
+  }
   if (home && home !== inferred && inferred === "madison") {
     if (canSeeCompany(scope, home)) return home;
     return assignedCompanyId(scope);
