@@ -8,7 +8,7 @@ export function DeskHero({ logo = null }: { logo?: string | null }) {
   return (
     <section className="desk-hero desk-hero-home px-2 text-center sm:px-4">
       <div className="hero-mark brand-static relative z-10">
-        <BrandMark variant="stacked" className="mx-auto h-14 w-14" />
+        <BrandMark className="mx-auto h-14 w-14" />
         <p className="mt-3 font-display text-5xl font-semibold tracking-[0.16em] text-white sm:text-6xl">
           {HOME_WORDMARK}
         </p>

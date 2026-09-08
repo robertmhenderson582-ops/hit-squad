@@ -258,7 +258,19 @@ textarea:focus {
 }
 
 .home-title-brand {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.home-title-mark {
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+}
+
+.home-title-copy {
   min-width: 0;
 }
 

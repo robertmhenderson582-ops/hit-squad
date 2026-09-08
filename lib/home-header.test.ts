@@ -23,6 +23,9 @@ describe("Sample A home header chrome", () => {
     assert.match(chrome, /home-owner-card/);
     assert.match(chrome, /home-title-word/);
     assert.match(chrome, /home-title-kicker/);
+    assert.match(chrome, /home-title-mark/);
+    assert.match(chrome, /<BrandMark /);
+    assert.doesNotMatch(chrome, /variant="stacked"|variant="jets"/);
     assert.match(chrome, /home-corner-home/);
     assert.match(chrome, /home-corner-settings/);
     assert.match(chrome, /home-owner-signout/);
@@ -31,6 +34,8 @@ describe("Sample A home header chrome", () => {
 
     assert.match(css, /\.home-corner-chrome \{/);
     assert.match(css, /\.home-title-card,/);
+    assert.match(css, /\.home-title-brand \{[\s\S]{0,80}display: flex;/);
+    assert.match(css, /\.home-title-mark \{[\s\S]{0,80}width: 2rem;/);
     assert.match(css, /\.home-owner-card \{/);
     assert.match(css, /\.home-title-card,[\s\S]{0,280}backdrop-filter: blur\(14px\)/);
     assert.match(css, /\.home-title-card,[\s\S]{0,360}border: 1px solid rgba\(62, 198, 212/);
@@ -45,6 +50,8 @@ describe("Sample A home header chrome", () => {
     assert.match(heroHeader, /home-owner-card/);
     assert.match(heroHeader, /HIT SQUAD/);
     assert.match(heroHeader, /PROJECT CONTROLS/);
+    assert.match(heroHeader, /<BrandMark /);
+    assert.match(heroHeader, /home-title-mark/);
     assert.match(heroHeader, /HomeCue/);
     assert.match(heroHeader, /href === "\/settings"/);
     assert.match(heroHeader, /item\.label\.toUpperCase/);
