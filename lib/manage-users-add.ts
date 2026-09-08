@@ -1,7 +1,7 @@
 export const SEATS_REQUEST_DEADLINE_MS = 15000;
 export const SEATS_RECOVER_DEADLINE_MS = 4000;
 export const SEATS_TIMEOUT_ERROR =
-  "Add user timed out. Try again. If the seat already appears below, you do not need to resubmit.";
+  "Add user timed out. Try again. If a refresh already shows the seat, do not resubmit.";
 export const DESK_SEATS_CHANGED_EVENT = "desk-seats-changed";
 
 export type ManageSeatRow = {
