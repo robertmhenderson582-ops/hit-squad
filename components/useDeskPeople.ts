@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSession } from "@/components/SessionProvider";
 import { lensPeopleFromSeats, peopleVisibleTo, seededDeskPeople, type DeskPerson } from "@/lib/desk-people";
 import type { HandoffSeat } from "@/lib/handoff";
+import { DESK_SEATS_CHANGED_EVENT } from "@/lib/manage-users-add";
 
 export function useDeskPeople() {
   const { user } = useSession();
@@ -22,7 +23,11 @@ export function useDeskPeople() {
     }
     load();
     window.addEventListener("focus", load);
-    return () => window.removeEventListener("focus", load);
+    window.addEventListener(DESK_SEATS_CHANGED_EVENT, load);
+    return () => {
+      window.removeEventListener("focus", load);
+      window.removeEventListener(DESK_SEATS_CHANGED_EVENT, load);
+    };
   }, [user]);
 
   return fetched ?? seeded;

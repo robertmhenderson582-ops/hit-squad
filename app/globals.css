@@ -62,6 +62,15 @@ body {
   animation: hs-hold-spin 0.85s linear infinite;
 }
 
+.hs-hold-spin-inline {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border-width: 2px;
+  box-shadow: none;
+  vertical-align: middle;
+}
+
 .login-og {
   position: relative;
   overflow: hidden;

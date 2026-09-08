@@ -382,6 +382,8 @@ test("owner can add a tester login that must change password on first sign-in", 
 
   const rows = await listSeatRows();
   assert.equal(rows.some((row) => row.email === ADDED && row.passwordIssued && row.companyId === "hitsquad"), true);
+  const memoryRows = await listSeatRows({ hydrate: false });
+  assert.equal(memoryRows.some((row) => row.email === ADDED && row.passwordIssued && row.companyId === "hitsquad"), true);
   const people = lensPeopleFromSeats(rows);
   assert.equal(people.some((row) => row.email === ADDED && row.id.startsWith("custom-")), true);
   assert.equal(people.some((row) => row.email === NOVUS_EMAIL), false);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { addCompany, isKnownCompany, listCompanies, setAssignedCompany } from "@/lib/companies-store";
+import { addCompany, isKnownCompany, listCompanies, peekCompanies, setAssignedCompany } from "@/lib/companies-store";
 import { canManageUsers, hasWorkingDesk, isOwner } from "@/lib/desk-role";
 import { seatsVisibleTo } from "@/lib/desk-people";
 import { cookieValue } from "@/lib/http";
@@ -73,8 +73,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       user: created.user,
-      seats: await listSeatRows(),
-      companies: await listCompanies(),
+      seats: await listSeatRows({ hydrate: false }),
+      companies: peekCompanies(),
       note: "Login created on this desk. Don’t send. First sign-in must change the password.",
     });
   }

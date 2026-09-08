@@ -11,13 +11,14 @@ export async function fetchJsonWithDeadline<T>(
   input: RequestInfo | URL,
   init: RequestInit | undefined,
   ms: number,
+  timeoutMessage = AUTH_TIMEOUT_ERROR,
 ): Promise<{ ok: boolean; status: number; data: T }> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       controller.abort();
-      reject(new Error(AUTH_TIMEOUT_ERROR));
+      reject(new Error(timeoutMessage));
     }, ms);
   });
   try {
@@ -31,9 +32,9 @@ export async function fetchJsonWithDeadline<T>(
     if (
       isDeadlineAbort(error) ||
       controller.signal.aborted ||
-      (error instanceof Error && error.message === AUTH_TIMEOUT_ERROR)
+      (error instanceof Error && error.message === timeoutMessage)
     ) {
-      throw new Error(AUTH_TIMEOUT_ERROR);
+      throw new Error(timeoutMessage);
     }
     throw error;
   } finally {

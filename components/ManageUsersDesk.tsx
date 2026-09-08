@@ -9,6 +9,18 @@ import { COMPANIES, assignmentChoices, companyName, type Company, type CompanyId
 import { canUseFollow, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
 import { lensPeopleFromSeats } from "@/lib/desk-people";
 import { followSeatFromEmail } from "@/lib/follow";
+import {
+  DESK_SEATS_CHANGED_EVENT,
+  SEATS_RECOVER_DEADLINE_MS,
+  SEATS_REQUEST_DEADLINE_MS,
+  SEATS_TIMEOUT_ERROR,
+  applyAddedSeats,
+  isAlreadySeatedError,
+  optimisticSeat,
+  removeOptimisticSeat,
+  seatsIncludeEmail,
+} from "@/lib/manage-users-add";
+import { fetchJsonWithDeadline } from "@/lib/session-fetch";
 import type { PublicUser, RosterEntry } from "@/lib/types";
 
 type SeatRow = PublicUser & { passwordIssued: boolean; companyId?: string };
@@ -37,6 +49,7 @@ export function ManageUsersDesk() {
   const [issueEmail, setIssueEmail] = useState(NOVUS_EMAIL);
   const [issuePassword, setIssuePassword] = useState("");
   const [note, setNote] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
   const [seatNote, setSeatNote] = useState<string | null>(null);
   const [recoveryOnce, setRecoveryOnce] = useState<string | null>(null);
   const [open, setOpen] = useState({ seats: true, add: true, roster: false });
@@ -151,31 +164,15 @@ export function ManageUsersDesk() {
     setSeatNote(`One-time recovery for ${data.email}. Copy it now. It is not emailed.`);
   }
 
-  async function onAdd(event: FormEvent) {
-    event.preventDefault();
-    setNote(null);
-    if (password.length < 8) {
-      setNote("Password must be 8+.");
-      return;
-    }
-    const response = await fetch("/api/desk/seats", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        email,
-        password,
-        companyId: addCompanyId || (addRole === "president" ? "madison" : "hitsquad"),
-        role: addRole,
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setNote(data.error || "Could not add.");
-      return;
-    }
-    setSeats(data.seats ?? []);
+  type AddSeatResponse = {
+    error?: string;
+    seats?: SeatRow[];
+    companies?: Company[];
+    user?: PublicUser & { companyId?: string };
+  };
+
+  function finishAddSuccess(data: AddSeatResponse, pending: ReturnType<typeof optimisticSeat>) {
+    setSeats((current) => applyAddedSeats(current, data.seats, data.user, pending));
     if (Array.isArray(data.companies)) setCompanies(data.companies);
     setName("");
     setEmail("");
@@ -183,6 +180,72 @@ export function ManageUsersDesk() {
     setAddCompanyId(addRole === "president" ? "madison" : "hitsquad");
     setAddRole("tester");
     setNote("Login created. Don’t send. First sign-in must change the password. No invite sent.");
+    window.dispatchEvent(new Event(DESK_SEATS_CHANGED_EVENT));
+  }
+
+  async function recoverAddedSeat(email: string, pending: ReturnType<typeof optimisticSeat>) {
+    try {
+      const { ok, data } = await fetchJsonWithDeadline<AddSeatResponse>(
+        "/api/desk/seats",
+        { credentials: "include", cache: "no-store" },
+        SEATS_RECOVER_DEADLINE_MS,
+        SEATS_TIMEOUT_ERROR,
+      );
+      if (ok && Array.isArray(data.seats) && seatsIncludeEmail(data.seats, email)) {
+        finishAddSuccess(data, pending);
+        return true;
+      }
+    } catch {
+      // Keep the timeout / error path. Do not leave ADDING… stuck.
+    }
+    return false;
+  }
+
+  async function onAdd(event: FormEvent) {
+    event.preventDefault();
+    if (adding) return;
+    setNote(null);
+    if (password.length < 8) {
+      setNote("Password must be 8+.");
+      return;
+    }
+    const companyId = addCompanyId || (addRole === "president" ? "madison" : "hitsquad");
+    const pending = optimisticSeat({ name, email, role: addRole, companyId });
+    setAdding(true);
+    setSeats((current) => applyAddedSeats(current, undefined, undefined, pending));
+    try {
+      const { ok, data } = await fetchJsonWithDeadline<AddSeatResponse>(
+        "/api/desk/seats",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            email,
+            password,
+            companyId,
+            role: addRole,
+          }),
+        },
+        SEATS_REQUEST_DEADLINE_MS,
+        SEATS_TIMEOUT_ERROR,
+      );
+      if (!ok) {
+        if (isAlreadySeatedError(data.error) && (await recoverAddedSeat(pending.email, pending))) return;
+        setSeats((current) => removeOptimisticSeat(current, pending.email));
+        setNote(data.error || "Could not add.");
+        return;
+      }
+      finishAddSuccess(data, pending);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not add.";
+      if (message === SEATS_TIMEOUT_ERROR && (await recoverAddedSeat(pending.email, pending))) return;
+      setSeats((current) => removeOptimisticSeat(current, pending.email));
+      setNote(message);
+    } finally {
+      setAdding(false);
+    }
   }
 
   async function removeAll() {
@@ -366,9 +429,10 @@ export function ManageUsersDesk() {
               Squad. President is the Madison desk seat — assign President and Madison when the
               login email is known. Do not invent an email.
             </p>
-            <form onSubmit={onAdd} className="mt-3 grid gap-3 sm:grid-cols-2">
-              <Field label="NAME" value={name} onChange={setName} required />
-              <Field label="EMAIL" value={email} onChange={setEmail} required type="email" placeholder="They type this to sign in" />
+            <form onSubmit={onAdd} className="mt-3" aria-busy={adding}>
+              <fieldset disabled={adding} className="grid gap-3 border-0 p-0 sm:grid-cols-2 disabled:opacity-70">
+              <Field label="NAME" value={name} onChange={setName} required disabled={adding} />
+              <Field label="EMAIL" value={email} onChange={setEmail} required type="email" placeholder="They type this to sign in" disabled={adding} />
               <label>
                 <span className="text-xs tracking-[0.14em] text-[#5b6f73]">ROLE</span>
                 <select
@@ -380,6 +444,7 @@ export function ManageUsersDesk() {
                   }}
                   className="paper-field mt-1"
                   aria-label="Role for the new user"
+                  disabled={adding}
                 >
                   <option value="tester">Tester</option>
                   <option value="president">President</option>
@@ -392,6 +457,7 @@ export function ManageUsersDesk() {
                   onChange={(event) => setAddCompanyId(event.target.value as CompanyId)}
                   className="paper-field mt-1"
                   aria-label="Company for the new user"
+                  disabled={adding}
                 >
                   {assignmentChoices(companies).map((company) => (
                     <option key={company.id} value={company.id}>
@@ -407,12 +473,23 @@ export function ManageUsersDesk() {
                 onChange={setPassword}
                 minLength={8}
                 required
+                disabled={adding}
               />
-              <button type="submit" className="rounded-lg bg-steel px-4 py-2 text-white sm:col-span-2">
-                Add user
+              <button
+                type="submit"
+                disabled={adding}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-steel px-4 py-2 text-white sm:col-span-2 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {adding ? <span className="hs-hold-spin hs-hold-spin-inline" aria-hidden="true" /> : null}
+                {adding ? "ADDING…" : "Add user"}
               </button>
+              </fieldset>
             </form>
-            {note ? <p className="mt-3 text-sm text-[#5b6f73]">{note}</p> : null}
+            {note ? (
+              <p role="status" className="mt-3 text-sm text-[#163038]">
+                {note}
+              </p>
+            ) : null}
           </Collapsible>
 
           <Collapsible
@@ -514,6 +591,7 @@ function Field({
   required,
   type = "text",
   placeholder,
+  disabled,
 }: {
   label: string;
   value: string;
@@ -521,6 +599,7 @@ function Field({
   required?: boolean;
   type?: string;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   return (
     <label>
@@ -530,6 +609,7 @@ function Field({
         type={type}
         value={value}
         placeholder={placeholder}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         className="paper-field mt-1"
       />
