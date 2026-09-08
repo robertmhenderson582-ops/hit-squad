@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { NOVUS_EMAIL } from "./desk-role.ts";
+import { NOVUS_EMAIL, OWNER_LOGIN_EMAIL } from "./desk-role.ts";
 import { JOSEPH_EMAIL, JOHN_BEECH_EMAIL } from "./tester-seats.ts";
 import {
   INBOX_CIRCLE,
@@ -13,6 +13,7 @@ import {
   inboxContactsFor,
   inboxThreadKey,
   isInboxCircleEmail,
+  madisonInboxContacts,
 } from "./inbox-circle.ts";
 
 describe("inbox circle", () => {
@@ -72,5 +73,26 @@ describe("inbox circle", () => {
     assert.doesNotMatch(panel, /can write each other here/);
     assert.doesNotMatch(panel, /Robert, Nathan, Benny, Shane, Wendell, and Chance/);
     assert.doesNotMatch(panel, /Testers do not see each other/);
+  });
+
+  it("President uses Madison Inbox and hides Hit Squad seats", () => {
+    const president = { role: "president", email: "president.example@example.com" };
+    assert.equal(canUseInbox(president), true);
+    const contacts = inboxContactsFor(president.email, president);
+    assert.equal(contacts.some((row) => row.email === "nathanboyte@gmail.com"), true);
+    assert.equal(contacts.some((row) => row.email === JOHN_BEECH_EMAIL), true);
+    assert.equal(contacts.some((row) => row.email === OWNER_LOGIN_EMAIL || row.id === "owner"), true);
+    assert.equal(contacts.some((row) => row.email === "bccamp2@gmail.com"), false);
+    assert.equal(contacts.some((row) => row.email === "shane@apcontrolsllc.com"), false);
+    assert.equal(contacts.some((row) => row.email === "wlanderno@yahoo.com"), false);
+    assert.equal(contacts.some((row) => row.email === NOVUS_INBOX_EMAIL), false);
+    const expanded = inboxContactsFor(president.email, { ...president, privileges: ["inbox-expand"] });
+    assert.equal(expanded.some((row) => row.email === "bccamp2@gmail.com"), true);
+    assert.equal(
+      madisonInboxContacts(president.email)
+        .filter((row) => row.id !== "owner")
+        .every((row) => row.company === "Madison"),
+      true,
+    );
   });
 });

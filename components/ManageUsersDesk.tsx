@@ -33,6 +33,7 @@ export function ManageUsersDesk() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [addCompanyId, setAddCompanyId] = useState<CompanyId>("hitsquad");
+  const [addRole, setAddRole] = useState<"tester" | "president">("tester");
   const [issueEmail, setIssueEmail] = useState(NOVUS_EMAIL);
   const [issuePassword, setIssuePassword] = useState("");
   const [note, setNote] = useState<string | null>(null);
@@ -165,7 +166,8 @@ export function ManageUsersDesk() {
         name,
         email,
         password,
-        companyId: addCompanyId || "hitsquad",
+        companyId: addCompanyId || (addRole === "president" ? "madison" : "hitsquad"),
+        role: addRole,
       }),
     });
     const data = await response.json();
@@ -178,7 +180,8 @@ export function ManageUsersDesk() {
     setName("");
     setEmail("");
     setPassword("");
-    setAddCompanyId("hitsquad");
+    setAddCompanyId(addRole === "president" ? "madison" : "hitsquad");
+    setAddRole("tester");
     setNote("Login created. Don’t send. First sign-in must change the password. No invite sent.");
   }
 
@@ -226,7 +229,13 @@ export function ManageUsersDesk() {
                   <td className="px-2 py-2">{row.name}</td>
                   <td className="px-2 py-2">{row.email}</td>
                   <td className="px-2 py-2">
-                    {row.role === "owner" ? "Owner" : row.role === "operator" ? "Operator" : "Tester"}
+                    {row.role === "owner"
+                      ? "Owner"
+                      : row.role === "operator"
+                        ? "Operator"
+                        : row.role === "president"
+                          ? "President"
+                          : "Tester"}
                   </td>
                   <td className="px-2 py-2">
                     {row.role === "owner" ? (
@@ -352,12 +361,30 @@ export function ManageUsersDesk() {
             onToggle={() => setOpen((current) => ({ ...current, add: !current.add }))}
           >
             <p className="text-sm leading-6 text-[#5b6f73]">
-              Creates a login on this desk. Name, email, company, and a one-time password. Don’t
-              send. They change it on first sign-in. No invite email. Default company is Hit Squad.
+              Creates a login on this desk. Name, email, company, role, and a one-time password.
+              Don’t send. They change it on first sign-in. No invite email. Default company is Hit
+              Squad. President is the Madison desk seat — assign President and Madison when the
+              login email is known. Do not invent an email.
             </p>
             <form onSubmit={onAdd} className="mt-3 grid gap-3 sm:grid-cols-2">
               <Field label="NAME" value={name} onChange={setName} required />
               <Field label="EMAIL" value={email} onChange={setEmail} required type="email" placeholder="They type this to sign in" />
+              <label>
+                <span className="text-xs tracking-[0.14em] text-[#5b6f73]">ROLE</span>
+                <select
+                  value={addRole}
+                  onChange={(event) => {
+                    const next = event.target.value === "president" ? "president" : "tester";
+                    setAddRole(next);
+                    if (next === "president" && addCompanyId === "hitsquad") setAddCompanyId("madison");
+                  }}
+                  className="paper-field mt-1"
+                  aria-label="Role for the new user"
+                >
+                  <option value="tester">Tester</option>
+                  <option value="president">President</option>
+                </select>
+              </label>
               <label>
                 <span className="text-xs tracking-[0.14em] text-[#5b6f73]">COMPANY</span>
                 <select

@@ -5,7 +5,7 @@ import { useDeskPeople } from "@/components/useDeskPeople";
 import { useSession } from "@/components/SessionProvider";
 import { aliasText, shouldApplyAliases } from "@/lib/catalog-aliases";
 import type { DeskPerson } from "@/lib/desk-people";
-import { activeLensSeat, canUseFollow, canUseViewAs, deskLensKey, hasBuildDesk, isTester, lensUser, testerFromViewAs, viewingAsOther } from "@/lib/desk-role";
+import { activeLensSeat, canUseFollow, canUseViewAs, deskLensKey, hasBuildDesk, isPresident, isTester, lensUser, testerFromViewAs, viewingAsOther } from "@/lib/desk-role";
 import { hydrateFromVault, setVaultViewAs } from "@/lib/estimate-vault-client";
 import {
   aliasLensFor,
@@ -215,7 +215,9 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       ? tester.aliased
         ? "aliased"
         : "real"
-      : aliasLensFor(followSeat);
+      : isPresident(user)
+        ? "real"
+        : aliasLensFor(followSeat);
   const applyingAliases = viewedSeat
     ? viewedSeat.aliased
     : tester

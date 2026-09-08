@@ -117,6 +117,7 @@ export type OwnerSettings = {
 };
 
 export const VIEW_AS_HIDDEN_SETTINGS = [
+  "/settings/privileges",
   "/settings/users",
   "/settings/follow",
   "/settings/activity",

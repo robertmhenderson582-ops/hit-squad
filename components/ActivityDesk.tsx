@@ -6,6 +6,8 @@ import { GripToPan } from "@/components/GripToPan";
 import { activityWhoNames, filterActivityByWho } from "@/lib/activity-filter";
 import { formatActivityWhen } from "@/lib/activity-when";
 import type { ActivityKind, ActivityRow } from "@/lib/activity-store";
+import { useSession } from "@/components/SessionProvider";
+import { canSeeOwnerLog } from "@/lib/desk-role";
 
 const KIND: Record<ActivityKind, string> = {
   "sign-in": "SIGN-IN OK",
@@ -16,6 +18,8 @@ const KIND: Record<ActivityKind, string> = {
 };
 
 export function ActivityDesk() {
+  const { user } = useSession();
+  const ownerLog = canSeeOwnerLog(user);
   const confirmRemove = useConfirmRemove();
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [who, setWho] = useState("");
@@ -73,10 +77,10 @@ export function ActivityDesk() {
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Activity</h2>
         <p className="mt-1 text-sm text-[#5b6f73]">
-          Owner ledger only. Sign-in ok / fail (username they typed — password never stored),
+          Activity view. Sign-in ok / fail (username they typed — password never stored),
           sessions (start → last screen → sign-out/idle), feature trail (Home, Crew, import, export,
           save rates, ticket — not every keystroke), and unhandled errors. Kept 30 days. Testers
-          never see this page.
+          never see this page. Delete / clear stay on the owner log unless Privileges grants them.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button type="button" onClick={() => void load()} className="rounded-lg bg-steel px-3 py-2 text-sm text-white">
@@ -88,20 +92,24 @@ export function ActivityDesk() {
           <button type="button" onClick={() => download("json")} className="rounded-lg border border-steel px-3 py-2 text-sm text-steel">
             Download JSON
           </button>
-          <button
-            type="button"
-            onClick={() => void remove({ olderThanDays: 7 }, "Delete older than 7 days?", "Rows older than 7 days leave the ledger.")}
-            className="rounded-lg border border-steel px-3 py-2 text-sm text-steel"
-          >
-            Delete older than 7 days
-          </button>
-          <button
-            type="button"
-            onClick={() => void remove({ clear: true }, "Clear log?", "The whole ledger clears. Tickets stay.")}
-            className="rounded-lg border border-[#b74120] px-3 py-2 text-sm text-[#b74120]"
-          >
-            Clear log
-          </button>
+          {ownerLog ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void remove({ olderThanDays: 7 }, "Delete older than 7 days?", "Rows older than 7 days leave the ledger.")}
+                className="rounded-lg border border-steel px-3 py-2 text-sm text-steel"
+              >
+                Delete older than 7 days
+              </button>
+              <button
+                type="button"
+                onClick={() => void remove({ clear: true }, "Clear log?", "The whole ledger clears. Tickets stay.")}
+                className="rounded-lg border border-[#b74120] px-3 py-2 text-sm text-[#b74120]"
+              >
+                Clear log
+              </button>
+            </>
+          ) : null}
         </div>
         <div className="mt-5 border-t border-[#d5e0de] pt-4">
           <p className="font-mono text-[10px] tracking-[0.2em] text-steel">NAME</p>
@@ -139,7 +147,9 @@ export function ActivityDesk() {
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs tracking-[0.14em] text-[#5b6f73]">
               <tr>
-                {["WHEN", "KIND", "WHO", "DETAIL", ""].map((header) => (
+                {[ownerLog ? "WHEN" : "WHEN", "KIND", "WHO", "DETAIL", ownerLog ? "" : null]
+                  .filter((header): header is string => header !== null)
+                  .map((header) => (
                   <th key={header || "x"} className="whitespace-nowrap px-2 py-2">
                     {header}
                   </th>
@@ -149,7 +159,7 @@ export function ActivityDesk() {
             <tbody>
               {visible.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-2 py-6 text-sm text-[#5b6f73]">
+                  <td colSpan={ownerLog ? 5 : 4} className="px-2 py-6 text-sm text-[#5b6f73]">
                     {rows.length === 0
                       ? "Ledger is empty."
                       : who
@@ -174,15 +184,17 @@ export function ActivityDesk() {
                     </td>
                     <td className="px-2 py-2">{row.who}</td>
                     <td className="px-2 py-2">{row.detail}</td>
-                    <td className="px-2 py-2">
-                      <button
-                        type="button"
-                        onClick={() => void remove({ id: row.id }, "Remove this row?", row.detail)}
-                        className="text-sm text-[#b74120]"
-                      >
-                        Delete
-                      </button>
-                    </td>
+                    {ownerLog ? (
+                      <td className="px-2 py-2">
+                        <button
+                          type="button"
+                          onClick={() => void remove({ id: row.id }, "Remove this row?", row.detail)}
+                          className="text-sm text-[#b74120]"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               )}

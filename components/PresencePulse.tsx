@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { hasBuildDesk } from "@/lib/desk-role";
+import { hasWorkingDesk } from "@/lib/desk-role";
 
 type Seat = { name: string; path: string; lastAt: number; live: boolean };
 
@@ -26,7 +26,7 @@ export function PresencePulse() {
   );
 
   useEffect(() => {
-    if (!hasBuildDesk(user) || hidden) return;
+    if (!hasWorkingDesk(user) || hidden) return;
     function load() {
       fetch("/api/desk/presence", { credentials: "include", cache: "no-store" })
         .then((response) => response.json())
@@ -44,7 +44,7 @@ export function PresencePulse() {
     return () => window.clearInterval(id);
   }, [seats.length]);
 
-  if (!hasBuildDesk(user) || hidden) return null;
+  if (!hasWorkingDesk(user) || hidden) return null;
   const row = seats[index % Math.max(seats.length, 1)];
   if (!row) return null;
 

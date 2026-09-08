@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { hasBuildDesk } from "@/lib/desk-role";
+import { hasWorkingDesk } from "@/lib/desk-role";
 import { isDeskLocked } from "@/lib/desk-lock";
 
 type Arrival = { name: string; path: string };
@@ -39,7 +39,7 @@ export function SignedInToast() {
   }, [pathname, status, user]);
 
   useEffect(() => {
-    if (status !== "authenticated" || !hasBuildDesk(user)) return;
+    if (status !== "authenticated" || !hasWorkingDesk(user)) return;
     if (owner?.viewAs && owner.viewAs !== "owner") return;
     if (owner?.followSeat && owner.followSeat !== "owner") return;
     const tick = window.setInterval(() => {
@@ -60,7 +60,7 @@ export function SignedInToast() {
     return () => window.clearTimeout(id);
   }, [arrival]);
 
-  if (!hasBuildDesk(user)) return null;
+  if (!hasWorkingDesk(user)) return null;
   if (owner?.viewAs && owner.viewAs !== "owner") return null;
   if (owner?.followSeat && owner.followSeat !== "owner") return null;
   if (!arrival) return null;

@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { lensPeopleFromSeats, seededDeskPeople, type DeskPerson } from "@/lib/desk-people";
+import { useEffect, useMemo, useState } from "react";
+import { useSession } from "@/components/SessionProvider";
+import { lensPeopleFromSeats, peopleVisibleTo, seededDeskPeople, type DeskPerson } from "@/lib/desk-people";
 import type { HandoffSeat } from "@/lib/handoff";
 
 export function useDeskPeople() {
-  const [people, setPeople] = useState<DeskPerson[]>(seededDeskPeople);
+  const { user } = useSession();
+  const seeded = useMemo(() => peopleVisibleTo(user, seededDeskPeople()), [user]);
+  const [fetched, setFetched] = useState<DeskPerson[] | null>(null);
 
   useEffect(() => {
     function load() {
@@ -13,16 +16,16 @@ export function useDeskPeople() {
         .then((response) => response.json())
         .then((data) => {
           if (!Array.isArray(data.seats)) return;
-          setPeople(lensPeopleFromSeats(data.seats));
+          setFetched(peopleVisibleTo(user, lensPeopleFromSeats(data.seats)));
         })
         .catch(() => undefined);
     }
     load();
     window.addEventListener("focus", load);
     return () => window.removeEventListener("focus", load);
-  }, []);
+  }, [user]);
 
-  return people;
+  return fetched ?? seeded;
 }
 
 /** Share / Turn over list. Testers can load this; they cannot load Users seats. */

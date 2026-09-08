@@ -5,7 +5,7 @@ import { SettingsGate } from "@/components/SettingsGate";
 
 export default function SettingsUsersPage() {
   return (
-    <SettingsGate buildDesk>
+    <SettingsGate buildDesk privilege="manage-users">
       <ManageUsersDesk />
     </SettingsGate>
   );

@@ -1,6 +1,8 @@
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
-import { NOVUS_EMAIL } from "./desk-role.ts";
-import { testerByEmail } from "./tester-seats.ts";
+import { canExpandInbox, isPresident, NOVUS_EMAIL } from "./desk-role.ts";
+import { isMadisonAssigned } from "./desk-people.ts";
+import type { PrivilegeViewer } from "./privileges.ts";
+import { testerByEmail, TESTER_SEATS } from "./tester-seats.ts";
 
 export type InboxCirclePerson = {
   id: string;
@@ -47,9 +49,10 @@ export function isNovusInboxEmail(email = "") {
   return normalizeInboxEmail(email) === NOVUS_INBOX_EMAIL;
 }
 
-export function canUseInbox(user?: { email?: string } | null): boolean {
+export function canUseInbox(user?: (PrivilegeViewer & { email?: string }) | null): boolean {
   const email = normalizeInboxEmail(user?.email);
   if (!email || isNovusInboxEmail(email) || email === NOVUS_EMAIL) return false;
+  if (isPresident(user)) return true;
   return isInboxCircleEmail(email);
 }
 
@@ -61,10 +64,85 @@ export function canReceiveDeskBot(user?: { email?: string } | null): boolean {
   return canUseInbox(user);
 }
 
-export function inboxContactsFor(email = ""): InboxCirclePerson[] {
+export function madisonInboxContacts(
+  email = "",
+  people: Array<{ id: string; email: string; name: string; companyId?: string }> = [],
+): InboxCirclePerson[] {
   const key = normalizeInboxEmail(email);
+  const rows: InboxCirclePerson[] = [];
+  const seen = new Set<string>();
+  function add(row: InboxCirclePerson) {
+    const next = normalizeInboxEmail(row.email);
+    if (!next || next === key || seen.has(next) || next === NOVUS_EMAIL || isNovusInboxEmail(next)) return;
+    seen.add(next);
+    rows.push({ ...row, email: next });
+  }
+  const owner = INBOX_CIRCLE.find((row) => row.id === "owner");
+  if (owner) add(owner);
+  for (const row of INBOX_CIRCLE) {
+    if (row.company === "Madison") add(row);
+  }
+  for (const seat of TESTER_SEATS) {
+    if (seat.company !== "madison") continue;
+    add({ id: seat.id, email: seat.email, name: seat.name, company: "Madison" });
+  }
+  for (const person of people) {
+    if (!isMadisonAssigned(person)) continue;
+    add({
+      id: person.id,
+      email: person.email,
+      name: person.name,
+      company: "Madison",
+    });
+  }
+  return rows;
+}
+
+export function inboxContactsFor(
+  email = "",
+  viewer?: PrivilegeViewer | null,
+  people: Array<{ id: string; email: string; name: string; companyId?: string }> = [],
+): InboxCirclePerson[] {
+  const key = normalizeInboxEmail(email);
+  if (isPresident(viewer)) {
+    if (canExpandInbox(viewer)) {
+      return INBOX_CIRCLE.filter((row) => row.email !== key);
+    }
+    return madisonInboxContacts(key, people);
+  }
   if (!isInboxCircleEmail(key)) return [];
   return INBOX_CIRCLE.filter((row) => row.email !== key);
+}
+
+export function inboxPeerFor(email = ""): InboxCirclePerson | undefined {
+  const circle = inboxCirclePerson(email);
+  if (circle) return circle;
+  const tester = testerByEmail(email);
+  if (!tester) return undefined;
+  return {
+    id: tester.id,
+    email: tester.email,
+    name: tester.name,
+    company: tester.company === "madison" ? "Madison" : "Hit Squad",
+  };
+}
+
+export function isMadisonInboxEmail(email = "") {
+  const key = normalizeInboxEmail(email);
+  if (!key) return false;
+  if (INBOX_CIRCLE.some((row) => row.email === key && row.company === "Madison")) return true;
+  return testerByEmail(key)?.company === "madison";
+}
+
+/** Persist / hydrate Inbox pairs. Circle, Madison seats, or a message that touches the circle. */
+export function keepInboxPair(from = "", to = "") {
+  const a = normalizeInboxEmail(from);
+  const b = normalizeInboxEmail(to);
+  if (!a.includes("@") || !b.includes("@")) return false;
+  if (a === NOVUS_EMAIL || b === NOVUS_EMAIL) return false;
+  if (isInboxCircleEmail(a) || isInboxCircleEmail(b)) return true;
+  if (isMadisonInboxEmail(a) || isMadisonInboxEmail(b)) return true;
+  return false;
 }
 
 export function inboxThreadKey(a: string, b: string) {

@@ -8,7 +8,7 @@ import {
   writeTalkWalk,
 } from "@/lib/talk-walk";
 import { useSession } from "@/components/SessionProvider";
-import { hasBuildDesk } from "@/lib/desk-role";
+import { canDesignerShip } from "@/lib/desk-role";
 
 type TalkMode = "closed" | "briefing" | "walk" | "updated";
 
@@ -37,7 +37,7 @@ export function TalkWalkProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (status !== "authenticated" || !user) return;
     if (user.mustChangePassword) return;
-    if (hasBuildDesk(user)) {
+    if (canDesignerShip(user)) {
       const seen = readTalkWalk();
       if (!seen) writeTalkWalk({ version: TALK_WALK_VERSION, skipped: true });
       return;

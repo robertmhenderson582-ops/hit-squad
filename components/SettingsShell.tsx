@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { canUseViewAs, hasBuildDesk, isOwner } from "@/lib/desk-role";
+import { canUseViewAs, hasBuildDesk, hasPrivilege, hasWorkingDesk, isOwner } from "@/lib/desk-role";
+import type { PrivilegeId } from "@/lib/privileges";
 
 const SECTIONS: {
   href: string;
@@ -12,21 +13,24 @@ const SECTIONS: {
   ownerOnly?: boolean;
   buildDesk?: boolean;
   viewAs?: boolean;
+  workingDesk?: boolean;
+  privilege?: PrivilegeId;
   exact?: boolean;
 }[] = [
   { href: "/settings", label: "Display", exact: true },
   { href: "/settings/security", label: "Security" },
   { href: "/settings/copy", label: "Copy" },
   { href: "/settings/talk", label: "How we talk" },
-  { href: "/settings/users", label: "Manage users", buildDesk: true },
+  { href: "/settings/privileges", label: "Privileges", ownerOnly: true },
+  { href: "/settings/users", label: "Manage users", buildDesk: true, privilege: "manage-users" },
   { href: "/settings/follow", label: "Follow", buildDesk: true },
-  { href: "/settings/activity", label: "Activity", buildDesk: true },
+  { href: "/settings/activity", label: "Activity", workingDesk: true },
   { href: "/settings/view-as", label: "View as", viewAs: true },
-  { href: "/settings/aliases", label: "Aliases", buildDesk: true },
-  { href: "/settings/republish", label: "Heads up — republish", buildDesk: true },
-  { href: "/settings/vault", label: "Data vault", buildDesk: true },
-  { href: "/settings/branding", label: "Branding", buildDesk: true },
-  { href: "/settings/sites", label: "Sites", buildDesk: true },
+  { href: "/settings/aliases", label: "Aliases", buildDesk: true, privilege: "alias-config" },
+  { href: "/settings/republish", label: "Heads up — republish", buildDesk: true, privilege: "designer-ship" },
+  { href: "/settings/vault", label: "Data vault", buildDesk: true, privilege: "vault-wipe" },
+  { href: "/settings/branding", label: "Branding", workingDesk: true },
+  { href: "/settings/sites", label: "Sites", buildDesk: true, privilege: "designer-ship" },
   { href: "/settings/checks", label: "Checks", ownerOnly: true },
   { href: "/settings/modules", label: "Future modules" },
 ];
@@ -44,6 +48,7 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
   const waiting = Boolean(hasBuildDesk(user) && desk && !desk.lensReady);
   const owner = isOwner(lens) && !waiting;
   const buildDesk = hasBuildDesk(lens) && !waiting;
+  const working = hasWorkingDesk(lens) && !waiting;
   const viewAsOk = canUseViewAs(lens) && !waiting;
 
   return (
@@ -53,8 +58,16 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
         <nav className="mt-3 flex flex-col gap-1">
           {SECTIONS.filter((item) => {
             if (item.ownerOnly && !owner) return false;
-            if (item.buildDesk && !buildDesk) return false;
             if (item.viewAs && !viewAsOk) return false;
+            if (item.privilege) {
+              return (
+                hasPrivilege(lens, item.privilege) ||
+                (Boolean(item.buildDesk) && buildDesk) ||
+                (Boolean(item.workingDesk) && working)
+              );
+            }
+            if (item.workingDesk && !working) return false;
+            if (item.buildDesk && !buildDesk) return false;
             return true;
           }).map((item) => {
             const on = active(pathname, item.href, item.exact);

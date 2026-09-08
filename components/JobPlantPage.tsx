@@ -13,7 +13,8 @@ import { ChangeOrderDesk } from "@/components/ChangeOrderDesk";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useAlias, useDeskLens, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { hasBuildDesk } from "@/lib/desk-role";
+import { hasWorkingDesk } from "@/lib/desk-role";
+import { peopleVisibleTo } from "@/lib/desk-people";
 import { companyScopeFor } from "@/lib/companies";
 import { VIEW_RESPONSIBILITIES, VISUAL_ROSTER } from "@/lib/owner-desk";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
@@ -92,7 +93,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const { user } = useSession();
   const desk = useOwnerDesk();
   const { lens, viewingAs, lensKey, seat } = useDeskLens();
-  const people = hasBuildDesk(user) ? desk?.people ?? [] : VISUAL_ROSTER;
+  const people = hasWorkingDesk(user) ? peopleVisibleTo(user, desk?.people ?? []) : VISUAL_ROSTER;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

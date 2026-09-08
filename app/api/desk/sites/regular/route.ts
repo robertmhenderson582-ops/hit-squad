@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { catalogSites } from "@/lib/desk-data";
-import { hasBuildDesk, isOwner } from "@/lib/desk-role";
+import { canDesignerShip, isOwner } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
 import { getOwnerSettings, setSiteRegularClient } from "@/lib/owner-settings-store";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (!hasBuildDesk(user)) return NextResponse.json({ error: "Build desk only." }, { status: 403 });
+  if (!canDesignerShip(user)) return NextResponse.json({ error: "Build desk only." }, { status: 403 });
   await getOwnerSettings();
   return NextResponse.json({
     sites: catalogSites().map((site) => ({

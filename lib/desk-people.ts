@@ -1,7 +1,8 @@
 import { companyIdForEmail, peopleLane, type CompanyId } from "./companies.ts";
-import { NOVUS_EMAIL } from "./desk-role.ts";
+import { canSeeHitSquadSeats, NOVUS_EMAIL } from "./desk-role.ts";
 import { VISUAL_ROSTER } from "./owner-desk.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
+import type { PrivilegeViewer } from "./privileges.ts";
 
 export type DeskPerson = {
   id: string;
@@ -44,6 +45,42 @@ export function lensPeopleFromSeats(seats: SeatLike[]): DeskPerson[] {
     people.push({ id: lensIdForSeat({ id: rawId, email }), email, name, companyId });
   }
   return people;
+}
+
+export function assignedCompanyOf(
+  row: { email: string; companyId?: string },
+  assignments?: Record<string, string>,
+): string {
+  const assigned = typeof row.companyId === "string" ? row.companyId.trim() : "";
+  return assigned || companyIdForEmail(row.email, assignments);
+}
+
+export function isMadisonAssigned(
+  row: { email: string; companyId?: string },
+  assignments?: Record<string, string>,
+): boolean {
+  return assignedCompanyOf(row, assignments) === "madison";
+}
+
+/** President (and any seat without Hit Squad visibility) sees Madison operators only. */
+export function peopleVisibleTo<T extends { email: string; companyId?: string; role?: string }>(
+  viewer: PrivilegeViewer | null | undefined,
+  people: T[],
+  assignments?: Record<string, string>,
+): T[] {
+  if (!viewer) return people;
+  if (canSeeHitSquadSeats(viewer)) return people;
+  return people.filter((row) => isMadisonAssigned(row, assignments));
+}
+
+export function seatsVisibleTo<T extends { email: string; companyId?: string; role?: string }>(
+  viewer: PrivilegeViewer | null | undefined,
+  seats: T[],
+  assignments?: Record<string, string>,
+): T[] {
+  if (!viewer) return seats;
+  if (canSeeHitSquadSeats(viewer)) return seats;
+  return seats.filter((row) => row.role === "owner" || isMadisonAssigned(row, assignments));
 }
 
 export function peopleByLane<T extends { email: string; companyId?: string }>(

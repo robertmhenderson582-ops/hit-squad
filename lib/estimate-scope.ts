@@ -1,6 +1,6 @@
 import { companyScopeFor, type CompanyScope } from "./companies.ts";
 import { dummyPacksForUser, mergeDummyPacks } from "./cbi-dummy.ts";
-import { hasBuildDesk, isOwner, isTester } from "./desk-role.ts";
+import { hasWorkingDesk, isOwner, isTester } from "./desk-role.ts";
 import { hisMatchForPack, mergeHisWoodRiverCards, NATHAN_DESK_EMAIL, shouldPaintHisCards } from "./his-wood-river.ts";
 import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
@@ -62,10 +62,10 @@ export function packVisibleTo(user: ScopeUser, pack: ScopedPack) {
   const email = user.email.trim().toLowerCase();
   if (!ownerEmail) return false;
   if (ownerEmail === email || packSharedEmails(pack).includes(email)) {
-    return isTester(user) || hasBuildDesk(user);
+    return isTester(user) || hasWorkingDesk(user);
   }
   if (isTester(user)) return false;
-  if (hasBuildDesk(user)) return isOwnerVaultEmail(pack.ownerEmail);
+  if (hasWorkingDesk(user)) return isOwnerVaultEmail(pack.ownerEmail);
   return false;
 }
 
@@ -119,7 +119,7 @@ export function localPackVisibleTo(user: ScopeUser, pack: ScopedPack) {
   if (isTester(user)) {
     return Boolean(ownerEmail) && (ownerEmail === email || packSharedEmails(pack).includes(email));
   }
-  if (!hasBuildDesk(user)) return false;
+  if (!hasWorkingDesk(user)) return false;
   if (!ownerEmail) return true;
   return isOwnerVaultEmail(pack.ownerEmail) || ownerEmail === email || packSharedEmails(pack).includes(email);
 }
@@ -148,5 +148,5 @@ export function visibleDeskPacks(
 export function canWritePack(user: ScopeUser, pack: ScopedPack) {
   if (isOwner(user)) return true;
   if (isTester(user)) return packVisibleTo(user, pack);
-  return hasBuildDesk(user) && packVisibleTo(user, pack);
+  return hasWorkingDesk(user) && packVisibleTo(user, pack);
 }

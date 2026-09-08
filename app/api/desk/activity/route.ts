@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { hasBuildDesk } from "@/lib/desk-role";
+import { canSeeOwnerLog, hasWorkingDesk } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
 import {
   addActivity,
@@ -22,7 +22,7 @@ function isKind(value: unknown): value is ActivityKind {
 export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (!hasBuildDesk(user)) return NextResponse.json({ error: "Build desk ledger only." }, { status: 403 });
+  if (!hasWorkingDesk(user)) return NextResponse.json({ error: "Build desk ledger only." }, { status: 403 });
   return NextResponse.json({ rows: await listActivity() });
 }
 
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (!hasBuildDesk(user)) return NextResponse.json({ error: "Build desk ledger only." }, { status: 403 });
+  if (!canSeeOwnerLog(user)) return NextResponse.json({ error: "Owner log only." }, { status: 403 });
   const body = (await request.json().catch(() => ({}))) as { id?: string; olderThanDays?: number; clear?: boolean };
   if (body.clear) await clearActivity();
   else if (typeof body.olderThanDays === "number") await removeActivityOlderThan(body.olderThanDays);

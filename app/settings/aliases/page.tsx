@@ -5,7 +5,7 @@ import { SettingsGate } from "@/components/SettingsGate";
 
 export default function SettingsAliasesPage() {
   return (
-    <SettingsGate buildDesk>
+    <SettingsGate buildDesk privilege="alias-config">
       <AliasesDesk />
     </SettingsGate>
   );

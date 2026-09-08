@@ -5,7 +5,7 @@ import { SettingsGate } from "@/components/SettingsGate";
 
 export default function SettingsActivityPage() {
   return (
-    <SettingsGate buildDesk>
+    <SettingsGate workingDesk>
       <ActivityDesk />
     </SettingsGate>
   );

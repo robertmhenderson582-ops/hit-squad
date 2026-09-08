@@ -370,7 +370,7 @@ describe("company desk logo on file", () => {
     assert.equal(/HIT SQUAD over PROJECT CONTROLS/.test(desk), false);
     assert.match(api, /setCompanyLogo/);
     assert.match(api, /isOwner/);
-    assert.match(api, /hasBuildDesk/);
+    assert.match(api, /hasWorkingDesk/);
     assert.match(store, /setCompanyLogo/);
     assert.match(store, /validateCompanyLogoInput/);
     assert.match(store, /COMPANIES_VAULT/);
