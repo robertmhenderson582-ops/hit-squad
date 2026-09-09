@@ -15,6 +15,9 @@
  * Visible sheets take the estimate company’s live logo as a faded worksheet
  * background splash. Hidden helpers (_JobDays / _CrewRanges / _Lists) stay unbranded.
  * No logo on file → no splash (never invent a mark).
+ * Post-write stamp (stampUnusedRowsHidden) also repairs ExcelJS OOXML that
+ * Excel Desktop "finds a problem with": Print_Area `$A1` vs `$A$1`, and
+ * `picture` before `legacyDrawing` when logo splash + comments coexist.
  */
 
 import ExcelJS from "exceljs";
@@ -1376,15 +1379,78 @@ function stampSheetCols(xml: string): string {
   return xml.replace(/<cols>[\s\S]*?<\/cols>/, `<cols>${tags.join("")}</cols>`);
 }
 
+const SHEET_LEAF_OR_BLOCK = (tag: string) =>
+  new RegExp(`<${tag}\\b[^/]*/>|<${tag}\\b[^>]*>[\\s\\S]*?</${tag}>`);
+
+function takeWorksheetTag(xml: string, tag: string): { xml: string; frag: string } {
+  const match = xml.match(SHEET_LEAF_OR_BLOCK(tag));
+  if (!match) return { xml, frag: "" };
+  return { xml: xml.replace(match[0], ""), frag: match[0] };
+}
+
+/**
+ * ECMA-376 CT_Worksheet tail: drawing, legacyDrawing, picture, tableParts, extLst.
+ * ExcelJS writes picture then legacyDrawing (logo splash + comments). Excel Desktop
+ * repairs that inversion — "We found a problem with some content".
+ */
+function stampWorksheetChildOrder(xml: string): string {
+  const pulled = ["legacyDrawing", "picture", "tableParts", "extLst"].reduce(
+    (acc, tag) => {
+      const next = takeWorksheetTag(acc.xml, tag);
+      acc.xml = next.xml;
+      acc.frags[tag] = next.frag;
+      return acc;
+    },
+    { xml, frags: {} as Record<string, string> },
+  );
+  const tail = ["legacyDrawing", "picture", "tableParts", "extLst"]
+    .map((tag) => pulled.frags[tag] ?? "")
+    .join("");
+  if (!tail) return pulled.xml;
+  if (!pulled.xml.includes("</worksheet>")) return `${pulled.xml}${tail}`;
+  return pulled.xml.replace("</worksheet>", `${tail}</worksheet>`);
+}
+
+/** ECMA-376 CT_SheetPr: tabColor, outlinePr, pageSetUpPr. */
+function stampOutlinePr(xml: string): string {
+  if (xml.includes("<outlinePr")) return xml;
+  const outline = '<outlinePr summaryBelow="1" summaryRight="1"/>';
+  if (/<sheetPr\b[^>]*\/>/.test(xml)) {
+    return xml.replace(/<sheetPr\b([^>]*)\/>/, `<sheetPr$1>${outline}</sheetPr>`);
+  }
+  if (/<sheetPr\b/.test(xml)) {
+    if (/<tabColor\b[^/]*\/>/.test(xml)) {
+      return xml.replace(/(<tabColor\b[^/]*\/>)/, `$1${outline}`);
+    }
+    return xml.replace(/<sheetPr\b([^>]*)>/, `<sheetPr$1>${outline}`);
+  }
+  return xml.replace(/<worksheet\b([^>]*)>/, `<worksheet$1><sheetPr>${outline}</sheetPr>`);
+}
+
+/**
+ * ExcelJS Print_Area is `'Sheet'!$A1:$C15`. Excel Desktop repairs mixed
+ * absolute refs on `_xlnm.Print_Area` — needs `$A$1:$C$15`.
+ */
+function stampPrintAreaNames(workbookXml: string): string {
+  return workbookXml.replace(
+    /(<definedName name="_xlnm\.Print_Area"[^>]*>)([^<]+)(<\/definedName>)/g,
+    (_all, open: string, body: string, close: string) =>
+      `${open}${body.replace(/!\$([A-Z]+)(\d+):\$([A-Z]+)(\d+)/g, "!$$$1$$$2:$$$3$$$4")}${close}`,
+  );
+}
+
 /** Excel still paints a white band under TOTAL unless unused rows are hidden by default. */
 async function stampUnusedRowsHidden(buffer: Uint8Array): Promise<Uint8Array> {
   const zip = await JSZip.loadAsync(buffer);
+  const workbook = zip.file("xl/workbook.xml");
+  if (workbook) {
+    zip.file("xl/workbook.xml", stampPrintAreaNames(await workbook.async("string")));
+  }
   for (const name of Object.keys(zip.files)) {
     if (!/^xl\/worksheets\/sheet\d+\.xml$/.test(name)) continue;
     const file = zip.file(name);
     if (!file) continue;
     let xml = await file.async("string");
-    const picture = xml.match(/<picture\b[^/]*\/>|<picture\b[^>]*>[\s\S]*?<\/picture>/)?.[0] ?? "";
     xml = stampSheetCols(xml);
     const hasInstrumentOutline = /<col[^>]*outlineLevel="1"/.test(xml);
     xml = xml.replace(/<sheetFormatPr\b([^>]*?)\/>/g, (_all, attrs: string) => {
@@ -1414,28 +1480,9 @@ async function stampUnusedRowsHidden(buffer: Uint8Array): Promise<Uint8Array> {
         }
         return full.replace("<sheetView", '<sheetView showOutlineSymbols="1"');
       });
-      if (!xml.includes("<outlinePr")) {
-        if (/<sheetPr\b[^>]*\/>/.test(xml)) {
-          xml = xml.replace(
-            /<sheetPr\b([^>]*)\/>/,
-            '<sheetPr$1><outlinePr summaryBelow="1" summaryRight="1"/></sheetPr>',
-          );
-        } else if (/<sheetPr\b/.test(xml)) {
-          xml = xml.replace(
-            /<sheetPr\b([^>]*)>/,
-            '<sheetPr$1><outlinePr summaryBelow="1" summaryRight="1"/>',
-          );
-        } else {
-          xml = xml.replace(
-            /<worksheet\b([^>]*)>/,
-            '<worksheet$1><sheetPr><outlinePr summaryBelow="1" summaryRight="1"/></sheetPr>',
-          );
-        }
-      }
+      xml = stampOutlinePr(xml);
     }
-    if (picture && !/<picture\b/.test(xml)) {
-      xml = xml.replace("</worksheet>", `${picture}</worksheet>`);
-    }
+    xml = stampWorksheetChildOrder(xml);
     zip.file(name, xml);
   }
   // JSZip runtime accepts createFolders on generate; the 3.1 typings only
@@ -1543,7 +1590,12 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
         exCell.value = cell.value;
         exCell.numFmt = cell.numFmt || FMT_DATE;
       } else {
-        exCell.value = { formula: cell.value, result: evalAt(sheet.name, cell.ref) };
+        // Day-grid formulas are walked via title/summary rollups (cached).
+        // Skipping a second evalAt per cell is the cheap huge-pack win.
+        const dayGrid = labor && row >= 7 && colNum >= LABOR_DATE_FIRST_COL;
+        exCell.value = dayGrid
+          ? { formula: cell.value }
+          : { formula: cell.value, result: evalAt(sheet.name, cell.ref) };
       }
 
       if (totalRows.has(row)) applyTotalStyle(exCell);

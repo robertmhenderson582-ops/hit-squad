@@ -108,5 +108,8 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(writer.includes('from "./xlsx-package.ts"'), false);
     assert.match(writer, /const EXCELJS_VML_COMMENT_SAFE = 800/);
     assert.match(writer, /createFolders:\s*false/);
+    assert.match(writer, /stampWorksheetChildOrder/);
+    assert.match(writer, /stampPrintAreaNames/);
+    assert.match(writer, /legacyDrawing/);
   });
 });

@@ -17,8 +17,10 @@ import { rodeoU250FilledSnapshot } from "./madison-u250.ts";
 import { parseA1 } from "./xlsx-minimal.ts";
 import {
   assertOpenableEstimateXlsx,
+  inspectEstimateXlsx,
   EXCELJS_VML_COMMENT_SAFE,
   EXCELJS_VML_IDMAP_CAPACITY,
+  worksheetTopLevelTags,
 } from "./xlsx-package.ts";
 import { boiler17B1FilledSnapshot } from "./wood-river-b1.ts";
 
@@ -240,6 +242,10 @@ async function exportAndOpen(input: EstimateXlsxInput, label: string) {
   for (const [part, count] of Object.entries(report.commentsByPart)) {
     assert.equal(count <= EXCELJS_VML_COMMENT_SAFE, true, `${label} ${part} ${count}`);
   }
+  for (const area of report.printAreas) {
+    assert.match(area, /!\$[A-Z]+\$\d+:\$[A-Z]+\$\d+/, `${label} print area ${area}`);
+    assert.equal(/!\$[A-Z]+\d+:\$[A-Z]+\d+/.test(area), false, `${label} mixed print area ${area}`);
+  }
   return report;
 }
 
@@ -272,6 +278,65 @@ describe("estimate xlsx package Excel can open", () => {
       assert.equal(report.bytes > 1000, true, item.label);
       assert.ok(report.sheets.includes(ESTIMATE_XLSX_SHEETS.summary), item.label);
     }
+  });
+
+  it("rejects the ExcelJS repair patterns (picture-before-legacyDrawing, mixed Print_Area)", async () => {
+    const bytes = await estimateToXlsx(denseInput({ companyLogo: PIXEL }));
+    await assertOpenableEstimateXlsx(bytes);
+    const { default: JSZip } = await import("jszip");
+    const zip = await JSZip.loadAsync(bytes);
+    const laborName = (
+      await Promise.all(
+        Object.keys(zip.files)
+          .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+          .map(async (name) => ({ name, xml: (await zip.file(name)?.async("string")) ?? "" })),
+      )
+    ).find((row) => /<legacyDrawing\b/.test(row.xml) && /<picture\b/.test(row.xml));
+    assert.ok(laborName, "expected a sheet with comments + logo splash");
+    const staff = laborName.xml;
+    assert.match(staff, /<legacyDrawing\b[\s\S]*<picture\b/);
+    const inverted = staff.replace(
+      /(<legacyDrawing\b[^/]*\/>)(<picture\b[^/]*\/>)/,
+      "$2$1",
+    );
+    assert.match(inverted, /<picture\b[\s\S]*<legacyDrawing\b/);
+    zip.file(laborName.name, inverted);
+    const invertedBytes = await zip.generateAsync({ type: "uint8array" });
+    await assert.rejects(() => inspectEstimateXlsx(invertedBytes), /xlsx-sheet-order/);
+
+    const zip2 = await JSZip.loadAsync(bytes);
+    const workbook = (await zip2.file("xl/workbook.xml")?.async("string")) ?? "";
+    zip2.file(
+      "xl/workbook.xml",
+      workbook.replace(/!\$([A-Z]+)\$(\d+):\$([A-Z]+)\$(\d+)/, "!$$$1$2:$$$3$4"),
+    );
+    const mixedBytes = await zip2.generateAsync({ type: "uint8array" });
+    await assert.rejects(() => inspectEstimateXlsx(mixedBytes), /xlsx-print-area-rel/);
+  });
+
+  it("puts legacyDrawing before picture and keeps Print_Area fully absolute (Excel repair class)", async () => {
+    const bytes = await estimateToXlsx(denseInput({ companyLogo: PIXEL }));
+    const report = await assertOpenableEstimateXlsx(bytes);
+    assert.ok(report.printAreas.length);
+    for (const area of report.printAreas) {
+      assert.match(area, /!\$[A-Z]+\$\d+:\$[A-Z]+\$\d+/);
+    }
+    const { default: JSZip } = await import("jszip");
+    const zip = await JSZip.loadAsync(bytes);
+    const sheets = await Promise.all(
+      report.parts
+        .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+        .map(async (name) => ({ name, xml: (await zip.file(name)?.async("string")) ?? "" })),
+    );
+    const branded = sheets.filter((row) => /<picture\b/.test(row.xml) && /<legacyDrawing\b/.test(row.xml));
+    assert.ok(branded.length >= 1, "logo + comments on a labor sheet");
+    for (const row of branded) {
+      const tags = worksheetTopLevelTags(row.xml);
+      assert.equal(tags.indexOf("legacyDrawing") < tags.indexOf("picture"), true, row.name);
+      assert.match(row.xml, /<legacyDrawing\b[\s\S]*<picture\b/);
+    }
+    const workbook = (await zip.file("xl/workbook.xml")?.async("string")) ?? "";
+    assert.equal(/Print_Area[^>]*>[^<]*!\$[A-Z]+\d+:\$[A-Z]+\d+</.test(workbook), false);
   });
 
   it("opens Drive-shaped vault packs when present (Aromatics / CAT 2 / Boiler 17)", async () => {
