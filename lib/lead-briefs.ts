@@ -9,6 +9,9 @@ export type PublicLeadBrief = {
   describe: string;
   files: PublicLeadFile[];
   savedAt: string;
+  jobId?: string;
+  folderId?: string;
+  companyId?: string;
 };
 
 export function briefKey(kind: string, jobId = "") {

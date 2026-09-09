@@ -2,7 +2,7 @@ import { catalogSites } from "./desk-data.ts";
 import { catalogSeedsAllowedOnDesk, jobsOnDesk, omitCatalogSeedJobs } from "./jobs.ts";
 import { clientFolderId } from "./quality-hse-modules.ts";
 import { jobTree, type JobTreeCompany } from "./job-tree.ts";
-import { isRetiredPeerCompany, isRetiredPeerCompanyName, type CompanyScope } from "./companies.ts";
+import { isRetiredPeerCompany, isRetiredPeerCompanyName, type CompanyId, type CompanyScope } from "./companies.ts";
 import type { JobMenuState } from "./job-menu.ts";
 import type { LocalPack, StorageLike } from "./local-estimates.ts";
 import type { JobRecord, SiteRecord } from "./types.ts";
@@ -129,6 +129,18 @@ export function cascadeJobs(tree: JobTreeCompany[], clientId: string, siteId: st
     }
   }
   return [...seen.values()];
+}
+
+/** Company that owns this Client → Site → Job pick on the Jobs tree. */
+export function cascadeCompanyId(tree: JobTreeCompany[], pick: JobScopePick): CompanyId | "" {
+  if (!pick.clientId || !pick.siteId || !pick.jobId) return "";
+  for (const company of tree) {
+    if (isRetiredPeerCompany(company.id) || isRetiredPeerCompanyName(company.name)) continue;
+    const client = company.clients.find((row) => row.id === pick.clientId);
+    const site = client?.sites.find((row) => row.id === pick.siteId);
+    if (site?.jobs.some((job) => job.id === pick.jobId)) return company.id;
+  }
+  return "";
 }
 
 /** Drop stale ids after the tree loads. Empty tree leaves the sticky pick alone. */

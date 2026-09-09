@@ -2,19 +2,23 @@
 
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { JobScopePicks, PickJobEmpty } from "@/components/JobScopePicks";
-import { LeadStudio } from "@/components/LeadStudio";
 import { ModuleRegister, type RegisterField } from "@/components/ModuleRegister";
+import { QualityCompanyDocRail } from "@/components/QualityCompanyDocRail";
 import { QualityDay1Card } from "@/components/QualityDay1Card";
+import { QualityFolderDrop } from "@/components/QualityFolderDrop";
 import { RollingChartMap } from "@/components/RollingChartMap";
 import { useQualityHseJobTree } from "@/components/useQualityHseJobTree";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { companyScopeFor } from "@/lib/companies";
+import { assignedCompanyId, companyScopeFor, inferCompanyIdFromParts } from "@/lib/companies";
+import { qualityRailCompanyId } from "@/lib/quality-company-docs";
+import { showsQualityFolderDesk } from "@/lib/quality-folders";
 import { canSeeMadisonManuals, madisonManualLabel, type QualityDay1 } from "@/lib/quality-day1";
 import { CLIENT_FOLDERS } from "@/lib/quality-hse-modules";
 import {
   QUALITY_JOB_SCOPE_KEY,
   cascadeClients,
+  cascadeCompanyId,
   cascadeJobs,
   cascadeSites,
   readJobScope,
@@ -90,6 +94,11 @@ export function QualityDesk() {
   const selectedJob = siteJobs.find((job) => job.id === pick.jobId);
   const selectedSite = sites.find((site) => site.id === pick.siteId);
   const selectedClient = clients.find((client) => client.id === pick.clientId);
+  const companyId =
+    cascadeCompanyId(tree, pick) ||
+    inferCompanyIdFromParts(selectedClient?.name, selectedSite?.name, selectedJob?.title, selectedJob?.code);
+  const showFolderDesk = showsQualityFolderDesk(companyId);
+  const railCompanyId = qualityRailCompanyId(companyId, assignedCompanyId(companyScopeFor(user)));
 
   useEffect(() => {
     if (!ready) return;
@@ -157,7 +166,9 @@ export function QualityDesk() {
   const log = QUALITY_SECTIONS.find((section) => section.id === tab);
 
   return (
-    <div className="field-desk mt-4 space-y-5">
+    <div className="field-desk mt-4 grid gap-5 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
+      <QualityCompanyDocRail companyId={railCompanyId} />
+      <div className="space-y-5">
       <JobScopePicks
         clients={clients}
         sites={sites}
@@ -176,13 +187,13 @@ export function QualityDesk() {
               {selectedClient ? ` · ${alias(selectedClient.name)}` : ""}
             </p>
           ) : null}
-          <LeadStudio title="Quality lead studio" kind="quality" jobId={pick.jobId} />
-          {chance ? (
+          {chance && showFolderDesk ? (
             <p className="plant-card px-4 py-3 text-sm">
-              Chance — this is your Quality home. Named Day-1 forms, the board, and the live tube map sit
-              on this job. Drops you save stay on this job.
+              Chance — pick a Quality folder, then drop files into it. Named Day-1 forms, the board, and
+              the live tube map stay on this job below.
             </p>
           ) : null}
+          {showFolderDesk ? <QualityFolderDrop jobId={pick.jobId} companyId={companyId} /> : null}
           {manuals ? <p className="text-sm">{madisonManualLabel("quality")}</p> : null}
 
           <div
@@ -278,6 +289,7 @@ export function QualityDesk() {
           ) : null}
         </>
       ) : null}
+      </div>
     </div>
   );
 }
