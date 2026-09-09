@@ -3,11 +3,21 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { classifyFromSheetsAndName, CLIENT_FACE_MAPPER_SPEC } from "./client-estimate-ingest.ts";
-import { deskPackageTotal } from "./estimate-desk-total.ts";
+import { deskPackageBreakdown, deskPackageTotal } from "./estimate-desk-total.ts";
 import { estimateFileName } from "./estimate-pack.ts";
 import { packSnapshotToXlsxInput } from "./estimate-pack-xlsx.ts";
-import { rodeoU110FilledSnapshot, RODEO_U110_VAULT_FILE } from "./madison-u110.ts";
-import { rodeoU250FilledSnapshot, RODEO_U250_VAULT_FILE } from "./madison-u250.ts";
+import {
+  familyABookOther,
+  familyASeatLabor,
+  loadRodeoU110Fixture,
+  rodeoU110FilledSnapshot,
+  RODEO_U110_SITE,
+  RODEO_U110_VAULT_FILE,
+} from "./madison-u110.ts";
+import { loadRodeoU250Fixture, rodeoU250FilledSnapshot, RODEO_U250_SITE, RODEO_U250_VAULT_FILE } from "./madison-u250.ts";
+import { miscMarkupAmount, otherCostTotals } from "./other-cost.ts";
+import { laborDollarsFromCrew, lookupShahanLabor } from "./shahan-wood-river.ts";
+import { wageLookupOpts } from "./wage-lookup.ts";
 import { isWakeIdentityOnly, rodeoMonroeWakeCards, RODEO_U110_PACK_ID, RODEO_U250_PACK_ID } from "./rodeo-monroe-wake.ts";
 import {
   bucketSum,
@@ -139,14 +149,49 @@ describe("Rodeo / Monroe golden fixtures", () => {
   });
 
   it("wake seed desk grandTotal matches Family A goldens via hours × bookRate", () => {
+    const u110Fixture = loadRodeoU110Fixture();
+    const u250Fixture = loadRodeoU250Fixture();
     const u110 = packSnapshotToXlsxInput(rodeoU110FilledSnapshot());
     const u250 = packSnapshotToXlsxInput(rodeoU250FilledSnapshot());
-    const u110Desk = deskPackageTotal(u110);
-    const u250Desk = deskPackageTotal(u250);
     const u110Lock = U110_CONTRACTOR_GOLDEN.buckets!;
     const u250Lock = U250_CONTRACTOR_GOLDEN.buckets!;
+    const u110Labor = familyASeatLabor(u110Fixture.positions);
+    const u250Labor = familyASeatLabor(u250Fixture.positions);
+    const u110Other = familyABookOther(u110Fixture.misc);
+    const u250Other = familyABookOther(u250Fixture.misc);
+    const u110Parts = deskPackageBreakdown(u110);
+    const u250Parts = deskPackageBreakdown(u250);
+    const u110Desk = deskPackageTotal(u110);
+    const u250Desk = deskPackageTotal(u250);
+
+    assert.equal(lookupShahanLabor("Boilermaker", wageLookupOpts(RODEO_U110_SITE)), null);
+    assert.equal(lookupShahanLabor("Boilermaker", wageLookupOpts(RODEO_U250_SITE)), null);
+    const u110BoilerRates = new Set(
+      u110Fixture.positions.filter((row) => row.position === "Boilermaker").map((row) => row.bookRate),
+    );
+    const u250BoilerRates = new Set(
+      u250Fixture.positions.filter((row) => row.position === "Boilermaker").map((row) => row.bookRate),
+    );
+    assert.ok(u110BoilerRates.size > 1);
+    assert.ok(u250BoilerRates.size > 1);
+
+    assert.equal(moneyEqual(laborDollarsFromCrew(u110.crew ?? {}, u110.site, u110.client), u110Labor), true);
+    assert.equal(moneyEqual(laborDollarsFromCrew(u250.crew ?? {}, u250.site, u250.client), u250Labor), true);
+    assert.equal(moneyEqual(otherCostTotals(u110.otherCost ?? { perDiemRate: 0, travel: [], misc: [] }).misc, u110Other), true);
+    assert.equal(moneyEqual(otherCostTotals(u250.otherCost ?? { perDiemRate: 0, travel: [], misc: [] }).misc, u250Other), true);
+    assert.equal(miscMarkupAmount(u110.otherCost ?? { perDiemRate: 0, travel: [], misc: [] }), 0);
+    assert.equal(miscMarkupAmount(u250.otherCost ?? { perDiemRate: 0, travel: [], misc: [] }), 0);
+    assert.equal(u110Parts.lines.find((line) => /markup/i.test(line.label))?.amount ?? 0, 0);
+    assert.equal(u250Parts.lines.find((line) => /markup/i.test(line.label))?.amount ?? 0, 0);
+    assert.equal(moneyEqual(u110Parts.lines.find((line) => line.id === "labor")?.amount ?? 0, u110Labor), true);
+    assert.equal(moneyEqual(u250Parts.lines.find((line) => line.id === "labor")?.amount ?? 0, u250Labor), true);
+    assert.equal(moneyEqual(u110Desk, u110Labor + u110Other), true);
+    assert.equal(moneyEqual(u250Desk, u250Labor + u250Other), true);
     assert.equal(moneyEqual(u110Desk, u110Lock.grandTotal), true);
     assert.equal(moneyEqual(u250Desk, u250Lock.grandTotal), true);
+    assert.equal(u110Lock.totalHours, 26_441);
+    assert.equal(u250Lock.totalHours, 12_881);
+
     const u110Live = { ...rodeoMonroeWakeCards().find((row) => row.packId === RODEO_U110_PACK_ID)!, createdAt: 9_000, updatedAt: 9_001 };
     const u250Live = { ...rodeoMonroeWakeCards().find((row) => row.packId === RODEO_U250_PACK_ID)!, createdAt: 9_000, updatedAt: 9_001 };
     assert.equal(

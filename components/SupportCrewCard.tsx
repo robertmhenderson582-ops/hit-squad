@@ -22,7 +22,7 @@ import {
 } from "@/lib/craft-labor";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import { defaultLaborClass } from "@/lib/labor-class";
-import { formatDeskDollars, formatShahanCrewCost, shahanCrewCostAmount, shahanCrewTitle, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
+import { crewRowLaborAmount, formatCrewRowCost, formatDeskDollars, shahanCrewTitle, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
 import { dayNightHours, perDiemDollarsForRow, perDiemRateForLane } from "@/lib/crew-pack";
 import { wageLookupOpts } from "@/lib/wage-lookup";
 
@@ -55,16 +55,12 @@ export function SupportCrewCard({
     () =>
       lines.map((row) => {
         const hours = computeRowHours(row, site, client, pack.crew.otAfter8, "", pack.jobMeta.holidays ?? []);
-        const title = shahanCrewTitle(row);
-        const opts = wageLookupOpts(site, {
-          laborClass: row.laborClassOverride ?? defaultLaborClass(title),
-          bookRate: row.bookRate,
-        });
+        const opts = wageLookupOpts(site);
         return {
           ...row,
           ...hours,
-          costAmount: shahanCrewCostAmount(title, hours, opts),
-          cost: formatShahanCrewCost(title, hours, opts),
+          costAmount: crewRowLaborAmount(row, hours, opts),
+          cost: formatCrewRowCost(row, hours, opts),
         };
       }),
     [client, lines, pack.crew.otAfter8, pack.jobMeta.holidays, site],

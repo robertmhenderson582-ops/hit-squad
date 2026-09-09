@@ -197,6 +197,21 @@ export function otherCostFromMadison(misc: MadisonU110Fixture["misc"]): OtherCos
   return { ...emptyOtherCost(), misc: lines };
 }
 
+/** Official Family A labor: hours × typed composite. Not a hardcoded grand total. */
+export function familyASeatLabor(positions: Array<{ hours: number; bookRate: number }>): number {
+  return Math.round(positions.reduce((sum, row) => sum + (Number(row.hours) || 0) * (Number(row.bookRate) || 0), 0) * 100) / 100;
+}
+
+export function familyABookOther(misc: Array<{ qty: number; each: number }>): number {
+  return Math.round(
+    misc.reduce((sum, row) => {
+      const qty = Number(row.qty) || 0;
+      const each = Number(row.each) || 0;
+      return qty > 0 && each > 0 ? sum + qty * each : sum;
+    }, 0) * 100,
+  ) / 100;
+}
+
 export function typedHoursFromMadisonPositions(positions: MadisonFixturePosition[]): MadisonTypedHours {
   const next: MadisonTypedHours = {
     staffHours: 0,

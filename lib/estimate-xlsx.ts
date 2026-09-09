@@ -145,6 +145,7 @@ import {
   SHAHAN_NO_RATE_LABEL,
   SHAHAN_STAFF_TITLES,
   SHAHAN_SUPPORT_TITLES,
+  seatBookRate,
   shahanCrewTitle,
   shahanPeriodRate,
   type JobRates,
@@ -1577,8 +1578,9 @@ function buildCrewSheet(
     pushText(cells, `E${dtRow}`, "DT");
     pushText(cells, `E${pdRow}`, LABOR_PD_TYPE);
 
-    const bookRate = Number(row.bookRate) || 0;
-    if (bookRate > 0) {
+    const bookRate = seatBookRate(row);
+    if (bookRate) {
+      // Family A has no ST/OT/DT premium — one composite sell on every band.
       pushNum(cells, `D${stRow}`, bookRate);
       pushNum(cells, `D${otRow}`, bookRate);
       pushNum(cells, `D${dtRow}`, bookRate);

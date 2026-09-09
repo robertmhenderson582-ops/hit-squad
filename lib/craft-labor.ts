@@ -492,6 +492,13 @@ export function syncCraftRows(
   });
 }
 
+function dropSeatBookRate(row: CraftRow): CraftRow {
+  if (row.bookRate == null) return row;
+  const next = { ...row };
+  delete next.bookRate;
+  return next;
+}
+
 export function assignCraftPosition(
   row: CraftRow,
   position: string,
@@ -500,10 +507,13 @@ export function assignCraftPosition(
   multiUnits = false,
 ): CraftRow {
   if (!position.trim()) {
-    return { ...row, position: "", ranges: [] };
+    return { ...dropSeatBookRate(row), position: "", ranges: [] };
   }
   if (row.ranges.length === 0) {
     return { ...craftRowFromPhases(phases, units, multiUnits), id: row.id, position };
+  }
+  if (position !== row.position) {
+    return { ...dropSeatBookRate(row), position };
   }
   return { ...row, position };
 }

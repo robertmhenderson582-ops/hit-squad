@@ -66,8 +66,6 @@ export type ShahanLookupOpts = {
   catalog?: ShahanLaborRow[];
   laborClass?: "Merit" | "Union" | null;
   group?: string;
-  /** Family A hours × one composite sell rate. When set, skip Rate Table ST/OT/DT. */
-  bookRate?: number;
 };
 
 /** Live labor catalog from Debbie Shahan TM OCIP. Exact sheet dollars. Do not invent. */
@@ -501,12 +499,25 @@ export function formatDeskDollars(amount: number): string {
 
 export type CrewBillHours = Pick<HoursSplit, "st" | "ot" | "dt"> & { hours?: number };
 
+export type CrewBillSeat = {
+  position?: string;
+  billedAs?: string;
+  bookRate?: number;
+  laborClassOverride?: "Merit" | "Union" | null;
+};
+
+/** Family A / Madison contractor composite sell. Hours × one rate — not Rate Table ST/OT/DT. */
+export function seatBookRate(row: Pick<CrewBillSeat, "bookRate"> | number | null | undefined): number {
+  const rate = typeof row === "number" || row == null ? Number(row) : Number(row.bookRate);
+  return priced(rate) ? rate : 0;
+}
+
 export function bookRateLaborAmount(
   bookRate: number,
   hours: CrewBillHours,
 ): number {
-  const rate = Number(bookRate) || 0;
-  if (!(rate > 0)) return 0;
+  const rate = seatBookRate(bookRate);
+  if (!rate) return 0;
   const total =
     typeof hours.hours === "number" && Number.isFinite(hours.hours)
       ? hours.hours
@@ -515,12 +526,12 @@ export function bookRateLaborAmount(
   return Math.round(total * rate * 100) / 100;
 }
 
+/** Rate Table ST/OT/DT only. Unmapped titles (Madison Boilermaker, Fire Watch) stay $0. */
 export function shahanCrewCostAmount(
   title: string,
   hours: CrewBillHours,
   opts: ShahanLookupOpts = {},
 ): number {
-  if (priced(opts.bookRate)) return bookRateLaborAmount(opts.bookRate!, hours);
   const row = lookupShahanLabor(title, opts);
   if (!hasShahanBillRate(row)) return 0;
   const raw =
@@ -530,17 +541,30 @@ export function shahanCrewCostAmount(
   return Math.round(raw * 100) / 100;
 }
 
+/**
+ * Live seat labor. Family A seats carry `bookRate` (hours × composite).
+ * Everyone else bills Rate Table ST/OT/DT via the typed title.
+ */
 export function crewRowLaborAmount(
-  row: { position?: string; billedAs?: string; bookRate?: number; laborClassOverride?: "Merit" | "Union" | null },
+  row: CrewBillSeat,
   hours: CrewBillHours,
   opts: ShahanLookupOpts = {},
 ): number {
+  const book = seatBookRate(row);
+  if (book) return bookRateLaborAmount(book, hours);
   const title = shahanCrewTitle(row);
   return shahanCrewCostAmount(title, hours, {
     ...opts,
-    bookRate: row.bookRate ?? opts.bookRate,
     laborClass: row.laborClassOverride ?? opts.laborClass ?? defaultLaborClass(title),
   });
+}
+
+export function formatCrewRowCost(
+  row: CrewBillSeat,
+  hours: CrewBillHours,
+  opts: ShahanLookupOpts = {},
+): string {
+  return formatDeskDollars(crewRowLaborAmount(row, hours, opts));
 }
 
 export function formatShahanCrewCost(

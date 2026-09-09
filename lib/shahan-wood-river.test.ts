@@ -33,6 +33,7 @@ import {
   hasShahanPeriodRate,
   bookRateLaborAmount,
   crewRowLaborAmount,
+  seatBookRate,
   shahanCrewCostAmount,
   shahanCrewTitle,
   shahanEquipmentByFuel,
@@ -156,9 +157,11 @@ describe("Shahan TM OCIP — Wood River", () => {
       1_129_390.12,
     );
     assert.equal(
-      shahanCrewCostAmount("Boilermaker", { st: 1500, ot: 0, dt: 0, hours: 1500 }, { bookRate: 154.95 }),
+      crewRowLaborAmount({ position: "Boilermaker", bookRate: 154.95 }, { st: 1500, ot: 0, dt: 0, hours: 1500 }),
       232_425,
     );
+    assert.equal(seatBookRate({ bookRate: 154.95 }), 154.95);
+    assert.equal(seatBookRate({}), 0);
   });
 
   it("defaults Job setup Staff/Craft PD and leaves mileage blank", () => {
@@ -252,7 +255,8 @@ describe("Shahan TM OCIP — Wood River", () => {
     assert.match(jobSetup, /applyPlantJobRates/);
     const supportCard = readFileSync(fileURLToPath(new URL("../components/SupportCrewCard.tsx", import.meta.url)), "utf8");
     assert.match(supportCard, /shahanCrewTitle/);
-    assert.match(supportCard, /formatShahanCrewCost/);
+    assert.match(supportCard, /formatCrewRowCost/);
+    assert.match(supportCard, /crewRowLaborAmount/);
     assert.equal(/cost: row\.cost/.test(supportCard), false);
   });
 

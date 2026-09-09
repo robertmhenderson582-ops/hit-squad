@@ -9,12 +9,11 @@
  * Variance is not the star column.
  */
 import { computeRowHours } from "./hours-clock.ts";
-import { defaultLaborClass } from "./labor-class.ts";
 import { equipmentTotals, thirdPartyCost, type EquipmentSheet } from "./equipment-sheet.ts";
 import type { DeskPackageCrew, DeskPackageInput } from "./estimate-desk-total.ts";
 import { hydrateJobMoney } from "./estimate-money.ts";
 import { otherCostTotals, type OtherCostSheet } from "./other-cost.ts";
-import { perDiemDollarsFromCrew, shahanCrewCostAmount, shahanCrewTitle } from "./shahan-wood-river.ts";
+import { crewRowLaborAmount, perDiemDollarsFromCrew, shahanCrewTitle } from "./shahan-wood-river.ts";
 import { subcontractorTotal, type SubSheet } from "./subcontractor.ts";
 import { wageLookupOpts } from "./wage-lookup.ts";
 import type { CostBudget, CostReportBook, TurnipPaste, TurnipRow } from "./cost-report.ts";
@@ -239,11 +238,7 @@ function crewLaneHoursDollars(
     if (!row.position?.trim()) return;
     const split = computeRowHours(row, site, client, otAfter8, "", holidays);
     const title = shahanCrewTitle(row);
-    const amount = shahanCrewCostAmount(title, split, {
-      ...opts,
-      laborClass: row.laborClassOverride ?? opts.laborClass ?? defaultLaborClass(title),
-      bookRate: row.bookRate,
-    });
+    const amount = crewRowLaborAmount(row, split, opts);
     hrs += split.hours;
     dollars += amount;
     crafts.push({
