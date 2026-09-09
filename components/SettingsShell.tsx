@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { canUseViewAs, hasBuildDesk, hasPrivilege, hasWorkingDesk, isOwner } from "@/lib/desk-role";
+import { canAddUsers, canUseViewAs, hasBuildDesk, hasPrivilege, hasWorkingDesk, isOwner } from "@/lib/desk-role";
 import type { PrivilegeId } from "@/lib/privileges";
 
 const SECTIONS: {
@@ -14,6 +14,7 @@ const SECTIONS: {
   buildDesk?: boolean;
   viewAs?: boolean;
   workingDesk?: boolean;
+  addUsers?: boolean;
   privilege?: PrivilegeId;
   exact?: boolean;
 }[] = [
@@ -22,7 +23,7 @@ const SECTIONS: {
   { href: "/settings/copy", label: "Copy" },
   { href: "/settings/talk", label: "How we talk" },
   { href: "/settings/privileges", label: "Privileges", ownerOnly: true },
-  { href: "/settings/users", label: "Manage users", buildDesk: true, privilege: "manage-users" },
+  { href: "/settings/users", label: "Manage users", buildDesk: true, addUsers: true, privilege: "manage-users" },
   { href: "/settings/follow", label: "Follow", buildDesk: true },
   { href: "/settings/activity", label: "Activity", workingDesk: true },
   { href: "/settings/view-as", label: "View as", viewAs: true },
@@ -32,6 +33,7 @@ const SECTIONS: {
   { href: "/settings/branding", label: "Branding", workingDesk: true },
   { href: "/settings/sites", label: "Sites", buildDesk: true, privilege: "designer-ship" },
   { href: "/settings/divisions", label: "Divisions", workingDesk: true },
+  { href: "/settings/positions", label: "Positions", workingDesk: true, addUsers: true },
   { href: "/settings/checks", label: "Checks", ownerOnly: true },
   { href: "/settings/modules", label: "Future modules" },
 ];
@@ -64,9 +66,11 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
               return (
                 hasPrivilege(lens, item.privilege) ||
                 (Boolean(item.buildDesk) && buildDesk) ||
-                (Boolean(item.workingDesk) && working)
+                (Boolean(item.workingDesk) && working) ||
+                (Boolean(item.addUsers) && canAddUsers(lens))
               );
             }
+            if (item.addUsers && (canAddUsers(lens) || (Boolean(item.workingDesk) && working))) return true;
             if (item.workingDesk && !working) return false;
             if (item.buildDesk && !buildDesk) return false;
             return true;

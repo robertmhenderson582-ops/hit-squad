@@ -1007,6 +1007,35 @@ export async function createSeat(input: {
   return { ok: true, user: toPublicUser(user) };
 }
 
+/** Extra vault seats only. Owner / Novus / seeded testers keep their login role. Positions stay additive. */
+export async function setExtraSeatRole(
+  email: string,
+  role: "tester" | "president",
+): Promise<{ ok: true; user: PublicUser } | { error: string }> {
+  const key = email.trim().toLowerCase();
+  await hydrateSeatStore();
+  const users = ownerUsers();
+  const user = users.find((row) => row.email === key);
+  if (!user) return { error: "That seat is not on this desk." };
+  if (user.role === "owner" || user.role === "operator") {
+    return { error: "Owner and Novus stay on their desks." };
+  }
+  if (reservedEmails().has(user.email)) return { error: "Seeded seats keep their login role." };
+  user.role = role;
+  try {
+    persistHashes(users, { replaceEmails: [user.email], confirm: true });
+  } catch {
+    return { error: "Could not save that assignment." };
+  }
+  try {
+    await flushSeatVault();
+  } catch {
+    pendingVault = Promise.resolve();
+    return { error: "Could not save that assignment." };
+  }
+  return { ok: true, user: toPublicUser(user) };
+}
+
 export function seatHasPassword(email: string): boolean {
   return Boolean(findUserByEmail(email)?.passwordHash);
 }

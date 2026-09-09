@@ -13,6 +13,7 @@ export function SettingsGate({
   buildDesk,
   viewAs,
   workingDesk,
+  addUsers,
   privilege,
   children,
 }: {
@@ -20,17 +21,18 @@ export function SettingsGate({
   buildDesk?: boolean;
   viewAs?: boolean;
   workingDesk?: boolean;
+  addUsers?: boolean;
   privilege?: PrivilegeId;
   children: React.ReactNode;
 }) {
   const { user } = useSession();
   const lens = useLensUser();
   const desk = useOwnerDesk();
-  const flags = { ownerOnly, buildDesk, viewAs, workingDesk, privilege };
+  const flags = { ownerOnly, buildDesk, viewAs, workingDesk, addUsers, privilege };
   const sessionOk = pageAllowedForSeat(user, flags);
   const lensOk = pageAllowedForSeat(lens, flags);
   const waiting = Boolean(
-    hasBuildDesk(user) && desk && !desk.lensReady && (ownerOnly || buildDesk || viewAs || workingDesk || privilege),
+    hasBuildDesk(user) && desk && !desk.lensReady && (ownerOnly || buildDesk || viewAs || workingDesk || addUsers || privilege),
   );
   const allowed = sessionOk && lensOk && !waiting;
 

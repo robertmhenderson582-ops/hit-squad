@@ -13,6 +13,8 @@ import {
   hasWorkingDesk,
   isPresident,
   canSeeHitSquadSeats,
+  canAddUsers,
+  canManagePositions,
   canManageUsers,
   canSeeOwnerLog,
   isOwnerLoginEmail,
@@ -104,6 +106,10 @@ test("Joseph has the full desk and still cannot take the build", () => {
   assert.equal(canLookupRates(nathan), true);
   assert.equal(canOpenRates(nathan), true);
   assert.equal(isProjectManagerOrAbove(nathan), true);
+  assert.equal(canAddUsers(nathan), true);
+  assert.equal(canManagePositions(nathan), true);
+  assert.equal(canAddUsers(joseph), true);
+  assert.equal(pageAllowedForSeat(nathan, { addUsers: true }), true);
 });
 
 test("View as lens matches the selected seat, not the signed-in owner", () => {
@@ -248,6 +254,8 @@ test("President has the working desk and locked owner-only gates", () => {
   assert.equal(canUseFollow(president), false);
   assert.equal(canSeeHitSquadSeats(president), false);
   assert.equal(canManageUsers(president), false);
+  assert.equal(canAddUsers(president), false);
+  assert.equal(canManagePositions(president), true);
   assert.equal(canSeeOwnerLog(president), false);
   assert.equal(pageAllowedForSeat(president, { workingDesk: true }), true);
   assert.equal(pageAllowedForSeat(president, { buildDesk: true }), false);
