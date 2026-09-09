@@ -499,9 +499,11 @@ export function formatDeskDollars(amount: number): string {
   return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+export type CrewBillHours = Pick<HoursSplit, "st" | "ot" | "dt"> & { hours?: number };
+
 export function bookRateLaborAmount(
   bookRate: number,
-  hours: Pick<HoursSplit, "st" | "ot" | "dt" | "hours">,
+  hours: CrewBillHours,
 ): number {
   const rate = Number(bookRate) || 0;
   if (!(rate > 0)) return 0;
@@ -515,7 +517,7 @@ export function bookRateLaborAmount(
 
 export function shahanCrewCostAmount(
   title: string,
-  hours: Pick<HoursSplit, "st" | "ot" | "dt" | "hours">,
+  hours: CrewBillHours,
   opts: ShahanLookupOpts = {},
 ): number {
   if (priced(opts.bookRate)) return bookRateLaborAmount(opts.bookRate!, hours);
@@ -530,7 +532,7 @@ export function shahanCrewCostAmount(
 
 export function crewRowLaborAmount(
   row: { position?: string; billedAs?: string; bookRate?: number; laborClassOverride?: "Merit" | "Union" | null },
-  hours: Pick<HoursSplit, "st" | "ot" | "dt" | "hours">,
+  hours: CrewBillHours,
   opts: ShahanLookupOpts = {},
 ): number {
   const title = shahanCrewTitle(row);
@@ -543,7 +545,7 @@ export function crewRowLaborAmount(
 
 export function formatShahanCrewCost(
   title: string,
-  hours: Pick<HoursSplit, "st" | "ot" | "dt">,
+  hours: CrewBillHours,
   opts: ShahanLookupOpts = {},
 ): string {
   return formatDeskDollars(shahanCrewCostAmount(title, hours, opts));
