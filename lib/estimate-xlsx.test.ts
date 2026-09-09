@@ -793,10 +793,15 @@ describe("estimate excel export", () => {
       .filter((file) => file && !file.startsWith("look-samples/"));
     assert.equal(listed.join("\n"), "");
     const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
+    const writer = readFileSync(fileURLToPath(new URL("./estimate-xlsx.ts", import.meta.url)), "utf8");
     assert.match(workspace, /estimateToXlsx/);
     assert.match(workspace, /ESTIMATE_EXPORT_ERROR/);
-    assert.match(workspace, /Exporting…/);
+    assert.match(workspace, /Building file…/);
+    assert.match(workspace, /BuildingFileModal/);
     assert.match(workspace, /exportBusy/);
+    assert.match(workspace, /exportLock/);
+    assert.match(workspace, /yieldToUi/);
+    assert.match(writer, /yieldToUi/);
     assert.equal(/nathanboyte|CAT 2 Pit Stop|isNathan/i.test(workspace), false);
     const empty = buildEstimateWorkbook({ title: "Blank", site: "Yates", client: "Georgia Power" });
     assert.deepEqual(empty.map((sheet) => sheet.name), [
@@ -805,6 +810,20 @@ describe("estimate excel export", () => {
       ESTIMATE_XLSX_SHEETS.lists,
     ]);
     assert.equal(empty[0].cells.some((cell) => cell.type === "formula" || (cell.type === "number" && /^C\d+$/.test(cell.ref))), true);
+  });
+
+  it("short-circuits export-lock IFERROR day formulas to the desk hours", () => {
+    const { evalAt } = evaluateWorkbook([
+      {
+        name: "Direct",
+        cells: [
+          { ref: "J10", type: "formula", value: "IFERROR(IF(AND(J8=1,J9=10),8,J8*999),8)" },
+          { ref: "J11", type: "formula", value: "IFERROR(IF(AND(J8=1),4.5,1),4.5)" },
+        ],
+      },
+    ]);
+    assert.equal(evalAt("Direct", "J10"), 8);
+    assert.equal(evalAt("Direct", "J11"), 4.5);
   });
 
   it("omits leftover $0 catalog rows — no blank Crane / OM Crane / empty labor tabs", async () => {

@@ -165,6 +165,7 @@ import { catalogSites } from "./desk-data.ts";
 import { companyName, inferCompanyIdFromParts } from "./companies.ts";
 import { clampEstimateStatus, parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { regularClientFromParts } from "./site-regular.ts";
+import { yieldToUi } from "./ui-yield.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
 import {
   buildWorkbook,
@@ -2646,8 +2647,10 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
 }
 
 export async function estimateToXlsx(input: EstimateXlsxInput = {}): Promise<Uint8Array> {
+  await yieldToUi();
   const resolved = { ...input, equipment: resolveEquipmentSheet(input.equipment) };
   const sheets = buildEstimateWorkbook(resolved);
+  await yieldToUi();
   if (!sheets.length) throw new Error("empty-workbook");
   const excel = summaryAmountAt(sheets, ESTIMATE_XLSX_SHEETS.summary, "ESTIMATE TOTAL $");
   const desk = deskPackageTotal(resolved);
