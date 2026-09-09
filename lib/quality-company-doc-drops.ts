@@ -30,7 +30,7 @@ function qualityDocCompanyId(input: { companyId?: unknown }) {
 
 export async function saveQualityCompanyDocDrop(user: QualityDocUser, input: QualityCompanyDocSaveInput) {
   const home = qualityCompanyDocHome(qualityDocCompanyId(input));
-  const folderId = input.folderId;
+  const folderId = typeof input.folderId === "string" ? input.folderId : "";
   if (!isQualityCompanyDocId(folderId, home)) {
     return { ok: false as const, status: 400, error: "Pick a Quality file." };
   }

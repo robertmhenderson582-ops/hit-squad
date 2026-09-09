@@ -69,10 +69,12 @@ export function qualityFolderSaveError(input: QualityFolderSaveInput) {
 
 export async function saveQualityFolderDrop(user: QualityDropUser, input: QualityFolderSaveInput) {
   const jobId = typeof input.jobId === "string" ? input.jobId.trim() : "";
-  const folderId = input.folderId;
+  const folderId = typeof input.folderId === "string" ? input.folderId : "";
   const companyId = qualityDropCompanyId(input);
   if (!jobId) return { ok: false as const, status: 400, error: "Pick a job." };
-  if (!qualityFolderAllowed(folderId, companyId)) return { ok: false as const, status: 400, error: "Pick a Quality folder." };
+  if (!qualityFolderAllowed(folderId, companyId) || !isQualityFolderId(folderId, companyId)) {
+    return { ok: false as const, status: 400, error: "Pick a Quality folder." };
+  }
   const incoming = parseQualityDropFiles(input.files);
   const check = checkQualityDrop(incoming);
   if (!check.accepted.length) {
