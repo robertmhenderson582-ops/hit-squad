@@ -10,6 +10,8 @@ import {
   publicBrief,
   saveStoredBrief,
 } from "@/lib/lead-brief-store";
+import { listQualityFolderDrops, saveQualityFolderDrop } from "@/lib/quality-folder-drops";
+import { QUALITY_FOLDERS, isQualityFolderId } from "@/lib/quality-folders";
 
 export const dynamic = "force-dynamic";
 
@@ -17,16 +19,30 @@ export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  const kind = new URL(request.url).searchParams.get("kind");
+  const params = new URL(request.url).searchParams;
+  const kind = params.get("kind");
   if (!isLeadBriefKind(kind)) {
     return NextResponse.json({ error: "Pick a desk." }, { status: 400 });
   }
 
+  const jobId = params.get("jobId")?.trim() || "";
+  const folderId = params.get("folder") || params.get("folderId") || "";
+  if (kind === "quality" && jobId && isQualityFolderId(folderId)) {
+    const listed = await listQualityFolderDrops(user, jobId, folderId);
+    return NextResponse.json({
+      briefs: listed.briefs,
+      files: listed.files,
+      folders: QUALITY_FOLDERS,
+      store: leadBriefStoreKind(),
+    });
+  }
+
   const briefs = hasBuildDesk(user)
-    ? await listStoredBriefs(kind)
-    : await listStoredBriefs(kind, user.email);
+    ? await listStoredBriefs(kind, undefined, jobId ? { jobId } : undefined)
+    : await listStoredBriefs(kind, user.email, jobId ? { jobId } : undefined);
   return NextResponse.json({
     briefs: briefs.map(publicBrief),
+    folders: kind === "quality" ? QUALITY_FOLDERS : undefined,
     store: leadBriefStoreKind(),
   });
 }
@@ -39,9 +55,28 @@ export async function POST(request: Request) {
     kind?: string;
     describe?: string;
     files?: Array<{ name?: string; type?: string; data?: string }>;
+    jobId?: string;
+    folderId?: string;
   };
   if (!isLeadBriefKind(body.kind)) {
     return NextResponse.json({ error: "Pick a desk." }, { status: 400 });
+  }
+
+  if (body.kind === "quality" && (body.folderId || body.jobId)) {
+    const result = await saveQualityFolderDrop(user, body);
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.error, rejected: result.rejected },
+        { status: result.status },
+      );
+    }
+    return NextResponse.json({
+      brief: result.brief,
+      files: result.brief.files,
+      rejected: result.rejected,
+      folders: QUALITY_FOLDERS,
+      store: leadBriefStoreKind(),
+    });
   }
 
   try {
@@ -55,6 +90,8 @@ export async function POST(request: Request) {
         type: typeof file.type === "string" ? file.type : "",
         data: typeof file.data === "string" ? file.data : "",
       })) : [],
+      jobId: body.jobId,
+      folderId: body.folderId,
     });
     return NextResponse.json({
       brief: publicBrief(brief),

@@ -2,9 +2,9 @@
 
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { JobScopePicks, PickJobEmpty } from "@/components/JobScopePicks";
-import { LeadStudio } from "@/components/LeadStudio";
 import { ModuleRegister, type RegisterField } from "@/components/ModuleRegister";
 import { QualityDay1Card } from "@/components/QualityDay1Card";
+import { QualityFolderDrop } from "@/components/QualityFolderDrop";
 import { RollingChartMap } from "@/components/RollingChartMap";
 import { useQualityHseJobTree } from "@/components/useQualityHseJobTree";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
@@ -176,13 +176,13 @@ export function QualityDesk() {
               {selectedClient ? ` · ${alias(selectedClient.name)}` : ""}
             </p>
           ) : null}
-          <LeadStudio title="Quality lead studio" kind="quality" jobId={pick.jobId} />
           {chance ? (
             <p className="plant-card px-4 py-3 text-sm">
-              Chance — this is your Quality home. Named Day-1 forms, the board, and the live tube map sit
-              on this job. Drops you save stay on this job.
+              Chance — pick a Quality folder, then drop files into it. Named Day-1 forms, the board, and
+              the live tube map stay on this job below.
             </p>
           ) : null}
+          <QualityFolderDrop jobId={pick.jobId} />
           {manuals ? <p className="text-sm">{madisonManualLabel("quality")}</p> : null}
 
           <div
