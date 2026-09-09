@@ -22,8 +22,13 @@ import JSZip from "jszip";
 import { evaluateWorkbook } from "./xlsx-eval.ts";
 import { isPhaseId, PHASE_TONE_BAND_INK, PHASE_TONE_FILLS } from "./phase-schedule.ts";
 import { prepareCompanyLogoSplash } from "./estimate-company-logo.ts";
-import { EXCELJS_VML_COMMENT_SAFE } from "./xlsx-package.ts";
 import { colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet, type WorkbookBuildOptions } from "./xlsx-minimal.ts";
+/**
+ * Writer-side copy of `EXCELJS_VML_COMMENT_SAFE` in xlsx-package.ts.
+ * Keep the number here so the ExcelJS writer does not import the inspector
+ * (avoids a writer → inspector → xlsx-minimal cycle in the Next client graph).
+ */
+const EXCELJS_VML_COMMENT_SAFE = 800;
 
 const WHITE = "FFFFFFFF";
 const DARK_TEXT = "FF102226";
@@ -1421,14 +1426,15 @@ async function stampUnusedRowsHidden(buffer: Uint8Array): Promise<Uint8Array> {
     }
     zip.file(name, xml);
   }
-  return new Uint8Array(
-    await zip.generateAsync({
-      type: "uint8array",
-      compression: "DEFLATE",
-      compressionOptions: { level: 6 },
-      createFolders: false,
-    }),
-  );
+  // JSZip runtime accepts createFolders on generate; the 3.1 typings only
+  // list it on load/file. Folder entries are not part of a valid xlsx zip.
+  const zipOut = {
+    type: "uint8array",
+    compression: "DEFLATE",
+    compressionOptions: { level: 6 },
+    createFolders: false,
+  } as JSZip.JSZipGeneratorOptions<"uint8array">;
+  return new Uint8Array(await zip.generateAsync<"uint8array">(zipOut));
 }
 
 export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: WorkbookBuildOptions): Promise<Uint8Array> {

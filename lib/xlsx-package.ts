@@ -16,6 +16,7 @@ export const EXCEL_CELL_XF_LIMIT = 64_000;
 export const EXCELJS_VML_IDMAP_CAPACITY = 1023;
 /** Leave headroom under the idmap so logo / drawing rIds cannot collide. */
 export const EXCELJS_VML_COMMENT_SAFE = 800;
+/** Writer (`xlsx-exceljs`) keeps a local copy of this number — do not import this file from the writer. */
 
 export type XlsxPackageReport = {
   bytes: number;
@@ -123,7 +124,7 @@ export async function inspectEstimateXlsx(bytes: Uint8Array): Promise<XlsxPackag
 export async function assertOpenableEstimateXlsx(bytes: Uint8Array): Promise<XlsxPackageReport> {
   const report = await inspectEstimateXlsx(bytes);
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(Buffer.from(bytes));
+  await wb.xlsx.load(bytes as unknown as ArrayBuffer);
   if (!wb.worksheets.length) throw new Error("xlsx-empty-workbook");
   const loaded = new Set(wb.worksheets.map((sheet) => sheet.name.toLowerCase()));
   for (const name of report.sheets) {

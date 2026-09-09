@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   EXCEL_UNIT_FORMATS,
   formatForHeader,
@@ -99,5 +101,12 @@ describe("xlsx-exceljs unit formats", () => {
     assert.equal(headerMetaHeight(produced, summaryWidth), HEADER_META_WRAP_HEIGHT);
     assert.equal(headerMetaHeight(job, laborWidth), HEADER_META_LINE_HEIGHT);
     assert.equal(headerMetaHeight(produced, laborWidth), HEADER_META_LINE_HEIGHT);
+  });
+
+  it("does not import the xlsx inspector (keeps the Next client graph acyclic)", () => {
+    const writer = readFileSync(fileURLToPath(new URL("./xlsx-exceljs.ts", import.meta.url)), "utf8");
+    assert.equal(writer.includes('from "./xlsx-package.ts"'), false);
+    assert.match(writer, /const EXCELJS_VML_COMMENT_SAFE = 800/);
+    assert.match(writer, /createFolders:\s*false/);
   });
 });
