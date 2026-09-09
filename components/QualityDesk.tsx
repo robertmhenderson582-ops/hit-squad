@@ -3,13 +3,15 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { JobScopePicks, PickJobEmpty } from "@/components/JobScopePicks";
 import { ModuleRegister, type RegisterField } from "@/components/ModuleRegister";
+import { QualityCompanyDocRail } from "@/components/QualityCompanyDocRail";
 import { QualityDay1Card } from "@/components/QualityDay1Card";
 import { QualityFolderDrop } from "@/components/QualityFolderDrop";
 import { RollingChartMap } from "@/components/RollingChartMap";
 import { useQualityHseJobTree } from "@/components/useQualityHseJobTree";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { companyScopeFor, inferCompanyIdFromParts } from "@/lib/companies";
+import { assignedCompanyId, companyScopeFor, inferCompanyIdFromParts } from "@/lib/companies";
+import { qualityRailCompanyId } from "@/lib/quality-company-docs";
 import { showsQualityFolderDesk } from "@/lib/quality-folders";
 import { canSeeMadisonManuals, madisonManualLabel, type QualityDay1 } from "@/lib/quality-day1";
 import { CLIENT_FOLDERS } from "@/lib/quality-hse-modules";
@@ -96,6 +98,7 @@ export function QualityDesk() {
     cascadeCompanyId(tree, pick) ||
     inferCompanyIdFromParts(selectedClient?.name, selectedSite?.name, selectedJob?.title, selectedJob?.code);
   const showFolderDesk = showsQualityFolderDesk(companyId);
+  const railCompanyId = qualityRailCompanyId(companyId, assignedCompanyId(companyScopeFor(user)));
 
   useEffect(() => {
     if (!ready) return;
@@ -163,7 +166,9 @@ export function QualityDesk() {
   const log = QUALITY_SECTIONS.find((section) => section.id === tab);
 
   return (
-    <div className="field-desk mt-4 space-y-5">
+    <div className="field-desk mt-4 grid gap-5 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
+      <QualityCompanyDocRail companyId={railCompanyId} />
+      <div className="space-y-5">
       <JobScopePicks
         clients={clients}
         sites={sites}
@@ -284,6 +289,7 @@ export function QualityDesk() {
           ) : null}
         </>
       ) : null}
+      </div>
     </div>
   );
 }

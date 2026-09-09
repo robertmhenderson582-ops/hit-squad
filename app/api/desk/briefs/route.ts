@@ -10,6 +10,12 @@ import {
   publicBrief,
   saveStoredBrief,
 } from "@/lib/lead-brief-store";
+import {
+  listQualityCompanyDocDrop,
+  listQualityCompanyDocDrops,
+  saveQualityCompanyDocDrop,
+} from "@/lib/quality-company-doc-drops";
+import { isQualityCompanyDocId, qualityCompanyDocsListedFor } from "@/lib/quality-company-docs";
 import { listQualityFolderDrops, saveQualityFolderDrop } from "@/lib/quality-folder-drops";
 import { isQualityFolderId, qualityFoldersListedFor } from "@/lib/quality-folders";
 
@@ -35,6 +41,25 @@ export async function GET(request: Request) {
   const jobId = params.get("jobId")?.trim() || "";
   const folderId = params.get("folder") || params.get("folderId") || "";
   const companyId = qualityCompanyId(params);
+  const companyDocs = params.get("scope") === "company-docs" || isQualityCompanyDocId(folderId, companyId || undefined);
+  if (kind === "quality" && companyDocs) {
+    if (isQualityCompanyDocId(folderId, companyId || undefined)) {
+      const listed = await listQualityCompanyDocDrop(user, folderId, companyId || undefined);
+      return NextResponse.json({
+        briefs: listed.briefs,
+        files: listed.files,
+        folders: qualityCompanyDocsListedFor(companyId),
+        store: leadBriefStoreKind(),
+      });
+    }
+    const listed = await listQualityCompanyDocDrops(user, companyId || undefined);
+    return NextResponse.json({
+      folders: listed.folders,
+      filesByFolder: listed.filesByFolder,
+      companyId: listed.companyId,
+      store: leadBriefStoreKind(),
+    });
+  }
   if (kind === "quality" && jobId && isQualityFolderId(folderId, companyId || undefined)) {
     const listed = await listQualityFolderDrops(user, jobId, folderId, companyId || undefined);
     return NextResponse.json({
@@ -67,10 +92,28 @@ export async function POST(request: Request) {
     folderId?: string;
     companyId?: string;
     company?: string;
+    scope?: string;
   };
   const companyId = qualityCompanyId(body);
   if (!isLeadBriefKind(body.kind)) {
     return NextResponse.json({ error: "Pick a desk." }, { status: 400 });
+  }
+
+  if (body.kind === "quality" && (body.scope === "company-docs" || isQualityCompanyDocId(body.folderId, companyId || undefined))) {
+    const result = await saveQualityCompanyDocDrop(user, { ...body, companyId: companyId || undefined });
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.error, rejected: result.rejected },
+        { status: result.status },
+      );
+    }
+    return NextResponse.json({
+      brief: result.brief,
+      files: result.brief.files,
+      rejected: result.rejected,
+      folders: qualityCompanyDocsListedFor(companyId),
+      store: leadBriefStoreKind(),
+    });
   }
 
   if (body.kind === "quality" && (body.folderId || body.jobId)) {

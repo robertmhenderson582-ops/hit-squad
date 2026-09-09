@@ -220,6 +220,7 @@ describe("Quality folder catalog", () => {
     const drop = source("../components/QualityFolderDrop.tsx");
     const folders = source("./quality-folders.ts");
     assert.match(quality, /QualityFolderDrop/);
+    assert.match(quality, /QualityCompanyDocRail/);
     assert.match(quality, /JobScopePicks/);
     assert.match(quality, /showsQualityFolderDesk/);
     assert.match(quality, /cascadeCompanyId/);
