@@ -25,6 +25,7 @@ import JSZip from "jszip";
 import { evaluateWorkbook } from "./xlsx-eval.ts";
 import { isPhaseId, PHASE_TONE_BAND_INK, PHASE_TONE_FILLS } from "./phase-schedule.ts";
 import { prepareCompanyLogoSplash } from "./estimate-company-logo.ts";
+import { yieldToUi } from "./ui-yield.ts";
 import { colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet, type WorkbookBuildOptions } from "./xlsx-minimal.ts";
 /**
  * Writer-side copy of `EXCELJS_VML_COMMENT_SAFE` in xlsx-package.ts.
@@ -196,12 +197,24 @@ function maxHeaderCol(cells: SheetCell[], rows: number | readonly number[] = 6):
   return colLetter(max);
 }
 
+const FILL_CACHE = new Map<string, ExcelJS.Fill>();
+const EDGE_CACHE = new Map<string, ExcelJS.Border>();
+
 function solid(argb: string): ExcelJS.Fill {
-  return { type: "pattern", pattern: "solid", fgColor: { argb } };
+  const hit = FILL_CACHE.get(argb);
+  if (hit) return hit;
+  const fill: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb } };
+  FILL_CACHE.set(argb, fill);
+  return fill;
 }
 
 function edge(style: ExcelJS.BorderStyle, color = BLACK): ExcelJS.Border {
-  return { style, color: { argb: color } };
+  const key = `${style}:${color}`;
+  const hit = EDGE_CACHE.get(key);
+  if (hit) return hit;
+  const next: ExcelJS.Border = { style, color: { argb: color } };
+  EDGE_CACHE.set(key, next);
+  return next;
 }
 
 function patchBorder(cell: ExcelJS.Cell, patch: Partial<ExcelJS.Borders>) {
@@ -327,13 +340,36 @@ function cellFormat(
   return formatForHeader(header);
 }
 
+type SheetRowIndex = {
+  colA: Map<number, SheetCell>;
+  colE: Map<number, SheetCell>;
+  kind: Map<number, "title" | "hc" | "hps" | "pd" | "hours" | "">;
+};
+
+const ROW_INDEX = new WeakMap<SheetCell[], SheetRowIndex>();
+
+function sheetRowIndex(cells: SheetCell[]): SheetRowIndex {
+  const cached = ROW_INDEX.get(cells);
+  if (cached) return cached;
+  const colA = new Map<number, SheetCell>();
+  const colE = new Map<number, SheetCell>();
+  for (const cell of cells) {
+    const parsed = parseRef(cell.ref);
+    if (parsed.col === "A") colA.set(parsed.row, cell);
+    else if (parsed.col === "E") colE.set(parsed.row, cell);
+  }
+  const next = { colA, colE, kind: new Map<number, "title" | "hc" | "hps" | "pd" | "hours" | "">() };
+  ROW_INDEX.set(cells, next);
+  return next;
+}
+
 function isTotalRow(cells: SheetCell[], row: number): boolean {
-  const label = cells.find((cell) => cell.ref === `A${row}`);
+  const label = sheetRowIndex(cells).colA.get(row);
   return label?.type === "text" && /^(TOTAL|ESTIMATE TOTAL|MAN-HOURS|TOTAL PROJECT)/i.test(label.value);
 }
 
 function isSectionRow(cells: SheetCell[], row: number): boolean {
-  const label = cells.find((cell) => cell.ref === `A${row}`);
+  const label = sheetRowIndex(cells).colA.get(row);
   return (
     label?.type === "text" &&
     /^(Labor \$|Large tools|Third-party rental|Notes|DIRECT LABOR|INDIRECT LABOR|MATERIALS)/i.test(label.value)
@@ -355,19 +391,24 @@ function nearestHeaderRow(cells: SheetCell[], row: number, extra: number[] = [])
 }
 
 function laborRowKind(cells: SheetCell[], row: number): "title" | "hc" | "hps" | "pd" | "hours" | "" {
-  const shift = cells.find((cell) => cell.ref === `A${row}`);
-  const type = cells.find((cell) => cell.ref === `E${row}`);
-  if (shift?.type === "text" && /DAYSHIFT|NIGHTSHIFT/i.test(shift.value)) return "title";
-  if (type?.type === "text" && type.value === "TITLE") return "title";
-  if (type?.type === "text" && type.value === "HC") return "hc";
-  if (type?.type === "text" && type.value === "HPS") return "hps";
-  if (type?.type === "text" && type.value === "PD") return "pd";
-  if (type?.type === "text" && /^(ST|OT|DT)$/.test(type.value)) return "hours";
-  return "";
+  const index = sheetRowIndex(cells);
+  const hit = index.kind.get(row);
+  if (hit !== undefined) return hit;
+  const shift = index.colA.get(row);
+  const type = index.colE.get(row);
+  let kind: "title" | "hc" | "hps" | "pd" | "hours" | "" = "";
+  if (shift?.type === "text" && /DAYSHIFT|NIGHTSHIFT/i.test(shift.value)) kind = "title";
+  else if (type?.type === "text" && type.value === "TITLE") kind = "title";
+  else if (type?.type === "text" && type.value === "HC") kind = "hc";
+  else if (type?.type === "text" && type.value === "HPS") kind = "hps";
+  else if (type?.type === "text" && type.value === "PD") kind = "pd";
+  else if (type?.type === "text" && /^(ST|OT|DT)$/.test(type.value)) kind = "hours";
+  index.kind.set(row, kind);
+  return kind;
 }
 
 function isAdderRow(cells: SheetCell[], row: number): boolean {
-  const label = cells.find((cell) => cell.ref === `A${row}`);
+  const label = sheetRowIndex(cells).colA.get(row);
   return (
     label?.type === "text" &&
     /contingency|cba increase|m\.o\.r\.e|6\.5% markup|6% /i.test(label.value)
@@ -405,9 +446,11 @@ function applyHeaderMetaLayout(ws: ExcelJS.Worksheet, bandLastCol: number, wrap 
       wrapText: wrap || row > 1,
     };
     if (row === 1) continue;
-    ws.getRow(row).height = wrap
+    const metaHeight = wrap
       ? headerMetaHeight(String(cell.value ?? ""), headerBandWidth(ws, bandLastCol))
       : HEADER_META_LINE_HEIGHT;
+    // Never shrink row 3 — Direct craft×phase stacks grow this row past the brand band.
+    ws.getRow(row).height = Math.max(Number(ws.getRow(row).height) || 0, metaHeight);
   }
 }
 
@@ -797,9 +840,10 @@ function pinHoursAndMoney(
   isSummary: boolean,
 ) {
   const headers = headerByColumn(sheet.cells, 6);
+  const pinLast = labor ? Math.min(lastCol, LABOR_INSTRUMENT_LAST_COL) : lastCol;
   for (let row = 7; row <= maxRow; row += 1) {
     const kind = labor ? laborRowKind(sheet.cells, row) : "";
-    for (let col = 1; col <= lastCol; col += 1) {
+    for (let col = 1; col <= pinLast; col += 1) {
       const cell = ws.getCell(row, col);
       let fmt = cellFormat(sheet, headers, colLetter(col), row, isSummary);
       if (labor && col >= LABOR_DATE_FIRST_COL && (kind === "hc" || kind === "hps" || kind === "pd" || kind === "hours")) {
@@ -823,7 +867,7 @@ function pinHoursAndMoney(
       ws.getColumn(colIndex(col)).width = width;
     }
   }
-  fitCurrencyColumns(ws, lastCol, maxRow);
+  fitCurrencyColumns(ws, pinLast, maxRow);
 }
 
 function numericResult(cell: ExcelJS.Cell): number | undefined {
@@ -878,7 +922,7 @@ function pinLaborEvenRows(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDateC
 }
 
 /** Last style write — Excel number xfs drop column-only center. */
-function pinLaborCraftAlignment(ws: ExcelJS.Worksheet, lastDateCol: number, maxRow: number) {
+function pinLaborCraftAlignment(ws: ExcelJS.Worksheet, lastDateCol: number, _maxRow: number) {
   const colAlign = { horizontal: "center" as const, vertical: "middle" as const };
   for (let col = 1; col <= LABOR_INSTRUMENT_LAST_COL; col += 1) {
     centerLaborCell(ws.getCell(6, col));
@@ -891,11 +935,7 @@ function pinLaborCraftAlignment(ws: ExcelJS.Worksheet, lastDateCol: number, maxR
       ws.getColumn(col).alignment = colAlign;
     }
   }
-  for (let row = 7; row <= maxRow; row += 1) {
-    for (let col = 1; col <= Math.max(LABOR_INSTRUMENT_LAST_COL, lastDateCol); col += 1) {
-      centerLaborCell(ws.getCell(row, col));
-    }
-  }
+  // Body cells are centered in pinLaborEvenRows — do not walk the day grid twice.
 }
 
 /** A Shift + B Position + F–I hour totals — merged title→PD. Skip per-row fills. */
@@ -970,19 +1010,8 @@ function applyLaborBlockChrome(
         }
       }
     }
-    if (kind === "hc" || kind === "hps" || kind === "pd") {
-      for (let col = LABOR_DATE_FIRST_COL; col <= lastDateCol; col += 1) {
-        const day = ws.getCell(row, col);
-        if (isLaborCountInputCell(day)) day.fill = solid(LABOR_HC_HPS);
-        centerLaborCell(day);
-      }
-    } else {
-      for (let col = LABOR_DATE_FIRST_COL; col <= lastDateCol; col += 1) {
-        const day = ws.getCell(row, col);
-        day.fill = solid(LABOR_DAY_WASH);
-        centerLaborCell(day);
-      }
-    }
+    // Day-grid fills are the last write in paintLaborDayCalendar — skip a
+    // duplicate O(days × rows) pass here. Borders still land below.
   }
 
   for (const col of LABOR_BLOCK_VOID_COL_NUMS) {
@@ -1103,27 +1132,39 @@ function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDat
   applyDirectPhaseLabels(ws, sheet);
 }
 
+/** Two lines per craft when the merge is wide; a third when `hrs.` wraps. */
+export const DIRECT_PHASE_LINE_PT = 13;
+export const DIRECT_PHASE_STACK_MAX_PT = 409;
+
+export function directPhaseStackHeight(crafts: number, stackCols: number): number {
+  const perCraft = stackCols >= 4 ? 2 : 3;
+  return Math.min(DIRECT_PHASE_STACK_MAX_PT, Math.max(1, crafts) * perCraft * DIRECT_PHASE_LINE_PT + 10);
+}
+
 /** Direct craft × phase stacks at each phase start, immediately above the color bar. */
 function applyDirectPhaseLabels(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
   const labels = sheet.directPhaseLabels ?? [];
   if (!labels.length) return;
-  let maxCrafts = 1;
+  let needed = 0;
   for (const label of labels) {
-    maxCrafts = Math.max(maxCrafts, label.crafts);
-    const fillArgb = isPhaseId(label.phaseId) ? PHASE_TONE_FILLS[label.phaseId] : STEEL;
     const stackEnd = label.stackEndCol ?? label.startCol;
+    const stackCols = stackEnd - label.startCol + 1;
+    needed = Math.max(needed, directPhaseStackHeight(label.crafts, stackCols));
+    const fillArgb = isPhaseId(label.phaseId) ? PHASE_TONE_FILLS[label.phaseId] : STEEL;
     for (let col = label.startCol; col <= stackEnd; col += 1) {
       const cell = ws.getCell(label.row, col);
       cell.fill = solid(fillArgb);
       cell.font = { bold: true, name: "Calibri", size: 7, color: { argb: PHASE_TONE_BAND_INK } };
-      cell.alignment = { horizontal: "left", vertical: "bottom", wrapText: true };
+      // Top-align so the first craft (BM) is never clipped when the row is tight.
+      cell.alignment = { horizontal: "left", vertical: "top", wrapText: true };
       cell.protection = { locked: true };
     }
   }
   const row = labels[0]?.row;
   if (row) {
-    const needed = Math.min(64, 14 * maxCrafts + 10);
     ws.getRow(row).height = Math.max(Number(ws.getRow(row).height) || 0, needed);
+    const title = ws.getCell(row, 1);
+    title.alignment = { horizontal: "left", vertical: "top", wrapText: true };
   }
 }
 
@@ -1180,29 +1221,6 @@ function applyLaborChrome(
     ws.getRow(row).height = 8;
   }
 
-  for (const weekend of sheet.weekendCols ?? []) {
-    for (let row = 6; row <= maxRow; row += 1) {
-      if (totalRows.has(row)) continue;
-      if (sheet.spacerRows?.includes(row)) continue;
-      const exCell = ws.getCell(row, weekend.col);
-      exCell.fill = solid(LABOR_WEEKEND_FILL);
-      if (row === 6) {
-        exCell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 7 };
-      }
-    }
-  }
-  for (const holiday of sheet.holidayCols ?? []) {
-    for (let row = 6; row <= maxRow; row += 1) {
-      if (totalRows.has(row)) continue;
-      if (sheet.spacerRows?.includes(row)) continue;
-      const exCell = ws.getCell(row, holiday.col);
-      exCell.fill = solid(LABOR_HOLIDAY_FILL);
-      if (row === 6) {
-        exCell.font = { bold: true, color: { argb: DARK_TEXT }, name: "Calibri", size: 7 };
-      }
-    }
-  }
-
   if (lastDateCol >= LABOR_DATE_FIRST_COL) {
     const first = colLetter(LABOR_DATE_FIRST_COL);
     const last = colLetter(lastDateCol);
@@ -1242,7 +1260,8 @@ function applyLaborChrome(
       size: 9,
     };
     if (holidayCols.has(col)) header.fill = solid(LABOR_HOLIDAY_FILL);
-    else if (!weekendCols.has(col)) header.fill = solid(STEEL_DEEP);
+    else if (weekendCols.has(col)) header.fill = solid(LABOR_WEEKEND_FILL);
+    else header.fill = solid(STEEL_DEEP);
   }
   for (let col = 1; col <= LABOR_INSTRUMENT_LAST_COL; col += 1) {
     centerLaborCell(ws.getCell(6, col));
@@ -1496,7 +1515,7 @@ async function stampUnusedRowsHidden(buffer: Uint8Array): Promise<Uint8Array> {
   const zipOut = {
     type: "uint8array",
     compression: "DEFLATE",
-    compressionOptions: { level: 6 },
+    compressionOptions: { level: 1 },
     createFolders: false,
   } as JSZip.JSZipGeneratorOptions<"uint8array">;
   return new Uint8Array(await zip.generateAsync<"uint8array">(zipOut));
@@ -1664,7 +1683,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
 
     const totalWidth = labor ? LABOR_INSTRUMENT_LAST_COL : lastVisibleColNum;
     for (const row of totalRows) applyTotalBar(ws, row, totalWidth);
-    if (chrome !== "ppr" && chrome !== "cover") applySoftUsedBand(ws, lastVisibleColNum, maxRow);
+    if (!labor && chrome !== "ppr" && chrome !== "cover") applySoftUsedBand(ws, lastVisibleColNum, maxRow);
 
     for (const col of sheet.hiddenCols ?? []) {
       ws.getColumn(col).hidden = true;
@@ -1733,6 +1752,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
     applySheetUnlocks(ws, sheet);
     applySheetComments(ws, sheet);
     await ws.protect(SHEET_PROTECT_PASSWORD, labor ? LABOR_SHEET_PROTECT_OPTIONS : SHEET_PROTECT_OPTIONS);
+    await yieldToUi();
   }
 
   const splash = await prepareCompanyLogoSplash(options?.companyLogo);

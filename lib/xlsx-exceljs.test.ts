@@ -111,5 +111,13 @@ describe("xlsx-exceljs unit formats", () => {
     assert.match(writer, /stampWorksheetChildOrder/);
     assert.match(writer, /stampPrintAreaNames/);
     assert.match(writer, /legacyDrawing/);
+    assert.match(writer, /sheetRowIndex/);
+    assert.match(writer, /yieldToUi/);
+    assert.match(writer, /compressionOptions:\s*\{\s*level:\s*1\s*\}/);
+    assert.match(writer, /paintLaborDayCalendar/);
+    assert.match(writer, /directPhaseStackHeight/);
+    assert.match(writer, /vertical: "top"/);
+    assert.doesNotMatch(writer, /Math\.min\(64,\s*14 \* maxCrafts/);
+    assert.doesNotMatch(writer, /if \(kind === "hc" \|\| kind === "hps" \|\| kind === "pd"\) \{\s*for \(let col = LABOR_DATE_FIRST_COL/);
   });
 });

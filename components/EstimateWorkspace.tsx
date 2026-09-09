@@ -13,6 +13,7 @@ import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { ThemeFlip } from "@/components/ThemeFlip";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { EstimateTotalRail } from "@/components/EstimateTotalRail";
+import { BuildingFileModal } from "@/components/BuildingFileModal";
 import { EstimateImportModal } from "@/components/EstimateImportModal";
 import { ModalPortal } from "@/components/ModalPortal";
 import { WageLookupDesk } from "@/components/WageLookupDesk";
@@ -56,6 +57,7 @@ import { shouldAttachP66TransferFace } from "@/lib/p66-transfer-face";
 import { P66_V1_EXPORT_LINE } from "@/lib/p66-v1";
 import { BASE_ESTIMATE_TABS, estimateTabsForSite, type EstimateTab } from "@/lib/estimate-tabs";
 import { readSubSheet } from "@/lib/subcontractor";
+import { yieldToUi } from "@/lib/ui-yield";
 import { downloadXlsx } from "@/lib/xlsx-minimal";
 import type { StaffingLine } from "@/lib/types";
 
@@ -123,8 +125,10 @@ export function EstimateWorkspace({
   const desk = useOwnerDesk();
   const importBlocked = viewingAsOther(desk?.viewAs);
   const fileRef = useRef<HTMLInputElement>(null);
+  const exportLock = useRef(false);
   const [exportError, setExportError] = useState("");
   const [exportBusy, setExportBusy] = useState(false);
+  const [exportModal, setExportModal] = useState(false);
   const [importError, setImportError] = useState("");
   const [importBusy, setImportBusy] = useState(false);
   const [pendingImport, setPendingImport] = useState<(EstimateImport & { otherCost?: OtherCostSheet }) | null>(null);
@@ -140,9 +144,12 @@ export function EstimateWorkspace({
   const company = estimateCompanyName({ client: boundClient, site: boundSite, title: name || crumb });
 
   async function exportWorkbook() {
-    if (exportBusy) return;
+    if (exportLock.current || exportBusy) return;
+    exportLock.current = true;
     setExportError("");
     setExportBusy(true);
+    setExportModal(true);
+    await yieldToUi();
     try {
       const bytes = await estimateToXlsx({
         title: name || crumb,
@@ -169,9 +176,11 @@ export function EstimateWorkspace({
         estimateXlsxFilename({ site: boundSite, title: name || crumb, client: boundClient, companyName: company }),
         bytes,
       );
+      setExportModal(false);
     } catch {
       setExportError(ESTIMATE_EXPORT_ERROR);
     } finally {
+      exportLock.current = false;
       setExportBusy(false);
     }
   }
@@ -202,6 +211,7 @@ export function EstimateWorkspace({
   async function readWorkbook(file: File) {
     setImportError("");
     setExportError("");
+    setExportModal(false);
     setPendingClientFace(null);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
@@ -382,7 +392,7 @@ export function EstimateWorkspace({
                 }}
                 className="rounded border border-white/20 px-3 py-1.5 text-white/90 disabled:opacity-60"
               >
-                {action.id === "export" && exportBusy ? "Exporting…" : action.label}
+                {action.id === "export" && exportBusy ? "Building file…" : action.label}
               </button>
             ))}
             <input
@@ -452,6 +462,12 @@ export function EstimateWorkspace({
         {tab === "wage-lookup" ? null : children}
         <EstimateTotalRail client={jobClient || client} site={jobSite || site} />
       </div>
+      {exportModal ? (
+        <BuildingFileModal
+          error={exportBusy ? "" : exportError}
+          onDismissError={!exportBusy && exportError ? () => setExportModal(false) : undefined}
+        />
+      ) : null}
       {confirmClose && packageId ? (
         <ModalPortal>
         <div className="modal-scrim" role="dialog" aria-modal="true">
