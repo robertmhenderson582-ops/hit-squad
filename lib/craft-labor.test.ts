@@ -8,6 +8,7 @@ import {
   assignSupportBilledAs,
   assignSupportDuty,
   blankCraftRow,
+  blankRange,
   blankSupportLine,
   cloneCraftRow,
   cloneSupportLine,
@@ -79,6 +80,14 @@ describe("crew ranges are per position", () => {
     assert.equal(defaultShiftForPhase("pre"), "Days");
     assert.equal(defaultShiftForPhase("post"), "Days");
     assert.equal(defaultShiftForPhase(undefined), "Days");
+
+    const bookSeat = assignCraftPosition(
+      { ...blankCraftRow(), position: "Boilermaker", bookRate: 158.89, ranges: [{ ...blankRange(), phaseId: "mech" }] },
+      "Boilermaker Journeyman",
+      defaultPhases(),
+    );
+    assert.equal(bookSeat.position, "Boilermaker Journeyman");
+    assert.equal(bookSeat.bookRate, undefined);
 
     const row = assignCraftPosition(blankCraftRow(), "Boilermaker Journeyman", defaultPhases());
     assert.equal(row.shift, "Days");

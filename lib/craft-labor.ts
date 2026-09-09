@@ -214,6 +214,8 @@ export type CraftRow = {
   ranges: CalendarRange[];
   /** Support-only on the desk; optional on other lanes so Excel can carry Bill as. */
   billedAs?: string;
+  /** Family A contractor composite sell rate (hours × one rate). Live desk labor uses this when set. */
+  bookRate?: number;
 };
 
 export type SupportLine = CraftRow & {
@@ -490,6 +492,13 @@ export function syncCraftRows(
   });
 }
 
+function dropSeatBookRate(row: CraftRow): CraftRow {
+  if (row.bookRate == null) return row;
+  const next = { ...row };
+  delete next.bookRate;
+  return next;
+}
+
 export function assignCraftPosition(
   row: CraftRow,
   position: string,
@@ -498,10 +507,13 @@ export function assignCraftPosition(
   multiUnits = false,
 ): CraftRow {
   if (!position.trim()) {
-    return { ...row, position: "", ranges: [] };
+    return { ...dropSeatBookRate(row), position: "", ranges: [] };
   }
   if (row.ranges.length === 0) {
     return { ...craftRowFromPhases(phases, units, multiUnits), id: row.id, position };
+  }
+  if (position !== row.position) {
+    return { ...dropSeatBookRate(row), position };
   }
   return { ...row, position };
 }

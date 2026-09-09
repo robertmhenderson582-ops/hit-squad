@@ -117,7 +117,7 @@ import {
   type RunningClock,
 } from "./hours-clock.ts";
 import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
-import { miscAmount, travelAmount, type OtherCostSheet, type TravelLine } from "./other-cost.ts";
+import { miscAmount, miscMarkupAmount, travelAmount, type OtherCostSheet, type TravelLine } from "./other-cost.ts";
 import {
   eachYmd,
   liveJobSetupPhases,
@@ -145,6 +145,7 @@ import {
   SHAHAN_NO_RATE_LABEL,
   SHAHAN_STAFF_TITLES,
   SHAHAN_SUPPORT_TITLES,
+  seatBookRate,
   shahanCrewTitle,
   shahanPeriodRate,
   type JobRates,
@@ -1577,9 +1578,17 @@ function buildCrewSheet(
     pushText(cells, `E${dtRow}`, "DT");
     pushText(cells, `E${pdRow}`, LABOR_PD_TYPE);
 
-    pushFormula(cells, `D${stRow}`, rateLookupFormula(rateName, "C", lastRateRow));
-    pushFormula(cells, `D${otRow}`, rateLookupFormula(rateName, "D", lastRateRow));
-    pushFormula(cells, `D${dtRow}`, rateLookupFormula(rateName, "E", lastRateRow));
+    const bookRate = seatBookRate(row);
+    if (bookRate) {
+      // Family A has no ST/OT/DT premium — one composite sell on every band.
+      pushNum(cells, `D${stRow}`, bookRate);
+      pushNum(cells, `D${otRow}`, bookRate);
+      pushNum(cells, `D${dtRow}`, bookRate);
+    } else {
+      pushFormula(cells, `D${stRow}`, rateLookupFormula(rateName, "C", lastRateRow));
+      pushFormula(cells, `D${otRow}`, rateLookupFormula(rateName, "D", lastRateRow));
+      pushFormula(cells, `D${dtRow}`, rateLookupFormula(rateName, "E", lastRateRow));
+    }
     pushFormula(cells, `C${stRow}`, `F${titleRow}*N(D${stRow})`);
     pushFormula(cells, `C${otRow}`, `G${titleRow}*N(D${otRow})`);
     pushFormula(cells, `C${dtRow}`, `H${titleRow}*N(D${dtRow})`);
@@ -2140,12 +2149,11 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
   }
 
   const thirdPartyCostTotal = (input.equipment?.thirdParty ?? []).reduce((sum, line) => sum + thirdPartyCost(line), 0);
-  const miscTotal = (input.otherCost?.misc ?? []).reduce((sum, line) => sum + miscAmount(line), 0);
   const subSheet = input.subcontractor ?? emptySubSheet();
   const markup = estimateMarkupDollars({
     subcontractor: subcontractorMarkupBase(subSheet, { site, client, otAfter8: Boolean(input.crew?.otAfter8) }),
     thirdParty: thirdPartyCostTotal,
-    misc: miscTotal,
+    misc: miscMarkupAmount(input.otherCost ?? { perDiemRate: 0, travel: [], misc: [] }),
     client,
     site,
   });

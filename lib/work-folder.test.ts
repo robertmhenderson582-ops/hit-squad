@@ -60,6 +60,8 @@ describe("Work Folder ids", () => {
     assert.match(doc, /Do not git client xlsx/);
     assert.match(doc, /MULTIPLE templates/);
     assert.match(doc, /lib\/wake-golden\/fixtures\.json/);
+    assert.match(doc, /rodeo-rodeo-u110-2026-ta\.json/);
+    assert.match(doc, /rodeo-rodeo-u250-fall-2026\.json/);
     assert.equal(/\.(xlsx|pdf)\n/.test(doc), false);
   });
 });

@@ -31,6 +31,9 @@ import {
   rematchShahanEquipmentId,
   allowedShahanPeriod,
   hasShahanPeriodRate,
+  bookRateLaborAmount,
+  crewRowLaborAmount,
+  seatBookRate,
   shahanCrewCostAmount,
   shahanCrewTitle,
   shahanEquipmentByFuel,
@@ -146,6 +149,19 @@ describe("Shahan TM OCIP — Wood River", () => {
     assert.equal(formatShahanCrewCost("Unknown", { st: 10, ot: 2, dt: 1 }), "");
     const opts = { catalog: SHAHAN_LABOR_FIXTURE };
     assert.equal(shahanCrewCostAmount("MANAGER, PROJECT 01", { st: 10, ot: 0, dt: 0 }, opts), 1100);
+    assert.equal(lookupShahanLabor("Boilermaker", { catalog: SHAHAN_LABOR }), null);
+    assert.equal(shahanCrewCostAmount("Boilermaker", { st: 7108, ot: 0, dt: 0, hours: 7108 }), 0);
+    assert.equal(bookRateLaborAmount(158.89, { st: 7108, ot: 0, dt: 0, hours: 7108 }), 1_129_390.12);
+    assert.equal(
+      crewRowLaborAmount({ position: "Boilermaker", bookRate: 158.89 }, { st: 7108, ot: 0, dt: 0, hours: 7108 }),
+      1_129_390.12,
+    );
+    assert.equal(
+      crewRowLaborAmount({ position: "Boilermaker", bookRate: 154.95 }, { st: 1500, ot: 0, dt: 0, hours: 1500 }),
+      232_425,
+    );
+    assert.equal(seatBookRate({ bookRate: 154.95 }), 154.95);
+    assert.equal(seatBookRate({}), 0);
   });
 
   it("defaults Job setup Staff/Craft PD and leaves mileage blank", () => {
@@ -239,7 +255,8 @@ describe("Shahan TM OCIP — Wood River", () => {
     assert.match(jobSetup, /applyPlantJobRates/);
     const supportCard = readFileSync(fileURLToPath(new URL("../components/SupportCrewCard.tsx", import.meta.url)), "utf8");
     assert.match(supportCard, /shahanCrewTitle/);
-    assert.match(supportCard, /formatShahanCrewCost/);
+    assert.match(supportCard, /formatCrewRowCost/);
+    assert.match(supportCard, /crewRowLaborAmount/);
     assert.equal(/cost: row\.cost/.test(supportCard), false);
   });
 

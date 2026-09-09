@@ -92,6 +92,62 @@ describe("local transfer commit", () => {
     assert.equal(readJobMenu(store).transferred[0]?.toName, "Nathan Boyte");
   });
 
+  it("refuses a broken Family A U110 flush with the locked-total reason and does not PUT", async () => {
+    resetVaultHydrateForTests();
+    const { rodeoU110FilledSnapshot } = await import("./madison-u110.ts");
+    const store = memoryStore();
+    const filled = rodeoU110FilledSnapshot({ createdAt: 9_000, updatedAt: 9_001 });
+    const dropRate = (rows: unknown[] | undefined) =>
+      (rows ?? []).map((row) => {
+        if (!row || typeof row !== "object") return row;
+        const next = { ...(row as Record<string, unknown>) };
+        delete next.bookRate;
+        return next;
+      });
+    const crew = filled.crew as {
+      staff?: unknown[];
+      generalForeman?: unknown[];
+      foreman?: unknown[];
+      direct?: unknown[];
+      support?: unknown[];
+    };
+    const other = filled.otherCost as { misc?: Array<Record<string, unknown>> };
+    applyPackToStore(store, {
+      ...filled,
+      crew: {
+        ...crew,
+        staff: dropRate(crew.staff),
+        generalForeman: dropRate(crew.generalForeman),
+        foreman: dropRate(crew.foreman),
+        direct: dropRate(crew.direct),
+        support: dropRate(crew.support),
+      },
+      otherCost: {
+        ...other,
+        misc: (other.misc ?? []).map((row) => {
+          const next = { ...row };
+          delete next.bookPriced;
+          return next;
+        }),
+      },
+    });
+    let hits = 0;
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      hits += 1;
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await flushVaultUpsert(filled.packId, store);
+      assert.equal(result.ok, false);
+      assert.match("error" in result ? result.error || "" : "", /Rodeo U110 desk \$815,?419(?:\.38)? ≠ locked \$5,?247,?587/);
+      assert.equal(hits, 0);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
   it("does not flush a leftover local pack after Turn over", async () => {
     resetVaultHydrateForTests();
     const store = memoryStore();
@@ -1477,9 +1533,11 @@ describe("local transfer commit", () => {
     }
   });
 
-  it("keeps a boot-only vault flush failure off the Could not Save banner", () => {
+  it("keeps a first-pass boot flush off the banner unless integrity or the retry still fails", () => {
     const src = readFileSync(fileURLToPath(new URL("../components/EstimatePackage.tsx", import.meta.url)), "utf8");
-    assert.match(src, /Drive sync delayed/);
+    assert.match(src, /isVaultIntegrityError/);
+    assert.match(src, /isVaultIntegrityError\(first\.error/);
+    assert.match(src, /applyVaultFlushResult\(retry, \{ force: true \}\)/);
     assert.match(src, /reportVaultErrors/);
     assert.match(src, /shouldHydrateOpenPack\(packId\) \|\| !\(hasLocal \|\| vaultListHydratePending\(\)\)/);
     assert.match(src, /hydrateOpenPack\(packId\)/);

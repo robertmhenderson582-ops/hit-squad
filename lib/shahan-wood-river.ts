@@ -497,9 +497,39 @@ export function formatDeskDollars(amount: number): string {
   return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+export type CrewBillHours = Pick<HoursSplit, "st" | "ot" | "dt"> & { hours?: number };
+
+export type CrewBillSeat = {
+  position?: string;
+  billedAs?: string;
+  bookRate?: number;
+  laborClassOverride?: "Merit" | "Union" | null;
+};
+
+/** Family A / Madison contractor composite sell. Hours × one rate — not Rate Table ST/OT/DT. */
+export function seatBookRate(row: Pick<CrewBillSeat, "bookRate"> | number | null | undefined): number {
+  const rate = typeof row === "number" || row == null ? Number(row) : Number(row.bookRate);
+  return priced(rate) ? rate : 0;
+}
+
+export function bookRateLaborAmount(
+  bookRate: number,
+  hours: CrewBillHours,
+): number {
+  const rate = seatBookRate(bookRate);
+  if (!rate) return 0;
+  const total =
+    typeof hours.hours === "number" && Number.isFinite(hours.hours)
+      ? hours.hours
+      : (Number(hours.st) || 0) + (Number(hours.ot) || 0) + (Number(hours.dt) || 0);
+  if (!(total > 0)) return 0;
+  return Math.round(total * rate * 100) / 100;
+}
+
+/** Rate Table ST/OT/DT only. Unmapped titles (Madison Boilermaker, Fire Watch) stay $0. */
 export function shahanCrewCostAmount(
   title: string,
-  hours: Pick<HoursSplit, "st" | "ot" | "dt">,
+  hours: CrewBillHours,
   opts: ShahanLookupOpts = {},
 ): number {
   const row = lookupShahanLabor(title, opts);
@@ -511,9 +541,35 @@ export function shahanCrewCostAmount(
   return Math.round(raw * 100) / 100;
 }
 
+/**
+ * Live seat labor. Family A seats carry `bookRate` (hours × composite).
+ * Everyone else bills Rate Table ST/OT/DT via the typed title.
+ */
+export function crewRowLaborAmount(
+  row: CrewBillSeat,
+  hours: CrewBillHours,
+  opts: ShahanLookupOpts = {},
+): number {
+  const book = seatBookRate(row);
+  if (book) return bookRateLaborAmount(book, hours);
+  const title = shahanCrewTitle(row);
+  return shahanCrewCostAmount(title, hours, {
+    ...opts,
+    laborClass: row.laborClassOverride ?? opts.laborClass ?? defaultLaborClass(title),
+  });
+}
+
+export function formatCrewRowCost(
+  row: CrewBillSeat,
+  hours: CrewBillHours,
+  opts: ShahanLookupOpts = {},
+): string {
+  return formatDeskDollars(crewRowLaborAmount(row, hours, opts));
+}
+
 export function formatShahanCrewCost(
   title: string,
-  hours: Pick<HoursSplit, "st" | "ot" | "dt">,
+  hours: CrewBillHours,
   opts: ShahanLookupOpts = {},
 ): string {
   return formatDeskDollars(shahanCrewCostAmount(title, hours, opts));
@@ -561,6 +617,7 @@ export function isStaffPerDiemLane(lane: "staff" | "general-foreman" | "foreman"
 type HourRow = {
   position: string;
   billedAs?: string;
+  bookRate?: number;
   laborClassOverride?: "Merit" | "Union" | null;
   shift?: "Days" | "Nights" | "Days & nights";
   clockOverride?: "auto" | "comp" | "staff";
@@ -606,11 +663,7 @@ export function laborDollarsFromCrew(
     Math.round(
       rows.reduce((sum, row) => {
         const hours = computeRowHours(row, site, client, crew.otAfter8, "", holidays);
-        const title = shahanCrewTitle(row);
-        return sum + shahanCrewCostAmount(title, hours, {
-          ...opts,
-          laborClass: row.laborClassOverride ?? opts.laborClass ?? defaultLaborClass(title),
-        });
+        return sum + crewRowLaborAmount(row, hours, opts);
       }, 0) * 100,
     ) / 100
   );

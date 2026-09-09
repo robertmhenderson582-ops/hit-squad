@@ -12,6 +12,7 @@ import {
   hydrateMiscLine,
   hydrateTravelLine,
   miscAmount,
+  miscMarkupAmount,
   miscDescriptionsFor,
   otherCostTotals,
   parseOtherCostJson,
@@ -236,4 +237,17 @@ test("other cost totals PD + travel + misc", () => {
   assert.equal(totals.travel, 100);
   assert.equal(totals.misc, 50);
   assert.equal(totals.total, 450);
+});
+
+test("Family A book-priced misc stays in Other Cost and out of 6.5% markup", () => {
+  const sheet = parseOtherCostJson({
+    misc: [
+      { item: "Welding Supplies", qty: 14, each: 2500, bookPriced: true },
+      { item: "Alloy rod", qty: 1, each: 40 },
+    ],
+  });
+  assert.equal(sheet.misc[0].bookPriced, true);
+  assert.equal(sheet.misc[1].bookPriced, undefined);
+  assert.equal(otherCostTotals(sheet).misc, 14 * 2500 + 40);
+  assert.equal(miscMarkupAmount(sheet), 40);
 });

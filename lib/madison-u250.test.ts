@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 import ExcelJS from "exceljs";
 import { classifyFromSheetsAndName, CLIENT_FACE_MAPPER_SPEC, shouldStageClientWorkbook } from "./client-estimate-ingest.ts";
 import { CREW_LANES } from "./crew-lanes.ts";
-import { crewHasRows, mergeVaultIntoLocal, pickPack } from "./estimate-pack.ts";
+import { crewHasRows, estimateFileName, mergeVaultIntoLocal, pickPack } from "./estimate-pack.ts";
+import { deskPackageTotal } from "./estimate-desk-total.ts";
 import { packSnapshotToXlsxInput } from "./estimate-pack-xlsx.ts";
 import { estimateTabIdsForSite } from "./estimate-tabs.ts";
 import { applyEstimateImport, createPackFromImport, parseEstimateXlsx } from "./estimate-xlsx-import.ts";
@@ -14,7 +15,7 @@ import { ingestMadisonU250 } from "./madison-u250-xlsx.ts";
 import { CREW_STORE_PREFIX, isDefaultSeedSchedule, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
 import { listLocalPacks, readStoreJson, storageKeyForPack, type StorageLike } from "./local-estimates.ts";
 import { RODEO_U250_PACK_ID, isWakeIdentityOnly, oneLivePackPerWakeJob, rodeoMonroeWakeCards } from "./rodeo-monroe-wake.ts";
-import { U250_CONTRACTOR_GOLDEN } from "./wake-golden.ts";
+import { moneyEqual, U250_CONTRACTOR_GOLDEN } from "./wake-golden.ts";
 import {
   checkRodeoU250OfficialHours,
   checkRodeoU250PackHours,
@@ -22,6 +23,7 @@ import {
   loadRodeoU250Fixture,
   persistRodeoU250Wake,
   RODEO_U250_CLIENT,
+  RODEO_U250_VAULT_FILE,
   RODEO_U250_HOURS_PLUG,
   RODEO_U250_SITE,
   RODEO_U250_STATUS,
@@ -159,6 +161,15 @@ describe("madison-u250 ingest", () => {
     assert.ok(misc.some((row) => row.item === "Freight" && row.each === 8000));
     assert.ok(misc.some((row) => row.item === "Per Diem (Direct)" && row.qty === 656 && row.each === 145));
     assert.equal(misc.some((row) => /extractor/i.test(row.item)), false);
+    assert.equal(
+      (pack.crew as { direct: Array<{ position: string; hours?: number; bookRate?: number }> }).direct.find(
+        (row) => row.position === "Boilermaker" && row.bookRate === 159.84,
+      )?.bookRate,
+      159.84,
+    );
+    const desk = deskPackageTotal(packSnapshotToXlsxInput(pack));
+    assert.equal(moneyEqual(desk, U250_CONTRACTOR_GOLDEN.buckets!.grandTotal), true);
+    assert.equal(estimateFileName({ site: RODEO_U250_SITE, title: pack.title }), RODEO_U250_VAULT_FILE);
   });
 
   it("wakes U250 crew on persist and prefers filled seed over an empty vault identity", () => {

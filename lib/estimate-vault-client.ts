@@ -6,6 +6,7 @@ import {
   scheduleOnce,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
+import { familyAVaultWriteError } from "./family-a-vault-write.ts";
 import { shouldSkipIntegrityFlush } from "./pack-integrity.ts";
 import { ownerVaultEmail, packSharedEmails } from "./estimate-scope.ts";
 import { applyHisIdentity, hisFileForPackId, hisMatchForPack, persistHisWoodRiverCards } from "./his-wood-river.ts";
@@ -277,6 +278,10 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   // re-upload over Drive. Editors = owner (Robert) OR assigned PM/estimator.
   if (packClockIsSeedSmashed(pack) || shouldSkipIntegrityFlush(pack)) {
     return { ok: true as const, skipped: true as const };
+  }
+  const familyAFault = familyAVaultWriteError(pack);
+  if (familyAFault) {
+    return { ok: false as const, error: familyAFault };
   }
   const body = JSON.stringify({ pack });
   if (lastBody.get(packId) === body) return { ok: true as const };

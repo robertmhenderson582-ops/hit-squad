@@ -5,8 +5,10 @@
  * B-1 day grid. Positions land on the Wood River five-card desk
  * (Staff / GF / Foreman / Direct / Support). Hole Watch/Fire Watch from the
  * Direct tab sits on Support — same card as Wood River. Book composite rates
- * stay on the fixture; desk labor $ resolve through Rate Tables / Shahan.
- * Non-labor SUMMARY lines seed Other Cost. Excel binaries stay on Drive.
+ * ride on each crew seat (`bookRate`); desk labor $ is hours × that rate.
+ * Madison titles stay typed — they do not invent Shahan Rodeo ST/OT/DT.
+ * Non-labor SUMMARY lines seed Other Cost as book-priced sell (no 6.5%
+ * markup). Excel binaries stay on Drive.
  *
  * Client-safe: static JSON fixture only. Workbook parse lives in madison-u110-xlsx.ts.
  */
@@ -178,6 +180,7 @@ export function crewFromMadisonPositions(
       id,
       position: item.position,
       shift: "Days",
+      bookRate: item.bookRate,
       ranges: [hoursPlugRange(item.hours, id, mech, plug)],
     };
     const list = crew[item.lane] ?? [];
@@ -190,8 +193,23 @@ export function crewFromMadisonPositions(
 export function otherCostFromMadison(misc: MadisonU110Fixture["misc"]): OtherCostSheet {
   const lines: MiscLine[] = misc
     .filter((row) => row.each > 0 && row.qty > 0)
-    .map((row) => ({ ...blankMisc(row.item), qty: row.qty, each: row.each }));
+    .map((row) => ({ ...blankMisc(row.item), qty: row.qty, each: row.each, bookPriced: true }));
   return { ...emptyOtherCost(), misc: lines };
+}
+
+/** Official Family A labor: hours × typed composite. Not a hardcoded grand total. */
+export function familyASeatLabor(positions: Array<{ hours: number; bookRate: number }>): number {
+  return Math.round(positions.reduce((sum, row) => sum + (Number(row.hours) || 0) * (Number(row.bookRate) || 0), 0) * 100) / 100;
+}
+
+export function familyABookOther(misc: Array<{ qty: number; each: number }>): number {
+  return Math.round(
+    misc.reduce((sum, row) => {
+      const qty = Number(row.qty) || 0;
+      const each = Number(row.each) || 0;
+      return qty > 0 && each > 0 ? sum + qty * each : sum;
+    }, 0) * 100,
+  ) / 100;
 }
 
 export function typedHoursFromMadisonPositions(positions: MadisonFixturePosition[]): MadisonTypedHours {
@@ -392,7 +410,10 @@ export function persistRodeoU110Wake(store?: StorageLike | null) {
   seedRodeoU110LocalDefaults(store, RODEO_U110_PACK_ID);
 }
 
+/** Drive Estimates-room name `estimateFileName` will mint on first owner Save. */
+export const RODEO_U110_VAULT_FILE = "rodeo-rodeo-u110-2026-ta.json";
+
 export const RODEO_U110_VAULT_APPLY =
-  "Owner OAuth vault write: open Rodeo U110 so wake seeds the filled pack, then Save. No vault JSON on Drive yet — SA-upload the filled snapshot. Service-account-only isolates cannot PATCH a missing file. Do not commit the xlsx.";
+  "Owner OAuth vault write: open Rodeo U110 so wake seeds Family A hours × bookRate (desk total $5,247,587), then Save. First Save createJson mints rodeo-rodeo-u110-2026-ta.json. A broken other+markup-only seed is a 409 with the locked-total reason — do not upload it. Service-account-only isolates cannot PATCH a missing file; create is the first-write path. Do not commit the xlsx. Do not invent Family B workbook dollars.";
 
 export { RODEO_U110_JOB_CODE, RODEO_U110_PACK_ID };

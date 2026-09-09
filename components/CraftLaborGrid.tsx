@@ -24,7 +24,7 @@ import {
 import { CrewPhaseCards } from "@/components/CrewPhaseCards";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { defaultLaborClass, type LaborClass } from "@/lib/labor-class";
-import { formatDeskDollars, formatShahanCrewCost, shahanCrewCostAmount, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
+import { crewRowLaborAmount, formatCrewRowCost, formatDeskDollars, shahanTitleHasNoRate } from "@/lib/shahan-wood-river";
 import { wageLookupOpts } from "@/lib/wage-lookup";
 import { dayNightHours, perDiemDollarsForRow, perDiemRateForLane } from "@/lib/crew-pack";
 import { canNameOrgLane, nameSlot, setOrgChartContact, setOrgChartName } from "@/lib/org-chart";
@@ -60,16 +60,12 @@ export function CraftLaborGrid({
     () =>
       rows.map((row) => {
         const hours = computeRowHours(row, site, client, pack.crew.otAfter8, "", pack.jobMeta.holidays ?? []);
-        const title = row.position || ("billedAs" in row ? String(row.billedAs || "") : "");
+        const opts = wageLookupOpts(site);
         return {
           ...row,
           ...hours,
-          costAmount: shahanCrewCostAmount(title, hours, wageLookupOpts(site, {
-            laborClass: row.laborClassOverride ?? defaultLaborClass(title),
-          })),
-          cost: formatShahanCrewCost(title, hours, wageLookupOpts(site, {
-            laborClass: row.laborClassOverride ?? defaultLaborClass(title),
-          })),
+          costAmount: crewRowLaborAmount(row, hours, opts),
+          cost: formatCrewRowCost(row, hours, opts),
         };
       }),
     [client, pack.crew.otAfter8, pack.jobMeta.holidays, rows, site],

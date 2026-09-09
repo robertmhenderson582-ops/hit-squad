@@ -57,6 +57,7 @@ import {
   type VaultUpsertResult,
 } from "@/lib/estimate-vault-client";
 import { crewHasRows } from "@/lib/estimate-pack";
+import { isVaultIntegrityError } from "@/lib/family-a-vault-write";
 import { packStateLooksSmashed, shouldHydrateOpenPack } from "@/lib/pack-integrity";
 import { parseOtherCostJson, persistCrewTravel, writeOtherCost } from "@/lib/other-cost";
 import { parseEquipmentSheet, writeEquipmentSheet } from "@/lib/equipment-sheet";
@@ -238,8 +239,10 @@ export function EstimatePackageProvider({
       setVaultSaveError("");
       return;
     }
-    if ((opts?.force || reportVaultErrors.current) && "error" in result && result.error) {
-      setVaultSaveError(result.error);
+    const message = "error" in result && result.error ? result.error : "";
+    if (!message) return;
+    if (opts?.force || reportVaultErrors.current || isVaultIntegrityError(message)) {
+      setVaultSaveError(message);
     }
   }
 
@@ -306,12 +309,16 @@ export function EstimatePackageProvider({
             setVaultSaveError("");
             return;
           }
+          if ("error" in first && isVaultIntegrityError(first.error || "")) {
+            applyVaultFlushResult(first, { force: true });
+            return;
+          }
           await new Promise((resolve) => setTimeout(resolve, 1000));
           if (cancelled || !aliveRef.current) return;
           const retry = await flushVaultUpsert(packId);
           if (cancelled || !aliveRef.current) return;
           if (retry.ok) setVaultSaveError("");
-          else console.warn("Drive sync delayed", "error" in retry ? retry.error : "");
+          else applyVaultFlushResult(retry, { force: true });
         })();
       };
       if (typeof requestAnimationFrame === "function") requestAnimationFrame(runBootFlush);

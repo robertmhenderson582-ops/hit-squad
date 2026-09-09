@@ -22,7 +22,7 @@ import {
   type JobMoney,
 } from "./estimate-money.ts";
 import { estimateMarkupDollars, estimateTotalBreakdown, signedMoneyLines, type EstimateTotalBreakdown } from "./estimate-total.ts";
-import { otherCostTotals, type OtherCostSheet } from "./other-cost.ts";
+import { miscMarkupAmount, otherCostTotals, type OtherCostSheet } from "./other-cost.ts";
 import { laborDollarsFromCrew, perDiemDollarsFromCrew, type JobRates } from "./shahan-wood-river.ts";
 import { subcontractorMarkupBase, subcontractorTotal, type SubSheet } from "./subcontractor.ts";
 import { wageLookupOpts } from "./wage-lookup.ts";
@@ -84,7 +84,7 @@ export function deskPackageBreakdown(input: DeskPackageInput): EstimateTotalBrea
     markup: estimateMarkupDollars({
       subcontractor: subcontractorMarkupBase(sheet, subCtx),
       thirdParty: thirdCost,
-      misc: rest.misc,
+      misc: miscMarkupAmount(other),
       client,
       site,
     }),

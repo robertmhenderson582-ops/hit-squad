@@ -3,7 +3,7 @@ import { readSession } from "@/lib/auth";
 import { cookieValue, serverTiming } from "@/lib/http";
 import { hasWorkingDesk } from "@/lib/desk-role";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
-import { listVisiblePacks, packsResponse, upsertVisiblePack } from "@/lib/estimate-vault";
+import { listVisiblePacks, packsResponse, upsertVisiblePack, vaultWriteUserError } from "@/lib/estimate-vault";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +39,8 @@ export async function PUT(request: Request) {
     };
     if (hasWorkingDesk(user)) payload.store = result.store;
     return NextResponse.json(payload);
-  } catch {
-    return NextResponse.json({ error: "Could not store that package." }, { status: 502 });
+  } catch (error) {
+    const mapped = vaultWriteUserError(error);
+    return NextResponse.json({ error: mapped.error }, { status: mapped.status });
   }
 }
