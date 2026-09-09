@@ -60,6 +60,7 @@ import {
   LABOR_PHASE_LABEL,
   LABOR_PHASE_CHIP_ROW,
   DIRECT_PHASE_LABELS,
+  DIRECT_PHASE_STACK_COLS,
   directCraftAbbrev,
   LABOR_WEEKDAY_LABELS,
   LABOR_TYPE_ORDER,
@@ -128,6 +129,7 @@ import {
   HEADER_META_LINE_HEIGHT,
   HEADER_META_WRAP_HEIGHT,
   LABOR_PHASE_ROW_HEIGHT,
+  directPhaseStackHeight,
   SUMMARY_COL_A_WIDTH,
   SUMMARY_SECTION,
   SUMMARY_TOTAL,
@@ -810,20 +812,6 @@ describe("estimate excel export", () => {
       ESTIMATE_XLSX_SHEETS.lists,
     ]);
     assert.equal(empty[0].cells.some((cell) => cell.type === "formula" || (cell.type === "number" && /^C\d+$/.test(cell.ref))), true);
-  });
-
-  it("short-circuits export-lock IFERROR day formulas to the desk hours", () => {
-    const { evalAt } = evaluateWorkbook([
-      {
-        name: "Direct",
-        cells: [
-          { ref: "J10", type: "formula", value: "IFERROR(IF(AND(J8=1,J9=10),8,J8*999),8)" },
-          { ref: "J11", type: "formula", value: "IFERROR(IF(AND(J8=1),4.5,1),4.5)" },
-        ],
-      },
-    ]);
-    assert.equal(evalAt("Direct", "J10"), 8);
-    assert.equal(evalAt("Direct", "J11"), 4.5);
   });
 
   it("omits leftover $0 catalog rows — no blank Crane / OM Crane / empty labor tabs", async () => {
@@ -3137,7 +3125,7 @@ describe("estimate excel export", () => {
       "A3:I3",
       "A4:I5",
       `J4:${lastDateCol}4`,
-      "J3:K3",
+      "J3:M3",
       ...laborBlockVoidMerges(direct.laborBlocks ?? []),
     ]);
     const support = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.support)!;
@@ -3460,8 +3448,9 @@ describe("estimate excel export", () => {
     assert.match(String(preLabel?.value), new RegExp(`SUM\\(J${pfDay.st}:K${pfDay.dt}\\)`));
     assert.match(String(preLabel?.value), new RegExp(`SUM\\(J${bmNight.st}:K${bmNight.dt}\\)`));
     assert.match(String(oilLabel?.value), new RegExp(`SUM\\(L${bmDay.st}:P${bmDay.dt}\\)`));
+    assert.equal(DIRECT_PHASE_STACK_COLS, 4);
     assert.ok(direct.merges?.includes(`J${LABOR_PHASE_CHIP_ROW}:K${LABOR_PHASE_CHIP_ROW}`));
-    assert.ok(direct.merges?.includes(`L${LABOR_PHASE_CHIP_ROW}:M${LABOR_PHASE_CHIP_ROW}`));
+    assert.ok(direct.merges?.includes(`L${LABOR_PHASE_CHIP_ROW}:O${LABOR_PHASE_CHIP_ROW}`));
     assert.equal(direct.merges?.includes(`L${LABOR_PHASE_CHIP_ROW}:P${LABOR_PHASE_CHIP_ROW}`), false);
     assert.equal(LABOR_BLOCK_HEIGHT, 7);
     assert.equal(bmDay.pd - bmDay.title, 6);
@@ -3515,6 +3504,15 @@ describe("estimate excel export", () => {
     assert.match(String(directBook.getCell("A1").value ?? ""), /MADISON/);
     assert.equal(/Hit Squad|HIT SQUAD/i.test(String(directBook.getCell("A1").value ?? "")), false);
     assert.equal(directBook.getCell(`J${LABOR_PHASE_CHIP_ROW}`).protection?.locked !== false, true);
+    assert.equal(directBook.getCell(`J${LABOR_PHASE_CHIP_ROW}`).alignment?.vertical, "top");
+    assert.equal(directBook.getCell(`J${LABOR_PHASE_CHIP_ROW}`).alignment?.wrapText, true);
+    const preStackPt = Number(directBook.getRow(LABOR_PHASE_CHIP_ROW).height);
+    assert.equal(preStackPt >= directPhaseStackHeight(2, 2), true);
+    assert.equal(preStackPt > 64, true);
+    const preVal = directBook.getCell(`J${LABOR_PHASE_CHIP_ROW}`).value as { formula?: string } | string | null;
+    const preFormula = typeof preVal === "object" && preVal ? String(preVal.formula ?? "") : String(preVal ?? "");
+    assert.match(preFormula, /BM PRE -/);
+    assert.match(preFormula, /PF PRE -/);
     const preFill = String(
       (directBook.getCell(`J${LABOR_PHASE_CHIP_ROW}`).fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "",
     ).toUpperCase();
@@ -3525,6 +3523,92 @@ describe("estimate excel export", () => {
     const imported = readFileSync(fileURLToPath(new URL("./estimate-xlsx-import.ts", import.meta.url)), "utf8");
     assert.match(imported, /titleRow \+ LABOR_ST_OFFSET/);
     assert.doesNotMatch(imported, /phaseChips|LABOR_PHASE_CHIP|directPhaseLabels/);
+  });
+
+  it("stacks OE/LB Direct hours on another mix and omits crafts with no hours in that phase", async () => {
+    const allDays = [true, true, true, true, true, true, true];
+    const input = {
+      title: "Bayway exchanger window",
+      client: "Phillips 66",
+      site: "Bayway — Linden, NJ",
+      companyName: "Madison",
+      crew: {
+        direct: [
+          craft("oe-1", "Operating Eng Grp 01", 10, {
+            start: "2026-10-01",
+            end: "2026-10-10",
+            days: allDays,
+            otAfter8: true,
+            headcount: 3,
+          }),
+          craft("lb-1", "Laborer", 10, {
+            start: "2026-10-06",
+            end: "2026-10-10",
+            days: allDays,
+            otAfter8: true,
+            headcount: 6,
+          }),
+        ],
+        otAfter8: true,
+      },
+      schedule: {
+        projectStart: "2026-10-01",
+        multiUnits: false,
+        units: [],
+        phases: [
+          {
+            id: "pre" as const,
+            name: "Pre-Turnaround",
+            on: true,
+            start: "2026-10-01",
+            stop: "2026-10-05",
+            daysPerWeek: 7,
+            hoursPerDay: 10,
+            otAfter8: false,
+            sundaysOff: [] as string[],
+          },
+          {
+            id: "mech" as const,
+            name: "Mechanical Window",
+            on: true,
+            start: "2026-10-06",
+            stop: "2026-10-10",
+            daysPerWeek: 7,
+            hoursPerDay: 10,
+            otAfter8: true,
+            sundaysOff: [] as string[],
+          },
+        ],
+      },
+      jobMeta: { staffPerDiemRate: 140, craftPerDiemRate: 130, staffMileageRate: 0.7, craftMileageRate: 0.5, rateBook: "" },
+    };
+    assert.equal(directCraftAbbrev("Operating Eng Grp 01"), "OE");
+    assert.equal(directCraftAbbrev("Laborer"), "LB");
+    const sheets = buildEstimateWorkbook(input);
+    const direct = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.direct)!;
+    const cells = cellMap(direct);
+    const pre = String(cells.get(`J${LABOR_PHASE_CHIP_ROW}`)?.value ?? "");
+    const mech = String(cells.get(`O${LABOR_PHASE_CHIP_ROW}`)?.value ?? "");
+    assert.match(pre, /OE PRE -/);
+    assert.equal(/LB PRE -/.test(pre), false);
+    assert.equal(/BM /.test(pre), false);
+    assert.match(mech, /OE Mech -/);
+    assert.match(mech, /LB Mech -/);
+    assert.equal(/PF /.test(mech), false);
+    assert.equal(direct.directPhaseLabels?.[0]?.crafts, 1);
+    assert.equal(direct.directPhaseLabels?.[1]?.crafts, 2);
+    assert.ok(direct.merges?.includes(`J${LABOR_PHASE_CHIP_ROW}:M${LABOR_PHASE_CHIP_ROW}`));
+
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes));
+    const book = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.direct);
+    assert.ok(book);
+    assert.equal(book.getCell(`J${LABOR_PHASE_CHIP_ROW}`).alignment?.vertical, "top");
+    assert.equal(Number(book.getRow(LABOR_PHASE_CHIP_ROW).height) >= directPhaseStackHeight(2, 4), true);
+    const formula = String((book.getCell(`O${LABOR_PHASE_CHIP_ROW}`).value as { formula?: string })?.formula ?? "");
+    assert.match(formula, /OE Mech -/);
+    assert.match(formula, /LB Mech -/);
   });
 
   it("hides unused grid past the used range and washes leftover white cells", async () => {

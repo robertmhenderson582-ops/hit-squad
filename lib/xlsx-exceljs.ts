@@ -446,9 +446,11 @@ function applyHeaderMetaLayout(ws: ExcelJS.Worksheet, bandLastCol: number, wrap 
       wrapText: wrap || row > 1,
     };
     if (row === 1) continue;
-    ws.getRow(row).height = wrap
+    const metaHeight = wrap
       ? headerMetaHeight(String(cell.value ?? ""), headerBandWidth(ws, bandLastCol))
       : HEADER_META_LINE_HEIGHT;
+    // Never shrink row 3 — Direct craft×phase stacks grow this row past the brand band.
+    ws.getRow(row).height = Math.max(Number(ws.getRow(row).height) || 0, metaHeight);
   }
 }
 
@@ -1130,27 +1132,39 @@ function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDat
   applyDirectPhaseLabels(ws, sheet);
 }
 
+/** Two lines per craft when the merge is wide; a third when `hrs.` wraps. */
+export const DIRECT_PHASE_LINE_PT = 13;
+export const DIRECT_PHASE_STACK_MAX_PT = 409;
+
+export function directPhaseStackHeight(crafts: number, stackCols: number): number {
+  const perCraft = stackCols >= 4 ? 2 : 3;
+  return Math.min(DIRECT_PHASE_STACK_MAX_PT, Math.max(1, crafts) * perCraft * DIRECT_PHASE_LINE_PT + 10);
+}
+
 /** Direct craft × phase stacks at each phase start, immediately above the color bar. */
 function applyDirectPhaseLabels(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
   const labels = sheet.directPhaseLabels ?? [];
   if (!labels.length) return;
-  let maxCrafts = 1;
+  let needed = 0;
   for (const label of labels) {
-    maxCrafts = Math.max(maxCrafts, label.crafts);
-    const fillArgb = isPhaseId(label.phaseId) ? PHASE_TONE_FILLS[label.phaseId] : STEEL;
     const stackEnd = label.stackEndCol ?? label.startCol;
+    const stackCols = stackEnd - label.startCol + 1;
+    needed = Math.max(needed, directPhaseStackHeight(label.crafts, stackCols));
+    const fillArgb = isPhaseId(label.phaseId) ? PHASE_TONE_FILLS[label.phaseId] : STEEL;
     for (let col = label.startCol; col <= stackEnd; col += 1) {
       const cell = ws.getCell(label.row, col);
       cell.fill = solid(fillArgb);
       cell.font = { bold: true, name: "Calibri", size: 7, color: { argb: PHASE_TONE_BAND_INK } };
-      cell.alignment = { horizontal: "left", vertical: "bottom", wrapText: true };
+      // Top-align so the first craft (BM) is never clipped when the row is tight.
+      cell.alignment = { horizontal: "left", vertical: "top", wrapText: true };
       cell.protection = { locked: true };
     }
   }
   const row = labels[0]?.row;
   if (row) {
-    const needed = Math.min(64, 14 * maxCrafts + 10);
     ws.getRow(row).height = Math.max(Number(ws.getRow(row).height) || 0, needed);
+    const title = ws.getCell(row, 1);
+    title.alignment = { horizontal: "left", vertical: "top", wrapText: true };
   }
 }
 
@@ -1246,7 +1260,8 @@ function applyLaborChrome(
       size: 9,
     };
     if (holidayCols.has(col)) header.fill = solid(LABOR_HOLIDAY_FILL);
-    else if (!weekendCols.has(col)) header.fill = solid(STEEL_DEEP);
+    else if (weekendCols.has(col)) header.fill = solid(LABOR_WEEKEND_FILL);
+    else header.fill = solid(STEEL_DEEP);
   }
   for (let col = 1; col <= LABOR_INSTRUMENT_LAST_COL; col += 1) {
     centerLaborCell(ws.getCell(6, col));

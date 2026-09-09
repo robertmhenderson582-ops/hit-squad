@@ -227,12 +227,6 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
 
   function evalFormula(sheet: string, raw: string): number | string {
     const src = raw.replace(/^=/, "").trim();
-    // Export-lock day hours: IFERROR(IF(exported, desk, clock), desk).
-    // Same desk number on both sides — skip walking the clock tree.
-    if (src.startsWith("IFERROR(IF(")) {
-      const locked = /,\s*(-?\d+(?:\.\d+)?)\),\s*(-?\d+(?:\.\d+)?)\)$/.exec(src);
-      if (locked && locked[1] === locked[2]) return Number(locked[1]);
-    }
     const sum = /^SUM\((.+)\)$/.exec(src);
     if (sum && /:/.test(sum[1])) {
       return sum[1].split(",").reduce((acc, part) => {

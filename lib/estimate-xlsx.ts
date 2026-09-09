@@ -223,8 +223,8 @@ export const LABOR_PHASE_LABEL = "Phase";
  * here at each phase’s start column — not a teal A3 dump, not on Auto rows.
  */
 export const LABOR_PHASE_CHIP_ROW = 3;
-/** Short stack at the phase start (above the bar), not a full-phase banner. */
-export const DIRECT_PHASE_STACK_COLS = 2;
+/** Stack width at the phase start — wide enough for `BM PRE - 1,944 hrs.` on one line. */
+export const DIRECT_PHASE_STACK_COLS = 4;
 /** Short phase names on Direct hour labels (Robert: PRE, Oil Out, …). */
 export const DIRECT_PHASE_LABELS: Record<PhaseId, string> = {
   pre: "PRE",
@@ -1510,6 +1510,22 @@ function formatDirectPhaseHourLine(craft: string, phaseLabel: string, dayExpr: s
   return `${title}&CHAR(10)&${split}`;
 }
 
+function craftHasHoursInSpan(
+  byRef: Map<string, SheetCell>,
+  titles: number[],
+  startCol: number,
+  endCol: number,
+): boolean {
+  for (const title of titles) {
+    const hcRow = title + LABOR_HC_OFFSET;
+    for (let col = startCol; col <= endCol; col += 1) {
+      const cell = byRef.get(`${colLetter(col)}${hcRow}`);
+      if (cell?.type === "number" && Number(cell.value) > 0) return true;
+    }
+  }
+  return false;
+}
+
 /** Direct-only: stacked craft×phase hours at each phase start, above the color bar. */
 function writeDirectPhaseHourLabels(
   cells: SheetCell[],
@@ -1531,9 +1547,15 @@ function writeDirectPhaseHourLabels(
   const labels: NonNullable<WorkbookSheet["directPhaseLabels"]> = [];
   const merges: string[] = [];
   if (!order.length) return { labels, merges };
+  const byRef = new Map(cells.map((cell) => [cell.ref, cell]));
   for (const run of runs) {
     const phaseLabel = isPhaseId(run.phaseId) ? DIRECT_PHASE_LABELS[run.phaseId] : run.phaseId;
-    const lines = order.map((code) => {
+    const live = order.filter((code) => {
+      const bucket = byCraft.get(code)!;
+      return craftHasHoursInSpan(byRef, [...bucket.day, ...bucket.night], run.startCol, run.endCol);
+    });
+    if (!live.length) continue;
+    const lines = live.map((code) => {
       const bucket = byCraft.get(code)!;
       return formatDirectPhaseHourLine(
         code,
@@ -1554,7 +1576,7 @@ function writeDirectPhaseHourLabels(
       endCol: run.endCol,
       stackEndCol,
       phaseId: run.phaseId,
-      crafts: order.length,
+      crafts: live.length,
     });
   }
   return { labels, merges };
