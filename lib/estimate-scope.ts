@@ -176,15 +176,15 @@ export function visibleDeskPacks(
 }
 
 /**
- * 2026-09-08 product lock: only the PM / estimator assigned to the job may edit.
- * Assignment emails are not fully wired — pack `ownerEmail` is the stand-in.
- * Owner may still operate as owner. President / view-as are lens tools, not extra editors.
- * Shared-with viewers must see the same live Drive pack (read-only intent).
+ * 2026-09-08 product lock: editors = owner (Robert) OR the assigned PM/estimator.
+ * Not assignee-only — the owner seat always can edit every pack.
+ * Assignment emails are not fully wired — pack `ownerEmail` is the PM/estimator stand-in.
+ * President / view-as are lens tools, not extra editors unless they are that assigned seat.
+ * Everyone else sees the same live Drive pack (read-only intent).
  * Follow-up: job assignment field + read-only UI. This is not a finished write-ACL.
  */
 export function canEditAssignedEstimate(user: ScopeUser, pack: ScopedPack) {
   if (isOwner(user)) return true;
-  if (isPresident(user)) return isPackOwner(user, pack);
   return isPackOwner(user, pack);
 }
 
@@ -195,7 +195,7 @@ export function isEstimateViewerNotEditor(user: ScopeUser, pack: ScopedPack) {
 
 export function canWritePack(user: ScopeUser, pack: ScopedPack) {
   if (isOwner(user)) return true;
-  // President View as / Madison lens is not an extra editor of someone else's book.
+  // President lens is not an extra editor. Assigned PM/estimator (pack owner) may edit.
   if (isPresident(user)) return isPackOwner(user, pack);
   if (isTester(user)) return packVisibleTo(user, pack);
   return hasWorkingDesk(user) && packVisibleTo(user, pack);

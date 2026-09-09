@@ -109,8 +109,8 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
   if (claimed && !canWritePack(user, claimed)) {
     return { ok: false as const, status: 403, error: "That package is not on this desk." };
   }
-  // 2026-09-08: viewers / unassigned seats cannot flush a smashed leftover over Drive.
-  // Assignment field is not fully wired — pack owner is the stand-in. Owner still writes.
+  // 2026-09-08: editors = owner (Robert) OR assigned PM/estimator. Not assignee-only.
+  // Viewers cannot flush a smashed leftover over Drive. ownerEmail is the PM stand-in.
   if (claimed && !canEditAssignedEstimate(user, claimed)) {
     const incoming = parsed.pack;
     const smash = packLooksSmashed(incoming) || shouldSkipIntegrityFlush(incoming);

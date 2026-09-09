@@ -82,7 +82,7 @@ describe("estimate vault scope", () => {
     assert.equal(canTransferPack(owner, testerPack), false);
   });
 
-  it("2026-09-08 lock: owner and pack owner may edit; President / viewers are not extra editors", () => {
+  it("2026-09-08 lock: owner (Robert) OR assigned PM/estimator may edit — not assignee-only", () => {
     const president = { email: "president.example@example.com", role: "president" as const };
     const shared = { ...ownerPack, sharedWith: [tester.email] };
     assert.equal(canEditAssignedEstimate(owner, ownerPack), true);
@@ -111,8 +111,8 @@ describe("estimate vault scope", () => {
     const shared = { ...ownerPack, sharedWith: [tester.email] };
     assert.equal(packVisibleTo(tester, shared), true);
     assert.equal(canWritePack(tester, shared), true);
-    // 2026-09-08 lock: assigned-editor ACL is not fully wired. Shared write still
-    // goes through canWritePack; canEditAssignedEstimate is false (viewer).
+    // 2026-09-08 lock: editors = owner OR assigned PM/estimator. Shared write still
+    // goes through canWritePack; canEditAssignedEstimate is false (viewer). Assignment field TBD.
     assert.equal(canEditAssignedEstimate(tester, shared), false);
     assert.equal(isEstimateViewerNotEditor(tester, shared), true);
     assert.equal(canSharePack(tester, shared), false);
