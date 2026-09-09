@@ -87,29 +87,28 @@ function haystack(...parts: Array<string | undefined | null>) {
   return norm(parts.filter(Boolean).join(" "));
 }
 
-export function defaultOpenCompanyId(companies: Array<{ id: CompanyId }>) {
-  if (companies.some((row) => row.id === "madison")) return "madison";
-  return companies[0]?.id;
+/** First paint / navigate to Jobs is fully collapsed. Madison is not auto-opened. */
+export function defaultOpenCompanyId(_companies?: Array<{ id: CompanyId }>) {
+  return "";
 }
 
-/** `""` is all collapsed. Only `undefined` (first paint / omitted prop) uses the default. */
+/** `""` is all collapsed. `undefined` (first paint / omitted prop) is also collapsed. */
 export function resolveOpenCompanyId(
   openCompanyId: string | undefined,
   companies: Array<{ id: CompanyId }>,
 ) {
-  if (openCompanyId === undefined) return defaultOpenCompanyId(companies) ?? "";
+  if (openCompanyId === undefined) return defaultOpenCompanyId(companies);
   return openCompanyId;
 }
 
-/** Sticky accordion: null = first paint default; `""` stays all-collapsed. */
+/** Sticky accordion: null and `""` stay all-collapsed. Unknown ids fall back to collapsed. */
 export function stickyOpenCompanyId(
   openCompanyId: string | null,
   companies: Array<{ id: CompanyId }>,
 ) {
-  if (openCompanyId === null) return defaultOpenCompanyId(companies) ?? "";
-  if (openCompanyId === "") return "";
+  if (openCompanyId === null || openCompanyId === "") return defaultOpenCompanyId(companies);
   if (companies.some((row) => row.id === openCompanyId)) return openCompanyId;
-  return defaultOpenCompanyId(companies) ?? "";
+  return defaultOpenCompanyId(companies);
 }
 
 export function siteTreeKey(companyId: string, siteId: string) {
@@ -134,31 +133,23 @@ export function divisionIsCollapsible() {
   return true;
 }
 
-/** Empty clients start collapsed. Clients with jobs start open. Explicit keys win. */
+/** Every client starts collapsed. Explicit `open:` keys win after the user expands. */
 export function defaultCollapsedClientKeys(tree: Array<{ id: string; clients: JobTreeClient[] }>) {
   const keys = new Set<string>();
   for (const company of tree) {
     for (const client of company.clients) {
-      if (!client.sites.some((site) => site.jobs.length > 0)) {
-        keys.add(clientTreeKey(company.id, client.id));
-      }
+      keys.add(clientTreeKey(company.id, client.id));
     }
   }
   return keys;
 }
 
-function divisionHasWork(division: { clients: readonly { sites: readonly { jobs: readonly unknown[] }[] }[] }) {
-  return division.clients.some((client) => client.sites.some((site) => site.jobs.length > 0));
-}
-
-/** Empty divisions start collapsed. Divisions with jobs start open. Explicit keys win. */
+/** Every division starts collapsed. Explicit `open:` keys win after the user expands. */
 export function defaultCollapsedDivisionKeys(tree: Array<{ id: string; divisions: JobTreeDivision[] }>) {
   const keys = new Set<string>();
   for (const company of tree) {
     for (const division of company.divisions) {
-      if (!divisionHasWork(division)) {
-        keys.add(divisionTreeKey(company.id, division.id));
-      }
+      keys.add(divisionTreeKey(company.id, division.id));
     }
   }
   return keys;
@@ -171,10 +162,7 @@ export function resolveDivisionOpen(
 ) {
   const key = divisionTreeKey(companyId, division.id);
   if (collapsed.has(key)) return false;
-  if (!divisionHasWork(division) && !collapsed.has(`open:${key}`)) {
-    return false;
-  }
-  return true;
+  return collapsed.has(`open:${key}`);
 }
 
 export function toggleCollapsedDivision(
@@ -203,10 +191,7 @@ export function resolveClientOpen(
 ) {
   const key = clientTreeKey(companyId, client.id);
   if (collapsed.has(key)) return false;
-  if (!client.sites.some((site) => site.jobs.length > 0) && !collapsed.has(`open:${key}`)) {
-    return false;
-  }
-  return true;
+  return collapsed.has(`open:${key}`);
 }
 
 export function toggleCollapsedClient(
@@ -228,19 +213,21 @@ export function toggleCollapsedClient(
   return next;
 }
 
-/** Only sites with 2+ jobs/estimates collapse. 0–1 stay open. */
+/** Sites with jobs collapse. Empty catalog placeholders stay as headers. */
 export function siteIsCollapsible(site: { jobs: readonly unknown[] }) {
-  return site.jobs.length >= 2;
+  return site.jobs.length >= 1;
 }
 
-/** Missing key = expanded (first paint). Collapsed keys stay collapsed across re-renders. */
+/** Missing key = collapsed (first paint). Explicit `open:` keys stay open across re-renders. */
 export function resolveSiteOpen(
   collapsed: ReadonlySet<string>,
   companyId: string,
   site: { id: string; jobs: readonly unknown[] },
 ) {
   if (!siteIsCollapsible(site)) return true;
-  return !collapsed.has(siteTreeKey(companyId, site.id));
+  const key = siteTreeKey(companyId, site.id);
+  if (collapsed.has(key)) return false;
+  return collapsed.has(`open:${key}`);
 }
 
 export function toggleCollapsedSite(
@@ -251,18 +238,25 @@ export function toggleCollapsedSite(
   const next = new Set(collapsed);
   if (!siteIsCollapsible(site)) return next;
   const key = siteTreeKey(companyId, site.id);
-  if (next.has(key)) next.delete(key);
-  else next.add(key);
+  const openKey = `open:${key}`;
+  const open = resolveSiteOpen(collapsed, companyId, site);
+  if (open) {
+    next.add(key);
+    next.delete(openKey);
+  } else {
+    next.delete(key);
+    next.add(openKey);
+  }
   return next;
 }
 
-/** Single-open accordion. Collapsing the open company yields `""` (none open). */
+/** Single-open accordion. First paint / null is all-collapsed, so the first click opens. */
 export function toggleOpenCompanyId(
   current: string | null,
   id: string,
   companies: Array<{ id: CompanyId }>,
 ) {
-  const now = current === null ? defaultOpenCompanyId(companies) ?? "" : current;
+  const now = current === null ? defaultOpenCompanyId(companies) : current;
   return now === id ? "" : id;
 }
 

@@ -74,9 +74,10 @@ const boiler17 = {
 };
 
 describe("job tree", () => {
-  it("opens Madison by default and keeps Yates as a Madison catalog site", () => {
-    assert.equal(defaultOpenCompanyId(COMPANIES), "madison");
-    assert.equal(defaultOpenCompanyId([{ id: "cbi" }]), "cbi");
+  it("starts the Jobs tree fully collapsed and keeps Yates as a Madison catalog site", () => {
+    assert.equal(defaultOpenCompanyId(COMPANIES), "");
+    assert.equal(defaultOpenCompanyId([{ id: "cbi" }]), "");
+    assert.equal(defaultOpenCompanyId([{ id: "madison" }]), "");
     assert.equal(sitesForCompany("madison").some((site) => site.id === "site-madison"), true);
     assert.equal(sitesForCompany("madison").some((site) => site.id === "site-yates"), true);
     assert.equal(sitesForCompany("madison").some((site) => site.id === "site-monroe" && site.name === "Monroe Energy"), true);
@@ -302,17 +303,17 @@ describe("job tree", () => {
     assert.equal(tree.some((row) => row.id === STANDALONE_ID), false);
   });
 
-  it("lets every company collapse and stays all-collapsed (empty string is not Madison)", () => {
+  it("lets every company collapse and starts all-collapsed (Madison is not auto-opened)", () => {
     const companies = COMPANIES.map((row) => ({ id: row.id }));
-    assert.equal(resolveOpenCompanyId(undefined, companies), "madison");
+    assert.equal(resolveOpenCompanyId(undefined, companies), "");
     assert.equal(resolveOpenCompanyId("", companies), "");
     assert.equal(resolveOpenCompanyId("hitsquad", companies), "hitsquad");
-    assert.equal(stickyOpenCompanyId(null, companies), "madison");
+    assert.equal(stickyOpenCompanyId(null, companies), "");
     assert.equal(stickyOpenCompanyId("", companies), "");
     assert.equal(stickyOpenCompanyId("hitsquad", companies), "hitsquad");
-    assert.equal(stickyOpenCompanyId("gone", companies), "madison");
+    assert.equal(stickyOpenCompanyId("gone", companies), "");
 
-    assert.equal(toggleOpenCompanyId(null, "madison", companies), "");
+    assert.equal(toggleOpenCompanyId(null, "madison", companies), "madison");
     assert.equal(toggleOpenCompanyId("madison", "madison", companies), "");
     assert.equal(toggleOpenCompanyId("", "madison", companies), "madison");
     assert.equal(toggleOpenCompanyId("madison", "hitsquad", companies), "hitsquad");
@@ -329,6 +330,7 @@ describe("job tree", () => {
     const desk = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
     const treeDesk = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
     const rates = readFileSync(fileURLToPath(new URL("../components/RatesDesk.tsx", import.meta.url)), "utf8");
+    assert.match(desk, /useState<string \| null>\(""\)/);
     assert.match(treeDesk, /resolveOpenCompanyId\(openCompanyId, tree\)/);
     assert.equal(/openCompanyId \|\| defaultOpenCompanyId/.test(treeDesk), false);
     assert.match(treeDesk, /\{open \? "▴" : "▾"\}/);
@@ -347,23 +349,25 @@ describe("job tree", () => {
     assert.equal(/resolveOpenCompanyId|stickyOpenCompanyId/.test(rates), false);
   });
 
-  it("collapses sites with 2+ jobs and stays collapsed (missing key is expanded)", () => {
+  it("collapses sites with jobs on first paint and stays collapsed until expanded", () => {
     const one = { id: "site-one", jobs: [{ id: "a" }] };
     const two = { id: "site-two", jobs: [{ id: "a" }, { id: "b" }] };
     const empty = { id: "site-empty", jobs: [] };
-    assert.equal(siteIsCollapsible(one), false);
+    assert.equal(siteIsCollapsible(one), true);
     assert.equal(siteIsCollapsible(empty), false);
     assert.equal(siteIsCollapsible(two), true);
     assert.equal(siteTreeKey("madison", "site-madison"), "madison:site-madison");
 
     const start = new Set<string>();
-    assert.equal(resolveSiteOpen(start, "madison", two), true);
-    assert.equal(resolveSiteOpen(start, "madison", one), true);
-    const collapsed = toggleCollapsedSite(start, "madison", two);
+    assert.equal(resolveSiteOpen(start, "madison", two), false);
+    assert.equal(resolveSiteOpen(start, "madison", one), false);
+    assert.equal(resolveSiteOpen(start, "madison", empty), true);
+    const opened = toggleCollapsedSite(start, "madison", two);
+    assert.equal(resolveSiteOpen(opened, "madison", two), true);
+    assert.equal(resolveSiteOpen(opened, "madison", one), false);
+    const collapsed = toggleCollapsedSite(opened, "madison", two);
     assert.equal(resolveSiteOpen(collapsed, "madison", two), false);
-    assert.equal(resolveSiteOpen(collapsed, "madison", one), true);
-    assert.equal(resolveSiteOpen(toggleCollapsedSite(collapsed, "madison", one), "madison", two), false);
-    assert.equal(resolveSiteOpen(toggleCollapsedSite(collapsed, "madison", two), "madison", two), true);
+    assert.equal(resolveSiteOpen(toggleCollapsedSite(start, "madison", one), "madison", one), true);
 
     const treeDesk = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
     assert.match(treeDesk, /resolveSiteOpen\(collapsedSites, company\.id, site\)/);
@@ -414,7 +418,7 @@ describe("job tree", () => {
     assert.equal(/site\.assigned \? alias\(site\.name\) : "Not assigned"/.test(treeDesk), false);
   });
 
-  it("collapses clients independently and starts empty Georgia Power closed", () => {
+  it("collapses clients independently and starts every client closed", () => {
     const empty = { id: GEORGIA_POWER_CLIENT_ID, sites: [{ id: "site-yates", jobs: [] }] };
     const busy = {
       id: PHILLIPS_66_CLIENT_ID,
@@ -422,20 +426,20 @@ describe("job tree", () => {
     };
     assert.equal(clientTreeKey("madison", PHILLIPS_66_CLIENT_ID), "madison:client:phillips-66");
     const start = new Set<string>();
-    assert.equal(resolveClientOpen(start, "madison", busy), true);
+    assert.equal(resolveClientOpen(start, "madison", busy), false);
     assert.equal(resolveClientOpen(start, "madison", empty), false);
     const opened = toggleCollapsedClient(start, "madison", empty);
     assert.equal(resolveClientOpen(opened, "madison", empty), true);
     const closed = toggleCollapsedClient(opened, "madison", empty);
     assert.equal(resolveClientOpen(closed, "madison", empty), false);
-    const hidP66 = toggleCollapsedClient(start, "madison", busy);
-    assert.equal(resolveClientOpen(hidP66, "madison", busy), false);
-    assert.equal(resolveClientOpen(toggleCollapsedClient(hidP66, "madison", busy), "madison", busy), true);
+    const openedP66 = toggleCollapsedClient(start, "madison", busy);
+    assert.equal(resolveClientOpen(openedP66, "madison", busy), true);
+    assert.equal(resolveClientOpen(toggleCollapsedClient(openedP66, "madison", busy), "madison", busy), false);
 
     const ownerTree = jobTree({ scope: owner, jobs: jobsOnDesk([], [cat2], false, owner), packs: [cat2] });
     const defaults = defaultCollapsedClientKeys(ownerTree);
     assert.equal(defaults.has(clientTreeKey("madison", GEORGIA_POWER_CLIENT_ID)), true);
-    assert.equal(defaults.has(clientTreeKey("madison", PHILLIPS_66_CLIENT_ID)), false);
+    assert.equal(defaults.has(clientTreeKey("madison", PHILLIPS_66_CLIENT_ID)), true);
 
     const treeDesk = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
     assert.match(treeDesk, /resolveClientOpen\(collapsedClients, company\.id, client\)/);
@@ -481,9 +485,43 @@ describe("job tree", () => {
       clients: [{ id: PHILLIPS_66_CLIENT_ID, sites: [{ id: "site-madison", jobs: [{ id: "a" }] }] }],
     };
     assert.equal(resolveDivisionOpen(new Set(), "madison", empty), false);
-    assert.equal(resolveDivisionOpen(new Set(), "madison", busy), true);
+    assert.equal(resolveDivisionOpen(new Set(), "madison", busy), false);
     const opened = toggleCollapsedDivision(new Set(), "madison", empty);
     assert.equal(resolveDivisionOpen(opened, "madison", empty), true);
+    const openedBusy = toggleCollapsedDivision(new Set(), "madison", busy);
+    assert.equal(resolveDivisionOpen(openedBusy, "madison", busy), true);
+    assert.equal(resolveDivisionOpen(toggleCollapsedDivision(openedBusy, "madison", busy), "madison", busy), false);
+  });
+
+  it("first paint on Jobs keeps Company / Division / Client / Site shut", () => {
+    const companies = COMPANIES.map((row) => ({ id: row.id }));
+    const busyClient = {
+      id: PHILLIPS_66_CLIENT_ID,
+      sites: [{ id: "site-madison", jobs: [{ id: "a" }, { id: "b" }] }],
+    };
+    const busyDivision = { id: "mechanical", clients: [busyClient] };
+    const busySite = { id: "site-madison", jobs: [{ id: "a" }, { id: "b" }] };
+    const start = new Set<string>();
+
+    assert.equal(defaultOpenCompanyId(companies), "");
+    assert.equal(resolveOpenCompanyId(undefined, companies), "");
+    assert.equal(stickyOpenCompanyId(null, companies), "");
+    assert.equal(resolveDivisionOpen(start, "madison", busyDivision), false);
+    assert.equal(resolveClientOpen(start, "madison", busyClient), false);
+    assert.equal(resolveSiteOpen(start, "madison", busySite), false);
+    assert.equal(toggleOpenCompanyId(null, "madison", companies), "madison");
+    assert.equal(resolveDivisionOpen(toggleCollapsedDivision(start, "madison", busyDivision), "madison", busyDivision), true);
+    assert.equal(resolveClientOpen(toggleCollapsedClient(start, "madison", busyClient), "madison", busyClient), true);
+    assert.equal(resolveSiteOpen(toggleCollapsedSite(start, "madison", busySite), "madison", busySite), true);
+
+    const treeDesk = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
+    const desk = readFileSync(fileURLToPath(new URL("../components/JobsDesk.tsx", import.meta.url)), "utf8");
+    assert.match(desk, /useState<string \| null>\(""\)/);
+    assert.match(desk, /stickyOpenCompanyId\(openCompanyId, tree\)/);
+    assert.match(treeDesk, /resolveOpenCompanyId\(openCompanyId, tree\)/);
+    assert.match(treeDesk, /resolveDivisionOpen\(collapsedDivisions, company\.id, division\)/);
+    assert.match(treeDesk, /resolveClientOpen\(collapsedClients, company\.id, client\)/);
+    assert.match(treeDesk, /resolveSiteOpen\(collapsedSites, company\.id, site\)/);
   });
 
   it("keeps James off Madison P66 / Georgia Power and does not list CBI", () => {
