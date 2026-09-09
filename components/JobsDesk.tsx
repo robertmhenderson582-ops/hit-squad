@@ -39,7 +39,7 @@ export function JobsDesk() {
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [packTick, setPackTick] = useState(0);
-  const [openCompanyId, setOpenCompanyId] = useState<string | null>(null);
+  const [openCompanyId, setOpenCompanyId] = useState<string | null>("");
   const [hydrating, setHydrating] = useState(true);
   const lensRef = useRef(lens);
   lensRef.current = lens;

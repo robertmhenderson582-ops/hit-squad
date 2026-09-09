@@ -7,7 +7,16 @@ import { companiesForScope, companyIdForUser, companyScopeFor, canSeeCompany } f
 import { isMadisonOperatedPack, listedDeskPacks, localPackVisibleTo, packListedOnOwnerDesk } from "./estimate-scope.ts";
 import { shouldPaintHisCards, HIS_AROMATICS_PACK_ID, HIS_CAT2_PACK_ID } from "./his-wood-river.ts";
 import { jobsOnDesk, seedJobsAllowed } from "./jobs.ts";
-import { companyIdForJob, jobTree, PHILLIPS_66_CLIENT_ID } from "./job-tree.ts";
+import {
+  companyIdForJob,
+  jobTree,
+  PHILLIPS_66_CLIENT_ID,
+  resolveClientOpen,
+  resolveDivisionOpen,
+  resolveOpenCompanyId,
+  resolveSiteOpen,
+  stickyOpenCompanyId,
+} from "./job-tree.ts";
 import { packsForViewedDesk } from "./lens-packs.ts";
 import { qualityHseJobTree } from "./quality-hse-scope.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
@@ -137,6 +146,15 @@ describe("President Jobs company root and Madison book", () => {
     });
     assert.deepEqual(quality.map((row) => row.id), ["madison"]);
     assert.equal(quality[0]?.sites.some((site) => site.jobs.some((job) => job.title.includes("CAT 2"))), true);
+
+    const start = new Set<string>();
+    const mechanical = madison?.divisions.find((row) => row.id === "mechanical");
+    const woodSite = { id: "site-madison", jobs: wood?.jobs ?? [{ id: "a" }] };
+    assert.equal(resolveOpenCompanyId(undefined, tree), "");
+    assert.equal(stickyOpenCompanyId(null, tree), "");
+    assert.equal(resolveDivisionOpen(start, "madison", mechanical || { id: "mechanical", clients: [] }), false);
+    assert.equal(resolveClientOpen(start, "madison", p66 || { id: PHILLIPS_66_CLIENT_ID, sites: [] }), false);
+    assert.equal(resolveSiteOpen(start, "madison", woodSite), false);
   });
 
   it("does not park a Hit Squad-only estimate on the President Madison root", () => {
