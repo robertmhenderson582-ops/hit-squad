@@ -22,6 +22,7 @@ import {
   TRANSFER_WRITE_ERROR,
 } from "./handoff.ts";
 import { packHasWork, parseIncomingPack, pickPack, publicPack, type EstimatePackSnapshot } from "./estimate-pack.ts";
+import { PACK_INTEGRITY_ERROR_PREFIX } from "./pack-integrity.ts";
 import {
   deleteEstimateInDrive,
   driveAdapter,
@@ -124,7 +125,10 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
       return { ok: false as const, status: 404, error: "That package is not on this desk." };
     }
     if (error instanceof Error && error.message === "AROMATICS_SEED_SMASH") {
-      return { ok: false as const, status: 409, error: "Could not store that package." };
+      return { ok: false as const, status: 409, error: "Demo seed clock cannot overwrite a live schedule." };
+    }
+    if (error instanceof Error && error.message.startsWith(PACK_INTEGRITY_ERROR_PREFIX)) {
+      return { ok: false as const, status: 409, error: error.message.slice(PACK_INTEGRITY_ERROR_PREFIX.length) };
     }
     throw error;
   }

@@ -1037,4 +1037,66 @@ describe("estimate pack snapshot", () => {
     assert.ok(desktop.getItem(`${PURCHASING_STORE_PREFIX}${key}`));
     assert.equal(purchasingHasWork(hydratePurchasing(collected?.purchasing)), true);
   });
+
+  it("empty Drive / demo clock cannot wipe a filled material pack in local hydrate", () => {
+    const filled = {
+      packId: "new-b1726",
+      key: "new:new-b1726",
+      title: "Boiler 17 2026",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 100,
+      ownerEmail: "nathanboyte@gmail.com",
+      schedule: {
+        projectStart: "2026-08-10",
+        phases: defaultPhaseSchedule().phases.map((row) =>
+          row.id === "pre" ? { ...row, start: "2026-08-10", stop: "2026-12-06" } : row,
+        ),
+      },
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-08-10", end: "2026-12-06" }] }] },
+    };
+    const empty = {
+      ...filled,
+      updatedAt: 500_000,
+      schedule: defaultPhaseSchedule(),
+      crew: { staff: [], generalForeman: [], foreman: [], direct: [], support: [] },
+    };
+    const picked = pickPack(filled, empty);
+    assert.equal((picked?.schedule as { projectStart?: string }).projectStart, "2026-08-10");
+    assert.equal(((picked?.crew as { staff: unknown[] }).staff || []).length, 1);
+
+    const store = memoryStore();
+    applyPackToStore(store, filled);
+    applyPackToStore(store, empty);
+    const kept = collectPack(store, "new-b1726");
+    assert.equal((kept?.schedule as { projectStart?: string }).projectStart, "2026-08-10");
+    assert.equal(((kept?.crew as { staff: unknown[] }).staff || []).length, 1);
+
+    const catFilled = {
+      packId: "new-mtaajdwa-f7539",
+      key: "new:new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 100,
+      ownerEmail: "nathanboyte@gmail.com",
+      schedule: { projectStart: "2026-09-01", phases: [{ id: "pre", on: true, start: "2026-09-01", stop: "2026-09-03" }] },
+      crew: { direct: [{ id: "bm-1", ranges: [{ start: "2026-09-01", end: "2026-09-03" }] }] },
+    };
+    const catEmpty = {
+      ...catFilled,
+      updatedAt: 900_000,
+      crew: { staff: [], direct: [] },
+      schedule: defaultPhaseSchedule(),
+    };
+    applyPackToStore(store, catFilled);
+    mergeVaultIntoLocal(store, catEmpty);
+    const catKept = collectPack(store, "new-mtaajdwa-f7539");
+    assert.equal(((catKept?.crew as { direct: unknown[] }).direct || []).length, 1);
+    assert.equal(packClockIsSeedSmashed(catFilled), false);
+  });
 });

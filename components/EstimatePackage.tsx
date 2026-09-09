@@ -56,9 +56,8 @@ import {
   vaultListHydratePending,
   type VaultUpsertResult,
 } from "@/lib/estimate-vault-client";
-import { aromaticsStateLooksSmashed } from "@/lib/aromatics-freeze";
 import { crewHasRows } from "@/lib/estimate-pack";
-import { HIS_AROMATICS_PACK_ID } from "@/lib/his-wood-river";
+import { packStateLooksSmashed, shouldHydrateOpenPack } from "@/lib/pack-integrity";
 import { parseOtherCostJson, persistCrewTravel, writeOtherCost } from "@/lib/other-cost";
 import { parseEquipmentSheet, writeEquipmentSheet } from "@/lib/equipment-sheet";
 import { normalizeSubSheet, writeSubSheet, type SubSheet } from "@/lib/subcontractor";
@@ -216,7 +215,7 @@ export function EstimatePackageProvider({
     if (!packId || !findLocalPack(packId)) return false;
     const localSchedule = readSchedule(estimateKey);
     const localCrew = readCrew(estimateKey);
-    if (packId === HIS_AROMATICS_PACK_ID && aromaticsStateLooksSmashed(packId, localSchedule, localCrew, findLocalPack(packId)?.title)) {
+    if (packStateLooksSmashed(packId, localSchedule, localCrew, findLocalPack(packId)?.title)) {
       return false;
     }
     if (isDefaultSeedSchedule(localSchedule) && crewHasRows(localCrew)) return false;
@@ -257,9 +256,8 @@ export function EstimatePackageProvider({
     const localSchedule = readSchedule(estimateKey);
     const seedPendingVault =
       Boolean(packId) &&
-      (packId === HIS_AROMATICS_PACK_ID
-        ? aromaticsStateLooksSmashed(packId, localSchedule, readCrew(estimateKey), findLocalPack(packId)?.title)
-        : isDefaultSeedSchedule(localSchedule) && crewHasRows(readCrew(estimateKey)));
+      (packStateLooksSmashed(packId, localSchedule, readCrew(estimateKey), findLocalPack(packId)?.title) ||
+        (isDefaultSeedSchedule(localSchedule) && crewHasRows(readCrew(estimateKey))));
     const paintFromLocal = () => {
       if (packId && isBoiler17PackId(packId) && typeof window !== "undefined") {
         seedBoiler17LocalDefaults(window.localStorage, packId);
@@ -291,7 +289,7 @@ export function EstimatePackageProvider({
     if (hasLocal && !seedPendingVault) paintFromLocal();
     else setReady(false);
     const boot = packId
-      ? packId === HIS_AROMATICS_PACK_ID || !(hasLocal || vaultListHydratePending())
+      ? shouldHydrateOpenPack(packId) || !(hasLocal || vaultListHydratePending())
         ? hydrateOpenPack(packId)
         : hydrateFromVault()
       : Promise.resolve([]);
@@ -332,15 +330,15 @@ export function EstimatePackageProvider({
     return () => window.clearTimeout(timer);
   }, [estimateKey, ready]);
 
-  function skipSmashedAromaticsWrite() {
+  function skipSmashedPackWrite() {
     const packId = packIdFromStoreKey(estimateKey);
     if (!packId) return false;
-    return aromaticsStateLooksSmashed(packId, schedule, crew, findLocalPack(packId)?.title);
+    return packStateLooksSmashed(packId, schedule, crew, findLocalPack(packId)?.title);
   }
 
   useEffect(() => {
     if (!ready) return;
-    if (skipSmashedAromaticsWrite()) return;
+    if (skipSmashedPackWrite()) return;
     writeSchedule(estimateKey, schedule);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
@@ -351,7 +349,7 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
-    if (skipSmashedAromaticsWrite()) return;
+    if (skipSmashedPackWrite()) return;
     writeCrew(estimateKey, crew);
     persistCrewTravel(estimateKey, crew, {
       staffPerMile: jobMeta.staffMileageRate,
@@ -366,7 +364,7 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
-    if (skipSmashedAromaticsWrite()) return;
+    if (skipSmashedPackWrite()) return;
     writeOrgChart(estimateKey, orgChart);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
@@ -377,7 +375,7 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
-    if (skipSmashedAromaticsWrite()) return;
+    if (skipSmashedPackWrite()) return;
     writeJobMeta(estimateKey, jobMeta);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
@@ -388,7 +386,7 @@ export function EstimatePackageProvider({
 
   useEffect(() => {
     if (!ready) return;
-    if (skipSmashedAromaticsWrite()) return;
+    if (skipSmashedPackWrite()) return;
     writeActivities(estimateKey, activities);
     const packId = packIdFromStoreKey(estimateKey);
     if (packId) {
@@ -402,7 +400,7 @@ export function EstimatePackageProvider({
     const packId = packIdFromStoreKey(estimateKey);
     if (!packId) return;
     return onEstimateSheets(() => {
-      if (skipSmashedAromaticsWrite()) return;
+      if (skipSmashedPackWrite()) return;
       touchLocalPack(packId);
       queueVaultUpsert(packId);
     });

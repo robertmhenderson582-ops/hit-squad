@@ -21,10 +21,10 @@ import { jobsOnDesk } from "./jobs.ts";
 import { packsMissingFromVault, writeVaultSeen } from "./job-menu.ts";
 import { handoffMarkText, TRANSFER_WRITE_ERROR } from "./handoff.ts";
 import { packsForViewedDesk, readLensPacks, snapshotLensPack, writeLensPacks } from "./lens-packs.ts";
-import { deleteLocalPack, findLocalPack, rememberLocalPack, type StorageLike } from "./local-estimates.ts";
+import { deleteLocalPack, findLocalPack, rememberLocalPack, storageKeyForPack, type StorageLike } from "./local-estimates.ts";
 import { isActiveMenuItem, readJobMenu, recordTransferredMenuItem } from "./job-menu.ts";
 import { applyPackToStore, collectPack } from "./estimate-pack.ts";
-import { defaultPhaseSchedule } from "./phase-schedule.ts";
+import { CREW_STORE_PREFIX, defaultPhaseSchedule, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
 import { addLogRow, emptyFcrPacket, readFcrPacket, writeFcrPacket } from "./change-order-packet.ts";
 import { emptyCostReportBook, readCostReport, saveCostSnapshot, writeCostReport } from "./cost-report.ts";
 import {
@@ -1039,6 +1039,53 @@ describe("local transfer commit", () => {
     }
   });
 
+  it("does not flush empty Boiler 17 or identity-only Cat 2 back to Drive", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-b1726",
+        title: "Boiler 17 2026",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: OWNER_LOGIN_EMAIL,
+        status: "Locked",
+      },
+      store,
+    );
+    store.setItem(`${CREW_STORE_PREFIX}${storageKeyForPack("new-b1726")}`, JSON.stringify({ staff: [], direct: [] }));
+    store.setItem(`${PHASE_STORE_PREFIX}${storageKeyForPack("new-b1726")}`, JSON.stringify(defaultPhaseSchedule()));
+    rememberLocalPack(
+      {
+        packId: "new-mtaajdwa-f7539",
+        title: "Madison CAT 2 (Pit Stop)",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        ownerEmail: OWNER_LOGIN_EMAIL,
+      },
+      store,
+    );
+    const bodies: unknown[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const raw = typeof init?.body === "string" ? init.body : "";
+      if (raw) bodies.push(JSON.parse(raw));
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const boiler = await flushVaultUpsert("new-b1726", store);
+      assert.equal(boiler.ok, true);
+      assert.equal("skipped" in boiler && boiler.skipped, true);
+      const cat = await flushVaultUpsert("new-mtaajdwa-f7539", store);
+      assert.equal(cat.ok, true);
+      assert.equal("skipped" in cat && cat.skipped, true);
+      assert.equal(bodies.length, 0);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
   it("collects equipment, sub, and otherCost on upsert and a failed Drive write errors", async () => {
     resetVaultHydrateForTests();
     const store = memoryStore();
@@ -1380,10 +1427,10 @@ describe("local transfer commit", () => {
     const src = readFileSync(fileURLToPath(new URL("../components/EstimatePackage.tsx", import.meta.url)), "utf8");
     assert.match(src, /Drive sync delayed/);
     assert.match(src, /reportVaultErrors/);
-    assert.match(src, /HIS_AROMATICS_PACK_ID \|\| !\(hasLocal \|\| vaultListHydratePending\(\)\)/);
+    assert.match(src, /shouldHydrateOpenPack\(packId\) \|\| !\(hasLocal \|\| vaultListHydratePending\(\)\)/);
     assert.match(src, /hydrateOpenPack\(packId\)/);
-    assert.match(src, /aromaticsStateLooksSmashed/);
-    assert.match(src, /skipSmashedAromaticsWrite/);
+    assert.match(src, /packStateLooksSmashed/);
+    assert.match(src, /skipSmashedPackWrite/);
     assert.equal(/if \(!result\.ok && "error" in result && result\.error\) setVaultSaveError/.test(src), false);
   });
 

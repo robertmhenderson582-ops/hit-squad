@@ -927,6 +927,46 @@ describe("drive estimate upsert", () => {
     );
   });
 
+  it("empty Drive upsert cannot wipe a filled Boiler 17 or Cat 2 pack", async () => {
+    const drive = memoryDrive();
+    const filled = {
+      packId: "new-b1726",
+      key: "new:new-b1726",
+      title: "Boiler 17 2026",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 400,
+      ownerEmail: "nathanboyte@gmail.com",
+      schedule: {
+        projectStart: "2026-08-10",
+        phases: defaultPhaseSchedule().phases.map((row) =>
+          row.id === "pre" ? { ...row, start: "2026-08-10", stop: "2026-12-06" } : row,
+        ),
+      },
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-08-10", end: "2026-12-06" }] }] },
+    };
+    drive.files.set("1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y", {
+      file: {
+        id: "1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y",
+        name: "wood-river-boiler-17-2026.json",
+        properties: { packId: "new-b1726", ownerEmail: filled.ownerEmail },
+      },
+      content: JSON.stringify(filled),
+    });
+    const empty = {
+      ...filled,
+      updatedAt: 99_000,
+      schedule: defaultPhaseSchedule(),
+      crew: { staff: [], generalForeman: [], foreman: [], direct: [], support: [] },
+    };
+    await upsertEstimateInDrive(drive, empty, "folder");
+    const written = JSON.parse(await drive.readJson("1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y"));
+    assert.equal((written.schedule as { projectStart?: string }).projectStart, "2026-08-10");
+    assert.equal((written.crew.staff || []).length, 1);
+  });
+
   it("Jobs list retries a timed-out live restore write onto the Aromatics file id only", async () => {
     const drive = memoryDrive();
     const seed = defaultPhaseSchedule();

@@ -6,6 +6,7 @@ import {
   scheduleOnce,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
+import { shouldSkipIntegrityFlush } from "./pack-integrity.ts";
 import { ownerVaultEmail, packSharedEmails } from "./estimate-scope.ts";
 import { applyHisIdentity, hisFileForPackId, hisMatchForPack, persistHisWoodRiverCards } from "./his-wood-river.ts";
 import { persistRodeoU110Wake } from "./madison-u110.ts";
@@ -271,7 +272,7 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   }
   const pack = collectPack(target, packId);
   if (!pack) return { ok: false as const };
-  if (packClockIsSeedSmashed(pack)) {
+  if (packClockIsSeedSmashed(pack) || shouldSkipIntegrityFlush(pack)) {
     return { ok: true as const, skipped: true as const };
   }
   const body = JSON.stringify({ pack });

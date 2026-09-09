@@ -4,6 +4,14 @@ import {
   aromaticsSourceCanRestore,
   isAromaticsIdentity,
 } from "./aromatics-freeze.ts";
+import {
+  decidePackWrite,
+  incomingBreaksFingerprint,
+  packHasDemoSeedClock,
+  packLooksSmashed,
+  readPackFingerprint,
+  rememberPackFingerprint,
+} from "./pack-integrity.ts";
 import { catalogSites } from "./desk-data.ts";
 import { parseEstimateStatus, resolveEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { clampStatusForSite, regularClientFromParts } from "./site-regular.ts";
@@ -144,7 +152,21 @@ export function crewHasCustomClock(crew: unknown) {
 export function packClockIsSeedSmashed(pack: EstimatePackSnapshot | null | undefined) {
   if (!pack?.packId) return false;
   if (isAromaticsPack(pack)) return aromaticsPackLooksSmashed(pack);
+  if (packLooksSmashed(pack)) return true;
   return isDefaultSeedSchedule(pack.schedule) && crewHasRows(pack.crew) && !crewHasCustomClock(pack.crew);
+}
+
+function withVaultIdentity(local: EstimatePackSnapshot, vault: EstimatePackSnapshot): EstimatePackSnapshot {
+  return {
+    ...local,
+    ownerEmail: vault.ownerEmail || local.ownerEmail,
+    sharedWith: vault.sharedWith,
+    transferredFrom: vault.transferredFrom,
+    transferredTo: vault.transferredTo,
+    transferredToName: vault.transferredToName,
+    transferredFromName: vault.transferredFromName,
+    status: vault.status || local.status,
+  };
 }
 
 function keepLiveIdentity(live: EstimatePackSnapshot, restored: EstimatePackSnapshot): EstimatePackSnapshot {
@@ -440,6 +462,14 @@ export function pickPack(
   } else if (packClockIsSeedSmashed(vault) && !packClockIsSeedSmashed(local)) {
     return restorePackClock(vault, local);
   }
+  const vaultWouldSmash = decidePackWrite(vault, local);
+  if (vaultWouldSmash.action === "keep-last-good" || vaultWouldSmash.action === "refuse") {
+    return withVaultIdentity(local, vault);
+  }
+  const localWouldSmash = decidePackWrite(local, vault);
+  if (localWouldSmash.action === "keep-last-good" || localWouldSmash.action === "refuse") {
+    return withVaultIdentity(restorePackClock(local, vault), vault);
+  }
   const vaultMoved =
     packWasTransferred(vault) ||
     Boolean(
@@ -570,11 +600,18 @@ export function collectPack(
 
 export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot) {
   if (!isLocalPackId(pack.packId)) return;
-  if (packClockIsSeedSmashed(pack)) {
-    const existing = collectPack(store, pack.packId);
+  const existing = collectPack(store, pack.packId);
+  const writeDecision = existing ? decidePackWrite(pack, existing) : { action: "accept" as const };
+  if (writeDecision.action === "keep-last-good" && existing) {
+    pack = restorePackClock(pack, existing);
+  } else if (packClockIsSeedSmashed(pack)) {
     if (existing && !packClockIsSeedSmashed(existing) && (scheduleHasWork(existing.schedule) || aromaticsSourceCanRestore(existing))) {
       pack = restorePackClock(pack, existing);
     }
+  }
+  const fpBreak = incomingBreaksFingerprint(pack, readPackFingerprint(store, pack.packId));
+  if (fpBreak && existing && !packLooksSmashed(existing)) {
+    pack = restorePackClock(pack, existing);
   }
   rememberLocalPack(
     {
@@ -598,14 +635,20 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
   touchLocalPack(pack.packId, pack.updatedAt || Date.now(), store, pack.createdAt);
   const key = storageKeyForPack(pack.packId);
   if (pack.schedule != null) {
-    const existing = readStoreJson(store, `${PHASE_STORE_PREFIX}${key}`);
-    if (scheduleHasWork(pack.schedule) || !scheduleHasWork(existing)) {
+    const existingSchedule = readStoreJson(store, `${PHASE_STORE_PREFIX}${key}`);
+    const incomingDemo = packHasDemoSeedClock({ packId: pack.packId, title: pack.title, schedule: pack.schedule });
+    const existingLive = scheduleHasWork(existingSchedule) && !packHasDemoSeedClock({ packId: pack.packId, title: pack.title, schedule: existingSchedule });
+    if (incomingDemo && existingLive) {
+      // Demo / 8-21 seed clock cannot collapse a live Job setup.
+    } else if (scheduleHasWork(pack.schedule) || !scheduleHasWork(existingSchedule)) {
       writeStoreJson(store, `${PHASE_STORE_PREFIX}${key}`, pack.schedule);
     }
   }
   if (pack.crew != null) {
-    const existing = readStoreJson(store, `${CREW_STORE_PREFIX}${key}`);
-    if (crewHasCustomClock(pack.crew) || !crewHasCustomClock(existing)) {
+    const existingCrew = readStoreJson(store, `${CREW_STORE_PREFIX}${key}`);
+    if (!crewHasRows(pack.crew) && crewHasRows(existingCrew)) {
+      // Empty vault crew cannot wipe a filled pack.
+    } else if (crewHasCustomClock(pack.crew) || !crewHasCustomClock(existingCrew)) {
       writeStoreJson(store, `${CREW_STORE_PREFIX}${key}`, pack.crew);
     }
   }
@@ -624,6 +667,7 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
   writeSheetIfRicher(store, `${FCR_STORE_PREFIX}${key}`, pack.fcr, fcrHasWork);
   writeSheetIfRicher(store, `${COST_REPORT_STORE_PREFIX}${key}`, pack.costReport, costReportHasWork);
   writeSheetIfRicher(store, `${PURCHASING_STORE_PREFIX}${key}`, pack.purchasing, purchasingHasWork);
+  rememberPackFingerprint(store, collectPack(store, pack.packId) || pack);
   notifyEstimateSheets();
 }
 

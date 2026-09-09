@@ -12,6 +12,7 @@ import {
   crewHasCustomClock,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
+import { decidePackWrite, integrityErrorMessage } from "./pack-integrity.ts";
 import {
   applyHisIdentity,
   HIS_AROMATICS_FILE_ID,
@@ -877,6 +878,15 @@ function knownHisFile(packId: string): DriveFile | null {
   };
 }
 
+async function readExistingSnapshot(adapter: DriveAdapter, fileId: string): Promise<EstimatePackSnapshot | null> {
+  try {
+    const parsed = parseIncomingPack(JSON.parse(await adapter.readJson(fileId)));
+    return parsed.ok ? parsed.pack : null;
+  } catch {
+    return null;
+  }
+}
+
 async function writePackFile(
   adapter: DriveAdapter,
   pack: EstimatePackSnapshot,
@@ -888,6 +898,14 @@ async function writePackFile(
       ? existing
       : knownHisFile(pack.packId);
   if (target?.id === HIS_AROMATICS_FREEZE_FILE_ID) target = knownHisFile(pack.packId);
+  const current = target ? await readExistingSnapshot(adapter, target.id) : null;
+  const decision = decidePackWrite(pack, current);
+  if (decision.action === "keep-last-good" && current && target) {
+    return target;
+  }
+  if (decision.action === "refuse") {
+    throw new Error(integrityErrorMessage(decision));
+  }
   const outgoing = await packForAromaticsWrite(adapter, pack, target?.id);
   if (!outgoing) {
     throw new Error("AROMATICS_SEED_SMASH");
