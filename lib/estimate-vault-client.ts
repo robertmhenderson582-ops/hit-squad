@@ -274,7 +274,7 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   const pack = collectPack(target, packId);
   if (!pack) return { ok: false as const };
   // View-as / President lens already returned above. Smashed viewer leftover must not
-  // re-upload over the assigned editor's Drive pack (2026-09-08 lock).
+  // re-upload over Drive. Editors = owner (Robert) OR assigned PM/estimator.
   if (packClockIsSeedSmashed(pack) || shouldSkipIntegrityFlush(pack)) {
     return { ok: true as const, skipped: true as const };
   }
