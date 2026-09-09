@@ -28,6 +28,7 @@ import {
   applyScopeSite,
   attachLegacyClientModule,
   cascadeClients,
+  cascadeCompanyId,
   cascadeJobs,
   cascadeSites,
   emptyJobScope,
@@ -124,6 +125,23 @@ describe("Quality / HSE job scope", () => {
       jobId: "",
     });
     assert.equal(applyScopeJob({ clientId: PHILLIPS_66_CLIENT_ID, siteId: "site-madison", jobId: "" }, `job-${BOILER17_PACK_ID}`).jobId, `job-${BOILER17_PACK_ID}`);
+    assert.equal(
+      cascadeCompanyId(tree, {
+        clientId: PHILLIPS_66_CLIENT_ID,
+        siteId: "site-madison",
+        jobId: `job-${BOILER17_PACK_ID}`,
+      }),
+      "madison",
+    );
+    assert.equal(
+      cascadeCompanyId(tree, {
+        clientId: GEORGIA_POWER_CLIENT_ID,
+        siteId: "site-yates",
+        jobId: "job-new-yates-1",
+      }),
+      "madison",
+    );
+    assert.equal(cascadeCompanyId(tree, emptyJobScope()), "");
   });
 
   it("drops a stale job id and keeps client / site when the tree still has them", () => {

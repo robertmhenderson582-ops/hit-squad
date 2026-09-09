@@ -6,16 +6,22 @@ import {
   QUALITY_DROP_MAX_FILE_BYTES,
   QUALITY_DROP_SIZE_ERROR,
   QUALITY_DROP_TYPE_ERROR,
+  QUALITY_FOLDER_TEMPLATES,
   QUALITY_FOLDERS,
+  QUALITY_MODULE_CATALOG,
   checkQualityDrop,
+  cloneQualityFolderTemplate,
   isQualityFolderId,
   mergeQualityFolderFiles,
   qualityFolderBriefId,
   qualityFolderDropsFor,
   qualityFolderLabel,
+  qualityFoldersFor,
+  qualityFoldersListedFor,
   readQualityFolderFiles,
   readQualityFolderPick,
   resolveQualityFolder,
+  showsQualityFolderDesk,
   writeQualityFolderFiles,
   writeQualityFolderPick,
 } from "./quality-folders.ts";
@@ -71,6 +77,39 @@ describe("Quality folder catalog", () => {
       qualityFolderBriefId("ChanceC318@yahoo.com", "job-new-b1726", "welders"),
       "brief-quality-chancec318@yahoo.com-job:job-new-b1726-folder:welders",
     );
+    assert.deepEqual(
+      qualityFoldersFor("madison").map((folder) => folder.label),
+      QUALITY_FOLDERS.map((folder) => folder.label),
+    );
+    assert.deepEqual(qualityFoldersFor("madison").map((folder) => folder.id), QUALITY_MODULE_CATALOG.map((folder) => folder.id));
+    assert.deepEqual(qualityFoldersFor("hitsquad"), []);
+    assert.deepEqual(qualityFoldersFor("acme"), []);
+    assert.equal(showsQualityFolderDesk("madison"), true);
+    assert.equal(showsQualityFolderDesk("hitsquad"), false);
+    assert.equal(showsQualityFolderDesk("acme"), false);
+    assert.equal(isQualityFolderId("welders", "madison"), true);
+    assert.equal(isQualityFolderId("welders", "hitsquad"), false);
+    assert.deepEqual(
+      qualityFoldersListedFor("").map((folder) => folder.label),
+      QUALITY_FOLDERS.map((folder) => folder.label),
+    );
+    assert.deepEqual(qualityFoldersListedFor("hitsquad"), []);
+    assert.deepEqual(
+      QUALITY_FOLDER_TEMPLATES.filter((row) => row.live).map((row) => row.companyId),
+      ["madison"],
+    );
+    const cloned = cloneQualityFolderTemplate("acme");
+    assert.equal(cloned.companyId, "acme");
+    assert.equal(cloned.live, false);
+    assert.deepEqual(
+      cloned.folders.map((folder) => folder.id),
+      QUALITY_MODULE_CATALOG.map((folder) => folder.id),
+    );
+    assert.deepEqual(
+      cloned.folders.map((folder) => folder.label),
+      QUALITY_FOLDERS.map((folder) => folder.label),
+    );
+    assert.equal(showsQualityFolderDesk("acme"), false);
   });
 
   it("keeps a per-job folder pick and does not mix local files across folders", () => {
@@ -182,6 +221,8 @@ describe("Quality folder catalog", () => {
     const folders = source("./quality-folders.ts");
     assert.match(quality, /QualityFolderDrop/);
     assert.match(quality, /JobScopePicks/);
+    assert.match(quality, /showsQualityFolderDesk/);
+    assert.match(quality, /cascadeCompanyId/);
     assert.doesNotMatch(quality, /LeadStudio/);
     const dropIndex = quality.indexOf("<QualityFolderDrop");
     const tabsIndex = quality.indexOf('role="tablist"');
@@ -190,6 +231,8 @@ describe("Quality folder catalog", () => {
     assert.match(drop, /onDrop/);
     assert.match(drop, /type="file"/);
     assert.match(drop, /selectRef.current\?\.focus/);
+    assert.match(drop, /qualityFoldersFor/);
+    assert.match(drop, /companyId/);
     for (const label of QUALITY_FOLDERS.map((folder) => folder.label)) {
       assert.match(folders, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }

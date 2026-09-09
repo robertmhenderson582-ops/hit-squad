@@ -1,10 +1,12 @@
+import type { CompanyId } from "./companies.ts";
 import type { LeadFile } from "./lead-briefs.ts";
 
 /**
- * Chance’s Quality folders. Labels are the contract unless a shipped synonym
- * maps 1:1 (Welds/NDE, Gauges, Flange Log, Job Completion, Rolling Chart, NDE req).
+ * Reusable Quality module catalog. Company templates clone this list.
+ * Madison is the live template now; Chance’s labels are the default labels.
+ * Do not bake a contractor name into the ids — the next company clones these.
  */
-export const QUALITY_FOLDERS = [
+export const QUALITY_MODULE_CATALOG = [
   { id: "packages", label: "Packages" },
   { id: "package-tracker", label: "Package Tracker" },
   { id: "welds-nde", label: "Welds / NDE" },
@@ -19,7 +21,54 @@ export const QUALITY_FOLDERS = [
   { id: "rolling-chart", label: "Rolling Chart" },
 ] as const;
 
-export type QualityFolderId = (typeof QUALITY_FOLDERS)[number]["id"];
+export type QualityFolderId = (typeof QUALITY_MODULE_CATALOG)[number]["id"];
+export type QualityFolderDef = { id: QualityFolderId; label: string };
+
+export type QualityFolderTemplate = {
+  companyId: CompanyId;
+  live: boolean;
+  folders: readonly QualityFolderDef[];
+};
+
+/** Madison Quality is the only live company template. Other companies clone later. */
+export const QUALITY_FOLDER_TEMPLATES: readonly QualityFolderTemplate[] = [
+  { companyId: "madison", live: true, folders: QUALITY_MODULE_CATALOG },
+];
+
+/** Chance’s Madison labels — same rows as the reusable catalog. */
+export const QUALITY_FOLDERS = QUALITY_MODULE_CATALOG;
+
+export function qualityFolderTemplateFor(companyId?: string | null): QualityFolderTemplate | null {
+  const id = (companyId || "").trim().toLowerCase();
+  if (!id) return null;
+  return QUALITY_FOLDER_TEMPLATES.find((row) => row.companyId === id) ?? null;
+}
+
+export function qualityFoldersFor(companyId?: string | null): readonly QualityFolderDef[] {
+  const template = qualityFolderTemplateFor(companyId);
+  if (!template?.live) return [];
+  return template.folders;
+}
+
+export function showsQualityFolderDesk(companyId?: string | null) {
+  return qualityFoldersFor(companyId).length > 0;
+}
+
+/** API / UI list. Missing company → default catalog (Chance’s Madison labels). Unknown company → none. */
+export function qualityFoldersListedFor(companyId?: string | null): readonly QualityFolderDef[] {
+  if (!(companyId || "").trim()) return QUALITY_FOLDERS;
+  return qualityFoldersFor(companyId);
+}
+
+/** Clone a live template for another company without inventing new modules. */
+export function cloneQualityFolderTemplate(companyId: CompanyId, source = "madison"): QualityFolderTemplate {
+  const folders = qualityFolderTemplateFor(source)?.folders ?? QUALITY_MODULE_CATALOG;
+  return {
+    companyId,
+    live: false,
+    folders: folders.map((folder) => ({ id: folder.id, label: folder.label })),
+  };
+}
 
 export const QUALITY_FOLDER_SCOPE_KEY = "hs_quality_folder_v1";
 
@@ -89,24 +138,32 @@ export type QualityFolderDrop = {
   savedAt: string;
 };
 
-export function isQualityFolderId(value: unknown): value is QualityFolderId {
-  return typeof value === "string" && QUALITY_FOLDERS.some((folder) => folder.id === value);
+export function isQualityFolderId(value: unknown, companyId?: string | null): value is QualityFolderId {
+  if (typeof value !== "string") return false;
+  const catalog = companyId ? qualityFoldersFor(companyId) : QUALITY_MODULE_CATALOG;
+  return catalog.some((folder) => folder.id === value);
 }
 
-export function qualityFolderLabel(id: QualityFolderId) {
-  return QUALITY_FOLDERS.find((folder) => folder.id === id)?.label ?? id;
+export function qualityFolderLabel(id: QualityFolderId, companyId?: string | null) {
+  const catalog = companyId ? qualityFoldersFor(companyId) : QUALITY_FOLDERS;
+  return catalog.find((folder) => folder.id === id)?.label ?? QUALITY_FOLDERS.find((folder) => folder.id === id)?.label ?? id;
 }
 
-/** Exact Chance labels, plus shipped 1:1 synonyms. Unknown strings stay unresolved. */
-export function resolveQualityFolder(value: string): QualityFolderId | "" {
+function folderAllowed(id: QualityFolderId, companyId?: string | null) {
+  if (!companyId) return true;
+  return qualityFoldersFor(companyId).some((folder) => folder.id === id);
+}
+
+/** Catalog ids plus shipped 1:1 synonyms. Madison form names stay synonyms, not folder ids. */
+export function resolveQualityFolder(value: string, companyId?: string | null): QualityFolderId | "" {
   const raw = value.trim();
-  if (isQualityFolderId(raw)) return raw;
+  if (isQualityFolderId(raw, companyId || undefined)) return raw as QualityFolderId;
   const key = raw.toLowerCase().replace(/\s+/g, " ");
   const compact = key.replace(/\s*\/\s*/g, "/");
-  if (FOLDER_SYNONYMS[key]) return FOLDER_SYNONYMS[key];
-  if (FOLDER_SYNONYMS[compact]) return FOLDER_SYNONYMS[compact];
+  if (FOLDER_SYNONYMS[key] && folderAllowed(FOLDER_SYNONYMS[key], companyId)) return FOLDER_SYNONYMS[key];
+  if (FOLDER_SYNONYMS[compact] && folderAllowed(FOLDER_SYNONYMS[compact], companyId)) return FOLDER_SYNONYMS[compact];
   const matches = Object.entries(FOLDER_SYNONYMS)
-    .filter(([alias]) => key === alias || key.startsWith(`${alias} `) || compact === alias)
+    .filter(([alias, id]) => folderAllowed(id, companyId) && (key === alias || key.startsWith(`${alias} `) || compact === alias))
     .sort((left, right) => right[0].length - left[0].length);
   return matches[0]?.[1] ?? "";
 }

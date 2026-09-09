@@ -16,6 +16,7 @@ export type StoredLeadBrief = {
   savedAt: string;
   jobId?: string;
   folderId?: string;
+  companyId?: string;
 };
 
 export type { PublicLeadBrief };
@@ -83,6 +84,7 @@ export function parseLeadBriefFile(raw: unknown, kind: LeadBriefKind): StoredLea
       savedAt: typeof row.savedAt === "string" ? row.savedAt : "",
       jobId: typeof row.jobId === "string" && row.jobId.trim() ? row.jobId.trim() : undefined,
       folderId: typeof row.folderId === "string" && row.folderId.trim() ? row.folderId.trim() : undefined,
+      companyId: typeof row.companyId === "string" && row.companyId.trim() ? row.companyId.trim() : undefined,
     });
   }
   return briefs;
@@ -105,6 +107,7 @@ function richerBrief(left: StoredLeadBrief, right: StoredLeadBrief): StoredLeadB
     whoName: right.whoName || left.whoName,
     jobId: right.jobId || left.jobId,
     folderId: right.folderId || left.folderId,
+    companyId: right.companyId || left.companyId,
   };
 }
 
@@ -225,16 +228,18 @@ export function briefIdFor(kind: LeadBriefKind, who: string, jobId = "", folderI
 export async function listStoredBriefs(
   kind: LeadBriefKind,
   who?: string,
-  filter?: { jobId?: string; folderId?: string },
+  filter?: { jobId?: string; folderId?: string; companyId?: string },
 ): Promise<StoredLeadBrief[]> {
   const briefs = await hydrateLeadBriefStore(kind);
   const key = who?.trim().toLowerCase() || "";
   const jobId = filter?.jobId?.trim() || "";
   const folderId = filter?.folderId?.trim() || "";
+  const companyId = filter?.companyId?.trim() || "";
   return briefs.filter((row) => {
     if (key && row.who !== key) return false;
     if (jobId && (row.jobId || "") !== jobId) return false;
     if (folderId && (row.folderId || "") !== folderId) return false;
+    if (companyId && (row.companyId || "") && row.companyId !== companyId) return false;
     return true;
   });
 }
@@ -247,11 +252,13 @@ export async function saveStoredBrief(input: {
   files?: LeadBrief["files"];
   jobId?: string;
   folderId?: string;
+  companyId?: string;
   mergeFiles?: boolean;
 }): Promise<StoredLeadBrief> {
   const who = input.who.trim().toLowerCase();
   const jobId = typeof input.jobId === "string" && input.jobId.trim() ? input.jobId.trim() : undefined;
   const folderId = typeof input.folderId === "string" && input.folderId.trim() ? input.folderId.trim() : undefined;
+  const companyId = typeof input.companyId === "string" && input.companyId.trim() ? input.companyId.trim() : undefined;
   const incoming = parseLeadFiles(input.files);
   const next: StoredLeadBrief = {
     id: briefIdFor(input.kind, who, jobId, folderId),
@@ -263,6 +270,7 @@ export async function saveStoredBrief(input: {
     savedAt: new Date().toLocaleString("en-GB", { hour12: false }),
     jobId,
     folderId,
+    companyId,
   };
   const briefs = await hydrateLeadBriefStore(input.kind);
   const index = briefs.findIndex((row) => row.id === next.id);

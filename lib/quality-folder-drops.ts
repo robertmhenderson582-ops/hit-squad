@@ -15,6 +15,7 @@ import {
   qualityFolderBriefId,
   qualityFolderDropsFor,
   qualityFolderLabel,
+  showsQualityFolderDesk,
   type QualityFolderId,
 } from "./quality-folders.ts";
 import type { PublicUser } from "./types.ts";
@@ -25,7 +26,17 @@ export type QualityFolderSaveInput = {
   jobId?: unknown;
   folderId?: unknown;
   files?: unknown;
+  companyId?: unknown;
 };
+
+function qualityDropCompanyId(input: { companyId?: unknown }) {
+  return typeof input.companyId === "string" && input.companyId.trim() ? input.companyId.trim() : undefined;
+}
+
+function qualityFolderAllowed(folderId: unknown, companyId?: string) {
+  if (companyId && !showsQualityFolderDesk(companyId)) return false;
+  return isQualityFolderId(folderId, companyId);
+}
 
 export function parseQualityDropFiles(raw: unknown): LeadFile[] {
   if (!Array.isArray(raw)) return [];
@@ -46,8 +57,9 @@ export function parseQualityDropFiles(raw: unknown): LeadFile[] {
 
 export function qualityFolderSaveError(input: QualityFolderSaveInput) {
   const jobId = typeof input.jobId === "string" ? input.jobId.trim() : "";
+  const companyId = qualityDropCompanyId(input);
   if (!jobId) return { status: 400, error: "Pick a job." };
-  if (!isQualityFolderId(input.folderId)) return { status: 400, error: "Pick a Quality folder." };
+  if (!qualityFolderAllowed(input.folderId, companyId)) return { status: 400, error: "Pick a Quality folder." };
   const files = parseQualityDropFiles(input.files);
   if (!files.length) return { status: 400, error: "Drop at least one file." };
   const check = checkQualityDrop(files);
@@ -58,8 +70,9 @@ export function qualityFolderSaveError(input: QualityFolderSaveInput) {
 export async function saveQualityFolderDrop(user: QualityDropUser, input: QualityFolderSaveInput) {
   const jobId = typeof input.jobId === "string" ? input.jobId.trim() : "";
   const folderId = input.folderId;
+  const companyId = qualityDropCompanyId(input);
   if (!jobId) return { ok: false as const, status: 400, error: "Pick a job." };
-  if (!isQualityFolderId(folderId)) return { ok: false as const, status: 400, error: "Pick a Quality folder." };
+  if (!qualityFolderAllowed(folderId, companyId)) return { ok: false as const, status: 400, error: "Pick a Quality folder." };
   const incoming = parseQualityDropFiles(input.files);
   const check = checkQualityDrop(incoming);
   if (!check.accepted.length) {
@@ -71,7 +84,7 @@ export async function saveQualityFolderDrop(user: QualityDropUser, input: Qualit
     };
   }
   const who = user.email.trim().toLowerCase();
-  const existing = await listStoredBriefs("quality", who, { jobId, folderId });
+  const existing = await listStoredBriefs("quality", who, { jobId, folderId, companyId });
   const prior = existing[0];
   const merged = mergeQualityFolderFiles(prior?.files ?? [], check.accepted as LeadFile[]);
   try {
@@ -79,10 +92,11 @@ export async function saveQualityFolderDrop(user: QualityDropUser, input: Qualit
       kind: "quality",
       who,
       whoName: user.name,
-      describe: qualityFolderLabel(folderId),
+      describe: qualityFolderLabel(folderId, companyId),
       files: merged,
       jobId,
       folderId,
+      companyId,
       mergeFiles: true,
     });
     return {
@@ -105,11 +119,15 @@ export async function listQualityFolderDrops(
   user: QualityDropUser,
   jobId: string,
   folderId: QualityFolderId,
+  companyId?: string,
 ) {
   const job = jobId.trim();
-  if (!job || !isQualityFolderId(folderId)) return { briefs: [] as PublicLeadBrief[], files: [] as Array<{ name: string; type: string }> };
+  const company = companyId?.trim() || undefined;
+  if (!job || !qualityFolderAllowed(folderId, company)) {
+    return { briefs: [] as PublicLeadBrief[], files: [] as Array<{ name: string; type: string }> };
+  }
   const who = hasBuildDesk(user) ? undefined : user.email;
-  const briefs = await listStoredBriefs("quality", who, { jobId: job, folderId });
+  const briefs = await listStoredBriefs("quality", who, { jobId: job, folderId, companyId: company });
   const mine = qualityFolderDropsFor(briefs, job, folderId, hasBuildDesk(user) ? undefined : user.email);
   const files = mine.flatMap((row) => row.files);
   return {

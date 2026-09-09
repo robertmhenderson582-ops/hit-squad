@@ -162,9 +162,14 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.match(quality, /BOARD/);
     assert.match(quality, /QUALITY_DESK_TABS/);
     assert.match(quality, /QualityFolderDrop/);
+    assert.match(quality, /showsQualityFolderDesk/);
+    assert.match(quality, /cascadeCompanyId/);
     assert.match(quality, /role="tablist"/);
     assert.match(quality, /useQualityHseJobTree/);
     const folders = source("./quality-folders.ts");
+    assert.match(folders, /QUALITY_MODULE_CATALOG/);
+    assert.match(folders, /QUALITY_FOLDER_TEMPLATES/);
+    assert.match(folders, /cloneQualityFolderTemplate/);
     assert.match(folders, /Packages/);
     assert.match(folders, /Package Tracker/);
     assert.match(folders, /Welds \/ NDE/);

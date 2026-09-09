@@ -11,6 +11,7 @@ export type PublicLeadBrief = {
   savedAt: string;
   jobId?: string;
   folderId?: string;
+  companyId?: string;
 };
 
 export function briefKey(kind: string, jobId = "") {

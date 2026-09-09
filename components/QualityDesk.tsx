@@ -9,12 +9,14 @@ import { RollingChartMap } from "@/components/RollingChartMap";
 import { useQualityHseJobTree } from "@/components/useQualityHseJobTree";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { companyScopeFor } from "@/lib/companies";
+import { companyScopeFor, inferCompanyIdFromParts } from "@/lib/companies";
+import { showsQualityFolderDesk } from "@/lib/quality-folders";
 import { canSeeMadisonManuals, madisonManualLabel, type QualityDay1 } from "@/lib/quality-day1";
 import { CLIENT_FOLDERS } from "@/lib/quality-hse-modules";
 import {
   QUALITY_JOB_SCOPE_KEY,
   cascadeClients,
+  cascadeCompanyId,
   cascadeJobs,
   cascadeSites,
   readJobScope,
@@ -90,6 +92,10 @@ export function QualityDesk() {
   const selectedJob = siteJobs.find((job) => job.id === pick.jobId);
   const selectedSite = sites.find((site) => site.id === pick.siteId);
   const selectedClient = clients.find((client) => client.id === pick.clientId);
+  const companyId =
+    cascadeCompanyId(tree, pick) ||
+    inferCompanyIdFromParts(selectedClient?.name, selectedSite?.name, selectedJob?.title, selectedJob?.code);
+  const showFolderDesk = showsQualityFolderDesk(companyId);
 
   useEffect(() => {
     if (!ready) return;
@@ -176,13 +182,13 @@ export function QualityDesk() {
               {selectedClient ? ` · ${alias(selectedClient.name)}` : ""}
             </p>
           ) : null}
-          {chance ? (
+          {chance && showFolderDesk ? (
             <p className="plant-card px-4 py-3 text-sm">
               Chance — pick a Quality folder, then drop files into it. Named Day-1 forms, the board, and
               the live tube map stay on this job below.
             </p>
           ) : null}
-          <QualityFolderDrop jobId={pick.jobId} />
+          {showFolderDesk ? <QualityFolderDrop jobId={pick.jobId} companyId={companyId} /> : null}
           {manuals ? <p className="text-sm">{madisonManualLabel("quality")}</p> : null}
 
           <div

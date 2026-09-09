@@ -7,11 +7,11 @@ import { useSession } from "@/components/SessionProvider";
 import { fileToLead, type LeadFile } from "@/lib/lead-briefs";
 import {
   QUALITY_DROP_ACCEPT,
-  QUALITY_FOLDERS,
   checkQualityDrop,
   isQualityFolderId,
   mergeQualityFolderFiles,
   qualityFolderLabel,
+  qualityFoldersFor,
   readQualityFolderFiles,
   readQualityFolderPick,
   writeQualityFolderFiles,
@@ -23,7 +23,8 @@ function dropFileFromBrowser(file: File) {
   return { name: file.name, type: file.type, bytes: file.size };
 }
 
-export function QualityFolderDrop({ jobId }: { jobId: string }) {
+export function QualityFolderDrop({ jobId, companyId }: { jobId: string; companyId?: string }) {
+  const folders = qualityFoldersFor(companyId || "madison");
   const { user } = useSession();
   const selectRef = useRef<HTMLSelectElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -48,8 +49,9 @@ export function QualityFolderDrop({ jobId }: { jobId: string }) {
   useEffect(() => {
     if (!jobId || !folderId) return;
     let cancelled = false;
+    const company = companyId ? `&company=${encodeURIComponent(companyId)}` : "";
     void fetch(
-      `/api/desk/briefs?kind=quality&jobId=${encodeURIComponent(jobId)}&folder=${encodeURIComponent(folderId)}`,
+      `/api/desk/briefs?kind=quality&jobId=${encodeURIComponent(jobId)}&folder=${encodeURIComponent(folderId)}${company}`,
       { credentials: "include" },
     )
       .then(async (response) => {
@@ -81,7 +83,7 @@ export function QualityFolderDrop({ jobId }: { jobId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [folderId, jobId, user?.email]);
+  }, [companyId, folderId, jobId, user?.email]);
 
   function pickFolder(next: QualityFolderId) {
     setFolderId(next);
@@ -100,6 +102,7 @@ export function QualityFolderDrop({ jobId }: { jobId: string }) {
         kind: "quality",
         jobId,
         folderId,
+        companyId: companyId || undefined,
         files: nextFiles.filter((file) => file.data),
       }),
     });
@@ -149,8 +152,8 @@ export function QualityFolderDrop({ jobId }: { jobId: string }) {
       setNote(
         [
           incoming.length === 1
-            ? `Saved ${incoming[0].name} in ${qualityFolderLabel(folderId)}.`
-            : `Saved ${incoming.length} files in ${qualityFolderLabel(folderId)}.`,
+            ? `Saved ${incoming[0].name} in ${qualityFolderLabel(folderId, companyId)}.`
+            : `Saved ${incoming.length} files in ${qualityFolderLabel(folderId, companyId)}.`,
           ...skipped,
         ].join(" "),
       );
@@ -167,8 +170,9 @@ export function QualityFolderDrop({ jobId }: { jobId: string }) {
     }
   }
 
-  const folder = qualityFolderLabel(folderId);
+  const folder = qualityFolderLabel(folderId, companyId);
   const listed = files.filter((file) => file.name);
+  if (!folders.length) return null;
 
   return (
     <section className="plant-card px-4 py-4">
@@ -184,12 +188,12 @@ export function QualityFolderDrop({ jobId }: { jobId: string }) {
             id="quality-folder-pick"
             value={folderId}
             onChange={(event) => {
-              if (isQualityFolderId(event.target.value)) pickFolder(event.target.value);
+              if (isQualityFolderId(event.target.value, companyId)) pickFolder(event.target.value);
             }}
             className="paper-field mt-1"
             aria-label="Quality folder"
           >
-            {QUALITY_FOLDERS.map((item) => (
+            {folders.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.label}
               </option>

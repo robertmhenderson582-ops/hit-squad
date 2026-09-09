@@ -9,6 +9,7 @@ import {
   forgetLeadBriefCacheForTests,
   listStoredBriefs,
   resetLeadBriefStoreForTests,
+  saveStoredBrief,
   useLeadBriefVaultForTests,
   type StoredLeadBrief,
 } from "./lead-brief-store.ts";
@@ -118,6 +119,79 @@ describe("Quality folder vault drops", { concurrency: 1 }, () => {
     assert.equal(qualityDropLeaks(chanceWelders), false);
     assert.equal(qualityDropLeaks({ file: QUALITY_BRIEFS_VAULT_NAME }), true);
     assert.equal(QUALITY_FOLDERS.length, 12);
+    assert.equal(first.brief.companyId, undefined);
+  });
+
+  it("stamps Madison on the brief and does not open folders for another company", async () => {
+    resetLeadBriefStoreForTests(join(dir, "company"));
+    useLeadBriefVaultForTests(memoryDrive());
+    const saved = await saveQualityFolderDrop(chance, {
+      jobId: "job-b17",
+      folderId: "welders",
+      companyId: "madison",
+      files: [pdf("stamp.pdf")],
+    });
+    assert.equal(saved.ok, true);
+    if (!saved.ok) return;
+    assert.equal(saved.brief.companyId, "madison");
+    assert.equal(saved.brief.jobId, "job-b17");
+    assert.equal(saved.brief.folderId, "welders");
+    assert.equal(
+      saved.brief.id,
+      "brief-quality-chancec318@yahoo.com-job:job-b17-folder:welders",
+    );
+
+    const blocked = await saveQualityFolderDrop(chance, {
+      jobId: "job-b17",
+      folderId: "welders",
+      companyId: "hitsquad",
+      files: [pdf("nope.pdf")],
+    });
+    assert.equal(blocked.ok, false);
+    if (!blocked.ok) assert.equal(blocked.error, "Pick a Quality folder.");
+
+    await saveStoredBrief({
+      kind: "quality",
+      who: chance.email,
+      whoName: chance.name,
+      describe: "Welders",
+      files: [pdf("legacy.pdf")],
+      jobId: "job-legacy",
+      folderId: "welders",
+    });
+    const legacy = await listStoredBriefs("quality", chance.email, {
+      jobId: "job-legacy",
+      folderId: "welders",
+      companyId: "madison",
+    });
+    assert.deepEqual(
+      legacy.map((row) => row.files[0]?.name),
+      ["legacy.pdf"],
+    );
+
+    await saveStoredBrief({
+      kind: "quality",
+      who: chance.email,
+      whoName: chance.name,
+      describe: "Welders",
+      files: [pdf("other-co.pdf")],
+      jobId: "job-other-co",
+      folderId: "welders",
+      companyId: "acme",
+    });
+    const filtered = await listStoredBriefs("quality", chance.email, {
+      jobId: "job-other-co",
+      folderId: "welders",
+      companyId: "madison",
+    });
+    assert.deepEqual(filtered, []);
+    const listed = await listQualityFolderDrops(chance, "job-b17", "welders", "madison");
+    assert.deepEqual(
+      listed.files.map((file) => file.name),
+      ["stamp.pdf"],
+    );
+    const hidden = await listQualityFolderDrops(chance, "job-b17", "welders", "hitsquad");
+    assert.deepEqual(hidden.files, []);
   });
 
   it("rejects a blocked type and does not wipe the folder", async () => {
