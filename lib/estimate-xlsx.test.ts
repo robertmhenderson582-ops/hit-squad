@@ -59,9 +59,8 @@ import {
   LABOR_NIGHTSHIFT,
   LABOR_PHASE_LABEL,
   LABOR_PHASE_CHIP_ROW,
-  LABOR_PHASE_CHIP_DAYS_FMT,
-  LABOR_PHASE_CHIP_NIGHTS_FMT,
-  LABOR_PHASE_CHIP_COMPLETE_FMT,
+  DIRECT_PHASE_LABELS,
+  directCraftAbbrev,
   LABOR_WEEKDAY_LABELS,
   LABOR_TYPE_ORDER,
   laborBlockId,
@@ -1330,9 +1329,9 @@ describe("estimate excel export", () => {
     assert.equal(direct.getCell("J7").alignment?.vertical, "middle");
     assert.equal(direct.getCell("J10").alignment?.vertical, "middle");
     assert.equal(argb(direct.getCell("J2")), argb(direct.getCell("A2")));
-    assert.equal(argb(direct.getCell("J3")), argb(direct.getCell("A3")));
+    assert.equal(argb(direct.getCell("J3")), PHASE_TONE_FILLS.mech.slice(2));
     assert.equal(argb(direct.getCell(`${lastDateCol}2`)), argb(direct.getCell("A2")));
-    assert.equal(argb(direct.getCell(`${lastDateCol}3`)), argb(direct.getCell("A3")));
+    assert.equal(argb(direct.getCell(`${lastDateCol}3`)), argb(direct.getCell("J3")));
     assert.equal(direct.getCell("A7").border?.left?.style, "medium");
     assert.equal(direct.getCell("I13").border?.right?.style, "medium");
     assert.equal(direct.getCell("I13").border?.bottom?.style, "medium");
@@ -3119,6 +3118,7 @@ describe("estimate excel export", () => {
       "A3:I3",
       "A4:I5",
       `J4:${lastDateCol}4`,
+      "J3:K3",
       ...laborBlockVoidMerges(direct.laborBlocks ?? []),
     ]);
     const support = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.support)!;
@@ -3335,30 +3335,37 @@ describe("estimate excel export", () => {
     const src = readFileSync(fileURLToPath(new URL("./estimate-xlsx.ts", import.meta.url)), "utf8");
     assert.match(src, /liveJobSetupPhases/);
     assert.match(src, /phaseBarRuns/);
-    assert.match(src, /next Excel compile/);
+    assert.match(src, /craft abbreviation/);
     assert.match(src, /view only/);
     assert.equal(/2026-01-11|Jan 11/.test(src), false);
     assert.equal(EXCEL_JOB_SETUP_IMPORT_PARKED, false);
     assert.equal(buildEstimateWorkbook(base).some((sheet) => sheet.name === "Job setup"), true);
   });
 
-  it("writes day/night/complete hour chips per position on the title row, phase-bounded", async () => {
+  it("stacks Direct craft×phase hours at each phase start above the color bar, not on Auto rows", async () => {
     const weekday = {
       start: "2026-09-01",
       end: "2026-09-07",
       days: [true, true, true, true, true, true, true],
     };
     const input = {
-      title: "Phase chips",
+      title: "Direct phase hours",
       client: "Phillips 66",
       site: "Wood River — Roxana, IL",
+      companyName: "Madison",
+      preparedBy: "Robert Henderson",
       crew: {
         staff: [
           craft("st", "Lead Safety 01", 10, { ...weekday, otAfter8: false, headcount: 2 }),
           craft("st-2", "Lead QA/QC 01", 10, { ...weekday, otAfter8: false, headcount: 1 }),
-          craft("st-n", "Night Safety 01", 10, {
+        ],
+        direct: [
+          craft("bm-1", "Boilermaker Journeyman", 10, { ...weekday, otAfter8: true, headcount: 2 }),
+          craft("bm-2", "Boilermaker Apprentice Y1P1 70%", 10, { ...weekday, otAfter8: true, headcount: 1 }),
+          craft("pf-1", "PIPEFITTER JOURNEYMAN", 10, { ...weekday, otAfter8: true, headcount: 4 }),
+          craft("bm-n", "Boilermaker Journeyman", 10, {
             ...weekday,
-            otAfter8: false,
+            otAfter8: true,
             shift: "Nights",
             headcount: 0,
             nightHeadcount: 1,
@@ -3383,8 +3390,8 @@ describe("estimate excel export", () => {
             sundaysOff: [] as string[],
           },
           {
-            id: "mech" as const,
-            name: "Mechanical Window",
+            id: "oil-out" as const,
+            name: "Oil Out",
             on: true,
             start: "2026-09-03",
             stop: "2026-09-07",
@@ -3397,78 +3404,108 @@ describe("estimate excel export", () => {
       },
       jobMeta: { staffPerDiemRate: 140, craftPerDiemRate: 130, staffMileageRate: 0.7, craftMileageRate: 0.5, rateBook: "" },
     };
+    assert.equal(directCraftAbbrev("Boilermaker Journeyman"), "BM");
+    assert.equal(directCraftAbbrev("PIPEFITTER JOURNEYMAN"), "PF");
+    assert.equal(directCraftAbbrev("Operating Eng Grp 01"), "OE");
+    assert.equal(DIRECT_PHASE_LABELS.pre, "PRE");
+    assert.equal(DIRECT_PHASE_LABELS["oil-out"], "Oil Out");
+
     const sheets = buildEstimateWorkbook(input);
     const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff)!;
-    const cells = cellMap(staff);
-    const day = laborHours(staff, "Lead Safety 01");
-    const qa = laborHours(staff, "Lead QA/QC 01");
-    const night = laborHours(staff, "Night Safety 01", LABOR_NIGHTSHIFT);
-    assert.ok(day.title && qa.title && night.title);
-    assert.notEqual(day.title, qa.title);
-    const preDays = cells.get(`J${day.title}`);
-    const preComplete = cells.get(`K${day.title}`);
-    const mechDays = cells.get(`L${day.title}`);
-    const mechNights = cells.get(`M${day.title}`);
-    const mechComplete = cells.get(`N${day.title}`);
-    const qaMechDays = cells.get(`L${qa.title}`);
-    const nightMechDays = cells.get(`L${night.title}`);
-    const nightMechNights = cells.get(`M${night.title}`);
-    const sheetWide = cells.get(`J${LABOR_PHASE_CHIP_ROW}`);
-    assert.equal(sheetWide?.type === "formula", false);
-    assert.equal(preDays?.type, "formula");
-    assert.equal(preComplete?.type, "formula");
-    assert.equal(mechDays?.type, "formula");
-    assert.equal(mechNights?.type, "formula");
-    assert.equal(mechComplete?.type, "formula");
-    assert.equal(preDays?.numFmt, LABOR_PHASE_CHIP_DAYS_FMT);
-    assert.equal(mechNights?.numFmt, LABOR_PHASE_CHIP_NIGHTS_FMT);
-    assert.equal(mechComplete?.numFmt, LABOR_PHASE_CHIP_COMPLETE_FMT);
-    assert.match(LABOR_PHASE_CHIP_DAYS_FMT, /D /);
-    assert.match(String(preDays?.value), new RegExp(`SUM\\(J${day.st}:K${day.dt}\\)`));
-    assert.equal(/SUM\(J\d+:K\d+\)\+SUM/.test(String(preDays?.value)), false);
-    assert.match(String(mechDays?.value), new RegExp(`SUM\\(L${day.st}:P${day.dt}\\)`));
-    assert.equal(String(mechNights?.value), "0");
-    assert.equal(String(mechComplete?.value), `L${day.title}+M${day.title}`);
-    assert.equal(String(nightMechDays?.value), "0");
-    assert.match(String(nightMechNights?.value), new RegExp(`SUM\\(L${night.st}:P${night.dt}\\)`));
-    assert.match(String(qaMechDays?.value), new RegExp(`SUM\\(L${qa.st}:P${qa.dt}\\)`));
-    assert.equal(String(qaMechDays?.value) === String(mechDays?.value), false);
-    const { evalAt } = evaluateWorkbook(sheets);
-    const sumRange = (st: number, dt: number, first: string, last: string) => {
+    const direct = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.direct)!;
+    const staffCells = cellMap(staff);
+    const directCells = cellMap(direct);
+    const safety = laborHours(staff, "Lead Safety 01");
+    const bmDay = laborHours(direct, "Boilermaker Journeyman");
+    const bmAppr = laborHours(direct, "Boilermaker Apprentice Y1P1 70%");
+    const pfDay = laborHours(direct, "PIPEFITTER JOURNEYMAN");
+    const bmNight = laborHours(direct, "Boilermaker Journeyman", LABOR_NIGHTSHIFT);
+    assert.ok(safety.title && bmDay.title && bmAppr.title && pfDay.title && bmNight.title);
+    assert.equal(staff.directPhaseLabels, undefined);
+    assert.equal(staffCells.get(`J${safety.title}`)?.type === "formula", false);
+    assert.equal(staffCells.get(`J${LABOR_PHASE_CHIP_ROW}`)?.type === "formula", false);
+
+    const preLabel = directCells.get(`J${LABOR_PHASE_CHIP_ROW}`);
+    const oilLabel = directCells.get(`L${LABOR_PHASE_CHIP_ROW}`);
+    assert.equal(preLabel?.type, "formula");
+    assert.equal(oilLabel?.type, "formula");
+    assert.equal(directCells.get(`J${bmDay.title}`)?.type === "formula", false);
+    assert.equal(directCells.get(`J${pfDay.title}`)?.type === "formula", false);
+    assert.equal(directCells.get(`P${LABOR_PHASE_CHIP_ROW}`)?.type === "formula", false);
+    assert.match(String(preLabel?.value), /BM PRE -/);
+    assert.match(String(preLabel?.value), /PF PRE -/);
+    assert.match(String(oilLabel?.value), /BM Oil Out -/);
+    assert.match(String(oilLabel?.value), /PF Oil Out -/);
+    assert.match(String(preLabel?.value), new RegExp(`SUM\\(J${bmDay.st}:K${bmDay.dt}\\)`));
+    assert.match(String(preLabel?.value), new RegExp(`SUM\\(J${bmAppr.st}:K${bmAppr.dt}\\)`));
+    assert.match(String(preLabel?.value), new RegExp(`SUM\\(J${pfDay.st}:K${pfDay.dt}\\)`));
+    assert.match(String(preLabel?.value), new RegExp(`SUM\\(J${bmNight.st}:K${bmNight.dt}\\)`));
+    assert.match(String(oilLabel?.value), new RegExp(`SUM\\(L${bmDay.st}:P${bmDay.dt}\\)`));
+    assert.ok(direct.merges?.includes(`J${LABOR_PHASE_CHIP_ROW}:K${LABOR_PHASE_CHIP_ROW}`));
+    assert.ok(direct.merges?.includes(`L${LABOR_PHASE_CHIP_ROW}:M${LABOR_PHASE_CHIP_ROW}`));
+    assert.equal(direct.merges?.includes(`L${LABOR_PHASE_CHIP_ROW}:P${LABOR_PHASE_CHIP_ROW}`), false);
+    assert.equal(LABOR_BLOCK_HEIGHT, 7);
+    assert.equal(bmDay.pd - bmDay.title, 6);
+    assert.deepEqual(
+      [0, 1, 2, 3, 4, 5, 6].map((offset) => String(directCells.get(`E${bmDay.title + offset}`)?.value ?? "")),
+      [LABOR_CLOCK_AUTO, LABOR_HC_LABEL, LABOR_HPS_TYPE, "ST", "OT", "DT", LABOR_PD_TYPE],
+    );
+    assert.deepEqual(
+      direct.directPhaseLabels?.map((row) => row.phaseId),
+      ["pre", "oil-out"],
+    );
+    assert.equal(direct.directPhaseLabels?.[0]?.crafts, 2);
+
+    const { evalAt, cellRaw } = evaluateWorkbook(sheets);
+    const sumRange = (sheet: string, st: number, dt: number, first: string, last: string) => {
       let total = 0;
       const start = first.charCodeAt(0);
       const end = last.charCodeAt(0);
       for (let col = start; col <= end; col += 1) {
         const letter = String.fromCharCode(col);
-        for (let row = st; row <= dt; row += 1) total += Number(evalAt(ESTIMATE_XLSX_SHEETS.staff, `${letter}${row}`)) || 0;
+        for (let row = st; row <= dt; row += 1) total += Number(evalAt(sheet, `${letter}${row}`)) || 0;
       }
       return total;
     };
-    const daysHrs = evalAt(ESTIMATE_XLSX_SHEETS.staff, `L${day.title}`);
-    const nightsHrs = evalAt(ESTIMATE_XLSX_SHEETS.staff, `M${day.title}`);
-    const completeHrs = evalAt(ESTIMATE_XLSX_SHEETS.staff, `N${day.title}`);
-    const qaHrs = evalAt(ESTIMATE_XLSX_SHEETS.staff, `L${qa.title}`);
-    const nightHrs = evalAt(ESTIMATE_XLSX_SHEETS.staff, `M${night.title}`);
-    assert.equal(daysHrs, sumRange(day.st, day.dt, "L", "P"));
-    assert.equal(nightsHrs, 0);
-    assert.equal(completeHrs, daysHrs + nightsHrs);
-    assert.equal(qaHrs, sumRange(qa.st, qa.dt, "L", "P"));
-    assert.equal(nightHrs, sumRange(night.st, night.dt, "L", "P"));
-    assert.equal(daysHrs > qaHrs, true);
-    assert.equal(String(mechDays?.value).includes(String(qa.st)), false);
-    const preHrs = evalAt(ESTIMATE_XLSX_SHEETS.staff, `J${day.title}`);
-    assert.equal(preHrs, sumRange(day.st, day.dt, "J", "K"));
+    const bmPreDay =
+      sumRange(ESTIMATE_XLSX_SHEETS.direct, bmDay.st, bmDay.dt, "J", "K") +
+      sumRange(ESTIMATE_XLSX_SHEETS.direct, bmAppr.st, bmAppr.dt, "J", "K");
+    const bmPreNight = sumRange(ESTIMATE_XLSX_SHEETS.direct, bmNight.st, bmNight.dt, "J", "K");
+    const pfPreDay = sumRange(ESTIMATE_XLSX_SHEETS.direct, pfDay.st, pfDay.dt, "J", "K");
+    const bmOilDay =
+      sumRange(ESTIMATE_XLSX_SHEETS.direct, bmDay.st, bmDay.dt, "L", "P") +
+      sumRange(ESTIMATE_XLSX_SHEETS.direct, bmAppr.st, bmAppr.dt, "L", "P");
+    const bmOilNight = sumRange(ESTIMATE_XLSX_SHEETS.direct, bmNight.st, bmNight.dt, "L", "P");
+    const pfOilDay = sumRange(ESTIMATE_XLSX_SHEETS.direct, pfDay.st, pfDay.dt, "L", "P");
+    const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
+    const preText = String(cellRaw(ESTIMATE_XLSX_SHEETS.direct, `J${LABOR_PHASE_CHIP_ROW}`));
+    const oilText = String(cellRaw(ESTIMATE_XLSX_SHEETS.direct, `L${LABOR_PHASE_CHIP_ROW}`));
+    assert.match(preText, new RegExp(`BM PRE - ${fmt(bmPreDay + bmPreNight)} hrs\\.\\n${fmt(bmPreDay)} day / ${fmt(bmPreNight)} night`));
+    assert.match(preText, new RegExp(`PF PRE - ${fmt(pfPreDay)} hrs\\.\\n${fmt(pfPreDay)} day / 0 night`));
+    assert.match(oilText, new RegExp(`BM Oil Out - ${fmt(bmOilDay + bmOilNight)} hrs\\.\\n${fmt(bmOilDay)} day / ${fmt(bmOilNight)} night`));
+    assert.match(oilText, new RegExp(`PF Oil Out - ${fmt(pfOilDay)} hrs\\.\\n${fmt(pfOilDay)} day / 0 night`));
+    assert.equal(bmPreDay + pfPreDay > 0, true);
+    assert.equal(String(preText).includes("Lead Safety"), false);
+
     const bytes = await estimateToXlsx(input);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(bytes));
     const staffBook = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.staff);
-    assert.ok(staffBook);
-    const chipFill = String((staffBook.getCell(`L${day.title}`).fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "").toUpperCase();
-    assert.equal(chipFill, PHASE_TONE_FILLS.mech);
-    assert.equal(staffBook.getCell(`L${day.title}`).protection?.locked !== false, true);
+    const directBook = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.direct);
+    assert.ok(staffBook && directBook);
+    assert.match(String(directBook.getCell("A1").value ?? ""), /MADISON/);
+    assert.equal(/Hit Squad|HIT SQUAD/i.test(String(directBook.getCell("A1").value ?? "")), false);
+    assert.equal(directBook.getCell(`J${LABOR_PHASE_CHIP_ROW}`).protection?.locked !== false, true);
+    const preFill = String(
+      (directBook.getCell(`J${LABOR_PHASE_CHIP_ROW}`).fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? "",
+    ).toUpperCase();
+    assert.equal(preFill, PHASE_TONE_FILLS.pre);
+    assert.equal(staffBook.getCell(`J${safety.title}`).value, null);
+    assert.equal(directBook.getCell(`J${bmDay.title}`).value, null);
+    assert.equal(directBook.pageSetup.printArea?.startsWith("A1:"), true);
     const imported = readFileSync(fileURLToPath(new URL("./estimate-xlsx-import.ts", import.meta.url)), "utf8");
     assert.match(imported, /titleRow \+ LABOR_ST_OFFSET/);
-    assert.doesNotMatch(imported, /phaseChips|LABOR_PHASE_CHIP/);
+    assert.doesNotMatch(imported, /phaseChips|LABOR_PHASE_CHIP|directPhaseLabels/);
   });
 
   it("hides unused grid past the used range and washes leftover white cells", async () => {

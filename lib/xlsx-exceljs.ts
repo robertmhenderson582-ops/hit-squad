@@ -1100,24 +1100,30 @@ function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDat
       centerLaborCell(cell);
     }
   }
-  applyLaborPhaseChips(ws, sheet);
+  applyDirectPhaseLabels(ws, sheet);
 }
 
-/** Day / night / complete hour chips on each position title row — locked view of that block. */
-function applyLaborPhaseChips(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
-  const chips = sheet.phaseChips ?? [];
-  if (!chips.length) return;
-  const byPhase = new Map<string, string>();
-  for (const run of sheet.phaseBar ?? []) {
-    if (isPhaseId(run.phaseId)) byPhase.set(`${run.startCol}:${run.endCol}:${run.phaseId}`, PHASE_TONE_FILLS[run.phaseId]);
+/** Direct craft × phase stacks at each phase start, immediately above the color bar. */
+function applyDirectPhaseLabels(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
+  const labels = sheet.directPhaseLabels ?? [];
+  if (!labels.length) return;
+  let maxCrafts = 1;
+  for (const label of labels) {
+    maxCrafts = Math.max(maxCrafts, label.crafts);
+    const fillArgb = isPhaseId(label.phaseId) ? PHASE_TONE_FILLS[label.phaseId] : STEEL;
+    const stackEnd = label.stackEndCol ?? label.startCol;
+    for (let col = label.startCol; col <= stackEnd; col += 1) {
+      const cell = ws.getCell(label.row, col);
+      cell.fill = solid(fillArgb);
+      cell.font = { bold: true, name: "Calibri", size: 7, color: { argb: PHASE_TONE_BAND_INK } };
+      cell.alignment = { horizontal: "left", vertical: "bottom", wrapText: true };
+      cell.protection = { locked: true };
+    }
   }
-  for (const chip of chips) {
-    const cell = ws.getCell(chip.row, chip.col);
-    const fillArgb = byPhase.get(`${chip.startCol}:${chip.endCol}:${chip.phaseId}`) ?? STEEL;
-    cell.fill = solid(fillArgb);
-    cell.font = { bold: true, name: "Calibri", size: 7, color: { argb: PHASE_TONE_BAND_INK } };
-    cell.alignment = { ...LABOR_CENTER };
-    cell.protection = { locked: true };
+  const row = labels[0]?.row;
+  if (row) {
+    const needed = Math.min(64, 14 * maxCrafts + 10);
+    ws.getRow(row).height = Math.max(Number(ws.getRow(row).height) || 0, needed);
   }
 }
 
@@ -1710,7 +1716,7 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
       pinLaborTitleBlock(ws);
       applyHeaderMetaLayout(ws, LABOR_INSTRUMENT_LAST_COL, true);
       pinLaborEvenRows(ws, sheet, lastVisibleColNum, maxRow);
-      applyLaborPhaseChips(ws, sheet);
+      applyDirectPhaseLabels(ws, sheet);
     }
     pinHoursAndMoney(ws, sheet, lastVisibleColNum, maxRow, labor, isSummary);
     for (const slot of sheet.billAs ?? []) {

@@ -60,11 +60,12 @@
  * phase-schedule (start/stop per phase) — not hard-coded sample dates.
  * This Look pass paints that bar as a view only. Adjustable Job setup card
  * + Position / hour / Bill as import ships on this compile (excel-ripple.ts).
- * Phase-bar day/night/complete hour chips ship on the next Excel compile —
- * view of live calendar ST+OT+DT per Job setup phase (import does not edit chips).
- * Each DAYSHIFT / NIGHTSHIFT title carries its own D / N / C chips on that
- * block’s title row — phase-bounded ST+OT+DT for that position only. Not a
- * sheet-global row-3 strip of every craft.
+ * Direct craft sheet only: craft×phase hour stacks sit at each phase’s
+ * start column, on the row immediately above the blue/red/green phase bar
+ * (not a teal header dump, not per-position Auto-row D/N/C chips).
+ * Live ST+OT+DT by craft abbreviation × Job setup phase, day + night.
+ * Import does not edit labels. Staff / Foremen / Support stay chip-free.
+ * Position blocks stay the 7-row HC/HPS/ST/OT/DT/PD craft shape.
  * Hidden _CrewRanges is a view of live pack CalendarRange stacks for create-new.
  * Import uses those ranges only when the daily HC/HPS/PD grid still matches.
  * Look sample xlsx files are stale chrome (no _CrewRanges). Fresh export always
@@ -116,10 +117,11 @@ import {
   type ClockOverride,
   type RunningClock,
 } from "./hours-clock.ts";
-import { defaultLaborClass, type LaborClass } from "./labor-class.ts";
+import { craftCodeFromRole, defaultLaborClass, type LaborClass } from "./labor-class.ts";
 import { miscAmount, miscMarkupAmount, travelAmount, type OtherCostSheet, type TravelLine } from "./other-cost.ts";
 import {
   eachYmd,
+  isPhaseId,
   liveJobSetupPhases,
   mergeSchedule,
   PHASE_IDS,
@@ -215,12 +217,21 @@ export const LABOR_INSTRUMENT_LAST_COL = 9;
 export const LABOR_PHASE_ROW = 4;
 export const LABOR_PHASE_ROW_END = 5;
 export const LABOR_PHASE_LABEL = "Phase";
-/** Unused header row above the phase name. Hour chips sit on each position title row. */
+/**
+ * Row immediately above the colored phase bar (row 4). Direct stacks live
+ * here at each phase’s start column — not a teal A3 dump, not on Auto rows.
+ */
 export const LABOR_PHASE_CHIP_ROW = 3;
-/** Spaced prefix so Excel does not read D9784 as a cell ref. */
-export const LABOR_PHASE_CHIP_DAYS_FMT = '"D "0';
-export const LABOR_PHASE_CHIP_NIGHTS_FMT = '"N "0';
-export const LABOR_PHASE_CHIP_COMPLETE_FMT = '"C "0';
+/** Short stack at the phase start (above the bar), not a full-phase banner. */
+export const DIRECT_PHASE_STACK_COLS = 2;
+/** Short phase names on Direct hour labels (Robert: PRE, Oil Out, …). */
+export const DIRECT_PHASE_LABELS: Record<PhaseId, string> = {
+  pre: "PRE",
+  "oil-out": "Oil Out",
+  mech: "Mech",
+  "oil-in": "Oil In",
+  post: "Post",
+};
 /** Two-letter weekday over the date number (row 5 / row 6). */
 export const LABOR_WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 export const LABOR_BLOCK_HEIGHT = 7;
@@ -1481,53 +1492,71 @@ function phaseHourRollup(titles: number[], startCol: number, endCol: number): st
     .join("+");
 }
 
-function writePhaseHourChips(
+/** Direct craft map (BM / PF / OE / LB / IW / TM). Shahan group fills Operating Eng, etc. */
+export function directCraftAbbrev(position: string): string | null {
+  const title = position.replace(/\s+/g, " ").trim();
+  if (!title) return null;
+  const fromRole = craftCodeFromRole(title);
+  if (fromRole && fromRole !== "M") return fromRole;
+  const group = lookupShahanLabor(title)?.group ?? "";
+  const tail = group.replace(/^.*\|/, " ").replace(/\bunion\b/gi, " ");
+  return craftCodeFromRole(tail) || craftCodeFromRole(group.replace(/\|/g, " "));
+}
+
+function formatDirectPhaseHourLine(craft: string, phaseLabel: string, dayExpr: string, nightExpr: string): string {
+  const title = `${excelTextLiteral(`${craft} ${phaseLabel} - `)}&TEXT((${dayExpr})+(${nightExpr}),"#,##0")&${excelTextLiteral(" hrs.")}`;
+  const split = `TEXT(${dayExpr},"#,##0")&${excelTextLiteral(" day / ")}&TEXT(${nightExpr},"#,##0")&${excelTextLiteral(" night")}`;
+  return `${title}&CHAR(10)&${split}`;
+}
+
+/** Direct-only: stacked craft×phase hours at each phase start, above the color bar. */
+function writeDirectPhaseHourLabels(
   cells: SheetCell[],
   runs: NonNullable<WorkbookSheet["phaseBar"]>,
-  blocks: Array<{ titleRow: number; night: boolean }>,
-): NonNullable<WorkbookSheet["phaseChips"]> {
-  const chips: NonNullable<WorkbookSheet["phaseChips"]> = [];
+  blocks: Array<{ titleRow: number; night: boolean; position: string }>,
+): { labels: NonNullable<WorkbookSheet["directPhaseLabels"]>; merges: string[] } {
+  const byCraft = new Map<string, { day: number[]; night: number[] }>();
+  const order: string[] = [];
   for (const block of blocks) {
-    for (const run of runs) {
-      const span = run.endCol - run.startCol + 1;
-      const blockHours = phaseHourRollup([block.titleRow], run.startCol, run.endCol);
-      const daysExpr = block.night ? "0" : blockHours;
-      const nightsExpr = block.night ? blockHours : "0";
-      const chipRow = block.titleRow;
-      const place = (col: number, kind: "days" | "nights" | "complete", formula: string, fmt: string) => {
-        cells.push({
-          ref: `${colLetter(col)}${chipRow}`,
-          type: "formula",
-          value: formula,
-          numFmt: fmt,
-        });
-        chips.push({
-          col,
-          row: chipRow,
-          kind,
-          startCol: run.startCol,
-          endCol: run.endCol,
-          phaseId: run.phaseId,
-        });
-      };
-      if (span >= 3) {
-        place(run.startCol, "days", daysExpr, LABOR_PHASE_CHIP_DAYS_FMT);
-        place(run.startCol + 1, "nights", nightsExpr, LABOR_PHASE_CHIP_NIGHTS_FMT);
-        place(
-          run.startCol + 2,
-          "complete",
-          `${colLetter(run.startCol)}${chipRow}+${colLetter(run.startCol + 1)}${chipRow}`,
-          LABOR_PHASE_CHIP_COMPLETE_FMT,
-        );
-      } else if (span === 2) {
-        place(run.startCol, "days", daysExpr, LABOR_PHASE_CHIP_DAYS_FMT);
-        place(run.startCol + 1, "complete", blockHours, LABOR_PHASE_CHIP_COMPLETE_FMT);
-      } else {
-        place(run.startCol, "complete", blockHours, LABOR_PHASE_CHIP_COMPLETE_FMT);
-      }
+    const code = directCraftAbbrev(block.position);
+    if (!code) continue;
+    if (!byCraft.has(code)) {
+      byCraft.set(code, { day: [], night: [] });
+      order.push(code);
     }
+    const bucket = byCraft.get(code)!;
+    (block.night ? bucket.night : bucket.day).push(block.titleRow);
   }
-  return chips;
+  const labels: NonNullable<WorkbookSheet["directPhaseLabels"]> = [];
+  const merges: string[] = [];
+  if (!order.length) return { labels, merges };
+  for (const run of runs) {
+    const phaseLabel = isPhaseId(run.phaseId) ? DIRECT_PHASE_LABELS[run.phaseId] : run.phaseId;
+    const lines = order.map((code) => {
+      const bucket = byCraft.get(code)!;
+      return formatDirectPhaseHourLine(
+        code,
+        phaseLabel,
+        phaseHourRollup(bucket.day, run.startCol, run.endCol),
+        phaseHourRollup(bucket.night, run.startCol, run.endCol),
+      );
+    });
+    const ref = `${colLetter(run.startCol)}${LABOR_PHASE_CHIP_ROW}`;
+    const stackEndCol = Math.min(run.startCol + DIRECT_PHASE_STACK_COLS - 1, run.endCol);
+    cells.push({ ref, type: "formula", value: lines.join("&CHAR(10)&") });
+    if (stackEndCol > run.startCol) {
+      merges.push(`${ref}:${colLetter(stackEndCol)}${LABOR_PHASE_CHIP_ROW}`);
+    }
+    labels.push({
+      row: LABOR_PHASE_CHIP_ROW,
+      startCol: run.startCol,
+      endCol: run.endCol,
+      stackEndCol,
+      phaseId: run.phaseId,
+      crafts: order.length,
+    });
+  }
+  return { labels, merges };
 }
 
 function buildCrewSheet(
@@ -1564,7 +1593,7 @@ function buildCrewSheet(
   const phaseBand = writePhaseBar(cells, dates, input.schedule);
 
   const titleRows: number[] = [];
-  const chipBlocks: Array<{ titleRow: number; night: boolean }> = [];
+  const chipBlocks: Array<{ titleRow: number; night: boolean; position: string }> = [];
   const pdMoneyRows: number[] = [];
   const laborBlocks: Array<{ start: number; end: number }> = [];
   const spacerRows: number[] = [];
@@ -1579,7 +1608,7 @@ function buildCrewSheet(
     const dtRow = excelRow + LABOR_DT_OFFSET;
     const pdRow = excelRow + LABOR_PD_OFFSET;
     titleRows.push(titleRow);
-    chipBlocks.push({ titleRow, night });
+    chipBlocks.push({ titleRow, night, position: row.position.trim() });
     pdMoneyRows.push(pdRow);
 
     const firstDate = dates.length ? colLetter(LABOR_DATE_START_COL) : "";
@@ -1732,6 +1761,11 @@ function buildCrewSheet(
     .map((ymd, index) => (holidays.includes(ymd) ? { col: LABOR_DATE_START_COL + index, ymd } : null))
     .filter((item): item is { col: number; ymd: string } => Boolean(item));
 
+  const directHours =
+    name === ESTIMATE_XLSX_SHEETS.direct
+      ? writeDirectPhaseHourLabels(cells, phaseBand.phaseBar, chipBlocks)
+      : { labels: [], merges: [] };
+
   return {
     name,
     cells,
@@ -1745,7 +1779,7 @@ function buildCrewSheet(
     laborBlocks,
     spacerRows,
     phaseBar: phaseBand.phaseBar,
-    phaseChips: writePhaseHourChips(cells, phaseBand.phaseBar, chipBlocks),
+    directPhaseLabels: directHours.labels.length ? directHours.labels : undefined,
     billAs: showBillAs
       ? laborBlocks.map((block) => ({
           labelRow: block.start + LABOR_ST_OFFSET,
@@ -1757,6 +1791,7 @@ function buildCrewSheet(
     merges: [
       ...headerTitleMerges(colLetter(LABOR_DATE_START_COL - 1)),
       ...phaseBand.merges,
+      ...directHours.merges,
       // Full title→PD range: HC/HPS sit between the summary and ST/OT/DT/PD rows.
       // Support splits B: Position (title–HPS) + Bill as value (OT–PD).
       ...laborBlockVoidMerges(laborBlocks, { billAs: showBillAs }),

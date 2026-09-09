@@ -215,7 +215,7 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
         i += 2;
         continue;
       }
-      if ("=<>+-*/".includes(ch)) {
+      if ("=<>+-*/&".includes(ch)) {
         tokens.push({ kind: "op", value: ch });
         i += 1;
         continue;
@@ -330,6 +330,16 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
           const utc = Date.UTC(1899, 11, 30) + serial * 86400000;
           return new Date(utc).getUTCDay() + 1;
         }
+        if (tok.value === "CHAR") return String.fromCharCode(asNumber(args[0]));
+        if (tok.value === "TEXT") {
+          const n = asNumber(args[0]);
+          const fmt = String(isRange(args[1]) ? "" : (args[1] ?? ""));
+          if (fmt === "#,##0") return Math.round(n).toLocaleString("en-US");
+          if (fmt === "#,##0.00") {
+            return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          }
+          return String(n);
+        }
         return 0;
       }
       if (tok.kind === "op" && tok.value === "-") return -asNumber(parsePrimary());
@@ -365,12 +375,29 @@ export function evaluateWorkbook(sheets: WorkbookSheet[]) {
       return left;
     }
 
-    function parseCompare(): EvalValue {
+    function concatText(value: EvalValue): string {
+      if (isRange(value)) return "";
+      if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+      return String(value ?? "");
+    }
+
+    function parseConcat(): EvalValue {
       let left = parseAdd();
+      let op = takeOp();
+      while (op === "&") {
+        take();
+        left = `${concatText(left)}${concatText(parseAdd())}`;
+        op = takeOp();
+      }
+      return left;
+    }
+
+    function parseCompare(): EvalValue {
+      let left = parseConcat();
       let op = takeOp();
       while (op && ["=", "<>", "<", ">", "<=", ">="].includes(op)) {
         take();
-        const right = parseAdd();
+        const right = parseConcat();
         if (op === "=") {
           if (left === right) left = true;
           else if (isNumericLike(left) && isNumericLike(right)) left = asNumber(left) === asNumber(right);
