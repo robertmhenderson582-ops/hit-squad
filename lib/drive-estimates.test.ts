@@ -1110,6 +1110,85 @@ describe("drive estimate upsert", () => {
     assert.equal(freezeWritten.updatedAt, 400);
   });
 
+  it("refuses a broken Rodeo-like first create and writes a good Family A seed", async () => {
+    const { rodeoU110FilledSnapshot, RODEO_U110_VAULT_FILE } = await import("./madison-u110.ts");
+    const { rodeoU250FilledSnapshot, RODEO_U250_VAULT_FILE } = await import("./madison-u250.ts");
+    const { PACK_INTEGRITY_ERROR_PREFIX } = await import("./pack-integrity.ts");
+    const dropRate = (rows: unknown[] | undefined) =>
+      (rows ?? []).map((row) => {
+        if (!row || typeof row !== "object") return row;
+        const next = { ...(row as Record<string, unknown>) };
+        delete next.bookRate;
+        return next;
+      });
+    const good = rodeoU110FilledSnapshot({
+      createdAt: 9_000,
+      updatedAt: 9_001,
+      ownerEmail: "robertmhenderson582@gmail.com",
+    });
+    const created = await upsertEstimateInDrive(memoryDrive(), good, "folder");
+    assert.equal(created.name, RODEO_U110_VAULT_FILE);
+
+    const u250 = await upsertEstimateInDrive(
+      memoryDrive(),
+      rodeoU250FilledSnapshot({
+        createdAt: 9_000,
+        updatedAt: 9_001,
+        ownerEmail: "robertmhenderson582@gmail.com",
+      }),
+      "folder",
+    );
+    assert.equal(u250.name, RODEO_U250_VAULT_FILE);
+
+    const crew = good.crew as {
+      staff?: unknown[];
+      generalForeman?: unknown[];
+      foreman?: unknown[];
+      direct?: unknown[];
+      support?: unknown[];
+    };
+    const other = good.otherCost as { misc?: Array<Record<string, unknown>> };
+    const broken = {
+      ...good,
+      crew: {
+        ...crew,
+        staff: dropRate(crew.staff),
+        generalForeman: dropRate(crew.generalForeman),
+        foreman: dropRate(crew.foreman),
+        direct: dropRate(crew.direct),
+        support: dropRate(crew.support),
+      },
+      otherCost: {
+        ...other,
+        misc: (other.misc ?? []).map((row) => {
+          const next = { ...row };
+          delete next.bookPriced;
+          return next;
+        }),
+      },
+    };
+    const drive = memoryDrive();
+    await assert.rejects(
+      () => upsertEstimateInDrive(drive, broken, "folder"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.message.startsWith(PACK_INTEGRITY_ERROR_PREFIX), true);
+        assert.match(error.message, /Rodeo U110 desk \$815,?419(?:\.38)? ≠ locked \$5,?247,?587/);
+        return true;
+      },
+    );
+    assert.equal(drive.files.size, 0);
+    await assert.rejects(
+      () => overwriteEstimateInDrive(drive, broken, "folder"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /Rodeo U110 desk \$815,?419(?:\.38)? ≠ locked \$5,?247,?587/);
+        return true;
+      },
+    );
+    assert.equal(drive.files.size, 0);
+  });
+
   it("pins Aromatics writes to the known file id instead of minting a stub", async () => {
     const drive = memoryDrive();
     const packId = "new-mtj7bvtk-akmei";

@@ -41,20 +41,24 @@ import {
   upsertEstimateInDrive,
   type DriveAdapter,
 } from "./drive-estimates.ts";
-import { familyAVaultWriteError } from "./family-a-vault-write.ts";
+import { packBaselineMoneyWriteError, packBaselineWriteError } from "./family-a-vault-write.ts";
 
 export { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./handoff.ts";
 
 /** Map Drive / integrity throws to a banner the desk can actually act on. */
-export function vaultWriteUserError(error: unknown): { status: number; error: string } {
+export function vaultWriteUserError(error: unknown): { status: number; error: string; skipped?: "integrity" } {
   if (error instanceof Error && error.message === "PACK_OWNED_ELSEWHERE") {
     return { status: 404, error: "That package is not on this desk." };
   }
   if (error instanceof Error && error.message === "AROMATICS_SEED_SMASH") {
-    return { status: 409, error: "Demo seed clock cannot overwrite a live schedule." };
+    return { status: 409, error: "Demo seed clock cannot overwrite a live schedule.", skipped: "integrity" };
   }
   if (error instanceof Error && error.message.startsWith(PACK_INTEGRITY_ERROR_PREFIX)) {
-    return { status: 409, error: error.message.slice(PACK_INTEGRITY_ERROR_PREFIX.length) };
+    return {
+      status: 409,
+      error: error.message.slice(PACK_INTEGRITY_ERROR_PREFIX.length),
+      skipped: "integrity",
+    };
   }
   if (error instanceof DriveApiError) {
     if (error.status === 401) {
@@ -176,9 +180,15 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
     archived: parsed.pack.archived,
     updatedAt: parsed.pack.updatedAt || Date.now(),
   });
-  const familyAFault = familyAVaultWriteError(pack);
-  if (familyAFault) {
-    return { ok: false as const, status: 409, error: familyAFault };
+  const writeDecision = decidePackWrite(pack, claimed);
+  if (writeDecision.action === "refuse") {
+    return { ok: false as const, status: 409, error: writeDecision.reason, skipped: "integrity" as const };
+  }
+  if (writeDecision.action === "accept") {
+    const baselineFault = claimed ? packBaselineMoneyWriteError(pack) : packBaselineWriteError(pack);
+    if (baselineFault) {
+      return { ok: false as const, status: 409, error: baselineFault, skipped: "integrity" as const };
+    }
   }
   if (!drive.configured) {
     return { ok: true as const, stored: false, store: "unconfigured" as const, pack };
@@ -187,7 +197,12 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
     await upsertEstimateInDrive(drive, pack);
   } catch (error) {
     const mapped = vaultWriteUserError(error);
-    return { ok: false as const, status: mapped.status, error: mapped.error };
+    return {
+      ok: false as const,
+      status: mapped.status,
+      error: mapped.error,
+      ...(mapped.skipped ? { skipped: mapped.skipped } : {}),
+    };
   }
   return { ok: true as const, stored: true, store: "drive" as const, pack };
 }

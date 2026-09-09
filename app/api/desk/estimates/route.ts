@@ -30,7 +30,9 @@ export async function PUT(request: Request) {
   try {
     const result = await upsertVisiblePack(user, body.pack ?? body);
     if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: result.status });
+      const body: { error: string; skipped?: "integrity" } = { error: result.error };
+      if ("skipped" in result && result.skipped === "integrity") body.skipped = "integrity";
+      return NextResponse.json(body, { status: result.status });
     }
     const payload: { ok: true; stored: boolean; pack: typeof result.pack; store?: string } = {
       ok: true,
@@ -41,6 +43,8 @@ export async function PUT(request: Request) {
     return NextResponse.json(payload);
   } catch (error) {
     const mapped = vaultWriteUserError(error);
-    return NextResponse.json({ error: mapped.error }, { status: mapped.status });
+    const body: { error: string; skipped?: "integrity" } = { error: mapped.error };
+    if (mapped.skipped) body.skipped = mapped.skipped;
+    return NextResponse.json(body, { status: mapped.status });
   }
 }

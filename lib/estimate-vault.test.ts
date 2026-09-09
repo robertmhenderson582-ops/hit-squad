@@ -829,6 +829,7 @@ describe("estimate vault service", () => {
     assert.equal(refused.ok, false);
     if (!refused.ok) {
       assert.equal(refused.status, 409);
+      assert.equal("skipped" in refused && refused.skipped, "integrity");
       assert.match(refused.error || "", /Rodeo U110 desk \$815,?419(?:\.38)? ≠ locked \$5,?247,?587/);
     }
 

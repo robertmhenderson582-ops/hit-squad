@@ -140,8 +140,34 @@ describe("local transfer commit", () => {
     try {
       const result = await flushVaultUpsert(filled.packId, store);
       assert.equal(result.ok, false);
+      assert.equal("skipped" in result && result.skipped, "integrity");
       assert.match("error" in result ? result.error || "" : "", /Rodeo U110 desk \$815,?419(?:\.38)? ≠ locked \$5,?247,?587/);
       assert.equal(hits, 0);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("flushes a good Family A U110 seed to Drive", async () => {
+    resetVaultHydrateForTests();
+    const { rodeoU110FilledSnapshot } = await import("./madison-u110.ts");
+    const store = memoryStore();
+    applyPackToStore(store, rodeoU110FilledSnapshot({ createdAt: 9_000, updatedAt: 9_001 }));
+    let hits = 0;
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      hits += 1;
+      return new Response(JSON.stringify({ ok: true, stored: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      const result = await flushVaultUpsert("new-u11026-rodeo", store);
+      assert.equal(result.ok, true);
+      assert.equal("skipped" in result && result.skipped, false);
+      assert.equal(hits, 1);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();
@@ -1199,17 +1225,18 @@ describe("local transfer commit", () => {
   it("collects equipment, sub, and otherCost on upsert and a failed Drive write errors", async () => {
     resetVaultHydrateForTests();
     const store = memoryStore();
-    const packId = "new-mtj7bvtk-akmei";
+    const packId = "new-cat2pit";
     applyPackToStore(store, {
       packId,
       key: `new:${packId}`,
-      title: "2027 Aromatics Turnaround",
+      title: "Cat 2 Pit Stop",
       client: "Phillips 66",
       site: "Wood River — Roxana, IL",
       siteId: "site-madison",
       createdAt: 1,
       updatedAt: 2,
       ownerEmail: OWNER_LOGIN_EMAIL,
+      schedule: { projectStart: "2026-09-01", phases: [{ id: "pre", on: true, start: "2026-09-01", stop: "2026-09-03" }] },
       equipment: { largeTools: [{ id: "lt-1", itemId: "wet:8:truck-crew", qty: 1 }], thirdParty: [] },
       otherCost: { travel: [{ id: "travel-staff", travelers: 39, miles: 1700, perMile: 0.76 }], misc: [{ id: "mc-1", item: "Alloy rod", qty: 65, each: 1000 }] },
       subcontractor: { cards: [{ id: "sc-1", vendor: "Hartford" }] },
@@ -1536,6 +1563,7 @@ describe("local transfer commit", () => {
   it("keeps a first-pass boot flush off the banner unless integrity or the retry still fails", () => {
     const src = readFileSync(fileURLToPath(new URL("../components/EstimatePackage.tsx", import.meta.url)), "utf8");
     assert.match(src, /isVaultIntegrityError/);
+    assert.match(src, /skipped === "integrity"/);
     assert.match(src, /isVaultIntegrityError\(first\.error/);
     assert.match(src, /applyVaultFlushResult\(retry, \{ force: true \}\)/);
     assert.match(src, /reportVaultErrors/);
