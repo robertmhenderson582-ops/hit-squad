@@ -254,10 +254,11 @@ export function EstimatePackageProvider({
     const packId = packIdFromStoreKey(estimateKey);
     const hasLocal = Boolean(packId && findLocalPack(packId));
     const localSchedule = readSchedule(estimateKey);
-    const seedPendingVault =
-      Boolean(packId) &&
-      (packStateLooksSmashed(packId, localSchedule, readCrew(estimateKey), findLocalPack(packId)?.title) ||
-        (isDefaultSeedSchedule(localSchedule) && crewHasRows(readCrew(estimateKey))));
+    const seedPendingVault = Boolean(
+      packId &&
+        (packStateLooksSmashed(packId, localSchedule, readCrew(estimateKey), findLocalPack(packId)?.title) ||
+          (isDefaultSeedSchedule(localSchedule) && crewHasRows(readCrew(estimateKey)))),
+    );
     const paintFromLocal = () => {
       if (packId && isBoiler17PackId(packId) && typeof window !== "undefined") {
         seedBoiler17LocalDefaults(window.localStorage, packId);
