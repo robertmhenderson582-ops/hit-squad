@@ -283,6 +283,22 @@ describe("owner View as desk scope", () => {
     const lens = deskScopeUser(owner, extra.id, null, [extra]);
     assert.equal(lens.email, extra.email);
     assert.equal(lens.name, extra.name);
+    assert.equal(lens.role, "tester");
     assert.equal(deskScopeUser(joseph, extra.id, null, [extra]).email, joseph.email);
+  });
+
+  it("views as a President vault seat with the President role", () => {
+    const freddy = {
+      id: "custom-freddy",
+      email: "president.example@example.com",
+      name: "Freddy Grimland",
+      role: "president" as const,
+    };
+    assert.equal(viewAsSeatFromValue(freddy.id), freddy.id);
+    const lens = deskScopeUser(owner, freddy.id, null, [freddy]);
+    assert.equal(lens.email, freddy.email);
+    assert.equal(lens.name, freddy.name);
+    assert.equal(lens.role, "president");
+    assert.equal(deskScopeUser(joseph, freddy.id, null, [freddy]).email, joseph.email);
   });
 });

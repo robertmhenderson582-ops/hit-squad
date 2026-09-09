@@ -2,21 +2,21 @@ import { viewAsSeatFromRequest, deskScopeUser } from "./desk-scope.ts";
 import { hydrateSeatStore, listSeatRows } from "./users.ts";
 import type { PublicUser } from "./types.ts";
 
-async function testerPeople() {
+async function deskLensPeople() {
   try {
     await hydrateSeatStore();
-    return (await listSeatRows()).filter((row) => row.role === "tester");
+    return (await listSeatRows()).filter((row) => row.role === "tester" || row.role === "president");
   } catch {
     return [];
   }
 }
 
 export async function scopedDeskUser(session: PublicUser, request: Request): Promise<PublicUser> {
-  return deskScopeUser(session, viewAsSeatFromRequest(request), null, await testerPeople());
+  return deskScopeUser(session, viewAsSeatFromRequest(request), null, await deskLensPeople());
 }
 
 export async function hydratedHandoffExtras() {
-  return (await testerPeople()).map((row) => ({
+  return (await deskLensPeople()).map((row) => ({
     name: row.name,
     email: row.email,
     companyId: row.companyId,

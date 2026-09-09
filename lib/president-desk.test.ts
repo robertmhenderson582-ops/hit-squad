@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { canUseInbox } from "./inbox-circle.ts";
+import { lensPeopleFromSeats, peopleByLane, peopleVisibleTo } from "./desk-people.ts";
 import {
   canArchiveDeleteJobs,
   canSeeHitSquadSeats,
@@ -10,6 +11,7 @@ import {
   hasBuildDesk,
   hasWorkingDesk,
   isPresident,
+  lensUser,
   pageAllowedForSeat,
 } from "./desk-role.ts";
 import { OWNER_ONLY_PRIVILEGES } from "./privileges.ts";
@@ -48,6 +50,9 @@ describe("Freddy President seat", () => {
     const page = readFileSync(fileURLToPath(new URL("../app/settings/privileges/page.tsx", import.meta.url)), "utf8");
     const api = readFileSync(fileURLToPath(new URL("../app/api/desk/privileges/route.ts", import.meta.url)), "utf8");
     const create = readFileSync(fileURLToPath(new URL("./users.ts", import.meta.url)), "utf8");
+    const lensPeople = readFileSync(fileURLToPath(new URL("./desk-people.ts", import.meta.url)), "utf8");
+    const scope = readFileSync(fileURLToPath(new URL("./desk-scope-server.ts", import.meta.url)), "utf8");
+    const viewAs = readFileSync(fileURLToPath(new URL("../components/ViewAsDesk.tsx", import.meta.url)), "utf8");
     assert.match(shell, /href: "\/settings\/privileges"/);
     assert.match(shell, /ownerOnly: true/);
     assert.match(page, /SettingsGate ownerOnly/);
@@ -63,5 +68,32 @@ describe("Freddy President seat", () => {
     assert.match(create, /"madison"/);
     assert.doesNotMatch(create, /madisonltd\.com/);
     assert.doesNotMatch(create, /freddy@/i);
+    assert.match(lensPeople, /role === "president"/);
+    assert.match(scope, /role === "president"/);
+    assert.match(viewAs, /peopleByLane\(desk\.people\)/);
+    assert.doesNotMatch(lensPeople, /Freddy\.Grimland@outlook\.com/i);
+    assert.doesNotMatch(scope, /Freddy\.Grimland@outlook\.com/i);
+  });
+
+  it("is a View as person on the company lane without a seeded email", () => {
+    const owner = {
+      id: "owner-robert-henderson",
+      email: "robertmhenderson582@gmail.com",
+      name: "Robert Henderson",
+      role: "owner" as const,
+    };
+    const people = lensPeopleFromSeats([
+      { ...president, companyId: "madison" },
+      { id: "tester-nathan", email: "nathanboyte@gmail.com", name: "Nathan Boyte", role: "tester", companyId: "madison" },
+    ]);
+    assert.equal(people.some((row) => row.email === president.email && row.role === "president"), true);
+    assert.equal(peopleByLane(people).company.some((row) => row.email === president.email), true);
+    assert.equal(peopleVisibleTo(owner, people).some((row) => row.id === president.id), true);
+    const lens = lensUser(owner, president.id, null, people);
+    assert.equal(lens?.role, "president");
+    assert.equal(hasWorkingDesk(lens), true);
+    assert.equal(hasBuildDesk(lens), false);
+    assert.equal(canUseViewAs(lens), false);
+    assert.equal(canSeeHitSquadSeats(lens), false);
   });
 });

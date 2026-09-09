@@ -471,7 +471,12 @@ test("owner can add a President seat without inventing an email", async () => {
 
   const rows = await listSeatRows();
   assert.equal(rows.some((row) => row.email === email && row.role === "president" && row.companyId === "madison"), true);
-  const people = peopleVisibleTo(user, lensPeopleFromSeats(rows));
+  const ownerPeople = lensPeopleFromSeats(rows);
+  assert.equal(
+    ownerPeople.some((row) => row.email === email && row.role === "president" && row.companyId === "madison"),
+    true,
+  );
+  const people = peopleVisibleTo(user, ownerPeople);
   assert.equal(people.some((row) => row.email === "nathanboyte@gmail.com"), true);
   assert.equal(people.some((row) => row.email === SHANE_EMAIL), false);
 
