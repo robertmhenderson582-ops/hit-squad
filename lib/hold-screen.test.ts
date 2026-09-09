@@ -40,6 +40,8 @@ describe("hold screen lock", () => {
     assert.match(pack, /ready: true/);
     assert.match(jobs, /HoldScreen/);
     assert.match(jobs, /REFRESHING JOBS/);
+    assert.match(jobs, /JOBS_REFRESH_DEADLINE_MS/);
+    assert.match(jobs, /finally \{\s*clearHold\(\);/);
     assert.match(pack, /findLocalPack/);
     assert.match(pack, /hydrateOpenPack/);
     assert.match(pack, /requestAnimationFrame/);

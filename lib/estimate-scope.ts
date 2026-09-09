@@ -1,10 +1,11 @@
-import { companyScopeFor, type CompanyScope } from "./companies.ts";
+import { companyScopeFor, inferCompanyIdFromParts, type CompanyScope } from "./companies.ts";
 import { dummyPacksForUser, mergeDummyPacks } from "./cbi-dummy.ts";
-import { hasWorkingDesk, isOwner, isTester } from "./desk-role.ts";
+import { hasWorkingDesk, isOwner, isPresident, isTester } from "./desk-role.ts";
 import { hisMatchForPack, mergeHisWoodRiverCards, NATHAN_DESK_EMAIL, shouldPaintHisCards } from "./his-wood-river.ts";
 import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
+import { isRodeoMonroeWakePack } from "./rodeo-monroe-wake.ts";
 import type { PublicUser } from "./types.ts";
 
 export type ScopeUser = Pick<PublicUser, "email" | "role">;
@@ -50,7 +51,23 @@ export function packOwnerEmailForWrite(
   return ownerVaultEmail();
 }
 
-export type ScopedPack = { ownerEmail?: string; sharedWith?: string[]; transferredFrom?: string };
+export type ScopedPack = {
+  ownerEmail?: string;
+  sharedWith?: string[];
+  transferredFrom?: string;
+  packId?: string;
+  title?: string;
+  client?: string;
+  site?: string;
+  siteId?: string;
+};
+
+/** Madison-operated identity — HIS / wake / P66-Yates-Monroe plants. Not Hit Squad product work. */
+export function isMadisonOperatedPack(pack?: ScopedPack | null): boolean {
+  if (!pack) return false;
+  if (hisMatchForPack(pack) || isRodeoMonroeWakePack(pack)) return true;
+  return inferCompanyIdFromParts(pack.client, pack.site, pack.title, pack.siteId) === "madison";
+}
 
 export function packSharedEmails(pack: { sharedWith?: string[] }) {
   return normalizeEmails(pack.sharedWith);
@@ -77,6 +94,12 @@ function transferredFromOwner(user: ScopeUser, pack: ScopedPack) {
 
 /** Owner Company cards. Does not grant leftover write — use packVisibleTo for writes. */
 export function packListedOnOwnerDesk(user: ScopeUser, pack: ScopedPack) {
+  if (isPresident(user)) {
+    if (isMadisonOperatedPack(pack)) return true;
+    const ownerEmail = packOwnerKey(pack.ownerEmail);
+    const email = user.email.trim().toLowerCase();
+    return ownerEmail === email || packSharedEmails(pack).includes(email);
+  }
   if (packVisibleTo(user, pack)) return true;
   return isOwner(user) && transferredFromOwner(user, pack);
 }
@@ -120,6 +143,10 @@ export function localPackVisibleTo(user: ScopeUser, pack: ScopedPack) {
     return Boolean(ownerEmail) && (ownerEmail === email || packSharedEmails(pack).includes(email));
   }
   if (!hasWorkingDesk(user)) return false;
+  if (isPresident(user)) {
+    if (isMadisonOperatedPack(pack)) return true;
+    return Boolean(ownerEmail) && (ownerEmail === email || packSharedEmails(pack).includes(email));
+  }
   if (!ownerEmail) return true;
   return isOwnerVaultEmail(pack.ownerEmail) || ownerEmail === email || packSharedEmails(pack).includes(email);
 }

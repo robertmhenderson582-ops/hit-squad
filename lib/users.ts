@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import bcrypt from "bcryptjs";
-import { assignedCompany, isKnownCompany, peekAssignedCompany, setAssignedCompany } from "./companies-store.ts";
+import { assignedCompanyForUser, isKnownCompany, peekAssignedCompanyForUser, setAssignedCompany } from "./companies-store.ts";
 import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
 import { peekPrivileges } from "./privileges-store.ts";
 import {
@@ -1020,7 +1020,8 @@ export async function listSeatRows(options?: {
     rows.map(async (user) => ({
       ...toPublicUser(user),
       passwordIssued: Boolean(user.passwordHash),
-      companyId: options?.hydrate === false ? peekAssignedCompany(user.email) : await assignedCompany(user.email),
+      companyId:
+        options?.hydrate === false ? peekAssignedCompanyForUser(user) : await assignedCompanyForUser(user),
     })),
   );
 }

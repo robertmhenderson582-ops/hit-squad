@@ -344,6 +344,8 @@ export function companyIdForJob(
     return assignedCompanyId(scope);
   }
   if (canSeeCompany(scope, inferred)) return inferred;
+  // President stays on Madison work. Do not park Hit Squad-only cards on his tree.
+  if (scope?.role === "president") return inferred;
   return assignedCompanyId(scope);
 }
 

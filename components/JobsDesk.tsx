@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HoldScreen } from "@/components/HoldScreen";
 import { JobMenuActions } from "@/components/JobMenuActions";
 import { JobScopedTools } from "@/components/JobScopedTools";
@@ -15,6 +15,7 @@ import { estimateForJob } from "@/lib/estimate-open";
 import { packsForViewedDesk, snapshotOwnerDesk } from "@/lib/lens-packs";
 import { viewAsInit } from "@/lib/desk-scope";
 import { deskFetch, flushLocalPacksToVault, hydrateFromVault } from "@/lib/estimate-vault-client";
+import { JOBS_REFRESH_DEADLINE_MS } from "@/lib/session-fetch";
 import { isHisProtectedMenuItem, shouldPaintHisCards } from "@/lib/his-wood-river";
 import { isActiveMenuItem, menuForViewedDesk, menuStatus } from "@/lib/job-menu";
 import { catalogSites } from "@/lib/desk-data";
@@ -40,45 +41,66 @@ export function JobsDesk() {
   const [packTick, setPackTick] = useState(0);
   const [openCompanyId, setOpenCompanyId] = useState<string | null>(null);
   const [hydrating, setHydrating] = useState(true);
+  const lensRef = useRef(lens);
+  lensRef.current = lens;
 
   useEffect(() => {
-    snapshotOwnerDesk(lens);
-  }, [lens, viewingAs, packTick]);
+    snapshotOwnerDesk(lensRef.current);
+  }, [lensKey, viewingAs, packTick]);
 
   useEffect(() => {
-    if (!lensReady) return;
+    if (!lensReady) {
+      setHydrating(false);
+      return;
+    }
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     setHydrating(true);
+    const clearHold = () => {
+      if (!cancelled) setHydrating(false);
+    };
+    timer = setTimeout(clearHold, JOBS_REFRESH_DEADLINE_MS);
     (async () => {
-      const jobsReq = deskFetch("/api/desk/jobs", viewAsInit(seat));
-      void hydrateFromVault(undefined, { viewAs: seat })
-        .then(async () => {
-          if (cancelled) return;
-          await flushLocalPacksToVault(undefined, { viewAs: seat });
-          snapshotOwnerDesk(lens);
-          if (!cancelled) setPackTick((value) => value + 1);
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          if (!cancelled) setHydrating(false);
-        });
-      const response = await jobsReq;
-      const data = await response.json();
-      if (cancelled) return;
-      if (!response.ok) {
-        setError(data.error || "Jobs stayed on this desk.");
-        return;
+      try {
+        const jobsReq = deskFetch("/api/desk/jobs", viewAsInit(seat));
+        void hydrateFromVault(undefined, { viewAs: seat })
+          .then(async () => {
+            if (cancelled) return;
+            await flushLocalPacksToVault(undefined, { viewAs: seat });
+            snapshotOwnerDesk(lensRef.current);
+            if (!cancelled) setPackTick((value) => value + 1);
+          })
+          .catch(() => undefined)
+          .finally(clearHold);
+        const response = await jobsReq;
+        const data = await response.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!response.ok) {
+          setError((data as { error?: string }).error || "Jobs stayed on this desk.");
+          return;
+        }
+        const incoming = (((data as { desk?: { jobs?: JobRecord[] } }).desk?.jobs as JobRecord[]) ?? []);
+        const reportedCompany =
+          typeof (data as { companyId?: string }).companyId === "string"
+            ? ((data as { companyId: string }).companyId as CompanyId)
+            : undefined;
+        const nextScope = companyScopeFor(lensRef.current, reportedCompany);
+        setServerJobs(catalogSeedsAllowedOnDesk(nextScope, seat) ? incoming : omitCatalogSeedJobs(incoming));
+        if (reportedCompany) setCompanyId(reportedCompany);
+        if (Array.isArray((data as { divisions?: Division[] }).divisions)) {
+          setDivisions((data as { divisions: Division[] }).divisions);
+        }
+      } catch {
+        if (!cancelled) setError("Jobs stayed on this desk.");
+      } finally {
+        clearHold();
       }
-      const incoming = ((data.desk?.jobs as JobRecord[]) ?? []);
-      const nextScope = companyScopeFor(lens, typeof data.companyId === "string" ? (data.companyId as CompanyId) : companyId);
-      setServerJobs(catalogSeedsAllowedOnDesk(nextScope, seat) ? incoming : omitCatalogSeedJobs(incoming));
-      if (typeof data.companyId === "string") setCompanyId(data.companyId as CompanyId);
-      if (Array.isArray(data.divisions)) setDivisions(data.divisions as Division[]);
     })();
     return () => {
       cancelled = true;
+      if (timer !== undefined) clearTimeout(timer);
     };
-  }, [lensKey, lensReady, seat, tick, viewingAs, lens]);
+  }, [lensKey, lensReady, seat, tick, viewingAs]);
 
   const closed = readClosed();
   const scope = companyScopeFor(lens, companyId);

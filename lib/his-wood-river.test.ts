@@ -225,6 +225,7 @@ test("purged leftover T&M never matches a HIS file", () => {
   assert.equal(hisMatchForPack({ packId: "new-mtkigb-james", title: "New Turnaround estimate", ownerEmail: JAMES_EMAIL }), null);
   assert.equal(shouldPaintHisCards({ email: "Robert Henderson" }), true);
   assert.equal(shouldPaintHisCards({ email: owner.email }), true);
+  assert.equal(shouldPaintHisCards({ email: "president.example@example.com", role: "president" }), true);
 });
 
 test("leftover T&M occupying the slot is dropped and Aromatics and CAT stay on Nathan's desk", () => {

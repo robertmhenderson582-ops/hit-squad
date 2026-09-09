@@ -231,6 +231,7 @@ export function isHisProtectedMenuItem(item?: { id?: string; packId?: string; ti
 export function shouldPaintHisCards(user?: { email?: string; role?: string } | null) {
   if (!user) return true;
   if (user.role === "owner" || isOwnerIdentity(user.email)) return true;
+  if (user.role === "president") return true;
   return canonicalEmail(user.email) === NATHAN_DESK_EMAIL;
 }
 

@@ -16,8 +16,7 @@ import { cookieValue } from "@/lib/http";
 export const dynamic = "force-dynamic";
 
 async function scopeFor(user: { email: string; role: string }) {
-  const companyId = await assignedCompany(user.email);
-  return companyScopeFor(user, companyId);
+  return companyScopeFor(user, await assignedCompany(user.email));
 }
 
 export async function GET(request: Request) {

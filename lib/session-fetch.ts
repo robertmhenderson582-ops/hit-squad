@@ -1,6 +1,9 @@
 export const SESSION_LOAD_DEADLINE_MS = 4000;
 export const AUTH_REQUEST_DEADLINE_MS = 8000;
 export const AUTH_TIMEOUT_ERROR = "Sign-in timed out. Try again.";
+/** Jobs overlay must clear even when vault / Drive list hangs. */
+export const JOBS_REFRESH_DEADLINE_MS = 8000;
+export const JOBS_REFRESH_TIMEOUT_ERROR = "Jobs refresh timed out.";
 
 function isDeadlineAbort(error: unknown) {
   const name = error instanceof Error ? error.name : "";

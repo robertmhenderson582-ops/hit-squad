@@ -13,6 +13,7 @@ import {
   isRetiredPeerCompanyName,
   isStandaloneId,
   mergeCompanies,
+  companyIdForUser,
   seedCompanyForEmail,
   validateCompanyLogoInput,
   canSeeCompany,
@@ -187,6 +188,15 @@ export async function assignedCompany(email: string): Promise<CompanyId> {
 export function peekAssignedCompany(email: string): CompanyId {
   const key = email.trim().toLowerCase();
   return readCache().assignments[key] ?? seedCompanyForEmail(key);
+}
+
+/** President is Madison even when the seed map / leftover assignment says Hit Squad. */
+export async function assignedCompanyForUser(user: { email: string; role?: string }): Promise<CompanyId> {
+  return companyIdForUser(user, await assignedCompany(user.email));
+}
+
+export function peekAssignedCompanyForUser(user: { email: string; role?: string }): CompanyId {
+  return companyIdForUser(user, peekAssignedCompany(user.email));
 }
 
 /** Assigned companies for this email only — never the owner's full catalog. */
