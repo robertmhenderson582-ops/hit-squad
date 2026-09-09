@@ -60,10 +60,12 @@
  * phase-schedule (start/stop per phase) — not hard-coded sample dates.
  * This Look pass paints that bar as a view only. Adjustable Job setup card
  * + Position / hour / Bill as import ships on this compile (excel-ripple.ts).
- * Direct craft sheet only: row-3 header labels roll live calendar ST+OT+DT
- * by craft abbreviation × Job setup phase (day and night on one line).
- * View of the live pack — import does not edit labels. Staff / Foremen /
- * Support stay chip-free. Not one D / N / C block per position.
+ * Direct craft sheet only: craft×phase hour stacks sit at each phase’s
+ * start column, on the row immediately above the blue/red/green phase bar
+ * (not a teal header dump, not per-position Auto-row D/N/C chips).
+ * Live ST+OT+DT by craft abbreviation × Job setup phase, day + night.
+ * Import does not edit labels. Staff / Foremen / Support stay chip-free.
+ * Position blocks stay the 7-row HC/HPS/ST/OT/DT/PD craft shape.
  * Hidden _CrewRanges is a view of live pack CalendarRange stacks for create-new.
  * Import uses those ranges only when the daily HC/HPS/PD grid still matches.
  * Look sample xlsx files are stale chrome (no _CrewRanges). Fresh export always
@@ -215,8 +217,13 @@ export const LABOR_INSTRUMENT_LAST_COL = 9;
 export const LABOR_PHASE_ROW = 4;
 export const LABOR_PHASE_ROW_END = 5;
 export const LABOR_PHASE_LABEL = "Phase";
-/** Direct craft × phase hour strip — teal header above the phase name (calendar start). */
+/**
+ * Row immediately above the colored phase bar (row 4). Direct stacks live
+ * here at each phase’s start column — not a teal A3 dump, not on Auto rows.
+ */
 export const LABOR_PHASE_CHIP_ROW = 3;
+/** Short stack at the phase start (above the bar), not a full-phase banner. */
+export const DIRECT_PHASE_STACK_COLS = 2;
 /** Short phase names on Direct hour labels (Robert: PRE, Oil Out, …). */
 export const DIRECT_PHASE_LABELS: Record<PhaseId, string> = {
   pre: "PRE",
@@ -1497,15 +1504,12 @@ export function directCraftAbbrev(position: string): string | null {
 }
 
 function formatDirectPhaseHourLine(craft: string, phaseLabel: string, dayExpr: string, nightExpr: string): string {
-  const prefix = `${craft} ${phaseLabel} - `;
-  return [
-    `${excelTextLiteral(prefix)}&TEXT((${dayExpr})+(${nightExpr}),"#,##0")&${excelTextLiteral(" hrs. (")}`,
-    `TEXT(${dayExpr},"#,##0")&${excelTextLiteral(" day / ")}`,
-    `TEXT(${nightExpr},"#,##0")&${excelTextLiteral(" night)")}`,
-  ].join("&");
+  const title = `${excelTextLiteral(`${craft} ${phaseLabel} - `)}&TEXT((${dayExpr})+(${nightExpr}),"#,##0")&${excelTextLiteral(" hrs.")}`;
+  const split = `TEXT(${dayExpr},"#,##0")&${excelTextLiteral(" day / ")}&TEXT(${nightExpr},"#,##0")&${excelTextLiteral(" night")}`;
+  return `${title}&CHAR(10)&${split}`;
 }
 
-/** Direct-only header strip: one label per craft × phase, day + night, live ST+OT+DT. */
+/** Direct-only: stacked craft×phase hours at each phase start, above the color bar. */
 function writeDirectPhaseHourLabels(
   cells: SheetCell[],
   runs: NonNullable<WorkbookSheet["phaseBar"]>,
@@ -1538,14 +1542,16 @@ function writeDirectPhaseHourLabels(
       );
     });
     const ref = `${colLetter(run.startCol)}${LABOR_PHASE_CHIP_ROW}`;
+    const stackEndCol = Math.min(run.startCol + DIRECT_PHASE_STACK_COLS - 1, run.endCol);
     cells.push({ ref, type: "formula", value: lines.join("&CHAR(10)&") });
-    if (run.endCol > run.startCol) {
-      merges.push(`${ref}:${colLetter(run.endCol)}${LABOR_PHASE_CHIP_ROW}`);
+    if (stackEndCol > run.startCol) {
+      merges.push(`${ref}:${colLetter(stackEndCol)}${LABOR_PHASE_CHIP_ROW}`);
     }
     labels.push({
       row: LABOR_PHASE_CHIP_ROW,
       startCol: run.startCol,
       endCol: run.endCol,
+      stackEndCol,
       phaseId: run.phaseId,
       crafts: order.length,
     });

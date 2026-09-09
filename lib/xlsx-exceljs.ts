@@ -1103,7 +1103,7 @@ function applyLaborPhaseBar(ws: ExcelJS.Worksheet, sheet: WorkbookSheet, lastDat
   applyDirectPhaseLabels(ws, sheet);
 }
 
-/** Direct craft × phase hour labels on the teal header strip — locked view of live hours. */
+/** Direct craft × phase stacks at each phase start, immediately above the color bar. */
 function applyDirectPhaseLabels(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
   const labels = sheet.directPhaseLabels ?? [];
   if (!labels.length) return;
@@ -1111,17 +1111,18 @@ function applyDirectPhaseLabels(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
   for (const label of labels) {
     maxCrafts = Math.max(maxCrafts, label.crafts);
     const fillArgb = isPhaseId(label.phaseId) ? PHASE_TONE_FILLS[label.phaseId] : STEEL;
-    for (let col = label.startCol; col <= label.endCol; col += 1) {
+    const stackEnd = label.stackEndCol ?? label.startCol;
+    for (let col = label.startCol; col <= stackEnd; col += 1) {
       const cell = ws.getCell(label.row, col);
       cell.fill = solid(fillArgb);
       cell.font = { bold: true, name: "Calibri", size: 7, color: { argb: PHASE_TONE_BAND_INK } };
-      cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      cell.alignment = { horizontal: "left", vertical: "bottom", wrapText: true };
       cell.protection = { locked: true };
     }
   }
   const row = labels[0]?.row;
   if (row) {
-    const needed = Math.min(52, 11 * maxCrafts + 8);
+    const needed = Math.min(64, 14 * maxCrafts + 10);
     ws.getRow(row).height = Math.max(Number(ws.getRow(row).height) || 0, needed);
   }
 }

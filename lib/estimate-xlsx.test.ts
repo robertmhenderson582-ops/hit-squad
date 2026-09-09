@@ -3118,7 +3118,7 @@ describe("estimate excel export", () => {
       "A3:I3",
       "A4:I5",
       `J4:${lastDateCol}4`,
-      `J3:${lastDateCol}3`,
+      "J3:K3",
       ...laborBlockVoidMerges(direct.laborBlocks ?? []),
     ]);
     const support = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.support)!;
@@ -3342,7 +3342,7 @@ describe("estimate excel export", () => {
     assert.equal(buildEstimateWorkbook(base).some((sheet) => sheet.name === "Job setup"), true);
   });
 
-  it("rolls Direct craft hours by craft abbreviation × phase on the header, not per-position chips", async () => {
+  it("stacks Direct craft×phase hours at each phase start above the color bar, not on Auto rows", async () => {
     const weekday = {
       start: "2026-09-01",
       end: "2026-09-07",
@@ -3431,6 +3431,7 @@ describe("estimate excel export", () => {
     assert.equal(oilLabel?.type, "formula");
     assert.equal(directCells.get(`J${bmDay.title}`)?.type === "formula", false);
     assert.equal(directCells.get(`J${pfDay.title}`)?.type === "formula", false);
+    assert.equal(directCells.get(`P${LABOR_PHASE_CHIP_ROW}`)?.type === "formula", false);
     assert.match(String(preLabel?.value), /BM PRE -/);
     assert.match(String(preLabel?.value), /PF PRE -/);
     assert.match(String(oilLabel?.value), /BM Oil Out -/);
@@ -3441,7 +3442,14 @@ describe("estimate excel export", () => {
     assert.match(String(preLabel?.value), new RegExp(`SUM\\(J${bmNight.st}:K${bmNight.dt}\\)`));
     assert.match(String(oilLabel?.value), new RegExp(`SUM\\(L${bmDay.st}:P${bmDay.dt}\\)`));
     assert.ok(direct.merges?.includes(`J${LABOR_PHASE_CHIP_ROW}:K${LABOR_PHASE_CHIP_ROW}`));
-    assert.ok(direct.merges?.includes(`L${LABOR_PHASE_CHIP_ROW}:P${LABOR_PHASE_CHIP_ROW}`));
+    assert.ok(direct.merges?.includes(`L${LABOR_PHASE_CHIP_ROW}:M${LABOR_PHASE_CHIP_ROW}`));
+    assert.equal(direct.merges?.includes(`L${LABOR_PHASE_CHIP_ROW}:P${LABOR_PHASE_CHIP_ROW}`), false);
+    assert.equal(LABOR_BLOCK_HEIGHT, 7);
+    assert.equal(bmDay.pd - bmDay.title, 6);
+    assert.deepEqual(
+      [0, 1, 2, 3, 4, 5, 6].map((offset) => String(directCells.get(`E${bmDay.title + offset}`)?.value ?? "")),
+      [LABOR_CLOCK_AUTO, LABOR_HC_LABEL, LABOR_HPS_TYPE, "ST", "OT", "DT", LABOR_PD_TYPE],
+    );
     assert.deepEqual(
       direct.directPhaseLabels?.map((row) => row.phaseId),
       ["pre", "oil-out"],
@@ -3472,10 +3480,10 @@ describe("estimate excel export", () => {
     const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
     const preText = String(cellRaw(ESTIMATE_XLSX_SHEETS.direct, `J${LABOR_PHASE_CHIP_ROW}`));
     const oilText = String(cellRaw(ESTIMATE_XLSX_SHEETS.direct, `L${LABOR_PHASE_CHIP_ROW}`));
-    assert.match(preText, new RegExp(`BM PRE - ${fmt(bmPreDay + bmPreNight)} hrs\\. \\(${fmt(bmPreDay)} day / ${fmt(bmPreNight)} night\\)`));
-    assert.match(preText, new RegExp(`PF PRE - ${fmt(pfPreDay)} hrs\\. \\(${fmt(pfPreDay)} day / 0 night\\)`));
-    assert.match(oilText, new RegExp(`BM Oil Out - ${fmt(bmOilDay + bmOilNight)} hrs\\. \\(${fmt(bmOilDay)} day / ${fmt(bmOilNight)} night\\)`));
-    assert.match(oilText, new RegExp(`PF Oil Out - ${fmt(pfOilDay)} hrs\\. \\(${fmt(pfOilDay)} day / 0 night\\)`));
+    assert.match(preText, new RegExp(`BM PRE - ${fmt(bmPreDay + bmPreNight)} hrs\\.\\n${fmt(bmPreDay)} day / ${fmt(bmPreNight)} night`));
+    assert.match(preText, new RegExp(`PF PRE - ${fmt(pfPreDay)} hrs\\.\\n${fmt(pfPreDay)} day / 0 night`));
+    assert.match(oilText, new RegExp(`BM Oil Out - ${fmt(bmOilDay + bmOilNight)} hrs\\.\\n${fmt(bmOilDay)} day / ${fmt(bmOilNight)} night`));
+    assert.match(oilText, new RegExp(`PF Oil Out - ${fmt(pfOilDay)} hrs\\.\\n${fmt(pfOilDay)} day / 0 night`));
     assert.equal(bmPreDay + pfPreDay > 0, true);
     assert.equal(String(preText).includes("Lead Safety"), false);
 

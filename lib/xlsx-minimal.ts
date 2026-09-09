@@ -184,11 +184,12 @@ export type WorkbookSheet = {
   headerRows?: number[];
   /** Job setup phase runs on labor rows 4–5 (day-grid columns). */
   phaseBar?: Array<{ startCol: number; endCol: number; phaseId: string }>;
-  /** Direct craft sheet only: row-3 craft × phase hour labels (not per-position chips). */
+  /** Direct craft sheet only: phase-start stacks above the colored phase bar. */
   directPhaseLabels?: Array<{
     row: number;
     startCol: number;
     endCol: number;
+    stackEndCol: number;
     phaseId: string;
     crafts: number;
   }>;
