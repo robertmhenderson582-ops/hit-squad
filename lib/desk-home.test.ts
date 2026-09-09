@@ -89,8 +89,9 @@ describe("home doors", () => {
     assert.match(home, /deskFetch/);
     assert.match(home, /<DeskHero logo=\{companyDeskLogo\} \/>/);
     assert.equal(/Wage lookup|Rate builder|Rodeo|COMP catalogs/i.test(home), false);
-    assert.match(jobsApi, /companyDeskLogoForEmail/);
-    assert.match(jobsApi, /assignedCompaniesForEmail/);
+    assert.match(jobsApi, /assignedCompanyForUser/);
+    assert.match(jobsApi, /assignedCompaniesForId/);
+    assert.match(jobsApi, /companyDeskLogoSrc/);
     assert.match(jobsApi, /scopedDeskUser/);
     assert.match(jobsApi, /companyDeskLogo:/);
     assert.match(jobsApi, /companyName:/);
