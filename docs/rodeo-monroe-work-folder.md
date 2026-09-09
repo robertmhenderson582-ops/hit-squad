@@ -94,10 +94,11 @@ After wake seed `deskPackageTotal` matches Family A (`5247587` / `2470680`):
 
 1. Owner OAuth opens Rodeo U110 / U250 so persist fills the live pack from the fixtures.
 2. Confirm the Estimate Total rail equals the Family A lock (hours stay `26441` / `12881`).
-3. Save. `estimateFileName` mints in the Estimates room:
+3. Save. First write is Drive `createJson` (not PATCH). `estimateFileName` mints in the Estimates room:
    - U110 → `rodeo-rodeo-u110-2026-ta.json`
    - U250 → `rodeo-rodeo-u250-fall-2026.json`
-4. Service-account-only isolates cannot PATCH a missing file. Owner Save (or SA-upload of the filled snapshot after the desk total is honest) is the create path.
+4. A hydrated pack whose rail is other+markup only (`~$815k` / `~$340k`) is a **409** — banner shows `Rodeo U110 desk $… ≠ locked $5247587` (never “Could not store that package.”). Drive 401/403/404 say sign-in, Estimates-folder write, or missing folder.
+5. Service-account-only isolates cannot PATCH a missing file. Owner Save (or SA create of the filled snapshot after the desk total is honest) is the create path.
 
 Do not commit vault JSON or client workbooks. Fixtures stay the source of truth until those landing files exist on Drive.
 

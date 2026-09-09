@@ -414,6 +414,6 @@ export function persistRodeoU110Wake(store?: StorageLike | null) {
 export const RODEO_U110_VAULT_FILE = "rodeo-rodeo-u110-2026-ta.json";
 
 export const RODEO_U110_VAULT_APPLY =
-  "Owner OAuth vault write: open Rodeo U110 so wake seeds Family A hours × bookRate (desk total $5,247,587), then Save. Landing name: rodeo-rodeo-u110-2026-ta.json. No vault JSON on Drive yet — do not upload a seed whose desk total is other+markup only. Service-account-only isolates cannot PATCH a missing file. Do not commit the xlsx. Do not invent Family B workbook dollars.";
+  "Owner OAuth vault write: open Rodeo U110 so wake seeds Family A hours × bookRate (desk total $5,247,587), then Save. First Save createJson mints rodeo-rodeo-u110-2026-ta.json. A broken other+markup-only seed is a 409 with the locked-total reason — do not upload it. Service-account-only isolates cannot PATCH a missing file; create is the first-write path. Do not commit the xlsx. Do not invent Family B workbook dollars.";
 
 export { RODEO_U110_JOB_CODE, RODEO_U110_PACK_ID };

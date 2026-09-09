@@ -31,6 +31,7 @@ import {
 } from "./pack-integrity.ts";
 import {
   deleteEstimateInDrive,
+  DriveApiError,
   driveAdapter,
   driveStoreKind,
   listDrivePacks,
@@ -40,8 +41,48 @@ import {
   upsertEstimateInDrive,
   type DriveAdapter,
 } from "./drive-estimates.ts";
+import { familyAVaultWriteError } from "./family-a-vault-write.ts";
 
 export { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./handoff.ts";
+
+/** Map Drive / integrity throws to a banner the desk can actually act on. */
+export function vaultWriteUserError(error: unknown): { status: number; error: string } {
+  if (error instanceof Error && error.message === "PACK_OWNED_ELSEWHERE") {
+    return { status: 404, error: "That package is not on this desk." };
+  }
+  if (error instanceof Error && error.message === "AROMATICS_SEED_SMASH") {
+    return { status: 409, error: "Demo seed clock cannot overwrite a live schedule." };
+  }
+  if (error instanceof Error && error.message.startsWith(PACK_INTEGRITY_ERROR_PREFIX)) {
+    return { status: 409, error: error.message.slice(PACK_INTEGRITY_ERROR_PREFIX.length) };
+  }
+  if (error instanceof DriveApiError) {
+    if (error.status === 401) {
+      return {
+        status: 401,
+        error: "Drive sign-in expired. Sign in again so the first Save can create the vault file.",
+      };
+    }
+    if (error.status === 403) {
+      return {
+        status: 403,
+        error:
+          "Drive denied creating the vault file. Grant the service account write on the Estimates folder, or sign in with owner OAuth and Save again.",
+      };
+    }
+    if (error.status === 404) {
+      return {
+        status: 404,
+        error: "Estimates folder was not found. First Save cannot create the vault file until Drive is configured.",
+      };
+    }
+    return { status: 502, error: `Drive could not store that package (${error.status}).` };
+  }
+  if (error instanceof Error && /vault write not confirmed/i.test(error.message)) {
+    return { status: 502, error: "Drive did not confirm the vault file after write. Try Save again." };
+  }
+  return { status: 502, error: "Could not store that package." };
+}
 
 export function estimateVaultAdapter(adapter?: DriveAdapter) {
   return adapter ?? driveAdapter();
@@ -135,22 +176,18 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
     archived: parsed.pack.archived,
     updatedAt: parsed.pack.updatedAt || Date.now(),
   });
+  const familyAFault = familyAVaultWriteError(pack);
+  if (familyAFault) {
+    return { ok: false as const, status: 409, error: familyAFault };
+  }
   if (!drive.configured) {
     return { ok: true as const, stored: false, store: "unconfigured" as const, pack };
   }
   try {
     await upsertEstimateInDrive(drive, pack);
   } catch (error) {
-    if (error instanceof Error && error.message === "PACK_OWNED_ELSEWHERE") {
-      return { ok: false as const, status: 404, error: "That package is not on this desk." };
-    }
-    if (error instanceof Error && error.message === "AROMATICS_SEED_SMASH") {
-      return { ok: false as const, status: 409, error: "Demo seed clock cannot overwrite a live schedule." };
-    }
-    if (error instanceof Error && error.message.startsWith(PACK_INTEGRITY_ERROR_PREFIX)) {
-      return { ok: false as const, status: 409, error: error.message.slice(PACK_INTEGRITY_ERROR_PREFIX.length) };
-    }
-    throw error;
+    const mapped = vaultWriteUserError(error);
+    return { ok: false as const, status: mapped.status, error: mapped.error };
   }
   return { ok: true as const, stored: true, store: "drive" as const, pack };
 }

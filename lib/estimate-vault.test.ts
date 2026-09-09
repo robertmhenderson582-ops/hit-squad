@@ -768,4 +768,74 @@ describe("estimate vault service", () => {
     assert.equal((kept?.schedule as { projectStart?: string }).projectStart, "2026-09-01");
     assert.equal(((kept?.crew as { direct: unknown[] }).direct || []).length, 1);
   });
+
+  it("creates Family A vault JSON on first Save and 409s a broken other+markup seed", async () => {
+    const { rodeoU110FilledSnapshot, RODEO_U110_VAULT_FILE } = await import("./madison-u110.ts");
+    const { rodeoU250FilledSnapshot, RODEO_U250_VAULT_FILE } = await import("./madison-u250.ts");
+    const { DriveApiError } = await import("./drive-estimates.ts");
+    const { vaultWriteUserError } = await import("./estimate-vault.ts");
+
+    const drive = memoryDrive();
+    const u110 = rodeoU110FilledSnapshot({ createdAt: 9_000, updatedAt: 9_001, ownerEmail: OWNER_LOGIN_EMAIL });
+    const created = await upsertVisiblePack(owner, u110, drive);
+    assert.equal(created.ok, true);
+    if (!created.ok) return;
+    assert.equal(created.stored, true);
+    const names = [...drive.files.values()].map((row) => row.file.name);
+    assert.equal(names.includes(RODEO_U110_VAULT_FILE), true);
+
+    const u250 = rodeoU250FilledSnapshot({ createdAt: 9_000, updatedAt: 9_001, ownerEmail: OWNER_LOGIN_EMAIL });
+    const created250 = await upsertVisiblePack(owner, u250, drive);
+    assert.equal(created250.ok, true);
+    const names2 = [...drive.files.values()].map((row) => row.file.name);
+    assert.equal(names2.includes(RODEO_U250_VAULT_FILE), true);
+
+    const dropRate = (rows: unknown[] | undefined) =>
+      (rows ?? []).map((row) => {
+        if (!row || typeof row !== "object") return row;
+        const next = { ...(row as Record<string, unknown>) };
+        delete next.bookRate;
+        return next;
+      });
+    const crew = u110.crew as {
+      staff?: unknown[];
+      generalForeman?: unknown[];
+      foreman?: unknown[];
+      direct?: unknown[];
+      support?: unknown[];
+    };
+    const other = u110.otherCost as { misc?: Array<Record<string, unknown>> };
+    const broken = {
+      ...u110,
+      packId: u110.packId,
+      crew: {
+        ...crew,
+        staff: dropRate(crew.staff),
+        generalForeman: dropRate(crew.generalForeman),
+        foreman: dropRate(crew.foreman),
+        direct: dropRate(crew.direct),
+        support: dropRate(crew.support),
+      },
+      otherCost: {
+        ...other,
+        misc: (other.misc ?? []).map((row) => {
+          const next = { ...row };
+          delete next.bookPriced;
+          return next;
+        }),
+      },
+    };
+    const refused = await upsertVisiblePack(owner, broken, memoryDrive());
+    assert.equal(refused.ok, false);
+    if (!refused.ok) {
+      assert.equal(refused.status, 409);
+      assert.match(refused.error || "", /Rodeo U110 desk \$815,?419(?:\.38)? ≠ locked \$5,?247,?587/);
+    }
+
+    const denied = vaultWriteUserError(new DriveApiError(403, "The user does not have sufficient permissions for this file.", "service-account"));
+    assert.equal(denied.status, 403);
+    assert.match(denied.error, /Estimates folder|owner OAuth/i);
+    const generic = vaultWriteUserError(new Error("boom"));
+    assert.equal(generic.error, "Could not store that package.");
+  });
 });
