@@ -66,6 +66,8 @@ export type ShahanLookupOpts = {
   catalog?: ShahanLaborRow[];
   laborClass?: "Merit" | "Union" | null;
   group?: string;
+  /** Family A hours × one composite sell rate. When set, skip Rate Table ST/OT/DT. */
+  bookRate?: number;
 };
 
 /** Live labor catalog from Debbie Shahan TM OCIP. Exact sheet dollars. Do not invent. */
@@ -497,11 +499,26 @@ export function formatDeskDollars(amount: number): string {
   return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+export function bookRateLaborAmount(
+  bookRate: number,
+  hours: Pick<HoursSplit, "st" | "ot" | "dt" | "hours">,
+): number {
+  const rate = Number(bookRate) || 0;
+  if (!(rate > 0)) return 0;
+  const total =
+    typeof hours.hours === "number" && Number.isFinite(hours.hours)
+      ? hours.hours
+      : (Number(hours.st) || 0) + (Number(hours.ot) || 0) + (Number(hours.dt) || 0);
+  if (!(total > 0)) return 0;
+  return Math.round(total * rate * 100) / 100;
+}
+
 export function shahanCrewCostAmount(
   title: string,
-  hours: Pick<HoursSplit, "st" | "ot" | "dt">,
+  hours: Pick<HoursSplit, "st" | "ot" | "dt" | "hours">,
   opts: ShahanLookupOpts = {},
 ): number {
+  if (priced(opts.bookRate)) return bookRateLaborAmount(opts.bookRate!, hours);
   const row = lookupShahanLabor(title, opts);
   if (!hasShahanBillRate(row)) return 0;
   const raw =
@@ -509,6 +526,19 @@ export function shahanCrewCostAmount(
     (hours.ot > 0 && priced(row!.ot) ? hours.ot * row!.ot : 0) +
     (hours.dt > 0 && priced(row!.dt) ? hours.dt * row!.dt : 0);
   return Math.round(raw * 100) / 100;
+}
+
+export function crewRowLaborAmount(
+  row: { position?: string; billedAs?: string; bookRate?: number; laborClassOverride?: "Merit" | "Union" | null },
+  hours: Pick<HoursSplit, "st" | "ot" | "dt" | "hours">,
+  opts: ShahanLookupOpts = {},
+): number {
+  const title = shahanCrewTitle(row);
+  return shahanCrewCostAmount(title, hours, {
+    ...opts,
+    bookRate: row.bookRate ?? opts.bookRate,
+    laborClass: row.laborClassOverride ?? opts.laborClass ?? defaultLaborClass(title),
+  });
 }
 
 export function formatShahanCrewCost(
@@ -561,6 +591,7 @@ export function isStaffPerDiemLane(lane: "staff" | "general-foreman" | "foreman"
 type HourRow = {
   position: string;
   billedAs?: string;
+  bookRate?: number;
   laborClassOverride?: "Merit" | "Union" | null;
   shift?: "Days" | "Nights" | "Days & nights";
   clockOverride?: "auto" | "comp" | "staff";
@@ -606,11 +637,7 @@ export function laborDollarsFromCrew(
     Math.round(
       rows.reduce((sum, row) => {
         const hours = computeRowHours(row, site, client, crew.otAfter8, "", holidays);
-        const title = shahanCrewTitle(row);
-        return sum + shahanCrewCostAmount(title, hours, {
-          ...opts,
-          laborClass: row.laborClassOverride ?? opts.laborClass ?? defaultLaborClass(title),
-        });
+        return sum + crewRowLaborAmount(row, hours, opts);
       }, 0) * 100,
     ) / 100
   );

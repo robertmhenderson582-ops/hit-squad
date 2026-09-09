@@ -214,6 +214,8 @@ export type CraftRow = {
   ranges: CalendarRange[];
   /** Support-only on the desk; optional on other lanes so Excel can carry Bill as. */
   billedAs?: string;
+  /** Family A contractor composite sell rate (hours × one rate). Live desk labor uses this when set. */
+  bookRate?: number;
 };
 
 export type SupportLine = CraftRow & {

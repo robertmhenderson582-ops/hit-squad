@@ -66,9 +66,11 @@ export function CraftLaborGrid({
           ...hours,
           costAmount: shahanCrewCostAmount(title, hours, wageLookupOpts(site, {
             laborClass: row.laborClassOverride ?? defaultLaborClass(title),
+            bookRate: row.bookRate,
           })),
           cost: formatShahanCrewCost(title, hours, wageLookupOpts(site, {
             laborClass: row.laborClassOverride ?? defaultLaborClass(title),
+            bookRate: row.bookRate,
           })),
         };
       }),

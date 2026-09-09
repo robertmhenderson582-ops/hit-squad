@@ -31,6 +31,8 @@ import {
   rematchShahanEquipmentId,
   allowedShahanPeriod,
   hasShahanPeriodRate,
+  bookRateLaborAmount,
+  crewRowLaborAmount,
   shahanCrewCostAmount,
   shahanCrewTitle,
   shahanEquipmentByFuel,
@@ -146,6 +148,17 @@ describe("Shahan TM OCIP — Wood River", () => {
     assert.equal(formatShahanCrewCost("Unknown", { st: 10, ot: 2, dt: 1 }), "");
     const opts = { catalog: SHAHAN_LABOR_FIXTURE };
     assert.equal(shahanCrewCostAmount("MANAGER, PROJECT 01", { st: 10, ot: 0, dt: 0 }, opts), 1100);
+    assert.equal(lookupShahanLabor("Boilermaker", { catalog: SHAHAN_LABOR }), null);
+    assert.equal(shahanCrewCostAmount("Boilermaker", { st: 7108, ot: 0, dt: 0, hours: 7108 }), 0);
+    assert.equal(bookRateLaborAmount(158.89, { st: 7108, ot: 0, dt: 0, hours: 7108 }), 1_129_390.12);
+    assert.equal(
+      crewRowLaborAmount({ position: "Boilermaker", bookRate: 158.89 }, { st: 7108, ot: 0, dt: 0, hours: 7108 }),
+      1_129_390.12,
+    );
+    assert.equal(
+      shahanCrewCostAmount("Boilermaker", { st: 1500, ot: 0, dt: 0, hours: 1500 }, { bookRate: 154.95 }),
+      232_425,
+    );
   });
 
   it("defaults Job setup Staff/Craft PD and leaves mileage blank", () => {

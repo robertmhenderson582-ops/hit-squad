@@ -56,7 +56,10 @@ export function SupportCrewCard({
       lines.map((row) => {
         const hours = computeRowHours(row, site, client, pack.crew.otAfter8, "", pack.jobMeta.holidays ?? []);
         const title = shahanCrewTitle(row);
-        const opts = wageLookupOpts(site, { laborClass: row.laborClassOverride ?? defaultLaborClass(title) });
+        const opts = wageLookupOpts(site, {
+          laborClass: row.laborClassOverride ?? defaultLaborClass(title),
+          bookRate: row.bookRate,
+        });
         return {
           ...row,
           ...hours,

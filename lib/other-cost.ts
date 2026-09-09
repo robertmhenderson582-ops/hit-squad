@@ -81,6 +81,8 @@ export type MiscLine = {
   description: string;
   qty: number;
   each: number;
+  /** Official contractor-template sell. Already in Family A SUMMARY — stay out of 6.5% markup. */
+  bookPriced?: boolean;
 };
 
 export type OtherCostSheet = {
@@ -208,13 +210,15 @@ export function blankMisc(item = ""): MiscLine {
 
 export function hydrateMiscLine(raw: unknown): MiscLine {
   const item = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  return {
+  const next: MiscLine = {
     id: String(item.id || uid("mc")),
     item: String(item.item || ""),
     description: String(item.description || ""),
     qty: Number(item.qty) || 0,
     each: Number(item.each) || 0,
   };
+  if (item.bookPriced) next.bookPriced = true;
+  return next;
 }
 
 export function miscDescriptionsFor(item: string): string[] {
@@ -233,6 +237,11 @@ export function seedMiscCatalog(): MiscLine[] {
 
 export function miscAmount(line: MiscLine) {
   return Math.max(0, line.qty) * Math.max(0, line.each);
+}
+
+/** Misc that still takes commercial 6.5%. Family A book-priced sell stays out. */
+export function miscMarkupAmount(sheet: Pick<OtherCostSheet, "misc">) {
+  return (sheet.misc ?? []).reduce((sum, line) => (line.bookPriced ? sum : sum + miscAmount(line)), 0);
 }
 
 function asKind(raw: Record<string, unknown>): TravelKind {

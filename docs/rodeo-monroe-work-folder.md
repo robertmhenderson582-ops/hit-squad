@@ -68,7 +68,7 @@ Rate-book samples on the desk still read Amendment 8 figures. Amend 9 is the abi
 | Rodeo U250 Fall 2026 | `new-u25026-rodeo` | EST-U25026 | Madison R2 five-card fill (`lib/wake-golden/rodeo-u250-crew.json`) |
 | Monroe 541V | `new-541v26-monroe` | EST-541V26 | Identity only — later |
 
-One live pack per job. U110 / U250 wake seed Staff / GF / Foreman / Direct / Support from official Madison hours × rate lines. There is no day grid in those books — hours plug on the official revision date (U110 2026-07-22, U250 2026-08-17), not an invented TA window. Official U250 has no GF seat — do not invent one. Do not seed EST-MTN9RM or a second U250 pack. Monroe shells still do not invent crew. Aromatics / Wood River packs are untouched.
+One live pack per job. U110 / U250 wake seed Staff / GF / Foreman / Direct / Support from official Madison hours × composite `bookRate` lines. Desk labor is hours × that fixture rate (Madison titles stay typed — they do not invent Shahan Rodeo ST/OT/DT). Non-labor SUMMARY lines seed Other Cost as book-priced sell so 6.5% commercial markup does not double-charge Family A. There is no day grid in those books — hours plug on the official revision date (U110 2026-07-22, U250 2026-08-17), not an invented TA window. Official U250 has no GF seat — do not invent one. Do not seed EST-MTN9RM or a second U250 pack. Monroe shells still do not invent crew. Aromatics / Wood River packs are untouched.
 
 ## Golden locks (official SUMMARY)
 
@@ -85,6 +85,21 @@ U110 buckets: Direct 16,730 / $2,746,343 · Indirect 9,711 / $1,735,592 · PD $4
 U250 buckets: Direct 8,315 / $1,383,800 · Indirect 4,566 / $767,540 · PD $188,740 · Mob $101,000 · Materials $20,000 · Equipment $9,600.
 
 Family B (~4.5MB P66 RODEO ESTIMATE WORKBOOK) is an additional face. Official lock for U110 / U250 is family A. Family B SUMMARY $ is pending workbook eval (no Drive text extract on the 4.5MB books) — do not invent those totals. Committed snapshot: `lib/wake-golden/fixtures.json`. U110 crew extract: `lib/wake-golden/rodeo-u110-crew.json`. U250 crew extract: `lib/wake-golden/rodeo-u250-crew.json`.
+
+## Vault create (follow-up — do not upload a broken seed)
+
+No Drive vault JSON yet for U110 / U250 (only Aromatics / Cat2 / Boiler 17). Do not invent Family B workbook dollars. Do not upload a seed whose Estimate Total is other+markup only.
+
+After wake seed `deskPackageTotal` matches Family A (`5247587` / `2470680`):
+
+1. Owner OAuth opens Rodeo U110 / U250 so persist fills the live pack from the fixtures.
+2. Confirm the Estimate Total rail equals the Family A lock (hours stay `26441` / `12881`).
+3. Save. `estimateFileName` mints in the Estimates room:
+   - U110 → `rodeo-rodeo-u110-2026-ta.json`
+   - U250 → `rodeo-rodeo-u250-fall-2026.json`
+4. Service-account-only isolates cannot PATCH a missing file. Owner Save (or SA-upload of the filled snapshot after the desk total is honest) is the create path.
+
+Do not commit vault JSON or client workbooks. Fixtures stay the source of truth until those landing files exist on Drive.
 
 ### Official-sheet findings (Madison U110 R1)
 

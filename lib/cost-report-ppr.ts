@@ -242,6 +242,7 @@ function crewLaneHoursDollars(
     const amount = shahanCrewCostAmount(title, split, {
       ...opts,
       laborClass: row.laborClassOverride ?? opts.laborClass ?? defaultLaborClass(title),
+      bookRate: row.bookRate,
     });
     hrs += split.hours;
     dollars += amount;

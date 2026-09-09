@@ -1,6 +1,5 @@
 import { computeRowHours } from "./hours-clock.ts";
-import { shahanCrewCostAmount, shahanCrewTitle, type ShahanLookupOpts } from "./shahan-wood-river.ts";
-import { defaultLaborClass } from "./labor-class.ts";
+import { crewRowLaborAmount, shahanCrewTitle, type ShahanLookupOpts } from "./shahan-wood-river.ts";
 import { buildXlsx, type SheetCell } from "./xlsx-minimal.ts";
 
 export const RODEO_TAB_ID = "rodeo";
@@ -25,6 +24,7 @@ export type RodeoFormState = {
 export type RodeoCrewRow = {
   position: string;
   billedAs?: string;
+  bookRate?: number;
   laborClassOverride?: "Merit" | "Union" | null;
   shift?: "Days" | "Nights" | "Days & nights";
   clockOverride?: "auto" | "comp" | "staff";
@@ -136,10 +136,7 @@ export function rodeoLaborLines(
       if (!row.position.trim()) continue;
       const hours = computeRowHours(row, site, client, crew.otAfter8);
       const title = shahanCrewTitle(row);
-      const dollars = shahanCrewCostAmount(title, hours, {
-        ...opts,
-        laborClass: row.laborClassOverride ?? defaultLaborClass(title),
-      });
+      const dollars = crewRowLaborAmount(row, hours, opts);
       lines.push({
         bucket: rodeoRowBucket(lane, row),
         title,

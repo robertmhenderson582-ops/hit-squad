@@ -4,9 +4,10 @@
  * Same Wood River five-card desk as U110 (Staff / GF / Foreman / Direct /
  * Support). Family A is hours × one composite rate. Hole Watch/Fire Watch
  * from the Direct tab sits on Support. Official book has no GF / PM /
- * Super rows — do not invent them. Book composite rates stay on the
- * fixture; desk labor $ resolve through Rate Tables / Shahan. Non-labor
- * SUMMARY lines seed Other Cost. Excel binaries stay on Drive.
+ * Super rows — do not invent them. Book composite rates ride on each
+ * crew seat (`bookRate`); desk labor $ is hours × that rate. Madison
+ * titles stay typed. Non-labor SUMMARY lines seed Other Cost as
+ * book-priced sell (no 6.5% markup). Excel binaries stay on Drive.
  *
  * One reserved pack: EST-U25026 / new-u25026-rodeo. Do not seed EST-MTN9RM
  * or any second U250 pack.
@@ -205,7 +206,10 @@ export function persistRodeoU250Wake(store?: StorageLike | null) {
   seedRodeoU250LocalDefaults(store, RODEO_U250_PACK_ID);
 }
 
+/** Drive Estimates-room name `estimateFileName` will mint on first owner Save. */
+export const RODEO_U250_VAULT_FILE = "rodeo-rodeo-u250-fall-2026.json";
+
 export const RODEO_U250_VAULT_APPLY =
-  "Owner OAuth vault write: open Rodeo U250 so wake seeds the filled pack, then Save. No vault JSON on Drive yet — SA-upload the filled snapshot. Service-account-only isolates cannot PATCH a missing file. Do not commit the xlsx. Do not create EST-MTN9RM or a second U250 pack.";
+  "Owner OAuth vault write: open Rodeo U250 so wake seeds Family A hours × bookRate (desk total $2,470,680), then Save. Landing name: rodeo-rodeo-u250-fall-2026.json. No vault JSON on Drive yet — do not upload a seed whose desk total is other+markup only. Service-account-only isolates cannot PATCH a missing file. Do not commit the xlsx. Do not invent Family B workbook dollars. Do not create EST-MTN9RM or a second U250 pack.";
 
 export { RODEO_U250_JOB_CODE, RODEO_U250_PACK_ID };

@@ -3,12 +3,18 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { classifyFromSheetsAndName, CLIENT_FACE_MAPPER_SPEC } from "./client-estimate-ingest.ts";
+import { deskPackageTotal } from "./estimate-desk-total.ts";
+import { estimateFileName } from "./estimate-pack.ts";
+import { packSnapshotToXlsxInput } from "./estimate-pack-xlsx.ts";
+import { rodeoU110FilledSnapshot, RODEO_U110_VAULT_FILE } from "./madison-u110.ts";
+import { rodeoU250FilledSnapshot, RODEO_U250_VAULT_FILE } from "./madison-u250.ts";
 import { isWakeIdentityOnly, rodeoMonroeWakeCards, RODEO_U110_PACK_ID, RODEO_U250_PACK_ID } from "./rodeo-monroe-wake.ts";
 import {
   bucketSum,
   checkHydratedWakeGolden,
   familyBWorkbookFixtures,
   goldenForPackId,
+  moneyEqual,
   MONROE_541V_GOLDEN,
   RODEO_WORKBOOK_BLANK_GOLDEN,
   U110_CONTRACTOR_GOLDEN,
@@ -130,5 +136,28 @@ describe("Rodeo / Monroe golden fixtures", () => {
     );
     assert.equal(goldenForPackId(RODEO_U110_PACK_ID)?.officialRevisionId, U110_CONTRACTOR_GOLDEN.officialRevisionId);
     assert.equal(wakeGoldenFixtures().length, 3);
+  });
+
+  it("wake seed desk grandTotal matches Family A goldens via hours × bookRate", () => {
+    const u110 = packSnapshotToXlsxInput(rodeoU110FilledSnapshot());
+    const u250 = packSnapshotToXlsxInput(rodeoU250FilledSnapshot());
+    const u110Desk = deskPackageTotal(u110);
+    const u250Desk = deskPackageTotal(u250);
+    const u110Lock = U110_CONTRACTOR_GOLDEN.buckets!;
+    const u250Lock = U250_CONTRACTOR_GOLDEN.buckets!;
+    assert.equal(moneyEqual(u110Desk, u110Lock.grandTotal), true);
+    assert.equal(moneyEqual(u250Desk, u250Lock.grandTotal), true);
+    const u110Live = { ...rodeoMonroeWakeCards().find((row) => row.packId === RODEO_U110_PACK_ID)!, createdAt: 9_000, updatedAt: 9_001 };
+    const u250Live = { ...rodeoMonroeWakeCards().find((row) => row.packId === RODEO_U250_PACK_ID)!, createdAt: 9_000, updatedAt: 9_001 };
+    assert.equal(
+      checkHydratedWakeGolden(u110Live, { grandTotal: u110Desk, totalHours: u110Lock.totalHours }).ok,
+      true,
+    );
+    assert.equal(
+      checkHydratedWakeGolden(u250Live, { grandTotal: u250Desk, totalHours: u250Lock.totalHours }).ok,
+      true,
+    );
+    assert.equal(estimateFileName({ site: u110.site, title: u110.title }), RODEO_U110_VAULT_FILE);
+    assert.equal(estimateFileName({ site: u250.site, title: u250.title }), RODEO_U250_VAULT_FILE);
   });
 });

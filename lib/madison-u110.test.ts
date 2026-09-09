@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 import ExcelJS from "exceljs";
 import { classifyFromSheetsAndName, CLIENT_FACE_MAPPER_SPEC, shouldStageClientWorkbook } from "./client-estimate-ingest.ts";
 import { CREW_LANES } from "./crew-lanes.ts";
-import { crewHasRows, mergeVaultIntoLocal, pickPack } from "./estimate-pack.ts";
+import { crewHasRows, estimateFileName, mergeVaultIntoLocal, pickPack } from "./estimate-pack.ts";
+import { deskPackageTotal } from "./estimate-desk-total.ts";
 import { packSnapshotToXlsxInput } from "./estimate-pack-xlsx.ts";
 import { estimateTabIdsForSite } from "./estimate-tabs.ts";
 import { applyEstimateImport, createPackFromImport, parseEstimateXlsx } from "./estimate-xlsx-import.ts";
@@ -14,7 +15,7 @@ import { ingestMadisonU110 } from "./madison-u110-xlsx.ts";
 import { CREW_STORE_PREFIX, isDefaultSeedSchedule, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
 import { readStoreJson, storageKeyForPack, type StorageLike } from "./local-estimates.ts";
 import { RODEO_U110_PACK_ID, RODEO_U250_PACK_ID, isWakeIdentityOnly, rodeoMonroeWakeCards } from "./rodeo-monroe-wake.ts";
-import { U110_CONTRACTOR_GOLDEN } from "./wake-golden.ts";
+import { moneyEqual, U110_CONTRACTOR_GOLDEN } from "./wake-golden.ts";
 import {
   checkRodeoU110OfficialHours,
   checkRodeoU110PackHours,
@@ -24,6 +25,7 @@ import {
   madisonLaneFor,
   persistRodeoU110Wake,
   RODEO_U110_CLIENT,
+  RODEO_U110_VAULT_FILE,
   RODEO_U110_HOURS_PLUG,
   RODEO_U110_SITE,
   RODEO_U110_STATUS,
@@ -152,6 +154,14 @@ describe("madison-u110 ingest", () => {
     assert.equal(Math.round(buckets.indirectHours), 9711);
     assert.ok((pack.otherCost as { misc?: Array<{ item: string; each: number }> })?.misc?.some((row) => row.item === "Extractor Equipment" && row.each === 125000));
     assert.ok((pack.otherCost as { misc?: Array<{ item: string }> })?.misc?.some((row) => row.item === "Per Diem (Direct)"));
+    assert.equal(
+      (pack.crew as { direct: Array<{ position: string; bookRate?: number }> }).direct.find((row) => row.position === "Boilermaker")
+        ?.bookRate,
+      158.89,
+    );
+    const desk = deskPackageTotal(packSnapshotToXlsxInput(pack));
+    assert.equal(moneyEqual(desk, U110_CONTRACTOR_GOLDEN.buckets!.grandTotal), true);
+    assert.equal(estimateFileName({ site: RODEO_U110_SITE, title: pack.title }), RODEO_U110_VAULT_FILE);
   });
 
   it("wakes U110 crew on persist and prefers filled seed over an empty vault identity", () => {
