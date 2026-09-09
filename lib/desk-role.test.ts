@@ -263,3 +263,37 @@ test("President has the working desk and locked owner-only gates", () => {
   assert.equal(canUseViewAs({ ...president, privileges: ["view-as"] }), true);
   assert.equal(lensUser(president, "nathan")?.email, president.email);
 });
+
+test("View as a President vault seat applies the President lens", () => {
+  const owner = {
+    id: "owner-robert-henderson",
+    email: "robertmhenderson582@gmail.com",
+    name: "Robert Henderson",
+    role: "owner" as const,
+  };
+  const freddy = {
+    id: "custom-freddy",
+    email: "president.example@example.com",
+    name: "Freddy Grimland",
+    role: "president",
+  };
+  const lens = lensUser(owner, freddy.id, null, [freddy]);
+  assert.equal(lens?.email, freddy.email);
+  assert.equal(lens?.name, freddy.name);
+  assert.equal(lens?.id, freddy.id);
+  assert.equal(lens?.role, "president");
+  assert.equal(isPresident(lens), true);
+  assert.equal(hasWorkingDesk(lens), true);
+  assert.equal(hasBuildDesk(lens), false);
+  assert.equal(canUseViewAs(lens), false);
+  assert.equal(canUseFollow(lens), false);
+  assert.equal(canSeeHitSquadSeats(lens), false);
+  assert.equal(canUseRateBuilder(lens), true);
+  assert.equal(canLookupRates(lens), true);
+  assert.equal(canArchiveDeleteJobs(lens), false);
+  assert.equal(pageAllowedForSeat(lens, { workingDesk: true }), true);
+  assert.equal(pageAllowedForSeat(lens, { buildDesk: true }), false);
+  assert.equal(pageAllowedForSeat(lens, { ownerOnly: true }), false);
+  assert.equal(pageAllowedForSeat(lens, { viewAs: true }), false);
+  assert.equal(lensUser(owner, "operator-novus", null, [freddy])?.email, owner.email);
+});

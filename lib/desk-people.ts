@@ -9,7 +9,14 @@ export type DeskPerson = {
   email: string;
   name: string;
   companyId?: CompanyId;
+  role?: string;
 };
+
+/** View as / Follow roster. Owner and Novus stay off; testers and President stay on. */
+export function isLensPersonRole(role?: string): boolean {
+  if (!role) return true;
+  return role === "tester" || role === "president";
+}
 
 type SeatLike = {
   id?: string;
@@ -35,14 +42,22 @@ export function lensPeopleFromSeats(seats: SeatLike[]): DeskPerson[] {
     const name = typeof row.name === "string" ? row.name.trim() : "";
     const rawId = typeof row.id === "string" ? row.id.trim() : "";
     if (!email || !name || !rawId || email === NOVUS_EMAIL) continue;
-    if (row.role && row.role !== "tester") continue;
+    if (!isLensPersonRole(row.role)) continue;
     if (seen.has(email)) continue;
     seen.add(email);
     const companyId =
       typeof row.companyId === "string" && row.companyId.trim()
         ? row.companyId.trim()
-        : companyIdForEmail(email);
-    people.push({ id: lensIdForSeat({ id: rawId, email }), email, name, companyId });
+        : row.role === "president"
+          ? "madison"
+          : companyIdForEmail(email);
+    people.push({
+      id: lensIdForSeat({ id: rawId, email }),
+      email,
+      name,
+      companyId,
+      ...(row.role ? { role: row.role } : {}),
+    });
   }
   return people;
 }

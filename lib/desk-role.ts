@@ -130,9 +130,11 @@ export function viewingAsOther(viewAs?: string | null): boolean {
   return Boolean(viewAs && viewAs !== "owner");
 }
 
+type LensPerson = { id: string; email: string; name: string; role?: string };
+
 export function testerFromViewAs(
   viewAs?: string | null,
-  people: Array<{ id: string; email: string; name: string }> = [],
+  people: Array<LensPerson> = [],
 ): TesterSeatDef | undefined {
   if (!viewAs || viewAs === "owner") return undefined;
   const row = VISUAL_ROSTER.find((seat) => seat.id === viewAs);
@@ -144,16 +146,21 @@ export function testerFromViewAs(
   if (!person) return undefined;
   const known = testerByEmail(person.email);
   if (known) return known;
+  const president = person.role === "president";
   return {
     id: person.id,
     email: person.email,
     name: person.name,
-    aliased: true,
+    aliased: !president,
     rateBuilder: true,
     viewAs: false,
     shop: "field",
-    company: "hitsquad",
+    company: president ? "madison" : "hitsquad",
   };
+}
+
+function lensRoleForPerson(person?: LensPerson): PublicUser["role"] {
+  return person?.role === "president" ? "president" : "tester";
 }
 
 /** Chrome / Settings use this seat. Real logins still gate on the session user. */
@@ -161,7 +168,7 @@ export function lensUser(
   session?: PublicUser | null,
   viewAs?: string | null,
   followSeat?: string | null,
-  people: Array<{ id: string; email: string; name: string }> = [],
+  people: Array<LensPerson> = [],
 ): PublicUser | null {
   if (!session) return null;
   if (!hasBuildDesk(session)) return session;
@@ -169,7 +176,8 @@ export function lensUser(
   if (!seatId) return session;
   const seat = testerFromViewAs(seatId, people);
   if (!seat) return session;
-  return { id: seat.id, email: seat.email, name: seat.name, role: "tester" };
+  const person = people.find((item) => item.id === seatId || item.email === seat.email || item.id === seat.id);
+  return { id: seat.id, email: seat.email, name: seat.name, role: lensRoleForPerson(person) };
 }
 
 /** Stable effect key. lensUser returns a new object while following/viewing as. */

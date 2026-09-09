@@ -4,6 +4,7 @@ import { NOVUS_EMAIL, NOVUS_ID } from "./desk-role.ts";
 import { STANDALONE_ID } from "./companies.ts";
 import {
   followIdFromEmail,
+  isLensPersonRole,
   lensIdForSeat,
   lensPeopleFromSeats,
   mergeDeskPeople,
@@ -14,6 +15,14 @@ import {
   seededDeskPeople,
 } from "./desk-people.ts";
 import { SHANE_EMAIL, TESTER_SEATS } from "./tester-seats.ts";
+
+const PRESIDENT = {
+  id: "custom-freddy",
+  email: "president.example@example.com",
+  name: "Freddy Grimland",
+  role: "president",
+  companyId: "madison",
+};
 
 const EXTRA = {
   id: "custom-added-tester",
@@ -108,4 +117,38 @@ test("President sees Madison operators only; Hit Squad seats stay owner-only", (
   assert.equal(presidentSeats.some((row) => row.email === "nathanboyte@gmail.com"), true);
   assert.equal(presidentSeats.some((row) => row.email === NOVUS_EMAIL), false);
   assert.equal(presidentSeats.some((row) => row.email === SHANE_EMAIL), false);
+});
+
+test("President vault seats appear in View as / Follow people on the company lane", () => {
+  assert.equal(isLensPersonRole("tester"), true);
+  assert.equal(isLensPersonRole("president"), true);
+  assert.equal(isLensPersonRole("owner"), false);
+  assert.equal(isLensPersonRole("operator"), false);
+  assert.equal(TESTER_SEATS.some((row) => row.email === PRESIDENT.email || /freddy/i.test(row.email)), false);
+  const people = lensPeopleFromSeats([
+    { id: "owner-robert-henderson", email: "robertmhenderson582@gmail.com", name: "Robert Henderson", role: "owner" },
+    { id: NOVUS_ID, email: NOVUS_EMAIL, name: "Novus", role: "operator" },
+    ...TESTER_SEATS.map((seat) => ({ id: seat.id, email: seat.email, name: seat.name, role: "tester", companyId: seat.company })),
+    PRESIDENT,
+  ]);
+  const freddy = people.find((row) => row.email === PRESIDENT.email);
+  assert.ok(freddy);
+  assert.equal(freddy.id, PRESIDENT.id);
+  assert.equal(freddy.name, PRESIDENT.name);
+  assert.equal(freddy.role, "president");
+  assert.equal(freddy.companyId, "madison");
+  assert.equal(people.some((row) => row.email === NOVUS_EMAIL), false);
+  assert.equal(people.some((row) => row.role === "owner"), false);
+  assert.equal(people.some((row) => row.id === "nathan"), true);
+  const owner = { role: "owner", email: "robertmhenderson582@gmail.com" };
+  const roster = peopleVisibleTo(owner, people);
+  assert.equal(roster.some((row) => row.id === PRESIDENT.id && row.role === "president"), true);
+  const lanes = peopleByLane(roster);
+  assert.equal(lanes.company.some((row) => row.email === PRESIDENT.email), true);
+  assert.equal(lanes.standalone.some((row) => row.email === PRESIDENT.email), false);
+  const withoutCompany = lensPeopleFromSeats([{ ...PRESIDENT, companyId: undefined }]);
+  assert.equal(withoutCompany[0]?.companyId, "madison");
+  const merged = mergeDeskPeople([PRESIDENT]);
+  assert.equal(merged.some((row) => row.email === PRESIDENT.email && row.id === PRESIDENT.id), true);
+  assert.equal(merged.some((row) => row.id === "nathan"), true);
 });
