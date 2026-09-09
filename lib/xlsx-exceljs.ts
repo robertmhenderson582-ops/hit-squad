@@ -23,6 +23,12 @@ import { evaluateWorkbook } from "./xlsx-eval.ts";
 import { isPhaseId, PHASE_TONE_BAND_INK, PHASE_TONE_FILLS } from "./phase-schedule.ts";
 import { prepareCompanyLogoSplash } from "./estimate-company-logo.ts";
 import { colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet, type WorkbookBuildOptions } from "./xlsx-minimal.ts";
+/**
+ * Writer-side copy of `EXCELJS_VML_COMMENT_SAFE` in xlsx-package.ts.
+ * Keep the number here so the ExcelJS writer does not import the inspector
+ * (avoids a writer → inspector → xlsx-minimal cycle in the Next client graph).
+ */
+const EXCELJS_VML_COMMENT_SAFE = 800;
 
 const WHITE = "FFFFFFFF";
 const DARK_TEXT = "FF102226";
@@ -469,15 +475,19 @@ function noteText(text: string | undefined): string {
 /** Excel comments / notes — hover popups. Not VBA. Import ignores these. */
 function applySheetComments(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
   const known = new Set(sheet.cells.map((cell) => cell.ref));
+  let written = 0;
   const apply = (ref: string, text: string | undefined, requireCell: boolean) => {
     const body = noteText(text);
     if (!body) return;
     if (requireCell && !known.has(ref)) return;
+    // ExcelJS VML o:idmap data="1" only allocates shape ids 1024–2047.
+    if (written >= EXCELJS_VML_COMMENT_SAFE) return;
     const { row, colNum } = parseRef(ref);
     const cell = ws.getCell(row, colNum);
     cell.note = {
       texts: [{ font: { size: 9, name: "Calibri", color: { argb: DARK_TEXT } }, text: body }],
     };
+    written += 1;
   };
   for (const cell of sheet.cells) apply(cell.ref, cell.note, false);
   for (const comment of sheet.comments ?? []) apply(comment.ref, comment.text, true);
@@ -723,12 +733,24 @@ function applyAdderStyle(exCell: ExcelJS.Cell) {
   exCell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
 }
 
-function printHeader(sheetName: string): string {
-  const safe = sheetName.replace(/&/g, "and").slice(0, 24);
-  return `&L&B HIT SQUAD / PROJECT CONTROLS &C ${safe} &R Confidential`;
+function excelHeaderSafe(text: string, max = 48): string {
+  return text.replace(/&/g, "and").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-const PRINT_FOOTER = "&L Produced by Hit Squad Project Controls &C &D &R Page &P of &N";
+function printBrand(companyName?: string | null): string {
+  const name = excelHeaderSafe(companyName ?? "", 32) || "Hit Squad";
+  return `${name.toUpperCase()} / PROJECT CONTROLS`;
+}
+
+function printHeader(sheetName: string, companyName?: string | null): string {
+  const safe = excelHeaderSafe(sheetName, 24);
+  return `&L&B ${printBrand(companyName)} &C ${safe} &R Confidential`;
+}
+
+function printFooter(companyName?: string | null): string {
+  const name = excelHeaderSafe(companyName ?? "", 40) || "Hit Squad";
+  return `&L Produced by ${name} &C &D &R Page &P of &N`;
+}
 
 export function clientCopyIsClean(value: string): boolean {
   return !FORBIDDEN_CLIENT_COPY.test(value);
@@ -1416,9 +1438,15 @@ async function stampUnusedRowsHidden(buffer: Uint8Array): Promise<Uint8Array> {
     }
     zip.file(name, xml);
   }
-  return new Uint8Array(
-    await zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 } }),
-  );
+  // JSZip runtime accepts createFolders on generate; the 3.1 typings only
+  // list it on load/file. Folder entries are not part of a valid xlsx zip.
+  const zipOut = {
+    type: "uint8array",
+    compression: "DEFLATE",
+    compressionOptions: { level: 6 },
+    createFolders: false,
+  } as JSZip.JSZipGeneratorOptions<"uint8array">;
+  return new Uint8Array(await zip.generateAsync<"uint8array">(zipOut));
 }
 
 export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: WorkbookBuildOptions): Promise<Uint8Array> {
@@ -1426,8 +1454,9 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
   if (!list.length) throw new Error("empty-workbook");
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Hit Squad Project Controls";
-  wb.lastModifiedBy = "Hit Squad Project Controls";
+  const company = (options?.companyName ?? "").replace(/\s+/g, " ").trim() || "Hit Squad";
+  wb.creator = company;
+  wb.lastModifiedBy = company;
   wb.created = new Date();
   wb.modified = new Date();
   wb.calcProperties = { fullCalcOnLoad: true };
@@ -1466,10 +1495,10 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
         printTitlesColumn: labor ? "A:I" : chrome === "ppr" ? "A:A" : undefined,
       },
       headerFooter: {
-        oddHeader: printHeader(safeName),
-        oddFooter: PRINT_FOOTER,
-        evenHeader: printHeader(safeName),
-        evenFooter: PRINT_FOOTER,
+        oddHeader: printHeader(safeName, options?.companyName),
+        oddFooter: printFooter(options?.companyName),
+        evenHeader: printHeader(safeName, options?.companyName),
+        evenFooter: printFooter(options?.companyName),
       },
       views: [
         labor

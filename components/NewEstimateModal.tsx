@@ -316,7 +316,7 @@ export function NewEstimateModal({
           <div className="mt-4">
             <p className="text-xs font-semibold tracking-[0.16em] text-[#5b6f73]">OR UPLOAD WORKBOOK</p>
             <p className="mt-1 text-xs text-[#5b6f73]">
-              John&apos;s filled Hit Squad xlsx seeds a new live pack — Job setup, crew, Bill as, Subs, Travel, and Equipment/COE.
+              A filled estimate xlsx seeds a new live pack — Job setup, crew, Bill as, Subs, Travel, and Equipment/COE.
             </p>
             <input
               ref={fileRef}

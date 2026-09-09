@@ -160,6 +160,7 @@ import {
 import { emptySubSheet, lineAmount, subCardTotal, subcontractorMarkupBase, type SubSheet } from "./subcontractor.ts";
 import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
 import { catalogSites } from "./desk-data.ts";
+import { companyName, inferCompanyIdFromParts } from "./companies.ts";
 import { clampEstimateStatus, parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { regularClientFromParts } from "./site-regular.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
@@ -175,7 +176,8 @@ import {
 
 export { EXCEL_JOB_SETUP_IMPORT_PARKED, EXCEL_RIPPLE_RETROACTIVE, EXCEL_RIPPLE_RULE } from "./excel-ripple.ts";
 export const ESTIMATE_EXPORT_ERROR = "Could not export. Try again.";
-export const ESTIMATE_IMPORT_ERROR = "Could not import that workbook. Use a Hit Squad export.";
+export const ESTIMATE_IMPORT_ERROR = "Could not import that workbook. Use an estimate export.";
+/** Fallback when the pack has no company (internal PPR / Hit Squad-assigned work). */
 export const ESTIMATE_EXPORT_PRODUCER = "Produced by Hit Squad Project Controls";
 export const ESTIMATE_EXPORT_BRAND = "HIT SQUAD / PROJECT CONTROLS";
 export const ESTIMATE_EXPORT_CONFIDENTIAL = "Confidential estimate package";
@@ -404,7 +406,11 @@ function stripSheetComments(sheet: WorkbookSheet): WorkbookSheet {
   };
 }
 
-/** Attach hover notes to the clock pick, Position / Bill as, day-grid HC/HPS/PD, and unlocked inputs. */
+/**
+ * Attach hover notes to the clock pick, Position / Bill as, first-day
+ * HC/HPS/PD seed, and unlocked inputs. Not every day-grid cell — see
+ * EXCEL_DAY_GRID_NOTE_BUDGET / ExcelJS VML idmap.
+ */
 export function attachEstimateComments(sheet: WorkbookSheet): WorkbookSheet {
   // Job setup: no comments. Money Value / Start / Stop / holidays used to
   // stamp notes, and leftovers without a cell painted the orphan triangle trail.
@@ -437,14 +443,27 @@ export function attachEstimateComments(sheet: WorkbookSheet): WorkbookSheet {
       const parsed = parseYmd(firstDate.value);
       if (parsed) add(firstDate.ref, excelFullDateNote(parsed));
     }
+    // First date column only (J of each block). Repeating HC/HPS/PD notes on
+    // every day explodes ExcelJS VML: o:idmap data="1" only covers shape ids
+    // 1024–2047 (~1023 comments/sheet). Aromatics-class Staff (~11k notes)
+    // overflow that map; Excel reports the zip as corrupt and cannot repair it.
     const hidden = new Set(sheet.hiddenCols ?? []);
+    let dayGridNotes = 0;
     for (const cell of sheet.cells) {
       const { colNum, row } = parseA1(cell.ref);
-      if (colNum < LABOR_DATE_START_COL || hidden.has(colNum) || row === 6) continue;
+      if (colNum !== LABOR_DATE_START_COL || hidden.has(colNum) || row === 6) continue;
       const offset = laborRowOffset(sheet, row);
-      if (offset === LABOR_HC_OFFSET) add(cell.ref, XLSX_TYPE_NOTES.HC);
-      else if (offset === LABOR_HPS_OFFSET) add(cell.ref, XLSX_TYPE_NOTES.HPS);
-      else if (offset === LABOR_PD_OFFSET) add(cell.ref, XLSX_TYPE_NOTES.PD);
+      const note =
+        offset === LABOR_HC_OFFSET
+          ? XLSX_TYPE_NOTES.HC
+          : offset === LABOR_HPS_OFFSET
+            ? XLSX_TYPE_NOTES.HPS
+            : offset === LABOR_PD_OFFSET
+              ? XLSX_TYPE_NOTES.PD
+              : undefined;
+      if (!note || dayGridNotes >= EXCEL_DAY_GRID_NOTE_BUDGET) continue;
+      add(cell.ref, note);
+      dayGridNotes += 1;
     }
   }
 
@@ -531,6 +550,12 @@ export const ESTIMATE_XLSX_SPARE_ROWS = 8;
  * (Position / hours / PD) become new seats; blank pad is ignored.
  */
 export const ESTIMATE_XLSX_SPARE_POSITIONS = 4;
+/**
+ * Cap first-date HC/HPS/PD notes so a 400-day × many-seat grid cannot
+ * refill the ExcelJS VML idmap (1023 shapes/sheet). Type / Position / J6
+ * seeds stay outside this budget.
+ */
+export const EXCEL_DAY_GRID_NOTE_BUDGET = 400;
 export const LABOR_SPARE_ID_PREFIX = "xlsx-spare-";
 /** Hidden Travel / Subcontractor row id — same idea as COE col H / labor block id. */
 export const TRAVEL_HIDDEN_ID_COL = 6;
@@ -559,6 +584,8 @@ export type EstimateXlsxInput = {
   changeOrders?: number;
   /** Live company-record logo (companyLogoSrc). Export-only; import does not store it. */
   companyLogo?: string | null;
+  /** Client-facing company (Settings / pack). Overrides client/site inference. */
+  companyName?: string | null;
   /** Signed-in exporter display name. Export-only; import ignores it. */
   preparedBy?: string | null;
   /** Live pack status. Export-only; import does not overwrite the pack. */
@@ -603,10 +630,35 @@ function xlsxName(name: string) {
   return excelSafeSheetName(name);
 }
 
-export function estimateXlsxFilename(input: { site?: string; title?: string } = {}) {
+/** Pack / Settings company. Madison plants infer Madison; otherwise the assigned company. */
+export function estimateCompanyName(input: {
+  companyName?: string | null;
+  client?: string;
+  site?: string;
+  title?: string;
+} = {}): string {
+  const typed = (input.companyName ?? "").replace(/\s+/g, " ").trim();
+  if (typed) return typed;
+  return companyName(inferCompanyIdFromParts(input.client, input.site, input.title));
+}
+
+export function estimateExportBrand(company: string): string {
+  const name = company.replace(/\s+/g, " ").trim() || "Estimate";
+  return `${name.toUpperCase()} / PROJECT CONTROLS`;
+}
+
+export function estimateExportProducer(company: string): string {
+  const name = company.replace(/\s+/g, " ").trim() || "Estimate";
+  return `Produced by ${name}`;
+}
+
+export function estimateXlsxFilename(
+  input: { site?: string; title?: string; companyName?: string | null; client?: string } = {},
+) {
+  const company = slugify(estimateCompanyName(input));
   const site = slugify((input.site || "").split("—")[0] || "");
   const title = slugify(input.title || "");
-  const base = ["hit-squad", site, title].filter(Boolean).join("-") || "hit-squad-estimate";
+  const base = [company, site, title].filter(Boolean).join("-") || `${company || "estimate"}-estimate`;
   return `${base}.xlsx`;
 }
 
@@ -722,7 +774,7 @@ function headerByline(input: EstimateXlsxInput, when = new Date()): string {
   const stamp = `${ESTIMATE_STATUS_LABEL}: ${clampEstimateStatus(parseEstimateStatus(input.status), regular)}`;
   const prepared = exporterDisplayName(input.preparedBy, null);
   const who = prepared ? `${ESTIMATE_PREPARED_BY_LABEL}: ${prepared}  ·  ` : "";
-  return `${stamp}  ·  ${who}${ESTIMATE_EXPORT_PRODUCER}  ·  ${ESTIMATE_EXPORT_CONFIDENTIAL}  ·  ${exportProducedLabel(when)}`;
+  return `${stamp}  ·  ${who}${estimateExportProducer(estimateCompanyName(input))}  ·  ${ESTIMATE_EXPORT_CONFIDENTIAL}  ·  ${exportProducedLabel(when)}`;
 }
 
 function headerTitleMerges(lastCol: string): string[] {
@@ -734,7 +786,7 @@ function headerCells(input: EstimateXlsxInput, when = new Date()): SheetCell[] {
   const title = (input.title || "").trim() || "Estimate";
   const job = [title, input.client, input.site, clock].filter((part) => String(part || "").trim()).join("  ·  ");
   return [
-    { ref: "A1", type: "text", value: ESTIMATE_EXPORT_BRAND },
+    { ref: "A1", type: "text", value: estimateExportBrand(estimateCompanyName(input)) },
     { ref: "A2", type: "text", value: job },
     { ref: "A3", type: "text", value: headerByline(input, when) },
   ];
@@ -2568,10 +2620,14 @@ export async function estimateToXlsx(input: EstimateXlsxInput = {}): Promise<Uin
     throw new Error("summary-total-mismatch");
   }
   // Rodeo V1: estimate fills P66-shaped export → Robert pastes into official file.
+  const company = estimateCompanyName(resolved);
   const extras = shouldAttachP66TransferFace(resolved.site, resolved.client)
-    ? buildP66TransferFaceSheets(p66TotalsFromDesk(resolved))
+    ? buildP66TransferFaceSheets(p66TotalsFromDesk(resolved), estimateExportBrand(company))
     : [];
-  const bytes = await buildWorkbook([...sheets, ...extras], { companyLogo: input.companyLogo });
+  const bytes = await buildWorkbook([...sheets, ...extras], {
+    companyLogo: input.companyLogo,
+    companyName: company,
+  });
   if (!bytes.byteLength) throw new Error("empty-workbook");
   return bytes;
 }

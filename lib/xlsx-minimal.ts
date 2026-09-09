@@ -214,6 +214,8 @@ export type WorkbookSheet = {
 export type WorkbookBuildOptions = {
   /** Already-resolved company logo src. Missing / unloadable → no splash. */
   companyLogo?: string | null;
+  /** Client-facing company for print header / workbook creator. */
+  companyName?: string | null;
 };
 
 export async function buildWorkbook(sheets: WorkbookSheet[], options?: WorkbookBuildOptions): Promise<Uint8Array> {

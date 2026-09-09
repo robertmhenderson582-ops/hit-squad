@@ -20,6 +20,8 @@ import {
 import type { SubSheet } from "./subcontractor.ts";
 import {
   ESTIMATE_XLSX_SHEETS,
+  estimateCompanyName,
+  estimateExportBrand,
   LABOR_BLOCK_ID_COL,
   spareLaborRowId,
   SUB_HIDDEN_ID_COL,
@@ -199,6 +201,24 @@ describe("estimate excel import", () => {
     const synced = syncCraftRows([staff], (applied.schedule as PhaseScheduleState).phases);
     assert.equal(synced[0].ranges[0].headcount, 1);
     assert.equal(synced[0].ranges[0].perDiemPeople, 1);
+  });
+
+  it("round-trips a Madison-branded workbook without requiring Hit Squad strings", async () => {
+    const input = { ...fixture(), companyName: "Madison" };
+    assert.equal(estimateCompanyName(input), "Madison");
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(bytes as unknown as ArrayBuffer);
+    const summary = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
+    assert.equal(summary?.getCell("A1").value, estimateExportBrand("Madison"));
+    assert.equal(/Hit Squad|HIT SQUAD|Hit-Squad/i.test(String(summary?.getCell("A1").value ?? "")), false);
+    assert.equal(/Hit Squad|HIT SQUAD/i.test(String(summary?.headerFooter.oddHeader ?? "")), false);
+    assert.match(String(summary?.headerFooter.oddHeader ?? ""), /MADISON/);
+    const imported = await parseEstimateXlsx(bytes);
+    assert.equal(imported.title, input.title);
+    assert.equal(imported.crew.staff?.[0]?.position, "Superintendent 01");
+    const applied = applyEstimateImport(asPack(input), imported);
+    assert.equal(deskPackageTotal(applied), deskPackageTotal(input));
   });
 
   it("imports HC, PD, Job setup, Position, and Bill as edits", async () => {
@@ -657,7 +677,7 @@ describe("estimate excel import", () => {
     assert.equal(tools[0]?.period, "monthly");
   });
 
-  it("rejects a workbook that is not a Hit Squad export", async () => {
+  it("rejects a workbook that is not an estimate export", async () => {
     const wb = new ExcelJS.Workbook();
     wb.addWorksheet("Nope").getCell("A1").value = "hello";
     const bytes = await wb.xlsx.writeBuffer();

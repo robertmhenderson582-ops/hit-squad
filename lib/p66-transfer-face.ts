@@ -247,10 +247,10 @@ export function p66PasteMapRows(totals: P66TransferTotals): P66PasteMapRow[] {
   ];
 }
 
-function buildPasteMapSheet(totals: P66TransferTotals): WorkbookSheet {
+function buildPasteMapSheet(totals: P66TransferTotals, brand: string): WorkbookSheet {
   const rows = p66PasteMapRows(totals);
   const cells: SheetCell[] = [
-    cell("A1", "HIT SQUAD / PROJECT CONTROLS"),
+    cell("A1", brand),
     cell("A2", P66_V1_EXPORT_LINE),
     cell("A3", P66_TRANSFER_NOTE),
     cell("A4", "Wake-up does not clone or protect their locked official xlsx."),
@@ -275,10 +275,10 @@ function buildPasteMapSheet(totals: P66TransferTotals): WorkbookSheet {
   return { name: excelSafeSheetName(P66_TRANSFER_PASTE_MAP), cells };
 }
 
-function buildSummarySheet(totals: P66TransferTotals): WorkbookSheet {
+function buildSummarySheet(totals: P66TransferTotals, brand: string): WorkbookSheet {
   const unit = totals.unit;
   const cells: SheetCell[] = [
-    cell("A1", "HIT SQUAD / PROJECT CONTROLS"),
+    cell("A1", brand),
     cell("A2", P66_TRANSFER_NOTE),
     cell("A3", "UNIT"),
     cell("B3", totals.unit),
@@ -399,10 +399,10 @@ function buildLaborSheet(name: string, totals: P66TransferTotals, bucket: "direc
   return { name: excelSafeSheetName(name), cells };
 }
 
-export function buildP66TransferFaceSheets(totals: P66TransferTotals): WorkbookSheet[] {
+export function buildP66TransferFaceSheets(totals: P66TransferTotals, brand = "MADISON / PROJECT CONTROLS"): WorkbookSheet[] {
   return [
-    buildPasteMapSheet(totals),
-    buildSummarySheet(totals),
+    buildPasteMapSheet(totals, brand),
+    buildSummarySheet(totals, brand),
     buildLaborSheet(P66_TRANSFER_DIRECT, totals, "direct"),
     buildLaborSheet(P66_TRANSFER_INDIRECT, totals, "indirect"),
     moneySheet(P66_TRANSFER_PER_DIEM, "3. PER DIEM (IC.L)", totals.perDiem, totals.unit),

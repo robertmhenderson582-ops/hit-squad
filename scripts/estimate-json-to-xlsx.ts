@@ -33,7 +33,7 @@ if (!src || src === "-h" || src === "--help") {
 
 const raw = JSON.parse(readFileSync(resolve(src), "utf8"));
 const { pack, input } = estimateJsonToXlsxInput(raw);
-const out = resolve(args[1] || estimateXlsxFilename({ site: pack.site, title: pack.title }));
+const out = resolve(args[1] || estimateXlsxFilename({ site: pack.site, title: pack.title, client: pack.client }));
 mkdirSync(dirname(out), { recursive: true });
 const bytes = await estimateJsonToXlsx(raw);
 writeFileSync(out, bytes);
