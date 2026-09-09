@@ -1037,4 +1037,197 @@ describe("estimate pack snapshot", () => {
     assert.ok(desktop.getItem(`${PURCHASING_STORE_PREFIX}${key}`));
     assert.equal(purchasingHasWork(hydratePurchasing(collected?.purchasing)), true);
   });
+
+  it("empty Drive / demo clock cannot wipe a filled material pack in local hydrate", () => {
+    const filled = {
+      packId: "new-b1726",
+      key: "new:new-b1726",
+      title: "Boiler 17 2026",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 100,
+      ownerEmail: "nathanboyte@gmail.com",
+      schedule: {
+        projectStart: "2026-08-10",
+        phases: defaultPhaseSchedule().phases.map((row) =>
+          row.id === "pre" ? { ...row, start: "2026-08-10", stop: "2026-12-06" } : row,
+        ),
+      },
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-08-10", end: "2026-12-06" }] }] },
+    };
+    const empty = {
+      ...filled,
+      updatedAt: 500_000,
+      schedule: defaultPhaseSchedule(),
+      crew: { staff: [], generalForeman: [], foreman: [], direct: [], support: [] },
+    };
+    const picked = pickPack(filled, empty);
+    assert.equal((picked?.schedule as { projectStart?: string }).projectStart, "2026-08-10");
+    assert.equal(((picked?.crew as { staff: unknown[] }).staff || []).length, 1);
+
+    const store = memoryStore();
+    applyPackToStore(store, filled);
+    applyPackToStore(store, empty);
+    const kept = collectPack(store, "new-b1726");
+    assert.equal((kept?.schedule as { projectStart?: string }).projectStart, "2026-08-10");
+    assert.equal(((kept?.crew as { staff: unknown[] }).staff || []).length, 1);
+
+    const catFilled = {
+      packId: "new-mtaajdwa-f7539",
+      key: "new:new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 100,
+      ownerEmail: "nathanboyte@gmail.com",
+      schedule: { projectStart: "2026-09-01", phases: [{ id: "pre", on: true, start: "2026-09-01", stop: "2026-09-03" }] },
+      crew: { direct: [{ id: "bm-1", ranges: [{ start: "2026-09-01", end: "2026-09-03" }] }] },
+    };
+    const catEmpty = {
+      ...catFilled,
+      updatedAt: 900_000,
+      crew: { staff: [], direct: [] },
+      schedule: defaultPhaseSchedule(),
+    };
+    applyPackToStore(store, catFilled);
+    mergeVaultIntoLocal(store, catEmpty);
+    const catKept = collectPack(store, "new-mtaajdwa-f7539");
+    assert.equal(((catKept?.crew as { direct: unknown[] }).direct || []).length, 1);
+    assert.equal(packClockIsSeedSmashed(catFilled), false);
+  });
+
+  it("richer Aromatics crew/clock cannot beat Cat 2, and U-250 AFE cannot stamp Boiler 17", () => {
+    const catGood = {
+      packId: "new-mtaajdwa-f7539",
+      key: "new:new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 100,
+      ownerEmail: "nathanboyte@gmail.com",
+      schedule: { projectStart: "2026-09-01", phases: [{ id: "pre", on: true, start: "2026-09-01", stop: "2026-09-03" }] },
+      crew: { direct: [{ id: "bm-1", ranges: [{ start: "2026-09-01", end: "2026-09-03" }] }] },
+    };
+    const catGraft = {
+      ...catGood,
+      updatedAt: 900_000,
+      schedule: {
+        projectStart: "2027-01-11",
+        phases: defaultPhaseSchedule().phases.map((row) =>
+          row.id === "pre" ? { ...row, start: "2027-01-11", stop: "2027-02-28" } : { ...row, start: "2027-03-01", stop: "2027-05-21" },
+        ),
+      },
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-05-21" }] }] },
+    };
+    assert.equal(packClockIsSeedSmashed(catGraft), true);
+    const picked = pickPack(catGood, catGraft);
+    assert.equal((picked?.schedule as { projectStart?: string }).projectStart, "2026-09-01");
+    assert.equal(((picked?.crew as { direct: unknown[] }).direct || []).length, 1);
+    assert.equal(pickPack(null, catGraft), null);
+
+    const store = memoryStore();
+    applyPackToStore(store, catGood);
+    applyPackToStore(store, catGraft);
+    const kept = collectPack(store, "new-mtaajdwa-f7539");
+    assert.equal((kept?.schedule as { projectStart?: string }).projectStart, "2026-09-01");
+    assert.equal(((kept?.crew as { direct: unknown[] }).direct || []).length, 1);
+
+    const boilerGood = {
+      packId: "new-b1726",
+      key: "new:new-b1726",
+      title: "Boiler 17 2026",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 100,
+      ownerEmail: "nathanboyte@gmail.com",
+      schedule: {
+        projectStart: "2026-08-10",
+        phases: defaultPhaseSchedule().phases.map((row) =>
+          row.id === "pre" ? { ...row, start: "2026-08-10", stop: "2026-12-06" } : row,
+        ),
+      },
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-08-10", end: "2026-12-06" }] }] },
+      jobMeta: { afeName: "Boiler 17 2026" },
+    };
+    const boilerSmash = {
+      ...boilerGood,
+      updatedAt: 800_000,
+      schedule: defaultPhaseSchedule(),
+      crew: { staff: [], generalForeman: [], foreman: [], direct: [], support: [] },
+      jobMeta: { afeName: "P66 Rodeo U-250" },
+    };
+    const boilerPicked = pickPack(boilerGood, boilerSmash);
+    assert.equal((boilerPicked?.jobMeta as { afeName?: string })?.afeName, "Boiler 17 2026");
+    assert.equal((boilerPicked?.schedule as { projectStart?: string }).projectStart, "2026-08-10");
+
+    const boilerStore = memoryStore();
+    applyPackToStore(boilerStore, boilerGood);
+    applyPackToStore(boilerStore, boilerSmash);
+    const boilerKept = collectPack(boilerStore, "new-b1726");
+    assert.equal((boilerKept?.jobMeta as { afeName?: string })?.afeName, "Boiler 17 2026");
+    assert.equal(((boilerKept?.crew as { staff: unknown[] }).staff || []).length, 1);
+  });
+
+  it("two clients hard-refresh to the same vault clock — thin local and richer smash lose", () => {
+    const vault = {
+      packId: "new-mtaajdwa-f7539",
+      key: "new:new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 800,
+      ownerEmail: "nathanboyte@gmail.com",
+      sharedWith: ["robertmhenderson582@gmail.com"],
+      schedule: { projectStart: "2026-09-01", phases: [{ id: "pre", on: true, start: "2026-09-01", stop: "2026-09-03" }] },
+      crew: { direct: [{ id: "bm-1", ranges: [{ start: "2026-09-01", end: "2026-09-03" }] }] },
+    };
+    const thinLocal = {
+      ...vault,
+      updatedAt: 90_000,
+      ownerEmail: "robertmhenderson582@gmail.com",
+      crew: { staff: [], direct: [] },
+      schedule: defaultPhaseSchedule(),
+    };
+    const smashLocal = {
+      ...vault,
+      updatedAt: 95_000,
+      ownerEmail: "robertmhenderson582@gmail.com",
+      schedule: {
+        projectStart: "2027-01-11",
+        phases: defaultPhaseSchedule().phases.map((row) =>
+          row.id === "pre" ? { ...row, start: "2027-01-11", stop: "2027-02-28" } : { ...row, start: "2027-03-01", stop: "2027-05-21" },
+        ),
+      },
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-05-21" }] }] },
+    };
+    assert.equal(preferCanonicalPack(smashLocal, vault).schedule, vault.schedule);
+    assert.equal(((preferCanonicalPack(smashLocal, vault).crew as { direct: unknown[] }).direct || []).length, 1);
+
+    const ownerDesk = memoryStore();
+    applyPackToStore(ownerDesk, thinLocal);
+    mergeVaultIntoLocal(ownerDesk, vault);
+    const nathanDesk = memoryStore();
+    mergeVaultIntoLocal(nathanDesk, vault);
+    const ownerKept = collectPack(ownerDesk, "new-mtaajdwa-f7539");
+    const nathanKept = collectPack(nathanDesk, "new-mtaajdwa-f7539");
+    assert.equal((ownerKept?.schedule as { projectStart?: string }).projectStart, "2026-09-01");
+    assert.equal((nathanKept?.schedule as { projectStart?: string }).projectStart, "2026-09-01");
+    assert.equal(((ownerKept?.crew as { direct: unknown[] }).direct || []).length, 1);
+    assert.equal(((nathanKept?.crew as { direct: unknown[] }).direct || []).length, 1);
+
+    applyPackToStore(ownerDesk, smashLocal);
+    const afterSmash = collectPack(ownerDesk, "new-mtaajdwa-f7539");
+    assert.equal((afterSmash?.schedule as { projectStart?: string }).projectStart, "2026-09-01");
+    assert.equal(packClockIsSeedSmashed(afterSmash), false);
+  });
 });

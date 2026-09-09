@@ -6,6 +6,7 @@ import {
   scheduleOnce,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
+import { shouldSkipIntegrityFlush } from "./pack-integrity.ts";
 import { ownerVaultEmail, packSharedEmails } from "./estimate-scope.ts";
 import { applyHisIdentity, hisFileForPackId, hisMatchForPack, persistHisWoodRiverCards } from "./his-wood-river.ts";
 import { persistRodeoU110Wake } from "./madison-u110.ts";
@@ -98,6 +99,7 @@ export function isLeftoverOwnerCopy(pack: { ownerEmail?: string; sharedWith?: st
   return true;
 }
 
+/** Drive vault is canonical. Hydrate so every seat sees the same live pack after hard-refresh. */
 export async function hydrateFromVault(
   store?: StorageLike | null,
   opts?: { viewAs?: string | null },
@@ -271,7 +273,9 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   }
   const pack = collectPack(target, packId);
   if (!pack) return { ok: false as const };
-  if (packClockIsSeedSmashed(pack)) {
+  // View-as / President lens already returned above. Smashed viewer leftover must not
+  // re-upload over Drive. Editors = owner (Robert) OR assigned PM/estimator.
+  if (packClockIsSeedSmashed(pack) || shouldSkipIntegrityFlush(pack)) {
     return { ok: true as const, skipped: true as const };
   }
   const body = JSON.stringify({ pack });

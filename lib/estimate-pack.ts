@@ -4,6 +4,17 @@ import {
   aromaticsSourceCanRestore,
   isAromaticsIdentity,
 } from "./aromatics-freeze.ts";
+import {
+  decidePackWrite,
+  incomingBreaksFingerprint,
+  packHasDemoSeedClock,
+  packHasForeignAfeName,
+  packIsVaultCanonical,
+  packLooksCrossPackGrafted,
+  packLooksSmashed,
+  readPackFingerprint,
+  rememberPackFingerprint,
+} from "./pack-integrity.ts";
 import { catalogSites } from "./desk-data.ts";
 import { parseEstimateStatus, resolveEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { clampStatusForSite, regularClientFromParts } from "./site-regular.ts";
@@ -144,7 +155,21 @@ export function crewHasCustomClock(crew: unknown) {
 export function packClockIsSeedSmashed(pack: EstimatePackSnapshot | null | undefined) {
   if (!pack?.packId) return false;
   if (isAromaticsPack(pack)) return aromaticsPackLooksSmashed(pack);
+  if (packLooksSmashed(pack)) return true;
   return isDefaultSeedSchedule(pack.schedule) && crewHasRows(pack.crew) && !crewHasCustomClock(pack.crew);
+}
+
+function withVaultIdentity(local: EstimatePackSnapshot, vault: EstimatePackSnapshot): EstimatePackSnapshot {
+  return {
+    ...local,
+    ownerEmail: vault.ownerEmail || local.ownerEmail,
+    sharedWith: vault.sharedWith,
+    transferredFrom: vault.transferredFrom,
+    transferredTo: vault.transferredTo,
+    transferredToName: vault.transferredToName,
+    transferredFromName: vault.transferredFromName,
+    status: vault.status || local.status,
+  };
 }
 
 function keepLiveIdentity(live: EstimatePackSnapshot, restored: EstimatePackSnapshot): EstimatePackSnapshot {
@@ -190,6 +215,28 @@ function pickCrew(newer: unknown, older: unknown) {
   if (crewHasCustomClock(newer)) return newer;
   if (crewHasCustomClock(older)) return older;
   return crewHasRows(newer) ? newer : older ?? newer;
+}
+
+function pickScheduleForPack(newer: EstimatePackSnapshot, older: EstimatePackSnapshot) {
+  const newerGraft = packLooksCrossPackGrafted(newer);
+  const olderGraft = packLooksCrossPackGrafted(older);
+  if (newerGraft && !olderGraft) return older.schedule ?? newer.schedule;
+  if (!newerGraft && olderGraft) return newer.schedule ?? older.schedule;
+  return pickSchedule(newer.schedule, older.schedule);
+}
+
+function pickCrewForPack(newer: EstimatePackSnapshot, older: EstimatePackSnapshot) {
+  const newerGraft = packLooksCrossPackGrafted(newer);
+  const olderGraft = packLooksCrossPackGrafted(older);
+  if (newerGraft && !olderGraft) return older.crew ?? newer.crew;
+  if (!newerGraft && olderGraft) return newer.crew ?? older.crew;
+  return pickCrew(newer.crew, older.crew);
+}
+
+function pickJobMetaForPack(newer: EstimatePackSnapshot, older: EstimatePackSnapshot) {
+  if (packHasForeignAfeName(newer) && !packHasForeignAfeName(older)) return older.jobMeta ?? newer.jobMeta;
+  if (!packHasForeignAfeName(newer) && packHasForeignAfeName(older)) return newer.jobMeta ?? older.jobMeta;
+  return newer.jobMeta ?? older.jobMeta;
 }
 
 export function equipmentHasWork(value: unknown) {
@@ -352,8 +399,17 @@ function packSheetScore(pack: EstimatePackSnapshot) {
   );
 }
 
-/** Same packId: transferred / richer working copy beats a thinner leftover. */
+/**
+ * Same packId: Drive-healthy / transferred / richer working copy beats a thinner leftover.
+ * A smashed or grafted copy cannot beat a good vault copy — all seats share one clock/total.
+ */
 export function preferCanonicalPack(a: EstimatePackSnapshot, b: EstimatePackSnapshot): EstimatePackSnapshot {
+  const aSmash = packLooksSmashed(a) || packLooksCrossPackGrafted(a);
+  const bSmash = packLooksSmashed(b) || packLooksCrossPackGrafted(b);
+  if (aSmash !== bSmash) return aSmash ? b : a;
+  const aCanon = packIsVaultCanonical(a);
+  const bCanon = packIsVaultCanonical(b);
+  if (aCanon !== bCanon) return aCanon ? a : b;
   const aMoved = packWasTransferred(a);
   const bMoved = packWasTransferred(b);
   if (aMoved !== bMoved) return aMoved ? a : b;
@@ -380,12 +436,21 @@ export function collapsePacksById(packs: EstimatePackSnapshot[]): EstimatePackSn
   return [...map.values()];
 }
 
+/**
+ * Hydrate / upsert merge. Drive vault is canonical for shared packs:
+ * stale, thin, demo, or cross-pack local cannot beat a good vault, so every
+ * seat hard-refreshes to the same Estimate Total and crew/clock.
+ * Viewers (shared-with / President lens / view-as) must not win over that vault copy.
+ */
 export function pickPack(
   local: EstimatePackSnapshot | null | undefined,
   vault: EstimatePackSnapshot | null | undefined,
 ): EstimatePackSnapshot | null {
   if (!vault?.packId) return local ?? null;
-  if (!local?.packId) return packHasWork(vault) ? vault : local ?? null;
+  if (!local?.packId) {
+    if (packLooksCrossPackGrafted(vault)) return null;
+    return packHasWork(vault) ? vault : local ?? null;
+  }
   if (isAromaticsPack(local) || isAromaticsPack(vault)) {
     if (packClockIsSeedSmashed(local) && aromaticsSourceCanRestore(vault)) {
       return {
@@ -440,6 +505,17 @@ export function pickPack(
   } else if (packClockIsSeedSmashed(vault) && !packClockIsSeedSmashed(local)) {
     return restorePackClock(vault, local);
   }
+  const vaultWouldSmash = decidePackWrite(vault, local);
+  if (vaultWouldSmash.action === "keep-last-good" || vaultWouldSmash.action === "refuse") {
+    return withVaultIdentity(local, vault);
+  }
+  const localWouldSmash = decidePackWrite(local, vault);
+  if (localWouldSmash.action === "keep-last-good" || localWouldSmash.action === "refuse") {
+    if (localWouldSmash.code === "stale") {
+      return withVaultIdentity({ ...vault, packId: local.packId, key: local.key }, vault);
+    }
+    return withVaultIdentity(restorePackClock(local, vault), vault);
+  }
   const vaultMoved =
     packWasTransferred(vault) ||
     Boolean(
@@ -462,10 +538,10 @@ export function pickPack(
   const older = newer === local ? vault : local;
   return {
     ...newer,
-    crew: pickCrew(newer.crew, older.crew),
+    crew: pickCrewForPack(newer, older),
     orgChart: newer.orgChart ?? older.orgChart,
-    schedule: pickSchedule(newer.schedule, older.schedule),
-    jobMeta: newer.jobMeta ?? older.jobMeta,
+    schedule: pickScheduleForPack(newer, older),
+    jobMeta: pickJobMetaForPack(newer, older),
     activities: newer.activities ?? older.activities,
     equipment: pickEquipment(newer.equipment, older.equipment),
     otherCost: pickOtherCost(newer.otherCost, older.otherCost),
@@ -570,12 +646,22 @@ export function collectPack(
 
 export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot) {
   if (!isLocalPackId(pack.packId)) return;
-  if (packClockIsSeedSmashed(pack)) {
-    const existing = collectPack(store, pack.packId);
-    if (existing && !packClockIsSeedSmashed(existing) && (scheduleHasWork(existing.schedule) || aromaticsSourceCanRestore(existing))) {
+  const existing = collectPack(store, pack.packId);
+  const writeDecision = decidePackWrite(pack, existing);
+  if (writeDecision.action === "refuse" && !existing) return;
+  if ((writeDecision.action === "keep-last-good" || writeDecision.action === "refuse") && existing) {
+    pack = restorePackClock(pack, existing);
+  } else if (packClockIsSeedSmashed(pack) || packLooksCrossPackGrafted(pack)) {
+    if (existing && !packLooksSmashed(existing) && (scheduleHasWork(existing.schedule) || aromaticsSourceCanRestore(existing))) {
       pack = restorePackClock(pack, existing);
     }
   }
+  const fpBreak = incomingBreaksFingerprint(pack, readPackFingerprint(store, pack.packId));
+  if (fpBreak && existing && !packLooksSmashed(existing)) {
+    pack = restorePackClock(pack, existing);
+  }
+  const stillGrafted = packLooksCrossPackGrafted(pack);
+  const existingHealthy = Boolean(existing && !packLooksSmashed(existing));
   rememberLocalPack(
     {
       packId: pack.packId,
@@ -598,19 +684,35 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
   touchLocalPack(pack.packId, pack.updatedAt || Date.now(), store, pack.createdAt);
   const key = storageKeyForPack(pack.packId);
   if (pack.schedule != null) {
-    const existing = readStoreJson(store, `${PHASE_STORE_PREFIX}${key}`);
-    if (scheduleHasWork(pack.schedule) || !scheduleHasWork(existing)) {
+    const existingSchedule = readStoreJson(store, `${PHASE_STORE_PREFIX}${key}`);
+    const incomingDemo = packHasDemoSeedClock({ packId: pack.packId, title: pack.title, schedule: pack.schedule });
+    const existingLive = scheduleHasWork(existingSchedule) && !packHasDemoSeedClock({ packId: pack.packId, title: pack.title, schedule: existingSchedule });
+    if (incomingDemo && existingLive) {
+      // Demo / 8-21 seed clock cannot collapse a live Job setup.
+    } else if (stillGrafted && existingHealthy) {
+      // Cross-pack Aromatics clock cannot overwrite this pack's Job setup.
+    } else if (scheduleHasWork(pack.schedule) || !scheduleHasWork(existingSchedule)) {
       writeStoreJson(store, `${PHASE_STORE_PREFIX}${key}`, pack.schedule);
     }
   }
   if (pack.crew != null) {
-    const existing = readStoreJson(store, `${CREW_STORE_PREFIX}${key}`);
-    if (crewHasCustomClock(pack.crew) || !crewHasCustomClock(existing)) {
+    const existingCrew = readStoreJson(store, `${CREW_STORE_PREFIX}${key}`);
+    if (!crewHasRows(pack.crew) && crewHasRows(existingCrew)) {
+      // Empty vault crew cannot wipe a filled pack.
+    } else if (stillGrafted && existingHealthy) {
+      // Richer foreign crew cannot beat this pack's last-good calendar.
+    } else if (crewHasCustomClock(pack.crew) || !crewHasCustomClock(existingCrew)) {
       writeStoreJson(store, `${CREW_STORE_PREFIX}${key}`, pack.crew);
     }
   }
   if (pack.orgChart != null) writeStoreJson(store, `${ORG_CHART_STORE_PREFIX}${key}`, pack.orgChart);
-  if (pack.jobMeta != null) writeStoreJson(store, `${JOB_META_PREFIX}${key}`, pack.jobMeta);
+  if (pack.jobMeta != null) {
+    if (packHasForeignAfeName(pack) && existing && !packHasForeignAfeName(existing)) {
+      // Foreign AFE (e.g. P66 Rodeo U-250 on Boiler 17) cannot stamp this pack.
+    } else {
+      writeStoreJson(store, `${JOB_META_PREFIX}${key}`, pack.jobMeta);
+    }
+  }
   if (pack.activities != null) writeStoreJson(store, `${ACTIVITY_STORE_PREFIX}${key}`, pack.activities);
   writeSheetIfRicher(store, `${EQUIPMENT_STORE_PREFIX}${key}`, pack.equipment, equipmentHasWork);
   if (pack.otherCost != null) {
@@ -624,6 +726,7 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
   writeSheetIfRicher(store, `${FCR_STORE_PREFIX}${key}`, pack.fcr, fcrHasWork);
   writeSheetIfRicher(store, `${COST_REPORT_STORE_PREFIX}${key}`, pack.costReport, costReportHasWork);
   writeSheetIfRicher(store, `${PURCHASING_STORE_PREFIX}${key}`, pack.purchasing, purchasingHasWork);
+  rememberPackFingerprint(store, collectPack(store, pack.packId) || pack);
   notifyEstimateSheets();
 }
 

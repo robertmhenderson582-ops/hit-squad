@@ -3,6 +3,7 @@ import {
   canReturnPack,
   canSharePack,
   canTransferPack,
+  canEditAssignedEstimate,
   canWritePack,
   listedDeskPacks,
   ownerVaultEmail,
@@ -22,6 +23,12 @@ import {
   TRANSFER_WRITE_ERROR,
 } from "./handoff.ts";
 import { packHasWork, parseIncomingPack, pickPack, publicPack, type EstimatePackSnapshot } from "./estimate-pack.ts";
+import {
+  decidePackWrite,
+  PACK_INTEGRITY_ERROR_PREFIX,
+  packLooksSmashed,
+  shouldSkipIntegrityFlush,
+} from "./pack-integrity.ts";
 import {
   deleteEstimateInDrive,
   driveAdapter,
@@ -102,6 +109,20 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
   if (claimed && !canWritePack(user, claimed)) {
     return { ok: false as const, status: 403, error: "That package is not on this desk." };
   }
+  // 2026-09-08: editors = owner (Robert) OR assigned PM/estimator. Not assignee-only.
+  // Viewers cannot flush a smashed leftover over Drive. ownerEmail is the PM stand-in.
+  if (claimed && !canEditAssignedEstimate(user, claimed)) {
+    const incoming = parsed.pack;
+    const smash = packLooksSmashed(incoming) || shouldSkipIntegrityFlush(incoming);
+    const decision = decidePackWrite(incoming, claimed);
+    if (smash || decision.action === "keep-last-good" || decision.action === "refuse") {
+      return {
+        ok: false as const,
+        status: 409,
+        error: "Viewer local cannot overwrite the shared estimate.",
+      };
+    }
+  }
   const merged = pickPack(parsed.pack, claimed) || parsed.pack;
   const pack = publicPack({
     ...merged,
@@ -124,7 +145,10 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
       return { ok: false as const, status: 404, error: "That package is not on this desk." };
     }
     if (error instanceof Error && error.message === "AROMATICS_SEED_SMASH") {
-      return { ok: false as const, status: 409, error: "Could not store that package." };
+      return { ok: false as const, status: 409, error: "Demo seed clock cannot overwrite a live schedule." };
+    }
+    if (error instanceof Error && error.message.startsWith(PACK_INTEGRITY_ERROR_PREFIX)) {
+      return { ok: false as const, status: 409, error: error.message.slice(PACK_INTEGRITY_ERROR_PREFIX.length) };
     }
     throw error;
   }
