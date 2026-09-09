@@ -965,6 +965,23 @@ describe("drive estimate upsert", () => {
     const written = JSON.parse(await drive.readJson("1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y"));
     assert.equal((written.schedule as { projectStart?: string }).projectStart, "2026-08-10");
     assert.equal((written.crew.staff || []).length, 1);
+
+    drive.files.set("1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y", {
+      file: {
+        id: "1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y",
+        name: "wood-river-boiler-17-2026.json",
+        properties: { packId: "new-b1726", ownerEmail: filled.ownerEmail },
+      },
+      content: JSON.stringify({ ...filled, jobMeta: { afeName: "Boiler 17 2026" } }),
+    });
+    const emptyU250 = {
+      ...empty,
+      jobMeta: { afeName: "P66 Rodeo U-250" },
+    };
+    await upsertEstimateInDrive(drive, emptyU250, "folder");
+    const afterAfe = JSON.parse(await drive.readJson("1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y"));
+    assert.equal((afterAfe.jobMeta as { afeName?: string })?.afeName, "Boiler 17 2026");
+    assert.equal((afterAfe.crew.staff || []).length, 1);
   });
 
   it("Jobs list retries a timed-out live restore write onto the Aromatics file id only", async () => {

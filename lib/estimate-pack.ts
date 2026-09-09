@@ -8,6 +8,8 @@ import {
   decidePackWrite,
   incomingBreaksFingerprint,
   packHasDemoSeedClock,
+  packHasForeignAfeName,
+  packLooksCrossPackGrafted,
   packLooksSmashed,
   readPackFingerprint,
   rememberPackFingerprint,
@@ -214,6 +216,28 @@ function pickCrew(newer: unknown, older: unknown) {
   return crewHasRows(newer) ? newer : older ?? newer;
 }
 
+function pickScheduleForPack(newer: EstimatePackSnapshot, older: EstimatePackSnapshot) {
+  const newerGraft = packLooksCrossPackGrafted(newer);
+  const olderGraft = packLooksCrossPackGrafted(older);
+  if (newerGraft && !olderGraft) return older.schedule ?? newer.schedule;
+  if (!newerGraft && olderGraft) return newer.schedule ?? older.schedule;
+  return pickSchedule(newer.schedule, older.schedule);
+}
+
+function pickCrewForPack(newer: EstimatePackSnapshot, older: EstimatePackSnapshot) {
+  const newerGraft = packLooksCrossPackGrafted(newer);
+  const olderGraft = packLooksCrossPackGrafted(older);
+  if (newerGraft && !olderGraft) return older.crew ?? newer.crew;
+  if (!newerGraft && olderGraft) return newer.crew ?? older.crew;
+  return pickCrew(newer.crew, older.crew);
+}
+
+function pickJobMetaForPack(newer: EstimatePackSnapshot, older: EstimatePackSnapshot) {
+  if (packHasForeignAfeName(newer) && !packHasForeignAfeName(older)) return older.jobMeta ?? newer.jobMeta;
+  if (!packHasForeignAfeName(newer) && packHasForeignAfeName(older)) return newer.jobMeta ?? older.jobMeta;
+  return newer.jobMeta ?? older.jobMeta;
+}
+
 export function equipmentHasWork(value: unknown) {
   const row = asRecord(value);
   if (!row) return false;
@@ -407,7 +431,10 @@ export function pickPack(
   vault: EstimatePackSnapshot | null | undefined,
 ): EstimatePackSnapshot | null {
   if (!vault?.packId) return local ?? null;
-  if (!local?.packId) return packHasWork(vault) ? vault : local ?? null;
+  if (!local?.packId) {
+    if (packLooksCrossPackGrafted(vault)) return null;
+    return packHasWork(vault) ? vault : local ?? null;
+  }
   if (isAromaticsPack(local) || isAromaticsPack(vault)) {
     if (packClockIsSeedSmashed(local) && aromaticsSourceCanRestore(vault)) {
       return {
@@ -492,10 +519,10 @@ export function pickPack(
   const older = newer === local ? vault : local;
   return {
     ...newer,
-    crew: pickCrew(newer.crew, older.crew),
+    crew: pickCrewForPack(newer, older),
     orgChart: newer.orgChart ?? older.orgChart,
-    schedule: pickSchedule(newer.schedule, older.schedule),
-    jobMeta: newer.jobMeta ?? older.jobMeta,
+    schedule: pickScheduleForPack(newer, older),
+    jobMeta: pickJobMetaForPack(newer, older),
     activities: newer.activities ?? older.activities,
     equipment: pickEquipment(newer.equipment, older.equipment),
     otherCost: pickOtherCost(newer.otherCost, older.otherCost),
@@ -601,11 +628,12 @@ export function collectPack(
 export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot) {
   if (!isLocalPackId(pack.packId)) return;
   const existing = collectPack(store, pack.packId);
-  const writeDecision = existing ? decidePackWrite(pack, existing) : { action: "accept" as const };
-  if (writeDecision.action === "keep-last-good" && existing) {
+  const writeDecision = decidePackWrite(pack, existing);
+  if (writeDecision.action === "refuse" && !existing) return;
+  if ((writeDecision.action === "keep-last-good" || writeDecision.action === "refuse") && existing) {
     pack = restorePackClock(pack, existing);
-  } else if (packClockIsSeedSmashed(pack)) {
-    if (existing && !packClockIsSeedSmashed(existing) && (scheduleHasWork(existing.schedule) || aromaticsSourceCanRestore(existing))) {
+  } else if (packClockIsSeedSmashed(pack) || packLooksCrossPackGrafted(pack)) {
+    if (existing && !packLooksSmashed(existing) && (scheduleHasWork(existing.schedule) || aromaticsSourceCanRestore(existing))) {
       pack = restorePackClock(pack, existing);
     }
   }
@@ -613,6 +641,8 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
   if (fpBreak && existing && !packLooksSmashed(existing)) {
     pack = restorePackClock(pack, existing);
   }
+  const stillGrafted = packLooksCrossPackGrafted(pack);
+  const existingHealthy = Boolean(existing && !packLooksSmashed(existing));
   rememberLocalPack(
     {
       packId: pack.packId,
@@ -640,6 +670,8 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
     const existingLive = scheduleHasWork(existingSchedule) && !packHasDemoSeedClock({ packId: pack.packId, title: pack.title, schedule: existingSchedule });
     if (incomingDemo && existingLive) {
       // Demo / 8-21 seed clock cannot collapse a live Job setup.
+    } else if (stillGrafted && existingHealthy) {
+      // Cross-pack Aromatics clock cannot overwrite this pack's Job setup.
     } else if (scheduleHasWork(pack.schedule) || !scheduleHasWork(existingSchedule)) {
       writeStoreJson(store, `${PHASE_STORE_PREFIX}${key}`, pack.schedule);
     }
@@ -648,12 +680,20 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
     const existingCrew = readStoreJson(store, `${CREW_STORE_PREFIX}${key}`);
     if (!crewHasRows(pack.crew) && crewHasRows(existingCrew)) {
       // Empty vault crew cannot wipe a filled pack.
+    } else if (stillGrafted && existingHealthy) {
+      // Richer foreign crew cannot beat this pack's last-good calendar.
     } else if (crewHasCustomClock(pack.crew) || !crewHasCustomClock(existingCrew)) {
       writeStoreJson(store, `${CREW_STORE_PREFIX}${key}`, pack.crew);
     }
   }
   if (pack.orgChart != null) writeStoreJson(store, `${ORG_CHART_STORE_PREFIX}${key}`, pack.orgChart);
-  if (pack.jobMeta != null) writeStoreJson(store, `${JOB_META_PREFIX}${key}`, pack.jobMeta);
+  if (pack.jobMeta != null) {
+    if (packHasForeignAfeName(pack) && existing && !packHasForeignAfeName(existing)) {
+      // Foreign AFE (e.g. P66 Rodeo U-250 on Boiler 17) cannot stamp this pack.
+    } else {
+      writeStoreJson(store, `${JOB_META_PREFIX}${key}`, pack.jobMeta);
+    }
+  }
   if (pack.activities != null) writeStoreJson(store, `${ACTIVITY_STORE_PREFIX}${key}`, pack.activities);
   writeSheetIfRicher(store, `${EQUIPMENT_STORE_PREFIX}${key}`, pack.equipment, equipmentHasWork);
   if (pack.otherCost != null) {

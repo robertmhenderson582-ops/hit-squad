@@ -1,7 +1,8 @@
 /**
  * Program-wide estimate pack integrity.
- * Empty / identity-only / demo-clock / thinner smash cannot overwrite a fuller live pack.
+ * Empty / identity-only / demo-clock / thinner / cross-pack smash cannot overwrite a fuller live pack.
  * Locked baselines are official facts only — no invented Monroe $ or Boiler labor $.
+ * U110 / U250 / Monroe have no vault JSON yet — identity-only reserved slots, do not invent files.
  */
 
 import {
@@ -36,6 +37,12 @@ const CREW_LANES = ["staff", "generalForeman", "foreman", "direct", "support"] a
 /** Sep 2 freeze Estimate Total. Do not invent a second Aromatics dollar lock. */
 export const AROMATICS_FREEZE_GRAND_TOTAL = 25_324_671.97;
 
+/** Sep 2 freeze Labor $ — live Cat 2 smash copied this onto the pit-stop pack. */
+export const AROMATICS_FREEZE_LABOR = 19_063_808.52;
+
+/** Sep 7 good Madison CAT 2 Estimate Total (vault fixture). Live smash was ~$20.81M. */
+export const CAT2_SEP7_GRAND_TOTAL = 1_435_365.66;
+
 /** Boiler leftover smashed onto the 8/21 demo seed — official B-1 starts 2026-08-10. */
 export const BOILER17_DEMO_PROJECT_START = "2026-08-21";
 
@@ -65,6 +72,8 @@ export type IntegrityPack = {
 };
 
 export type PackDollarsStatus = "locked" | "formula-unavailable" | "structure-only";
+
+export type PackFamily = "aromatics" | "cat2" | "u110" | "u250" | "monroe" | "boiler";
 
 export type PackBaseline = {
   packId: string;
@@ -219,6 +228,90 @@ export function isCat2Identity(pack?: { packId?: string; title?: string } | null
   return title.includes("madison cat 2") || title === "madison cat 2 (pit stop)";
 }
 
+export function packFamilyOf(pack?: { packId?: string; title?: string } | null): PackFamily | null {
+  if (!pack) return null;
+  const id = (pack.packId || "").trim();
+  if (id === HIS_AROMATICS_PACK_ID || isAromaticsIdentity(pack)) return "aromatics";
+  if (id === HIS_CAT2_PACK_ID || isCat2Identity(pack)) return "cat2";
+  if (id === RODEO_U110_PACK_ID) return "u110";
+  if (id === RODEO_U250_PACK_ID) return "u250";
+  if (id === MONROE_541V_PACK_ID) return "monroe";
+  if (id === BOILER17_PACK_ID || isBoiler17Identity(pack)) return "boiler";
+  return null;
+}
+
+function jobMetaAfeName(jobMeta: unknown) {
+  const row = asRecord(jobMeta);
+  return typeof row?.afeName === "string" ? row.afeName : "";
+}
+
+/** Map a stamped AFE / job name onto a material family. Empty / unknown names are not grafts. */
+export function afeFamilyOf(name = ""): PackFamily | null {
+  const key = titleKey(name);
+  if (!key) return null;
+  if (key.includes("2027 aromatics") || key.includes("aromatics turnaround")) return "aromatics";
+  if (key.includes("madison cat 2") || key.includes("cat 2 pit")) return "cat2";
+  if (/\bu-?250\b/.test(key) || key.includes("p66 rodeo u-250") || key.includes("p66 rodeo u250")) return "u250";
+  if (/\bu-?110\b/.test(key) || key.includes("p66 rodeo u-110") || key.includes("p66 rodeo u110")) return "u110";
+  if (key.includes("541v") || key.includes("monroe")) return "monroe";
+  if (key.includes("boiler 17")) return "boiler";
+  return null;
+}
+
+function crewHasAromaticsFreezeStart(crew: unknown) {
+  const row = asRecord(crew);
+  if (!row) return false;
+  for (const lane of CREW_LANES) {
+    const list = row[lane];
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      const ranges = asRecord(item)?.ranges;
+      if (!Array.isArray(ranges)) continue;
+      for (const range of ranges) {
+        const start = typeof asRecord(range)?.start === "string" ? String(asRecord(range)?.start) : "";
+        if (start === AROMATICS_FREEZE_PROJECT_START || start.startsWith("2027-")) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Multi-month 2027 Aromatics crew — the shape grafted onto live Cat 2. */
+export function crewLooksLikeAromaticsFreeze(crew: unknown) {
+  return crewClockSpanDays(crew) >= AROMATICS_FREEZE_MIN_CREW_SPAN_DAYS && crewHasAromaticsFreezeStart(crew);
+}
+
+/**
+ * Aromatics 2027-01-11 clock / multi-month 2027 crew sitting on a different pack.
+ * Official Cat 2 never starts 2027-01-11. Other material packs need the long freeze crew
+ * so a one-day 2027 stub on a draft (new-cat2pit) is not treated as smash.
+ */
+export function packHasAromaticsClockGraft(pack?: IntegrityPack | null) {
+  if (!pack?.packId || isAromaticsIdentity(pack)) return false;
+  const start = scheduleProjectStart(pack.schedule);
+  const freezeCrew = crewLooksLikeAromaticsFreeze(pack.crew);
+  if (isCat2Identity(pack) && (start === AROMATICS_FREEZE_PROJECT_START || freezeCrew)) return true;
+  if (start === AROMATICS_FREEZE_PROJECT_START && freezeCrew) return true;
+  if (freezeCrew && isMaterialPack(pack)) return true;
+  return false;
+}
+
+export function packHasForeignAfeName(pack?: IntegrityPack | null) {
+  if (!pack?.packId) return false;
+  const family = packFamilyOf(pack);
+  const afeFamily = afeFamilyOf(jobMetaAfeName(pack.jobMeta));
+  if (!family || !afeFamily) return false;
+  return family !== afeFamily;
+}
+
+/** Cross-pack overwrite: Aromatics crew/clock or another job's AFE stamped on this pack. */
+export function packLooksCrossPackGrafted(pack?: IntegrityPack | null) {
+  if (!pack?.packId) return false;
+  if (packHasAromaticsClockGraft(pack)) return true;
+  if (packHasForeignAfeName(pack)) return true;
+  return false;
+}
+
 export function isMaterialPack(pack?: { packId?: string; title?: string } | null) {
   if (!pack) return false;
   const id = (pack.packId || "").trim();
@@ -257,8 +350,9 @@ export function materialPackBaselines(): PackBaseline[] {
     {
       packId: HIS_CAT2_PACK_ID,
       label: "Madison CAT 2",
-      dollarsStatus: "structure-only",
-      note: "No official dollar lock. Crew / sheet / byte fingerprint only — pit-stop dates may sit inside the 2026 seed window.",
+      grandTotal: CAT2_SEP7_GRAND_TOTAL,
+      dollarsStatus: "locked",
+      note: "Sep 7 good Estimate Total. Live smash grafted Aromatics crew/clock (labor $19,063,808.52 → total ~$20.81M). Pit-stop dates may sit inside the 2026 seed window.",
     },
     {
       packId: RODEO_U110_PACK_ID,
@@ -266,7 +360,7 @@ export function materialPackBaselines(): PackBaseline[] {
       grandTotal: fixtures.u110Contractor.buckets.grandTotal,
       totalHours: fixtures.u110Contractor.buckets.totalHours,
       dollarsStatus: "locked",
-      note: fixtures.u110Contractor.note,
+      note: `${fixtures.u110Contractor.note} No vault JSON yet — identity-only reserved slot.`,
     },
     {
       packId: RODEO_U250_PACK_ID,
@@ -274,14 +368,14 @@ export function materialPackBaselines(): PackBaseline[] {
       grandTotal: fixtures.u250Contractor.buckets.grandTotal,
       totalHours: fixtures.u250Contractor.buckets.totalHours,
       dollarsStatus: "locked",
-      note: fixtures.u250Contractor.note,
+      note: `${fixtures.u250Contractor.note} No vault JSON yet — identity-only reserved slot.`,
     },
     {
       packId: MONROE_541V_PACK_ID,
       label: "Monroe 541V",
       totalHours: fixtures.monroe541v.monroeHours.totalLabor,
       dollarsStatus: "formula-unavailable",
-      note: fixtures.monroe541v.note,
+      note: `${fixtures.monroe541v.note} No vault JSON yet — identity-only reserved slot.`,
     },
     {
       packId: BOILER17_PACK_ID,
@@ -353,6 +447,7 @@ export function packRichness(pack?: IntegrityPack | null): PackRichness {
 
 export function packLooksSmashed(pack?: IntegrityPack | null) {
   if (!pack?.packId) return false;
+  if (packLooksCrossPackGrafted(pack)) return true;
   if (isAromaticsIdentity(pack)) return aromaticsPackLooksSmashed(pack);
   if (isWakeIdentityOnly(pack)) return false;
   if (isBoiler17Identity(pack)) {
@@ -413,11 +508,34 @@ export function decidePackWrite(
   if (!incoming?.packId) {
     return { action: "refuse", reason: "Missing package.", code: "missing" };
   }
+  if (packLooksCrossPackGrafted(incoming) && !existing?.packId) {
+    return {
+      action: "refuse",
+      reason: "Cross-pack crew, clock, or AFE cannot seed this estimate.",
+      code: "cross-pack",
+    };
+  }
   if (!existing?.packId) return { action: "accept" };
   if ((existing.packId || "").trim() !== (incoming.packId || "").trim()) return { action: "accept" };
 
   const next = packRichness(incoming);
   const live = packRichness(existing);
+  const incomingGraft = packLooksCrossPackGrafted(incoming);
+  const existingGraft = packLooksCrossPackGrafted(existing);
+  if (incomingGraft && !existingGraft) {
+    if (live.hasSheets || live.crewRows > 0 || live.hasLiveClock) {
+      return {
+        action: "keep-last-good",
+        reason: "Cross-pack crew, clock, or AFE cannot overwrite this estimate.",
+        code: "cross-pack",
+      };
+    }
+    return {
+      action: "refuse",
+      reason: "Cross-pack crew, clock, or AFE cannot seed this estimate.",
+      code: "cross-pack",
+    };
+  }
   const aromaticsIncoming = isAromaticsIdentity(incoming) || isAromaticsIdentity(existing);
 
   if (aromaticsIncoming && aromaticsPackLooksSmashed(incoming) && aromaticsSourceCanRestore(existing)) {
@@ -521,6 +639,9 @@ export function rememberPackFingerprint(store: StorageLike | null | undefined, p
 export function incomingBreaksFingerprint(incoming: IntegrityPack, fp: PackFingerprint | null): string | null {
   if (!fp || fp.packId !== incoming.packId) return null;
   const next = packRichness(incoming);
+  if (packLooksCrossPackGrafted(incoming) && (fp.hasSheets || fp.hasLiveClock || fp.crewRows > 0)) {
+    return "Cross-pack crew, clock, or AFE cannot overwrite this estimate.";
+  }
   if (next.identityOnly && fp.hasSheets) return "Identity-only card cannot overwrite a filled estimate.";
   if (next.emptyCrew && fp.crewRows > 0) return "Empty crew cannot overwrite a filled estimate.";
   if (next.demoClock && fp.hasLiveClock) return "Demo seed clock cannot overwrite a live schedule.";
@@ -580,6 +701,19 @@ export function checkPackBaseline(
 
   if (baseline.dollarsStatus === "structure-only") {
     return { ok: true, skipped: "structure-only", reason: baseline.note };
+  }
+
+  if (
+    isCat2Identity(pack) &&
+    desk?.grandTotal != null &&
+    (moneyEqual(desk.grandTotal, AROMATICS_FREEZE_LABOR) ||
+      moneyEqual(desk.grandTotal, AROMATICS_FREEZE_GRAND_TOTAL) ||
+      desk.grandTotal >= CAT2_SEP7_GRAND_TOTAL * 5)
+  ) {
+    return {
+      ok: false,
+      fault: `${baseline.label} desk $${desk.grandTotal} looks like an Aromatics graft vs locked $${baseline.grandTotal}.`,
+    };
   }
 
   if (desk?.grandTotal != null && baseline.grandTotal != null) {
