@@ -20,6 +20,7 @@ import {
   packHasAromaticsClockGraft,
   packHasDemoSeedClock,
   packHasForeignAfeName,
+  packIsVaultCanonical,
   packLooksCrossPackGrafted,
   packLooksSmashed,
   packPayloadBytes,
@@ -339,5 +340,16 @@ describe("pack integrity write guards", () => {
     const wakeOnly = { packId: RODEO_U110_PACK_ID, title: "Rodeo U110 2026 TA", createdAt: 1, updatedAt: 1 };
     assert.equal(shouldSkipIntegrityFlush(wakeOnly), true);
     assert.equal(packLooksCrossPackGrafted(wakeOnly), false);
+  });
+
+  it("stale local cannot overwrite a newer canonical vault copy", () => {
+    const vault = cat2Live({ updatedAt: 800 });
+    const stale = cat2Live({ updatedAt: 100 });
+    assert.equal(packIsVaultCanonical(vault), true);
+    assert.equal(packIsVaultCanonical(stale), true);
+    const staleWrite = decidePackWrite(stale, vault);
+    assert.equal(staleWrite.action, "keep-last-good");
+    assert.match(staleWrite.reason, /Stale/i);
+    assert.equal(decidePackWrite(vault, stale).action, "accept");
   });
 });

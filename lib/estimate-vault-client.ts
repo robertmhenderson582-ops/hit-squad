@@ -272,6 +272,7 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   }
   const pack = collectPack(target, packId);
   if (!pack) return { ok: false as const };
+  // Post-restore smash / thin leftover must not re-upload and poison other seats.
   if (packClockIsSeedSmashed(pack) || shouldSkipIntegrityFlush(pack)) {
     return { ok: true as const, skipped: true as const };
   }

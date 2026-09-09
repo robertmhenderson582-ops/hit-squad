@@ -9,6 +9,7 @@ import {
   incomingBreaksFingerprint,
   packHasDemoSeedClock,
   packHasForeignAfeName,
+  packIsVaultCanonical,
   packLooksCrossPackGrafted,
   packLooksSmashed,
   readPackFingerprint,
@@ -398,8 +399,17 @@ function packSheetScore(pack: EstimatePackSnapshot) {
   );
 }
 
-/** Same packId: transferred / richer working copy beats a thinner leftover. */
+/**
+ * Same packId: Drive-healthy / transferred / richer working copy beats a thinner leftover.
+ * A smashed or grafted copy cannot beat a good vault copy — all seats share one clock/total.
+ */
 export function preferCanonicalPack(a: EstimatePackSnapshot, b: EstimatePackSnapshot): EstimatePackSnapshot {
+  const aSmash = packLooksSmashed(a) || packLooksCrossPackGrafted(a);
+  const bSmash = packLooksSmashed(b) || packLooksCrossPackGrafted(b);
+  if (aSmash !== bSmash) return aSmash ? b : a;
+  const aCanon = packIsVaultCanonical(a);
+  const bCanon = packIsVaultCanonical(b);
+  if (aCanon !== bCanon) return aCanon ? a : b;
   const aMoved = packWasTransferred(a);
   const bMoved = packWasTransferred(b);
   if (aMoved !== bMoved) return aMoved ? a : b;
@@ -426,6 +436,11 @@ export function collapsePacksById(packs: EstimatePackSnapshot[]): EstimatePackSn
   return [...map.values()];
 }
 
+/**
+ * Hydrate / upsert merge. Drive vault is canonical for shared packs:
+ * stale, thin, demo, or cross-pack local cannot beat a good vault, so every
+ * seat hard-refreshes to the same Estimate Total and crew/clock.
+ */
 export function pickPack(
   local: EstimatePackSnapshot | null | undefined,
   vault: EstimatePackSnapshot | null | undefined,
@@ -495,6 +510,9 @@ export function pickPack(
   }
   const localWouldSmash = decidePackWrite(local, vault);
   if (localWouldSmash.action === "keep-last-good" || localWouldSmash.action === "refuse") {
+    if (localWouldSmash.code === "stale") {
+      return withVaultIdentity({ ...vault, packId: local.packId, key: local.key }, vault);
+    }
     return withVaultIdentity(restorePackClock(local, vault), vault);
   }
   const vaultMoved =

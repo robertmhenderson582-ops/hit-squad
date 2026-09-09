@@ -1086,6 +1086,60 @@ describe("local transfer commit", () => {
     }
   });
 
+  it("post-restore local smash cannot re-upload and poison other seats", async () => {
+    resetVaultHydrateForTests();
+    const packId = "new-mtaajdwa-f7539";
+    const store = memoryStore();
+    applyPackToStore(store, {
+      packId,
+      key: `new:${packId}`,
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 800,
+      ownerEmail: OWNER_LOGIN_EMAIL,
+      schedule: { projectStart: "2026-09-01", phases: [{ id: "pre", on: true, start: "2026-09-01", stop: "2026-09-03" }] },
+      crew: { direct: [{ id: "bm-1", ranges: [{ start: "2026-09-01", end: "2026-09-03" }] }] },
+    });
+    const key = storageKeyForPack(packId);
+    store.setItem(
+      `${PHASE_STORE_PREFIX}${key}`,
+      JSON.stringify({
+        projectStart: "2027-01-11",
+        phases: defaultPhaseSchedule().phases.map((row) =>
+          row.id === "pre" ? { ...row, start: "2027-01-11", stop: "2027-02-28" } : { ...row, start: "2027-03-01", stop: "2027-05-21" },
+        ),
+      }),
+    );
+    store.setItem(
+      `${CREW_STORE_PREFIX}${key}`,
+      JSON.stringify({
+        staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2027-01-11", end: "2027-05-21" }] }],
+        direct: [],
+      }),
+    );
+    const smashed = collectPack(store, packId);
+    assert.equal((smashed?.schedule as { projectStart?: string }).projectStart, "2027-01-11");
+    const bodies: unknown[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const raw = typeof init?.body === "string" ? init.body : "";
+      if (raw) bodies.push(JSON.parse(raw));
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await flushVaultUpsert(packId, store);
+      assert.equal(result.ok, true);
+      assert.equal("skipped" in result && result.skipped, true);
+      assert.equal(bodies.length, 0);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
   it("collects equipment, sub, and otherCost on upsert and a failed Drive write errors", async () => {
     resetVaultHydrateForTests();
     const store = memoryStore();

@@ -1,6 +1,8 @@
 /**
  * Program-wide estimate pack integrity.
- * Empty / identity-only / demo-clock / thinner / cross-pack smash cannot overwrite a fuller live pack.
+ * Empty / identity-only / demo-clock / thinner / cross-pack / stale smash cannot overwrite a fuller live pack.
+ * Drive vault is canonical for shared packs: every seat must see the same Estimate Total and
+ * crew/clock after a hard-refresh. One user's smashed local cannot poison everyone else's view.
  * Locked baselines are official facts only — no invented Monroe $ or Boiler labor $.
  * U110 / U250 / Monroe have no vault JSON yet — identity-only reserved slots, do not invent files.
  */
@@ -586,6 +588,26 @@ export function decidePackWrite(
     };
   }
 
+  const incomingAt = incoming.updatedAt || 0;
+  const existingAt = existing.updatedAt || 0;
+  if (
+    incomingAt > 0 &&
+    existingAt > 0 &&
+    incomingAt < existingAt &&
+    packIsVaultCanonical(existing) &&
+    packIsVaultCanonical(incoming) &&
+    !packLooksSmashed(incoming) &&
+    next.sheetScore <= live.sheetScore &&
+    next.crewRows <= live.crewRows &&
+    next.bytes <= live.bytes
+  ) {
+    return {
+      action: "keep-last-good",
+      reason: "Stale local copy cannot overwrite a newer vault estimate.",
+      code: "stale",
+    };
+  }
+
   return { action: "accept" };
 }
 
@@ -594,10 +616,25 @@ export function integrityErrorMessage(decision: IntegrityDecision) {
   return `${PACK_INTEGRITY_ERROR_PREFIX}${decision.reason}`;
 }
 
+/**
+ * Healthy Drive copy — the shared source of truth after hard-refresh.
+ * Smashed / identity-only / demo packs are never canonical.
+ */
+export function packIsVaultCanonical(pack?: IntegrityPack | null) {
+  if (!pack?.packId) return false;
+  if (packLooksSmashed(pack) || packLooksCrossPackGrafted(pack) || packIsIdentityOnly(pack)) return false;
+  if (packHasDemoSeedClock(pack)) return false;
+  return packRichness(pack).hasSheets;
+}
+
+/**
+ * Do not PUT a smashed / thin / identity-only leftover back to Drive.
+ * After a restore, a later local smash must not re-upload and poison other seats.
+ */
 export function shouldSkipIntegrityFlush(pack?: IntegrityPack | null) {
   if (!pack?.packId) return false;
   if (isWakeIdentityOnly(pack)) return true;
-  if (packLooksSmashed(pack)) return true;
+  if (packLooksSmashed(pack) || packLooksCrossPackGrafted(pack)) return true;
   if (isMaterialPackId(pack.packId) && packIsIdentityOnly(pack)) return true;
   if (isMaterialPackId(pack.packId) && !packCrewHasRows(pack.crew) && packHasDemoSeedClock(pack)) return true;
   return false;
