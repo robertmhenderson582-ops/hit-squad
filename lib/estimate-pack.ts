@@ -440,6 +440,7 @@ export function collapsePacksById(packs: EstimatePackSnapshot[]): EstimatePackSn
  * Hydrate / upsert merge. Drive vault is canonical for shared packs:
  * stale, thin, demo, or cross-pack local cannot beat a good vault, so every
  * seat hard-refreshes to the same Estimate Total and crew/clock.
+ * Viewers (shared-with / President lens / view-as) must not win over that vault copy.
  */
 export function pickPack(
   local: EstimatePackSnapshot | null | undefined,

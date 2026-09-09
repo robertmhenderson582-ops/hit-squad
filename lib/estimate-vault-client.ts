@@ -99,6 +99,7 @@ export function isLeftoverOwnerCopy(pack: { ownerEmail?: string; sharedWith?: st
   return true;
 }
 
+/** Drive vault is canonical. Hydrate so every seat sees the same live pack after hard-refresh. */
 export async function hydrateFromVault(
   store?: StorageLike | null,
   opts?: { viewAs?: string | null },
@@ -272,7 +273,8 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   }
   const pack = collectPack(target, packId);
   if (!pack) return { ok: false as const };
-  // Post-restore smash / thin leftover must not re-upload and poison other seats.
+  // View-as / President lens already returned above. Smashed viewer leftover must not
+  // re-upload over the assigned editor's Drive pack (2026-09-08 lock).
   if (packClockIsSeedSmashed(pack) || shouldSkipIntegrityFlush(pack)) {
     return { ok: true as const, skipped: true as const };
   }

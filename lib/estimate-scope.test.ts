@@ -3,10 +3,12 @@ import { describe, it } from "node:test";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import {
+  canEditAssignedEstimate,
   canReturnPack,
   canSharePack,
   canTransferPack,
   canWritePack,
+  isEstimateViewerNotEditor,
   isOwnerVaultEmail,
   listedDeskPacks,
   packOwnerEmailForWrite,
@@ -80,6 +82,21 @@ describe("estimate vault scope", () => {
     assert.equal(canTransferPack(owner, testerPack), false);
   });
 
+  it("2026-09-08 lock: owner and pack owner may edit; President / viewers are not extra editors", () => {
+    const president = { email: "president.example@example.com", role: "president" as const };
+    const shared = { ...ownerPack, sharedWith: [tester.email] };
+    assert.equal(canEditAssignedEstimate(owner, ownerPack), true);
+    assert.equal(canEditAssignedEstimate(owner, testerPack), true);
+    assert.equal(canEditAssignedEstimate(tester, testerPack), true);
+    assert.equal(canEditAssignedEstimate(tester, shared), false);
+    assert.equal(canEditAssignedEstimate(president, ownerPack), false);
+    assert.equal(canEditAssignedEstimate(president, { ...ownerPack, ownerEmail: president.email }), true);
+    assert.equal(canWritePack(president, ownerPack), false);
+    assert.equal(canWritePack(president, { ...ownerPack, ownerEmail: president.email }), true);
+    assert.equal(isEstimateViewerNotEditor(tester, shared), true);
+    assert.equal(isEstimateViewerNotEditor(novus, ownerPack), true);
+  });
+
   it("lets the current owner turn a pack over; Joseph and Shane cannot take it", () => {
     assert.equal(canTransferPack(owner, ownerPack), true);
     assert.equal(canTransferPack(novus, ownerPack), false);
@@ -94,6 +111,10 @@ describe("estimate vault scope", () => {
     const shared = { ...ownerPack, sharedWith: [tester.email] };
     assert.equal(packVisibleTo(tester, shared), true);
     assert.equal(canWritePack(tester, shared), true);
+    // 2026-09-08 lock: assigned-editor ACL is not fully wired. Shared write still
+    // goes through canWritePack; canEditAssignedEstimate is false (viewer).
+    assert.equal(canEditAssignedEstimate(tester, shared), false);
+    assert.equal(isEstimateViewerNotEditor(tester, shared), true);
     assert.equal(canSharePack(tester, shared), false);
     assert.equal(canTransferPack(tester, shared), false);
     assert.equal(packVisibleTo(otherTester, shared), false);

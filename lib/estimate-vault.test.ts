@@ -737,4 +737,35 @@ describe("estimate vault service", () => {
     const freezeWritten = JSON.parse(await drive.readJson(HIS_AROMATICS_FREEZE_FILE_ID));
     assert.equal(freezeWritten.ownerEmail, "freeze-should-not-win@example.com");
   });
+
+  it("viewer smashed local cannot overwrite the shared vault pack", async () => {
+    const drive = memoryDrive();
+    const live = cat2({
+      packId: "new-mtaajdwa-f7539",
+      title: "Madison CAT 2 (Pit Stop)",
+      updatedAt: 400,
+      schedule: { projectStart: "2026-09-01", phases: [{ id: "pre", on: true, start: "2026-09-01", stop: "2026-09-03" }] },
+      crew: { direct: [{ id: "bm-1", ranges: [{ start: "2026-09-01", end: "2026-09-03" }] }] },
+    });
+    assert.equal((await upsertVisiblePack(owner, live, drive)).ok, true);
+    const shared = await shareVisiblePack(owner, "new-mtaajdwa-f7539", tester.email, drive, live);
+    assert.equal(shared.ok, true);
+    const smash = {
+      ...live,
+      updatedAt: 99_000,
+      ownerEmail: tester.email,
+      sharedWith: [tester.email],
+      schedule: defaultPhaseSchedule(),
+      crew: { staff: [], direct: [] },
+    };
+    const flushed = await upsertVisiblePack(tester, smash, drive);
+    assert.equal(flushed.ok, false);
+    if (!flushed.ok) {
+      assert.equal(flushed.status, 409);
+      assert.match(flushed.error || "", /Viewer local/i);
+    }
+    const kept = await getVisiblePack(owner, "new-mtaajdwa-f7539", drive);
+    assert.equal((kept?.schedule as { projectStart?: string }).projectStart, "2026-09-01");
+    assert.equal(((kept?.crew as { direct: unknown[] }).direct || []).length, 1);
+  });
 });
