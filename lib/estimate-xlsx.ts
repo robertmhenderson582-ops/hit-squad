@@ -404,7 +404,11 @@ function stripSheetComments(sheet: WorkbookSheet): WorkbookSheet {
   };
 }
 
-/** Attach hover notes to the clock pick, Position / Bill as, day-grid HC/HPS/PD, and unlocked inputs. */
+/**
+ * Attach hover notes to the clock pick, Position / Bill as, first-day
+ * HC/HPS/PD seed, and unlocked inputs. Not every day-grid cell — see
+ * EXCEL_DAY_GRID_NOTE_BUDGET / ExcelJS VML idmap.
+ */
 export function attachEstimateComments(sheet: WorkbookSheet): WorkbookSheet {
   // Job setup: no comments. Money Value / Start / Stop / holidays used to
   // stamp notes, and leftovers without a cell painted the orphan triangle trail.
@@ -437,14 +441,27 @@ export function attachEstimateComments(sheet: WorkbookSheet): WorkbookSheet {
       const parsed = parseYmd(firstDate.value);
       if (parsed) add(firstDate.ref, excelFullDateNote(parsed));
     }
+    // First date column only (J of each block). Repeating HC/HPS/PD notes on
+    // every day explodes ExcelJS VML: o:idmap data="1" only covers shape ids
+    // 1024–2047 (~1023 comments/sheet). Aromatics-class Staff (~11k notes)
+    // overflow that map; Excel reports the zip as corrupt and cannot repair it.
     const hidden = new Set(sheet.hiddenCols ?? []);
+    let dayGridNotes = 0;
     for (const cell of sheet.cells) {
       const { colNum, row } = parseA1(cell.ref);
-      if (colNum < LABOR_DATE_START_COL || hidden.has(colNum) || row === 6) continue;
+      if (colNum !== LABOR_DATE_START_COL || hidden.has(colNum) || row === 6) continue;
       const offset = laborRowOffset(sheet, row);
-      if (offset === LABOR_HC_OFFSET) add(cell.ref, XLSX_TYPE_NOTES.HC);
-      else if (offset === LABOR_HPS_OFFSET) add(cell.ref, XLSX_TYPE_NOTES.HPS);
-      else if (offset === LABOR_PD_OFFSET) add(cell.ref, XLSX_TYPE_NOTES.PD);
+      const note =
+        offset === LABOR_HC_OFFSET
+          ? XLSX_TYPE_NOTES.HC
+          : offset === LABOR_HPS_OFFSET
+            ? XLSX_TYPE_NOTES.HPS
+            : offset === LABOR_PD_OFFSET
+              ? XLSX_TYPE_NOTES.PD
+              : undefined;
+      if (!note || dayGridNotes >= EXCEL_DAY_GRID_NOTE_BUDGET) continue;
+      add(cell.ref, note);
+      dayGridNotes += 1;
     }
   }
 
@@ -531,6 +548,12 @@ export const ESTIMATE_XLSX_SPARE_ROWS = 8;
  * (Position / hours / PD) become new seats; blank pad is ignored.
  */
 export const ESTIMATE_XLSX_SPARE_POSITIONS = 4;
+/**
+ * Cap first-date HC/HPS/PD notes so a 400-day × many-seat grid cannot
+ * refill the ExcelJS VML idmap (1023 shapes/sheet). Type / Position / J6
+ * seeds stay outside this budget.
+ */
+export const EXCEL_DAY_GRID_NOTE_BUDGET = 400;
 export const LABOR_SPARE_ID_PREFIX = "xlsx-spare-";
 /** Hidden Travel / Subcontractor row id — same idea as COE col H / labor block id. */
 export const TRAVEL_HIDDEN_ID_COL = 6;

@@ -142,6 +142,7 @@ import {
   buildSheetXml,
   colLetter,
   excelSafeSheetName,
+  parseA1,
   type WorkbookSheet,
 } from "./xlsx-minimal.ts";
 
@@ -1790,6 +1791,7 @@ describe("estimate excel export", () => {
     assert.equal(excelNoteText(staff.getCell(`E${staffRows.pd}`)), "");
     assert.equal(excelNoteText(staff.getCell("J8")), XLSX_TYPE_NOTES.HC);
     assert.equal(excelNoteText(staff.getCell("J10")), "");
+    assert.equal(excelNoteText(staff.getCell("K8")), "");
     assert.equal(excelNoteText(staff.getCell("J6")), excelFullDateNote(new Date(2026, 8, 1)));
     assert.equal(excelNoteText(staff.getCell("K6")), "");
     assert.equal(excelNoteText(staff.getCell("J5")), "");
@@ -1799,6 +1801,47 @@ describe("estimate excel export", () => {
     assert.equal(excelNoteText(misc.getCell("D7")), XLSX_INPUT_NOTES.rate);
     assert.equal(excelNoteText(rental.getCell("B7")), XLSX_INPUT_NOTES.period);
     assert.equal(excelNoteText(support.getCell(`B${supportRows.ot}`)), XLSX_INPUT_NOTES.billAs);
+  });
+
+  it("seeds HC/HPS/PD notes on the first date column only, not every day", () => {
+    const input = {
+      ...woodRiverFixture(),
+      schedule: {
+        ...woodRiverFixture().schedule,
+        phases: [
+          {
+            id: "mech" as const,
+            name: "Mechanical Window",
+            on: true,
+            start: "2026-09-01",
+            stop: "2026-09-03",
+            daysPerWeek: 7,
+            hoursPerDay: 10,
+            otAfter8: true,
+            sundaysOff: [],
+          },
+        ],
+      },
+      crew: {
+        staff: [craft("st-1", "Superintendent 01", 10, { start: "2026-09-01", end: "2026-09-03", perDiemPeople: 1 })],
+        otAfter8: true,
+      },
+    };
+    const staff = sheetOf(buildEstimateWorkbook(input), ESTIMATE_XLSX_SHEETS.staff)!;
+    const rows = laborHours(staff, "Superintendent 01");
+    const cells = cellMap(staff);
+    assert.equal(laborCalendarDates(input).length >= 3, true);
+    assert.equal(cells.get(`J${rows.hc}`)?.note, XLSX_TYPE_NOTES.HC);
+    assert.equal(cells.get(`J${rows.hps}`)?.note, XLSX_TYPE_NOTES.HPS);
+    assert.equal(cells.get(`J${rows.pd}`)?.note, XLSX_TYPE_NOTES.PD);
+    assert.equal(cells.get(`K${rows.hc}`)?.note, undefined);
+    assert.equal(cells.get(`L${rows.hc}`)?.note, undefined);
+    const dayGridNotes = staff.cells.filter((cell) => {
+      const parsed = parseA1(cell.ref);
+      return parsed.colNum >= LABOR_DATE_START_COL && parsed.row >= 7 && cell.note;
+    }).length;
+    assert.equal(staff.laborBlocks?.length, 1 + ESTIMATE_XLSX_SPARE_POSITIONS);
+    assert.equal(dayGridNotes, (1 + ESTIMATE_XLSX_SPARE_POSITIONS) * 3);
   });
 
   it("shows d-mmm date headers and only comments the J6 seed", async () => {

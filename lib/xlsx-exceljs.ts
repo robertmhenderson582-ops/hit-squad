@@ -22,6 +22,7 @@ import JSZip from "jszip";
 import { evaluateWorkbook } from "./xlsx-eval.ts";
 import { isPhaseId, PHASE_TONE_BAND_INK, PHASE_TONE_FILLS } from "./phase-schedule.ts";
 import { prepareCompanyLogoSplash } from "./estimate-company-logo.ts";
+import { EXCELJS_VML_COMMENT_SAFE } from "./xlsx-package.ts";
 import { colLetter, excelSafeSheetName, type SheetCell, type WorkbookSheet, type WorkbookBuildOptions } from "./xlsx-minimal.ts";
 
 const WHITE = "FFFFFFFF";
@@ -469,15 +470,19 @@ function noteText(text: string | undefined): string {
 /** Excel comments / notes — hover popups. Not VBA. Import ignores these. */
 function applySheetComments(ws: ExcelJS.Worksheet, sheet: WorkbookSheet) {
   const known = new Set(sheet.cells.map((cell) => cell.ref));
+  let written = 0;
   const apply = (ref: string, text: string | undefined, requireCell: boolean) => {
     const body = noteText(text);
     if (!body) return;
     if (requireCell && !known.has(ref)) return;
+    // ExcelJS VML o:idmap data="1" only allocates shape ids 1024–2047.
+    if (written >= EXCELJS_VML_COMMENT_SAFE) return;
     const { row, colNum } = parseRef(ref);
     const cell = ws.getCell(row, colNum);
     cell.note = {
       texts: [{ font: { size: 9, name: "Calibri", color: { argb: DARK_TEXT } }, text: body }],
     };
+    written += 1;
   };
   for (const cell of sheet.cells) apply(cell.ref, cell.note, false);
   for (const comment of sheet.comments ?? []) apply(comment.ref, comment.text, true);
@@ -1417,7 +1422,12 @@ async function stampUnusedRowsHidden(buffer: Uint8Array): Promise<Uint8Array> {
     zip.file(name, xml);
   }
   return new Uint8Array(
-    await zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 } }),
+    await zip.generateAsync({
+      type: "uint8array",
+      compression: "DEFLATE",
+      compressionOptions: { level: 6 },
+      createFolders: false,
+    }),
   );
 }
 
