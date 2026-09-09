@@ -54,12 +54,13 @@ export function JobsDesk() {
       return;
     }
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timer: ReturnType<typeof setTimeout> = setTimeout(() => {
+      if (!cancelled) setHydrating(false);
+    }, JOBS_REFRESH_DEADLINE_MS);
     setHydrating(true);
     const clearHold = () => {
       if (!cancelled) setHydrating(false);
     };
-    timer = setTimeout(clearHold, JOBS_REFRESH_DEADLINE_MS);
     (async () => {
       try {
         const jobsReq = deskFetch("/api/desk/jobs", viewAsInit(seat));
@@ -98,7 +99,7 @@ export function JobsDesk() {
     })();
     return () => {
       cancelled = true;
-      if (timer !== undefined) clearTimeout(timer);
+      clearTimeout(timer);
     };
   }, [lensKey, lensReady, seat, tick, viewingAs]);
 

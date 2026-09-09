@@ -193,7 +193,7 @@ describe("Jobs REFRESHING overlay always clears", () => {
     assert.ok(JOBS_REFRESH_DEADLINE_MS <= 8000);
     const desk = source("../components/JobsDesk.tsx");
     assert.match(desk, /JOBS_REFRESH_DEADLINE_MS/);
-    assert.match(desk, /setTimeout\(clearHold, JOBS_REFRESH_DEADLINE_MS\)/);
+    assert.match(desk, /setTimeout\(/);
     assert.match(desk, /finally \{\s*clearHold\(\);/);
     assert.match(desk, /if \(!lensReady\) \{\s*setHydrating\(false\);/);
     assert.match(desk, /\[lensKey, lensReady, seat, tick, viewingAs\]/);

@@ -65,7 +65,10 @@ export type ScopedPack = {
 /** Madison-operated identity — HIS / wake / P66-Yates-Monroe plants. Not Hit Squad product work. */
 export function isMadisonOperatedPack(pack?: ScopedPack | null): boolean {
   if (!pack) return false;
-  if (hisMatchForPack(pack) || isRodeoMonroeWakePack(pack)) return true;
+  if (hisMatchForPack(pack)) return true;
+  if (pack.packId && isRodeoMonroeWakePack({ packId: pack.packId, title: pack.title, site: pack.site, siteId: pack.siteId })) {
+    return true;
+  }
   return inferCompanyIdFromParts(pack.client, pack.site, pack.title, pack.siteId) === "madison";
 }
 

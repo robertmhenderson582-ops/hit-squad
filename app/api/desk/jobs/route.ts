@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { companyDeskLogoSrc, companyScopeFor } from "@/lib/companies";
-import { assignedCompaniesForId, assignedCompanyForUser, listCompanies, listDivisionsForScope } from "@/lib/companies-store";
+import { assignedCompaniesForId, companyDeskLogoSrc, companyScopeFor } from "@/lib/companies";
+import { assignedCompanyForUser, listCompanies, listDivisionsForScope } from "@/lib/companies-store";
 import { cookieValue } from "@/lib/http";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { deskForUser, omitCatalogSeedJobs, seedJobsAllowed } from "@/lib/jobs";
