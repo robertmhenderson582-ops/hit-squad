@@ -184,14 +184,13 @@ export type WorkbookSheet = {
   headerRows?: number[];
   /** Job setup phase runs on labor rows 4–5 (day-grid columns). */
   phaseBar?: Array<{ startCol: number; endCol: number; phaseId: string }>;
-  /** Per-position title-row day/night/complete hour chips (view of that block’s phase hours). */
-  phaseChips?: Array<{
-    col: number;
+  /** Direct craft sheet only: row-3 craft × phase hour labels (not per-position chips). */
+  directPhaseLabels?: Array<{
     row: number;
-    kind: "days" | "nights" | "complete";
     startCol: number;
     endCol: number;
     phaseId: string;
+    crafts: number;
   }>;
   /** Support Bill as field — label + value rows in column B under Position. */
   billAs?: Array<{ labelRow: number; valueRow: number }>;
