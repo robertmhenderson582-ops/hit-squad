@@ -35,6 +35,8 @@ export type CompanyScope = {
   isOwner: boolean;
   email: string;
   companyId?: CompanyId;
+  /** Seat role when known. President is always Madison-scoped. */
+  role?: string;
 };
 
 const COMPANY_ID_RE = /^[a-z][a-z0-9]{0,39}$/;
@@ -155,6 +157,16 @@ export function seedCompanyForEmail(email: string): CompanyId {
   return testerByEmail(key)?.company ?? "hitsquad";
 }
 
+/** President is Madison. Testers keep seed / persisted assignment. Unknown emails stay Hit Squad. */
+export function companyIdForUser(
+  user?: { email?: string; role?: string } | null,
+  assigned?: CompanyId,
+): CompanyId {
+  if (user?.role === "president") return "madison";
+  if (assigned && (isCompanyId(assigned) || isStandaloneId(assigned))) return assigned;
+  return seedCompanyForEmail(user?.email || "");
+}
+
 /** Seed or override map. Owner stays company-desk; standalone is never inferred from a name. */
 export function companyIdForEmail(email: string, assignments: Record<string, string> = {}): CompanyId {
   const key = email.trim().toLowerCase();
@@ -168,7 +180,8 @@ export function companyScopeFor(user?: { email?: string; role?: string } | null,
   return {
     isOwner: user.role === "owner",
     email: user.email,
-    companyId: companyId ?? seedCompanyForEmail(user.email),
+    companyId: companyIdForUser(user, companyId),
+    role: user.role,
   };
 }
 

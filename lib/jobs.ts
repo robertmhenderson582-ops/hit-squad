@@ -87,6 +87,7 @@ export function seedJobsAllowed(scope?: CompanyScope | null) {
   const email = scope?.email?.trim().toLowerCase();
   if (!email) return false;
   if (scope?.isOwner || isOwnerIdentity(email)) return false;
+  if (scope?.role === "president") return false;
   return email !== "nathanboyte@gmail.com" && email !== JOHN_BEECH_EMAIL;
 }
 
@@ -178,7 +179,9 @@ export function jobsOnDesk(
   );
   const keepHis =
     !viewingAs ||
-    shouldPaintHisCards(scope ? { email: scope.email, role: scope.isOwner ? "owner" : undefined } : null);
+    shouldPaintHisCards(
+      scope ? { email: scope.email, role: scope.isOwner ? "owner" : scope.role } : null,
+    );
   return menu ? omitDeletedJobs(painted, menu, keepHis) : painted;
 }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { assignedCompany, listCompanies } from "@/lib/companies-store";
+import { assignedCompanyForUser, listCompanies } from "@/lib/companies-store";
 import { companyScopeFor } from "@/lib/companies";
 import { resolveEstimateCompanyLogo } from "@/lib/estimate-company-logo";
 import { cookieValue } from "@/lib/http";
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   const deskUser = await scopedDeskUser(user, request);
-  const companyId = await assignedCompany(deskUser.email);
+  const companyId = await assignedCompanyForUser(deskUser);
   const scope = companyScopeFor(deskUser, companyId);
   const url = new URL(request.url);
   const client = url.searchParams.get("client") ?? "";

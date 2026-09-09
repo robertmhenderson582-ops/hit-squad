@@ -46,6 +46,7 @@ describe("Rodeo + Monroe wake shells", () => {
     assert.equal(shouldPaintWakeCards({ email: OWNER_LOGIN_EMAIL, role: "owner" }), true);
     assert.equal(shouldPaintWakeCards({ email: "nathanboyte@gmail.com", role: "tester" }, { isOwner: false, email: "nathanboyte@gmail.com", companyId: "madison" }), true);
     assert.equal(shouldPaintWakeCards({ email: JOHN_BEECH_EMAIL, role: "tester" }, { isOwner: false, email: JOHN_BEECH_EMAIL, companyId: "madison" }), true);
+    assert.equal(shouldPaintWakeCards({ email: "president.example@example.com", role: "president" }), true);
     assert.equal(shouldPaintWakeCards({ email: "jameshcainjr@gmail.com", role: "tester" }, { isOwner: false, email: "jameshcainjr@gmail.com", companyId: "cbi" }), false);
 
     const live = {

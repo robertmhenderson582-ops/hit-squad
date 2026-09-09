@@ -154,6 +154,8 @@ describe("desk counts", () => {
     assert.doesNotMatch(desk, /includeSeeds: true/);
     assert.doesNotMatch(desk, /holdPartialTree \? null/);
     assert.match(desk, /JobTreeDesk/);
+    assert.match(desk, /JOBS_REFRESH_DEADLINE_MS/);
+    assert.match(desk, /finally \{\s*clearHold\(\);/);
     const jobsApi = readFileSync(fileURLToPath(new URL("../app/api/desk/jobs/route.ts", import.meta.url)), "utf8");
     assert.match(jobsApi, /omitCatalogSeedJobs/);
     assert.match(jobsApi, /seedJobsAllowed\(scope\)/);

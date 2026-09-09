@@ -9,7 +9,7 @@ import {
   signSeatClaim,
   signSession,
 } from "@/lib/auth";
-import { peekAssignedCompany } from "@/lib/companies-store";
+import { peekAssignedCompanyForUser } from "@/lib/companies-store";
 import { cookieValue } from "@/lib/http";
 import {
   hydrateSeatStore,
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     beginSessionVaultCatchUp(request, cookieUser.email);
   }
   const response = NextResponse.json(
-    { user, companyId: user ? peekAssignedCompany(user.email) : null },
+    { user, companyId: user ? peekAssignedCompanyForUser(user) : null },
     {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate",

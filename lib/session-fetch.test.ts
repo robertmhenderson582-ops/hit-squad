@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import {
   AUTH_REQUEST_DEADLINE_MS,
   AUTH_TIMEOUT_ERROR,
+  JOBS_REFRESH_DEADLINE_MS,
   SESSION_LOAD_DEADLINE_MS,
   fetchJsonWithDeadline,
 } from "./session-fetch.ts";
@@ -19,6 +20,7 @@ test("session fetch deadlines stay short enough to clear CHECKING SESSION", () =
   assert.ok(SESSION_LOAD_DEADLINE_MS <= 4000);
   assert.ok(AUTH_REQUEST_DEADLINE_MS <= 8000);
   assert.ok(AUTH_REQUEST_DEADLINE_MS > SESSION_LOAD_DEADLINE_MS);
+  assert.ok(JOBS_REFRESH_DEADLINE_MS <= 8000);
   const session = readFileSync(fileURLToPath(new URL("../components/SessionProvider.tsx", import.meta.url)), "utf8");
   const login = readFileSync(fileURLToPath(new URL("../components/LoginForm.tsx", import.meta.url)), "utf8");
   assert.match(session, /SESSION_LOAD_DEADLINE_MS/);

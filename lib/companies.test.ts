@@ -14,6 +14,7 @@ import {
   canSeeCompany,
   catalogVisibleTo,
   companiesForScope,
+  companyScopeFor,
   companyDeskLogoSrc,
   COMPANY_LOGO_BAD_TYPE,
   COMPANY_LOGO_MAX_ENCODED,
@@ -164,6 +165,13 @@ describe("assign and visibility", () => {
       companiesForScope(johnHenry).map((row) => row.id),
       [],
     );
+    const president = companyScopeFor({ email: "president.example@example.com", role: "president" }, "hitsquad");
+    assert.equal(president?.companyId, "madison");
+    assert.deepEqual(
+      companiesForScope(president).map((row) => row.id),
+      ["madison"],
+    );
+    assert.equal(canSeeCompany(president, "hitsquad"), false);
   });
 
   it("hides Madison catalog from James and Hit Squad testers, and hides CBI from Madison", () => {
