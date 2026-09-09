@@ -49,6 +49,16 @@ export function canManageUsers(user?: PrivilegeViewer | null): boolean {
   return hasBuildDesk(user) || hasPrivilege(user, "manage-users");
 }
 
+/** Owner / Novus / granted Manage users, plus seeded PM seats (Nathan, John Beech, Joseph). */
+export function canAddUsers(user?: (PrivilegeViewer & { email?: string; role?: string }) | null): boolean {
+  return canManageUsers(user) || isProjectManager(user);
+}
+
+/** Positions live on the working desk. PM seats can assign titles at or below their rank. */
+export function canManagePositions(user?: (PrivilegeViewer & { email?: string; role?: string }) | null): boolean {
+  return hasWorkingDesk(user) || canAddUsers(user);
+}
+
 export function canExpandInbox(user?: PrivilegeViewer | null): boolean {
   return isOwner(user) || hasPrivilege(user, "inbox-expand");
 }
@@ -187,12 +197,13 @@ export function deskLensKey(user?: { id?: string; email?: string; role?: string 
 }
 
 export function pageAllowedForSeat(
-  user: PublicUser | null | undefined,
+  user: (PrivilegeViewer & { email?: string; id?: string; name?: string }) | PublicUser | null | undefined,
   flags: {
     ownerOnly?: boolean;
     buildDesk?: boolean;
     viewAs?: boolean;
     workingDesk?: boolean;
+    addUsers?: boolean;
     privilege?: PrivilegeId;
   },
 ) {
@@ -200,8 +211,12 @@ export function pageAllowedForSeat(
     return (
       hasPrivilege(user, flags.privilege) ||
       (Boolean(flags.buildDesk) && hasBuildDesk(user)) ||
-      (Boolean(flags.workingDesk) && hasWorkingDesk(user))
+      (Boolean(flags.workingDesk) && hasWorkingDesk(user)) ||
+      (Boolean(flags.addUsers) && canAddUsers(user))
     );
+  }
+  if (flags.addUsers) {
+    return canAddUsers(user) || (Boolean(flags.workingDesk) && hasWorkingDesk(user));
   }
   if (flags.ownerOnly) return isOwner(user);
   if (flags.viewAs) return canUseViewAs(user);

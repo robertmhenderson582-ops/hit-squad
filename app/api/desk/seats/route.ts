@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { addCompany, isKnownCompany, listCompanies, peekCompanies, setAssignedCompany } from "@/lib/companies-store";
-import { canManageUsers, hasWorkingDesk, isOwner } from "@/lib/desk-role";
+import { loadPositionDesk } from "@/lib/desk-positions-server";
+import { canAddUsers, canManageUsers, hasWorkingDesk, isOwner } from "@/lib/desk-role";
 import { seatsVisibleTo } from "@/lib/desk-people";
 import { cookieValue } from "@/lib/http";
+import { canCreateSeatAs } from "@/lib/org-positions";
 import {
   createSeat,
   findUserByEmail,
@@ -16,16 +18,22 @@ import {
 
 export const dynamic = "force-dynamic";
 
+async function actorFor(user: { email: string; role: string; privileges?: string[] }) {
+  const desk = await loadPositionDesk(user);
+  return desk.actor;
+}
+
 export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (!hasWorkingDesk(user) && !canManageUsers(user)) {
+  if (!hasWorkingDesk(user) && !canManageUsers(user) && !canAddUsers(user)) {
     return NextResponse.json({ error: "Build desk only." }, { status: 403 });
   }
   await hydrateSeatStore();
   return NextResponse.json({
     seats: seatsVisibleTo(user, await listSeatRows()),
     companies: await listCompanies(),
+    actor: await actorFor(user),
     note: "Owner-created seats. Testers never see this list. No invite is sent.",
   });
 }
@@ -33,7 +41,6 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (!isOwner(user)) return NextResponse.json({ error: "Owner issues one-time passwords." }, { status: 403 });
 
   const body = (await request.json().catch(() => ({}))) as {
     name?: string;
@@ -46,6 +53,7 @@ export async function POST(request: Request) {
   };
 
   if (typeof body.addCompany === "string") {
+    if (!isOwner(user)) return NextResponse.json({ error: "Owner issues one-time passwords." }, { status: 403 });
     const result = await addCompany(body.addCompany);
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
     return NextResponse.json({
@@ -53,17 +61,22 @@ export async function POST(request: Request) {
       company: result.company,
       seats: await listSeatRows(),
       companies: await listCompanies(),
+      actor: await actorFor(user),
       note: "Company added on this desk.",
     });
   }
 
   if (typeof body.name === "string" && body.name.trim()) {
+    if (!canAddUsers(user)) return NextResponse.json({ error: "That permission is above your seat." }, { status: 403 });
+    const desk = await loadPositionDesk(user);
+    const allowed = canCreateSeatAs(user, { role: body.role, companyId: body.companyId }, desk.holds, desk.catalog, desk.actor.addableCompanyIds);
+    if ("error" in allowed) return NextResponse.json({ error: allowed.error }, { status: 403 });
     const created = await createSeat({
       name: body.name,
       email: body.email,
       password: body.password,
       companyId: body.companyId,
-      role: body.role,
+      role: body.role === "president" && desk.actor.addableRoles.includes("president") ? "president" : "tester",
     });
     if ("error" in created) {
       const status = created.error.startsWith("Password was not saved") ? 503 : 400;
@@ -73,11 +86,14 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       user: created.user,
-      seats: await listSeatRows({ hydrate: false }),
+      seats: seatsVisibleTo(user, await listSeatRows({ hydrate: false })),
       companies: peekCompanies(),
+      actor: desk.actor,
       note: "Login created on this desk. Don’t send. First sign-in must change the password.",
     });
   }
+
+  if (!isOwner(user)) return NextResponse.json({ error: "Owner issues one-time passwords." }, { status: 403 });
 
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";

@@ -41,6 +41,7 @@ import {
   verifyPassword,
   collapseSeatHashes,
   listBuildSeats,
+  setExtraSeatRole,
   ownerSeatCount,
   persistExistingOwnerHash,
   mergeHashRows,
@@ -490,6 +491,15 @@ test("owner can add a President seat without inventing an email", async () => {
   assert.ok(reloaded);
   assert.equal(reloaded.role, "president");
   assert.equal(reloaded.name, "Freddy Grimland");
+
+  assert.equal("error" in (await setExtraSeatRole(OWNER_LOGIN_EMAIL, "president")), true);
+  assert.equal("error" in (await setExtraSeatRole(TESTER, "president")), true);
+  const revoked = await setExtraSeatRole(email, "tester");
+  assert.equal("ok" in revoked, true);
+  assert.equal(findUserByEmail(email)?.role, "tester");
+  const restored = await setExtraSeatRole(email, "president");
+  assert.equal("ok" in restored, true);
+  assert.equal(findUserByEmail(email)?.role, "president");
 });
 
 test("createSeat rejects owner, Novus, duplicates, and a short password", async () => {

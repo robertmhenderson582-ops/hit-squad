@@ -6,7 +6,8 @@ import { PresencePulse } from "@/components/PresencePulse";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { COMPANIES, assignmentChoices, companyName, type Company, type CompanyId } from "@/lib/companies";
-import { canUseFollow, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
+import { canAddUsers, canUseFollow, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
+import type { SeatGrantActor } from "@/lib/org-positions";
 import { lensPeopleFromSeats } from "@/lib/desk-people";
 import { followSeatFromEmail } from "@/lib/follow";
 import {
@@ -36,8 +37,10 @@ export function ManageUsersDesk() {
   const desk = useOwnerDesk();
   const owner = isOwner(user);
   const followOk = canUseFollow(user);
+  const canAdd = canAddUsers(user);
   const [seats, setSeats] = useState<SeatRow[]>([]);
   const [companies, setCompanies] = useState<Company[]>(COMPANIES);
+  const [actor, setActor] = useState<SeatGrantActor | null>(null);
   const [newCompany, setNewCompany] = useState("");
   const [roster, setRoster] = useState<RosterEntry[]>([]);
   const [liveSeats, setLiveSeats] = useState<LiveSeat[]>([]);
@@ -60,6 +63,7 @@ export function ManageUsersDesk() {
     if (response.ok) {
       setSeats(data.seats ?? []);
       if (Array.isArray(data.companies)) setCompanies(data.companies);
+      if (data.actor) setActor(data.actor);
     }
   }
 
@@ -79,6 +83,19 @@ export function ManageUsersDesk() {
   }, []);
 
   const followPeople = lensPeopleFromSeats(seats);
+  const addableRoles = actor?.addableRoles ?? (owner ? (["tester", "president"] as const) : (["tester"] as const));
+  const addableCompanies = assignmentChoices(companies).filter((company) =>
+    actor ? actor.addableCompanyIds.includes(company.id) : owner,
+  );
+
+  useEffect(() => {
+    if (!actor) return;
+    if (!actor.addableRoles.includes(addRole)) setAddRole("tester");
+    if (actor.addableCompanyIds.length && !actor.addableCompanyIds.includes(addCompanyId)) {
+      setAddCompanyId(actor.addableCompanyIds[0] as CompanyId);
+    }
+  }, [actor, addRole, addCompanyId]);
+
   function followEmail(email: string) {
     const seat = followSeatFromEmail(email, followPeople);
     if (!seat || !desk || !followOk) return;
@@ -168,17 +185,20 @@ export function ManageUsersDesk() {
     error?: string;
     seats?: SeatRow[];
     companies?: Company[];
+    actor?: SeatGrantActor;
     user?: PublicUser & { companyId?: string };
   };
 
   function finishAddSuccess(data: AddSeatResponse, pending: ReturnType<typeof optimisticSeat>) {
     setSeats((current) => applyAddedSeats(current, data.seats, data.user, pending));
     if (Array.isArray(data.companies)) setCompanies(data.companies);
+    if (data.actor) setActor(data.actor);
     setName("");
     setEmail("");
     setPassword("");
-    setAddCompanyId(addRole === "president" ? "madison" : "hitsquad");
-    setAddRole("tester");
+    const nextRole = addableRoles.includes("president") && addRole === "president" ? "president" : "tester";
+    setAddRole(nextRole);
+    setAddCompanyId(addableCompanies[0]?.id || (nextRole === "president" ? "madison" : "hitsquad"));
     setNote("Login created. Don’t send. First sign-in must change the password. No invite sent.");
     window.dispatchEvent(new Event(DESK_SEATS_CHANGED_EVENT));
   }
@@ -209,8 +229,20 @@ export function ManageUsersDesk() {
       setNote("Password must be 8+.");
       return;
     }
-    const companyId = addCompanyId || (addRole === "president" ? "madison" : "hitsquad");
-    const pending = optimisticSeat({ name, email, role: addRole, companyId });
+    if (!addableRoles.includes(addRole)) {
+      setNote("That permission is above your seat.");
+      return;
+    }
+    const role = addRole;
+    const companyId =
+      addableCompanies.some((company) => company.id === addCompanyId)
+        ? addCompanyId
+        : addableCompanies[0]?.id || (role === "president" ? "madison" : "hitsquad");
+    if (addableCompanies.length && !addableCompanies.some((company) => company.id === companyId)) {
+      setNote("Hit Squad seats stay on the owner desk.");
+      return;
+    }
+    const pending = optimisticSeat({ name, email, role, companyId });
     setAdding(true);
     setSeats((current) => applyAddedSeats(current, undefined, undefined, pending));
     try {
@@ -416,7 +448,7 @@ export function ManageUsersDesk() {
         ) : null}
       </Collapsible>
 
-      {owner ? (
+      {canAdd ? (
         <>
           <Collapsible
             title="Add user"
@@ -428,6 +460,9 @@ export function ManageUsersDesk() {
               Don’t send. They change it on first sign-in. No invite email. Default company is Hit
               Squad. President is the Madison desk seat — assign President and Madison when the
               login email is known. Do not invent an email.
+              {owner
+                ? ""
+                : " You can only add seats at or below your own permissions. Hit Squad stays on the owner desk unless that company is on your seat."}
             </p>
             <form onSubmit={onAdd} className="mt-3" aria-busy={adding}>
               <fieldset disabled={adding} className="grid gap-3 border-0 p-0 sm:grid-cols-2 disabled:opacity-70">
@@ -447,7 +482,7 @@ export function ManageUsersDesk() {
                   disabled={adding}
                 >
                   <option value="tester">Tester</option>
-                  <option value="president">President</option>
+                  {addableRoles.includes("president") ? <option value="president">President</option> : null}
                 </select>
               </label>
               <label>
@@ -459,7 +494,7 @@ export function ManageUsersDesk() {
                   aria-label="Company for the new user"
                   disabled={adding}
                 >
-                  {assignmentChoices(companies).map((company) => (
+                  {(addableCompanies.length ? addableCompanies : assignmentChoices(companies)).map((company) => (
                     <option key={company.id} value={company.id}>
                       {company.name}
                     </option>
@@ -492,7 +527,7 @@ export function ManageUsersDesk() {
             ) : null}
           </Collapsible>
 
-          <Collapsible
+          {owner ? <Collapsible
             title="Visual roster"
             open={open.roster}
             onToggle={() => setOpen((current) => ({ ...current, roster: !current.roster }))}
@@ -555,7 +590,7 @@ export function ManageUsersDesk() {
             <button type="button" onClick={removeAll} className="mt-4 rounded-lg border border-[#d5e0de] px-4 py-2 text-[#b74120]">
               Clear visual roster
             </button>
-          </Collapsible>
+          </Collapsible> : null}
         </>
       ) : null}
     </div>
