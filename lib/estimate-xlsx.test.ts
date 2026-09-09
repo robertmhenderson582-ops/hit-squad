@@ -10,10 +10,11 @@ import type { CraftRow } from "./craft-labor.ts";
 import {
   buildEstimateWorkbook,
   EXCEL_JOB_SETUP_IMPORT_PARKED,
-  ESTIMATE_EXPORT_BRAND,
   ESTIMATE_EXPORT_CONFIDENTIAL,
   ESTIMATE_EXPORT_ERROR,
-  ESTIMATE_EXPORT_PRODUCER,
+  estimateCompanyName,
+  estimateExportBrand,
+  estimateExportProducer,
   ESTIMATE_PREPARED_BY_LABEL,
   ESTIMATE_STATUS_LABEL,
   exporterDisplayName,
@@ -353,9 +354,9 @@ describe("estimate excel export", () => {
     const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff);
     const direct = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.direct);
     assert.ok(summary && staff && direct);
-    assert.equal(summary.cells.find((cell) => cell.ref === "A1")?.value, ESTIMATE_EXPORT_BRAND);
+    assert.equal(summary.cells.find((cell) => cell.ref === "A1")?.value, estimateExportBrand("Madison"));
     assert.match(String(summary.cells.find((cell) => cell.ref === "A2")?.value), /Unit 3 mechanical/);
-    assert.match(String(summary.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(ESTIMATE_EXPORT_PRODUCER));
+    assert.match(String(summary.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(estimateExportProducer("Madison")));
     assert.match(String(summary.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(ESTIMATE_EXPORT_CONFIDENTIAL));
     assert.match(String(summary.cells.find((cell) => cell.ref === "A3")?.value), /Produced /);
     assert.match(String(staff.cells.find((cell) => cell.ref === "C10")?.value), /^F7\*N\(D10\)$/);
@@ -446,7 +447,7 @@ describe("estimate excel export", () => {
     await wb.xlsx.load(Buffer.from(bytes));
     const summarySheet = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary);
     assert.ok(summarySheet);
-    assert.match(String(summarySheet.getCell("A3").value ?? ""), /Produced by Hit Squad Project Controls/);
+    assert.match(String(summarySheet.getCell("A3").value ?? ""), /Produced by Madison/);
     assert.equal(wb.worksheets.some((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.summary), true);
     assert.equal(/nathan|cat 2 pit stop/i.test(JSON.stringify(wb.model)), false);
 
@@ -778,10 +779,10 @@ describe("estimate excel export", () => {
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, laborHrsRef(block, "ot")), 4);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, laborHrsRef(block, "dt")), 0);
     assert.equal(evalAt(ESTIMATE_XLSX_SHEETS.direct, laborMoneyRef(block)), 8 * billed.st + 4 * (billed.ot ?? 0));
-    assert.match(estimateXlsxFilename(rodeoFixture()), /rodeo/);
-    assert.equal(/nathan|cat-2|wood-river/i.test(estimateXlsxFilename(rodeoFixture())), false);
-    assert.match(estimateXlsxFilename(woodRiverFixture()), /wood-river/);
-    assert.equal(/nathan|cat-2-pit-stop/i.test(estimateXlsxFilename(woodRiverFixture())), false);
+    assert.match(estimateXlsxFilename(rodeoFixture()), /^madison-rodeo/);
+    assert.equal(/hit-squad|nathan|cat-2|wood-river/i.test(estimateXlsxFilename(rodeoFixture())), false);
+    assert.match(estimateXlsxFilename(woodRiverFixture()), /^madison-wood-river/);
+    assert.equal(/hit-squad|nathan|cat-2-pit-stop/i.test(estimateXlsxFilename(woodRiverFixture())), false);
     assert.equal(sheetRef("Rate Tables", "C7"), "'Rate Tables'!C7");
     assert.equal(ESTIMATE_EXPORT_ERROR, "Could not export. Try again.");
   });
@@ -2908,7 +2909,9 @@ describe("estimate excel export", () => {
     assert.equal(wb.worksheets.length, 17);
     assert.ok(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobDays));
     assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crewRanges)?.state, "veryHidden");
-    assert.ok(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader?.includes("HIT SQUAD"));
+    assert.ok(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader?.includes("MADISON"));
+    assert.equal(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader?.includes("HIT SQUAD"), false);
+    assert.equal(wb.creator, "Madison");
     assert.equal(/field trial|forgebook/i.test(String(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.summary)?.headerFooter.oddHeader)), false);
     const lead = laborHours(staffSheet, "Lead Safety 01");
     const gf = laborHours(staffSheet, "Pipefitter GF Union");
@@ -3723,11 +3726,11 @@ describe("estimate excel export", () => {
     assert.equal(exporterDisplayName("", ""), null);
     const staff = sheetOf(buildEstimateWorkbook({ ...woodRiverFixture(), preparedBy: "Nathan Boyte" }), ESTIMATE_XLSX_SHEETS.staff);
     assert.ok(staff);
-    assert.equal(staff.cells.find((cell) => cell.ref === "A1")?.value, ESTIMATE_EXPORT_BRAND);
+    assert.equal(staff.cells.find((cell) => cell.ref === "A1")?.value, estimateExportBrand("Madison"));
     assert.match(String(staff.cells.find((cell) => cell.ref === "A2")?.value), /Unit 3 mechanical/);
     assert.match(String(staff.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(`${ESTIMATE_STATUS_LABEL}: Draft`));
     assert.match(String(staff.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(`${ESTIMATE_PREPARED_BY_LABEL}: Nathan Boyte`));
-    assert.match(String(staff.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(ESTIMATE_EXPORT_PRODUCER));
+    assert.match(String(staff.cells.find((cell) => cell.ref === "A3")?.value), new RegExp(estimateExportProducer("Madison")));
     assert.deepEqual(
       staff.merges?.slice(0, 3),
       ["A1:I1", "A2:I2", "A3:I3"],
@@ -3767,10 +3770,30 @@ describe("estimate excel export", () => {
     const packXlsx = readFileSync(fileURLToPath(new URL("./estimate-pack-xlsx.ts", import.meta.url)), "utf8");
     assert.match(workspace, /preparedBy:/);
     assert.match(workspace, /exporterDisplayName/);
+    assert.match(workspace, /estimateCompanyName/);
+    assert.match(workspace, /companyName: company/);
+    assert.equal(workspace.includes("HIT SQUAD"), false);
     assert.match(workspace, /status: pack\.status \|\| status/);
     assert.match(packXlsx, /status: pack\.status/);
     assert.match(importer, /export-only/);
     assert.equal(/preparedBy/.test(importer), false);
     assert.equal(/input\.status/.test(importer), false);
+  });
+
+  it("brands the client workbook with the estimate company, not Hit Squad chrome", () => {
+    assert.equal(estimateCompanyName(woodRiverFixture()), "Madison");
+    assert.equal(estimateCompanyName(rodeoFixture()), "Madison");
+    assert.equal(estimateCompanyName({ client: "Georgia Power", site: "Plant Yates" }), "Madison");
+    assert.equal(estimateCompanyName({ title: "Internal shop sheet" }), "Hit Squad");
+    assert.equal(estimateCompanyName({ companyName: "Madison Industrial" }), "Madison Industrial");
+    assert.equal(estimateExportBrand("Madison"), "MADISON / PROJECT CONTROLS");
+    assert.equal(estimateExportProducer("Madison"), "Produced by Madison");
+    const branded = sheetOf(
+      buildEstimateWorkbook({ ...woodRiverFixture(), companyName: "Madison Industrial" }),
+      ESTIMATE_XLSX_SHEETS.summary,
+    );
+    assert.equal(branded?.cells.find((cell) => cell.ref === "A1")?.value, "MADISON INDUSTRIAL / PROJECT CONTROLS");
+    assert.match(String(branded?.cells.find((cell) => cell.ref === "A3")?.value), /Produced by Madison Industrial/);
+    assert.equal(/Hit Squad|HIT SQUAD|Hit-Squad/i.test(JSON.stringify(branded?.cells ?? [])), false);
   });
 });

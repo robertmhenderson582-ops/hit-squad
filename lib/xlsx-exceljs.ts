@@ -733,12 +733,24 @@ function applyAdderStyle(exCell: ExcelJS.Cell) {
   exCell.font = { bold: true, color: { argb: WHITE }, name: "Calibri", size: 10 };
 }
 
-function printHeader(sheetName: string): string {
-  const safe = sheetName.replace(/&/g, "and").slice(0, 24);
-  return `&L&B HIT SQUAD / PROJECT CONTROLS &C ${safe} &R Confidential`;
+function excelHeaderSafe(text: string, max = 48): string {
+  return text.replace(/&/g, "and").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-const PRINT_FOOTER = "&L Produced by Hit Squad Project Controls &C &D &R Page &P of &N";
+function printBrand(companyName?: string | null): string {
+  const name = excelHeaderSafe(companyName ?? "", 32) || "Hit Squad";
+  return `${name.toUpperCase()} / PROJECT CONTROLS`;
+}
+
+function printHeader(sheetName: string, companyName?: string | null): string {
+  const safe = excelHeaderSafe(sheetName, 24);
+  return `&L&B ${printBrand(companyName)} &C ${safe} &R Confidential`;
+}
+
+function printFooter(companyName?: string | null): string {
+  const name = excelHeaderSafe(companyName ?? "", 40) || "Hit Squad";
+  return `&L Produced by ${name} &C &D &R Page &P of &N`;
+}
 
 export function clientCopyIsClean(value: string): boolean {
   return !FORBIDDEN_CLIENT_COPY.test(value);
@@ -1442,8 +1454,9 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
   if (!list.length) throw new Error("empty-workbook");
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Hit Squad Project Controls";
-  wb.lastModifiedBy = "Hit Squad Project Controls";
+  const company = (options?.companyName ?? "").replace(/\s+/g, " ").trim() || "Hit Squad";
+  wb.creator = company;
+  wb.lastModifiedBy = company;
   wb.created = new Date();
   wb.modified = new Date();
   wb.calcProperties = { fullCalcOnLoad: true };
@@ -1482,10 +1495,10 @@ export async function buildWorkbookExcel(sheets: WorkbookSheet[], options?: Work
         printTitlesColumn: labor ? "A:I" : chrome === "ppr" ? "A:A" : undefined,
       },
       headerFooter: {
-        oddHeader: printHeader(safeName),
-        oddFooter: PRINT_FOOTER,
-        evenHeader: printHeader(safeName),
-        evenFooter: PRINT_FOOTER,
+        oddHeader: printHeader(safeName, options?.companyName),
+        oddFooter: printFooter(options?.companyName),
+        evenHeader: printHeader(safeName, options?.companyName),
+        evenFooter: printFooter(options?.companyName),
       },
       views: [
         labor

@@ -160,6 +160,7 @@ import {
 import { emptySubSheet, lineAmount, subCardTotal, subcontractorMarkupBase, type SubSheet } from "./subcontractor.ts";
 import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
 import { catalogSites } from "./desk-data.ts";
+import { companyName, inferCompanyIdFromParts } from "./companies.ts";
 import { clampEstimateStatus, parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { regularClientFromParts } from "./site-regular.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
@@ -175,7 +176,8 @@ import {
 
 export { EXCEL_JOB_SETUP_IMPORT_PARKED, EXCEL_RIPPLE_RETROACTIVE, EXCEL_RIPPLE_RULE } from "./excel-ripple.ts";
 export const ESTIMATE_EXPORT_ERROR = "Could not export. Try again.";
-export const ESTIMATE_IMPORT_ERROR = "Could not import that workbook. Use a Hit Squad export.";
+export const ESTIMATE_IMPORT_ERROR = "Could not import that workbook. Use an estimate export.";
+/** Fallback when the pack has no company (internal PPR / Hit Squad-assigned work). */
 export const ESTIMATE_EXPORT_PRODUCER = "Produced by Hit Squad Project Controls";
 export const ESTIMATE_EXPORT_BRAND = "HIT SQUAD / PROJECT CONTROLS";
 export const ESTIMATE_EXPORT_CONFIDENTIAL = "Confidential estimate package";
@@ -582,6 +584,8 @@ export type EstimateXlsxInput = {
   changeOrders?: number;
   /** Live company-record logo (companyLogoSrc). Export-only; import does not store it. */
   companyLogo?: string | null;
+  /** Client-facing company (Settings / pack). Overrides client/site inference. */
+  companyName?: string | null;
   /** Signed-in exporter display name. Export-only; import ignores it. */
   preparedBy?: string | null;
   /** Live pack status. Export-only; import does not overwrite the pack. */
@@ -626,10 +630,35 @@ function xlsxName(name: string) {
   return excelSafeSheetName(name);
 }
 
-export function estimateXlsxFilename(input: { site?: string; title?: string } = {}) {
+/** Pack / Settings company. Madison plants infer Madison; otherwise the assigned company. */
+export function estimateCompanyName(input: {
+  companyName?: string | null;
+  client?: string;
+  site?: string;
+  title?: string;
+} = {}): string {
+  const typed = (input.companyName ?? "").replace(/\s+/g, " ").trim();
+  if (typed) return typed;
+  return companyName(inferCompanyIdFromParts(input.client, input.site, input.title));
+}
+
+export function estimateExportBrand(company: string): string {
+  const name = company.replace(/\s+/g, " ").trim() || "Estimate";
+  return `${name.toUpperCase()} / PROJECT CONTROLS`;
+}
+
+export function estimateExportProducer(company: string): string {
+  const name = company.replace(/\s+/g, " ").trim() || "Estimate";
+  return `Produced by ${name}`;
+}
+
+export function estimateXlsxFilename(
+  input: { site?: string; title?: string; companyName?: string | null; client?: string } = {},
+) {
+  const company = slugify(estimateCompanyName(input));
   const site = slugify((input.site || "").split("—")[0] || "");
   const title = slugify(input.title || "");
-  const base = ["hit-squad", site, title].filter(Boolean).join("-") || "hit-squad-estimate";
+  const base = [company, site, title].filter(Boolean).join("-") || `${company || "estimate"}-estimate`;
   return `${base}.xlsx`;
 }
 
@@ -745,7 +774,7 @@ function headerByline(input: EstimateXlsxInput, when = new Date()): string {
   const stamp = `${ESTIMATE_STATUS_LABEL}: ${clampEstimateStatus(parseEstimateStatus(input.status), regular)}`;
   const prepared = exporterDisplayName(input.preparedBy, null);
   const who = prepared ? `${ESTIMATE_PREPARED_BY_LABEL}: ${prepared}  ·  ` : "";
-  return `${stamp}  ·  ${who}${ESTIMATE_EXPORT_PRODUCER}  ·  ${ESTIMATE_EXPORT_CONFIDENTIAL}  ·  ${exportProducedLabel(when)}`;
+  return `${stamp}  ·  ${who}${estimateExportProducer(estimateCompanyName(input))}  ·  ${ESTIMATE_EXPORT_CONFIDENTIAL}  ·  ${exportProducedLabel(when)}`;
 }
 
 function headerTitleMerges(lastCol: string): string[] {
@@ -757,7 +786,7 @@ function headerCells(input: EstimateXlsxInput, when = new Date()): SheetCell[] {
   const title = (input.title || "").trim() || "Estimate";
   const job = [title, input.client, input.site, clock].filter((part) => String(part || "").trim()).join("  ·  ");
   return [
-    { ref: "A1", type: "text", value: ESTIMATE_EXPORT_BRAND },
+    { ref: "A1", type: "text", value: estimateExportBrand(estimateCompanyName(input)) },
     { ref: "A2", type: "text", value: job },
     { ref: "A3", type: "text", value: headerByline(input, when) },
   ];
@@ -2591,10 +2620,14 @@ export async function estimateToXlsx(input: EstimateXlsxInput = {}): Promise<Uin
     throw new Error("summary-total-mismatch");
   }
   // Rodeo V1: estimate fills P66-shaped export → Robert pastes into official file.
+  const company = estimateCompanyName(resolved);
   const extras = shouldAttachP66TransferFace(resolved.site, resolved.client)
-    ? buildP66TransferFaceSheets(p66TotalsFromDesk(resolved))
+    ? buildP66TransferFaceSheets(p66TotalsFromDesk(resolved), estimateExportBrand(company))
     : [];
-  const bytes = await buildWorkbook([...sheets, ...extras], { companyLogo: input.companyLogo });
+  const bytes = await buildWorkbook([...sheets, ...extras], {
+    companyLogo: input.companyLogo,
+    companyName: company,
+  });
   if (!bytes.byteLength) throw new Error("empty-workbook");
   return bytes;
 }

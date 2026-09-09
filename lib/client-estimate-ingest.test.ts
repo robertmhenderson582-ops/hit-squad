@@ -95,6 +95,8 @@ describe("client estimate ingest (staged)", () => {
       "wood-river-2027-aromatics-turnaround.xlsx",
     );
     assert.equal(native.kind, "hitsquad-live-pack");
+    assert.equal(native.label, "Estimate live pack workbook");
+    assert.equal(/Hit Squad|HIT SQUAD/i.test(native.label + native.note), false);
     assert.equal(shouldStageClientWorkbook(native), false);
 
     const seed = seedMetadataForClass(familyA);

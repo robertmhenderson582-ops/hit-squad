@@ -29,6 +29,7 @@ import { companyLogoFromApiPayload } from "@/lib/estimate-company-logo";
 import {
   ESTIMATE_EXPORT_ERROR,
   ESTIMATE_IMPORT_ERROR,
+  estimateCompanyName,
   estimateToXlsx,
   estimateXlsxFilename,
   exporterDisplayName,
@@ -136,6 +137,7 @@ export function EstimateWorkspace({
   const boundSite = jobSite || site || "";
   const header = estimatePackageHeader(name || crumb, boundSite);
   const tabs = estimateTabsForSite(boundSite, boundClient, status);
+  const company = estimateCompanyName({ client: boundClient, site: boundSite, title: name || crumb });
 
   async function exportWorkbook() {
     if (exportBusy) return;
@@ -157,12 +159,16 @@ export function EstimateWorkspace({
         subcontractor: readSubSheet(pack.estimateKey),
         changeOrders: fcrChangeOrderTotal(readFcrPacket(pack.estimateKey)),
         companyLogo: await fetchEstimateCompanyLogo(boundClient, boundSite),
+        companyName: company,
         preparedBy: exporterDisplayName(user?.name, user?.email),
         status: pack.status || status,
         regularClient,
       });
       if (!bytes.byteLength) throw new Error("empty-workbook");
-      downloadXlsx(estimateXlsxFilename({ site: boundSite, title: name || crumb }), bytes);
+      downloadXlsx(
+        estimateXlsxFilename({ site: boundSite, title: name || crumb, client: boundClient, companyName: company }),
+        bytes,
+      );
     } catch {
       setExportError(ESTIMATE_EXPORT_ERROR);
     } finally {
@@ -311,7 +317,7 @@ export function EstimateWorkspace({
             <Link href="/" className="brand-static header-home flex min-w-0 shrink-0 items-center gap-2" title="Home" aria-label="Home">
               <BrandMark className="h-7 w-7 shrink-0" />
               <span className="min-w-0 leading-none">
-                <span className="block font-display text-lg tracking-[0.16em] text-white">HIT SQUAD</span>
+                <span className="block font-display text-lg tracking-[0.16em] text-white">{company.toUpperCase()}</span>
                 <span className="mt-0.5 block font-display text-[10px] tracking-[0.22em] text-white/75">
                   PROJECT CONTROLS
                 </span>

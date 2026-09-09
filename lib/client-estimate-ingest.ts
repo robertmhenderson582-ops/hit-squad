@@ -144,12 +144,12 @@ export function classifyFromSheetsAndName(sheets: string[], fileName = ""): Clie
   if (looksLikeHitSquadPack(sheets)) {
     return {
       kind: "hitsquad-live-pack",
-      label: "Hit Squad live pack workbook",
+      label: "Estimate live pack workbook",
       sheets,
       fileName: name,
       staged: false,
       families: [],
-      note: "Native Hit Squad xlsx. Import writes the live pack (excel-ripple).",
+      note: "Native estimate xlsx. Import writes the live pack (excel-ripple).",
     };
   }
   if (looksLikeFerndaleGep(sheets, name)) {
@@ -349,7 +349,7 @@ export const CLIENT_FACE_MAPPER_SPEC = {
     clock: "Wood River B-1 HC × Hours/shift day grids",
     buckets: ["Staff", "GF", "Foreman", "Direct Craft", "Support"],
     tabs: ["Summary Page", "Staff", "Foremen", "Direct", "Support"],
-    exportAs: "Hit Squad live pack — B-1 hours apply; labor $ from Rate Tables",
+    exportAs: "Estimate live pack — B-1 hours apply; labor $ from Rate Tables",
     ingest: "apply-hours",
   },
   "ferndale-gep": {
