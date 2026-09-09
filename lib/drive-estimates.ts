@@ -12,6 +12,7 @@ import {
   crewHasCustomClock,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
+import { packBaselineMoneyWriteError, packBaselineWriteException } from "./family-a-vault-write.ts";
 import { decidePackWrite, integrityErrorMessage } from "./pack-integrity.ts";
 import {
   applyHisIdentity,
@@ -909,6 +910,12 @@ async function writePackFile(
   const outgoing = await packForAromaticsWrite(adapter, pack, target?.id);
   if (!outgoing) {
     throw new Error("AROMATICS_SEED_SMASH");
+  }
+  const baselineFault = packBaselineWriteException(outgoing);
+  if (baselineFault) {
+    const moneyFault = packBaselineMoneyWriteError(outgoing);
+    if (moneyFault || !current || !target) throw baselineFault;
+    return target;
   }
   const ownerEmail = outgoing.ownerEmail.trim().toLowerCase() || pack.ownerEmail.trim().toLowerCase();
   const payload = JSON.stringify(publicPack({ ...outgoing, ownerEmail }), null, 2);

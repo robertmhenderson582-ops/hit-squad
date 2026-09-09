@@ -6,7 +6,7 @@ import {
   scheduleOnce,
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
-import { familyAVaultWriteError } from "./family-a-vault-write.ts";
+import { packBaselineWriteCheck } from "./family-a-vault-write.ts";
 import { shouldSkipIntegrityFlush } from "./pack-integrity.ts";
 import { ownerVaultEmail, packSharedEmails } from "./estimate-scope.ts";
 import { applyHisIdentity, hisFileForPackId, hisMatchForPack, persistHisWoodRiverCards } from "./his-wood-river.ts";
@@ -259,8 +259,12 @@ async function putVaultPack(body: string) {
 
 async function readVaultPutResult(response: Response) {
   if (response.ok) return { ok: true as const };
-  const data = (await response.json().catch(() => ({}))) as { error?: string };
-  return { ok: false as const, error: vaultPutError(data) };
+  const data = (await response.json().catch(() => ({}))) as { error?: string; skipped?: string };
+  const error = vaultPutError(data);
+  if (data.skipped === "integrity") {
+    return { ok: false as const, skipped: "integrity" as const, error };
+  }
+  return { ok: false as const, error };
 }
 
 export async function flushVaultUpsert(packId: string, store?: StorageLike | null) {
@@ -279,9 +283,13 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   if (packClockIsSeedSmashed(pack) || shouldSkipIntegrityFlush(pack)) {
     return { ok: true as const, skipped: true as const };
   }
-  const familyAFault = familyAVaultWriteError(pack);
-  if (familyAFault) {
-    return { ok: false as const, error: familyAFault };
+  const baseline = packBaselineWriteCheck(pack);
+  if (!baseline.ok) {
+    return {
+      ok: false as const,
+      skipped: "integrity" as const,
+      error: baseline.error || "Estimate desk does not match the locked baseline.",
+    };
   }
   const body = JSON.stringify({ pack });
   if (lastBody.get(packId) === body) return { ok: true as const };

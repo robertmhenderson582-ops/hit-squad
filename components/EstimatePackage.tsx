@@ -241,7 +241,8 @@ export function EstimatePackageProvider({
     }
     const message = "error" in result && result.error ? result.error : "";
     if (!message) return;
-    if (opts?.force || reportVaultErrors.current || isVaultIntegrityError(message)) {
+    const integrity = ("skipped" in result && result.skipped === "integrity") || isVaultIntegrityError(message);
+    if (opts?.force || reportVaultErrors.current || integrity) {
       setVaultSaveError(message);
     }
   }
@@ -309,7 +310,10 @@ export function EstimatePackageProvider({
             setVaultSaveError("");
             return;
           }
-          if ("error" in first && isVaultIntegrityError(first.error || "")) {
+          if (
+            ("skipped" in first && first.skipped === "integrity") ||
+            ("error" in first && isVaultIntegrityError(first.error || ""))
+          ) {
             applyVaultFlushResult(first, { force: true });
             return;
           }
