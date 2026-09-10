@@ -101,6 +101,12 @@ test("Rate Vault stays owner-eyes-only until Privileges grants it", () => {
   assert.equal(pageAllowedForSeat(owner, { privilege: "rate-vault" }), true);
   assert.equal(pageAllowedForSeat(nathan, { privilege: "rate-vault" }), false);
   assert.equal(pageAllowedForSeat({ ...nathan, privileges: ["rate-vault"] }, { privilege: "rate-vault" }), true);
+  const james = { role: "tester" as const, email: "jhut26@gmail.com" };
+  assert.equal(canSeeRateVault(james), true);
+  assert.equal(canSeeRateVaultDoor(james, james), true);
+  assert.equal(pageAllowedForSeat(james, { privilege: "rate-vault" }), true);
+  assert.equal(pageAllowedForSeat(james, { ownerOnly: true }), false);
+  assert.equal(pageAllowedForSeat(james, { buildDesk: true }), false);
 });
 
 test("operator has build desk; testers do not", () => {

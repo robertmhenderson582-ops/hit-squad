@@ -1,5 +1,6 @@
 import { companyDeskLogoSrc } from "./companies.ts";
 import { canSeeRateVaultDoor } from "./desk-role.ts";
+import { isRateVaultOnlyViewer } from "./rate-vault.ts";
 
 export const HOME_WORDMARK = "HIT SQUAD";
 export const HOME_KICKER = "PROJECT CONTROLS";
@@ -100,10 +101,13 @@ type RateVaultViewer = { role?: string; privileges?: readonly string[] | null };
 
 /** Public four doors, plus Rate Vault when the session and lens both hold the grant. */
 export function homeDockTilesForViewer(
-  session?: RateVaultViewer | null,
-  lens?: RateVaultViewer | null,
+  session?: (RateVaultViewer & { email?: string }) | null,
+  lens?: (RateVaultViewer & { email?: string }) | null,
   canRates = true,
 ) {
+  if (isRateVaultOnlyViewer(session) && isRateVaultOnlyViewer(lens ?? session)) {
+    return canSeeRateVaultDoor(session, lens) ? [RATE_VAULT_DOOR] : [];
+  }
   const tiles: HomeDockTile[] = homeDockTiles(canRates);
   if (canSeeRateVaultDoor(session, lens)) tiles.push(RATE_VAULT_DOOR);
   return tiles;

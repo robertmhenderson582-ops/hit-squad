@@ -3,10 +3,12 @@
 import { AuthGate } from "@/components/AuthGate";
 import { DeskChrome } from "@/components/DeskChrome";
 import { QualityDesk } from "@/components/QualityDesk";
+import { RateVaultOnlyRedirect } from "@/components/RateVaultOnlyRedirect";
 
 export default function QualityPage() {
   return (
     <AuthGate require="authenticated">
+      <RateVaultOnlyRedirect />
       <DeskChrome title="QUALITY">
         <QualityDesk />
       </DeskChrome>

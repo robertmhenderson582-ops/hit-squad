@@ -18,6 +18,7 @@ import { useLensUser } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { canOpenRates, isOperator, isPresident, isTester } from "@/lib/desk-role";
 import { DESK_NAV } from "@/lib/desk-nav";
+import { RateVaultOnlyRedirect } from "@/components/RateVaultOnlyRedirect";
 
 const NAV = DESK_NAV;
 
@@ -104,6 +105,7 @@ function ChromeInner({
       data-capture-root
       data-desk-chrome={hero ? "hero" : "paper"}
     >
+      <RateVaultOnlyRedirect />
       <FieldTrialBanner />
       {hero ? (
         <>

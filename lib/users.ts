@@ -16,6 +16,7 @@ import { DriveApiError, SEATS_SA_OPEN_ERROR, isSeatsOpenDenied, vaultDriveAdapte
 import { canonicalEmail, identityBucket, isOwnerAliasSeat, isOwnerIdentity, resolveIdentity } from "./identity.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
+import { RATE_VAULT_JAMES_EMAIL, RATE_VAULT_JAMES_ID, RATE_VAULT_JAMES_NAME } from "./rate-vault.ts";
 import type { PublicUser, SeatHashClaim } from "./types.ts";
 
 export type { SeatHashClaim };
@@ -234,7 +235,7 @@ export function parseExtraSeats(raw: unknown): ExtraSeat[] {
 }
 
 function reservedEmails() {
-  return new Set<string>([ownerEmail(), NOVUS_EMAIL, ...TESTER_SEATS.map((seat) => seat.email)]);
+  return new Set<string>([ownerEmail(), NOVUS_EMAIL, RATE_VAULT_JAMES_EMAIL, ...TESTER_SEATS.map((seat) => seat.email)]);
 }
 
 function loadSeatFile(): SeatStoreFile {
@@ -609,6 +610,19 @@ function seedUsers(): StoredUser[] {
     };
   });
   const known = new Set<string>([owner.email, novus.email, ...testers.map((seat) => seat.email)]);
+  const jamesSaved = persisted[RATE_VAULT_JAMES_EMAIL];
+  const james: StoredUser = {
+    id: RATE_VAULT_JAMES_ID,
+    email: RATE_VAULT_JAMES_EMAIL,
+    name: RATE_VAULT_JAMES_NAME,
+    role: "tester",
+    mustChangePassword: jamesSaved ? Boolean(jamesSaved.mustChangePassword) : true,
+    passwordHash: jamesSaved?.passwordHash,
+    previousHashes: jamesSaved?.previousHashes,
+    recoveryHash: jamesSaved?.recoveryHash,
+    recoveryConsumed: jamesSaved?.recoveryConsumed,
+  };
+  known.add(james.email);
   const extras: StoredUser[] = loadSeatFile().extras
     .filter((seat) => !known.has(seat.email) && !isOwnerAliasSeat(seat) && !resolveIdentity(seat.email) && !resolveIdentity(seat.id))
     .map((seat) => {
@@ -626,7 +640,7 @@ function seedUsers(): StoredUser[] {
         recoveryConsumed: saved?.recoveryConsumed,
       };
     });
-  return [owner, novus, ...testers, ...extras];
+  return [owner, novus, ...testers, james, ...extras];
 }
 
 function ownerUsers(): StoredUser[] {

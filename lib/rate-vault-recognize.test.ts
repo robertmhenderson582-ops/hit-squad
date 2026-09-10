@@ -39,6 +39,8 @@ describe("Rate Vault recognition", () => {
     assert.equal(detectRateVaultFormat("terms.docx"), "docx");
     assert.equal(guessRateVaultKind("GPPMA-Agreement-Bookv10 (1).pdf").kind, "gppma");
     assert.equal(guessRateVaultKind("Rodeo Exhibit B-1 Bryan FINAL 08.06.26.xlsx").kind, "b1-exhibit");
+    assert.equal(guessRateVaultKind("Wood River Exhibit B-1 latest (Robert 09.10.26)").kind, "b1-exhibit");
+    assert.equal(guessRateVaultSite("Wood River Exhibit B-1 latest (Robert 09.10.26)"), "wood-river");
     assert.equal(guessRateVaultKind("Rate Sheet Builder Bayway 08.27.26.xlsx").kind, "rate-builder");
     assert.equal(guessRateVaultKind("PF - L 553 WRR 2025 P66 Wage Rate Sheet.pdf").kind, "local-craft-sheet");
     assert.equal(guessRateVaultKind("Work Agreement Construction Maintenance Monroe Energy.pdf").kind, "pla");
@@ -52,6 +54,7 @@ describe("Rate Vault recognition", () => {
     assert.equal(guessColumnRole("Base Wage (BW)"), "wage");
     assert.equal(guessColumnRole("H&W / Pension"), "fringe");
     assert.equal(guessColumnRole("Craft / Position"), "craft");
+    assert.equal(guessColumnRole("Bill Rate"), "bill");
   });
 
   it("sniffs excel headers without assuming one layout", async () => {

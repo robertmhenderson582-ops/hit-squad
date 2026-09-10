@@ -12,7 +12,8 @@ export const RATE_VAULT_HREF = "/rate-vault";
 export const RATE_VAULT_API = "/api/rate-vault";
 export const RATE_VAULT_TITLE = "Rate Vault";
 export const RATE_VAULT_KICKER = "B-1 Builder";
-export const RATE_VAULT_OWNER_NOTE = "Private workshop — not for testers.";
+export const RATE_VAULT_OWNER_NOTE =
+  "Private workshop — owner and the P66 Rate Vault seat. Not for testers.";
 export const RATE_VAULT_CLIENT = "Phillips 66" as const;
 export const RATE_VAULT_SCOPE_NOTE =
   "Rate Vault is Phillips 66 exclusive — James Hutton / P66 procurement lane. Other clients get their own vault later if ever.";
@@ -159,12 +160,12 @@ export const RATE_VAULT_BUILDER_STEPS = [
   {
     id: "burden",
     label: "Burden / build",
-    note: "CBA/PLA, state law, and fringes feed the pack later.",
+    note: "Visual rate pack — export the B-1 Excel, edit offline, re-import. Live tables stay off.",
   },
   {
     id: "publish",
     label: "Publish preview",
-    note: "Stub — live Rate Tables stay on Jobs / Rates.",
+    note: "Scroll the filled package. Re-import updates this preview. Live Rate Tables stay on Jobs / Rates.",
   },
 ] as const;
 
@@ -176,6 +177,47 @@ export const RATE_VAULT_DROP_TYPE_ERROR = "Use PDF, Word, or Excel (xlsx / xlsm 
 export const RATE_VAULT_DROP_SIZE_ERROR = "File is too large for Rate Vault (15 MB).";
 export const RATE_VAULT_SOURCE_DRAG = "application/x-hitsquad-rate-source";
 export const RATE_VAULT_CRAFT_DRAG = "application/x-hitsquad-rate-craft";
+
+/** Vault-internal B-1 Excel — same credibility bar as estimate Excel (formula check to the site). */
+export const RATE_VAULT_B1_KIND = "rate-vault-b1";
+export const RATE_VAULT_B1_MARKER = "HIT SQUAD RATE VAULT B-1";
+export const RATE_VAULT_B1_PACKAGE_SHEET = "B-1 Package";
+export const RATE_VAULT_B1_RATE_SHEET = "Rate Summary";
+export const RATE_VAULT_B1_BURDEN_SHEET = "Burden Summary";
+export const RATE_VAULT_B1_SPARE_POSITIONS = 5;
+export const RATE_VAULT_B1_IMPORT_ERROR = "Could not import that workbook. Use a Rate Vault B-1 export.";
+export const RATE_VAULT_B1_POISON_ERROR = "That workbook is not a valid Rate Vault B-1 package. It was not applied.";
+export const RATE_VAULT_B1_OCIP_MIX_ERROR =
+  "That workbook is an OCIP face and this picker is non-OCIP (or the reverse). Confirm to apply it anyway.";
+export const RATE_VAULT_B1_COMP_SHEET = "COMP Check";
+export const RATE_VAULT_B1_CBA_SHEET = "CBA PLA";
+export const RATE_VAULT_B1_STATE_SHEET = "State law";
+export const RATE_VAULT_B1_REQUIRED_SHEETS = [
+  RATE_VAULT_B1_PACKAGE_SHEET,
+  RATE_VAULT_B1_RATE_SHEET,
+  RATE_VAULT_B1_BURDEN_SHEET,
+  RATE_VAULT_B1_COMP_SHEET,
+  RATE_VAULT_B1_CBA_SHEET,
+  RATE_VAULT_B1_STATE_SHEET,
+] as const;
+
+/** P66 Rate Vault seat — James Hutton. Not James Cain. Not the tester circle. */
+export const RATE_VAULT_JAMES_EMAIL = "jhut26@gmail.com";
+export const RATE_VAULT_JAMES_NAME = "James Hutton";
+export const RATE_VAULT_JAMES_ID = "rate-vault-james-hutton";
+
+export function isRateVaultJamesEmail(email?: string | null) {
+  return (email || "").trim().toLowerCase() === RATE_VAULT_JAMES_EMAIL;
+}
+
+/** Rate Vault only — no Jobs / Inbox / Suggestion Box desk. */
+export function isRateVaultOnlyViewer(user?: { email?: string | null; role?: string | null } | null) {
+  return isRateVaultJamesEmail(user?.email);
+}
+
+export function isRateVaultB1ExcelName(name: string) {
+  return /\.xlsx$/i.test(name) || /\.xlsm$/i.test(name);
+}
 
 export const RATE_VAULT_MIME: Record<string, readonly string[]> = {
   pdf: ["application/pdf"],
@@ -258,7 +300,69 @@ export type RateVaultConfirmedReview = {
   writesRateBook: false;
 };
 
-export type RateVaultColumnRole = "craft" | "position" | "wage" | "fringe" | "burden" | "local" | "ot" | "dt" | "unknown";
+export type RateVaultColumnRole = "craft" | "position" | "wage" | "fringe" | "burden" | "local" | "ot" | "dt" | "bill" | "unknown";
+
+export const RATE_VAULT_DEFAULT_SITE_ID = "wood-river" as const;
+
+export type RateVaultPreviewSheetKind = "rate-summary" | "burden-summary" | "craft" | "staff-ocip" | "craft-ocip" | "other";
+
+export type RateVaultPreviewSheet = {
+  name: string;
+  kind: string;
+};
+
+export type RateVaultLane = "union" | "merit";
+export type RateVaultOcipFace = "ocip" | "non-ocip";
+
+export type RateVaultPreviewRow = {
+  id: string;
+  sheet: string;
+  group: string;
+  craft: string;
+  local: string | null;
+  position: string;
+  wage: number;
+  fringe: number;
+  burden: number;
+  billRate: number;
+  billOt: number | null;
+  billDt: number | null;
+  lane: RateVaultLane;
+  ocip: boolean;
+  clockNote: string;
+};
+
+export type RateVaultBurdenLine = {
+  id: string;
+  label: string;
+  ratePct: number;
+  note: string;
+};
+
+export type RateVaultPackageVersion = {
+  id: string;
+  at: string;
+  note: string;
+};
+
+export type RateVaultPreviewPackage = {
+  id: string;
+  title: string;
+  siteId: RateVaultSiteId;
+  sourceId: string | null;
+  sourceTitle: string;
+  effective: string | null;
+  revision: string | null;
+  extractedFrom: string;
+  note: string;
+  writesRateBook: false;
+  fixture: boolean;
+  ocipFace: RateVaultOcipFace | "both";
+  version: RateVaultPackageVersion | null;
+  sheets: RateVaultPreviewSheet[];
+  burden: RateVaultBurdenLine[];
+  rows: RateVaultPreviewRow[];
+};
 
 export type RateVaultSheetSniff = {
   name: string;
@@ -395,6 +499,34 @@ export type RateVaultPublishStub = {
   note: string;
 };
 
+export const RATE_VAULT_BUYOFF_ACTIONS = ["approve", "reject", "request-changes"] as const;
+export type RateVaultBuyoffAction = (typeof RATE_VAULT_BUYOFF_ACTIONS)[number];
+export const RATE_VAULT_BUYOFF_STATUSES = ["pending", "approved", "rejected", "changes-requested"] as const;
+export type RateVaultBuyoffStatus = (typeof RATE_VAULT_BUYOFF_STATUSES)[number];
+
+export type RateVaultBuyoffDecision = {
+  id: string;
+  siteId: RateVaultSiteId;
+  packageId: string;
+  title: string;
+  status: RateVaultBuyoffStatus;
+  note: string;
+  createdAt: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+  writesRateBook: false;
+};
+
+export function isRateVaultBuyoffAction(value: unknown): value is RateVaultBuyoffAction {
+  return typeof value === "string" && (RATE_VAULT_BUYOFF_ACTIONS as readonly string[]).includes(value);
+}
+
+export function buyoffStatusForAction(action: RateVaultBuyoffAction): RateVaultBuyoffStatus {
+  if (action === "approve") return "approved";
+  if (action === "reject") return "rejected";
+  return "changes-requested";
+}
+
 export type RateVaultWorkshop = {
   id: "rate-vault";
   name: typeof RATE_VAULT_TITLE;
@@ -404,6 +536,8 @@ export type RateVaultWorkshop = {
   steps: typeof RATE_VAULT_BUILDER_STEPS;
   library: RateVaultLibrary;
   review: RateVaultRecognitionReview | null;
+  preview: RateVaultPreviewPackage | null;
+  buyoffs: RateVaultBuyoffDecision[];
   cbaPla: RateVaultCbaPlaVault;
   stateLaw: RateVaultStateLawVault;
   publish: RateVaultPublishStub;
@@ -423,6 +557,8 @@ export function emptyRateVaultWorkshop(): RateVaultWorkshop {
     steps: RATE_VAULT_BUILDER_STEPS,
     library: emptyRateVaultLibrary(),
     review: null,
+    preview: null,
+    buyoffs: [],
     cbaPla: emptyCbaPlaVault(),
     stateLaw: emptyStateLawVault(),
     publish: {
@@ -472,11 +608,14 @@ export function stubPublishRateVault(): RateVaultPublishStub {
   };
 }
 
-export function rateVaultAccess(user: { role?: string; privileges?: readonly string[] | null } | null | undefined) {
+export function rateVaultAccess(
+  user: { role?: string; email?: string; privileges?: readonly string[] | null } | null | undefined,
+) {
   if (!user) return { ok: false as const, status: 401 as const, error: "Not signed in." };
   const owner = user.role === "owner";
   const granted = (user.privileges ?? []).includes(RATE_VAULT_PRIVILEGE);
-  if (!owner && !granted) {
+  const james = isRateVaultJamesEmail(user.email);
+  if (!owner && !granted && !james) {
     return { ok: false as const, status: 403 as const, error: "Rate Vault is owner-eyes-only." };
   }
   return { ok: true as const, status: 200 as const };

@@ -175,5 +175,10 @@ describe("Home four doors", () => {
       homeDockTilesForViewer(granted).map((tile) => tile.key),
       ["jobs", "quality", "hse", "accounting", "rate-vault"],
     );
+    const james = { role: "tester" as const, email: "jhut26@gmail.com" };
+    assert.deepEqual(
+      homeDockTilesForViewer(james).map((tile) => tile.key),
+      ["rate-vault"],
+    );
   });
 });

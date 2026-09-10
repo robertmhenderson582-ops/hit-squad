@@ -5,14 +5,23 @@ import { RATE_VAULT_LIBRARY_KIND, RATE_VAULT_LIBRARY_NAME } from "./rate-vault-l
 import {
   addRateVaultOwnerSource,
   confirmRateVaultReview,
+  getRateVaultPackage,
   listRateVaultOwnerLibrary,
   listRateVaultOverrides,
+  listRateVaultPackages,
   listRateVaultReviews,
   organizeRateVaultSource,
   resetRateVaultStoreForTests,
   storePayloadLeaksBinary,
+  upsertRateVaultPackage,
   useRateVaultStoreForTests,
+  decideRateVaultBuyoff,
+  listRateVaultBuyoffs,
+  listRateVaultVersions,
+  queueRateVaultBuyoff,
+  restoreRateVaultLastGood,
 } from "./rate-vault-store.ts";
+import { loadWoodRiverB1PreviewFixture } from "./rate-vault-preview.ts";
 import { readVaultJson } from "./drive-data.ts";
 
 describe("Rate Vault owner catalog store", { concurrency: 1 }, () => {
@@ -90,5 +99,68 @@ describe("Rate Vault owner catalog store", { concurrency: 1 }, () => {
     useRateVaultStoreForTests(memoryDrive());
     const saved = await addRateVaultOwnerSource({ title: "Nope", driveId: "x" });
     assert.equal(saved.ok, false);
+  });
+
+  it("persists an imported B-1 package without workbook bytes", async () => {
+    const drive = memoryDrive();
+    useRateVaultStoreForTests(drive);
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const journeyman = fixture.rows.find((row) => row.position === "Boilermaker Journeyman");
+    assert.ok(journeyman);
+    const saved = await upsertRateVaultPackage({
+      ...fixture,
+      fixture: false,
+      extractedFrom: "vault-xlsx-import",
+      rows: fixture.rows.map((row) =>
+        row.id === journeyman?.id ? { ...row, wage: 99.99, billRate: 99.99 + row.fringe + row.burden } : row,
+      ),
+      data: "SHOULD-NOT-PERSIST-PACKAGE",
+    } as typeof fixture & { data: string });
+    assert.equal(saved.ok, true);
+    if (!saved.ok) return;
+    assert.equal(saved.preview.fixture, false);
+    assert.equal(saved.preview.extractedFrom, "vault-xlsx-import");
+    assert.equal(saved.preview.writesRateBook, false);
+    assert.equal("data" in saved.preview, false);
+
+    const listed = await listRateVaultPackages();
+    const loaded = await getRateVaultPackage("wood-river");
+    assert.equal(listed.length, 1);
+    assert.equal(loaded?.rows.find((row) => row.id === journeyman?.id)?.wage, 99.99);
+
+    const vault = await readVaultJson<{ packages?: Array<Record<string, unknown>> }>(
+      drive,
+      RATE_VAULT_LIBRARY_NAME,
+      RATE_VAULT_LIBRARY_KIND,
+    );
+    assert.equal(storePayloadLeaksBinary(vault), false);
+    assert.equal(JSON.stringify(vault).includes("SHOULD-NOT-PERSIST-PACKAGE"), false);
+    assert.equal(vault?.packages?.[0]?.extractedFrom, "vault-xlsx-import");
+    assert.ok(saved.preview.version?.id);
+    assert.match(saved.preview.version?.note || "", /Imported B-1 Excel/);
+    const versions = await listRateVaultVersions("wood-river");
+    assert.ok(versions.length >= 1);
+
+    const queued = await queueRateVaultBuyoff(saved.preview);
+    assert.equal(queued.status, "pending");
+    assert.equal(queued.writesRateBook, false);
+    const buyoffRows = await listRateVaultBuyoffs();
+    assert.equal(buyoffRows[0]?.id, queued.id);
+    const approved = await decideRateVaultBuyoff({
+      id: queued.id,
+      action: "approve",
+      decidedBy: "robertmhenderson582@gmail.com",
+    });
+    assert.equal(approved.ok, true);
+    if (approved.ok) {
+      assert.equal(approved.buyoff.status, "approved");
+      assert.equal(approved.buyoff.writesRateBook, false);
+    }
+
+    const restored = await restoreRateVaultLastGood("wood-river");
+    assert.equal(restored.ok, true);
+    if (!restored.ok) return;
+    assert.equal(restored.preview.rows.find((row) => row.id === journeyman?.id)?.wage, journeyman?.wage);
+    assert.match(restored.preview.version?.note || "", /last-good/i);
   });
 });

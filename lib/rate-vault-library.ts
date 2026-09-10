@@ -18,8 +18,10 @@ import {
   type RateVaultRecognitionReview,
   type RateVaultSiteId,
   type RateVaultSourceOverride,
+  type RateVaultPreviewPackage,
   type RateVaultWorkshop,
 } from "./rate-vault.ts";
+import { defaultRateVaultPreview, WOOD_RIVER_B1_EXHIBIT_DRIVE_ID } from "./rate-vault-preview.ts";
 
 export const RATE_VAULT_LIBRARY_NAME = "rate-vault.json";
 export const RATE_VAULT_LIBRARY_KIND = "rate-vault-library";
@@ -68,6 +70,15 @@ const SEED: readonly SeedRow[] = [
     kind: "comp",
     siteId: "east-coast",
     note: "East Coast COMP / GMTA Madison Amendment 1 (PCA0001103).",
+  },
+  {
+    // TODO: replace WOOD_RIVER_B1_EXHIBIT_DRIVE_ID with the Drive file id after Robert's 09.10.26 Exhibit B-1 is uploaded. Catalog by id only — never commit the xlsx.
+    driveId: WOOD_RIVER_B1_EXHIBIT_DRIVE_ID,
+    title: "Wood River Exhibit B-1 latest (Robert 09.10.26)",
+    kind: "b1-exhibit",
+    siteId: "wood-river",
+    primary: true,
+    note: "Primary Wood River Exhibit B-1 (Robert 09.10.26). Metadata only — file stays on Drive. Visual package loads from the checked-in preview fixture.",
   },
   {
     driveId: "1aP0etQYJxWo003IUa8bVWWoDpOAwk1m2",
@@ -355,6 +366,7 @@ export function buildRateVaultWorkshop(
   reviews: readonly RateVaultConfirmedReview[] = [],
   review: RateVaultRecognitionReview | null = null,
   overrides: readonly RateVaultSourceOverride[] = [],
+  preview: RateVaultPreviewPackage | null = defaultRateVaultPreview(review?.guessedSiteId ?? "wood-river"),
 ): RateVaultWorkshop {
   const workshop = emptyRateVaultWorkshop();
   return {
@@ -366,5 +378,6 @@ export function buildRateVaultWorkshop(
       overrides: overrides.map((row) => ({ ...row })),
     },
     review,
+    preview,
   };
 }

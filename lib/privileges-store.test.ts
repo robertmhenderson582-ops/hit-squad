@@ -36,3 +36,11 @@ test("owner can grant and revoke owner-only items per email", async () => {
   forgetPrivilegeCacheForTests();
   assert.deepEqual(peekPrivileges(email), []);
 });
+
+test("James Hutton always peeks the Rate Vault grant without a stored row", async () => {
+  const email = "jhut26@gmail.com";
+  assert.deepEqual(peekPrivileges(email), ["rate-vault"]);
+  assert.deepEqual(await revokePrivilege(email, "rate-vault"), []);
+  assert.deepEqual(peekPrivileges(email), ["rate-vault"]);
+  assert.equal((await listPrivilegeGrants())[email], undefined);
+});
