@@ -4,26 +4,22 @@ import { DRIVE_FOLDER_MIME, type DriveAdapter, type DriveFile } from "./drive-es
 import type { LeadFile } from "./lead-briefs.ts";
 import { isQualityCompanyDocsJobId, qualityCompanyDocLabel, type QualityCompanyDocId } from "./quality-company-docs.ts";
 import { qualityFolderLabel, type QualityFolderId } from "./quality-folders.ts";
+import {
+  QUALITY_UNVAULTED_MARK,
+  QUALITY_VAULT_WRITE_ERROR,
+  mergeVaultedQualityFiles,
+  qualityVaultStored,
+  type QualityListedFile,
+  type QualityVaultPlace,
+} from "./quality-vault-shared.ts";
 
-export const QUALITY_VAULT_WRITE_ERROR =
-  "Could not save to the Quality vault. Those files are only on this desk. Try again.";
-export const QUALITY_UNVAULTED_MARK = "on this desk only — not saved yet";
-
-export type QualityVaultPlace = {
-  companyId?: string;
-  companyLabel?: string;
-  siteLabel?: string;
-  jobId?: string;
-  jobLabel?: string;
-  folderId: string;
-  companyDocs?: boolean;
-};
-
-export type QualityListedFile = {
-  name: string;
-  type: string;
-  data?: string;
-  vaulted: boolean;
+export {
+  QUALITY_UNVAULTED_MARK,
+  QUALITY_VAULT_WRITE_ERROR,
+  mergeVaultedQualityFiles,
+  qualityVaultStored,
+  type QualityListedFile,
+  type QualityVaultPlace,
 };
 
 export function qualityVaultFolderName(name: string) {
@@ -63,10 +59,6 @@ export function qualityDriveReady(drive?: DriveAdapter | null) {
   return Boolean(
     drive?.configured && drive.listChildren && drive.createFolder && drive.uploadBytes && drive.updateBytes,
   );
-}
-
-export function qualityVaultStored(store?: string | null, stored?: boolean) {
-  return store === "drive" && stored !== false;
 }
 
 function decodeLeadBytes(file: LeadFile) {
@@ -112,7 +104,11 @@ export async function writeQualityVaultFiles(drive: DriveAdapter, folderId: stri
   return written;
 }
 
-export async function persistQualityVaultFiles(drive: DriveAdapter | null | undefined, place: QualityVaultPlace, files: LeadFile[]) {
+export async function persistQualityVaultFiles(
+  drive: DriveAdapter | null | undefined,
+  place: QualityVaultPlace,
+  files: LeadFile[],
+) {
   if (!qualityDriveReady(drive)) throw new Error(QUALITY_VAULT_WRITE_ERROR);
   const incoming = files.filter((file) => file.name && file.data);
   if (!incoming.length) throw new Error("Drop at least one file.");
@@ -120,36 +116,6 @@ export async function persistQualityVaultFiles(drive: DriveAdapter | null | unde
   const written = await writeQualityVaultFiles(drive as DriveAdapter, folderId, incoming);
   if (written.length !== incoming.length) throw new Error(QUALITY_VAULT_WRITE_ERROR);
   return { folderId, files: written, path: qualityVaultPath(place), store: "drive" as const };
-}
-
-export function mergeVaultedQualityFiles(
-  vault: Array<{ name?: string; type?: string }>,
-  local: Array<{ name?: string; type?: string; data?: string }>,
-): QualityListedFile[] {
-  const listed: QualityListedFile[] = [];
-  const seen = new Set<string>();
-  for (const file of vault) {
-    const name = (file.name || "").trim();
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
-    listed.push({
-      name,
-      type: file.type || "application/octet-stream",
-      vaulted: true,
-    });
-  }
-  for (const file of local) {
-    const name = (file.name || "").trim();
-    if (!name || seen.has(name) || !file.data) continue;
-    seen.add(name);
-    listed.push({
-      name,
-      type: file.type || "application/octet-stream",
-      data: file.data,
-      vaulted: false,
-    });
-  }
-  return listed;
 }
 
 export function briefsIndexFolderId() {

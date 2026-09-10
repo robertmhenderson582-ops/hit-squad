@@ -26,7 +26,7 @@ import {
   mergeVaultedQualityFiles,
   qualityVaultStored,
   type QualityListedFile,
-} from "@/lib/quality-vault";
+} from "@/lib/quality-vault-shared";
 
 function dropFileFromBrowser(file: File) {
   return { name: file.name, type: file.type, bytes: file.size };

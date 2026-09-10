@@ -236,6 +236,7 @@ describe("Quality folder catalog", () => {
     assert.match(drop, /companyId/);
     assert.match(drop, /qualityVaultStored/);
     assert.match(drop, /QUALITY_UNVAULTED_MARK/);
+    assert.match(drop, /quality-vault-shared/);
     assert.match(drop, /siteLabel/);
     assert.match(drop, /jobLabel/);
     for (const label of QUALITY_FOLDERS.map((folder) => folder.label)) {
