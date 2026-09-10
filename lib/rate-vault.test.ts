@@ -13,9 +13,14 @@ import {
   RATE_VAULT_OWNER_NOTE,
   RATE_VAULT_PRIVILEGE,
   RATE_VAULT_SECTIONS,
+  RATE_VAULT_STATE_LAW_ID,
+  RATE_VAULT_STATE_LAW_RULES,
+  RATE_VAULT_STATE_LAW_SECTION,
+  RATE_VAULT_STATE_LAW_SITES,
   RATE_VAULT_TITLE,
   emptyCbaPlaVault,
   emptyRateVaultWorkshop,
+  emptyStateLawVault,
   rateVaultAccess,
   stubPublishRateVault,
 } from "./rate-vault.ts";
@@ -81,7 +86,7 @@ describe("Rate Vault scaffold", () => {
     assert.equal(workshop.id, "rate-vault");
     assert.deepEqual(
       RATE_VAULT_SECTIONS.map((section) => section.id),
-      ["halls", "contractor", "cba-pla", "p66", "publish"],
+      ["halls", "contractor", "cba-pla", "state-law", "p66", "publish"],
     );
     assert.equal(RATE_VAULT_CBA_PLA_ID, "cba-pla");
     assert.equal(RATE_VAULT_CBA_PLA_SECTION.id, "cba-pla");
@@ -102,8 +107,32 @@ describe("Rate Vault scaffold", () => {
     assert.equal(workshop.cbaPla.id, "cba-pla");
     assert.deepEqual(workshop.cbaPla.entries, []);
     assert.equal(workshop.cbaPla.rules.every((rule) => rule.captured === false), true);
+    assert.equal(RATE_VAULT_STATE_LAW_ID, "state-law");
+    assert.equal(RATE_VAULT_STATE_LAW_SECTION.label, "State law");
+    assert.match(RATE_VAULT_STATE_LAW_SECTION.note, /site location \/ state/i);
+    assert.match(RATE_VAULT_STATE_LAW_SECTION.note, /Illinois/);
+    assert.match(RATE_VAULT_STATE_LAW_SECTION.note, /Wood River/);
+    assert.match(RATE_VAULT_STATE_LAW_SECTION.note, /California/);
+    assert.match(RATE_VAULT_STATE_LAW_SECTION.note, /Rodeo/);
+    assert.match(RATE_VAULT_STATE_LAW_SECTION.note, /Ferndale/);
+    assert.match(RATE_VAULT_STATE_LAW_SECTION.note, /New Jersey/);
+    assert.match(RATE_VAULT_STATE_LAW_SECTION.note, /Bayway/);
+    assert.match(RATE_VAULT_STATE_LAW_SECTION.note, /Montana/);
+    assert.match(RATE_VAULT_STATE_LAW_SECTION.note, /Billings/);
+    assert.match(RATE_VAULT_STATE_LAW_SECTION.note, /published rate package/i);
+    assert.deepEqual(
+      RATE_VAULT_STATE_LAW_RULES.map((rule) => rule.id),
+      ["ot", "wage", "rest", "holiday"],
+    );
+    assert.deepEqual(
+      RATE_VAULT_STATE_LAW_SITES.map((row) => `${row.site}:${row.state}`),
+      ["Wood River:Illinois", "Rodeo:California", "Ferndale:California", "Bayway:New Jersey", "Billings:Montana"],
+    );
+    assert.deepEqual(workshop.stateLaw, emptyStateLawVault());
+    assert.equal(workshop.stateLaw.id, "state-law");
+    assert.deepEqual(workshop.stateLaw.entries, []);
     const p66 = RATE_VAULT_SECTIONS.find((section) => section.id === "p66");
-    assert.match(p66?.note ?? "", /CBA \/ PLA is its own vault/i);
+    assert.match(p66?.note ?? "", /CBA \/ PLA and State law are their own vaults/i);
     assert.equal(workshop.publish.status, "stub");
     assert.equal(workshop.publish.published, false);
     assert.equal(workshop.publish.packageId, null);
@@ -132,15 +161,20 @@ describe("Rate Vault scaffold", () => {
     assert.match(vaultModule, /Contractor books/);
     assert.match(vaultModule, /CBA \/ PLA/);
     assert.match(vaultModule, /cba-pla/);
+    assert.match(vaultModule, /State law/);
+    assert.match(vaultModule, /state-law/);
     assert.match(vaultModule, /P66 \/ site rules/);
     assert.match(vaultModule, /Publish rate package/);
     assert.match(desk, /RATE_VAULT_CBA_PLA_ID/);
+    assert.match(desk, /RATE_VAULT_STATE_LAW_ID/);
     assert.match(desk, /CBA \/ PLA upload stub/);
     assert.match(desk, /Vault is empty/);
+    assert.match(desk, /No state-law captures yet/);
     assert.doesNotMatch(desk, /Cassidy|james@|invite James/i);
     assert.doesNotMatch(vaultModule, /Cassidy|estimate-pack|\/api\/desk\/rates/);
     const docs = source("../docs/rate-vault.md");
     assert.match(docs, /cba-pla/);
+    assert.match(docs, /state-law/);
     assert.match(docs, /not nested under P66/);
     assert.match(desk, /\/api\/rate-vault/);
     assert.match(gate, /canSeeRateVaultDoor/);

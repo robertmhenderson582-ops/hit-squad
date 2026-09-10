@@ -31,6 +31,31 @@ export const RATE_VAULT_CBA_PLA_SECTION = {
   note: "For sites without a dedicated P66 rate book (Wood River, Bayway), hall CBA/PLA rules drive OT, fringes, eligibility, and clock — and must feed the published rate package.",
 } as const;
 
+/** First-class workshop module — keyed by site location / state, not nested under P66. */
+export const RATE_VAULT_STATE_LAW_ID = "state-law" as const;
+
+export const RATE_VAULT_STATE_LAW_RULES = [
+  { id: "ot", label: "OT" },
+  { id: "wage", label: "Wage" },
+  { id: "rest", label: "Rest" },
+  { id: "holiday", label: "Holiday" },
+] as const;
+
+export const RATE_VAULT_STATE_LAW_SITES = [
+  { site: "Wood River", state: "Illinois" },
+  { site: "Rodeo", state: "California" },
+  { site: "Ferndale", state: "California" },
+  { site: "Bayway", state: "New Jersey" },
+  { site: "Billings", state: "Montana" },
+] as const;
+
+export const RATE_VAULT_STATE_LAW_SECTION = {
+  id: RATE_VAULT_STATE_LAW_ID,
+  label: "State law",
+  title: "State law vault",
+  note: "Recognize OT, wage, rest, and holiday rules by site location / state — Illinois (Wood River), California (Rodeo, Ferndale), New Jersey (Bayway), Montana (Billings). These sit alongside CBA/PLA when site-specific P66 rates are thin, and must feed the published rate package later.",
+} as const;
+
 export const RATE_VAULT_SECTIONS = [
   {
     id: "halls",
@@ -43,10 +68,11 @@ export const RATE_VAULT_SECTIONS = [
     note: "Contractor rate books land here later.",
   },
   RATE_VAULT_CBA_PLA_SECTION,
+  RATE_VAULT_STATE_LAW_SECTION,
   {
     id: "p66",
     label: "P66 / site rules",
-    note: "Phillips 66 and site rules land here later. CBA / PLA is its own vault — not this pane.",
+    note: "Phillips 66 and site rules land here later. CBA / PLA and State law are their own vaults — not this pane.",
   },
   {
     id: "publish",
@@ -81,6 +107,33 @@ export function emptyCbaPlaVault(): RateVaultCbaPlaVault {
   };
 }
 
+export type RateVaultStateLawRuleId = (typeof RATE_VAULT_STATE_LAW_RULES)[number]["id"];
+
+export type RateVaultStateLawEntry = {
+  id: string;
+  site: string;
+  state: string;
+  captured: false;
+};
+
+export type RateVaultStateLawVault = {
+  id: typeof RATE_VAULT_STATE_LAW_ID;
+  label: typeof RATE_VAULT_STATE_LAW_SECTION.label;
+  entries: readonly RateVaultStateLawEntry[];
+  sites: typeof RATE_VAULT_STATE_LAW_SITES;
+  rules: ReadonlyArray<(typeof RATE_VAULT_STATE_LAW_RULES)[number] & { captured: false }>;
+};
+
+export function emptyStateLawVault(): RateVaultStateLawVault {
+  return {
+    id: RATE_VAULT_STATE_LAW_ID,
+    label: RATE_VAULT_STATE_LAW_SECTION.label,
+    entries: [],
+    sites: RATE_VAULT_STATE_LAW_SITES,
+    rules: RATE_VAULT_STATE_LAW_RULES.map((rule) => ({ ...rule, captured: false as const })),
+  };
+}
+
 export type RateVaultPublishStub = {
   status: "stub";
   published: false;
@@ -95,6 +148,7 @@ export type RateVaultWorkshop = {
   ownerNote: typeof RATE_VAULT_OWNER_NOTE;
   sections: typeof RATE_VAULT_SECTIONS;
   cbaPla: RateVaultCbaPlaVault;
+  stateLaw: RateVaultStateLawVault;
   publish: RateVaultPublishStub;
 };
 
@@ -106,6 +160,7 @@ export function emptyRateVaultWorkshop(): RateVaultWorkshop {
     ownerNote: RATE_VAULT_OWNER_NOTE,
     sections: RATE_VAULT_SECTIONS,
     cbaPla: emptyCbaPlaVault(),
+    stateLaw: emptyStateLawVault(),
     publish: {
       status: "stub",
       published: false,

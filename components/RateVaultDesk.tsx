@@ -8,6 +8,10 @@ import {
   RATE_VAULT_KICKER,
   RATE_VAULT_OWNER_NOTE,
   RATE_VAULT_SECTIONS,
+  RATE_VAULT_STATE_LAW_ID,
+  RATE_VAULT_STATE_LAW_RULES,
+  RATE_VAULT_STATE_LAW_SECTION,
+  RATE_VAULT_STATE_LAW_SITES,
   RATE_VAULT_TITLE,
   stubPublishRateVault,
   type RateVaultPublishStub,
@@ -59,8 +63,8 @@ export function RateVaultDesk() {
         <h2 className="font-display text-3xl tracking-wide text-[#163038]">{RATE_VAULT_TITLE}</h2>
         <p className="mt-2 text-sm leading-6 text-[#5b6f73]">{RATE_VAULT_OWNER_NOTE}</p>
         <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
-          Halls, contractor books, CBA / PLA, and Phillips 66 site rules will land here. This
-          scaffold does not import Jobs, Quality, seats, or live estimate Rate Tables.
+          Halls, contractor books, CBA / PLA, state law, and Phillips 66 site rules will land
+          here. This scaffold does not import Jobs, Quality, seats, or live estimate Rate Tables.
         </p>
         {error ? <p className="mt-3 text-sm text-[#163038]">{error}</p> : null}
       </section>
@@ -70,9 +74,13 @@ export function RateVaultDesk() {
           {section.id === RATE_VAULT_CBA_PLA_ID ? (
             <p className="text-xs tracking-[0.14em] text-[#5b6f73]">{RATE_VAULT_CBA_PLA_SECTION.title}</p>
           ) : null}
+          {section.id === RATE_VAULT_STATE_LAW_ID ? (
+            <p className="text-xs tracking-[0.14em] text-[#5b6f73]">{RATE_VAULT_STATE_LAW_SECTION.title}</p>
+          ) : null}
           <h3 className="text-xl font-semibold text-[#163038]">{section.label}</h3>
           <p className="mt-2 text-sm leading-6 text-[#5b6f73]">{section.note}</p>
           {section.id === RATE_VAULT_CBA_PLA_ID ? <RateVaultCbaPlaStub /> : null}
+          {section.id === RATE_VAULT_STATE_LAW_ID ? <RateVaultStateLawStub /> : null}
           {section.id === "publish" ? (
             <div className="mt-4">
               <button type="button" className="rounded-lg bg-steel px-4 py-2 text-sm text-white" onClick={() => void publishStub()}>
@@ -101,6 +109,26 @@ function RateVaultCbaPlaStub() {
       <p className="text-sm text-[#5b6f73]">Vault is empty. No CBA / PLA captures yet.</p>
       <ul className="space-y-1 text-sm text-[#5b6f73]">
         {RATE_VAULT_CBA_PLA_RULES.map((rule) => (
+          <li key={rule.id}>{rule.label} — not captured</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function RateVaultStateLawStub() {
+  return (
+    <div className="mt-4 space-y-3">
+      <p className="text-sm text-[#5b6f73]">Vault is empty. No state-law captures yet.</p>
+      <ul className="space-y-1 text-sm text-[#5b6f73]">
+        {RATE_VAULT_STATE_LAW_SITES.map((row) => (
+          <li key={`${row.site}-${row.state}`}>
+            {row.site} — {row.state}
+          </li>
+        ))}
+      </ul>
+      <ul className="space-y-1 text-sm text-[#5b6f73]">
+        {RATE_VAULT_STATE_LAW_RULES.map((rule) => (
           <li key={rule.id}>{rule.label} — not captured</li>
         ))}
       </ul>
