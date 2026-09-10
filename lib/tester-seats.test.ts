@@ -31,6 +31,8 @@ test("seeds company homes without inventing extra seats", () => {
   assert.equal(testerByEmail(JOHN_BEECH_EMAIL)?.company, "madison");
   assert.equal(testerByEmail(JAMES_EMAIL)?.company, "cbi");
   assert.equal(testerByEmail(JAMES_EMAIL)?.email, "jameshcainjr@gmail.com");
+  assert.equal(testerByEmail("jhut26@gmail.com"), undefined);
+  assert.equal(TESTER_SEATS.some((row) => row.email === "jhut26@gmail.com"), false);
   assert.equal(testerByEmail(JOSEPH_EMAIL)?.company, "hitsquad");
   assert.equal(testerByEmail("marks544@yahoo.com")?.company, "hitsquad");
   assert.equal(testerByEmail(JOHN_HENRY_EMAIL)?.company, "lucky13");

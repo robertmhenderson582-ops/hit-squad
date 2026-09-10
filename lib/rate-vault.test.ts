@@ -71,6 +71,16 @@ describe("Rate Vault scaffold", () => {
     assert.equal(pageAllowedForSeat({ ...freddy, privileges: ["rate-vault"] }, { privilege: "rate-vault" }), true);
     assert.equal(homeDockTilesForViewer(nathan).some((tile) => tile.key === "rate-vault"), false);
     assert.equal(homeDockTilesForViewer(owner).some((tile) => tile.key === "rate-vault"), true);
+
+    const james = { role: "tester" as const, email: "jhut26@gmail.com" };
+    assert.equal(canSeeRateVault(james), true);
+    assert.equal(canSeeRateVaultDoor(james, james), true);
+    assert.equal(pageAllowedForSeat(james, { privilege: "rate-vault" }), true);
+    assert.deepEqual(
+      homeDockTilesForViewer(james).map((tile) => tile.key),
+      ["rate-vault"],
+    );
+    assert.deepEqual(rateVaultAccess(james), { ok: true, status: 200 });
   });
 
   it("gates session access and keeps a stub workshop boundary", () => {
@@ -142,6 +152,7 @@ describe("Rate Vault scaffold", () => {
     assert.equal(workshop.steps, RATE_VAULT_BUILDER_STEPS);
     assert.equal(workshop.review, null);
     assert.equal(workshop.preview, null);
+    assert.deepEqual(workshop.buyoffs, []);
     const seededPreview = buildRateVaultWorkshop();
     assert.equal(seededPreview.preview?.siteId, "wood-river");
     assert.ok((seededPreview.preview?.rows.length ?? 0) >= 8);
@@ -224,6 +235,8 @@ describe("Rate Vault scaffold", () => {
     const store = source("./rate-vault-store.ts");
     const xlsx = source("./rate-vault-xlsx.ts");
     const privileges = source("./privileges.ts");
+    const chrome = source("../components/DeskChrome.tsx");
+    const redirect = source("../components/RateVaultOnlyRedirect.tsx");
 
     assert.match(dock, /homeDockTilesForViewer/);
     assert.match(dock, /RATE_VAULT_DOOR/);
@@ -261,6 +274,11 @@ describe("Rate Vault scaffold", () => {
     assert.match(desk, /Export B-1 Excel/);
     assert.match(desk, /import-b1/);
     assert.match(desk, /export-b1/);
+    assert.match(desk, /restore-b1/);
+    assert.match(desk, /Confirm OCIP mix/);
+    assert.match(desk, /decide-buyoff/);
+    assert.match(desk, /Rate package buyoff/);
+    assert.match(desk, /Request changes/);
     assert.match(desk, /Live write to Jobs \/ Rates stays stubbed/);
     assert.match(previewUi, /Wood River B-1 rate package/);
     assert.match(previewUi, /Burden Summary/);
@@ -294,6 +312,12 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /B-1 Excel export \/ import/);
     assert.match(docs, /formula check to the site/);
     assert.match(docs, /refuses silent poison/);
+    assert.match(docs, /James Hutton/);
+    assert.match(docs, /jhut26@gmail.com/);
+    assert.match(docs, /COMP Check/);
+    assert.match(docs, /last-good/);
+    assert.match(docs, /Rate package buyoff/);
+    assert.match(docs, /OCIP/);
     assert.doesNotMatch(library, /siteId:\s*"monroe"/);
     assert.doesNotMatch(library, /Monroe Energy/);
     assert.doesNotMatch(vaultModule, /id: "monroe"/);
@@ -311,13 +335,24 @@ describe("Rate Vault scaffold", () => {
     assert.match(api, /recognizeRateVaultSource/);
     assert.match(api, /export-b1/);
     assert.match(api, /import-b1/);
+    assert.match(api, /restore-b1/);
+    assert.match(api, /decide-buyoff/);
     assert.match(vaultModule, /HIT SQUAD RATE VAULT B-1/);
+    assert.match(vaultModule, /jhut26@gmail.com/);
+    assert.match(vaultModule, /James Hutton/);
+    assert.match(xlsx, /COMP Check/);
+    assert.match(store, /lastGood/);
+    assert.match(store, /queueRateVaultBuyoff/);
     assert.match(xlsx, /RATE_VAULT_B1_MARKER/);
     assert.match(xlsx, /rateVaultPreviewToXlsx/);
     assert.match(xlsx, /parseRateVaultB1Xlsx/);
     assert.doesNotMatch(xlsx, FORBIDDEN_IMPORT);
     assert.doesNotMatch(xlsx, /from ["'][^"']*(estimate-xlsx|estimate-pack)/);
     assert.match(server, /canSeeRateVault\(user\)/);
+    assert.match(chrome, /RateVaultOnlyRedirect/);
+    assert.match(redirect, /isRateVaultOnlyViewer/);
+    assert.match(redirect, /\/rate-vault/);
+    assert.doesNotMatch(redirect, FORBIDDEN_IMPORT);
     assert.match(privileges, /"rate-vault"/);
     assert.match(library, /17YtnXtCcIXq68sROl3_VwkIo6PHYzTIR/);
     assert.match(recognize, /needsConfirm: true/);

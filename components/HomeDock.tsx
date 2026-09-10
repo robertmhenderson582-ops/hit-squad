@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useLensUser } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { RATE_VAULT_DOOR, homeDockTiles, homeDockTilesForViewer } from "@/lib/desk-home";
+import { RATE_VAULT_DOOR, homeDockTilesForViewer } from "@/lib/desk-home";
 
 export function HomeDock() {
   const { user } = useSession();
   const lens = useLensUser();
-  const tiles = homeDockTiles();
-  const ownerTiles = homeDockTilesForViewer(user, lens).filter((tile) => tile.key === RATE_VAULT_DOOR.key);
+  const visible = homeDockTilesForViewer(user, lens);
+  const tiles = visible.filter((tile) => tile.key !== RATE_VAULT_DOOR.key);
+  const ownerTiles = visible.filter((tile) => tile.key === RATE_VAULT_DOOR.key);
 
   return (
     <nav className="home-dock" aria-label="Desk modules">

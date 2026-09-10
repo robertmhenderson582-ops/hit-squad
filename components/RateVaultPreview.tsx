@@ -4,16 +4,18 @@ import { FieldBlock } from "@/components/FieldMark";
 import {
   RATE_VAULT_SITES,
   rateVaultSiteLabel,
+  type RateVaultOcipFace,
   type RateVaultPreviewPackage,
 } from "@/lib/rate-vault";
 import {
   burdenTotalPct,
+  filterPreviewByFace,
   formatRateVaultMoney,
   formatRateVaultPct,
   previewRowGroups,
 } from "@/lib/rate-vault-preview";
 
-const RATE_HEADERS = ["Position", "Craft / local", "Wage", "Fringe", "Burden", "Bill ST", "Bill OT", "Bill DT"] as const;
+const RATE_HEADERS = ["Position", "Lane", "Craft / local", "Wage", "Fringe", "Burden", "Bill ST", "Bill OT", "Bill DT"] as const;
 
 export function RateVaultSitePicker({
   siteId,
@@ -42,16 +44,42 @@ export function RateVaultSitePicker({
   );
 }
 
+export function RateVaultOcipPicker({
+  face,
+  onFace,
+}: {
+  face: RateVaultOcipFace | "both";
+  onFace: (value: RateVaultOcipFace | "both") => void;
+}) {
+  return (
+    <FieldBlock label="OCIP face">
+      <select
+        className="paper-field mt-1"
+        value={face}
+        aria-label="OCIP face"
+        onChange={(event) => onFace(event.target.value as RateVaultOcipFace | "both")}
+      >
+        <option value="both">OCIP and non-OCIP</option>
+        <option value="ocip">OCIP</option>
+        <option value="non-ocip">non-OCIP</option>
+      </select>
+    </FieldBlock>
+  );
+}
+
 export function RateVaultPreviewTables({
   preview,
   siteId,
   emptyNote,
+  ocipFace = "both",
 }: {
   preview: RateVaultPreviewPackage | null;
   siteId: string;
   emptyNote: string;
+  ocipFace?: RateVaultOcipFace | "both";
 }) {
-  if (!preview || !preview.rows.length) {
+  const viewed = preview && ocipFace !== "both" ? filterPreviewByFace(preview, ocipFace) : preview;
+  if (!viewed || !viewed.rows.length) {
     return (
       <p className="mt-4 text-sm text-[#5b6f73]">
         {emptyNote || `No B-1 preview for ${rateVaultSiteLabel(siteId) || "this site"} yet.`}
@@ -59,33 +87,35 @@ export function RateVaultPreviewTables({
     );
   }
 
-  const groups = previewRowGroups(preview.rows);
-  const burdenPct = burdenTotalPct(preview);
+  const groups = previewRowGroups(viewed.rows);
+  const burdenPct = burdenTotalPct(viewed);
 
   return (
     <div className="mt-4 space-y-6">
       <div>
         <p className="text-xs tracking-[0.14em] text-[#5b6f73]">Visual rate package</p>
-        <h4 className="text-lg font-semibold text-[#163038]">{preview.title}</h4>
+        <h4 className="text-lg font-semibold text-[#163038]">{viewed.title}</h4>
         <p className="mt-1 text-sm leading-6 text-[#5b6f73]">
-          {rateVaultSiteLabel(preview.siteId)}
-          {preview.revision ? ` · ${preview.revision}` : ""}
-          {preview.effective ? ` · effective ${preview.effective}` : ""}
+          {rateVaultSiteLabel(viewed.siteId)}
+          {viewed.revision ? ` · ${viewed.revision}` : ""}
+          {viewed.effective ? ` · effective ${viewed.effective}` : ""}
           {" · "}
-          {preview.rows.length} positions
-          {preview.fixture
+          {viewed.rows.length} positions
+          {ocipFace !== "both" ? ` · ${ocipFace}` : ""}
+          {viewed.fixture
             ? " · fixture"
-            : preview.extractedFrom === "vault-xlsx-import"
+            : viewed.extractedFrom === "vault-xlsx-import"
               ? " · imported B-1 Excel"
               : ""}
+          {viewed.version ? ` · ${viewed.version.note} ${viewed.version.at.slice(0, 10)}` : ""}
         </p>
-        {preview.note ? <p className="mt-2 text-sm leading-6 text-[#5b6f73]">{preview.note}</p> : null}
+        {viewed.note ? <p className="mt-2 text-sm leading-6 text-[#5b6f73]">{viewed.note}</p> : null}
       </div>
 
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm" aria-label="Wood River B-1 rate package">
           <caption className="sr-only">
-            {preview.title} — positions with wage, fringe, burden, and bill rate
+            {viewed.title} — positions with wage, fringe, burden, and bill rate
           </caption>
           <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
             <tr>
@@ -106,6 +136,7 @@ export function RateVaultPreviewTables({
               {group.rows.map((row) => (
                 <tr key={row.id} className="border-t border-[#d5e0de]">
                   <td className="px-2 py-2 font-semibold text-[#163038]">{row.position}</td>
+                  <td className="px-2 py-2 text-[#5b6f73]">{row.lane}</td>
                   <td className="px-2 py-2 text-[#5b6f73]">
                     {row.craft}
                     {row.local ? ` · L ${row.local}` : ""}
@@ -143,7 +174,7 @@ export function RateVaultPreviewTables({
               </tr>
             </thead>
             <tbody>
-              {preview.burden.map((line) => (
+              {viewed.burden.map((line) => (
                 <tr key={line.id} className="border-t border-[#d5e0de]">
                   <td className="px-2 py-2 font-semibold text-[#163038]">{line.label}</td>
                   <td className="px-2 py-2 font-semibold">{formatRateVaultPct(line.ratePct)}</td>

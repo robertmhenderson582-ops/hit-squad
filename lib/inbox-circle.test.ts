@@ -31,6 +31,7 @@ describe("inbox circle", () => {
       ],
     );
     assert.equal(INBOX_CIRCLE.length, 7);
+    assert.equal(INBOX_CIRCLE.some((row) => row.email === "jhut26@gmail.com"), false);
     assert.equal(INBOX_CIRCLE.find((row) => row.email === NOVUS_INBOX_EMAIL)?.name, "Novus");
     assert.equal(INBOX_CIRCLE.find((row) => row.email === NOVUS_INBOX_EMAIL)?.company, "Hit Squad");
     assert.equal(isInboxCircleEmail("Shane@apcontrolsllc.com"), true);

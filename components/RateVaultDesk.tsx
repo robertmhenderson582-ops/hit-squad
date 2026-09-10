@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { FieldBlock } from "@/components/FieldMark";
-import { RateVaultPreviewTables, RateVaultSitePicker } from "@/components/RateVaultPreview";
+import { RateVaultOcipPicker, RateVaultPreviewTables, RateVaultSitePicker } from "@/components/RateVaultPreview";
 import {
   RATE_VAULT_ACCEPT,
   RATE_VAULT_BUILDER_STEPS,
@@ -28,7 +28,10 @@ import {
   rateVaultSiteLabel,
   reorderRateVaultItems,
   type RateVaultBuilderStepId,
+  type RateVaultBuyoffAction,
+  type RateVaultBuyoffDecision,
   type RateVaultConfirmedReview,
+  type RateVaultOcipFace,
   type RateVaultPreviewPackage,
   type RateVaultPublishStub,
   type RateVaultRecognitionReview,
@@ -177,6 +180,8 @@ export function RateVaultDesk() {
   const [step, setStep] = useState<RateVaultBuilderStepId>("sources");
   const [siteId, setSiteId] = useState<string>(RATE_VAULT_DEFAULT_SITE_ID);
   const [packageSiteId, setPackageSiteId] = useState<string>(RATE_VAULT_DEFAULT_SITE_ID);
+  const [ocipFace, setOcipFace] = useState<RateVaultOcipFace | "both">("both");
+  const [pendingImport, setPendingImport] = useState<{ name: string; type: string; data: string } | null>(null);
   const [kind, setKind] = useState("");
   const [craft, setCraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -227,8 +232,13 @@ export function RateVaultDesk() {
         data?: string;
         fallback?: string;
         error?: string;
+        code?: string;
+        needsConfirm?: boolean;
+        ocipMix?: boolean;
+        buyoffs?: RateVaultBuyoffDecision[];
       };
       if (!response.ok) {
+        if (data.code === "ocip-mix" && data.needsConfirm) return { ...data, ocipMix: true };
         setError(data.error || "Rate Vault is owner-eyes-only.");
         return null;
       }
@@ -261,7 +271,13 @@ export function RateVaultDesk() {
         type: payload.type,
         data: payload.data,
         siteId: packageSiteId,
+        ocipFace: ocipFace === "both" ? undefined : ocipFace,
       });
+      if (imported && "ocipMix" in imported && imported.ocipMix) {
+        setPendingImport(payload);
+        setError(imported.error || "Confirm OCIP face mix before applying.");
+        return;
+      }
       if (!imported) return;
       if (imported.preview && imported.fallback !== "recognize") {
         if (imported.preview.siteId) {
@@ -293,7 +309,11 @@ export function RateVaultDesk() {
   }
 
   async function exportB1() {
-    const data = await post({ action: "export-b1", siteId: packageSiteId });
+    const data = await post({
+      action: "export-b1",
+      siteId: packageSiteId,
+      ocipFace: ocipFace === "both" ? undefined : ocipFace,
+    });
     if (!data?.data || !data.fileName) {
       if (!data) return;
       setError("Could not export a Rate Vault B-1 workbook for that site.");
@@ -306,6 +326,43 @@ export function RateVaultDesk() {
     setNote(
       "Exported Rate Vault B-1 Excel — formulas visible. Edit offline, then drop the file back here.",
     );
+  }
+
+  async function confirmOcipMix() {
+    if (!pendingImport) return;
+    const imported = await post({
+      action: "import-b1",
+      fileName: pendingImport.name,
+      type: pendingImport.type,
+      data: pendingImport.data,
+      siteId: packageSiteId,
+      ocipFace: ocipFace === "both" ? undefined : ocipFace,
+      confirmOcipMix: true,
+    });
+    setPendingImport(null);
+    if (imported?.preview) {
+      setNote("OCIP mix confirmed. Preview is this book — not a parallel copy.");
+      setStep("burden");
+    }
+  }
+
+  async function restoreLastGood() {
+    const data = await post({ action: "restore-b1", siteId: packageSiteId });
+    if (data?.preview) setNote("Restored the last-good Rate Vault package.");
+  }
+
+  async function decideBuyoff(id: string, buyoffAction: RateVaultBuyoffAction) {
+    const data = await post({ action: "decide-buyoff", buyoffId: id, buyoffAction });
+    if (!data) return;
+    if (buyoffAction === "approve") {
+      setNote("Buyoff stamped approved. Live Rate Tables stay stubbed — this does not write Jobs / Rates.");
+      return;
+    }
+    if (buyoffAction === "reject") {
+      setNote("Buyoff rejected. Vault package is unchanged.");
+      return;
+    }
+    setNote("Changes requested. Vault package is unchanged.");
   }
 
   async function recognizeLinked(entry: RateVaultSourceEntry, nextStep?: RateVaultBuilderStepId) {
@@ -373,8 +430,15 @@ export function RateVaultDesk() {
           metadata only.
         </p>
         {error ? <p className="mt-3 text-sm text-[#163038]">{error}</p> : null}
+        {pendingImport ? (
+          <button type="button" className="mt-3 rounded-lg bg-steel px-4 py-2 text-sm text-white" onClick={() => void confirmOcipMix()}>
+            Confirm OCIP mix
+          </button>
+        ) : null}
         {note ? <p className="mt-3 text-sm text-[#163038]">{note}</p> : null}
       </section>
+
+      <BuyoffPane buyoffs={workshop?.buyoffs ?? []} preview={packagePreview} busy={busy} onDecide={decideBuyoff} />
 
       <nav className="plant-card px-5 py-4" aria-label="B-1 Builder steps">
         <ol className="flex flex-wrap gap-2">
@@ -471,9 +535,12 @@ export function RateVaultDesk() {
         <BurdenPane
           preview={packagePreview}
           packageSiteId={packageSiteId}
+          ocipFace={ocipFace}
           busy={busy}
           onSite={setPackageSiteId}
+          onFace={setOcipFace}
           onExport={() => void exportB1()}
+          onRestore={() => void restoreLastGood()}
           onDrop={(file) => void recognizeFile(file, undefined, "burden")}
           onSource={(sourceId) => void recognizeSourceId(sourceId, "burden")}
         />
@@ -484,15 +551,92 @@ export function RateVaultDesk() {
           publish={publish}
           preview={packagePreview}
           packageSiteId={packageSiteId}
+          ocipFace={ocipFace}
           busy={busy}
           onSite={setPackageSiteId}
+          onFace={setOcipFace}
           onExport={() => void exportB1()}
+          onRestore={() => void restoreLastGood()}
           onPublish={() => void post({ action: "publish" })}
           onDrop={(file) => void recognizeFile(file, undefined, "publish")}
           onSource={(sourceId) => void recognizeSourceId(sourceId, "publish")}
         />
       ) : null}
     </div>
+  );
+}
+
+function BuyoffPane({
+  buyoffs,
+  preview,
+  busy,
+  onDecide,
+}: {
+  buyoffs: RateVaultBuyoffDecision[];
+  preview: RateVaultPreviewPackage | null;
+  busy: boolean;
+  onDecide: (id: string, action: RateVaultBuyoffAction) => void;
+}) {
+  return (
+    <section className="plant-card px-5 py-5">
+      <p className="text-xs tracking-[0.14em] text-[#5b6f73]">Hit Squad hinge</p>
+      <h3 className="text-xl font-semibold text-[#163038]">Rate package buyoff</h3>
+      <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
+        List inbound Rate Vault packages and stamp Approve / Reject / Request changes. Approve
+        does not write live estimate Rate Tables.
+      </p>
+      {!buyoffs.length ? (
+        <p className="mt-3 text-sm text-[#5b6f73]">No pending buyoffs. Import a B-1 Excel to queue one.</p>
+      ) : (
+        <ul className="mt-4 space-y-3">
+          {buyoffs.map((row) => (
+            <li key={row.id} className="border-t border-[#d5e0de] pt-3">
+              <p className="font-semibold text-[#163038]">{row.title}</p>
+              <p className="mt-1 text-sm text-[#5b6f73]">
+                {rateVaultSiteLabel(row.siteId)} · {row.status}
+                {row.decidedAt ? ` · ${row.decidedAt.slice(0, 10)}` : ""}
+                {row.note ? ` · ${row.note}` : ""}
+              </p>
+              {preview && preview.id === row.packageId ? (
+                <p className="mt-1 text-sm text-[#5b6f73]">
+                  Preview {preview.rows.length} positions · bill stack on Burden / Publish.
+                </p>
+              ) : null}
+              {row.status === "pending" ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-lg bg-steel px-4 py-2 text-sm text-white"
+                    disabled={busy}
+                    onClick={() => onDecide(row.id, "approve")}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-[#d5e0de] px-4 py-2 text-sm text-[#163038]"
+                    disabled={busy}
+                    onClick={() => onDecide(row.id, "reject")}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-[#d5e0de] px-4 py-2 text-sm text-[#163038]"
+                    disabled={busy}
+                    onClick={() => onDecide(row.id, "request-changes")}
+                  >
+                    Request changes
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-[#163038]">Decision stamped. Live write stays stubbed.</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -1025,17 +1169,23 @@ function MapCraftsPane({
 function BurdenPane({
   preview,
   packageSiteId,
+  ocipFace,
   busy,
   onSite,
+  onFace,
   onExport,
+  onRestore,
   onDrop,
   onSource,
 }: {
   preview: RateVaultPreviewPackage | null;
   packageSiteId: string;
+  ocipFace: RateVaultOcipFace | "both";
   busy: boolean;
   onSite: (value: string) => void;
+  onFace: (value: RateVaultOcipFace | "both") => void;
   onExport: () => void;
+  onRestore: () => void;
   onDrop: (file: File) => void;
   onSource: (sourceId: string) => void;
 }) {
@@ -1050,17 +1200,32 @@ function BurdenPane({
           bill offline, then drop the same file here so this preview updates. Live Rate Tables
           stay stubbed.
         </p>
-        <div className="mt-4 max-w-xs">
-          <RateVaultSitePicker siteId={packageSiteId} onSite={onSite} />
+        <div className="mt-4 flex max-w-xl flex-wrap gap-4">
+          <div className="max-w-xs flex-1">
+            <RateVaultSitePicker siteId={packageSiteId} onSite={onSite} />
+          </div>
+          <div className="max-w-xs flex-1">
+            <RateVaultOcipPicker face={ocipFace} onFace={onFace} />
+          </div>
         </div>
-        <button
-          type="button"
-          className="mt-4 rounded-lg bg-steel px-4 py-2 text-sm text-white"
-          disabled={busy || !preview}
-          onClick={onExport}
-        >
-          Export B-1 Excel
-        </button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-lg bg-steel px-4 py-2 text-sm text-white"
+            disabled={busy || !preview}
+            onClick={onExport}
+          >
+            Export B-1 Excel
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-[#d5e0de] px-4 py-2 text-sm text-[#163038]"
+            disabled={busy}
+            onClick={onRestore}
+          >
+            Restore last-good
+          </button>
+        </div>
         <div className="mt-4">
           <RateVaultFileDrop
             label="Drop a B-1 or hall sheet onto Burden"
@@ -1073,6 +1238,7 @@ function BurdenPane({
         <RateVaultPreviewTables
           preview={preview}
           siteId={packageSiteId}
+          ocipFace={ocipFace}
           emptyNote="No B-1 preview for this site yet. Wood River is seeded — pick it to see the package."
         />
       </section>
@@ -1131,9 +1297,12 @@ function PublishPane({
   publish,
   preview,
   packageSiteId,
+  ocipFace,
   busy,
   onSite,
+  onFace,
   onExport,
+  onRestore,
   onPublish,
   onDrop,
   onSource,
@@ -1141,9 +1310,12 @@ function PublishPane({
   publish: RateVaultPublishStub | null;
   preview: RateVaultPreviewPackage | null;
   packageSiteId: string;
+  ocipFace: RateVaultOcipFace | "both";
   busy: boolean;
   onSite: (value: string) => void;
+  onFace: (value: RateVaultOcipFace | "both") => void;
   onExport: () => void;
+  onRestore: () => void;
   onPublish: () => void;
   onDrop: (file: File) => void;
   onSource: (sourceId: string) => void;
@@ -1155,17 +1327,32 @@ function PublishPane({
         Scroll the filled package. Re-import an edited Rate Vault B-1 Excel to update this
         preview. Publish is still a stub — it does not write live estimate Rate Tables.
       </p>
-      <div className="mt-4 max-w-xs">
-        <RateVaultSitePicker siteId={packageSiteId} onSite={onSite} />
+      <div className="mt-4 flex max-w-xl flex-wrap gap-4">
+        <div className="max-w-xs flex-1">
+          <RateVaultSitePicker siteId={packageSiteId} onSite={onSite} />
+        </div>
+        <div className="max-w-xs flex-1">
+          <RateVaultOcipPicker face={ocipFace} onFace={onFace} />
+        </div>
       </div>
-      <button
-        type="button"
-        className="mt-4 rounded-lg border border-[#d5e0de] px-4 py-2 text-sm text-[#163038]"
-        disabled={busy || !preview}
-        onClick={onExport}
-      >
-        Export B-1 Excel
-      </button>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="rounded-lg border border-[#d5e0de] px-4 py-2 text-sm text-[#163038]"
+          disabled={busy || !preview}
+          onClick={onExport}
+        >
+          Export B-1 Excel
+        </button>
+        <button
+          type="button"
+          className="rounded-lg border border-[#d5e0de] px-4 py-2 text-sm text-[#163038]"
+          disabled={busy}
+          onClick={onRestore}
+        >
+          Restore last-good
+        </button>
+      </div>
       <div className="mt-4">
         <RateVaultFileDrop
           label="Drop a B-1 or rate pack for preview"
@@ -1178,6 +1365,7 @@ function PublishPane({
       <RateVaultPreviewTables
         preview={preview}
         siteId={packageSiteId}
+        ocipFace={ocipFace}
         emptyNote="No B-1 preview for this site yet. Wood River is seeded — pick it to scroll the package."
       />
       <button

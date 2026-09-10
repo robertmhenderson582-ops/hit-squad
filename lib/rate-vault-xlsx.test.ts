@@ -19,7 +19,7 @@ import {
 
 async function loadWorkbook(bytes: Uint8Array) {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(bytes);
+  await workbook.xlsx.load(bytes as unknown as ArrayBuffer);
   return workbook;
 }
 
@@ -39,7 +39,12 @@ describe("Rate Vault B-1 Excel export / import", () => {
 
     const workbook = await loadWorkbook(exported.bytes);
     const names = workbook.worksheets.map((sheet) => sheet.name);
-    assert.deepEqual(names, [RATE_VAULT_B1_PACKAGE_SHEET, RATE_VAULT_B1_RATE_SHEET, RATE_VAULT_B1_BURDEN_SHEET]);
+    assert.ok(names.includes(RATE_VAULT_B1_PACKAGE_SHEET));
+    assert.ok(names.includes(RATE_VAULT_B1_RATE_SHEET));
+    assert.ok(names.includes(RATE_VAULT_B1_BURDEN_SHEET));
+    assert.ok(names.includes("COMP Check"));
+    assert.ok(names.includes("CBA PLA"));
+    assert.ok(names.includes("State law"));
 
     const pack = workbook.getWorksheet(RATE_VAULT_B1_PACKAGE_SHEET);
     assert.equal(pack?.getCell("A1").value, RATE_VAULT_B1_MARKER);
@@ -52,8 +57,8 @@ describe("Rate Vault B-1 Excel export / import", () => {
     RATE_VAULT_B1_RATE_HEADERS.forEach((header, index) => {
       assert.equal(rates.getCell(1, index + 1).value, header);
     });
-    assert.equal(rates.getColumn(12).hidden, true);
-    const firstId = String(rates.getCell("L2").value || "");
+    assert.equal(rates.getColumn(15).hidden, true);
+    const firstId = String(rates.getCell("O2").value || "");
     assert.ok(firstId);
     const bill = rates.getCell("I2");
     const formula = bill.formula || (bill.value && typeof bill.value === "object" && "formula" in bill.value ? String((bill.value as { formula: string }).formula) : "");
@@ -73,6 +78,10 @@ describe("Rate Vault B-1 Excel export / import", () => {
         ? String((burden.getCell(`B${totalRow}`).value as { formula: string }).formula)
         : "");
     assert.match(String(totalFormula), /^SUM\(B2:B/);
+    const comp = workbook.getWorksheet("COMP Check");
+    assert.ok(comp);
+    assert.match(String(comp.getCell("A1").value || ""), /COMP check/i);
+    assert.ok(String(comp.getCell("B3").value && typeof comp.getCell("B3").value === "object" ? (comp.getCell("B3").value as { formula?: string }).formula : comp.getCell("B3").formula || "").includes("COUNTA"));
   });
 
   it("round-trips an edited wage into the vault preview bill", async () => {
@@ -188,5 +197,63 @@ describe("Rate Vault B-1 Excel export / import", () => {
     if (imported.ok) return;
     assert.equal(imported.code, "invalid");
     assert.match(imported.error, /not a valid number/);
+  });
+
+  it("refuses a renamed Rate Summary when requiredSheets is present", async () => {
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const exported = await rateVaultPreviewToXlsx(fixture);
+    const workbook = await loadWorkbook(exported.bytes);
+    const rates = workbook.getWorksheet(RATE_VAULT_B1_RATE_SHEET);
+    assert.ok(rates);
+    rates.name = "Rates Renamed";
+    const buffer = await workbook.xlsx.writeBuffer();
+    const imported = await parseRateVaultB1Xlsx({
+      fileName: exported.fileName,
+      bytes: new Uint8Array(buffer),
+    });
+    assert.equal(imported.ok, false);
+    if (imported.ok) return;
+    assert.equal(imported.code, "invalid");
+    assert.match(imported.error, /renamed or removed/);
+  });
+
+  it("refuses broken Bill ST formula guts", async () => {
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const exported = await rateVaultPreviewToXlsx(fixture);
+    const workbook = await loadWorkbook(exported.bytes);
+    const rates = workbook.getWorksheet(RATE_VAULT_B1_RATE_SHEET);
+    assert.ok(rates);
+    rates.getCell("I2").value = { formula: "A1*99", result: 1 };
+    const buffer = await workbook.xlsx.writeBuffer();
+    const imported = await parseRateVaultB1Xlsx({
+      fileName: exported.fileName,
+      bytes: new Uint8Array(buffer),
+    });
+    assert.equal(imported.ok, false);
+    if (imported.ok) return;
+    assert.equal(imported.code, "invalid");
+    assert.match(imported.error, /formula guts/i);
+  });
+
+  it("exports an OCIP-only face and keeps union / merit lanes on the rate sheet", async () => {
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const exported = await rateVaultPreviewToXlsx(fixture, { ocipFace: "ocip" });
+    const workbook = await loadWorkbook(exported.bytes);
+    const pack = workbook.getWorksheet(RATE_VAULT_B1_PACKAGE_SHEET);
+    assert.equal(String(pack?.getCell("B14").value || ""), "ocip");
+    const rates = workbook.getWorksheet(RATE_VAULT_B1_RATE_SHEET);
+    assert.ok(rates);
+    const lanes = new Set<string>();
+    const faces = new Set<string>();
+    rates.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const position = String(row.getCell(1).value || "");
+      if (!position) return;
+      lanes.add(String(row.getCell(12).value || ""));
+      faces.add(String(row.getCell(13).value || ""));
+    });
+    assert.equal(faces.has("non-OCIP"), false);
+    assert.equal(faces.has("OCIP"), true);
+    assert.equal(lanes.has("union") || lanes.has("merit"), true);
   });
 });

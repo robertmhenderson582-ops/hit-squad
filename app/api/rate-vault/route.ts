@@ -4,20 +4,28 @@ import { enrichReviewWithPreview, resolveRateVaultPreview } from "@/lib/rate-vau
 import { parseConfirmReview, recognizeRateVaultSource } from "@/lib/rate-vault-recognize";
 import { requireRateVault } from "@/lib/rate-vault-server";
 import {
+  RATE_VAULT_B1_OCIP_MIX_ERROR,
   isRateVaultSiteId,
   stubPublishRateVault,
+  type RateVaultOcipFace,
   type RateVaultPreviewPackage,
   type RateVaultRecognitionReview,
 } from "@/lib/rate-vault";
+import { mergePreviewFace, previewHasLaneBlend } from "@/lib/rate-vault-preview";
 import { parseRateVaultB1Xlsx, rateVaultPreviewToXlsx, RATE_VAULT_B1_MIME } from "@/lib/rate-vault-xlsx";
 import {
   addRateVaultOwnerSource,
   confirmRateVaultReview,
+  decideRateVaultBuyoff,
   getRateVaultPackage,
+  listRateVaultBuyoffs,
   listRateVaultOverrides,
   listRateVaultOwnerLibrary,
   listRateVaultReviews,
+  listRateVaultVersions,
   organizeRateVaultSource,
+  queueRateVaultBuyoff,
+  restoreRateVaultLastGood,
   upsertRateVaultPackage,
 } from "@/lib/rate-vault-store";
 
@@ -26,7 +34,7 @@ export const dynamic = "force-dynamic";
 async function livePreview(input: {
   siteId?: string | null;
   review?: RateVaultRecognitionReview | null;
-  source?: Parameters<typeof resolveRateVaultPreview>[0]["source"];
+  source?: NonNullable<Parameters<typeof resolveRateVaultPreview>[0]>["source"];
   preview?: RateVaultPreviewPackage | null;
 }) {
   if (input.preview) return input.preview;
@@ -50,17 +58,24 @@ async function workshopPayload(
     listRateVaultOverrides(),
   ]);
   const resolved = preview !== undefined ? preview : await livePreview({ review });
-  return buildRateVaultWorkshop(extras, reviews, review, overrides, resolved);
+  const workshop = buildRateVaultWorkshop(extras, reviews, review, overrides, resolved);
+  workshop.buyoffs = await listRateVaultBuyoffs();
+  return workshop;
 }
 
 export async function GET(request: Request) {
   const { error } = await requireRateVault(request);
   if (error) return error;
-  return NextResponse.json({ workshop: await workshopPayload() });
+  const workshop = await workshopPayload();
+  return NextResponse.json({
+    workshop,
+    versions: await listRateVaultVersions(workshop.preview?.siteId || "wood-river"),
+    buyoffs: workshop.buyoffs,
+  });
 }
 
 export async function POST(request: Request) {
-  const { error } = await requireRateVault(request);
+  const { error, user } = await requireRateVault(request);
   if (error) return error;
   const body = (await request.json().catch(() => ({}))) as {
     action?: string;
@@ -77,6 +92,11 @@ export async function POST(request: Request) {
     data?: string;
     sourceId?: string;
     review?: Record<string, unknown>;
+    ocipFace?: string;
+    confirmOcipMix?: boolean;
+    versionNote?: string;
+    buyoffId?: string;
+    buyoffAction?: string;
   };
   const action = body.action || "";
 
@@ -100,7 +120,8 @@ export async function POST(request: Request) {
     if (!preview) {
       return NextResponse.json({ error: "No B-1 package for that site yet." }, { status: 404 });
     }
-    const exported = await rateVaultPreviewToXlsx(preview);
+    const face: RateVaultOcipFace | undefined = body.ocipFace === "ocip" || body.ocipFace === "non-ocip" ? body.ocipFace : undefined;
+    const exported = await rateVaultPreviewToXlsx(preview, { ocipFace: face });
     return NextResponse.json({
       fileName: exported.fileName,
       type: RATE_VAULT_B1_MIME,
@@ -122,11 +143,58 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ error: imported.error, code: imported.code }, { status: 400 });
     }
-    const saved = await upsertRateVaultPackage(imported.preview);
+    const viewFace: RateVaultOcipFace | null =
+      body.ocipFace === "ocip" || body.ocipFace === "non-ocip" ? body.ocipFace : null;
+    const fileFace = imported.preview.ocipFace === "ocip" || imported.preview.ocipFace === "non-ocip" ? imported.preview.ocipFace : null;
+    if (viewFace && fileFace && viewFace !== fileFace && !body.confirmOcipMix) {
+      return NextResponse.json(
+        { error: RATE_VAULT_B1_OCIP_MIX_ERROR, code: "ocip-mix", needsConfirm: true },
+        { status: 400 },
+      );
+    }
+    const stored = await getRateVaultPackage(imported.preview.siteId);
+    if (previewHasLaneBlend(stored, imported.preview)) {
+      return NextResponse.json(
+        { error: "Merit and union lanes stay separate. The package was not applied.", code: "invalid" },
+        { status: 400 },
+      );
+    }
+    const merged = mergePreviewFace(stored, imported.preview, fileFace || viewFace || "ocip");
+    const saved = await upsertRateVaultPackage(merged, typeof body.versionNote === "string" ? body.versionNote : "Imported B-1 Excel");
     if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: saved.status });
+    await queueRateVaultBuyoff(saved.preview, saved.preview.version?.note || "Imported B-1 Excel");
     return NextResponse.json({
       preview: saved.preview,
+      versions: await listRateVaultVersions(saved.preview.siteId),
+      buyoffs: await listRateVaultBuyoffs(),
       workshop: await workshopPayload(null, saved.preview),
+    });
+  }
+
+  if (action === "decide-buyoff") {
+    const decided = await decideRateVaultBuyoff({
+      id: body.buyoffId || body.sourceId,
+      action: body.buyoffAction || body.kind,
+      note: body.note,
+      decidedBy: user?.email || user?.name || "owner",
+    });
+    if (!decided.ok) return NextResponse.json({ error: decided.error }, { status: decided.status });
+    return NextResponse.json({
+      buyoff: decided.buyoff,
+      writesRateBook: false,
+      buyoffs: await listRateVaultBuyoffs(),
+      workshop: await workshopPayload(),
+    });
+  }
+
+  if (action === "restore-b1") {
+    const siteId = isRateVaultSiteId(body.siteId) ? body.siteId : "wood-river";
+    const restored = await restoreRateVaultLastGood(siteId);
+    if (!restored.ok) return NextResponse.json({ error: restored.error }, { status: restored.status });
+    return NextResponse.json({
+      preview: restored.preview,
+      versions: await listRateVaultVersions(siteId),
+      workshop: await workshopPayload(null, restored.preview),
     });
   }
 

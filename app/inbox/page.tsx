@@ -5,11 +5,13 @@ import { DeskChrome } from "@/components/DeskChrome";
 import { InboxDesk } from "@/components/InboxDesk";
 import { useLensUser } from "@/components/OwnerDeskContext";
 import { canUseInbox } from "@/lib/inbox-circle";
+import { RateVaultOnlyRedirect } from "@/components/RateVaultOnlyRedirect";
 
 export default function InboxPage() {
   const lens = useLensUser();
   return (
     <AuthGate require="authenticated">
+      <RateVaultOnlyRedirect />
       <DeskChrome title="INBOX" hideTitle>
         {canUseInbox(lens) ? (
           <InboxDesk />

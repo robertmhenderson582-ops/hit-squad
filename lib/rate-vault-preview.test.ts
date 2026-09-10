@@ -9,11 +9,15 @@ import {
   WOOD_RIVER_B1_EXHIBIT_TITLE,
   WOOD_RIVER_B1_PREVIEW_FIXTURE_PATH,
   enrichReviewWithPreview,
+  filterPreviewByFace,
   isWoodRiverB1Source,
   loadWoodRiverB1PreviewFixture,
+  mergePreviewFace,
   parseRateVaultPreviewPackage,
+  previewHasLaneBlend,
   previewRowAddsUp,
   resolveRateVaultPreview,
+  stampRateVaultVersion,
 } from "./rate-vault-preview.ts";
 
 function source(rel: string) {
@@ -94,5 +98,32 @@ describe("Rate Vault Wood River B-1 preview", () => {
     assert.equal(workshop.preview?.siteId, "wood-river");
     assert.ok((workshop.preview?.rows.length ?? 0) >= 8);
     assert.equal(workshop.publish.published, false);
+    const fixture = loadWoodRiverB1PreviewFixture();
+    assert.equal(
+      fixture.rows.some((row) => row.craft === "Merit Staff" && row.lane === "merit"),
+      true,
+    );
+    assert.equal(
+      fixture.rows.some((row) => /ocip/i.test(row.group) && row.ocip),
+      true,
+    );
+    assert.equal(
+      fixture.rows.some((row) => row.lane === "union" && !row.ocip),
+      true,
+    );
+    const ocipOnly = filterPreviewByFace(fixture, "ocip");
+    assert.equal(ocipOnly.rows.every((row) => row.ocip), true);
+    assert.ok(ocipOnly.rows.length < fixture.rows.length);
+    const stamped = stampRateVaultVersion(fixture, "Imported B-1 Excel", "2026-09-10T12:00:00.000Z");
+    assert.equal(stamped.version?.note, "Imported B-1 Excel");
+    assert.match(stamped.version?.id || "", /^v-20260910/);
+    const blended = {
+      ...fixture,
+      rows: fixture.rows.map((row) => (row.lane === "union" ? { ...row, lane: "merit" as const } : row)),
+    };
+    assert.equal(previewHasLaneBlend(fixture, blended), true);
+    const merged = mergePreviewFace(fixture, ocipOnly, "ocip");
+    assert.equal(merged.rows.some((row) => !row.ocip), true);
+    assert.equal(merged.rows.some((row) => row.ocip), true);
   });
 });

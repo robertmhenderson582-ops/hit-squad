@@ -10,23 +10,41 @@
 import ExcelJS from "exceljs";
 import {
   RATE_VAULT_B1_BURDEN_SHEET,
+  RATE_VAULT_B1_CBA_SHEET,
+  RATE_VAULT_B1_COMP_SHEET,
   RATE_VAULT_B1_IMPORT_ERROR,
   RATE_VAULT_B1_KIND,
   RATE_VAULT_B1_MARKER,
   RATE_VAULT_B1_PACKAGE_SHEET,
   RATE_VAULT_B1_POISON_ERROR,
   RATE_VAULT_B1_RATE_SHEET,
+  RATE_VAULT_B1_REQUIRED_SHEETS,
   RATE_VAULT_B1_SPARE_POSITIONS,
+  RATE_VAULT_B1_STATE_SHEET,
+  RATE_VAULT_CBA_PLA_RULES,
+  RATE_VAULT_CBA_PLA_SECTION,
+  RATE_VAULT_STATE_LAW_RULES,
+  RATE_VAULT_STATE_LAW_SECTION,
+  RATE_VAULT_STATE_LAW_SITES,
   isRateVaultB1ExcelName,
   isRateVaultSiteId,
   looksLikeForeignRateVaultSite,
   rateVaultSiteLabel,
   type RateVaultBurdenLine,
+  type RateVaultLane,
+  type RateVaultOcipFace,
   type RateVaultPreviewPackage,
   type RateVaultPreviewRow,
   type RateVaultSiteId,
 } from "./rate-vault.ts";
-import { parseRateVaultPreviewPackage } from "./rate-vault-preview.ts";
+import {
+  defaultRateVaultClockNote,
+  filterPreviewByFace,
+  inferRateVaultLane,
+  inferRateVaultOcip,
+  parseRateVaultPreviewPackage,
+  rateVaultCompCheck,
+} from "./rate-vault-preview.ts";
 
 export const RATE_VAULT_B1_RATE_HEADERS = [
   "Position",
@@ -40,6 +58,9 @@ export const RATE_VAULT_B1_RATE_HEADERS = [
   "Bill ST",
   "Bill OT",
   "Bill DT",
+  "Lane",
+  "OCIP",
+  "OT / clock",
   "_id",
 ] as const;
 
@@ -58,9 +79,12 @@ export type RateVaultB1ImportOk = {
 
 export type RateVaultB1ImportFail = {
   ok: false;
-  code: "not-vault-b1" | "poison" | "empty" | "invalid";
+  code: "not-vault-b1" | "poison" | "empty" | "invalid" | "ocip-mix";
   error: string;
+  needsConfirm?: boolean;
 };
+
+const BILL_ST_FORMULA = /^F(\d+)\s*\+\s*G\1\s*\+\s*H\1$/i;
 
 export type RateVaultB1ImportResult = RateVaultB1ImportOk | RateVaultB1ImportFail;
 
@@ -175,6 +199,12 @@ function sheetByName(workbook: ExcelJS.Workbook, name: string) {
   return workbook.worksheets.find((sheet) => sheet.name.trim().toLowerCase() === needle) ?? null;
 }
 
+function parseOcipFace(raw?: string): RateVaultOcipFace | "both" {
+  const value = (raw || "").trim().toLowerCase();
+  if (value === "ocip" || value === "non-ocip" || value === "both") return value;
+  return "both";
+}
+
 function packageMap(sheet: ExcelJS.Worksheet) {
   const out = new Map<string, string>();
   sheet.eachRow((row, rowNumber) => {
@@ -238,10 +268,15 @@ function applyHeader(row: ExcelJS.Row, headers: readonly string[]) {
   });
 }
 
-export async function rateVaultPreviewToXlsx(preview: RateVaultPreviewPackage): Promise<{
+export async function rateVaultPreviewToXlsx(
+  preview: RateVaultPreviewPackage,
+  options: { ocipFace?: RateVaultOcipFace } = {},
+): Promise<{
   fileName: string;
   bytes: Uint8Array;
 }> {
+  const face = options.ocipFace;
+  const exported = face ? filterPreviewByFace(preview, face) : preview;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Hit Squad Rate Vault";
   workbook.created = new Date();
@@ -251,31 +286,33 @@ export async function rateVaultPreviewToXlsx(preview: RateVaultPreviewPackage): 
   pack.getCell("A1").font = { bold: true };
   const meta: Array<[string, string | boolean]> = [
     ["kind", RATE_VAULT_B1_KIND],
-    ["siteId", preview.siteId],
-    ["title", preview.title],
-    ["revision", preview.revision || ""],
-    ["packageId", preview.id],
+    ["siteId", exported.siteId],
+    ["title", exported.title],
+    ["revision", exported.revision || ""],
+    ["packageId", exported.id],
     ["writesRateBook", false],
-    ["extractedFrom", preview.extractedFrom],
-    ["fixture", preview.fixture],
-    ["effective", preview.effective || ""],
-    ["sourceId", preview.sourceId || ""],
-    ["sourceTitle", preview.sourceTitle],
-    ["note", preview.note],
+    ["extractedFrom", exported.extractedFrom],
+    ["fixture", exported.fixture],
+    ["effective", exported.effective || ""],
+    ["sourceId", exported.sourceId || ""],
+    ["sourceTitle", exported.sourceTitle],
+    ["note", exported.note],
+    ["ocipFace", face || exported.ocipFace || "both"],
+    ["requiredSheets", RATE_VAULT_B1_REQUIRED_SHEETS.join("|")],
   ];
   meta.forEach(([key, value], index) => {
     const row = index + 2;
     pack.getCell(`A${row}`).value = key;
     pack.getCell(`B${row}`).value = typeof value === "boolean" ? String(value) : value;
   });
-  pack.getCell("A16").value =
-    "This workbook is the formula check to the site. Edit Rate Summary / Burden Summary offline, then drop the file back on Rate Vault. Preview updates from this book — not a parallel copy. Live Rate Tables stay off until Publish is wired.";
+  pack.getCell("A18").value =
+    "This workbook is the formula check to the site. Edit Rate Summary / Burden Summary offline, then drop the file back on Rate Vault. Preview updates from this book — not a parallel copy. CBA / PLA, State law, and COMP Check are read-only. Live Rate Tables stay off until Publish is wired.";
   pack.getColumn(1).width = 18;
   pack.getColumn(2).width = 72;
 
   const rates = workbook.addWorksheet(RATE_VAULT_B1_RATE_SHEET);
   applyHeader(rates.getRow(1), RATE_VAULT_B1_RATE_HEADERS);
-  preview.rows.forEach((row, index) => {
+  exported.rows.forEach((row, index) => {
     const r = index + 2;
     rates.getCell(`A${r}`).value = row.position;
     rates.getCell(`B${r}`).value = row.craft;
@@ -288,21 +325,24 @@ export async function rateVaultPreviewToXlsx(preview: RateVaultPreviewPackage): 
     rates.getCell(`I${r}`).value = { formula: `F${r}+G${r}+H${r}`, result: row.billRate };
     if (row.billOt != null) rates.getCell(`J${r}`).value = row.billOt;
     if (row.billDt != null) rates.getCell(`K${r}`).value = row.billDt;
-    rates.getCell(`L${r}`).value = row.id;
+    rates.getCell(`L${r}`).value = row.lane;
+    rates.getCell(`M${r}`).value = row.ocip ? "OCIP" : "non-OCIP";
+    rates.getCell(`N${r}`).value = row.clockNote;
+    rates.getCell(`O${r}`).value = row.id;
     for (const col of ["F", "G", "H", "I", "J", "K"] as const) applyMoneyStyle(rates.getCell(`${col}${r}`));
   });
   for (let i = 0; i < RATE_VAULT_B1_SPARE_POSITIONS; i += 1) {
-    const r = preview.rows.length + 2 + i;
-    rates.getCell(`L${r}`).value = `xlsx-spare-${i + 1}`;
+    const r = exported.rows.length + 2 + i;
+    rates.getCell(`O${r}`).value = `xlsx-spare-${i + 1}`;
   }
-  rates.getColumn(12).hidden = true;
-  [22, 16, 10, 16, 18, 12, 12, 12, 12, 12, 12, 18].forEach((width, index) => {
+  rates.getColumn(15).hidden = true;
+  [22, 16, 10, 16, 18, 12, 12, 12, 12, 12, 12, 10, 10, 22, 18].forEach((width, index) => {
     rates.getColumn(index + 1).width = width;
   });
 
   const burden = workbook.addWorksheet(RATE_VAULT_B1_BURDEN_SHEET);
   applyHeader(burden.getRow(1), RATE_VAULT_B1_BURDEN_HEADERS);
-  preview.burden.forEach((line, index) => {
+  exported.burden.forEach((line, index) => {
     const r = index + 2;
     burden.getCell(`A${r}`).value = line.label;
     burden.getCell(`B${r}`).value = line.ratePct;
@@ -310,13 +350,13 @@ export async function rateVaultPreviewToXlsx(preview: RateVaultPreviewPackage): 
     burden.getCell(`C${r}`).value = line.note;
     burden.getCell(`D${r}`).value = line.id;
   });
-  const totalRow = preview.burden.length + 2;
-  const lastData = Math.max(preview.burden.length + 1, 2);
+  const totalRow = exported.burden.length + 2;
+  const lastData = Math.max(exported.burden.length + 1, 2);
   burden.getCell(`A${totalRow}`).value = "Total";
   burden.getCell(`A${totalRow}`).font = { bold: true };
   burden.getCell(`B${totalRow}`).value = {
     formula: `SUM(B2:B${lastData})`,
-    result: money(preview.burden.reduce((sum, line) => sum + line.ratePct, 0)),
+    result: money(exported.burden.reduce((sum, line) => sum + line.ratePct, 0)),
   };
   burden.getCell(`B${totalRow}`).numFmt = PCT_FMT;
   burden.getColumn(4).hidden = true;
@@ -324,15 +364,77 @@ export async function rateVaultPreviewToXlsx(preview: RateVaultPreviewPackage): 
     burden.getColumn(index + 1).width = width;
   });
 
+  addCompCheckSheet(workbook, exported);
+  addReadOnlyRulesSheet(workbook, RATE_VAULT_B1_CBA_SHEET, RATE_VAULT_CBA_PLA_SECTION.title, [
+    RATE_VAULT_CBA_PLA_SECTION.note,
+    ...RATE_VAULT_CBA_PLA_RULES.map((rule) => `${rule.label} — captured on the vault later; this tab is read-only.`),
+  ]);
+  addReadOnlyRulesSheet(workbook, RATE_VAULT_B1_STATE_SHEET, RATE_VAULT_STATE_LAW_SECTION.title, [
+    RATE_VAULT_STATE_LAW_SECTION.note,
+    ...RATE_VAULT_STATE_LAW_SITES.map((row) => `${row.site} — ${row.state}`),
+    ...RATE_VAULT_STATE_LAW_RULES.map((rule) => `${rule.label} — captured on the vault later; this tab is read-only.`),
+  ]);
+
   const buffer = await workbook.xlsx.writeBuffer();
-  return { fileName: rateVaultB1FileName(preview), bytes: new Uint8Array(buffer) };
+  return { fileName: rateVaultB1FileName(exported), bytes: new Uint8Array(buffer) };
 }
 
-function billRateForRow(cell: ExcelJS.Cell, wage: number, fringe: number, burden: number) {
-  if (cellHasFormula(cell)) return money(wage + fringe + burden);
+function addCompCheckSheet(workbook: ExcelJS.Workbook, preview: RateVaultPreviewPackage) {
+  const check = rateVaultCompCheck(preview);
+  const lastRate = Math.max(preview.rows.length + 1, 2);
+  const sheet = workbook.addWorksheet(RATE_VAULT_B1_COMP_SHEET);
+  sheet.getCell("A1").value = "COMP check — key totals from this Rate Vault B-1 (not the giant COMP xlsm)";
+  sheet.getCell("A1").font = { bold: true };
+  const lines: Array<[string, ExcelJS.CellValue]> = [
+    ["Positions", { formula: `COUNTA('${RATE_VAULT_B1_RATE_SHEET}'!A2:A${lastRate})`, result: check.positions }],
+    ["Wage total", { formula: `SUM('${RATE_VAULT_B1_RATE_SHEET}'!F2:F${lastRate})`, result: check.wageTotal }],
+    ["Fringe total", { formula: `SUM('${RATE_VAULT_B1_RATE_SHEET}'!G2:G${lastRate})`, result: check.fringeTotal }],
+    ["Burden $ total", { formula: `SUM('${RATE_VAULT_B1_RATE_SHEET}'!H2:H${lastRate})`, result: check.burdenTotal }],
+    ["Bill ST total", { formula: `SUM('${RATE_VAULT_B1_RATE_SHEET}'!I2:I${lastRate})`, result: check.billTotal }],
+    ["Burden stack %", { formula: `'${RATE_VAULT_B1_BURDEN_SHEET}'!B${preview.burden.length + 2}`, result: check.burdenPct }],
+  ];
+  lines.forEach(([label, value], index) => {
+    const row = index + 3;
+    sheet.getCell(`A${row}`).value = label;
+    sheet.getCell(`B${row}`).value = value;
+  });
+  sheet.getCell("A10").value = "Site reconcile: these formulas pull Rate Summary / Burden Summary. Typed-over guts fail import.";
+  sheet.getColumn(1).width = 22;
+  sheet.getColumn(2).width = 22;
+  void sheet.protect("", { selectLockedCells: true, selectUnlockedCells: true });
+}
+
+function addReadOnlyRulesSheet(workbook: ExcelJS.Workbook, name: string, title: string, lines: string[]) {
+  const sheet = workbook.addWorksheet(name);
+  sheet.getCell("A1").value = title;
+  sheet.getCell("A1").font = { bold: true };
+  sheet.getCell("A2").value = "Read-only rule summary. Edit wages / fringes / burden on Rate Summary only.";
+  lines.forEach((line, index) => {
+    sheet.getCell(`A${index + 4}`).value = line;
+  });
+  sheet.getColumn(1).width = 88;
+  void sheet.protect("", { selectLockedCells: true, selectUnlockedCells: true });
+}
+
+function billFormulaText(cell: ExcelJS.Cell) {
+  if (cell.formula) return String(cell.formula).replace(/^=/, "").trim();
+  const raw = cell.value;
+  if (raw && typeof raw === "object" && "formula" in raw && (raw as { formula?: unknown }).formula) {
+    return String((raw as { formula: string }).formula).replace(/^=/, "").trim();
+  }
+  return "";
+}
+
+function billRateForRow(cell: ExcelJS.Cell, wage: number, fringe: number, burden: number): { ok: true; value: number } | { poison: true } {
+  if (cellHasFormula(cell)) {
+    const formula = billFormulaText(cell);
+    if (!BILL_ST_FORMULA.test(formula)) return { poison: true };
+    return { ok: true, value: money(wage + fringe + burden) };
+  }
   const typed = readNumber(cell);
-  if ("ok" in typed) return typed.value;
-  return money(wage + fringe + burden);
+  if ("ok" in typed) return { ok: true, value: typed.value };
+  if ("empty" in typed) return { ok: true, value: money(wage + fringe + burden) };
+  return { poison: true };
 }
 
 function optionalMoney(cell: ExcelJS.Cell): { ok: true; value: number | null } | { poison: true } {
@@ -358,7 +460,7 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
 
   const workbook = new ExcelJS.Workbook();
   try {
-    await workbook.xlsx.load(bytes);
+    await workbook.xlsx.load(bytes as unknown as ArrayBuffer);
   } catch {
     return fail("not-vault-b1", RATE_VAULT_B1_IMPORT_ERROR);
   }
@@ -387,6 +489,15 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
     return fail("poison", "That site is not in this vault. The package was not applied.");
   }
   const siteId = (isRateVaultSiteId(siteRaw) ? siteRaw : "wood-river") as RateVaultSiteId;
+  const required = (meta.get("requiredsheets") || "")
+    .split("|")
+    .map((name) => name.trim())
+    .filter(Boolean);
+  for (const name of required) {
+    if (!sheetByName(workbook, name)) {
+      return fail("invalid", `Sheet "${name}" was renamed or removed. The package was not applied.`);
+    }
+  }
 
   const rateSheet = sheetByName(workbook, RATE_VAULT_B1_RATE_SHEET);
   if (!rateSheet) return fail("invalid", "Rate Summary is missing. The package was not applied.");
@@ -430,21 +541,36 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
       poison = fail("invalid", "A bill rate cell is not a valid number. The package was not applied.");
       break;
     }
-    const hiddenId = text(row.getCell(rateCols._id || 12).value);
+    const bill = billRateForRow(row.getCell(rateCols["Bill ST"]), wage.value, fringe.value, burdenAmt.value);
+    if ("poison" in bill) {
+      poison = fail("invalid", "Bill ST formula guts are broken. The package was not applied.");
+      break;
+    }
+    const hiddenId = text(row.getCell(rateCols._id || 15).value);
     const id = hiddenId && !isRateVaultB1SpareId(hiddenId) ? hiddenId : nextImportId(position, rows.length);
+    const sheet = text(row.getCell(rateCols.Sheet || 5).value) || RATE_VAULT_B1_RATE_SHEET;
+    const group = text(row.getCell(rateCols.Group || 4).value) || "Rate Summary";
+    const craft = text(row.getCell(rateCols.Craft || 2).value) || "Craft";
+    const laneRaw = text(row.getCell(rateCols.Lane || 12).value).toLowerCase();
+    const lane: RateVaultLane = laneRaw === "merit" || laneRaw === "union" ? laneRaw : inferRateVaultLane({ craft, group, sheet });
+    const ocipRaw = text(row.getCell(rateCols.OCIP || 13).value);
+    const ocip = ocipRaw ? /ocip/i.test(ocipRaw) && !/non-ocip/i.test(ocipRaw) : inferRateVaultOcip({ group, sheet });
     rows.push({
       id,
-      sheet: text(row.getCell(rateCols.Sheet || 5).value) || RATE_VAULT_B1_RATE_SHEET,
-      group: text(row.getCell(rateCols.Group || 4).value) || "Rate Summary",
-      craft: text(row.getCell(rateCols.Craft || 2).value) || "Craft",
+      sheet,
+      group,
+      craft,
       local: text(row.getCell(rateCols.Local || 3).value) || null,
       position,
       wage: wage.value,
       fringe: fringe.value,
       burden: burdenAmt.value,
-      billRate: billRateForRow(row.getCell(rateCols["Bill ST"]), wage.value, fringe.value, burdenAmt.value),
+      billRate: bill.value,
       billOt: billOt.value,
       billDt: billDt.value,
+      lane,
+      ocip,
+      clockNote: text(row.getCell(rateCols["OT / clock"] || 14).value) || defaultRateVaultClockNote(lane),
     });
   }
   if (poison) return poison;
@@ -487,9 +613,13 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
       "Imported from a Rate Vault B-1 Excel export. This book is the vault package — not a parallel copy. Live Rate Tables stay off.",
     writesRateBook: false,
     fixture: false,
+    ocipFace: parseOcipFace(meta.get("ocipface")),
     sheets: [
       { name: RATE_VAULT_B1_RATE_SHEET, kind: "rate-summary" },
       { name: RATE_VAULT_B1_BURDEN_SHEET, kind: "burden-summary" },
+      { name: RATE_VAULT_B1_COMP_SHEET, kind: "other" },
+      { name: RATE_VAULT_B1_CBA_SHEET, kind: "other" },
+      { name: RATE_VAULT_B1_STATE_SHEET, kind: "other" },
     ],
     burden: burdenLines,
     rows,

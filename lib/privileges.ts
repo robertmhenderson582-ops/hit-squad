@@ -1,4 +1,5 @@
 import type { PrivilegeId } from "./types.ts";
+import { isRateVaultJamesEmail } from "./rate-vault.ts";
 
 export type { PrivilegeId };
 
@@ -65,7 +66,7 @@ export const PRIVILEGE_COPY: Record<PrivilegeId, { label: string; detail: string
   },
   "rate-vault": {
     label: "Rate Vault",
-    detail: "Owner-eyes-only B-1 / rate builder workshop. Hidden from testers unless granted.",
+    detail: "P66 B-1 / rate builder workshop. Owner plus the Rate Vault seat. Hidden from testers unless granted.",
   },
 };
 
@@ -97,11 +98,14 @@ export function normalizePrivileges(raw: unknown): PrivilegeId[] {
 export function hasPrivilege(user: PrivilegeViewer | null | undefined, privilege: PrivilegeId): boolean {
   if (!user) return false;
   if (user.role === "owner") return true;
+  if (privilege === "rate-vault" && isRateVaultJamesEmail(user.email)) return true;
   return (user.privileges ?? []).includes(privilege);
 }
 
 export function grantedPrivileges(user: PrivilegeViewer | null | undefined): PrivilegeId[] {
   if (!user) return [];
   if (user.role === "owner") return [...OWNER_ONLY_PRIVILEGES];
-  return normalizePrivileges(user.privileges);
+  const next = normalizePrivileges(user.privileges);
+  if (isRateVaultJamesEmail(user.email) && !next.includes("rate-vault")) next.push("rate-vault");
+  return next;
 }

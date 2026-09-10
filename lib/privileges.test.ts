@@ -54,4 +54,8 @@ test("owner has every grantable privilege; President starts with none", () => {
   );
   assert.deepEqual(normalizePrivileges(["view-as", "view-as", "nope"]), ["view-as"]);
   assert.equal(hasPrivilege(null, "manage-users"), false);
+  const james = { role: "tester", email: "jhut26@gmail.com" };
+  assert.equal(hasPrivilege(james, "rate-vault"), true);
+  assert.equal(hasPrivilege(james, "manage-users"), false);
+  assert.deepEqual(grantedPrivileges(james), ["rate-vault"]);
 });

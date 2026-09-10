@@ -15,6 +15,11 @@ import {
   storePayloadLeaksBinary,
   upsertRateVaultPackage,
   useRateVaultStoreForTests,
+  decideRateVaultBuyoff,
+  listRateVaultBuyoffs,
+  listRateVaultVersions,
+  queueRateVaultBuyoff,
+  restoreRateVaultLastGood,
 } from "./rate-vault-store.ts";
 import { loadWoodRiverB1PreviewFixture } from "./rate-vault-preview.ts";
 import { readVaultJson } from "./drive-data.ts";
@@ -131,5 +136,31 @@ describe("Rate Vault owner catalog store", { concurrency: 1 }, () => {
     assert.equal(storePayloadLeaksBinary(vault), false);
     assert.equal(JSON.stringify(vault).includes("SHOULD-NOT-PERSIST-PACKAGE"), false);
     assert.equal(vault?.packages?.[0]?.extractedFrom, "vault-xlsx-import");
+    assert.ok(saved.preview.version?.id);
+    assert.match(saved.preview.version?.note || "", /Imported B-1 Excel/);
+    const versions = await listRateVaultVersions("wood-river");
+    assert.ok(versions.length >= 1);
+
+    const queued = await queueRateVaultBuyoff(saved.preview);
+    assert.equal(queued.status, "pending");
+    assert.equal(queued.writesRateBook, false);
+    const buyoffRows = await listRateVaultBuyoffs();
+    assert.equal(buyoffRows[0]?.id, queued.id);
+    const approved = await decideRateVaultBuyoff({
+      id: queued.id,
+      action: "approve",
+      decidedBy: "robertmhenderson582@gmail.com",
+    });
+    assert.equal(approved.ok, true);
+    if (approved.ok) {
+      assert.equal(approved.buyoff.status, "approved");
+      assert.equal(approved.buyoff.writesRateBook, false);
+    }
+
+    const restored = await restoreRateVaultLastGood("wood-river");
+    assert.equal(restored.ok, true);
+    if (!restored.ok) return;
+    assert.equal(restored.preview.rows.find((row) => row.id === journeyman?.id)?.wage, journeyman?.wage);
+    assert.match(restored.preview.version?.note || "", /last-good/i);
   });
 });

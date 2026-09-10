@@ -52,6 +52,9 @@ import {
   prepareLoginSeats,
 } from "./users.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
+import { RATE_VAULT_JAMES_EMAIL, RATE_VAULT_JAMES_ID, RATE_VAULT_JAMES_NAME } from "./rate-vault.ts";
+import { canSeeRateVault } from "./desk-role.ts";
+import { peekPrivileges } from "./privileges-store.ts";
 
 const OWNER_SECRET = "owner-seat-secret-xx";
 const CHOSEN = "chosen-seat-secret";
@@ -131,6 +134,24 @@ test("owner email never enters the create-password path", () => {
 
   assert.equal(seatNeedsPasswordCreate(OWNER_LOGIN_EMAIL), false);
   assert.equal(verifyPassword(findUserByEmail(OWNER_LOGIN_EMAIL)!, OWNER_SECRET), true);
+});
+
+test("James Hutton is a Rate Vault seat, not a tester-circle login", () => {
+  assert.equal(TESTER_SEATS.some((row) => row.email === RATE_VAULT_JAMES_EMAIL), false);
+  const james = findUserByEmail("Jhut26@gmail.com");
+  assert.ok(james);
+  assert.equal(james.id, RATE_VAULT_JAMES_ID);
+  assert.equal(james.email, RATE_VAULT_JAMES_EMAIL);
+  assert.equal(james.name, RATE_VAULT_JAMES_NAME);
+  assert.equal(james.role, "tester");
+  assert.equal(james.passwordHash, undefined);
+  assert.equal(seatNeedsPasswordCreate(RATE_VAULT_JAMES_EMAIL), true);
+  assert.equal(loginOutcome({ email: RATE_VAULT_JAMES_EMAIL }).status, "needsCreate");
+  assert.deepEqual(peekPrivileges(RATE_VAULT_JAMES_EMAIL), ["rate-vault"]);
+  assert.equal(canSeeRateVault({ role: "tester", email: RATE_VAULT_JAMES_EMAIL }), true);
+  assert.equal(canLookupRates(james), false);
+  assert.equal(canUseRateBuilder(james), false);
+  assert.equal(canUseViewAs(james), false);
 });
 
 test("Shane Smith is a tester seat that must create a password on first visit", () => {
@@ -741,6 +762,7 @@ test("parseExtraSeats skips owner, Novus, and seeded testers", () => {
       { id: "custom-nathan", email: TESTER, name: "Nope" },
       { id: "owner-robert-henderson", email: "alias.owner@example.com", name: "Nope" },
       { id: "custom-local", email: "robertmhenderson582@gmail.com", name: "robertmhenderson582" },
+      { id: RATE_VAULT_JAMES_ID, email: RATE_VAULT_JAMES_EMAIL, name: RATE_VAULT_JAMES_NAME },
       { id: "", email: "bad@example.com", name: "Nope" },
     ],
   });

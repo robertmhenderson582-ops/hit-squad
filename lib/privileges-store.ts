@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { PRIVILEGES_VAULT_KIND, PRIVILEGES_VAULT_NAME, readVaultJson, writeVaultJson } from "./drive-data.ts";
 import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import { isPrivilegeId, normalizePrivileges, type PrivilegeId } from "./privileges.ts";
+import { isRateVaultJamesEmail } from "./rate-vault.ts";
 
 export type PrivilegeFile = {
   grants: Record<string, PrivilegeId[]>;
@@ -99,14 +100,18 @@ export async function hydratePrivilegeStore(): Promise<PrivilegeFile> {
 export function peekPrivileges(email: string): PrivilegeId[] {
   const key = email.trim().toLowerCase();
   if (!key) return [];
-  return [...(readCache().grants[key] ?? [])];
+  const grants = [...(readCache().grants[key] ?? [])];
+  if (isRateVaultJamesEmail(key) && !grants.includes("rate-vault")) grants.push("rate-vault");
+  return grants;
 }
 
 export async function privilegesFor(email: string): Promise<PrivilegeId[]> {
   const key = email.trim().toLowerCase();
   if (!key) return [];
   const data = await hydratePrivilegeStore();
-  return [...(data.grants[key] ?? [])];
+  const grants = [...(data.grants[key] ?? [])];
+  if (isRateVaultJamesEmail(key) && !grants.includes("rate-vault")) grants.push("rate-vault");
+  return grants;
 }
 
 export async function listPrivilegeGrants(): Promise<Record<string, PrivilegeId[]>> {

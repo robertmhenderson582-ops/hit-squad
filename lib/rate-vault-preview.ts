@@ -7,6 +7,9 @@ import woodRiverB1PreviewJson from "./rate-vault/wood-river-b1-preview-fixture.j
 import {
   isRateVaultSiteId,
   type RateVaultColumnRole,
+  type RateVaultLane,
+  type RateVaultOcipFace,
+  type RateVaultPackageVersion,
   type RateVaultPreviewPackage,
   type RateVaultPreviewRow,
   type RateVaultPreviewSheet,
@@ -69,16 +72,45 @@ function parseSheet(raw: unknown): RateVaultPreviewSheet | null {
   };
 }
 
+export function inferRateVaultLane(input: { craft?: string | null; group?: string | null; sheet?: string | null }): RateVaultLane {
+  return /merit/i.test([input.craft, input.group, input.sheet].filter(Boolean).join(" ")) ? "merit" : "union";
+}
+
+export function inferRateVaultOcip(input: { group?: string | null; sheet?: string | null; kind?: string | null }) {
+  return /ocip/i.test([input.group, input.sheet, input.kind].filter(Boolean).join(" "));
+}
+
+export function defaultRateVaultClockNote(lane: RateVaultLane) {
+  return lane === "merit" ? "Staff clock" : "OT after 8 · Sunday DT";
+}
+
+export function rowMatchesOcipFace(row: Pick<RateVaultPreviewRow, "ocip">, face: RateVaultOcipFace) {
+  return face === "ocip" ? row.ocip : !row.ocip;
+}
+
+export function filterPreviewByFace(preview: RateVaultPreviewPackage, face: RateVaultOcipFace): RateVaultPreviewPackage {
+  return {
+    ...cloneRateVaultPreview(preview),
+    ocipFace: face,
+    rows: preview.rows.filter((row) => rowMatchesOcipFace(row, face)),
+  };
+}
+
 function parsePreviewRow(raw: unknown, index: number): RateVaultPreviewRow | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
   const position = text(row.position);
   if (!position) return null;
+  const sheet = text(row.sheet) || "Rate Summary";
+  const group = text(row.group) || "Rate Summary";
+  const craft = text(row.craft) || "Craft";
+  const lane: RateVaultLane = row.lane === "merit" || row.lane === "union" ? row.lane : inferRateVaultLane({ craft, group, sheet });
+  const ocip = typeof row.ocip === "boolean" ? row.ocip : inferRateVaultOcip({ group, sheet });
   const next: RateVaultPreviewRow = {
     id: text(row.id) || `row-${index + 1}`,
-    sheet: text(row.sheet) || "Rate Summary",
-    group: text(row.group) || "Rate Summary",
-    craft: text(row.craft) || "Craft",
+    sheet,
+    group,
+    craft,
     local: text(row.local) || null,
     position,
     wage: money(row.wage),
@@ -87,6 +119,9 @@ function parsePreviewRow(raw: unknown, index: number): RateVaultPreviewRow | nul
     billRate: money(row.billRate),
     billOt: row.billOt == null || row.billOt === "" ? null : money(row.billOt),
     billDt: row.billDt == null || row.billDt === "" ? null : money(row.billDt),
+    lane,
+    ocip,
+    clockNote: text(row.clockNote) || defaultRateVaultClockNote(lane),
   };
   return next;
 }
@@ -131,9 +166,75 @@ export function parseRateVaultPreviewPackage(raw: unknown): RateVaultPreviewPack
     note: text(row.note),
     writesRateBook: false,
     fixture: row.fixture === true,
+    ocipFace: row.ocipFace === "ocip" || row.ocipFace === "non-ocip" || row.ocipFace === "both" ? row.ocipFace : "both",
+    version: parseVersion(row.version),
     sheets,
     burden,
     rows,
+  };
+}
+
+function parseVersion(raw: unknown): RateVaultPackageVersion | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const id = text(row.id);
+  const at = text(row.at);
+  if (!id || !at) return null;
+  return { id, at, note: text(row.note) || "Imported B-1 Excel" };
+}
+
+export function stampRateVaultVersion(preview: RateVaultPreviewPackage, note: string, at = new Date().toISOString()): RateVaultPreviewPackage {
+  return {
+    ...cloneRateVaultPreview(preview),
+    version: {
+      id: `v-${at.slice(0, 19).replace(/[-:T]/g, "")}`,
+      at,
+      note: note.trim() || "Imported B-1 Excel",
+    },
+  };
+}
+
+export function mergePreviewFace(
+  stored: RateVaultPreviewPackage | null,
+  incoming: RateVaultPreviewPackage,
+  face: RateVaultOcipFace,
+): RateVaultPreviewPackage {
+  if (!stored) return { ...cloneRateVaultPreview(incoming), ocipFace: incoming.ocipFace === "both" ? "both" : face };
+  const kept = stored.rows.filter((row) => !rowMatchesOcipFace(row, face));
+  const nextRows = [...kept, ...incoming.rows.filter((row) => rowMatchesOcipFace(row, face))];
+  const blended = nextRows.some((row) => {
+    const prior = stored.rows.find((item) => item.id === row.id);
+    return Boolean(prior && prior.lane !== row.lane);
+  });
+  if (blended) {
+    return { ...cloneRateVaultPreview(stored) };
+  }
+  return {
+    ...cloneRateVaultPreview(incoming),
+    id: stored.id,
+    siteId: stored.siteId,
+    ocipFace: kept.length && incoming.rows.some((row) => rowMatchesOcipFace(row, face)) ? "both" : face,
+    rows: nextRows,
+    burden: incoming.burden.length ? incoming.burden : stored.burden,
+  };
+}
+
+export function previewHasLaneBlend(stored: RateVaultPreviewPackage | null, incoming: RateVaultPreviewPackage) {
+  if (!stored) return false;
+  return incoming.rows.some((row) => {
+    const prior = stored.rows.find((item) => item.id === row.id);
+    return Boolean(prior && prior.lane !== row.lane);
+  });
+}
+
+export function rateVaultCompCheck(preview: RateVaultPreviewPackage) {
+  return {
+    positions: preview.rows.length,
+    wageTotal: money(preview.rows.reduce((sum, row) => sum + row.wage, 0)),
+    fringeTotal: money(preview.rows.reduce((sum, row) => sum + row.fringe, 0)),
+    burdenTotal: money(preview.rows.reduce((sum, row) => sum + row.burden, 0)),
+    billTotal: money(preview.rows.reduce((sum, row) => sum + row.billRate, 0)),
+    burdenPct: burdenTotalPct(preview),
   };
 }
 
@@ -251,6 +352,8 @@ export function cloneRateVaultPreview(preview: RateVaultPreviewPackage): RateVau
   return {
     ...preview,
     writesRateBook: false,
+    ocipFace: preview.ocipFace || "both",
+    version: preview.version ? { ...preview.version } : null,
     sheets: preview.sheets.map((sheet) => ({ ...sheet })),
     burden: preview.burden.map((row) => ({ ...row })),
     rows: preview.rows.map((row) => ({ ...row })),

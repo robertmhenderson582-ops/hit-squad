@@ -1,6 +1,6 @@
 # Rate Vault — module boundary
 
-Owner-eyes-only B-1 / rate builder workshop inside Hit Squad. Default grant is the owner seat. Settings → Privileges can assign `rate-vault` later without a code change. Madison seats stay out unless that privilege is granted.
+Owner-eyes-only B-1 / rate builder workshop inside Hit Squad. Default grant is the owner seat plus the P66 Rate Vault seat **James Hutton** (`jhut26@gmail.com`). That seat is Rate Vault–scoped — Home shows only the Rate Vault door, and Jobs / Inbox / Suggestion Box / Quality / HSE stay closed. Settings → Privileges can assign `rate-vault` later without a code change. The wider tester circle stays out. Do not mail James from this build. Not James Cain (`jameshcainjr@gmail.com`).
 
 **Rate Vault is Phillips 66 exclusive** — James Hutton / P66 procurement lane. Site pickers, seed catalog, CBA/PLA keys, state-law keys, and B-1 Builder lists only cover P66 Hit Squad plants (Wood River, Bayway, Rodeo, Ferndale, Billings) plus East Coast COMP. Monroe Energy, Yates / Georgia Power, and any other non-P66 client or refinery are out of this vault. Other clients get their own vault later if ever.
 
@@ -16,7 +16,7 @@ Owner-eyes-only B-1 / rate builder workshop inside Hit Squad. Default grant is t
 
 First-class workshop modules (`RATE_VAULT_SECTIONS` ids): `library`, `halls`, `contractor`, `cba-pla`, `state-law`, `p66`, `publish`.
 
-The B-1 Builder face is a guided path (`RATE_VAULT_BUILDER_STEPS`): **Sources → Recognize → Map crafts → Burden / build → Publish preview**. Burden / Publish show a **visual rate package** (positions × wage / fringe / burden / bill) friendlier than a raw Exhibit B-1. Wood River is the demo default. Full Exhibit B-1 math parity is still incremental. Publish stays a stub and does not write live estimate Rate Tables.
+The B-1 Builder face is a guided path (`RATE_VAULT_BUILDER_STEPS`): **Sources → Recognize → Map crafts → Burden / build → Publish preview**. Burden / Publish show a **visual rate package** (positions × wage / fringe / burden / bill) friendlier than a raw Exhibit B-1. Sites v1: Wood River is the full demo path (opening Rate Vault auto-loads the B-1-derived fixture). Bayway / Rodeo / Ferndale / Billings use the same shell and stay empty until their B-1 is linked. Merit and union lanes stay visible and mapped separately — never blended. OCIP and non-OCIP faces are selectable. Full Exhibit B-1 math parity is still incremental. Publish stays a stub and does not write live estimate Rate Tables. A thin **Rate package buyoff** hinge (Approve / Reject / Request changes) stamps a decision only — approve does not write Rate Tables.
 
 `cba-pla` is its own pane — **CBA / PLA** (CBA & PLA vault). It is not nested under P66 / site rules. For sites without a dedicated P66 rate book (Wood River, Bayway), hall CBA/PLA rules drive OT, fringes, eligibility, and clock, and must feed the published rate package.
 
@@ -49,14 +49,24 @@ Rate Vault’s B-1 Builder matches Hit Squad estimate Excel round-trip behavior 
 | Export | `POST /api/rate-vault` `action: "export-b1"` → `lib/rate-vault-xlsx.ts` `rateVaultPreviewToXlsx` |
 | Import | Drop an `.xlsx` / `.xlsm` on any Builder step → `action: "import-b1"` → `parseRateVaultB1Xlsx` |
 
-The export is the **formula check to the site** (same credibility bar as estimate Excel / under-the-hood proof). Rate Summary **Bill ST** is `=Fn+Gn+Hn` with a cached result. Hidden `_id` columns key the importer. Spare empty position rows sit under the live seats so a new line can be typed in.
+The export is the **friendlier Rate Vault face** and the **formula check to the site** (same credibility bar as estimate Excel / under-the-hood proof). Rate Summary columns: position, craft, local, wage, fringe, burden, Bill ST / OT / DT, lane, OCIP, OT / clock. **Bill ST** is `=Fn+Gn+Hn` with a cached result tying burden → bill. Hidden `_id` columns key the importer. Spare empty position rows sit under the live seats so a new line can be typed in. Export also writes:
 
-Re-import writes the edited package into `rate-vault.json` (`packages[]` — metadata / rate rows only, never workbook bytes). GET / recognize / Burden / Publish prefer that stored package over the Wood River fixture so a library-card click does not wipe offline edits.
+- **COMP Check** — key totals (positions, wage / fringe / burden / bill, burden stack %) via formulas that pull Rate Summary / Burden Summary. Not a raw dump of the giant COMP xlsm.
+- **CBA PLA** and **State law** — read-only rule summary tabs (Excel forbids `/` in the CBA sheet name). Editable rate cells stay on Rate Summary / Burden Summary only.
 
-Import validates and **refuses silent poison**:
+Export tags the selected OCIP face (`ocip` / `non-ocip` / both). Import refuses mixing an OCIP workbook into a non-OCIP picker (or the reverse) unless the owner clicks **Confirm OCIP mix**. Merit vs union lanes never blend on mapped rows.
+
+Re-import writes the edited package into `rate-vault.json` (`packages[]` — metadata / rate rows only, never workbook bytes). Each successful import stamps a **version** (date + note) and keeps a **last-good** package so Restore last-good can roll back. GET / recognize / Burden / Publish prefer that stored package over the Wood River fixture so a library-card click does not wipe offline edits. Owner and James share one canonical Drive vault package — no device-kick.
+
+Import **may change** wages, fringes, burden inputs, bill overrides, and add/remove positions on mapped rows. Import validates and **refuses silent poison**:
 
 - No Rate Vault marker / not our export → `{ fallback: "recognize" }` so a raw hall book still sniffs.
 - Monroe / Yates / non-P66 site, NaN or negative money, missing Rate Summary, empty positions → 400 and the preview is unchanged.
+- Silent sheet renames (required Rate Summary / Burden / COMP Check / CBA PLA / State law tabs) or broken Bill ST formula guts → 400, preview unchanged.
+
+PDF / Word drops stay **review cards** this pass. Round-trip is Excel ↔ vault.
+
+A successful import also queues a **Rate package buyoff** row. Approve / Reject / Request changes stamp the hinge only. Approve does **not** write live estimate Rate Tables.
 
 Publish to live estimate Rate Tables stays a later explicit step. Vault-internal export / edit / import is enough for Burden / Publish preview to ripple.
 
