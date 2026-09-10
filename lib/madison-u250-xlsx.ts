@@ -1,7 +1,8 @@
 /**
  * Madison U250 contractor workbook parse (JB 09.10.26 transfer face).
  * ExcelJS only — not imported by the wake / desk seed path. Upload loads
- * this module on demand.
+ * this module on demand. Hours stay on the parsed seats; the day-grid
+ * shape comes from the Staffing R3 fixture in madison-u250.ts.
  */
 import ExcelJS from "exceljs";
 import {
