@@ -10,6 +10,7 @@ import {
   RATE_VAULT_CRAFT_DRAG,
   RATE_VAULT_KICKER,
   RATE_VAULT_OWNER_NOTE,
+  RATE_VAULT_SCOPE_NOTE,
   RATE_VAULT_SITES,
   RATE_VAULT_SOURCE_DRAG,
   RATE_VAULT_SOURCE_KIND_LABEL,
@@ -288,6 +289,7 @@ export function RateVaultDesk() {
         <p className="text-xs tracking-[0.14em] text-[#5b6f73]">{RATE_VAULT_KICKER}</p>
         <h2 className="font-display text-3xl tracking-wide text-[#163038]">{RATE_VAULT_TITLE}</h2>
         <p className="mt-2 text-sm leading-6 text-[#5b6f73]">{RATE_VAULT_OWNER_NOTE}</p>
+        <p className="mt-2 text-sm leading-6 text-[#5b6f73]">{RATE_VAULT_SCOPE_NOTE}</p>
         <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
           Build a rate pack the way Exhibit B-1 does, with a clearer path: sources, recognize,
           map crafts, burden, then a publish preview. Drop PDF / Word / Excel on any step.
@@ -498,7 +500,8 @@ function SourcesPane({
       <h3 className="text-xl font-semibold text-[#163038]">Browse the vault catalog</h3>
       <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
         {entries.length} shown · {total} indexed. Drag a book onto a site or kind bucket, or drop
-        a file into the zone. Wood River, Bayway, Rodeo, and Monroe are preloaded.
+        a file into the zone. Phillips 66 only — Wood River, Bayway, Rodeo, Ferndale, Billings,
+        and East Coast COMP.
       </p>
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">

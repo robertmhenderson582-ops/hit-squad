@@ -13,6 +13,7 @@ import {
   checkRateVaultDropFile,
   isRateVaultSiteId,
   isRateVaultSourceKind,
+  looksLikeForeignRateVaultSite,
   rateVaultFileExtension,
   type RateVaultColumnRole,
   type RateVaultConfirmedReview,
@@ -48,7 +49,6 @@ const SITE_PATTERNS: Array<{ id: RateVaultSiteId; re: RegExp }> = [
   { id: "wood-river", re: /wood\s*river|\bwrr\b|\bwr\b|roxana|gppma/i },
   { id: "bayway", re: /bayway/i },
   { id: "rodeo", re: /\brodeo\b/i },
-  { id: "monroe", re: /monroe/i },
   { id: "ferndale", re: /ferndale|\bwashington\s+agc|\blocal\s*302\b/i },
   { id: "billings", re: /billings/i },
   { id: "east-coast", re: /east\s*coast|pca0001103|gmta[\s-]*madison/i },
@@ -100,6 +100,7 @@ export function guessRateVaultKind(hay = ""): { kind: RateVaultSourceKind | "unk
 }
 
 export function guessRateVaultSite(hay = ""): RateVaultSiteId | null {
+  if (looksLikeForeignRateVaultSite(hay)) return null;
   for (const row of SITE_PATTERNS) {
     if (row.re.test(hay)) return row.id;
   }

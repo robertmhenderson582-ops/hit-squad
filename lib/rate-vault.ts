@@ -13,6 +13,9 @@ export const RATE_VAULT_API = "/api/rate-vault";
 export const RATE_VAULT_TITLE = "Rate Vault";
 export const RATE_VAULT_KICKER = "B-1 Builder";
 export const RATE_VAULT_OWNER_NOTE = "Private workshop — not for testers.";
+export const RATE_VAULT_CLIENT = "Phillips 66" as const;
+export const RATE_VAULT_SCOPE_NOTE =
+  "Rate Vault is Phillips 66 exclusive — James Hutton / P66 procurement lane. Other clients get their own vault later if ever.";
 
 /** First-class workshop module — not nested under P66 / site rules. */
 export const RATE_VAULT_CBA_PLA_ID = "cba-pla" as const;
@@ -62,7 +65,7 @@ export const RATE_VAULT_LIBRARY_SECTION = {
   id: RATE_VAULT_LIBRARY_ID,
   label: "Source library",
   title: "Source library",
-  note: "Drive-indexed agreements, wage sheets, and B-1 exemplars. Catalog by file id — binaries stay on Drive.",
+  note: "Phillips 66 Drive-indexed agreements, wage sheets, and B-1 exemplars. Catalog by file id — binaries stay on Drive.",
 } as const;
 
 export const RATE_VAULT_SECTIONS = [
@@ -117,17 +120,25 @@ export const RATE_VAULT_SOURCE_KIND_LABEL: Record<RateVaultSourceKind, string> =
   other: "Other",
 };
 
+/** Phillips 66 plants + East Coast COMP. Monroe / Yates / other clients are out of this vault. */
 export const RATE_VAULT_SITES = [
   { id: "wood-river", label: "Wood River", region: "Illinois" },
   { id: "bayway", label: "Bayway", region: "New Jersey" },
   { id: "rodeo", label: "Rodeo", region: "California" },
-  { id: "monroe", label: "Monroe", region: "Pennsylvania" },
   { id: "ferndale", label: "Ferndale", region: "Washington" },
   { id: "billings", label: "Billings", region: "Montana" },
   { id: "east-coast", label: "East Coast", region: "COMP" },
 ] as const;
 
 export type RateVaultSiteId = (typeof RATE_VAULT_SITES)[number]["id"];
+
+const FOREIGN_RATE_VAULT_SITE =
+  /\bmonroe(?:\s+energy)?\b|\byates\b|\bgeorgia\s+power\b|\bharbor\s+fuels\b|\bridge\s+station\b/i;
+
+/** True when hay names a non-P66 client / refinery. Those stay out of Rate Vault. */
+export function looksLikeForeignRateVaultSite(hay: string) {
+  return FOREIGN_RATE_VAULT_SITE.test(hay);
+}
 
 export const RATE_VAULT_BUILDER_STEPS = [
   {

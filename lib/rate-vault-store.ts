@@ -83,7 +83,7 @@ function parseReviews(raw: unknown): RateVaultConfirmedReview[] {
     out.push({
       sourceId: item.sourceId,
       kind: item.kind,
-      siteId: item.siteId ?? null,
+      siteId: isRateVaultSiteId(item.siteId) ? item.siteId : null,
       craft: item.craft ?? null,
       local: item.local ?? null,
       confirmedAt: typeof item.confirmedAt === "string" ? item.confirmedAt : new Date().toISOString(),

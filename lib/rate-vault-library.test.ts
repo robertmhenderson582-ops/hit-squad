@@ -14,15 +14,11 @@ import {
 
 const REQUIRED_IDS = [
   "17YtnXtCcIXq68sROl3_VwkIo6PHYzTIR",
-  "1NDjMfdotigHW4mY1iD3SbuoE7SQqG46L",
-  "1jyg5eYsBdDe9cAt881MlOrW4g2q7QbX2",
   "1bhDSXSP1huQEOifr6f9ZeRhNje9cXZ42",
   "1nUCFfLflJDT7N5NRY2h22vRzWYxMt_mX",
   "1JzCBSqwJGU8qKTWFn2DKGrGKfOSTXan6",
   "1aP0etQYJxWo003IUa8bVWWoDpOAwk1m2",
   "1uw4jwmCB0iPmoC_HJH-xce5A308NsNe5",
-  "1fHV3d7q3yUuWA6N_2VtoGhKXLh9M-SaV",
-  "1cTN7RDD2RhB07SDqTSTL7_6YghVKVLrz",
   "1X1F7HnMLkAXMCq3VZESPMtSZ83eZCmu4",
   "1EpxaHxTdy6I0H4YV4scosap4PfkoWjiT",
   "1Tl__EcHbjt4Vv5849MYJk9Yc-6q4QXgl",
@@ -32,6 +28,13 @@ const REQUIRED_IDS = [
   "15zFicxrF46616pD3ljvjOAduAVfi6-rH",
   "15bDYldQYfnWQSESTgxuoAvlWo55w4lrq",
   "1DR80tcSvBnP9GJU8zEs2iNhLb4V8liYP",
+];
+
+const DROPPED_NON_P66_IDS = [
+  "1NDjMfdotigHW4mY1iD3SbuoE7SQqG46L",
+  "1jyg5eYsBdDe9cAt881MlOrW4g2q7QbX2",
+  "1cTN7RDD2RhB07SDqTSTL7_6YghVKVLrz",
+  "1fHV3d7q3yUuWA6N_2VtoGhKXLh9M-SaV",
 ];
 
 describe("Rate Vault source library", () => {
@@ -44,7 +47,16 @@ describe("Rate Vault source library", () => {
     assert.equal(libraryHasSite(seed, "wood-river"), true);
     assert.equal(libraryHasSite(seed, "bayway"), true);
     assert.equal(libraryHasSite(seed, "rodeo"), true);
-    assert.equal(libraryHasSite(seed, "monroe"), true);
+    assert.equal(libraryHasSite(seed, "ferndale"), true);
+    assert.equal(libraryHasSite(seed, "east-coast"), true);
+    assert.equal(libraryHasSite(seed, "monroe" as never), false);
+    for (const id of DROPPED_NON_P66_IDS) {
+      assert.equal(ids.includes(id), false, id);
+    }
+    assert.equal(
+      seed.every((row) => !/monroe|yates|georgia power/i.test([row.title, row.note, row.siteId, row.pathHint].join(" "))),
+      true,
+    );
     assert.equal(seed.some((row) => row.kind === "gppma" && row.siteId === "wood-river"), true);
     assert.equal(seed.some((row) => row.kind === "b1-exhibit" && row.siteId === "rodeo" && row.primary), true);
     const oldBayway = seed.find((row) => row.driveId === "15SH7BjS8yEQRO8u34uMaF6EHBXQcgovm");
@@ -94,14 +106,14 @@ describe("Rate Vault source library", () => {
       {
         sourceId: extra.id,
         kind: "cba",
-        siteId: "monroe",
+        siteId: "ferndale",
         craft: "Insulator",
         local: "17",
       },
     ]);
     const found = merged.find((row) => row.id === extra.id);
     assert.equal(found?.kind, "cba");
-    assert.equal(found?.siteId, "monroe");
+    assert.equal(found?.siteId, "ferndale");
     assert.equal(found?.confirmed, true);
     assert.equal(seed.some((row) => row.id === extra.id), false);
     const parsed = parseOwnerLibraryInput({ title: "Nope", driveId: "short" });
@@ -113,5 +125,20 @@ describe("Rate Vault source library", () => {
     assert.equal(workshop.library.entries.find((row) => row.id === extra.id)?.siteId, "bayway");
     assert.equal(workshop.library.entries.find((row) => row.id === extra.id)?.kind, "pla");
     assert.equal(workshop.publish.published, false);
+    const foreign = ownerLibraryEntry({
+      id: "1DDDDDDDDDDDDDDDDDDDDDDDDDD",
+      title: "Monroe Energy Local 420 wage rates.pdf",
+      driveId: "1DDDDDDDDDDDDDDDDDDDDDDDDDD",
+      driveKind: "file",
+      kind: "local-craft-sheet",
+      siteId: null,
+      craft: "Pipefitter",
+      local: "420",
+      primary: true,
+      archived: false,
+      note: "Should not surface in the P66 vault",
+    });
+    const gated = mergeRateVaultLibrary(seed, [foreign]);
+    assert.equal(gated.some((row) => row.id === foreign.id), false);
   });
 });

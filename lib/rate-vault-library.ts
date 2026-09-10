@@ -1,5 +1,6 @@
 /**
  * Rate Vault source library — Drive ids + metadata only.
+ * P66-exclusive catalog (Wood River / Bayway / Rodeo / Ferndale / Billings / East Coast COMP).
  * Never embed P66 / Madison / GPPMA / B-1 / wage-sheet binaries.
  */
 
@@ -10,6 +11,7 @@ import {
   isRateVaultDriveId,
   isRateVaultSiteId,
   isRateVaultSourceKind,
+  looksLikeForeignRateVaultSite,
   rateVaultDriveUrl,
   rateVaultPathHint,
   type RateVaultConfirmedReview,
@@ -35,6 +37,7 @@ type SeedRow = {
   note: string;
 };
 
+/** Default catalog. Non-P66 books (Monroe / Yates) stay out of this list. */
 const SEED: readonly SeedRow[] = [
   {
     driveId: "17YtnXtCcIXq68sROl3_VwkIo6PHYzTIR",
@@ -42,21 +45,6 @@ const SEED: readonly SeedRow[] = [
     kind: "gppma",
     siteId: "wood-river",
     note: "GPPMA agreement book — Wood River / Illinois. Latest indexed copy.",
-  },
-  {
-    driveId: "1NDjMfdotigHW4mY1iD3SbuoE7SQqG46L",
-    title: "Site PLA folder",
-    kind: "pla",
-    driveKind: "folder",
-    siteId: "monroe",
-    note: "Monroe / site PLA pile. Folder ref — open on Drive.",
-  },
-  {
-    driveId: "1jyg5eYsBdDe9cAt881MlOrW4g2q7QbX2",
-    title: "Work Agreement Construction Maintenance Monroe Energy Refinery.pdf",
-    kind: "pla",
-    siteId: "monroe",
-    note: "Monroe Energy construction / maintenance work agreement (PLA / CBA).",
   },
   {
     driveId: "1bhDSXSP1huQEOifr6f9ZeRhNje9cXZ42",
@@ -98,23 +86,6 @@ const SEED: readonly SeedRow[] = [
     craft: "Boilermaker",
     local: "363",
     note: "Wood River boilermaker Local 363 wage sheet. Expires 12.31.25.",
-  },
-  {
-    driveId: "1fHV3d7q3yUuWA6N_2VtoGhKXLh9M-SaV",
-    title: "L 502 Wage and Benefits 2025-2.pdf",
-    kind: "local-craft-sheet",
-    craft: "Pipefitter",
-    local: "502",
-    note: "Local 502 wage and benefits 2025-2. Newest indexed copy.",
-  },
-  {
-    driveId: "1cTN7RDD2RhB07SDqTSTL7_6YghVKVLrz",
-    title: "L - 420 PIPEFITTERS BTJ-MESJ-MESS 2025-2026 wage rates MONROE ENERGY.pdf",
-    kind: "local-craft-sheet",
-    siteId: "monroe",
-    craft: "Pipefitter",
-    local: "420",
-    note: "Monroe Energy pipefitter Local 420 wage rates 2025–2026.",
   },
   {
     driveId: "1X1F7HnMLkAXMCq3VZESPMtSZ83eZCmu4",
@@ -213,12 +184,17 @@ function seedEntry(row: SeedRow): RateVaultSourceEntry {
   };
 }
 
+export function isAllowedRateVaultSource(entry: Pick<RateVaultSourceEntry, "title" | "note" | "siteId" | "pathHint">) {
+  if (entry.siteId && !isRateVaultSiteId(entry.siteId)) return false;
+  return !looksLikeForeignRateVaultSite([entry.title, entry.note, entry.siteId, entry.pathHint].filter(Boolean).join(" "));
+}
+
 export function seedRateVaultLibrary(): RateVaultSourceEntry[] {
-  return SEED.map(seedEntry);
+  return SEED.map(seedEntry).filter(isAllowedRateVaultSource);
 }
 
 export function seedRateVaultDriveIds() {
-  return SEED.map((row) => row.driveId);
+  return seedRateVaultLibrary().map((row) => row.driveId);
 }
 
 export function findSeedRateVaultSource(driveId: string) {
@@ -315,11 +291,13 @@ export function mergeRateVaultLibrary(
   const byId = new Map<string, RateVaultSourceEntry>();
   for (const row of seed) byId.set(row.id, { ...row });
   for (const row of extras) byId.set(row.id, { ...row });
-  return [...byId.values()].map((entry) => {
-    const review = reviews.find((item) => item.sourceId === entry.id) ?? null;
-    const override = overrides.find((item) => item.sourceId === entry.id) ?? null;
-    return applyRateVaultOverride(applyRateVaultReview(entry, review), override);
-  });
+  return [...byId.values()]
+    .map((entry) => {
+      const review = reviews.find((item) => item.sourceId === entry.id) ?? null;
+      const override = overrides.find((item) => item.sourceId === entry.id) ?? null;
+      return applyRateVaultOverride(applyRateVaultReview(entry, review), override);
+    })
+    .filter(isAllowedRateVaultSource);
 }
 
 export function parseOwnerLibraryInput(raw: unknown): Omit<RateVaultSourceEntry, "href" | "pathHint" | "origin" | "confirmed"> | { error: string } {
