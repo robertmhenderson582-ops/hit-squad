@@ -171,6 +171,12 @@ import { companyName, inferCompanyIdFromParts } from "./companies.ts";
 import { clampEstimateStatus, parseEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { regularClientFromParts } from "./site-regular.ts";
 import { yieldToUi } from "./ui-yield.ts";
+import {
+  activityDescriptionOf,
+  activityHasWork,
+  activityResourceLabel,
+  normalizeWorkActivities,
+} from "./work-activities.ts";
 import { summaryAmountAt } from "./xlsx-eval.ts";
 import {
   buildWorkbook,
@@ -546,6 +552,7 @@ export const ESTIMATE_XLSX_SHEETS = {
   direct: "Direct",
   support: "Support",
   laydown: "Laydown",
+  activities: "Activities",
   staff: "Staff",
   rental: "Equipment Rental",
   tension: "Tensioning Torquing equipment",
@@ -614,6 +621,8 @@ export type EstimateXlsxInput = {
   status?: EstimateStatus | string | null;
   /** Open site Regular-client flag. When omitted, catalog seed/override is used. */
   regularClient?: boolean;
+  /** Work list. Hours do not bill and never feed ESTIMATE TOTAL $. */
+  activities?: unknown;
 };
 
 type CrewLane = "staff" | "craft";
@@ -1984,6 +1993,28 @@ function liveTravel(line: TravelLine) {
   return travelAmount(line) > 0;
 }
 
+function buildActivitiesSheet(input: EstimateXlsxInput): BuiltSheet | null {
+  const rows = normalizeWorkActivities(input.activities).filter(activityHasWork);
+  if (!rows.length) return null;
+  const cells = headerCells(input);
+  ["Activity no.", "WBS", "Unit", "Description", "Resources", "Phase", "Hours"].forEach((label, index) => {
+    pushText(cells, `${colLetter(index + 1)}6`, label);
+  });
+  const unlocked: Array<{ row: number; col: number }> = [];
+  rows.forEach((row, index) => {
+    const excelRow = 7 + index;
+    pushText(cells, `A${excelRow}`, row.activityNo);
+    pushText(cells, `B${excelRow}`, row.wbs);
+    pushText(cells, `C${excelRow}`, row.unit);
+    pushText(cells, `D${excelRow}`, activityDescriptionOf(row));
+    pushText(cells, `E${excelRow}`, activityResourceLabel(row));
+    pushText(cells, `F${excelRow}`, row.phaseId && isPhaseId(row.phaseId) ? PHASE_NAMES[row.phaseId] : "");
+    pushNum(cells, `G${excelRow}`, row.hours);
+    unlockInputCols(unlocked, excelRow, 6);
+  });
+  return { name: ESTIMATE_XLSX_SHEETS.activities, cells, unlocked };
+}
+
 function buildTravelSheet(input: EstimateXlsxInput, lines: TravelLine[], name: string): BuiltSheet | null {
   const live = lines.filter(liveTravel);
   if (!live.length) return null;
@@ -2336,6 +2367,7 @@ function buildSummary(input: EstimateXlsxInput, built: BuiltSheet[]): BuiltSheet
 
 /** Optional tabs. Header-only / leftover $0 catalog rows never create these. */
 export const OPTIONAL_ESTIMATE_SHEETS = [
+  ESTIMATE_XLSX_SHEETS.activities,
   ESTIMATE_XLSX_SHEETS.staff,
   ESTIMATE_XLSX_SHEETS.foremen,
   ESTIMATE_XLSX_SHEETS.direct,
@@ -2712,6 +2744,7 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
     .filter((sheet): sheet is BuiltSheet => Boolean(sheet))
     .map((sheet) => ({ ...sheet, name: xlsxName(sheet.name) }));
   const setup = { ...buildJobSetupSheet(input), name: xlsxName(ESTIMATE_XLSX_SHEETS.jobSetup) };
+  const activities = buildActivitiesSheet(input);
   const lists = { ...buildListsSheet(), name: xlsxName(ESTIMATE_XLSX_SHEETS.lists) };
   const jobDays = buildJobDaysSheet(laborCalendarDates(input));
   const helpers = jobDays ? [{ ...jobDays, name: xlsxName(ESTIMATE_XLSX_SHEETS.jobDays) }] : [];
@@ -2720,6 +2753,7 @@ export function buildEstimateWorkbook(input: EstimateXlsxInput = {}): WorkbookSh
   return [
     { ...buildSummary(input, body), name: xlsxName(ESTIMATE_XLSX_SHEETS.summary) },
     setup,
+    ...(activities ? [{ ...activities, name: xlsxName(ESTIMATE_XLSX_SHEETS.activities) }] : []),
     ...body,
     lists,
     ...helpers,

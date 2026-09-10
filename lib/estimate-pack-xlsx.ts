@@ -80,6 +80,7 @@ export function packSnapshotToXlsxInput(pack: EstimatePackSnapshot): EstimateXls
     changeOrders: fcrChangeOrderTotal(fcrFromUnknown(pack.fcr)),
     status: pack.status,
     regularClient: regularClientFromParts(pack.site, pack.client, catalogSites()),
+    activities: pack.activities,
   };
 }
 

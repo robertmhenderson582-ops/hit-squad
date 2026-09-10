@@ -170,6 +170,7 @@ export function EstimateWorkspace({
         preparedBy: exporterDisplayName(user?.name, user?.email),
         status: pack.status || status,
         regularClient,
+        activities: pack.activities,
       });
       if (!bytes.byteLength) throw new Error("empty-workbook");
       downloadXlsx(

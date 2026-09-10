@@ -479,4 +479,36 @@ describe("estimate pack JSON → xlsx", () => {
     assert.match(ripple, /view of Job setup only/);
     assert.equal(/25324671|1435365/.test(ripple), false);
   });
+
+  it("Activities sheet is a live-pack view and does not change ESTIMATE TOTAL $", () => {
+    const { input } = estimateJsonToXlsxInput(SAMPLE_PACK);
+    const withActs = {
+      ...input,
+      activities: [
+        {
+          id: "wa-1",
+          activityNo: "1",
+          name: "Short",
+          description: "Long scope that used to clip on one line",
+          resources: ["Boilermaker", "Pipefitter"],
+          people: ["Alex Rivera"],
+          phaseId: "mech",
+          hours: 40,
+        },
+      ],
+    };
+    const bareSheets = buildEstimateWorkbook(input);
+    const liveSheets = buildEstimateWorkbook(withActs);
+    assert.equal(estimateWorkbookSummaryTotal(input), estimateWorkbookSummaryTotal(withActs));
+    assert.equal(deskEstimateTotal(input), deskEstimateTotal(withActs));
+    assert.equal(bareSheets.some((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.activities), false);
+    const act = liveSheets.find((sheet) => sheet.name === ESTIMATE_XLSX_SHEETS.activities);
+    assert.ok(act);
+    const textAt = (ref: string) => act.cells.find((cell) => cell.ref === ref)?.value;
+    assert.equal(textAt("A7"), "001");
+    assert.equal(textAt("D7"), "Long scope that used to clip on one line");
+    assert.equal(textAt("E7"), "Boilermaker, Pipefitter, Alex Rivera");
+    assert.equal(textAt("F7"), "Mechanical Window");
+    assert.equal(act.sheetTotal, undefined);
+  });
 });

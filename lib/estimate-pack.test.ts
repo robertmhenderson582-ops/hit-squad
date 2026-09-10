@@ -5,6 +5,7 @@ import { ORG_CHART_STORE_PREFIX } from "./org-chart.ts";
 import { EQUIPMENT_STORE_PREFIX } from "./equipment-sheet.ts";
 import { OTHER_COST_STORE_PREFIX } from "./other-cost.ts";
 import { newEstimateKey } from "./estimate-open.ts";
+import { ACTIVITY_STORE_PREFIX } from "./work-activities.ts";
 import { SUB_STORE_PREFIX } from "./subcontractor.ts";
 import {
   addLogRow,
@@ -258,6 +259,27 @@ describe("estimate pack snapshot", () => {
     assert.equal(crewHasRows(pack.crew), true);
     assert.equal(packHasWork(pack), true);
     assert.equal(pack.ownerEmail, "robertmhenderson582@gmail.com");
+  });
+
+  it("counts description-only and multi-resource activities as pack work", () => {
+    const store = memoryStore();
+    rememberLocalPack(
+      {
+        packId: "new-act-work",
+        title: "Working estimate",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+      },
+      store,
+    );
+    const key = newEstimateKey("new-act-work");
+    store.setItem(
+      `${ACTIVITY_STORE_PREFIX}${key}`,
+      JSON.stringify([{ id: "wa-1", description: "Long isolation note", resources: ["Boilermaker", "Pipefitter"] }]),
+    );
+    const pack = collectPack(store, "new-act-work", "robertmhenderson582@gmail.com");
+    assert.ok(pack);
+    assert.equal(packHasWork(pack), true);
   });
 
   it("renames pack title from Job setup and keeps it on a pack round-trip", () => {
