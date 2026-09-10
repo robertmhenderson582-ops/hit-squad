@@ -69,7 +69,7 @@ function ChromeInner({
   const links = navItems.map((item) => {
     const active = navActive(pathname, item.href, item.modules);
     return (
-      <Link key={item.href} href={item.href} className={rail(active)}>
+      <Link key={item.href} href={item.href} className={rail(active)} title={item.label} aria-label={item.label}>
         {item.label.toUpperCase()}
       </Link>
     );
@@ -121,7 +121,7 @@ function ChromeInner({
                   <HomeCue />
                 </Link>
                 {navItems.map((item) => (
-                  <Link key={item.href} href={item.href} className="home-corner-settings">
+                  <Link key={item.href} href={item.href} className="home-corner-settings" title={item.label} aria-label={item.label}>
                     {item.href === "/settings" ? <SettingsGlyph /> : null}
                     {item.label.toUpperCase()}
                   </Link>

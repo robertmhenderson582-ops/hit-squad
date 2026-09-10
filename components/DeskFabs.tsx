@@ -245,7 +245,7 @@ export function DeskFabs() {
             >
               Send a ticket
             </div>
-            <button type="button" onClick={closeTicket} className="text-xl leading-none text-[#5b6f73]" aria-label="Close ticket">
+            <button type="button" onClick={closeTicket} className="text-xl leading-none text-[#5b6f73]" aria-label="Close ticket" title="Close ticket">
               ×
             </button>
           </div>
@@ -281,6 +281,7 @@ export function DeskFabs() {
               <button
                 type="button"
                 aria-label="Remove capture"
+                title="Remove capture"
                 onClick={() => {
                   persist({ ...draft, capture: null });
                   setSavedDraft(hasStoredDraft({ ...draft, capture: null }));
@@ -328,6 +329,8 @@ export function DeskFabs() {
         }}
         className={`inbox-fab ${inbox.unread > 0 ? "inbox-fab-pulse" : ""}`}
         data-capture="ignore"
+        title={inbox.unread > 0 ? `Inbox · ${inbox.unread} unread` : "Inbox"}
+        aria-label={inbox.unread > 0 ? `Inbox, ${inbox.unread} unread` : "Inbox"}
       >
         Inbox
         {inbox.unread > 0 ? <span className="inbox-count">{inbox.unread}</span> : null}

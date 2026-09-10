@@ -313,7 +313,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
           ...thread,
           unread: 0,
           messages: thread.messages.map((message) =>
-            message.from === "self" && !message.readAt ? { ...message, readAt: new Date().toLocaleString("en-GB", { hour12: false }) } : message,
+            message.readAt ? message : { ...message, readAt: new Date().toLocaleString("en-GB", { hour12: false }) },
           ),
         };
       }),

@@ -120,11 +120,10 @@ export function LoginForm() {
       <section className="rounded border border-amber-flare/40 bg-black/25 p-4">
         <p className="font-mono text-[10px] tracking-[0.28em] text-amber-label">CONFIDENTIAL</p>
         <p className="mt-2 text-sm leading-6 text-paper-cream/90">
-          Madison plant, commercial, and HSE information — and records from other clients and
-          contractors — is plugged into this desk only so the trusted circle can estimate outage
-          and T&amp;M work. This is not Madison software. It is a private Hit Squad
-          field trial. Do not share, copy, screenshot, or discuss this desk or its contents
-          outside the people Robert has invited.
+          Client plant, commercial, and HSE records — and contractor files — are on this desk
+          only so the trusted circle can estimate outage and T&amp;M work. This is a private
+          Hit Squad field trial. Do not share, copy, screenshot, or discuss this desk or its
+          contents outside the people Robert has invited.
         </p>
       </section>
 

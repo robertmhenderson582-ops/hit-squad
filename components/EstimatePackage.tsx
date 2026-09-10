@@ -16,6 +16,7 @@ import {
   applyUnitOtPick,
   defaultPhaseSchedule,
   isDefaultSeedSchedule,
+  mergeSchedule,
   patchPhase,
   patchUnitPhase,
   readSchedule,
@@ -505,7 +506,7 @@ export function EstimatePackageProvider({
           writeJobMeta(estimateKey, meta);
           setJobMetaState(meta);
         }
-        setSchedule(next.schedule);
+        setSchedule(mergeSchedule(next.schedule));
         setCrewState({
           staff: next.crew.staff ?? [],
           generalForeman: next.crew.generalForeman ?? [],

@@ -8,6 +8,7 @@ import {
   appendInboxMessage,
   makeMessage,
   makeThread,
+  mergeThreadUnread,
   reconcileInboxDesk,
   rollbackInboxSend,
   startInboxThread,
@@ -295,6 +296,33 @@ describe("inbox compose stays on the thread", () => {
     const thread = next.threads.find((row) => row.personId === NATHAN.id);
     assert.ok(thread);
     assert.equal(thread.messages.filter((message) => message.text === "Testing").length, 2);
+  });
+
+  it("does not resurrect a locally read unread count on poll", () => {
+    const incoming = {
+      id: "im-from-nathan",
+      from: "them" as const,
+      author: "Nathan Boyte",
+      text: "Need a look",
+      photo: null,
+      sentAt: "a",
+      readAt: null,
+    };
+    const remote = [circleThread(NATHAN, { unread: 1, messages: [incoming] })];
+    const local = [DESK, { ...remote[0], unread: 0 }];
+    assert.equal(mergeThreadUnread(local[1], remote[0]), 0);
+    const next = reconcileInboxDesk(local, remote, remote[0].id);
+    assert.equal(next.threads.find((row) => row.personId === NATHAN.id)?.unread, 0);
+
+    const newer = {
+      ...incoming,
+      id: "im-from-nathan-2",
+      text: "Second note",
+      sentAt: "b",
+    };
+    const withNew = [circleThread(NATHAN, { unread: 1, messages: [incoming, newer] })];
+    const afterNew = reconcileInboxDesk(next.threads, withNew, remote[0].id);
+    assert.equal(afterNew.threads.find((row) => row.personId === NATHAN.id)?.unread, 1);
   });
 
   it("provider posts a hide and rolls back a failed send", () => {
