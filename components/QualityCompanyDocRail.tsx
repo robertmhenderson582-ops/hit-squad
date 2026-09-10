@@ -5,7 +5,6 @@ import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { useSession } from "@/components/SessionProvider";
 import { fileToLead, type LeadFile } from "@/lib/lead-briefs";
 import {
-  isQualityCompanyDocId,
   qualityCompanyDocHome,
   qualityCompanyDocLabel,
   qualityCompanyDocsListedFor,
@@ -32,7 +31,7 @@ function dropFileFromBrowser(file: File) {
   return { name: file.name, type: file.type, bytes: file.size };
 }
 
-function localByDoc(home: string, docs: Array<{ id: string }>) {
+function localByDoc(home: string, docs: ReadonlyArray<{ id: string }>) {
   return Object.fromEntries(docs.map((doc) => [doc.id, readQualityCompanyDocFiles(home, doc.id as QualityCompanyDocId)]));
 }
 
