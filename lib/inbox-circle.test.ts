@@ -46,7 +46,10 @@ describe("inbox circle", () => {
       true,
     );
     assert.equal(isInboxCircleEmail("marks544@yahoo.com"), false);
+    assert.equal(canUseInbox({ email: "marks544@yahoo.com" }), false);
+    assert.equal(canUseSuggestionBox({ email: "marks544@yahoo.com" }), false);
     assert.equal(canUseInbox({ email: "nathanboyte@gmail.com" }), true);
+    assert.equal(canUseSuggestionBox({ email: "chancec318@yahoo.com" }), true);
     assert.equal(canUseSuggestionBox({ email: JOSEPH_EMAIL }), false);
     assert.equal(canReceiveDeskBot({ email: NOVUS_EMAIL }), false);
     assert.equal(canReceiveDeskBot({ email: "robertmhenderson582@gmail.com" }), true);

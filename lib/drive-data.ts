@@ -46,8 +46,12 @@ export function briefsFolderId(kind: "quality" | "hse", env: Record<string, stri
 /** Production seats.json. Shared with the vault SA; the Estimates parent folder is not. */
 export const SEATS_VAULT_FILE_ID = "1d3lzLDxCPwC963fdplsnwYgrDEanohZc";
 
+/** Production tickets.json. Suggestion Box / desk tickets. Never expose this id to testers. */
+export const TICKETS_VAULT_FILE_ID = "1s4D47FvkOm1G8qYVP3-klKOkkpDyGFFu";
+
 const KNOWN_VAULT_FILE_IDS: Record<string, string> = {
   [SEATS_VAULT_NAME]: SEATS_VAULT_FILE_ID,
+  [TICKETS_VAULT_NAME]: TICKETS_VAULT_FILE_ID,
 };
 
 const rememberedVaultFileIds = new Map<string, string>();
@@ -120,7 +124,7 @@ async function fileFromStoredId(adapter: DriveAdapter, name: string, kind: strin
   const knownId = KNOWN_VAULT_FILE_IDS[name] || "";
   const id = rememberedVaultFileIds.get(vaultFileKey(name, kind)) || envId || knownId;
   if (!id) return null;
-  // SEATS_VAULT_FILE_ID / DRIVE_SEATS_FILE_ID: PATCH by id even if GET media throws.
+  // SEATS_VAULT_FILE_ID / TICKETS_VAULT_FILE_ID / DRIVE_*_FILE_ID: PATCH by id even if GET media throws.
   // Never fall through to createJson in the unlistable Estimates folder.
   if (!(envId || knownId)) {
     try {
@@ -159,7 +163,15 @@ export async function readVaultJson<T>(
 ): Promise<T | null> {
   const file = await findVaultJsonFile(adapter, name, kind, folderId);
   if (!file) return null;
-  return JSON.parse(await adapter.readJson(file.id)) as T;
+  try {
+    return JSON.parse(await adapter.readJson(file.id)) as T;
+  } catch (error) {
+    // Pinned tickets.json may not exist yet in tests / first boot. A 403 still fails closed.
+    if (name === TICKETS_VAULT_NAME && !(error instanceof DriveApiError && error.status === 403)) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 async function confirmedVaultBytes(adapter: DriveAdapter, fileId: string, payload: string) {
@@ -200,12 +212,15 @@ export async function writeVaultJson(
   const properties = { kind };
   const pinnedId = KNOWN_VAULT_FILE_IDS[name] || vaultEnvFileId(name);
   const existing = await findVaultJsonFile(adapter, name, kind, folderId);
-  // seats.json: never createJson. A folder 403 must not mint a second file.
+  // seats.json / tickets.json: never createJson. A folder 403 must not mint a second file.
   if (!existing && pinnedId) {
     throw new Error("vault file id not writable");
   }
   if (!existing && name === SEATS_VAULT_NAME) {
     throw new Error("seats vault must PATCH known id");
+  }
+  if (!existing && name === TICKETS_VAULT_NAME) {
+    throw new Error("tickets vault must PATCH known id");
   }
   const seatsDenied =
     name === SEATS_VAULT_NAME && (existing?.id || pinnedId)

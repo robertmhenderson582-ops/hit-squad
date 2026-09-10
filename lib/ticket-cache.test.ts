@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 import {
+  TICKET_UNVAULTED_MARK,
   hydrateTickets,
   mergeTickets,
+  mergeVaultedTickets,
   rememberTicket,
   ticketCacheKey,
+  ticketsVaultStored,
 } from "./ticket-cache.ts";
 import { makeTicket, type DeskTicket } from "./tickets.ts";
 
@@ -67,30 +70,32 @@ describe("ticket cache merge", () => {
     assert.equal(merged[0].capture, rich.capture);
   });
 
-  it("owner hydrate keeps local tickets when the server list is shorter", () => {
-    const first = rememberTicket(OWNER, ticket(OWNER, "first", "tkt-1"));
-    assert.equal(first.length, 1);
+  it("confirmed hydrate marks leftover local tickets unvaulted and does not persist them as saved", () => {
+    rememberTicket(OWNER, ticket(OWNER, "first", "tkt-1"));
     rememberTicket(OWNER, ticket(OWNER, "second", "tkt-2"));
     rememberTicket(OWNER, ticket(OWNER, "third", "tkt-3"));
-    const shown = hydrateTickets([ticket(OWNER, "third", "tkt-3")], OWNER, true);
+    const shown = hydrateTickets([ticket(OWNER, "third", "tkt-3")], OWNER, true, {
+      store: "drive",
+      stored: true,
+    });
     assert.equal(shown.length, 3);
-    assert.deepEqual(
-      shown.map((row) => row.id).sort(),
-      ["tkt-1", "tkt-2", "tkt-3"],
-    );
+    assert.equal(shown.find((row) => row.id === "tkt-3")?.vaulted, true);
+    assert.equal(shown.find((row) => row.id === "tkt-1")?.vaulted, false);
+    assert.match(TICKET_UNVAULTED_MARK, /on this desk only/);
     const raw = JSON.parse(memory.get(ticketCacheKey(OWNER)) || "{}") as { tickets?: DeskTicket[] };
-    assert.equal(raw.tickets?.length, 3);
+    assert.deepEqual(
+      raw.tickets?.map((row) => row.id),
+      ["tkt-3"],
+    );
   });
 
-  it("remember then merge does not drop existing tickets", () => {
+  it("unconfirmed hydrate does not treat local leftovers as saved", () => {
     rememberTicket(OWNER, ticket(OWNER, "already there", "tkt-keep"));
     const filed = ticket(OWNER, "just filed", "tkt-new");
-    const afterSubmit = rememberTicket(OWNER, filed);
-    assert.equal(afterSubmit.length, 2);
-    const afterServer = hydrateTickets([filed], OWNER, true);
-    assert.equal(afterServer.length, 2);
-    assert.equal(afterServer.some((row) => row.id === "tkt-keep"), true);
-    assert.equal(afterServer.some((row) => row.id === "tkt-new"), true);
+    const shown = hydrateTickets([filed], OWNER, true, { store: "tmp-cache", stored: false });
+    assert.equal(shown.every((row) => row.vaulted === false), true);
+    assert.equal(ticketsVaultStored("tmp-cache", true), false);
+    assert.equal(mergeVaultedTickets([filed], [ticket(OWNER, "keep", "tkt-keep")]).map((row) => `${row.id}:${row.vaulted}`).join(), "tkt-new:true,tkt-keep:false");
   });
 
   it("testers still only see their own tickets after a merge", () => {
@@ -99,8 +104,10 @@ describe("ticket cache merge", () => {
       [ticket(TESTER, "mine", "tkt-joe"), ticket(OWNER, "owner row", "tkt-owner")],
       TESTER,
       false,
+      { store: "drive", stored: true },
     );
     assert.equal(shown.length, 1);
     assert.equal(shown[0].id, "tkt-joe");
+    assert.equal(shown[0].vaulted, true);
   });
 });

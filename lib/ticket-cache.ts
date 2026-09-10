@@ -2,6 +2,37 @@ import type { DeskTicket } from "./tickets";
 
 export const TICKET_CACHE_PREFIX = "hs_tickets_v1:";
 
+/** Client-safe tickets vault copy. No Drive / Node imports. */
+export const TICKETS_VAULT_WRITE_ERROR =
+  "Could not save to the tickets vault. That ticket is only on this desk. Try again.";
+export const TICKET_UNVAULTED_MARK = "on this desk only — not saved yet";
+
+export type ListedTicket = DeskTicket & { vaulted: boolean };
+
+export function ticketsVaultStored(store?: string | null, stored?: boolean) {
+  return (store === "drive" || store === "server-json-file") && stored !== false;
+}
+
+export function ticketsVaultLeaks(payload: unknown) {
+  return /tickets\.json|1s4D47FvkOm1G8qYVP3|DRIVE_TICKETS|owner vault/i.test(JSON.stringify(payload ?? ""));
+}
+
+export function mergeVaultedTickets(vault: DeskTicket[], local: DeskTicket[]): ListedTicket[] {
+  const listed: ListedTicket[] = [];
+  const seen = new Set<string>();
+  for (const row of vault) {
+    if (!row?.id || seen.has(row.id)) continue;
+    seen.add(row.id);
+    listed.push({ ...row, vaulted: true });
+  }
+  for (const row of local) {
+    if (!row?.id || seen.has(row.id)) continue;
+    seen.add(row.id);
+    listed.push({ ...row, vaulted: false });
+  }
+  return listed.sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+}
+
 export function ticketCacheKey(who: string) {
   return `${TICKET_CACHE_PREFIX}${who.trim().toLowerCase()}`;
 }
@@ -95,22 +126,27 @@ export function hydrateTickets(
   server: DeskTicket[],
   who: string,
   seeAll: boolean,
-  opts?: { persist?: boolean },
-): DeskTicket[] {
+  opts?: { persist?: boolean; store?: string | null; stored?: boolean },
+): ListedTicket[] {
   const persist = opts?.persist !== false;
+  const confirmed = ticketsVaultStored(opts?.store, opts?.stored);
   const local = who && persist ? readTicketCache(who) : [];
-  const merged = persist ? mergeTickets(server, local) : [...server];
-  // Always persist the union on the signed-in desk. Owner View as must not
-  // write a filtered list into that cache.
-  if (who && persist) writeTicketCache(who, merged);
-  return ticketsForViewer(merged, who, seeAll);
+  const listed = mergeVaultedTickets(confirmed ? server : [], persist ? local : server);
+  // Only persist vault-confirmed rows. Owner View as must not write a filtered list.
+  if (who && persist && confirmed) {
+    writeTicketCache(
+      who,
+      listed.filter((row) => row.vaulted),
+    );
+  }
+  return ticketsForViewer(listed, who, seeAll);
 }
 
-export function ticketsForViewer(
-  tickets: DeskTicket[],
+export function ticketsForViewer<T extends DeskTicket>(
+  tickets: T[],
   who: string | undefined,
   seeAll: boolean,
-): DeskTicket[] {
+): T[] {
   if (seeAll) return [...tickets];
   if (!who) return [];
   return tickets.filter((row) => row.who === who);
