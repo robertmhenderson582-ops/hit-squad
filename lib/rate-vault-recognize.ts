@@ -74,6 +74,7 @@ const COLUMN_ROLES: Array<{ role: Exclude<RateVaultColumnRole, "unknown">; re: R
   { role: "local", re: /\blocal\b|\bhall\b|\bl\s*#/i },
   { role: "ot", re: /\bot\b|overtime/i },
   { role: "dt", re: /\bdt\b|double/i },
+  { role: "bill", re: /\bbill(?:ed|ing)?\b|\bbill\s*rate\b/i },
 ];
 
 function decodeBase64(data: string) {

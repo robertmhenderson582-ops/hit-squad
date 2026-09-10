@@ -159,12 +159,12 @@ export const RATE_VAULT_BUILDER_STEPS = [
   {
     id: "burden",
     label: "Burden / build",
-    note: "CBA/PLA, state law, and fringes feed the pack later.",
+    note: "Visual rate pack — wage, fringe, burden, and bill. Live tables stay off.",
   },
   {
     id: "publish",
     label: "Publish preview",
-    note: "Stub — live Rate Tables stay on Jobs / Rates.",
+    note: "Scroll the filled package. Live Rate Tables stay on Jobs / Rates.",
   },
 ] as const;
 
@@ -258,7 +258,55 @@ export type RateVaultConfirmedReview = {
   writesRateBook: false;
 };
 
-export type RateVaultColumnRole = "craft" | "position" | "wage" | "fringe" | "burden" | "local" | "ot" | "dt" | "unknown";
+export type RateVaultColumnRole = "craft" | "position" | "wage" | "fringe" | "burden" | "local" | "ot" | "dt" | "bill" | "unknown";
+
+export const RATE_VAULT_DEFAULT_SITE_ID = "wood-river" as const;
+
+export type RateVaultPreviewSheetKind = "rate-summary" | "burden-summary" | "craft" | "staff-ocip" | "craft-ocip" | "other";
+
+export type RateVaultPreviewSheet = {
+  name: string;
+  kind: string;
+};
+
+export type RateVaultPreviewRow = {
+  id: string;
+  sheet: string;
+  group: string;
+  craft: string;
+  local: string | null;
+  position: string;
+  wage: number;
+  fringe: number;
+  burden: number;
+  billRate: number;
+  billOt: number | null;
+  billDt: number | null;
+};
+
+export type RateVaultBurdenLine = {
+  id: string;
+  label: string;
+  ratePct: number;
+  note: string;
+};
+
+export type RateVaultPreviewPackage = {
+  id: string;
+  title: string;
+  siteId: RateVaultSiteId;
+  sourceId: string | null;
+  sourceTitle: string;
+  effective: string | null;
+  revision: string | null;
+  extractedFrom: string;
+  note: string;
+  writesRateBook: false;
+  fixture: boolean;
+  sheets: RateVaultPreviewSheet[];
+  burden: RateVaultBurdenLine[];
+  rows: RateVaultPreviewRow[];
+};
 
 export type RateVaultSheetSniff = {
   name: string;
@@ -404,6 +452,7 @@ export type RateVaultWorkshop = {
   steps: typeof RATE_VAULT_BUILDER_STEPS;
   library: RateVaultLibrary;
   review: RateVaultRecognitionReview | null;
+  preview: RateVaultPreviewPackage | null;
   cbaPla: RateVaultCbaPlaVault;
   stateLaw: RateVaultStateLawVault;
   publish: RateVaultPublishStub;
@@ -423,6 +472,7 @@ export function emptyRateVaultWorkshop(): RateVaultWorkshop {
     steps: RATE_VAULT_BUILDER_STEPS,
     library: emptyRateVaultLibrary(),
     review: null,
+    preview: null,
     cbaPla: emptyCbaPlaVault(),
     stateLaw: emptyStateLawVault(),
     publish: {

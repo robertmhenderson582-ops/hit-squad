@@ -141,6 +141,11 @@ describe("Rate Vault scaffold", () => {
     assert.equal(workshop.library.entries.length, 0);
     assert.equal(workshop.steps, RATE_VAULT_BUILDER_STEPS);
     assert.equal(workshop.review, null);
+    assert.equal(workshop.preview, null);
+    const seededPreview = buildRateVaultWorkshop();
+    assert.equal(seededPreview.preview?.siteId, "wood-river");
+    assert.ok((seededPreview.preview?.rows.length ?? 0) >= 8);
+    assert.equal(seededPreview.preview?.writesRateBook, false);
     assert.deepEqual(reorderRateVaultItems(["a", "b", "c"], 2, 0), ["c", "a", "b"]);
     const moved = moveRateVaultSource(seedRateVaultLibrary(), "1EpxaHxTdy6I0H4YV4scosap4PfkoWjiT", {
       siteId: "bayway",
@@ -214,6 +219,8 @@ describe("Rate Vault scaffold", () => {
     const vaultModule = source("./rate-vault.ts");
     const library = source("./rate-vault-library.ts");
     const recognize = source("./rate-vault-recognize.ts");
+    const preview = source("./rate-vault-preview.ts");
+    const previewUi = source("../components/RateVaultPreview.tsx");
     const store = source("./rate-vault-store.ts");
     const privileges = source("./privileges.ts");
 
@@ -248,6 +255,14 @@ describe("Rate Vault scaffold", () => {
     assert.match(desk, /CBA \/ PLA upload stub/);
     assert.match(desk, /State law upload/);
     assert.match(desk, /Publish preview upload/);
+    assert.match(desk, /Open visual package/);
+    assert.match(desk, /Visual rate package/);
+    assert.match(desk, /Live write to Jobs \/ Rates stays stubbed/);
+    assert.match(previewUi, /Wood River B-1 rate package/);
+    assert.match(previewUi, /Burden Summary/);
+    assert.match(preview, /wood-river-b1-preview-fixture\.json/);
+    assert.match(preview, /1WOODRIVERB1LATESTPENDING000/);
+    assert.match(library, /Wood River Exhibit B-1 latest \(Robert 09\.10\.26\)/);
     assert.match(desk, /onDrop/);
     assert.match(desk, /RATE_VAULT_SOURCE_DRAG/);
     assert.match(desk, /RATE_VAULT_CRAFT_DRAG/);
@@ -267,6 +282,9 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /never commit/i);
     assert.match(docs, /Drag and drop/);
     assert.match(docs, /Quality folders/);
+    assert.match(docs, /wood-river-b1-preview-fixture/);
+    assert.match(docs, /visual rate package/i);
+    assert.match(docs, /does not write live estimate Rate Tables/);
     assert.doesNotMatch(library, /siteId:\s*"monroe"/);
     assert.doesNotMatch(library, /Monroe Energy/);
     assert.doesNotMatch(vaultModule, /id: "monroe"/);
@@ -295,6 +313,7 @@ describe("Rate Vault scaffold", () => {
     assert.doesNotMatch(desk, FORBIDDEN_IMPORT);
     assert.doesNotMatch(library, FORBIDDEN_IMPORT);
     assert.doesNotMatch(recognize, FORBIDDEN_IMPORT);
+    assert.doesNotMatch(preview, FORBIDDEN_IMPORT);
     assert.doesNotMatch(store, FORBIDDEN_IMPORT);
     assert.doesNotMatch(TESTER_WHATS_NEW, /Rate Vault|B-1 Builder/i);
     assert.doesNotMatch(OWNER_WHATS_NEW, /Rate Vault|B-1 Builder/i);

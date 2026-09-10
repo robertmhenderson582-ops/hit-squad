@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { buildRateVaultWorkshop, findSeedRateVaultSource } from "@/lib/rate-vault-library";
+import { enrichReviewWithPreview, resolveRateVaultPreview } from "@/lib/rate-vault-preview";
 import { parseConfirmReview, recognizeRateVaultSource } from "@/lib/rate-vault-recognize";
 import { requireRateVault } from "@/lib/rate-vault-server";
-import { stubPublishRateVault, type RateVaultRecognitionReview } from "@/lib/rate-vault";
+import { stubPublishRateVault, type RateVaultPreviewPackage, type RateVaultRecognitionReview } from "@/lib/rate-vault";
 import {
   addRateVaultOwnerSource,
   confirmRateVaultReview,
@@ -14,13 +15,16 @@ import {
 
 export const dynamic = "force-dynamic";
 
-async function workshopPayload(review: RateVaultRecognitionReview | null = null) {
+async function workshopPayload(
+  review: RateVaultRecognitionReview | null = null,
+  preview: RateVaultPreviewPackage | null = resolveRateVaultPreview({ review }),
+) {
   const [extras, reviews, overrides] = await Promise.all([
     listRateVaultOwnerLibrary(),
     listRateVaultReviews(),
     listRateVaultOverrides(),
   ]);
-  return buildRateVaultWorkshop(extras, reviews, review, overrides);
+  return buildRateVaultWorkshop(extras, reviews, review, overrides, preview);
 }
 
 export async function GET(request: Request) {
@@ -91,7 +95,9 @@ export async function POST(request: Request) {
     if ("error" in recognized) {
       return NextResponse.json({ error: recognized.error }, { status: recognized.status });
     }
-    return NextResponse.json({ review: recognized, workshop: await workshopPayload(recognized) });
+    const preview = resolveRateVaultPreview({ review: recognized, source: linked });
+    const review = enrichReviewWithPreview(recognized, preview);
+    return NextResponse.json({ review, preview, workshop: await workshopPayload(review, preview) });
   }
 
   if (action === "confirm") {
@@ -122,12 +128,15 @@ export async function POST(request: Request) {
         note: "Confirmed from Rate Vault recognition. Metadata only.",
       });
     }
+    const preview = resolveRateVaultPreview({ review: recognized, source: linked, siteId: parsed.siteId });
+    const review = enrichReviewWithPreview(recognized, preview);
     const confirmed = await confirmRateVaultReview(parsed);
     return NextResponse.json({
-      review: recognized,
+      review,
+      preview,
       confirmed,
       writesRateBook: false,
-      workshop: await workshopPayload(recognized),
+      workshop: await workshopPayload(review, preview),
     });
   }
 

@@ -16,7 +16,7 @@ Owner-eyes-only B-1 / rate builder workshop inside Hit Squad. Default grant is t
 
 First-class workshop modules (`RATE_VAULT_SECTIONS` ids): `library`, `halls`, `contractor`, `cba-pla`, `state-law`, `p66`, `publish`.
 
-The B-1 Builder face is a guided path (`RATE_VAULT_BUILDER_STEPS`): **Sources → Recognize → Map crafts → Burden / build → Publish preview**. Full Exhibit B-1 math parity is incremental. Publish stays a stub and does not write live estimate Rate Tables.
+The B-1 Builder face is a guided path (`RATE_VAULT_BUILDER_STEPS`): **Sources → Recognize → Map crafts → Burden / build → Publish preview**. Burden / Publish show a **visual rate package** (positions × wage / fringe / burden / bill) friendlier than a raw Exhibit B-1. Wood River is the demo default. Full Exhibit B-1 math parity is still incremental. Publish stays a stub and does not write live estimate Rate Tables.
 
 `cba-pla` is its own pane — **CBA / PLA** (CBA & PLA vault). It is not nested under P66 / site rules. For sites without a dedicated P66 rate book (Wood River, Bayway), hall CBA/PLA rules drive OT, fringes, eligibility, and clock, and must feed the published rate package.
 
@@ -31,6 +31,14 @@ The catalog is **Drive file id + metadata only**. Never commit P66 / Madison rat
 Seeded kinds: `cba`, `pla`, `gppma`, `local-craft-sheet`, `b1-exhibit`, `rate-builder`, `comp`, `union-terms`, `other`.
 
 Sites indexed: Wood River, Bayway, Rodeo, Ferndale, Billings, and East Coast COMP. Prefer the latest book per site. Older B-1 faces stay in the catalog as archived / not primary. Ambiguous folder refs and clearly non-P66 books (Monroe PLA / Local 420 / Exhibit C Monroe, Yates) stay out of the default seed rather than appearing as a foreign site.
+
+Wood River now has a primary `b1-exhibit` — **Wood River Exhibit B-1 latest (Robert 09.10.26)**. Catalog by Drive id only. If the Drive upload is still pending, the seed uses a placeholder id (`WOOD_RIVER_B1_EXHIBIT_DRIVE_ID` in `lib/rate-vault-preview.ts`) with a TODO to swap the real id in. Never commit the ~24 MB `.xlsx`.
+
+## Visual B-1 preview
+
+Selecting the Wood River B-1 library card (or opening Burden / Publish) loads a filled package from the checked-in JSON fixture `lib/rate-vault/wood-river-b1-preview-fixture.json`. That file is metadata and rate rows only — no workbook bytes. It mirrors Rate Summary / Burden Summary / craft locals (BM 363, PF 553, Laborer) plus Staff / Craft OCIP faces so the owner can scroll a real table before a compact extract from the live workbook replaces the seed.
+
+Site pickers on Burden and Publish default to Wood River. Other P66 sites stay empty until their fixtures land. Recognize → map → burden stays wired: a linked Drive title still produces a review card, and the Wood River path injects fixture columns when no binary was dropped. Confirm never writes a live rate book. The Publish button remains `stubPublishRateVault()`.
 
 Owner-added rows persist as metadata in `rate-vault.json` on Drive (`RATE_VAULT_LIBRARY_KIND`). That file must not contain file bytes.
 

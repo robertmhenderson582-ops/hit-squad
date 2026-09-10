@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { FieldBlock } from "@/components/FieldMark";
+import { RateVaultPreviewTables, RateVaultSitePicker } from "@/components/RateVaultPreview";
 import {
   RATE_VAULT_ACCEPT,
   RATE_VAULT_BUILDER_STEPS,
   RATE_VAULT_CBA_PLA_RULES,
   RATE_VAULT_CBA_PLA_SECTION,
   RATE_VAULT_CRAFT_DRAG,
+  RATE_VAULT_DEFAULT_SITE_ID,
   RATE_VAULT_KICKER,
   RATE_VAULT_OWNER_NOTE,
   RATE_VAULT_SCOPE_NOTE,
@@ -26,6 +28,7 @@ import {
   reorderRateVaultItems,
   type RateVaultBuilderStepId,
   type RateVaultConfirmedReview,
+  type RateVaultPreviewPackage,
   type RateVaultPublishStub,
   type RateVaultRecognitionReview,
   type RateVaultSheetSniff,
@@ -35,6 +38,7 @@ import {
   type RateVaultWorkshop,
 } from "@/lib/rate-vault";
 import { filterRateVaultLibrary } from "@/lib/rate-vault-library";
+import { defaultRateVaultPreview, isWoodRiverB1Source } from "@/lib/rate-vault-preview";
 
 function fileToPayload(file: File) {
   return new Promise<{ name: string; type: string; data: string }>((resolve, reject) => {
@@ -166,9 +170,11 @@ export function RateVaultDesk() {
   const [workshop, setWorkshop] = useState<RateVaultWorkshop | null>(null);
   const [publish, setPublish] = useState<RateVaultPublishStub | null>(null);
   const [review, setReview] = useState<RateVaultRecognitionReview | null>(null);
+  const [preview, setPreview] = useState<RateVaultPreviewPackage | null>(null);
   const [confirmed, setConfirmed] = useState<RateVaultConfirmedReview | null>(null);
   const [step, setStep] = useState<RateVaultBuilderStepId>("sources");
-  const [siteId, setSiteId] = useState("");
+  const [siteId, setSiteId] = useState<string>(RATE_VAULT_DEFAULT_SITE_ID);
+  const [packageSiteId, setPackageSiteId] = useState<string>(RATE_VAULT_DEFAULT_SITE_ID);
   const [kind, setKind] = useState("");
   const [craft, setCraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -185,7 +191,10 @@ export function RateVaultDesk() {
           setError(data.error || "Rate Vault is owner-eyes-only.");
           return;
         }
-        if (data.workshop) setWorkshop(data.workshop);
+        if (data.workshop) {
+          setWorkshop(data.workshop);
+          if (data.workshop.preview) setPreview(data.workshop.preview);
+        }
       })
       .catch(() => {
         if (!cancelled) setError("Could not reach Rate Vault.");
@@ -209,6 +218,7 @@ export function RateVaultDesk() {
         workshop?: RateVaultWorkshop;
         publish?: RateVaultPublishStub;
         review?: RateVaultRecognitionReview;
+        preview?: RateVaultPreviewPackage | null;
         confirmed?: RateVaultConfirmedReview;
         error?: string;
       };
@@ -219,6 +229,8 @@ export function RateVaultDesk() {
       if (data.workshop) setWorkshop(data.workshop);
       if (data.publish) setPublish(data.publish);
       if (data.review) setReview(data.review);
+      if (data.preview !== undefined) setPreview(data.preview);
+      else if (data.workshop?.preview) setPreview(data.workshop.preview);
       if (data.confirmed) setConfirmed(data.confirmed);
       return data;
     } catch {
@@ -229,7 +241,7 @@ export function RateVaultDesk() {
     }
   }
 
-  async function recognizeFile(file: File, sourceId?: string) {
+  async function recognizeFile(file: File, sourceId?: string, nextStep?: RateVaultBuilderStepId) {
     const check = checkRateVaultDropFile({ name: file.name, type: file.type, bytes: file.size });
     if (!check.ok) {
       setError(check.error);
@@ -244,12 +256,16 @@ export function RateVaultDesk() {
       sourceId,
     });
     if (data?.review) {
-      setStep("recognize");
+      if (data.review.guessedSiteId) {
+        setPackageSiteId(data.review.guessedSiteId);
+        setSiteId(data.review.guessedSiteId);
+      }
+      setStep(nextStep ?? "recognize");
       setNote("Review the guesses. Confirm before anything is cataloged — this does not write a rate book.");
     }
   }
 
-  async function recognizeLinked(entry: RateVaultSourceEntry) {
+  async function recognizeLinked(entry: RateVaultSourceEntry, nextStep?: RateVaultBuilderStepId) {
     const data = await post({
       action: "recognize",
       fileName: entry.title,
@@ -257,14 +273,21 @@ export function RateVaultDesk() {
       sourceId: entry.id,
     });
     if (data?.review) {
-      setStep("recognize");
-      setNote("Guessed from the Drive title and path. Confirm or correct before mapping.");
+      const site = data.review.guessedSiteId || entry.siteId || RATE_VAULT_DEFAULT_SITE_ID;
+      setPackageSiteId(site);
+      if (entry.siteId) setSiteId(entry.siteId);
+      setStep(nextStep ?? "recognize");
+      setNote(
+        data.preview
+          ? "Visual package loaded from the Wood River B-1 fixture. Confirm or open Burden / Publish to scroll the table."
+          : "Guessed from the Drive title and path. Confirm or correct before mapping.",
+      );
     }
   }
 
-  async function recognizeSourceId(sourceId: string) {
+  async function recognizeSourceId(sourceId: string, nextStep?: RateVaultBuilderStepId) {
     const entry = (workshop?.library.entries ?? []).find((row) => row.id === sourceId);
-    if (entry) await recognizeLinked(entry);
+    if (entry) await recognizeLinked(entry, nextStep);
   }
 
   async function organizeSource(sourceId: string, bucket: { siteId?: string; kind?: string }) {
@@ -282,6 +305,15 @@ export function RateVaultDesk() {
     () => filterRateVaultLibrary(entries ?? [], { siteId, kind, craft, includeArchived: true }),
     [craft, entries, kind, siteId],
   );
+  const woodRiverPrimary = useMemo(
+    () => (entries ?? []).find((row) => isWoodRiverB1Source(row) && row.primary && !row.archived) ?? null,
+    [entries],
+  );
+  const packagePreview = useMemo(() => {
+    if (packageSiteId !== RATE_VAULT_DEFAULT_SITE_ID) return preview?.siteId === packageSiteId ? preview : null;
+    if (preview?.siteId === RATE_VAULT_DEFAULT_SITE_ID) return preview;
+    return defaultRateVaultPreview(RATE_VAULT_DEFAULT_SITE_ID);
+  }, [packageSiteId, preview]);
 
   return (
     <div className="mt-4 space-y-5">
@@ -328,8 +360,8 @@ export function RateVaultDesk() {
             label="Drop a rate sheet on any Builder step"
             note="PDF, Word, or Excel. Same zone on Sources, Recognize, Map, Burden, and Publish. Binaries stay off git."
             ariaLabel="Rate Vault builder drop"
-            onFile={(file) => void recognizeFile(file)}
-            onSource={(sourceId) => void recognizeSourceId(sourceId)}
+            onFile={(file) => void recognizeFile(file, undefined, step === "sources" ? "recognize" : step)}
+            onSource={(sourceId) => void recognizeSourceId(sourceId, step === "sources" ? "recognize" : step)}
           />
         </div>
       </nav>
@@ -345,7 +377,9 @@ export function RateVaultDesk() {
           onSite={setSiteId}
           onKind={setKind}
           onCraft={setCraft}
+          woodRiverPrimary={woodRiverPrimary}
           onRecognize={(entry) => void recognizeLinked(entry)}
+          onOpenPackage={(entry) => void recognizeLinked(entry, "burden")}
           onDrop={(file) => void recognizeFile(file)}
           onOrganize={(sourceId, bucket) => void organizeSource(sourceId, bucket)}
           onAdd={async (payload) => {
@@ -382,25 +416,32 @@ export function RateVaultDesk() {
         <MapCraftsPane
           review={review}
           confirmed={confirmed}
-          onDrop={(file) => void recognizeFile(file)}
-          onSource={(sourceId) => void recognizeSourceId(sourceId)}
+          preview={packagePreview}
+          onDrop={(file) => void recognizeFile(file, undefined, "map-crafts")}
+          onSource={(sourceId) => void recognizeSourceId(sourceId, "map-crafts")}
         />
       ) : null}
 
       {step === "burden" ? (
         <BurdenPane
-          onDrop={(file) => void recognizeFile(file)}
-          onSource={(sourceId) => void recognizeSourceId(sourceId)}
+          preview={packagePreview}
+          packageSiteId={packageSiteId}
+          onSite={setPackageSiteId}
+          onDrop={(file) => void recognizeFile(file, undefined, "burden")}
+          onSource={(sourceId) => void recognizeSourceId(sourceId, "burden")}
         />
       ) : null}
 
       {step === "publish" ? (
         <PublishPane
           publish={publish}
+          preview={packagePreview}
+          packageSiteId={packageSiteId}
           busy={busy}
+          onSite={setPackageSiteId}
           onPublish={() => void post({ action: "publish" })}
-          onDrop={(file) => void recognizeFile(file)}
-          onSource={(sourceId) => void recognizeSourceId(sourceId)}
+          onDrop={(file) => void recognizeFile(file, undefined, "publish")}
+          onSource={(sourceId) => void recognizeSourceId(sourceId, "publish")}
         />
       ) : null}
     </div>
@@ -450,10 +491,12 @@ function SourcesPane({
   kind,
   craft,
   busy,
+  woodRiverPrimary,
   onSite,
   onKind,
   onCraft,
   onRecognize,
+  onOpenPackage,
   onDrop,
   onOrganize,
   onAdd,
@@ -464,10 +507,12 @@ function SourcesPane({
   kind: string;
   craft: string;
   busy: boolean;
+  woodRiverPrimary: RateVaultSourceEntry | null;
   onSite: (value: string) => void;
   onKind: (value: string) => void;
   onCraft: (value: string) => void;
   onRecognize: (entry: RateVaultSourceEntry) => void;
+  onOpenPackage: (entry: RateVaultSourceEntry) => void;
   onDrop: (file: File) => void;
   onOrganize: (sourceId: string, bucket: { siteId?: string; kind?: string }) => void;
   onAdd: (payload: {
@@ -501,8 +546,27 @@ function SourcesPane({
       <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
         {entries.length} shown · {total} indexed. Drag a book onto a site or kind bucket, or drop
         a file into the zone. Phillips 66 only — Wood River, Bayway, Rodeo, Ferndale, Billings,
-        and East Coast COMP.
+        and East Coast COMP. Site filter defaults to Wood River for the demo B-1 package.
       </p>
+
+      {woodRiverPrimary ? (
+        <div className="mt-4 rounded-lg border border-steel px-4 py-4">
+          <p className="text-xs tracking-[0.14em] text-[#5b6f73]">Primary B-1</p>
+          <h4 className="text-lg font-semibold text-[#163038]">{woodRiverPrimary.title}</h4>
+          <p className="mt-1 text-sm leading-6 text-[#5b6f73]">{woodRiverPrimary.note}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className="rounded-lg bg-steel px-4 py-2 text-sm text-white" disabled={busy} onClick={() => onOpenPackage(woodRiverPrimary)}>
+              Open visual package
+            </button>
+            <button type="button" className="job-action" disabled={busy} onClick={() => onRecognize(woodRiverPrimary)}>
+              Recognize
+            </button>
+            <a href={woodRiverPrimary.href} target="_blank" rel="noreferrer" className="job-action inline-flex">
+              Open Drive
+            </a>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         <FieldBlock label="Site">
@@ -808,11 +872,13 @@ function RecognizePane({
 function MapCraftsPane({
   review,
   confirmed,
+  preview,
   onDrop,
   onSource,
 }: {
   review: RateVaultRecognitionReview | null;
   confirmed: RateVaultConfirmedReview | null;
+  preview: RateVaultPreviewPackage | null;
   onDrop: (file: File) => void;
   onSource: (sourceId: string) => void;
 }) {
@@ -820,16 +886,31 @@ function MapCraftsPane({
   const dragFrom = useRef<number | null>(null);
 
   useEffect(() => {
-    setRows(
+    const sniffed =
       review?.sheets.flatMap((sheet, sheetIndex) =>
         sheet.columns.map((column, index) => ({
           id: `${sheet.name}-${sheetIndex}-${index}`,
           header: column.header,
           role: column.role,
         })),
-      ) ?? [],
+      ) ?? [];
+    if (sniffed.length) {
+      setRows(sniffed);
+      return;
+    }
+    setRows(
+      preview
+        ? [
+            { id: "craft", header: "Craft", role: "craft" as const },
+            { id: "position", header: "Position", role: "position" as const },
+            { id: "wage", header: "Base Wage", role: "wage" as const },
+            { id: "fringe", header: "Fringe", role: "fringe" as const },
+            { id: "burden", header: "Burden", role: "burden" as const },
+            { id: "bill", header: "Bill Rate", role: "bill" as const },
+          ]
+        : [],
     );
-  }, [review]);
+  }, [preview, review]);
 
   return (
     <section className="plant-card px-5 py-5">
@@ -883,21 +964,57 @@ function MapCraftsPane({
           ))}
         </ul>
       ) : (
-        <p className="mt-4 text-sm text-[#5b6f73]">No header sniff yet. Drop an Excel sheet to see craft / wage / fringe columns.</p>
+        <p className="mt-4 text-sm text-[#5b6f73]">
+          {preview
+            ? "Wood River B-1 fixture columns are ready. Confirm recognition, or drop a workbook to re-sniff."
+            : "No header sniff yet. Drop an Excel sheet to see craft / wage / fringe columns."}
+        </p>
       )}
     </section>
   );
 }
 
 function BurdenPane({
+  preview,
+  packageSiteId,
+  onSite,
   onDrop,
   onSource,
 }: {
+  preview: RateVaultPreviewPackage | null;
+  packageSiteId: string;
+  onSite: (value: string) => void;
   onDrop: (file: File) => void;
   onSource: (sourceId: string) => void;
 }) {
   return (
     <div className="space-y-5">
+      <section className="plant-card px-5 py-5">
+        <p className="text-xs tracking-[0.14em] text-[#5b6f73]">Burden / build</p>
+        <h3 className="text-xl font-semibold text-[#163038]">Visual rate package</h3>
+        <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
+          Friendlier than a raw Exhibit B-1, same guts: position, wage, fringe, burden, bill.
+          Site defaults to Wood River. Selecting the catalog card loads this table without the
+          24 MB workbook.
+        </p>
+        <div className="mt-4 max-w-xs">
+          <RateVaultSitePicker siteId={packageSiteId} onSite={onSite} />
+        </div>
+        <div className="mt-4">
+          <RateVaultFileDrop
+            label="Drop a B-1 or hall sheet onto Burden"
+            note="Library cards populate the Wood River fixture. A later drop can replace it. File stays off git."
+            ariaLabel="Burden / build upload"
+            onFile={onDrop}
+            onSource={onSource}
+          />
+        </div>
+        <RateVaultPreviewTables
+          preview={preview}
+          siteId={packageSiteId}
+          emptyNote="No B-1 preview for this site yet. Wood River is seeded — pick it to see the package."
+        />
+      </section>
       <section className="plant-card px-5 py-5">
         <p className="text-xs tracking-[0.14em] text-[#5b6f73]">{RATE_VAULT_CBA_PLA_SECTION.title}</p>
         <h3 className="text-xl font-semibold text-[#163038]">{RATE_VAULT_CBA_PLA_SECTION.label}</h3>
@@ -951,13 +1068,19 @@ function BurdenPane({
 
 function PublishPane({
   publish,
+  preview,
+  packageSiteId,
   busy,
+  onSite,
   onPublish,
   onDrop,
   onSource,
 }: {
   publish: RateVaultPublishStub | null;
+  preview: RateVaultPreviewPackage | null;
+  packageSiteId: string;
   busy: boolean;
+  onSite: (value: string) => void;
   onPublish: () => void;
   onDrop: (file: File) => void;
   onSource: (sourceId: string) => void;
@@ -966,9 +1089,12 @@ function PublishPane({
     <section className="plant-card px-5 py-5">
       <h3 className="text-xl font-semibold text-[#163038]">Publish preview</h3>
       <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
-        Publish is a stub. Live Rate Tables stay on Jobs / Rates. Drop a B-1 or builder book to
-        recognize it against this preview — it will not publish itself.
+        Scroll the filled Wood River package. Publish is still a stub — it does not write live
+        estimate Rate Tables. Drop a B-1 or drag the library card to refresh the preview.
       </p>
+      <div className="mt-4 max-w-xs">
+        <RateVaultSitePicker siteId={packageSiteId} onSite={onSite} />
+      </div>
       <div className="mt-4">
         <RateVaultFileDrop
           label="Drop a B-1 or rate pack for preview"
@@ -978,6 +1104,11 @@ function PublishPane({
           onSource={onSource}
         />
       </div>
+      <RateVaultPreviewTables
+        preview={preview}
+        siteId={packageSiteId}
+        emptyNote="No B-1 preview for this site yet. Wood River is seeded — pick it to scroll the package."
+      />
       <button
         type="button"
         className="mt-4 rounded-lg bg-steel px-4 py-2 text-sm text-white"
@@ -987,6 +1118,7 @@ function PublishPane({
         Publish stub
       </button>
       {publish ? <p className="mt-3 text-sm text-[#163038]">{publish.note}</p> : null}
+      <p className="mt-3 text-sm text-[#5b6f73]">Live write to Jobs / Rates stays stubbed.</p>
     </section>
   );
 }
