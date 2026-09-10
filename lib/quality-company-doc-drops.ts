@@ -1,6 +1,7 @@
 import { hasBuildDesk } from "./desk-role.ts";
-import { listStoredBriefs, publicBrief, saveStoredBrief } from "./lead-brief-store.ts";
+import { leadBriefAdapter, listStoredBriefs, publicBrief, saveStoredBrief } from "./lead-brief-store.ts";
 import type { LeadFile, PublicLeadBrief } from "./lead-briefs.ts";
+import { persistQualityVaultFiles, QUALITY_VAULT_WRITE_ERROR } from "./quality-vault.ts";
 import {
   isQualityCompanyDocId,
   mergeQualityCompanyDocFiles,
@@ -50,6 +51,12 @@ export async function saveQualityCompanyDocDrop(user: QualityDocUser, input: Qua
   const prior = existing[0];
   const merged = mergeQualityCompanyDocFiles(prior?.files ?? [], check.accepted as LeadFile[]);
   try {
+    await persistQualityVaultFiles(leadBriefAdapter(), {
+      companyId: home,
+      folderId,
+      jobId,
+      companyDocs: true,
+    }, check.accepted as LeadFile[]);
     const brief = await saveStoredBrief({
       kind: "quality",
       who,
@@ -66,12 +73,14 @@ export async function saveQualityCompanyDocDrop(user: QualityDocUser, input: Qua
       brief: publicBrief(brief),
       rejected: check.rejected,
       kept: merged.map((file) => file.name),
+      stored: true as const,
+      store: "drive" as const,
     };
   } catch {
     return {
       ok: false as const,
       status: 503,
-      error: "Could not save. Those files are still on this desk — try again.",
+      error: QUALITY_VAULT_WRITE_ERROR,
       rejected: check.rejected,
     };
   }

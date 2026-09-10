@@ -36,6 +36,7 @@ Local owner password is the value in `.env.example` / `.env.local` (`OWNER_PASSW
 | `GOOGLE_CLIENT_EMAIL` / `GOOGLE_PRIVATE_KEY` | Optional alternative to the JSON blob. |
 | `DRIVE_ESTIMATES_FOLDER_ID` | Optional. Estimates room folder id. Server-only. Do not expose to testers. |
 | `DRIVE_DATA_FOLDER_ID` | Optional. Data room for companies, Activity, tickets, inbox, lead briefs, seat hashes, and owner settings. Falls back to the Estimates room. Server-only. Do not expose to testers. |
+| `DRIVE_QUALITY_FOLDER_ID` | Optional. Quality vault room. Default is the existing Hit Squad Quality folder (company → site → job). Quality uploads fail closed if Drive is down. Server-only. |
 
 The session cookie is named `hs_session`. It is `HttpOnly`, `Path=/`, `SameSite=Lax`, and `Secure` when `AUTH_COOKIE_SECURE=true` (or when `NODE_ENV=production` unless you force it off).
 

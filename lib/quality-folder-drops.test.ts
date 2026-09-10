@@ -246,7 +246,7 @@ describe("Quality folder vault drops", { concurrency: 1 }, () => {
     if (failed.ok) return;
     assert.match(failed.error, /Could not save/);
     const leftover = await listStoredBriefs("quality", chance.email, { jobId: "job-b17", folderId: "travelers" });
-    assert.equal(leftover[0]?.files[0]?.name, "traveler.pdf");
+    assert.equal(leftover.length, 0);
   });
 
   it("requires a job and a known folder before any write", async () => {

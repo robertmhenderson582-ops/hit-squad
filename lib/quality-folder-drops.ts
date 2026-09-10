@@ -1,5 +1,6 @@
 import { hasBuildDesk } from "./desk-role.ts";
 import {
+  leadBriefAdapter,
   listStoredBriefs,
   publicBrief,
   saveStoredBrief,
@@ -18,6 +19,7 @@ import {
   showsQualityFolderDesk,
   type QualityFolderId,
 } from "./quality-folders.ts";
+import { persistQualityVaultFiles, QUALITY_VAULT_WRITE_ERROR } from "./quality-vault.ts";
 import type { PublicUser } from "./types.ts";
 
 export type QualityDropUser = Pick<PublicUser, "email" | "name" | "role">;
@@ -27,6 +29,9 @@ export type QualityFolderSaveInput = {
   folderId?: unknown;
   files?: unknown;
   companyId?: unknown;
+  companyLabel?: unknown;
+  siteLabel?: unknown;
+  jobLabel?: unknown;
 };
 
 function qualityDropCompanyId(input: { companyId?: unknown }) {
@@ -89,7 +94,18 @@ export async function saveQualityFolderDrop(user: QualityDropUser, input: Qualit
   const existing = await listStoredBriefs("quality", who, { jobId, folderId, companyId });
   const prior = existing[0];
   const merged = mergeQualityFolderFiles(prior?.files ?? [], check.accepted as LeadFile[]);
+  const companyLabel = typeof input.companyLabel === "string" ? input.companyLabel : undefined;
+  const siteLabel = typeof input.siteLabel === "string" ? input.siteLabel : undefined;
+  const jobLabel = typeof input.jobLabel === "string" ? input.jobLabel : undefined;
   try {
+    await persistQualityVaultFiles(leadBriefAdapter(), {
+      companyId,
+      companyLabel,
+      siteLabel,
+      jobId,
+      jobLabel,
+      folderId,
+    }, check.accepted as LeadFile[]);
     const brief = await saveStoredBrief({
       kind: "quality",
       who,
@@ -106,12 +122,14 @@ export async function saveQualityFolderDrop(user: QualityDropUser, input: Qualit
       brief: publicBrief(brief),
       rejected: check.rejected,
       kept: merged.map((file) => file.name),
+      stored: true as const,
+      store: "drive" as const,
     };
   } catch {
     return {
       ok: false as const,
       status: 503,
-      error: "Could not save. Those files are still on this desk — try again.",
+      error: QUALITY_VAULT_WRITE_ERROR,
       rejected: check.rejected,
     };
   }
@@ -143,7 +161,7 @@ export function qualityFolderRowId(who: string, jobId: string, folderId: Quality
 }
 
 export function qualityDropLeaks(payload: unknown) {
-  return /quality-briefs\.json|1A7anV1UKx8m7|141Js9RQZKXq|1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|drive\.google\.com|owner vault/i.test(
+  return /quality-briefs\.json|1A7anV1UKx8m7|141Js9RQZKXq|1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|DRIVE_QUALITY|drive\.google\.com|owner vault/i.test(
     JSON.stringify(payload ?? ""),
   );
 }

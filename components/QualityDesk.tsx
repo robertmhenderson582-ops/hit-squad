@@ -10,7 +10,7 @@ import { RollingChartMap } from "@/components/RollingChartMap";
 import { useQualityHseJobTree } from "@/components/useQualityHseJobTree";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { assignedCompanyId, companyScopeFor, inferCompanyIdFromParts } from "@/lib/companies";
+import { assignedCompanyId, companyName, companyScopeFor, inferCompanyIdFromParts, type CompanyId } from "@/lib/companies";
 import { qualityRailCompanyId } from "@/lib/quality-company-docs";
 import { showsQualityFolderDesk } from "@/lib/quality-folders";
 import { canSeeMadisonManuals, madisonManualLabel, type QualityDay1 } from "@/lib/quality-day1";
@@ -193,7 +193,15 @@ export function QualityDesk() {
               the live tube map stay on this job below.
             </p>
           ) : null}
-          {showFolderDesk ? <QualityFolderDrop jobId={pick.jobId} companyId={companyId} /> : null}
+          {showFolderDesk ? (
+            <QualityFolderDrop
+              jobId={pick.jobId}
+              companyId={companyId}
+              companyLabel={companyId ? companyName(companyId as CompanyId) : undefined}
+              siteLabel={selectedSite?.name}
+              jobLabel={selectedJob?.title || selectedJob?.code}
+            />
+          ) : null}
           {manuals ? <p className="text-sm">{madisonManualLabel("quality")}</p> : null}
 
           <div

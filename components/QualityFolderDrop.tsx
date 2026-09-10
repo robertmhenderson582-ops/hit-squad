@@ -18,18 +18,37 @@ import {
   writeQualityFolderPick,
   type QualityFolderId,
 } from "@/lib/quality-folders";
+import {
+  QUALITY_UNVAULTED_MARK,
+  QUALITY_VAULT_WRITE_ERROR,
+  mergeVaultedQualityFiles,
+  qualityVaultStored,
+  type QualityListedFile,
+} from "@/lib/quality-vault-shared";
 
 function dropFileFromBrowser(file: File) {
   return { name: file.name, type: file.type, bytes: file.size };
 }
 
-export function QualityFolderDrop({ jobId, companyId }: { jobId: string; companyId?: string }) {
+export function QualityFolderDrop({
+  jobId,
+  companyId,
+  companyLabel,
+  siteLabel,
+  jobLabel,
+}: {
+  jobId: string;
+  companyId?: string;
+  companyLabel?: string;
+  siteLabel?: string;
+  jobLabel?: string;
+}) {
   const folders = qualityFoldersFor(companyId || "madison");
   const { user } = useSession();
   const selectRef = useRef<HTMLSelectElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [folderId, setFolderId] = useState<QualityFolderId>(() => readQualityFolderPick(jobId));
-  const [files, setFiles] = useState<LeadFile[]>([]);
+  const [files, setFiles] = useState<QualityListedFile[]>([]);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [noteKind, setNoteKind] = useState<"ok" | "warn" | "err">("ok");
@@ -39,7 +58,7 @@ export function QualityFolderDrop({ jobId, companyId }: { jobId: string; company
   useEffect(() => {
     const next = readQualityFolderPick(jobId);
     setFolderId(next);
-    setFiles(readQualityFolderFiles(jobId, next));
+    setFiles(mergeVaultedQualityFiles([], readQualityFolderFiles(jobId, next)));
     setNote(null);
     setSavedAt(null);
     const frame = window.requestAnimationFrame(() => selectRef.current?.focus());
@@ -58,28 +77,23 @@ export function QualityFolderDrop({ jobId, companyId }: { jobId: string; company
         const data = (await response.json().catch(() => ({}))) as {
           files?: Array<{ name?: string; type?: string }>;
           briefs?: Array<{ savedAt?: string; files?: Array<{ name?: string; type?: string }> }>;
+          store?: string;
         };
-        if (cancelled || !response.ok) return;
-        const listed = Array.isArray(data.files)
-          ? data.files
-          : data.briefs?.[0]?.files ?? [];
-        const names = listed.map((file) => file.name).filter((name): name is string => Boolean(name));
-        if (!names.length) return;
-        setFiles((current) => {
-          const kept = current.filter((file) => names.includes(file.name) || Boolean(file.data));
-          const extras = names
-            .filter((name) => !kept.some((file) => file.name === name))
-            .map((name) => ({
-              name,
-              type: listed.find((file) => file.name === name)?.type || "application/octet-stream",
-              data: "",
-            }));
-          return [...kept, ...extras];
-        });
-        const stamp = data.briefs?.[0]?.savedAt;
+        if (cancelled) return;
+        const listed = response.ok
+          ? Array.isArray(data.files)
+            ? data.files
+            : data.briefs?.[0]?.files ?? []
+          : [];
+        const vaulted = qualityVaultStored(data.store, response.ok) ? listed : [];
+        setFiles(mergeVaultedQualityFiles(vaulted, readQualityFolderFiles(jobId, folderId)));
+        const stamp = vaulted.length ? data.briefs?.[0]?.savedAt : undefined;
         if (stamp) setSavedAt(stamp);
+        else setSavedAt(null);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setFiles(mergeVaultedQualityFiles([], readQualityFolderFiles(jobId, folderId)));
+      });
     return () => {
       cancelled = true;
     };
@@ -88,7 +102,7 @@ export function QualityFolderDrop({ jobId, companyId }: { jobId: string; company
   function pickFolder(next: QualityFolderId) {
     setFolderId(next);
     writeQualityFolderPick(jobId, next);
-    setFiles(readQualityFolderFiles(jobId, next));
+    setFiles(mergeVaultedQualityFiles([], readQualityFolderFiles(jobId, next)));
     setNote(null);
     setSavedAt(null);
   }
@@ -103,6 +117,9 @@ export function QualityFolderDrop({ jobId, companyId }: { jobId: string; company
         jobId,
         folderId,
         companyId: companyId || undefined,
+        companyLabel: companyLabel || undefined,
+        siteLabel: siteLabel || undefined,
+        jobLabel: jobLabel || undefined,
         files: nextFiles.filter((file) => file.data),
       }),
     });
@@ -110,9 +127,11 @@ export function QualityFolderDrop({ jobId, companyId }: { jobId: string; company
       error?: string;
       rejected?: Array<{ name?: string; error?: string }>;
       brief?: { savedAt?: string; files?: Array<{ name?: string; type?: string }> };
+      store?: string;
+      stored?: boolean;
     };
-    if (!response.ok) {
-      throw new Error(typeof data.error === "string" && data.error ? data.error : "Could not save. Try again.");
+    if (!response.ok || !qualityVaultStored(data.store, data.stored)) {
+      throw new Error(typeof data.error === "string" && data.error ? data.error : QUALITY_VAULT_WRITE_ERROR);
     }
     return data;
   }
@@ -141,12 +160,12 @@ export function QualityFolderDrop({ jobId, companyId }: { jobId: string; company
           .filter((file) => check.accepted.some((row) => row.name === file.name))
           .map(fileToLead),
       );
-      const next = mergeQualityFolderFiles(files, incoming);
-      setFiles(next);
-      writeQualityFolderFiles(jobId, folderId, next);
-      if (incoming.length) noteFeatureTrail("import");
-      const saved = await persistVault(next);
+      const saved = await persistVault(incoming);
+      const vaulted = saved.brief?.files ?? [];
+      setFiles(mergeVaultedQualityFiles(vaulted, []));
+      writeQualityFolderFiles(jobId, folderId, []);
       if (saved.brief?.savedAt) setSavedAt(saved.brief.savedAt);
+      if (incoming.length) noteFeatureTrail("import");
       const skipped = check.rejected.map((row) => `${row.name}: ${row.error}`);
       setNoteKind(skipped.length ? "warn" : "ok");
       setNote(
@@ -158,11 +177,29 @@ export function QualityFolderDrop({ jobId, companyId }: { jobId: string; company
         ].join(" "),
       );
     } catch (error) {
+      const incoming = await Promise.all(
+        picked
+          .filter((file) => check.accepted.some((row) => row.name === file.name))
+          .map(fileToLead),
+      ).catch(() => [] as LeadFile[]);
+      const leftover = mergeQualityFolderFiles(
+        files.filter((file) => !file.vaulted && file.data).map((file) => ({
+          name: file.name,
+          type: file.type,
+          data: file.data || "",
+        })),
+        incoming,
+      );
+      writeQualityFolderFiles(jobId, folderId, leftover);
+      setFiles(mergeVaultedQualityFiles(
+        files.filter((file) => file.vaulted),
+        leftover,
+      ));
       setNoteKind("err");
       setNote(
         error instanceof Error && error.message
-          ? `${error.message} Files stay on this desk until they save.`
-          : "Could not save. Files stay on this desk until they save.",
+          ? error.message
+          : QUALITY_VAULT_WRITE_ERROR,
       );
     } finally {
       setSaving(false);
@@ -178,8 +215,8 @@ export function QualityFolderDrop({ jobId, companyId }: { jobId: string; company
     <section className="plant-card px-4 py-4">
       <h2 className="font-display text-xl">Quality folders</h2>
       <p className="mt-2 text-sm">
-        Pick a folder, then drop files into it. Drops stay on this job. Testers only see their own
-        files.
+        Pick a folder, then drop files into it. Success shows only after the Quality vault
+        confirms the write. Testers only see their own files.
       </p>
       <div className="mt-3 max-w-md">
         <FieldBlock label="Folder">
@@ -236,7 +273,7 @@ export function QualityFolderDrop({ jobId, companyId }: { jobId: string; company
           {listed.map((file) => (
             <li key={file.name}>
               {file.name}
-              {file.data ? "" : " · on this Quality room"}
+              {file.vaulted ? "" : ` · ${QUALITY_UNVAULTED_MARK}`}
             </li>
           ))}
         </ul>
