@@ -46,7 +46,8 @@ describe("Rate Vault recognition", () => {
     assert.equal(guessRateVaultSite("PF - L 553 WRR 2025 P66 Wage Rate Sheet"), "wood-river");
     assert.equal(guessRateVaultSite("Bayway Exhibit B-1 UPDATED OE 08.20.26"), "bayway");
     assert.equal(guessRateVaultSite("Rodeo Exhibit B-1"), "rodeo");
-    assert.equal(guessRateVaultSite("wage rates MONROE ENERGY"), "monroe");
+    assert.equal(guessRateVaultSite("wage rates MONROE ENERGY"), null);
+    assert.equal(guessRateVaultSite("Yates Rate builder Base Rate"), null);
     assert.equal(guessRateVaultLocal("L - 420 PIPEFITTERS"), "420");
     assert.equal(guessColumnRole("Base Wage (BW)"), "wage");
     assert.equal(guessColumnRole("H&W / Pension"), "fringe");

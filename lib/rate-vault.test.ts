@@ -10,11 +10,14 @@ import {
   RATE_VAULT_CBA_PLA_ID,
   RATE_VAULT_CBA_PLA_RULES,
   RATE_VAULT_CBA_PLA_SECTION,
+  RATE_VAULT_CLIENT,
   RATE_VAULT_HREF,
   RATE_VAULT_LIBRARY_ID,
   RATE_VAULT_OWNER_NOTE,
   RATE_VAULT_PRIVILEGE,
+  RATE_VAULT_SCOPE_NOTE,
   RATE_VAULT_SECTIONS,
+  RATE_VAULT_SITES,
   RATE_VAULT_SOURCE_KINDS,
   RATE_VAULT_STATE_LAW_ID,
   RATE_VAULT_STATE_LAW_RULES,
@@ -24,6 +27,8 @@ import {
   emptyCbaPlaVault,
   emptyRateVaultWorkshop,
   emptyStateLawVault,
+  isRateVaultSiteId,
+  looksLikeForeignRateVaultSite,
   moveRateVaultSource,
   rateVaultAccess,
   reorderRateVaultItems,
@@ -110,8 +115,29 @@ describe("Rate Vault scaffold", () => {
       "union-terms",
       "other",
     ]);
+    assert.equal(RATE_VAULT_CLIENT, "Phillips 66");
+    assert.match(RATE_VAULT_SCOPE_NOTE, /Phillips 66 exclusive/i);
+    assert.match(RATE_VAULT_SCOPE_NOTE, /James Hutton/);
+    assert.match(RATE_VAULT_SCOPE_NOTE, /P66 procurement/i);
+    assert.deepEqual(
+      RATE_VAULT_SITES.map((site) => site.id),
+      ["wood-river", "bayway", "rodeo", "ferndale", "billings", "east-coast"],
+    );
+    assert.equal(isRateVaultSiteId("monroe"), false);
+    assert.equal(isRateVaultSiteId("yates"), false);
+    assert.equal(looksLikeForeignRateVaultSite("Monroe Energy Trainer"), true);
+    assert.equal(looksLikeForeignRateVaultSite("Plant Yates"), true);
+    assert.equal(looksLikeForeignRateVaultSite("Wood River GPPMA"), false);
     const seeded = buildRateVaultWorkshop();
     assert.equal(seeded.library.entries.length, seedRateVaultLibrary().length);
+    assert.equal(
+      seeded.library.entries.every((row) => !row.siteId || isRateVaultSiteId(row.siteId)),
+      true,
+    );
+    assert.equal(
+      seeded.library.entries.every((row) => !looksLikeForeignRateVaultSite([row.title, row.note, row.siteId].join(" "))),
+      true,
+    );
     assert.equal(workshop.library.entries.length, 0);
     assert.equal(workshop.steps, RATE_VAULT_BUILDER_STEPS);
     assert.equal(workshop.review, null);
@@ -195,7 +221,9 @@ describe("Rate Vault scaffold", () => {
     assert.match(dock, /RATE_VAULT_DOOR/);
     assert.match(dock, /role="radio"/);
     assert.match(desk, /RATE_VAULT_OWNER_NOTE/);
+    assert.match(desk, /RATE_VAULT_SCOPE_NOTE/);
     assert.match(desk, /RATE_VAULT_BUILDER_STEPS/);
+    assert.doesNotMatch(desk, /Monroe|Yates/);
     assert.match(vaultModule, /Hall uploads/);
     assert.match(vaultModule, /Contractor books/);
     assert.match(vaultModule, /CBA \/ PLA/);
@@ -231,11 +259,17 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /cba-pla/);
     assert.match(docs, /state-law/);
     assert.match(docs, /not nested under P66/);
+    assert.match(docs, /Phillips 66 exclusive/i);
+    assert.match(docs, /James Hutton/);
+    assert.match(docs, /P66 procurement/i);
     assert.match(docs, /files stay on Drive/i);
     assert.match(docs, /review card/i);
     assert.match(docs, /never commit/i);
     assert.match(docs, /Drag and drop/);
     assert.match(docs, /Quality folders/);
+    assert.doesNotMatch(library, /siteId:\s*"monroe"/);
+    assert.doesNotMatch(library, /Monroe Energy/);
+    assert.doesNotMatch(vaultModule, /id: "monroe"/);
     assert.match(desk, /\/api\/rate-vault/);
     assert.match(gate, /canSeeRateVaultDoor/);
     assert.match(gate, /router.replace\("\/"\)/);

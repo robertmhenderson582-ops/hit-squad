@@ -24,12 +24,12 @@ describe("Rate Vault owner catalog store", { concurrency: 1 }, () => {
     const drive = memoryDrive();
     useRateVaultStoreForTests(drive);
     const saved = await addRateVaultOwnerSource({
-      title: "Extra Monroe wage sheet.pdf",
+      title: "Extra Wood River wage sheet.pdf",
       driveId: "1BBBBBBBBBBBBBBBBBBBBBBBBBB",
       kind: "local-craft-sheet",
-      siteId: "monroe",
+      siteId: "wood-river",
       craft: "Pipefitter",
-      local: "420",
+      local: "553",
       data: "SHOULD-NOT-PERSIST",
     });
     assert.equal(saved.ok, true);
@@ -40,9 +40,9 @@ describe("Rate Vault owner catalog store", { concurrency: 1 }, () => {
     const review = await confirmRateVaultReview({
       sourceId: saved.entry.id,
       kind: "local-craft-sheet",
-      siteId: "monroe",
+      siteId: "wood-river",
       craft: "Pipefitter",
-      local: "420",
+      local: "553",
       confirmedAt: "2026-09-10T00:00:00.000Z",
       writesRateBook: false,
     });
@@ -50,7 +50,7 @@ describe("Rate Vault owner catalog store", { concurrency: 1 }, () => {
 
     const extras = await listRateVaultOwnerLibrary();
     const reviews = await listRateVaultReviews();
-    assert.equal(extras[0]?.title, "Extra Monroe wage sheet.pdf");
+    assert.equal(extras[0]?.title, "Extra Wood River wage sheet.pdf");
     assert.equal(reviews[0]?.writesRateBook, false);
 
     const vault = await readVaultJson<{ extras?: Array<Record<string, unknown>>; reviews?: unknown[] }>(

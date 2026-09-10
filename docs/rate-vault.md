@@ -2,6 +2,8 @@
 
 Owner-eyes-only B-1 / rate builder workshop inside Hit Squad. Default grant is the owner seat. Settings → Privileges can assign `rate-vault` later without a code change. Madison seats stay out unless that privilege is granted.
 
+**Rate Vault is Phillips 66 exclusive** — James Hutton / P66 procurement lane. Site pickers, seed catalog, CBA/PLA keys, state-law keys, and B-1 Builder lists only cover P66 Hit Squad plants (Wood River, Bayway, Rodeo, Ferndale, Billings) plus East Coast COMP. Monroe Energy, Yates / Georgia Power, and any other non-P66 client or refinery are out of this vault. Other clients get their own vault later if ever.
+
 ## What this module owns
 
 | Surface | Path |
@@ -28,7 +30,7 @@ The catalog is **Drive file id + metadata only**. Never commit P66 / Madison rat
 
 Seeded kinds: `cba`, `pla`, `gppma`, `local-craft-sheet`, `b1-exhibit`, `rate-builder`, `comp`, `union-terms`, `other`.
 
-Sites indexed at minimum: Wood River, Bayway, Rodeo, Monroe (plus Ferndale / East Coast / Billings when a book points there). Prefer the latest book per site. Older B-1 faces stay in the catalog as archived / not primary.
+Sites indexed: Wood River, Bayway, Rodeo, Ferndale, Billings, and East Coast COMP. Prefer the latest book per site. Older B-1 faces stay in the catalog as archived / not primary. Ambiguous folder refs and clearly non-P66 books (Monroe PLA / Local 420 / Exhibit C Monroe, Yates) stay out of the default seed rather than appearing as a foreign site.
 
 Owner-added rows persist as metadata in `rate-vault.json` on Drive (`RATE_VAULT_LIBRARY_KIND`). That file must not contain file bytes.
 
