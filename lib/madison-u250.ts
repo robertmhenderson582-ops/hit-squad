@@ -165,8 +165,8 @@ export function rodeoU250FilledSnapshot(
  * matches the live lock.
  */
 export function shouldFillRodeoU250Crew(pack?: { packId?: string; crew?: unknown } | null) {
-  if (!isRodeoU250PackId(pack?.packId)) return false;
-  if (!crewHasRows(pack?.crew)) return true;
+  if (!pack || !isRodeoU250PackId(pack.packId)) return false;
+  if (!crewHasRows(pack.crew)) return true;
   return !checkRodeoU250PackHours(pack.crew as never).ok;
 }
 
