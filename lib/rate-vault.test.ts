@@ -95,7 +95,7 @@ describe("Rate Vault scaffold", () => {
     const layout = source("../app/rate-vault/layout.tsx");
     const api = source("../app/api/rate-vault/route.ts");
     const server = source("./rate-vault-server.ts");
-    const module = source("./rate-vault.ts");
+    const vaultModule = source("./rate-vault.ts");
     const privileges = source("./privileges.ts");
 
     assert.match(dock, /homeDockTilesForViewer/);
@@ -103,10 +103,10 @@ describe("Rate Vault scaffold", () => {
     assert.match(dock, /role="radio"/);
     assert.match(desk, /RATE_VAULT_OWNER_NOTE/);
     assert.match(desk, /RATE_VAULT_SECTIONS/);
-    assert.match(module, /Hall uploads/);
-    assert.match(module, /Contractor books/);
-    assert.match(module, /P66 \/ site rules/);
-    assert.match(module, /Publish rate package/);
+    assert.match(vaultModule, /Hall uploads/);
+    assert.match(vaultModule, /Contractor books/);
+    assert.match(vaultModule, /P66 \/ site rules/);
+    assert.match(vaultModule, /Publish rate package/);
     assert.match(desk, /\/api\/rate-vault/);
     assert.match(gate, /canSeeRateVaultDoor/);
     assert.match(gate, /router.replace\("\/"\)/);
@@ -120,7 +120,7 @@ describe("Rate Vault scaffold", () => {
     assert.match(api, /stubPublishRateVault/);
     assert.match(server, /canSeeRateVault\(user\)/);
     assert.match(privileges, /"rate-vault"/);
-    assert.doesNotMatch(module, FORBIDDEN_IMPORT);
+    assert.doesNotMatch(vaultModule, FORBIDDEN_IMPORT);
     assert.doesNotMatch(server, FORBIDDEN_IMPORT);
     assert.doesNotMatch(api, FORBIDDEN_IMPORT);
     assert.doesNotMatch(desk, FORBIDDEN_IMPORT);
