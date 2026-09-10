@@ -33,6 +33,7 @@ import {
   JOB_SETUP_LABOR_CONT_CELL,
   JOB_SETUP_MONEY_TITLE,
   JOB_SETUP_MORE_CELL,
+  JOB_SETUP_PD_MODE_CELL,
   JOB_SETUP_HOLIDAYS_TITLE,
   JOB_SETUP_HOLIDAY_START_ROW,
   JOB_SETUP_HOLIDAY_MAX,
@@ -89,7 +90,14 @@ import {
 } from "./equipment-sheet.ts";
 import { type MiscLine, type OtherCostSheet, type TravelKind, type TravelLine } from "./other-cost.ts";
 import type { B2Period } from "./b2-east-coast.ts";
-import { hydrateHolidays, isStaffSeat, type ClockOverride } from "./hours-clock.ts";
+import {
+  DEFAULT_PER_DIEM_MODE,
+  hydrateHolidays,
+  hydratePerDiemMode,
+  isStaffSeat,
+  type ClockOverride,
+  type PerDiemMode,
+} from "./hours-clock.ts";
 import type { EstimateXlsxCrew } from "./estimate-xlsx.ts";
 import {
   cascadePhases,
@@ -338,8 +346,22 @@ function applyTypedHourPolicy(blocks: ImportedBlock[]): { blocks: ImportedBlock[
   return { blocks: next, warnings };
 }
 
-function dayLive(day: ImportedDay) {
-  return day.hc > 0 || day.pd > 0;
+function dayHasLabor(day: Pick<ImportedDay, "hc">) {
+  return day.hc > 0;
+}
+
+function isSevenDayAutoPd(
+  day: Pick<ImportedDay, "hc" | "pd">,
+  pattern: Pick<ImportedDay, "pd">,
+  mode: PerDiemMode,
+) {
+  return mode === "seven-day" && day.hc <= 0 && sameQty(day.pd, pattern.pd) && pattern.pd > 0;
+}
+
+function dayLive(day: ImportedDay, mode: PerDiemMode = DEFAULT_PER_DIEM_MODE, pattern?: Pick<ImportedDay, "pd">) {
+  if (dayHasLabor(day)) return true;
+  if (pattern && isSevenDayAutoPd(day, pattern, mode)) return false;
+  return day.pd > 0;
 }
 
 function dayPattern(day: Pick<ImportedDay, "hc" | "hps" | "pd">) {
@@ -381,7 +403,9 @@ function rangeFromPattern(
     hoursPerShift: pattern.hps,
     perDiemPeople: pattern.pd,
     nightPerDiemPeople: 0,
-    days: days.some(dayLive) ? daysMask(days.filter((day) => dayPattern(day) === dayPattern(pattern) && dayLive(day))) : maskForPhaseDays(phase?.daysPerWeek ?? 5),
+    days: days.some(dayHasLabor)
+      ? daysMask(days.filter((day) => dayPattern(day) === dayPattern(pattern) && dayHasLabor(day)))
+      : maskForPhaseDays(phase?.daysPerWeek ?? 5),
     skipDates,
     phaseId: phase?.id,
     shift: night ? "Nights" : "Days",
@@ -400,8 +424,9 @@ function existingDayPlug(
   ymd: string,
   night: boolean,
   holidays: string[] = [],
+  perDiemMode: PerDiemMode = DEFAULT_PER_DIEM_MODE,
 ): Pick<ImportedDay, "hc" | "hps" | "pd"> {
-  return laborDayPlug(row, ymd, night, holidays);
+  return laborDayPlug(row, ymd, night, holidays, perDiemMode);
 }
 
 function sameQty(left: number, right: number) {
@@ -413,10 +438,11 @@ function existingMatchesDays(
   days: ImportedDay[],
   night: boolean,
   holidays: string[] = [],
+  perDiemMode: PerDiemMode = DEFAULT_PER_DIEM_MODE,
 ): boolean {
   if (!row?.ranges?.length) return false;
   return days.every((day) => {
-    const plug = existingDayPlug(row, day.ymd, night, holidays);
+    const plug = existingDayPlug(row, day.ymd, night, holidays, perDiemMode);
     return sameQty(plug.hc, day.hc) && sameQty(plug.pd, day.pd) && (day.hc <= 0 || sameQty(plug.hps, day.hps) || plug.hps === 0);
   });
 }
@@ -434,10 +460,11 @@ function fillBlankHps(
   phases: PhaseRow[],
   existing?: CraftRow,
   holidays: string[] = [],
+  perDiemMode: PerDiemMode = DEFAULT_PER_DIEM_MODE,
 ): ImportedDay[] {
   return days.map((day) => {
     if (day.hps > 0 || day.hc <= 0) return day;
-    const plug = existing ? existingDayPlug(existing, day.ymd, night, holidays) : { hc: 0, hps: 0, pd: 0 };
+    const plug = existing ? existingDayPlug(existing, day.ymd, night, holidays, perDiemMode) : { hc: 0, hps: 0, pd: 0 };
     const phase = phaseOwningDate(phases, day.ymd);
     const hps = plug.hps || Number(existing?.ranges?.[0]?.hoursPerShift) || Number(phase?.hoursPerDay) || 0;
     return hps > 0 ? { ...day, hps } : day;
@@ -450,10 +477,12 @@ function rangesFromDays(
   phases: PhaseRow[],
   existing?: CraftRow,
   holidays: string[] = [],
+  perDiemMode: PerDiemMode = DEFAULT_PER_DIEM_MODE,
 ): CalendarRange[] {
+  const mode = hydratePerDiemMode(perDiemMode);
   const holidaySet = new Set(hydrateHolidays(holidays));
-  const filled = fillBlankHps(days, night, phases, existing, holidays);
-  if (existing && existingMatchesDays(existing, filled, night, holidays)) {
+  const filled = fillBlankHps(days, night, phases, existing, holidays, mode);
+  if (existing && existingMatchesDays(existing, filled, night, holidays, mode)) {
     return existingRangesForSide(existing, night);
   }
   const byYmd = new Map(filled.map((day) => [day.ymd, day]));
@@ -468,13 +497,18 @@ function rangesFromDays(
       if (owner?.id !== phase.id) return { ...day, hc: 0, hps: 0, st: 0, ot: 0, dt: 0, pd: 0 };
       return day;
     });
-    const firstLive = window.find(dayLive);
+    const firstLive = window.find(dayHasLabor) ?? window.find((day) => day.pd > 0);
     const pattern = firstLive ?? { hc: 0, hps: phase.hoursPerDay || 0, pd: 0 };
     const skipDates = window
-      .filter((day) => !holidaySet.has(day.ymd) && (!dayLive(day) || dayPattern(day) !== dayPattern(pattern)))
+      .filter(
+        (day) =>
+          !holidaySet.has(day.ymd) &&
+          !isSevenDayAutoPd(day, pattern, mode) &&
+          (!dayLive(day, mode, pattern) || dayPattern(day) !== dayPattern(pattern)),
+      )
       .map((day) => day.ymd);
     ranges.push(rangeFromPattern(window, night, phase, phase.start, phase.stop, pattern, skipDates, existing));
-    const extras = window.filter((day) => dayLive(day) && dayPattern(day) !== dayPattern(pattern));
+    const extras = window.filter((day) => dayLive(day, mode, pattern) && dayPattern(day) !== dayPattern(pattern));
     const extraPatterns = new Map<string, ImportedDay[]>();
     for (const day of extras) {
       const key = dayPattern(day);
@@ -489,7 +523,7 @@ function rangesFromDays(
       ranges.push(rangeFromPattern(group, night, phase, start, end, group[0], skip, existing));
     }
   }
-  const leftover = filled.filter((day) => !used.has(day.ymd) && dayLive(day));
+  const leftover = filled.filter((day) => !used.has(day.ymd) && dayLive(day, mode));
   const leftoverPatterns = new Map<string, ImportedDay[]>();
   for (const day of leftover) {
     const key = dayPattern(day);
@@ -569,6 +603,7 @@ function parseJobSetupMoney(ws: ExcelJS.Worksheet | undefined): Partial<JobRates
     cbaIncreaseDate: cellYmd(jobSetupCell(ws, JOB_SETUP_CBA_DATE_CELL).value),
     cbaIncreasePct: asNum(jobSetupCell(ws, JOB_SETUP_CBA_PCT_CELL).value),
     moreFundPerHour: moreEmpty ? null : asNum(moreRaw),
+    perDiemMode: hydratePerDiemMode(asText(jobSetupCell(ws, JOB_SETUP_PD_MODE_CELL).value) || DEFAULT_PER_DIEM_MODE),
     holidays: parseJobSetupHolidays(ws),
   };
 }
@@ -656,14 +691,15 @@ function applyRowFromBlocks(
   blocks: ImportedBlock[],
   phases: PhaseRow[],
   holidays: string[] = [],
+  perDiemMode: PerDiemMode = DEFAULT_PER_DIEM_MODE,
 ): CraftRow {
   const dayBlocks = blocks.filter((block) => !block.night);
   const nightBlocks = blocks.filter((block) => block.night);
   const position = blocks.find((block) => block.position.trim())?.position || existing.position;
   const seeded = { ...existing, position };
   const ranges = [
-    ...dayBlocks.flatMap((block) => rangesFromDays(block.days, false, phases, seeded, holidays)),
-    ...nightBlocks.flatMap((block) => rangesFromDays(block.days, true, phases, seeded, holidays)),
+    ...dayBlocks.flatMap((block) => rangesFromDays(block.days, false, phases, seeded, holidays, perDiemMode)),
+    ...nightBlocks.flatMap((block) => rangesFromDays(block.days, true, phases, seeded, holidays, perDiemMode)),
   ];
   const hours = rollupHours(blocks.flatMap((block) => block.days));
   const night = ranges.some((range) => range.shift === "Nights");
@@ -697,6 +733,7 @@ function applyBlocks(
   phases: PhaseRow[],
   storedRanges?: Record<string, CalendarRange[]>,
   holidays: string[] = [],
+  perDiemMode: PerDiemMode = DEFAULT_PER_DIEM_MODE,
 ): EstimateXlsxCrew {
   const next: EstimateXlsxCrew = {
     staff: [...(base.staff ?? [])],
@@ -729,7 +766,7 @@ function applyBlocks(
         id: spareNew ? fresh.id : group[0].id,
         ranges: storedRangesForRow(storedRanges, group[0].id),
       };
-      const row = applyRowFromBlocks(existing, group, phases, holidays);
+      const row = applyRowFromBlocks(existing, group, phases, holidays, perDiemMode);
       const list = [...(next[lane] as CraftRow[])];
       const index = list.findIndex((item) => item.id === row.id);
       const written = lane === "support" ? hydrateSupportLine({ ...row, billedAs: (row as SupportLine).billedAs ?? "" }) : row;
@@ -958,7 +995,14 @@ export async function parseEstimateXlsx(bytes: Uint8Array): Promise<EstimateImpo
   const blocks = typed.blocks;
   if (!blocks.length && !wb.getWorksheet(ESTIMATE_XLSX_SHEETS.jobSetup)) throw new Error(ESTIMATE_IMPORT_ERROR);
   const crewRanges = parseCrewRanges(wb.getWorksheet(ESTIMATE_XLSX_SHEETS.crewRanges));
-  const crew = applyBlocks({}, bySheet, schedule.phases, crewRanges, jobMeta?.holidays ?? []);
+  const crew = applyBlocks(
+    {},
+    bySheet,
+    schedule.phases,
+    crewRanges,
+    jobMeta?.holidays ?? [],
+    hydratePerDiemMode(jobMeta?.perDiemMode),
+  );
   return {
     ...header,
     schedule,
@@ -1332,7 +1376,19 @@ export function applyEstimateImport(base: EstimatePackSnapshot, imported: Estima
         ? (base.jobMeta as { holidays?: unknown }).holidays
         : []),
   );
-  const crew = applyBlocks(asCrew(base.crew), blocksBySheet(imported.blocks), schedule.phases, imported.crewRanges, holidays);
+  const crew = applyBlocks(
+    asCrew(base.crew),
+    blocksBySheet(imported.blocks),
+    schedule.phases,
+    imported.crewRanges,
+    holidays,
+    hydratePerDiemMode(
+      imported.jobMeta?.perDiemMode ??
+        (base.jobMeta && typeof base.jobMeta === "object" && "perDiemMode" in base.jobMeta
+          ? (base.jobMeta as { perDiemMode?: unknown }).perDiemMode
+          : undefined),
+    ),
+  );
   const costs = applyImportedCosts(base, imported, schedule);
   return {
     ...base,

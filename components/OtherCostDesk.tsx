@@ -32,11 +32,11 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
   const pack = useEstimatePackage();
   const [sheet, setSheet] = useState<OtherCostSheet>(emptyOtherCost);
   const pdDays = useMemo(
-    () => perDiemDaysFromCrew(pack.crew, site, client),
-    [client, pack.crew, site],
+    () => perDiemDaysFromCrew(pack.crew, site, client, pack.jobMeta.holidays ?? [], pack.jobMeta.perDiemMode),
+    [client, pack.crew, pack.jobMeta.holidays, pack.jobMeta.perDiemMode, site],
   );
   const pdDollars = useMemo(
-    () => perDiemDollarsFromCrew(pack.crew, pack.jobMeta, site, client),
+    () => perDiemDollarsFromCrew(pack.crew, pack.jobMeta, site, client, pack.jobMeta.holidays ?? []),
     [client, pack.crew, pack.jobMeta, site],
   );
 
@@ -83,16 +83,17 @@ export function OtherCostDesk({ client, site }: { client?: string; site?: string
   return (
     <div className="space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Other Cost. Per diem uses Job setup Staff vs Craft $ / day and Crew PD days. Travel is Staff
+        Other Cost. Per diem uses Job setup Staff vs Craft $ / day, the Job setup PD days
+        switch (days worked vs 7 days a week), and Crew PD people. Travel is Staff
         and Craft headcount from Crew, then travelers × miles × $ / mile. Mileage on those lines
-        starts from Job setup. Misc is CAT 2 reimbursables — not B-3 small tools.
+        starts from Job setup. Misc is CAT 2 reimbursables — not B-3 small tools. Travel does not keep a second PD book.
       </p>
 
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Per diem</h2>
         <p className="mt-1 text-sm text-[#5b6f73]">
-          Staff + GF use Staff PD / day. Foreman + Direct + Support use Craft PD / day. Change those
-          rates on Job setup.
+          Staff + GF use Staff PD / day. Foreman + Direct + Support use Craft PD / day. Day count
+          follows the Job setup PD days switch. Change those on Job setup.
         </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <p className="text-sm text-[#5b6f73]">

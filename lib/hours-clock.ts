@@ -5,6 +5,32 @@ export type SeatKind = "staff" | "craft";
 export type ClockOverride = "auto" | "comp" | "staff";
 export type RunningClock = "staff" | SiteClock;
 
+/** Job setup PD day count. Default days-worked — weekends/off days do not get PD. */
+export const PER_DIEM_MODES = ["days-worked", "seven-day"] as const;
+export type PerDiemMode = (typeof PER_DIEM_MODES)[number];
+export const DEFAULT_PER_DIEM_MODE: PerDiemMode = "days-worked";
+export const PER_DIEM_MODE_LABELS: Record<PerDiemMode, string> = {
+  "days-worked": "Days worked",
+  "seven-day": "7 days a week",
+};
+
+export function hydratePerDiemMode(raw: unknown): PerDiemMode {
+  const text = String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_]+/g, " ")
+    .replace(/\s+/g, " ");
+  if (text === "seven-day" || text === "seven day" || text === "7-day" || text === "7 day" || text === "7 days a week") {
+    return "seven-day";
+  }
+  if (text === "days-worked" || text === "days worked" || text === "worked") return "days-worked";
+  return DEFAULT_PER_DIEM_MODE;
+}
+
+export function perDiemModeLabel(mode: PerDiemMode = DEFAULT_PER_DIEM_MODE): string {
+  return PER_DIEM_MODE_LABELS[hydratePerDiemMode(mode)];
+}
+
 export type HoursSplit = {
   st: number;
   ot: number;
@@ -37,6 +63,11 @@ export type ComputeRangeInput = {
   skipDates?: string[];
   /** Job-level holidays (YYYY-MM-DD). Unioned with skipDates — no billable hours that day. */
   holidays?: string[];
+  /**
+   * Job setup PD mode. Days worked = labor days (ST/OT/DT). 7 days a week =
+   * every calendar day in this range start–end except skipDates.
+   */
+  perDiemMode?: PerDiemMode;
 };
 
 export type RangeDay = {
@@ -362,7 +393,28 @@ export function computeRangeDaySplits(input: ComputeRangeInput): {
     });
     workedDays += 1;
   }
-  return { raw, head, workedDays, pd: workedDays * Math.max(0, input.perDiemPeople ?? 0) };
+  return { raw, head, workedDays, pd: perDiemDaysForRange(input, workedDays) };
+}
+
+/**
+ * PD people-days for one range/shift.
+ * Days worked: labor days (days-mask, not holiday/skip) × perDiemPeople.
+ * 7 days a week: every calendar day in range start–end × perDiemPeople,
+ * including weekends, days-mask off days, and holidays. skipDates stay out
+ * (person not on site). Window is the seat range, seeded from that phase's
+ * Job setup Start/Stop — not the full job schedule.
+ */
+export function perDiemDaysForRange(input: Pick<ComputeRangeInput, "start" | "end" | "perDiemPeople" | "skipDates" | "perDiemMode">, workedDays: number): number {
+  const people = Math.max(0, input.perDiemPeople ?? 0);
+  if (people <= 0) return 0;
+  if (hydratePerDiemMode(input.perDiemMode) !== "seven-day") return workedDays * people;
+  const skip = new Set(hydrateHolidays(input.skipDates));
+  let days = 0;
+  for (const date of eachDate(input.start, input.end)) {
+    if (skip.has(ymd(date))) continue;
+    days += 1;
+  }
+  return days * people;
 }
 
 export function computeRangeHours(input: ComputeRangeInput): RangeHours {
@@ -423,6 +475,7 @@ export function computeRowHours(
   crewOtAfter8 = false,
   plantCode = "",
   holidays: string[] = [],
+  perDiemMode: PerDiemMode = DEFAULT_PER_DIEM_MODE,
 ): HoursSplit {
   if (!row.position.trim()) {
     return { st: 0, ot: 0, dt: 0, pd: 0, hours: 0, workedDays: 0 };
@@ -453,6 +506,7 @@ export function computeRowHours(
         clockOverride: row.clockOverride ?? "auto",
         skipDates: range.skipDates,
         holidays,
+        perDiemMode,
       }),
     ),
   );

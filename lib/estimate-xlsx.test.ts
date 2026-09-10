@@ -28,6 +28,8 @@ import {
   JOB_SETUP_EQUIP_CONT_CELL,
   JOB_SETUP_LABOR_CONT_CELL,
   JOB_SETUP_MORE_CELL,
+  JOB_SETUP_PD_MODE_CELL,
+  JOB_SETUP_PD_MODE_LABEL,
   JOB_SETUP_MONEY_TITLE,
   JOB_SETUP_HOLIDAYS_TITLE,
   JOB_SETUP_HOLIDAY_START_ROW,
@@ -2667,6 +2669,8 @@ describe("estimate excel export", () => {
     assert.equal(setupCells.get(JOB_SETUP_LABOR_CONT_CELL)?.value, 10);
     assert.equal(setupCells.get(JOB_SETUP_MORE_CELL)?.type, "number");
     assert.equal(setupCells.get(JOB_SETUP_MORE_CELL)?.value, 0);
+    assert.equal(setupCells.get("A26")?.value, JOB_SETUP_PD_MODE_LABEL);
+    assert.equal(setupCells.get(JOB_SETUP_PD_MODE_CELL)?.value, "Days worked");
     assert.equal(setupCells.get(JOB_SETUP_STAFF_PD_CELL)?.note, undefined);
     const staff = sheetOf(sheets, ESTIMATE_XLSX_SHEETS.staff);
     const pdRate = staff?.cells.find((cell) => cell.ref === "D13");

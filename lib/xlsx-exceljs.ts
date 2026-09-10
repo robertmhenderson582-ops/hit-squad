@@ -477,9 +477,11 @@ function isLaborSheet(name: string) {
 /** Yellow HC / HPS / PD count day-grid — same unlocked edit surface as HC. */
 export function isLaborDayInput(sheet: WorkbookSheet, row: number, colNum: number): boolean {
   if (!isLaborSheet(sheet.name) || colNum < LABOR_DATE_FIRST_COL) return false;
-  if (sheet.holidayCols?.some((item) => item.col === colNum)) return false;
   const kind = laborRowKind(sheet.cells, row);
-  return kind === "hc" || kind === "hps" || kind === "pd";
+  // 7-day PD fills weekends/holidays; Nathan still nudges those yellow cells.
+  if (kind === "pd") return true;
+  if (sheet.holidayCols?.some((item) => item.col === colNum)) return false;
+  return kind === "hc" || kind === "hps";
 }
 
 /** Hard count/HPS plugs only — empty unused day cells stay teal, not yellow. */
@@ -1081,6 +1083,14 @@ function paintLaborDayCalendar(
         cell.fill = solid(spacers.has(row) ? LABOR_SPACER : SHEET_VOID_WASH);
         continue;
       }
+      if ((kind === "hc" || kind === "hps" || kind === "pd") && isLaborCountInputCell(cell)) {
+        const pdOnMuted = kind === "pd";
+        if (pdOnMuted || (!holiday.has(col) && !weekend.has(col))) {
+          cell.fill = solid(LABOR_HC_HPS);
+          cell.font = { ...(cell.font ?? {}), color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
+          continue;
+        }
+      }
       if (holiday.has(col)) {
         cell.fill = solid(LABOR_HOLIDAY_FILL);
         cell.font = { ...(cell.font ?? {}), color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
@@ -1091,13 +1101,8 @@ function paintLaborDayCalendar(
         cell.font = { ...(cell.font ?? {}), color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
         continue;
       }
-      if ((kind === "hc" || kind === "hps" || kind === "pd") && isLaborCountInputCell(cell)) {
-        cell.fill = solid(LABOR_HC_HPS);
-        cell.font = { ...(cell.font ?? {}), color: { argb: DARK_TEXT }, name: "Calibri", size: 10 };
-      } else {
-        cell.fill = solid(LABOR_DAY_WASH);
-        cell.font = { ...(cell.font ?? {}), color: { argb: WHITE }, name: "Calibri", size: 10 };
-      }
+      cell.fill = solid(LABOR_DAY_WASH);
+      cell.font = { ...(cell.font ?? {}), color: { argb: WHITE }, name: "Calibri", size: 10 };
     }
   }
 }
@@ -1234,8 +1239,10 @@ function applyLaborChrome(
     };
     ws.addConditionalFormatting({ ref: `${first}6:${last}6`, rules: [weekendRule] });
     for (const block of blocks) {
+      // HC through DT — PD row stays yellow when the mode fills a count.
+      if (block.end - 1 < block.start + 1) continue;
       ws.addConditionalFormatting({
-        ref: `${first}${block.start + 1}:${last}${block.end}`,
+        ref: `${first}${block.start + 1}:${last}${block.end - 1}`,
         rules: [weekendRule],
       });
     }

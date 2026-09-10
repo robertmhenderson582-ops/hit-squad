@@ -364,6 +364,48 @@ export function JobSetupCard({
           </p>
         ) : null}
       </div>
+      <div className="mt-6">
+        <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">PER DIEM DAYS</span>
+        <fieldset className="mt-2 grid gap-2 sm:grid-cols-2">
+          <legend className="sr-only">Per diem day count</legend>
+          {(
+            [
+              {
+                id: "days-worked" as const,
+                title: "Days worked",
+                note: "PD only on days that seat has ST / OT / DT labor hours.",
+              },
+              {
+                id: "seven-day" as const,
+                title: "7 days a week",
+                note: "PD every calendar day in that seat’s range (phase Start–Stop), including weekends and off days.",
+              },
+            ] as const
+          ).map((option) => {
+            const selected = (pack.jobMeta.perDiemMode || "days-worked") === option.id;
+            return (
+              <label
+                key={option.id}
+                className={`block cursor-pointer rounded-lg border px-3 py-3 ${
+                  selected ? "border-steel bg-white" : "border-[#d5e0de] bg-[#f4f1e8]"
+                }`}
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold text-[#163038]">
+                  <input
+                    type="radio"
+                    name="per-diem-mode"
+                    className="accent-steel"
+                    checked={selected}
+                    onChange={() => pack.setJobMeta((current) => ({ ...current, perDiemMode: option.id }))}
+                  />
+                  {option.title}
+                </span>
+                <span className="mt-1 block text-xs text-[#5b6f73]">{option.note}</span>
+              </label>
+            );
+          })}
+        </fieldset>
+      </div>
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">STAFF PER DIEM $ / DAY</span>
