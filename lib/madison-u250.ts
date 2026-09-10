@@ -12,10 +12,11 @@
  * its own line). Excel binaries stay on Drive.
  *
  * Day-grid shape comes from Staffing R3 09102026 (HC calendar). Seat hours
- * stay the JB lock — HPS is locked hours ÷ staffing person-days. Do not
- * invent a new total from that grid. If a seat has no staffing calendar,
- * hours spread across Job setup phase dates the same way Wood River B-1
- * does (HC × HPS stacks + skipDates). Never lump every seat onto one date.
+ * stay the JB lock — 2-decimal HPS so Excel download/import keeps those
+ * hours (base or base+0.01 across the HC calendar). Do not invent a new
+ * total from that grid. If a seat has no staffing calendar, hours spread
+ * across Job setup phase dates the same way Wood River B-1 does (HC × HPS
+ * stacks + skipDates). Never lump every seat onto one date.
  *
  * One reserved pack: EST-U25026 / new-u25026-rodeo. Do not seed EST-MTN9RM
  * or any second U250 pack.
@@ -139,7 +140,7 @@ function jsDow(ymd: string) {
 }
 
 function plugKey(plug: Pick<DayPlug, "hc" | "hps">) {
-  return `${plug.hc}|${plug.hps}`;
+  return `${plug.hc}|${Math.round(plug.hps * 100)}`;
 }
 
 function daysMaskFrom(plugs: DayPlug[]): boolean[] {
@@ -240,16 +241,70 @@ function fallbackPlugs(hours: number, schedule: PhaseScheduleState): DayPlug[] {
     }
   }
   if (!days.length || hours <= 0) return [];
-  const hps = hours / days.length;
-  return days.map((ymd) => ({ ymd, hc: 1, hps }));
+  return staffingPlugs(
+    days.map((ymd) => ({ ymd, hc: 1 })),
+    hours,
+  );
 }
 
+/**
+ * Days whose headcount sums to `extra` person-days. Excel writes HPS at
+ * 2 decimals (`pushNum` → money), so the day-grid must already be
+ * hundredths: base or base+0.01. A last-day remainder is not safe —
+ * HC>1 cannot absorb a leftover cent without inventing or losing hours.
+ */
+function extraDayIndexes(headcounts: number[], extra: number): Set<number> {
+  const picked = new Set<number>();
+  if (extra <= 0) return picked;
+  const prev = new Array<number>(extra + 1).fill(-2);
+  const used = new Array<number>(extra + 1).fill(-1);
+  prev[0] = -1;
+  for (let index = 0; index < headcounts.length; index += 1) {
+    const hc = headcounts[index];
+    for (let sum = extra; sum >= hc; sum -= 1) {
+      if (prev[sum] === -2 && prev[sum - hc] !== -2) {
+        prev[sum] = sum - hc;
+        used[sum] = index;
+      }
+    }
+  }
+  if (prev[extra] === -2) return picked;
+  let sum = extra;
+  while (sum > 0) {
+    const index = used[sum];
+    picked.add(index);
+    sum -= headcounts[index];
+  }
+  return picked;
+}
+
+/**
+ * 2-decimal HPS so Excel UP→DOWN keeps the JB lock. Whole days take
+ * +0.01 when a subset of HC sums to the leftover person-days. If that
+ * subset does not exist, keep exact hours/person-days (never invent a total).
+ */
 function staffingPlugs(raw: U250StaffPlug[] | undefined, hours: number): DayPlug[] {
   const live = (raw ?? []).filter((row) => row.hc > 0);
   const personDays = live.reduce((sum, row) => sum + row.hc, 0);
   if (!live.length || personDays <= 0 || hours <= 0) return [];
-  const hps = hours / personDays;
-  return live.map((row) => ({ ymd: row.ymd, hc: row.hc, hps }));
+  const totalCents = Math.round(hours * 100);
+  const base = Math.floor(totalCents / personDays);
+  const extra = totalCents - base * personDays;
+  const bumped = extraDayIndexes(
+    live.map((row) => row.hc),
+    extra,
+  );
+  const plugs = live.map((row, index) => ({
+    ymd: row.ymd,
+    hc: row.hc,
+    hps: (base + (bumped.has(index) ? 1 : 0)) / 100,
+  }));
+  const allocated = Math.round(plugs.reduce((sum, plug) => sum + plug.hc * plug.hps, 0) * 100);
+  if (extra > 0 && allocated !== totalCents) {
+    const hps = hours / personDays;
+    return live.map((row) => ({ ymd: row.ymd, hc: row.hc, hps }));
+  }
+  return plugs;
 }
 
 /** Map Family A / upload titles onto Staffing R3 craft keys. Foreman before journeyman. */
