@@ -15,6 +15,7 @@ export const OWNER_ONLY_PRIVILEGES: readonly PrivilegeId[] = [
   "unaliased-export",
   "designer-ship",
   "security-billing",
+  "rate-vault",
 ] as const;
 
 export const PRIVILEGE_COPY: Record<PrivilegeId, { label: string; detail: string }> = {
@@ -61,6 +62,10 @@ export const PRIVILEGE_COPY: Record<PrivilegeId, { label: string; detail: string
   "security-billing": {
     label: "Security / billing",
     detail: "Owner lock times and billing controls.",
+  },
+  "rate-vault": {
+    label: "Rate Vault",
+    detail: "Owner-eyes-only B-1 / rate builder workshop. Hidden from testers unless granted.",
   },
 };
 

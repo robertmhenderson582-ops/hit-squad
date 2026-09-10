@@ -65,6 +65,7 @@ function screenName(path: string) {
   if (path.startsWith("/quality")) return "Quality";
   if (path.startsWith("/hse")) return "HSE";
   if (path.startsWith("/accounting")) return "Accounting";
+  if (path.startsWith("/rate-vault")) return "Rate Vault";
   if (path.startsWith("/cost")) return "Cost";
   if (path.startsWith("/change-orders")) return "Change orders";
   if (path.startsWith("/purchasing")) return "Purchasing";

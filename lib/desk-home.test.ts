@@ -8,6 +8,7 @@ import {
   COMPANY_DESK_DOOR,
   HOME_DOCK_TILES,
   HOME_DOORS,
+  RATE_VAULT_DOOR,
   HOME_KICKER,
   HOME_WORDMARK,
   SCOREBOARD_DOOR,
@@ -31,6 +32,9 @@ describe("home doors", () => {
     assert.deepEqual(BURIED_HOME_DOORS, [STANDALONE_DOOR]);
     assert.equal(SCOREBOARD_DOOR.href, "/scoreboard");
     assert.equal(HOME_DOCK_TILES.some((tile) => tile.key === "scoreboard"), false);
+    assert.equal(HOME_DOCK_TILES.some((tile) => tile.key === "rate-vault" || tile.href === "/rate-vault"), false);
+    assert.equal(RATE_VAULT_DOOR.href, "/rate-vault");
+    assert.equal(RATE_VAULT_DOOR.label, "Rate Vault");
     assert.equal(
       HOME_DOORS.some((door) => door.key === "standalone" || door.href === "/standalone"),
       false,
