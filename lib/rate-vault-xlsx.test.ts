@@ -124,7 +124,9 @@ describe("Rate Vault B-1 Excel export / import", () => {
     const fixture = loadWoodRiverB1PreviewFixture();
     const exported = await rateVaultPreviewToXlsx(fixture);
     const workbook = await loadWorkbook(exported.bytes);
-    workbook.getWorksheet(RATE_VAULT_B1_PACKAGE_SHEET)?.getCell("B4").value = "Monroe Energy Trainer B-1";
+    const monroePack = workbook.getWorksheet(RATE_VAULT_B1_PACKAGE_SHEET);
+    assert.ok(monroePack);
+    monroePack.getCell("B4").value = "Monroe Energy Trainer B-1";
     const buffer = await workbook.xlsx.writeBuffer();
     const imported = await parseRateVaultB1Xlsx({
       fileName: "Monroe-Energy-B-1.xlsx",
@@ -140,7 +142,9 @@ describe("Rate Vault B-1 Excel export / import", () => {
     const fixture = loadWoodRiverB1PreviewFixture();
     const exported = await rateVaultPreviewToXlsx(fixture);
     const workbook = await loadWorkbook(exported.bytes);
-    workbook.getWorksheet(RATE_VAULT_B1_PACKAGE_SHEET)?.getCell("B3").value = "monroe";
+    const forged = workbook.getWorksheet(RATE_VAULT_B1_PACKAGE_SHEET);
+    assert.ok(forged);
+    forged.getCell("B3").value = "beaumont";
     const buffer = await workbook.xlsx.writeBuffer();
     const imported = await parseRateVaultB1Xlsx({
       fileName: exported.fileName,
@@ -173,7 +177,8 @@ describe("Rate Vault B-1 Excel export / import", () => {
     const exported = await rateVaultPreviewToXlsx(fixture);
     const workbook = await loadWorkbook(exported.bytes);
     const rates = workbook.getWorksheet(RATE_VAULT_B1_RATE_SHEET);
-    rates?.getCell("F2").value = "n/a";
+    assert.ok(rates);
+    rates.getCell("F2").value = "n/a";
     const buffer = await workbook.xlsx.writeBuffer();
     const imported = await parseRateVaultB1Xlsx({
       fileName: exported.fileName,

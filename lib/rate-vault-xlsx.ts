@@ -1,7 +1,7 @@
 /**
  * Rate Vault B-1 Excel export / import.
  * Vault-internal formula check to the site — same credibility bar as
- * estimate Excel, but this file must not import estimate-pack or estimate-xlsx.
+ * estimate Excel, but this file must not import the estimate pack or workbook writer.
  * Hidden row ids + Rate Summary cells are the keys. Excel is never a
  * parallel book: re-import updates the vault preview / rate package.
  * Refuse silent poison (Monroe / Yates, bad money, empty package).

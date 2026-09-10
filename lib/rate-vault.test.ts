@@ -311,11 +311,12 @@ describe("Rate Vault scaffold", () => {
     assert.match(api, /recognizeRateVaultSource/);
     assert.match(api, /export-b1/);
     assert.match(api, /import-b1/);
-    assert.match(xlsx, /HIT SQUAD RATE VAULT B-1/);
+    assert.match(vaultModule, /HIT SQUAD RATE VAULT B-1/);
+    assert.match(xlsx, /RATE_VAULT_B1_MARKER/);
     assert.match(xlsx, /rateVaultPreviewToXlsx/);
     assert.match(xlsx, /parseRateVaultB1Xlsx/);
     assert.doesNotMatch(xlsx, FORBIDDEN_IMPORT);
-    assert.doesNotMatch(xlsx, /estimate-xlsx|estimate-pack/);
+    assert.doesNotMatch(xlsx, /from ["'][^"']*(estimate-xlsx|estimate-pack)/);
     assert.match(server, /canSeeRateVault\(user\)/);
     assert.match(privileges, /"rate-vault"/);
     assert.match(library, /17YtnXtCcIXq68sROl3_VwkIo6PHYzTIR/);
