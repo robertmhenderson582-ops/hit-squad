@@ -13,6 +13,8 @@ import {
   hasWorkingDesk,
   isPresident,
   canSeeHitSquadSeats,
+  canSeeRateVault,
+  canSeeRateVaultDoor,
   canAddUsers,
   canManagePositions,
   canManageUsers,
@@ -74,6 +76,31 @@ test("Archive / Delete / Restore stay on the owner desk and hide from testers an
   assert.equal(canArchiveDeleteJobs(lensUser(owner, "owner")), true);
   assert.equal(pageAllowedForSeat(owner, { ownerOnly: true }), canArchiveDeleteJobs(owner));
   assert.equal(pageAllowedForSeat(nathan, { ownerOnly: true }), canArchiveDeleteJobs(nathan));
+});
+
+test("Rate Vault stays owner-eyes-only until Privileges grants it", () => {
+  const owner = {
+    id: "owner-robert-henderson",
+    email: "robertmhenderson582@gmail.com",
+    name: "Robert Henderson",
+    role: "owner" as const,
+  };
+  const novus = { role: "operator" as const, email: NOVUS_EMAIL };
+  const nathan = { role: "tester" as const, email: "nathanboyte@gmail.com" };
+  const chance = { role: "tester" as const, email: "chancec318@yahoo.com" };
+  const president = { role: "president" as const, email: "president.example@example.com" };
+  assert.equal(canSeeRateVault(owner), true);
+  assert.equal(canSeeRateVaultDoor(owner, owner), true);
+  assert.equal(canSeeRateVault(novus), false);
+  assert.equal(canSeeRateVault(nathan), false);
+  assert.equal(canSeeRateVault(chance), false);
+  assert.equal(canSeeRateVault(president), false);
+  assert.equal(canSeeRateVaultDoor(owner, lensUser(owner, "nathan")), false);
+  assert.equal(canSeeRateVault({ ...president, privileges: ["rate-vault"] }), true);
+  assert.equal(canSeeRateVaultDoor({ ...president, privileges: ["rate-vault"] }), true);
+  assert.equal(pageAllowedForSeat(owner, { privilege: "rate-vault" }), true);
+  assert.equal(pageAllowedForSeat(nathan, { privilege: "rate-vault" }), false);
+  assert.equal(pageAllowedForSeat({ ...nathan, privileges: ["rate-vault"] }, { privilege: "rate-vault" }), true);
 });
 
 test("operator has build desk; testers do not", () => {
@@ -253,6 +280,8 @@ test("President has the working desk and locked owner-only gates", () => {
   assert.equal(canUseViewAs(president), false);
   assert.equal(canUseFollow(president), false);
   assert.equal(canSeeHitSquadSeats(president), false);
+  assert.equal(canSeeRateVault(president), false);
+  assert.equal(canSeeRateVaultDoor(president, president), false);
   assert.equal(canManageUsers(president), false);
   assert.equal(canAddUsers(president), false);
   assert.equal(canManagePositions(president), true);
@@ -268,6 +297,7 @@ test("President has the working desk and locked owner-only gates", () => {
   );
   assert.equal(canArchiveDeleteJobs({ ...president, privileges: ["archive-delete"] }), true);
   assert.equal(canSeeHitSquadSeats({ ...president, privileges: ["hitsquad-seats"] }), true);
+  assert.equal(canSeeRateVault({ ...president, privileges: ["rate-vault"] }), true);
   assert.equal(canUseViewAs({ ...president, privileges: ["view-as"] }), true);
   assert.equal(lensUser(president, "nathan")?.email, president.email);
 });
@@ -296,6 +326,8 @@ test("View as a President vault seat applies the President lens", () => {
   assert.equal(canUseViewAs(lens), false);
   assert.equal(canUseFollow(lens), false);
   assert.equal(canSeeHitSquadSeats(lens), false);
+  assert.equal(canSeeRateVault(lens), false);
+  assert.equal(canSeeRateVaultDoor(owner, lens), false);
   assert.equal(canUseRateBuilder(lens), true);
   assert.equal(canLookupRates(lens), true);
   assert.equal(canArchiveDeleteJobs(lens), false);

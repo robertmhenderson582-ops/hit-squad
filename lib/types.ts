@@ -11,7 +11,8 @@ export type PrivilegeId =
   | "alias-config"
   | "unaliased-export"
   | "designer-ship"
-  | "security-billing";
+  | "security-billing"
+  | "rate-vault";
 
 export type PublicUser = {
   id: string;

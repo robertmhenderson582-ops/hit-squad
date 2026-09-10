@@ -1,4 +1,5 @@
 import { companyDeskLogoSrc } from "./companies.ts";
+import { canSeeRateVaultDoor } from "./desk-role.ts";
 
 export const HOME_WORDMARK = "HIT SQUAD";
 export const HOME_KICKER = "PROJECT CONTROLS";
@@ -27,6 +28,17 @@ export const SCOREBOARD_DOOR = {
   key: "scoreboard",
   label: "Scoreboard",
   note: "Read-only rollup — parked until live feeds",
+} as const;
+
+/**
+ * Owner-eyes-only Home door. Not a public HOME_DOCK_TILES peer.
+ * HomeDock appends it only when session + lens hold `rate-vault`.
+ */
+export const RATE_VAULT_DOOR = {
+  href: "/rate-vault",
+  key: "rate-vault",
+  label: "Rate Vault",
+  note: "Private B-1 workshop",
 } as const;
 
 /** Ease-in bury: not a home door. Do not add back to HOME_DOORS without an owner ask. */
@@ -82,6 +94,19 @@ export function homeDoorLabels(doors = HOME_DOORS) {
 
 export function homeDockTiles(_canRates = true) {
   return HOME_DOCK_TILES.slice();
+}
+
+type RateVaultViewer = { role?: string; privileges?: readonly string[] | null };
+
+/** Public four doors, plus Rate Vault when the session and lens both hold the grant. */
+export function homeDockTilesForViewer(
+  session?: RateVaultViewer | null,
+  lens?: RateVaultViewer | null,
+  canRates = true,
+) {
+  const tiles: HomeDockTile[] = homeDockTiles(canRates);
+  if (canSeeRateVaultDoor(session, lens)) tiles.push(RATE_VAULT_DOOR);
+  return tiles;
 }
 
 export function homeDockHrefs(canRates = true) {

@@ -7,6 +7,7 @@ import { lensPeopleFromSeats, peopleByLane, peopleVisibleTo } from "./desk-peopl
 import {
   canArchiveDeleteJobs,
   canSeeHitSquadSeats,
+  canSeeRateVault,
   canUseViewAs,
   hasBuildDesk,
   hasWorkingDesk,
@@ -33,6 +34,7 @@ describe("Freddy President seat", () => {
     assert.equal(canUseViewAs(president), false);
     assert.equal(canArchiveDeleteJobs(president), false);
     assert.equal(canSeeHitSquadSeats(president), false);
+    assert.equal(canSeeRateVault(president), false);
     assert.equal(pageAllowedForSeat(president, { workingDesk: true }), true);
     assert.equal(pageAllowedForSeat(president, { ownerOnly: true }), false);
     assert.equal(OWNER_ONLY_PRIVILEGES.includes("hitsquad-seats"), true);
@@ -95,5 +97,6 @@ describe("Freddy President seat", () => {
     assert.equal(hasBuildDesk(lens), false);
     assert.equal(canUseViewAs(lens), false);
     assert.equal(canSeeHitSquadSeats(lens), false);
+    assert.equal(canSeeRateVault(lens), false);
   });
 });

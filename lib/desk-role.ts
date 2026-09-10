@@ -87,6 +87,19 @@ export function canSecurityBilling(user?: PrivilegeViewer | null): boolean {
   return isOwner(user) || hasPrivilege(user, "security-billing");
 }
 
+/** Owner-eyes-only Rate Vault workshop. Default grant is owner; Privileges can assign later. */
+export function canSeeRateVault(user?: PrivilegeViewer | null): boolean {
+  return hasPrivilege(user, "rate-vault");
+}
+
+/** Home door: session and lens must both hold the grant. View as a tester hides the door. */
+export function canSeeRateVaultDoor(
+  session?: PrivilegeViewer | null,
+  lens?: PrivilegeViewer | null,
+): boolean {
+  return canSeeRateVault(session) && canSeeRateVault(lens ?? session);
+}
+
 /** Owner, Novus, President, and rates seats (Joseph’s full desk). Other testers stay off the builder. */
 export function canUseRateBuilder(user?: { email?: string; role?: string } | null): boolean {
   if (!user) return false;

@@ -24,6 +24,7 @@ test("locked matrix lists shared President items and grantable owner-only items"
       "unaliased-export",
       "designer-ship",
       "security-billing",
+      "rate-vault",
     ],
   );
   assert.equal(
@@ -34,6 +35,7 @@ test("locked matrix lists shared President items and grantable owner-only items"
   assert.equal(PRESIDENT_SHARED.includes("Madison presence"), true);
   assert.equal(isPrivilegeId("manage-users"), true);
   assert.equal(isPrivilegeId("hitsquad-seats"), true);
+  assert.equal(isPrivilegeId("rate-vault"), true);
   assert.equal(isPrivilegeId("not-a-privilege"), false);
 });
 

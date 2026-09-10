@@ -423,6 +423,14 @@ textarea:focus {
   gap: 0.55rem 0.58rem;
 }
 
+.home-dock-owner-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem 0.58rem;
+  margin-top: 0.55rem;
+}
+
 .home-dock-tile {
   display: flex;
   box-sizing: border-box;

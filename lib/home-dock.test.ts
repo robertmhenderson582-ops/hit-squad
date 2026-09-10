@@ -6,6 +6,8 @@ import {
   COMPANY_DESK_DOOR,
   HOME_DOCK_TILES,
   JOB_SCOPED_TILES,
+  RATE_VAULT_DOOR,
+  homeDockTilesForViewer,
   SCOREBOARD_DOOR,
   homeDockHasCombinedQualityHse,
   homeDockHrefs,
@@ -46,6 +48,11 @@ describe("Home four doors", () => {
     assert.equal(homeDockLabels().includes("Change orders"), false);
     assert.equal(homeDockLabels().includes("Purchasing"), false);
     assert.equal(homeDockLabels().includes("Scoreboard"), false);
+    assert.equal(homeDockLabels().includes("Rate Vault"), false);
+    assert.equal(
+      HOME_DOCK_TILES.some((tile) => tile.key === RATE_VAULT_DOOR.key || tile.href === RATE_VAULT_DOOR.href),
+      false,
+    );
     assert.equal(SCOREBOARD_DOOR.href, "/scoreboard");
     assert.match(SCOREBOARD_DOOR.note, /parked/i);
   });
@@ -96,8 +103,11 @@ describe("Home four doors", () => {
     assert.match(hero, /hero-mark[\s\S]*HomeDock/);
     assert.doesNotMatch(hero, /py-8|sm:py-10/);
     assert.match(dock, /homeDockTiles/);
+    assert.match(dock, /homeDockTilesForViewer/);
+    assert.match(dock, /RATE_VAULT_DOOR/);
     assert.match(dock, /aria-label="Desk modules"/);
     assert.doesNotMatch(dock, /canOpenRates/);
+    assert.match(css, /\.home-dock-owner-row \{/);
     assert.doesNotMatch(hero, /COMPANY_DESK_DOOR/);
     assert.doesNotMatch(home, /plant-card|hud-tile|desk-grid|Quality \/ HSE/);
     assert.doesNotMatch(dock, /Quality \/ HSE/);
@@ -138,5 +148,32 @@ describe("Home four doors", () => {
     assert.match(purchasingDesk, /liveCostJobs/);
     assert.match(accountingPage, /ClosedModuleDesk/);
     assert.match(accountingPage, /Accounting/);
+  });
+
+  it("appends Rate Vault only when session and lens hold the grant", () => {
+    const owner = { role: "owner" as const };
+    const nathan = { role: "tester" as const };
+    const president = { role: "president" as const };
+    const granted = { role: "president" as const, privileges: ["rate-vault"] };
+    assert.deepEqual(
+      homeDockTilesForViewer(nathan).map((tile) => tile.key),
+      ["jobs", "quality", "hse", "accounting"],
+    );
+    assert.deepEqual(
+      homeDockTilesForViewer(president).map((tile) => tile.key),
+      ["jobs", "quality", "hse", "accounting"],
+    );
+    assert.deepEqual(
+      homeDockTilesForViewer(owner, nathan).map((tile) => tile.key),
+      ["jobs", "quality", "hse", "accounting"],
+    );
+    assert.deepEqual(
+      homeDockTilesForViewer(owner, owner).map((tile) => tile.key),
+      ["jobs", "quality", "hse", "accounting", "rate-vault"],
+    );
+    assert.deepEqual(
+      homeDockTilesForViewer(granted).map((tile) => tile.key),
+      ["jobs", "quality", "hse", "accounting", "rate-vault"],
+    );
   });
 });
