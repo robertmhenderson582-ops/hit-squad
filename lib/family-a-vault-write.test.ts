@@ -48,7 +48,7 @@ describe("Family A vault write gate", () => {
     assert.equal(moneyEqual(u110Desk.grandTotal, U110_CONTRACTOR_GOLDEN.buckets!.grandTotal), true);
     assert.equal(moneyEqual(u250Desk.grandTotal, U250_CONTRACTOR_GOLDEN.buckets!.grandTotal), true);
     assert.equal(Math.round(u110Desk.totalHours), 26_441);
-    assert.equal(Math.round(u250Desk.totalHours), 12_881);
+    assert.equal(Math.round(u250Desk.totalHours), 12_001);
     assert.equal(familyAVaultWriteError(u110), null);
     assert.equal(familyAVaultWriteError(u250), null);
 

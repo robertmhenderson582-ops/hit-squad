@@ -39,6 +39,8 @@ describe("Work Folder ids", () => {
     assert.equal(isRodeoWorkbookFamilyId(RODEO_WORKBOOK_BLANK_ID), true);
     assert.equal(isRodeoWorkbookFamilyId(RODEO_WORKBOOK_U110_ID), true);
     assert.equal(isRodeoWorkbookFamilyId(RODEO_WORKBOOK_U250_ID), true);
+    assert.equal(isRodeoWorkbookFamilyId("1gNw_YEzhBICk8TGiqANxXvw_NLTR-4Mu"), true);
+    assert.equal(isOfficialRevisionId("1Mcn8wd-JvDZaQUkQ3MGW40oH0UkNpiNb"), true);
     assert.match(driveViewUrl(WESTERN_STATES_AGREEMENT_ID), /1wdYyt-qOEruPtosgiCSbkYO2yaTZnPfi/);
     assert.match(driveFolderUrl(WORK_FOLDER_ID), /1_e5q1-ZpFTPE5LEWM9kv27a10gC16WbE/);
     assert.equal(WEST_COMP_AMEND9_ID, "1zWoijAW5hGx7-Ew2U77_7uYxjEHS3RqT");

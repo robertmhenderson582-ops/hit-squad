@@ -1,6 +1,7 @@
 /**
- * Official Madison U250 contractor R2 workbook parse. ExcelJS only — not
- * imported by the wake / desk seed path. Upload loads this module on demand.
+ * Madison U250 contractor workbook parse (JB 09.10.26 transfer face).
+ * ExcelJS only — not imported by the wake / desk seed path. Upload loads
+ * this module on demand.
  */
 import ExcelJS from "exceljs";
 import {

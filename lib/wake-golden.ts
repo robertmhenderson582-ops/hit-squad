@@ -3,7 +3,8 @@
  * Official Gmail revisions lock filled totals. Unexplained mismatch is a P0 bug.
  * Numbers extracted from Drive text of the official books — binaries stay out of git.
  *
- * Family A (Madison contractor template) is the official lock for U110 / U250.
+ * Family A (Madison contractor template) is the official lock for U110.
+ * U250 live desk lock is JB 09.10.26 Summary on the Family A five-card face.
  * Family B (P66 RODEO ESTIMATE WORKBOOK) stays a separate face — do not collapse.
  */
 
@@ -12,10 +13,14 @@ import {
   OFFICIAL_MONROE_541V_REVISION_NAME,
   OFFICIAL_U110_REVISION_ID,
   OFFICIAL_U110_REVISION_NAME,
+  JB_U250_ESTIMATE_ID,
+  JB_U250_STAFFING_ID,
+  OFFICIAL_U250_R2_REVISION_ID,
   OFFICIAL_U250_REVISION_ID,
   OFFICIAL_U250_REVISION_NAME,
   RODEO_WORKBOOK_BLANK_ID,
   RODEO_WORKBOOK_U110_ID,
+  RODEO_WORKBOOK_U250_072325_ID,
   RODEO_WORKBOOK_U250_ID,
 } from "./work-folder.ts";
 import {
@@ -136,34 +141,40 @@ export const U110_CONTRACTOR_GOLDEN: WakeGoldenFixture = {
   },
 };
 
-/** U250 Madison contractor R2 — official Gmail lock. */
+/** U250 Madison transfer face from JB 09.10.26 — live desk lock. */
 export const U250_CONTRACTOR_GOLDEN: WakeGoldenFixture = {
   packId: RODEO_U250_PACK_ID,
   unit: "U250",
   family: "madison-contractor",
   officialRevisionId: OFFICIAL_U250_REVISION_ID,
   officialRevisionName: OFFICIAL_U250_REVISION_NAME,
-  extraTemplateIds: [RODEO_WORKBOOK_U250_ID, RODEO_WORKBOOK_BLANK_ID],
+  extraTemplateIds: [
+    JB_U250_ESTIMATE_ID,
+    JB_U250_STAFFING_ID,
+    OFFICIAL_U250_R2_REVISION_ID,
+    RODEO_WORKBOOK_U250_072325_ID,
+    RODEO_WORKBOOK_BLANK_ID,
+  ],
   extractedFrom: "drive-text",
   dollarsStatus: "locked",
-  note: "Family A official lock. Family B workbook is an additional face, not this total.",
+  note: "JB 09.10.26 Summary is the live desk lock ($2,351,438.99 / 12,001 hrs). Seats from the Madison transfer face populated from that book. Historical Madison R2 $2,470,680 is retired. Family B 4.5MB book stays a separate face (same Summary $). Do not invent hours from #REF! Water Walls sheets.",
   buckets: {
-    directHours: 8315,
-    directDollars: 1383800,
-    directRate: 166.42,
-    indirectHours: 4566,
-    indirectDollars: 767540,
-    indirectRate: 168.1,
-    perDiem: 188740,
-    mobDemob: 101000,
-    materialsDirect: 20000,
+    directHours: 6934,
+    directDollars: 1_186_079.92,
+    directRate: 171.05,
+    indirectHours: 5067,
+    indirectDollars: 847_554.07,
+    indirectRate: 167.27,
+    perDiem: 186_805,
+    mobDemob: 93_000,
+    materialsDirect: 20_000,
     materialsIndirect: 0,
-    equipment: 9600,
+    equipment: 16_800,
     thirdParty: 0,
-    other: 0,
-    totalHours: 12881,
-    grandTotal: 2470680,
-    allInRate: 297.14,
+    other: 1_200,
+    totalHours: 12_001,
+    grandTotal: 2_351_438.99,
+    allInRate: 339.12,
   },
 };
 
@@ -208,18 +219,35 @@ export const U110_RODEO_WORKBOOK_GOLDEN: WakeGoldenFixture = {
   buckets: null,
 };
 
-/** Family B filled U250 workbook — additional face. Totals not invented. */
+/** Family B filled U250 workbook — additional face. Same JB Summary $ as the desk lock. */
 export const U250_RODEO_WORKBOOK_GOLDEN: WakeGoldenFixture = {
   packId: RODEO_U250_PACK_ID,
   unit: "U250",
   family: "p66-rodeo-workbook",
   officialRevisionId: RODEO_WORKBOOK_U250_ID,
-  officialRevisionName: "Copy of P66 RODEO ESTIMATE WORKBOOK  U-250  07.23.25 JB.xlsx",
-  extraTemplateIds: [RODEO_WORKBOOK_BLANK_ID],
+  officialRevisionName: "P66 RODEO ESTIMATE WORKBOOK  U-250  09.10.26 JB.xlsx",
+  extraTemplateIds: [RODEO_WORKBOOK_U250_072325_ID, RODEO_WORKBOOK_BLANK_ID],
   extractedFrom: "drive-text",
-  dollarsStatus: "pending-workbook-eval",
-  note: "Family B additional face. 4.5MB book has no Drive text extract. Do not invent SUMMARY $ or collapse into family A.",
-  buckets: null,
+  dollarsStatus: "locked",
+  note: "Family B additional face. JB 09.10.26 Summary evaluated — same $ as the Madison transfer-face desk lock. 4.5MB book has no Drive text extract. Do not invent hours from #REF! Water Walls sheets or collapse this book into a second pack.",
+  buckets: {
+    directHours: 6934,
+    directDollars: 1_186_079.92,
+    directRate: 171.05,
+    indirectHours: 5067,
+    indirectDollars: 847_554.07,
+    indirectRate: 167.27,
+    perDiem: 186_805,
+    mobDemob: 93_000,
+    materialsDirect: 20_000,
+    materialsIndirect: 0,
+    equipment: 16_800,
+    thirdParty: 0,
+    other: 1_200,
+    totalHours: 12_001,
+    grandTotal: 2_351_438.99,
+    allInRate: 339.12,
+  },
 };
 
 export const RODEO_WORKBOOK_BLANK_GOLDEN: WakeGoldenFixture = {

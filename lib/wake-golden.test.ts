@@ -51,7 +51,7 @@ describe("Rodeo / Monroe golden fixtures", () => {
     assert.equal(u110.directHours + u110.indirectHours, u110.totalHours);
     assert.equal(u250.directHours + u250.indirectHours, u250.totalHours);
     assert.equal(u110.grandTotal, 5_247_587);
-    assert.equal(u250.grandTotal, 2_470_680);
+    assert.equal(u250.grandTotal, 2_351_438.99);
     assert.equal(U110_CONTRACTOR_GOLDEN.family, "madison-contractor");
     assert.equal(U250_CONTRACTOR_GOLDEN.family, "madison-contractor");
     assert.equal(MONROE_541V_GOLDEN.dollarsStatus, "formula-unavailable");
@@ -64,11 +64,15 @@ describe("Rodeo / Monroe golden fixtures", () => {
     );
   });
 
-  it("keeps family B workbook fixtures as a separate face and does not invent those totals", () => {
+  it("keeps family B workbook fixtures as a separate face and does not invent U110 totals", () => {
     const familyB = familyBWorkbookFixtures();
     assert.equal(familyB.every((row) => row.family === "p66-rodeo-workbook"), true);
-    assert.equal(familyB.every((row) => row.buckets === null), true);
-    assert.equal(familyB.every((row) => row.dollarsStatus === "pending-workbook-eval"), true);
+    assert.equal(U110_RODEO_WORKBOOK_GOLDEN.buckets, null);
+    assert.equal(U110_RODEO_WORKBOOK_GOLDEN.dollarsStatus, "pending-workbook-eval");
+    assert.equal(RODEO_WORKBOOK_BLANK_GOLDEN.buckets, null);
+    assert.equal(RODEO_WORKBOOK_BLANK_GOLDEN.dollarsStatus, "pending-workbook-eval");
+    assert.equal(U250_RODEO_WORKBOOK_GOLDEN.dollarsStatus, "locked");
+    assert.equal(U250_RODEO_WORKBOOK_GOLDEN.buckets?.grandTotal, 2_351_438.99);
     assert.equal(U110_RODEO_WORKBOOK_GOLDEN.officialRevisionId, RODEO_WORKBOOK_U110_ID);
     assert.equal(U250_RODEO_WORKBOOK_GOLDEN.officialRevisionId, RODEO_WORKBOOK_U250_ID);
     assert.equal(RODEO_WORKBOOK_BLANK_GOLDEN.officialRevisionId, RODEO_WORKBOOK_BLANK_ID);
@@ -95,7 +99,7 @@ describe("Rodeo / Monroe golden fixtures", () => {
       u250Contractor: { officialRevisionId: string; buckets: { grandTotal: number } };
       monroe541v: { officialRevisionId: string; dollarsStatus: string };
       u110RodeoWorkbook: { officialRevisionId: string; family: string; buckets: null };
-      u250RodeoWorkbook: { officialRevisionId: string; family: string; buckets: null };
+      u250RodeoWorkbook: { officialRevisionId: string; family: string; buckets: { grandTotal: number } | null };
       rodeoWorkbookBlank: { officialRevisionId: string };
       boiler17B1: { officialRevisionId: string; dollarsStatus: string; boiler17Hours: { targetCraftHours: number } };
       mikeCppr108451: { jobNumber: string; mayLaborPdTravel: number; mayWithThirdAndCoe: number };
@@ -109,6 +113,7 @@ describe("Rodeo / Monroe golden fixtures", () => {
     assert.equal(raw.u110RodeoWorkbook.family, "p66-rodeo-workbook");
     assert.equal(raw.u110RodeoWorkbook.buckets, null);
     assert.equal(raw.u250RodeoWorkbook.officialRevisionId, RODEO_WORKBOOK_U250_ID);
+    assert.equal(raw.u250RodeoWorkbook.buckets?.grandTotal, 2_351_438.99);
     assert.equal(raw.rodeoWorkbookBlank.officialRevisionId, RODEO_WORKBOOK_BLANK_ID);
     assert.equal(raw.boiler17B1.officialRevisionId, "1sMay67BNvtkW6fFLygPtymnIkFqrvvHT");
     assert.equal(raw.boiler17B1.dollarsStatus, "formula-unavailable");
@@ -170,7 +175,7 @@ describe("Rodeo / Monroe golden fixtures", () => {
       u110Fixture.positions.filter((row) => row.position === "Boilermaker").map((row) => row.bookRate),
     );
     const u250BoilerRates = new Set(
-      u250Fixture.positions.filter((row) => row.position === "Boilermaker").map((row) => row.bookRate),
+      u250Fixture.positions.filter((row) => /boilermaker/i.test(row.position)).map((row) => row.bookRate),
     );
     assert.ok(u110BoilerRates.size > 1);
     assert.ok(u250BoilerRates.size > 1);
@@ -190,7 +195,7 @@ describe("Rodeo / Monroe golden fixtures", () => {
     assert.equal(moneyEqual(u110Desk, u110Lock.grandTotal), true);
     assert.equal(moneyEqual(u250Desk, u250Lock.grandTotal), true);
     assert.equal(u110Lock.totalHours, 26_441);
-    assert.equal(u250Lock.totalHours, 12_881);
+    assert.equal(u250Lock.totalHours, 12_001);
 
     const u110Live = { ...rodeoMonroeWakeCards().find((row) => row.packId === RODEO_U110_PACK_ID)!, createdAt: 9_000, updatedAt: 9_001 };
     const u250Live = { ...rodeoMonroeWakeCards().find((row) => row.packId === RODEO_U250_PACK_ID)!, createdAt: 9_000, updatedAt: 9_001 };

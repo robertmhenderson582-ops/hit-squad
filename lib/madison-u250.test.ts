@@ -22,6 +22,7 @@ import {
   ingestRodeoU250FromFixture,
   loadRodeoU250Fixture,
   persistRodeoU250Wake,
+  shouldFillRodeoU250Crew,
   RODEO_U250_CLIENT,
   RODEO_U250_VAULT_FILE,
   RODEO_U250_HOURS_PLUG,
@@ -118,25 +119,26 @@ describe("madison-u250 ingest", () => {
     assert.equal(ingested.jobMeta.craftPerDiemRate, 145);
   });
 
-  it("fills U250 pack hours from Madison R2 and keeps the SUMMARY face lock", () => {
+  it("fills U250 pack hours from JB 09.10.26 and keeps the SUMMARY face lock", () => {
     const fixture = loadRodeoU250Fixture();
     assert.equal(checkRodeoU250OfficialHours(fixture.summaryBuckets).ok, true);
     assert.equal(fixture.summaryBuckets.directHours, U250_CONTRACTOR_GOLDEN.buckets?.directHours);
     assert.equal(fixture.summaryBuckets.indirectHours, U250_CONTRACTOR_GOLDEN.buckets?.indirectHours);
     assert.equal(fixture.summaryBuckets.grandTotal, U250_CONTRACTOR_GOLDEN.buckets?.grandTotal);
-    assert.equal(fixture.summaryBuckets.grandTotal, 2_470_680);
-    assert.equal(fixture.positions.length, 11);
-    assert.equal(fixture.positions.filter((row) => row.lane === "staff").length, 4);
+    assert.equal(fixture.summaryBuckets.grandTotal, 2_351_438.99);
+    assert.equal(fixture.positions.length, 22);
+    assert.equal(fixture.positions.filter((row) => row.lane === "staff").length, 9);
     assert.equal(fixture.positions.filter((row) => row.lane === "generalForeman").length, 0);
-    assert.equal(fixture.positions.filter((row) => row.lane === "foreman").length, 2);
-    assert.equal(fixture.positions.filter((row) => row.lane === "direct").length, 4);
-    assert.equal(fixture.positions.filter((row) => row.lane === "support").length, 1);
+    assert.equal(fixture.positions.filter((row) => row.lane === "foreman").length, 4);
+    assert.equal(fixture.positions.filter((row) => row.lane === "direct").length, 9);
+    assert.equal(fixture.positions.filter((row) => row.lane === "support").length, 0);
     assert.ok(fixture.findings.some((row) => /#REF/i.test(row)));
     assert.ok(fixture.findings.some((row) => /Tool Room/i.test(row)));
     assert.ok(fixture.findings.some((row) => /EST-MTN9RM/i.test(row)));
+    assert.ok(fixture.findings.some((row) => /Water Walls/i.test(row)));
     assert.equal(
-      fixture.positions.find((row) => row.position === "Boilermaker" && row.hours === 794)?.bookRate,
-      159.84,
+      fixture.positions.find((row) => row.position === "Boilermaker Journeyman (Days)" && row.hours === 2104)?.bookAmount,
+      342594.08,
     );
 
     const pack = rodeoU250FilledSnapshot();
@@ -151,21 +153,23 @@ describe("madison-u250 ingest", () => {
     assert.equal(Math.round(hours.staffHours), fixture.typedHours.staffHours);
     assert.equal(Math.round(hours.generalForemanHours), 0);
     assert.equal(Math.round(hours.directHours), fixture.typedHours.directHours);
-    assert.equal(Math.round(hours.supportHours), 716);
+    assert.equal(Math.round(hours.supportHours), 0);
     const buckets = rodeoU250BucketHoursFromCrew(pack.crew as never);
-    assert.equal(Math.round(buckets.directHours), 8315);
-    assert.equal(Math.round(buckets.indirectHours), 4566);
-    assert.equal(Math.round(buckets.totalHours), 12881);
+    assert.equal(Math.round(buckets.directHours), 6934);
+    assert.equal(Math.round(buckets.indirectHours), 5067);
+    assert.equal(Math.round(buckets.totalHours), 12001);
     const misc = (pack.otherCost as { misc?: Array<{ item: string; each: number; qty: number }> })?.misc ?? [];
-    assert.ok(misc.some((row) => row.item === "Alloy Welding rods" && row.qty === 50 && row.each === 150));
-    assert.ok(misc.some((row) => row.item === "Freight" && row.each === 8000));
-    assert.ok(misc.some((row) => row.item === "Per Diem (Direct)" && row.qty === 656 && row.each === 145));
+    assert.ok(misc.some((row) => row.item === "Alloy Welding Rod" && row.qty === 1 && row.each === 5000));
+    assert.ok(misc.some((row) => row.item === "Craft Mileage" && row.each === 75000));
+    assert.ok(misc.some((row) => row.item === "Direct craft per diem (@$145)" && row.qty === 654 && row.each === 145));
+    assert.ok(misc.some((row) => row.item === "Markup 6% (MISC & General Rental)" && row.each === 1200));
     assert.equal(misc.some((row) => /extractor/i.test(row.item)), false);
-    assert.equal(
-      (pack.crew as { direct: Array<{ position: string; hours?: number; bookRate?: number }> }).direct.find(
-        (row) => row.position === "Boilermaker" && row.bookRate === 159.84,
-      )?.bookRate,
-      159.84,
+    assert.ok(
+      Number(
+        (pack.crew as { direct: Array<{ position: string; bookRate?: number }> }).direct.find(
+          (row) => row.position === "Boilermaker Journeyman (Days)",
+        )?.bookRate,
+      ) > 160,
     );
     const desk = deskPackageTotal(packSnapshotToXlsxInput(pack));
     assert.equal(moneyEqual(desk, U250_CONTRACTOR_GOLDEN.buckets!.grandTotal), true);
@@ -200,6 +204,19 @@ describe("madison-u250 ingest", () => {
     assert.equal(checkRodeoU250PackHours(winner?.crew as never).ok, true);
     mergeVaultIntoLocal(store, vault);
     assert.equal(checkRodeoU250PackHours(readStoreJson(store, `${CREW_STORE_PREFIX}${key}`) as never).ok, true);
+
+    const stale = {
+      packId: RODEO_U250_PACK_ID,
+      crew: {
+        staff: [],
+        generalForeman: [],
+        foreman: [],
+        direct: [{ id: "stale-bm", position: "Boilermaker", bookRate: 167.74, ranges: [{ hoursPerShift: 3714, headcount: 1 }] }],
+        support: [],
+      },
+    };
+    assert.equal(shouldFillRodeoU250Crew(stale), true);
+    assert.equal(shouldFillRodeoU250Crew(rodeoU250FilledSnapshot()), false);
   });
 
   it("stays on the Wood River five-card desk — empty GF is official, not invented", () => {
@@ -220,13 +237,17 @@ describe("madison-u250 ingest", () => {
       direct: unknown[];
       support: unknown[];
     };
-    assert.ok(crew.staff.length && crew.foreman.length && crew.direct.length && crew.support.length);
+    assert.ok(crew.staff.length && crew.foreman.length && crew.direct.length);
+    assert.equal(crew.support.length, 0);
     assert.equal(crew.generalForeman.length, 0);
     const card = rodeoMonroeWakeCards().find((row) => row.packId === RODEO_U250_PACK_ID)!;
     assert.equal(isWakeIdentityOnly(card), true);
     const ingested = ingestRodeoU250FromFixture();
-    assert.equal(ingested.fixture.positions.some((row) => row.position === "Boilermaker" && row.hours === 3714), true);
-    assert.equal(ingested.fixture.positions.filter((row) => row.position === "Foreman").length, 2);
+    assert.equal(
+      ingested.fixture.positions.some((row) => row.position === "Boilermaker Journeyman (Days)" && row.hours === 2104),
+      true,
+    );
+    assert.equal(ingested.fixture.positions.filter((row) => /\bforeman\b/i.test(row.position)).length, 4);
     assert.equal(ingested.fixture.positions.some((row) => /general\s*foreman/i.test(row.position)), false);
     assert.equal(oneLivePackPerWakeJob([pack]), true);
     assert.equal(
@@ -276,12 +297,13 @@ describe("madison-u250 ingest", () => {
     const upBuckets = rodeoU250BucketHoursFromCrew(up.crew as never);
     const downBuckets = rodeoU250BucketHoursFromCrew(down.crew as never);
     assert.equal(Math.round(upBuckets.directHours), Math.round(before.directBucketHours));
-    assert.equal(Math.round(upBuckets.indirectHours), 4566);
-    assert.equal(Math.round(downBuckets.directHours), 8315);
-    assert.equal(Math.round(downBuckets.indirectHours), 4566);
+    assert.equal(Math.round(upBuckets.indirectHours), 5067);
+    assert.equal(Math.round(downBuckets.directHours), 6934);
+    assert.equal(Math.round(downBuckets.indirectHours), 5067);
     assert.ok((up.crew.staff?.length ?? 0) && (up.crew.foreman?.length ?? 0));
     assert.equal(up.crew.generalForeman?.length ?? 0, 0);
-    assert.ok((up.crew.direct?.length ?? 0) && (up.crew.support?.length ?? 0));
-    assert.equal(Math.round(rodeoU250HoursFromCrew(up.crew).supportHours), 716);
+    assert.ok((up.crew.direct?.length ?? 0) > 0);
+    assert.equal(up.crew.support?.length ?? 0, 0);
+    assert.equal(Math.round(rodeoU250HoursFromCrew(up.crew).supportHours), 0);
   });
 });
