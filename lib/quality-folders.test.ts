@@ -234,6 +234,10 @@ describe("Quality folder catalog", () => {
     assert.match(drop, /selectRef.current\?\.focus/);
     assert.match(drop, /qualityFoldersFor/);
     assert.match(drop, /companyId/);
+    assert.match(drop, /qualityVaultStored/);
+    assert.match(drop, /QUALITY_UNVAULTED_MARK/);
+    assert.match(drop, /siteLabel/);
+    assert.match(drop, /jobLabel/);
     for (const label of QUALITY_FOLDERS.map((folder) => folder.label)) {
       assert.match(folders, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }

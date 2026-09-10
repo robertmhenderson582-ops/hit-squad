@@ -162,6 +162,9 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.match(quality, /BOARD/);
     assert.match(quality, /QUALITY_DESK_TABS/);
     assert.match(quality, /QualityFolderDrop/);
+    assert.match(quality, /companyLabel/);
+    assert.match(quality, /siteLabel/);
+    assert.match(quality, /jobLabel/);
     assert.match(quality, /QualityCompanyDocRail/);
     assert.match(quality, /showsQualityFolderDesk/);
     assert.match(quality, /cascadeCompanyId/);

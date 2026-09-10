@@ -92,6 +92,9 @@ export async function POST(request: Request) {
     folderId?: string;
     companyId?: string;
     company?: string;
+    companyLabel?: string;
+    siteLabel?: string;
+    jobLabel?: string;
     scope?: string;
   };
   const companyId = qualityCompanyId(body);
@@ -112,7 +115,8 @@ export async function POST(request: Request) {
       files: result.brief.files,
       rejected: result.rejected,
       folders: qualityCompanyDocsListedFor(companyId),
-      store: leadBriefStoreKind(),
+      stored: result.stored,
+      store: result.store,
     });
   }
 
@@ -129,7 +133,8 @@ export async function POST(request: Request) {
       files: result.brief.files,
       rejected: result.rejected,
       folders: qualityFoldersListedFor(companyId),
-      store: leadBriefStoreKind(),
+      stored: result.stored,
+      store: result.store,
     });
   }
 

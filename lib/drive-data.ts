@@ -32,6 +32,17 @@ export const POSITIONS_VAULT_KIND = "positions";
 
 export const DRIVE_WRITE_ERROR = "Could not save. Try again.";
 
+/** Existing Hit Squad Quality room under Data. Never expose this id to testers. */
+export const QUALITY_ROOM_ID = "1A7anV1UKx8m7IgUW2uVpwWHxB5fHerOg";
+
+export function qualityFolderId(env: Record<string, string | undefined> = process.env) {
+  return env.DRIVE_QUALITY_FOLDER_ID?.trim() || QUALITY_ROOM_ID;
+}
+
+export function briefsFolderId(kind: "quality" | "hse", env: Record<string, string | undefined> = process.env) {
+  return kind === "quality" ? qualityFolderId(env) : dataFolderId(env);
+}
+
 /** Production seats.json. Shared with the vault SA; the Estimates parent folder is not. */
 export const SEATS_VAULT_FILE_ID = "1d3lzLDxCPwC963fdplsnwYgrDEanohZc";
 

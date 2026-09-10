@@ -20,9 +20,20 @@ import {
   checkQualityDrop,
   mergeQualityFolderFiles,
 } from "@/lib/quality-folders";
+import {
+  QUALITY_UNVAULTED_MARK,
+  QUALITY_VAULT_WRITE_ERROR,
+  mergeVaultedQualityFiles,
+  qualityVaultStored,
+  type QualityListedFile,
+} from "@/lib/quality-vault";
 
 function dropFileFromBrowser(file: File) {
   return { name: file.name, type: file.type, bytes: file.size };
+}
+
+function localByDoc(home: string, docs: Array<{ id: string }>) {
+  return Object.fromEntries(docs.map((doc) => [doc.id, readQualityCompanyDocFiles(home, doc.id as QualityCompanyDocId)]));
 }
 
 export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
@@ -31,8 +42,10 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
   const { user } = useSession();
   const inputRef = useRef<HTMLInputElement>(null);
   const [docId, setDocId] = useState<QualityCompanyDocId>(() => readQualityCompanyDocPick(home));
-  const [filesByDoc, setFilesByDoc] = useState<Record<string, LeadFile[]>>(() =>
-    Object.fromEntries(docs.map((doc) => [doc.id, readQualityCompanyDocFiles(home, doc.id)])),
+  const [filesByDoc, setFilesByDoc] = useState<Record<string, QualityListedFile[]>>(() =>
+    Object.fromEntries(
+      docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], readQualityCompanyDocFiles(home, doc.id))]),
+    ),
   );
   const [note, setNote] = useState<string | null>(null);
   const [noteKind, setNoteKind] = useState<"ok" | "warn" | "err">("ok");
@@ -42,7 +55,11 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
   useEffect(() => {
     const next = readQualityCompanyDocPick(home);
     setDocId(next);
-    setFilesByDoc(Object.fromEntries(docs.map((doc) => [doc.id, readQualityCompanyDocFiles(home, doc.id)])));
+    setFilesByDoc(
+      Object.fromEntries(
+        docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], readQualityCompanyDocFiles(home, doc.id))]),
+      ),
+    );
     setNote(null);
   }, [home]);
 
@@ -55,26 +72,33 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
       .then(async (response) => {
         const data = (await response.json().catch(() => ({}))) as {
           filesByFolder?: Record<string, Array<{ name?: string; type?: string }>>;
+          store?: string;
         };
-        if (cancelled || !response.ok || !data.filesByFolder) return;
-        setFilesByDoc((current) => {
-          const next = { ...current };
-          for (const [id, listed] of Object.entries(data.filesByFolder ?? {})) {
-            const names = listed.map((file) => file.name).filter((name): name is string => Boolean(name));
-            const kept = (current[id] ?? []).filter((file) => names.includes(file.name) || Boolean(file.data));
-            const extras = names
-              .filter((name) => !kept.some((file) => file.name === name))
-              .map((name) => ({
-                name,
-                type: listed.find((file) => file.name === name)?.type || "application/octet-stream",
-                data: "",
-              }));
-            next[id] = [...kept, ...extras];
-          }
-          return next;
-        });
+        if (cancelled) return;
+        const locals = localByDoc(home, docs);
+        if (!response.ok || !qualityVaultStored(data.store, true) || !data.filesByFolder) {
+          setFilesByDoc(
+            Object.fromEntries(docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], locals[doc.id] ?? [])])),
+          );
+          return;
+        }
+        setFilesByDoc(
+          Object.fromEntries(
+            docs.map((doc) => [
+              doc.id,
+              mergeVaultedQualityFiles(data.filesByFolder?.[doc.id] ?? [], locals[doc.id] ?? []),
+            ]),
+          ),
+        );
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (cancelled) return;
+        setFilesByDoc(
+          Object.fromEntries(
+            docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], readQualityCompanyDocFiles(home, doc.id))]),
+          ),
+        );
+      });
     return () => {
       cancelled = true;
     };
@@ -101,9 +125,12 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
     });
     const data = (await response.json().catch(() => ({}))) as {
       error?: string;
+      store?: string;
+      stored?: boolean;
+      brief?: { files?: Array<{ name?: string; type?: string }> };
     };
-    if (!response.ok) {
-      throw new Error(typeof data.error === "string" && data.error ? data.error : "Could not save. Try again.");
+    if (!response.ok || !qualityVaultStored(data.store, data.stored)) {
+      throw new Error(typeof data.error === "string" && data.error ? data.error : QUALITY_VAULT_WRITE_ERROR);
     }
     return data;
   }
@@ -133,11 +160,11 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
           .filter((file) => check.accepted.some((row) => row.name === file.name))
           .map(fileToLead),
       );
-      const next = mergeQualityFolderFiles(filesByDoc[target] ?? [], incoming);
-      setFilesByDoc((current) => ({ ...current, [target]: next }));
-      writeQualityCompanyDocFiles(home, target, next);
+      const saved = await persistVault(target, incoming);
+      const vaulted = mergeVaultedQualityFiles(saved.brief?.files ?? incoming.map((file) => ({ name: file.name, type: file.type })), []);
+      setFilesByDoc((current) => ({ ...current, [target]: vaulted }));
+      writeQualityCompanyDocFiles(home, target, []);
       if (incoming.length) noteFeatureTrail("import");
-      await persistVault(target, next);
       const skipped = check.rejected.map((row) => `${row.name}: ${row.error}`);
       setNoteKind(skipped.length ? "warn" : "ok");
       setNote(
@@ -149,12 +176,27 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
         ].join(" "),
       );
     } catch (error) {
-      setNoteKind("err");
-      setNote(
-        error instanceof Error && error.message
-          ? `${error.message} Files stay on this desk until they save.`
-          : "Could not save. Files stay on this desk until they save.",
+      const incoming = await Promise.all(
+        picked
+          .filter((file) => check.accepted.some((row) => row.name === file.name))
+          .map(fileToLead),
+      ).catch(() => [] as LeadFile[]);
+      const leftover = mergeQualityFolderFiles(
+        (filesByDoc[target] ?? [])
+          .filter((file) => !file.vaulted && file.data)
+          .map((file) => ({ name: file.name, type: file.type, data: file.data || "" })),
+        incoming,
       );
+      writeQualityCompanyDocFiles(home, target, leftover);
+      setFilesByDoc((current) => ({
+        ...current,
+        [target]: mergeVaultedQualityFiles(
+          (current[target] ?? []).filter((file) => file.vaulted),
+          leftover,
+        ),
+      }));
+      setNoteKind("err");
+      setNote(error instanceof Error && error.message ? error.message : QUALITY_VAULT_WRITE_ERROR);
     } finally {
       setSaving(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -196,7 +238,10 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
                 {listed.length ? (
                   <ul className="mt-2 space-y-1 text-sm text-[#5b6f73]">
                     {listed.map((file) => (
-                      <li key={file.name}>{file.name}</li>
+                      <li key={file.name}>
+                        {file.name}
+                        {file.vaulted ? "" : ` · ${QUALITY_UNVAULTED_MARK}`}
+                      </li>
                     ))}
                   </ul>
                 ) : null}

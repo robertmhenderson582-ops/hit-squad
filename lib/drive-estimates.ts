@@ -28,11 +28,15 @@ import {
 } from "./his-wood-river.ts";
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 
+export const DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
+
 export type DriveFile = {
   id: string;
   name: string;
   properties?: Record<string, string>;
   modifiedTime?: string;
+  mimeType?: string;
+  parents?: string[];
 };
 
 export type DriveAdapter = {
@@ -58,6 +62,17 @@ export type DriveAdapter = {
   deleteJson(fileId: string): Promise<void>;
   /** True when the file bytes match what we just wrote. Never log content. */
   confirmWrite?(fileId: string, content: string): Promise<boolean>;
+  listChildren?(folderId: string): Promise<DriveFile[]>;
+  createFolder?(parentId: string, name: string): Promise<DriveFile>;
+  uploadBytes?(
+    folderId: string,
+    name: string,
+    bytes: Uint8Array,
+    mimeType: string,
+    properties?: Record<string, string>,
+  ): Promise<DriveFile>;
+  updateBytes?(fileId: string, bytes: Uint8Array, mimeType?: string): Promise<DriveFile>;
+  readBytes?(fileId: string): Promise<Uint8Array>;
 };
 
 export const SEATS_SA_OPEN_ERROR = "service account cannot open seats.json";
@@ -169,12 +184,23 @@ export function resetDriveTokenCache() {
   oauthDriveFailedOver = false;
 }
 
-export function memoryDrive(): DriveAdapter & { files: Map<string, { file: DriveFile; content: string }> } {
+export function memoryDrive(): DriveAdapter & {
+  files: Map<string, { file: DriveFile; content: string }>;
+  tree: Map<string, { file: DriveFile; bytes: Uint8Array }>;
+} {
   const files = new Map<string, { file: DriveFile; content: string }>();
+  const tree = new Map<string, { file: DriveFile; bytes: Uint8Array }>();
   let n = 0;
+
+  function putTree(file: DriveFile, bytes = new Uint8Array()) {
+    tree.set(file.id, { file, bytes });
+    return file;
+  }
+
   return {
     configured: true,
     files,
+    tree,
     async listJson() {
       return [...files.values()].map((row) => row.file);
     },
@@ -182,7 +208,7 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
       return [...files.values()].map((row) => row.file).filter((file) => !name || file.name === name);
     },
     async statFile(fileId) {
-      const row = files.get(fileId);
+      const row = files.get(fileId) || tree.get(fileId);
       if (!row) throw new DriveApiError(404, "not found");
       return row.file;
     },
@@ -191,10 +217,17 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
       if (!row) throw new Error("missing");
       return row.content;
     },
-    async createJson(_folderId, name, content, properties) {
+    async createJson(folderId, name, content, properties) {
       n += 1;
-      const file: DriveFile = { id: `file-${n}`, name, properties };
+      const file: DriveFile = {
+        id: `file-${n}`,
+        name,
+        properties,
+        mimeType: "application/json",
+        parents: folderId ? [folderId] : undefined,
+      };
       files.set(file.id, { file, content });
+      putTree(file, new TextEncoder().encode(content));
       return file;
     },
     async updateJson(fileId, content, name, properties) {
@@ -204,15 +237,64 @@ export function memoryDrive(): DriveAdapter & { files: Map<string, { file: Drive
         name: name || row?.file.name || fileId,
         properties: properties || row?.file.properties,
         modifiedTime: new Date().toISOString(),
+        mimeType: row?.file.mimeType || "application/json",
+        parents: row?.file.parents,
       };
-      files.set(fileId, { file, content });
+      files.set(file.id, { file, content });
+      putTree(file, new TextEncoder().encode(content));
       return file;
     },
     async deleteJson(fileId) {
       files.delete(fileId);
+      tree.delete(fileId);
     },
     async confirmWrite(fileId, content) {
       return files.get(fileId)?.content === content;
+    },
+    async listChildren(folderId) {
+      return [...tree.values()].map((row) => row.file).filter((file) => file.parents?.includes(folderId));
+    },
+    async createFolder(parentId, name) {
+      const existing = [...tree.values()].find(
+        (row) => row.file.parents?.includes(parentId) && row.file.name === name && row.file.mimeType === DRIVE_FOLDER_MIME,
+      );
+      if (existing) return existing.file;
+      n += 1;
+      return putTree({
+        id: `folder-${n}`,
+        name,
+        mimeType: DRIVE_FOLDER_MIME,
+        parents: [parentId],
+      });
+    },
+    async uploadBytes(folderId, name, bytes, mimeType, properties) {
+      n += 1;
+      const copy = new Uint8Array(bytes);
+      return putTree(
+        {
+          id: `bin-${n}`,
+          name,
+          mimeType,
+          parents: [folderId],
+          properties,
+        },
+        copy,
+      );
+    },
+    async updateBytes(fileId, bytes, mimeType) {
+      const row = tree.get(fileId);
+      if (!row) throw new Error("missing");
+      const file: DriveFile = {
+        ...row.file,
+        mimeType: mimeType || row.file.mimeType,
+        modifiedTime: new Date().toISOString(),
+      };
+      return putTree(file, new Uint8Array(bytes));
+    },
+    async readBytes(fileId) {
+      const row = tree.get(fileId);
+      if (!row) throw new Error("missing");
+      return row.bytes;
     },
   };
 }
@@ -312,7 +394,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
     do {
       const params: Record<string, string> = {
         q,
-        fields: "nextPageToken,files(id,name,properties,modifiedTime)",
+        fields: "nextPageToken,files(id,name,mimeType,parents,properties,modifiedTime)",
         pageSize: "100",
         includeItemsFromAllDrives: "true",
       };
@@ -419,6 +501,59 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
     async confirmWrite(fileId, content) {
       return confirmDriveWrite(getAccessToken, fileId, content);
     },
+    async listChildren(folderId) {
+      return listByQuery(`'${escapeDriveQueryValue(folderId)}' in parents and trashed=false`);
+    },
+    async createFolder(parentId, name) {
+      const response = await fetch(driveApiUrl("/drive/v3/files"), {
+        method: "POST",
+        headers: await authHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ name, mimeType: DRIVE_FOLDER_MIME, parents: [parentId] }),
+      });
+      const file = (await response.json()) as DriveFile & { error?: unknown };
+      if (!file.id) throw driveHttpError(response.status || 400, file, "folder");
+      return { id: file.id, name: file.name || name, mimeType: DRIVE_FOLDER_MIME, parents: [parentId] };
+    },
+    async uploadBytes(folderId, name, bytes, mimeType, properties) {
+      const boundary = `hs_bytes_${Date.now()}`;
+      const meta = { name, parents: [folderId], mimeType, properties };
+      const head = Buffer.from(
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`,
+      );
+      const tail = Buffer.from(`\r\n--${boundary}--`);
+      const body = Buffer.concat([head, Buffer.from(bytes), tail]);
+      const response = await fetch(driveApiUrl("/upload/drive/v3/files", { uploadType: "multipart" }), {
+        method: "POST",
+        headers: await authHeaders({ "content-type": `multipart/related; boundary=${boundary}` }),
+        body,
+      });
+      const file = (await response.json()) as DriveFile & { error?: unknown };
+      if (!file.id) throw driveHttpError(response.status || 400, file, "upload");
+      return { id: file.id, name: file.name || name, mimeType, parents: [folderId], properties };
+    },
+    async updateBytes(fileId, bytes, mimeType) {
+      const response = await fetch(
+        driveApiUrl(`/upload/drive/v3/files/${fileId}`, { uploadType: "media", fields: "id,name,mimeType,modifiedTime" }),
+        {
+          method: "PATCH",
+          headers: await authHeaders({ "content-type": mimeType || "application/octet-stream" }),
+          body: Buffer.from(bytes),
+        },
+      );
+      const file = (await response.json()) as DriveFile & { error?: unknown };
+      if (!response.ok || !file.id) throw driveHttpError(response.status || 400, file, "upload");
+      return { id: file.id, name: file.name || fileId, mimeType: file.mimeType || mimeType };
+    },
+    async readBytes(fileId) {
+      const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { alt: "media" }), {
+        headers: await authHeaders(),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw driveHttpError(response.status, payload, "read");
+      }
+      return new Uint8Array(await response.arrayBuffer());
+    },
   };
 }
 
@@ -478,6 +613,21 @@ function unconfiguredDrive(): DriveAdapter {
       throw new Error("unconfigured");
     },
     async deleteJson() {
+      throw new Error("unconfigured");
+    },
+    async listChildren() {
+      return [];
+    },
+    async createFolder() {
+      throw new Error("unconfigured");
+    },
+    async uploadBytes() {
+      throw new Error("unconfigured");
+    },
+    async updateBytes() {
+      throw new Error("unconfigured");
+    },
+    async readBytes() {
       throw new Error("unconfigured");
     },
   };
@@ -548,6 +698,28 @@ function withServiceAccountFallback(primary: DriveAdapter, secondary: DriveAdapt
     updateJson: (fileId, content, name, properties) =>
       runWrite(fileId, content, (drive) => drive.updateJson(fileId, content, name, properties)),
     deleteJson: (fileId) => run((drive) => drive.deleteJson(fileId)),
+    listChildren: (folderId) =>
+      run((drive) => (drive.listChildren ? drive.listChildren(folderId) : Promise.resolve([]))),
+    createFolder: (parentId, name) =>
+      run((drive) => {
+        if (!drive.createFolder) throw new Error("unconfigured");
+        return drive.createFolder(parentId, name);
+      }),
+    uploadBytes: (folderId, name, bytes, mimeType, properties) =>
+      run((drive) => {
+        if (!drive.uploadBytes) throw new Error("unconfigured");
+        return drive.uploadBytes(folderId, name, bytes, mimeType, properties);
+      }),
+    updateBytes: (fileId, bytes, mimeType) =>
+      run((drive) => {
+        if (!drive.updateBytes) throw new Error("unconfigured");
+        return drive.updateBytes(fileId, bytes, mimeType);
+      }),
+    readBytes: (fileId) =>
+      run((drive) => {
+        if (!drive.readBytes) throw new Error("unconfigured");
+        return drive.readBytes(fileId);
+      }),
   };
 }
 
@@ -637,6 +809,27 @@ function withVaultWritePreference(sa: DriveAdapter, oauth: DriveAdapter): DriveA
       (await writeConfirmed(sa, fileId, content)) || writeConfirmed(oauth, fileId, content),
     // SA only — do not let an OAuth GET hide a 403 on seats.json.
     statFile: (fileId) => (sa.statFile ? sa.statFile(fileId) : Promise.reject(new DriveApiError(404, "stat"))),
+    listChildren: (folderId) => preferSa((drive) => (drive.listChildren ? drive.listChildren(folderId) : Promise.resolve([]))),
+    createFolder: (parentId, name) =>
+      preferSa((drive) => {
+        if (!drive.createFolder) throw new Error("unconfigured");
+        return drive.createFolder(parentId, name);
+      }),
+    uploadBytes: (folderId, name, bytes, mimeType, properties) =>
+      preferSa((drive) => {
+        if (!drive.uploadBytes) throw new Error("unconfigured");
+        return drive.uploadBytes(folderId, name, bytes, mimeType, properties);
+      }),
+    updateBytes: (fileId, bytes, mimeType) =>
+      preferSa((drive) => {
+        if (!drive.updateBytes) throw new Error("unconfigured");
+        return drive.updateBytes(fileId, bytes, mimeType);
+      }),
+    readBytes: (fileId) =>
+      preferSa((drive) => {
+        if (!drive.readBytes) throw new Error("unconfigured");
+        return drive.readBytes(fileId);
+      }),
   };
 }
 

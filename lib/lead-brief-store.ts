@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { briefsVault, readVaultJson, writeVaultJson } from "./drive-data.ts";
+import { briefsFolderId, briefsVault, readVaultJson, writeVaultJson } from "./drive-data.ts";
 import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import type { LeadBrief, LeadFile, PublicLeadBrief } from "./lead-briefs.ts";
+import { QUALITY_VAULT_WRITE_ERROR } from "./quality-vault.ts";
 
 export type LeadBriefKind = "quality" | "hse";
 
@@ -29,6 +30,14 @@ let injectedAdapter: DriveAdapter | null | undefined;
 
 export function leadBriefStoreKind() {
   return resolveAdapter() ? "drive" : "server-json-file";
+}
+
+export function leadBriefAdapter() {
+  return resolveAdapter();
+}
+
+export function qualityBriefsRequireDrive() {
+  return Boolean(resolveAdapter()?.configured);
 }
 
 export function leadBriefStorePath(kind: LeadBriefKind) {
@@ -167,7 +176,14 @@ async function readVaultBriefs(kind: LeadBriefKind): Promise<StoredLeadBrief[]> 
   const drive = resolveAdapter();
   if (!drive) return [];
   const vault = briefsVault(kind);
-  return parseLeadBriefFile(await readVaultJson(drive, vault.name, vault.kind), kind);
+  const folderId = briefsFolderId(kind);
+  const fromRoom = await readVaultJson(drive, vault.name, vault.kind, folderId);
+  if (fromRoom) return parseLeadBriefFile(fromRoom, kind);
+  if (kind === "quality") {
+    const fromData = await readVaultJson(drive, vault.name, vault.kind);
+    return parseLeadBriefFile(fromData, kind);
+  }
+  return parseLeadBriefFile(null, kind);
 }
 
 function briefsNeedVaultWrite(vault: StoredLeadBrief[], merged: StoredLeadBrief[]) {
@@ -181,11 +197,19 @@ function briefsNeedVaultWrite(vault: StoredLeadBrief[], merged: StoredLeadBrief[
 
 async function persist(kind: LeadBriefKind, briefs: StoredLeadBrief[]): Promise<StoredLeadBrief[]> {
   const drive = resolveAdapter();
+  if (kind === "quality") {
+    if (!drive?.configured) throw new Error(QUALITY_VAULT_WRITE_ERROR);
+    const merged = mergeLeadBriefs(await readVaultBriefs(kind), briefs);
+    const vault = briefsVault(kind);
+    await writeVaultJson(drive, vault.name, vault.kind, { briefs: merged }, briefsFolderId(kind));
+    writeCache(kind, merged);
+    return merged;
+  }
   if (drive) {
     const merged = mergeLeadBriefs(await readVaultBriefs(kind), briefs);
     writeCache(kind, merged);
     const vault = briefsVault(kind);
-    await writeVaultJson(drive, vault.name, vault.kind, { briefs: merged });
+    await writeVaultJson(drive, vault.name, vault.kind, { briefs: merged }, briefsFolderId(kind));
     return merged;
   }
   const merged = mergeLeadBriefs(readDiskBriefs(kind), briefs);
@@ -196,6 +220,12 @@ async function persist(kind: LeadBriefKind, briefs: StoredLeadBrief[]): Promise<
 export async function hydrateLeadBriefStore(kind: LeadBriefKind): Promise<StoredLeadBrief[]> {
   const cached = readCache(kind);
   const drive = resolveAdapter();
+  if (kind === "quality") {
+    if (!drive?.configured) return [];
+    const vault = await readVaultBriefs(kind);
+    writeCache(kind, vault);
+    return vault;
+  }
   if (drive) {
     try {
       const vault = await readVaultBriefs(kind);
@@ -203,7 +233,7 @@ export async function hydrateLeadBriefStore(kind: LeadBriefKind): Promise<Stored
       writeCache(kind, merged);
       if (briefsNeedVaultWrite(vault, merged)) {
         const named = briefsVault(kind);
-        await writeVaultJson(drive, named.name, named.kind, { briefs: merged });
+        await writeVaultJson(drive, named.name, named.kind, { briefs: merged }, briefsFolderId(kind));
       }
     } catch {
       // Keep the local cache.
