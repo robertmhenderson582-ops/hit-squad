@@ -271,6 +271,7 @@ function Conversation({
                 onClick={() => onRemoveMessage(message.id, message.text || "Photo")}
                 className="trash-btn !min-h-8 !min-w-8 !text-sm"
                 aria-label="Remove this message"
+                title="Remove this message"
               >
                 ⌫
               </button>

@@ -121,7 +121,7 @@ function PhaseRowsTable({
                   {picks ? (
                     <select
                       aria-label={`${row.name} overtime`}
-                      value={currentPick ?? (row.id === "post" ? "5x8-st" : "4x10-st")}
+                      value={currentPick ?? (row.id === "post" ? "5x8-ot8" : "4x10-st")}
                       onChange={(event) => onPickOt(row.id as PhaseId, event.target.value as PhaseOtPick)}
                       className="paper-field mt-2 min-w-[14rem]"
                     >

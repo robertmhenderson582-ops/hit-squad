@@ -107,11 +107,10 @@ import {
   parseYmd,
   PHASE_IDS,
   PHASE_NAMES,
-  PHASE_OT_PICKS,
   eachYmd,
   maskForPhaseDays,
+  phaseOtPickFromLabel,
   phaseOwningDate,
-  type PhaseOtPick,
   type PhaseRow,
   type PhaseScheduleState,
 } from "./phase-schedule.ts";
@@ -555,7 +554,7 @@ function parseJobSetup(ws: ExcelJS.Worksheet | undefined): PhaseScheduleState {
     let stop = cellYmd(ws.getCell(row, 4).value);
     if (start && stop && stop < start) stop = start;
     const pickLabel = asText(ws.getCell(row, 8).value);
-    const pick = PHASE_OT_PICKS.find((item) => item.label === pickLabel)?.id as PhaseOtPick | undefined;
+    const pick = phaseOtPickFromLabel(pickLabel) ?? undefined;
     const days = asNum(ws.getCell(row, 5).value);
     const hours = asNum(ws.getCell(row, 6).value);
     incoming.push({

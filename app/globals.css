@@ -1835,10 +1835,11 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   margin-left: 0.4rem;
   justify-content: center;
   border-radius: 999px;
-  background: #d7f4f7;
-  color: #0f5f6d;
+  background: #fff;
+  color: #08343c;
+  border: 1px solid #08343c;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   padding: 0 0.3rem;
 }
 
@@ -2026,6 +2027,7 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   color: #fff;
   padding: 0.35rem 0.75rem;
   font-size: 0.8rem;
+  font-weight: 700;
   animation: teal-pulse 1.4s ease-out infinite;
 }
 
@@ -2161,6 +2163,51 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 .crew-chevron:hover .crew-chevron-label,
 .crew-chevron:focus-visible .crew-chevron-label {
   opacity: 1;
+}
+
+.desk-hover-tip {
+  position: relative;
+}
+
+.desk-hover-tip-label {
+  pointer-events: none;
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 50%;
+  z-index: 8;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  border-radius: 4px;
+  background: #0f5f6d;
+  color: #efe6d4;
+  padding: 0.2rem 0.45rem;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  opacity: 0;
+}
+
+.desk-hover-tip:hover .desk-hover-tip-label,
+.desk-hover-tip:focus-visible .desk-hover-tip-label {
+  opacity: 1;
+}
+
+.staff-clock-fold {
+  margin-bottom: 0.75rem;
+  border: 1px solid #d5e0de;
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0.55rem 0.75rem;
+}
+
+.staff-clock-fold-summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #163038;
+}
+
+.staff-clock-fold[open] .staff-clock-fold-summary {
+  margin-bottom: 0.55rem;
 }
 
 .crew-phase-card {

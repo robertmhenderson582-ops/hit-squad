@@ -50,6 +50,7 @@ export function PasswordField({
           onClick={() => setShow((on) => !on)}
           disabled={disabled}
           aria-label={show ? "Hide password" : "Show password"}
+          title={show ? "Hide password" : "Show password"}
         >
           {show ? "hide" : "eye"}
         </button>

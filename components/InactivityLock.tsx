@@ -108,8 +108,17 @@ export function InactivityLock() {
         <div className="lock-scrim">
           <form onSubmit={unlock} className="lock-card">
             <div className="mb-3 flex justify-end">
-              <button type="button" onClick={flipDayNight} className="theme-flip" aria-label="Day or Night">
+              <button
+                type="button"
+                onClick={flipDayNight}
+                className="theme-flip desk-hover-tip"
+                aria-label={resolvedTheme === "day" ? "Night — instrument cluster" : "Day — paper desk"}
+                title={resolvedTheme === "day" ? "Night — instrument cluster" : "Day — paper desk"}
+              >
                 {resolvedTheme === "day" ? "☾" : "☀"}
+                <span className="desk-hover-tip-label">
+                  {resolvedTheme === "day" ? "Night — instrument cluster" : "Day — paper desk"}
+                </span>
               </button>
             </div>
             <h2 className="font-display text-2xl">Session locked — sign in again</h2>

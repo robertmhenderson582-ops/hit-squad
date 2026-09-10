@@ -83,15 +83,41 @@ export function phaseBarRuns(dates: string[], phases: PhaseRow[]): PhaseBarRun[]
   return runs;
 }
 
-export type PhaseOtPick = "4x10-st" | "4x10-ot8" | "5x8-st" | "5x8-ot8";
+export type PhaseOtPick = "4x10-st" | "4x10-ot8" | "5x8-ot8";
+/** Retired Pre/Post pick. Saved packs and old Excel labels remap to `5x8-ot8`. */
+export type LegacyPhaseOtPick = PhaseOtPick | "5x8-st";
+
+export const RETIRED_PHASE_OT_PICK = "5x8-st" as const;
+export const RETIRED_PHASE_OT_LABEL = "5×8 — all straight time";
 
 /** Pre-Turnaround and Post share this list. Do not shorten Pre. */
 export const PHASE_OT_PICKS: Array<{ id: PhaseOtPick; label: string }> = [
-  { id: "5x8-st", label: "5×8 — all straight time" },
   { id: "5x8-ot8", label: "5×8 — OT after 8 hours" },
   { id: "4x10-st", label: "4×10 — all 10 ST" },
   { id: "4x10-ot8", label: "4×10 — OT after 8" },
 ];
+
+export function normalizePhaseOtPick(pick: string | null | undefined): PhaseOtPick | null {
+  if (pick === RETIRED_PHASE_OT_PICK) return "5x8-ot8";
+  if (pick === "4x10-st" || pick === "4x10-ot8" || pick === "5x8-ot8") return pick;
+  return null;
+}
+
+export function phaseOtPickFromLabel(label: string): PhaseOtPick | null {
+  const hit = PHASE_OT_PICKS.find((item) => item.label === label);
+  if (hit) return hit.id;
+  if (label === RETIRED_PHASE_OT_LABEL) return "5x8-ot8";
+  return null;
+}
+
+/** 5×8 all-ST is retired. Nearest valid Pre/Post pick is OT after 8. */
+export function migrateRetiredOtPhase(row: PhaseRow): PhaseRow {
+  if (row.id !== "pre" && row.id !== "post") return row;
+  if (row.daysPerWeek === 5 && row.hoursPerDay === 8 && !row.otAfter8) {
+    return { ...row, otAfter8: true };
+  }
+  return row;
+}
 
 export function otPicksForPhase(id: PhaseId) {
   if (id === "pre" || id === "post") return PHASE_OT_PICKS;
@@ -254,7 +280,7 @@ export function defaultPhases(): PhaseRow[] {
       stop: "2026-10-05",
       daysPerWeek: 5,
       hoursPerDay: 8,
-      otAfter8: false,
+      otAfter8: true,
       sundaysOff: [],
     },
   ];
@@ -446,7 +472,7 @@ export function mergeSchedule(saved: Partial<PhaseScheduleState> | null | undefi
         sundaysOff: Array.isArray(hit.sundaysOff) ? hit.sundaysOff : row.sundaysOff,
         on: Boolean(hit.on),
       };
-    }),
+    }).map(migrateRetiredOtPhase),
   };
 }
 
@@ -500,22 +526,23 @@ export function patchPhase(state: PhaseScheduleState, id: PhaseId, patch: Partia
   };
 }
 
-export function applyOtPick(state: PhaseScheduleState, id: PhaseId, pick: PhaseOtPick): PhaseScheduleState {
-  if (pick === "4x10-st") {
+export function applyOtPick(state: PhaseScheduleState, id: PhaseId, pick: LegacyPhaseOtPick): PhaseScheduleState {
+  const next = normalizePhaseOtPick(pick);
+  if (next === "4x10-st") {
     return patchPhase(state, id, { daysPerWeek: 4, hoursPerDay: 10, otAfter8: false });
   }
-  if (pick === "4x10-ot8") {
+  if (next === "4x10-ot8") {
     return patchPhase(state, id, { daysPerWeek: 4, hoursPerDay: 10, otAfter8: true });
   }
-  if (pick === "5x8-ot8") {
+  if (next === "5x8-ot8") {
     return patchPhase(state, id, { daysPerWeek: 5, hoursPerDay: 8, otAfter8: true });
   }
-  return patchPhase(state, id, { daysPerWeek: 5, hoursPerDay: 8, otAfter8: false });
+  return state;
 }
 
 export function phaseOtPick(row: PhaseRow): PhaseOtPick | null {
   if (row.daysPerWeek === 4 && row.hoursPerDay === 10) return row.otAfter8 ? "4x10-ot8" : "4x10-st";
-  if (row.daysPerWeek === 5 && row.hoursPerDay === 8) return row.otAfter8 ? "5x8-ot8" : "5x8-st";
+  if (row.daysPerWeek === 5 && row.hoursPerDay === 8) return "5x8-ot8";
   return null;
 }
 

@@ -11,11 +11,17 @@ import {
   liveJobSetupPhases,
   mergeSchedule,
   rangesHaveCustomClock,
+  migrateRetiredOtPhase,
+  normalizePhaseOtPick,
   otPicksForPhase,
   patchPhase,
   phaseBarRuns,
+  phaseOtPick,
+  phaseOtPickFromLabel,
   phaseOwningDate,
   PHASE_OT_PICKS,
+  RETIRED_PHASE_OT_LABEL,
+  RETIRED_PHASE_OT_PICK,
   PHASE_TONE_BAND_INK,
   PHASE_TONE_FILLS,
   setMultiUnits,
@@ -99,19 +105,19 @@ describe("phase schedule", () => {
     assert.equal(pre?.otAfter8, true);
     const st = applyOtPick(ot, "pre", "4x10-st");
     assert.equal(st.phases.find((row) => row.id === "pre")?.otAfter8, false);
-    const post = applyOtPick(defaultPhaseSchedule(), "post", "5x8-st");
+    const post = applyOtPick(defaultPhaseSchedule(), "post", "5x8-ot8");
     assert.equal(post.phases.find((row) => row.id === "post")?.daysPerWeek, 5);
     assert.equal(post.phases.find((row) => row.id === "post")?.hoursPerDay, 8);
-    assert.equal(post.phases.find((row) => row.id === "post")?.otAfter8, false);
-    const preFive = applyOtPick(defaultPhaseSchedule(), "pre", "5x8-st");
-    assert.equal(preFive.phases.find((row) => row.id === "pre")?.daysPerWeek, 5);
-    assert.equal(preFive.phases.find((row) => row.id === "pre")?.hoursPerDay, 8);
-    assert.equal(preFive.phases.find((row) => row.id === "pre")?.otAfter8, false);
-    const preFiveOt = applyOtPick(preFive, "pre", "5x8-ot8");
+    assert.equal(post.phases.find((row) => row.id === "post")?.otAfter8, true);
+    const remapped = applyOtPick(defaultPhaseSchedule(), "pre", "5x8-st");
+    assert.equal(remapped.phases.find((row) => row.id === "pre")?.daysPerWeek, 5);
+    assert.equal(remapped.phases.find((row) => row.id === "pre")?.hoursPerDay, 8);
+    assert.equal(remapped.phases.find((row) => row.id === "pre")?.otAfter8, true);
+    const preFiveOt = applyOtPick(defaultPhaseSchedule(), "pre", "5x8-ot8");
     assert.equal(preFiveOt.phases.find((row) => row.id === "pre")?.otAfter8, true);
   });
 
-  it("Pre-Turnaround schedule picker matches Post", () => {
+  it("Pre-Turnaround schedule picker matches Post and drops all-ST 5×8", () => {
     const pre = otPicksForPhase("pre");
     const post = otPicksForPhase("post");
     assert.ok(pre);
@@ -119,10 +125,49 @@ describe("phase schedule", () => {
     assert.deepEqual(pre, post);
     assert.deepEqual(
       pre.map((item) => item.id),
-      ["5x8-st", "5x8-ot8", "4x10-st", "4x10-ot8"],
+      ["5x8-ot8", "4x10-st", "4x10-ot8"],
     );
-    assert.equal(PHASE_OT_PICKS.length, 4);
+    assert.equal(PHASE_OT_PICKS.length, 3);
+    assert.equal(
+      PHASE_OT_PICKS.some((item) => item.id === RETIRED_PHASE_OT_PICK || item.label === RETIRED_PHASE_OT_LABEL),
+      false,
+    );
     assert.equal(otPicksForPhase("mech"), null);
+    assert.equal(normalizePhaseOtPick("5x8-st"), "5x8-ot8");
+    assert.equal(phaseOtPickFromLabel(RETIRED_PHASE_OT_LABEL), "5x8-ot8");
+    assert.equal(phaseOtPickFromLabel("5×8 — OT after 8 hours"), "5x8-ot8");
+  });
+
+  it("migrates saved 5x8-st Pre/Post packs to 5x8-ot8", () => {
+    const saved = mergeSchedule({
+      projectStart: "2026-08-21",
+      phases: defaultPhases().map((row) =>
+        row.id === "post" ? { ...row, daysPerWeek: 5, hoursPerDay: 8, otAfter8: false } : row,
+      ),
+    });
+    const post = saved.phases.find((row) => row.id === "post");
+    assert.equal(post?.daysPerWeek, 5);
+    assert.equal(post?.hoursPerDay, 8);
+    assert.equal(post?.otAfter8, true);
+    assert.equal(phaseOtPick(post!), "5x8-ot8");
+    const leftover = migrateRetiredOtPhase({
+      ...defaultPhases().find((row) => row.id === "pre")!,
+      daysPerWeek: 5,
+      hoursPerDay: 8,
+      otAfter8: false,
+    });
+    assert.equal(leftover.otAfter8, true);
+    assert.equal(phaseOtPick(leftover), "5x8-ot8");
+    const mid = migrateRetiredOtPhase({
+      ...defaultPhases().find((row) => row.id === "mech")!,
+      daysPerWeek: 5,
+      hoursPerDay: 8,
+      otAfter8: false,
+    });
+    assert.equal(mid.otAfter8, false);
+    const fresh = defaultPhaseSchedule().phases.find((row) => row.id === "post");
+    assert.equal(fresh?.otAfter8, true);
+    assert.equal(phaseOtPick(fresh!), "5x8-ot8");
   });
 
   it("merge persist never drops a locked phase", () => {

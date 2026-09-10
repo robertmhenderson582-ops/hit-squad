@@ -417,35 +417,30 @@ function CraftAccordionRow({
       {open ? (
         <tr>
           <td colSpan={11} className="bg-[#f4f1e8] px-4 py-4">
-            <p className="text-xs text-[#163038]">
-              {clockNote(
-                row.position,
-                site,
-                client,
-                row.clockOverride ?? "auto",
-                "",
-                "billedAs" in row ? String(row.billedAs || "") : "",
-              )}
-            </p>
-            <label className="mt-2 flex items-center gap-2 text-sm text-[#163038]">
-              <input
-                type="checkbox"
-                checked={clockChecked}
-                onChange={(event) =>
-                  onPatch({
-                    clockOverride: event.target.checked ? (staff ? "comp" : "staff") : "auto",
-                  })
-                }
+            {namedLane === "staff" ? (
+              <details className="staff-clock-fold">
+                <summary className="staff-clock-fold-summary">Staff clock</summary>
+                <StaffClockFields
+                  row={row}
+                  site={site}
+                  client={client}
+                  staff={staff}
+                  clockChecked={clockChecked}
+                  namedLane={namedLane}
+                  onPatch={onPatch}
+                />
+              </details>
+            ) : (
+              <StaffClockFields
+                row={row}
+                site={site}
+                client={client}
+                staff={staff}
+                clockChecked={clockChecked}
+                namedLane={namedLane}
+                onPatch={onPatch}
               />
-              {staff ? "Use COMP clock" : "Use staff clock"}
-            </label>
-            <p className="mt-1 text-xs text-[#5b6f73]">
-              Uncheck returns to auto. Union/Merit is a label only — a union superintendent still uses the
-              staff split unless Use COMP clock is on.
-            </p>
-            {namedLane && canNameOrgLane(namedLane) ? (
-              <StaffGfNames rowId={row.id} />
-            ) : null}
+            )}
             <DayNightHoursLine row={row} site={site} client={client} otAfter8={pack.crew.otAfter8} />
             <CrewPhaseCards
               row={row}
@@ -459,6 +454,56 @@ function CraftAccordionRow({
           </td>
         </tr>
       ) : null}
+    </>
+  );
+}
+
+function StaffClockFields({
+  row,
+  site,
+  client,
+  staff,
+  clockChecked,
+  namedLane,
+  onPatch,
+}: {
+  row: CraftRow;
+  site: string;
+  client: string;
+  staff: boolean;
+  clockChecked: boolean;
+  namedLane: "staff" | "generalForeman" | null;
+  onPatch: (patch: Partial<CraftRow>) => void;
+}) {
+  return (
+    <>
+      <p className="text-xs text-[#163038]">
+        {clockNote(
+          row.position,
+          site,
+          client,
+          row.clockOverride ?? "auto",
+          "",
+          "billedAs" in row ? String(row.billedAs || "") : "",
+        )}
+      </p>
+      <label className="mt-2 flex items-center gap-2 text-sm text-[#163038]">
+        <input
+          type="checkbox"
+          checked={clockChecked}
+          onChange={(event) =>
+            onPatch({
+              clockOverride: event.target.checked ? (staff ? "comp" : "staff") : "auto",
+            })
+          }
+        />
+        {staff ? "Use COMP clock" : "Use staff clock"}
+      </label>
+      <p className="mt-1 text-xs text-[#5b6f73]">
+        Uncheck returns to auto. Union/Merit is a label only — a union superintendent still uses the
+        staff split unless Use COMP clock is on.
+      </p>
+      {namedLane && canNameOrgLane(namedLane) ? <StaffGfNames rowId={row.id} /> : null}
     </>
   );
 }

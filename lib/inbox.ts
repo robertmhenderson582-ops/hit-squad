@@ -324,7 +324,16 @@ function mergePeerThread(
     }
   }
   const messages = [...map.values()].sort((a, b) => a.sentAt.localeCompare(b.sentAt) || a.id.localeCompare(b.id));
-  return { ...remote, messages };
+  return { ...remote, messages, unread: mergeThreadUnread(local, { ...remote, messages }) };
+}
+
+/** Keep a local read (unread 0) unless the poll brought in a new incoming message. */
+export function mergeThreadUnread(local: InboxThread | undefined, remote: InboxThread) {
+  if (!local) return remote.unread;
+  const localIds = new Set(local.messages.map((row) => row.id));
+  const newIncoming = remote.messages.filter((row) => row.from === "them" && !localIds.has(row.id));
+  if (local.unread === 0 && newIncoming.length === 0) return 0;
+  return remote.unread;
 }
 
 /**
