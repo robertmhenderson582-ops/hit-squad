@@ -6,13 +6,16 @@ import { canSeeRateVault, canSeeRateVaultDoor, pageAllowedForSeat } from "./desk
 import { RATE_VAULT_DOOR, homeDockTilesForViewer } from "./desk-home.ts";
 import {
   RATE_VAULT_API,
+  RATE_VAULT_BUILDER_STEPS,
   RATE_VAULT_CBA_PLA_ID,
   RATE_VAULT_CBA_PLA_RULES,
   RATE_VAULT_CBA_PLA_SECTION,
   RATE_VAULT_HREF,
+  RATE_VAULT_LIBRARY_ID,
   RATE_VAULT_OWNER_NOTE,
   RATE_VAULT_PRIVILEGE,
   RATE_VAULT_SECTIONS,
+  RATE_VAULT_SOURCE_KINDS,
   RATE_VAULT_STATE_LAW_ID,
   RATE_VAULT_STATE_LAW_RULES,
   RATE_VAULT_STATE_LAW_SECTION,
@@ -24,6 +27,7 @@ import {
   rateVaultAccess,
   stubPublishRateVault,
 } from "./rate-vault.ts";
+import { buildRateVaultWorkshop, seedRateVaultLibrary } from "./rate-vault-library.ts";
 import { OWNER_ONLY_PRIVILEGES, isPrivilegeId } from "./privileges.ts";
 import { DESK_VERSION, OWNER_WHATS_NEW, TESTER_WHATS_NEW } from "./whats-new.ts";
 
@@ -86,8 +90,29 @@ describe("Rate Vault scaffold", () => {
     assert.equal(workshop.id, "rate-vault");
     assert.deepEqual(
       RATE_VAULT_SECTIONS.map((section) => section.id),
-      ["halls", "contractor", "cba-pla", "state-law", "p66", "publish"],
+      ["library", "halls", "contractor", "cba-pla", "state-law", "p66", "publish"],
     );
+    assert.equal(RATE_VAULT_LIBRARY_ID, "library");
+    assert.deepEqual(
+      RATE_VAULT_BUILDER_STEPS.map((step) => step.id),
+      ["sources", "recognize", "map-crafts", "burden", "publish"],
+    );
+    assert.deepEqual([...RATE_VAULT_SOURCE_KINDS], [
+      "cba",
+      "pla",
+      "gppma",
+      "local-craft-sheet",
+      "b1-exhibit",
+      "rate-builder",
+      "comp",
+      "union-terms",
+      "other",
+    ]);
+    const seeded = buildRateVaultWorkshop();
+    assert.equal(seeded.library.entries.length, seedRateVaultLibrary().length);
+    assert.equal(workshop.library.entries.length, 0);
+    assert.equal(workshop.steps, RATE_VAULT_BUILDER_STEPS);
+    assert.equal(workshop.review, null);
     assert.equal(RATE_VAULT_CBA_PLA_ID, "cba-pla");
     assert.equal(RATE_VAULT_CBA_PLA_SECTION.id, "cba-pla");
     assert.equal(RATE_VAULT_CBA_PLA_SECTION.label, "CBA / PLA");
@@ -150,13 +175,16 @@ describe("Rate Vault scaffold", () => {
     const api = source("../app/api/rate-vault/route.ts");
     const server = source("./rate-vault-server.ts");
     const vaultModule = source("./rate-vault.ts");
+    const library = source("./rate-vault-library.ts");
+    const recognize = source("./rate-vault-recognize.ts");
+    const store = source("./rate-vault-store.ts");
     const privileges = source("./privileges.ts");
 
     assert.match(dock, /homeDockTilesForViewer/);
     assert.match(dock, /RATE_VAULT_DOOR/);
     assert.match(dock, /role="radio"/);
     assert.match(desk, /RATE_VAULT_OWNER_NOTE/);
-    assert.match(desk, /RATE_VAULT_SECTIONS/);
+    assert.match(desk, /RATE_VAULT_BUILDER_STEPS/);
     assert.match(vaultModule, /Hall uploads/);
     assert.match(vaultModule, /Contractor books/);
     assert.match(vaultModule, /CBA \/ PLA/);
@@ -165,17 +193,24 @@ describe("Rate Vault scaffold", () => {
     assert.match(vaultModule, /state-law/);
     assert.match(vaultModule, /P66 \/ site rules/);
     assert.match(vaultModule, /Publish rate package/);
-    assert.match(desk, /RATE_VAULT_CBA_PLA_ID/);
-    assert.match(desk, /RATE_VAULT_STATE_LAW_ID/);
+    assert.match(vaultModule, /Source library/);
+    assert.match(desk, /RATE_VAULT_CBA_PLA_SECTION/);
+    assert.match(desk, /RATE_VAULT_STATE_LAW_SECTION/);
     assert.match(desk, /CBA \/ PLA upload stub/);
     assert.match(desk, /Vault is empty/);
     assert.match(desk, /No state-law captures yet/);
+    assert.match(desk, /Browse the vault catalog/);
+    assert.match(desk, /Review card/);
+    assert.match(desk, /B-1 Builder steps/);
     assert.doesNotMatch(desk, /Cassidy|james@|invite James/i);
     assert.doesNotMatch(vaultModule, /Cassidy|estimate-pack|\/api\/desk\/rates/);
     const docs = source("../docs/rate-vault.md");
     assert.match(docs, /cba-pla/);
     assert.match(docs, /state-law/);
     assert.match(docs, /not nested under P66/);
+    assert.match(docs, /files stay on Drive/i);
+    assert.match(docs, /review card/i);
+    assert.match(docs, /never commit/i);
     assert.match(desk, /\/api\/rate-vault/);
     assert.match(gate, /canSeeRateVaultDoor/);
     assert.match(gate, /router.replace\("\/"\)/);
@@ -185,14 +220,23 @@ describe("Rate Vault scaffold", () => {
     assert.match(layout, /redirect\("\/"\)/);
     assert.match(layout, /redirect\("\/login"\)/);
     assert.match(api, /requireRateVault/);
-    assert.match(api, /emptyRateVaultWorkshop/);
+    assert.match(api, /buildRateVaultWorkshop/);
     assert.match(api, /stubPublishRateVault/);
+    assert.match(api, /recognizeRateVaultSource/);
     assert.match(server, /canSeeRateVault\(user\)/);
     assert.match(privileges, /"rate-vault"/);
+    assert.match(library, /17YtnXtCcIXq68sROl3_VwkIo6PHYzTIR/);
+    assert.match(recognize, /needsConfirm: true/);
+    assert.match(store, /rate-vault\.json/);
+    assert.match(library, /RATE_VAULT_LIBRARY_NAME/);
+    assert.doesNotMatch(store, /Buffer\.from\(|writeFileSync\([^)]*\.(xlsx|pdf|xlsb)/);
     assert.doesNotMatch(vaultModule, FORBIDDEN_IMPORT);
     assert.doesNotMatch(server, FORBIDDEN_IMPORT);
     assert.doesNotMatch(api, FORBIDDEN_IMPORT);
     assert.doesNotMatch(desk, FORBIDDEN_IMPORT);
+    assert.doesNotMatch(library, FORBIDDEN_IMPORT);
+    assert.doesNotMatch(recognize, FORBIDDEN_IMPORT);
+    assert.doesNotMatch(store, FORBIDDEN_IMPORT);
     assert.doesNotMatch(TESTER_WHATS_NEW, /Rate Vault|B-1 Builder/i);
     assert.doesNotMatch(OWNER_WHATS_NEW, /Rate Vault|B-1 Builder/i);
     assert.equal(DESK_VERSION, "1.51.1");
