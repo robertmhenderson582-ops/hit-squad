@@ -9,10 +9,11 @@ import { deskFetch } from "@/lib/estimate-vault-client";
 import { burnCaption } from "@/lib/capture";
 import { buildDeskChrome } from "@/lib/desk-role";
 import {
+  TICKET_UNVAULTED_MARK,
+  TICKETS_VAULT_WRITE_ERROR,
   hydrateTickets,
-  patchCachedTicket,
-  removeCachedDone,
-  removeCachedTicket,
+  ticketsVaultStored,
+  type ListedTicket,
 } from "@/lib/ticket-cache";
 import { ticketCopyText, type DeskTicket } from "@/lib/tickets";
 
@@ -22,23 +23,23 @@ export function TicketsDesk() {
   const { lens, viewingAs } = useDeskLens();
   const confirmRemove = useConfirmRemove();
   const ownerChrome = buildDeskChrome(user, desk?.viewAs, desk?.followSeat);
-  const [tickets, setTickets] = useState<DeskTicket[]>([]);
+  const [tickets, setTickets] = useState<ListedTicket[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<{ src: string; caption: string } | null>(null);
   const mine = user?.email || "";
   const viewer = viewingAs ? lens?.email || "" : mine;
 
   const refresh = useCallback(
-    (server: DeskTicket[] = []) => {
+    (server: DeskTicket[] = [], store?: string | null, stored?: boolean) => {
       if (!viewer) {
-        setTickets(server);
+        setTickets(server.map((row) => ({ ...row, vaulted: ticketsVaultStored(store, stored) })));
         return;
       }
       if (viewingAs) {
-        setTickets(hydrateTickets(server, viewer, false, { persist: false }));
+        setTickets(hydrateTickets(server, viewer, false, { persist: false, store, stored }));
         return;
       }
-      setTickets(hydrateTickets(server, mine, ownerChrome));
+      setTickets(hydrateTickets(server, mine, ownerChrome, { store, stored }));
     },
     [mine, ownerChrome, viewer, viewingAs],
   );
@@ -48,16 +49,17 @@ export function TicketsDesk() {
     deskFetch("/api/desk/tickets")
       .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
       .then(({ ok, data }) => {
-        if (!ok) {
-          setError(data.error || "Tickets could not load.");
-          if (mine) refresh();
+        if (!ok || !ticketsVaultStored(data.store, data.stored)) {
+          setError(typeof data.error === "string" && data.error ? data.error : "Tickets could not load.");
+          if (mine) refresh([], data.store, false);
           return;
         }
-        refresh((data.tickets ?? []) as DeskTicket[]);
+        setError(null);
+        refresh((data.tickets ?? []) as DeskTicket[], data.store, data.stored);
       })
       .catch(() => {
         setError("Tickets could not load.");
-        if (mine) refresh();
+        if (mine) refresh([], null, false);
       });
   }, [mine, ownerChrome, refresh, viewer]);
 
@@ -70,9 +72,6 @@ export function TicketsDesk() {
   }, [mine, refresh]);
 
   async function patch(id: string, body: { done?: boolean; notifyFix?: boolean | null }) {
-    if (mine) {
-      setTickets(patchCachedTicket(mine, id, body).filter((row) => ownerChrome || row.who === mine));
-    }
     const response = await fetch("/api/desk/tickets", {
       method: "PATCH",
       credentials: "include",
@@ -80,16 +79,15 @@ export function TicketsDesk() {
       body: JSON.stringify({ id, ...body }),
     });
     const data = await response.json().catch(() => ({}));
-    if (response.ok) refresh((data.tickets ?? []) as DeskTicket[]);
-    else {
-      setError(typeof data.error === "string" && data.error ? data.error : "Could not save. Try again.");
-      if (mine) refresh();
+    if (response.ok && ticketsVaultStored(data.store, data.stored)) {
+      refresh((data.tickets ?? []) as DeskTicket[], data.store, data.stored);
+    } else {
+      setError(typeof data.error === "string" && data.error ? data.error : TICKETS_VAULT_WRITE_ERROR);
     }
   }
 
   async function remove(id: string, label: string) {
     if (!(await confirmRemove(label, { title: "Remove this ticket?", confirmLabel: "Delete" }))) return;
-    if (mine) setTickets(removeCachedTicket(mine, id).filter((row) => ownerChrome || row.who === mine));
     const response = await fetch("/api/desk/tickets", {
       method: "DELETE",
       credentials: "include",
@@ -97,10 +95,10 @@ export function TicketsDesk() {
       body: JSON.stringify({ id }),
     });
     const data = await response.json().catch(() => ({}));
-    if (response.ok) refresh((data.tickets ?? []) as DeskTicket[]);
-    else {
-      setError(typeof data.error === "string" && data.error ? data.error : "Could not save. Try again.");
-      if (mine) refresh();
+    if (response.ok && ticketsVaultStored(data.store, data.stored)) {
+      refresh((data.tickets ?? []) as DeskTicket[], data.store, data.stored);
+    } else {
+      setError(typeof data.error === "string" && data.error ? data.error : TICKETS_VAULT_WRITE_ERROR);
     }
   }
 
@@ -108,7 +106,6 @@ export function TicketsDesk() {
     if (!(await confirmRemove("Done tickets leave this list.", { title: "Delete done?", confirmLabel: "Delete done" }))) {
       return;
     }
-    if (mine) setTickets(removeCachedDone(mine).filter((row) => ownerChrome || row.who === mine));
     const response = await fetch("/api/desk/tickets", {
       method: "DELETE",
       credentials: "include",
@@ -116,10 +113,10 @@ export function TicketsDesk() {
       body: JSON.stringify({ done: true }),
     });
     const data = await response.json().catch(() => ({}));
-    if (response.ok) refresh((data.tickets ?? []) as DeskTicket[]);
-    else {
-      setError(typeof data.error === "string" && data.error ? data.error : "Could not save. Try again.");
-      if (mine) refresh();
+    if (response.ok && ticketsVaultStored(data.store, data.stored)) {
+      refresh((data.tickets ?? []) as DeskTicket[], data.store, data.stored);
+    } else {
+      setError(typeof data.error === "string" && data.error ? data.error : TICKETS_VAULT_WRITE_ERROR);
     }
   }
 
@@ -146,7 +143,8 @@ export function TicketsDesk() {
         <div>
           <h2 className="text-2xl font-semibold text-[#163038]">Tickets</h2>
           <p className="mt-2 text-sm text-[#5b6f73]">
-            Filed from the Ticket button. They stay on this list. They do not copy into Inbox.
+            Filed from Suggestion Box. Success shows only after the tickets vault confirms the
+            write. They do not copy into Inbox.
           </p>
         </div>
         {ownerChrome ? (
@@ -173,6 +171,7 @@ export function TicketsDesk() {
                 {row.kind}
                 {row.later ? " · later" : ""}
                 {row.done ? " · done" : ""}
+                {row.vaulted ? "" : ` · ${TICKET_UNVAULTED_MARK}`}
               </p>
               <p className="text-xs text-[#5b6f73]">
                 {row.at} · {row.who}

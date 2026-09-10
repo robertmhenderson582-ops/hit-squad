@@ -29,13 +29,14 @@ Local owner password is the value in `.env.example` / `.env.local` (`OWNER_PASSW
 | `OWNER_PASSWORD` | Local / field-trial password. Keep it out of git. |
 | `AUTH_SECRET` | Signs the session cookie. Use a long random string. |
 | `AUTH_COOKIE_SECURE` | `false` on local HTTP. `true` on HTTPS deploys. |
-| `TICKET_STORE_PATH` | Optional. Server JSON file for tickets. Not committed. Local default `data/tickets.json`. On Vercel `/tmp/hit-squad-tickets.json`. |
+| `TICKET_STORE_PATH` | Optional. Explicit file vault for tickets (tests / local). Not committed. Live Suggestion Box fails closed unless Drive confirms `tickets.json`. On Vercel `/tmp` is not a successful save. |
 | `TICKET_SMTP_URL` / `GMAIL_APP_PASSWORD` | Optional. Emails each ticket to `OWNER_EMAIL` (Novus/Gmail copy). |
 | `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` / `GOOGLE_OAUTH_REFRESH_TOKEN` | Optional. Preferred Drive write path (user OAuth refresh token). Never commit. |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Optional fallback. Full service-account JSON (raw or base64). Reads work; creates on consumer Gmail return 403. |
 | `GOOGLE_CLIENT_EMAIL` / `GOOGLE_PRIVATE_KEY` | Optional alternative to the JSON blob. |
 | `DRIVE_ESTIMATES_FOLDER_ID` | Optional. Estimates room folder id. Server-only. Do not expose to testers. |
 | `DRIVE_DATA_FOLDER_ID` | Optional. Data room for companies, Activity, tickets, inbox, lead briefs, seat hashes, and owner settings. Falls back to the Estimates room. Server-only. Do not expose to testers. |
+| `DRIVE_TICKETS_FILE_ID` | Optional. Production `tickets.json` id when the Data folder is not listable. Suggestion Box writes fail closed if Drive does not confirm. Server-only. |
 | `DRIVE_QUALITY_FOLDER_ID` | Optional. Quality vault room. Default is the existing Hit Squad Quality folder (company → site → job). Quality uploads fail closed if Drive is down. Server-only. |
 
 The session cookie is named `hs_session`. It is `HttpOnly`, `Path=/`, `SameSite=Lax`, and `Secure` when `AUTH_COOKIE_SECURE=true` (or when `NODE_ENV=production` unless you force it off).

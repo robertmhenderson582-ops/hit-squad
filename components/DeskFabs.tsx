@@ -4,7 +4,14 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { CaptureMarkup } from "@/components/CaptureMarkup";
 import { compressCapture, shootViewport } from "@/lib/capture";
-import { mergeTickets, readTicketCache, rememberTicket, writeTicketCache } from "@/lib/ticket-cache";
+import {
+  TICKETS_VAULT_WRITE_ERROR,
+  mergeTickets,
+  readTicketCache,
+  rememberTicket,
+  ticketsVaultStored,
+  writeTicketCache,
+} from "@/lib/ticket-cache";
 import { makeTicket, TICKET_DRAFT_KEY, TICKET_KINDS, type DeskTicket, type TicketKind } from "@/lib/tickets";
 import { unlockInboxAudio } from "@/lib/chime";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
@@ -113,15 +120,6 @@ export function DeskFabs() {
       later: false,
       who: email,
     });
-    rememberTicket(email, filed);
-    announceTicketsChanged();
-    window.localStorage.removeItem(TICKET_DRAFT_KEY);
-    setDraft(EMPTY_DRAFT);
-    setSavedDraft(false);
-    setTicketOpen(false);
-    setNote(null);
-    noteFeatureTrail("ticket");
-
     try {
       const response = await fetch("/api/desk/tickets", {
         method: "POST",
@@ -136,20 +134,26 @@ export function DeskFabs() {
         }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setNote(typeof data.error === "string" && data.error ? data.error : "Could not save. Try again.");
+      if (!response.ok || !ticketsVaultStored(data.store, data.stored)) {
+        setNote(typeof data.error === "string" && data.error ? data.error : TICKETS_VAULT_WRITE_ERROR);
         return;
       }
       const serverTicket = data.ticket as DeskTicket | undefined;
       const serverList = (data.tickets ?? []) as DeskTicket[];
+      rememberTicket(email, serverTicket ?? filed);
       writeTicketCache(
         email,
         mergeTickets(serverList, [serverTicket ?? filed, ...readTicketCache(email)]),
       );
       announceTicketsChanged();
+      window.localStorage.removeItem(TICKET_DRAFT_KEY);
+      setDraft(EMPTY_DRAFT);
+      setSavedDraft(false);
+      setTicketOpen(false);
+      noteFeatureTrail("ticket");
       setNote("Saved to Tickets. Not Inbox.");
     } catch {
-      setNote("Could not save. Try again.");
+      setNote(TICKETS_VAULT_WRITE_ERROR);
     }
   }
 

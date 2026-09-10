@@ -2,9 +2,11 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "
 import { dirname, join } from "node:path";
 import { TICKETS_VAULT_KIND, TICKETS_VAULT_NAME, readVaultJson, writeVaultJson } from "./drive-data.ts";
 import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
+import { TICKETS_VAULT_WRITE_ERROR } from "./ticket-cache.ts";
 import { isTicketKind, type DeskTicket } from "./tickets.ts";
 
 export const OWNER_TICKET_EMAIL = "robertmhenderson582@gmail.com";
+export { TICKETS_VAULT_WRITE_ERROR };
 
 type TicketFile = { tickets?: DeskTicket[]; removedIds?: string[] };
 
@@ -13,8 +15,25 @@ let removedCache: string[] = [];
 let loadedFrom: string | null = null;
 let injectedAdapter: DriveAdapter | null | undefined;
 
+/** Drive is required when configured, or when no explicit file vault is set. */
+export function ticketsRequireDrive() {
+  if (resolveAdapter()?.configured) return true;
+  return !process.env.TICKET_STORE_PATH;
+}
+
 export function ticketStoreKind() {
-  return resolveAdapter() ? "drive" : "server-json-file";
+  if (resolveAdapter()) return "drive";
+  if (process.env.TICKET_STORE_PATH) return "server-json-file";
+  if (process.env.VERCEL) return "tmp-cache";
+  return "none";
+}
+
+export function ticketsStored(kind = ticketStoreKind()) {
+  return kind === "drive" || kind === "server-json-file";
+}
+
+export function ticketAdapter() {
+  return resolveAdapter();
 }
 
 export function ticketStorePath() {
@@ -67,16 +86,25 @@ function readCache(): DeskTicket[] {
   return cache;
 }
 
-function writeCache(tickets: DeskTicket[], removedIds: string[] = removedCache) {
+function rememberCache(tickets: DeskTicket[], removedIds: string[] = removedCache) {
   cache = tickets;
   removedCache = [...new Set(removedIds)].filter((id) => !tickets.some((row) => row.id === id));
+  loadedFrom = ticketStorePath();
+}
+
+function writeTicketFile(tickets: DeskTicket[], removedIds: string[] = removedCache) {
+  rememberCache(tickets, removedIds);
   const file = ticketStorePath();
-  loadedFrom = file;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify({ tickets, removedIds: removedCache }, null, 2) + "\n", "utf8");
+}
+
+function writeCache(tickets: DeskTicket[], removedIds: string[] = removedCache) {
+  rememberCache(tickets, removedIds);
   try {
-    mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify({ tickets, removedIds: removedCache }, null, 2) + "\n", "utf8");
+    writeTicketFile(tickets, removedIds);
   } catch {
-    // Best-effort only. A failed write must not wipe the previous file.
+    // Best-effort cache only. A failed sidecar write must not undo a confirmed vault write.
   }
 }
 
@@ -110,15 +138,6 @@ export function mergeStoredTickets(vault: DeskTicket[], incoming: DeskTicket[]):
   return [...map.values()].sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
 }
 
-function ticketNeedsVaultWrite(vault: DeskTicket[], merged: DeskTicket[]) {
-  if (merged.length !== vault.length) return true;
-  const byId = new Map(vault.map((row) => [row.id, row]));
-  return merged.some((row) => {
-    const existing = byId.get(row.id);
-    return !existing || Boolean(row.capture && !existing.capture) || Boolean(row.note && !existing.note);
-  });
-}
-
 function readDiskRaw(): unknown {
   try {
     return JSON.parse(readFileSync(ticketStorePath(), "utf8"));
@@ -142,49 +161,40 @@ async function readVaultFile(): Promise<{ tickets: DeskTicket[]; removedIds: str
 async function persist(tickets: DeskTicket[], opts?: { removedIds?: string[] }): Promise<DeskTicket[]> {
   const extraRemoved = opts?.removedIds ?? [];
   const drive = resolveAdapter();
-  const vault = drive ? await readVaultFile() : null;
-  const disk = readDiskRaw();
-  const removed = new Set([
-    ...(vault?.removedIds ?? []),
-    ...parseTicketRemovedIds(disk),
-    ...removedCache,
-    ...extraRemoved,
-  ]);
-  const merged = mergeStoredTickets(vault?.tickets ?? readDiskTickets(), tickets).filter((row) => !removed.has(row.id));
-  const tombstones = [...removed].filter((id) => !merged.some((row) => row.id === id));
-  if (drive) {
+  if (ticketsRequireDrive()) {
+    if (!drive?.configured) throw new Error(TICKETS_VAULT_WRITE_ERROR);
+    const vault = await readVaultFile();
+    const removed = new Set([...(vault?.removedIds ?? []), ...removedCache, ...extraRemoved]);
+    const merged = mergeStoredTickets(vault?.tickets ?? [], tickets).filter((row) => !removed.has(row.id));
+    const tombstones = [...removed].filter((id) => !merged.some((row) => row.id === id));
     await writeVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, { tickets: merged, removedIds: tombstones });
+    writeCache(merged, tombstones);
+    return merged;
   }
-  writeCache(merged, tombstones);
+  const disk = readDiskRaw();
+  const removed = new Set([...parseTicketRemovedIds(disk), ...removedCache, ...extraRemoved]);
+  const merged = mergeStoredTickets(readDiskTickets(), tickets).filter((row) => !removed.has(row.id));
+  const tombstones = [...removed].filter((id) => !merged.some((row) => row.id === id));
+  writeTicketFile(merged, tombstones);
   return merged;
 }
 
 export async function hydrateTicketStore(): Promise<DeskTicket[]> {
-  const cached = readCache();
-  const drive = resolveAdapter();
-  if (drive) {
-    try {
-      const vault = await readVaultFile();
-      if (vault) {
-        const removed = new Set([...vault.removedIds, ...removedCache]);
-        const seedFromCache = vault.tickets.length > 0 || removed.size > 0;
-        const merged = mergeStoredTickets(vault.tickets, seedFromCache ? cached : []).filter((row) => !removed.has(row.id));
-        writeCache(merged, [...removed]);
-        if (ticketNeedsVaultWrite(vault.tickets, merged) || vault.removedIds.length !== removed.size) {
-          await writeVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, {
-            tickets: merged,
-            removedIds: [...removed].filter((id) => !merged.some((row) => row.id === id)),
-          });
-        }
-      } else if (cached.length || removedCache.length) {
-        await writeVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND, {
-          tickets: cached,
-          removedIds: removedCache,
-        });
-      }
-    } catch {
-      // Keep the local cache. Never replace a richer set with a thinner vault read.
+  if (ticketsRequireDrive()) {
+    const drive = resolveAdapter();
+    if (!drive?.configured) {
+      rememberCache([], []);
+      return [];
     }
+    const vault = await readVaultFile();
+    if (!vault) {
+      rememberCache([], []);
+      return [];
+    }
+    const removed = new Set(vault.removedIds);
+    const tickets = vault.tickets.filter((row) => !removed.has(row.id));
+    writeCache(tickets, [...removed]);
+    return tickets;
   }
   return readCache();
 }
@@ -197,7 +207,7 @@ export async function listStoredTickets(who?: string): Promise<DeskTicket[]> {
 }
 
 export async function addStoredTicket(entry: DeskTicket): Promise<DeskTicket> {
-  const tickets = await hydrateTicketStore();
+  const tickets = [...(await hydrateTicketStore())];
   const index = tickets.findIndex((row) => row.id === entry.id);
   const next: DeskTicket = {
     ...entry,
@@ -214,23 +224,25 @@ export async function addStoredTicket(entry: DeskTicket): Promise<DeskTicket> {
     tickets.unshift(next);
   }
   const saved = await persist(tickets);
-  return saved.find((row) => row.id === next.id) ?? (index >= 0 ? tickets[index] : next);
+  const row = saved.find((item) => item.id === next.id);
+  if (!row) throw new Error(TICKETS_VAULT_WRITE_ERROR);
+  return row;
 }
 
 export async function patchStoredTicket(
   id: string,
   patch: Partial<Pick<DeskTicket, "done" | "notifyFix">>,
 ): Promise<DeskTicket | null> {
-  const tickets = await hydrateTicketStore();
+  const tickets = [...(await hydrateTicketStore())];
   const row = tickets.find((item) => item.id === id);
   if (!row) return null;
   Object.assign(row, patch);
   const saved = await persist(tickets);
-  return saved.find((item) => item.id === id) ?? row;
+  return saved.find((item) => item.id === id) ?? null;
 }
 
 export async function removeStoredTicket(id: string) {
-  const tickets = await hydrateTicketStore();
+  const tickets = [...(await hydrateTicketStore())];
   const index = tickets.findIndex((item) => item.id === id);
   if (index < 0) return;
   tickets.splice(index, 1);
@@ -238,7 +250,7 @@ export async function removeStoredTicket(id: string) {
 }
 
 export async function removeStoredDoneTickets() {
-  const tickets = await hydrateTicketStore();
+  const tickets = [...(await hydrateTicketStore())];
   const removedIds = tickets.filter((row) => row.done).map((row) => row.id);
   await persist(
     tickets.filter((row) => !row.done),

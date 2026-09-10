@@ -2,8 +2,15 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { after, describe, it } from "node:test";
-import { ticketsForViewer } from "./ticket-cache.ts";
+import {
+  TICKETS_VAULT_WRITE_ERROR,
+  ticketsForViewer,
+  ticketsVaultLeaks,
+  ticketsVaultStored,
+} from "./ticket-cache.ts";
+import { canUseSuggestionBox } from "./inbox-circle.ts";
 import {
   addStoredTicket,
   forgetTicketCacheForTests,
@@ -13,9 +20,18 @@ import {
   resetTicketStoreForTests,
   staleWarmTicketInstanceForTests,
   ticketStoreKind,
+  ticketsRequireDrive,
+  ticketsStored,
   useTicketVaultForTests,
 } from "./ticket-store.ts";
-import { TICKETS_VAULT_KIND, TICKETS_VAULT_NAME, readVaultJson } from "./drive-data.ts";
+import {
+  TICKETS_VAULT_FILE_ID,
+  TICKETS_VAULT_KIND,
+  TICKETS_VAULT_NAME,
+  findVaultJsonFile,
+  readVaultJson,
+  resetVaultFileIdsForTests,
+} from "./drive-data.ts";
 import { makeTicket } from "./tickets.ts";
 import { memoryDrive } from "./drive-estimates.ts";
 
@@ -159,7 +175,7 @@ describe("ticket file store", { concurrency: 1 }, () => {
     assert.equal((await listStoredTickets()).length, 2);
   });
 
-  it("hydrate merge does not replace a richer cache with a thinner vault", async () => {
+  it("hydrate treats the vault as source of truth and does not promote /tmp leftovers", async () => {
     const drive = memoryDrive();
     const keep = join(dir, "richer.json");
     resetTicketStoreForTests(keep);
@@ -185,9 +201,163 @@ describe("ticket file store", { concurrency: 1 }, () => {
     useTicketVaultForTests(drive);
     const listed = await listStoredTickets();
     assert.equal(listed.some((row) => row.id === owner.id), true);
-    assert.equal(listed.some((row) => row.id === chance.id && row.who === "chancec318@yahoo.com"), true);
+    assert.equal(listed.some((row) => row.id === chance.id), false);
     const vault = await readVaultTickets(drive);
-    assert.equal(vault.some((row) => row.id === chance.id), true);
+    assert.equal(vault.some((row) => row.id === chance.id), false);
+  });
+
+  it("fails closed when Drive is missing and does not advertise a local ticket as saved", async () => {
+    resetTicketStoreForTests();
+    useTicketVaultForTests(null);
+    assert.equal(ticketsRequireDrive(), true);
+    assert.equal(ticketStoreKind(), "none");
+    assert.equal(ticketsStored(), false);
+    await assert.rejects(
+      () =>
+        addStoredTicket(
+          makeTicket({
+            kind: "Broke",
+            note: "must not look saved",
+            capture: null,
+            later: false,
+            who: "chancec318@yahoo.com",
+          }),
+        ),
+      (error: unknown) => error instanceof Error && error.message === TICKETS_VAULT_WRITE_ERROR,
+    );
+    assert.deepEqual(await listStoredTickets(), []);
+  });
+
+  it("fails closed on Vercel /tmp — that path is not a successful save", async () => {
+    const prev = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    try {
+      resetTicketStoreForTests();
+      useTicketVaultForTests(null);
+      assert.equal(ticketStoreKind(), "tmp-cache");
+      assert.equal(ticketsStored(), false);
+      await assert.rejects(
+        () =>
+          addStoredTicket(
+            makeTicket({
+              kind: "Broke",
+              note: "tmp is not the vault",
+              capture: null,
+              later: false,
+              who: "marks544@yahoo.com",
+            }),
+          ),
+        /tickets vault/,
+      );
+      assert.deepEqual(await listStoredTickets(), []);
+    } finally {
+      if (prev == null) delete process.env.VERCEL;
+      else process.env.VERCEL = prev;
+    }
+  });
+
+  it("fails closed when the Drive write is not confirmed", async () => {
+    const drive = memoryDrive();
+    resetTicketStoreForTests();
+    useTicketVaultForTests({
+      ...drive,
+      configured: true,
+      async updateJson() {
+        return { id: TICKETS_VAULT_FILE_ID, name: TICKETS_VAULT_NAME };
+      },
+      async confirmWrite() {
+        return false;
+      },
+      async readJson() {
+        return "{}";
+      },
+    });
+    await assert.rejects(
+      () =>
+        addStoredTicket(
+          makeTicket({
+            kind: "Broke",
+            note: "unconfirmed",
+            capture: null,
+            later: false,
+            who: "chancec318@yahoo.com",
+          }),
+        ),
+      /not confirmed|tickets vault|update/,
+    );
+    assert.equal((await listStoredTickets()).length, 0);
+  });
+
+  it("PATCHes the known tickets.json id so a redeploy still loads tester tickets", async () => {
+    resetVaultFileIdsForTests();
+    const drive = memoryDrive();
+    resetTicketStoreForTests();
+    useTicketVaultForTests(drive);
+    const chance = await addStoredTicket(
+      makeTicket({
+        kind: "better way",
+        note: "Chance after republish",
+        capture: null,
+        later: false,
+        who: "chancec318@yahoo.com",
+      }),
+    );
+    const found = await findVaultJsonFile(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND);
+    assert.equal(found?.id, TICKETS_VAULT_FILE_ID);
+    forgetTicketCacheForTests();
+    useTicketVaultForTests(drive);
+    const again = await listStoredTickets("chancec318@yahoo.com");
+    assert.equal(again.length, 1);
+    assert.equal(again[0].id, chance.id);
+    assert.equal((await listStoredTickets("marks544@yahoo.com")).length, 0);
+    assert.equal(ticketsVaultLeaks({ tickets: again, store: "drive" }), false);
+  });
+
+  it("does not open Suggestion Box to Mark; Chance can file; owner sees all", async () => {
+    assert.equal(canUseSuggestionBox({ email: "marks544@yahoo.com" }), false);
+    assert.equal(canUseSuggestionBox({ email: "chancec318@yahoo.com" }), true);
+    const drive = memoryDrive();
+    resetTicketStoreForTests();
+    useTicketVaultForTests(drive);
+    const chance = await addStoredTicket(
+      makeTicket({
+        kind: "Broke",
+        note: "Chance only",
+        capture: null,
+        later: false,
+        who: "chancec318@yahoo.com",
+      }),
+    );
+    const mark = await addStoredTicket(
+      makeTicket({
+        kind: "other",
+        note: "Mark leftover",
+        capture: null,
+        later: false,
+        who: "marks544@yahoo.com",
+      }),
+    );
+    assert.deepEqual(
+      (await listStoredTickets("chancec318@yahoo.com")).map((row) => row.id),
+      [chance.id],
+    );
+    assert.deepEqual((await listStoredTickets("marks544@yahoo.com")).map((row) => row.id), [mark.id]);
+    assert.equal((await listStoredTickets()).length, 2);
+    const route = readFileSync(fileURLToPath(new URL("../app/api/desk/tickets/route.ts", import.meta.url)), "utf8");
+    assert.match(route, /canUseSuggestionBox/);
+    assert.match(route, /TICKETS_VAULT_WRITE_ERROR/);
+    assert.match(route, /stored: ticketsStored/);
+    const fabs = readFileSync(fileURLToPath(new URL("../components/DeskFabs.tsx", import.meta.url)), "utf8");
+    assert.match(fabs, /ticketsVaultStored/);
+    assert.match(fabs, /TICKETS_VAULT_WRITE_ERROR/);
+    assert.doesNotMatch(fabs, /rememberTicket\(email, filed\);\s*announceTicketsChanged/);
+    const desk = readFileSync(fileURLToPath(new URL("../components/TicketsDesk.tsx", import.meta.url)), "utf8");
+    assert.match(desk, /TICKET_UNVAULTED_MARK/);
+    assert.match(desk, /ticketsVaultStored/);
+    assert.equal(ticketsVaultStored("drive", true), true);
+    assert.equal(ticketsVaultStored("tmp-cache", true), false);
+    assert.equal(ticketsVaultStored("server-json-file", true), true);
+    assert.equal(ticketsVaultStored("drive", false), false);
   });
 
   it("union by id does not let a stale list wipe a tester ticket", () => {
