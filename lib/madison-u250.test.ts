@@ -10,7 +10,14 @@ import { deskPackageTotal } from "./estimate-desk-total.ts";
 import { packSnapshotToXlsxInput } from "./estimate-pack-xlsx.ts";
 import { estimateTabIdsForSite } from "./estimate-tabs.ts";
 import { applyEstimateImport, createPackFromImport, parseEstimateXlsx } from "./estimate-xlsx-import.ts";
-import { ESTIMATE_XLSX_SHEETS, LABOR_BLOCK_ID_COL, LABOR_HPS_TYPE, estimateToXlsx } from "./estimate-xlsx.ts";
+import {
+  ESTIMATE_XLSX_SHEETS,
+  LABOR_BLOCK_ID_COL,
+  LABOR_HPS_TYPE,
+  estimateToXlsx,
+  laborCalendarDates,
+  laborDayPlug,
+} from "./estimate-xlsx.ts";
 import { ingestMadisonU250 } from "./madison-u250-xlsx.ts";
 import { CREW_STORE_PREFIX, isDefaultSeedSchedule, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
 import { listLocalPacks, readStoreJson, storageKeyForPack, type StorageLike } from "./local-estimates.ts";
@@ -23,9 +30,13 @@ import {
   loadRodeoU250Fixture,
   persistRodeoU250Wake,
   shouldFillRodeoU250Crew,
+  u250CrewDayGridCollapsed,
+  liveU250WorkDates,
   RODEO_U250_CLIENT,
   RODEO_U250_VAULT_FILE,
   RODEO_U250_HOURS_PLUG,
+  RODEO_U250_SCHEDULE_START,
+  RODEO_U250_SCHEDULE_STOP,
   RODEO_U250_SITE,
   RODEO_U250_STATUS,
   rodeoU250BucketHoursFromCrew,
@@ -103,7 +114,7 @@ describe("madison-u250 ingest", () => {
     assert.equal(shouldStageClientWorkbook(familyB), true);
   });
 
-  it("parses a Madison contractor buffer without inventing a calendar, GF seat, or #REF labor $", async () => {
+  it("parses a Madison contractor buffer without inventing a GF seat or #REF labor $", async () => {
     const ingested = await ingestMadisonU250(
       await miniMadisonBytes(),
       "MADISON U250 2026 Turnaround Contractor Estimate Template R2_08_17_2026_RH.xlsx",
@@ -113,8 +124,11 @@ describe("madison-u250 ingest", () => {
     assert.equal(ingested.crew.foreman?.[0]?.position, "Foreman");
     assert.equal(ingested.crew.direct?.[0]?.position, "Boilermaker");
     assert.equal(ingested.crew.support?.[0]?.position, "Hole Watch/Fire Watch");
-    assert.equal(ingested.schedule.projectStart, RODEO_U250_HOURS_PLUG);
-    assert.ok(ingested.crew.direct?.[0]?.ranges.some((range) => range.headcount === 1 && range.hoursPerShift === 20));
+    assert.equal(ingested.schedule.projectStart, RODEO_U250_SCHEDULE_START);
+    assert.ok(ingested.schedule.phases.some((phase) => phase.on && phase.stop > phase.start));
+    assert.equal(u250CrewDayGridCollapsed(ingested.crew), false);
+    assert.equal(Math.round(rodeoU250HoursFromCrew(ingested.crew).directHours), 20);
+    assert.ok((liveU250WorkDates(ingested.crew.direct?.[0]).length ?? 0) > 1);
     assert.equal(ingested.jobMeta.staffPerDiemRate, 155);
     assert.equal(ingested.jobMeta.craftPerDiemRate, 145);
   });
@@ -217,6 +231,26 @@ describe("madison-u250 ingest", () => {
     };
     assert.equal(shouldFillRodeoU250Crew(stale), true);
     assert.equal(shouldFillRodeoU250Crew(rodeoU250FilledSnapshot()), false);
+
+    const lumpRange = {
+      id: "lump",
+      start: RODEO_U250_HOURS_PLUG,
+      end: RODEO_U250_HOURS_PLUG,
+      headcount: 1,
+      nightHeadcount: 0,
+      hoursPerShift: 2104,
+      perDiemPeople: 0,
+      days: [true, true, true, true, true, true, true],
+    };
+    const collapsedCrew = {
+      staff: [{ id: "s", position: "QA/QC (Lead QA-QC Days)", ranges: [lumpRange] }],
+      generalForeman: [],
+      foreman: [{ id: "f", position: "Foreman (Boilermaker Days)", ranges: [lumpRange] }],
+      direct: [{ id: "d", position: "Boilermaker Journeyman (Days)", ranges: [lumpRange] }],
+      support: [],
+    };
+    assert.equal(u250CrewDayGridCollapsed(collapsedCrew), true);
+    assert.equal(shouldFillRodeoU250Crew({ packId: RODEO_U250_PACK_ID, crew: collapsedCrew }), true);
   });
 
   it("stays on the Wood River five-card desk — empty GF is official, not invented", () => {
@@ -305,5 +339,55 @@ describe("madison-u250 ingest", () => {
     assert.ok((up.crew.direct?.length ?? 0) > 0);
     assert.equal(up.crew.support?.length ?? 0, 0);
     assert.equal(Math.round(rodeoU250HoursFromCrew(up.crew).supportHours), 0);
+  });
+
+  it("export day-grid spreads U250 hours across the staffing calendar, not one date", async () => {
+    const pack = rodeoU250FilledSnapshot();
+    const input = packSnapshotToXlsxInput(pack);
+    const dates = laborCalendarDates(input);
+    assert.equal(dates[0], RODEO_U250_SCHEDULE_START);
+    assert.equal(dates[dates.length - 1], RODEO_U250_SCHEDULE_STOP);
+    assert.ok(dates.length > 1);
+    assert.equal(u250CrewDayGridCollapsed(input.crew), false);
+
+    const seats = [
+      ...((input.crew.staff ?? []).map((row) => ({ row, night: /night/i.test(row.position) }))),
+      ...((input.crew.foreman ?? []).map((row) => ({ row, night: /night/i.test(row.position) }))),
+      ...((input.crew.direct ?? []).map((row) => ({ row, night: /night/i.test(row.position) }))),
+    ].filter((item) => item.row.position.trim());
+    const dateCounts = seats.map(({ row, night }) => {
+      const work = dates.filter((ymd) => {
+        const plug = laborDayPlug(row, ymd, night);
+        return plug.hc > 0 && plug.hps > 0;
+      });
+      return { position: row.position, dates: work };
+    });
+    assert.equal(
+      dateCounts.every((row) => row.dates.length <= 1),
+      false,
+      "every U250 position dumped day-grid hours onto a single date",
+    );
+    const bmDays = dateCounts.find((row) => row.position === "Boilermaker Journeyman (Days)");
+    assert.ok((bmDays?.dates.length ?? 0) > 1);
+    assert.ok(dateCounts.filter((row) => row.dates.length > 1).length >= 10);
+
+    const buckets = rodeoU250BucketHoursFromCrew(input.crew);
+    assert.equal(Math.round(buckets.directHours), 6934);
+    assert.equal(Math.round(buckets.indirectHours), 5067);
+    assert.equal(Math.round(buckets.totalHours), 12001);
+    const desk = deskPackageTotal(input);
+    assert.equal(moneyEqual(desk, U250_CONTRACTOR_GOLDEN.buckets!.grandTotal), true);
+
+    const bytes = await estimateToXlsx(input);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(bytes) as never);
+    const direct = wb.getWorksheet(ESTIMATE_XLSX_SHEETS.direct);
+    assert.ok(direct);
+    const dateHeader = direct.getRow(6);
+    let dateCols = 0;
+    dateHeader.eachCell((cell, col) => {
+      if (col >= 10 && cell.value != null && cell.value !== "") dateCols += 1;
+    });
+    assert.ok(dateCols > 1);
   });
 });
