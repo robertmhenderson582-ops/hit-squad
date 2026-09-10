@@ -7,6 +7,7 @@ import {
   computeRowHours,
   eastCoastCraftOtAfter8,
   hydrateHolidays,
+  hydratePerDiemMode,
   runningClock,
   seatKind,
   siteClockFromText,
@@ -776,5 +777,50 @@ describe("East Coast CBA craft OT after 8", () => {
       "2026-01-01",
       "2026-09-16",
     ]);
+  });
+});
+
+describe("per diem mode", () => {
+  const week = {
+    ...WOOD_RIVER,
+    position: "Boilermaker Journeyman",
+    start: "2026-09-14",
+    end: "2026-09-20",
+    hoursPerShift: 10,
+    headcount: 1,
+    days: [false, true, true, true, true, true, false] as boolean[],
+    perDiemPeople: 2,
+  };
+
+  it("defaults unknown values to days-worked", () => {
+    assert.equal(hydratePerDiemMode(undefined), "days-worked");
+    assert.equal(hydratePerDiemMode(""), "days-worked");
+    assert.equal(hydratePerDiemMode("7 days a week"), "seven-day");
+  });
+
+  it("days-worked counts labor days only; 7-day counts the range calendar", () => {
+    const worked = computeRangeHours(week);
+    const seven = computeRangeHours({ ...week, perDiemMode: "seven-day" });
+    assert.equal(worked.workedDays, 5);
+    assert.equal(worked.pd, 10);
+    assert.equal(seven.workedDays, 5);
+    assert.equal(seven.pd, 14);
+    assert.equal(seven.st, worked.st);
+    assert.equal(seven.ot, worked.ot);
+    assert.equal(seven.dt, worked.dt);
+  });
+
+  it("7-day still pays PD on a holiday; skipDates still drop the person", () => {
+    const holiday = computeRangeHours({ ...week, perDiemMode: "seven-day", holidays: ["2026-09-16"] });
+    const skipped = computeRangeHours({ ...week, perDiemMode: "seven-day", skipDates: ["2026-09-16"] });
+    assert.equal(holiday.pd, 14);
+    assert.equal(holiday.workedDays, 4);
+    assert.equal(skipped.pd, 12);
+    assert.equal(skipped.workedDays, 4);
+  });
+
+  it("zero PD people is $0 in both modes", () => {
+    assert.equal(computeRangeHours({ ...week, perDiemPeople: 0 }).pd, 0);
+    assert.equal(computeRangeHours({ ...week, perDiemPeople: 0, perDiemMode: "seven-day" }).pd, 0);
   });
 });

@@ -108,13 +108,18 @@ import {
   boundOtLabel,
   clockTitle,
   computeRangeHours,
+  DEFAULT_PER_DIEM_MODE,
   hydrateHolidays,
+  hydratePerDiemMode,
   isStaffSeat,
   mondayKey,
   parseYmd,
+  perDiemModeLabel,
+  PER_DIEM_MODE_LABELS,
   runningClock,
   siteClockFromText,
   type ClockOverride,
+  type PerDiemMode,
   type RunningClock,
 } from "./hours-clock.ts";
 import { craftCodeFromRole, defaultLaborClass, type LaborClass } from "./labor-class.ts";
@@ -205,6 +210,8 @@ export const JOB_SETUP_CBA_ON_CELL = "B22";
 export const JOB_SETUP_CBA_DATE_CELL = "B23";
 export const JOB_SETUP_CBA_PCT_CELL = "B24";
 export const JOB_SETUP_MORE_CELL = "B25";
+export const JOB_SETUP_PD_MODE_CELL = "B26";
+export const JOB_SETUP_PD_MODE_LABEL = "PD days";
 export const JOB_SETUP_HOLIDAYS_TITLE = "Holidays";
 export const JOB_SETUP_HOLIDAY_START_ROW = 27;
 export const JOB_SETUP_HOLIDAY_SPARE = 8;
@@ -348,6 +355,8 @@ export const XLSX_JOB_MONEY_NOTES = {
   cbaDate: "CBA increase starts on this date. Desk splits craft hours on this date.",
   cbaPct: "CBA increase percent. 3 = 3%. Applies to COMP / Shahan base wage (baseSt), not billed ST.",
   more: "M.O.R.E. fund $ per craft hour. Blank stays $0. Summary $ = desk MORE hours × this cell.",
+  pdMode:
+    "PD day count. Days worked = ST/OT/DT labor days for that seat. 7 days a week = every calendar day in the seat range (phase Start–Stop), including weekends/off days. skipDates stay out. Same switch as Job setup.",
   holidays: "Plant / job holidays (YYYY-MM-DD). No ST/OT/DT/HC those days. Same list as Job setup on the desk.",
   cbaSummary: "CBA $ is desk hours after the effective date × base wage × %. Not billed composite. Math does not live in Excel.",
 } as const;
@@ -399,6 +408,7 @@ export function headerInputNote(header: string): string | undefined {
   if (h === "cba effective date") return XLSX_JOB_MONEY_NOTES.cbaDate;
   if (h === "cba increase %") return XLSX_JOB_MONEY_NOTES.cbaPct;
   if (h === "m.o.r.e. fund $ / hr") return XLSX_JOB_MONEY_NOTES.more;
+  if (h === "pd days") return XLSX_JOB_MONEY_NOTES.pdMode;
   if (h === "holidays") return XLSX_JOB_MONEY_NOTES.holidays;
   return XLSX_INPUT_NOTES.fallback;
 }
@@ -1305,6 +1315,11 @@ function jobHolidays(input?: Pick<EstimateXlsxInput, "jobMeta"> | string[] | nul
   return hydrateHolidays(input?.jobMeta && "holidays" in input.jobMeta ? input.jobMeta.holidays : []);
 }
 
+export function jobPerDiemMode(input?: Pick<EstimateXlsxInput, "jobMeta"> | PerDiemMode | null): PerDiemMode {
+  if (typeof input === "string") return hydratePerDiemMode(input);
+  return hydratePerDiemMode(input?.jobMeta && "perDiemMode" in input.jobMeta ? input.jobMeta.perDiemMode : undefined);
+}
+
 function rangeCoversDay(
   row: CraftRow,
   range: CalendarRange,
@@ -1327,6 +1342,36 @@ function rangeCoversDay(
 
 function coveringRanges(row: CraftRow, ymd: string, night: boolean, holidays: string[] = []): CalendarRange[] {
   return (row.ranges ?? []).filter((range) => rangeCoversDay(row, range, ymd, night, holidays));
+}
+
+/** Range window for 7-day PD — phase Start/Stop on the seat, not days-mask / holidays. */
+function rangeCoversPdDay(
+  row: CraftRow,
+  range: CalendarRange,
+  ymd: string,
+  night: boolean,
+  holidays: string[] = [],
+  mode: PerDiemMode = DEFAULT_PER_DIEM_MODE,
+): boolean {
+  if (hydratePerDiemMode(mode) === "days-worked") return rangeCoversDay(row, range, ymd, night, holidays);
+  if (range.off) return false;
+  const shift = rangeShift(row, range);
+  if (night && shift === "Days") return false;
+  if (!night && shift === "Nights") return false;
+  if (!range.start || !range.end) return false;
+  if (ymd < range.start || ymd > range.end) return false;
+  if (range.skipDates?.includes(ymd)) return false;
+  return true;
+}
+
+function coveringPdRanges(
+  row: CraftRow,
+  ymd: string,
+  night: boolean,
+  holidays: string[] = [],
+  mode: PerDiemMode = DEFAULT_PER_DIEM_MODE,
+): CalendarRange[] {
+  return (row.ranges ?? []).filter((range) => rangeCoversPdDay(row, range, ymd, night, holidays, mode));
 }
 
 function rangeDayHeadcount(row: CraftRow, range: CalendarRange, ymd: string, night: boolean): number {
@@ -1359,20 +1404,22 @@ export function laborDayPlug(
   ymd: string,
   night: boolean,
   holidays: string[] = [],
+  perDiemMode: PerDiemMode = DEFAULT_PER_DIEM_MODE,
 ): { hc: number; hps: number; pd: number } {
-  const ranges = coveringRanges(row, ymd, night, holidays);
-  if (!ranges.length) return { hc: 0, hps: 0, pd: 0 };
+  const mode = hydratePerDiemMode(perDiemMode);
+  const labor = coveringRanges(row, ymd, night, holidays);
+  const pdRanges = coveringPdRanges(row, ymd, night, holidays, mode);
+  if (!labor.length && !pdRanges.length) return { hc: 0, hps: 0, pd: 0 };
   let hourUnits = 0;
-  let pd = 0;
   let hps = 0;
-  for (const range of ranges) {
+  for (const range of labor) {
     const hc = rangeDayHeadcount(row, range, ymd, night);
     const rangeHps = Number(range.hoursPerShift) || 0;
     hourUnits += hc * rangeHps;
-    pd += rangeDayPd(row, range, night);
     if (rangeHps > 0) hps = rangeHps;
   }
   const hc = hps > 0 ? hourUnits / hps : 0;
+  const pd = pdRanges.reduce((sum, range) => sum + rangeDayPd(row, range, night), 0);
   if (hc <= 0 && pd <= 0) return { hc: 0, hps: 0, pd: 0 };
   return { hc, hps, pd };
 }
@@ -1611,6 +1658,7 @@ function buildCrewSheet(
   ];
   headers.forEach((label, index) => pushText(cells, `${colLetter(index + 1)}6`, label));
   const holidays = jobHolidays(input);
+  const pdMode = jobPerDiemMode(input);
   writeDateRow(cells, dates, holidays);
   writeWeekdayRow(cells, dates);
   const phaseBand = writePhaseBar(cells, dates, input.schedule);
@@ -1700,7 +1748,7 @@ function buildCrewSheet(
     pushFormula(cells, `C${pdRow}`, `I${titleRow}*D${pdRow}`);
     dates.forEach((ymd, index) => {
       const col = colLetter(LABOR_DATE_START_COL + index);
-      const plug = laborDayPlug(row, ymd, night, holidays);
+      const plug = laborDayPlug(row, ymd, night, holidays, pdMode);
       const hps = plug.hps > 0 ? plug.hps : rowHasPosition(row) ? 0 : spareHps;
       pushNum(cells, `${col}${hcRow}`, plug.hc);
       pushNum(cells, `${col}${hpsRow}`, hps);
@@ -2308,6 +2356,7 @@ function listFormula(col: string, count: number) {
 const PERIOD_LIST_COL = "J";
 const STAFF_SEAT_LIST_COL = "K";
 const CLOCK_PICK_LIST_COL = "L";
+const PD_MODE_LIST_COL = "S";
 /** Unique non-full period subsets — one helper column each so live rows can drop missing rates. */
 const PERIOD_SUBSET_LISTS = [
   ["daily"],
@@ -2440,6 +2489,7 @@ function buildListsSheet(): WorkbookSheet {
     staffSeatListTitles(),
     [...LABOR_CLOCK_PICKS],
     ...PERIOD_SUBSET_LISTS.map((list) => [...list]),
+    [PER_DIEM_MODE_LABELS["days-worked"], PER_DIEM_MODE_LABELS["seven-day"]],
   ];
   const cells: SheetCell[] = [];
   columns.forEach((list, index) => {
@@ -2551,6 +2601,12 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
       value: drivers.moreFundPerHour ?? 0,
       fmt: "$#,##0.00",
     },
+    {
+      cell: JOB_SETUP_PD_MODE_CELL,
+      label: JOB_SETUP_PD_MODE_LABEL,
+      kind: "text",
+      value: perDiemModeLabel(jobPerDiemMode(input)),
+    },
   ];
   for (const item of moneyRows) {
     const row = Number(/(\d+)$/.exec(item.cell)?.[1] || 0);
@@ -2566,6 +2622,7 @@ function buildJobSetupSheet(input: EstimateXlsxInput): WorkbookSheet {
   }
   validations.push(
     { sqref: JOB_SETUP_CBA_ON_CELL, formulae: [listFormula("I", 2)] },
+    { sqref: JOB_SETUP_PD_MODE_CELL, formulae: [listFormula(PD_MODE_LIST_COL, 2)] },
     jobSetupDateValidation(
       JOB_SETUP_CBA_DATE_CELL,
       "DATE(1990,1,1)",

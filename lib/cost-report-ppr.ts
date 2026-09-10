@@ -269,6 +269,7 @@ export function pprLanesFromPack(input: DeskPackageInput): CostBudgetLane[] {
     {
       staffPerDiemRate: Number(input.jobMeta?.staffPerDiemRate) || 0,
       craftPerDiemRate: Number(input.jobMeta?.craftPerDiemRate) || 0,
+      perDiemMode: input.jobMeta?.perDiemMode,
     },
     site,
     client,

@@ -171,15 +171,20 @@ describe("Shahan TM OCIP — Wood River", () => {
     assert.equal(fresh.staffMileageRate, 0);
     assert.equal(fresh.craftMileageRate, 0);
     assert.equal(fresh.rateBook, "");
+    assert.equal(fresh.perDiemMode, "days-worked");
     const hydrated = hydrateJobRates({});
     assert.equal(hydrated.staffPerDiemRate, 140);
     assert.equal(hydrated.craftPerDiemRate, 130);
+    assert.equal(hydrated.perDiemMode, "days-worked");
+    assert.equal(hydrateJobRates({ perDiemMode: "seven-day" }).perDiemMode, "seven-day");
+    assert.equal(hydrateJobRates({ perDiemMode: "7 days a week" }).perDiemMode, "seven-day");
     assert.deepEqual(emptyJobRates(), {
       staffPerDiemRate: 140,
       craftPerDiemRate: 130,
       staffMileageRate: 0,
       craftMileageRate: 0,
       rateBook: "",
+      perDiemMode: "days-worked",
     });
     const leftover = hydrateJobRates({ mileageRate: 0.67, perDiemRate: 185 });
     assert.equal(leftover.staffMileageRate, 0.67);
@@ -424,12 +429,14 @@ describe("Shahan TM OCIP — Wood River", () => {
       staffMileageRate: 0.67,
       craftMileageRate: 0.55,
       rateBook: "",
+      perDiemMode: "seven-day" as const,
     });
     assert.equal(meta.staffPerDiemRate, SHAHAN_STAFF_PD);
     assert.equal(meta.craftPerDiemRate, SHAHAN_CRAFT_PD);
     assert.equal(meta.rateBook, SHAHAN_BOOK_ID);
     assert.equal(meta.afeName, "AFE-1");
     assert.equal(meta.staffMileageRate, 0.67);
+    assert.equal(meta.perDiemMode, "seven-day");
     const sheet = rematchEquipmentSheetToShahan({
       largeTools: [{ id: "lt-1", itemId: "air-mover", period: "daily", qty: 2, start: "2026-09-21", end: "2026-09-23", freight: 40, enteredCost: 0 }],
       thirdParty: [{ id: "tp-1", item: "Crane", period: "weekly", rate: 1000, freight: 200, qty: 2, start: "2026-09-21", end: "2026-09-28" }],

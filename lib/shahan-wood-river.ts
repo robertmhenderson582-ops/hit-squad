@@ -9,7 +9,13 @@
  * Books stay in Drive. Never commit the xlsx / xlsm / PDF.
  */
 
-import { computeRowHours, type HoursSplit } from "./hours-clock.ts";
+import {
+  computeRowHours,
+  DEFAULT_PER_DIEM_MODE,
+  hydratePerDiemMode,
+  type HoursSplit,
+  type PerDiemMode,
+} from "./hours-clock.ts";
 import { defaultLaborClass } from "./labor-class.ts";
 
 export const SHAHAN_BOOK_ID = "shahan-wood-river";
@@ -296,6 +302,8 @@ export type JobRates = {
   staffMileageRate: number;
   craftMileageRate: number;
   rateBook: string;
+  /** Job setup: PD on labor days, or every calendar day in each seat range. */
+  perDiemMode: PerDiemMode;
 };
 
 export type CrewCardId = "staff" | "general-foreman" | "foreman" | "direct" | "support";
@@ -307,6 +315,7 @@ export function emptyJobRates(): JobRates {
     staffMileageRate: 0,
     craftMileageRate: 0,
     rateBook: "",
+    perDiemMode: DEFAULT_PER_DIEM_MODE,
   };
 }
 
@@ -325,6 +334,7 @@ export function hydrateJobRates(raw: Partial<JobRates> | Record<string, unknown>
     staffMileageRate: "staffMileageRate" in row ? num(row.staffMileageRate, 0) : leftoverMileage,
     craftMileageRate: "craftMileageRate" in row ? num(row.craftMileageRate, 0) : leftoverMileage,
     rateBook: typeof row.rateBook === "string" ? row.rateBook : defaults.rateBook,
+    perDiemMode: hydratePerDiemMode(row.perDiemMode),
   };
 }
 
@@ -681,22 +691,24 @@ export function perDiemDaysFromCrew(
   site = "",
   client = "",
   holidays: string[] = [],
+  perDiemMode: PerDiemMode = DEFAULT_PER_DIEM_MODE,
 ): { staff: number; craft: number } {
+  const mode = hydratePerDiemMode(perDiemMode);
   const staffRows = [...(crew.staff ?? []), ...(crew.generalForeman ?? [])];
   const craftRows = [...(crew.foreman ?? []), ...(crew.direct ?? []), ...(crew.support ?? [])];
-  const staff = staffRows.reduce((sum, row) => sum + computeRowHours(row, site, client, crew.otAfter8, "", holidays).pd, 0);
-  const craft = craftRows.reduce((sum, row) => sum + computeRowHours(row, site, client, crew.otAfter8, "", holidays).pd, 0);
+  const staff = staffRows.reduce((sum, row) => sum + computeRowHours(row, site, client, crew.otAfter8, "", holidays, mode).pd, 0);
+  const craft = craftRows.reduce((sum, row) => sum + computeRowHours(row, site, client, crew.otAfter8, "", holidays, mode).pd, 0);
   return { staff, craft };
 }
 
 export function perDiemDollarsFromCrew(
   crew: Parameters<typeof perDiemDaysFromCrew>[0],
-  rates: { staffPerDiemRate: number; craftPerDiemRate: number },
+  rates: { staffPerDiemRate: number; craftPerDiemRate: number; perDiemMode?: PerDiemMode },
   site = "",
   client = "",
   holidays: string[] = [],
 ): number {
-  const days = perDiemDaysFromCrew(crew, site, client, holidays);
+  const days = perDiemDaysFromCrew(crew, site, client, holidays, hydratePerDiemMode(rates.perDiemMode));
   return Math.round((days.staff * Math.max(0, rates.staffPerDiemRate) + days.craft * Math.max(0, rates.craftPerDiemRate)) * 100) / 100;
 }
 

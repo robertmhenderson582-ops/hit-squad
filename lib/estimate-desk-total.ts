@@ -59,6 +59,7 @@ export function deskPackageBreakdown(input: DeskPackageInput): EstimateTotalBrea
   const rates = {
     staffPerDiemRate: Number(input.jobMeta?.staffPerDiemRate) || 0,
     craftPerDiemRate: Number(input.jobMeta?.craftPerDiemRate) || 0,
+    perDiemMode: input.jobMeta?.perDiemMode,
   };
   const money = hydrateJobMoney(input.jobMeta);
   const holidays = money.holidays;

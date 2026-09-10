@@ -297,6 +297,7 @@ describe("estimate excel import", () => {
     setup.getCell("B23").value = new Date(2026, 0, 1);
     setup.getCell("B24").value = 3;
     setup.getCell("B25").value = 2;
+    setup.getCell("B26").value = "7 days a week";
     const imported = await parseEstimateXlsx(new Uint8Array(await wb.xlsx.writeBuffer()));
     assert.equal(imported.jobMeta?.staffPerDiemRate, 155);
     assert.equal(imported.jobMeta?.craftPerDiemRate, 145);
@@ -309,6 +310,7 @@ describe("estimate excel import", () => {
     assert.equal(imported.jobMeta?.cbaIncreaseDate, "2026-01-01");
     assert.equal(imported.jobMeta?.cbaIncreasePct, 3);
     assert.equal(imported.jobMeta?.moreFundPerHour, 2);
+    assert.equal(imported.jobMeta?.perDiemMode, "seven-day");
     const applied = applyEstimateImport(asPack(input), imported);
     const meta = applied.jobMeta as {
       staffPerDiemRate?: number;
@@ -317,7 +319,9 @@ describe("estimate excel import", () => {
       equipmentContingencyPct?: number;
       subsContingencyPct?: number;
       moreFundPerHour?: number | null;
+      perDiemMode?: string;
     };
+    assert.equal(meta.perDiemMode, "seven-day");
     assert.equal(meta.staffPerDiemRate, 155);
     assert.equal(meta.staffMileageRate, 0.85);
     assert.equal(meta.laborContingencyPct, 8);
@@ -327,6 +331,63 @@ describe("estimate excel import", () => {
     const moneyDiff = diffEstimateImport(asPack(input), imported);
     assert.equal(moneyDiff.lines.some((line) => /Staff PD \$ \/ day/.test(line) && /155/.test(line)), true);
     assert.equal(moneyDiff.lines.some((line) => /CBA increase/i.test(line)), true);
+  });
+
+  it("7-day PD export/import keeps the weekday labor mask and the mode", async () => {
+    const input: EstimateXlsxInput = {
+      title: "PD seven-day",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      crew: {
+        direct: [
+          craft("dr-pd", "Boilermaker Journeyman", {
+            start: "2026-09-14",
+            end: "2026-09-20",
+            otAfter8: true,
+            perDiemPeople: 2,
+          }),
+        ],
+        otAfter8: true,
+      },
+      schedule: {
+        projectStart: "2026-09-14",
+        multiUnits: false,
+        units: [],
+        phases: [
+          {
+            id: "mech",
+            name: "Mechanical Window",
+            on: true,
+            start: "2026-09-14",
+            stop: "2026-09-20",
+            daysPerWeek: 5,
+            hoursPerDay: 10,
+            otAfter8: true,
+            sundaysOff: [],
+          },
+        ],
+      },
+      jobMeta: {
+        staffPerDiemRate: 140,
+        craftPerDiemRate: 130,
+        staffMileageRate: 0,
+        craftMileageRate: 0,
+        rateBook: "",
+        perDiemMode: "seven-day",
+      },
+    };
+    const before = deskPackageTotal(input);
+    const bytes = await estimateToXlsx(input);
+    const imported = await parseEstimateXlsx(bytes);
+    assert.equal(imported.jobMeta?.perDiemMode, "seven-day");
+    const applied = applyEstimateImport(asPack(input), imported);
+    const row = (applied.crew as { direct: CraftRow[] }).direct[0];
+    assert.deepEqual(row.ranges[0]?.days, [false, true, true, true, true, true, false]);
+    assert.equal(row.ranges[0]?.perDiemPeople, 2);
+    assert.equal(
+      deskPackageTotal({ ...input, crew: applied.crew, jobMeta: applied.jobMeta }),
+      before,
+    );
   });
 
   it("DOWN: Job setup money merge keeps Ferndale / Boiler 17 live fields", async () => {

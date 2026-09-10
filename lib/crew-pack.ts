@@ -1,4 +1,10 @@
-import { computeRangeHours, sumSplits, type HoursSplit } from "./hours-clock.ts";
+import {
+  computeRangeHours,
+  DEFAULT_PER_DIEM_MODE,
+  sumSplits,
+  type HoursSplit,
+  type PerDiemMode,
+} from "./hours-clock.ts";
 import { isStaffPerDiemLane } from "./shahan-wood-river.ts";
 
 export type CrewPackRow = {
@@ -47,6 +53,7 @@ export function dayNightHours(
   client = "",
   otAfter8 = false,
   holidays: string[] = [],
+  perDiemMode: PerDiemMode = DEFAULT_PER_DIEM_MODE,
 ): { day: HoursSplit; night: HoursSplit } {
   let day = emptySplit();
   let night = emptySplit();
@@ -74,6 +81,7 @@ export function dayNightHours(
       clockOverride: row.clockOverride ?? "auto",
       skipDates: range.skipDates,
       holidays,
+      perDiemMode,
     };
     if (shift === "Days & nights") {
       day = sumSplits([

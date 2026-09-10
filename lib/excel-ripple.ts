@@ -18,8 +18,12 @@
  * Support Bill as is a live-pack view of billedAs (same Rate Tables craft);
  * the field round-trips on import.
  * Daily PD count on craft sheets is live-pack perDiemPeople / nightPerDiemPeople
- * (can differ from HC). Day cells are hard yellow inputs like HC; PD $ stays
- * count × PD rate. Empty unused day cells stay teal, not yellow.
+ * (can differ from HC), filled from Job setup perDiemMode: Days worked = labor
+ * days only; 7 days a week = every calendar day in that seat range (phase
+ * Start–Stop), including weekends/off days. skipDates stay out. Day cells are
+ * hard yellow inputs like HC; PD $ stays count × PD rate. Empty unused day
+ * cells stay teal, not yellow. One job-level switch — desk, Other Cost, and
+ * Excel share the same counts.
  * Craft-sheet Billable column is dropped — it duplicated ST+OT+DT / per-row
  * totals. Labor $ is dropped the same way: Subtotal $ holds TM $ (ST+OT+DT);
  * PD $ stays on the PD row. Day-grid sums still feed ST/OT/DT hours and PD

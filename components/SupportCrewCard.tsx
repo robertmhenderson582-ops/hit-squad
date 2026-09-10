@@ -54,7 +54,15 @@ export function SupportCrewCard({
   const computed = useMemo(
     () =>
       lines.map((row) => {
-        const hours = computeRowHours(row, site, client, pack.crew.otAfter8, "", pack.jobMeta.holidays ?? []);
+        const hours = computeRowHours(
+          row,
+          site,
+          client,
+          pack.crew.otAfter8,
+          "",
+          pack.jobMeta.holidays ?? [],
+          pack.jobMeta.perDiemMode,
+        );
         const opts = wageLookupOpts(site);
         return {
           ...row,
@@ -63,7 +71,7 @@ export function SupportCrewCard({
           cost: formatCrewRowCost(row, hours, opts),
         };
       }),
-    [client, lines, pack.crew.otAfter8, pack.jobMeta.holidays, site],
+    [client, lines, pack.crew.otAfter8, pack.jobMeta.holidays, pack.jobMeta.perDiemMode, site],
   );
   const totals = useMemo(() => sumSplits(computed), [computed]);
   const costTotal = useMemo(
