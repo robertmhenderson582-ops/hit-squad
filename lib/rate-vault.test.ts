@@ -6,11 +6,15 @@ import { canSeeRateVault, canSeeRateVaultDoor, pageAllowedForSeat } from "./desk
 import { RATE_VAULT_DOOR, homeDockTilesForViewer } from "./desk-home.ts";
 import {
   RATE_VAULT_API,
+  RATE_VAULT_CBA_PLA_ID,
+  RATE_VAULT_CBA_PLA_RULES,
+  RATE_VAULT_CBA_PLA_SECTION,
   RATE_VAULT_HREF,
   RATE_VAULT_OWNER_NOTE,
   RATE_VAULT_PRIVILEGE,
   RATE_VAULT_SECTIONS,
   RATE_VAULT_TITLE,
+  emptyCbaPlaVault,
   emptyRateVaultWorkshop,
   rateVaultAccess,
   stubPublishRateVault,
@@ -77,8 +81,29 @@ describe("Rate Vault scaffold", () => {
     assert.equal(workshop.id, "rate-vault");
     assert.deepEqual(
       RATE_VAULT_SECTIONS.map((section) => section.id),
-      ["halls", "contractor", "p66", "publish"],
+      ["halls", "contractor", "cba-pla", "p66", "publish"],
     );
+    assert.equal(RATE_VAULT_CBA_PLA_ID, "cba-pla");
+    assert.equal(RATE_VAULT_CBA_PLA_SECTION.id, "cba-pla");
+    assert.equal(RATE_VAULT_CBA_PLA_SECTION.label, "CBA / PLA");
+    assert.equal(RATE_VAULT_CBA_PLA_SECTION.title, "CBA & PLA vault");
+    assert.match(RATE_VAULT_CBA_PLA_SECTION.note, /Wood River/);
+    assert.match(RATE_VAULT_CBA_PLA_SECTION.note, /Bayway/);
+    assert.match(RATE_VAULT_CBA_PLA_SECTION.note, /OT/);
+    assert.match(RATE_VAULT_CBA_PLA_SECTION.note, /fringes/i);
+    assert.match(RATE_VAULT_CBA_PLA_SECTION.note, /eligibility/i);
+    assert.match(RATE_VAULT_CBA_PLA_SECTION.note, /clock/i);
+    assert.match(RATE_VAULT_CBA_PLA_SECTION.note, /published rate package/i);
+    assert.deepEqual(
+      RATE_VAULT_CBA_PLA_RULES.map((rule) => rule.id),
+      ["ot", "fringes", "eligibility", "clock"],
+    );
+    assert.deepEqual(workshop.cbaPla, emptyCbaPlaVault());
+    assert.equal(workshop.cbaPla.id, "cba-pla");
+    assert.deepEqual(workshop.cbaPla.entries, []);
+    assert.equal(workshop.cbaPla.rules.every((rule) => rule.captured === false), true);
+    const p66 = RATE_VAULT_SECTIONS.find((section) => section.id === "p66");
+    assert.match(p66?.note ?? "", /CBA \/ PLA is its own vault/i);
     assert.equal(workshop.publish.status, "stub");
     assert.equal(workshop.publish.published, false);
     assert.equal(workshop.publish.packageId, null);
@@ -105,8 +130,18 @@ describe("Rate Vault scaffold", () => {
     assert.match(desk, /RATE_VAULT_SECTIONS/);
     assert.match(vaultModule, /Hall uploads/);
     assert.match(vaultModule, /Contractor books/);
+    assert.match(vaultModule, /CBA \/ PLA/);
+    assert.match(vaultModule, /cba-pla/);
     assert.match(vaultModule, /P66 \/ site rules/);
     assert.match(vaultModule, /Publish rate package/);
+    assert.match(desk, /RATE_VAULT_CBA_PLA_ID/);
+    assert.match(desk, /CBA \/ PLA upload stub/);
+    assert.match(desk, /Vault is empty/);
+    assert.doesNotMatch(desk, /Cassidy|james@|invite James/i);
+    assert.doesNotMatch(vaultModule, /Cassidy|estimate-pack|\/api\/desk\/rates/);
+    const docs = source("../docs/rate-vault.md");
+    assert.match(docs, /cba-pla/);
+    assert.match(docs, /not nested under P66/);
     assert.match(desk, /\/api\/rate-vault/);
     assert.match(gate, /canSeeRateVaultDoor/);
     assert.match(gate, /router.replace\("\/"\)/);
