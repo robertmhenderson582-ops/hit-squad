@@ -15,6 +15,7 @@ import {
   type RateVaultConfirmedReview,
   type RateVaultRecognitionReview,
   type RateVaultSiteId,
+  type RateVaultSourceOverride,
   type RateVaultWorkshop,
 } from "./rate-vault.ts";
 
@@ -291,17 +292,33 @@ export function applyRateVaultReview(
   return { ...next, pathHint: rateVaultPathHint(next) };
 }
 
+export function applyRateVaultOverride(
+  entry: RateVaultSourceEntry,
+  override: RateVaultSourceOverride | null,
+): RateVaultSourceEntry {
+  if (!override || override.sourceId !== entry.id) return entry;
+  const next: RateVaultSourceEntry = {
+    ...entry,
+    kind: override.kind ?? entry.kind,
+    siteId: override.siteId !== undefined ? (isRateVaultSiteId(override.siteId) ? override.siteId : null) : entry.siteId,
+    pathHint: "",
+  };
+  return { ...next, pathHint: rateVaultPathHint(next) };
+}
+
 export function mergeRateVaultLibrary(
   seed: readonly RateVaultSourceEntry[],
   extras: readonly RateVaultSourceEntry[] = [],
   reviews: ReadonlyArray<{ sourceId: string; kind: RateVaultSourceKind; siteId: string | null; craft: string | null; local: string | null }> = [],
+  overrides: readonly RateVaultSourceOverride[] = [],
 ) {
   const byId = new Map<string, RateVaultSourceEntry>();
   for (const row of seed) byId.set(row.id, { ...row });
   for (const row of extras) byId.set(row.id, { ...row });
   return [...byId.values()].map((entry) => {
     const review = reviews.find((item) => item.sourceId === entry.id) ?? null;
-    return applyRateVaultReview(entry, review);
+    const override = overrides.find((item) => item.sourceId === entry.id) ?? null;
+    return applyRateVaultOverride(applyRateVaultReview(entry, review), override);
   });
 }
 
@@ -359,14 +376,16 @@ export function buildRateVaultWorkshop(
   extras: readonly RateVaultSourceEntry[] = [],
   reviews: readonly RateVaultConfirmedReview[] = [],
   review: RateVaultRecognitionReview | null = null,
+  overrides: readonly RateVaultSourceOverride[] = [],
 ): RateVaultWorkshop {
   const workshop = emptyRateVaultWorkshop();
   return {
     ...workshop,
     library: {
-      entries: mergeRateVaultLibrary(seedRateVaultLibrary(), extras, reviews),
+      entries: mergeRateVaultLibrary(seedRateVaultLibrary(), extras, reviews, overrides),
       extras: extras.map((row) => ({ ...row })),
       reviews: reviews.map((row) => ({ ...row })),
+      overrides: overrides.map((row) => ({ ...row })),
     },
     review,
   };

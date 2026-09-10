@@ -6,7 +6,9 @@ import {
   addRateVaultOwnerSource,
   confirmRateVaultReview,
   listRateVaultOwnerLibrary,
+  listRateVaultOverrides,
   listRateVaultReviews,
+  organizeRateVaultSource,
   resetRateVaultStoreForTests,
   storePayloadLeaksBinary,
   useRateVaultStoreForTests,
@@ -59,6 +61,29 @@ describe("Rate Vault owner catalog store", { concurrency: 1 }, () => {
     assert.equal(storePayloadLeaksBinary(vault), false);
     assert.equal(JSON.stringify(vault).includes("SHOULD-NOT-PERSIST"), false);
     assert.equal(vault?.extras?.[0]?.driveId, "1BBBBBBBBBBBBBBBBBBBBBBBBBB");
+  });
+
+  it("moves a source between site buckets without storing bytes", async () => {
+    const drive = memoryDrive();
+    useRateVaultStoreForTests(drive);
+    await addRateVaultOwnerSource({
+      title: "Hall book.pdf",
+      driveId: "1CCCCCCCCCCCCCCCCCCCCCCCCCC",
+      kind: "other",
+      siteId: "rodeo",
+    });
+    const moved = await organizeRateVaultSource({
+      sourceId: "1CCCCCCCCCCCCCCCCCCCCCCCCCC",
+      siteId: "wood-river",
+      kind: "local-craft-sheet",
+    });
+    assert.equal(moved.ok, true);
+    const listed = await listRateVaultOverrides();
+    assert.equal(listed[0]?.siteId, "wood-river");
+    assert.equal(listed[0]?.kind, "local-craft-sheet");
+    const extras = await listRateVaultOwnerLibrary();
+    assert.equal(extras[0]?.siteId, "wood-river");
+    assert.equal(storePayloadLeaksBinary(extras), false);
   });
 
   it("rejects a bad Drive id", async () => {

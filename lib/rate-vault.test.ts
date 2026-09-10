@@ -24,7 +24,9 @@ import {
   emptyCbaPlaVault,
   emptyRateVaultWorkshop,
   emptyStateLawVault,
+  moveRateVaultSource,
   rateVaultAccess,
+  reorderRateVaultItems,
   stubPublishRateVault,
 } from "./rate-vault.ts";
 import { buildRateVaultWorkshop, seedRateVaultLibrary } from "./rate-vault-library.ts";
@@ -113,6 +115,15 @@ describe("Rate Vault scaffold", () => {
     assert.equal(workshop.library.entries.length, 0);
     assert.equal(workshop.steps, RATE_VAULT_BUILDER_STEPS);
     assert.equal(workshop.review, null);
+    assert.deepEqual(reorderRateVaultItems(["a", "b", "c"], 2, 0), ["c", "a", "b"]);
+    const moved = moveRateVaultSource(seedRateVaultLibrary(), "1EpxaHxTdy6I0H4YV4scosap4PfkoWjiT", {
+      siteId: "bayway",
+      kind: "rate-builder",
+    });
+    const rodeo = moved.find((row) => row.driveId === "1EpxaHxTdy6I0H4YV4scosap4PfkoWjiT");
+    assert.equal(rodeo?.siteId, "bayway");
+    assert.equal(rodeo?.kind, "rate-builder");
+    assert.equal(seedRateVaultLibrary().find((row) => row.driveId === "1EpxaHxTdy6I0H4YV4scosap4PfkoWjiT")?.siteId, "rodeo");
     assert.equal(RATE_VAULT_CBA_PLA_ID, "cba-pla");
     assert.equal(RATE_VAULT_CBA_PLA_SECTION.id, "cba-pla");
     assert.equal(RATE_VAULT_CBA_PLA_SECTION.label, "CBA / PLA");
@@ -202,6 +213,18 @@ describe("Rate Vault scaffold", () => {
     assert.match(desk, /Browse the vault catalog/);
     assert.match(desk, /Review card/);
     assert.match(desk, /B-1 Builder steps/);
+    assert.match(desk, /Rate Vault builder drop/);
+    assert.match(desk, /Rate Vault source upload/);
+    assert.match(desk, /Recognize rate sheet/);
+    assert.match(desk, /Map crafts upload/);
+    assert.match(desk, /CBA \/ PLA upload stub/);
+    assert.match(desk, /State law upload/);
+    assert.match(desk, /Publish preview upload/);
+    assert.match(desk, /onDrop/);
+    assert.match(desk, /RATE_VAULT_SOURCE_DRAG/);
+    assert.match(desk, /RATE_VAULT_CRAFT_DRAG/);
+    assert.match(desk, /organize-source/);
+    assert.match(api, /organize-source/);
     assert.doesNotMatch(desk, /Cassidy|james@|invite James/i);
     assert.doesNotMatch(vaultModule, /Cassidy|estimate-pack|\/api\/desk\/rates/);
     const docs = source("../docs/rate-vault.md");
@@ -211,6 +234,8 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /files stay on Drive/i);
     assert.match(docs, /review card/i);
     assert.match(docs, /never commit/i);
+    assert.match(docs, /Drag and drop/);
+    assert.match(docs, /Quality folders/);
     assert.match(desk, /\/api\/rate-vault/);
     assert.match(gate, /canSeeRateVaultDoor/);
     assert.match(gate, /router.replace\("\/"\)/);

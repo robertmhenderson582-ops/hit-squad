@@ -46,6 +46,10 @@ Recognition is flexible and path-aware — layouts are not universal (site, craf
 
 Human confirm / correct is required before the catalog updates. **Recognition ≠ silent overwrite.** Confirm never writes a live rate book.
 
+## Drag and drop
+
+Every B-1 Builder step is a drop target — Sources, Recognize, Map crafts, Burden / build, and Publish — plus a persistent zone under the stepper. Drop PDF / Word / Excel the same way Quality folders accept files. Library cards are also draggable onto site and kind buckets to recategorize (metadata only; the Drive file does not move). Mapped craft / column rows can be reordered by drag. Binaries still never land in git.
+
 ## Break-off later
 
 Rate Vault is partitioned so a later program can leave `hitsquad-desk` without rewriting the workshop.

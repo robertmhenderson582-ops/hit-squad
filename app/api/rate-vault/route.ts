@@ -6,15 +6,21 @@ import { stubPublishRateVault, type RateVaultRecognitionReview } from "@/lib/rat
 import {
   addRateVaultOwnerSource,
   confirmRateVaultReview,
+  listRateVaultOverrides,
   listRateVaultOwnerLibrary,
   listRateVaultReviews,
+  organizeRateVaultSource,
 } from "@/lib/rate-vault-store";
 
 export const dynamic = "force-dynamic";
 
 async function workshopPayload(review: RateVaultRecognitionReview | null = null) {
-  const [extras, reviews] = await Promise.all([listRateVaultOwnerLibrary(), listRateVaultReviews()]);
-  return buildRateVaultWorkshop(extras, reviews, review);
+  const [extras, reviews, overrides] = await Promise.all([
+    listRateVaultOwnerLibrary(),
+    listRateVaultReviews(),
+    listRateVaultOverrides(),
+  ]);
+  return buildRateVaultWorkshop(extras, reviews, review, overrides);
 }
 
 export async function GET(request: Request) {
@@ -43,6 +49,16 @@ export async function POST(request: Request) {
     review?: Record<string, unknown>;
   };
   const action = body.action || "";
+
+  if (action === "organize-source") {
+    const moved = await organizeRateVaultSource({
+      sourceId: body.sourceId,
+      siteId: body.siteId,
+      kind: body.kind,
+    });
+    if (!moved.ok) return NextResponse.json({ error: moved.error }, { status: moved.status });
+    return NextResponse.json({ override: moved.override, workshop: await workshopPayload() });
+  }
 
   if (action === "publish") {
     return NextResponse.json({ publish: stubPublishRateVault(), workshop: await workshopPayload() });

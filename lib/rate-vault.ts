@@ -163,6 +163,8 @@ export const RATE_VAULT_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.xlsb,.xlsm";
 export const RATE_VAULT_MAX_FILE_BYTES = 15 * 1024 * 1024;
 export const RATE_VAULT_DROP_TYPE_ERROR = "Use PDF, Word, or Excel (xlsx / xlsm / xls / xlsb).";
 export const RATE_VAULT_DROP_SIZE_ERROR = "File is too large for Rate Vault (15 MB).";
+export const RATE_VAULT_SOURCE_DRAG = "application/x-hitsquad-rate-source";
+export const RATE_VAULT_CRAFT_DRAG = "application/x-hitsquad-rate-craft";
 
 export const RATE_VAULT_MIME: Record<string, readonly string[]> = {
   pdf: ["application/pdf"],
@@ -272,11 +274,55 @@ export type RateVaultRecognitionReview = {
   extractNote: string;
 };
 
+export type RateVaultSourceOverride = {
+  sourceId: string;
+  siteId?: RateVaultSiteId | null;
+  kind?: RateVaultSourceKind;
+};
+
 export type RateVaultLibrary = {
   entries: RateVaultSourceEntry[];
   extras: RateVaultSourceEntry[];
   reviews: RateVaultConfirmedReview[];
+  overrides: RateVaultSourceOverride[];
 };
+
+export function rateVaultDragTypes(types: ArrayLike<string> | null | undefined) {
+  return Array.from(types ?? []);
+}
+
+export function rateVaultHasFileDrag(types: ArrayLike<string> | null | undefined) {
+  return rateVaultDragTypes(types).includes("Files");
+}
+
+export function rateVaultHasSourceDrag(types: ArrayLike<string> | null | undefined) {
+  return rateVaultDragTypes(types).includes(RATE_VAULT_SOURCE_DRAG);
+}
+
+export function reorderRateVaultItems<T>(items: readonly T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return items.slice();
+  const next = items.slice();
+  const [row] = next.splice(from, 1);
+  if (row === undefined) return items.slice();
+  next.splice(to, 0, row);
+  return next;
+}
+
+export function moveRateVaultSource(
+  entries: readonly RateVaultSourceEntry[],
+  sourceId: string,
+  bucket: { siteId?: RateVaultSiteId | null; kind?: RateVaultSourceKind },
+): RateVaultSourceEntry[] {
+  return entries.map((entry) => {
+    if (entry.id !== sourceId) return entry;
+    const next = {
+      ...entry,
+      siteId: bucket.siteId !== undefined ? bucket.siteId : entry.siteId,
+      kind: bucket.kind ?? entry.kind,
+    };
+    return { ...next, pathHint: rateVaultPathHint(next) };
+  });
+}
 
 export type RateVaultSectionId = (typeof RATE_VAULT_SECTIONS)[number]["id"];
 export type RateVaultCbaPlaRuleId = (typeof RATE_VAULT_CBA_PLA_RULES)[number]["id"];
@@ -353,7 +399,7 @@ export type RateVaultWorkshop = {
 };
 
 export function emptyRateVaultLibrary(): RateVaultLibrary {
-  return { entries: [], extras: [], reviews: [] };
+  return { entries: [], extras: [], reviews: [], overrides: [] };
 }
 
 export function emptyRateVaultWorkshop(): RateVaultWorkshop {

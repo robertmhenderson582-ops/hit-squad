@@ -11,15 +11,17 @@ import {
   ownerLibraryEntry,
   parseOwnerLibraryInput,
 } from "./rate-vault-library.ts";
-import type { RateVaultConfirmedReview, RateVaultSourceEntry } from "./rate-vault.ts";
+import { isRateVaultSiteId, isRateVaultSourceKind, type RateVaultConfirmedReview, type RateVaultSourceEntry, type RateVaultSourceOverride } from "./rate-vault.ts";
 
 type StoreFile = {
   extras?: RateVaultSourceEntry[];
   reviews?: RateVaultConfirmedReview[];
+  overrides?: RateVaultSourceOverride[];
 };
 
 let extras: RateVaultSourceEntry[] = [];
 let reviews: RateVaultConfirmedReview[] = [];
+let overrides: RateVaultSourceOverride[] = [];
 let injectedAdapter: DriveAdapter | null | undefined;
 let hydrated = false;
 
@@ -98,7 +100,7 @@ async function persist() {
     drive,
     RATE_VAULT_LIBRARY_NAME,
     RATE_VAULT_LIBRARY_KIND,
-    { extras: extras.map(sanitizeEntry), reviews: cloneReviews(reviews) },
+    { extras: extras.map(sanitizeEntry), reviews: cloneReviews(reviews), overrides: overrides.map((row) => ({ ...row })) },
     dataFolderId(),
   );
 }
@@ -107,6 +109,7 @@ export function useRateVaultStoreForTests(drive: DriveAdapter | null) {
   injectedAdapter = drive;
   extras = [];
   reviews = [];
+  overrides = [];
   hydrated = false;
 }
 
@@ -114,6 +117,7 @@ export function resetRateVaultStoreForTests() {
   injectedAdapter = undefined;
   extras = [];
   reviews = [];
+  overrides = [];
   hydrated = false;
 }
 
@@ -125,6 +129,7 @@ export async function hydrateRateVaultStore() {
       const raw = await readVaultJson<StoreFile>(drive, RATE_VAULT_LIBRARY_NAME, RATE_VAULT_LIBRARY_KIND, dataFolderId());
       extras = parseExtras(raw?.extras);
       reviews = parseReviews(raw?.reviews);
+      overrides = parseOverrides(raw?.overrides);
     } catch {
       // keep memory
     }
@@ -140,6 +145,63 @@ export async function listRateVaultOwnerLibrary() {
 export async function listRateVaultReviews() {
   await hydrateRateVaultStore();
   return cloneReviews(reviews);
+}
+
+function parseOverrides(raw: unknown): RateVaultSourceOverride[] {
+  if (!Array.isArray(raw)) return [];
+  const out: RateVaultSourceOverride[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const item = row as RateVaultSourceOverride;
+    if (typeof item.sourceId !== "string" || !item.sourceId.trim()) continue;
+    out.push({
+      sourceId: item.sourceId,
+      siteId: item.siteId === null || isRateVaultSiteId(item.siteId) ? item.siteId : undefined,
+      kind: isRateVaultSourceKind(item.kind) ? item.kind : undefined,
+    });
+  }
+  return out;
+}
+
+export async function listRateVaultOverrides() {
+  await hydrateRateVaultStore();
+  return overrides.map((row) => ({ ...row }));
+}
+
+export async function organizeRateVaultSource(raw: unknown) {
+  if (!raw || typeof raw !== "object") return { ok: false as const, status: 400, error: "Pick a source to move." };
+  const row = raw as { sourceId?: unknown; siteId?: unknown; kind?: unknown };
+  const sourceId = typeof row.sourceId === "string" ? row.sourceId.trim() : "";
+  if (!sourceId) return { ok: false as const, status: 400, error: "Pick a source to move." };
+  await hydrateRateVaultStore();
+  const kind = isRateVaultSourceKind(row.kind) ? row.kind : undefined;
+  const siteId =
+    row.siteId === "" || row.siteId === null
+      ? null
+      : isRateVaultSiteId(row.siteId)
+        ? row.siteId
+        : undefined;
+  if (kind === undefined && siteId === undefined) {
+    return { ok: false as const, status: 400, error: "Drop onto a site or kind bucket." };
+  }
+  const extra = extras.find((item) => item.id === sourceId || item.driveId === sourceId);
+  if (extra) {
+    extras = extras.map((item) =>
+      item.id === extra.id
+        ? { ...item, ...(kind ? { kind } : {}), ...(siteId !== undefined ? { siteId } : {}) }
+        : item,
+    );
+  }
+  const next: RateVaultSourceOverride = {
+    sourceId,
+    ...(kind ? { kind } : {}),
+    ...(siteId !== undefined ? { siteId } : {}),
+  };
+  const index = overrides.findIndex((item) => item.sourceId === sourceId);
+  if (index >= 0) overrides[index] = { ...overrides[index], ...next };
+  else overrides.push(next);
+  await persist();
+  return { ok: true as const, override: next };
 }
 
 export async function addRateVaultOwnerSource(raw: unknown) {

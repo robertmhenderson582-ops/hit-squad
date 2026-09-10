@@ -106,8 +106,12 @@ describe("Rate Vault source library", () => {
     assert.equal(seed.some((row) => row.id === extra.id), false);
     const parsed = parseOwnerLibraryInput({ title: "Nope", driveId: "short" });
     assert.equal("error" in parsed, true);
-    const workshop = buildRateVaultWorkshop([extra]);
+    const workshop = buildRateVaultWorkshop([extra], [], null, [
+      { sourceId: extra.id, siteId: "bayway", kind: "pla" },
+    ]);
     assert.equal(workshop.library.entries.some((row) => row.id === extra.id), true);
+    assert.equal(workshop.library.entries.find((row) => row.id === extra.id)?.siteId, "bayway");
+    assert.equal(workshop.library.entries.find((row) => row.id === extra.id)?.kind, "pla");
     assert.equal(workshop.publish.published, false);
   });
 });
