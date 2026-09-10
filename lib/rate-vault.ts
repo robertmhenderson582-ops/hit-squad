@@ -56,16 +56,26 @@ export const RATE_VAULT_STATE_LAW_SECTION = {
   note: "Recognize OT, wage, rest, and holiday rules by site location / state — Illinois (Wood River), California (Rodeo, Ferndale), New Jersey (Bayway), Montana (Billings). These sit alongside CBA/PLA when site-specific P66 rates are thin, and must feed the published rate package later.",
 } as const;
 
+export const RATE_VAULT_LIBRARY_ID = "library" as const;
+
+export const RATE_VAULT_LIBRARY_SECTION = {
+  id: RATE_VAULT_LIBRARY_ID,
+  label: "Source library",
+  title: "Source library",
+  note: "Drive-indexed agreements, wage sheets, and B-1 exemplars. Catalog by file id — binaries stay on Drive.",
+} as const;
+
 export const RATE_VAULT_SECTIONS = [
+  RATE_VAULT_LIBRARY_SECTION,
   {
     id: "halls",
     label: "Hall uploads",
-    note: "Union / hall books land here later. No ingest in this scaffold.",
+    note: "Hall books also appear in the source library. Link a Drive id — do not commit the file.",
   },
   {
     id: "contractor",
     label: "Contractor books",
-    note: "Contractor rate books land here later.",
+    note: "Contractor rate books land here later. Link through the source library for now.",
   },
   RATE_VAULT_CBA_PLA_SECTION,
   RATE_VAULT_STATE_LAW_SECTION,
@@ -80,6 +90,239 @@ export const RATE_VAULT_SECTIONS = [
     note: "Stub only — does not write live estimate Rate Tables.",
   },
 ] as const;
+
+export const RATE_VAULT_SOURCE_KINDS = [
+  "cba",
+  "pla",
+  "gppma",
+  "local-craft-sheet",
+  "b1-exhibit",
+  "rate-builder",
+  "comp",
+  "union-terms",
+  "other",
+] as const;
+
+export type RateVaultSourceKind = (typeof RATE_VAULT_SOURCE_KINDS)[number];
+
+export const RATE_VAULT_SOURCE_KIND_LABEL: Record<RateVaultSourceKind, string> = {
+  cba: "CBA",
+  pla: "PLA",
+  gppma: "GPPMA",
+  "local-craft-sheet": "Local craft sheet",
+  "b1-exhibit": "B-1 exhibit",
+  "rate-builder": "Rate builder",
+  comp: "COMP",
+  "union-terms": "Union terms",
+  other: "Other",
+};
+
+export const RATE_VAULT_SITES = [
+  { id: "wood-river", label: "Wood River", region: "Illinois" },
+  { id: "bayway", label: "Bayway", region: "New Jersey" },
+  { id: "rodeo", label: "Rodeo", region: "California" },
+  { id: "monroe", label: "Monroe", region: "Pennsylvania" },
+  { id: "ferndale", label: "Ferndale", region: "Washington" },
+  { id: "billings", label: "Billings", region: "Montana" },
+  { id: "east-coast", label: "East Coast", region: "COMP" },
+] as const;
+
+export type RateVaultSiteId = (typeof RATE_VAULT_SITES)[number]["id"];
+
+export const RATE_VAULT_BUILDER_STEPS = [
+  {
+    id: "sources",
+    label: "Sources",
+    note: "Browse and link Drive books. Files stay on Drive.",
+  },
+  {
+    id: "recognize",
+    label: "Recognize",
+    note: "Read the sheet, then review guesses. Nothing writes a rate book yet.",
+  },
+  {
+    id: "map-crafts",
+    label: "Map crafts",
+    note: "Confirm craft / local / columns. Layouts are not universal.",
+  },
+  {
+    id: "burden",
+    label: "Burden / build",
+    note: "CBA/PLA, state law, and fringes feed the pack later.",
+  },
+  {
+    id: "publish",
+    label: "Publish preview",
+    note: "Stub — live Rate Tables stay on Jobs / Rates.",
+  },
+] as const;
+
+export type RateVaultBuilderStepId = (typeof RATE_VAULT_BUILDER_STEPS)[number]["id"];
+
+export const RATE_VAULT_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.xlsb,.xlsm";
+export const RATE_VAULT_MAX_FILE_BYTES = 15 * 1024 * 1024;
+export const RATE_VAULT_DROP_TYPE_ERROR = "Use PDF, Word, or Excel (xlsx / xlsm / xls / xlsb).";
+export const RATE_VAULT_DROP_SIZE_ERROR = "File is too large for Rate Vault (15 MB).";
+export const RATE_VAULT_SOURCE_DRAG = "application/x-hitsquad-rate-source";
+export const RATE_VAULT_CRAFT_DRAG = "application/x-hitsquad-rate-craft";
+
+export const RATE_VAULT_MIME: Record<string, readonly string[]> = {
+  pdf: ["application/pdf"],
+  doc: ["application/msword"],
+  docx: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+  xls: ["application/vnd.ms-excel"],
+  xlsx: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  xlsm: ["application/vnd.ms-excel.sheet.macroenabled.12"],
+  xlsb: ["application/vnd.ms-excel.sheet.binary.macroenabled.12"],
+};
+
+export type RateVaultFormat = keyof typeof RATE_VAULT_MIME | "unknown";
+
+export function isRateVaultSourceKind(value: unknown): value is RateVaultSourceKind {
+  return typeof value === "string" && (RATE_VAULT_SOURCE_KINDS as readonly string[]).includes(value);
+}
+
+export function isRateVaultSiteId(value: unknown): value is RateVaultSiteId {
+  return typeof value === "string" && RATE_VAULT_SITES.some((site) => site.id === value);
+}
+
+export function isRateVaultDriveId(value: string) {
+  return /^[A-Za-z0-9_-]{20,80}$/.test(value.trim());
+}
+
+export function rateVaultDriveUrl(driveId: string, driveKind: "file" | "folder" = "file") {
+  const id = driveId.trim();
+  if (driveKind === "folder") return `https://drive.google.com/drive/folders/${id}`;
+  return `https://drive.google.com/file/d/${id}/view`;
+}
+
+export function rateVaultSiteLabel(siteId: string | null | undefined) {
+  return RATE_VAULT_SITES.find((site) => site.id === siteId)?.label ?? "";
+}
+
+export function rateVaultPathHint(input: {
+  siteId?: string | null;
+  craft?: string | null;
+  local?: string | null;
+  kind?: RateVaultSourceKind | null;
+}) {
+  const local = input.local?.trim() ? `L ${input.local.trim()}` : "";
+  return [
+    rateVaultSiteLabel(input.siteId),
+    input.craft?.trim() || "",
+    local,
+    input.kind ? RATE_VAULT_SOURCE_KIND_LABEL[input.kind] : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export type RateVaultSourceOrigin = "seed" | "owner";
+
+export type RateVaultSourceEntry = {
+  id: string;
+  title: string;
+  driveId: string;
+  driveKind: "file" | "folder";
+  href: string;
+  kind: RateVaultSourceKind;
+  siteId: RateVaultSiteId | null;
+  craft: string | null;
+  local: string | null;
+  primary: boolean;
+  archived: boolean;
+  origin: RateVaultSourceOrigin;
+  confirmed: boolean;
+  note: string;
+  pathHint: string;
+};
+
+export type RateVaultConfirmedReview = {
+  sourceId: string;
+  kind: RateVaultSourceKind;
+  siteId: RateVaultSiteId | null;
+  craft: string | null;
+  local: string | null;
+  confirmedAt: string;
+  writesRateBook: false;
+};
+
+export type RateVaultColumnRole = "craft" | "position" | "wage" | "fringe" | "burden" | "local" | "ot" | "dt" | "unknown";
+
+export type RateVaultSheetSniff = {
+  name: string;
+  headerRow: number | null;
+  headers: string[];
+  columns: Array<{ header: string; role: RateVaultColumnRole }>;
+};
+
+export type RateVaultRecognitionReview = {
+  sourceId: string | null;
+  fileName: string;
+  mime: string;
+  extension: string;
+  format: RateVaultFormat;
+  guessedKind: RateVaultSourceKind | "unknown";
+  guessedSiteId: RateVaultSiteId | null;
+  guessedCraft: string | null;
+  guessedLocal: string | null;
+  confidence: number;
+  sheets: RateVaultSheetSniff[];
+  snippets: string[];
+  needsConfirm: true;
+  writesRateBook: false;
+  extractNote: string;
+};
+
+export type RateVaultSourceOverride = {
+  sourceId: string;
+  siteId?: RateVaultSiteId | null;
+  kind?: RateVaultSourceKind;
+};
+
+export type RateVaultLibrary = {
+  entries: RateVaultSourceEntry[];
+  extras: RateVaultSourceEntry[];
+  reviews: RateVaultConfirmedReview[];
+  overrides: RateVaultSourceOverride[];
+};
+
+export function rateVaultDragTypes(types: ArrayLike<string> | null | undefined) {
+  return Array.from(types ?? []);
+}
+
+export function rateVaultHasFileDrag(types: ArrayLike<string> | null | undefined) {
+  return rateVaultDragTypes(types).includes("Files");
+}
+
+export function rateVaultHasSourceDrag(types: ArrayLike<string> | null | undefined) {
+  return rateVaultDragTypes(types).includes(RATE_VAULT_SOURCE_DRAG);
+}
+
+export function reorderRateVaultItems<T>(items: readonly T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return items.slice();
+  const next = items.slice();
+  const [row] = next.splice(from, 1);
+  if (row === undefined) return items.slice();
+  next.splice(to, 0, row);
+  return next;
+}
+
+export function moveRateVaultSource(
+  entries: readonly RateVaultSourceEntry[],
+  sourceId: string,
+  bucket: { siteId?: RateVaultSiteId | null; kind?: RateVaultSourceKind },
+): RateVaultSourceEntry[] {
+  return entries.map((entry) => {
+    if (entry.id !== sourceId) return entry;
+    const next = {
+      ...entry,
+      siteId: bucket.siteId !== undefined ? bucket.siteId : entry.siteId,
+      kind: bucket.kind ?? entry.kind,
+    };
+    return { ...next, pathHint: rateVaultPathHint(next) };
+  });
+}
 
 export type RateVaultSectionId = (typeof RATE_VAULT_SECTIONS)[number]["id"];
 export type RateVaultCbaPlaRuleId = (typeof RATE_VAULT_CBA_PLA_RULES)[number]["id"];
@@ -147,10 +390,17 @@ export type RateVaultWorkshop = {
   purpose: "B-1 / rate builder workshop";
   ownerNote: typeof RATE_VAULT_OWNER_NOTE;
   sections: typeof RATE_VAULT_SECTIONS;
+  steps: typeof RATE_VAULT_BUILDER_STEPS;
+  library: RateVaultLibrary;
+  review: RateVaultRecognitionReview | null;
   cbaPla: RateVaultCbaPlaVault;
   stateLaw: RateVaultStateLawVault;
   publish: RateVaultPublishStub;
 };
+
+export function emptyRateVaultLibrary(): RateVaultLibrary {
+  return { entries: [], extras: [], reviews: [], overrides: [] };
+}
 
 export function emptyRateVaultWorkshop(): RateVaultWorkshop {
   return {
@@ -159,6 +409,9 @@ export function emptyRateVaultWorkshop(): RateVaultWorkshop {
     purpose: "B-1 / rate builder workshop",
     ownerNote: RATE_VAULT_OWNER_NOTE,
     sections: RATE_VAULT_SECTIONS,
+    steps: RATE_VAULT_BUILDER_STEPS,
+    library: emptyRateVaultLibrary(),
+    review: null,
     cbaPla: emptyCbaPlaVault(),
     stateLaw: emptyStateLawVault(),
     publish: {
@@ -168,6 +421,35 @@ export function emptyRateVaultWorkshop(): RateVaultWorkshop {
       note: "Publish is a stub. Live Rate Tables stay on Jobs / Rates.",
     },
   };
+}
+
+export function rateVaultFileExtension(name: string) {
+  const base = name.replace(/\\/g, "/").split("/").pop() || "";
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0 || dot === base.length - 1) return "";
+  return base.slice(dot + 1).toLowerCase();
+}
+
+export function rateVaultDropByteLength(data: string) {
+  const compact = data.replace(/\s/g, "");
+  if (!compact) return 0;
+  const padding = compact.endsWith("==") ? 2 : compact.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((compact.length * 3) / 4) - padding);
+}
+
+export function checkRateVaultDropFile(file: { name: string; type?: string; bytes?: number; data?: string }) {
+  const ext = rateVaultFileExtension(file.name);
+  const allowed = RATE_VAULT_MIME[ext];
+  const mime = (file.type || "").split(";")[0].trim().toLowerCase();
+  if (!allowed) return { ok: false as const, error: RATE_VAULT_DROP_TYPE_ERROR, name: file.name };
+  if (mime && mime !== "application/octet-stream" && !allowed.includes(mime)) {
+    return { ok: false as const, error: RATE_VAULT_DROP_TYPE_ERROR, name: file.name };
+  }
+  const bytes = typeof file.bytes === "number" ? file.bytes : rateVaultDropByteLength(file.data || "");
+  if (!Number.isFinite(bytes) || bytes < 0 || bytes > RATE_VAULT_MAX_FILE_BYTES) {
+    return { ok: false as const, error: RATE_VAULT_DROP_SIZE_ERROR, name: file.name };
+  }
+  return { ok: true as const, name: file.name, bytes, format: ext as RateVaultFormat };
 }
 
 export function stubPublishRateVault(): RateVaultPublishStub {
