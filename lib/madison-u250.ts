@@ -1,13 +1,15 @@
 /**
- * Rodeo U250 — Madison contractor R2 → Hit Squad live pack.
+ * Rodeo U250 — JB 09.10.26 Summary → Family A five-card live pack.
  *
  * Same Wood River five-card desk as U110 (Staff / GF / Foreman / Direct /
- * Support). Family A is hours × one composite rate. Hole Watch/Fire Watch
- * from the Direct tab sits on Support. Official book has no GF / PM /
- * Super rows — do not invent them. Book composite rates ride on each
- * crew seat (`bookRate`); desk labor $ is hours × that rate. Madison
- * titles stay typed. Non-labor SUMMARY lines seed Other Cost as
- * book-priced sell (no 6.5% markup). Excel binaries stay on Drive.
+ * Support). Live lock is John Beech's 09.10.26 P66 workbook Summary
+ * ($2,351,438.99 / 12,001 hrs) on the Madison contractor transfer face.
+ * Family A is hours × one composite `bookRate` (bookAmount ÷ hours so
+ * displayed rounded rates do not drift). Official book has no GF / PM /
+ * Super / Fire Watch rows — do not invent them. Tool Room Attendant sits
+ * on Indirect → Staff. Titles stay typed. Non-labor SUMMARY lines seed
+ * Other Cost as book-priced sell (no 6.5% markup; JB 6% MISC markup is
+ * its own line). Excel binaries stay on Drive.
  *
  * One reserved pack: EST-U25026 / new-u25026-rodeo. Do not seed EST-MTN9RM
  * or any second U250 pack.
@@ -53,7 +55,9 @@ export const RODEO_U250_CLIENT = RODEO_U250_SHELL.client;
 export const RODEO_U250_SITE = RODEO_U250_SHELL.site;
 export const RODEO_U250_SITE_ID = RODEO_U250_SHELL.siteId;
 export const RODEO_U250_STATUS = "In progress" as const;
-export const RODEO_U250_HOURS_PLUG = "2026-08-17";
+export const RODEO_U250_HOURS_PLUG = "2026-09-10";
+export const RODEO_U250_CONTRACTOR = "MADISON INDUSTRIAL SVCS TEAM LLC";
+export const RODEO_U250_BLOCK = "2026 U250 Cat Change (TAR.ER01.26.250)";
 
 export type MadisonU250Fixture = MadisonU110Fixture;
 export type MadisonU250Ingest = MadisonU110Ingest;
@@ -148,17 +152,22 @@ export function rodeoU250FilledSnapshot(
     jobMeta: {
       ...(typeof base?.jobMeta === "object" && base.jobMeta ? base.jobMeta : {}),
       ...ingested.jobMeta,
-      rodeoForm: { tarUnit: "U250", contractor: "", block: "" },
+      rodeoForm: { tarUnit: "U250", contractor: RODEO_U250_CONTRACTOR, block: RODEO_U250_BLOCK },
     },
     otherCost: ingested.otherCost,
     costReport: base?.costReport,
   };
 }
 
-/** Fill empty U250 crew from the official Madison R2 extract. Do not smash a live clock. */
+/**
+ * Fill empty U250 crew, or replace a stale R2 / drifted clock that no longer
+ * matches the JB 09.10.26 official hours. Do not smash a clock that already
+ * matches the live lock.
+ */
 export function shouldFillRodeoU250Crew(pack?: { packId?: string; crew?: unknown } | null) {
-  if (!isRodeoU250PackId(pack?.packId)) return false;
-  return !crewHasRows(pack?.crew);
+  if (!pack || !isRodeoU250PackId(pack.packId)) return false;
+  if (!crewHasRows(pack.crew)) return true;
+  return !checkRodeoU250PackHours(pack.crew as never).ok;
 }
 
 export function seedRodeoU250LocalDefaults(store: StorageLike, packId: string) {
@@ -190,7 +199,7 @@ export function seedRodeoU250LocalDefaults(store: StorageLike, packId: string) {
   }
   const key = storageKeyForPack(packId);
   const crew = readStoreJson(store, `${CREW_STORE_PREFIX}${key}`);
-  if (!crewHasRows(crew)) {
+  if (shouldFillRodeoU250Crew({ packId, crew })) {
     const filled = rodeoU250FilledSnapshot({
       createdAt: pack?.createdAt,
       ownerEmail: pack?.ownerEmail,
@@ -200,7 +209,7 @@ export function seedRodeoU250LocalDefaults(store: StorageLike, packId: string) {
   }
 }
 
-/** After wake cards paint, fill empty U250 from Madison R2. Prefer filled seed over empty Drive. */
+/** After wake cards paint, fill/refresh U250 from the JB 09.10.26 lock. Prefer filled seed over empty Drive. */
 export function persistRodeoU250Wake(store?: StorageLike | null) {
   if (!store) return;
   seedRodeoU250LocalDefaults(store, RODEO_U250_PACK_ID);
@@ -210,6 +219,6 @@ export function persistRodeoU250Wake(store?: StorageLike | null) {
 export const RODEO_U250_VAULT_FILE = "rodeo-rodeo-u250-fall-2026.json";
 
 export const RODEO_U250_VAULT_APPLY =
-  "Owner OAuth vault write: open Rodeo U250 so wake seeds Family A hours × bookRate (desk total $2,470,680), then Save. First Save createJson mints rodeo-rodeo-u250-fall-2026.json. A broken other+markup-only seed is a 409 with the locked-total reason — do not upload it. Service-account-only isolates cannot PATCH a missing file; create is the first-write path. Do not commit the xlsx. Do not invent Family B workbook dollars. Do not create EST-MTN9RM or a second U250 pack.";
+  "Owner OAuth vault write: open Rodeo U250 so wake seeds JB 09.10.26 hours × bookRate (desk total $2,351,438.99), then Save. First Save createJson mints rodeo-rodeo-u250-fall-2026.json. A broken other+markup-only seed is a 409 with the locked-total reason — do not upload it. Service-account-only isolates cannot PATCH a missing file; create is the first-write path. Do not commit the xlsx. Do not invent hours from #REF! Water Walls sheets. Do not create EST-MTN9RM or a second U250 pack.";
 
 export { RODEO_U250_JOB_CODE, RODEO_U250_PACK_ID };

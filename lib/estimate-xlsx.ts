@@ -1733,9 +1733,10 @@ function buildCrewSheet(
     const bookRate = seatBookRate(row);
     if (bookRate) {
       // Family A has no ST/OT/DT premium — one composite sell on every band.
-      pushNum(cells, `D${stRow}`, bookRate);
-      pushNum(cells, `D${otRow}`, bookRate);
-      pushNum(cells, `D${dtRow}`, bookRate);
+      // Keep the fixture rate (bookAmount ÷ hours), not a cents-rounded display.
+      cells.push({ ref: `D${stRow}`, type: "number", value: bookRate });
+      cells.push({ ref: `D${otRow}`, type: "number", value: bookRate });
+      cells.push({ ref: `D${dtRow}`, type: "number", value: bookRate });
     } else {
       pushFormula(cells, `D${stRow}`, rateLookupFormula(rateName, "C", lastRateRow));
       pushFormula(cells, `D${otRow}`, rateLookupFormula(rateName, "D", lastRateRow));

@@ -21,9 +21,19 @@ export const WORK_FOLDER_MONROE_541V_ID = "1dqQNs3SH2DCYuclP7_VaAhndJmdy2k87";
 export const OFFICIAL_U110_REVISION_ID = "1Y9Y9xk6HGQycPBwUm6Xi4RM2dA0GfOej";
 export const OFFICIAL_U110_REVISION_NAME =
   "MADISON U110 2026 Turnaround Contractor Estimate Template 1540 072222026R1.xlsx";
-export const OFFICIAL_U250_REVISION_ID = "1JNH2TwVz-iiubkr86i9CUwVETQFVSQlg";
+/** Live Family A extract — Madison transfer face populated from JB 09.10.26. */
+export const OFFICIAL_U250_REVISION_ID = "1Mcn8wd-JvDZaQUkQ3MGW40oH0UkNpiNb";
 export const OFFICIAL_U250_REVISION_NAME =
+  "MADISON U250 2026 Turnaround Contractor Estimate Template_populated_from_JB_09.10.26.xlsx";
+/** Historical Madison R2 — retired desk lock ($2,470,680 / 12,881 hrs). */
+export const OFFICIAL_U250_R2_REVISION_ID = "1JNH2TwVz-iiubkr86i9CUwVETQFVSQlg";
+export const OFFICIAL_U250_R2_REVISION_NAME =
   "MADISON U250 2026 Turnaround Contractor Estimate Template R2_08_17_2026_RH.xlsx";
+/** John Beech 09.10.26 Family B workbook — Summary source of truth. */
+export const JB_U250_ESTIMATE_ID = "1wvDt-9e_SgaGR--LZ_wXDzu6Py9Ujej4";
+export const JB_U250_ESTIMATE_NAME = "P66 RODEO ESTIMATE WORKBOOK  U-250  09.10.26 JB.xlsx";
+export const JB_U250_STAFFING_ID = "1USxydY-S0ojKTDjrrtK_sT8zLjAvKFVC";
+export const JB_U250_STAFFING_NAME = "MADISON U250 20206 Staffing Plan Template 09102026 R3 JB .xlsx";
 export const OFFICIAL_MONROE_541V_REVISION_ID = "15NhD45FUvdFmfynkbqYGGsy0muhIcx3y";
 export const OFFICIAL_MONROE_541V_REVISION_NAME =
   "Monroe Energy U541 VAC  Estimate Workbook POST REVIEW 1204 06162026.xlsx";
@@ -47,8 +57,11 @@ export const RODEO_WORKBOOK_BLANK_ID = "1X2ETYoUFx1gbVTX7GhFEyWD7nP0ABcBo";
 export const RODEO_WORKBOOK_BLANK_NAME = "P66 RODEO ESTIMATE WORKBOOK Blank Needs Rates updated.xlsx";
 export const RODEO_WORKBOOK_U110_ID = "1j0YaowDFQgZTspCY_yMT8oYeWjxEZQTs";
 export const RODEO_WORKBOOK_U110_NAME = "P66 RODEO ESTIMATE WORKBOOK Unit 110  1508 07222026 RH.xlsx";
-export const RODEO_WORKBOOK_U250_ID = "1gNw_YEzhBICk8TGiqANxXvw_NLTR-4Mu";
-export const RODEO_WORKBOOK_U250_NAME = "Copy of P66 RODEO ESTIMATE WORKBOOK  U-250  07.23.25 JB.xlsx";
+export const RODEO_WORKBOOK_U250_ID = JB_U250_ESTIMATE_ID;
+export const RODEO_WORKBOOK_U250_NAME = JB_U250_ESTIMATE_NAME;
+/** Earlier Family B copy — additional face, not the 09.10.26 lock. */
+export const RODEO_WORKBOOK_U250_072325_ID = "1gNw_YEzhBICk8TGiqANxXvw_NLTR-4Mu";
+export const RODEO_WORKBOOK_U250_072325_NAME = "Copy of P66 RODEO ESTIMATE WORKBOOK  U-250  07.23.25 JB.xlsx";
 
 export const WESTERN_STATES_AGREEMENT_ID = "1wdYyt-qOEruPtosgiCSbkYO2yaTZnPfi";
 export const WESTERN_STATES_AGREEMENT_NAME = "Western States Agreement.pdf";
@@ -90,7 +103,7 @@ export function officialRevisionIds() {
 }
 
 export function rodeoWorkbookFamilyIds() {
-  return [RODEO_WORKBOOK_BLANK_ID, RODEO_WORKBOOK_U110_ID, RODEO_WORKBOOK_U250_ID];
+  return [RODEO_WORKBOOK_BLANK_ID, RODEO_WORKBOOK_U110_ID, RODEO_WORKBOOK_U250_ID, RODEO_WORKBOOK_U250_072325_ID];
 }
 
 export function isOfficialRevisionId(fileId = "") {

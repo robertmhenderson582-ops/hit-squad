@@ -1,35 +1,35 @@
 {
   "extractedFrom": "official-xlsx",
-  "officialRevisionId": "1JNH2TwVz-iiubkr86i9CUwVETQFVSQlg",
-  "officialRevisionName": "MADISON U250 2026 Turnaround Contractor Estimate Template R2_08_17_2026_RH.xlsx",
-  "hoursPlugDate": "2026-08-17",
-  "hoursPlugNote": "Madison R2 has no calendar grid. Hours plug is the official revision date (filename R2_08_17_2026 / Gmail 2026-08-17), not a TA window. Drive created/modified 2026-08-27. CBA/PLA clock is later.",
+  "officialRevisionId": "1Mcn8wd-JvDZaQUkQ3MGW40oH0UkNpiNb",
+  "officialRevisionName": "MADISON U250 2026 Turnaround Contractor Estimate Template_populated_from_JB_09.10.26.xlsx",
+  "hoursPlugDate": "2026-09-10",
+  "hoursPlugNote": "JB 09.10.26 Summary is the live desk lock. Family A Madison transfer face holds the five-card seats (hours × composite bookRate). Hours plug is the JB revision date 2026-09-10, not an invented TA window. Staffing R3 09102026 has a day grid (Pre TAR 2026-09-07 through Post TAR 2027-01-08) — used for contractor/event labels only. Do not invent HC×HPS calendars from that grid. CBA/PLA clock is later.",
   "summaryBuckets": {
-    "directHours": 8315,
-    "directDollars": 1383800,
-    "directRate": 166.42,
-    "indirectHours": 4566,
-    "indirectDollars": 767540,
-    "indirectRate": 168.1,
-    "perDiem": 188740,
-    "mobDemob": 101000,
+    "directHours": 6934,
+    "directDollars": 1186079.92,
+    "directRate": 171.05,
+    "indirectHours": 5067,
+    "indirectDollars": 847554.07,
+    "indirectRate": 167.27,
+    "perDiem": 186805,
+    "mobDemob": 93000,
     "materialsDirect": 20000,
     "materialsIndirect": 0,
-    "equipment": 9600,
+    "equipment": 16800,
     "thirdParty": 0,
-    "other": 0,
-    "totalHours": 12881,
-    "grandTotal": 2470680,
-    "allInRate": 297.14
+    "other": 1200,
+    "totalHours": 12001,
+    "grandTotal": 2351438.99,
+    "allInRate": 339.12
   },
   "typedHours": {
-    "staffHours": 2892.0,
+    "staffHours": 3415.0,
     "generalForemanHours": 0.0,
-    "foremenHours": 1674.0,
-    "directHours": 7599.0,
-    "supportHours": 716.0,
-    "directBucketHours": 8315.0,
-    "indirectBucketHours": 4566.0
+    "foremenHours": 1652.0,
+    "directHours": 6934.0,
+    "supportHours": 0.0,
+    "directBucketHours": 6934.0,
+    "indirectBucketHours": 5067.0
   },
   "jobMeta": {
     "area": "U250",
@@ -38,34 +38,28 @@
   },
   "misc": [
     {
-      "item": "Alloy Welding rods",
-      "qty": 50,
-      "each": 150,
-      "bucket": "materialsDirect"
+      "item": "Direct craft per diem (@$145)",
+      "qty": 654,
+      "each": 145,
+      "bucket": "perDiem"
     },
     {
-      "item": "Welding supplies",
-      "qty": 50,
-      "each": 150,
-      "bucket": "materialsDirect"
+      "item": "Indirect non-craft per diem (@$145)",
+      "qty": 395,
+      "each": 145,
+      "bucket": "perDiem"
     },
     {
-      "item": "Gasses",
-      "qty": 50,
-      "each": 100,
-      "bucket": "materialsDirect"
+      "item": "Staff/Supervision per diem (@$155)",
+      "qty": 193,
+      "each": 155,
+      "bucket": "perDiem"
     },
     {
-      "item": "TRUCK, JOB, 1/2 & 3/4 TON, PU",
-      "qty": 4,
-      "each": 1500,
-      "bucket": "equipment"
-    },
-    {
-      "item": "TRAILER TOOL UNDER 36'",
-      "qty": 2,
-      "each": 1800,
-      "bucket": "equipment"
+      "item": "OPERATOR ENG SE GRP III NIGHTS per diem",
+      "qty": 33,
+      "each": 145,
+      "bucket": "perDiem"
     },
     {
       "item": "Staff Mileage",
@@ -80,126 +74,242 @@
       "bucket": "mobDemob"
     },
     {
-      "item": "Freight",
+      "item": "Alloy Welding Rod",
       "qty": 1,
-      "each": 8000,
-      "bucket": "mobDemob"
+      "each": 5000,
+      "bucket": "materialsDirect"
     },
     {
-      "item": "Per Diem (Direct)",
-      "qty": 656,
-      "each": 145,
-      "bucket": "perDiem"
+      "item": "Argon",
+      "qty": 1,
+      "each": 5000,
+      "bucket": "materialsDirect"
     },
     {
-      "item": "Per Diem (Indirect)",
-      "qty": 604,
-      "each": 155,
-      "bucket": "perDiem"
+      "item": "Welding Supplies",
+      "qty": 1,
+      "each": 5000,
+      "bucket": "materialsDirect"
+    },
+    {
+      "item": "Gases",
+      "qty": 1,
+      "each": 5000,
+      "bucket": "materialsDirect"
+    },
+    {
+      "item": "TRUCK, JOB, 1/2 & 3/4 TON, PU",
+      "qty": 6,
+      "each": 1500,
+      "bucket": "equipment"
+    },
+    {
+      "item": "TRAILER TOOL UNDER 36'",
+      "qty": 3,
+      "each": 1800,
+      "bucket": "equipment"
+    },
+    {
+      "item": "Round Trip Freight (Trailer)",
+      "qty": 1,
+      "each": 2400,
+      "bucket": "equipment"
+    },
+    {
+      "item": "Markup 6% (MISC & General Rental)",
+      "qty": 1,
+      "each": 1200,
+      "bucket": "other"
     }
   ],
   "positions": [
     {
       "sheet": "direct",
       "lane": "direct",
-      "position": "Boilermaker",
-      "hours": 3714.0,
-      "bookRate": 167.74,
-      "bookAmount": 622986.36
+      "position": "Boilermaker Journeyman (Days)",
+      "hours": 2104.0,
+      "bookRate": 162.82988593155895,
+      "bookAmount": 342594.08
     },
     {
       "sheet": "direct",
       "lane": "direct",
-      "position": "Pipefitter",
-      "hours": 2373.0,
-      "bookRate": 191.49,
-      "bookAmount": 454405.77
+      "position": "Boilermaker Journeyman (Nights)",
+      "hours": 1696.0,
+      "bookRate": 172.07540094339623,
+      "bookAmount": 291839.88
     },
     {
       "sheet": "direct",
       "lane": "direct",
-      "position": "Laborer",
-      "hours": 718.0,
-      "bookRate": 104.15,
-      "bookAmount": 74779.7
-    },
-    {
-      "sheet": "direct",
-      "lane": "support",
-      "position": "Hole Watch/Fire Watch",
-      "hours": 716.0,
-      "bookRate": 146.25,
-      "bookAmount": 104715.0
+      "position": "Boilermaker Apprentice 90% (Days)",
+      "hours": 276.0,
+      "bookRate": 140.37478260869565,
+      "bookAmount": 38743.44
     },
     {
       "sheet": "direct",
       "lane": "direct",
-      "position": "Boilermaker",
-      "hours": 794.0,
-      "bookRate": 159.84,
-      "bookAmount": 126912.96
+      "position": "Boilermaker Apprentice 90% (Nights)",
+      "hours": 180.0,
+      "bookRate": 148.00866666666667,
+      "bookAmount": 26641.56
+    },
+    {
+      "sheet": "direct",
+      "lane": "direct",
+      "position": "Pipefitter Journeyman (Days)",
+      "hours": 1336.0,
+      "bookRate": 189.73155688622754,
+      "bookAmount": 253481.36
+    },
+    {
+      "sheet": "direct",
+      "lane": "direct",
+      "position": "Pipefitter Journeyman (Nights)",
+      "hours": 528.0,
+      "bookRate": 221.48348484848484,
+      "bookAmount": 116943.28
+    },
+    {
+      "sheet": "direct",
+      "lane": "direct",
+      "position": "Pipefitter Apprentice 85% (Days)",
+      "hours": 436.0,
+      "bookRate": 177.2860091743119,
+      "bookAmount": 77296.7
+    },
+    {
+      "sheet": "direct",
+      "lane": "direct",
+      "position": "Laborer Journeyman Grp III (Days)",
+      "hours": 258.0,
+      "bookRate": 100.2946511627907,
+      "bookAmount": 25876.02
+    },
+    {
+      "sheet": "direct",
+      "lane": "direct",
+      "position": "Laborer Journeyman Grp III (Nights)",
+      "hours": 120.0,
+      "bookRate": 105.53,
+      "bookAmount": 12663.6
     },
     {
       "sheet": "indirect",
       "lane": "staff",
-      "position": "QA/QC",
-      "hours": 994.0,
-      "bookRate": 150.17,
-      "bookAmount": 149268.98
+      "position": "QA/QC (Lead QA-QC Days)",
+      "hours": 481.0,
+      "bookRate": 130.20546777546778,
+      "bookAmount": 62628.83
     },
     {
       "sheet": "indirect",
       "lane": "staff",
-      "position": "Safety",
-      "hours": 848.0,
-      "bookRate": 157.1,
-      "bookAmount": 133220.8
+      "position": "QA/QC (Lead QA-QC Nights)",
+      "hours": 362.0,
+      "bookRate": 174.15795580110498,
+      "bookAmount": 63045.18
     },
     {
       "sheet": "indirect",
       "lane": "staff",
-      "position": "Warehouse",
-      "hours": 680.0,
-      "bookRate": 157.95,
-      "bookAmount": 107406.0
+      "position": "Safety (Lead Safety Days)",
+      "hours": 454.0,
+      "bookRate": 155.2698678414097,
+      "bookAmount": 70492.52
     },
     {
       "sheet": "indirect",
       "lane": "staff",
-      "position": "Fork Lift Operator",
+      "position": "Safety (Lead Safety Nights)",
+      "hours": 334.0,
+      "bookRate": 160.8853892215569,
+      "bookAmount": 53735.72
+    },
+    {
+      "sheet": "indirect",
+      "lane": "foreman",
+      "position": "Foreman (Boilermaker Days)",
+      "hours": 590.0,
+      "bookRate": 170.4883559322034,
+      "bookAmount": 100588.13
+    },
+    {
+      "sheet": "indirect",
+      "lane": "foreman",
+      "position": "Foreman (Pipefitter Days)",
+      "hours": 544.0,
+      "bookRate": 207.99485294117648,
+      "bookAmount": 113149.2
+    },
+    {
+      "sheet": "indirect",
+      "lane": "foreman",
+      "position": "Foreman (Boilermaker Nights)",
+      "hours": 374.0,
+      "bookRate": 187.8127540106952,
+      "bookAmount": 70241.97
+    },
+    {
+      "sheet": "indirect",
+      "lane": "foreman",
+      "position": "Foreman (Pipefitter Nights)",
+      "hours": 144.0,
+      "bookRate": 240.2555555555556,
+      "bookAmount": 34596.8
+    },
+    {
+      "sheet": "indirect",
+      "lane": "staff",
+      "position": "Tool Room Attendant (Days)",
+      "hours": 444.0,
+      "bookRate": 161.6254054054054,
+      "bookAmount": 71761.68
+    },
+    {
+      "sheet": "indirect",
+      "lane": "staff",
+      "position": "Tool Room Attendant (Nights)",
+      "hours": 290.0,
+      "bookRate": 159.05675862068966,
+      "bookAmount": 46126.46
+    },
+    {
+      "sheet": "indirect",
+      "lane": "staff",
+      "position": "Material Expediter (Days)",
+      "hours": 400.0,
+      "bookRate": 156.9908,
+      "bookAmount": 62796.32
+    },
+    {
+      "sheet": "indirect",
+      "lane": "staff",
+      "position": "Material Expediter (Nights)",
+      "hours": 280.0,
+      "bookRate": 159.314,
+      "bookAmount": 44607.92
+    },
+    {
+      "sheet": "indirect",
+      "lane": "staff",
+      "position": "Fork Lift Operator (Operator Eng A1 Grp III Days)",
       "hours": 370.0,
-      "bookRate": 145.36,
-      "bookAmount": 53783.2
-    },
-    {
-      "sheet": "indirect",
-      "lane": "foreman",
-      "position": "Foreman",
-      "hours": 962.0,
-      "bookRate": 177.69,
-      "bookAmount": 170937.78
-    },
-    {
-      "sheet": "indirect",
-      "lane": "foreman",
-      "position": "Foreman",
-      "hours": 712.0,
-      "bookRate": 214.78,
-      "bookAmount": 152923.36
+      "bookRate": 145.36037837837836,
+      "bookAmount": 53783.34
     }
   ],
   "findings": [
-    "SUMMARY CONTRACTOR (B3) and BLOCK / EVENT (B4) are blank \u2014 do not invent Madison or a block name. Other tabs formula-link those cells and show 0.",
-    "Filename stamps R2_08_17_2026. Gmail thread 1a079325d30a2c45 is 17 Aug 2026. Drive created/modified 2026-08-27. Hours-plug date uses that revision day, not an invented TA window.",
-    "INSTRUCTIONS say tabs 1 through 10; the book has nine numbered tabs (1\u20139) plus Lookups.",
-    "Defined names leftover from another workbook (wrn.*, sss, abc, xyz, DRE, mgmt) resolve to #N/A / #REF! (_Fill). No labor $ cells were #REF \u2014 amounts are hours \u00d7 typed composite rate.",
-    "No external links. Workbook absPath leftover points at a Zachry SharePoint Rodeo folder \u2014 not a data link. No day-by-day HC \u00d7 Hours/shift grid \u2014 Family A is hours \u00d7 one composite rate.",
-    "Two Boilermaker rows (3,714 @ $167.74 and 794 @ $159.84) and two Foreman rows (962 @ $177.69 and 712 @ $214.78) kept as separate seats \u2014 different book rates.",
-    "Gmail R2 note said Tool Room / Trailer Attendant 794.0 @ $159.84 was moved to Directs (Night Shift Operator removed). Official Direct tab labels that 794h row Boilermaker \u2014 kept as typed. Do not relabel.",
-    "No General Foreman / PM / Superintendent rows. GF card stays empty \u2014 do not invent a seat.",
-    "Tab 6 MATERIAL 1 has a $0 unit rate and empty qty \u2014 not counted. Freight $8,000 sits on Mob/Demob, not materials.",
-    "Tab 4 row 28 is labeled MOB _DEMOB 21 (skips 20) with $0 \u2014 template numbering leftover.",
-    "Tab 8 header still says 7. THIRD PARTY AMT; tab 9 header says 8. OTHER \u2014 template numbering leftover.",
-    "P66 RODEO ESTIMATE WORKBOOK U-250 (Family B, 4.5MB) has no Drive text extract. Not used as a second crew desk. Golden totals stay Family A. Do not seed EST-MTN9RM or any second U250 pack."
+    "JB Summary SOURCE OF TRUTH from P66 RODEO ESTIMATE WORKBOOK U-250 09.10.26 JB.xlsx (Drive 1wvDt-9e_SgaGR--LZ_wXDzu6Py9Ujej4): labor 12,001 hrs / $2,033,633.99 · PD $186,805 · Mileage $93,000 · COE $16,800 · MISC $20,000 · Markup 6% $1,200 · Grand $2,351,438.99. Direct 6,934 / $1,186,079.92. Indirect 5,067 / $847,554.07.",
+    "Desk seats come from the Family A Madison transfer face populated from that JB book (Drive 1Mcn8wd-JvDZaQUkQ3MGW40oH0UkNpiNb). Same Wood River five-card mapper as U110 / prior U250. Historical Madison R2 $2,470,680 / 12,881 hrs is retired.",
+    "JB Family B book is ~4.5MB and has no Drive text extract. #REF! Water Walls and other broken craft sheets were not used to invent hours. Only Summary + transfer-face labor/Other Cost lines land on the desk.",
+    "Staffing Drive 1USxydY-S0ojKTDjrrtK_sT8zLjAvKFVC (R3 09102026) supplies CONTRACTOR MADISON INDUSTRIAL SVCS TEAM LLC and BLOCK / EVENT 2026 U250 Cat Change (TAR.ER01.26.250). Area on that sheet is Coker (CKR). Day grid is not the hours clock.",
+    "No General Foreman / PM / Superintendent rows. GF card stays empty — do not invent a seat.",
+    "No Hole Watch / Fire Watch on the Direct tab. Support card stays empty — do not invent a watch seat. Tool Room Attendant sits on Indirect → Staff (typed), not relabeled Boilermaker and not moved to Direct.",
+    "Day/night and apprentice seats kept separate — different book rates. bookRate is bookAmount ÷ hours so hours × rate recovers JB labor $ (displayed composites like $162.83 are rounded).",
+    "OPERATOR ENG SE GRP III NIGHTS is a Per Diem line only (33 × $145). Staffing headcount qty cell was 0 — do not invent a labor seat from it.",
+    "Markup 6% $1,200 is 6% of MISC $20,000. Seeded as book-priced Other Cost so the desk 6.5% commercial markup does not double-charge.",
+    "P66 client Excel form filled separately is not this pack. Do not seed EST-MTN9RM or any second U250 pack. Do not commit the xlsx binaries."
   ]
 }
