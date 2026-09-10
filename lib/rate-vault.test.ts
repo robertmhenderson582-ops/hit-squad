@@ -102,10 +102,11 @@ describe("Rate Vault scaffold", () => {
     assert.match(dock, /RATE_VAULT_DOOR/);
     assert.match(dock, /role="radio"/);
     assert.match(desk, /RATE_VAULT_OWNER_NOTE/);
-    assert.match(desk, /Hall uploads/);
-    assert.match(desk, /Contractor books/);
-    assert.match(desk, /P66 \/ site rules/);
-    assert.match(desk, /Publish rate package/);
+    assert.match(desk, /RATE_VAULT_SECTIONS/);
+    assert.match(module, /Hall uploads/);
+    assert.match(module, /Contractor books/);
+    assert.match(module, /P66 \/ site rules/);
+    assert.match(module, /Publish rate package/);
     assert.match(desk, /\/api\/rate-vault/);
     assert.match(gate, /canSeeRateVaultDoor/);
     assert.match(gate, /router.replace\("\/"\)/);
