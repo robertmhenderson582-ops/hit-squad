@@ -18,7 +18,7 @@ import {
 import { catalogSites } from "./desk-data.ts";
 import { parseEstimateStatus, resolveEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
 import { clampStatusForSite, regularClientFromParts } from "./site-regular.ts";
-import { ACTIVITY_STORE_PREFIX } from "./work-activities.ts";
+import { ACTIVITY_STORE_PREFIX, activitiesHaveWork, normalizeWorkActivities } from "./work-activities.ts";
 import { FCR_STORE_PREFIX, fcrPacketHasWork } from "./change-order-packet.ts";
 import { COST_REPORT_STORE_PREFIX, costReportHasWork } from "./cost-report.ts";
 import { PURCHASING_STORE_PREFIX } from "./purchasing-prefix.ts";
@@ -354,11 +354,7 @@ export function packHasSheets(pack: EstimatePackSnapshot | null | undefined) {
     fcrHasWork(pack.fcr) ||
     costReportHasWork(pack.costReport) ||
     purchasingHasWork(pack.purchasing) ||
-    (Array.isArray(pack.activities) &&
-      pack.activities.some((row) => {
-        const item = asRecord(row);
-        return Boolean(item && (item.name || Number(item.hours) > 0));
-      }))
+    activitiesHaveWork(pack.activities)
   );
 }
 
@@ -374,10 +370,7 @@ export function packHasWork(pack: EstimatePackSnapshot | null | undefined) {
   if (fcrHasWork(pack.fcr)) return true;
   if (costReportHasWork(pack.costReport)) return true;
   if (purchasingHasWork(pack.purchasing)) return true;
-  if (Array.isArray(pack.activities) && pack.activities.some((row) => {
-    const item = asRecord(row);
-    return Boolean(item && (item.name || Number(item.hours) > 0));
-  })) {
+  if (activitiesHaveWork(pack.activities)) {
     return true;
   }
   return false;
@@ -713,7 +706,7 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
       writeStoreJson(store, `${JOB_META_PREFIX}${key}`, pack.jobMeta);
     }
   }
-  if (pack.activities != null) writeStoreJson(store, `${ACTIVITY_STORE_PREFIX}${key}`, pack.activities);
+  if (pack.activities != null) writeStoreJson(store, `${ACTIVITY_STORE_PREFIX}${key}`, normalizeWorkActivities(pack.activities));
   writeSheetIfRicher(store, `${EQUIPMENT_STORE_PREFIX}${key}`, pack.equipment, equipmentHasWork);
   if (pack.otherCost != null) {
     writeStoreJson(

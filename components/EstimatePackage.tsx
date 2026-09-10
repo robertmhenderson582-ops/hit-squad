@@ -35,7 +35,7 @@ import { seedBoiler17LocalDefaults } from "@/lib/his-wood-river";
 import { isRodeoU110PackId, seedRodeoU110LocalDefaults } from "@/lib/madison-u110";
 import { isRodeoU250PackId, seedRodeoU250LocalDefaults } from "@/lib/madison-u250";
 import { emptyJobMeta, hydrateJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
-import { readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
+import { normalizeWorkActivities, readActivities, writeActivities, type WorkActivity } from "@/lib/work-activities";
 import { packIdFromStoreKey, findLocalPack, renameLocalPackTitle, touchLocalPack, writeLocalPackStatus } from "@/lib/local-estimates";
 import { catalogSites } from "@/lib/desk-data";
 import {
@@ -210,7 +210,9 @@ export function EstimatePackageProvider({
   const [crew, setCrewState] = useState<CrewState>(() => syncCrew(readCrew(estimateKey), readSchedule(estimateKey)));
   const [orgChart, setOrgChartState] = useState<OrgChartState>(() => readOrgChart(estimateKey));
   const [jobMeta, setJobMetaState] = useState<JobMeta>(() => readJobMeta(estimateKey));
-  const [activities, setActivitiesState] = useState<WorkActivity[]>(() => readActivities(estimateKey) ?? []);
+  const [activities, setActivitiesState] = useState<WorkActivity[]>(() =>
+    normalizeWorkActivities(readActivities(estimateKey) ?? []),
+  );
   const [status, setStatusState] = useState<EstimateStatus>(() => readPackStatus(estimateKey));
   const [ready, setReady] = useState(() => {
     const packId = packIdFromStoreKey(estimateKey);
@@ -286,7 +288,7 @@ export function EstimatePackageProvider({
       } else {
         setJobMetaState(nextMeta);
       }
-      setActivitiesState(readActivities(estimateKey) ?? []);
+      setActivitiesState(normalizeWorkActivities(readActivities(estimateKey) ?? []));
       const nextStatus = readPackStatus(estimateKey);
       setStatusState(nextStatus);
       hydratePackStatus(estimateKey, nextStatus);
@@ -556,7 +558,9 @@ export function EstimatePackageProvider({
         return null;
       },
       setActivities(next) {
-        setActivitiesState((current) => (typeof next === "function" ? next(current) : next));
+        setActivitiesState((current) =>
+          normalizeWorkActivities(typeof next === "function" ? next(current) : next),
+        );
       },
       addCraftRow() {
         return blankCraftRow();
