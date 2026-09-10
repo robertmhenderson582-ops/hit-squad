@@ -73,7 +73,11 @@ export function RateVaultPreviewTables({
           {preview.effective ? ` · effective ${preview.effective}` : ""}
           {" · "}
           {preview.rows.length} positions
-          {preview.fixture ? " · fixture" : ""}
+          {preview.fixture
+            ? " · fixture"
+            : preview.extractedFrom === "vault-xlsx-import"
+              ? " · imported B-1 Excel"
+              : ""}
         </p>
         {preview.note ? <p className="mt-2 text-sm leading-6 text-[#5b6f73]">{preview.note}</p> : null}
       </div>

@@ -159,12 +159,12 @@ export const RATE_VAULT_BUILDER_STEPS = [
   {
     id: "burden",
     label: "Burden / build",
-    note: "Visual rate pack — wage, fringe, burden, and bill. Live tables stay off.",
+    note: "Visual rate pack — export the B-1 Excel, edit offline, re-import. Live tables stay off.",
   },
   {
     id: "publish",
     label: "Publish preview",
-    note: "Scroll the filled package. Live Rate Tables stay on Jobs / Rates.",
+    note: "Scroll the filled package. Re-import updates this preview. Live Rate Tables stay on Jobs / Rates.",
   },
 ] as const;
 
@@ -176,6 +176,20 @@ export const RATE_VAULT_DROP_TYPE_ERROR = "Use PDF, Word, or Excel (xlsx / xlsm 
 export const RATE_VAULT_DROP_SIZE_ERROR = "File is too large for Rate Vault (15 MB).";
 export const RATE_VAULT_SOURCE_DRAG = "application/x-hitsquad-rate-source";
 export const RATE_VAULT_CRAFT_DRAG = "application/x-hitsquad-rate-craft";
+
+/** Vault-internal B-1 Excel — same credibility bar as estimate Excel (formula check to the site). */
+export const RATE_VAULT_B1_KIND = "rate-vault-b1";
+export const RATE_VAULT_B1_MARKER = "HIT SQUAD RATE VAULT B-1";
+export const RATE_VAULT_B1_PACKAGE_SHEET = "B-1 Package";
+export const RATE_VAULT_B1_RATE_SHEET = "Rate Summary";
+export const RATE_VAULT_B1_BURDEN_SHEET = "Burden Summary";
+export const RATE_VAULT_B1_SPARE_POSITIONS = 5;
+export const RATE_VAULT_B1_IMPORT_ERROR = "Could not import that workbook. Use a Rate Vault B-1 export.";
+export const RATE_VAULT_B1_POISON_ERROR = "That workbook is not a valid Rate Vault B-1 package. It was not applied.";
+
+export function isRateVaultB1ExcelName(name: string) {
+  return /\.xlsx$/i.test(name) || /\.xlsm$/i.test(name);
+}
 
 export const RATE_VAULT_MIME: Record<string, readonly string[]> = {
   pdf: ["application/pdf"],

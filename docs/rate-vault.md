@@ -40,6 +40,28 @@ Selecting the Wood River B-1 library card (or opening Burden / Publish) loads a 
 
 Site pickers on Burden and Publish default to Wood River. Other P66 sites stay empty until their fixtures land. Recognize → map → burden stays wired: a linked Drive title still produces a review card, and the Wood River path injects fixture columns when no binary was dropped. Confirm never writes a live rate book. The Publish button remains `stubPublishRateVault()`.
 
+## B-1 Excel export / import (vault-internal)
+
+Rate Vault’s B-1 Builder matches Hit Squad estimate Excel round-trip behavior — export with formulas visible, edit offline, re-import so the vault preview updates. This is **one source**, not a parallel book.
+
+| Direction | Surface |
+| --- | --- |
+| Export | `POST /api/rate-vault` `action: "export-b1"` → `lib/rate-vault-xlsx.ts` `rateVaultPreviewToXlsx` |
+| Import | Drop an `.xlsx` / `.xlsm` on any Builder step → `action: "import-b1"` → `parseRateVaultB1Xlsx` |
+
+The export is the **formula check to the site** (same credibility bar as estimate Excel / under-the-hood proof). Rate Summary **Bill ST** is `=Fn+Gn+Hn` with a cached result. Hidden `_id` columns key the importer. Spare empty position rows sit under the live seats so a new line can be typed in.
+
+Re-import writes the edited package into `rate-vault.json` (`packages[]` — metadata / rate rows only, never workbook bytes). GET / recognize / Burden / Publish prefer that stored package over the Wood River fixture so a library-card click does not wipe offline edits.
+
+Import validates and **refuses silent poison**:
+
+- No Rate Vault marker / not our export → `{ fallback: "recognize" }` so a raw hall book still sniffs.
+- Monroe / Yates / non-P66 site, NaN or negative money, missing Rate Summary, empty positions → 400 and the preview is unchanged.
+
+Publish to live estimate Rate Tables stays a later explicit step. Vault-internal export / edit / import is enough for Burden / Publish preview to ripple.
+
+Never commit the ~24 MB official Exhibit B-1 or any generated Rate Vault `.xlsx` to git.
+
 Owner-added rows persist as metadata in `rate-vault.json` on Drive (`RATE_VAULT_LIBRARY_KIND`). That file must not contain file bytes.
 
 ## Formats and recognition

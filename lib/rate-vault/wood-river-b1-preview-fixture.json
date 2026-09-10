@@ -9,6 +9,7 @@
   "extractedFrom": "demo-seed",
   "note": "Preview seed mirroring Rate Summary / Burden Summary / craft locals (BM 363, PF 553, Laborer) plus Staff / Craft OCIP faces. Compact extract from the 24 MB workbook can replace this JSON. Catalog the Drive file by id only — never commit the xlsx. Does not write live Rate Tables.",
   "writesRateBook": false,
+  "fixture": true,
   "sheets": [
     { "name": "Rate Summary", "kind": "rate-summary" },
     { "name": "Burden Summary", "kind": "burden-summary" },

@@ -22,6 +22,7 @@ import {
   RATE_VAULT_STATE_LAW_SITES,
   RATE_VAULT_TITLE,
   checkRateVaultDropFile,
+  isRateVaultB1ExcelName,
   rateVaultHasFileDrag,
   rateVaultHasSourceDrag,
   rateVaultSiteLabel,
@@ -39,6 +40,7 @@ import {
 } from "@/lib/rate-vault";
 import { filterRateVaultLibrary } from "@/lib/rate-vault-library";
 import { defaultRateVaultPreview, isWoodRiverB1Source } from "@/lib/rate-vault-preview";
+import { downloadXlsx } from "@/lib/xlsx-minimal";
 
 function fileToPayload(file: File) {
   return new Promise<{ name: string; type: string; data: string }>((resolve, reject) => {
@@ -220,6 +222,10 @@ export function RateVaultDesk() {
         review?: RateVaultRecognitionReview;
         preview?: RateVaultPreviewPackage | null;
         confirmed?: RateVaultConfirmedReview;
+        fileName?: string;
+        type?: string;
+        data?: string;
+        fallback?: string;
         error?: string;
       };
       if (!response.ok) {
@@ -248,6 +254,27 @@ export function RateVaultDesk() {
       return;
     }
     const payload = await fileToPayload(file);
+    if (isRateVaultB1ExcelName(file.name)) {
+      const imported = await post({
+        action: "import-b1",
+        fileName: payload.name,
+        type: payload.type,
+        data: payload.data,
+        siteId: packageSiteId,
+      });
+      if (!imported) return;
+      if (imported.preview && imported.fallback !== "recognize") {
+        if (imported.preview.siteId) {
+          setPackageSiteId(imported.preview.siteId);
+          setSiteId(imported.preview.siteId);
+        }
+        setStep(nextStep && nextStep !== "sources" ? nextStep : "burden");
+        setNote(
+          "Imported B-1 Excel. Preview is this book — not a parallel copy. Live Rate Tables stay stubbed.",
+        );
+        return;
+      }
+    }
     const data = await post({
       action: "recognize",
       fileName: payload.name,
@@ -263,6 +290,22 @@ export function RateVaultDesk() {
       setStep(nextStep ?? "recognize");
       setNote("Review the guesses. Confirm before anything is cataloged — this does not write a rate book.");
     }
+  }
+
+  async function exportB1() {
+    const data = await post({ action: "export-b1", siteId: packageSiteId });
+    if (!data?.data || !data.fileName) {
+      if (!data) return;
+      setError("Could not export a Rate Vault B-1 workbook for that site.");
+      return;
+    }
+    const raw = atob(data.data);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
+    downloadXlsx(data.fileName, bytes);
+    setNote(
+      "Exported Rate Vault B-1 Excel — formulas visible. Edit offline, then drop the file back here.",
+    );
   }
 
   async function recognizeLinked(entry: RateVaultSourceEntry, nextStep?: RateVaultBuilderStepId) {
@@ -324,8 +367,10 @@ export function RateVaultDesk() {
         <p className="mt-2 text-sm leading-6 text-[#5b6f73]">{RATE_VAULT_SCOPE_NOTE}</p>
         <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
           Build a rate pack the way Exhibit B-1 does, with a clearer path: sources, recognize,
-          map crafts, burden, then a publish preview. Drop PDF / Word / Excel on any step.
-          Files stay on Drive — this catalog is ids and metadata only.
+          map crafts, burden, then a publish preview. Export B-1 Excel is the formula check to
+          the site — edit offline, then drop the same workbook back to update this preview.
+          Drop PDF / Word / Excel on any step. Files stay on Drive — this catalog is ids and
+          metadata only.
         </p>
         {error ? <p className="mt-3 text-sm text-[#163038]">{error}</p> : null}
         {note ? <p className="mt-3 text-sm text-[#163038]">{note}</p> : null}
@@ -426,7 +471,9 @@ export function RateVaultDesk() {
         <BurdenPane
           preview={packagePreview}
           packageSiteId={packageSiteId}
+          busy={busy}
           onSite={setPackageSiteId}
+          onExport={() => void exportB1()}
           onDrop={(file) => void recognizeFile(file, undefined, "burden")}
           onSource={(sourceId) => void recognizeSourceId(sourceId, "burden")}
         />
@@ -439,6 +486,7 @@ export function RateVaultDesk() {
           packageSiteId={packageSiteId}
           busy={busy}
           onSite={setPackageSiteId}
+          onExport={() => void exportB1()}
           onPublish={() => void post({ action: "publish" })}
           onDrop={(file) => void recognizeFile(file, undefined, "publish")}
           onSource={(sourceId) => void recognizeSourceId(sourceId, "publish")}
@@ -977,13 +1025,17 @@ function MapCraftsPane({
 function BurdenPane({
   preview,
   packageSiteId,
+  busy,
   onSite,
+  onExport,
   onDrop,
   onSource,
 }: {
   preview: RateVaultPreviewPackage | null;
   packageSiteId: string;
+  busy: boolean;
   onSite: (value: string) => void;
+  onExport: () => void;
   onDrop: (file: File) => void;
   onSource: (sourceId: string) => void;
 }) {
@@ -994,16 +1046,25 @@ function BurdenPane({
         <h3 className="text-xl font-semibold text-[#163038]">Visual rate package</h3>
         <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
           Friendlier than a raw Exhibit B-1, same guts: position, wage, fringe, burden, bill.
-          Site defaults to Wood River. Selecting the catalog card loads this table without the
-          24 MB workbook.
+          Export B-1 Excel is the formula check to the site. Edit wages, fringes, burden, or
+          bill offline, then drop the same file here so this preview updates. Live Rate Tables
+          stay stubbed.
         </p>
         <div className="mt-4 max-w-xs">
           <RateVaultSitePicker siteId={packageSiteId} onSite={onSite} />
         </div>
+        <button
+          type="button"
+          className="mt-4 rounded-lg bg-steel px-4 py-2 text-sm text-white"
+          disabled={busy || !preview}
+          onClick={onExport}
+        >
+          Export B-1 Excel
+        </button>
         <div className="mt-4">
           <RateVaultFileDrop
             label="Drop a B-1 or hall sheet onto Burden"
-            note="Library cards populate the Wood River fixture. A later drop can replace it. File stays off git."
+            note="Drop a Rate Vault B-1 export to update this package. Other books still recognize. File stays off git."
             ariaLabel="Burden / build upload"
             onFile={onDrop}
             onSource={onSource}
@@ -1072,6 +1133,7 @@ function PublishPane({
   packageSiteId,
   busy,
   onSite,
+  onExport,
   onPublish,
   onDrop,
   onSource,
@@ -1081,6 +1143,7 @@ function PublishPane({
   packageSiteId: string;
   busy: boolean;
   onSite: (value: string) => void;
+  onExport: () => void;
   onPublish: () => void;
   onDrop: (file: File) => void;
   onSource: (sourceId: string) => void;
@@ -1089,16 +1152,24 @@ function PublishPane({
     <section className="plant-card px-5 py-5">
       <h3 className="text-xl font-semibold text-[#163038]">Publish preview</h3>
       <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
-        Scroll the filled Wood River package. Publish is still a stub — it does not write live
-        estimate Rate Tables. Drop a B-1 or drag the library card to refresh the preview.
+        Scroll the filled package. Re-import an edited Rate Vault B-1 Excel to update this
+        preview. Publish is still a stub — it does not write live estimate Rate Tables.
       </p>
       <div className="mt-4 max-w-xs">
         <RateVaultSitePicker siteId={packageSiteId} onSite={onSite} />
       </div>
+      <button
+        type="button"
+        className="mt-4 rounded-lg border border-[#d5e0de] px-4 py-2 text-sm text-[#163038]"
+        disabled={busy || !preview}
+        onClick={onExport}
+      >
+        Export B-1 Excel
+      </button>
       <div className="mt-4">
         <RateVaultFileDrop
           label="Drop a B-1 or rate pack for preview"
-          note="Recognition only. Publish stub does not write live Rate Tables."
+          note="A Rate Vault B-1 export updates this preview. Publish stub does not write live Rate Tables."
           ariaLabel="Publish preview upload"
           onFile={onDrop}
           onSource={onSource}

@@ -222,6 +222,7 @@ describe("Rate Vault scaffold", () => {
     const preview = source("./rate-vault-preview.ts");
     const previewUi = source("../components/RateVaultPreview.tsx");
     const store = source("./rate-vault-store.ts");
+    const xlsx = source("./rate-vault-xlsx.ts");
     const privileges = source("./privileges.ts");
 
     assert.match(dock, /homeDockTilesForViewer/);
@@ -257,9 +258,14 @@ describe("Rate Vault scaffold", () => {
     assert.match(desk, /Publish preview upload/);
     assert.match(desk, /Open visual package/);
     assert.match(desk, /Visual rate package/);
+    assert.match(desk, /Export B-1 Excel/);
+    assert.match(desk, /import-b1/);
+    assert.match(desk, /export-b1/);
     assert.match(desk, /Live write to Jobs \/ Rates stays stubbed/);
     assert.match(previewUi, /Wood River B-1 rate package/);
     assert.match(previewUi, /Burden Summary/);
+    assert.match(previewUi, /imported B-1 Excel/);
+    assert.doesNotMatch(desk, /rate-vault-xlsx/);
     assert.match(preview, /wood-river-b1-preview-fixture\.json/);
     assert.match(preview, /1WOODRIVERB1LATESTPENDING000/);
     assert.match(library, /Wood River Exhibit B-1 latest \(Robert 09\.10\.26\)/);
@@ -285,6 +291,9 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /wood-river-b1-preview-fixture/);
     assert.match(docs, /visual rate package/i);
     assert.match(docs, /does not write live estimate Rate Tables/);
+    assert.match(docs, /B-1 Excel export \/ import/);
+    assert.match(docs, /formula check to the site/);
+    assert.match(docs, /refuses silent poison/);
     assert.doesNotMatch(library, /siteId:\s*"monroe"/);
     assert.doesNotMatch(library, /Monroe Energy/);
     assert.doesNotMatch(vaultModule, /id: "monroe"/);
@@ -300,6 +309,13 @@ describe("Rate Vault scaffold", () => {
     assert.match(api, /buildRateVaultWorkshop/);
     assert.match(api, /stubPublishRateVault/);
     assert.match(api, /recognizeRateVaultSource/);
+    assert.match(api, /export-b1/);
+    assert.match(api, /import-b1/);
+    assert.match(xlsx, /HIT SQUAD RATE VAULT B-1/);
+    assert.match(xlsx, /rateVaultPreviewToXlsx/);
+    assert.match(xlsx, /parseRateVaultB1Xlsx/);
+    assert.doesNotMatch(xlsx, FORBIDDEN_IMPORT);
+    assert.doesNotMatch(xlsx, /estimate-xlsx|estimate-pack/);
     assert.match(server, /canSeeRateVault\(user\)/);
     assert.match(privileges, /"rate-vault"/);
     assert.match(library, /17YtnXtCcIXq68sROl3_VwkIo6PHYzTIR/);

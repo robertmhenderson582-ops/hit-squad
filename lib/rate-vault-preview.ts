@@ -130,7 +130,7 @@ export function parseRateVaultPreviewPackage(raw: unknown): RateVaultPreviewPack
     extractedFrom: text(row.extractedFrom) || "demo-seed",
     note: text(row.note),
     writesRateBook: false,
-    fixture: true,
+    fixture: row.fixture === true,
     sheets,
     burden,
     rows,
@@ -245,4 +245,14 @@ export function previewRowGroups(rows: readonly RateVaultPreviewRow[]) {
 export function burdenTotalPct(preview: RateVaultPreviewPackage | null) {
   if (!preview) return 0;
   return money(preview.burden.reduce((sum, row) => sum + row.ratePct, 0));
+}
+
+export function cloneRateVaultPreview(preview: RateVaultPreviewPackage): RateVaultPreviewPackage {
+  return {
+    ...preview,
+    writesRateBook: false,
+    sheets: preview.sheets.map((sheet) => ({ ...sheet })),
+    burden: preview.burden.map((row) => ({ ...row })),
+    rows: preview.rows.map((row) => ({ ...row })),
+  };
 }

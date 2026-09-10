@@ -11,17 +11,20 @@ import {
   ownerLibraryEntry,
   parseOwnerLibraryInput,
 } from "./rate-vault-library.ts";
-import { isRateVaultSiteId, isRateVaultSourceKind, type RateVaultConfirmedReview, type RateVaultSourceEntry, type RateVaultSourceOverride } from "./rate-vault.ts";
+import { isRateVaultSiteId, isRateVaultSourceKind, type RateVaultConfirmedReview, type RateVaultPreviewPackage, type RateVaultSourceEntry, type RateVaultSourceOverride } from "./rate-vault.ts";
+import { cloneRateVaultPreview, parseRateVaultPreviewPackage } from "./rate-vault-preview.ts";
 
 type StoreFile = {
   extras?: RateVaultSourceEntry[];
   reviews?: RateVaultConfirmedReview[];
   overrides?: RateVaultSourceOverride[];
+  packages?: RateVaultPreviewPackage[];
 };
 
 let extras: RateVaultSourceEntry[] = [];
 let reviews: RateVaultConfirmedReview[] = [];
 let overrides: RateVaultSourceOverride[] = [];
+let packages: RateVaultPreviewPackage[] = [];
 let injectedAdapter: DriveAdapter | null | undefined;
 let hydrated = false;
 
@@ -100,7 +103,12 @@ async function persist() {
     drive,
     RATE_VAULT_LIBRARY_NAME,
     RATE_VAULT_LIBRARY_KIND,
-    { extras: extras.map(sanitizeEntry), reviews: cloneReviews(reviews), overrides: overrides.map((row) => ({ ...row })) },
+    {
+      extras: extras.map(sanitizeEntry),
+      reviews: cloneReviews(reviews),
+      overrides: overrides.map((row) => ({ ...row })),
+      packages: packages.map(sanitizePackage),
+    },
     dataFolderId(),
   );
 }
@@ -110,6 +118,7 @@ export function useRateVaultStoreForTests(drive: DriveAdapter | null) {
   extras = [];
   reviews = [];
   overrides = [];
+  packages = [];
   hydrated = false;
 }
 
@@ -118,6 +127,7 @@ export function resetRateVaultStoreForTests() {
   extras = [];
   reviews = [];
   overrides = [];
+  packages = [];
   hydrated = false;
 }
 
@@ -130,6 +140,7 @@ export async function hydrateRateVaultStore() {
       extras = parseExtras(raw?.extras);
       reviews = parseReviews(raw?.reviews);
       overrides = parseOverrides(raw?.overrides);
+      packages = parsePackages(raw?.packages);
     } catch {
       // keep memory
     }
@@ -224,6 +235,67 @@ export async function confirmRateVaultReview(review: RateVaultConfirmedReview) {
   else reviews.push(next);
   await persist();
   return next;
+}
+
+function sanitizePackage(row: RateVaultPreviewPackage): RateVaultPreviewPackage {
+  const cloned = cloneRateVaultPreview(row);
+  delete (cloned as { data?: unknown }).data;
+  delete (cloned as { bytes?: unknown }).bytes;
+  delete (cloned as { content?: unknown }).content;
+  return { ...cloned, writesRateBook: false };
+}
+
+function parsePackages(raw: unknown): RateVaultPreviewPackage[] {
+  if (!Array.isArray(raw)) return [];
+  const out: RateVaultPreviewPackage[] = [];
+  for (const row of raw) {
+    const parsed = parseRateVaultPreviewPackage(row);
+    if ("error" in parsed) continue;
+    const fixture = Boolean(row && typeof row === "object" && (row as { fixture?: unknown }).fixture === true);
+    const extractedFrom =
+      row && typeof row === "object" && typeof (row as { extractedFrom?: unknown }).extractedFrom === "string"
+        ? (row as { extractedFrom: string }).extractedFrom
+        : parsed.extractedFrom;
+    out.push(
+      sanitizePackage({
+        ...parsed,
+        fixture,
+        extractedFrom,
+        writesRateBook: false,
+      }),
+    );
+  }
+  return out;
+}
+
+export async function listRateVaultPackages() {
+  await hydrateRateVaultStore();
+  return packages.map(cloneRateVaultPreview);
+}
+
+export async function getRateVaultPackage(siteId: string | null | undefined) {
+  await hydrateRateVaultStore();
+  const match = packages.find((row) => row.siteId === siteId);
+  return match ? cloneRateVaultPreview(match) : null;
+}
+
+export async function upsertRateVaultPackage(raw: RateVaultPreviewPackage) {
+  await hydrateRateVaultStore();
+  const parsed = parseRateVaultPreviewPackage({
+    ...raw,
+    fixture: raw.fixture,
+    extractedFrom: raw.extractedFrom,
+  });
+  if ("error" in parsed) return { ok: false as const, status: 400, error: parsed.error };
+  const preview = sanitizePackage({
+    ...parsed,
+    fixture: raw.fixture === true,
+    extractedFrom: raw.extractedFrom || parsed.extractedFrom,
+    writesRateBook: false,
+  });
+  packages = [...packages.filter((row) => row.siteId !== preview.siteId), preview];
+  await persist();
+  return { ok: true as const, preview: cloneRateVaultPreview(preview) };
 }
 
 export function storePayloadLeaksBinary(payload: unknown) {
