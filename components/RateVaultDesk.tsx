@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { FieldBlock } from "@/components/FieldMark";
-import { RateVaultOcipPicker, RateVaultPreviewTables, RateVaultSitePicker } from "@/components/RateVaultPreview";
+import { RateVaultBookPicker, RateVaultOcipPicker, RateVaultPreviewTables, RateVaultSitePicker } from "@/components/RateVaultPreview";
 import {
   RATE_VAULT_ACCEPT,
+  RATE_VAULT_B1_BOOK_MIX_ERROR,
   RATE_VAULT_BUILDER_STEPS,
   RATE_VAULT_CBA_PLA_RULES,
   RATE_VAULT_CBA_PLA_SECTION,
@@ -27,6 +28,7 @@ import {
   rateVaultHasSourceDrag,
   rateVaultSiteLabel,
   reorderRateVaultItems,
+  type RateVaultBookFace,
   type RateVaultBuilderStepId,
   type RateVaultBuyoffAction,
   type RateVaultBuyoffDecision,
@@ -40,9 +42,10 @@ import {
   type RateVaultSourceEntry,
   type RateVaultSourceKind,
   type RateVaultWorkshop,
+  packageBookFace,
 } from "@/lib/rate-vault";
 import { filterRateVaultLibrary } from "@/lib/rate-vault-library";
-import { defaultRateVaultPreview, isWoodRiverB1Source } from "@/lib/rate-vault-preview";
+import { defaultRateVaultPreview, inferRateVaultBookFace, isWoodRiverB1Source, isWoodRiverRrffB1Source } from "@/lib/rate-vault-preview";
 import { downloadXlsx } from "@/lib/xlsx-minimal";
 
 function fileToPayload(file: File) {
@@ -181,7 +184,9 @@ export function RateVaultDesk() {
   const [siteId, setSiteId] = useState<string>(RATE_VAULT_DEFAULT_SITE_ID);
   const [packageSiteId, setPackageSiteId] = useState<string>(RATE_VAULT_DEFAULT_SITE_ID);
   const [ocipFace, setOcipFace] = useState<RateVaultOcipFace | "both">("both");
-  const [pendingImport, setPendingImport] = useState<{ name: string; type: string; data: string } | null>(null);
+  const [bookFace, setBookFace] = useState<RateVaultBookFace>("rrff");
+  const [bookPackages, setBookPackages] = useState<Partial<Record<RateVaultBookFace, RateVaultPreviewPackage | null>>>({});
+  const [pendingImport, setPendingImport] = useState<{ name: string; type: string; data: string; mix?: "ocip" | "book" } | null>(null);
   const [kind, setKind] = useState("");
   const [craft, setCraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -200,7 +205,15 @@ export function RateVaultDesk() {
         }
         if (data.workshop) {
           setWorkshop(data.workshop);
-          if (data.workshop.preview) setPreview(data.workshop.preview);
+          if (data.workshop.bookPreviews) setBookPackages(data.workshop.bookPreviews);
+          if (data.workshop.preview) {
+            setPreview(data.workshop.preview);
+            setBookPackages((current) => ({
+              ...current,
+              ...data.workshop?.bookPreviews,
+              [packageBookFace(data.workshop!.preview)]: data.workshop!.preview,
+            }));
+          }
         }
       })
       .catch(() => {
@@ -235,18 +248,30 @@ export function RateVaultDesk() {
         code?: string;
         needsConfirm?: boolean;
         ocipMix?: boolean;
+        bookMix?: boolean;
         buyoffs?: RateVaultBuyoffDecision[];
       };
       if (!response.ok) {
         if (data.code === "ocip-mix" && data.needsConfirm) return { ...data, ocipMix: true };
+        if (data.code === "book-mix" && data.needsConfirm) return { ...data, bookMix: true };
         setError(data.error || "Rate Vault is owner-eyes-only.");
         return null;
       }
-      if (data.workshop) setWorkshop(data.workshop);
+      if (data.workshop) {
+        setWorkshop(data.workshop);
+        if (data.workshop.bookPreviews) {
+          setBookPackages((current) => ({ ...current, ...data.workshop?.bookPreviews }));
+        }
+      }
       if (data.publish) setPublish(data.publish);
       if (data.review) setReview(data.review);
-      if (data.preview !== undefined) setPreview(data.preview);
-      else if (data.workshop?.preview) setPreview(data.workshop.preview);
+      if (data.preview !== undefined) {
+        setPreview(data.preview);
+        if (data.preview) {
+          const book = packageBookFace(data.preview);
+          setBookPackages((current) => ({ ...current, [book]: data.preview }));
+        }
+      } else if (data.workshop?.preview) setPreview(data.workshop.preview);
       if (data.confirmed) setConfirmed(data.confirmed);
       return data;
     } catch {
@@ -271,10 +296,16 @@ export function RateVaultDesk() {
         type: payload.type,
         data: payload.data,
         siteId: packageSiteId,
+        bookFace,
         ocipFace: ocipFace === "both" ? undefined : ocipFace,
       });
+      if (imported && "bookMix" in imported && imported.bookMix) {
+        setPendingImport({ ...payload, mix: "book" });
+        setError(imported.error || RATE_VAULT_B1_BOOK_MIX_ERROR);
+        return;
+      }
       if (imported && "ocipMix" in imported && imported.ocipMix) {
-        setPendingImport(payload);
+        setPendingImport({ ...payload, mix: "ocip" });
         setError(imported.error || "Confirm OCIP face mix before applying.");
         return;
       }
@@ -284,6 +315,7 @@ export function RateVaultDesk() {
           setPackageSiteId(imported.preview.siteId);
           setSiteId(imported.preview.siteId);
         }
+        setBookFace(packageBookFace(imported.preview));
         setStep(nextStep && nextStep !== "sources" ? nextStep : "burden");
         setNote(
           "Imported B-1 Excel. Preview is this book — not a parallel copy. Live Rate Tables stay stubbed.",
@@ -312,6 +344,7 @@ export function RateVaultDesk() {
     const data = await post({
       action: "export-b1",
       siteId: packageSiteId,
+      bookFace,
       ocipFace: ocipFace === "both" ? undefined : ocipFace,
     });
     if (!data?.data || !data.fileName) {
@@ -336,6 +369,7 @@ export function RateVaultDesk() {
       type: pendingImport.type,
       data: pendingImport.data,
       siteId: packageSiteId,
+      bookFace,
       ocipFace: ocipFace === "both" ? undefined : ocipFace,
       confirmOcipMix: true,
     });
@@ -346,8 +380,28 @@ export function RateVaultDesk() {
     }
   }
 
+  async function confirmBookMix() {
+    if (!pendingImport) return;
+    const imported = await post({
+      action: "import-b1",
+      fileName: pendingImport.name,
+      type: pendingImport.type,
+      data: pendingImport.data,
+      siteId: packageSiteId,
+      bookFace,
+      ocipFace: ocipFace === "both" ? undefined : ocipFace,
+      confirmBookMix: true,
+    });
+    setPendingImport(null);
+    if (imported?.preview) {
+      setBookFace(packageBookFace(imported.preview));
+      setNote("Book mix confirmed. That workbook now fills this picker only — RRFF and T&M stay separate packages.");
+      setStep("burden");
+    }
+  }
+
   async function restoreLastGood() {
-    const data = await post({ action: "restore-b1", siteId: packageSiteId });
+    const data = await post({ action: "restore-b1", siteId: packageSiteId, bookFace });
     if (data?.preview) setNote("Restored the last-good Rate Vault package.");
   }
 
@@ -371,15 +425,20 @@ export function RateVaultDesk() {
       fileName: entry.title,
       driveId: entry.driveId,
       sourceId: entry.id,
+      bookFace: inferRateVaultBookFace(entry),
     });
     if (data?.review) {
       const site = data.review.guessedSiteId || entry.siteId || RATE_VAULT_DEFAULT_SITE_ID;
       setPackageSiteId(site);
       if (entry.siteId) setSiteId(entry.siteId);
+      const book = inferRateVaultBookFace(entry);
+      setBookFace(book);
       setStep(nextStep ?? "recognize");
       setNote(
         data.preview
-          ? "Visual package loaded from the Wood River B-1 fixture. Confirm or open Burden / Publish to scroll the table."
+          ? book === "tm"
+            ? "T&M book loaded. Hall rates are not in this vault yet — switch back to RRFF for the filled package."
+            : "Visual package loaded from the Wood River B-1 fixture. Confirm or open Burden / Publish to scroll the table."
           : "Guessed from the Drive title and path. Confirm or correct before mapping.",
       );
     }
@@ -406,14 +465,33 @@ export function RateVaultDesk() {
     [craft, entries, kind, siteId],
   );
   const woodRiverPrimary = useMemo(
-    () => (entries ?? []).find((row) => isWoodRiverB1Source(row) && row.primary && !row.archived) ?? null,
+    () =>
+      (entries ?? []).find((row) => isWoodRiverRrffB1Source(row) && row.primary && !row.archived) ??
+      (entries ?? []).find((row) => isWoodRiverB1Source(row) && row.primary && !row.archived) ??
+      null,
     [entries],
   );
   const packagePreview = useMemo(() => {
-    if (packageSiteId !== RATE_VAULT_DEFAULT_SITE_ID) return preview?.siteId === packageSiteId ? preview : null;
-    if (preview?.siteId === RATE_VAULT_DEFAULT_SITE_ID) return preview;
-    return defaultRateVaultPreview(RATE_VAULT_DEFAULT_SITE_ID);
-  }, [packageSiteId, preview]);
+    if (packageSiteId !== RATE_VAULT_DEFAULT_SITE_ID) {
+      return preview?.siteId === packageSiteId && packageBookFace(preview) === bookFace ? preview : null;
+    }
+    const fromBook = bookPackages[bookFace];
+    if (fromBook && fromBook.siteId === RATE_VAULT_DEFAULT_SITE_ID) return fromBook;
+    if (preview?.siteId === RATE_VAULT_DEFAULT_SITE_ID && packageBookFace(preview) === bookFace) return preview;
+    return defaultRateVaultPreview(RATE_VAULT_DEFAULT_SITE_ID, bookFace);
+  }, [bookFace, bookPackages, packageSiteId, preview]);
+
+  async function onBook(next: RateVaultBookFace) {
+    setBookFace(next);
+    const cached = bookPackages[next];
+    if (cached && cached.siteId === packageSiteId) {
+      setPreview(cached);
+      return;
+    }
+    const data = await post({ action: "load-preview", siteId: packageSiteId, bookFace: next });
+    if (data?.preview) setPreview(data.preview);
+    else setPreview(defaultRateVaultPreview(packageSiteId === RATE_VAULT_DEFAULT_SITE_ID ? RATE_VAULT_DEFAULT_SITE_ID : null, next));
+  }
 
   return (
     <div className="mt-4 space-y-5">
@@ -430,7 +508,11 @@ export function RateVaultDesk() {
           metadata only.
         </p>
         {error ? <p className="mt-3 text-sm text-[#163038]">{error}</p> : null}
-        {pendingImport ? (
+        {pendingImport?.mix === "book" ? (
+          <button type="button" className="mt-3 rounded-lg bg-steel px-4 py-2 text-sm text-white" onClick={() => void confirmBookMix()}>
+            Confirm book mix
+          </button>
+        ) : pendingImport ? (
           <button type="button" className="mt-3 rounded-lg bg-steel px-4 py-2 text-sm text-white" onClick={() => void confirmOcipMix()}>
             Confirm OCIP mix
           </button>
@@ -535,9 +617,11 @@ export function RateVaultDesk() {
         <BurdenPane
           preview={packagePreview}
           packageSiteId={packageSiteId}
+          bookFace={bookFace}
           ocipFace={ocipFace}
           busy={busy}
           onSite={setPackageSiteId}
+          onBook={(next) => void onBook(next)}
           onFace={setOcipFace}
           onExport={() => void exportB1()}
           onRestore={() => void restoreLastGood()}
@@ -551,9 +635,11 @@ export function RateVaultDesk() {
           publish={publish}
           preview={packagePreview}
           packageSiteId={packageSiteId}
+          bookFace={bookFace}
           ocipFace={ocipFace}
           busy={busy}
           onSite={setPackageSiteId}
+          onBook={(next) => void onBook(next)}
           onFace={setOcipFace}
           onExport={() => void exportB1()}
           onRestore={() => void restoreLastGood()}
@@ -1169,9 +1255,11 @@ function MapCraftsPane({
 function BurdenPane({
   preview,
   packageSiteId,
+  bookFace,
   ocipFace,
   busy,
   onSite,
+  onBook,
   onFace,
   onExport,
   onRestore,
@@ -1180,9 +1268,11 @@ function BurdenPane({
 }: {
   preview: RateVaultPreviewPackage | null;
   packageSiteId: string;
+  bookFace: RateVaultBookFace;
   ocipFace: RateVaultOcipFace | "both";
   busy: boolean;
   onSite: (value: string) => void;
+  onBook: (value: RateVaultBookFace) => void;
   onFace: (value: RateVaultOcipFace | "both") => void;
   onExport: () => void;
   onRestore: () => void;
@@ -1201,10 +1291,15 @@ function BurdenPane({
           Edit those offline, drop the same file here, and this desk updates. Live Rate Tables
           stay stubbed.
         </p>
-        <div className="mt-4 flex max-w-xl flex-wrap gap-4">
+        <div className="mt-4 flex max-w-3xl flex-wrap gap-4">
           <div className="max-w-xs flex-1">
             <RateVaultSitePicker siteId={packageSiteId} onSite={onSite} />
           </div>
+          {packageSiteId === RATE_VAULT_DEFAULT_SITE_ID ? (
+            <div className="max-w-xs flex-1">
+              <RateVaultBookPicker book={bookFace} onBook={onBook} />
+            </div>
+          ) : null}
           <div className="max-w-xs flex-1">
             <RateVaultOcipPicker face={ocipFace} onFace={onFace} />
           </div>
@@ -1240,7 +1335,11 @@ function BurdenPane({
           preview={preview}
           siteId={packageSiteId}
           ocipFace={ocipFace}
-          emptyNote="No B-1 preview for this site yet. Wood River is seeded — pick it to see the package."
+          emptyNote={
+            bookFace === "tm"
+              ? "T&M hall rates are not loaded in this vault yet. Official Union_TM numbers stay on Drive. Switch back to RRFF for the filled Wood River package."
+              : "No B-1 preview for this site yet. Wood River is seeded — pick it to see the package."
+          }
         />
       </section>
       <section className="plant-card px-5 py-5">
@@ -1298,9 +1397,11 @@ function PublishPane({
   publish,
   preview,
   packageSiteId,
+  bookFace,
   ocipFace,
   busy,
   onSite,
+  onBook,
   onFace,
   onExport,
   onRestore,
@@ -1311,9 +1412,11 @@ function PublishPane({
   publish: RateVaultPublishStub | null;
   preview: RateVaultPreviewPackage | null;
   packageSiteId: string;
+  bookFace: RateVaultBookFace;
   ocipFace: RateVaultOcipFace | "both";
   busy: boolean;
   onSite: (value: string) => void;
+  onBook: (value: RateVaultBookFace) => void;
   onFace: (value: RateVaultOcipFace | "both") => void;
   onExport: () => void;
   onRestore: () => void;
@@ -1328,10 +1431,15 @@ function PublishPane({
         Scroll the filled package. Re-import an edited Rate Vault B-1 Excel to update this
         preview. Publish is still a stub — it does not write live estimate Rate Tables.
       </p>
-      <div className="mt-4 flex max-w-xl flex-wrap gap-4">
+      <div className="mt-4 flex max-w-3xl flex-wrap gap-4">
         <div className="max-w-xs flex-1">
           <RateVaultSitePicker siteId={packageSiteId} onSite={onSite} />
         </div>
+        {packageSiteId === RATE_VAULT_DEFAULT_SITE_ID ? (
+          <div className="max-w-xs flex-1">
+            <RateVaultBookPicker book={bookFace} onBook={onBook} />
+          </div>
+        ) : null}
         <div className="max-w-xs flex-1">
           <RateVaultOcipPicker face={ocipFace} onFace={onFace} />
         </div>
@@ -1367,7 +1475,11 @@ function PublishPane({
         preview={preview}
         siteId={packageSiteId}
         ocipFace={ocipFace}
-        emptyNote="No B-1 preview for this site yet. Wood River is seeded — pick it to scroll the package."
+        emptyNote={
+          bookFace === "tm"
+            ? "T&M hall rates are not loaded in this vault yet. Official Union_TM numbers stay on Drive. Switch back to RRFF for the filled Wood River package."
+            : "No B-1 preview for this site yet. Wood River is seeded — pick it to scroll the package."
+        }
       />
       <button
         type="button"

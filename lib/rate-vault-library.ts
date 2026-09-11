@@ -21,7 +21,11 @@ import {
   type RateVaultPreviewPackage,
   type RateVaultWorkshop,
 } from "./rate-vault.ts";
-import { defaultRateVaultPreview, WOOD_RIVER_B1_EXHIBIT_DRIVE_ID } from "./rate-vault-preview.ts";
+import {
+  defaultRateVaultPreview,
+  WOOD_RIVER_B1_EXHIBIT_DRIVE_ID,
+  WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID,
+} from "./rate-vault-preview.ts";
 
 export const RATE_VAULT_LIBRARY_NAME = "rate-vault.json";
 export const RATE_VAULT_LIBRARY_KIND = "rate-vault-library";
@@ -77,7 +81,15 @@ const SEED: readonly SeedRow[] = [
     kind: "b1-exhibit",
     siteId: "wood-river",
     primary: true,
-    note: "Primary Wood River RRFF Exhibit B-1 labor-burden workbook. Catalog by Drive id — the xlsx stays on Drive. Visual package is craft-sheet Pay Tax / Ins / Misc / O/H / Profit plus Fringes Subtotal. Not the TM labor-burden face.",
+    note: "Primary Wood River RRFF Exhibit B-1 labor-burden workbook. Catalog by Drive id — the xlsx stays on Drive. Visual package is craft-sheet Pay Tax / Ins / Misc / O/H / Profit plus Fringes Subtotal. Separate book from T&M / Union_TM — never mix wages or burden.",
+  },
+  {
+    driveId: WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID,
+    title: "Wood River Exhibit B-1 Union_TM Labor Burden Buildup",
+    kind: "b1-exhibit",
+    siteId: "wood-river",
+    primary: true,
+    note: "Primary Wood River T&M (Union_TM) Exhibit B-1 labor-burden workbook. Separate book from RRFF — pick T&M on Burden / Publish; OCIP still filters seats inside this book. Catalog by Drive id only; hall rates are not invented here. The official ~25 MB xlsx stays on Drive.",
   },
   {
     driveId: "1aP0etQYJxWo003IUa8bVWWoDpOAwk1m2",
