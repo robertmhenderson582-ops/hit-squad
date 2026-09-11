@@ -12,6 +12,7 @@ import {
   RATE_VAULT_B1_BURDEN_SHEET,
   RATE_VAULT_B1_CBA_SHEET,
   RATE_VAULT_B1_COMP_SHEET,
+  RATE_VAULT_B1_FRINGE_SHEET,
   RATE_VAULT_B1_IMPORT_ERROR,
   RATE_VAULT_B1_KIND,
   RATE_VAULT_B1_MARKER,
@@ -30,13 +31,16 @@ import {
   isRateVaultSiteId,
   looksLikeForeignRateVaultSite,
   rateVaultSiteLabel,
+  type RateVaultBurdenFamily,
   type RateVaultBurdenLine,
+  type RateVaultFringeLine,
   type RateVaultLane,
   type RateVaultOcipFace,
   type RateVaultPreviewPackage,
   type RateVaultPreviewRow,
   type RateVaultSiteId,
 } from "./rate-vault.ts";
+import { inferBurdenFamily, ripplePreviewRowsFromB1Sheets } from "./rate-vault-b1.ts";
 import {
   defaultRateVaultClockNote,
   filterPreviewByFace,
@@ -64,7 +68,30 @@ export const RATE_VAULT_B1_RATE_HEADERS = [
   "_id",
 ] as const;
 
-export const RATE_VAULT_B1_BURDEN_HEADERS = ["Item", "Rate %", "Note", "_id"] as const;
+export const RATE_VAULT_B1_BURDEN_HEADERS = ["Family", "Item", "Rate %", "$ / hr", "Hall", "Note", "_id", "_ridesOt"] as const;
+export const RATE_VAULT_B1_FRINGE_HEADERS = ["Hall", "Craft", "Local", "Fringe", "$ / hr", "Rate %", "Note", "_id", "_ridesOt"] as const;
+
+export function rateVaultFringeRippleFormula(row: number) {
+  const sheet = RATE_VAULT_B1_FRINGE_SHEET;
+  return `SUMIF('${sheet}'!A:A,E${row},'${sheet}'!E:E)+F${row}*SUMIF('${sheet}'!A:A,E${row},'${sheet}'!F:F)/100`;
+}
+
+export function rateVaultBurdenRippleFormula(row: number) {
+  const sheet = RATE_VAULT_B1_BURDEN_SHEET;
+  return `F${row}*(SUMIF('${sheet}'!A:A,"pay-tax",'${sheet}'!C:C)+SUMIFS('${sheet}'!C:C,'${sheet}'!E:E,E${row},'${sheet}'!A:A,"<>pay-tax"))/100+SUMIF('${sheet}'!E:E,E${row},'${sheet}'!D:D)`;
+}
+
+function normalizeFormula(value: string) {
+  return value.replace(/^=/, "").replace(/\s+/g, "").replace(/'/g, "").toLowerCase();
+}
+
+export function isRateVaultFringeRippleFormula(formula: string, row: number) {
+  return normalizeFormula(formula) === normalizeFormula(rateVaultFringeRippleFormula(row));
+}
+
+export function isRateVaultBurdenRippleFormula(formula: string, row: number) {
+  return normalizeFormula(formula) === normalizeFormula(rateVaultBurdenRippleFormula(row));
+}
 
 export const RATE_VAULT_B1_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -306,7 +333,7 @@ export async function rateVaultPreviewToXlsx(
     pack.getCell(`B${row}`).value = typeof value === "boolean" ? String(value) : value;
   });
   pack.getCell("A18").value =
-    "This workbook is the formula check to the site. Edit Rate Summary / Burden Summary offline, then drop the file back on Rate Vault. Preview updates from this book — not a parallel copy. CBA / PLA, State law, and COMP Check are read-only. Live Rate Tables stay off until Publish is wired.";
+    "Lean Rate Vault B-1 face — not the ~25 MB official Exhibit B-1. No pivots, no OCIP/staff dumps, no unused shells. Rate Summary Fringe / Burden pull Fringes and Burden Summary. Edit those tabs (or wages), drop this file back. Preview updates from this book — not a parallel copy. CBA / PLA, State law, and COMP Check are read-only. Live Rate Tables stay off until Publish is wired.";
   pack.getColumn(1).width = 18;
   pack.getColumn(2).width = 72;
 
@@ -320,8 +347,8 @@ export async function rateVaultPreviewToXlsx(
     rates.getCell(`D${r}`).value = row.group;
     rates.getCell(`E${r}`).value = row.sheet;
     rates.getCell(`F${r}`).value = row.wage;
-    rates.getCell(`G${r}`).value = row.fringe;
-    rates.getCell(`H${r}`).value = row.burden;
+    rates.getCell(`G${r}`).value = { formula: rateVaultFringeRippleFormula(r), result: row.fringe };
+    rates.getCell(`H${r}`).value = { formula: rateVaultBurdenRippleFormula(r), result: row.burden };
     rates.getCell(`I${r}`).value = { formula: `F${r}+G${r}+H${r}`, result: row.billRate };
     if (row.billOt != null) rates.getCell(`J${r}`).value = row.billOt;
     if (row.billDt != null) rates.getCell(`K${r}`).value = row.billDt;
@@ -344,24 +371,63 @@ export async function rateVaultPreviewToXlsx(
   applyHeader(burden.getRow(1), RATE_VAULT_B1_BURDEN_HEADERS);
   exported.burden.forEach((line, index) => {
     const r = index + 2;
-    burden.getCell(`A${r}`).value = line.label;
-    burden.getCell(`B${r}`).value = line.ratePct;
-    burden.getCell(`B${r}`).numFmt = PCT_FMT;
-    burden.getCell(`C${r}`).value = line.note;
-    burden.getCell(`D${r}`).value = line.id;
+    burden.getCell(`A${r}`).value = line.family;
+    burden.getCell(`B${r}`).value = line.label;
+    burden.getCell(`C${r}`).value = line.ratePct;
+    burden.getCell(`C${r}`).numFmt = PCT_FMT;
+    burden.getCell(`D${r}`).value = line.amountHr;
+    applyMoneyStyle(burden.getCell(`D${r}`));
+    burden.getCell(`E${r}`).value = line.sheet || line.craft || "";
+    burden.getCell(`F${r}`).value = line.note;
+    burden.getCell(`G${r}`).value = line.id;
+    burden.getCell(`H${r}`).value = line.ridesOt ? "TRUE" : "FALSE";
   });
-  const totalRow = exported.burden.length + 2;
-  const lastData = Math.max(exported.burden.length + 1, 2);
-  burden.getCell(`A${totalRow}`).value = "Total";
-  burden.getCell(`A${totalRow}`).font = { bold: true };
-  burden.getCell(`B${totalRow}`).value = {
-    formula: `SUM(B2:B${lastData})`,
-    result: money(exported.burden.reduce((sum, line) => sum + line.ratePct, 0)),
+  const lastBurdenData = Math.max(exported.burden.length + 1, 2);
+  const payTaxRow = exported.burden.length + 2;
+  burden.getCell(`A${payTaxRow}`).value = "pay-tax";
+  burden.getCell(`B${payTaxRow}`).value = "Pay Tax Subtotal";
+  burden.getCell(`B${payTaxRow}`).font = { bold: true };
+  burden.getCell(`C${payTaxRow}`).value = {
+    formula: `SUMIF(A2:A${lastBurdenData},"pay-tax",C2:C${lastBurdenData})`,
+    result: money(exported.burden.filter((line) => line.family === "pay-tax").reduce((sum, line) => sum + line.ratePct, 0)),
   };
-  burden.getCell(`B${totalRow}`).numFmt = PCT_FMT;
-  burden.getColumn(4).hidden = true;
-  [28, 12, 48, 18].forEach((width, index) => {
+  burden.getCell(`C${payTaxRow}`).numFmt = PCT_FMT;
+  burden.getColumn(7).hidden = true;
+  burden.getColumn(8).hidden = true;
+  [14, 22, 12, 12, 28, 48, 18, 10].forEach((width, index) => {
     burden.getColumn(index + 1).width = width;
+  });
+
+  const fringes = workbook.addWorksheet(RATE_VAULT_B1_FRINGE_SHEET);
+  applyHeader(fringes.getRow(1), RATE_VAULT_B1_FRINGE_HEADERS);
+  const fringeRows = exported.fringes ?? [];
+  fringeRows.forEach((line, index) => {
+    const r = index + 2;
+    fringes.getCell(`A${r}`).value = line.sheet;
+    fringes.getCell(`B${r}`).value = line.craft;
+    fringes.getCell(`C${r}`).value = line.local || "";
+    fringes.getCell(`D${r}`).value = line.label;
+    fringes.getCell(`E${r}`).value = line.amountHr;
+    applyMoneyStyle(fringes.getCell(`E${r}`));
+    fringes.getCell(`F${r}`).value = line.ratePct;
+    fringes.getCell(`F${r}`).numFmt = PCT_FMT;
+    fringes.getCell(`G${r}`).value = line.note;
+    fringes.getCell(`H${r}`).value = line.id;
+    fringes.getCell(`I${r}`).value = line.ridesOt ? "TRUE" : "FALSE";
+  });
+  const fringeTotal = fringeRows.length + 2;
+  const lastFringe = Math.max(fringeRows.length + 1, 2);
+  fringes.getCell(`D${fringeTotal}`).value = "Fringes Subtotal";
+  fringes.getCell(`D${fringeTotal}`).font = { bold: true };
+  fringes.getCell(`E${fringeTotal}`).value = {
+    formula: `SUM(E2:E${lastFringe})`,
+    result: money(fringeRows.reduce((sum, line) => sum + line.amountHr, 0)),
+  };
+  applyMoneyStyle(fringes.getCell(`E${fringeTotal}`));
+  fringes.getColumn(8).hidden = true;
+  fringes.getColumn(9).hidden = true;
+  [32, 16, 10, 22, 12, 12, 48, 18, 10].forEach((width, index) => {
+    fringes.getColumn(index + 1).width = width;
   });
 
   addCompCheckSheet(workbook, exported);
@@ -391,7 +457,8 @@ function addCompCheckSheet(workbook: ExcelJS.Workbook, preview: RateVaultPreview
     ["Fringe total", { formula: `SUM('${RATE_VAULT_B1_RATE_SHEET}'!G2:G${lastRate})`, result: check.fringeTotal }],
     ["Burden $ total", { formula: `SUM('${RATE_VAULT_B1_RATE_SHEET}'!H2:H${lastRate})`, result: check.burdenTotal }],
     ["Bill ST total", { formula: `SUM('${RATE_VAULT_B1_RATE_SHEET}'!I2:I${lastRate})`, result: check.billTotal }],
-    ["Burden stack %", { formula: `'${RATE_VAULT_B1_BURDEN_SHEET}'!B${preview.burden.length + 2}`, result: check.burdenPct }],
+    ["Pay tax stack %", { formula: `'${RATE_VAULT_B1_BURDEN_SHEET}'!C${preview.burden.length + 2}`, result: check.burdenPct }],
+    ["Fringes $ / hr", { formula: `SUM('${RATE_VAULT_B1_FRINGE_SHEET}'!E2:E${Math.max((preview.fringes ?? []).length + 1, 2)})`, result: money((preview.fringes ?? []).reduce((sum, line) => sum + line.amountHr, 0)) }],
   ];
   lines.forEach(([label, value], index) => {
     const row = index + 3;
@@ -408,7 +475,7 @@ function addReadOnlyRulesSheet(workbook: ExcelJS.Workbook, name: string, title: 
   const sheet = workbook.addWorksheet(name);
   sheet.getCell("A1").value = title;
   sheet.getCell("A1").font = { bold: true };
-  sheet.getCell("A2").value = "Read-only rule summary. Edit wages / fringes / burden on Rate Summary only.";
+  sheet.getCell("A2").value = "Read-only rule summary. Edit wages on Rate Summary. Edit fringe $ and burden % on Fringes / Burden Summary — Rate Summary formulas pull those tabs.";
   lines.forEach((line, index) => {
     sheet.getCell(`A${index + 4}`).value = line;
   });
@@ -451,6 +518,31 @@ function requiredMoney(cell: ExcelJS.Cell): { ok: true; value: number } | { pois
   if ("poison" in read) return { poison: true };
   if (read.value < 0) return { poison: true };
   return { ok: true, value: read.value };
+}
+
+function parseRidesOt(raw: string, fallback: boolean) {
+  const value = raw.trim().toLowerCase();
+  if (!value) return fallback;
+  if (value === "true" || value === "1" || value === "yes") return true;
+  if (value === "false" || value === "0" || value === "no") return false;
+  return fallback;
+}
+
+function readRippleMoney(
+  cell: ExcelJS.Cell,
+  rowNumber: number,
+  kind: "fringe" | "burden",
+): { ok: true; value: number; ripple: boolean } | { poison: true } {
+  if (cellHasFormula(cell)) {
+    const formula = billFormulaText(cell);
+    const matches =
+      kind === "fringe" ? isRateVaultFringeRippleFormula(formula, rowNumber) : isRateVaultBurdenRippleFormula(formula, rowNumber);
+    if (!matches) return { poison: true };
+    return { ok: true, value: 0, ripple: true };
+  }
+  const typed = requiredMoney(cell);
+  if ("poison" in typed) return { poison: true };
+  return { ok: true, value: typed.value, ripple: false };
 }
 
 export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise<RateVaultB1ImportResult> {
@@ -499,6 +591,78 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
     }
   }
 
+  const burdenLines: RateVaultBurdenLine[] = [];
+  const burdenSheet = sheetByName(workbook, RATE_VAULT_B1_BURDEN_SHEET);
+  if (burdenSheet) {
+    const burdenCols = headerIndex(burdenSheet, RATE_VAULT_B1_BURDEN_HEADERS);
+    const lastBurden = burdenSheet.rowCount;
+    for (let rowNumber = 2; rowNumber <= lastBurden; rowNumber += 1) {
+      const row = burdenSheet.getRow(rowNumber);
+      const label = text(row.getCell(burdenCols.Item || (burdenCols.Family ? 2 : 1)).value);
+      if (!label || /^total$/i.test(label) || /subtotal/i.test(label)) continue;
+      const pct = requiredMoney(row.getCell(burdenCols["Rate %"] || 2));
+      if ("poison" in pct) {
+        return fail("invalid", "A burden rate is not a valid number. The package was not applied.");
+      }
+      const amountCol = burdenCols["$ / hr"];
+      const amount = amountCol ? requiredMoney(row.getCell(amountCol)) : { ok: true as const, value: 0 };
+      if ("poison" in amount) {
+        return fail("invalid", "A burden rate is not a valid number. The package was not applied.");
+      }
+      const hiddenId = text(row.getCell(burdenCols._id || (amountCol ? 7 : 4)).value);
+      const familyRaw = burdenCols.Family ? text(row.getCell(burdenCols.Family).value) : "";
+      const family = (["pay-tax", "insurance", "misc", "oh", "profit"] as const).includes(familyRaw as RateVaultBurdenFamily)
+        ? (familyRaw as RateVaultBurdenFamily)
+        : inferBurdenFamily(label);
+      const hall = burdenCols.Hall ? text(row.getCell(burdenCols.Hall).value) : "";
+      burdenLines.push({
+        id: hiddenId || `burden-${burdenLines.length + 1}`,
+        label,
+        family,
+        unit: family === "pay-tax" || family === "insurance" ? "pct-taxable" : "amount-hr",
+        ratePct: pct.value,
+        amountHr: amount.value,
+        note: text(row.getCell(burdenCols.Note || 6).value),
+        craft: hall || null,
+        local: null,
+        sheet: hall || null,
+        ridesOt: parseRidesOt(text(row.getCell(burdenCols._ridesOt || 8).value), family === "pay-tax"),
+      });
+    }
+  }
+
+  const fringeLines: RateVaultFringeLine[] = [];
+  const fringeSheet = sheetByName(workbook, RATE_VAULT_B1_FRINGE_SHEET);
+  if (fringeSheet) {
+    const fringeCols = headerIndex(fringeSheet, RATE_VAULT_B1_FRINGE_HEADERS);
+    const lastFringe = fringeSheet.rowCount;
+    for (let rowNumber = 2; rowNumber <= lastFringe; rowNumber += 1) {
+      const row = fringeSheet.getRow(rowNumber);
+      const label = text(row.getCell(fringeCols.Fringe || 4).value);
+      if (!label || /subtotal/i.test(label)) continue;
+      const amount = requiredMoney(row.getCell(fringeCols["$ / hr"] || 5));
+      if ("poison" in amount) {
+        return fail("invalid", "A fringe amount is not a valid number. The package was not applied.");
+      }
+      const pct = requiredMoney(row.getCell(fringeCols["Rate %"] || 6));
+      if ("poison" in pct) {
+        return fail("invalid", "A fringe amount is not a valid number. The package was not applied.");
+      }
+      fringeLines.push({
+        id: text(row.getCell(fringeCols._id || 8).value) || `fringe-${fringeLines.length + 1}`,
+        label,
+        amountHr: amount.value,
+        ratePct: pct.value,
+        unit: pct.value && !amount.value ? "pct-taxable" : "amount-hr",
+        craft: text(row.getCell(fringeCols.Craft || 2).value) || "Craft",
+        local: text(row.getCell(fringeCols.Local || 3).value) || null,
+        sheet: text(row.getCell(fringeCols.Hall || 1).value) || "Craft",
+        note: text(row.getCell(fringeCols.Note || 7).value),
+        ridesOt: parseRidesOt(text(row.getCell(fringeCols._ridesOt || 9).value), false),
+      });
+    }
+  }
+
   const rateSheet = sheetByName(workbook, RATE_VAULT_B1_RATE_SHEET);
   if (!rateSheet) return fail("invalid", "Rate Summary is missing. The package was not applied.");
   const rateCols = headerIndex(rateSheet, RATE_VAULT_B1_RATE_HEADERS);
@@ -507,32 +671,29 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
   }
 
   const rows: RateVaultPreviewRow[] = [];
+  const fringeRippleIds = new Set<string>();
+  const burdenRippleIds = new Set<string>();
   let poison: RateVaultB1ImportFail | null = null;
   const lastRate = rateSheet.rowCount;
   for (let rowNumber = 2; rowNumber <= lastRate; rowNumber += 1) {
     const row = rateSheet.getRow(rowNumber);
     const position = text(row.getCell(rateCols.Position).value);
     const wageCell = row.getCell(rateCols.Wage);
-    const fringeCell = row.getCell(rateCols.Fringe);
-    const burdenCell = row.getCell(rateCols.Burden);
     const wageRead = readNumber(wageCell);
-    const fringeRead = readNumber(fringeCell);
-    const burdenRead = readNumber(burdenCell);
-    const emptyRow =
-      !position &&
-      "empty" in wageRead &&
-      "empty" in fringeRead &&
-      "empty" in burdenRead;
-    if (emptyRow) continue;
     if (!position) {
+      if ("empty" in wageRead) continue;
       poison = fail("invalid", "A rate row is missing a position. The package was not applied.");
       break;
     }
     const wage = requiredMoney(wageCell);
-    const fringe = requiredMoney(fringeCell);
-    const burdenAmt = requiredMoney(burdenCell);
-    if ("poison" in wage || "poison" in fringe || "poison" in burdenAmt) {
+    const fringe = readRippleMoney(row.getCell(rateCols.Fringe), rowNumber, "fringe");
+    const burdenAmt = readRippleMoney(row.getCell(rateCols.Burden), rowNumber, "burden");
+    if ("poison" in wage) {
       poison = fail("invalid", "A rate cell is not a valid number. The package was not applied.");
+      break;
+    }
+    if ("poison" in fringe || "poison" in burdenAmt) {
+      poison = fail("invalid", "Fringe / Burden formula guts are broken. The package was not applied.");
       break;
     }
     const billOt = optionalMoney(row.getCell(rateCols["Bill OT"] || 10));
@@ -572,32 +733,11 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
       ocip,
       clockNote: text(row.getCell(rateCols["OT / clock"] || 14).value) || defaultRateVaultClockNote(lane),
     });
+    if (fringe.ripple) fringeRippleIds.add(id);
+    if (burdenAmt.ripple) burdenRippleIds.add(id);
   }
   if (poison) return poison;
   if (!rows.length) return fail("empty", "That workbook has no rate positions. The package was not applied.");
-
-  const burdenLines: RateVaultBurdenLine[] = [];
-  const burdenSheet = sheetByName(workbook, RATE_VAULT_B1_BURDEN_SHEET);
-  if (burdenSheet) {
-    const burdenCols = headerIndex(burdenSheet, RATE_VAULT_B1_BURDEN_HEADERS);
-    const lastBurden = burdenSheet.rowCount;
-    for (let rowNumber = 2; rowNumber <= lastBurden; rowNumber += 1) {
-      const row = burdenSheet.getRow(rowNumber);
-      const label = text(row.getCell(burdenCols.Item || 1).value);
-      if (!label || /^total$/i.test(label)) continue;
-      const pct = requiredMoney(row.getCell(burdenCols["Rate %"] || 2));
-      if ("poison" in pct) {
-        return fail("invalid", "A burden rate is not a valid number. The package was not applied.");
-      }
-      const hiddenId = text(row.getCell(burdenCols._id || 4).value);
-      burdenLines.push({
-        id: hiddenId || `burden-${burdenLines.length + 1}`,
-        label,
-        ratePct: pct.value,
-        note: text(row.getCell(burdenCols.Note || 3).value),
-      });
-    }
-  }
 
   const title = meta.get("title") || `${rateVaultSiteLabel(siteId)} B-1`;
   const parsed = parseRateVaultPreviewPackage({
@@ -617,11 +757,13 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
     sheets: [
       { name: RATE_VAULT_B1_RATE_SHEET, kind: "rate-summary" },
       { name: RATE_VAULT_B1_BURDEN_SHEET, kind: "burden-summary" },
+      { name: RATE_VAULT_B1_FRINGE_SHEET, kind: "fringes" },
       { name: RATE_VAULT_B1_COMP_SHEET, kind: "other" },
       { name: RATE_VAULT_B1_CBA_SHEET, kind: "other" },
       { name: RATE_VAULT_B1_STATE_SHEET, kind: "other" },
     ],
     burden: burdenLines,
+    fringes: fringeLines,
     rows,
   });
   if ("error" in parsed) return fail("invalid", parsed.error);
@@ -632,6 +774,10 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
       fixture: false,
       extractedFrom: "vault-xlsx-import",
       writesRateBook: false,
+      rows: ripplePreviewRowsFromB1Sheets(parsed.rows, parsed.burden, parsed.fringes, parsed.craftSheets, {
+        rippleFringe: fringeRippleIds.size > 0,
+        rippleBurden: burdenRippleIds.size > 0,
+      }),
     },
   };
 }

@@ -38,9 +38,20 @@ describe("Rate Vault Wood River B-1 preview", () => {
     assert.equal(fixture.fixture, true);
     assert.equal(fixture.id, parsed.id);
     assert.ok(fixture.rows.length >= 8);
-    assert.ok(fixture.burden.length >= 4);
+    assert.ok(fixture.craftSheets.length >= 4);
+    assert.ok(fixture.fringes.length >= 4);
+    assert.ok(fixture.burden.some((line) => line.label === "Pay Tax FICA-MC" && line.ratePct === 7.65));
+    assert.ok(fixture.burden.some((line) => line.label === "Pay Tax SUI" && line.ratePct === 8.55));
+    assert.ok(fixture.burden.some((line) => line.label === "O/H"));
+    assert.ok(fixture.burden.some((line) => line.label === "Profit"));
+    assert.equal(
+      fixture.burden.some((line) => /suta|illinois composite|overhead & fee/i.test(line.label)),
+      false,
+    );
+    assert.ok(fixture.fringes.some((line) => line.sheet.includes("BOILERMAKER") && line.label === "H&W" && line.amountHr === 7.07));
     assert.ok(fixture.sheets.some((sheet) => sheet.name === "Rate Summary"));
     assert.ok(fixture.sheets.some((sheet) => sheet.name === "Burden Summary"));
+    assert.ok(fixture.sheets.some((sheet) => sheet.name === "Fringes"));
     assert.equal(
       fixture.rows.some((row) => /boilermaker journeyman/i.test(row.position) && row.local === "363"),
       true,
@@ -58,7 +69,8 @@ describe("Rate Vault Wood River B-1 preview", () => {
       true,
     );
     assert.match(WOOD_RIVER_B1_PREVIEW_FIXTURE_PATH, /wood-river-b1-preview-fixture\.json/);
-    assert.doesNotMatch(JSON.stringify(fixture), /PK.*word\/document|monroe|yates/i);
+    assert.doesNotMatch(JSON.stringify(fixture), /PK.*word\/document|monroe|yates|shahan/i);
+    assert.doesNotMatch(JSON.stringify(raw), /shahan/i);
   });
 
   it("resolves the Wood River catalog card onto the visual package", async () => {

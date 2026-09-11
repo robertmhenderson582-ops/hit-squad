@@ -1195,9 +1195,10 @@ function BurdenPane({
         <p className="text-xs tracking-[0.14em] text-[#5b6f73]">Burden / build</p>
         <h3 className="text-xl font-semibold text-[#163038]">Visual rate package</h3>
         <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
-          Friendlier than a raw Exhibit B-1, same guts: position, wage, fringe, burden, bill.
-          Export B-1 Excel is the formula check to the site. Edit wages, fringes, burden, or
-          bill offline, then drop the same file here so this preview updates. Live Rate Tables
+          Friendlier than a raw Exhibit B-1, same guts: hall craft sheets with Pay Tax, Ins,
+          Misc, O/H, Profit, and Fringes Subtotal as $ / hr. Export is a lean B-1 face — not
+          the 25 MB official book. Fringe and burden cells pull the Fringes / Burden tabs.
+          Edit those offline, drop the same file here, and this desk updates. Live Rate Tables
           stay stubbed.
         </p>
         <div className="mt-4 flex max-w-xl flex-wrap gap-4">

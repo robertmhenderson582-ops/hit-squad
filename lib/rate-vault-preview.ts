@@ -5,8 +5,24 @@
 
 import woodRiverB1PreviewJson from "./rate-vault/wood-river-b1-preview-fixture.json" with { type: "json" };
 import {
+  applyB1ToPreviewRows,
+  b1PayTaxPct,
+  craftSheetsFromFlat,
+  flattenB1Burden,
+  flattenB1Fringes,
+  inferBurdenFamily,
+  inferBurdenUnit,
+  isRateVaultBurdenFamily,
+} from "./rate-vault-b1.ts";
+import { woodRiverB1CraftSheets } from "./rate-vault-wood-river-b1.ts";
+import {
   isRateVaultSiteId,
+  type RateVaultBurdenFamily,
+  type RateVaultBurdenLine,
+  type RateVaultBurdenUnit,
   type RateVaultColumnRole,
+  type RateVaultCraftSheet,
+  type RateVaultFringeLine,
   type RateVaultLane,
   type RateVaultOcipFace,
   type RateVaultPackageVersion,
@@ -22,10 +38,10 @@ import {
 
 export const WOOD_RIVER_B1_PREVIEW_FIXTURE_PATH = "lib/rate-vault/wood-river-b1-preview-fixture.json";
 
-/** TODO: replace with the Drive file id after Robert's 09.10.26 Exhibit B-1 is uploaded. Catalog by id only — never commit the xlsx. */
-export const WOOD_RIVER_B1_EXHIBIT_DRIVE_ID = "1WOODRIVERB1LATESTPENDING000";
+/** Wood River RRFF Labor Burden Buildup — catalog by Drive id only. Never commit the xlsx. Not the TM labor-burden face. */
+export const WOOD_RIVER_B1_EXHIBIT_DRIVE_ID = "1HN5FclxjQNw0iHm_hizHbcWM9GZV_Zeu";
 
-export const WOOD_RIVER_B1_EXHIBIT_TITLE = "Wood River Exhibit B-1 latest (Robert 09.10.26)";
+export const WOOD_RIVER_B1_EXHIBIT_TITLE = "Wood River Exhibit B-1 RRFF Labor Burden Buildup";
 
 export const RATE_VAULT_PREVIEW_COLUMNS: Array<{ header: string; role: RateVaultColumnRole }> = [
   { header: "Craft", role: "craft" },
@@ -126,16 +142,77 @@ function parsePreviewRow(raw: unknown, index: number): RateVaultPreviewRow | nul
   return next;
 }
 
-function parseBurdenLine(raw: unknown, index: number) {
+function parseBurdenLine(raw: unknown, index: number): RateVaultBurdenLine | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const label = text(row.label);
+  if (!label) return null;
+  const family: RateVaultBurdenFamily = isRateVaultBurdenFamily(row.family) ? row.family : inferBurdenFamily(label);
+  const unit: RateVaultBurdenUnit = row.unit === "amount-hr" || row.unit === "pct-taxable" ? row.unit : inferBurdenUnit({
+    family,
+    unit: "pct-taxable",
+    ratePct: money(row.ratePct),
+    amountHr: money(row.amountHr),
+  });
+  return {
+    id: text(row.id) || `burden-${index + 1}`,
+    label,
+    family,
+    unit,
+    ratePct: money(row.ratePct),
+    amountHr: money(row.amountHr),
+    note: text(row.note) || "",
+    craft: text(row.craft) || null,
+    local: text(row.local) || null,
+    sheet: text(row.sheet) || null,
+    ridesOt: row.ridesOt === true,
+  };
+}
+
+function parseFringeLine(raw: unknown, index: number): RateVaultFringeLine | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
   const label = text(row.label);
   if (!label) return null;
   return {
-    id: text(row.id) || `burden-${index + 1}`,
+    id: text(row.id) || `fringe-${index + 1}`,
     label,
+    amountHr: money(row.amountHr),
     ratePct: money(row.ratePct),
+    unit: row.unit === "pct-taxable" ? "pct-taxable" : "amount-hr",
+    craft: text(row.craft) || "Craft",
+    local: text(row.local) || null,
+    sheet: text(row.sheet) || "Craft",
     note: text(row.note) || "",
+    ridesOt: row.ridesOt === true,
+  };
+}
+
+function parseCraftSheet(raw: unknown, index: number): RateVaultCraftSheet | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const sheet = text(row.sheet);
+  const craft = text(row.craft);
+  if (!sheet || !craft) return null;
+  const fringes = Array.isArray(row.fringes)
+    ? row.fringes.map(parseFringeLine).filter((item): item is RateVaultFringeLine => Boolean(item))
+    : [];
+  const burden = Array.isArray(row.burden)
+    ? row.burden.map(parseBurdenLine).filter((item): item is RateVaultBurdenLine => Boolean(item))
+    : [];
+  return {
+    id: text(row.id) || `craft-sheet-${index + 1}`,
+    sheet,
+    craft,
+    local: text(row.local) || null,
+    lane: row.lane === "merit" ? "merit" : "union",
+    group: text(row.group) || sheet,
+    revision: text(row.revision) || null,
+    effective: text(row.effective) || null,
+    representativeWage: money(row.representativeWage),
+    representativePosition: text(row.representativePosition) || craft,
+    fringes,
+    burden,
   };
 }
 
@@ -148,9 +225,16 @@ export function parseRateVaultPreviewPackage(raw: unknown): RateVaultPreviewPack
   if (!siteId) return { error: "Preview package needs a P66 site." };
   const rows = Array.isArray(row.rows) ? row.rows.map(parsePreviewRow).filter((item): item is RateVaultPreviewRow => Boolean(item)) : [];
   if (!rows.length) return { error: "Preview package needs rate rows." };
-  const burden = Array.isArray(row.burden)
-    ? row.burden.map(parseBurdenLine).filter((item): item is NonNullable<typeof item> => Boolean(item))
+  const parsedSheets = Array.isArray(row.craftSheets)
+    ? row.craftSheets.map(parseCraftSheet).filter((item): item is RateVaultCraftSheet => Boolean(item))
     : [];
+  const burden = Array.isArray(row.burden)
+    ? row.burden.map(parseBurdenLine).filter((item): item is RateVaultBurdenLine => Boolean(item))
+    : [];
+  const fringes = Array.isArray(row.fringes)
+    ? row.fringes.map(parseFringeLine).filter((item): item is RateVaultFringeLine => Boolean(item))
+    : [];
+  const craftSheets = parsedSheets.length ? parsedSheets : craftSheetsFromFlat(burden, fringes, rows);
   const sheets = Array.isArray(row.sheets)
     ? row.sheets.map(parseSheet).filter((item): item is RateVaultPreviewSheet => Boolean(item))
     : [];
@@ -169,7 +253,9 @@ export function parseRateVaultPreviewPackage(raw: unknown): RateVaultPreviewPack
     ocipFace: row.ocipFace === "ocip" || row.ocipFace === "non-ocip" || row.ocipFace === "both" ? row.ocipFace : "both",
     version: parseVersion(row.version),
     sheets,
-    burden,
+    craftSheets,
+    burden: burden.length ? burden : flattenB1Burden(craftSheets),
+    fringes: fringes.length ? fringes : flattenB1Fringes(craftSheets),
     rows,
   };
 }
@@ -216,6 +302,8 @@ export function mergePreviewFace(
     ocipFace: kept.length && incoming.rows.some((row) => rowMatchesOcipFace(row, face)) ? "both" : face,
     rows: nextRows,
     burden: incoming.burden.length ? incoming.burden : stored.burden,
+    fringes: incoming.fringes.length ? incoming.fringes : stored.fringes,
+    craftSheets: incoming.craftSheets.length ? incoming.craftSheets : stored.craftSheets,
   };
 }
 
@@ -234,17 +322,24 @@ export function rateVaultCompCheck(preview: RateVaultPreviewPackage) {
     fringeTotal: money(preview.rows.reduce((sum, row) => sum + row.fringe, 0)),
     burdenTotal: money(preview.rows.reduce((sum, row) => sum + row.burden, 0)),
     billTotal: money(preview.rows.reduce((sum, row) => sum + row.billRate, 0)),
-    burdenPct: burdenTotalPct(preview),
+    burdenPct: b1PayTaxPct(preview),
   };
 }
 
 let cachedWoodRiver: RateVaultPreviewPackage | null = null;
 
 export function loadWoodRiverB1PreviewFixture(): RateVaultPreviewPackage {
-  if (cachedWoodRiver) return { ...cachedWoodRiver, rows: cachedWoodRiver.rows.map((row) => ({ ...row })), burden: cachedWoodRiver.burden.map((row) => ({ ...row })), sheets: cachedWoodRiver.sheets.map((row) => ({ ...row })) };
+  if (cachedWoodRiver) return cloneRateVaultPreview(cachedWoodRiver);
   const parsed = parseRateVaultPreviewPackage(woodRiverB1PreviewJson);
   if ("error" in parsed) throw new Error(parsed.error);
-  cachedWoodRiver = parsed;
+  const craftSheets = parsed.craftSheets.length ? parsed.craftSheets : woodRiverB1CraftSheets();
+  cachedWoodRiver = {
+    ...parsed,
+    craftSheets,
+    rows: applyB1ToPreviewRows(parsed.rows, craftSheets),
+    burden: parsed.burden.length ? parsed.burden : flattenB1Burden(craftSheets),
+    fringes: parsed.fringes.length ? parsed.fringes : flattenB1Fringes(craftSheets),
+  };
   return loadWoodRiverB1PreviewFixture();
 }
 
@@ -287,8 +382,9 @@ export function resolveRateVaultPreview(input: {
 export function previewSheetsFromPackage(preview: RateVaultPreviewPackage | null): RateVaultSheetSniff[] {
   if (!preview) return [];
   const headers = RATE_VAULT_PREVIEW_COLUMNS.map((column) => column.header);
-  const rateSheets = preview.sheets.filter((sheet) => sheet.kind !== "burden-summary");
+  const rateSheets = preview.sheets.filter((sheet) => sheet.kind !== "burden-summary" && sheet.kind !== "fringes");
   const burden = preview.sheets.find((sheet) => sheet.kind === "burden-summary");
+  const fringes = preview.sheets.find((sheet) => sheet.kind === "fringes");
   const out: RateVaultSheetSniff[] = rateSheets.map((sheet) => ({
     name: sheet.name,
     headerRow: 1,
@@ -299,10 +395,26 @@ export function previewSheetsFromPackage(preview: RateVaultPreviewPackage | null
     out.push({
       name: burden.name,
       headerRow: 1,
-      headers: ["Burden item", "Rate %", "Note"],
+      headers: ["Family", "Item", "Rate %", "$ / hr", "Hall", "Note"],
       columns: [
-        { header: "Burden item", role: "burden" },
+        { header: "Family", role: "burden" },
+        { header: "Item", role: "burden" },
         { header: "Rate %", role: "unknown" },
+        { header: "$ / hr", role: "unknown" },
+        { header: "Hall", role: "local" },
+        { header: "Note", role: "unknown" },
+      ],
+    });
+  }
+  if (fringes) {
+    out.push({
+      name: fringes.name,
+      headerRow: 1,
+      headers: ["Hall", "Fringe", "$ / hr", "Note"],
+      columns: [
+        { header: "Hall", role: "local" },
+        { header: "Fringe", role: "fringe" },
+        { header: "$ / hr", role: "fringe" },
         { header: "Note", role: "unknown" },
       ],
     });
@@ -344,8 +456,7 @@ export function previewRowGroups(rows: readonly RateVaultPreviewRow[]) {
 }
 
 export function burdenTotalPct(preview: RateVaultPreviewPackage | null) {
-  if (!preview) return 0;
-  return money(preview.burden.reduce((sum, row) => sum + row.ratePct, 0));
+  return b1PayTaxPct(preview);
 }
 
 export function cloneRateVaultPreview(preview: RateVaultPreviewPackage): RateVaultPreviewPackage {
@@ -355,7 +466,13 @@ export function cloneRateVaultPreview(preview: RateVaultPreviewPackage): RateVau
     ocipFace: preview.ocipFace || "both",
     version: preview.version ? { ...preview.version } : null,
     sheets: preview.sheets.map((sheet) => ({ ...sheet })),
+    craftSheets: (preview.craftSheets ?? []).map((sheet) => ({
+      ...sheet,
+      fringes: sheet.fringes.map((row) => ({ ...row })),
+      burden: sheet.burden.map((row) => ({ ...row })),
+    })),
     burden: preview.burden.map((row) => ({ ...row })),
+    fringes: (preview.fringes ?? []).map((row) => ({ ...row })),
     rows: preview.rows.map((row) => ({ ...row })),
   };
 }

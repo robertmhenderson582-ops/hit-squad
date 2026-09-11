@@ -192,14 +192,30 @@ export const RATE_VAULT_B1_OCIP_MIX_ERROR =
 export const RATE_VAULT_B1_COMP_SHEET = "COMP Check";
 export const RATE_VAULT_B1_CBA_SHEET = "CBA PLA";
 export const RATE_VAULT_B1_STATE_SHEET = "State law";
+export const RATE_VAULT_B1_FRINGE_SHEET = "Fringes";
+/** Lean Rate Vault face — not the ~25 MB official Exhibit B-1. */
+export const RATE_VAULT_B1_EXPORT_MAX_BYTES = 150_000;
 export const RATE_VAULT_B1_REQUIRED_SHEETS = [
   RATE_VAULT_B1_PACKAGE_SHEET,
   RATE_VAULT_B1_RATE_SHEET,
   RATE_VAULT_B1_BURDEN_SHEET,
+  RATE_VAULT_B1_FRINGE_SHEET,
   RATE_VAULT_B1_COMP_SHEET,
   RATE_VAULT_B1_CBA_SHEET,
   RATE_VAULT_B1_STATE_SHEET,
 ] as const;
+
+/** Exhibit B-1 craft-sheet families. Not a site-wide Illinois composite. */
+export const RATE_VAULT_B1_BURDEN_FAMILIES = [
+  { id: "pay-tax", label: "Pay taxes", note: "Pay Tax FICA-MC / FUI / SUI — % of taxable base wage on each hall sheet" },
+  { id: "insurance", label: "Insurance", note: "Ins W/C, Emp Liab, Gen Liab, Umbrella, Other — % of taxable BW" },
+  { id: "misc", label: "Misc", note: "Misc Small / Cons / PPE / Other — $/hr on the craft sheet" },
+  { id: "oh", label: "O/H", note: "B-1 O/H — Supplier column, not bundled with profit" },
+  { id: "profit", label: "Profit", note: "B-1 Profit — separate from O/H" },
+] as const;
+
+export type RateVaultBurdenFamily = (typeof RATE_VAULT_B1_BURDEN_FAMILIES)[number]["id"];
+export type RateVaultBurdenUnit = "pct-taxable" | "amount-hr";
 
 /** P66 Rate Vault seat — James Hutton. Not James Cain. Not the tester circle. */
 export const RATE_VAULT_JAMES_EMAIL = "jhut26@gmail.com";
@@ -304,7 +320,14 @@ export type RateVaultColumnRole = "craft" | "position" | "wage" | "fringe" | "bu
 
 export const RATE_VAULT_DEFAULT_SITE_ID = "wood-river" as const;
 
-export type RateVaultPreviewSheetKind = "rate-summary" | "burden-summary" | "craft" | "staff-ocip" | "craft-ocip" | "other";
+export type RateVaultPreviewSheetKind =
+  | "rate-summary"
+  | "burden-summary"
+  | "fringes"
+  | "craft"
+  | "staff-ocip"
+  | "craft-ocip"
+  | "other";
 
 export type RateVaultPreviewSheet = {
   name: string;
@@ -335,8 +358,43 @@ export type RateVaultPreviewRow = {
 export type RateVaultBurdenLine = {
   id: string;
   label: string;
+  family: RateVaultBurdenFamily;
+  unit: RateVaultBurdenUnit;
   ratePct: number;
+  amountHr: number;
   note: string;
+  craft: string | null;
+  local: string | null;
+  sheet: string | null;
+  ridesOt: boolean;
+};
+
+export type RateVaultFringeLine = {
+  id: string;
+  label: string;
+  amountHr: number;
+  ratePct: number;
+  unit: RateVaultBurdenUnit;
+  craft: string;
+  local: string | null;
+  sheet: string;
+  note: string;
+  ridesOt: boolean;
+};
+
+export type RateVaultCraftSheet = {
+  id: string;
+  sheet: string;
+  craft: string;
+  local: string | null;
+  lane: RateVaultLane;
+  group: string;
+  revision: string | null;
+  effective: string | null;
+  representativeWage: number;
+  representativePosition: string;
+  fringes: RateVaultFringeLine[];
+  burden: RateVaultBurdenLine[];
 };
 
 export type RateVaultPackageVersion = {
@@ -360,7 +418,9 @@ export type RateVaultPreviewPackage = {
   ocipFace: RateVaultOcipFace | "both";
   version: RateVaultPackageVersion | null;
   sheets: RateVaultPreviewSheet[];
+  craftSheets: RateVaultCraftSheet[];
   burden: RateVaultBurdenLine[];
+  fringes: RateVaultFringeLine[];
   rows: RateVaultPreviewRow[];
 };
 

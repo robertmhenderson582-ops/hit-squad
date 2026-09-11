@@ -72,13 +72,12 @@ const SEED: readonly SeedRow[] = [
     note: "East Coast COMP / GMTA Madison Amendment 1 (PCA0001103).",
   },
   {
-    // TODO: replace WOOD_RIVER_B1_EXHIBIT_DRIVE_ID with the Drive file id after Robert's 09.10.26 Exhibit B-1 is uploaded. Catalog by id only — never commit the xlsx.
     driveId: WOOD_RIVER_B1_EXHIBIT_DRIVE_ID,
-    title: "Wood River Exhibit B-1 latest (Robert 09.10.26)",
+    title: "Wood River Exhibit B-1 RRFF Labor Burden Buildup",
     kind: "b1-exhibit",
     siteId: "wood-river",
     primary: true,
-    note: "Primary Wood River Exhibit B-1 (Robert 09.10.26). Metadata only — file stays on Drive. Visual package loads from the checked-in preview fixture.",
+    note: "Primary Wood River RRFF Exhibit B-1 labor-burden workbook. Catalog by Drive id — the xlsx stays on Drive. Visual package is craft-sheet Pay Tax / Ins / Misc / O/H / Profit plus Fringes Subtotal. Not the TM labor-burden face.",
   },
   {
     driveId: "1aP0etQYJxWo003IUa8bVWWoDpOAwk1m2",

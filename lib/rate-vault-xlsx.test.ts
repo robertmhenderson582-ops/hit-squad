@@ -3,15 +3,20 @@ import { describe, it } from "node:test";
 import ExcelJS from "exceljs";
 import {
   RATE_VAULT_B1_BURDEN_SHEET,
+  RATE_VAULT_B1_EXPORT_MAX_BYTES,
   RATE_VAULT_B1_IMPORT_ERROR,
   RATE_VAULT_B1_KIND,
   RATE_VAULT_B1_MARKER,
   RATE_VAULT_B1_PACKAGE_SHEET,
   RATE_VAULT_B1_RATE_SHEET,
+  RATE_VAULT_B1_REQUIRED_SHEETS,
 } from "./rate-vault.ts";
+import { hallBurdenSubtotal, hallFringeSubtotal } from "./rate-vault-b1.ts";
 import { loadWoodRiverB1PreviewFixture } from "./rate-vault-preview.ts";
 import {
   RATE_VAULT_B1_RATE_HEADERS,
+  isRateVaultBurdenRippleFormula,
+  isRateVaultFringeRippleFormula,
   parseRateVaultB1Xlsx,
   rateVaultB1FileName,
   rateVaultPreviewToXlsx,
@@ -43,6 +48,7 @@ describe("Rate Vault B-1 Excel export / import", () => {
     assert.ok(names.includes(RATE_VAULT_B1_RATE_SHEET));
     assert.ok(names.includes(RATE_VAULT_B1_BURDEN_SHEET));
     assert.ok(names.includes("COMP Check"));
+    assert.ok(names.includes("Fringes"));
     assert.ok(names.includes("CBA PLA"));
     assert.ok(names.includes("State law"));
 
@@ -63,21 +69,36 @@ describe("Rate Vault B-1 Excel export / import", () => {
     const bill = rates.getCell("I2");
     const formula = bill.formula || (bill.value && typeof bill.value === "object" && "formula" in bill.value ? String((bill.value as { formula: string }).formula) : "");
     assert.equal(formula, "F2+G2+H2");
+    const fringeFormula = rates.getCell("G2").formula || "";
+    const burdenFormula = rates.getCell("H2").formula || "";
+    assert.equal(isRateVaultFringeRippleFormula(fringeFormula, 2), true);
+    assert.equal(isRateVaultBurdenRippleFormula(burdenFormula, 2), true);
+    assert.deepEqual(names, [...RATE_VAULT_B1_REQUIRED_SHEETS]);
+    assert.ok(exported.bytes.byteLength < RATE_VAULT_B1_EXPORT_MAX_BYTES);
+    assert.match(String(pack?.getCell("A18").value || ""), /Lean Rate Vault B-1 face/);
     const journeymanRow = fixture.rows.findIndex((row) => row.position === "Boilermaker Journeyman") + 2;
     assert.ok(journeymanRow >= 2);
     assert.equal(rates.getCell(`A${journeymanRow}`).value, "Boilermaker Journeyman");
 
     const burden = workbook.getWorksheet(RATE_VAULT_B1_BURDEN_SHEET);
-    assert.equal(burden?.getColumn(4).hidden, true);
+    assert.equal(burden?.getColumn(7).hidden, true);
+    assert.equal(burden?.getColumn(8).hidden, true);
+    assert.equal(burden?.getCell("A1").value, "Family");
+    assert.equal(burden?.getCell("B1").value, "Item");
     const totalRow = (fixture.burden.length || 0) + 2;
     const totalFormula =
-      burden?.getCell(`B${totalRow}`).formula ||
-      (burden?.getCell(`B${totalRow}`).value &&
-      typeof burden.getCell(`B${totalRow}`).value === "object" &&
-      "formula" in (burden.getCell(`B${totalRow}`).value as object)
-        ? String((burden.getCell(`B${totalRow}`).value as { formula: string }).formula)
+      burden?.getCell(`C${totalRow}`).formula ||
+      (burden?.getCell(`C${totalRow}`).value &&
+      typeof burden.getCell(`C${totalRow}`).value === "object" &&
+      "formula" in (burden.getCell(`C${totalRow}`).value as object)
+        ? String((burden.getCell(`C${totalRow}`).value as { formula: string }).formula)
         : "");
-    assert.match(String(totalFormula), /^SUM\(B2:B/);
+    assert.match(String(totalFormula), /SUMIF\(A2:A/);
+    const fringes = workbook.getWorksheet("Fringes");
+    assert.ok(fringes);
+    assert.equal(fringes.getCell("D1").value, "Fringe");
+    assert.equal(fringes.getColumn(8).hidden, true);
+    assert.equal(fringes.getColumn(9).hidden, true);
     const comp = workbook.getWorksheet("COMP Check");
     assert.ok(comp);
     assert.match(String(comp.getCell("A1").value || ""), /COMP check/i);
@@ -112,9 +133,74 @@ describe("Rate Vault B-1 Excel export / import", () => {
     const row = imported.preview.rows.find((item) => item.position === "Boilermaker Journeyman");
     assert.ok(row);
     assert.equal(row?.wage, nextWage);
-    assert.equal(row?.fringe, journeyman?.fringe);
-    assert.equal(row?.burden, journeyman?.burden);
-    assert.equal(row?.billRate, nextWage + (journeyman?.fringe ?? 0) + (journeyman?.burden ?? 0));
+    const expectedFringe = hallFringeSubtotal(imported.preview.fringes, journeyman?.sheet || "", nextWage);
+    const expectedBurden = hallBurdenSubtotal(imported.preview.burden, journeyman?.sheet || "", nextWage);
+    assert.equal(row?.fringe, expectedFringe);
+    assert.equal(row?.burden, expectedBurden);
+    assert.equal(row?.billRate, nextWage + expectedFringe + expectedBurden);
+  });
+
+  it("ripples offline fringe, tax, and O/H edits onto the live Rate Vault package", async () => {
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const journeyman = fixture.rows.find((row) => row.position === "Boilermaker Journeyman");
+    assert.ok(journeyman);
+    const exported = await rateVaultPreviewToXlsx(fixture);
+    const workbook = await loadWorkbook(exported.bytes);
+    const fringes = workbook.getWorksheet("Fringes");
+    const burden = workbook.getWorksheet(RATE_VAULT_B1_BURDEN_SHEET);
+    assert.ok(fringes && burden);
+    fringes.eachRow((row, rowNumber) => {
+      if (rowNumber > 1 && String(row.getCell(1).value) === journeyman?.sheet && String(row.getCell(4).value) === "H&W") {
+        row.getCell(5).value = 8.07;
+      }
+    });
+    burden.eachRow((row, rowNumber) => {
+      if (rowNumber > 1 && String(row.getCell(2).value) === "Pay Tax SUI") row.getCell(3).value = 9.55;
+      if (rowNumber > 1 && String(row.getCell(2).value) === "O/H" && String(row.getCell(5).value) === journeyman?.sheet) {
+        row.getCell(4).value = 1.25;
+      }
+    });
+    const buffer = await workbook.xlsx.writeBuffer();
+    const imported = await parseRateVaultB1Xlsx({
+      fileName: exported.fileName,
+      bytes: new Uint8Array(buffer),
+    });
+    assert.equal(imported.ok, true);
+    if (!imported.ok) return;
+    assert.equal(imported.preview.writesRateBook, false);
+    assert.equal(imported.preview.extractedFrom, "vault-xlsx-import");
+    assert.equal(imported.preview.fringes.some((line) => line.sheet === journeyman?.sheet && line.label === "H&W" && line.amountHr === 8.07), true);
+    assert.equal(imported.preview.burden.some((line) => line.label === "Pay Tax SUI" && line.ratePct === 9.55), true);
+    assert.equal(
+      imported.preview.craftSheets.some((sheet) => sheet.sheet === journeyman?.sheet && sheet.fringes.some((line) => line.label === "H&W" && line.amountHr === 8.07)),
+      true,
+    );
+    const row = imported.preview.rows.find((item) => item.position === "Boilermaker Journeyman");
+    const expectedFringe = hallFringeSubtotal(imported.preview.fringes, journeyman?.sheet || "", journeyman?.wage ?? 0);
+    const expectedBurden = hallBurdenSubtotal(imported.preview.burden, journeyman?.sheet || "", journeyman?.wage ?? 0);
+    assert.equal(row?.fringe, expectedFringe);
+    assert.equal(row?.burden, expectedBurden);
+    assert.equal(row?.billRate, Math.round(((journeyman?.wage ?? 0) + expectedFringe + expectedBurden) * 100) / 100);
+    assert.ok((row?.fringe ?? 0) > (journeyman?.fringe ?? 0));
+    assert.ok((row?.burden ?? 0) > (journeyman?.burden ?? 0));
+  });
+
+  it("refuses broken Fringe / Burden ripple guts", async () => {
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const exported = await rateVaultPreviewToXlsx(fixture);
+    const workbook = await loadWorkbook(exported.bytes);
+    const rates = workbook.getWorksheet(RATE_VAULT_B1_RATE_SHEET);
+    assert.ok(rates);
+    rates.getCell("G2").value = { formula: "A1*99", result: 1 };
+    const buffer = await workbook.xlsx.writeBuffer();
+    const imported = await parseRateVaultB1Xlsx({
+      fileName: exported.fileName,
+      bytes: new Uint8Array(buffer),
+    });
+    assert.equal(imported.ok, false);
+    if (imported.ok) return;
+    assert.equal(imported.code, "invalid");
+    assert.match(imported.error, /formula guts/i);
   });
 
   it("refuses a random workbook as not-vault-b1", async () => {
@@ -233,6 +319,64 @@ describe("Rate Vault B-1 Excel export / import", () => {
     if (imported.ok) return;
     assert.equal(imported.code, "invalid");
     assert.match(imported.error, /formula guts/i);
+  });
+
+  it("round-trips B-1 pay tax, hall fringes, and rebuilt craft sheets", async () => {
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const exported = await rateVaultPreviewToXlsx(fixture);
+    const imported = await parseRateVaultB1Xlsx({
+      fileName: exported.fileName,
+      bytes: exported.bytes,
+    });
+    assert.equal(imported.ok, true);
+    if (!imported.ok) return;
+    assert.equal(
+      imported.preview.burden.some((line) => line.label === "Pay Tax SUI" && line.ratePct === 8.55),
+      true,
+    );
+    assert.equal(
+      imported.preview.fringes.some((line) => line.label === "H&W" && line.amountHr === 7.07),
+      true,
+    );
+    assert.equal(
+      imported.preview.craftSheets.some(
+        (sheet) => /BOILERMAKER/i.test(sheet.sheet) && sheet.fringes.some((line) => line.label === "H&W"),
+      ),
+      true,
+    );
+    assert.equal(
+      imported.preview.burden.some((line) => /suta|illinois composite|overhead & fee/i.test(line.label)),
+      false,
+    );
+  });
+
+  it("still reads the prior Item / Rate % / Note burden layout", async () => {
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const exported = await rateVaultPreviewToXlsx(fixture);
+    const workbook = await loadWorkbook(exported.bytes);
+    const prior = workbook.getWorksheet(RATE_VAULT_B1_BURDEN_SHEET);
+    assert.ok(prior);
+    workbook.removeWorksheet(prior.id);
+    const burden = workbook.addWorksheet(RATE_VAULT_B1_BURDEN_SHEET);
+    burden.getCell("A1").value = "Item";
+    burden.getCell("B1").value = "Rate %";
+    burden.getCell("C1").value = "Note";
+    burden.getCell("D1").value = "_id";
+    burden.getCell("A2").value = "Pay Tax SUI";
+    burden.getCell("B2").value = 8.55;
+    burden.getCell("C2").value = "legacy column layout";
+    burden.getCell("D2").value = "legacy-sui";
+    const buffer = await workbook.xlsx.writeBuffer();
+    const imported = await parseRateVaultB1Xlsx({
+      fileName: exported.fileName,
+      bytes: new Uint8Array(buffer),
+    });
+    assert.equal(imported.ok, true);
+    if (!imported.ok) return;
+    const sui = imported.preview.burden.find((line) => line.label === "Pay Tax SUI");
+    assert.equal(sui?.ratePct, 8.55);
+    assert.equal(sui?.family, "pay-tax");
+    assert.equal(sui?.id, "legacy-sui");
   });
 
   it("exports an OCIP-only face and keeps union / merit lanes on the rate sheet", async () => {
