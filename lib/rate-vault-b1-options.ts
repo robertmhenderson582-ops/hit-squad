@@ -345,7 +345,7 @@ export function inferRateVaultB1Controls(input: RateVaultB1ControlInput = {}): R
     (fromAmounts && fromAmounts !== "custom" ? fromAmounts : "") ||
     (noteSuggestsStraight(note, label) ? "ST-ONLY" : "") ||
     (ridesOt ? "OT" : "ST");
-  let calcSt = normalizeRateVaultB1Calc(input.calcSt, "st") || "ST";
+  const calcSt = normalizeRateVaultB1Calc(input.calcSt, "st") || "ST";
   let calcDt = normalizeRateVaultB1Calc(input.calcDt, "dt");
   if (!calcDt) {
     if (meritHealth || calcOt === "ST-ONLY") calcDt = "ST-ONLY";
