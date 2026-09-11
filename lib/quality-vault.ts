@@ -189,7 +189,13 @@ export function isProtectedQualityCompanyDocFile(fileId?: string | null) {
   return (fileId || "").trim() === QUALITY_CONTROL_MANUAL_FILE_ID;
 }
 
-function qualityVaultListedFile(row: DriveFile) {
+type QualityVaultListedName = {
+  name: string;
+  type: string;
+  protected?: boolean;
+};
+
+function qualityVaultListedFile(row: DriveFile): QualityVaultListedName {
   return {
     name: row.name,
     type: qualityCompanyDocPreviewType({
@@ -214,7 +220,7 @@ export async function listQualityCompanyDocVaultFolders(
   place: { companyId?: string; who?: string },
 ) {
   const folders = qualityCompanyDocsListedFor(place.companyId);
-  const empty = Object.fromEntries(folders.map((folder) => [folder.id, [] as Array<{ name: string; type: string }>]));
+  const empty = Object.fromEntries(folders.map((folder) => [folder.id, [] as QualityVaultListedName[]]));
   const unlocked = Object.fromEntries(folders.map((folder) => [folder.id, false])) as Record<string, boolean>;
   if (!qualityDriveReady(drive)) {
     return {
@@ -243,7 +249,7 @@ export async function listQualityCompanyDocVaultFolders(
         const label = qualityVaultFolderName(qualityCompanyDocLabel(folder.id, place.companyId));
         const bucket = bucketKids.find((row) => row.name === label && isQualityVaultFolder(row));
         if (!bucket?.id) {
-          return [folder.id, [] as Array<{ name: string; type: string }>, { locked: false, known: true }] as const;
+          return [folder.id, [] as QualityVaultListedName[], { locked: false, known: true }] as const;
         }
         const kids = await drive!.listChildren!(bucket.id);
         const files = kids
@@ -255,7 +261,7 @@ export async function listQualityCompanyDocVaultFolders(
     return {
       filesByFolder: Object.fromEntries(listed.map(([id, files]) => [id, files])) as Record<
         string,
-        Array<{ name: string; type: string }>
+        QualityVaultListedName[]
       >,
       locksByFolder: Object.fromEntries(listed.map(([id, , lock]) => [id, lock.locked])) as Record<string, boolean>,
       locksKnown: listed.every(([, , lock]) => lock.known),
@@ -287,7 +293,7 @@ export async function listQualityVaultFiles(
 ) {
   if (!qualityDriveReady(drive)) {
     return {
-      files: [] as Array<{ name: string; type: string }>,
+      files: [] as QualityVaultListedName[],
       locked: true,
       locksKnown: false,
       store: "unconfigured" as const,
@@ -300,7 +306,7 @@ export async function listQualityVaultFiles(
       const kids = await drive!.listChildren!(parent);
       const existing = kids.find((row) => row.name === name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
       if (!existing?.id) {
-        return { files: [], locked: false, locksKnown: true, store: "drive" as const, stored: true as const };
+        return { files: [] as QualityVaultListedName[], locked: false, locksKnown: true, store: "drive" as const, stored: true as const };
       }
       parent = existing.id;
     }
@@ -311,7 +317,7 @@ export async function listQualityVaultFiles(
     const lock = qualityLibraryLockFromKids(kids);
     return { files, locked: lock.locked, locksKnown: lock.known, store: "drive" as const, stored: true as const };
   } catch {
-    return { files: [], locked: true, locksKnown: false, store: "drive" as const, stored: false as const };
+    return { files: [] as QualityVaultListedName[], locked: true, locksKnown: false, store: "drive" as const, stored: false as const };
   }
 }
 
