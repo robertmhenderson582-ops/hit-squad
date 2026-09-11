@@ -15,6 +15,9 @@ import {
   issueSeatPassword,
   listSeatRows,
 } from "@/lib/users";
+import { setDoors } from "@/lib/privileges-store";
+import { applyVaultAclForSeat } from "@/lib/vault-acl-apply";
+import { normalizeSeatDoors } from "@/lib/vault-acl";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +64,7 @@ async function postSeats(request: Request) {
     addCompany?: string;
     recover?: boolean;
     role?: string;
+    doors?: unknown;
   };
 
   if (typeof body.addCompany === "string") {
@@ -94,12 +98,22 @@ async function postSeats(request: Request) {
       return NextResponse.json({ error: created.error, vaultPersisted: status === 503 ? false : undefined }, { status });
     }
     await flushSeatVault();
+    const doors = isOwner(user) ? normalizeSeatDoors(body.doors) : [];
+    let shared: Awaited<ReturnType<typeof applyVaultAclForSeat>>["shared"] = [];
+    try {
+      if (doors.length) await setDoors(created.user.email, doors);
+      shared = (await applyVaultAclForSeat(created.user.email, doors, created.user)).shared;
+    } catch {
+      shared = [];
+    }
     return NextResponse.json({
       ok: true,
       user: created.user,
       seats: seatsVisibleTo(user, await listSeatRows({ hydrate: false })),
       companies: peekCompanies(),
       actor: desk.actor,
+      doors,
+      shared,
       note: "Login created on this desk. Don’t send. First sign-in must change the password.",
     });
   }

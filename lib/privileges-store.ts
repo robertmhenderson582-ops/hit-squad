@@ -5,9 +5,11 @@ import { PRIVILEGES_VAULT_KIND, PRIVILEGES_VAULT_NAME, readVaultJson, writeVault
 import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import { isPrivilegeId, normalizePrivileges, type PrivilegeId } from "./privileges.ts";
 import { isRateVaultJamesEmail } from "./rate-vault.ts";
+import { normalizeSeatDoors, type SeatDoorId } from "./vault-acl.ts";
 
 export type PrivilegeFile = {
   grants: Record<string, PrivilegeId[]>;
+  doors?: Record<string, SeatDoorId[]>;
 };
 
 let memoryOverride: PrivilegeFile | null = null;
@@ -29,20 +31,27 @@ export function parsePrivilegeFile(raw: unknown): PrivilegeFile {
     const next = normalizePrivileges(list);
     if (next.length) grants[key] = next;
   }
-  return { grants };
+  const doors: Record<string, SeatDoorId[]> = {};
+  for (const [email, list] of Object.entries(parsed.doors ?? {})) {
+    const key = email.trim().toLowerCase();
+    if (!key.includes("@")) continue;
+    const next = normalizeSeatDoors(list);
+    if (next.length) doors[key] = next;
+  }
+  return { grants, doors };
 }
 
 function emptyFile(): PrivilegeFile {
-  return { grants: {} };
+  return { grants: {}, doors: {} };
 }
 
 function hasDeskData(data: PrivilegeFile) {
-  return Object.keys(data.grants).length > 0;
+  return Object.keys(data.grants).length > 0 || Object.keys(data.doors ?? {}).length > 0;
 }
 
 function readCache(): PrivilegeFile {
   if (memoryOverride) {
-    return { grants: { ...memoryOverride.grants } };
+    return { grants: { ...memoryOverride.grants }, doors: { ...(memoryOverride.doors ?? {}) } };
   }
   try {
     return parsePrivilegeFile(JSON.parse(readFileSync(privilegeStorePath(), "utf8")));
@@ -53,7 +62,7 @@ function readCache(): PrivilegeFile {
 
 function writeCache(data: PrivilegeFile) {
   if (memoryOverride) {
-    memoryOverride = { grants: { ...data.grants } };
+    memoryOverride = { grants: { ...data.grants }, doors: { ...(data.doors ?? {}) } };
     return;
   }
   const path = privilegeStorePath();
@@ -144,6 +153,36 @@ export async function revokePrivilege(email: string, privilege: PrivilegeId): Pr
   );
 }
 
+export function peekDoors(email: string): SeatDoorId[] {
+  const key = email.trim().toLowerCase();
+  if (!key) return [];
+  return [...(readCache().doors?.[key] ?? [])];
+}
+
+export async function doorsFor(email: string): Promise<SeatDoorId[]> {
+  const key = email.trim().toLowerCase();
+  if (!key) return [];
+  const data = await hydratePrivilegeStore();
+  return [...(data.doors?.[key] ?? [])];
+}
+
+export async function setDoors(email: string, doors: SeatDoorId[]): Promise<SeatDoorId[]> {
+  const key = email.trim().toLowerCase();
+  if (!key.includes("@")) return [];
+  const data = await hydratePrivilegeStore();
+  const next = normalizeSeatDoors(doors);
+  data.doors = { ...(data.doors ?? {}) };
+  if (next.length) data.doors[key] = next;
+  else delete data.doors[key];
+  await persist(data);
+  return next;
+}
+
+export async function listDoorGrants(): Promise<Record<string, SeatDoorId[]>> {
+  const data = await hydratePrivilegeStore();
+  return { ...(data.doors ?? {}) };
+}
+
 export function resetPrivilegesForTests() {
   memoryOverride = null;
   hydrated = false;
@@ -168,7 +207,7 @@ export function usePrivilegeVaultForTests(adapter: DriveAdapter | null) {
 }
 
 export function useMemoryPrivileges() {
-  memoryOverride = { grants: {} };
+  memoryOverride = { grants: {}, doors: {} };
   hydrated = true;
   injectedAdapter = null;
 }

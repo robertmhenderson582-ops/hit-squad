@@ -25,6 +25,9 @@ export type QualityVaultPlace = {
   jobLabel?: string;
   folderId: string;
   companyDocs?: boolean;
+  /** Pre-job Ready Quality package shelf — company / Ready Quality packages / kit. */
+  shelf?: boolean;
+  packageLabel?: string;
   /** Server-only uploader stamp. Never send Drive ids to testers. */
   who?: string;
 };

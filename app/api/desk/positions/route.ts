@@ -6,7 +6,9 @@ import { canManagePositions, isOwner } from "@/lib/desk-role";
 import { loadPositionDesk } from "@/lib/desk-positions-server";
 import { cookieValue } from "@/lib/http";
 import {
+  CORPORATE_QC_MANAGER_POSITION_ID,
   PRESIDENT_POSITION_ID,
+  SITE_QC_MANAGER_POSITION_ID,
   canCreateCustomPosition,
   canGrantPosition,
   canRemovePosition,
@@ -23,6 +25,7 @@ import {
   revokePositionHold,
 } from "@/lib/org-positions-store";
 import { findUserByEmail, hydrateSeatStore, listSeatRows, setExtraSeatRole } from "@/lib/users";
+import { applyVaultAclForSeat } from "@/lib/vault-acl-apply";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +98,13 @@ export async function POST(request: Request) {
     const result = await assignPosition(positionId, email, desk.divisions);
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
     if (position?.kind === "president") await syncPresidentLogin(email, true);
+    if (position?.id === CORPORATE_QC_MANAGER_POSITION_ID || position?.id === SITE_QC_MANAGER_POSITION_ID) {
+      try {
+        await applyVaultAclForSeat(email, ["quality"], person);
+      } catch {
+        // Seat assigned. Owner can retry vault share from the invite card.
+      }
+    }
     return NextResponse.json({ ok: true, hold: result.hold, ...(await payload(user)), note: "Seat assigned. Titles stack." });
   }
 

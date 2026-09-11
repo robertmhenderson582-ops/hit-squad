@@ -52,6 +52,14 @@ describe("org positions", () => {
     assert.equal(catalog.some((row) => row.id === PRESIDENT_POSITION_ID && row.companyId === "madison"), true);
     assert.equal(catalog.some((row) => row.id === PROJECT_MANAGER_POSITION_ID), true);
     assert.equal(
+      catalog.some((row) => row.id === "corporate-qc-manager" && row.desk === "corporate" && row.seed === true),
+      true,
+    );
+    assert.equal(
+      catalog.some((row) => row.id === "site-qc-manager" && row.desk === "field" && row.seed === true),
+      true,
+    );
+    assert.equal(
       catalog.some((row) => row.id === divisionHeadPositionId("madison", MECHANICAL_DIVISION_ID) && row.kind === "division-head"),
       true,
     );
@@ -85,6 +93,15 @@ describe("org positions", () => {
     assert.equal("ok" in canCreateSeatAs(nathan, { role: "tester", companyId: "madison" }, [], catalog, ["madison"]), true);
     assert.equal("error" in canCreateSeatAs(nathan, { role: "president", companyId: "madison" }, [], catalog, ["madison"]), true);
     assert.equal("error" in canCreateSeatAs(nathan, { role: "tester", companyId: "hitsquad" }, [], catalog, ["madison"]), true);
+    const corporateQc = catalog.find((row) => row.id === "corporate-qc-manager");
+    assert.equal(
+      "error" in
+        canGrantPosition(nathan, corporateQc, { ...nathan, companyId: "madison" }, [], catalog, {
+          canSeeTarget: true,
+          canSeeCompany: true,
+        }),
+      true,
+    );
     const presidentSeat = catalog.find((row) => row.id === PRESIDENT_POSITION_ID);
     assert.equal(
       "error" in
@@ -110,6 +127,16 @@ describe("org positions", () => {
     assert.equal(alreadyHolds(holds, mechanical!.id, owner.email), true);
     assert.equal("ok" in canRevokeHold(owner, mechanical, holds, catalog), true);
     assert.equal("ok" in canRenamePosition(owner, presidentSeat, holds, catalog, "President / COO"), true);
+    const corporateQc = catalog.find((row) => row.id === "corporate-qc-manager");
+    assert.equal(
+      "ok" in
+        canGrantPosition(owner, corporateQc, { ...owner, companyId: "hitsquad" }, [], catalog, {
+          canSeeTarget: true,
+          canSeeCompany: true,
+        }),
+      true,
+    );
+    assert.equal("error" in canRemovePosition(corporateQc), true);
     assert.equal("error" in canRemovePosition(presidentSeat), true);
     assert.equal("ok" in canRemovePosition({ id: "estimator", kind: "custom", label: "Estimator", desk: "field" }), true);
   });

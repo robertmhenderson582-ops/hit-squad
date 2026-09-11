@@ -9,6 +9,7 @@ import {
   signSession,
 } from "@/lib/auth";
 import { cookieValue } from "@/lib/http";
+import { applyVaultAclForSeat } from "@/lib/vault-acl-apply";
 import {
   findSeatForSession,
   flushSeatVault,
@@ -45,6 +46,13 @@ export async function POST(request: Request) {
   if (!stored) return NextResponse.json({ error: "That seat is not on this desk." }, { status: 404 });
   stored.mustChangePassword = false;
   stored.previousHashes = [];
+  if (session.mustChangePassword) {
+    try {
+      await applyVaultAclForSeat(result.email, [], stored);
+    } catch {
+      // Password already landed. Vault share retries on the next Owner invite click.
+    }
+  }
   const publicUser = { ...toPublicUser(stored), mustChangePassword: false };
   const token = await signSession(publicUser);
   const response = NextResponse.json({

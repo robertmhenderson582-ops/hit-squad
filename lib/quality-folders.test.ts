@@ -215,7 +215,7 @@ describe("Quality folder catalog", () => {
     );
   });
 
-  it("fails if Quality no longer opens on the folder dropdown first", () => {
+  it("fails if Quality no longer opens on catalog radios first", () => {
     const quality = source("../components/QualityDesk.tsx");
     const drop = source("../components/QualityFolderDrop.tsx");
     const rail = source("../components/QualityCompanyDocRail.tsx");
@@ -227,14 +227,21 @@ describe("Quality folder catalog", () => {
     assert.match(quality, /cascadeCompanyId/);
     assert.match(quality, /isQualityVaultSeat/);
     assert.match(quality, /QualityVaultOwnerTree/);
+    assert.match(quality, /QUALITY_DESK_RADIOS/);
+    assert.match(quality, /role="radiogroup"/);
+    assert.match(quality, /QualityPackageShelf/);
     assert.doesNotMatch(quality, /LeadStudio/);
+    assert.doesNotMatch(quality, /QUALITY_DESK_TABS/);
+    assert.doesNotMatch(quality, /quality-folder-pick/);
+    assert.doesNotMatch(drop, /quality-folder-pick/);
+    assert.doesNotMatch(drop, /<select/);
+    const radioIndex = quality.indexOf('role="radiogroup"');
     const dropIndex = quality.indexOf("<QualityFolderDrop");
-    const tabsIndex = quality.indexOf('role="tablist"');
-    assert.equal(dropIndex > 0 && tabsIndex > dropIndex, true);
-    assert.match(drop, /quality-folder-pick/);
+    assert.equal(radioIndex > 0 && dropIndex > radioIndex, true);
+    assert.match(drop, /folderId/);
     assert.match(drop, /onDrop/);
     assert.match(drop, /type="file"/);
-    assert.match(drop, /selectRef.current\?\.focus/);
+    assert.match(drop, /dropRef.current\?\.focus/);
     assert.match(drop, /qualityFoldersFor/);
     assert.match(drop, /companyId/);
     assert.match(drop, /qualityVaultStored/);

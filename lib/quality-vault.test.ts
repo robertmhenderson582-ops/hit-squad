@@ -83,6 +83,16 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
       }),
       ["Madison", "Quality Control Manual"],
     );
+    assert.deepEqual(
+      qualityVaultPath({
+        companyId: "madison",
+        folderId: "packages",
+        jobId: "quality-ready-shelf:day-1-kit",
+        jobLabel: "Day-1 kit",
+        shelf: true,
+      }),
+      ["Madison", "Ready Quality packages", "Day-1 kit"],
+    );
     assert.equal(qualityVaultStored("drive", true), true);
     assert.equal(qualityVaultStored("server-json-file", true), false);
     assert.equal(qualityVaultStored("drive", false), false);

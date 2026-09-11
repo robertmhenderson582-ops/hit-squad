@@ -75,6 +75,12 @@ export type DriveAdapter = {
   ): Promise<DriveFile>;
   updateBytes?(fileId: string, bytes: Uint8Array, mimeType?: string): Promise<DriveFile>;
   readBytes?(fileId: string): Promise<Uint8Array>;
+  /** Share a Drive file/folder with a person. Never sends a Drive notification. */
+  shareWithEmail?(
+    fileId: string,
+    email: string,
+    role?: "writer" | "reader",
+  ): Promise<{ ok: boolean; already?: boolean }>;
 };
 
 export const SEATS_SA_OPEN_ERROR = "service account cannot open seats.json";
@@ -189,9 +195,11 @@ export function resetDriveTokenCache() {
 export function memoryDrive(): DriveAdapter & {
   files: Map<string, { file: DriveFile; content: string }>;
   tree: Map<string, { file: DriveFile; bytes: Uint8Array }>;
+  shares: Map<string, Array<{ email: string; role: string }>>;
 } {
   const files = new Map<string, { file: DriveFile; content: string }>();
   const tree = new Map<string, { file: DriveFile; bytes: Uint8Array }>();
+  const shares = new Map<string, Array<{ email: string; role: string }>>();
   let n = 0;
 
   function putTree(file: DriveFile, bytes = new Uint8Array()) {
@@ -203,6 +211,7 @@ export function memoryDrive(): DriveAdapter & {
     configured: true,
     files,
     tree,
+    shares,
     async listJson() {
       return [...files.values()].map((row) => row.file);
     },
@@ -297,6 +306,14 @@ export function memoryDrive(): DriveAdapter & {
       const row = tree.get(fileId);
       if (!row) throw new Error("missing");
       return row.bytes;
+    },
+    async shareWithEmail(fileId, email, role = "writer") {
+      const key = email.trim().toLowerCase();
+      const current = shares.get(fileId) ?? [];
+      if (current.some((row) => row.email === key)) return { ok: true, already: true };
+      current.push({ email: key, role });
+      shares.set(fileId, current);
+      return { ok: true };
     },
   };
 }
@@ -562,6 +579,28 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
         throw driveHttpError(response.status, payload, "read");
       }
       return new Uint8Array(await response.arrayBuffer());
+    },
+    async shareWithEmail(fileId, email, role = "writer") {
+      const response = await fetch(
+        driveApiUrl(`/drive/v3/files/${fileId}/permissions`, {
+          sendNotificationEmail: "false",
+          supportsAllDrives: "true",
+        }),
+        {
+          method: "POST",
+          headers: await authHeaders({ "content-type": "application/json" }),
+          body: JSON.stringify({
+            type: "user",
+            role,
+            emailAddress: email.trim().toLowerCase(),
+          }),
+        },
+      );
+      const data = (await response.json().catch(() => null)) as { id?: string; error?: unknown } | null;
+      if (response.ok || response.status === 409) return { ok: true, already: response.status === 409 };
+      const message = JSON.stringify(data ?? "");
+      if (/already/i.test(message)) return { ok: true, already: true };
+      throw driveHttpError(response.status || 400, data, "share");
     },
   };
 }

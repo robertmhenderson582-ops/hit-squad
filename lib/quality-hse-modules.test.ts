@@ -116,9 +116,10 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.doesNotMatch(qualityCard, /useEstimatePackage|setJobMeta|jobMeta/);
     assert.doesNotMatch(hseCard, /useEstimatePackage|setJobMeta|jobMeta|readEquipmentSheet|readSubSheet|computeRowHours/);
     assert.doesNotMatch(rolling, /useEstimatePackage|setJobMeta|jobMeta/);
-    assert.match(quality, /QualityDay1Card/);
-    assert.match(quality, /RollingChartMap/);
-    assert.match(quality, /QUALITY_SECTIONS/);
+    assert.doesNotMatch(quality, /QualityDay1Card/);
+    assert.doesNotMatch(quality, /RollingChartMap/);
+    assert.doesNotMatch(quality, /QUALITY_SECTIONS/);
+    assert.match(quality, /QUALITY_DESK_RADIOS/);
     assert.match(quality, /JobScopePicks/);
     assert.match(hse, /HseDay1Card/);
     assert.match(hse, /HSE_EXECUTE_LANES/);
@@ -159,8 +160,10 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.match(moduleLib, /Travelers/);
     assert.match(moduleLib, /Welders/);
     assert.match(moduleLib, /Calibration/);
-    assert.match(quality, /BOARD/);
-    assert.match(quality, /QUALITY_DESK_TABS/);
+    assert.doesNotMatch(quality, /BOARD/);
+    assert.doesNotMatch(quality, /QUALITY_DESK_TABS/);
+    assert.match(quality, /QUALITY_DESK_RADIOS/);
+    assert.match(quality, /role="radiogroup"/);
     assert.match(quality, /QualityFolderDrop/);
     assert.match(quality, /companyLabel/);
     assert.match(quality, /siteLabel/);
@@ -173,7 +176,7 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.match(companyDocs, /Code Documents/);
     assert.match(companyDocs, /Forms/);
     assert.match(companyDocs, /Quality Updates/);
-    assert.match(quality, /role="tablist"/);
+    assert.match(quality, /role="radiogroup"/);
     assert.match(quality, /useQualityHseJobTree/);
     const folders = source("./quality-folders.ts");
     assert.match(folders, /QUALITY_MODULE_CATALOG/);
@@ -190,6 +193,7 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.match(folders, /Rolling Chart/);
     assert.match(moduleLib, /Day-1 package/);
     assert.match(moduleLib, /Rolling chart/);
+    assert.match(quality, /QualityPackageShelf/);
     assert.match(moduleLib, /id: "client"/);
     assert.match(moduleLib, /id: "job"/);
     assert.match(moduleLib, /id: "unit"/);

@@ -24,6 +24,10 @@ export const QUALITY_MODULE_CATALOG = [
 export type QualityFolderId = (typeof QUALITY_MODULE_CATALOG)[number]["id"];
 export type QualityFolderDef = { id: QualityFolderId; label: string };
 
+/** Desk radios — the catalog is the nav. No Board / NCR / Day-1 register tabs. */
+export const QUALITY_DESK_RADIOS = QUALITY_MODULE_CATALOG;
+export type QualityDeskRadioId = QualityFolderId;
+
 export type QualityFolderTemplate = {
   companyId: CompanyId;
   live: boolean;
@@ -52,6 +56,16 @@ export function qualityFoldersFor(companyId?: string | null): readonly QualityFo
 
 export function showsQualityFolderDesk(companyId?: string | null) {
   return qualityFoldersFor(companyId).length > 0;
+}
+
+/** Madison is the live template. Radios stay up for Quality seats even before a job is picked. */
+export function qualityDeskVaultCompanyId(
+  companyId?: string | null,
+  opts?: { qualitySeat?: boolean },
+): string | undefined {
+  if (showsQualityFolderDesk(companyId)) return companyId || undefined;
+  if (opts?.qualitySeat) return "madison";
+  return companyId || undefined;
 }
 
 /** API / UI list. Missing company → default catalog (Chance’s Madison labels). Unknown company → none. */
@@ -142,6 +156,10 @@ export function isQualityFolderId(value: unknown, companyId?: string | null): va
   if (typeof value !== "string") return false;
   const catalog = companyId ? qualityFoldersFor(companyId) : QUALITY_MODULE_CATALOG;
   return catalog.some((folder) => folder.id === value);
+}
+
+export function isQualityDeskRadio(value: string, companyId?: string | null): value is QualityDeskRadioId {
+  return isQualityFolderId(value, companyId);
 }
 
 export function qualityFolderLabel(id: QualityFolderId, companyId?: string | null) {

@@ -12,6 +12,7 @@ import {
   type QualityCompanyDocId,
 } from "./quality-company-docs.ts";
 import { qualityFolderLabel, type QualityFolderId } from "./quality-folders.ts";
+import { isQualityReadyShelfJobId, qualityReadyShelfPackageLabel } from "./quality-package-shelf.ts";
 import {
   QUALITY_LIBRARY_LOCK_KIND,
   QUALITY_LIBRARY_LOCK_NAME,
@@ -88,6 +89,12 @@ export function qualityVaultPath(place: QualityVaultPlace): string[] {
   );
   if (place.companyDocs || isQualityCompanyDocsJobId(place.jobId)) {
     return [company, folder];
+  }
+  if (place.shelf || isQualityReadyShelfJobId(place.jobId)) {
+    const pack = qualityVaultFolderName(
+      place.packageLabel || place.jobLabel || qualityReadyShelfPackageLabel(place.jobId) || "Kit",
+    );
+    return [company, "Ready Quality packages", pack];
   }
   const site = qualityVaultFolderName((place.siteLabel || "").trim() || "Site");
   const job = qualityVaultFolderName((place.jobLabel || place.jobId || "").trim() || "Job");
