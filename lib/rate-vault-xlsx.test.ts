@@ -15,6 +15,9 @@ import {
 import { hallBurdenSubtotal, hallFringeSubtotal } from "./rate-vault-b1.ts";
 import { loadWoodRiverB1PreviewFixture, loadWoodRiverTmB1PreviewFixture, mergePreviewFace, rateVaultImportMergeFace } from "./rate-vault-preview.ts";
 import {
+  RATE_VAULT_B1_BURDEN_COL_FLOORS,
+  RATE_VAULT_B1_FRINGE_COL_FLOORS,
+  RATE_VAULT_B1_RATE_COL_FLOORS,
   RATE_VAULT_B1_RATE_HEADERS,
   isRateVaultBurdenRippleFormula,
   isRateVaultFringeRippleFormula,
@@ -606,6 +609,39 @@ describe("Rate Vault B-1 Excel export / import", () => {
     assert.equal(imported.preview.ocipFace, "ocip");
     assert.ok(imported.preview.rows.length > 0);
     assert.equal(imported.preview.rows.every((row) => row.ocip), true);
+  });
+
+  it("widens Rate Summary columns so Wood River T&M + OCIP values fit at open", async () => {
+    const fixture = loadWoodRiverTmB1PreviewFixture();
+    const exported = await rateVaultPreviewToXlsx(fixture, { ocipFace: "ocip" });
+    const workbook = await loadWorkbook(exported.bytes);
+    const rates = workbook.getWorksheet(RATE_VAULT_B1_RATE_SHEET);
+    const burden = workbook.getWorksheet(RATE_VAULT_B1_BURDEN_SHEET);
+    const fringes = workbook.getWorksheet("Fringes");
+    assert.ok(rates && burden && fringes);
+    RATE_VAULT_B1_RATE_COL_FLOORS.forEach((floor, index) => {
+      assert.ok((rates.getColumn(index + 1).width ?? 0) >= floor, `Rate Summary col ${index + 1} width`);
+    });
+    RATE_VAULT_B1_BURDEN_COL_FLOORS.forEach((floor, index) => {
+      assert.ok((burden.getColumn(index + 1).width ?? 0) >= floor, `Burden col ${index + 1} width`);
+    });
+    RATE_VAULT_B1_FRINGE_COL_FLOORS.forEach((floor, index) => {
+      assert.ok((fringes.getColumn(index + 1).width ?? 0) >= floor, `Fringes col ${index + 1} width`);
+    });
+    let longestPosition = "Position";
+    let longestSheet = "Sheet";
+    rates.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const position = String(row.getCell(1).value || "");
+      const sheet = String(row.getCell(5).value || "");
+      if (position.length > longestPosition.length) longestPosition = position;
+      if (sheet.length > longestSheet.length) longestSheet = sheet;
+    });
+    assert.ok((rates.getColumn(1).width ?? 0) >= longestPosition.length);
+    assert.ok((rates.getColumn(5).width ?? 0) >= longestSheet.length);
+    assert.notEqual(rates.getCell("A1").alignment?.wrapText, true);
+    assert.ok((rates.getColumn(6).width ?? 0) >= 14);
+    assert.ok((rates.getColumn(9).width ?? 0) >= 14);
   });
 
   it("still imports machine metadata from a legacy B-1 Package first tab", async () => {

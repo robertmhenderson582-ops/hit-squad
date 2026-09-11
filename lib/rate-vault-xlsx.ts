@@ -76,6 +76,13 @@ export const RATE_VAULT_B1_RATE_HEADERS = [
   "_id",
 ] as const;
 
+/** Floors so Position / Sheet / money headers read at open — Excel width ≠ character count. */
+export const RATE_VAULT_B1_RATE_COL_FLOORS = [34, 20, 12, 22, 32, 14, 14, 14, 14, 14, 14, 12, 12, 26, 18] as const;
+export const RATE_VAULT_B1_BURDEN_COL_FLOORS = [14, 26, 12, 14, 32, 18, 16, 14, 14, 14, 10, 12, 12, 12, 44, 18, 10] as const;
+export const RATE_VAULT_B1_FRINGE_COL_FLOORS = [32, 18, 12, 24, 14, 12, 18, 16, 14, 14, 14, 10, 12, 12, 12, 44, 18, 10] as const;
+const B1_COL_WIDTH_PAD = 3;
+const B1_COL_WIDTH_CAP = 56;
+
 export const RATE_VAULT_B1_BURDEN_HEADERS = [
   "Family",
   "Item",
@@ -357,13 +364,25 @@ function solidFill(argb: string): ExcelJS.Fill {
 }
 
 function applyHeader(row: ExcelJS.Row, headers: readonly string[]) {
-  row.height = 20;
+  row.height = 22;
   headers.forEach((header, index) => {
     const cell = row.getCell(index + 1);
     cell.value = header;
     cell.font = { bold: true, color: { argb: HS_WHITE }, name: "Calibri", size: 10 };
     cell.fill = solidFill(HS_STEEL);
-    cell.alignment = { vertical: "middle", wrapText: true };
+    cell.alignment = { vertical: "middle", wrapText: false };
+  });
+}
+
+function applyColumnWidths(sheet: ExcelJS.Worksheet, floors: readonly number[]) {
+  floors.forEach((floor, index) => {
+    const col = index + 1;
+    let longest = 0;
+    sheet.eachRow((row) => {
+      const value = text(row.getCell(col).value);
+      if (value.length > longest) longest = value.length;
+    });
+    sheet.getColumn(col).width = Math.min(B1_COL_WIDTH_CAP, Math.max(floor, longest + B1_COL_WIDTH_PAD));
   });
 }
 
@@ -584,9 +603,7 @@ export async function rateVaultPreviewToXlsx(
     rates.getCell(`O${r}`).value = `xlsx-spare-${i + 1}`;
   }
   rates.getColumn(15).hidden = true;
-  [22, 16, 10, 16, 18, 12, 12, 12, 12, 12, 12, 10, 10, 22, 18].forEach((width, index) => {
-    rates.getColumn(index + 1).width = width;
-  });
+  applyColumnWidths(rates, RATE_VAULT_B1_RATE_COL_FLOORS);
   applyVisibleSheetChrome(rates, exported, face);
 
   const burden = workbook.addWorksheet(RATE_VAULT_B1_BURDEN_SHEET);
@@ -619,9 +636,7 @@ export async function rateVaultPreviewToXlsx(
   burden.getCell(`C${payTaxRow}`).numFmt = PCT_FMT;
   burden.getColumn(16).hidden = true;
   burden.getColumn(17).hidden = true;
-  [14, 22, 12, 12, 28, 14, 12, 16, 16, 16, 8, 10, 10, 10, 40, 18, 10].forEach((width, index) => {
-    burden.getColumn(index + 1).width = width;
-  });
+  applyColumnWidths(burden, RATE_VAULT_B1_BURDEN_COL_FLOORS);
   applyVisibleSheetChrome(burden, exported, face);
 
   const fringes = workbook.addWorksheet(RATE_VAULT_B1_FRINGE_SHEET);
@@ -653,9 +668,7 @@ export async function rateVaultPreviewToXlsx(
   applyMoneyStyle(fringes.getCell(`E${fringeTotal}`));
   fringes.getColumn(17).hidden = true;
   fringes.getColumn(18).hidden = true;
-  [32, 16, 10, 22, 12, 12, 14, 12, 16, 16, 16, 8, 10, 10, 10, 40, 18, 10].forEach((width, index) => {
-    fringes.getColumn(index + 1).width = width;
-  });
+  applyColumnWidths(fringes, RATE_VAULT_B1_FRINGE_COL_FLOORS);
   applyVisibleSheetChrome(fringes, exported, face);
 
   addCompCheckSheet(workbook, exported, face);
