@@ -84,7 +84,7 @@ export async function ensureQualityVaultPath(drive: DriveAdapter, place: Quality
   return parent;
 }
 
-function qualityFileProperties(who?: string) {
+function qualityFileProperties(who?: string): Record<string, string> {
   const stamp = (who || "").trim().toLowerCase();
   return stamp ? { kind: "quality-file", who: stamp } : { kind: "quality-file" };
 }
