@@ -12,10 +12,11 @@ import {
   useLeadBriefVaultForTests,
 } from "./lead-brief-store.ts";
 import { saveQualityCompanyDocDrop } from "./quality-company-doc-drops.ts";
-import { saveQualityFolderDrop } from "./quality-folder-drops.ts";
+import { listQualityFolderDrops, listQualityVaultOwnerTree, saveQualityFolderDrop } from "./quality-folder-drops.ts";
 import {
   QUALITY_UNVAULTED_MARK,
   QUALITY_VAULT_WRITE_ERROR,
+  listQualityVaultFiles,
   mergeVaultedQualityFiles,
   persistQualityVaultFiles,
   qualityVaultPath,
@@ -124,6 +125,26 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
     );
     assert.equal(index?.briefs?.[0]?.files?.[0]?.name, "stamp.pdf");
     assert.equal(index?.briefs?.[0]?.files?.[0]?.data, pdf("stamp.pdf", "welder-stamp").data);
+
+    const listed = await listQualityFolderDrops(chance, "job-b17", "welders", "madison", {
+      siteLabel: "Wood River",
+      jobLabel: "Boiler 17",
+    });
+    assert.equal(listed.stored, true);
+    assert.equal(listed.store, "drive");
+    assert.deepEqual(listed.files.map((file) => file.name), ["stamp.pdf"]);
+    const vaulted = await listQualityVaultFiles(drive, {
+      companyId: "madison",
+      siteLabel: "Wood River",
+      jobId: "job-b17",
+      jobLabel: "Boiler 17",
+      folderId: "welders",
+      who: chance.email,
+    });
+    assert.equal(vaulted.stored, true);
+    assert.deepEqual(vaulted.files.map((file) => file.name), ["stamp.pdf"]);
+    const tree = await listQualityVaultOwnerTree(owner);
+    assert.equal(tree.some((row) => row.path.join("/") === "Madison/Wood River/Boiler 17/Welders" && row.files.includes("stamp.pdf")), true);
   });
 
   it("writes company docs under the company bucket and lists them for the owner", async () => {

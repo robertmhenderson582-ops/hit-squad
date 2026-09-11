@@ -144,6 +144,26 @@ describe("Quality / HSE job scope", () => {
     assert.equal(cascadeCompanyId(tree, emptyJobScope()), "");
   });
 
+  it("lets Chance’s Quality seat pick Madison jobs without changing his Hit Squad assignment", () => {
+    const chance = { isOwner: false, email: "chancec318@yahoo.com", companyId: "hitsquad" as const, role: "tester" };
+    const empty = qualityHseJobTree({ scope: chance, packs: [], serverJobs: [] });
+    assert.equal(cascadeClients(empty).some((row) => row.id === PHILLIPS_66_CLIENT_ID), true);
+    const tree = qualityHseJobTree({ scope: chance, packs: [boiler17], serverJobs: [] });
+    assert.equal(
+      cascadeCompanyId(tree, {
+        clientId: PHILLIPS_66_CLIENT_ID,
+        siteId: "site-madison",
+        jobId: `job-${BOILER17_PACK_ID}`,
+      }),
+      "madison",
+    );
+    const jobs = cascadeJobs(tree, PHILLIPS_66_CLIENT_ID, "site-madison");
+    assert.equal(jobs.some((row) => row.id === `job-${BOILER17_PACK_ID}` && row.title === BOILER17_TITLE), true);
+    const wendell = { isOwner: false, email: "wlanderno@yahoo.com", companyId: "hitsquad" as const, role: "tester" };
+    const hseTree = qualityHseJobTree({ scope: wendell, packs: [], serverJobs: [] });
+    assert.equal(cascadeClients(hseTree).some((row) => row.id === PHILLIPS_66_CLIENT_ID), false);
+  });
+
   it("drops a stale job id and keeps client / site when the tree still has them", () => {
     const tree = qualityHseJobTree({ scope: owner, packs: [boiler17] });
     const stale = resolveJobScope(

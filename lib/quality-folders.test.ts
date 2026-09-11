@@ -224,6 +224,8 @@ describe("Quality folder catalog", () => {
     assert.match(quality, /JobScopePicks/);
     assert.match(quality, /showsQualityFolderDesk/);
     assert.match(quality, /cascadeCompanyId/);
+    assert.match(quality, /isQualityVaultSeat/);
+    assert.match(quality, /QualityVaultOwnerTree/);
     assert.doesNotMatch(quality, /LeadStudio/);
     const dropIndex = quality.indexOf("<QualityFolderDrop");
     const tabsIndex = quality.indexOf('role="tablist"');
@@ -239,6 +241,7 @@ describe("Quality folder catalog", () => {
     assert.match(drop, /quality-vault-shared/);
     assert.match(drop, /siteLabel/);
     assert.match(drop, /jobLabel/);
+    assert.match(drop, /data\.stored/);
     for (const label of QUALITY_FOLDERS.map((folder) => folder.label)) {
       assert.match(folders, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }

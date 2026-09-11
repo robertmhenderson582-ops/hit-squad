@@ -17,7 +17,7 @@ import {
   saveQualityCompanyDocDrop,
 } from "@/lib/quality-company-doc-drops";
 import { isQualityCompanyDocId, qualityCompanyDocsListedFor } from "@/lib/quality-company-docs";
-import { listQualityFolderDrops, saveQualityFolderDrop } from "@/lib/quality-folder-drops";
+import { listQualityFolderDrops, listQualityVaultOwnerTree, saveQualityFolderDrop } from "@/lib/quality-folder-drops";
 import { isQualityFolderId, qualityFoldersListedFor } from "@/lib/quality-folders";
 
 function qualityCompanyId(request: URLSearchParams | { companyId?: string; company?: string }) {
@@ -43,6 +43,15 @@ export async function GET(request: Request) {
   const folderId = params.get("folder") || params.get("folderId") || "";
   const companyId = qualityCompanyId(params);
   const companyDocs = params.get("scope") === "company-docs" || isQualityCompanyDocId(folderId, companyId || undefined);
+  if (kind === "quality" && params.get("tree") === "1") {
+    if (!hasBuildDesk(user)) return NextResponse.json({ error: "Build desk only." }, { status: 403 });
+    const tree = await listQualityVaultOwnerTree(user);
+    return NextResponse.json({
+      tree,
+      store: leadBriefStoreKind("quality"),
+      stored: leadBriefStoreKind("quality") === "drive",
+    });
+  }
   if (kind === "quality" && companyDocs) {
     if (isQualityCompanyDocId(folderId, companyId || undefined)) {
       const listed = await listQualityCompanyDocDrop(user, folderId, companyId || undefined);
@@ -50,7 +59,8 @@ export async function GET(request: Request) {
         briefs: listed.briefs,
         files: listed.files,
         folders: qualityCompanyDocsListedFor(companyId),
-        store: leadBriefStoreKind(),
+        store: listed.store,
+        stored: listed.stored,
       });
     }
     const listed = await listQualityCompanyDocDrops(user, companyId || undefined);
@@ -58,16 +68,22 @@ export async function GET(request: Request) {
       folders: listed.folders,
       filesByFolder: listed.filesByFolder,
       companyId: listed.companyId,
-      store: leadBriefStoreKind(),
+      store: listed.store,
+      stored: listed.stored,
     });
   }
   if (kind === "quality" && jobId && isQualityFolderId(folderId, companyId || undefined)) {
-    const listed = await listQualityFolderDrops(user, jobId, folderId, companyId || undefined);
+    const listed = await listQualityFolderDrops(user, jobId, folderId, companyId || undefined, {
+      companyLabel: params.get("companyLabel") || undefined,
+      siteLabel: params.get("site") || params.get("siteLabel") || undefined,
+      jobLabel: params.get("jobLabel") || undefined,
+    });
     return NextResponse.json({
       briefs: listed.briefs,
       files: listed.files,
       folders: qualityFoldersListedFor(companyId),
-      store: leadBriefStoreKind(),
+      store: listed.store,
+      stored: listed.stored,
     });
   }
 
@@ -77,7 +93,8 @@ export async function GET(request: Request) {
   return NextResponse.json({
     briefs: briefs.map(publicBrief),
     folders: kind === "quality" ? qualityFoldersListedFor(companyId) : undefined,
-    store: leadBriefStoreKind(),
+    store: leadBriefStoreKind(kind === "quality" ? "quality" : "hse"),
+    stored: kind === "quality" ? leadBriefStoreKind("quality") === "drive" : undefined,
   });
 }
 

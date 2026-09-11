@@ -3,8 +3,11 @@ import { readSession } from "@/lib/auth";
 import { assignedCompaniesForId, companyDeskLogoSrc, companyScopeFor } from "@/lib/companies";
 import { assignedCompanyForUser, listCompanies, listDivisionsForScope } from "@/lib/companies-store";
 import { cookieValue } from "@/lib/http";
+import { isQualityVaultSeat } from "@/lib/desk-role";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { deskForUser, omitCatalogSeedJobs, seedJobsAllowed } from "@/lib/jobs";
+import { listQualityVaultJobs } from "@/lib/quality-vault-jobs-server";
+import { mergeQualityVaultJobs } from "@/lib/quality-vault-jobs";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +22,9 @@ export async function GET(request: Request) {
   const scope = companyScopeFor(deskUser, companyId);
   const desk = deskForUser(deskUser.id, scope);
   if (!seedJobsAllowed(scope)) desk.jobs = omitCatalogSeedJobs(desk.jobs);
+  if (isQualityVaultSeat(deskUser)) {
+    desk.jobs = mergeQualityVaultJobs(desk.jobs, await listQualityVaultJobs(deskUser));
+  }
 
   return NextResponse.json({
     user: { id: deskUser.id, email: deskUser.email, name: deskUser.name },

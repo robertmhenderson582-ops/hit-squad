@@ -72,10 +72,11 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
         const data = (await response.json().catch(() => ({}))) as {
           filesByFolder?: Record<string, Array<{ name?: string; type?: string }>>;
           store?: string;
+          stored?: boolean;
         };
         if (cancelled) return;
         const locals = localByDoc(home, docs);
-        if (!response.ok || !qualityVaultStored(data.store, true) || !data.filesByFolder) {
+        if (!response.ok || !qualityVaultStored(data.store, data.stored) || !data.filesByFolder) {
           setFilesByDoc(
             Object.fromEntries(docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], locals[doc.id] ?? [])])),
           );

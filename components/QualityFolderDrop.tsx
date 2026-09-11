@@ -69,8 +69,11 @@ export function QualityFolderDrop({
     if (!jobId || !folderId) return;
     let cancelled = false;
     const company = companyId ? `&company=${encodeURIComponent(companyId)}` : "";
+    const companyName = companyLabel ? `&companyLabel=${encodeURIComponent(companyLabel)}` : "";
+    const site = siteLabel ? `&siteLabel=${encodeURIComponent(siteLabel)}` : "";
+    const job = jobLabel ? `&jobLabel=${encodeURIComponent(jobLabel)}` : "";
     void fetch(
-      `/api/desk/briefs?kind=quality&jobId=${encodeURIComponent(jobId)}&folder=${encodeURIComponent(folderId)}${company}`,
+      `/api/desk/briefs?kind=quality&jobId=${encodeURIComponent(jobId)}&folder=${encodeURIComponent(folderId)}${company}${companyName}${site}${job}`,
       { credentials: "include" },
     )
       .then(async (response) => {
@@ -78,6 +81,7 @@ export function QualityFolderDrop({
           files?: Array<{ name?: string; type?: string }>;
           briefs?: Array<{ savedAt?: string; files?: Array<{ name?: string; type?: string }> }>;
           store?: string;
+          stored?: boolean;
         };
         if (cancelled) return;
         const listed = response.ok
@@ -85,7 +89,7 @@ export function QualityFolderDrop({
             ? data.files
             : data.briefs?.[0]?.files ?? []
           : [];
-        const vaulted = qualityVaultStored(data.store, response.ok) ? listed : [];
+        const vaulted = qualityVaultStored(data.store, data.stored) ? listed : [];
         setFiles(mergeVaultedQualityFiles(vaulted, readQualityFolderFiles(jobId, folderId)));
         const stamp = vaulted.length ? data.briefs?.[0]?.savedAt : undefined;
         if (stamp) setSavedAt(stamp);
@@ -97,7 +101,7 @@ export function QualityFolderDrop({
     return () => {
       cancelled = true;
     };
-  }, [companyId, folderId, jobId, user?.email]);
+  }, [companyId, companyLabel, folderId, jobId, jobLabel, siteLabel, user?.email]);
 
   function pickFolder(next: QualityFolderId) {
     setFolderId(next);

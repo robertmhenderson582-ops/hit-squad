@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { briefsFolderId, briefsVault, readVaultJson, writeVaultJson } from "./drive-data.ts";
-import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
+import { driveAdapter, vaultDriveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import { HSE_VAULT_WRITE_ERROR, type LeadBrief, type LeadFile, type PublicLeadBrief } from "./lead-briefs.ts";
 import { QUALITY_VAULT_WRITE_ERROR } from "./quality-vault.ts";
 
@@ -28,16 +28,16 @@ let cache: Record<LeadBriefKind, StoredLeadBrief[] | null> = { quality: null, hs
 let loadedFrom: Record<LeadBriefKind, string | null> = { quality: null, hse: null };
 let injectedAdapter: DriveAdapter | null | undefined;
 
-export function leadBriefStoreKind() {
-  return resolveAdapter() ? "drive" : "server-json-file";
+export function leadBriefStoreKind(kind?: LeadBriefKind) {
+  return resolveAdapter(kind) ? "drive" : "server-json-file";
 }
 
-export function leadBriefAdapter() {
-  return resolveAdapter();
+export function leadBriefAdapter(kind?: LeadBriefKind) {
+  return resolveAdapter(kind);
 }
 
 export function qualityBriefsRequireDrive() {
-  return Boolean(resolveAdapter()?.configured);
+  return Boolean(resolveAdapter("quality")?.configured);
 }
 
 export function hseBriefsRequireDrive() {
@@ -151,17 +151,19 @@ function writeCache(kind: LeadBriefKind, briefs: StoredLeadBrief[]) {
   }
 }
 
-function resolveAdapter(): DriveAdapter | null {
+function resolveAdapter(kind?: LeadBriefKind): DriveAdapter | null {
   if (injectedAdapter !== undefined) return injectedAdapter;
   if (process.env.LEAD_BRIEF_STORE_PATH || process.env.QUALITY_BRIEF_STORE_PATH || process.env.HSE_BRIEF_STORE_PATH) {
     return null;
   }
-  const drive = driveAdapter();
+  // Quality folder writes try SA then OAuth per call. Sticky OAuth→SA failover
+  // on driveAdapter() is why desk dumps never created the Quality tree.
+  const drive = kind === "quality" ? vaultDriveAdapter() : driveAdapter();
   return drive.configured ? drive : null;
 }
 
 async function readVaultBriefs(kind: LeadBriefKind): Promise<StoredLeadBrief[]> {
-  const drive = resolveAdapter();
+  const drive = resolveAdapter(kind);
   if (!drive) return [];
   const vault = briefsVault(kind);
   const folderId = briefsFolderId(kind);
@@ -172,7 +174,7 @@ async function readVaultBriefs(kind: LeadBriefKind): Promise<StoredLeadBrief[]> 
 }
 
 async function persist(kind: LeadBriefKind, briefs: StoredLeadBrief[]): Promise<StoredLeadBrief[]> {
-  const drive = resolveAdapter();
+  const drive = resolveAdapter(kind);
   if (!drive?.configured) throw new Error(briefVaultWriteError(kind));
   const merged = mergeLeadBriefs(await readVaultBriefs(kind), briefs);
   const vault = briefsVault(kind);
@@ -182,7 +184,7 @@ async function persist(kind: LeadBriefKind, briefs: StoredLeadBrief[]): Promise<
 }
 
 export async function hydrateLeadBriefStore(kind: LeadBriefKind): Promise<StoredLeadBrief[]> {
-  const drive = resolveAdapter();
+  const drive = resolveAdapter(kind);
   if (!drive?.configured) return [];
   const vault = await readVaultBriefs(kind);
   writeCache(kind, vault);

@@ -12,6 +12,13 @@ export type QualityVaultPlace = {
   jobLabel?: string;
   folderId: string;
   companyDocs?: boolean;
+  /** Server-only uploader stamp. Never send Drive ids to testers. */
+  who?: string;
+};
+
+export type QualityVaultTreeRow = {
+  path: string[];
+  files: string[];
 };
 
 export type QualityListedFile = {
@@ -23,6 +30,12 @@ export type QualityListedFile = {
 
 export function qualityVaultStored(store?: string | null, stored?: boolean) {
   return store === "drive" && stored !== false;
+}
+
+export function qualityDropLeaks(payload: unknown) {
+  return /quality-briefs\.json|1A7anV1UKx8m7|141Js9RQZKXq|1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|DRIVE_QUALITY|drive\.google\.com|owner vault/i.test(
+    JSON.stringify(payload ?? ""),
+  );
 }
 
 export function mergeVaultedQualityFiles(

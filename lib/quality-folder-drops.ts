@@ -19,7 +19,14 @@ import {
   showsQualityFolderDesk,
   type QualityFolderId,
 } from "./quality-folders.ts";
-import { persistQualityVaultFiles, QUALITY_VAULT_WRITE_ERROR } from "./quality-vault.ts";
+import { DriveApiError } from "./drive-estimates.ts";
+import {
+  listQualityVaultFiles,
+  listQualityVaultTree,
+  persistQualityVaultFiles,
+  QUALITY_VAULT_WRITE_ERROR,
+} from "./quality-vault.ts";
+import type { QualityVaultTreeRow } from "./quality-vault-shared.ts";
 import type { PublicUser } from "./types.ts";
 
 export type QualityDropUser = Pick<PublicUser, "email" | "name" | "role">;
@@ -98,13 +105,14 @@ export async function saveQualityFolderDrop(user: QualityDropUser, input: Qualit
   const siteLabel = typeof input.siteLabel === "string" ? input.siteLabel : undefined;
   const jobLabel = typeof input.jobLabel === "string" ? input.jobLabel : undefined;
   try {
-    await persistQualityVaultFiles(leadBriefAdapter(), {
+    await persistQualityVaultFiles(leadBriefAdapter("quality"), {
       companyId,
       companyLabel,
       siteLabel,
       jobId,
       jobLabel,
       folderId,
+      who,
     }, check.accepted as LeadFile[]);
     const brief = await saveStoredBrief({
       kind: "quality",
@@ -125,7 +133,9 @@ export async function saveQualityFolderDrop(user: QualityDropUser, input: Qualit
       stored: true as const,
       store: "drive" as const,
     };
-  } catch {
+  } catch (error) {
+    const status = error instanceof DriveApiError ? error.status : 0;
+    console.warn(`quality-vault: folder write failed; ${status || "err"}`);
     return {
       ok: false as const,
       status: 503,
@@ -140,31 +150,65 @@ export async function listQualityFolderDrops(
   jobId: string,
   folderId: QualityFolderId,
   companyId?: string,
+  place?: { companyLabel?: string; siteLabel?: string; jobLabel?: string },
 ) {
   const job = jobId.trim();
   const company = companyId?.trim() || undefined;
   if (!job || !qualityFolderAllowed(folderId, company)) {
-    return { briefs: [] as PublicLeadBrief[], files: [] as Array<{ name: string; type: string }> };
+    return {
+      briefs: [] as PublicLeadBrief[],
+      files: [] as Array<{ name: string; type: string }>,
+      store: "server-json-file" as const,
+      stored: false as const,
+    };
   }
   const who = hasBuildDesk(user) ? undefined : user.email;
   const briefs = await listStoredBriefs("quality", who, { jobId: job, folderId, companyId: company });
   const mine = qualityFolderDropsFor(briefs, job, folderId, hasBuildDesk(user) ? undefined : user.email);
-  const files = mine.flatMap((row) => row.files);
+  const briefFiles = mine.flatMap((row) => row.files);
+  const vault = await listQualityVaultFiles(leadBriefAdapter("quality"), {
+    companyId: company,
+    companyLabel: place?.companyLabel,
+    siteLabel: place?.siteLabel,
+    jobId: job,
+    jobLabel: place?.jobLabel,
+    folderId,
+    who,
+  });
+  const files = vault.stored ? mergeVaultedQualityNames(vault.files, briefFiles) : [];
   return {
     briefs: briefs.map(publicBrief),
     files,
+    store: vault.store === "drive" ? "drive" as const : "server-json-file" as const,
+    stored: vault.stored,
   };
+}
+
+function mergeVaultedQualityNames(
+  vault: Array<{ name: string; type: string }>,
+  extra: Array<{ name: string; type: string }>,
+) {
+  const seen = new Set<string>();
+  const files: Array<{ name: string; type: string }> = [];
+  for (const file of [...vault, ...extra]) {
+    const name = (file.name || "").trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    files.push({ name, type: file.type || "application/octet-stream" });
+  }
+  return files;
+}
+
+export async function listQualityVaultOwnerTree(user: QualityDropUser) {
+  if (!hasBuildDesk(user)) return [] as QualityVaultTreeRow[];
+  return listQualityVaultTree(leadBriefAdapter("quality"));
 }
 
 export function qualityFolderRowId(who: string, jobId: string, folderId: QualityFolderId) {
   return qualityFolderBriefId(who, jobId, folderId);
 }
 
-export function qualityDropLeaks(payload: unknown) {
-  return /quality-briefs\.json|1A7anV1UKx8m7|141Js9RQZKXq|1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|DRIVE_QUALITY|drive\.google\.com|owner vault/i.test(
-    JSON.stringify(payload ?? ""),
-  );
-}
+export { qualityDropLeaks } from "./quality-vault-shared.ts";
 
 export function visibleQualityBriefsForTester(briefs: StoredLeadBrief[], who: string) {
   return briefs.filter((row) => row.who === who.trim().toLowerCase());

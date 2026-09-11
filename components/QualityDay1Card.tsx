@@ -58,7 +58,7 @@ export function QualityDay1Card({
     <div className="plant-card px-4 py-4">
       <h2 className="font-display text-xl">{QUALITY_DAY1_LABEL}</h2>
       <p className="mt-2 text-sm">
-        Chance’s named package. Open a form and type. No invented hold points. Files stay off this desk.
+        Chance’s named package. Open a form and type. No invented hold points. Drop files in Quality folders above.
       </p>
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <FieldBlock label="Inspection plan / ITP">
