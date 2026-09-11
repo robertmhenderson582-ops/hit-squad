@@ -334,6 +334,8 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /lean Rate Vault face/);
     assert.match(xlsx, /rateVaultFringeRippleFormula/);
     assert.match(xlsx, /rateVaultBurdenRippleFormula/);
+    assert.match(xlsx, /Family must not be "pay-tax"/);
+    assert.match(xlsx, /getCell\(`A\$\{payTaxRow\}`\)\.value = "total"/);
     assert.match(docs, /refuses silent poison/);
     assert.match(docs, /James Hutton/);
     assert.match(docs, /jhut26@gmail.com/);
@@ -358,6 +360,9 @@ describe("Rate Vault scaffold", () => {
     assert.match(api, /recognizeRateVaultSource/);
     assert.match(api, /export-b1/);
     assert.match(api, /import-b1/);
+    assert.match(api, /rateVaultImportMergeFace/);
+    assert.match(preview, /rateVaultImportMergeFace/);
+    assert.doesNotMatch(api, /fileFace \|\| viewFace \|\| "ocip"/);
     assert.match(api, /restore-b1/);
     assert.match(api, /decide-buyoff/);
     assert.match(vaultModule, /HIT SQUAD RATE VAULT B-1/);

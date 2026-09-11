@@ -12,7 +12,7 @@ import {
   RATE_VAULT_B1_REQUIRED_SHEETS,
 } from "./rate-vault.ts";
 import { hallBurdenSubtotal, hallFringeSubtotal } from "./rate-vault-b1.ts";
-import { loadWoodRiverB1PreviewFixture } from "./rate-vault-preview.ts";
+import { loadWoodRiverB1PreviewFixture, mergePreviewFace, rateVaultImportMergeFace } from "./rate-vault-preview.ts";
 import {
   RATE_VAULT_B1_RATE_HEADERS,
   isRateVaultBurdenRippleFormula,
@@ -94,6 +94,8 @@ describe("Rate Vault B-1 Excel export / import", () => {
         ? String((burden.getCell(`C${totalRow}`).value as { formula: string }).formula)
         : "");
     assert.match(String(totalFormula), /SUMIF\(A2:A/);
+    assert.equal(String(burden?.getCell(`A${totalRow}`).value || ""), "total");
+    assert.equal(String(burden?.getCell(`B${totalRow}`).value || ""), "Pay Tax Subtotal");
     const fringes = workbook.getWorksheet("Fringes");
     assert.ok(fringes);
     assert.equal(fringes.getCell("D1").value, "Fringe");
@@ -103,6 +105,30 @@ describe("Rate Vault B-1 Excel export / import", () => {
     assert.ok(comp);
     assert.match(String(comp.getCell("A1").value || ""), /COMP check/i);
     assert.ok(String(comp.getCell("B3").value && typeof comp.getCell("B3").value === "object" ? (comp.getCell("B3").value as { formula?: string }).formula : comp.getCell("B3").formula || "").includes("COUNTA"));
+  });
+
+  it("keeps Excel pay-tax SUMIF equal to the desk stack after recalc", async () => {
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const exported = await rateVaultPreviewToXlsx(fixture);
+    const workbook = await loadWorkbook(exported.bytes);
+    const burden = workbook.getWorksheet(RATE_VAULT_B1_BURDEN_SHEET);
+    assert.ok(burden);
+    let excelPayTax = 0;
+    burden.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      if (String(row.getCell(1).value || "") !== "pay-tax") return;
+      const raw = row.getCell(3).value;
+      const pct =
+        typeof raw === "number"
+          ? raw
+          : raw && typeof raw === "object" && "result" in raw && typeof (raw as { result: unknown }).result === "number"
+            ? (raw as { result: number }).result
+            : 0;
+      excelPayTax += pct;
+    });
+    const deskPayTax = fixture.burden.filter((line) => line.family === "pay-tax").reduce((sum, line) => sum + line.ratePct, 0);
+    assert.equal(Math.round(excelPayTax * 100) / 100, Math.round(deskPayTax * 100) / 100);
+    assert.equal(Math.round(excelPayTax * 100) / 100, 16.8);
   });
 
   it("round-trips an edited wage into the vault preview bill", async () => {
@@ -183,6 +209,69 @@ describe("Rate Vault B-1 Excel export / import", () => {
     assert.equal(row?.billRate, Math.round(((journeyman?.wage ?? 0) + expectedFringe + expectedBurden) * 100) / 100);
     assert.ok((row?.fringe ?? 0) > (journeyman?.fringe ?? 0));
     assert.ok((row?.burden ?? 0) > (journeyman?.burden ?? 0));
+  });
+
+  it("re-import of a both-faces book updates stored non-OCIP wages and hall ripple", async () => {
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const journeyman = fixture.rows.find((row) => row.position === "Boilermaker Journeyman");
+    assert.ok(journeyman);
+    assert.equal(journeyman?.ocip, false);
+    const exported = await rateVaultPreviewToXlsx(fixture);
+    const workbook = await loadWorkbook(exported.bytes);
+    const rates = workbook.getWorksheet(RATE_VAULT_B1_RATE_SHEET);
+    const fringes = workbook.getWorksheet("Fringes");
+    assert.ok(rates && fringes);
+    rates.eachRow((row, rowNumber) => {
+      if (rowNumber > 1 && String(row.getCell(1).value) === "Boilermaker Journeyman") row.getCell(6).value = 88.88;
+    });
+    fringes.eachRow((row, rowNumber) => {
+      if (rowNumber > 1 && String(row.getCell(1).value) === journeyman?.sheet && String(row.getCell(4).value) === "H&W") {
+        row.getCell(5).value = 8.07;
+      }
+    });
+    const buffer = await workbook.xlsx.writeBuffer();
+    const imported = await parseRateVaultB1Xlsx({
+      fileName: exported.fileName,
+      bytes: new Uint8Array(buffer),
+    });
+    assert.equal(imported.ok, true);
+    if (!imported.ok) return;
+    assert.equal(rateVaultImportMergeFace(imported.preview), "both");
+    const dropped = mergePreviewFace(fixture, imported.preview, "ocip");
+    assert.equal(dropped.rows.find((row) => row.position === "Boilermaker Journeyman")?.wage, journeyman?.wage);
+    const merged = mergePreviewFace(fixture, imported.preview, rateVaultImportMergeFace(imported.preview));
+    const row = merged.rows.find((item) => item.position === "Boilermaker Journeyman");
+    assert.equal(row?.wage, 88.88);
+    const expectedFringe = hallFringeSubtotal(merged.fringes, journeyman?.sheet || "", 88.88);
+    assert.equal(row?.fringe, expectedFringe);
+    assert.ok((row?.fringe ?? 0) > (journeyman?.fringe ?? 0));
+    assert.equal(merged.craftSheets.some((sheet) => sheet.fringes.some((line) => line.label === "H&W" && line.amountHr === 8.07)), true);
+  });
+
+  it("keeps a typed Fringe override on one row when other rows still ripple", async () => {
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const journeyman = fixture.rows.find((row) => row.position === "Boilermaker Journeyman");
+    const gf = fixture.rows.find((row) => row.position === "Boilermaker General Foreman");
+    assert.ok(journeyman && gf);
+    const exported = await rateVaultPreviewToXlsx(fixture);
+    const workbook = await loadWorkbook(exported.bytes);
+    const rates = workbook.getWorksheet(RATE_VAULT_B1_RATE_SHEET);
+    assert.ok(rates);
+    rates.eachRow((row, rowNumber) => {
+      if (rowNumber > 1 && String(row.getCell(1).value) === "Boilermaker Journeyman") row.getCell(7).value = 12.34;
+    });
+    const buffer = await workbook.xlsx.writeBuffer();
+    const imported = await parseRateVaultB1Xlsx({
+      fileName: exported.fileName,
+      bytes: new Uint8Array(buffer),
+    });
+    assert.equal(imported.ok, true);
+    if (!imported.ok) return;
+    assert.equal(imported.preview.rows.find((row) => row.position === "Boilermaker Journeyman")?.fringe, 12.34);
+    assert.equal(
+      imported.preview.rows.find((row) => row.position === "Boilermaker General Foreman")?.fringe,
+      hallFringeSubtotal(imported.preview.fringes, gf?.sheet || "", gf?.wage ?? 0),
+    );
   });
 
   it("refuses broken Fringe / Burden ripple guts", async () => {
