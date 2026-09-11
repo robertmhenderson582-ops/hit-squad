@@ -1,18 +1,25 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HoldScreen } from "@/components/HoldScreen";
 import { PasswordField } from "@/components/PasswordField";
 import { useSession } from "@/components/SessionProvider";
+import {
+  INITIAL_LOGIN_GATE,
+  type LoginGate,
+  loginGateAfterProbe,
+  loginShowsCreateFields,
+  loginShowsPasswordField,
+  loginSubmitLabel,
+  looksLikeEmail,
+} from "@/lib/login-form";
 import { isOwnerLoginEmail } from "@/lib/owner-login";
-
-type Gate = "identify" | "create" | "password" | "recover";
 
 export function LoginForm() {
   const router = useRouter();
   const { signIn, probeSignIn, error } = useSession();
-  const [gate, setGate] = useState<Gate>("identify");
+  const [gate, setGate] = useState<LoginGate>(INITIAL_LOGIN_GATE);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nextPassword, setNextPassword] = useState("");
@@ -20,20 +27,45 @@ export function LoginForm() {
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const gateRef = useRef(gate);
+  const passwordRef = useRef(password);
+  gateRef.current = gate;
+  passwordRef.current = password;
 
   const visibleError = localError || error;
-
-  function resetGate() {
-    setGate("identify");
-    setPassword("");
-    setNextPassword("");
-    setConfirmPassword("");
-  }
+  const showPassword = loginShowsPasswordField(gate, email);
+  const showCreate = loginShowsCreateFields(gate, email);
 
   function onEmailChange(value: string) {
     setEmail(value);
-    if (gate !== "identify") resetGate();
+    if (gate === "create" || gate === "recover") {
+      setGate("password");
+      setNextPassword("");
+      setConfirmPassword("");
+    }
   }
+
+  useEffect(() => {
+    if (!acknowledged || !looksLikeEmail(email) || isOwnerLoginEmail(email)) return;
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const probe = await probeSignIn({ email, acknowledged: true, silent: true });
+        if (cancelled) return;
+        const next = loginGateAfterProbe({ email, probe, current: gateRef.current });
+        setGate(next);
+        if (next === "create") {
+          setNextPassword((prev) => prev || passwordRef.current);
+        }
+      } catch {
+        // Keep the password field. Submit still authenticates.
+      }
+    }, 280);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [acknowledged, email, probeSignIn]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,23 +82,6 @@ export function LoginForm() {
       return;
     }
 
-    if (gate === "identify") {
-      if (isOwnerLoginEmail(email)) {
-        setGate("password");
-        return;
-      }
-      setSubmitting(true);
-      try {
-        const next = await probeSignIn({ email, acknowledged: true });
-        setGate(isOwnerLoginEmail(email) || next !== "create" ? "password" : "create");
-      } catch (err) {
-        setLocalError(err instanceof Error ? err.message : "Sign-in failed.");
-      } finally {
-        setSubmitting(false);
-      }
-      return;
-    }
-
     if (gate === "create") {
       if (nextPassword.length < 8) {
         setLocalError("Password must be 8+.");
@@ -80,15 +95,19 @@ export function LoginForm() {
 
     setSubmitting(true);
     try {
-      if (gate === "create") {
-        await signIn({
-          email,
-          acknowledged: true,
-          newPassword: nextPassword,
-          confirmPassword,
-        });
-      } else {
-        await signIn({ email, password, acknowledged: true });
+      const next =
+        gate === "create"
+          ? await signIn({
+              email,
+              acknowledged: true,
+              newPassword: nextPassword,
+              confirmPassword,
+            })
+          : await signIn({ email, password, acknowledged: true });
+      if (next === "create") {
+        setGate("create");
+        setNextPassword((prev) => prev || password);
+        return;
       }
       fetch("/api/desk/activity", {
         method: "POST",
@@ -155,7 +174,7 @@ export function LoginForm() {
           />
         </label>
 
-        {gate === "create" && !isOwnerLoginEmail(email) ? (
+        {showCreate ? (
           <>
             <section className="rounded border border-steel-rim/40 bg-black/25 p-4">
               <p className="font-mono text-[10px] tracking-[0.28em] text-steel-glow">FIRST SIGN-IN</p>
@@ -186,7 +205,7 @@ export function LoginForm() {
           </>
         ) : null}
 
-        {gate === "password" || gate === "recover" ? (
+        {showPassword ? (
           <>
             {gate === "recover" ? (
               <p className="text-sm leading-6 text-paper-cream/90">
@@ -222,20 +241,6 @@ export function LoginForm() {
               </button>
             )}
           </>
-        ) : gate === "identify" ? (
-          <button
-            type="button"
-            className="font-mono text-[10px] tracking-[0.18em] text-steel-glow underline"
-            onClick={() => {
-              if (!email.trim()) {
-                setLocalError("Type the email first.");
-                return;
-              }
-              setGate("recover");
-            }}
-          >
-            Need to get back in?
-          </button>
         ) : null}
       </div>
 
@@ -250,7 +255,7 @@ export function LoginForm() {
         disabled={!acknowledged || submitting}
         className="w-full bg-steel px-4 py-3 font-display text-lg tracking-[0.24em] text-paper-cream disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {submitting ? "CHECKING SESSION" : gate === "identify" ? "CONTINUE" : gate === "recover" ? "RECOVER THE DESK" : "ENTER THE DESK"}
+        {loginSubmitLabel(gate, submitting)}
       </button>
       </fieldset>
     </form>

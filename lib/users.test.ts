@@ -235,7 +235,7 @@ test("unissued invited email plus ack creates a password and session user", asyn
   assert.equal(loginOutcome({ email: TESTER }).status, "needsCreate");
 
   const skipped = loginOutcome({ email: TESTER, password: CHOSEN });
-  assert.equal(skipped.status, "error");
+  assert.equal(skipped.status, "needsCreate");
   assert.equal(seatNeedsPasswordCreate(TESTER), true);
 
   const created = loginOutcome({
@@ -269,6 +269,76 @@ test("unissued invited email plus ack creates a password and session user", asyn
   const changed = await setOwnPassword(TESTER, OTHER, CHOSEN);
   assert.equal("ok" in changed, true);
   assert.equal(verifyPassword(findUserByEmail(TESTER)!, OTHER), true);
+});
+
+test("password typed on a needsCreate seat does not skip the one create step", () => {
+  assert.equal(seatNeedsPasswordCreate(TESTER), true);
+  const typed = loginOutcome({ email: TESTER, password: CHOSEN });
+  assert.equal(typed.status, "needsCreate");
+  assert.equal(seatNeedsPasswordCreate(TESTER), true);
+  assert.equal(findUserByEmail(TESTER)?.passwordHash, undefined);
+
+  const created = loginOutcome({
+    email: TESTER,
+    newPassword: CHOSEN,
+    confirmPassword: CHOSEN,
+  });
+  assert.equal(created.status, "authenticated");
+  if (created.status === "authenticated") {
+    assert.equal(created.user.mustChangePassword, false);
+  }
+  assert.equal(loginOutcome({ email: TESTER, password: CHOSEN }).status, "authenticated");
+});
+
+test("temp-password invite has one mustChange step that clears once", async () => {
+  const issued = await issueSeatPassword(TESTER, ISSUED);
+  assert.equal("ok" in issued, true);
+  assert.equal(seatNeedsPasswordCreate(TESTER), false);
+  assert.equal(loginOutcome({ email: TESTER }).status, "needsPassword");
+
+  const ok = loginOutcome({ email: TESTER, password: ISSUED });
+  assert.equal(ok.status, "authenticated");
+  if (ok.status === "authenticated") {
+    assert.equal(ok.user.mustChangePassword, true);
+  }
+
+  const changed = await setOwnPassword(TESTER, CHOSEN);
+  assert.equal("ok" in changed, true);
+  const stored = findUserByEmail(TESTER);
+  assert.ok(stored);
+  assert.equal(stored.mustChangePassword, false);
+  assert.equal(verifyPassword(stored, CHOSEN), true);
+
+  const again = loginOutcome({ email: TESTER, password: CHOSEN });
+  assert.equal(again.status, "authenticated");
+  if (again.status === "authenticated") {
+    assert.equal(again.user.mustChangePassword, false);
+  }
+
+  const leftover = await setOwnPassword(TESTER, OTHER);
+  assert.equal("error" in leftover, true);
+  if ("error" in leftover) {
+    assert.equal(leftover.error, "Current and new password are required.");
+  }
+  assert.equal(verifyPassword(findUserByEmail(TESTER)!, CHOSEN), true);
+});
+
+test("create-on-login does not leave a stacked mustChange gate", () => {
+  const created = loginOutcome({
+    email: TESTER,
+    newPassword: CHOSEN,
+    confirmPassword: CHOSEN,
+  });
+  assert.equal(created.status, "authenticated");
+  if (created.status === "authenticated") {
+    assert.equal(created.user.mustChangePassword, false);
+  }
+  assert.equal(findUserByEmail(TESTER)?.mustChangePassword, false);
+  const again = loginOutcome({ email: TESTER, password: CHOSEN });
+  assert.equal(again.status, "authenticated");
+  if (again.status === "authenticated") {
+    assert.equal(again.user.mustChangePassword, false);
+  }
 });
 
 test("already-issued email still needs the current password", async () => {
@@ -1772,13 +1842,18 @@ test("SecurityDesk shows Saving… while the password request is in flight", () 
   assert.match(source, /disabled=\{busy\}/);
 });
 
-test("MustChangePasswordGate releases FIRST SIGN-IN after a successful Continue", () => {
+test("MustChangePasswordGate releases after a successful Continue without asking for the temp password", () => {
   const source = readFileSync(
     fileURLToPath(new URL("../components/MustChangePasswordGate.tsx", import.meta.url)),
     "utf8",
   );
+  const helper = readFileSync(fileURLToPath(new URL("./login-form.ts", import.meta.url)), "utf8");
   assert.match(source, /setReleased\(true\)/);
-  assert.match(source, /!released/);
+  assert.match(source, /mustChangeGateBlocks/);
+  assert.match(source, /acceptUser/);
+  assert.match(source, /mustChangePassword: false/);
+  assert.doesNotMatch(source, /current-password|Current password/);
+  assert.match(helper, /!input\.released/);
 });
 
 test("mergeHashRows does not resurrect mustChange true from an old vault row", () => {
