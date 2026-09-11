@@ -1,6 +1,6 @@
 import { ESTIMATES_ROOM_ID, type DriveAdapter } from "./drive-estimates.ts";
 import { hseFolderId, qualityFolderId } from "./drive-data.ts";
-import { inviteEmailAllowed } from "./invite-mail.ts";
+import { inviteEmailAllowed } from "./invite-policy.ts";
 import {
   CORPORATE_QC_MANAGER_POSITION_ID,
   SITE_QC_MANAGER_POSITION_ID,
@@ -10,9 +10,9 @@ import {
 } from "./org-positions.ts";
 import { holdsCorporateQualityPosition, holdsFieldQualityPosition, isQualitySeatLabel } from "./quality-company-doc-acl.ts";
 import { isQualityVaultSeat } from "./desk-role.ts";
+import { type SeatDoorId } from "./seat-doors.ts";
 
-export const SEAT_DOORS = ["quality", "hse", "estimates"] as const;
-export type SeatDoorId = (typeof SEAT_DOORS)[number];
+export { SEAT_DOORS, isSeatDoorId, normalizeSeatDoors, type SeatDoorId } from "./seat-doors.ts";
 
 export const VAULT_ACL_SHARE_ERROR = "Could not share the vault folder. Confirm the desk Drive account can add people.";
 
@@ -21,15 +21,6 @@ export type VaultShareTarget = {
   door: SeatDoorId;
   role: "writer";
 };
-
-export function isSeatDoorId(value: unknown): value is SeatDoorId {
-  return typeof value === "string" && (SEAT_DOORS as readonly string[]).includes(value);
-}
-
-export function normalizeSeatDoors(raw: unknown): SeatDoorId[] {
-  if (!Array.isArray(raw)) return [];
-  return [...new Set(raw.filter(isSeatDoorId))];
-}
 
 export function vaultTargetsForDoors(doors: readonly SeatDoorId[]): VaultShareTarget[] {
   const targets: VaultShareTarget[] = [];

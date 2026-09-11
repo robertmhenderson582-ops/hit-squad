@@ -53,6 +53,9 @@ describe("Owner invite mail", () => {
     assert.match(route, /isOwner/);
     assert.doesNotMatch(seats, /sendSeatInvite/);
     assert.match(desk, /send: true/);
+    assert.doesNotMatch(desk, /invite-mail/);
+    assert.doesNotMatch(desk, /nodemailer/);
+    assert.doesNotMatch(desk, /vault-acl/);
     assert.doesNotMatch(desk, /invite email sent/i);
   });
 });
