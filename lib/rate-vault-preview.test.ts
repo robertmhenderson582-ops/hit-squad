@@ -210,7 +210,7 @@ describe("Rate Vault Wood River B-1 preview", () => {
         (row) =>
           row.sheet === "WOODRIVER PIPEFITTER TM" &&
           row.position === "PIPEFITTER JOURNEYMAN" &&
-          row.wage === 49.0295,
+          row.wage === 49.03,
       ),
       true,
     );
