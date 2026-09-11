@@ -255,6 +255,54 @@ export function craftSheetsFromFlat(
   });
 }
 
+export function hallFringeSubtotal(
+  fringes: readonly RateVaultFringeLine[],
+  sheet: string,
+  wage: number,
+) {
+  return money(
+    fringes
+      .filter((line) => line.sheet === sheet)
+      .reduce((sum, line) => sum + fringeLineAmount(line, wage), 0),
+  );
+}
+
+/** Pay tax is site-wide on the Burden sheet (blank Hall). Hall Ins / Misc / O/H / Profit add on. */
+export function hallBurdenSubtotal(
+  burden: readonly RateVaultBurdenLine[],
+  sheet: string,
+  wage: number,
+) {
+  return money(
+    burden
+      .filter((line) => line.family === "pay-tax" || line.sheet === sheet)
+      .reduce((sum, line) => sum + burdenLineAmount(line, wage), 0),
+  );
+}
+
+export function ripplePreviewRowsFromB1Sheets(
+  rows: readonly RateVaultPreviewRow[],
+  burden: readonly RateVaultBurdenLine[],
+  fringes: readonly RateVaultFringeLine[],
+  craftSheets: readonly RateVaultCraftSheet[],
+  options: { rippleFringe: boolean; rippleBurden: boolean } = { rippleFringe: true, rippleBurden: true },
+) {
+  return rows.map((row) => {
+    const fringe = options.rippleFringe ? hallFringeSubtotal(fringes, row.sheet, row.wage) : row.fringe;
+    const nextBurden = options.rippleBurden ? hallBurdenSubtotal(burden, row.sheet, row.wage) : row.burden;
+    const sheet = findCraftSheetForRow(craftSheets, row);
+    const rates = sheet ? b1RatesForCraftSheet({ ...sheet, fringes: sheet.fringes, burden: sheet.burden }, row.wage) : null;
+    return {
+      ...row,
+      fringe,
+      burden: nextBurden,
+      billRate: money(row.wage + fringe + nextBurden),
+      billOt: options.rippleFringe || options.rippleBurden ? rates?.billOt ?? row.billOt : row.billOt,
+      billDt: options.rippleFringe || options.rippleBurden ? rates?.billDt ?? row.billDt : row.billDt,
+    };
+  });
+}
+
 export function b1PayTaxPct(preview: Pick<RateVaultPreviewPackage, "burden"> | null) {
   if (!preview) return 0;
   return money(preview.burden.filter((line) => line.family === "pay-tax").reduce((sum, line) => sum + line.ratePct, 0));

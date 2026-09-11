@@ -193,6 +193,8 @@ export const RATE_VAULT_B1_COMP_SHEET = "COMP Check";
 export const RATE_VAULT_B1_CBA_SHEET = "CBA PLA";
 export const RATE_VAULT_B1_STATE_SHEET = "State law";
 export const RATE_VAULT_B1_FRINGE_SHEET = "Fringes";
+/** Lean Rate Vault face — not the ~25 MB official Exhibit B-1. */
+export const RATE_VAULT_B1_EXPORT_MAX_BYTES = 150_000;
 export const RATE_VAULT_B1_REQUIRED_SHEETS = [
   RATE_VAULT_B1_PACKAGE_SHEET,
   RATE_VAULT_B1_RATE_SHEET,

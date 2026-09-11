@@ -331,6 +331,9 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /does not write live estimate Rate Tables/);
     assert.match(docs, /B-1 Excel export \/ import/);
     assert.match(docs, /formula check to the site/);
+    assert.match(docs, /lean Rate Vault face/);
+    assert.match(xlsx, /rateVaultFringeRippleFormula/);
+    assert.match(xlsx, /rateVaultBurdenRippleFormula/);
     assert.match(docs, /refuses silent poison/);
     assert.match(docs, /James Hutton/);
     assert.match(docs, /jhut26@gmail.com/);

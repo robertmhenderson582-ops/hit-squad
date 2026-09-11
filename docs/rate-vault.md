@@ -49,7 +49,7 @@ Rate Vault’s B-1 Builder matches Hit Squad estimate Excel round-trip behavior 
 | Export | `POST /api/rate-vault` `action: "export-b1"` → `lib/rate-vault-xlsx.ts` `rateVaultPreviewToXlsx` |
 | Import | Drop an `.xlsx` / `.xlsm` on any Builder step → `action: "import-b1"` → `parseRateVaultB1Xlsx` |
 
-The export is the **friendlier Rate Vault face** and the **formula check to the site** (same credibility bar as estimate Excel / under-the-hood proof). Rate Summary columns: position, craft, local, wage, fringe, burden, Bill ST / OT / DT, lane, OCIP, OT / clock. **Bill ST** is `=Fn+Gn+Hn` with a cached result tying burden → bill. Hidden `_id` columns key the importer. Spare empty position rows sit under the live seats so a new line can be typed in. Export also writes:
+The export is the **lean Rate Vault face** and the **formula check to the site** — not a clone of the ~25 MB official Exhibit B-1 (no pivots, no OCIP/staff dumps, no unused shells). Rate Summary columns: position, craft, local, wage, fringe, burden, Bill ST / OT / DT, lane, OCIP, OT / clock. **Fringe** and **Burden** are `SUMIF` / `SUMIFS` ties to the Fringes and Burden Summary tabs. **Bill ST** is `=Fn+Gn+Hn`. Hidden `_id` / `_ridesOt` columns key the importer. Spare empty position rows sit under the live seats so a new line can be typed in. Export also writes:
 
 - **Fringes** — hall-by-hall B-1 fringe lines as $/hr with a Fringes Subtotal formula.
 - **COMP Check** — key totals (positions, wage / fringe / burden / bill, Pay Tax stack %, fringe $) via formulas that pull Rate Summary / Burden Summary / Fringes. Not a raw dump of the giant COMP xlsm.
@@ -59,7 +59,7 @@ Export tags the selected OCIP face (`ocip` / `non-ocip` / both). Import refuses 
 
 Re-import writes the edited package into `rate-vault.json` (`packages[]` — metadata / rate rows only, never workbook bytes). Each successful import stamps a **version** (date + note) and keeps a **last-good** package so Restore last-good can roll back. GET / recognize / Burden / Publish prefer that stored package over the Wood River fixture so a library-card click does not wipe offline edits. Owner and James share one canonical Drive vault package — no device-kick.
 
-Import **may change** wages, fringes, burden inputs, bill overrides, and add/remove positions on mapped rows. Import validates and **refuses silent poison**:
+Import **may change** wages, fringes, burden inputs, bill overrides, and add/remove positions on mapped rows. Offline edits on Fringes / Burden Summary / Rate Summary wages ripple back onto the live Rate Vault desk (hall cards and bills). One book — not a parallel copy. Import validates and **refuses silent poison**:
 
 - No Rate Vault marker / not our export → `{ fallback: "recognize" }` so a raw hall book still sniffs.
 - Monroe / Yates / non-P66 site, NaN or negative money, missing Rate Summary, empty positions → 400 and the preview is unchanged.
