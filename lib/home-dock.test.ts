@@ -180,5 +180,9 @@ describe("Home four doors", () => {
       homeDockTilesForViewer(james).map((tile) => tile.key),
       ["rate-vault"],
     );
+    assert.deepEqual(
+      homeDockTilesForViewer(owner, james).map((tile) => tile.key),
+      ["rate-vault"],
+    );
   });
 });

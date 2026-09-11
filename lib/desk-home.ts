@@ -99,13 +99,14 @@ export function homeDockTiles(_canRates = true) {
 
 type RateVaultViewer = { role?: string; privileges?: readonly string[] | null };
 
-/** Public four doors, plus Rate Vault when the session and lens both hold the grant. */
+/** Public four doors, plus Rate Vault when the session and lens both hold the grant.
+ *  A Rate Vault–only lens (James, or View as James) hides Jobs / Quality / HSE / Accounting. */
 export function homeDockTilesForViewer(
   session?: (RateVaultViewer & { email?: string }) | null,
   lens?: (RateVaultViewer & { email?: string }) | null,
   canRates = true,
 ) {
-  if (isRateVaultOnlyViewer(session) && isRateVaultOnlyViewer(lens ?? session)) {
+  if (isRateVaultOnlyViewer(lens ?? session)) {
     return canSeeRateVaultDoor(session, lens) ? [RATE_VAULT_DOOR] : [];
   }
   const tiles: HomeDockTile[] = homeDockTiles(canRates);

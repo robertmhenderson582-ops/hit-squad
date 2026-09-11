@@ -80,6 +80,10 @@ describe("Rate Vault scaffold", () => {
       homeDockTilesForViewer(james).map((tile) => tile.key),
       ["rate-vault"],
     );
+    assert.deepEqual(
+      homeDockTilesForViewer(owner, james).map((tile) => tile.key),
+      ["rate-vault"],
+    );
     assert.deepEqual(rateVaultAccess(james), { ok: true, status: 200 });
   });
 
@@ -351,6 +355,8 @@ describe("Rate Vault scaffold", () => {
     assert.match(server, /canSeeRateVault\(user\)/);
     assert.match(chrome, /RateVaultOnlyRedirect/);
     assert.match(redirect, /isRateVaultOnlyViewer/);
+    assert.match(redirect, /useLensUser/);
+    assert.match(redirect, /lens \|\| user/);
     assert.match(redirect, /\/rate-vault/);
     assert.doesNotMatch(redirect, FORBIDDEN_IMPORT);
     assert.match(privileges, /"rate-vault"/);

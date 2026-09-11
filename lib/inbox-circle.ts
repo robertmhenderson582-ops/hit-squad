@@ -2,6 +2,7 @@ import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { canExpandInbox, isPresident, NOVUS_EMAIL } from "./desk-role.ts";
 import { isMadisonAssigned } from "./desk-people.ts";
 import type { PrivilegeViewer } from "./privileges.ts";
+import { isRateVaultJamesEmail } from "./rate-vault.ts";
 import { testerByEmail, TESTER_SEATS } from "./tester-seats.ts";
 
 export type InboxCirclePerson = {
@@ -51,7 +52,7 @@ export function isNovusInboxEmail(email = "") {
 
 export function canUseInbox(user?: (PrivilegeViewer & { email?: string }) | null): boolean {
   const email = normalizeInboxEmail(user?.email);
-  if (!email || isNovusInboxEmail(email) || email === NOVUS_EMAIL) return false;
+  if (!email || isNovusInboxEmail(email) || email === NOVUS_EMAIL || isRateVaultJamesEmail(email)) return false;
   if (isPresident(user)) return true;
   return isInboxCircleEmail(email);
 }
@@ -73,7 +74,16 @@ export function madisonInboxContacts(
   const seen = new Set<string>();
   function add(row: InboxCirclePerson) {
     const next = normalizeInboxEmail(row.email);
-    if (!next || next === key || seen.has(next) || next === NOVUS_EMAIL || isNovusInboxEmail(next)) return;
+    if (
+      !next ||
+      next === key ||
+      seen.has(next) ||
+      next === NOVUS_EMAIL ||
+      isNovusInboxEmail(next) ||
+      isRateVaultJamesEmail(next)
+    ) {
+      return;
+    }
     seen.add(next);
     rows.push({ ...row, email: next });
   }
@@ -104,14 +114,15 @@ export function inboxContactsFor(
   people: Array<{ id: string; email: string; name: string; companyId?: string }> = [],
 ): InboxCirclePerson[] {
   const key = normalizeInboxEmail(email);
+  if (isRateVaultJamesEmail(key)) return [];
   if (isPresident(viewer)) {
     if (canExpandInbox(viewer)) {
-      return INBOX_CIRCLE.filter((row) => row.email !== key);
+      return INBOX_CIRCLE.filter((row) => row.email !== key && !isRateVaultJamesEmail(row.email));
     }
     return madisonInboxContacts(key, people);
   }
   if (!isInboxCircleEmail(key)) return [];
-  return INBOX_CIRCLE.filter((row) => row.email !== key);
+  return INBOX_CIRCLE.filter((row) => row.email !== key && !isRateVaultJamesEmail(row.email));
 }
 
 export function inboxPeerFor(email = ""): InboxCirclePerson | undefined {
@@ -140,6 +151,7 @@ export function keepInboxPair(from = "", to = "") {
   const b = normalizeInboxEmail(to);
   if (!a.includes("@") || !b.includes("@")) return false;
   if (a === NOVUS_EMAIL || b === NOVUS_EMAIL) return false;
+  if (isRateVaultJamesEmail(a) || isRateVaultJamesEmail(b)) return false;
   if (isInboxCircleEmail(a) || isInboxCircleEmail(b)) return true;
   if (isMadisonInboxEmail(a) || isMadisonInboxEmail(b)) return true;
   return false;

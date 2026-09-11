@@ -144,41 +144,68 @@ export function ManageUsersDesk() {
   async function onIssue(event: FormEvent) {
     event.preventDefault();
     setSeatNote(null);
-    const response = await fetch("/api/desk/seats", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: issueEmail, password: issuePassword }),
-    });
-    const data = await response.json();
-    setIssuePassword("");
-    if (!response.ok) {
-      setSeatNote(data.error || "Could not issue.");
-      return;
+    try {
+      const { ok, data } = await fetchJsonWithDeadline<{
+        error?: string;
+        seats?: SeatRow[];
+        companies?: Company[];
+      }>(
+        "/api/desk/seats",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: issueEmail, password: issuePassword }),
+        },
+        SEATS_REQUEST_DEADLINE_MS,
+        SEATS_TIMEOUT_ERROR,
+      );
+      setIssuePassword("");
+      if (!ok) {
+        setSeatNote(data.error || "Could not issue.");
+        return;
+      }
+      setSeats(data.seats ?? []);
+      if (Array.isArray(data.companies)) setCompanies(data.companies);
+      setSeatNote("Password issued on this desk. Don’t send. First sign-in must change it.");
+      setRecoveryOnce(null);
+    } catch (error) {
+      setIssuePassword("");
+      setSeatNote(error instanceof Error ? error.message : "Could not issue.");
     }
-    setSeats(data.seats ?? []);
-    if (Array.isArray(data.companies)) setCompanies(data.companies);
-    setSeatNote("Password issued on this desk. Don’t send. First sign-in must change it.");
-    setRecoveryOnce(null);
   }
 
   async function onRecoverSeat() {
     setSeatNote(null);
     setRecoveryOnce(null);
-    const response = await fetch("/api/desk/seats", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: issueEmail, recover: true }),
-    });
-    const data = await response.json();
-    if (!response.ok || !data.ok || typeof data.password !== "string") {
-      setSeatNote(data.error || "Recovery was not saved.");
-      return;
+    try {
+      const { ok, data } = await fetchJsonWithDeadline<{
+        error?: string;
+        ok?: boolean;
+        password?: string;
+        email?: string;
+        seats?: SeatRow[];
+      }>(
+        "/api/desk/seats",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: issueEmail, recover: true }),
+        },
+        SEATS_REQUEST_DEADLINE_MS,
+        SEATS_TIMEOUT_ERROR,
+      );
+      if (!ok || !data.ok || typeof data.password !== "string") {
+        setSeatNote(data.error || "Recovery was not saved.");
+        return;
+      }
+      setSeats(data.seats ?? []);
+      setRecoveryOnce(data.password);
+      setSeatNote(`One-time recovery for ${data.email}. Copy it now. It is not emailed.`);
+    } catch (error) {
+      setSeatNote(error instanceof Error ? error.message : "Recovery was not saved.");
     }
-    setSeats(data.seats ?? []);
-    setRecoveryOnce(data.password);
-    setSeatNote(`One-time recovery for ${data.email}. Copy it now. It is not emailed.`);
   }
 
   type AddSeatResponse = {

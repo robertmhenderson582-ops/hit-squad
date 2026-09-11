@@ -85,6 +85,8 @@ test("Add user submit shows ADDING…, times out, and does not stay stuck", () =
   assert.match(desk, /SEATS_REQUEST_DEADLINE_MS/);
   assert.match(desk, /SEATS_RECOVER_DEADLINE_MS/);
   assert.match(desk, /SEATS_TIMEOUT_ERROR/);
+  assert.match(desk, /email: issueEmail, password: issuePassword/);
+  assert.match(desk, /email: issueEmail, recover: true/);
   assert.match(desk, /applyAddedSeats/);
   assert.match(desk, /removeOptimisticSeat/);
   assert.match(desk, /DESK_SEATS_CHANGED_EVENT/);
@@ -92,4 +94,7 @@ test("Add user submit shows ADDING…, times out, and does not stay stuck", () =
   assert.match(people, /DESK_SEATS_CHANGED_EVENT/);
   assert.match(seats, /listSeatRows\(\{ hydrate: false \}\)/);
   assert.match(seats, /peekCompanies\(\)/);
+  assert.match(seats, /await issueSeatPassword/);
+  assert.match(seats, /Password was not saved/);
+  assert.match(seats, /Could not save that seat change/);
 });
