@@ -39,6 +39,8 @@ export type QualityListedFile = {
   type: string;
   data?: string;
   vaulted: boolean;
+  /** Company Quality Control Manual — listed, not removable. Never a Drive id. */
+  protected?: boolean;
 };
 
 export function qualityVaultStored(store?: string | null, stored?: boolean) {
@@ -46,25 +48,38 @@ export function qualityVaultStored(store?: string | null, stored?: boolean) {
 }
 
 export function qualityDropLeaks(payload: unknown) {
-  return /quality-briefs\.json|1A7anV1UKx8m7|141Js9RQZKXq|1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|DRIVE_QUALITY|drive\.google\.com|owner vault|hitsquad-vault@|iam\.gserviceaccount\.com/i.test(
+  return /quality-briefs\.json|1A7anV1UKx8m7|1IATimbehupRHwa9|141Js9RQZKXq|1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|DRIVE_QUALITY|drive\.google\.com|owner vault|hitsquad-vault@|iam\.gserviceaccount\.com/i.test(
     JSON.stringify(payload ?? ""),
   );
 }
 
+export function mergeQualityListedProtected(
+  current: boolean | undefined,
+  incoming: boolean | undefined,
+) {
+  return Boolean(current) && Boolean(incoming);
+}
+
 export function mergeVaultedQualityFiles(
-  vault: Array<{ name?: string; type?: string }>,
+  vault: Array<{ name?: string; type?: string; protected?: boolean }>,
   local: Array<{ name?: string; type?: string; data?: string }>,
 ): QualityListedFile[] {
   const listed: QualityListedFile[] = [];
   const seen = new Set<string>();
   for (const file of vault) {
     const name = (file.name || "").trim();
-    if (!name || seen.has(name) || isQualityLibraryLockName(name)) continue;
+    if (!name || isQualityLibraryLockName(name)) continue;
+    if (seen.has(name)) {
+      const row = listed.find((item) => item.name === name);
+      if (row) row.protected = mergeQualityListedProtected(row.protected, file.protected);
+      continue;
+    }
     seen.add(name);
     listed.push({
       name,
       type: file.type || "application/octet-stream",
       vaulted: true,
+      ...(file.protected ? { protected: true } : {}),
     });
   }
   for (const file of local) {

@@ -24,6 +24,7 @@ import type { PublicUser } from "./types.ts";
  */
 export const QUALITY_COMPANY_DOC_EDIT_ERROR = "Only Quality seats can add or remove these files.";
 export const QUALITY_COMPANY_DOC_LOCK_ERROR = "Only Corporate Quality or the owner can lock this library.";
+export const QUALITY_COMPANY_DOC_KEEP_ERROR = "That file is the company Quality Control Manual.";
 export { QUALITY_COMPANY_DOC_LOCKED_NOTE };
 
 export type QualityCompanyDocActor = Pick<PublicUser, "email" | "name" | "role">;

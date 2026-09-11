@@ -10,9 +10,10 @@ import {
   resetLeadBriefStoreForTests,
   useLeadBriefVaultForTests,
 } from "./lead-brief-store.ts";
-import { memoryDrive } from "./drive-estimates.ts";
+import { DRIVE_FOLDER_MIME, memoryDrive } from "./drive-estimates.ts";
 import {
   QUALITY_COMPANY_DOC_EDIT_ERROR,
+  QUALITY_COMPANY_DOC_KEEP_ERROR,
   QUALITY_COMPANY_DOC_LOCK_ERROR,
   QUALITY_COMPANY_DOC_LOCKED_NOTE,
   listQualityCompanyDocDrop,
@@ -24,6 +25,7 @@ import {
   saveQualityCompanyDocDrop,
 } from "./quality-company-doc-drops.ts";
 import { QUALITY_DROP_TYPE_ERROR } from "./quality-folder-drops.ts";
+import { QUALITY_CONTROL_MANUAL_FILE_ID } from "./drive-data.ts";
 import { QUALITY_COMPANY_DOC_GOOGLE_NATIVE_ERROR, qualityCompanyDocsJobId } from "./quality-company-docs.ts";
 import { persistQualityVaultFiles } from "./quality-vault.ts";
 import { qualityDropLeaks } from "./quality-vault-shared.ts";
@@ -319,5 +321,107 @@ describe("Quality company document vault drops", { concurrency: 1 }, () => {
     const listed = await listQualityCompanyDocDrops(chance, "madison");
     assert.equal(listed.locksKnown, false);
     assert.equal(listed.locksByFolder["code-documents"], true);
+  });
+
+  it("lets Chance remove extra Control Manual drops and keeps the company manual", async () => {
+    const drive = memoryDrive();
+    resetLeadBriefStoreForTests(join(dir, "manual-keep"));
+    useLeadBriefVaultForTests(drive);
+    const place = {
+      companyId: "madison",
+      folderId: "quality-control-manual" as const,
+      jobId: "company-docs:madison",
+      companyDocs: true as const,
+    };
+    await persistQualityVaultFiles(drive, place, [pdf("Quality Control Manual.pdf", "official-manual")]);
+    const bucket = [...drive.tree.values()].find(
+      (row) => row.file.name === "Quality Control Manual" && row.file.mimeType === DRIVE_FOLDER_MIME,
+    );
+    const uploaded = [...drive.tree.values()].find(
+      (row) => row.file.name === "Quality Control Manual.pdf" && row.file.parents?.includes(bucket?.file.id || ""),
+    );
+    assert.ok(uploaded);
+    drive.tree.delete(uploaded.file.id);
+    drive.tree.set(QUALITY_CONTROL_MANUAL_FILE_ID, {
+      file: { ...uploaded.file, id: QUALITY_CONTROL_MANUAL_FILE_ID },
+      bytes: uploaded.bytes,
+    });
+
+    const saved = await saveQualityCompanyDocDrop(chance, {
+      companyId: "madison",
+      folderId: "quality-control-manual",
+      files: [pdf("chance-drop.pdf", "chance-notes")],
+    });
+    assert.equal(saved.ok, true);
+    const viewerBlocked = await removeQualityCompanyDocFile(wendell, {
+      companyId: "madison",
+      folderId: "quality-control-manual",
+      fileName: "chance-drop.pdf",
+    });
+    assert.equal(viewerBlocked.ok, false);
+    if (!viewerBlocked.ok) assert.equal(viewerBlocked.error, QUALITY_COMPANY_DOC_EDIT_ERROR);
+
+    const locked = await lockQualityCompanyDoc(owner, {
+      companyId: "madison",
+      folderId: "quality-control-manual",
+      locked: true,
+    });
+    assert.equal(locked.ok, true);
+    const lockedRemove = await removeQualityCompanyDocFile(chance, {
+      companyId: "madison",
+      folderId: "quality-control-manual",
+      fileName: "chance-drop.pdf",
+    });
+    assert.equal(lockedRemove.ok, false);
+    if (!lockedRemove.ok) assert.equal(lockedRemove.error, QUALITY_COMPANY_DOC_LOCKED_NOTE);
+    const unlocked = await lockQualityCompanyDoc(owner, {
+      companyId: "madison",
+      folderId: "quality-control-manual",
+      locked: false,
+    });
+    assert.equal(unlocked.ok, true);
+
+    const cleared = await removeQualityCompanyDocFile(chance, {
+      companyId: "madison",
+      folderId: "quality-control-manual",
+      fileName: "chance-drop.pdf",
+    });
+    assert.equal(cleared.ok, true);
+    if (cleared.ok) {
+      assert.equal(cleared.files.some((file) => file.name === "chance-drop.pdf"), false);
+      assert.equal(cleared.files.some((file) => file.name === "Quality Control Manual.pdf" && file.protected), true);
+      assert.equal(qualityDropLeaks(cleared), false);
+    }
+
+    drive.tree.set("chance-copy", {
+      file: {
+        id: "chance-copy",
+        name: "Quality Control Manual.pdf",
+        mimeType: "application/pdf",
+        parents: bucket?.file.id ? [bucket.file.id] : [],
+      },
+      bytes: new Uint8Array([9, 9, 9]),
+    });
+    const extras = await removeQualityCompanyDocFile(chance, {
+      companyId: "madison",
+      folderId: "quality-control-manual",
+      fileName: "Quality Control Manual.pdf",
+    });
+    assert.equal(extras.ok, true);
+    assert.equal(drive.tree.has(QUALITY_CONTROL_MANUAL_FILE_ID), true);
+    assert.equal(drive.tree.has("chance-copy"), false);
+
+    const keep = await removeQualityCompanyDocFile(chance, {
+      companyId: "madison",
+      folderId: "quality-control-manual",
+      fileName: "Quality Control Manual.pdf",
+    });
+    assert.equal(keep.ok, false);
+    if (!keep.ok) assert.equal(keep.error, QUALITY_COMPANY_DOC_KEEP_ERROR);
+    assert.equal(drive.tree.has(QUALITY_CONTROL_MANUAL_FILE_ID), true);
+    const listed = await listQualityCompanyDocDrop(chance, "quality-control-manual", "madison");
+    assert.equal(listed.files.some((file) => file.name === "Quality Control Manual.pdf" && file.protected), true);
+    assert.equal(qualityDropLeaks(listed), false);
+    assert.equal(qualityDropLeaks(keep), false);
   });
 });

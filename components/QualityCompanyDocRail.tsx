@@ -91,7 +91,7 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
     )
       .then(async (response) => {
         const data = (await response.json().catch(() => ({}))) as {
-          filesByFolder?: Record<string, Array<{ name?: string; type?: string }>>;
+          filesByFolder?: Record<string, Array<{ name?: string; type?: string; protected?: boolean }>>;
           locksByFolder?: Record<string, boolean>;
           locksKnown?: boolean;
           acl?: QualityCompanyDocAcl;
@@ -334,7 +334,7 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
     }));
     const data = (await response.json().catch(() => ({}))) as {
       error?: string;
-      files?: Array<{ name?: string; type?: string }>;
+      files?: Array<{ name?: string; type?: string; protected?: boolean }>;
       store?: string;
       stored?: boolean;
     };
@@ -351,7 +351,7 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
     <aside id="quality-company-docs" className="plant-card h-fit px-3 py-4" aria-label="Quality files">
       <p className="mb-3 text-xs text-[#5b6f73]">
         {acl.canAddRemove
-          ? "Drop a file on a bar to save it. Click a bar to open that library."
+          ? "Drop a file on a bar to save it. Click a bar to open that library. Remove a file there, then confirm."
           : "Click a bar to open that library."}
       </p>
       <ul className="space-y-2">

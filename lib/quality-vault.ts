@@ -1,5 +1,5 @@
 import { companyName, type CompanyId } from "./companies.ts";
-import { QUALITY_BRIEFS_VAULT_NAME, briefsFolderId, qualityFolderId } from "./drive-data.ts";
+import { QUALITY_BRIEFS_VAULT_NAME, QUALITY_CONTROL_MANUAL_FILE_ID, briefsFolderId, qualityFolderId } from "./drive-data.ts";
 import { DRIVE_FOLDER_MIME, DriveApiError, type DriveAdapter, type DriveFile } from "./drive-estimates.ts";
 import type { LeadFile } from "./lead-briefs.ts";
 import {
@@ -185,6 +185,10 @@ function isQualityVaultFolder(row: DriveFile) {
   return Boolean(row.id && row.name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
 }
 
+export function isProtectedQualityCompanyDocFile(fileId?: string | null) {
+  return (fileId || "").trim() === QUALITY_CONTROL_MANUAL_FILE_ID;
+}
+
 function qualityVaultListedFile(row: DriveFile) {
   return {
     name: row.name,
@@ -192,6 +196,7 @@ function qualityVaultListedFile(row: DriveFile) {
       name: row.name,
       type: row.mimeType && row.mimeType !== DRIVE_FOLDER_MIME ? row.mimeType : "application/octet-stream",
     }),
+    ...(isProtectedQualityCompanyDocFile(row.id) ? { protected: true as const } : {}),
   };
 }
 
@@ -320,7 +325,7 @@ async function qualityVaultFolderId(drive: DriveAdapter, place: QualityVaultPlac
   return parent;
 }
 
-/** Trash a vaulted company-doc file. Fail closed — missing Drive or a leftover file is an error. */
+/** Trash vaulted extras by name. Never trash the standing Quality Control Manual PDF. */
 export async function trashQualityVaultFile(
   drive: DriveAdapter | null | undefined,
   place: QualityVaultPlace,
@@ -330,16 +335,36 @@ export async function trashQualityVaultFile(
   if (!wanted || isQualityLibraryLockName(wanted)) throw new Error(QUALITY_VAULT_WRITE_ERROR);
   if (!qualityDriveReady(drive) || !drive?.deleteJson) throw new Error(QUALITY_VAULT_WRITE_ERROR);
   const folderId = await qualityVaultFolderId(drive as DriveAdapter, place);
-  if (!folderId) return { missing: true as const, store: "drive" as const, stored: true as const };
+  if (!folderId) {
+    return { missing: true as const, protectedKept: false, trashed: 0, store: "drive" as const, stored: true as const };
+  }
   const kids = await drive.listChildren!(folderId);
-  const row = kids.find((item) => isQualityVaultFile(item) && item.name === wanted);
-  if (!row?.id) return { missing: true as const, store: "drive" as const, stored: true as const };
-  await drive.deleteJson(row.id);
+  const matches = kids.filter((item) => isQualityVaultFile(item) && item.name === wanted && item.id);
+  const extras = matches.filter((item) => !isProtectedQualityCompanyDocFile(item.id));
+  const protectedKept = matches.some((item) => isProtectedQualityCompanyDocFile(item.id));
+  if (!extras.length) {
+    return {
+      missing: !protectedKept,
+      protectedKept,
+      trashed: 0,
+      store: "drive" as const,
+      stored: true as const,
+    };
+  }
+  for (const row of extras) {
+    await drive.deleteJson(row.id);
+  }
   const leftover = (await drive.listChildren!(folderId)).find(
-    (item) => isQualityVaultFile(item) && item.name === wanted,
+    (item) => isQualityVaultFile(item) && item.name === wanted && !isProtectedQualityCompanyDocFile(item.id),
   );
   if (leftover?.id) throw new Error(QUALITY_VAULT_WRITE_ERROR);
-  return { missing: false as const, store: "drive" as const, stored: true as const };
+  return {
+    missing: false as const,
+    protectedKept,
+    trashed: extras.length,
+    store: "drive" as const,
+    stored: true as const,
+  };
 }
 
 export async function writeQualityCompanyDocLock(

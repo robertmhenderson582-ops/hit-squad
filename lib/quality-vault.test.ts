@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
-import { QUALITY_BRIEFS_VAULT_KIND, QUALITY_BRIEFS_VAULT_NAME, qualityFolderId, readVaultJson } from "./drive-data.ts";
+import { QUALITY_BRIEFS_VAULT_KIND, QUALITY_BRIEFS_VAULT_NAME, QUALITY_CONTROL_MANUAL_FILE_ID, qualityFolderId, readVaultJson } from "./drive-data.ts";
 import { DRIVE_FOLDER_MIME, DriveApiError, memoryDrive } from "./drive-estimates.ts";
 import {
   forgetLeadBriefCacheForTests,
@@ -21,6 +21,7 @@ import {
   QUALITY_VAULT_SHARE_ERROR,
   QUALITY_VAULT_WRITE_ERROR,
   listQualityCompanyDocVaultFolders,
+  isProtectedQualityCompanyDocFile,
   listQualityVaultFiles,
   mergeVaultedQualityFiles,
   persistQualityVaultFiles,
@@ -359,5 +360,56 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
     assert.equal(after.locked, true);
     await writeQualityCompanyDocLock(drive, place, false, owner.email);
     assert.equal((await listQualityVaultFiles(drive, place)).locked, false);
+  });
+
+  it("trashes extra Control Manual copies and leaves the company PDF", async () => {
+    const drive = memoryDrive();
+    const place = {
+      companyId: "madison",
+      folderId: "quality-control-manual",
+      jobId: "company-docs:madison",
+      companyDocs: true as const,
+    };
+    await persistQualityVaultFiles(drive, place, [pdf("Quality Control Manual.pdf", "official")]);
+    const bucket = [...drive.tree.values()].find(
+      (row) => row.file.name === "Quality Control Manual" && row.file.mimeType === DRIVE_FOLDER_MIME,
+    );
+    const uploaded = [...drive.tree.values()].find(
+      (row) => row.file.name === "Quality Control Manual.pdf" && row.file.parents?.includes(bucket?.file.id || ""),
+    );
+    assert.ok(uploaded);
+    drive.tree.delete(uploaded.file.id);
+    drive.tree.set(QUALITY_CONTROL_MANUAL_FILE_ID, {
+      file: { ...uploaded.file, id: QUALITY_CONTROL_MANUAL_FILE_ID },
+      bytes: uploaded.bytes,
+    });
+    drive.tree.set("chance-copy", {
+      file: {
+        id: "chance-copy",
+        name: "Quality Control Manual.pdf",
+        mimeType: "application/pdf",
+        parents: bucket?.file.id ? [bucket.file.id] : [],
+      },
+      bytes: new Uint8Array([4, 5, 6]),
+    });
+    assert.equal(isProtectedQualityCompanyDocFile(QUALITY_CONTROL_MANUAL_FILE_ID), true);
+    const trashed = await trashQualityVaultFile(drive, place, "Quality Control Manual.pdf");
+    assert.equal(trashed.trashed, 1);
+    assert.equal(trashed.protectedKept, true);
+    assert.equal(drive.tree.has(QUALITY_CONTROL_MANUAL_FILE_ID), true);
+    assert.equal(drive.tree.has("chance-copy"), false);
+    const listed = await listQualityVaultFiles(drive, place);
+    assert.equal(listed.files.some((file) => file.name === "Quality Control Manual.pdf" && file.protected), true);
+    assert.equal(qualityDropLeaks(listed), false);
+    assert.deepEqual(
+      mergeVaultedQualityFiles(
+        [
+          { name: "Quality Control Manual.pdf", type: "application/pdf", protected: true },
+          { name: "Quality Control Manual.pdf", type: "application/pdf" },
+        ],
+        [],
+      ).map((file) => `${file.name}:${file.protected ? "keep" : "drop"}`),
+      ["Quality Control Manual.pdf:drop"],
+    );
   });
 });
