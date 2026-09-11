@@ -619,8 +619,10 @@ describe("Rate Vault B-1 Excel export / import", () => {
     for (const row of imported.preview.rows) {
       sheets.set(row.sheet, (sheets.get(row.sheet) || 0) + 1);
     }
+    assert.equal(imported.preview.rows.length, 183);
     assert.equal(sheets.get("WOODRIVER BOILERMAKER TM"), 36);
     assert.equal(sheets.get("WOODRIVER PIPEFITTER TM"), 15);
+    assert.equal(sheets.get("WOODRIVER LABORER TM"), 12);
     assert.equal(sheets.get("WOODRIVER BM STAFF TM"), 28);
     assert.equal(sheets.get("WOODRIVER PF STAFF TM"), 27);
     assert.equal(imported.preview.rows.some((row) => row.position === "BOILERMAKER GENERAL FOREMAN"), true);

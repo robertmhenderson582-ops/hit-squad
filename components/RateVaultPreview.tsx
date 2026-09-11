@@ -425,6 +425,7 @@ export function RateVaultPreviewTables({
   ocipFace?: RateVaultOcipFace | "both";
   onB1Line?: RateVaultB1LineHandler;
 }) {
+  // Desk Rate Summary / position list — same filterPreviewByFace as Export B-1.
   const viewed = preview && ocipFace !== "both" ? filterPreviewByFace(preview, ocipFace) : preview;
   if (!viewed || !viewed.rows.length) {
     if (viewed && packageBookFace(viewed) === "tm") {

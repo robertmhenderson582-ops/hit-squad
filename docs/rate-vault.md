@@ -118,7 +118,7 @@ Human confirm / correct is required before the catalog updates. **Recognition �
 
 ## Drag and drop
 
-Every B-1 Builder step is a drop target — Sources, Recognize, Map crafts, Burden / build, and Publish — plus a persistent zone under the stepper. Drop PDF / Word / Excel the same way Quality folders accept files. Library cards are also draggable onto site and kind buckets to recategorize (metadata only; the Drive file does not move). Mapped craft / column rows can be reordered by drag. Binaries still never land in git.
+Every B-1 Builder step is a drop target — Sources, Map crafts, Burden / build, and Publish — plus a persistent zone under the stepper. Recognize keeps only the pane drop so that step is not a double zone. Drop PDF / Word / Excel the same way Quality folders accept files. Library cards are also draggable onto site and kind buckets to recategorize (metadata only; the Drive file does not move). Mapped craft / column rows can be reordered by drag. Binaries still never land in git.
 
 ## Break-off later
 

@@ -205,7 +205,15 @@ describe("Rate Vault Wood River B-1 preview", () => {
     assert.equal(ocip.rows.filter((row) => row.sheet === "WOODRIVER PIPEFITTER TM").length, 15);
     assert.equal(ocip.rows.filter((row) => row.sheet === "WOODRIVER LABORER TM").length, 12);
     assert.equal(ocip.rows.some((row) => row.position === "BOILERMAKER GENERAL FOREMAN" && row.wage === 50.6), true);
-    assert.equal(ocip.rows.some((row) => row.position === "PIPEFITTER JOURNEYMAN" && row.wage === 49.03), true);
+    assert.equal(
+      ocip.rows.some(
+        (row) =>
+          row.sheet === "WOODRIVER PIPEFITTER TM" &&
+          row.position === "PIPEFITTER JOURNEYMAN" &&
+          row.wage === 49.0295,
+      ),
+      true,
+    );
     assert.equal(ocip.ocipFace, "both");
     assert.equal(ocip.rows.length, 183);
   });
