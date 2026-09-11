@@ -20,6 +20,17 @@ export const TALK_STEPS = [
   },
 ] as const;
 
+export const HIDDEN_INBOX_TALK_STEPS = [
+  {
+    title: "How we talk",
+    body: "Inbox and Suggestion Box are off this desk for now. For tickets and help, email hitsquad.novus@gmail.com. Use regular email to communicate.",
+  },
+] as const;
+
+export function talkStepsForDesk(showInboxSuggestionBox = false) {
+  return showInboxSuggestionBox ? TALK_STEPS : HIDDEN_INBOX_TALK_STEPS;
+}
+
 export type TalkWalkState = {
   version: number;
   skipped: boolean;

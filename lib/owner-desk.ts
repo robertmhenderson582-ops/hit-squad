@@ -114,6 +114,11 @@ export type OwnerSettings = {
   republish: RepublishState;
   /** Owner overrides of SiteRecord.regularClient, keyed by site id. */
   regularClient?: Record<string, boolean>;
+  /**
+   * Owner / Novus flip. Default off — Inbox and Suggestion Box stay out of
+   * the desk chrome for every seat until Robert turns them back on.
+   */
+  showInboxSuggestionBox?: boolean;
 };
 
 export const VIEW_AS_HIDDEN_SETTINGS = [

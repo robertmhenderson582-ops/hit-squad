@@ -30,6 +30,7 @@ function defaultSettings(): OwnerSettings {
       buildStamp: BUILD_STAMP,
       inboxNotice: null,
     },
+    showInboxSuggestionBox: false,
   };
 }
 
@@ -52,6 +53,7 @@ export function parseOwnerSettings(raw: unknown): OwnerSettings {
   if (!raw || typeof raw !== "object") return next;
   const row = raw as Partial<OwnerSettings>;
   if (typeof row.aliasesOn === "boolean") next.aliasesOn = row.aliasesOn;
+  if (typeof row.showInboxSuggestionBox === "boolean") next.showInboxSuggestionBox = row.showInboxSuggestionBox;
   if (isFollowSeat(row.followSeat)) next.followSeat = row.followSeat;
   if (isViewAsSeat(row.viewAs)) next.viewAs = row.viewAs;
   if (row.viewResponsibility && VIEW_RESPONSIBILITIES.includes(row.viewResponsibility)) {
@@ -169,6 +171,7 @@ export async function getOwnerSettings(): Promise<OwnerSettings> {
 export async function setOwnerSettings(next: Partial<OwnerSettings>): Promise<OwnerSettings> {
   await hydrateOwnerSettings();
   if (typeof next.aliasesOn === "boolean") settings.aliasesOn = next.aliasesOn;
+  if (typeof next.showInboxSuggestionBox === "boolean") settings.showInboxSuggestionBox = next.showInboxSuggestionBox;
   if (isFollowSeat(next.followSeat)) settings.followSeat = next.followSeat;
   if (isViewAsSeat(next.viewAs)) settings.viewAs = next.viewAs;
   if (next.viewResponsibility && VIEW_RESPONSIBILITIES.includes(next.viewResponsibility)) {

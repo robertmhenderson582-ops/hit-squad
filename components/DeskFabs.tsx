@@ -17,9 +17,9 @@ import { unlockInboxAudio } from "@/lib/chime";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { InboxPanel } from "@/components/InboxPanel";
 import { useInbox } from "@/components/InboxProvider";
-import { useLensUser } from "@/components/OwnerDeskContext";
+import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { canUseInbox, canUseSuggestionBox } from "@/lib/inbox-circle";
+import { canSeeInboxUi, canSeeSuggestionBoxUi } from "@/lib/inbox-circle";
 
 type Draft = {
   kind: TicketKind;
@@ -56,9 +56,10 @@ function announceTicketsChanged() {
 export function DeskFabs() {
   const { status, user } = useSession();
   const lens = useLensUser();
+  const desk = useOwnerDesk();
   const inbox = useInbox();
-  const showInbox = canUseInbox(lens);
-  const showTickets = canUseSuggestionBox(lens);
+  const showInbox = canSeeInboxUi(lens, desk?.showInboxSuggestionBox);
+  const showTickets = canSeeSuggestionBoxUi(lens, desk?.showInboxSuggestionBox);
   const [ticketOpen, setTicketOpen] = useState(false);
   const [hiddenForShot, setHiddenForShot] = useState(false);
   const [markupSrc, setMarkupSrc] = useState<string | null>(null);

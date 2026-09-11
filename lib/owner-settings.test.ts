@@ -48,6 +48,22 @@ describe("owner settings vault persist", () => {
     assert.equal(again.regularClient?.["site-ferndale"], true);
   });
 
+  it("defaults Inbox and Suggestion Box chrome off and persists the owner flip", async () => {
+    const drive = memoryDrive();
+    useOwnerSettingsVaultForTests(drive);
+    const first = await getOwnerSettings();
+    assert.equal(first.showInboxSuggestionBox, false);
+    await setOwnerSettings({ showInboxSuggestionBox: true });
+    forgetOwnerSettingsCacheForTests();
+    useOwnerSettingsVaultForTests(drive);
+    const again = await getOwnerSettings();
+    assert.equal(again.showInboxSuggestionBox, true);
+    await setOwnerSettings({ showInboxSuggestionBox: false });
+    forgetOwnerSettingsCacheForTests();
+    useOwnerSettingsVaultForTests(drive);
+    assert.equal((await getOwnerSettings()).showInboxSuggestionBox, false);
+  });
+
   it("does not vault presence", () => {
     const presence = readFileSync(fileURLToPath(new URL("./presence.ts", import.meta.url)), "utf8");
     assert.equal(/drive-data/.test(presence), false);

@@ -8,8 +8,11 @@ import {
   INBOX_CIRCLE,
   NOVUS_INBOX_EMAIL,
   canReceiveDeskBot,
+  canSeeInboxUi,
+  canSeeSuggestionBoxUi,
   canUseInbox,
   canUseSuggestionBox,
+  inboxSuggestionBoxChromeOn,
   inboxContactsFor,
   inboxThreadKey,
   isInboxCircleEmail,
@@ -69,9 +72,20 @@ describe("inbox circle", () => {
     assert.equal(inboxContactsFor(JOSEPH_EMAIL).length, 0);
     assert.equal(inboxThreadKey("NathanBoyte@gmail.com", "bccamp2@gmail.com"), inboxThreadKey("bccamp2@gmail.com", "nathanboyte@gmail.com"));
     const fabs = readFileSync(fileURLToPath(new URL("../components/DeskFabs.tsx", import.meta.url)), "utf8");
-    assert.match(fabs, /canUseInbox/);
-    assert.match(fabs, /canUseSuggestionBox/);
+    assert.match(fabs, /canSeeInboxUi/);
+    assert.match(fabs, /canSeeSuggestionBoxUi/);
     assert.match(fabs, /showInbox/);
+    assert.equal(inboxSuggestionBoxChromeOn(undefined), false);
+    assert.equal(inboxSuggestionBoxChromeOn(false), false);
+    assert.equal(inboxSuggestionBoxChromeOn(true), true);
+    assert.equal(canSeeInboxUi({ email: "nathanboyte@gmail.com" }), false);
+    assert.equal(canSeeInboxUi({ email: "nathanboyte@gmail.com" }, false), false);
+    assert.equal(canSeeInboxUi({ email: "nathanboyte@gmail.com" }, true), true);
+    assert.equal(canSeeInboxUi({ email: OWNER_LOGIN_EMAIL }, false), false);
+    assert.equal(canSeeInboxUi({ email: OWNER_LOGIN_EMAIL }, true), true);
+    assert.equal(canSeeSuggestionBoxUi({ email: "chancec318@yahoo.com" }, false), false);
+    assert.equal(canSeeSuggestionBoxUi({ email: "chancec318@yahoo.com" }, true), true);
+    assert.equal(canSeeSuggestionBoxUi({ email: "marks544@yahoo.com" }, true), false);
     const panel = readFileSync(fileURLToPath(new URL("../components/InboxPanel.tsx", import.meta.url)), "utf8");
     assert.match(panel, /those six only/);
     assert.match(panel, />Inbox</);

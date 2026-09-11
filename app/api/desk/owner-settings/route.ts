@@ -25,6 +25,7 @@ export async function POST(request: Request) {
     viewAs?: string;
     viewResponsibility?: string;
     viewSite?: string;
+    showInboxSuggestionBox?: boolean;
     action?: string;
     waitMinutes?: RepublishWait;
     note?: string;
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
       viewAs: body.viewAs as never,
       viewResponsibility: body.viewResponsibility as never,
       viewSite: body.viewSite,
+      showInboxSuggestionBox: body.showInboxSuggestionBox,
     }),
   );
 }
