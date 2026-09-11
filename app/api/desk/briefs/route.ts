@@ -59,7 +59,12 @@ export async function GET(request: Request) {
   if (kind === "quality" && companyDocs) {
     if (fileName && isQualityCompanyDocId(folderId, companyId || undefined)) {
       const listed = await readQualityCompanyDocFile(user, folderId, fileName, companyId || undefined);
-      if (!listed.file) return NextResponse.json({ error: "File not found." }, { status: 404 });
+      if (!listed.file) {
+        return NextResponse.json(
+          { error: listed.error || "File not found." },
+          { status: listed.error ? 415 : 404 },
+        );
+      }
       return NextResponse.json({
         file: listed.file,
         store: listed.store,

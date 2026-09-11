@@ -10,7 +10,7 @@ import {
   qualityCompanyDocZipMemberType,
   readQualityCompanyDocZipMembers,
 } from "./quality-company-doc-zip.ts";
-import { qualityCompanyDocArchiveName, qualityCompanyDocViewKind } from "./quality-company-docs.ts";
+import { qualityCompanyDocArchiveName, qualityCompanyDocPreviewType, qualityCompanyDocViewKind } from "./quality-company-docs.ts";
 
 async function samplePack() {
   const zip = new JSZip();
@@ -49,6 +49,8 @@ describe("Quality company-doc zip packs", () => {
     assert.equal(qualityCompanyDocViewKind({ name: "ASME IX.zip", type: "application/zip" }), "zip");
     assert.equal(qualityCompanyDocViewKind({ name: "docs/ASME IX.pdf" }), "pdf");
     assert.equal(qualityCompanyDocZipMemberType("docs/ASME IX.pdf"), "application/pdf");
+    assert.equal(qualityCompanyDocPreviewType({ name: "docs/ASME IX.pdf", type: "text/plain" }), "application/pdf");
+    assert.equal(qualityCompanyDocZipMemberType("x.pdf"), "application/pdf");
   });
 
   it("opens a pdf member from the pack without treating the zip as other", async () => {
