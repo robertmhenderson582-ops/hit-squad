@@ -3,16 +3,21 @@
 import { FormEvent, useState } from "react";
 import { PasswordField } from "@/components/PasswordField";
 import { useSession } from "@/components/SessionProvider";
+import { mustChangeGateBlocks } from "@/lib/login-form";
 
 export function MustChangePasswordGate({ children }: { children: React.ReactNode }) {
-  const { user, status, refresh } = useSession();
+  const { user, status, refresh, acceptUser } = useSession();
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [released, setReleased] = useState(false);
 
-  const blocked = status === "authenticated" && Boolean(user?.mustChangePassword) && !released;
+  const blocked = mustChangeGateBlocks({
+    status,
+    mustChangePassword: user?.mustChangePassword,
+    released,
+  });
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -38,6 +43,12 @@ export function MustChangePasswordGate({ children }: { children: React.ReactNode
       setMessage(data.error || "Password was not saved.");
       return;
     }
+    const cleared = data.user
+      ? { ...data.user, mustChangePassword: false }
+      : user
+        ? { ...user, mustChangePassword: false }
+        : null;
+    if (cleared) acceptUser(cleared);
     setReleased(true);
     setNext("");
     setConfirm("");
@@ -49,11 +60,11 @@ export function MustChangePasswordGate({ children }: { children: React.ReactNode
   return (
     <div className="industrial-root flex min-h-screen items-center justify-center px-4">
       <section className="plant-card w-full max-w-md px-5 py-6">
-        <p className="text-xs tracking-[0.18em] text-[#5b6f73]">FIRST SIGN-IN</p>
-        <h1 className="mt-2 font-display text-3xl tracking-[0.08em] text-[#163038]">Set your password</h1>
+        <p className="text-xs tracking-[0.18em] text-[#5b6f73]">SET A PASSWORD</p>
+        <h1 className="mt-2 font-display text-3xl tracking-[0.08em] text-[#163038]">Choose a lasting password</h1>
         <p className="mt-3 text-sm leading-6 text-[#5b6f73]">
-          This seat was created by the owner. Choose a password of 8+ characters before the desk
-          opens. This screen cannot be skipped. Later this session is not an option.
+          The password you just used was temporary. Choose 8+ characters. This is the last step
+          before the desk opens — you will not be asked to sign in again.
         </p>
         <form onSubmit={onSubmit} className="mt-5 grid gap-3">
           <PasswordField label="New password" autoComplete="new-password" value={next} onChange={setNext} minLength={8} required />

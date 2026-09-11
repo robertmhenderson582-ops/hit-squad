@@ -917,6 +917,11 @@ export function loginOutcome(input: {
       : { status: "needsPassword" };
   }
 
+  // Password typed on a no-hash seat is not a skip — ask them to create once.
+  if (seatNeedsPasswordCreate(email)) {
+    return { status: "needsCreate" };
+  }
+
   const user = findUserByEmail(email);
   if (!user || !verifyPassword(user, password)) {
     return { status: "error", error: GENERIC_SIGNIN_ERROR, http: 401 };
