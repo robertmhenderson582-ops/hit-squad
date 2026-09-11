@@ -7,6 +7,7 @@ import { useDisplay } from "@/components/DisplayProvider";
 import { DeskBanners } from "@/components/DeskBanners";
 import { EstimateModalProvider, NewEstimateHost } from "@/components/EstimateModalContext";
 import { UnderConstructionBanner } from "@/components/UnderConstructionBanner";
+import { DeskHelpBar } from "@/components/DeskHelpBar";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { BrandMark } from "@/components/BrandMark";
 import { HomeCue } from "@/components/HomeCue";
@@ -107,6 +108,7 @@ function ChromeInner({
     >
       <RateVaultOnlyRedirect />
       <FieldTrialBanner />
+      <DeskHelpBar />
       {hero ? (
         <>
           <div className="home-corner-chrome">

@@ -176,10 +176,56 @@ html.hs-capturing:has(.estimate-modal) .ticket-scrim {
   color: #1a0d03;
 }
 
+.desk-help-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem 0.7rem;
+  min-width: 0;
+  padding: 0.36rem 0.75rem;
+  background: #083943;
+  border-bottom: 1px solid rgba(62, 198, 212, 0.35);
+  color: #efe6d4;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.desk-help-label {
+  flex: 0 0 auto;
+  color: #3ec6d4;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.desk-help-mail {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: #efe6d4;
+  text-decoration: underline;
+  text-overflow: ellipsis;
+  text-underline-offset: 0.18em;
+  white-space: nowrap;
+}
+
+.desk-help-mail:hover,
+.desk-help-mail:focus {
+  color: #f0a13a;
+}
+
 @media (max-width: 640px) {
   .trial-banner {
     padding-left: 0.75rem;
     padding-top: 2.35rem;
+  }
+
+  .desk-help-bar {
+    justify-content: flex-start;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.62rem;
   }
 }
 
@@ -2720,6 +2766,7 @@ html[data-theme="night"] .rfq-sheet {
   .print-hide,
   .desk-fabs,
   .theme-flip,
+  .desk-help-bar,
   .inbox-toast {
     display: none !important;
   }
