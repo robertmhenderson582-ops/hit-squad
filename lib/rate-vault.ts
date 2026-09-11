@@ -195,8 +195,8 @@ export const RATE_VAULT_B1_COMP_SHEET = "COMP Check";
 export const RATE_VAULT_B1_CBA_SHEET = "CBA PLA";
 export const RATE_VAULT_B1_STATE_SHEET = "State law";
 export const RATE_VAULT_B1_FRINGE_SHEET = "Fringes";
-/** Lean Rate Vault face — not the ~25 MB official Exhibit B-1. */
-export const RATE_VAULT_B1_EXPORT_MAX_BYTES = 150_000;
+/** Lean Rate Vault face — not the ~25 MB official Exhibit B-1. Room for hall B-1 control columns. */
+export const RATE_VAULT_B1_EXPORT_MAX_BYTES = 250_000;
 export const RATE_VAULT_B1_REQUIRED_SHEETS = [
   RATE_VAULT_B1_PACKAGE_SHEET,
   RATE_VAULT_B1_RATE_SHEET,
@@ -218,6 +218,13 @@ export const RATE_VAULT_B1_BURDEN_FAMILIES = [
 
 export type RateVaultBurdenFamily = (typeof RATE_VAULT_B1_BURDEN_FAMILIES)[number]["id"];
 export type RateVaultBurdenUnit = "pct-taxable" | "amount-hr";
+
+/** Exhibit B-1 hall-sheet builder controls. Not a three-way fringe enum. */
+export const RATE_VAULT_B1_RATE_KINDS = ["$", "%", "Varies"] as const;
+export const RATE_VAULT_B1_BASES = ["BW (K)", "Tax BW (P)"] as const;
+export const RATE_VAULT_B1_CALC_OPTIONS = ["ST", "OT", "DT", "ST-ONLY", "OT-ONLY"] as const;
+export const RATE_VAULT_B1_RATE_CLASSES = ["Merit", "Union"] as const;
+export const RATE_VAULT_B1_CRAFT_TYPES = ["Staff", "Craft", "Engineer", "All"] as const;
 
 /** P66 Rate Vault seat — James Hutton. Not James Cain. Not the tester circle. */
 export const RATE_VAULT_JAMES_EMAIL = "jhut26@gmail.com";
@@ -374,7 +381,19 @@ export type RateVaultPreviewRow = {
   clockNote: string;
 };
 
-export type RateVaultBurdenLine = {
+export type RateVaultB1LineControls = {
+  rateKind: string;
+  base: string;
+  calcSt: string;
+  calcOt: string;
+  calcDt: string;
+  mult: number | null;
+  rideSt: boolean;
+  rideOt: boolean;
+  rideDt: boolean;
+};
+
+export type RateVaultBurdenLine = RateVaultB1LineControls & {
   id: string;
   label: string;
   family: RateVaultBurdenFamily;
@@ -388,7 +407,7 @@ export type RateVaultBurdenLine = {
   ridesOt: boolean;
 };
 
-export type RateVaultFringeLine = {
+export type RateVaultFringeLine = RateVaultB1LineControls & {
   id: string;
   label: string;
   amountHr: number;
@@ -410,6 +429,8 @@ export type RateVaultCraftSheet = {
   group: string;
   revision: string | null;
   effective: string | null;
+  rateClass: string;
+  craftType: string;
   representativeWage: number;
   representativePosition: string;
   fringes: RateVaultFringeLine[];

@@ -278,6 +278,7 @@ describe("Rate Vault scaffold", () => {
     assert.match(desk, /Export B-1 Excel/);
     assert.match(desk, /import-b1/);
     assert.match(desk, /export-b1/);
+    assert.match(desk, /patch-b1-line/);
     assert.match(desk, /restore-b1/);
     assert.match(desk, /Confirm OCIP mix/);
     assert.match(desk, /Confirm book mix/);
@@ -303,6 +304,15 @@ describe("Rate Vault scaffold", () => {
     assert.match(previewUi, /T&M labor-burden book/);
     assert.match(previewUi, /Fringes Subtotal/);
     assert.match(previewUi, /Pay Tax FICA-MC/);
+    assert.match(previewUi, /Rate \$\/%\/Varies/);
+    assert.match(previewUi, /ST Calc/);
+    assert.match(previewUi, /Tax BW \(P\)/);
+    assert.match(previewUi, /BW \(K\)/);
+    assert.match(previewUi, /ST-ONLY/);
+    assert.match(previewUi, /OT-ONLY/);
+    assert.match(previewUi, /Rate Class/);
+    assert.match(previewUi, /Craft Type/);
+    assert.doesNotMatch(previewUi, /\bAccrual\b|hours worked|hours paid|hours-worked|hours-paid/i);
     assert.doesNotMatch(previewUi, /SUTA — Illinois|Composite 39/);
     assert.doesNotMatch(desk, /[Ss]hahan/);
     assert.doesNotMatch(preview, /[Ss]hahan/);
@@ -360,6 +370,61 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /1fFrxkY68TaCJXQa3OYVRZJ5oStJg9kMg/);
     assert.match(docs, /Confirm book mix/);
     assert.match(docs, /Union_TM/);
+    assert.match(docs, /Rate \$\/%\/Varies/);
+    assert.match(docs, /Tax BW \(P\)/);
+    assert.match(docs, /BW \(K\)/);
+    assert.match(docs, /ST Calc/);
+    assert.match(docs, /ST-ONLY/);
+    assert.match(docs, /OT-ONLY/);
+    assert.match(docs, /b1-fringe-options/);
+    assert.match(docs, /b1-fringe-options\.md/);
+    assert.match(docs, /b1-dropdowns/);
+    assert.match(xlsx, /Rate \$\/%\/Varies/);
+    assert.match(xlsx, /ST Calc/);
+    assert.match(source("./rate-vault-b1-options.ts"), /b1-fringe-options/);
+    assert.match(source("./rate-vault-b1-options.ts"), /b1-dropdowns/);
+    const fringeCatalog = source("./rate-vault/b1-fringe-options.json");
+    const fringeNotes = source("../docs/b1-fringe-options.md");
+    const parsedCatalog = JSON.parse(fringeCatalog) as {
+      meta?: { distinctFringeBurdenCalcOptionLabels?: string[] };
+      options?: { id?: string; label?: string }[];
+    };
+    assert.deepEqual(parsedCatalog.meta?.distinctFringeBurdenCalcOptionLabels, [
+      "ST",
+      "OT",
+      "DT",
+      "ST-ONLY",
+      "OT-ONLY",
+      "BW (K)",
+      "Tax BW (P)",
+      "$",
+      "%",
+      "Varies",
+      "Merit",
+      "Union",
+      "Staff",
+      "Craft",
+      "Engineer",
+      "All",
+    ]);
+    assert.equal(
+      (parsedCatalog.options ?? []).some((row) => row.id === "st-ot-dt-calc/OT-ONLY" && row.label === "OT-ONLY"),
+      true,
+    );
+    assert.match(fringeCatalog, /ST-ONLY/);
+    assert.match(fringeCatalog, /Tax BW \(P\)/);
+    assert.match(fringeCatalog, /BW \(K\)/);
+    assert.match(fringeCatalog, /do NOT appear anywhere in sharedStrings/);
+    assert.match(fringeNotes, /ST-ONLY/);
+    assert.match(fringeNotes, /OT-ONLY/);
+    assert.match(fringeNotes, /BW \(K\)/);
+    assert.match(fringeNotes, /Tax BW \(P\)/);
+    assert.doesNotMatch(fringeNotes, /[Ss]hahan/);
+    assert.doesNotMatch((parsedCatalog.meta?.distinctFringeBurdenCalcOptionLabels ?? []).join("|"), /hours|accrual/i);
+    assert.doesNotMatch(source("./rate-vault/b1-dropdowns.json"), /hours worked|hours paid|accrual/i);
+    assert.doesNotMatch(source("./rate-vault-b1-options.ts"), /[Ss]hahan/);
+    assert.doesNotMatch(source("./rate-vault/b1-dropdowns.json"), /[Ss]hahan/);
+    assert.doesNotMatch(source("./rate-vault/b1-fringe-options.json"), /[Ss]hahan/);
     assert.doesNotMatch(library, /siteId:\s*"monroe"/);
     assert.doesNotMatch(library, /Monroe Energy/);
     assert.doesNotMatch(vaultModule, /id: "monroe"/);
@@ -377,6 +442,8 @@ describe("Rate Vault scaffold", () => {
     assert.match(api, /recognizeRateVaultSource/);
     assert.match(api, /export-b1/);
     assert.match(api, /import-b1/);
+    assert.match(api, /patch-b1-line/);
+    assert.match(api, /applyB1LineControlsToPreview/);
     assert.match(api, /rateVaultImportMergeFace/);
     assert.match(api, /book-mix/);
     assert.match(api, /confirmBookMix/);

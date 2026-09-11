@@ -21,6 +21,8 @@ import {
   previewHasLaneBlend,
   rateVaultImportMergeFace,
 } from "@/lib/rate-vault-preview";
+import { applyB1LineControlsToPreview } from "@/lib/rate-vault-b1";
+import { parseRateVaultB1LinePatch } from "@/lib/rate-vault-b1-options";
 import { parseRateVaultB1Xlsx, rateVaultPreviewToXlsx, RATE_VAULT_B1_MIME } from "@/lib/rate-vault-xlsx";
 import {
   addRateVaultOwnerSource,
@@ -140,6 +142,8 @@ export async function POST(request: Request) {
     versionNote?: string;
     buyoffId?: string;
     buyoffAction?: string;
+    lineId?: string;
+    patch?: Record<string, unknown>;
   };
   const action = body.action || "";
 
@@ -248,6 +252,39 @@ export async function POST(request: Request) {
       writesRateBook: false,
       buyoffs: await listRateVaultBuyoffs(),
       workshop: await workshopPayload(),
+    });
+  }
+
+  if (action === "patch-b1-line") {
+    const siteId = isRateVaultSiteId(body.siteId) ? body.siteId : "wood-river";
+    const bookFace = parseBookFace(body.bookFace);
+    const lineId = typeof body.lineId === "string" ? body.lineId.trim() : "";
+    if (!lineId) return NextResponse.json({ error: "B-1 line id is required." }, { status: 400 });
+    const preview = await livePreview({ siteId, bookFace });
+    if (!preview) {
+      return NextResponse.json({ error: "No B-1 package for that site yet." }, { status: 404 });
+    }
+    const exists =
+      preview.fringes.some((line) => line.id === lineId) ||
+      preview.burden.some((line) => line.id === lineId) ||
+      preview.craftSheets.some(
+        (sheet) => sheet.fringes.some((line) => line.id === lineId) || sheet.burden.some((line) => line.id === lineId),
+      );
+    if (!exists) return NextResponse.json({ error: "That B-1 line is not on this package." }, { status: 400 });
+    const next = applyB1LineControlsToPreview(preview, lineId, parseRateVaultB1LinePatch(body.patch));
+    const saved = await upsertRateVaultPackage(
+      {
+        ...next,
+        fixture: false,
+        extractedFrom: preview.extractedFrom === "demo-seed" || preview.fixture ? "vault-b1-controls" : preview.extractedFrom,
+      },
+      "B-1 line controls",
+    );
+    if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: saved.status });
+    return NextResponse.json({
+      preview: saved.preview,
+      versions: await listRateVaultVersions(saved.preview.siteId, bookFace),
+      workshop: await workshopPayload(null, saved.preview, bookFace),
     });
   }
 

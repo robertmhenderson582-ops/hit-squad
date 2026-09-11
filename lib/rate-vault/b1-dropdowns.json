@@ -1,0 +1,11 @@
+{
+  "note": "Extension point for additional official B-1 option strings. Canonical lists live in b1-fringe-options.json (desk extract). Append every extra Drop Down List value here — unknown book strings stay first-class. Do not invent Illinois composites or names that are not in the book.",
+  "source": "desk extract extension — merge onto lib/rate-vault/b1-fringe-options.json",
+  "calc": [],
+  "base": [],
+  "rateKind": [],
+  "rateClass": [],
+  "craftType": [],
+  "ride": [],
+  "extra": {}
+}

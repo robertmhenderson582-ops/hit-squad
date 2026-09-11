@@ -1,10 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  applyB1LineControlsToPreview,
   b1RatesForCraftSheet,
   craftSheetsFromFlat,
+  fringeLine,
+  fringeOnBucket,
   looksLikePlaceholderIllinoisComposite,
 } from "./rate-vault-b1.ts";
+import {
+  inferRateVaultB1Controls,
+  parseRateVaultB1LinePatch,
+  rateVaultB1DistinctFringeLabels,
+  rateVaultB1SelectOptions,
+  retainRateVaultB1Option,
+} from "./rate-vault-b1-options.ts";
 import { loadWoodRiverB1PreviewFixture, loadWoodRiverTmB1PreviewFixture } from "./rate-vault-preview.ts";
 import { woodRiverB1CraftSheets } from "./rate-vault-wood-river-b1.ts";
 import { woodRiverTmB1CraftSheets } from "./rate-vault-wood-river-tm-b1.ts";
@@ -27,7 +37,9 @@ describe("Rate Vault B-1 craft-sheet math", () => {
     const meritLead = b1RatesForCraftSheet(merit, 90);
     assert.equal(meritLead.wage, 90);
     assert.equal(meritLead.fringe, 11.05);
-    assert.equal(meritLead.billOt, 169.63);
+    assert.equal(merit.fringes.find((line) => line.label === "Health")?.calcOt, "ST-ONLY");
+    assert.equal(merit.fringes.find((line) => line.label === "Health")?.rideOt, false);
+    assert.equal(meritLead.billOt, 164.88);
     assert.equal(b1RatesForCraftSheet(merit, 72).bill, 93.89);
     assert.equal(b1RatesForCraftSheet(bmStaff, 71).bill, 119.07);
   });
@@ -101,5 +113,113 @@ describe("Rate Vault B-1 craft-sheet math", () => {
       tm.rows.some((row) => row.position === "BOILERMAKER GENERAL FOREMAN" && row.fringe === 36.89 && row.wage === 50.6),
       true,
     );
+  });
+
+  it("calculates every Exhibit B-1 calc / base / rate-kind / ride choice", () => {
+    const base = {
+      id: "hw",
+      label: "H&W",
+      amountHr: 10,
+      craft: "Boilermaker",
+      local: "363",
+      sheet: "WOODRIVER BOILERMAKER RRFF",
+    };
+    const st = fringeLine({ ...base, calcOt: "ST", calcDt: "ST", rideOt: true, rideDt: true });
+    assert.equal(fringeOnBucket(st, 40, "ot"), 10);
+    assert.equal(fringeOnBucket(st, 40, "dt"), 10);
+
+    const ot = fringeLine({ ...base, calcOt: "OT", calcDt: "OT", rideOt: true, rideDt: true });
+    assert.equal(fringeOnBucket(ot, 40, "ot"), 15);
+    assert.equal(fringeOnBucket(ot, 40, "dt"), 15);
+
+    const dt = fringeLine({ ...base, calcOt: "DT", calcDt: "DT", rideOt: true, rideDt: true });
+    assert.equal(fringeOnBucket(dt, 40, "ot"), 20);
+    assert.equal(fringeOnBucket(dt, 40, "dt"), 20);
+
+    const mixed = fringeLine({ ...base, id: "mixed", calcOt: "OT", calcDt: "DT", rideOt: true, rideDt: true });
+    assert.equal(fringeOnBucket(mixed, 40, "ot"), 15);
+    assert.equal(fringeOnBucket(mixed, 40, "dt"), 20);
+
+    const straight = fringeLine({ ...base, calcOt: "ST-ONLY", calcDt: "ST-ONLY", rideOt: false, rideDt: false });
+    assert.equal(fringeOnBucket(straight, 40, "st"), 10);
+    assert.equal(fringeOnBucket(straight, 40, "ot"), 0);
+    assert.equal(fringeOnBucket(straight, 40, "dt"), 0);
+
+    const otOnly = fringeLine({ ...base, id: "ot-only", calcSt: "OT-ONLY", calcOt: "OT-ONLY", calcDt: "OT-ONLY", rideOt: true, rideDt: true });
+    assert.equal(fringeOnBucket(otOnly, 40, "st"), 0);
+    assert.equal(fringeOnBucket(otOnly, 40, "ot"), 15);
+    assert.equal(fringeOnBucket(otOnly, 40, "dt"), 0);
+
+    const pctTax = fringeLine({
+      ...base,
+      id: "annuity",
+      label: "Annuity",
+      amountHr: 0,
+      ratePct: 10,
+      unit: "pct-taxable",
+      base: "Tax BW (P)",
+      calcOt: "OT",
+      calcDt: "DT",
+      rideOt: true,
+      rideDt: true,
+    });
+    assert.equal(fringeOnBucket(pctTax, 40, "ot"), 6);
+    const pctBase = fringeLine({ ...pctTax, id: "annuity-bw", base: "BW (K)" });
+    assert.equal(fringeOnBucket(pctBase, 40, "ot"), 6);
+
+    const custom = fringeLine({ ...base, id: "custom", calcOt: "Book Custom Mode", rideOt: true, mult: 1.25 });
+    assert.equal(custom.calcOt, "Book Custom Mode");
+    assert.equal(fringeOnBucket(custom, 40, "ot"), 12.5);
+    assert.equal(rateVaultB1SelectOptions("calc", "Book Custom Mode").includes("Book Custom Mode"), true);
+    assert.deepEqual(retainRateVaultB1Option(["ST"], "Book Custom Mode"), ["ST", "Book Custom Mode"]);
+    assert.deepEqual(rateVaultB1SelectOptions("calc"), ["ST", "OT", "DT", "ST-ONLY", "OT-ONLY"]);
+    assert.deepEqual(rateVaultB1SelectOptions("base"), ["BW (K)", "Tax BW (P)"]);
+    assert.deepEqual(rateVaultB1SelectOptions("rateKind"), ["$", "%", "Varies"]);
+    assert.deepEqual(rateVaultB1SelectOptions("rateClass"), ["Merit", "Union"]);
+    assert.deepEqual(rateVaultB1SelectOptions("craftType"), ["Staff", "Craft", "Engineer", "All"]);
+    assert.deepEqual(rateVaultB1DistinctFringeLabels(), [
+      "ST",
+      "OT",
+      "DT",
+      "ST-ONLY",
+      "OT-ONLY",
+      "BW (K)",
+      "Tax BW (P)",
+      "$",
+      "%",
+      "Varies",
+      "Merit",
+      "Union",
+      "Staff",
+      "Craft",
+      "Engineer",
+      "All",
+    ]);
+  });
+
+  it("maps legacy ridesOt into the five calc modes without deleting options, and patches change Bill OT/DT", () => {
+    const rides = inferRateVaultB1Controls({ ridesOt: true, unit: "amount-hr" });
+    assert.equal(rides.calcOt, "OT");
+    assert.equal(rides.calcDt, "DT");
+    assert.equal(rides.rideOt, true);
+    const parked = inferRateVaultB1Controls({ ridesOt: false, unit: "amount-hr" });
+    assert.equal(parked.calcOt, "ST");
+    assert.equal(parked.calcDt, "ST");
+    assert.equal(parked.rideOt, true);
+
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const gf = fixture.rows.find((row) => row.position === "Boilermaker General Foreman");
+    const hw = fixture.fringes.find((line) => line.label === "H&W" && line.sheet.includes("BOILERMAKER"));
+    assert.ok(gf && hw);
+    assert.equal(gf.billOt, 140.21);
+    assert.equal(hw.calcOt, "OT");
+    assert.equal(hw.calcDt, "DT");
+    const next = applyB1LineControlsToPreview(fixture, hw.id, parseRateVaultB1LinePatch({ calcOt: "ST-ONLY", rideOt: false }));
+    const patched = next.rows.find((row) => row.position === "Boilermaker General Foreman");
+    const patchedLine = next.fringes.find((line) => line.id === hw.id);
+    assert.equal(patchedLine?.calcOt, "ST-ONLY");
+    assert.equal(patchedLine?.rideOt, false);
+    assert.ok((patched?.billOt ?? 0) < (gf.billOt ?? 0));
+    assert.equal(Math.round(((gf.billOt ?? 0) - (patched?.billOt ?? 0)) * 100) / 100, 10.61);
   });
 });
