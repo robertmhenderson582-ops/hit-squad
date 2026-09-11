@@ -4,6 +4,7 @@
  */
 
 import woodRiverB1PreviewJson from "./rate-vault/wood-river-b1-preview-fixture.json" with { type: "json" };
+import woodRiverTmB1PreviewJson from "./rate-vault/wood-river-tm-b1-preview-fixture.json" with { type: "json" };
 import {
   applyB1ToPreviewRows,
   b1PayTaxPct,
@@ -16,6 +17,7 @@ import {
   ripplePreviewRowsFromB1Sheets,
 } from "./rate-vault-b1.ts";
 import { woodRiverB1CraftSheets } from "./rate-vault-wood-river-b1.ts";
+import { WOOD_RIVER_TM_B1_PACKAGE_NOTE, woodRiverTmB1CraftSheets } from "./rate-vault-wood-river-tm-b1.ts";
 import {
   isRateVaultSiteId,
   packageBookFace,
@@ -40,6 +42,7 @@ import {
 } from "./rate-vault.ts";
 
 export const WOOD_RIVER_B1_PREVIEW_FIXTURE_PATH = "lib/rate-vault/wood-river-b1-preview-fixture.json";
+export const WOOD_RIVER_TM_B1_PREVIEW_FIXTURE_PATH = "lib/rate-vault/wood-river-tm-b1-preview-fixture.json";
 
 /** Wood River RRFF Labor Burden Buildup — catalog by Drive id only. Never commit the xlsx. Not the TM labor-burden face. */
 export const WOOD_RIVER_B1_EXHIBIT_DRIVE_ID = "1HN5FclxjQNw0iHm_hizHbcWM9GZV_Zeu";
@@ -51,8 +54,7 @@ export const WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID = "1fFrxkY68TaCJXQa3OYVRZJ5oStJg9
 
 export const WOOD_RIVER_TM_B1_EXHIBIT_TITLE = "Wood River Exhibit B-1 Union_TM Labor Burden Buildup";
 
-export const WOOD_RIVER_TM_B1_EMPTY_NOTE =
-  "T&M Exhibit B-1 is cataloged as its own Wood River labor-burden book (Drive id 1fFrxkY68TaCJXQa3OYVRZJ5oStJg9kMg, titles like Union_TM Labor Burden Buildup). Official hall numbers stay on Drive — this vault does not invent T&M wages, fringes, or an Illinois composite %. Switch back to RRFF for the filled package. OCIP still filters seats inside this book once rates land. Does not write live Rate Tables.";
+export { WOOD_RIVER_TM_B1_PACKAGE_NOTE };
 
 export const RATE_VAULT_PREVIEW_COLUMNS: Array<{ header: string; role: RateVaultColumnRole }> = [
   { header: "Craft", role: "craft" },
@@ -386,30 +388,19 @@ let cachedWoodRiverTm: RateVaultPreviewPackage | null = null;
 
 export function loadWoodRiverTmB1PreviewFixture(): RateVaultPreviewPackage {
   if (cachedWoodRiverTm) return cloneRateVaultPreview(cachedWoodRiverTm);
+  const parsed = parseRateVaultPreviewPackage(woodRiverTmB1PreviewJson);
+  if ("error" in parsed) throw new Error(parsed.error);
+  const craftSheets = parsed.craftSheets.length ? parsed.craftSheets : woodRiverTmB1CraftSheets();
   cachedWoodRiverTm = {
-    id: "wood-river-tm-b1-preview",
-    title: WOOD_RIVER_TM_B1_EXHIBIT_TITLE,
-    siteId: "wood-river",
-    sourceId: WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID,
-    sourceTitle: WOOD_RIVER_TM_B1_EXHIBIT_TITLE,
-    effective: null,
-    revision: null,
-    extractedFrom: "demo-seed",
-    note: WOOD_RIVER_TM_B1_EMPTY_NOTE,
-    writesRateBook: false,
-    fixture: true,
+    ...parsed,
     bookFace: "tm",
-    ocipFace: "both",
-    version: null,
-    sheets: [
-      { name: "Rate Summary", kind: "rate-summary" },
-      { name: "Burden Summary", kind: "burden-summary" },
-      { name: "Fringes", kind: "fringes" },
-    ],
-    craftSheets: [],
-    burden: [],
-    fringes: [],
-    rows: [],
+    sourceId: parsed.sourceId || WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID,
+    sourceTitle: parsed.sourceTitle || WOOD_RIVER_TM_B1_EXHIBIT_TITLE,
+    note: parsed.note || WOOD_RIVER_TM_B1_PACKAGE_NOTE,
+    craftSheets,
+    rows: applyB1ToPreviewRows(parsed.rows, craftSheets),
+    burden: parsed.burden.length ? parsed.burden : flattenB1Burden(craftSheets),
+    fringes: parsed.fringes.length ? parsed.fringes : flattenB1Fringes(craftSheets),
   };
   return loadWoodRiverTmB1PreviewFixture();
 }
@@ -548,7 +539,7 @@ export function enrichReviewWithPreview(
       : [preview.title, preview.note, ...preview.rows.slice(0, 3).map((row) => `${row.position} · ${formatRateVaultMoney(row.billRate)}`)].filter(Boolean),
     extractNote: review.extractNote.includes("no binary")
       ? preview.bookFace === "tm"
-        ? "Linked Drive id — T&M book face loaded. Hall rates are not in this vault yet. Confirm before mapping. Layouts are not universal."
+        ? "Linked Drive id — visual package loaded from the Wood River T&M B-1 preview fixture. Confirm before mapping. Layouts are not universal."
         : "Linked Drive id — visual package loaded from the Wood River B-1 preview fixture. Confirm before mapping. Layouts are not universal."
       : review.extractNote,
   };

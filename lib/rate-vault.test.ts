@@ -293,6 +293,7 @@ describe("Rate Vault scaffold", () => {
     assert.match(previewUi, /imported B-1 Excel/);
     assert.doesNotMatch(desk, /rate-vault-xlsx/);
     assert.match(preview, /wood-river-b1-preview-fixture\.json/);
+    assert.match(preview, /wood-river-tm-b1-preview-fixture\.json/);
     assert.match(preview, /1HN5FclxjQNw0iHm_hizHbcWM9GZV_Zeu/);
     assert.match(preview, /1fFrxkY68TaCJXQa3OYVRZJ5oStJg9kMg/);
     assert.match(preview, /bookFace/);
@@ -310,7 +311,10 @@ describe("Rate Vault scaffold", () => {
     assert.doesNotMatch(xlsx, /[Ss]hahan/);
     assert.doesNotMatch(source("./rate-vault-b1.ts"), /[Ss]hahan/);
     assert.doesNotMatch(source("./rate-vault-wood-river-b1.ts"), /[Ss]hahan/);
+    assert.doesNotMatch(source("./rate-vault-wood-river-tm-b1.ts"), /[Ss]hahan/);
     assert.doesNotMatch(source("./rate-vault/wood-river-b1-preview-fixture.json"), /[Ss]hahan/);
+    assert.doesNotMatch(source("./rate-vault/wood-river-tm-b1-preview-fixture.json"), /[Ss]hahan/);
+    assert.doesNotMatch(source("./rate-vault/wood-river-tm-b1-extract.json"), /[Ss]hahan/);
     assert.match(desk, /onDrop/);
     assert.match(desk, /RATE_VAULT_SOURCE_DRAG/);
     assert.match(desk, /RATE_VAULT_CRAFT_DRAG/);
@@ -332,6 +336,7 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /Drag and drop/);
     assert.match(docs, /Quality folders/);
     assert.match(docs, /wood-river-b1-preview-fixture/);
+    assert.match(docs, /wood-river-tm-b1-preview-fixture/);
     assert.match(docs, /Pay Tax FICA-MC/);
     assert.match(docs, /Fringes Subtotal/);
     assert.doesNotMatch(docs, /placeholder id|1WOODRIVERB1LATESTPENDING000/);

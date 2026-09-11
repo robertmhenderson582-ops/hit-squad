@@ -230,7 +230,7 @@ export function RateVaultPreviewTables({
           {viewed.note ? <p className="text-sm leading-6 text-[#5b6f73]">{viewed.note}</p> : null}
           <p className="text-sm text-[#5b6f73]">
             {emptyNote ||
-              `T&M hall rates are not loaded in this vault yet. Switch back to RRFF for the filled Wood River package.`}
+              `No T&M seats in this view. Switch OCIP or pick RRFF for the other Wood River book.`}
           </p>
         </div>
       );
