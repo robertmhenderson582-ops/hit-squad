@@ -11,6 +11,7 @@ import {
 import {
   inferRateVaultB1Controls,
   parseRateVaultB1LinePatch,
+  rateVaultB1DistinctFringeLabels,
   rateVaultB1SelectOptions,
   retainRateVaultB1Option,
 } from "./rate-vault-b1-options.ts";
@@ -173,6 +174,27 @@ describe("Rate Vault B-1 craft-sheet math", () => {
     assert.deepEqual(retainRateVaultB1Option(["ST"], "Book Custom Mode"), ["ST", "Book Custom Mode"]);
     assert.deepEqual(rateVaultB1SelectOptions("calc"), ["ST", "OT", "DT", "ST-ONLY", "OT-ONLY"]);
     assert.deepEqual(rateVaultB1SelectOptions("base"), ["BW (K)", "Tax BW (P)"]);
+    assert.deepEqual(rateVaultB1SelectOptions("rateKind"), ["$", "%", "Varies"]);
+    assert.deepEqual(rateVaultB1SelectOptions("rateClass"), ["Merit", "Union"]);
+    assert.deepEqual(rateVaultB1SelectOptions("craftType"), ["Staff", "Craft", "Engineer", "All"]);
+    assert.deepEqual(rateVaultB1DistinctFringeLabels(), [
+      "ST",
+      "OT",
+      "DT",
+      "ST-ONLY",
+      "OT-ONLY",
+      "BW (K)",
+      "Tax BW (P)",
+      "$",
+      "%",
+      "Varies",
+      "Merit",
+      "Union",
+      "Staff",
+      "Craft",
+      "Engineer",
+      "All",
+    ]);
   });
 
   it("maps legacy ridesOt into the five calc modes without deleting options, and patches change Bill OT/DT", () => {

@@ -377,15 +377,50 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /ST-ONLY/);
     assert.match(docs, /OT-ONLY/);
     assert.match(docs, /b1-fringe-options/);
+    assert.match(docs, /b1-fringe-options\.md/);
     assert.match(docs, /b1-dropdowns/);
     assert.match(xlsx, /Rate \$\/%\/Varies/);
     assert.match(xlsx, /ST Calc/);
     assert.match(source("./rate-vault-b1-options.ts"), /b1-fringe-options/);
     assert.match(source("./rate-vault-b1-options.ts"), /b1-dropdowns/);
-    assert.match(source("./rate-vault/b1-fringe-options.json"), /ST-ONLY/);
-    assert.match(source("./rate-vault/b1-fringe-options.json"), /Tax BW \(P\)/);
-    assert.match(source("./rate-vault/b1-fringe-options.json"), /BW \(K\)/);
-    assert.doesNotMatch(source("./rate-vault/b1-fringe-options.json"), /hours worked|hours paid|accrual/i);
+    const fringeCatalog = source("./rate-vault/b1-fringe-options.json");
+    const fringeNotes = source("../docs/b1-fringe-options.md");
+    const parsedCatalog = JSON.parse(fringeCatalog) as {
+      meta?: { distinctFringeBurdenCalcOptionLabels?: string[] };
+      options?: { id?: string; label?: string }[];
+    };
+    assert.deepEqual(parsedCatalog.meta?.distinctFringeBurdenCalcOptionLabels, [
+      "ST",
+      "OT",
+      "DT",
+      "ST-ONLY",
+      "OT-ONLY",
+      "BW (K)",
+      "Tax BW (P)",
+      "$",
+      "%",
+      "Varies",
+      "Merit",
+      "Union",
+      "Staff",
+      "Craft",
+      "Engineer",
+      "All",
+    ]);
+    assert.equal(
+      (parsedCatalog.options ?? []).some((row) => row.id === "st-ot-dt-calc/OT-ONLY" && row.label === "OT-ONLY"),
+      true,
+    );
+    assert.match(fringeCatalog, /ST-ONLY/);
+    assert.match(fringeCatalog, /Tax BW \(P\)/);
+    assert.match(fringeCatalog, /BW \(K\)/);
+    assert.match(fringeCatalog, /do NOT appear anywhere in sharedStrings/);
+    assert.match(fringeNotes, /ST-ONLY/);
+    assert.match(fringeNotes, /OT-ONLY/);
+    assert.match(fringeNotes, /BW \(K\)/);
+    assert.match(fringeNotes, /Tax BW \(P\)/);
+    assert.doesNotMatch(fringeNotes, /[Ss]hahan/);
+    assert.doesNotMatch((parsedCatalog.meta?.distinctFringeBurdenCalcOptionLabels ?? []).join("|"), /hours|accrual/i);
     assert.doesNotMatch(source("./rate-vault/b1-dropdowns.json"), /hours worked|hours paid|accrual/i);
     assert.doesNotMatch(source("./rate-vault-b1-options.ts"), /[Ss]hahan/);
     assert.doesNotMatch(source("./rate-vault/b1-dropdowns.json"), /[Ss]hahan/);

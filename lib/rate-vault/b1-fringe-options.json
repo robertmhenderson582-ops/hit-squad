@@ -1,10 +1,1454 @@
 {
-  "note": "Wood River Exhibit B-1 Drop Down List — exact strings from the desk extract. ST/OT/DT Calc is A1:A5 → hall sheet row 7. % base is E1:E2 → row 8. Rate $/ %/Varies is the row-6 cell format/text, not a DV list. Rate Class and Craft Type are also in the book. Do not invent, rename, or collapse. Unknown later extract strings append via b1-dropdowns.json.",
-  "source": "desk extract 2026-09-11 — Drop Down List A1:A5, E1:E2, row-6 Rate $/ %/Varies, Rate Class, Craft Type",
-  "calc": ["ST", "OT", "DT", "ST-ONLY", "OT-ONLY"],
-  "base": ["BW (K)", "Tax BW (P)"],
-  "rateKind": ["$", "%", "Varies"],
-  "rateClass": ["Merit", "Union"],
-  "craftType": ["Staff", "Craft", "Engineer", "All"],
-  "ride": ["Y", "N"]
+  "options": [
+    {
+      "id": "st-ot-dt-calc/ST",
+      "label": "ST",
+      "source": "Drop Down List!$A$1:$A$5; dataValidation (x14) on craft/staff sheet row-7 cells labeled 'ST/OT/DT Calc ---->'",
+      "appearsOn": [
+        "Drop Down List!A1:A5",
+        "Boilermaker L363!J7,K7:N8,P7:P8,Q7:R7,T7:U8,V7:Y7,AA7:AA8,AB7:AD7,AF7:AF8,AG7:AH7 (and similar sqref)",
+        "BM Union Staff!I7,J7:M8,O7:O8,P7:Q7,S7:T8,U7:X7,Z7:Z8,AA7:AC7,AE7:AE8,AF7:AG7",
+        "Merit Staff!I7,J7:M8,O7:O8,P7:Q7,S7:S8,T7:AD7,AF7:AF8,AG7:AJ7,AL7:AL8,AM7:AO7,AQ7:AQ8,AR7:AS7",
+        "Pipefitter L553! (same pattern as Boilermaker L363)",
+        "Also on other GPPMA craft/staff tabs with same template"
+      ],
+      "controls": "Apply the ST-row computed amount unchanged on OT and DT rows (flat $/hr; does not ride premium)."
+    },
+    {
+      "id": "st-ot-dt-calc/OT",
+      "label": "OT",
+      "source": "Drop Down List!$A$1:$A$5; dataValidation (x14) on craft/staff sheet row-7 cells labeled 'ST/OT/DT Calc ---->'",
+      "appearsOn": [
+        "Drop Down List!A1:A5",
+        "Boilermaker L363!J7,K7:N8,P7:P8,Q7:R7,T7:U8,V7:Y7,AA7:AA8,AB7:AD7,AF7:AF8,AG7:AH7 (and similar sqref)",
+        "BM Union Staff!I7,J7:M8,O7:O8,P7:Q7,S7:T8,U7:X7,Z7:Z8,AA7:AC7,AE7:AE8,AF7:AG7",
+        "Merit Staff!I7,J7:M8,O7:O8,P7:Q7,S7:S8,T7:AD7,AF7:AF8,AG7:AJ7,AL7:AL8,AM7:AO7,AQ7:AQ8,AR7:AS7",
+        "Pipefitter L553! (same pattern as Boilermaker L363)",
+        "Also on other GPPMA craft/staff tabs with same template"
+      ],
+      "controls": "OT row = ST amount \u00d7 1.5; DT row keeps the OT (1.5\u00d7) amount (rides OT, not DT)."
+    },
+    {
+      "id": "st-ot-dt-calc/DT",
+      "label": "DT",
+      "source": "Drop Down List!$A$1:$A$5; dataValidation (x14) on craft/staff sheet row-7 cells labeled 'ST/OT/DT Calc ---->'",
+      "appearsOn": [
+        "Drop Down List!A1:A5",
+        "Boilermaker L363!J7,K7:N8,P7:P8,Q7:R7,T7:U8,V7:Y7,AA7:AA8,AB7:AD7,AF7:AF8,AG7:AH7 (and similar sqref)",
+        "BM Union Staff!I7,J7:M8,O7:O8,P7:Q7,S7:T8,U7:X7,Z7:Z8,AA7:AC7,AE7:AE8,AF7:AG7",
+        "Merit Staff!I7,J7:M8,O7:O8,P7:Q7,S7:S8,T7:AD7,AF7:AF8,AG7:AJ7,AL7:AL8,AM7:AO7,AQ7:AQ8,AR7:AS7",
+        "Pipefitter L553! (same pattern as Boilermaker L363)",
+        "Also on other GPPMA craft/staff tabs with same template"
+      ],
+      "controls": "OT row = ST amount \u00d7 1.5; DT row = ST amount \u00d7 2 (rides both OT and DT premiums)."
+    },
+    {
+      "id": "st-ot-dt-calc/ST-ONLY",
+      "label": "ST-ONLY",
+      "source": "Drop Down List!$A$1:$A$5; dataValidation (x14) on craft/staff sheet row-7 cells labeled 'ST/OT/DT Calc ---->'",
+      "appearsOn": [
+        "Drop Down List!A1:A5",
+        "Boilermaker L363!J7,K7:N8,P7:P8,Q7:R7,T7:U8,V7:Y7,AA7:AA8,AB7:AD7,AF7:AF8,AG7:AH7 (and similar sqref)",
+        "BM Union Staff!I7,J7:M8,O7:O8,P7:Q7,S7:T8,U7:X7,Z7:Z8,AA7:AC7,AE7:AE8,AF7:AG7",
+        "Merit Staff!I7,J7:M8,O7:O8,P7:Q7,S7:S8,T7:AD7,AF7:AF8,AG7:AJ7,AL7:AL8,AM7:AO7,AQ7:AQ8,AR7:AS7",
+        "Pipefitter L553! (same pattern as Boilermaker L363)",
+        "Also on other GPPMA craft/staff tabs with same template"
+      ],
+      "controls": "Amount applies on ST rows only; OT and DT get 0."
+    },
+    {
+      "id": "st-ot-dt-calc/OT-ONLY",
+      "label": "OT-ONLY",
+      "source": "Drop Down List!$A$1:$A$5; dataValidation (x14) on craft/staff sheet row-7 cells labeled 'ST/OT/DT Calc ---->'",
+      "appearsOn": [
+        "Drop Down List!A1:A5",
+        "Boilermaker L363!J7,K7:N8,P7:P8,Q7:R7,T7:U8,V7:Y7,AA7:AA8,AB7:AD7,AF7:AF8,AG7:AH7 (and similar sqref)",
+        "BM Union Staff!I7,J7:M8,O7:O8,P7:Q7,S7:T8,U7:X7,Z7:Z8,AA7:AC7,AE7:AE8,AF7:AG7",
+        "Merit Staff!I7,J7:M8,O7:O8,P7:Q7,S7:S8,T7:AD7,AF7:AF8,AG7:AJ7,AL7:AL8,AM7:AO7,AQ7:AQ8,AR7:AS7",
+        "Pipefitter L553! (same pattern as Boilermaker L363)",
+        "Also on other GPPMA craft/staff tabs with same template"
+      ],
+      "controls": "OT row = ST amount \u00d7 1.5; ST and DT get 0."
+    },
+    {
+      "id": "pct-base/BW-K",
+      "label": "BW (K)",
+      "source": "Drop Down List!$E$1:$E$2; dataValidation (x14) on craft/staff sheet row-8 cells under label 'Base Wage (COL K) or Taxable Base (COL P) for % Calc in Row 6 ---->'",
+      "appearsOn": [
+        "Drop Down List!E1:E2",
+        "Boilermaker L363!Q8:S8,V8:Z8,AB8:AE8,AG8:AH8 (J8 Base Wage also set to Tax BW (P) in this file)",
+        "BM Union Staff!P8:R8,U8:Y8,AA8:AD8,AF8:AG8",
+        "Merit Staff!P8:R8,T8:AE8,AG8:AK8,AM8:AP8,AR8:AS8",
+        "Pipefitter L553! (same pattern as Boilermaker)"
+      ],
+      "controls": "When row-6 rate is percent-formatted, multiply % by Base Wage column K (craft) / I (staff) for that data row."
+    },
+    {
+      "id": "pct-base/Tax-BW-P",
+      "label": "Tax BW (P)",
+      "source": "Drop Down List!$E$1:$E$2; dataValidation (x14) on craft/staff sheet row-8 cells under label 'Base Wage (COL K) or Taxable Base (COL P) for % Calc in Row 6 ---->'",
+      "appearsOn": [
+        "Drop Down List!E1:E2",
+        "Boilermaker L363!Q8:S8,V8:Z8,AB8:AE8,AG8:AH8 (J8 Base Wage also set to Tax BW (P) in this file)",
+        "BM Union Staff!P8:R8,U8:Y8,AA8:AD8,AF8:AG8",
+        "Merit Staff!P8:R8,T8:AE8,AG8:AK8,AM8:AP8,AR8:AS8",
+        "Pipefitter L553! (same pattern as Boilermaker)"
+      ],
+      "controls": "When row-6 rate is percent-formatted, multiply % by Taxable BW column P (craft) / O (staff) for that data row."
+    },
+    {
+      "id": "rate-mode/currency",
+      "label": "$",
+      "source": "Not a Drop Down List entry. Inferred from row-6 value/format. Row label D6='Rate $/ %/Varies ---->'. Formulas branch on CELL(\"format\",col$6) 'c'/'p' and text 'varies'. Exact token 'Varies' is sharedStrings and appears in row-6 cells (e.g. Base Wage, Merit Other).",
+      "appearsOn": [
+        "All GPPMA craft/staff sheets row 6 (Pay Tax / Fringes / Ins / Misc / O/H / Profit / BW adder columns)",
+        "Boilermaker L363!J6='Varies'; Q6:S6 percent; V6:Z6 percent; AB6:AE6 currency; AG6:AH6 currency",
+        "Merit Staff!I6='Varies'; T6/V6/W6 percent fringes; U6 currency Health; AE6='Varies'; etc.",
+        "Formula error/prompt strings: 'Enter Amt', 'Invalid %', 'not $ or %'"
+      ],
+      "controls": "Row-6 cell with currency number format (CELL(\"format\") starts with \"c\"): treat numeric value as flat $/hr added to the burden line."
+    },
+    {
+      "id": "rate-mode/pct",
+      "label": "%",
+      "source": "Not a Drop Down List entry. Inferred from row-6 value/format. Row label D6='Rate $/ %/Varies ---->'. Formulas branch on CELL(\"format\",col$6) 'c'/'p' and text 'varies'. Exact token 'Varies' is sharedStrings and appears in row-6 cells (e.g. Base Wage, Merit Other).",
+      "appearsOn": [
+        "All GPPMA craft/staff sheets row 6 (Pay Tax / Fringes / Ins / Misc / O/H / Profit / BW adder columns)",
+        "Boilermaker L363!J6='Varies'; Q6:S6 percent; V6:Z6 percent; AB6:AE6 currency; AG6:AH6 currency",
+        "Merit Staff!I6='Varies'; T6/V6/W6 percent fringes; U6 currency Health; AE6='Varies'; etc.",
+        "Formula error/prompt strings: 'Enter Amt', 'Invalid %', 'not $ or %'"
+      ],
+      "controls": "Row-6 cell with percent number format (CELL(\"format\") starts with \"p\"): treat numeric value as % of BW (K) or Tax BW (P) per row-8 selector; rejects % outside 0\u20131 with \"Invalid %\"."
+    },
+    {
+      "id": "rate-mode/Varies",
+      "label": "Varies",
+      "source": "Not a Drop Down List entry. Inferred from row-6 value/format. Row label D6='Rate $/ %/Varies ---->'. Formulas branch on CELL(\"format\",col$6) 'c'/'p' and text 'varies'. Exact token 'Varies' is sharedStrings and appears in row-6 cells (e.g. Base Wage, Merit Other).",
+      "appearsOn": [
+        "All GPPMA craft/staff sheets row 6 (Pay Tax / Fringes / Ins / Misc / O/H / Profit / BW adder columns)",
+        "Boilermaker L363!J6='Varies'; Q6:S6 percent; V6:Z6 percent; AB6:AE6 currency; AG6:AH6 currency",
+        "Merit Staff!I6='Varies'; T6/V6/W6 percent fringes; U6 currency Health; AE6='Varies'; etc.",
+        "Formula error/prompt strings: 'Enter Amt', 'Invalid %', 'not $ or %'"
+      ],
+      "controls": "Row-6 cell text exactly \"Varies\" (case-insensitive in formulas via =\"varies\"): ST formula returns \"Enter Amt\" so the $/hr is entered per position/row instead of from the header rate."
+    },
+    {
+      "id": "rate-class/Merit",
+      "label": "Merit",
+      "source": "Drop Down List!$B$1:$B$5 (populated B1:B2 only); named range RateClass; DV on I3/J3",
+      "appearsOn": [
+        "Drop Down List!B1:B2",
+        "Boilermaker L363!J3 (named RateClass)",
+        "BM Union Staff!I3",
+        "Merit Staff!I3",
+        "Pipefitter L553!J3"
+      ],
+      "controls": "Sheet-level Rate Class filter/tag (Merit vs Union). Uncertain whether it changes fringe math directly; appears to classify the hall sheet."
+    },
+    {
+      "id": "rate-class/Union",
+      "label": "Union",
+      "source": "Drop Down List!$B$1:$B$5 (populated B1:B2 only); named range RateClass; DV on I3/J3",
+      "appearsOn": [
+        "Drop Down List!B1:B2",
+        "Boilermaker L363!J3 (named RateClass)",
+        "BM Union Staff!I3",
+        "Merit Staff!I3",
+        "Pipefitter L553!J3"
+      ],
+      "controls": "Sheet-level Rate Class filter/tag (Merit vs Union). Uncertain whether it changes fringe math directly; appears to classify the hall sheet."
+    },
+    {
+      "id": "craft-type/Staff",
+      "label": "Staff",
+      "source": "Drop Down List!$D$1:$D$20 (populated D1:D4 only); named range Craft_Type; DV on I2/J2",
+      "appearsOn": [
+        "Drop Down List!D1:D4",
+        "Boilermaker L363!J2 (named Craft_Type)",
+        "BM Union Staff!I2",
+        "Merit Staff!I2",
+        "Pipefitter L553!J2"
+      ],
+      "controls": "Sheet-level Position Type filter/tag (Staff / Craft / Engineer / All). Uncertain whether it changes fringe math directly."
+    },
+    {
+      "id": "craft-type/Craft",
+      "label": "Craft",
+      "source": "Drop Down List!$D$1:$D$20 (populated D1:D4 only); named range Craft_Type; DV on I2/J2",
+      "appearsOn": [
+        "Drop Down List!D1:D4",
+        "Boilermaker L363!J2 (named Craft_Type)",
+        "BM Union Staff!I2",
+        "Merit Staff!I2",
+        "Pipefitter L553!J2"
+      ],
+      "controls": "Sheet-level Position Type filter/tag (Staff / Craft / Engineer / All). Uncertain whether it changes fringe math directly."
+    },
+    {
+      "id": "craft-type/Engineer",
+      "label": "Engineer",
+      "source": "Drop Down List!$D$1:$D$20 (populated D1:D4 only); named range Craft_Type; DV on I2/J2",
+      "appearsOn": [
+        "Drop Down List!D1:D4",
+        "Boilermaker L363!J2 (named Craft_Type)",
+        "BM Union Staff!I2",
+        "Merit Staff!I2",
+        "Pipefitter L553!J2"
+      ],
+      "controls": "Sheet-level Position Type filter/tag (Staff / Craft / Engineer / All). Uncertain whether it changes fringe math directly."
+    },
+    {
+      "id": "craft-type/All",
+      "label": "All",
+      "source": "Drop Down List!$D$1:$D$20 (populated D1:D4 only); named range Craft_Type; DV on I2/J2",
+      "appearsOn": [
+        "Drop Down List!D1:D4",
+        "Boilermaker L363!J2 (named Craft_Type)",
+        "BM Union Staff!I2",
+        "Merit Staff!I2",
+        "Pipefitter L553!J2"
+      ],
+      "controls": "Sheet-level Position Type filter/tag (Staff / Craft / Engineer / All). Uncertain whether it changes fringe math directly."
+    },
+    {
+      "id": "data-row-rate-type/ST",
+      "label": "ST",
+      "source": "Data-row column F (craft) \u2014 not from Drop Down List DV on F; values ST/OT/DT identify the premium row. Formulas compare $F to these strings when applying row-7 ST/OT/DT Calc.",
+      "appearsOn": [
+        "Boilermaker L363!F10+ (ST/OT/DT repeating)",
+        "BM Union Staff / Merit Staff / Pipefitter L553 same pattern (column F or equivalent)"
+      ],
+      "controls": "Identifies whether the current data row is the ST premium tier so row-7 Calc can scale or zero the burden line."
+    },
+    {
+      "id": "data-row-rate-type/OT",
+      "label": "OT",
+      "source": "Data-row column F (craft) \u2014 not from Drop Down List DV on F; values ST/OT/DT identify the premium row. Formulas compare $F to these strings when applying row-7 ST/OT/DT Calc.",
+      "appearsOn": [
+        "Boilermaker L363!F10+ (ST/OT/DT repeating)",
+        "BM Union Staff / Merit Staff / Pipefitter L553 same pattern (column F or equivalent)"
+      ],
+      "controls": "Identifies whether the current data row is the OT premium tier so row-7 Calc can scale or zero the burden line."
+    },
+    {
+      "id": "data-row-rate-type/DT",
+      "label": "DT",
+      "source": "Data-row column F (craft) \u2014 not from Drop Down List DV on F; values ST/OT/DT identify the premium row. Formulas compare $F to these strings when applying row-7 ST/OT/DT Calc.",
+      "appearsOn": [
+        "Boilermaker L363!F10+ (ST/OT/DT repeating)",
+        "BM Union Staff / Merit Staff / Pipefitter L553 same pattern (column F or equivalent)"
+      ],
+      "controls": "Identifies whether the current data row is the DT premium tier so row-7 Calc can scale or zero the burden line."
+    },
+    {
+      "id": "site/01",
+      "label": "Refineries - Alliance ",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C1",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/02",
+      "label": "Refineries - Bayway ",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C2",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/03",
+      "label": "Refineries - Billings ",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C3",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/04",
+      "label": "Refineries - Borger",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C4",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/05",
+      "label": "Refineries - Ferndale",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C5",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/06",
+      "label": "Refineries - Lake Charles ",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C6",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/07",
+      "label": "Refineries - Los Angeles",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C7",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/08",
+      "label": "Refineries - Ponca City ",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C8",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/09",
+      "label": "Refineries - Rodeo",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C9",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/10",
+      "label": "Refineries - Santa Maria",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C10",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/11",
+      "label": "Refineries - Sweeny",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C11",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/12",
+      "label": "Refineries - Wood River ",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C12",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/13",
+      "label": "Midstream - Amarillo Division - New Mexico",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C13",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/14",
+      "label": "Midstream - Amarillo Division - Colorado",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C14",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/15",
+      "label": "Midstream - Amarillo Division - Texas (Panhandle only)",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C15",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/16",
+      "label": "Midstream - Billings Division - Utah",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C16",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/17",
+      "label": "Midstream - Billings Division - Wyoming",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C17",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/18",
+      "label": "Midstream - Billings Division - Montana",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C18",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/19",
+      "label": "Midstream - Billings Division - Idaho",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C19",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/20",
+      "label": "Midstream - Billings Division - North Dakota",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C20",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/21",
+      "label": "Midstream - Central Division - Oklahoma",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C21",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/22",
+      "label": "Midstream - Central Division - Kansas",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C22",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/23",
+      "label": "Midstream - Central Division - Missouri",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C23",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/24",
+      "label": "Midstream - Central Division - Iowa",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C24",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/25",
+      "label": "Midstream - Central Division - Nebraska",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C25",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/26",
+      "label": "Midstream - Central Division - Illinois",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C26",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/27",
+      "label": "Midstream - East/Gulf Coast Division - Texas",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C27",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/28",
+      "label": "Midstream - East/Gulf Coast Division - Louisiana",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C28",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/29",
+      "label": "Midstream - East/Gulf Coast Division - New Jersey",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C29",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/30",
+      "label": "Midstream - Gulf Coast Fractionators",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C30",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/31",
+      "label": "Midstream - West Coast Division - California",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C31",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/32",
+      "label": "Midstream - West Coast Division - Oregon",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C32",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/33",
+      "label": "Midstream - West Coast Division - Washington",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C33",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/34",
+      "label": "Lubricants - Portland Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C34",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/35",
+      "label": "Lubricants - Benicia Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C35",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/36",
+      "label": "Lubricants - Los Angeles Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C36",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/37",
+      "label": "Lubricants - Sulphur Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C37",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/38",
+      "label": "Lubricants - Waukesha Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C38",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/39",
+      "label": "Lubricants - Hartford Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C39",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/40",
+      "label": "Lubricants - Selmer Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C40",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/41",
+      "label": "Lubricants - Savannah Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C41",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/42",
+      "label": "CP Chemical - Bartlesville Research & Technology Center (BRTC)",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C42",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/43",
+      "label": "CP Chemical - Borger Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C43",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/44",
+      "label": "CP Chemical - Cedar Bayou Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C44",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/45",
+      "label": "CP Chemical - Headquarters/Corporate Office Location",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C45",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/46",
+      "label": "CP Chemical - Kingwood Research and Technology Center (KRTC)",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C46",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/47",
+      "label": "CP Chemical - Orange Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C47",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/48",
+      "label": "CP Chemical - Pasadena Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C48",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/49",
+      "label": "CP Chemical - Port Arthur Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C49",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/50",
+      "label": "CP Chemical - Sweeny Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C50",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "site/51",
+      "label": "CP Chemical - Drilling Specilties Company, a division of Chevron Phillips Chemical Company LP-Alamo Plant",
+      "source": "Drop Down List!$C$1:$C$51 (DV uses $C$2:$C$65); SITES/REGIONS multi-select area on craft sheets",
+      "appearsOn": [
+        "Drop Down List!C51",
+        "Boilermaker L363!AK10:AK41",
+        "BM Union Staff!AJ10:AJ41",
+        "Merit Staff!AV10:AV41",
+        "Pipefitter L553!AK10:AK41"
+      ],
+      "controls": "Marks which site/region the rates on this sheet are valid for. Does not change fringe $/hr math."
+    },
+    {
+      "id": "subcategory/from-master-position-list",
+      "label": "(values from Master Position List!$N$3:$N$624)",
+      "source": "dataValidation list ='Master Position List'!$N$3:$N$624 on I1/J1 (named Subcategory)",
+      "appearsOn": [
+        "Boilermaker L363!J1",
+        "BM Union Staff!I1",
+        "Merit Staff!I1",
+        "Pipefitter L553!J1",
+        "Master Position List!N3:N624"
+      ],
+      "controls": "Sheet-level subcategory filter for positions. Uncertain direct effect on fringe formulas; used with Master Position List VLOOKUPs."
+    }
+  ],
+  "columns": [
+    {
+      "sheet": "Boilermaker L363",
+      "rows": {
+        "5": {
+          "H": "Billable Rate",
+          "I": "Mult ",
+          "J": "BW",
+          "K": "BW",
+          "L": "BW",
+          "M": "BW",
+          "N": "BW",
+          "O": "BW",
+          "P": "Taxable BW",
+          "Q": "Pay Tax",
+          "R": "Pay Tax",
+          "S": "Pay Tax",
+          "T": "Pay Tax Subtotal",
+          "U": "Fringes Subtotal",
+          "V": "Ins",
+          "W": "Ins",
+          "X": "Ins",
+          "Y": "Ins",
+          "Z": "Ins",
+          "AA": "Ins Subtotal",
+          "AB": "Misc",
+          "AC": "Misc",
+          "AD": "Misc",
+          "AE": "Misc",
+          "AF": "Misc Subtotal",
+          "AG": "Supplier",
+          "AH": "Supplier",
+          "AI": "Supplier Subtotal"
+        },
+        "6": {
+          "D": "Rate $/ %/Varies ---->",
+          "J": "Varies",
+          "K": "1 (0% format on BW 100%)",
+          "M": "0 $",
+          "N": "0 $",
+          "O": "0 $",
+          "Q": "7.65% FICA-MC",
+          "R": "0.60% FUI",
+          "S": "8.55% SUI",
+          "V": "0% W/C",
+          "W": "0% Emp Liab",
+          "X": "2.65% Gen Liab",
+          "Y": "1.75% Umbrella",
+          "Z": "0% Other",
+          "AB": "$2.25 Small",
+          "AC": "$1.86 Cons",
+          "AD": "$2.10 PPE",
+          "AE": "$0 Other",
+          "AG": "$6.68 O/H",
+          "AH": "$3.33 Profit"
+        },
+        "7": {
+          "D": "ST/OT/DT Calc ---->",
+          "J": "DT",
+          "K": "DT",
+          "L": "DT",
+          "M": "DT",
+          "N": "DT",
+          "O": "DT",
+          "Q": "DT",
+          "R": "DT",
+          "S": "DT",
+          "V": "ST",
+          "W": "ST",
+          "X": "ST",
+          "Y": "ST",
+          "Z": "ST",
+          "AB": "ST",
+          "AC": "ST",
+          "AD": "ST",
+          "AE": "ST",
+          "AG": "ST",
+          "AH": "ST"
+        },
+        "8": {
+          "D": "Base Wage (COL K) or Taxable Base (COL P) for % Calc in Row 6 ---->",
+          "J": "Tax BW (P)",
+          "Q": "Tax BW (P)",
+          "R": "Tax BW (P)",
+          "S": "Tax BW (P)",
+          "V": "BW (K)",
+          "W": "BW (K)",
+          "X": "BW (K)",
+          "Y": "BW (K)",
+          "Z": "BW (K)",
+          "AB": "BW (K)",
+          "AC": "BW (K)",
+          "AD": "BW (K)",
+          "AE": "BW (K)",
+          "AG": "BW (K)",
+          "AH": "Tax BW (P)"
+        },
+        "9": {
+          "B": "Sub Category",
+          "C": "Service Code",
+          "D": "NONE - No Category (Free Text)",
+          "E": "ESN",
+          "H": "Billable Rate",
+          "I": "Mult ",
+          "J": "Base Wage",
+          "K": "BW     100%",
+          "L": "Shift Diff",
+          "M": "Taxable Vacation",
+          "N": "Taxable Other",
+          "O": "Taxable Other",
+          "P": "Taxable BW",
+          "Q": "Pay Tax FICA-MC",
+          "R": "Pay Tax FUI",
+          "S": "Pay Tax SUI",
+          "T": "Pay Tax Subtotal",
+          "U": "Fringes Subtotal",
+          "V": "Ins W/C",
+          "W": "Ins Emp Liab",
+          "X": "Ins Gen Liab",
+          "Y": "Ins Umbrella",
+          "Z": "Ins Other",
+          "AA": "Ins Subtotal",
+          "AB": "Misc Small",
+          "AC": "Misc Cons",
+          "AD": "Misc PPE",
+          "AE": "Misc Other",
+          "AF": "Misc Subtotal",
+          "AG": "O/H",
+          "AH": "Profit",
+          "AI": "Supplier Subtotal",
+          "AK": "SITES/REGIONS (Please select all sites from the drop down list where the rates are valid)"
+        }
+      },
+      "notes": "Fringes Subtotal (U) is INDEX from Rate Input Fringe ST/OT/DT \u2014 not driven by row-6 Rate $/ %/Varies on this TM face. Mult (I) is computed H/SUM(K,L), not a dropdown."
+    },
+    {
+      "sheet": "BM Union Staff",
+      "rows": {
+        "5": {
+          "G": "Billable Rate",
+          "H": "Mult ",
+          "I": "BW",
+          "J": "BW",
+          "K": "BW",
+          "L": "BW",
+          "M": "BW",
+          "N": "BW",
+          "O": "Taxable BW",
+          "P": "Pay Tax",
+          "Q": "Pay Tax",
+          "R": "Pay Tax",
+          "S": "Pay Tax Subtotal",
+          "T": "Fringes Subtotal",
+          "U": "Ins",
+          "V": "Ins",
+          "W": "Ins",
+          "X": "Ins",
+          "Y": "Ins",
+          "Z": "Ins Subtotal",
+          "AA": "Misc",
+          "AB": "Misc",
+          "AC": "Misc",
+          "AD": "Misc",
+          "AE": "Misc Subtotal",
+          "AF": "Supplier",
+          "AG": "Supplier",
+          "AH": "Supplier Subtotal"
+        },
+        "6": {
+          "D": "Rate $/ %/Varies ---->",
+          "I": "Varies",
+          "J": "1",
+          "L": "0",
+          "M": "0",
+          "N": "0",
+          "P": "7.65%",
+          "Q": "0.60%",
+          "R": "8.55%",
+          "U": "0%",
+          "V": "0%",
+          "W": "2.65%",
+          "X": "1.75%",
+          "Y": "0%",
+          "AA": "$0.50",
+          "AB": "$1.25",
+          "AC": "$1.85",
+          "AD": "$0",
+          "AF": "$10.24 O/H",
+          "AG": "$5.12 Profit"
+        },
+        "7": {
+          "D": "ST/OT/DT Calc ---->",
+          "I": "DT",
+          "J": "DT",
+          "K": "DT",
+          "L": "DT",
+          "M": "DT",
+          "N": "DT",
+          "P": "DT",
+          "Q": "DT",
+          "R": "DT",
+          "U": "ST",
+          "V": "ST",
+          "W": "ST",
+          "X": "ST",
+          "Y": "ST",
+          "AA": "ST",
+          "AB": "ST",
+          "AC": "ST",
+          "AD": "ST",
+          "AF": "ST",
+          "AG": "ST"
+        },
+        "8": {
+          "D": "Base Wage (COL K) or Taxable Base (COL P) for % Calc in Row 6 ---->",
+          "I": "Tax BW (P)",
+          "P": "Tax BW (P)",
+          "Q": "Tax BW (P)",
+          "R": "Tax BW (P)",
+          "U": "BW (K)",
+          "V": "BW (K)",
+          "W": "BW (K)",
+          "X": "BW (K)",
+          "Y": "BW (K)",
+          "AA": "BW (K)",
+          "AB": "BW (K)",
+          "AC": "BW (K)",
+          "AD": "BW (K)",
+          "AF": "BW (K)",
+          "AG": "Tax BW (P)"
+        },
+        "9": {
+          "B": "Sub Category",
+          "C": "Service Code",
+          "D": "NONE - No Category (Free Text)",
+          "E": "ESN",
+          "G": "Billable Rate",
+          "H": "Mult ",
+          "I": "Base Wage",
+          "J": "BW     100%",
+          "K": "Shift Diff",
+          "L": "Taxable Vacation",
+          "M": "Taxable Other",
+          "N": "Taxable Other",
+          "O": "Taxable BW",
+          "P": "Pay Tax FICA-MC",
+          "Q": "Pay Tax FUI",
+          "R": "Pay Tax SUI",
+          "S": "Pay Tax Subtotal",
+          "T": "Fringes Subtotal",
+          "U": "Ins W/C",
+          "V": "Ins Emp Liab",
+          "W": "Ins Gen Liab",
+          "X": "Ins Umbrella",
+          "Y": "Ins Other",
+          "Z": "Ins Subtotal",
+          "AA": "Misc Small",
+          "AB": "Misc Cons",
+          "AC": "Misc PPE",
+          "AD": "Misc Other",
+          "AE": "Misc Subtotal",
+          "AF": "O/H",
+          "AG": "Profit",
+          "AH": "Supplier Subtotal",
+          "AJ": "SITES/REGIONS (...)"
+        }
+      },
+      "notes": "Column letters are shifted one left vs craft sheets (no unused col G spacer). Fringes Subtotal from Rate Input. Mult computed."
+    },
+    {
+      "sheet": "Merit Staff",
+      "rows": {
+        "5": {
+          "G": "Billable Rate",
+          "H": "Mult ",
+          "I": "BW",
+          "J": "BW",
+          "K": "BW",
+          "L": "BW",
+          "M": "BW",
+          "N": "BW",
+          "O": "Taxable BW",
+          "P": "Pay Tax",
+          "Q": "Pay Tax",
+          "R": "Pay Tax",
+          "S": "Pay Tax Subtotal",
+          "T": "Fringes",
+          "U": "Fringes",
+          "V": "Fringes",
+          "W": "Fringes",
+          "X": "Fringes",
+          "Y": "Fringes",
+          "Z": "Fringes",
+          "AA": "Fringes",
+          "AB": "Fringes",
+          "AC": "Fringes",
+          "AD": "Fringes",
+          "AE": "Fringes",
+          "AF": "Fringes Subtotal",
+          "AG": "Ins",
+          "AH": "Ins",
+          "AI": "Ins",
+          "AJ": "Ins",
+          "AK": "Ins",
+          "AL": "Ins Subtotal",
+          "AM": "Misc",
+          "AN": "Misc",
+          "AO": "Misc",
+          "AP": "Misc",
+          "AQ": "Misc Subtotal",
+          "AR": "Supplier",
+          "AS": "Supplier",
+          "AT": "Supplier Subtotal"
+        },
+        "6": {
+          "D": "Rate $/ %/Varies ---->",
+          "I": "Varies",
+          "J": "1",
+          "L": "0",
+          "M": "0",
+          "N": "0",
+          "P": "7.65%",
+          "Q": "0.60%",
+          "R": "8.55%",
+          "T": "2% 401K",
+          "U": "$4.75 Health",
+          "V": "3% Vacation",
+          "W": "2% Holiday Sick Pay",
+          "X": "0",
+          "Y": "0",
+          "Z": "0",
+          "AA": "0",
+          "AB": "0",
+          "AC": "0",
+          "AD": "0",
+          "AE": "Varies",
+          "AG": "0%",
+          "AH": "0%",
+          "AI": "2.65%",
+          "AJ": "1.75%",
+          "AK": "0%",
+          "AM": "$0.50",
+          "AN": "$1.25",
+          "AO": "$1.85",
+          "AP": "$0",
+          "AR": "$10.24 O/H",
+          "AS": "$5.12 Profit"
+        },
+        "7": {
+          "D": "ST/OT/DT Calc ---->",
+          "I": "DT",
+          "J": "DT",
+          "K": "DT",
+          "L": "DT",
+          "M": "DT",
+          "N": "DT",
+          "P": "DT",
+          "Q": "DT",
+          "R": "DT",
+          "T": "DT",
+          "U": "ST",
+          "V": "ST",
+          "W": "ST",
+          "X": "ST",
+          "Y": "ST",
+          "Z": "ST",
+          "AA": "ST",
+          "AB": "ST",
+          "AC": "ST",
+          "AD": "ST",
+          "AE": "ST",
+          "AG": "ST",
+          "AH": "ST",
+          "AI": "ST",
+          "AJ": "ST",
+          "AK": "ST",
+          "AM": "ST",
+          "AN": "ST",
+          "AO": "ST",
+          "AP": "ST",
+          "AR": "ST",
+          "AS": "ST"
+        },
+        "8": {
+          "D": "Base Wage (COL K) or Taxable Base (COL P) for % Calc in Row 6 ---->",
+          "I": "Tax BW (P)",
+          "P": "Tax BW (P)",
+          "Q": "Tax BW (P)",
+          "R": "Tax BW (P)",
+          "T": "BW (K)",
+          "U": "BW (K)",
+          "V": "BW (K)",
+          "W": "BW (K)",
+          "X": "BW (K)",
+          "Y": "BW (K)",
+          "Z": "BW (K)",
+          "AA": "BW (K)",
+          "AB": "BW (K)",
+          "AC": "BW (K)",
+          "AD": "BW (K)",
+          "AE": "BW (K)",
+          "AG": "BW (K)",
+          "AH": "BW (K)",
+          "AI": "BW (K)",
+          "AJ": "BW (K)",
+          "AK": "BW (K)",
+          "AM": "BW (K)",
+          "AN": "BW (K)",
+          "AO": "BW (K)",
+          "AP": "BW (K)",
+          "AR": "BW (K)",
+          "AS": "Tax BW (P)"
+        },
+        "9": {
+          "B": "Sub Category",
+          "C": "Service Code",
+          "D": "NONE - No Category (Free Text)",
+          "E": "ESN",
+          "G": "Billable Rate",
+          "H": "Mult ",
+          "I": "Base Wage",
+          "J": "BW     100%",
+          "K": "Supv Adder",
+          "L": "Taxable Other",
+          "M": "Taxable Other",
+          "N": "Taxable Other",
+          "O": "Taxable BW",
+          "P": "Pay Tax FICA-MC",
+          "Q": "Pay Tax FUI",
+          "R": "Pay Tax SUI",
+          "S": "Pay Tax Subtotal",
+          "T": "401K",
+          "U": "Health",
+          "V": "Vacation",
+          "W": "Holiday Sick Pay",
+          "X": "Other",
+          "Y": "Other",
+          "Z": "Other",
+          "AA": "Other",
+          "AB": "Other",
+          "AC": "Other",
+          "AD": "Other",
+          "AE": "Other",
+          "AF": "Fringes Subtotal",
+          "AG": "Ins W/C",
+          "AH": "Ins Emp Liab",
+          "AI": "Ins Gen Liab",
+          "AJ": "Ins Umbrella",
+          "AK": "Ins Other",
+          "AL": "Ins Subtotal",
+          "AM": "Misc Small",
+          "AN": "Misc Cons",
+          "AO": "Misc PPE",
+          "AP": "Misc Other",
+          "AQ": "Misc Subtotal",
+          "AR": "O/H",
+          "AS": "Profit",
+          "AT": "Supplier Subtotal",
+          "AV": "SITES/REGIONS (...)"
+        }
+      },
+      "notes": "Only Merit Staff exposes named Fringes component columns with full row-6/7/8 selectors. 401K row7=DT (rides); Health/Vacation/Holiday Sick Pay row7=ST (flat)."
+    },
+    {
+      "sheet": "Pipefitter L553",
+      "rows": {
+        "5": "same band labels as Boilermaker L363 (H..AI)",
+        "6": {
+          "D": "Rate $/ %/Varies ---->",
+          "J": "Varies",
+          "K": "1",
+          "M": "0",
+          "N": "0",
+          "O": "0",
+          "Q": "7.65%",
+          "R": "0.60%",
+          "S": "8.55%",
+          "V": "0%",
+          "W": "0%",
+          "X": "2.65%",
+          "Y": "1.75%",
+          "Z": "0%",
+          "AB": "$2.25",
+          "AC": "$1.86",
+          "AD": "$2.10",
+          "AE": "$0",
+          "AG": "$8.13 O/H",
+          "AH": "$4.07 Profit"
+        },
+        "7": "same ST/OT/DT pattern as Boilermaker (Pay Tax=DT; Ins/Misc/O/H=ST; Profit AH7=ST)",
+        "8": "same BW (K) / Tax BW (P) pattern as Boilermaker (Profit AH8=Tax BW (P))",
+        "9": "same column names as Boilermaker L363"
+      },
+      "notes": "Structure mirrors Boilermaker L363; Fringes Subtotal from Rate Input."
+    }
+  ],
+  "notes": [
+    "Source: /workspace/rate-vault-wr-b1/Wood_River_B1_latest.xlsx (TM face banners WOODRIVER \u2026 TM). Prefer this file over RRFF sister for dropdown lists/validations.",
+    "openpyxl warns 'Data Validation extension is not supported'; classic DV nodes are stubs (#N/A / empty). Real lists are in x14:dataValidations pointing at Drop Down List and Master Position List.",
+    "Drop Down List sheet dimension A1:E51. Column C locations extend through C51; DV ranges sometimes oversized (C2:C65, D1:D20, B1:B5) beyond populated cells.",
+    "Named ranges used in rate building: Craft_Type, RateClass, Subcategory (per craft sheet); Master_Position_List. FilterDatabase/Print_Area/Print_Titles are layout-only.",
+    "Rate $/ %/Varies is NOT a three-item dropdown list in Drop Down List. Mode is chosen by entering currency-formatted $, percent-formatted %, or the literal text Varies in row 6. Catalogued as three options because the row label and formulas encode exactly those three behaviors.",
+    "Strings 'hours worked', 'hours paid', and 'accrual' do NOT appear anywhere in sharedStrings of this workbook.",
+    "Shared string '% of BW' appears only as Rate Detail!AC1 column header \u2014 not a craft-sheet fringe dropdown option.",
+    "Mult is a computed column (Billable Rate / SUM(BaseWage components)), not a selectable option.",
+    "Union craft/staff Fringes Subtotal is pulled from Rate Input (Fringe ST/OT/DT columns) via INDEX/MATCH; ST/OT/DT ride behavior for that subtotal is baked into Rate Input values, while Ins/Misc/Pay Tax/O/H/Profit use row-7 selectors on the hall sheet.",
+    "ST/OT/DT Calc formula summary (OT/DT rows): ST\u2192copy ST amt; OT\u2192OT=1.5\u00d7, DT=1.5\u00d7; DT\u2192OT=1.5\u00d7, DT=2\u00d7; ST-ONLY\u2192OT/DT=0; OT-ONLY\u2192OT=1.5\u00d7, ST/DT=0.",
+    "Do not invent options. Do not commit the xlsx. Do not email.",
+    "Owner rule 2026-09-11 (Robert): if the B-1 has an option, more than likely it was put in for a purpose \u2014 do not collapse to a short list."
+  ],
+  "meta": {
+    "sourceWorkbook": "/workspace/rate-vault-wr-b1/Wood_River_B1_latest.xlsx",
+    "dropDownListSheet": "Drop Down List",
+    "distinctFringeBurdenCalcOptionLabels": [
+      "ST",
+      "OT",
+      "DT",
+      "ST-ONLY",
+      "OT-ONLY",
+      "BW (K)",
+      "Tax BW (P)",
+      "$",
+      "%",
+      "Varies",
+      "Merit",
+      "Union",
+      "Staff",
+      "Craft",
+      "Engineer",
+      "All"
+    ],
+    "distinctFringeBurdenCalcOptionCount": 16,
+    "totalCataloguedOptionsIncludingSites": 71
+  }
 }

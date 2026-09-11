@@ -65,7 +65,7 @@ Legacy `ridesOt` still maps in: `true` → OT Calc **OT** + DT Calc **DT** + Rid
 
 Desk Burden / Publish show every control. `POST /api/rate-vault` `action: "patch-b1-line"` persists a line and ripples Bill OT/DT so Export uses the stored package.
 
-Canonical lists: `lib/rate-vault/b1-fringe-options.json`. Further Drop Down List strings append to `lib/rate-vault/b1-dropdowns.json`. Unknown option strings are never dropped. Do not invent Illinois composites or names that are not in the book.
+Canonical lists: `lib/rate-vault/b1-fringe-options.json` (desk extract of Drop Down List A1:A5 / E1:E2 plus Rate Class, Craft Type, and row-6 `$` / `%` / `Varies`). Extract notes: `docs/b1-fringe-options.md`. Further Drop Down List strings append to `lib/rate-vault/b1-dropdowns.json`. Unknown option strings are never dropped. Do not invent Illinois composites or names that are not in the book.
 
 ## B-1 Excel export / import (vault-internal)
 

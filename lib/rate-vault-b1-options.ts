@@ -83,8 +83,77 @@ function mergeList(base: readonly string[], extra: readonly unknown[] | undefine
   return uniqStrings([...base, ...(extra ?? [])]);
 }
 
+const OPTION_PREFIX_TO_KIND = {
+  "st-ot-dt-calc": "calc",
+  "pct-base": "base",
+  "rate-mode": "rateKind",
+  "rate-class": "rateClass",
+  "craft-type": "craftType",
+  "data-row-rate-type": "rateType",
+} as const;
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? uniqStrings(value) : [];
+}
+
+/** Desk extract catalog is `{ options, columns, notes, meta }`. Flat string arrays still work. */
 function catalogFrom(raw: unknown): Partial<RateVaultB1DropdownCatalog> {
-  return raw && typeof raw === "object" ? (raw as Partial<RateVaultB1DropdownCatalog>) : {};
+  if (!raw || typeof raw !== "object") return {};
+  const obj = raw as Record<string, unknown>;
+  const grouped: Partial<Record<(typeof OPTION_PREFIX_TO_KIND)[keyof typeof OPTION_PREFIX_TO_KIND], string[]>> = {};
+  if (Array.isArray(obj.options)) {
+    for (const item of obj.options) {
+      if (!item || typeof item !== "object") continue;
+      const rec = item as { id?: unknown; label?: unknown };
+      const id = typeof rec.id === "string" ? rec.id : "";
+      const label = typeof rec.label === "string" ? rec.label.trim() : "";
+      if (!label) continue;
+      const prefix = id.split("/")[0] || "";
+      const kind = OPTION_PREFIX_TO_KIND[prefix as keyof typeof OPTION_PREFIX_TO_KIND];
+      if (!kind) continue;
+      grouped[kind] = mergeList(grouped[kind] ?? [], [label]);
+    }
+  }
+  const extra =
+    obj.extra && typeof obj.extra === "object" && !Array.isArray(obj.extra)
+      ? (obj.extra as Record<string, string[]>)
+      : undefined;
+  const meta = obj.meta && typeof obj.meta === "object" ? (obj.meta as Record<string, unknown>) : {};
+  const notes = Array.isArray(obj.notes) ? obj.notes.filter((note): note is string => typeof note === "string") : [];
+  return {
+    rateKind: stringList(obj.rateKind).length ? stringList(obj.rateKind) : grouped.rateKind,
+    base: stringList(obj.base).length ? stringList(obj.base) : grouped.base,
+    calc: stringList(obj.calc).length ? stringList(obj.calc) : grouped.calc,
+    ride: stringList(obj.ride),
+    rateClass: stringList(obj.rateClass).length ? stringList(obj.rateClass) : grouped.rateClass,
+    craftType: stringList(obj.craftType).length ? stringList(obj.craftType) : grouped.craftType,
+    rateType: stringList(obj.rateType).length ? stringList(obj.rateType) : grouped.rateType,
+    extra,
+    note: typeof obj.note === "string" ? obj.note : notes[0],
+    source:
+      typeof obj.source === "string"
+        ? obj.source
+        : typeof meta.sourceWorkbook === "string"
+          ? meta.sourceWorkbook
+          : undefined,
+  };
+}
+
+export function rateVaultB1DistinctFringeLabels() {
+  const meta =
+    fringeOptions && typeof fringeOptions === "object"
+      ? (fringeOptions as { meta?: { distinctFringeBurdenCalcOptionLabels?: unknown } }).meta
+      : undefined;
+  const labels = stringList(meta?.distinctFringeBurdenCalcOptionLabels);
+  return labels.length
+    ? labels
+    : [
+        ...RATE_VAULT_B1_CALC_MODES,
+        ...RATE_VAULT_B1_BASE_MODES,
+        ...RATE_VAULT_B1_RATE_KIND_MODES,
+        ...RATE_VAULT_B1_RATE_CLASSES,
+        ...RATE_VAULT_B1_CRAFT_TYPES,
+      ];
 }
 
 export function mergeRateVaultB1Dropdowns(
