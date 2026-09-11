@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
 import { DRIVE_WRITE_ERROR } from "@/lib/drive-data";
 import { hasBuildDesk } from "@/lib/desk-role";
+import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { cookieValue } from "@/lib/http";
 import { HSE_VAULT_WRITE_ERROR } from "@/lib/lead-briefs";
 import {
@@ -30,14 +31,15 @@ function qualityCompanyId(request: URLSearchParams | { companyId?: string; compa
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const user = await readSession(cookieValue(request));
-  if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  const session = await readSession(cookieValue(request));
+  if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   const params = new URL(request.url).searchParams;
   const kind = params.get("kind");
   if (!isLeadBriefKind(kind)) {
     return NextResponse.json({ error: "Pick a desk." }, { status: 400 });
   }
+  const user = kind === "quality" ? await scopedDeskUser(session, request) : session;
 
   const jobId = params.get("jobId")?.trim() || "";
   const folderId = params.get("folder") || params.get("folderId") || "";
@@ -99,8 +101,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const user = await readSession(cookieValue(request));
-  if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  const session = await readSession(cookieValue(request));
+  if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   const body = (await request.json().catch(() => ({}))) as {
     kind?: string;
@@ -119,6 +121,7 @@ export async function POST(request: Request) {
   if (!isLeadBriefKind(body.kind)) {
     return NextResponse.json({ error: "Pick a desk." }, { status: 400 });
   }
+  const user = body.kind === "quality" ? await scopedDeskUser(session, request) : session;
 
   if (body.kind === "quality" && (body.scope === "company-docs" || isQualityCompanyDocId(body.folderId, companyId || undefined))) {
     const result = await saveQualityCompanyDocDrop(user, { ...body, companyId: companyId || undefined });

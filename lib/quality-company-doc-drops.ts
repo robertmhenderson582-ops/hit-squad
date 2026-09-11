@@ -2,7 +2,7 @@ import { hasBuildDesk } from "./desk-role.ts";
 import { leadBriefAdapter, listStoredBriefs, publicBrief, saveStoredBrief } from "./lead-brief-store.ts";
 import type { LeadFile, PublicLeadBrief } from "./lead-briefs.ts";
 import { DriveApiError } from "./drive-estimates.ts";
-import { listQualityVaultFiles, persistQualityVaultFiles, QUALITY_VAULT_WRITE_ERROR } from "./quality-vault.ts";
+import { listQualityVaultFiles, persistQualityVaultFiles, qualityVaultWriteUserError } from "./quality-vault.ts";
 import {
   isQualityCompanyDocId,
   mergeQualityCompanyDocFiles,
@@ -84,7 +84,7 @@ export async function saveQualityCompanyDocDrop(user: QualityDocUser, input: Qua
     return {
       ok: false as const,
       status: 503,
-      error: QUALITY_VAULT_WRITE_ERROR,
+      error: qualityVaultWriteUserError(error, hasBuildDesk(user)),
       rejected: check.rejected,
     };
   }

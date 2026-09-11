@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { QUALITY_BRIEFS_VAULT_KIND, QUALITY_BRIEFS_VAULT_NAME, qualityFolderId, readVaultJson } from "./drive-data.ts";
-import { DRIVE_FOLDER_MIME, memoryDrive } from "./drive-estimates.ts";
+import { DRIVE_FOLDER_MIME, DriveApiError, memoryDrive } from "./drive-estimates.ts";
 import {
   forgetLeadBriefCacheForTests,
   listStoredBriefs,
@@ -13,14 +13,18 @@ import {
 } from "./lead-brief-store.ts";
 import { saveQualityCompanyDocDrop } from "./quality-company-doc-drops.ts";
 import { listQualityFolderDrops, listQualityVaultOwnerTree, saveQualityFolderDrop } from "./quality-folder-drops.ts";
+import { qualityDropLeaks } from "./quality-vault-shared.ts";
 import {
   QUALITY_UNVAULTED_MARK,
+  QUALITY_VAULT_MISSING_ERROR,
+  QUALITY_VAULT_SHARE_ERROR,
   QUALITY_VAULT_WRITE_ERROR,
   listQualityVaultFiles,
   mergeVaultedQualityFiles,
   persistQualityVaultFiles,
   qualityVaultPath,
   qualityVaultStored,
+  qualityVaultWriteUserError,
 } from "./quality-vault.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-quality-vault-"));
@@ -214,5 +218,86 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
     if (!failed.ok) assert.match(failed.error, /Could not save/);
     assert.equal((await listStoredBriefs("quality", chance.email, { jobId: "job-b17", folderId: "travelers" })).length, 0);
     assert.equal(owner.role, "owner");
+  });
+
+  it("keeps testers on the vault write error and gives the owner a 403/404 share diagnostic", async () => {
+    const leaked = new DriveApiError(
+      403,
+      "The user does not have sufficient permissions for this file. hitsquad-vault@hit-squad-vault.iam.gserviceaccount.com 1A7anV1UKx8m7IgUW2uVpwWHxB5fHerOg",
+      "service-account",
+    );
+    assert.equal(qualityVaultWriteUserError(leaked, false), QUALITY_VAULT_WRITE_ERROR);
+    assert.equal(qualityVaultWriteUserError(leaked, true), QUALITY_VAULT_SHARE_ERROR);
+    assert.equal(qualityVaultWriteUserError(new DriveApiError(404, "folder 1A7anV1UKx8m7IgUW2uVpwWHxB5fHerOg"), true), QUALITY_VAULT_MISSING_ERROR);
+    assert.equal(qualityDropLeaks(QUALITY_VAULT_WRITE_ERROR), false);
+    assert.equal(qualityDropLeaks(QUALITY_VAULT_SHARE_ERROR), false);
+    assert.equal(qualityDropLeaks(QUALITY_VAULT_MISSING_ERROR), false);
+    assert.equal(qualityDropLeaks(leaked.message), true);
+
+    const drive = memoryDrive();
+    resetLeadBriefStoreForTests(join(dir, "acl"));
+    const denied = {
+      ...drive,
+      configured: true,
+      async createFolder() {
+        throw leaked;
+      },
+      async uploadBytes() {
+        throw leaked;
+      },
+    };
+    useLeadBriefVaultForTests(denied);
+    const tester = await saveQualityFolderDrop(chance, {
+      jobId: "job-b17",
+      folderId: "welders",
+      companyId: "madison",
+      files: [pdf("stamp.pdf")],
+    });
+    const ownerDenied = await saveQualityFolderDrop(owner, {
+      jobId: "job-b17",
+      folderId: "welders",
+      companyId: "madison",
+      files: [pdf("stamp.pdf")],
+    });
+    assert.equal(tester.ok, false);
+    assert.equal(ownerDenied.ok, false);
+    if (!tester.ok) {
+      assert.equal(tester.error, QUALITY_VAULT_WRITE_ERROR);
+      assert.equal(qualityDropLeaks(tester), false);
+    }
+    if (!ownerDenied.ok) {
+      assert.equal(ownerDenied.error, QUALITY_VAULT_SHARE_ERROR);
+      assert.equal(qualityDropLeaks(ownerDenied), false);
+    }
+    assert.equal((await listStoredBriefs("quality", chance.email, { jobId: "job-b17", folderId: "welders" })).length, 0);
+    assert.equal((await listStoredBriefs("quality", owner.email, { jobId: "job-b17", folderId: "welders" })).length, 0);
+
+    const missing = {
+      ...drive,
+      configured: true,
+      async createFolder() {
+        throw new DriveApiError(404, "not found 1A7anV1UKx8m7IgUW2uVpwWHxB5fHerOg");
+      },
+    };
+    useLeadBriefVaultForTests(missing);
+    const ownerMissing = await saveQualityFolderDrop(owner, {
+      jobId: "job-b17",
+      folderId: "travelers",
+      companyId: "madison",
+      files: [pdf("traveler.pdf")],
+    });
+    const testerMissing = await saveQualityFolderDrop(chance, {
+      jobId: "job-b17",
+      folderId: "travelers",
+      companyId: "madison",
+      files: [pdf("traveler.pdf")],
+    });
+    assert.equal(ownerMissing.ok, false);
+    assert.equal(testerMissing.ok, false);
+    if (!ownerMissing.ok) {
+      assert.equal(ownerMissing.error, QUALITY_VAULT_MISSING_ERROR);
+      assert.equal(qualityDropLeaks(ownerMissing), false);
+    }
+    if (!testerMissing.ok) assert.equal(testerMissing.error, QUALITY_VAULT_WRITE_ERROR);
   });
 });

@@ -192,7 +192,11 @@ export function attachLegacyClientModule(
   }
 }
 
-/** Same job list the Jobs tree uses for this seat — awarded, Locked, and live packs. */
+/**
+ * Quality / HSE job picker. Madison catalog + pack identities for Quality seats.
+ * Not the Drive email-dump folder tree — Chance’s files show after refresh via
+ * listQualityVaultFiles (Drive path + briefs index), not as dump-folder nodes.
+ */
 export function qualityHseJobTree(input: {
   scope?: CompanyScope | null;
   serverJobs?: JobRecord[];

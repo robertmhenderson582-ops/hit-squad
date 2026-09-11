@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { fileToLead, type LeadFile } from "@/lib/lead-briefs";
+import { viewAsInit } from "@/lib/desk-scope";
 import {
   qualityCompanyDocHome,
   qualityCompanyDocLabel,
@@ -39,6 +41,7 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
   const home = qualityCompanyDocHome(companyId);
   const docs = qualityCompanyDocsListedFor(home);
   const { user } = useSession();
+  const owner = useOwnerDesk();
   const inputRef = useRef<HTMLInputElement>(null);
   const [docId, setDocId] = useState<QualityCompanyDocId>(() => readQualityCompanyDocPick(home));
   const [filesByDoc, setFilesByDoc] = useState<Record<string, QualityListedFile[]>>(() =>
@@ -66,7 +69,7 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
     let cancelled = false;
     void fetch(
       `/api/desk/briefs?kind=quality&scope=company-docs&company=${encodeURIComponent(home)}`,
-      { credentials: "include" },
+      viewAsInit(owner?.viewAs),
     )
       .then(async (response) => {
         const data = (await response.json().catch(() => ({}))) as {
@@ -102,7 +105,7 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
     return () => {
       cancelled = true;
     };
-  }, [home, user?.email]);
+  }, [home, owner?.viewAs, user?.email]);
 
   function pickDoc(next: QualityCompanyDocId) {
     setDocId(next);
@@ -111,9 +114,8 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
   }
 
   async function persistVault(target: QualityCompanyDocId, nextFiles: LeadFile[]) {
-    const response = await fetch("/api/desk/briefs", {
+    const response = await fetch("/api/desk/briefs", viewAsInit(owner?.viewAs, {
       method: "POST",
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         kind: "quality",
@@ -122,7 +124,7 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
         folderId: target,
         files: nextFiles.filter((file) => file.data),
       }),
-    });
+    }));
     const data = (await response.json().catch(() => ({}))) as {
       error?: string;
       store?: string;

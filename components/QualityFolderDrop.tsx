@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { FieldBlock } from "@/components/FieldMark";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { fileToLead, type LeadFile } from "@/lib/lead-briefs";
+import { viewAsInit } from "@/lib/desk-scope";
 import {
   QUALITY_DROP_ACCEPT,
   checkQualityDrop,
@@ -45,6 +47,7 @@ export function QualityFolderDrop({
 }) {
   const folders = qualityFoldersFor(companyId || "madison");
   const { user } = useSession();
+  const owner = useOwnerDesk();
   const selectRef = useRef<HTMLSelectElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [folderId, setFolderId] = useState<QualityFolderId>(() => readQualityFolderPick(jobId));
@@ -74,7 +77,7 @@ export function QualityFolderDrop({
     const job = jobLabel ? `&jobLabel=${encodeURIComponent(jobLabel)}` : "";
     void fetch(
       `/api/desk/briefs?kind=quality&jobId=${encodeURIComponent(jobId)}&folder=${encodeURIComponent(folderId)}${company}${companyName}${site}${job}`,
-      { credentials: "include" },
+      viewAsInit(owner?.viewAs),
     )
       .then(async (response) => {
         const data = (await response.json().catch(() => ({}))) as {
@@ -101,7 +104,7 @@ export function QualityFolderDrop({
     return () => {
       cancelled = true;
     };
-  }, [companyId, companyLabel, folderId, jobId, jobLabel, siteLabel, user?.email]);
+  }, [companyId, companyLabel, folderId, jobId, jobLabel, owner?.viewAs, siteLabel, user?.email]);
 
   function pickFolder(next: QualityFolderId) {
     setFolderId(next);
@@ -112,9 +115,8 @@ export function QualityFolderDrop({
   }
 
   async function persistVault(nextFiles: LeadFile[]) {
-    const response = await fetch("/api/desk/briefs", {
+    const response = await fetch("/api/desk/briefs", viewAsInit(owner?.viewAs, {
       method: "POST",
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         kind: "quality",
@@ -126,7 +128,7 @@ export function QualityFolderDrop({
         jobLabel: jobLabel || undefined,
         files: nextFiles.filter((file) => file.data),
       }),
-    });
+    }));
     const data = (await response.json().catch(() => ({}))) as {
       error?: string;
       rejected?: Array<{ name?: string; error?: string }>;

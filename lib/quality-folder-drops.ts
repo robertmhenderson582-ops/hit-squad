@@ -24,7 +24,7 @@ import {
   listQualityVaultFiles,
   listQualityVaultTree,
   persistQualityVaultFiles,
-  QUALITY_VAULT_WRITE_ERROR,
+  qualityVaultWriteUserError,
 } from "./quality-vault.ts";
 import type { QualityVaultTreeRow } from "./quality-vault-shared.ts";
 import type { PublicUser } from "./types.ts";
@@ -139,7 +139,7 @@ export async function saveQualityFolderDrop(user: QualityDropUser, input: Qualit
     return {
       ok: false as const,
       status: 503,
-      error: QUALITY_VAULT_WRITE_ERROR,
+      error: qualityVaultWriteUserError(error, hasBuildDesk(user)),
       rejected: check.rejected,
     };
   }
@@ -162,6 +162,7 @@ export async function listQualityFolderDrops(
       stored: false as const,
     };
   }
+  // Briefs index is metadata after a confirmed Drive write. Refresh merges Drive names + brief names.
   const who = hasBuildDesk(user) ? undefined : user.email;
   const briefs = await listStoredBriefs("quality", who, { jobId: job, folderId, companyId: company });
   const mine = qualityFolderDropsFor(briefs, job, folderId, hasBuildDesk(user) ? undefined : user.email);

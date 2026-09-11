@@ -1,11 +1,13 @@
 import { companyName, type CompanyId } from "./companies.ts";
 import { QUALITY_BRIEFS_VAULT_NAME, briefsFolderId, qualityFolderId } from "./drive-data.ts";
-import { DRIVE_FOLDER_MIME, type DriveAdapter, type DriveFile } from "./drive-estimates.ts";
+import { DRIVE_FOLDER_MIME, DriveApiError, type DriveAdapter, type DriveFile } from "./drive-estimates.ts";
 import type { LeadFile } from "./lead-briefs.ts";
 import { isQualityCompanyDocsJobId, qualityCompanyDocLabel, type QualityCompanyDocId } from "./quality-company-docs.ts";
 import { qualityFolderLabel, type QualityFolderId } from "./quality-folders.ts";
 import {
   QUALITY_UNVAULTED_MARK,
+  QUALITY_VAULT_MISSING_ERROR,
+  QUALITY_VAULT_SHARE_ERROR,
   QUALITY_VAULT_WRITE_ERROR,
   mergeVaultedQualityFiles,
   qualityVaultStored,
@@ -16,6 +18,8 @@ import {
 
 export {
   QUALITY_UNVAULTED_MARK,
+  QUALITY_VAULT_MISSING_ERROR,
+  QUALITY_VAULT_SHARE_ERROR,
   QUALITY_VAULT_WRITE_ERROR,
   mergeVaultedQualityFiles,
   qualityVaultStored,
@@ -23,6 +27,25 @@ export {
   type QualityVaultPlace,
   type QualityVaultTreeRow,
 };
+
+/** Status only. Never return Drive messages, SA email, or folder ids. */
+export function qualityVaultDriveStatus(error: unknown) {
+  if (error instanceof DriveApiError && error.status) return error.status;
+  if (error instanceof Error) {
+    const match = /\b(403|404)\b/.exec(error.message);
+    if (match) return Number(match[1]);
+  }
+  return 0;
+}
+
+/** Testers always get QUALITY_VAULT_WRITE_ERROR. Owner sees share/missing copy on 403/404. */
+export function qualityVaultWriteUserError(error: unknown, ownerFacing: boolean) {
+  if (!ownerFacing) return QUALITY_VAULT_WRITE_ERROR;
+  const status = qualityVaultDriveStatus(error);
+  if (status === 403) return QUALITY_VAULT_SHARE_ERROR;
+  if (status === 404) return QUALITY_VAULT_MISSING_ERROR;
+  return QUALITY_VAULT_WRITE_ERROR;
+}
 
 export function qualityVaultFolderName(name: string) {
   const cleaned = name
@@ -138,6 +161,7 @@ export function qualityVaultFileVisible(row: DriveFile, who?: string) {
   return (row.properties?.who || "").trim().toLowerCase() === key;
 }
 
+/** Chance’s refresh list: Drive names at company/site/job/folder, filtered by who. Not the email-dump tree. */
 export async function listQualityVaultFiles(
   drive: DriveAdapter | null | undefined,
   place: QualityVaultPlace,

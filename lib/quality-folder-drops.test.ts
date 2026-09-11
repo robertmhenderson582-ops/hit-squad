@@ -120,6 +120,7 @@ describe("Quality folder vault drops", { concurrency: 1 }, () => {
     assert.equal(hidden.every((row) => row.who === chance.email), true);
     assert.equal(qualityDropLeaks(chanceWelders), false);
     assert.equal(qualityDropLeaks({ file: QUALITY_BRIEFS_VAULT_NAME }), true);
+    assert.equal(qualityDropLeaks("hitsquad-vault@hit-squad-vault.iam.gserviceaccount.com"), true);
     assert.equal(QUALITY_FOLDERS.length, 12);
     assert.equal(first.brief.companyId, undefined);
   });

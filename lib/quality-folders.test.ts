@@ -218,6 +218,7 @@ describe("Quality folder catalog", () => {
   it("fails if Quality no longer opens on the folder dropdown first", () => {
     const quality = source("../components/QualityDesk.tsx");
     const drop = source("../components/QualityFolderDrop.tsx");
+    const rail = source("../components/QualityCompanyDocRail.tsx");
     const folders = source("./quality-folders.ts");
     assert.match(quality, /QualityFolderDrop/);
     assert.match(quality, /QualityCompanyDocRail/);
@@ -242,6 +243,8 @@ describe("Quality folder catalog", () => {
     assert.match(drop, /siteLabel/);
     assert.match(drop, /jobLabel/);
     assert.match(drop, /data\.stored/);
+    assert.match(drop, /viewAsInit/);
+    assert.match(rail, /viewAsInit/);
     for (const label of QUALITY_FOLDERS.map((folder) => folder.label)) {
       assert.match(folders, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }

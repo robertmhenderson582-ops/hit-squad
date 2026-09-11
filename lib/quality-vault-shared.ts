@@ -2,6 +2,11 @@
 
 export const QUALITY_VAULT_WRITE_ERROR =
   "Could not save to the Quality vault. Those files are only on this desk. Try again.";
+/** Owner / build desk only. Never send to testers. No SA email, no Drive ids. */
+export const QUALITY_VAULT_SHARE_ERROR =
+  "Quality vault is not writable by the desk. Share the Quality room with the vault account as writer.";
+export const QUALITY_VAULT_MISSING_ERROR =
+  "Quality vault folder was not found. Confirm the Quality room is shared with the vault account.";
 export const QUALITY_UNVAULTED_MARK = "on this desk only — not saved yet";
 
 export type QualityVaultPlace = {
@@ -33,7 +38,7 @@ export function qualityVaultStored(store?: string | null, stored?: boolean) {
 }
 
 export function qualityDropLeaks(payload: unknown) {
-  return /quality-briefs\.json|1A7anV1UKx8m7|141Js9RQZKXq|1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|DRIVE_QUALITY|drive\.google\.com|owner vault/i.test(
+  return /quality-briefs\.json|1A7anV1UKx8m7|141Js9RQZKXq|1k4xceUc5ihDuzSf7opdjEzwnt2ODJomC|DRIVE_QUALITY|drive\.google\.com|owner vault|hitsquad-vault@|iam\.gserviceaccount\.com/i.test(
     JSON.stringify(payload ?? ""),
   );
 }
