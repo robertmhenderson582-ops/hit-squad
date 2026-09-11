@@ -58,6 +58,16 @@ export function showsQualityFolderDesk(companyId?: string | null) {
   return qualityFoldersFor(companyId).length > 0;
 }
 
+/** Madison is the live template. Radios stay up for Quality seats even before a job is picked. */
+export function qualityDeskVaultCompanyId(
+  companyId?: string | null,
+  opts?: { qualitySeat?: boolean },
+): string | undefined {
+  if (showsQualityFolderDesk(companyId)) return companyId || undefined;
+  if (opts?.qualitySeat) return "madison";
+  return companyId || undefined;
+}
+
 /** API / UI list. Missing company → default catalog (Chance’s Madison labels). Unknown company → none. */
 export function qualityFoldersListedFor(companyId?: string | null): readonly QualityFolderDef[] {
   if (!(companyId || "").trim()) return QUALITY_FOLDERS;

@@ -15,6 +15,7 @@ import { qualityRailCompanyId } from "@/lib/quality-company-docs";
 import {
   QUALITY_DESK_RADIOS,
   isQualityDeskRadio,
+  qualityDeskVaultCompanyId,
   readQualityFolderPick,
   showsQualityFolderDesk,
   writeQualityFolderPick,
@@ -53,12 +54,9 @@ export function QualityDesk() {
   const companyId =
     cascadeCompanyId(tree, pick) ||
     inferCompanyIdFromParts(selectedClient?.name, selectedSite?.name, selectedJob?.title, selectedJob?.code);
-  const vaultCompanyId =
-    showsQualityFolderDesk(companyId)
-      ? companyId
-      : isQualityVaultSeat(user) && (jobOpen || radio === "packages")
-        ? "madison"
-        : companyId;
+  const vaultCompanyId = qualityDeskVaultCompanyId(companyId, {
+    qualitySeat: isQualityVaultSeat(user) || buildDesk,
+  });
   const showFolderDesk = showsQualityFolderDesk(vaultCompanyId);
   const railCompanyId = qualityRailCompanyId(undefined, assignedCompanyId(companyScopeFor(user)));
   const radios = QUALITY_DESK_RADIOS;

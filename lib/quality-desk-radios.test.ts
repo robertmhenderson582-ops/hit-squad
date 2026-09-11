@@ -6,6 +6,8 @@ import {
   QUALITY_DESK_RADIOS,
   QUALITY_MODULE_CATALOG,
   isQualityDeskRadio,
+  qualityDeskVaultCompanyId,
+  showsQualityFolderDesk,
 } from "./quality-folders.ts";
 import { QUALITY_DESK_TABS } from "./quality-module.ts";
 
@@ -57,5 +59,10 @@ describe("Quality desk radios", () => {
     assert.doesNotMatch(drop, /<select/);
     assert.doesNotMatch(drop, /quality-folder-pick/);
     assert.match(drop, /id="quality-folder-drop"/);
+    assert.match(desk, /qualityDeskVaultCompanyId/);
+    assert.doesNotMatch(desk, /radio === "packages"/);
+    assert.equal(qualityDeskVaultCompanyId(undefined, { qualitySeat: true }), "madison");
+    assert.equal(showsQualityFolderDesk(qualityDeskVaultCompanyId(undefined, { qualitySeat: true })), true);
+    assert.equal(qualityDeskVaultCompanyId(undefined, { qualitySeat: false }), undefined);
   });
 });
