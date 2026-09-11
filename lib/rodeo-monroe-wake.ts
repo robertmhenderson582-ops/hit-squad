@@ -6,6 +6,7 @@
  */
 
 import { assignedCompanyId, companyScopeFor, type CompanyScope } from "./companies.ts";
+import { isMintedEstimatePackId, isSandboxEstimateOwner } from "./estimate-isolation.ts";
 import { isOwnerIdentity } from "./identity.ts";
 import { jobCodeFromPackId } from "./his-wood-river.ts";
 import type { LocalPack } from "./local-estimates.ts";
@@ -133,18 +134,26 @@ export function wakeShellByPackId(packId = "") {
 
 /** Job-tree hrefs often pass a packId-only hint. Match by id/code first; title/site are optional. */
 export type WakePackHint = Pick<LocalPack, "packId"> &
-  Partial<Pick<LocalPack, "title" | "siteId" | "site" | "createdAt" | "updatedAt">>;
+  Partial<Pick<LocalPack, "title" | "siteId" | "site" | "createdAt" | "updatedAt" | "ownerEmail">>;
 
 export function wakeMatchForPack(pack?: WakePackHint | null) {
   if (!pack) return null;
+  const sandbox = isSandboxEstimateOwner(pack.ownerEmail);
   const byId = wakeShellByPackId(pack.packId);
-  if (byId) return byId;
+  if (byId) return sandbox ? null : byId;
   const code = jobCodeFromPackId(pack.packId);
   const byCode = wakeShells().find((row) => row.jobCode === code);
-  if (byCode) return byCode;
+  if (byCode && !sandbox) {
+    const needle = normId(pack.packId);
+    const reserved = normId(byCode.packId);
+    if (needle === reserved || needle === normId(byCode.jobCode) || needle.startsWith(reserved)) return byCode;
+  }
   const title = titleKey(pack.title);
   if (!title) return null;
-  return wakeShells().find((row) => titleKey(row.title) === title) ?? null;
+  const byTitle = wakeShells().find((row) => titleKey(row.title) === title) ?? null;
+  if (!byTitle || sandbox) return null;
+  if (isMintedEstimatePackId(pack.packId) && normId(pack.packId) !== normId(byTitle.packId)) return null;
+  return byTitle;
 }
 
 export function isRodeoMonroeWakePack(pack?: WakePackHint | null) {

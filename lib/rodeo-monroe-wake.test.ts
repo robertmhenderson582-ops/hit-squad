@@ -66,6 +66,14 @@ describe("Rodeo + Monroe wake shells", () => {
     assert.equal(isWakeIdentityOnly(rodeoMonroeWakeCards()[0]), true);
     assert.equal(oneLivePackPerWakeJob(merged), true);
     assert.equal(wakeMatchForPack(live)?.unit, "U110");
+    assert.equal(
+      wakeMatchForPack({
+        packId: "new-mark-u110",
+        title: "Rodeo U110 2026 TA",
+        ownerEmail: "marks544@yahoo.com",
+      }),
+      null,
+    );
 
     const job = localPackToJob(rodeoMonroeWakeCards()[0]!);
     assert.equal(job.code, RODEO_U110_JOB_CODE);

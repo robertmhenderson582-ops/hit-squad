@@ -90,6 +90,7 @@ describe("inbox circle", () => {
     assert.equal(contacts.some((row) => row.email === "shane@apcontrolsllc.com"), false);
     assert.equal(contacts.some((row) => row.email === "wlanderno@yahoo.com"), false);
     assert.equal(contacts.some((row) => row.email === NOVUS_INBOX_EMAIL), false);
+    assert.equal(contacts.some((row) => row.email === "marks544@yahoo.com"), false);
     const expanded = inboxContactsFor(president.email, { ...president, privileges: ["inbox-expand"] });
     assert.equal(expanded.some((row) => row.email === "bccamp2@gmail.com"), true);
     assert.equal(

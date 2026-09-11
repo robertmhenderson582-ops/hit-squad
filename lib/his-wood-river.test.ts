@@ -81,6 +81,8 @@ test("HIS known files include Aromatics + CAT + Boiler 17, never purged T&M or t
   assert.equal(hisFileForPackId(HIS_AROMATICS_PACK_ID)?.fileId, HIS_AROMATICS_FILE_ID);
   assert.equal(hisFileForPackId(HIS_CAT2_PACK_ID)?.fileId, HIS_CAT2_FILE_ID);
   assert.equal(hisFileForPackId(HIS_BOILER17_PACK_ID)?.fileId, HIS_BOILER17_FILE_ID);
+  assert.equal(hisFileForPackId(`${HIS_AROMATICS_PACK_ID}-sandbox`), null);
+  assert.equal(hisMatchForPack({ packId: "new-mark-arom", title: "2027 Aromatics Turnaround", ownerEmail: "marks544@yahoo.com" }), null);
   assert.equal(hisFileForPackId(HIS_TM_PACK_ID), null);
   assert.equal(hisFileForPackId("new-mtj5d6-longer-vault"), null);
   assert.equal(hisFileForPackId("new-mtj5d6-tm2027"), null);

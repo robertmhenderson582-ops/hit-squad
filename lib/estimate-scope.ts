@@ -1,6 +1,7 @@
 import { companyScopeFor, inferCompanyIdFromParts, type CompanyScope } from "./companies.ts";
 import { dummyPacksForUser, mergeDummyPacks } from "./cbi-dummy.ts";
 import { hasWorkingDesk, isOwner, isPresident, isTester } from "./desk-role.ts";
+import { isSandboxEstimateOwner } from "./estimate-isolation.ts";
 import { hisMatchForPack, mergeHisWoodRiverCards, NATHAN_DESK_EMAIL, shouldPaintHisCards } from "./his-wood-river.ts";
 import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
@@ -33,7 +34,14 @@ export function packOwnerEmailForWrite(
   pack?: { packId?: string; title?: string; client?: string; site?: string; siteId?: string },
 ) {
   if (hisMatchForPack({ ...pack, ownerEmail: existing })) {
+    // Sandbox testers keep their own stamp — never restamp onto Nathan via HIS match.
+    if (isTester(user) && isSandboxEstimateOwner(user.email)) {
+      return user.email.trim().toLowerCase();
+    }
     const current = canonicalEmail(existing) || (existing || "").trim().toLowerCase();
+    if (current && isSandboxEstimateOwner(current)) {
+      return current;
+    }
     if (current === NATHAN_DESK_EMAIL || isOwnerIdentity(current)) {
       return isOwnerIdentity(current) ? ownerVaultEmail() : NATHAN_DESK_EMAIL;
     }

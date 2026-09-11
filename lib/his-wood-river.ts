@@ -16,6 +16,7 @@ import type { EstimateStatus } from "./estimate-status.ts";
 import { applyPackToStore, crewHasRows } from "./estimate-pack.ts";
 import { CREW_STORE_PREFIX } from "./phase-schedule.ts";
 import { boiler17B1FilledSnapshot } from "./wood-river-b1.ts";
+import { isMintedEstimatePackId, isSandboxEstimateOwner } from "./estimate-isolation.ts";
 import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
 import { JOB_META_PREFIX } from "./job-meta-prefix.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
@@ -164,15 +165,25 @@ export function omitPurgedHisLeftovers<T extends HisIdentityPack>(packs: T[] | u
   return (packs ?? []).filter((pack) => !isPurgedHisLeftover(pack));
 }
 
-export function hisFileForPackId(packId: string) {
+function hisFileForExactPackId(packId: string) {
   const id = (packId || "").trim();
   if (!id || isPurgedHisLeftover({ packId: id })) return null;
   const needle = normPackId(id);
-  const exact = hisKnownEstimateFiles().find((row) => row.packId && normPackId(row.packId) === needle);
+  return hisKnownEstimateFiles().find((row) => row.packId && normPackId(row.packId) === needle) ?? null;
+}
+
+function hisFileForPrefixPackId(packId: string) {
+  const id = (packId || "").trim();
+  if (!id || isPurgedHisLeftover({ packId: id })) return null;
+  const needle = normPackId(id);
+  const exact = hisFileForExactPackId(id);
   if (exact) return exact;
-  return (
-    hisKnownEstimateFiles().find((row) => row.packId && needle.startsWith(normPackId(row.packId))) ?? null
-  );
+  return hisKnownEstimateFiles().find((row) => row.packId && needle.startsWith(normPackId(row.packId))) ?? null;
+}
+
+/** Exact known HIS pack id only. Prefix leftovers must not pin Drive writes. */
+export function hisFileForPackId(packId: string) {
+  return hisFileForExactPackId(packId);
 }
 
 export function hisFileByDriveId(fileId: string) {
@@ -185,18 +196,33 @@ function hisTitleKey(value = "") {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-/** Known Nathan Wood River jobs only. Purged T&M leftover and "New Turnaround estimate" never match. */
+/**
+ * Known Nathan Wood River jobs only.
+ * Ownership + minted pack id beat title / copied file id / prefix leftovers.
+ * Sandbox seats (Mark and other non-Madison testers) never attach via weak keys.
+ * Exact HIS pack ids still match so a stale leftover on the live card can restamp.
+ */
 export function hisMatchForPack(pack?: HisIdentityPack | null) {
   if (!pack || isPurgedHisLeftover(pack)) return null;
+  const sandbox = isSandboxEstimateOwner(pack.ownerEmail);
   if (pack.fileId) {
     const byFile = hisFileByDriveId(pack.fileId);
-    if (byFile) return byFile;
+    if (byFile) {
+      const exactId = pack.packId ? hisFileForExactPackId(pack.packId) : null;
+      if (sandbox && pack.packId && !exactId) return null;
+      return byFile;
+    }
   }
-  const byId = pack.packId ? hisFileForPackId(pack.packId) : null;
-  if (byId) return byId;
+  const exact = pack.packId ? hisFileForExactPackId(pack.packId) : null;
+  if (exact) return exact;
+  const prefix = pack.packId ? hisFileForPrefixPackId(pack.packId) : null;
+  if (prefix && !sandbox) return prefix;
   const title = hisTitleKey(pack.title);
   if (!title) return null;
-  return hisKnownEstimateFiles().find((row) => hisTitleKey(row.title) === title) ?? null;
+  const byTitle = hisKnownEstimateFiles().find((row) => hisTitleKey(row.title) === title) ?? null;
+  if (!byTitle || sandbox) return null;
+  if (isMintedEstimatePackId(pack.packId) && !hisFileForExactPackId(pack.packId || "")) return null;
+  return byTitle;
 }
 
 export function isHisWoodRiverPack(pack?: HisIdentityPack | null) {
@@ -204,9 +230,10 @@ export function isHisWoodRiverPack(pack?: HisIdentityPack | null) {
 }
 
 export function isHisWoodRiverJob(job?: { title?: string; code?: string; packId?: string; id?: string } | null) {
-  if (!job || isPurgedHisLeftover({ packId: job.packId || job.id, title: job.title, code: job.code })) return false;
-  const title = hisTitleKey(job.title);
-  return Boolean(title && hisKnownEstimateFiles().some((row) => hisTitleKey(row.title) === title));
+  if (!job) return false;
+  const packId = job.packId || (job.id?.startsWith("job-") ? job.id.slice(4) : "");
+  if (isPurgedHisLeftover({ packId: packId || job.id, title: job.title, code: job.code })) return false;
+  return Boolean(hisMatchForPack({ packId, title: job.title, code: job.code }));
 }
 
 /** Job-menu leftover ids: packId, job-{packId}, or a live HIS title. Purged T&M is not protected. */
@@ -360,8 +387,7 @@ function hisCardAlreadyPresent(packs: LocalPack[], card: LocalPack) {
   return packs.some((row) => {
     if (normPackId(row.packId) === normPackId(card.packId)) return true;
     const match = hisMatchForPack(row);
-    if (match && match.packId && normPackId(match.packId) === normPackId(card.packId)) return true;
-    return hisTitleKey(row.title) === hisTitleKey(card.title);
+    return Boolean(match && match.packId && normPackId(match.packId) === normPackId(card.packId));
   });
 }
 
