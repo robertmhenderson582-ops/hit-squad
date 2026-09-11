@@ -2,11 +2,22 @@
 
 import { FieldBlock } from "@/components/FieldMark";
 import {
+  RATE_VAULT_B1_BURDEN_FAMILIES,
   RATE_VAULT_SITES,
   rateVaultSiteLabel,
+  type RateVaultBurdenFamily,
+  type RateVaultCraftSheet,
   type RateVaultOcipFace,
   type RateVaultPreviewPackage,
 } from "@/lib/rate-vault";
+import {
+  burdenLineAmount,
+  burdenLinePct,
+  craftSheetBurdenSubtotal,
+  craftSheetFamilyAmount,
+  craftSheetFringesSubtotal,
+  fringeLineAmount,
+} from "@/lib/rate-vault-b1";
 import {
   burdenTotalPct,
   filterPreviewByFace,
@@ -67,6 +78,108 @@ export function RateVaultOcipPicker({
   );
 }
 
+function familyLabel(id: RateVaultBurdenFamily) {
+  return RATE_VAULT_B1_BURDEN_FAMILIES.find((row) => row.id === id)?.label ?? id;
+}
+
+function CraftSheetBurden({ sheet }: { sheet: RateVaultCraftSheet }) {
+  const wage = sheet.representativeWage;
+  const fringeTotal = craftSheetFringesSubtotal(sheet, wage);
+  const burdenTotal = craftSheetBurdenSubtotal(sheet, wage);
+  return (
+    <section className="rounded-lg border border-[#d5e0de] px-3 py-3">
+      <p className="text-xs tracking-[0.12em] text-[#5b6f73]">{sheet.sheet}</p>
+      <h5 className="text-base font-semibold text-[#163038]">
+        {sheet.craft}
+        {sheet.local ? ` · L ${sheet.local}` : ""}
+        {sheet.lane === "merit" ? " · merit" : ""}
+      </h5>
+      <p className="mt-1 text-sm text-[#5b6f73]">
+        {sheet.representativePosition} @ {formatRateVaultMoney(wage)} taxable BW · Fringes Subtotal{" "}
+        {formatRateVaultMoney(fringeTotal)} / hr · burden {formatRateVaultMoney(burdenTotal)} (
+        {formatRateVaultPct(wage ? (burdenTotal / wage) * 100 : 0)} of BW)
+      </p>
+
+      <p className="mt-3 text-xs tracking-[0.12em] text-[#5b6f73]">Fringes Subtotal — $ / hr</p>
+      <table className="mt-1 min-w-full text-left text-sm" aria-label={`${sheet.craft} B-1 fringes`}>
+        <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
+          <tr>
+            <th scope="col" className="px-2 py-1">
+              Fringe
+            </th>
+            <th scope="col" className="px-2 py-1">
+              $ / hr
+            </th>
+            <th scope="col" className="px-2 py-1">
+              of BW
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {sheet.fringes.map((line) => {
+            const amount = fringeLineAmount(line, wage);
+            if (!amount && line.unit !== "pct-taxable") return null;
+            return (
+              <tr key={line.id} className="border-t border-[#d5e0de]">
+                <td className="px-2 py-1 font-semibold text-[#163038]">{line.label}</td>
+                <td className="px-2 py-1 font-semibold">{formatRateVaultMoney(amount)}</td>
+                <td className="px-2 py-1 text-[#5b6f73]">
+                  {line.unit === "pct-taxable" ? formatRateVaultPct(line.ratePct) : "—"}
+                </td>
+              </tr>
+            );
+          })}
+          <tr className="border-t border-[#d5e0de]">
+            <td className="px-2 py-1 font-semibold">Fringes Subtotal</td>
+            <td className="px-2 py-1 font-semibold">{formatRateVaultMoney(fringeTotal)}</td>
+            <td className="px-2 py-1">—</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {RATE_VAULT_B1_BURDEN_FAMILIES.map((family) => {
+        const lines = sheet.burden.filter((line) => line.family === family.id);
+        if (!lines.length) return null;
+        const subtotal = craftSheetFamilyAmount(sheet, family.id, wage);
+        return (
+          <div key={family.id} className="mt-3">
+            <p className="text-xs tracking-[0.12em] text-[#5b6f73]">{family.label}</p>
+            <table className="mt-1 min-w-full text-left text-sm" aria-label={`${sheet.craft} B-1 ${family.label}`}>
+              <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
+                <tr>
+                  <th scope="col" className="px-2 py-1">
+                    Item
+                  </th>
+                  <th scope="col" className="px-2 py-1">
+                    Rate
+                  </th>
+                  <th scope="col" className="px-2 py-1">
+                    $ / hr
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line) => (
+                  <tr key={line.id} className="border-t border-[#d5e0de]">
+                    <td className="px-2 py-1 font-semibold text-[#163038]">{line.label}</td>
+                    <td className="px-2 py-1 font-semibold">{formatRateVaultPct(burdenLinePct(line, wage))}</td>
+                    <td className="px-2 py-1 font-semibold">{formatRateVaultMoney(burdenLineAmount(line, wage))}</td>
+                  </tr>
+                ))}
+                <tr className="border-t border-[#d5e0de]">
+                  <td className="px-2 py-1 font-semibold">{familyLabel(family.id)} subtotal</td>
+                  <td className="px-2 py-1">—</td>
+                  <td className="px-2 py-1 font-semibold">{formatRateVaultMoney(subtotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 export function RateVaultPreviewTables({
   preview,
   siteId,
@@ -88,7 +201,8 @@ export function RateVaultPreviewTables({
   }
 
   const groups = previewRowGroups(viewed.rows);
-  const burdenPct = burdenTotalPct(viewed);
+  const payTaxPct = burdenTotalPct(viewed);
+  const halls = viewed.craftSheets ?? [];
 
   return (
     <div className="mt-4 space-y-6">
@@ -155,35 +269,55 @@ export function RateVaultPreviewTables({
       </div>
 
       <div>
-        <p className="text-xs tracking-[0.14em] text-[#5b6f73]">Burden Summary</p>
-        <h4 className="text-lg font-semibold text-[#163038]">Burden stack</h4>
-        <p className="mt-1 text-sm text-[#5b6f73]">Composite {formatRateVaultPct(burdenPct)} of taxable wage — hall sheets still vary.</p>
-        <div className="mt-3 overflow-x-auto">
-          <table className="min-w-full text-left text-sm" aria-label="Wood River B-1 burden summary">
-            <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
-              <tr>
-                <th scope="col" className="px-2 py-2">
-                  Item
-                </th>
-                <th scope="col" className="px-2 py-2">
-                  Rate
-                </th>
-                <th scope="col" className="px-2 py-2">
-                  Note
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {viewed.burden.map((line) => (
-                <tr key={line.id} className="border-t border-[#d5e0de]">
-                  <td className="px-2 py-2 font-semibold text-[#163038]">{line.label}</td>
-                  <td className="px-2 py-2 font-semibold">{formatRateVaultPct(line.ratePct)}</td>
-                  <td className="px-2 py-2 text-[#5b6f73]">{line.note || "—"}</td>
+        <p className="text-xs tracking-[0.14em] text-[#5b6f73]">Exhibit B-1 craft sheets</p>
+        <h4 className="text-lg font-semibold text-[#163038]">Burden + fringes</h4>
+        <p className="mt-1 text-sm text-[#5b6f73]">
+          Pay Tax FICA-MC / FUI / SUI {formatRateVaultPct(payTaxPct)} of taxable BW on every Wood River hall sheet.
+          Insurance, misc, O/H, and profit stay on the craft sheet — not a site-wide Illinois composite. Fringes
+          Subtotal is $ / hr, hall by hall.
+        </p>
+        {halls.length ? (
+          <div className="mt-3 grid gap-4">
+            {halls.map((sheet) => (
+              <CraftSheetBurden key={sheet.id} sheet={sheet} />
+            ))}
+          </div>
+        ) : viewed.burden.length || viewed.fringes?.length ? (
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full text-left text-sm" aria-label="Wood River B-1 burden summary">
+              <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
+                <tr>
+                  <th scope="col" className="px-2 py-2">
+                    Family
+                  </th>
+                  <th scope="col" className="px-2 py-2">
+                    Item
+                  </th>
+                  <th scope="col" className="px-2 py-2">
+                    Rate
+                  </th>
+                  <th scope="col" className="px-2 py-2">
+                    $ / hr
+                  </th>
+                  <th scope="col" className="px-2 py-2">
+                    Hall
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {viewed.burden.map((line) => (
+                  <tr key={line.id} className="border-t border-[#d5e0de]">
+                    <td className="px-2 py-2 text-[#5b6f73]">{familyLabel(line.family)}</td>
+                    <td className="px-2 py-2 font-semibold text-[#163038]">{line.label}</td>
+                    <td className="px-2 py-2 font-semibold">{formatRateVaultPct(line.ratePct)}</td>
+                    <td className="px-2 py-2 font-semibold">{line.amountHr ? formatRateVaultMoney(line.amountHr) : "—"}</td>
+                    <td className="px-2 py-2 text-[#5b6f73]">{line.sheet || line.craft || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </div>
     </div>
   );
