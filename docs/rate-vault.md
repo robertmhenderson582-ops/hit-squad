@@ -55,7 +55,7 @@ The export is the **lean Rate Vault face** and the **formula check to the site**
 - **COMP Check** — key totals (positions, wage / fringe / burden / bill, Pay Tax stack %, fringe $) via formulas that pull Rate Summary / Burden Summary / Fringes. Not a raw dump of the giant COMP xlsm.
 - **CBA PLA** and **State law** — read-only rule summary tabs (Excel forbids `/` in the CBA sheet name). Editable rate cells stay on Rate Summary / Burden Summary only.
 
-Export tags the selected OCIP face (`ocip` / `non-ocip` / both). Import refuses mixing an OCIP workbook into a non-OCIP picker (or the reverse) unless the owner clicks **Confirm OCIP mix**. Merit vs union lanes never blend on mapped rows.
+Export tags the selected OCIP face (`ocip` / `non-ocip` / both). A both-faces book **replaces** the stored package on import — do not default that book onto an OCIP-only merge (that dropped craft / non-OCIP wage and fringe edits). An OCIP-only (or non-OCIP-only) export still merges just that face and ripples hall Fringes / Burden onto kept rows. Import refuses mixing an OCIP workbook into a non-OCIP picker (or the reverse) unless the owner clicks **Confirm OCIP mix**. Merit vs union lanes never blend on mapped rows.
 
 Re-import writes the edited package into `rate-vault.json` (`packages[]` — metadata / rate rows only, never workbook bytes). Each successful import stamps a **version** (date + note) and keeps a **last-good** package so Restore last-good can roll back. GET / recognize / Burden / Publish prefer that stored package over the Wood River fixture so a library-card click does not wipe offline edits. Owner and James share one canonical Drive vault package — no device-kick.
 

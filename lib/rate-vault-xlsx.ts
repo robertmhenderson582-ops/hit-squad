@@ -384,7 +384,9 @@ export async function rateVaultPreviewToXlsx(
   });
   const lastBurdenData = Math.max(exported.burden.length + 1, 2);
   const payTaxRow = exported.burden.length + 2;
-  burden.getCell(`A${payTaxRow}`).value = "pay-tax";
+  // Family must not be "pay-tax" — Rate Summary SUMIF(A:A,"pay-tax",C:C) would
+  // double-count this subtotal (16.80 + 16.80) when Excel recalculates.
+  burden.getCell(`A${payTaxRow}`).value = "total";
   burden.getCell(`B${payTaxRow}`).value = "Pay Tax Subtotal";
   burden.getCell(`B${payTaxRow}`).font = { bold: true };
   burden.getCell(`C${payTaxRow}`).value = {
@@ -774,10 +776,13 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
       fixture: false,
       extractedFrom: "vault-xlsx-import",
       writesRateBook: false,
-      rows: ripplePreviewRowsFromB1Sheets(parsed.rows, parsed.burden, parsed.fringes, parsed.craftSheets, {
-        rippleFringe: fringeRippleIds.size > 0,
-        rippleBurden: burdenRippleIds.size > 0,
-      }),
+      rows: parsed.rows.map(
+        (row) =>
+          ripplePreviewRowsFromB1Sheets([row], parsed.burden, parsed.fringes, parsed.craftSheets, {
+            rippleFringe: fringeRippleIds.has(row.id),
+            rippleBurden: burdenRippleIds.has(row.id),
+          })[0] ?? row,
+      ),
     },
   };
 }

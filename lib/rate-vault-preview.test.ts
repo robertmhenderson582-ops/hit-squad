@@ -14,6 +14,7 @@ import {
   loadWoodRiverB1PreviewFixture,
   mergePreviewFace,
   parseRateVaultPreviewPackage,
+  rateVaultImportMergeFace,
   previewHasLaneBlend,
   previewRowAddsUp,
   resolveRateVaultPreview,
@@ -137,5 +138,12 @@ describe("Rate Vault Wood River B-1 preview", () => {
     const merged = mergePreviewFace(fixture, ocipOnly, "ocip");
     assert.equal(merged.rows.some((row) => !row.ocip), true);
     assert.equal(merged.rows.some((row) => row.ocip), true);
+    assert.equal(rateVaultImportMergeFace(fixture), "both");
+    assert.equal(rateVaultImportMergeFace(ocipOnly), "ocip");
+    const bothMerged = mergePreviewFace(fixture, { ...fixture, rows: fixture.rows.map((row) => ({ ...row, wage: row.wage + 1 })) }, "both");
+    assert.equal(
+      bothMerged.rows.find((row) => row.position === "Boilermaker Journeyman")?.wage,
+      (fixture.rows.find((row) => row.position === "Boilermaker Journeyman")?.wage ?? 0) + 1,
+    );
   });
 });

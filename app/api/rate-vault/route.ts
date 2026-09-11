@@ -11,7 +11,7 @@ import {
   type RateVaultPreviewPackage,
   type RateVaultRecognitionReview,
 } from "@/lib/rate-vault";
-import { mergePreviewFace, previewHasLaneBlend } from "@/lib/rate-vault-preview";
+import { mergePreviewFace, previewHasLaneBlend, rateVaultImportMergeFace } from "@/lib/rate-vault-preview";
 import { parseRateVaultB1Xlsx, rateVaultPreviewToXlsx, RATE_VAULT_B1_MIME } from "@/lib/rate-vault-xlsx";
 import {
   addRateVaultOwnerSource,
@@ -159,7 +159,7 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const merged = mergePreviewFace(stored, imported.preview, fileFace || viewFace || "ocip");
+    const merged = mergePreviewFace(stored, imported.preview, rateVaultImportMergeFace(imported.preview));
     const saved = await upsertRateVaultPackage(merged, typeof body.versionNote === "string" ? body.versionNote : "Imported B-1 Excel");
     if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: saved.status });
     await queueRateVaultBuyoff(saved.preview, saved.preview.version?.note || "Imported B-1 Excel");

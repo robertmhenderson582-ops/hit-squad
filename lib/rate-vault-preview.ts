@@ -13,6 +13,7 @@ import {
   inferBurdenFamily,
   inferBurdenUnit,
   isRateVaultBurdenFamily,
+  ripplePreviewRowsFromB1Sheets,
 } from "./rate-vault-b1.ts";
 import { woodRiverB1CraftSheets } from "./rate-vault-wood-river-b1.ts";
 import {
@@ -280,12 +281,19 @@ export function stampRateVaultVersion(preview: RateVaultPreviewPackage, note: st
   };
 }
 
+/** A both-faces book replaces the stored package. Never default that book onto an OCIP-only merge. */
+export function rateVaultImportMergeFace(incoming: Pick<RateVaultPreviewPackage, "ocipFace">): RateVaultOcipFace | "both" {
+  return incoming.ocipFace === "ocip" || incoming.ocipFace === "non-ocip" ? incoming.ocipFace : "both";
+}
+
 export function mergePreviewFace(
   stored: RateVaultPreviewPackage | null,
   incoming: RateVaultPreviewPackage,
-  face: RateVaultOcipFace,
+  face: RateVaultOcipFace | "both",
 ): RateVaultPreviewPackage {
-  if (!stored) return { ...cloneRateVaultPreview(incoming), ocipFace: incoming.ocipFace === "both" ? "both" : face };
+  if (!stored || face === "both") {
+    return { ...cloneRateVaultPreview(incoming), ocipFace: incoming.ocipFace === "both" || face === "both" ? "both" : face };
+  }
   const kept = stored.rows.filter((row) => !rowMatchesOcipFace(row, face));
   const nextRows = [...kept, ...incoming.rows.filter((row) => rowMatchesOcipFace(row, face))];
   const blended = nextRows.some((row) => {
@@ -295,15 +303,18 @@ export function mergePreviewFace(
   if (blended) {
     return { ...cloneRateVaultPreview(stored) };
   }
+  const burden = incoming.burden.length ? incoming.burden : stored.burden;
+  const fringes = incoming.fringes.length ? incoming.fringes : stored.fringes;
+  const craftSheets = incoming.craftSheets.length ? incoming.craftSheets : stored.craftSheets;
   return {
     ...cloneRateVaultPreview(incoming),
     id: stored.id,
     siteId: stored.siteId,
     ocipFace: kept.length && incoming.rows.some((row) => rowMatchesOcipFace(row, face)) ? "both" : face,
-    rows: nextRows,
-    burden: incoming.burden.length ? incoming.burden : stored.burden,
-    fringes: incoming.fringes.length ? incoming.fringes : stored.fringes,
-    craftSheets: incoming.craftSheets.length ? incoming.craftSheets : stored.craftSheets,
+    rows: ripplePreviewRowsFromB1Sheets(nextRows, burden, fringes, craftSheets),
+    burden,
+    fringes,
+    craftSheets,
   };
 }
 
