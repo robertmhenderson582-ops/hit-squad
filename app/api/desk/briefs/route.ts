@@ -15,6 +15,7 @@ import {
 import {
   listQualityCompanyDocDrop,
   listQualityCompanyDocDrops,
+  readQualityCompanyDocFile,
   saveQualityCompanyDocDrop,
 } from "@/lib/quality-company-doc-drops";
 import { isQualityCompanyDocId, qualityCompanyDocsListedFor } from "@/lib/quality-company-docs";
@@ -43,6 +44,7 @@ export async function GET(request: Request) {
 
   const jobId = params.get("jobId")?.trim() || "";
   const folderId = params.get("folder") || params.get("folderId") || "";
+  const fileName = params.get("file")?.trim() || "";
   const companyId = qualityCompanyId(params);
   const companyDocs = params.get("scope") === "company-docs" || isQualityCompanyDocId(folderId, companyId || undefined);
   if (kind === "quality" && params.get("tree") === "1") {
@@ -55,6 +57,15 @@ export async function GET(request: Request) {
     });
   }
   if (kind === "quality" && companyDocs) {
+    if (fileName && isQualityCompanyDocId(folderId, companyId || undefined)) {
+      const listed = await readQualityCompanyDocFile(user, folderId, fileName, companyId || undefined);
+      if (!listed.file) return NextResponse.json({ error: "File not found." }, { status: 404 });
+      return NextResponse.json({
+        file: listed.file,
+        store: listed.store,
+        stored: listed.stored,
+      });
+    }
     if (isQualityCompanyDocId(folderId, companyId || undefined)) {
       const listed = await listQualityCompanyDocDrop(user, folderId, companyId || undefined);
       return NextResponse.json({

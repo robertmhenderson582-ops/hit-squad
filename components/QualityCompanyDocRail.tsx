@@ -6,7 +6,9 @@ import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { fileToLead, type LeadFile } from "@/lib/lead-briefs";
 import { viewAsInit } from "@/lib/desk-scope";
+import { QualityCompanyDocViewer } from "@/components/QualityCompanyDocViewer";
 import {
+  primaryQualityCompanyDocFile,
   qualityCompanyDocHome,
   qualityCompanyDocLabel,
   qualityCompanyDocsListedFor,
@@ -22,7 +24,6 @@ import {
   mergeQualityFolderFiles,
 } from "@/lib/quality-folders";
 import {
-  QUALITY_UNVAULTED_MARK,
   QUALITY_VAULT_WRITE_ERROR,
   mergeVaultedQualityFiles,
   qualityVaultStored,
@@ -53,6 +54,8 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
   const [noteKind, setNoteKind] = useState<"ok" | "warn" | "err">("ok");
   const [saving, setSaving] = useState(false);
   const [overId, setOverId] = useState<QualityCompanyDocId | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [openFileName, setOpenFileName] = useState<string | null>(null);
 
   useEffect(() => {
     const next = readQualityCompanyDocPick(home);
@@ -111,6 +114,13 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
     setDocId(next);
     writeQualityCompanyDocPick(home, next);
     setNote(null);
+  }
+
+  function openLibrary(next: QualityCompanyDocId, fileName?: string) {
+    pickDoc(next);
+    const listed = (filesByDoc[next] ?? []).filter((file) => file.name);
+    setOpenFileName(fileName || primaryQualityCompanyDocFile(listed)?.name || null);
+    setLibraryOpen(true);
   }
 
   async function persistVault(target: QualityCompanyDocId, nextFiles: LeadFile[]) {
@@ -205,8 +215,11 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
     }
   }
 
+  const libraryFiles = (filesByDoc[docId] ?? []).filter((file) => file.name);
+
   return (
     <aside id="quality-company-docs" className="plant-card h-fit px-3 py-4" aria-label="Quality files">
+      <p className="mb-3 text-xs text-[#5b6f73]">Drop a file on a bar to save it. Click a bar to open that library.</p>
       <ul className="space-y-2">
         {docs.map((doc) => {
           const selected = doc.id === docId;
@@ -233,39 +246,51 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
                   id={`quality-company-doc-${doc.id}`}
                   className="w-full text-left text-sm font-semibold"
                   aria-current={selected ? "true" : undefined}
-                  onClick={() => pickDoc(doc.id)}
+                  aria-haspopup="dialog"
+                  onClick={() => openLibrary(doc.id)}
                 >
                   {doc.label}
                 </button>
-                {listed.length ? (
-                  <ul className="mt-2 space-y-1 text-sm text-[#5b6f73]">
-                    {listed.map((file) => (
-                      <li key={file.name}>
-                        {file.name}
-                        {file.vaulted ? "" : ` · ${QUALITY_UNVAULTED_MARK}`}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
+                <p className="mt-1 text-xs text-[#5b6f73]">
+                  {overId === doc.id
+                    ? "Drop to save here"
+                    : listed.length
+                      ? `${listed.length} file${listed.length === 1 ? "" : "s"} · click to open`
+                      : "Drop files here"}
+                </p>
               </div>
             </li>
           );
         })}
       </ul>
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        accept={QUALITY_DROP_ACCEPT}
-        className="paper-field mt-3"
-        disabled={saving}
-        aria-label={`Add files to ${qualityCompanyDocLabel(docId, home)}`}
-        onChange={(event) => void onFiles(docId, event.target.files)}
-      />
+      <label className="mt-3 block text-xs text-[#5b6f73]">
+        Or choose files for {qualityCompanyDocLabel(docId, home)}
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept={QUALITY_DROP_ACCEPT}
+          className="paper-field mt-1"
+          disabled={saving}
+          aria-label={`Add files to ${qualityCompanyDocLabel(docId, home)}`}
+          onChange={(event) => void onFiles(docId, event.target.files)}
+        />
+      </label>
       {saving ? <p className="mt-2 text-sm">Saving…</p> : null}
       {note ? (
         <p className={`mt-2 text-sm ${noteKind === "err" ? "text-[#8a2a2a]" : "text-[#5b6f73]"}`}>{note}</p>
       ) : null}
+      <QualityCompanyDocViewer
+        open={libraryOpen}
+        title={qualityCompanyDocLabel(docId, home)}
+        home={home}
+        docId={docId}
+        files={libraryFiles}
+        selectedName={openFileName}
+        viewAs={owner?.viewAs}
+        onSelect={setOpenFileName}
+        onClose={() => setLibraryOpen(false)}
+      />
     </aside>
   );
 }

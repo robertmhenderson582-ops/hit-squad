@@ -107,7 +107,7 @@ export function QualityDesk() {
         ? "madison"
         : companyId;
   const showFolderDesk = showsQualityFolderDesk(vaultCompanyId);
-  const railCompanyId = qualityRailCompanyId(vaultCompanyId || companyId, assignedCompanyId(companyScopeFor(user)));
+  const railCompanyId = qualityRailCompanyId(undefined, assignedCompanyId(companyScopeFor(user)));
 
   useEffect(() => {
     if (!ready) return;

@@ -25,6 +25,7 @@ import {
   qualityVaultPath,
   qualityVaultStored,
   qualityVaultWriteUserError,
+  readQualityVaultFile,
 } from "./quality-vault.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-quality-vault-"));
@@ -168,6 +169,15 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
     const file = await child(drive, bucket.id, "qc-manual.pdf");
     assert.ok(file);
     assert.equal(new TextDecoder().decode(await drive.readBytes(file.id)), "manual");
+    const opened = await readQualityVaultFile(
+      drive,
+      { companyId: "madison", folderId: "quality-control-manual", jobId: "company-docs:madison", companyDocs: true },
+      "qc-manual.pdf",
+    );
+    assert.equal(opened.file?.name, "qc-manual.pdf");
+    assert.equal(opened.file?.data, pdf("qc-manual.pdf", "manual").data);
+    assert.equal("id" in (opened.file || {}), false);
+    assert.equal(qualityDropLeaks(opened), false);
     const ownerRows = await listStoredBriefs("quality", undefined, {
       jobId: "company-docs:madison",
       folderId: "quality-control-manual",

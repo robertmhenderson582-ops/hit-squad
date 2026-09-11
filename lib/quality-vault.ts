@@ -192,6 +192,46 @@ export async function listQualityVaultFiles(
   }
 }
 
+/** Bytes for open/view. Names + base64 only — never Drive ids. */
+export async function readQualityVaultFile(
+  drive: DriveAdapter | null | undefined,
+  place: QualityVaultPlace,
+  fileName: string,
+) {
+  const wanted = (fileName || "").replace(/\\/g, "/").split("/").pop()?.trim() || "";
+  if (!wanted || !qualityDriveReady(drive) || !drive?.readBytes) {
+    return { file: null, store: "unconfigured" as const, stored: false as const };
+  }
+  try {
+    let parent = qualityFolderId();
+    for (const name of qualityVaultPath(place)) {
+      const kids = await drive.listChildren!(parent);
+      const existing = kids.find((row) => row.name === name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
+      if (!existing?.id) {
+        return { file: null, store: "drive" as const, stored: true as const };
+      }
+      parent = existing.id;
+    }
+    const kids = await drive.listChildren!(parent);
+    const row = kids.find((item) => qualityVaultFileVisible(item, place.who) && item.name === wanted);
+    if (!row?.id) {
+      return { file: null, store: "drive" as const, stored: true as const };
+    }
+    const bytes = await drive.readBytes(row.id);
+    return {
+      file: {
+        name: row.name,
+        type: row.mimeType && row.mimeType !== DRIVE_FOLDER_MIME ? row.mimeType : "application/octet-stream",
+        data: Buffer.from(bytes).toString("base64"),
+      },
+      store: "drive" as const,
+      stored: true as const,
+    };
+  } catch {
+    return { file: null, store: "drive" as const, stored: false as const };
+  }
+}
+
 export async function listQualityVaultTree(drive: DriveAdapter | null | undefined): Promise<QualityVaultTreeRow[]> {
   if (!qualityDriveReady(drive)) return [];
   try {
