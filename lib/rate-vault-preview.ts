@@ -15,6 +15,7 @@ import {
   inferBurdenUnit,
   isRateVaultBurdenFamily,
   ripplePreviewRowsFromB1Sheets,
+  withB1Controls,
 } from "./rate-vault-b1.ts";
 import { woodRiverB1CraftSheets } from "./rate-vault-wood-river-b1.ts";
 import { WOOD_RIVER_TM_B1_PACKAGE_NOTE, woodRiverTmB1CraftSheets } from "./rate-vault-wood-river-tm-b1.ts";
@@ -168,7 +169,7 @@ function parseBurdenLine(raw: unknown, index: number): RateVaultBurdenLine | nul
     ratePct: money(row.ratePct),
     amountHr: money(row.amountHr),
   });
-  return {
+  const next: RateVaultBurdenLine = {
     id: text(row.id) || `burden-${index + 1}`,
     label,
     family,
@@ -180,7 +181,27 @@ function parseBurdenLine(raw: unknown, index: number): RateVaultBurdenLine | nul
     local: text(row.local) || null,
     sheet: text(row.sheet) || null,
     ridesOt: row.ridesOt === true,
+    rateKind: "",
+    base: "",
+    calcSt: "",
+    calcOt: "",
+    calcDt: "",
+    mult: null,
+    rideSt: true,
+    rideOt: true,
+    rideDt: true,
   };
+  return withB1Controls(next, {
+    rateKind: text(row.rateKind) || undefined,
+    base: text(row.base) || undefined,
+    calcSt: text(row.calcSt) || undefined,
+    calcOt: text(row.calcOt) || undefined,
+    calcDt: text(row.calcDt) || undefined,
+    mult: typeof row.mult === "number" ? row.mult : undefined,
+    rideSt: typeof row.rideSt === "boolean" ? row.rideSt : undefined,
+    rideOt: typeof row.rideOt === "boolean" ? row.rideOt : undefined,
+    rideDt: typeof row.rideDt === "boolean" ? row.rideDt : undefined,
+  });
 }
 
 function parseFringeLine(raw: unknown, index: number): RateVaultFringeLine | null {
@@ -188,7 +209,7 @@ function parseFringeLine(raw: unknown, index: number): RateVaultFringeLine | nul
   const row = raw as Record<string, unknown>;
   const label = text(row.label);
   if (!label) return null;
-  return {
+  const next: RateVaultFringeLine = {
     id: text(row.id) || `fringe-${index + 1}`,
     label,
     amountHr: money(row.amountHr),
@@ -199,7 +220,27 @@ function parseFringeLine(raw: unknown, index: number): RateVaultFringeLine | nul
     sheet: text(row.sheet) || "Craft",
     note: text(row.note) || "",
     ridesOt: row.ridesOt === true,
+    rateKind: "",
+    base: "",
+    calcSt: "",
+    calcOt: "",
+    calcDt: "",
+    mult: null,
+    rideSt: true,
+    rideOt: true,
+    rideDt: true,
   };
+  return withB1Controls(next, {
+    rateKind: text(row.rateKind) || undefined,
+    base: text(row.base) || undefined,
+    calcSt: text(row.calcSt) || undefined,
+    calcOt: text(row.calcOt) || undefined,
+    calcDt: text(row.calcDt) || undefined,
+    mult: typeof row.mult === "number" ? row.mult : undefined,
+    rideSt: typeof row.rideSt === "boolean" ? row.rideSt : undefined,
+    rideOt: typeof row.rideOt === "boolean" ? row.rideOt : undefined,
+    rideDt: typeof row.rideDt === "boolean" ? row.rideDt : undefined,
+  });
 }
 
 function parseCraftSheet(raw: unknown, index: number): RateVaultCraftSheet | null {

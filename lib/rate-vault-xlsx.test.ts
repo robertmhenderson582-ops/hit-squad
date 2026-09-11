@@ -12,7 +12,7 @@ import {
   RATE_VAULT_B1_REQUIRED_SHEETS,
 } from "./rate-vault.ts";
 import { hallBurdenSubtotal, hallFringeSubtotal } from "./rate-vault-b1.ts";
-import { loadWoodRiverB1PreviewFixture, mergePreviewFace, rateVaultImportMergeFace } from "./rate-vault-preview.ts";
+import { loadWoodRiverB1PreviewFixture, loadWoodRiverTmB1PreviewFixture, mergePreviewFace, rateVaultImportMergeFace } from "./rate-vault-preview.ts";
 import {
   RATE_VAULT_B1_RATE_HEADERS,
   isRateVaultBurdenRippleFormula,
@@ -81,10 +81,15 @@ describe("Rate Vault B-1 Excel export / import", () => {
     assert.equal(rates.getCell(`A${journeymanRow}`).value, "Boilermaker Journeyman");
 
     const burden = workbook.getWorksheet(RATE_VAULT_B1_BURDEN_SHEET);
-    assert.equal(burden?.getColumn(7).hidden, true);
-    assert.equal(burden?.getColumn(8).hidden, true);
+    assert.equal(burden?.getColumn(16).hidden, true);
+    assert.equal(burden?.getColumn(17).hidden, true);
     assert.equal(burden?.getCell("A1").value, "Family");
     assert.equal(burden?.getCell("B1").value, "Item");
+    assert.equal(burden?.getCell("F1").value, "Rate $/%/Varies");
+    assert.equal(burden?.getCell("H1").value, "ST Calc");
+    assert.equal(burden?.getCell("I1").value, "OT Calc");
+    assert.equal(String(burden?.getCell("F2").value || ""), "%");
+    assert.equal(String(burden?.getCell("G2").value || ""), "Tax BW");
     const totalRow = (fixture.burden.length || 0) + 2;
     const totalFormula =
       burden?.getCell(`C${totalRow}`).formula ||
@@ -99,8 +104,10 @@ describe("Rate Vault B-1 Excel export / import", () => {
     const fringes = workbook.getWorksheet("Fringes");
     assert.ok(fringes);
     assert.equal(fringes.getCell("D1").value, "Fringe");
-    assert.equal(fringes.getColumn(8).hidden, true);
-    assert.equal(fringes.getColumn(9).hidden, true);
+    assert.equal(fringes.getCell("G1").value, "Rate $/%/Varies");
+    assert.equal(fringes.getCell("I1").value, "ST Calc");
+    assert.equal(fringes.getColumn(17).hidden, true);
+    assert.equal(fringes.getColumn(18).hidden, true);
     const comp = workbook.getWorksheet("COMP Check");
     assert.ok(comp);
     assert.match(String(comp.getCell("A1").value || ""), /COMP check/i);
@@ -488,5 +495,76 @@ describe("Rate Vault B-1 Excel export / import", () => {
     assert.equal(faces.has("non-OCIP"), false);
     assert.equal(faces.has("OCIP"), true);
     assert.equal(lanes.has("union") || lanes.has("merit"), true);
+  });
+
+  it("round-trips Exhibit B-1 calc / ride / Mult strings, including unknown book options", async () => {
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const hw = fixture.fringes.find((line) => line.label === "H&W" && line.sheet.includes("BOILERMAKER"));
+    assert.ok(hw);
+    const exported = await rateVaultPreviewToXlsx(fixture);
+    const workbook = await loadWorkbook(exported.bytes);
+    const fringes = workbook.getWorksheet("Fringes");
+    assert.ok(fringes);
+    let target = 0;
+    fringes.eachRow((row, rowNumber) => {
+      if (rowNumber > 1 && String(row.getCell(4).value) === "H&W" && String(row.getCell(1).value || "").includes("BOILERMAKER")) {
+        target = rowNumber;
+      }
+    });
+    assert.ok(target);
+    assert.equal(String(fringes.getCell(target, 7).value || ""), "$");
+    assert.equal(String(fringes.getCell(target, 9).value || ""), "Hours Worked");
+    assert.equal(String(fringes.getCell(target, 10).value || ""), "Hours Paid");
+    fringes.getCell(target, 10).value = "Book Custom Mode";
+    fringes.getCell(target, 12).value = 1.25;
+    fringes.getCell(target, 14).value = "Y";
+    const buffer = await workbook.xlsx.writeBuffer();
+    const imported = await parseRateVaultB1Xlsx({
+      fileName: exported.fileName,
+      bytes: new Uint8Array(buffer),
+    });
+    assert.equal(imported.ok, true);
+    if (!imported.ok) return;
+    const line = imported.preview.fringes.find((item) => item.id === hw.id);
+    assert.equal(line?.calcOt, "Book Custom Mode");
+    assert.equal(line?.mult, 1.25);
+    assert.equal(line?.rideOt, true);
+    const gf = imported.preview.rows.find((row) => row.position === "Boilermaker General Foreman");
+    assert.ok(gf?.billOt != null);
+    assert.notEqual(gf?.billOt, 140.21);
+  });
+
+  it("infers Calc from hidden _ridesOt when ST/OT/DT Calc cells are blank", async () => {
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const exported = await rateVaultPreviewToXlsx(fixture);
+    const workbook = await loadWorkbook(exported.bytes);
+    const fringes = workbook.getWorksheet("Fringes");
+    assert.ok(fringes);
+    fringes.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      row.getCell(9).value = null;
+      row.getCell(10).value = null;
+      row.getCell(11).value = null;
+    });
+    const buffer = await workbook.xlsx.writeBuffer();
+    const imported = await parseRateVaultB1Xlsx({
+      fileName: exported.fileName,
+      bytes: new Uint8Array(buffer),
+    });
+    assert.equal(imported.ok, true);
+    if (!imported.ok) return;
+    const hw = imported.preview.fringes.find((line) => line.label === "H&W" && line.sheet.includes("BOILERMAKER"));
+    const labor = imported.preview.fringes.find((line) => line.label === "Health & Welfare" && /LABORER/i.test(line.sheet));
+    assert.equal(hw?.calcOt, "Hours Paid");
+    assert.equal(hw?.rideOt, true);
+    assert.equal(labor?.calcOt, "Hours Worked");
+    assert.equal(labor?.rideOt, true);
+  });
+
+  it("keeps a T&M export under the lean-face byte cap", async () => {
+    const fixture = loadWoodRiverTmB1PreviewFixture();
+    const exported = await rateVaultPreviewToXlsx(fixture);
+    assert.ok(exported.bytes.byteLength < RATE_VAULT_B1_EXPORT_MAX_BYTES);
+    assert.match(exported.fileName, /TM/);
   });
 });

@@ -9,6 +9,7 @@
 
 import {
   RATE_VAULT_B1_BURDEN_FAMILIES,
+  type RateVaultB1LineControls,
   type RateVaultBurdenFamily,
   type RateVaultBurdenLine,
   type RateVaultBurdenUnit,
@@ -17,6 +18,15 @@ import {
   type RateVaultPreviewPackage,
   type RateVaultPreviewRow,
 } from "./rate-vault.ts";
+import {
+  b1BucketFactor,
+  classifyRateVaultB1Base,
+  classifyRateVaultB1RateKind,
+  inferRateVaultB1Controls,
+  normalizeRateVaultB1Controls,
+  unitFromB1RateKind,
+  type RateVaultB1Bucket,
+} from "./rate-vault-b1-options.ts";
 
 export const RATE_VAULT_B1_PAY_TAX = [
   { id: "fica-mc", label: "Pay Tax FICA-MC", ratePct: 7.65, note: "Social Security + Medicare — % of taxable BW" },
@@ -86,8 +96,23 @@ export function burdenLinePct(line: RateVaultBurdenLine, wage: number) {
   return impliedPct(line.amountHr, wage);
 }
 
+export function withB1Controls<T extends RateVaultB1LineControls>(line: T, over: Partial<RateVaultB1LineControls> = {}): T {
+  const named = line as T & { unit?: string; label?: string; craft?: string | null; sheet?: string | null; note?: string };
+  const next = normalizeRateVaultB1Controls({
+    ...named,
+    ...over,
+    unit: named.unit || (over.rateKind === "%" ? "pct-taxable" : "amount-hr"),
+    label: named.label,
+    craft: named.craft,
+    sheet: named.sheet,
+    note: named.note,
+  });
+  return { ...line, ...next };
+}
+
 export function fringeLineAmount(line: RateVaultFringeLine, wage: number) {
-  if (line.unit === "pct-taxable") return amountFromPct(line.ratePct, wage);
+  const kind = classifyRateVaultB1RateKind(line.rateKind || (line.unit === "pct-taxable" ? "%" : "$"));
+  if (kind === "%" || line.unit === "pct-taxable") return amountFromPct(line.ratePct, wage);
   return money(line.amountHr);
 }
 
@@ -113,23 +138,44 @@ export function craftSheetBurdenPct(sheet: RateVaultCraftSheet, wage = sheet.rep
   return impliedPct(craftSheetBurdenSubtotal(sheet, wage), wage);
 }
 
-function wageForBucket(baseSt: number, bucket: "st" | "ot" | "dt") {
+function wageForBucket(baseSt: number, bucket: RateVaultB1Bucket) {
   if (bucket === "ot") return money(baseSt * 1.5);
   if (bucket === "dt") return money(baseSt * 2);
   return money(baseSt);
 }
 
-function fringeOnBucket(line: RateVaultFringeLine, baseSt: number, bucket: "st" | "ot" | "dt") {
-  if (bucket === "st") return fringeLineAmount(line, baseSt);
-  if (!line.ridesOt) return fringeLineAmount(line, baseSt);
-  if (line.unit === "pct-taxable") return fringeLineAmount(line, wageForBucket(baseSt, bucket));
-  const paid = bucket === "ot" ? 1.5 : 2;
-  return money(line.amountHr * paid);
+function controlsFor(line: RateVaultB1LineControls & { unit?: RateVaultBurdenUnit; ridesOt?: boolean; note?: string; label?: string }) {
+  return inferRateVaultB1Controls(line);
 }
 
-function burdenOnBucket(line: RateVaultBurdenLine, baseSt: number, bucket: "st" | "ot" | "dt") {
-  if (bucket === "st" || line.ridesOt) return burdenLineAmount(line, wageForBucket(baseSt, bucket));
-  return burdenLineAmount(line, baseSt);
+export function fringeOnBucket(line: RateVaultFringeLine, baseSt: number, bucket: RateVaultB1Bucket) {
+  const controls = controlsFor(line);
+  const factor = b1BucketFactor(controls, bucket);
+  if (factor === 0) return 0;
+  const kind = classifyRateVaultB1RateKind(controls.rateKind || (line.unit === "pct-taxable" ? "%" : "$"));
+  if (kind === "%" || line.unit === "pct-taxable") {
+    const taxBw = classifyRateVaultB1Base(controls.base) === "Tax BW";
+    const wage = taxBw && factor !== 1 ? wageForBucket(baseSt, bucket) : money(baseSt);
+    const amount = amountFromPct(line.ratePct, wage);
+    if (taxBw && factor !== 1) return amount;
+    return money(amount * factor);
+  }
+  return money((line.amountHr || 0) * factor);
+}
+
+export function burdenOnBucket(line: RateVaultBurdenLine, baseSt: number, bucket: RateVaultB1Bucket) {
+  const controls = controlsFor(line);
+  const factor = b1BucketFactor(controls, bucket);
+  if (factor === 0) return 0;
+  const kind = classifyRateVaultB1RateKind(controls.rateKind || (inferBurdenUnit(line) === "pct-taxable" ? "%" : "$"));
+  if (kind === "%" || inferBurdenUnit(line) === "pct-taxable") {
+    const taxBw = classifyRateVaultB1Base(controls.base) === "Tax BW";
+    const wage = taxBw && factor !== 1 ? wageForBucket(baseSt, bucket) : money(baseSt);
+    const amount = burdenLineAmount({ ...line, unit: "pct-taxable" }, wage);
+    if (taxBw && factor !== 1) return amount;
+    return money(amount * factor);
+  }
+  return money(burdenLineAmount(line, baseSt) * factor);
 }
 
 export function b1RatesForCraftSheet(
@@ -316,6 +362,21 @@ export function previewRowAddsUpB1(row: Pick<RateVaultPreviewRow, "wage" | "frin
   return Math.abs(row.wage + row.fringe + row.burden - row.billRate) <= MONEY_TOL;
 }
 
+function burdenControls(ridesOt: boolean, unit: RateVaultBurdenUnit): RateVaultB1LineControls & { ridesOt: boolean } {
+  return normalizeRateVaultB1Controls({
+    unit,
+    ridesOt,
+    rateKind: unit === "pct-taxable" ? "%" : "$",
+    base: unit === "pct-taxable" ? "Tax BW" : "Base Wage",
+    calcSt: "Hours Worked",
+    calcOt: ridesOt ? "Hours Paid" : "Hours Worked",
+    calcDt: ridesOt ? "Hours Paid" : "Hours Worked",
+    rideSt: true,
+    rideOt: true,
+    rideDt: true,
+  });
+}
+
 export function payTaxLines(sheetId: string, ridesOt = true): RateVaultBurdenLine[] {
   return RATE_VAULT_B1_PAY_TAX.map((row) => ({
     id: `${sheetId}-${row.id}`,
@@ -328,7 +389,7 @@ export function payTaxLines(sheetId: string, ridesOt = true): RateVaultBurdenLin
     craft: null,
     local: null,
     sheet: null,
-    ridesOt,
+    ...burdenControls(ridesOt, "pct-taxable"),
   }));
 }
 
@@ -350,7 +411,7 @@ export function insLines(
     craft,
     local,
     sheet,
-    ridesOt: false,
+    ...burdenControls(false, "pct-taxable"),
   }));
 }
 
@@ -372,7 +433,7 @@ export function miscLines(
     craft,
     local,
     sheet,
-    ridesOt: false,
+    ...burdenControls(false, "amount-hr"),
   }));
 }
 
@@ -396,7 +457,7 @@ export function supplierLines(
       craft,
       local,
       sheet,
-      ridesOt: false,
+      ...burdenControls(false, "amount-hr"),
     },
     {
       id: `${sheetId}-profit`,
@@ -409,7 +470,7 @@ export function supplierLines(
       craft,
       local,
       sheet,
-      ridesOt: false,
+      ...burdenControls(false, "amount-hr"),
     },
   ];
 }
@@ -425,8 +486,38 @@ export function fringeLine(input: {
   sheet: string;
   ridesOt?: boolean;
   note?: string;
+  rateKind?: string;
+  base?: string;
+  calcSt?: string;
+  calcOt?: string;
+  calcDt?: string;
+  mult?: number | null;
+  rideSt?: boolean;
+  rideOt?: boolean;
+  rideDt?: boolean;
+  amountOt?: number | null;
+  rideFlagSt?: string | boolean | null;
+  rideFlagOt?: string | boolean | null;
+  rideFlagDt?: string | boolean | null;
 }): RateVaultFringeLine {
   const unit = input.unit ?? (input.ratePct ? "pct-taxable" : "amount-hr");
+  const meritHealth =
+    /health/i.test(input.label) && /merit/i.test(`${input.craft} ${input.sheet}`) && input.ridesOt !== true;
+  const controls = normalizeRateVaultB1Controls({
+    ...input,
+    unit,
+    rateKind: input.rateKind || (unit === "pct-taxable" ? "%" : "$"),
+    base: input.base || (unit === "pct-taxable" ? "Tax BW" : "Base Wage"),
+    calcOt: input.calcOt || (meritHealth ? "Straight Time" : undefined),
+    calcDt: input.calcDt || (meritHealth ? "Straight Time" : undefined),
+    rideOt: input.rideOt ?? (meritHealth ? false : undefined),
+    rideDt: input.rideDt ?? (meritHealth ? false : undefined),
+    note:
+      input.note ||
+      (meritHealth
+        ? "Merit Health — Straight Time / Ride OT N on the hall sheet (does not pay on OT/DT)."
+        : "B-1 fringe — $/hr on the hall sheet (Fringes Subtotal)."),
+  });
   return {
     id: input.id,
     label: input.label,
@@ -436,8 +527,37 @@ export function fringeLine(input: {
     craft: input.craft,
     local: input.local,
     sheet: input.sheet,
-    note: input.note || "B-1 fringe — $/hr on the hall sheet (Fringes Subtotal).",
-    ridesOt: Boolean(input.ridesOt),
+    note:
+      input.note ||
+      (meritHealth
+        ? "Merit Health — Straight Time / Ride OT N on the hall sheet (does not pay on OT/DT)."
+        : "B-1 fringe — $/hr on the hall sheet (Fringes Subtotal)."),
+    ...controls,
+  };
+}
+
+export function applyB1LineControlsToPreview(
+  preview: RateVaultPreviewPackage,
+  lineId: string,
+  patch: Partial<RateVaultB1LineControls>,
+): RateVaultPreviewPackage {
+  const applyLine = <T extends RateVaultFringeLine | RateVaultBurdenLine>(line: T): T => {
+    if (line.id !== lineId) return withB1Controls(line);
+    const next = { ...line, ...patch };
+    if (patch.rateKind) next.unit = unitFromB1RateKind(patch.rateKind);
+    return withB1Controls(next);
+  };
+  const craftSheets = preview.craftSheets.map((sheet) => ({
+    ...sheet,
+    fringes: sheet.fringes.map(applyLine),
+    burden: sheet.burden.map(applyLine),
+  }));
+  return {
+    ...preview,
+    craftSheets,
+    fringes: preview.fringes.map(applyLine),
+    burden: preview.burden.map(applyLine),
+    rows: applyB1ToPreviewRows(preview.rows, craftSheets),
   };
 }
 

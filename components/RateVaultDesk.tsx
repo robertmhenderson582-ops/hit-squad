@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { FieldBlock } from "@/components/FieldMark";
-import { RateVaultBookPicker, RateVaultOcipPicker, RateVaultPreviewTables, RateVaultSitePicker } from "@/components/RateVaultPreview";
+import {
+  RateVaultBookPicker,
+  RateVaultOcipPicker,
+  RateVaultPreviewTables,
+  RateVaultSitePicker,
+  type RateVaultB1LineHandler,
+} from "@/components/RateVaultPreview";
 import {
   RATE_VAULT_ACCEPT,
   RATE_VAULT_B1_BOOK_MIX_ERROR,
@@ -493,6 +499,16 @@ export function RateVaultDesk() {
     else setPreview(defaultRateVaultPreview(packageSiteId === RATE_VAULT_DEFAULT_SITE_ID ? RATE_VAULT_DEFAULT_SITE_ID : null, next));
   }
 
+  const patchB1Line: RateVaultB1LineHandler = (lineId, patch) => {
+    void post({
+      action: "patch-b1-line",
+      siteId: packageSiteId,
+      bookFace,
+      lineId,
+      patch,
+    });
+  };
+
   return (
     <div className="mt-4 space-y-5">
       <section className="plant-card px-5 py-5">
@@ -627,6 +643,7 @@ export function RateVaultDesk() {
           onRestore={() => void restoreLastGood()}
           onDrop={(file) => void recognizeFile(file, undefined, "burden")}
           onSource={(sourceId) => void recognizeSourceId(sourceId, "burden")}
+          onB1Line={patchB1Line}
         />
       ) : null}
 
@@ -646,6 +663,7 @@ export function RateVaultDesk() {
           onPublish={() => void post({ action: "publish" })}
           onDrop={(file) => void recognizeFile(file, undefined, "publish")}
           onSource={(sourceId) => void recognizeSourceId(sourceId, "publish")}
+          onB1Line={patchB1Line}
         />
       ) : null}
     </div>
@@ -1265,6 +1283,7 @@ function BurdenPane({
   onRestore,
   onDrop,
   onSource,
+  onB1Line,
 }: {
   preview: RateVaultPreviewPackage | null;
   packageSiteId: string;
@@ -1278,6 +1297,7 @@ function BurdenPane({
   onRestore: () => void;
   onDrop: (file: File) => void;
   onSource: (sourceId: string) => void;
+  onB1Line?: RateVaultB1LineHandler;
 }) {
   return (
     <div className="space-y-5">
@@ -1286,8 +1306,9 @@ function BurdenPane({
         <h3 className="text-xl font-semibold text-[#163038]">Visual rate package</h3>
         <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
           Friendlier than a raw Exhibit B-1, same guts: hall craft sheets with Pay Tax, Ins,
-          Misc, O/H, Profit, and Fringes Subtotal as $ / hr. Export is a lean B-1 face — not
-          the 25 MB official book. Fringe and burden cells pull the Fringes / Burden tabs.
+          Misc, O/H, Profit, and Fringes Subtotal as $ / hr, plus the hall Rate $/%/Varies,
+          Base Wage vs Tax BW, ST/OT/DT Calc, Mult, and ride flags. Export is a lean B-1 face —
+          not the 25 MB official book. Fringe and burden cells pull the Fringes / Burden tabs.
           Edit those offline, drop the same file here, and this desk updates. Live Rate Tables
           stay stubbed.
         </p>
@@ -1335,6 +1356,7 @@ function BurdenPane({
           preview={preview}
           siteId={packageSiteId}
           ocipFace={ocipFace}
+          onB1Line={onB1Line}
           emptyNote={
             bookFace === "tm"
               ? "No T&M seats in this view. Switch OCIP or pick RRFF for the other Wood River book."
@@ -1408,6 +1430,7 @@ function PublishPane({
   onPublish,
   onDrop,
   onSource,
+  onB1Line,
 }: {
   publish: RateVaultPublishStub | null;
   preview: RateVaultPreviewPackage | null;
@@ -1423,6 +1446,7 @@ function PublishPane({
   onPublish: () => void;
   onDrop: (file: File) => void;
   onSource: (sourceId: string) => void;
+  onB1Line?: RateVaultB1LineHandler;
 }) {
   return (
     <section className="plant-card px-5 py-5">
@@ -1475,6 +1499,7 @@ function PublishPane({
         preview={preview}
         siteId={packageSiteId}
         ocipFace={ocipFace}
+        onB1Line={onB1Line}
         emptyNote={
           bookFace === "tm"
             ? "No T&M seats in this view. Switch OCIP or pick RRFF for the other Wood River book."

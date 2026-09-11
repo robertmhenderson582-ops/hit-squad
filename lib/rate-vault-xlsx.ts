@@ -44,6 +44,11 @@ import {
 } from "./rate-vault.ts";
 import { inferBurdenFamily, ripplePreviewRowsFromB1Sheets } from "./rate-vault-b1.ts";
 import {
+  RATE_VAULT_B1_RATE_KIND_LABEL,
+  normalizeRateVaultB1Controls,
+  rateVaultB1SelectOptions,
+} from "./rate-vault-b1-options.ts";
+import {
   defaultRateVaultClockNote,
   filterPreviewByFace,
   inferRateVaultLane,
@@ -70,8 +75,45 @@ export const RATE_VAULT_B1_RATE_HEADERS = [
   "_id",
 ] as const;
 
-export const RATE_VAULT_B1_BURDEN_HEADERS = ["Family", "Item", "Rate %", "$ / hr", "Hall", "Note", "_id", "_ridesOt"] as const;
-export const RATE_VAULT_B1_FRINGE_HEADERS = ["Hall", "Craft", "Local", "Fringe", "$ / hr", "Rate %", "Note", "_id", "_ridesOt"] as const;
+export const RATE_VAULT_B1_BURDEN_HEADERS = [
+  "Family",
+  "Item",
+  "Rate %",
+  "$ / hr",
+  "Hall",
+  RATE_VAULT_B1_RATE_KIND_LABEL,
+  "Base",
+  "ST Calc",
+  "OT Calc",
+  "DT Calc",
+  "Mult",
+  "Ride ST",
+  "Ride OT",
+  "Ride DT",
+  "Note",
+  "_id",
+  "_ridesOt",
+] as const;
+export const RATE_VAULT_B1_FRINGE_HEADERS = [
+  "Hall",
+  "Craft",
+  "Local",
+  "Fringe",
+  "$ / hr",
+  "Rate %",
+  RATE_VAULT_B1_RATE_KIND_LABEL,
+  "Base",
+  "ST Calc",
+  "OT Calc",
+  "DT Calc",
+  "Mult",
+  "Ride ST",
+  "Ride OT",
+  "Ride DT",
+  "Note",
+  "_id",
+  "_ridesOt",
+] as const;
 
 export function rateVaultFringeRippleFormula(row: number) {
   const sheet = RATE_VAULT_B1_FRINGE_SHEET;
@@ -303,6 +345,120 @@ function applyHeader(row: ExcelJS.Row, headers: readonly string[]) {
   });
 }
 
+function rideCell(value: boolean) {
+  return value ? "Y" : "N";
+}
+
+function applyB1ListValidation(
+  cell: ExcelJS.Cell,
+  kind: "rateKind" | "base" | "calc" | "ride",
+  current?: string | null,
+) {
+  const options = rateVaultB1SelectOptions(kind, current);
+  const joined = options.join(",");
+  if (!joined || joined.length > 240) return;
+  cell.dataValidation = {
+    type: "list",
+    allowBlank: true,
+    formulae: [`"${joined}"`],
+    showErrorMessage: false,
+  };
+}
+
+function writeB1ControlCells(
+  sheet: ExcelJS.Worksheet,
+  row: number,
+  startCol: number,
+  line: {
+    rateKind?: string;
+    base?: string;
+    calcSt?: string;
+    calcOt?: string;
+    calcDt?: string;
+    mult?: number | null;
+    rideSt?: boolean;
+    rideOt?: boolean;
+    rideDt?: boolean;
+    ridesOt?: boolean;
+    unit?: string;
+    label?: string;
+    craft?: string | null;
+    sheet?: string | null;
+    note?: string;
+  },
+) {
+  const controls = normalizeRateVaultB1Controls({
+    rateKind: line.rateKind,
+    base: line.base,
+    calcSt: line.calcSt,
+    calcOt: line.calcOt,
+    calcDt: line.calcDt,
+    mult: line.mult ?? null,
+    rideSt: line.rideSt,
+    rideOt: line.rideOt,
+    rideDt: line.rideDt,
+    ridesOt: line.ridesOt === true,
+    unit: line.unit,
+    label: line.label,
+    craft: line.craft,
+    sheet: line.sheet,
+    note: line.note,
+  });
+  sheet.getCell(row, startCol).value = controls.rateKind;
+  sheet.getCell(row, startCol + 1).value = controls.base;
+  sheet.getCell(row, startCol + 2).value = controls.calcSt;
+  sheet.getCell(row, startCol + 3).value = controls.calcOt;
+  sheet.getCell(row, startCol + 4).value = controls.calcDt;
+  if (controls.mult != null) sheet.getCell(row, startCol + 5).value = controls.mult;
+  sheet.getCell(row, startCol + 6).value = rideCell(controls.rideSt);
+  sheet.getCell(row, startCol + 7).value = rideCell(controls.rideOt);
+  sheet.getCell(row, startCol + 8).value = rideCell(controls.rideDt);
+  applyB1ListValidation(sheet.getCell(row, startCol), "rateKind", controls.rateKind);
+  applyB1ListValidation(sheet.getCell(row, startCol + 1), "base", controls.base);
+  applyB1ListValidation(sheet.getCell(row, startCol + 2), "calc", controls.calcSt);
+  applyB1ListValidation(sheet.getCell(row, startCol + 3), "calc", controls.calcOt);
+  applyB1ListValidation(sheet.getCell(row, startCol + 4), "calc", controls.calcDt);
+  applyB1ListValidation(sheet.getCell(row, startCol + 6), "ride", rideCell(controls.rideSt));
+  applyB1ListValidation(sheet.getCell(row, startCol + 7), "ride", rideCell(controls.rideOt));
+  applyB1ListValidation(sheet.getCell(row, startCol + 8), "ride", rideCell(controls.rideDt));
+}
+
+function readOptionalMult(cell: ExcelJS.Cell) {
+  const read = readNumber(cell);
+  return "ok" in read ? read.value : null;
+}
+
+function readB1Controls(
+  cols: Record<string, number>,
+  row: ExcelJS.Row,
+  ridesOt: boolean,
+  extras: { unit?: string; label?: string; craft?: string | null; sheet?: string | null; note?: string },
+) {
+  const rateKind = text(row.getCell(cols[RATE_VAULT_B1_RATE_KIND_LABEL] || 0).value);
+  const base = text(row.getCell(cols.Base || 0).value);
+  const calcSt = text(row.getCell(cols["ST Calc"] || 0).value);
+  const calcOt = text(row.getCell(cols["OT Calc"] || 0).value);
+  const calcDt = text(row.getCell(cols["DT Calc"] || 0).value);
+  const mult = cols.Mult ? readOptionalMult(row.getCell(cols.Mult)) : null;
+  return normalizeRateVaultB1Controls({
+    rateKind,
+    base,
+    calcSt,
+    calcOt,
+    calcDt,
+    mult,
+    ridesOt,
+    unit: extras.unit,
+    label: extras.label,
+    craft: extras.craft,
+    sheet: extras.sheet,
+    note: extras.note,
+    rideFlagSt: cols["Ride ST"] ? text(row.getCell(cols["Ride ST"]).value) : undefined,
+    rideFlagOt: cols["Ride OT"] ? text(row.getCell(cols["Ride OT"]).value) : undefined,
+    rideFlagDt: cols["Ride DT"] ? text(row.getCell(cols["Ride DT"]).value) : undefined,
+  });
+}
+
 export async function rateVaultPreviewToXlsx(
   preview: RateVaultPreviewPackage,
   options: { ocipFace?: RateVaultOcipFace } = {},
@@ -387,9 +543,10 @@ export async function rateVaultPreviewToXlsx(
     burden.getCell(`D${r}`).value = line.amountHr;
     applyMoneyStyle(burden.getCell(`D${r}`));
     burden.getCell(`E${r}`).value = line.sheet || line.craft || "";
-    burden.getCell(`F${r}`).value = line.note;
-    burden.getCell(`G${r}`).value = line.id;
-    burden.getCell(`H${r}`).value = line.ridesOt ? "TRUE" : "FALSE";
+    writeB1ControlCells(burden, r, 6, line);
+    burden.getCell(`O${r}`).value = line.note;
+    burden.getCell(`P${r}`).value = line.id;
+    burden.getCell(`Q${r}`).value = line.ridesOt ? "TRUE" : "FALSE";
   });
   const lastBurdenData = Math.max(exported.burden.length + 1, 2);
   const payTaxRow = exported.burden.length + 2;
@@ -403,9 +560,9 @@ export async function rateVaultPreviewToXlsx(
     result: money(exported.burden.filter((line) => line.family === "pay-tax").reduce((sum, line) => sum + line.ratePct, 0)),
   };
   burden.getCell(`C${payTaxRow}`).numFmt = PCT_FMT;
-  burden.getColumn(7).hidden = true;
-  burden.getColumn(8).hidden = true;
-  [14, 22, 12, 12, 28, 48, 18, 10].forEach((width, index) => {
+  burden.getColumn(16).hidden = true;
+  burden.getColumn(17).hidden = true;
+  [14, 22, 12, 12, 28, 14, 12, 16, 16, 16, 8, 10, 10, 10, 40, 18, 10].forEach((width, index) => {
     burden.getColumn(index + 1).width = width;
   });
 
@@ -422,9 +579,10 @@ export async function rateVaultPreviewToXlsx(
     applyMoneyStyle(fringes.getCell(`E${r}`));
     fringes.getCell(`F${r}`).value = line.ratePct;
     fringes.getCell(`F${r}`).numFmt = PCT_FMT;
-    fringes.getCell(`G${r}`).value = line.note;
-    fringes.getCell(`H${r}`).value = line.id;
-    fringes.getCell(`I${r}`).value = line.ridesOt ? "TRUE" : "FALSE";
+    writeB1ControlCells(fringes, r, 7, line);
+    fringes.getCell(`P${r}`).value = line.note;
+    fringes.getCell(`Q${r}`).value = line.id;
+    fringes.getCell(`R${r}`).value = line.ridesOt ? "TRUE" : "FALSE";
   });
   const fringeTotal = fringeRows.length + 2;
   const lastFringe = Math.max(fringeRows.length + 1, 2);
@@ -435,9 +593,9 @@ export async function rateVaultPreviewToXlsx(
     result: money(fringeRows.reduce((sum, line) => sum + line.amountHr, 0)),
   };
   applyMoneyStyle(fringes.getCell(`E${fringeTotal}`));
-  fringes.getColumn(8).hidden = true;
-  fringes.getColumn(9).hidden = true;
-  [32, 16, 10, 22, 12, 12, 48, 18, 10].forEach((width, index) => {
+  fringes.getColumn(17).hidden = true;
+  fringes.getColumn(18).hidden = true;
+  [32, 16, 10, 22, 12, 12, 14, 12, 16, 16, 16, 8, 10, 10, 10, 40, 18, 10].forEach((width, index) => {
     fringes.getColumn(index + 1).width = width;
   });
 
@@ -626,18 +784,28 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
         ? (familyRaw as RateVaultBurdenFamily)
         : inferBurdenFamily(label);
       const hall = burdenCols.Hall ? text(row.getCell(burdenCols.Hall).value) : "";
+      const note = text(row.getCell(burdenCols.Note || 6).value);
+      const unit = family === "pay-tax" || family === "insurance" ? "pct-taxable" : "amount-hr";
+      const ridesOt = parseRidesOt(text(row.getCell(burdenCols._ridesOt || 8).value), family === "pay-tax");
       burdenLines.push({
         id: hiddenId || `burden-${burdenLines.length + 1}`,
         label,
         family,
-        unit: family === "pay-tax" || family === "insurance" ? "pct-taxable" : "amount-hr",
+        unit,
         ratePct: pct.value,
         amountHr: amount.value,
-        note: text(row.getCell(burdenCols.Note || 6).value),
+        note,
         craft: hall || null,
         local: null,
         sheet: hall || null,
-        ridesOt: parseRidesOt(text(row.getCell(burdenCols._ridesOt || 8).value), family === "pay-tax"),
+        ridesOt,
+        ...readB1Controls(burdenCols, row, ridesOt, {
+          unit,
+          label,
+          craft: hall || null,
+          sheet: hall || null,
+          note,
+        }),
       });
     }
   }
@@ -659,17 +827,23 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
       if ("poison" in pct) {
         return fail("invalid", "A fringe amount is not a valid number. The package was not applied.");
       }
+      const craft = text(row.getCell(fringeCols.Craft || 2).value) || "Craft";
+      const sheet = text(row.getCell(fringeCols.Hall || 1).value) || "Craft";
+      const note = text(row.getCell(fringeCols.Note || 7).value);
+      const unit = pct.value && !amount.value ? "pct-taxable" : "amount-hr";
+      const ridesOt = parseRidesOt(text(row.getCell(fringeCols._ridesOt || 9).value), false);
       fringeLines.push({
         id: text(row.getCell(fringeCols._id || 8).value) || `fringe-${fringeLines.length + 1}`,
         label,
         amountHr: amount.value,
         ratePct: pct.value,
-        unit: pct.value && !amount.value ? "pct-taxable" : "amount-hr",
-        craft: text(row.getCell(fringeCols.Craft || 2).value) || "Craft",
+        unit,
+        craft,
         local: text(row.getCell(fringeCols.Local || 3).value) || null,
-        sheet: text(row.getCell(fringeCols.Hall || 1).value) || "Craft",
-        note: text(row.getCell(fringeCols.Note || 7).value),
-        ridesOt: parseRidesOt(text(row.getCell(fringeCols._ridesOt || 9).value), false),
+        sheet,
+        note,
+        ridesOt,
+        ...readB1Controls(fringeCols, row, ridesOt, { unit, label, craft, sheet, note }),
       });
     }
   }

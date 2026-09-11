@@ -45,7 +45,25 @@ Catalog by Drive id only. Never commit the official ~24–25 MB `.xlsx` / `.xlsm
 
 Selecting the Wood River B-1 library card (or opening Burden / Publish) loads a filled package from the checked-in JSON fixture for that book — `lib/rate-vault/wood-river-b1-preview-fixture.json` (RRFF) or `lib/rate-vault/wood-river-tm-b1-preview-fixture.json` (T&M / Union_TM). Those files are metadata and rate rows only — no workbook bytes. Burden / build is driven by ingested B-1 craft-sheet columns: **Pay Tax FICA-MC / FUI / SUI**, **Ins W/C / Emp Liab / Gen Liab / Umbrella**, **Misc Small / Cons / PPE**, **O/H**, **Profit**, and **Fringes Subtotal** as $/hr hall by hall. T&M union halls carry that Fringes Subtotal as one line (the official face has no H&W/Pension component columns). Dollars imply % of taxable base wage. The official Burden Summary pivot can be an empty shell — do not trust it over craft-sheet columns. This is not a placeholder Illinois composite (no invented WC 14.20 / tools 1.85 / bundled overhead-and-fee).
 
-Site pickers on Burden and Publish default to Wood River. The **Book** picker (RRFF / T&M) sits next to site and OCIP on those panes. Other P66 sites stay empty until their fixtures land. Recognize → map → burden stays wired: a linked Drive title still produces a review card, and the Wood River RRFF / T&M path injects that book’s fixture columns when no binary was dropped. Confirm never writes a live rate book. The Publish button remains `stubPublishRateVault()`. Bill OT/DT formula work stays parked.
+Site pickers on Burden and Publish default to Wood River. The **Book** picker (RRFF / T&M) sits next to site and OCIP on those panes. Other P66 sites stay empty until their fixtures land. Recognize → map → burden stays wired: a linked Drive title still produces a review card, and the Wood River RRFF / T&M path injects that book’s fixture columns when no binary was dropped. Confirm never writes a live rate book. The Publish button remains `stubPublishRateVault()`. Desk Bill OT/DT follow the Exhibit B-1 builder controls below. Excel Bill OT/DT stay typed values this pass (not formulas).
+
+## Exhibit B-1 rate-builder controls
+
+Wood River hall sheets are not a three-way `{hours-worked, hours-paid, straight-only}` enum. Rate Vault keeps the same surface the GPPMA / Exhibit B-1 template exposes:
+
+| Control | Book labels | Notes |
+| --- | --- | --- |
+| Rate $/%/Varies | `$`, `%`, `Varies` | Row-6 rate kind. `%` is taxable-base percent; `$` is $/hr. |
+| Base | `Base Wage`, `Tax BW` | `%` lines default to Tax BW. |
+| ST Calc / OT Calc / DT Calc | `Hours Worked`, `Hours Paid`, `Straight Time`, `Y`, `N`, `Varies` | Per-bucket. Unknown book strings stay first-class. |
+| Mult | number or blank | Used by Hours Paid / Y / Varies when the hall is not a plain 1.5 / 2. |
+| Ride ST / Ride OT / Ride DT | `Y`, `N` | Column ride flags on Fringes **and** Pay Tax / Ins / Misc / O/H / Profit. |
+
+Legacy `ridesOt` still maps in for older packages: `true` → OT/DT Calc **Hours Paid** + Ride Y; `false` → **Hours Worked** + Ride Y (parks the ST $ on OT/DT — Laborer / Teamster honesty). That map does **not** delete or hide the other book choices. Merit Health without `ridesOt` recognizes as **Straight Time** / Ride OT N (hall does not pay that fringe on OT/DT).
+
+Desk Burden / Publish show every control. `POST /api/rate-vault` `action: "patch-b1-line"` persists a line and ripples Bill OT/DT so Export uses the stored package.
+
+Drop Down List strings from a later desk extract of the official workbook append to `lib/rate-vault/b1-dropdowns.json` (`extra` plus each list). Unknown option strings are never dropped. Do not invent Illinois composites or Shahan.
 
 ## B-1 Excel export / import (vault-internal)
 
@@ -58,7 +76,7 @@ Rate Vault’s B-1 Builder matches Hit Squad estimate Excel round-trip behavior 
 
 The export is the **lean Rate Vault face** and the **formula check to the site** — not a clone of the ~25 MB official Exhibit B-1 (no pivots, no OCIP/staff dumps, no unused shells). Rate Summary columns: position, craft, local, wage, fringe, burden, Bill ST / OT / DT, lane, OCIP, OT / clock. **Fringe** and **Burden** are `SUMIF` / `SUMIFS` ties to the Fringes and Burden Summary tabs. **Bill ST** is `=Fn+Gn+Hn`. Hidden `_id` / `_ridesOt` columns key the importer. Spare empty position rows sit under the live seats so a new line can be typed in. Export also writes:
 
-- **Fringes** — hall-by-hall B-1 fringe lines as $/hr with a Fringes Subtotal formula.
+- **Fringes** — hall-by-hall B-1 fringe lines as $/hr with Rate $/%/Varies, Base, ST/OT/DT Calc, Mult, Ride ST/OT/DT, and a Fringes Subtotal formula. Burden Summary carries the same controls on Pay Tax / Ins / Misc / O/H / Profit. Hidden `_id` / `_ridesOt` stay for compat; a workbook that only has `_ridesOt` still imports and infers Calc.
 - **COMP Check** — key totals (positions, wage / fringe / burden / bill, Pay Tax stack %, fringe $) via formulas that pull Rate Summary / Burden Summary / Fringes. Not a raw dump of the giant COMP xlsm.
 - **CBA PLA** and **State law** — read-only rule summary tabs (Excel forbids `/` in the CBA sheet name). Editable rate cells stay on Rate Summary / Burden Summary only.
 
