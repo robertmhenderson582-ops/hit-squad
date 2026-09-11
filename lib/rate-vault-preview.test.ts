@@ -130,8 +130,12 @@ describe("Rate Vault Wood River B-1 preview", () => {
       true,
     );
     const ocipOnly = filterPreviewByFace(fixture, "ocip");
-    assert.equal(ocipOnly.rows.every((row) => row.ocip), true);
-    assert.ok(ocipOnly.rows.length < fixture.rows.length);
+    assert.ok(ocipOnly.rows.some((row) => row.ocip));
+    assert.equal(
+      ocipOnly.rows.some((row) => /BOILERMAKER RRFF/i.test(row.sheet) && /journeyman/i.test(row.position)),
+      true,
+    );
+    assert.ok(ocipOnly.rows.length >= 8);
     const stamped = stampRateVaultVersion(fixture, "Imported B-1 Excel", "2026-09-10T12:00:00.000Z");
     assert.equal(stamped.version?.note, "Imported B-1 Excel");
     assert.match(stamped.version?.id || "", /^v-20260910/);
@@ -144,7 +148,7 @@ describe("Rate Vault Wood River B-1 preview", () => {
     assert.equal(merged.rows.some((row) => !row.ocip), true);
     assert.equal(merged.rows.some((row) => row.ocip), true);
     assert.equal(rateVaultImportMergeFace(fixture), "both");
-    assert.equal(rateVaultImportMergeFace(ocipOnly), "ocip");
+    assert.equal(rateVaultImportMergeFace(ocipOnly), "both");
     const bothMerged = mergePreviewFace(fixture, { ...fixture, rows: fixture.rows.map((row) => ({ ...row, wage: row.wage + 1 })) }, "both");
     assert.equal(
       bothMerged.rows.find((row) => row.position === "Boilermaker Journeyman")?.wage,
@@ -192,5 +196,17 @@ describe("Rate Vault Wood River B-1 preview", () => {
     assert.doesNotMatch(JSON.stringify(raw), /shahan/i);
     assert.equal(resolveRateVaultPreview({ siteId: "wood-river", bookFace: "tm" })?.bookFace, "tm");
     assert.equal(resolveRateVaultPreview({ siteId: "wood-river" })?.bookFace, "rrff");
+  });
+
+  it("keeps Direct Craft BM / PF halls on a T&M OCIP face", () => {
+    const fixture = loadWoodRiverTmB1PreviewFixture();
+    const ocip = filterPreviewByFace(fixture, "ocip");
+    assert.equal(ocip.rows.filter((row) => row.sheet === "WOODRIVER BOILERMAKER TM").length, 36);
+    assert.equal(ocip.rows.filter((row) => row.sheet === "WOODRIVER PIPEFITTER TM").length, 15);
+    assert.equal(ocip.rows.filter((row) => row.sheet === "WOODRIVER LABORER TM").length, 12);
+    assert.equal(ocip.rows.some((row) => row.position === "BOILERMAKER GENERAL FOREMAN" && row.wage === 50.6), true);
+    assert.equal(ocip.rows.some((row) => row.position === "PIPEFITTER JOURNEYMAN" && row.wage === 49.03), true);
+    assert.equal(ocip.ocipFace, "both");
+    assert.equal(ocip.rows.length, 183);
   });
 });

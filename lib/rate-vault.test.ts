@@ -298,6 +298,7 @@ describe("Rate Vault scaffold", () => {
     assert.match(preview, /1HN5FclxjQNw0iHm_hizHbcWM9GZV_Zeu/);
     assert.match(preview, /1fFrxkY68TaCJXQa3OYVRZJ5oStJg9kMg/);
     assert.match(preview, /bookFace/);
+    assert.match(preview, /hallHasOcipPair/);
     assert.match(library, /Wood River Exhibit B-1 RRFF Labor Burden Buildup/);
     assert.match(library, /Wood River Exhibit B-1 Union_TM Labor Burden Buildup/);
     assert.match(previewUi, /Labor-burden book/);
@@ -358,6 +359,7 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /hidden last-tab `_meta`/);
     assert.match(docs, /Excel opens on \*\*Rate Summary\*\*/);
     assert.match(docs, /column widths that fit Position/);
+    assert.match(docs, /WOODRIVER BOILERMAKER TM/);
     assert.match(xlsx, /rateVaultFringeRippleFormula/);
     assert.match(xlsx, /rateVaultBurdenRippleFormula/);
     assert.match(xlsx, /Family must not be "pay-tax"/);
