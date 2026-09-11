@@ -29,7 +29,15 @@ export async function fetchJsonWithDeadline<T>(
       fetch(input, { ...init, signal: controller.signal }),
       timeout,
     ]);
-    const data = (await Promise.race([response.json() as Promise<T>, timeout])) as T;
+    const raw = (await Promise.race([response.text(), timeout])) as string;
+    let data = {} as T;
+    if (raw.trim()) {
+      try {
+        data = JSON.parse(raw) as T;
+      } catch {
+        data = {} as T;
+      }
+    }
     return { ok: response.ok, status: response.status, data };
   } catch (error) {
     if (

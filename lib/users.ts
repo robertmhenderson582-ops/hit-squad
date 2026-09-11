@@ -928,7 +928,7 @@ export function listBuildSeats(): PublicUser[] {
   return ownerUsers().map(toPublicUser);
 }
 
-export function issueSeatPassword(email: string, password: string): { ok: true } | { error: string } {
+export async function issueSeatPassword(email: string, password: string): Promise<{ ok: true } | { error: string }> {
   if (password.length < 8) return { error: "Password must be 8+." };
   const user = findUserByEmail(email);
   if (!user) return { error: "That seat is not on this desk." };
@@ -937,7 +937,13 @@ export function issueSeatPassword(email: string, password: string): { ok: true }
   user.mustChangePassword = true;
   try {
     persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
-  } catch {
+    await flushSeatVault();
+  } catch (error) {
+    pendingVault = Promise.resolve();
+    return { error: passwordVaultError(error) };
+  }
+  if (!(await passwordWriteLanded(email, password))) {
+    pendingVault = Promise.resolve();
     return { error: "Password was not saved. Try again." };
   }
   return { ok: true };
@@ -1017,7 +1023,11 @@ export async function createSeat(input: {
   if (!(await passwordWriteLanded(email, password))) {
     return { error: "Password was not saved. Try again." };
   }
-  await setAssignedCompany(email, companyId);
+  try {
+    await setAssignedCompany(email, companyId);
+  } catch {
+    // Seat + password landed. Company stays on the seed until assign is retried.
+  }
   return { ok: true, user: toPublicUser(user) };
 }
 
@@ -1174,8 +1184,13 @@ export async function issueRecoveryPassword(
   const password = newRecoverySecret();
   user.recoveryHash = bcrypt.hashSync(password, 12);
   user.recoveryConsumed = false;
-  persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
-  await flushSeatVault();
+  try {
+    persistHashes(ownerUsers(), { replaceEmails: [user.email], confirm: true });
+    await flushSeatVault();
+  } catch {
+    pendingVault = Promise.resolve();
+    return { error: "Recovery was not saved. Try again." };
+  }
   const persisted = ownerHashRow(loadPersisted(), user.email);
   if (!persisted?.recoveryHash || !bcrypt.compareSync(password, persisted.recoveryHash)) {
     return { error: "Recovery was not saved. Try again." };

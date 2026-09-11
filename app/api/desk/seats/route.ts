@@ -39,6 +39,17 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  try {
+    return await postSeats(request);
+  } catch {
+    return NextResponse.json(
+      { error: "Could not save that seat change. Try again.", vaultPersisted: false },
+      { status: 503 },
+    );
+  }
+}
+
+async function postSeats(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
@@ -101,12 +112,16 @@ export async function POST(request: Request) {
 
   if (body.recover === true) {
     const issued = await issueRecoveryPassword(email);
-    if ("error" in issued) return NextResponse.json({ error: issued.error }, { status: 400 });
+    if ("error" in issued) {
+      const status = issued.error.includes("not saved") ? 503 : 400;
+      return NextResponse.json({ error: issued.error, vaultPersisted: status === 503 ? false : undefined }, { status });
+    }
     return NextResponse.json({
       ok: true,
       email: issued.email,
       password: issued.password,
-      seats: await listSeatRows(),
+      seats: seatsVisibleTo(user, await listSeatRows({ hydrate: false })),
+      companies: peekCompanies(),
       note: "One-time recovery issued. Copy it now. It is not emailed and not logged.",
     });
   }
@@ -120,22 +135,31 @@ export async function POST(request: Request) {
     if (!(await isKnownCompany(body.companyId))) {
       return NextResponse.json({ error: "Pick a company on this desk." }, { status: 400 });
     }
-    await setAssignedCompany(email, body.companyId);
+    try {
+      await setAssignedCompany(email, body.companyId);
+    } catch {
+      return NextResponse.json(
+        { error: "Could not save that assignment. Try again.", vaultPersisted: false },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({
       ok: true,
-      seats: await listSeatRows(),
-      companies: await listCompanies(),
+      seats: seatsVisibleTo(user, await listSeatRows({ hydrate: false })),
+      companies: peekCompanies(),
       note: "Company assignment saved on this desk.",
     });
   }
 
-  const result = issueSeatPassword(email, password);
-  if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
-  await flushSeatVault();
+  const result = await issueSeatPassword(email, password);
+  if ("error" in result) {
+    const status = result.error.startsWith("Password was not saved") ? 503 : 400;
+    return NextResponse.json({ error: result.error, vaultPersisted: status === 503 ? false : undefined }, { status });
+  }
   return NextResponse.json({
     ok: true,
-    seats: await listSeatRows(),
-    companies: await listCompanies(),
+    seats: seatsVisibleTo(user, await listSeatRows({ hydrate: false })),
+    companies: peekCompanies(),
     note: "Password issued on this desk. Don’t send. Never logged.",
   });
 }

@@ -40,6 +40,18 @@ test("fetchJsonWithDeadline returns JSON before the deadline", async () => {
   assert.equal(result.data.user?.email, "ok@example.com");
 });
 
+test("fetchJsonWithDeadline treats an empty 500 body as a failed JSON payload", async () => {
+  globalThis.fetch = (async () =>
+    new Response("", {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })) as typeof fetch;
+  const result = await fetchJsonWithDeadline<{ error?: string }>("/api/desk/seats", { method: "POST" }, 200);
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 500);
+  assert.deepEqual(result.data, {});
+});
+
 test("fetchJsonWithDeadline throws a recoverable error when fetch hangs", async () => {
   globalThis.fetch = (() => new Promise(() => {})) as typeof fetch;
   const started = Date.now();

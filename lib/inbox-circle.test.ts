@@ -13,6 +13,7 @@ import {
   inboxContactsFor,
   inboxThreadKey,
   isInboxCircleEmail,
+  keepInboxPair,
   madisonInboxContacts,
 } from "./inbox-circle.ts";
 
@@ -32,6 +33,10 @@ describe("inbox circle", () => {
     );
     assert.equal(INBOX_CIRCLE.length, 7);
     assert.equal(INBOX_CIRCLE.some((row) => row.email === "jhut26@gmail.com"), false);
+    assert.equal(canUseInbox({ role: "tester", email: "jhut26@gmail.com" }), false);
+    assert.equal(canUseSuggestionBox({ email: "jhut26@gmail.com" }), false);
+    assert.equal(inboxContactsFor(OWNER_LOGIN_EMAIL).some((row) => row.email === "jhut26@gmail.com"), false);
+    assert.equal(keepInboxPair(OWNER_LOGIN_EMAIL, "jhut26@gmail.com"), false);
     assert.equal(INBOX_CIRCLE.find((row) => row.email === NOVUS_INBOX_EMAIL)?.name, "Novus");
     assert.equal(INBOX_CIRCLE.find((row) => row.email === NOVUS_INBOX_EMAIL)?.company, "Hit Squad");
     assert.equal(isInboxCircleEmail("Shane@apcontrolsllc.com"), true);

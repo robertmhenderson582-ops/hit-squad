@@ -54,6 +54,7 @@ import {
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 import { RATE_VAULT_JAMES_EMAIL, RATE_VAULT_JAMES_ID, RATE_VAULT_JAMES_NAME } from "./rate-vault.ts";
 import { canSeeRateVault } from "./desk-role.ts";
+import { canUseInbox, canUseSuggestionBox, keepInboxPair } from "./inbox-circle.ts";
 import { peekPrivileges } from "./privileges-store.ts";
 
 const OWNER_SECRET = "owner-seat-secret-xx";
@@ -152,6 +153,67 @@ test("James Hutton is a Rate Vault seat, not a tester-circle login", () => {
   assert.equal(canLookupRates(james), false);
   assert.equal(canUseRateBuilder(james), false);
   assert.equal(canUseViewAs(james), false);
+  assert.equal(canUseInbox(james), false);
+  assert.equal(canUseSuggestionBox(james), false);
+  assert.equal(keepInboxPair(OWNER_LOGIN_EMAIL, RATE_VAULT_JAMES_EMAIL), false);
+});
+
+test("owner can issue James Hutton a Rate Vault password that lands in the seats vault", async () => {
+  const drive = memoryDrive();
+  useSeatVaultForTests(drive);
+  const issued = await issueSeatPassword(RATE_VAULT_JAMES_EMAIL, ISSUED);
+  assert.equal("ok" in issued, true);
+  assert.equal(seatNeedsPasswordCreate(RATE_VAULT_JAMES_EMAIL), false);
+  const james = findUserByEmail(RATE_VAULT_JAMES_EMAIL);
+  assert.ok(james);
+  assert.equal(verifyPassword(james, ISSUED), true);
+  assert.equal(james.mustChangePassword, true);
+  assert.deepEqual(peekPrivileges(RATE_VAULT_JAMES_EMAIL), ["rate-vault"]);
+  assert.equal(canUseInbox(james), false);
+  assert.equal(canSeeRateVault(james), true);
+
+  const rows = await listSeatRows({ hydrate: false });
+  assert.equal(rows.some((row) => row.email === RATE_VAULT_JAMES_EMAIL && row.passwordIssued), true);
+
+  const vaultRaw = [...drive.files.values()].map((row) => row.content).join();
+  assert.match(vaultRaw, /jhut26@gmail.com/);
+  assert.equal(vaultRaw.includes(ISSUED), false);
+  assert.doesNotMatch(vaultRaw, /inbox|suggestion/i);
+
+  forgetSeatCacheForTests();
+  useSeatVaultForTests(drive);
+  await hydrateSeatStore();
+  assert.equal(loginOutcome({ email: RATE_VAULT_JAMES_EMAIL, password: ISSUED }).status, "authenticated");
+  assert.equal(seatNeedsPasswordCreate(RATE_VAULT_JAMES_EMAIL), false);
+});
+
+test("issuing James a password fails closed when the seats vault write fails", async () => {
+  const inner = memoryDrive();
+  useSeatVaultForTests({
+    configured: true,
+    listJson: (folderId) => inner.listJson(folderId),
+    readJson: (fileId) => inner.readJson(fileId),
+    async createJson() {
+      throw new Error("drive write failed");
+    },
+    async updateJson() {
+      throw new Error("drive write failed");
+    },
+    deleteJson: (fileId) => inner.deleteJson(fileId),
+  });
+
+  const issued = await issueSeatPassword(RATE_VAULT_JAMES_EMAIL, ISSUED);
+  assert.equal("ok" in issued, false);
+  if ("error" in issued) {
+    assert.equal(issued.error, "Password was not saved. Try again.");
+  }
+
+  forgetSeatCacheForTests();
+  useSeatVaultForTests(inner);
+  await hydrateSeatStore();
+  assert.equal(seatNeedsPasswordCreate(RATE_VAULT_JAMES_EMAIL), true);
+  assert.equal(loginOutcome({ email: RATE_VAULT_JAMES_EMAIL }).status, "needsCreate");
+  assert.equal(findUserByEmail(RATE_VAULT_JAMES_EMAIL)?.passwordHash, undefined);
 });
 
 test("Shane Smith is a tester seat that must create a password on first visit", () => {
@@ -209,8 +271,8 @@ test("unissued invited email plus ack creates a password and session user", asyn
   assert.equal(verifyPassword(findUserByEmail(TESTER)!, OTHER), true);
 });
 
-test("already-issued email still needs the current password", () => {
-  const issued = issueSeatPassword(TESTER, ISSUED);
+test("already-issued email still needs the current password", async () => {
+  const issued = await issueSeatPassword(TESTER, ISSUED);
   assert.equal("ok" in issued, true);
   assert.equal(seatNeedsPasswordCreate(TESTER), false);
   assert.equal(loginOutcome({ email: TESTER }).status, "needsPassword");
@@ -527,6 +589,10 @@ test("createSeat rejects owner, Novus, duplicates, and a short password", async 
   assert.equal("error" in (await createSeat({ name: "Robert", email: OWNER_LOGIN_EMAIL, password: ISSUED })), true);
   assert.equal("error" in (await createSeat({ name: "Novus", email: NOVUS_EMAIL, password: ISSUED })), true);
   assert.equal("error" in (await createSeat({ name: "Nathan", email: TESTER, password: ISSUED })), true);
+  assert.equal(
+    "error" in (await createSeat({ name: "James Hutton", email: RATE_VAULT_JAMES_EMAIL, password: ISSUED })),
+    true,
+  );
   assert.equal("error" in (await createSeat({ name: "Short", email: ADDED, password: SHORT })), true);
   assert.equal("error" in (await createSeat({ name: "X", email: ADDED, password: ISSUED })), true);
   assert.equal(findUserByEmail(ADDED), undefined);
