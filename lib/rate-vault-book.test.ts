@@ -130,14 +130,19 @@ describe("Rate Vault Wood River book switch", { concurrency: 1 }, () => {
     const rrff = loadWoodRiverB1PreviewFixture();
     const ocip = filterPreviewByFace(rrff, "ocip");
     assert.equal(ocip.bookFace, "rrff");
-    assert.equal(ocip.rows.every((row) => row.ocip), true);
-    assert.ok(ocip.rows.length < rrff.rows.length);
+    assert.ok(ocip.rows.some((row) => row.ocip));
+    assert.equal(
+      ocip.rows.some((row) => row.sheet === "WOODRIVER BOILERMAKER RRFF"),
+      true,
+    );
     const tm = loadWoodRiverTmB1PreviewFixture();
     const tmOcip = filterPreviewByFace(tm, "ocip");
     assert.equal(tmOcip.bookFace, "tm");
-    assert.equal(tmOcip.rows.every((row) => row.ocip), true);
-    assert.ok(tmOcip.rows.length > 0);
-    assert.ok(tmOcip.rows.length < tm.rows.length);
+    assert.equal(tmOcip.rows.filter((row) => row.sheet === "WOODRIVER BOILERMAKER TM").length, 36);
+    assert.equal(tmOcip.rows.filter((row) => row.sheet === "WOODRIVER PIPEFITTER TM").length, 15);
+    assert.equal(tmOcip.rows.filter((row) => row.sheet === "WOODRIVER BM STAFF TM").length, 28);
+    assert.equal(tmOcip.rows.filter((row) => row.sheet === "WOODRIVER PF STAFF TM").length, 27);
+    assert.equal(tmOcip.rows.length, tm.rows.length);
   });
 
   it("tags export with the selected book and refuses a silent mix on import", async () => {

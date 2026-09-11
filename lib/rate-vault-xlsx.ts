@@ -710,7 +710,7 @@ function writePackageMetaSheet(
     ["sourceId", exported.sourceId || ""],
     ["sourceTitle", exported.sourceTitle],
     ["note", exported.note],
-    ["ocipFace", face || exported.ocipFace || "both"],
+    ["ocipFace", exported.ocipFace || face || "both"],
     ["bookFace", packageBookFace(exported)],
     ["requiredSheets", RATE_VAULT_B1_REQUIRED_SHEETS.join("|")],
   ];
