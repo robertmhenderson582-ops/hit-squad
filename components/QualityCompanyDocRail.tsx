@@ -83,9 +83,11 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
         if (cancelled) return;
         const locals = localByDoc(home, docs);
         if (!response.ok || !qualityVaultStored(data.store, data.stored) || !data.filesByFolder) {
-          setFilesByDoc(
-            Object.fromEntries(docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], locals[doc.id] ?? [])])),
-          );
+          setFilesByDoc((current) => {
+            const hasAny = docs.some((doc) => (current[doc.id] ?? []).length);
+            if (hasAny) return current;
+            return Object.fromEntries(docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], locals[doc.id] ?? [])]));
+          });
           return;
         }
         setFilesByDoc(
@@ -99,11 +101,13 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
       })
       .catch(() => {
         if (cancelled) return;
-        setFilesByDoc(
-          Object.fromEntries(
+        setFilesByDoc((current) => {
+          const hasAny = docs.some((doc) => (current[doc.id] ?? []).length);
+          if (hasAny) return current;
+          return Object.fromEntries(
             docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], readQualityCompanyDocFiles(home, doc.id))]),
-          ),
-        );
+          );
+        });
       });
     return () => {
       cancelled = true;

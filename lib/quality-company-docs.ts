@@ -70,14 +70,28 @@ export function qualityRailCompanyId(_jobCompanyId?: string | null, assignedComp
 
 export type QualityCompanyDocViewKind = "pdf" | "image" | "office" | "text" | "zip" | "other";
 
+/** Native Google Docs/Sheets mime — not a binary PDF from OneDrive/zip. */
+export const QUALITY_COMPANY_DOC_GOOGLE_NATIVE_ERROR =
+  "That file is a Google Doc, not a PDF. Upload the PDF file itself.";
+
 export function qualityCompanyDocFileName(value: unknown) {
   if (typeof value !== "string") return "";
   return value.replace(/\\/g, "/").split("/").pop()?.trim() || "";
 }
 
+export function qualityCompanyDocMime(type?: string) {
+  return (type || "").split(";")[0].trim();
+}
+
+export function qualityCompanyDocGoogleNativeType(type?: string) {
+  const mime = qualityCompanyDocMime(type).toLowerCase();
+  return mime.startsWith("application/vnd.google-apps.") && !mime.endsWith(".folder");
+}
+
 export function qualityCompanyDocViewKind(file: { name?: string; type?: string }): QualityCompanyDocViewKind {
   const name = qualityCompanyDocFileName(file.name).toLowerCase();
-  const type = (file.type || "").split(";")[0].trim().toLowerCase();
+  const type = qualityCompanyDocMime(file.type).toLowerCase();
+  if (qualityCompanyDocGoogleNativeType(type)) return "other";
   if (type.includes("pdf") || name.endsWith(".pdf")) return "pdf";
   if (type.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/.test(name)) return "image";
   if (
@@ -92,6 +106,29 @@ export function qualityCompanyDocViewKind(file: { name?: string; type?: string }
   if (type.includes("zip") || name.endsWith(".zip")) return "zip";
   if (type.startsWith("text/") || name.endsWith(".txt")) return "text";
   return "other";
+}
+
+/**
+ * Blob / object-URL MIME from view kind, not Drive’s listed type.
+ * A file named x.pdf with type text/plain still previews as application/pdf.
+ */
+export function qualityCompanyDocPreviewType(file: { name?: string; type?: string }) {
+  const name = qualityCompanyDocFileName(file.name);
+  const type = qualityCompanyDocMime(file.type);
+  if (qualityCompanyDocGoogleNativeType(type)) return type || "application/octet-stream";
+  const kind = qualityCompanyDocViewKind({ name, type });
+  if (kind === "pdf") return "application/pdf";
+  if (kind === "image") {
+    const lower = name.toLowerCase();
+    if (lower.endsWith(".png")) return "image/png";
+    if (lower.endsWith(".gif")) return "image/gif";
+    if (lower.endsWith(".webp")) return "image/webp";
+    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+    if (type.toLowerCase().startsWith("image/")) return type;
+    return "image/jpeg";
+  }
+  if (kind === "text") return "text/plain";
+  return type || "application/octet-stream";
 }
 
 export function qualityCompanyDocArchiveName(value: unknown) {
@@ -118,9 +155,10 @@ export function publicQualityCompanyDocFile(file: { name?: string; type?: string
   const name = qualityCompanyDocFileName(file?.name);
   const data = typeof file?.data === "string" ? file.data : "";
   if (!name || !data) return null;
+  if (qualityCompanyDocGoogleNativeType(file?.type)) return null;
   return {
     name,
-    type: file?.type?.trim() || "application/octet-stream",
+    type: qualityCompanyDocPreviewType({ name, type: file?.type }),
     data,
   };
 }

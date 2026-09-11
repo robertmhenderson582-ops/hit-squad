@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import {
   qualityCompanyDocFileName,
+  qualityCompanyDocPreviewType,
   qualityCompanyDocViewKind,
   type QualityCompanyDocViewKind,
 } from "./quality-company-docs.ts";
@@ -36,21 +37,15 @@ export function isQualityCompanyDocZipJunk(path: string, dir?: boolean) {
 
 export function qualityCompanyDocZipMemberType(name: string) {
   const kind = qualityCompanyDocViewKind({ name });
-  if (kind === "pdf") return "application/pdf";
-  if (kind === "image") {
-    if (name.toLowerCase().endsWith(".png")) return "image/png";
-    if (name.toLowerCase().endsWith(".gif")) return "image/gif";
-    if (name.toLowerCase().endsWith(".webp")) return "image/webp";
-    return "image/jpeg";
+  if (kind === "office") {
+    if (name.toLowerCase().endsWith(".docx")) {
+      return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    }
+    if (name.toLowerCase().endsWith(".xlsx")) {
+      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    }
   }
-  if (kind === "text") return "text/plain";
-  if (name.toLowerCase().endsWith(".docx")) {
-    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-  }
-  if (name.toLowerCase().endsWith(".xlsx")) {
-    return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-  }
-  return "application/octet-stream";
+  return qualityCompanyDocPreviewType({ name });
 }
 
 export function listQualityCompanyDocZipMembers(

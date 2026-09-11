@@ -12,6 +12,7 @@ import {
 import {
   primaryQualityCompanyDocFile,
   qualityCompanyDocArchiveName,
+  qualityCompanyDocPreviewType,
   qualityCompanyDocViewKind,
   qualityCompanyDocViewPath,
   type QualityCompanyDocId,
@@ -21,7 +22,8 @@ import { QUALITY_UNVAULTED_MARK, type QualityListedFile } from "@/lib/quality-va
 
 function bytesToObjectUrl(file: { name: string; type: string; data: string }) {
   const bytes = leadToBytes(file);
-  const blob = new Blob([bytes], { type: file.type || "application/octet-stream" });
+  const type = qualityCompanyDocPreviewType(file);
+  const blob = new Blob([bytes], { type });
   return URL.createObjectURL(blob);
 }
 
@@ -56,8 +58,12 @@ export function QualityCompanyDocViewer({
   const [zipMemberPath, setZipMemberPath] = useState<string | null>(null);
   const [memberFile, setMemberFile] = useState<{ name: string; type: string; data: string } | null>(null);
   const zipCacheRef = useRef<{ name: string; type: string; data: string } | null>(null);
-  const libraryKind: QualityCompanyDocViewKind = selected ? qualityCompanyDocViewKind(selected) : "other";
-  const kind = memberFile ? qualityCompanyDocViewKind(memberFile) : libraryKind;
+  const libraryKind: QualityCompanyDocViewKind = selected
+    ? qualityCompanyDocViewKind({ name: selected.name, type: qualityCompanyDocPreviewType(selected) })
+    : "other";
+  const kind = memberFile
+    ? qualityCompanyDocViewKind({ name: memberFile.name, type: qualityCompanyDocPreviewType(memberFile) })
+    : libraryKind;
   const previewName = memberFile?.name ?? selected?.name ?? "";
 
   useEffect(() => {
@@ -119,7 +125,7 @@ export function QualityCompanyDocViewer({
             if (cancelled) return;
             setMemberFile(member);
             objectUrl = bytesToObjectUrl(member);
-            if (qualityCompanyDocViewKind(member) === "text") {
+            if (qualityCompanyDocViewKind({ name: member.name, type: qualityCompanyDocPreviewType(member) }) === "text") {
               setText(new TextDecoder().decode(leadToBytes(member)));
             }
             setHref(objectUrl);
@@ -134,7 +140,7 @@ export function QualityCompanyDocViewer({
         setZipMembers([]);
         setMemberFile(null);
         objectUrl = bytesToObjectUrl(file);
-        if (qualityCompanyDocViewKind(file) === "text") {
+        if (qualityCompanyDocViewKind({ name: file.name, type: qualityCompanyDocPreviewType(file) }) === "text") {
           setText(new TextDecoder().decode(leadToBytes(file)));
         }
         setHref(objectUrl);

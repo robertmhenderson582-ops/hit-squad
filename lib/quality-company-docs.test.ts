@@ -9,10 +9,14 @@ import {
   QUALITY_COMPANY_DOC_TEMPLATES,
   cloneQualityCompanyDocTemplate,
   isQualityCompanyDocId,
+  QUALITY_COMPANY_DOC_GOOGLE_NATIVE_ERROR,
   primaryQualityCompanyDocFile,
+  publicQualityCompanyDocFile,
   qualityCompanyDocCollidesWithJobFolder,
+  qualityCompanyDocGoogleNativeType,
   qualityCompanyDocHome,
   qualityCompanyDocLabel,
+  qualityCompanyDocPreviewType,
   qualityCompanyDocViewKind,
   qualityCompanyDocViewPath,
   qualityCompanyDocsFor,
@@ -189,6 +193,33 @@ describe("Quality company document catalog", () => {
     assert.match(viewer, /readQualityCompanyDocZipMembers/);
     assert.match(viewer, /pickQualityCompanyDocZipMember/);
     assert.match(viewer, /Back to pack/);
+    assert.match(viewer, /qualityCompanyDocPreviewType/);
+    assert.match(viewer, /kind === "pdf" && href/);
+    assert.match(viewer, /kind === "text" && text != null/);
     assert.doesNotMatch(viewer, /drive\.google\.com/);
+  });
+
+  it("previews a file named x.pdf as application/pdf even when Drive says text/plain", () => {
+    const mislabeled = { name: "x.pdf", type: "text/plain", data: "JVBERi0x" };
+    assert.equal(qualityCompanyDocViewKind(mislabeled), "pdf");
+    assert.equal(qualityCompanyDocPreviewType(mislabeled), "application/pdf");
+    assert.equal(qualityCompanyDocPreviewType({ name: "docs/ASME IX.pdf", type: "text/plain" }), "application/pdf");
+    assert.equal(qualityCompanyDocPreviewType({ name: "stamp.png", type: "text/plain" }), "image/png");
+    assert.equal(qualityCompanyDocPreviewType({ name: "note.txt", type: "application/octet-stream" }), "text/plain");
+    const published = publicQualityCompanyDocFile(mislabeled);
+    assert.equal(published?.type, "application/pdf");
+    assert.equal(qualityCompanyDocGoogleNativeType("application/vnd.google-apps.document"), true);
+    assert.equal(qualityCompanyDocGoogleNativeType("application/vnd.google-apps.folder"), false);
+    assert.equal(qualityCompanyDocViewKind({ name: "x.pdf", type: "application/vnd.google-apps.document" }), "other");
+    assert.equal(publicQualityCompanyDocFile({
+      name: "x.pdf",
+      type: "application/vnd.google-apps.document",
+      data: "QQ==",
+    }), null);
+    assert.match(QUALITY_COMPANY_DOC_GOOGLE_NATIVE_ERROR, /Google Doc/);
+    const viewer = source("../components/QualityCompanyDocViewer.tsx");
+    assert.match(viewer, /new Blob\(\[bytes\], \{ type \}\)/);
+    assert.match(viewer, /qualityCompanyDocPreviewType\(file\)/);
+    assert.doesNotMatch(viewer, /new Blob\(\[bytes\], \{ type: file\.type/);
   });
 });

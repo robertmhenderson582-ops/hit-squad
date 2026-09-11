@@ -19,6 +19,7 @@ import {
   QUALITY_VAULT_MISSING_ERROR,
   QUALITY_VAULT_SHARE_ERROR,
   QUALITY_VAULT_WRITE_ERROR,
+  listQualityCompanyDocVaultFolders,
   listQualityVaultFiles,
   mergeVaultedQualityFiles,
   persistQualityVaultFiles,
@@ -175,6 +176,7 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
       "qc-manual.pdf",
     );
     assert.equal(opened.file?.name, "qc-manual.pdf");
+    assert.equal(opened.file?.type, "application/pdf");
     assert.equal(opened.file?.data, pdf("qc-manual.pdf", "manual").data);
     assert.equal("id" in (opened.file || {}), false);
     assert.equal(qualityDropLeaks(opened), false);
@@ -184,6 +186,23 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
       companyId: "madison",
     });
     assert.equal(ownerRows.some((row) => row.who === chance.email), true);
+
+    const mislabeled = await persistQualityVaultFiles(
+      drive,
+      { companyId: "madison", folderId: "code-documents", jobId: "company-docs:madison", companyDocs: true },
+      [{ name: "x.pdf", type: "text/plain", data: Buffer.from("%PDF-1.4 codes").toString("base64") }],
+    );
+    assert.equal(mislabeled.store, "drive");
+    const openedPlain = await readQualityVaultFile(
+      drive,
+      { companyId: "madison", folderId: "code-documents", jobId: "company-docs:madison", companyDocs: true },
+      "x.pdf",
+    );
+    assert.equal(openedPlain.file?.type, "application/pdf");
+    const buckets = await listQualityCompanyDocVaultFolders(drive, { companyId: "madison" });
+    assert.equal(buckets.stored, true);
+    assert.equal(buckets.filesByFolder["quality-control-manual"]?.some((file) => file.name === "qc-manual.pdf"), true);
+    assert.equal(buckets.filesByFolder["code-documents"]?.some((file) => file.name === "x.pdf" && file.type === "application/pdf"), true);
   });
 
   it("fails closed when Drive is missing and does not advertise a local brief as saved", async () => {

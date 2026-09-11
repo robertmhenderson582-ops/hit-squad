@@ -2,7 +2,15 @@ import { companyName, type CompanyId } from "./companies.ts";
 import { QUALITY_BRIEFS_VAULT_NAME, briefsFolderId, qualityFolderId } from "./drive-data.ts";
 import { DRIVE_FOLDER_MIME, DriveApiError, type DriveAdapter, type DriveFile } from "./drive-estimates.ts";
 import type { LeadFile } from "./lead-briefs.ts";
-import { isQualityCompanyDocsJobId, qualityCompanyDocLabel, type QualityCompanyDocId } from "./quality-company-docs.ts";
+import {
+  QUALITY_COMPANY_DOC_GOOGLE_NATIVE_ERROR,
+  isQualityCompanyDocsJobId,
+  qualityCompanyDocGoogleNativeType,
+  qualityCompanyDocLabel,
+  qualityCompanyDocPreviewType,
+  qualityCompanyDocsListedFor,
+  type QualityCompanyDocId,
+} from "./quality-company-docs.ts";
 import { qualityFolderLabel, type QualityFolderId } from "./quality-folders.ts";
 import {
   QUALITY_UNVAULTED_MARK,
@@ -154,6 +162,66 @@ function isQualityVaultFile(row: DriveFile) {
   return Boolean(name) && name !== QUALITY_BRIEFS_VAULT_NAME;
 }
 
+function isQualityVaultFolder(row: DriveFile) {
+  return Boolean(row.id && row.name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
+}
+
+function qualityVaultListedFile(row: DriveFile) {
+  return {
+    name: row.name,
+    type: qualityCompanyDocPreviewType({
+      name: row.name,
+      type: row.mimeType && row.mimeType !== DRIVE_FOLDER_MIME ? row.mimeType : "application/octet-stream",
+    }),
+  };
+}
+
+async function findQualityVaultChild(drive: DriveAdapter, parent: string, name: string) {
+  const kids = await drive.listChildren!(parent);
+  return kids.find((row) => row.name === name && isQualityVaultFolder(row)) ?? null;
+}
+
+/**
+ * One company-folder walk, then parallel bucket lists.
+ * Avoids 4× stacked Drive path + briefs round-trips on Quality rail refresh.
+ */
+export async function listQualityCompanyDocVaultFolders(
+  drive: DriveAdapter | null | undefined,
+  place: { companyId?: string; who?: string },
+) {
+  const folders = qualityCompanyDocsListedFor(place.companyId);
+  const empty = Object.fromEntries(folders.map((folder) => [folder.id, [] as Array<{ name: string; type: string }>]));
+  if (!qualityDriveReady(drive)) {
+    return { filesByFolder: empty, store: "unconfigured" as const, stored: false as const };
+  }
+  try {
+    const company = qualityCompanyVaultLabel(place.companyId);
+    const companyFolder = await findQualityVaultChild(drive as DriveAdapter, qualityFolderId(), company);
+    if (!companyFolder?.id) {
+      return { filesByFolder: empty, store: "drive" as const, stored: true as const };
+    }
+    const bucketKids = await drive!.listChildren!(companyFolder.id);
+    const listed = await Promise.all(
+      folders.map(async (folder) => {
+        const label = qualityVaultFolderName(qualityCompanyDocLabel(folder.id, place.companyId));
+        const bucket = bucketKids.find((row) => row.name === label && isQualityVaultFolder(row));
+        if (!bucket?.id) return [folder.id, [] as Array<{ name: string; type: string }>] as const;
+        const files = (await drive!.listChildren!(bucket.id))
+          .filter((row) => qualityVaultFileVisible(row, place.who))
+          .map((row) => qualityVaultListedFile(row));
+        return [folder.id, files] as const;
+      }),
+    );
+    return {
+      filesByFolder: Object.fromEntries(listed) as Record<string, Array<{ name: string; type: string }>>,
+      store: "drive" as const,
+      stored: true as const,
+    };
+  } catch {
+    return { filesByFolder: empty, store: "drive" as const, stored: false as const };
+  }
+}
+
 export function qualityVaultFileVisible(row: DriveFile, who?: string) {
   if (!isQualityVaultFile(row)) return false;
   const key = (who || "").trim().toLowerCase();
@@ -182,10 +250,7 @@ export async function listQualityVaultFiles(
     const kids = await drive!.listChildren!(parent);
     const files = kids
       .filter((row) => qualityVaultFileVisible(row, place.who))
-      .map((row) => ({
-        name: row.name,
-        type: row.mimeType && row.mimeType !== DRIVE_FOLDER_MIME ? row.mimeType : "application/octet-stream",
-      }));
+      .map((row) => qualityVaultListedFile(row));
     return { files, store: "drive" as const, stored: true as const };
   } catch {
     return { files: [], store: "drive" as const, stored: false as const };
@@ -217,11 +282,22 @@ export async function readQualityVaultFile(
     if (!row?.id) {
       return { file: null, store: "drive" as const, stored: true as const };
     }
+    if (qualityCompanyDocGoogleNativeType(row.mimeType)) {
+      return {
+        file: null,
+        store: "drive" as const,
+        stored: true as const,
+        error: QUALITY_COMPANY_DOC_GOOGLE_NATIVE_ERROR,
+      };
+    }
     const bytes = await drive.readBytes(row.id);
     return {
       file: {
         name: row.name,
-        type: row.mimeType && row.mimeType !== DRIVE_FOLDER_MIME ? row.mimeType : "application/octet-stream",
+        type: qualityCompanyDocPreviewType({
+          name: row.name,
+          type: row.mimeType && row.mimeType !== DRIVE_FOLDER_MIME ? row.mimeType : "application/octet-stream",
+        }),
         data: Buffer.from(bytes).toString("base64"),
       },
       store: "drive" as const,
