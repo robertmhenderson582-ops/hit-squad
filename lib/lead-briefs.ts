@@ -1,3 +1,7 @@
+/** Client-safe HSE brief vault copy. No Drive / Node imports. */
+export const HSE_VAULT_WRITE_ERROR =
+  "Could not save to the HSE vault. Those files are only on this desk. Try again.";
+
 export type LeadFile = { name: string; type: string; data: string };
 export type LeadBrief = { describe: string; files: LeadFile[]; savedAt: string | null };
 export type PublicLeadFile = { name: string; type: string };

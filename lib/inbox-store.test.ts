@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
-import { INBOX_VAULT_KIND, INBOX_VAULT_NAME, readVaultJson } from "./drive-data.ts";
+import { INBOX_VAULT_FILE_ID, INBOX_VAULT_KIND, INBOX_VAULT_NAME, readVaultJson } from "./drive-data.ts";
 import { memoryDrive } from "./drive-estimates.ts";
 import { inboxThreadKey, NOVUS_INBOX_EMAIL } from "./inbox-circle.ts";
 import { acceptedInboxPhoto } from "./inbox.ts";
@@ -139,6 +139,11 @@ describe("inbox store", { concurrency: 1 }, () => {
     assert.equal(vault.some((message) => message.text === "Owner to Nathan"), true);
     assert.equal(vault.some((message) => message.text === "Nathan to owner"), true);
     assert.equal(vault.length, 2);
+    assert.equal([...drive.files.keys()].includes(INBOX_VAULT_FILE_ID), true);
+    assert.equal(
+      [...drive.files.values()].filter((row) => row.file.name === INBOX_VAULT_NAME).length,
+      1,
+    );
   });
 
   it("a GET after another instance's POST sees the new row", async () => {

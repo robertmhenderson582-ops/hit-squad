@@ -87,6 +87,7 @@ export function HseDesk() {
   function persist(next: HseModuleState) {
     if (!pick.jobId) return;
     setModule(next);
+    // Day1 / lane rows stay on this desk only. Briefs Save is the fail-closed vault path.
     writeHseModuleForJob(pick.jobId, next);
   }
 

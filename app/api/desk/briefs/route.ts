@@ -3,6 +3,7 @@ import { readSession } from "@/lib/auth";
 import { DRIVE_WRITE_ERROR } from "@/lib/drive-data";
 import { hasBuildDesk } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
+import { HSE_VAULT_WRITE_ERROR } from "@/lib/lead-briefs";
 import {
   isLeadBriefKind,
   leadBriefStoreKind,
@@ -157,7 +158,11 @@ export async function POST(request: Request) {
       brief: publicBrief(brief),
       store: leadBriefStoreKind(),
     });
-  } catch {
-    return NextResponse.json({ error: DRIVE_WRITE_ERROR }, { status: 503 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    return NextResponse.json(
+      { error: message === HSE_VAULT_WRITE_ERROR ? HSE_VAULT_WRITE_ERROR : DRIVE_WRITE_ERROR },
+      { status: 503 },
+    );
   }
 }
