@@ -8,6 +8,11 @@ import { fileToLead, type LeadFile } from "@/lib/lead-briefs";
 import { viewAsInit } from "@/lib/desk-scope";
 import { QualityCompanyDocViewer } from "@/components/QualityCompanyDocViewer";
 import {
+  canMutateQualityCompanyDoc,
+  qualityCompanyDocAcl,
+  type QualityCompanyDocAcl,
+} from "@/lib/quality-company-doc-acl";
+import {
   primaryQualityCompanyDocFile,
   qualityCompanyDocHome,
   qualityCompanyDocLabel,
@@ -24,6 +29,7 @@ import {
   mergeQualityFolderFiles,
 } from "@/lib/quality-folders";
 import {
+  QUALITY_COMPANY_DOC_LOCKED_NOTE,
   QUALITY_VAULT_WRITE_ERROR,
   mergeVaultedQualityFiles,
   qualityVaultStored,
@@ -56,6 +62,15 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
   const [overId, setOverId] = useState<QualityCompanyDocId | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [openFileName, setOpenFileName] = useState<string | null>(null);
+  const viewingAs = Boolean(owner?.viewAs && owner.viewAs !== "owner");
+  const [acl, setAcl] = useState<QualityCompanyDocAcl>(() =>
+    viewingAs ? qualityCompanyDocAcl(null) : qualityCompanyDocAcl(user),
+  );
+  const [locksByDoc, setLocksByDoc] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(docs.map((doc) => [doc.id, false])),
+  );
+  const [locksKnown, setLocksKnown] = useState(true);
+  const [locking, setLocking] = useState(false);
 
   useEffect(() => {
     const next = readQualityCompanyDocPick(home);
@@ -77,12 +92,18 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
       .then(async (response) => {
         const data = (await response.json().catch(() => ({}))) as {
           filesByFolder?: Record<string, Array<{ name?: string; type?: string }>>;
+          locksByFolder?: Record<string, boolean>;
+          locksKnown?: boolean;
+          acl?: QualityCompanyDocAcl;
           store?: string;
           stored?: boolean;
         };
         if (cancelled) return;
+        if (data.acl) setAcl(data.acl);
         const locals = localByDoc(home, docs);
         if (!response.ok || !qualityVaultStored(data.store, data.stored) || !data.filesByFolder) {
+          setLocksKnown(false);
+          setLocksByDoc(Object.fromEntries(docs.map((doc) => [doc.id, true])));
           setFilesByDoc((current) => {
             const hasAny = docs.some((doc) => (current[doc.id] ?? []).length);
             if (hasAny) return current;
@@ -90,6 +111,12 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
           });
           return;
         }
+        setLocksKnown(data.locksKnown !== false);
+        setLocksByDoc(
+          Object.fromEntries(
+            docs.map((doc) => [doc.id, Boolean(data.locksByFolder?.[doc.id])]),
+          ),
+        );
         setFilesByDoc(
           Object.fromEntries(
             docs.map((doc) => [
@@ -101,6 +128,8 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
       })
       .catch(() => {
         if (cancelled) return;
+        setLocksKnown(false);
+        setLocksByDoc(Object.fromEntries(docs.map((doc) => [doc.id, true])));
         setFilesByDoc((current) => {
           const hasAny = docs.some((doc) => (current[doc.id] ?? []).length);
           if (hasAny) return current;
@@ -146,14 +175,63 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
       brief?: { files?: Array<{ name?: string; type?: string }> };
     };
     if (!response.ok || !qualityVaultStored(data.store, data.stored)) {
-      throw new Error(typeof data.error === "string" && data.error ? data.error : QUALITY_VAULT_WRITE_ERROR);
+      const denied = new Error(typeof data.error === "string" && data.error ? data.error : QUALITY_VAULT_WRITE_ERROR);
+      (denied as Error & { status?: number }).status = response.status;
+      throw denied;
     }
     return data;
+  }
+
+  function docLocked(target: QualityCompanyDocId) {
+    return Boolean(locksByDoc[target]);
+  }
+
+  function canEditDoc(target: QualityCompanyDocId) {
+    return canMutateQualityCompanyDoc(acl, docLocked(target), locksKnown);
+  }
+
+  async function toggleLock(target: QualityCompanyDocId) {
+    if (!acl.canLock) return;
+    setLocking(true);
+    setNote(null);
+    try {
+      const response = await fetch("/api/desk/briefs", viewAsInit(owner?.viewAs, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "quality",
+          scope: "company-docs",
+          action: "lock",
+          companyId: home,
+          folderId: target,
+          locked: !docLocked(target),
+        }),
+      }));
+      const data = (await response.json().catch(() => ({}))) as { error?: string; locked?: boolean };
+      if (!response.ok) {
+        throw new Error(typeof data.error === "string" && data.error ? data.error : QUALITY_VAULT_WRITE_ERROR);
+      }
+      setLocksByDoc((current) => ({ ...current, [target]: Boolean(data.locked) }));
+      setLocksKnown(true);
+      setNoteKind("ok");
+      setNote(data.locked ? QUALITY_COMPANY_DOC_LOCKED_NOTE : `Unlocked ${qualityCompanyDocLabel(target, home)}.`);
+    } catch (error) {
+      setNoteKind("err");
+      setNote(error instanceof Error && error.message ? error.message : QUALITY_VAULT_WRITE_ERROR);
+    } finally {
+      setLocking(false);
+    }
   }
 
   async function onFiles(target: QualityCompanyDocId, list: FileList | File[] | null) {
     const picked = Array.from(list ?? []);
     if (!picked.length) return;
+    if (!canEditDoc(target)) {
+      setNoteKind("err");
+      setNote(acl.canAddRemove ? QUALITY_COMPANY_DOC_LOCKED_NOTE : "View only — Quality seats add files here.");
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
     const check = checkQualityDrop(picked.map(dropFileFromBrowser));
     if (!check.accepted.length) {
       setNoteKind("err");
@@ -192,6 +270,12 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
         ].join(" "),
       );
     } catch (error) {
+      const denied = error instanceof Error && "status" in error && (error as Error & { status?: number }).status === 403;
+      if (denied) {
+        setNoteKind("err");
+        setNote(error instanceof Error && error.message ? error.message : QUALITY_COMPANY_DOC_LOCKED_NOTE);
+        return;
+      }
       const incoming = await Promise.all(
         picked
           .filter((file) => check.accepted.some((row) => row.name === file.name))
@@ -220,14 +304,62 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
   }
 
   const libraryFiles = (filesByDoc[docId] ?? []).filter((file) => file.name);
+  const selectedEditable = canEditDoc(docId);
+
+  async function removeLibraryFile(name: string) {
+    const leftover = (filesByDoc[docId] ?? []).filter((file) => file.name === name && !file.vaulted);
+    if (leftover.length && !(filesByDoc[docId] ?? []).some((file) => file.name === name && file.vaulted)) {
+      const next = (filesByDoc[docId] ?? []).filter((file) => file.name !== name);
+      writeQualityCompanyDocFiles(
+        home,
+        docId,
+        next
+          .filter((file) => !file.vaulted && file.data)
+          .map((file) => ({ name: file.name, type: file.type, data: file.data || "" })),
+      );
+      setFilesByDoc((current) => ({ ...current, [docId]: next }));
+      if (openFileName === name) setOpenFileName(primaryQualityCompanyDocFile(next)?.name || null);
+      return;
+    }
+    const response = await fetch("/api/desk/briefs", viewAsInit(owner?.viewAs, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "quality",
+        scope: "company-docs",
+        companyId: home,
+        folderId: docId,
+        fileName: name,
+      }),
+    }));
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      files?: Array<{ name?: string; type?: string }>;
+      store?: string;
+      stored?: boolean;
+    };
+    if (!response.ok || !qualityVaultStored(data.store, data.stored) || !data.files) {
+      throw new Error(typeof data.error === "string" && data.error ? data.error : QUALITY_VAULT_WRITE_ERROR);
+    }
+    const next = mergeVaultedQualityFiles(data.files, []);
+    writeQualityCompanyDocFiles(home, docId, []);
+    setFilesByDoc((current) => ({ ...current, [docId]: next }));
+    if (openFileName === name) setOpenFileName(primaryQualityCompanyDocFile(next)?.name || null);
+  }
 
   return (
     <aside id="quality-company-docs" className="plant-card h-fit px-3 py-4" aria-label="Quality files">
-      <p className="mb-3 text-xs text-[#5b6f73]">Drop a file on a bar to save it. Click a bar to open that library.</p>
+      <p className="mb-3 text-xs text-[#5b6f73]">
+        {acl.canAddRemove
+          ? "Drop a file on a bar to save it. Click a bar to open that library."
+          : "Click a bar to open that library."}
+      </p>
       <ul className="space-y-2">
         {docs.map((doc) => {
           const selected = doc.id === docId;
           const listed = (filesByDoc[doc.id] ?? []).filter((file) => file.name);
+          const locked = docLocked(doc.id);
+          const editable = canEditDoc(doc.id);
           return (
             <li key={doc.id}>
               <div
@@ -236,6 +368,7 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
                 }`}
                 onDragOver={(event) => {
                   event.preventDefault();
+                  if (!editable) return;
                   setOverId(doc.id);
                 }}
                 onDragLeave={() => setOverId((current) => (current === doc.id ? null : current))}
@@ -245,41 +378,62 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
                   void onFiles(doc.id, event.dataTransfer.files);
                 }}
               >
-                <button
-                  type="button"
-                  id={`quality-company-doc-${doc.id}`}
-                  className="w-full text-left text-sm font-semibold"
-                  aria-current={selected ? "true" : undefined}
-                  aria-haspopup="dialog"
-                  onClick={() => openLibrary(doc.id)}
-                >
-                  {doc.label}
-                </button>
+                <div className="flex items-start justify-between gap-2">
+                  <button
+                    type="button"
+                    id={`quality-company-doc-${doc.id}`}
+                    className="w-full text-left text-sm font-semibold"
+                    aria-current={selected ? "true" : undefined}
+                    aria-haspopup="dialog"
+                    onClick={() => openLibrary(doc.id)}
+                  >
+                    {doc.label}
+                  </button>
+                  {acl.canLock ? (
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs text-steel underline"
+                      disabled={locking}
+                      aria-pressed={locked}
+                      onClick={() => void toggleLock(doc.id)}
+                    >
+                      {locked ? "Unlock" : "Lock"}
+                    </button>
+                  ) : null}
+                </div>
                 <p className="mt-1 text-xs text-[#5b6f73]">
-                  {overId === doc.id
-                    ? "Drop to save here"
-                    : listed.length
-                      ? `${listed.length} file${listed.length === 1 ? "" : "s"} · click to open`
-                      : "Drop files here"}
+                  {locked && !acl.canLock
+                    ? QUALITY_COMPANY_DOC_LOCKED_NOTE
+                    : overId === doc.id
+                      ? "Drop to save here"
+                      : listed.length
+                        ? `${listed.length} file${listed.length === 1 ? "" : "s"} · click to open`
+                        : editable
+                          ? "Drop files here"
+                          : "Click to open"}
                 </p>
               </div>
             </li>
           );
         })}
       </ul>
-      <label className="mt-3 block text-xs text-[#5b6f73]">
-        Or choose files for {qualityCompanyDocLabel(docId, home)}
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept={QUALITY_DROP_ACCEPT}
-          className="paper-field mt-1"
-          disabled={saving}
-          aria-label={`Add files to ${qualityCompanyDocLabel(docId, home)}`}
-          onChange={(event) => void onFiles(docId, event.target.files)}
-        />
-      </label>
+      {acl.canAddRemove ? (
+        <label className="mt-3 block text-xs text-[#5b6f73]">
+          Or choose files for {qualityCompanyDocLabel(docId, home)}
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept={QUALITY_DROP_ACCEPT}
+            className="paper-field mt-1"
+            disabled={saving || !selectedEditable}
+            aria-label={`Add files to ${qualityCompanyDocLabel(docId, home)}`}
+            onChange={(event) => void onFiles(docId, event.target.files)}
+          />
+        </label>
+      ) : (
+        <input ref={inputRef} type="file" className="hidden" tabIndex={-1} aria-hidden="true" />
+      )}
       {saving ? <p className="mt-2 text-sm">Saving…</p> : null}
       {note ? (
         <p className={`mt-2 text-sm ${noteKind === "err" ? "text-[#8a2a2a]" : "text-[#5b6f73]"}`}>{note}</p>
@@ -292,7 +446,10 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
         files={libraryFiles}
         selectedName={openFileName}
         viewAs={owner?.viewAs}
+        canRemove={selectedEditable}
+        lockedNote={!selectedEditable && docLocked(docId) ? QUALITY_COMPANY_DOC_LOCKED_NOTE : null}
         onSelect={setOpenFileName}
+        onRemove={removeLibraryFile}
         onClose={() => setLibraryOpen(false)}
       />
     </aside>

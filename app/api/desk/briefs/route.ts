@@ -13,9 +13,12 @@ import {
   saveStoredBrief,
 } from "@/lib/lead-brief-store";
 import {
+  lockQualityCompanyDoc,
   listQualityCompanyDocDrop,
   listQualityCompanyDocDrops,
   readQualityCompanyDocFile,
+  removeQualityCompanyDocFile,
+  resolveQualityCompanyDocAcl,
   saveQualityCompanyDocDrop,
 } from "@/lib/quality-company-doc-drops";
 import { isQualityCompanyDocId, qualityCompanyDocsListedFor } from "@/lib/quality-company-docs";
@@ -72,20 +75,32 @@ export async function GET(request: Request) {
       });
     }
     if (isQualityCompanyDocId(folderId, companyId || undefined)) {
-      const listed = await listQualityCompanyDocDrop(user, folderId, companyId || undefined);
+      const [listed, acl] = await Promise.all([
+        listQualityCompanyDocDrop(user, folderId, companyId || undefined),
+        resolveQualityCompanyDocAcl(user),
+      ]);
       return NextResponse.json({
         briefs: listed.briefs,
         files: listed.files,
         folders: qualityCompanyDocsListedFor(companyId),
+        locked: listed.locked,
+        locksKnown: listed.locksKnown,
+        acl,
         store: listed.store,
         stored: listed.stored,
       });
     }
-    const listed = await listQualityCompanyDocDrops(user, companyId || undefined);
+    const [listed, acl] = await Promise.all([
+      listQualityCompanyDocDrops(user, companyId || undefined),
+      resolveQualityCompanyDocAcl(user),
+    ]);
     return NextResponse.json({
       folders: listed.folders,
       filesByFolder: listed.filesByFolder,
+      locksByFolder: listed.locksByFolder,
+      locksKnown: listed.locksKnown,
       companyId: listed.companyId,
+      acl,
       store: listed.store,
       stored: listed.stored,
     });
@@ -132,6 +147,10 @@ export async function POST(request: Request) {
     siteLabel?: string;
     jobLabel?: string;
     scope?: string;
+    action?: string;
+    locked?: boolean;
+    fileName?: string;
+    file?: string;
   };
   const companyId = qualityCompanyId(body);
   if (!isLeadBriefKind(body.kind)) {
@@ -140,6 +159,16 @@ export async function POST(request: Request) {
   const user = body.kind === "quality" ? await scopedDeskUser(session, request) : session;
 
   if (body.kind === "quality" && (body.scope === "company-docs" || isQualityCompanyDocId(body.folderId, companyId || undefined))) {
+    if (body.action === "lock") {
+      const result = await lockQualityCompanyDoc(user, { ...body, companyId: companyId || undefined });
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json({
+        locked: result.locked,
+        stored: result.stored,
+        store: result.store,
+        folders: qualityCompanyDocsListedFor(companyId),
+      });
+    }
     const result = await saveQualityCompanyDocDrop(user, { ...body, companyId: companyId || undefined });
     if (!result.ok) {
       return NextResponse.json(
@@ -201,4 +230,36 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
+}
+
+export async function DELETE(request: Request) {
+  const session = await readSession(cookieValue(request));
+  if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+
+  const body = (await request.json().catch(() => ({}))) as {
+    kind?: string;
+    scope?: string;
+    folderId?: string;
+    companyId?: string;
+    company?: string;
+    fileName?: string;
+    file?: string;
+  };
+  const companyId = qualityCompanyId(body);
+  if (body.kind !== "quality" || (body.scope !== "company-docs" && !isQualityCompanyDocId(body.folderId, companyId || undefined))) {
+    return NextResponse.json({ error: "Pick a Quality file." }, { status: 400 });
+  }
+  const user = await scopedDeskUser(session, request);
+  const result = await removeQualityCompanyDocFile(user, {
+    companyId: companyId || undefined,
+    folderId: body.folderId,
+    fileName: body.fileName || body.file,
+  });
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+  return NextResponse.json({
+    files: result.files,
+    stored: result.stored,
+    store: result.store,
+    folders: qualityCompanyDocsListedFor(companyId),
+  });
 }

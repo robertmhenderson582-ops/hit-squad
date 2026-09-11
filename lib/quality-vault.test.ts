@@ -15,6 +15,7 @@ import { saveQualityCompanyDocDrop } from "./quality-company-doc-drops.ts";
 import { listQualityFolderDrops, listQualityVaultOwnerTree, saveQualityFolderDrop } from "./quality-folder-drops.ts";
 import { qualityDropLeaks } from "./quality-vault-shared.ts";
 import {
+  QUALITY_LIBRARY_LOCK_NAME,
   QUALITY_UNVAULTED_MARK,
   QUALITY_VAULT_MISSING_ERROR,
   QUALITY_VAULT_SHARE_ERROR,
@@ -27,6 +28,8 @@ import {
   qualityVaultStored,
   qualityVaultWriteUserError,
   readQualityVaultFile,
+  trashQualityVaultFile,
+  writeQualityCompanyDocLock,
 } from "./quality-vault.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-quality-vault-"));
@@ -328,5 +331,33 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
       assert.equal(qualityDropLeaks(ownerMissing), false);
     }
     if (!testerMissing.ok) assert.equal(testerMissing.error, QUALITY_VAULT_WRITE_ERROR);
+  });
+
+  it("trashes a company-doc file and stamps a per-bar lock without listing the lock as a file", async () => {
+    const drive = memoryDrive();
+    resetLeadBriefStoreForTests(join(dir, "trash"));
+    useLeadBriefVaultForTests(drive);
+    const place = {
+      companyId: "madison",
+      folderId: "quality-control-manual",
+      jobId: "company-docs:madison",
+      companyDocs: true as const,
+    };
+    await persistQualityVaultFiles(drive, place, [pdf("qc-manual.pdf", "manual")]);
+    const locked = await writeQualityCompanyDocLock(drive, place, true, owner.email);
+    assert.equal(locked.locked, true);
+    const listed = await listQualityVaultFiles(drive, place);
+    assert.equal(listed.locked, true);
+    assert.deepEqual(listed.files.map((file) => file.name), ["qc-manual.pdf"]);
+    assert.equal(listed.files.some((file) => file.name === QUALITY_LIBRARY_LOCK_NAME), false);
+    const folders = await listQualityCompanyDocVaultFolders(drive, { companyId: "madison" });
+    assert.equal(folders.locksByFolder["quality-control-manual"], true);
+    assert.equal(folders.filesByFolder["quality-control-manual"]?.some((file) => file.name === "qc-manual.pdf"), true);
+    await trashQualityVaultFile(drive, place, "qc-manual.pdf");
+    const after = await listQualityVaultFiles(drive, place);
+    assert.deepEqual(after.files, []);
+    assert.equal(after.locked, true);
+    await writeQualityCompanyDocLock(drive, place, false, owner.email);
+    assert.equal((await listQualityVaultFiles(drive, place)).locked, false);
   });
 });

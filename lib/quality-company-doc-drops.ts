@@ -1,13 +1,27 @@
 import { hasBuildDesk } from "./desk-role.ts";
-import { leadBriefAdapter, listStoredBriefs, publicBrief, saveStoredBrief } from "./lead-brief-store.ts";
+import { leadBriefAdapter, listStoredBriefs, publicBrief, removeFileFromStoredBriefs, saveStoredBrief } from "./lead-brief-store.ts";
 import type { LeadFile, PublicLeadBrief } from "./lead-briefs.ts";
 import { DriveApiError } from "./drive-estimates.ts";
+import { hydratePositionStore } from "./org-positions-store.ts";
+import { mergePositions } from "./org-positions.ts";
+import {
+  QUALITY_COMPANY_DOC_EDIT_ERROR,
+  QUALITY_COMPANY_DOC_LOCK_ERROR,
+  QUALITY_COMPANY_DOC_LOCKED_NOTE,
+  canMutateQualityCompanyDoc,
+  qualityCompanyDocAcl,
+  qualityCompanyDocMutateError,
+  type QualityCompanyDocAcl,
+  type QualityCompanyDocActor,
+} from "./quality-company-doc-acl.ts";
 import {
   listQualityCompanyDocVaultFolders,
   listQualityVaultFiles,
   persistQualityVaultFiles,
   qualityVaultWriteUserError,
   readQualityVaultFile,
+  trashQualityVaultFile,
+  writeQualityCompanyDocLock,
 } from "./quality-vault.ts";
 import {
   QUALITY_COMPANY_DOC_GOOGLE_NATIVE_ERROR,
@@ -27,9 +41,30 @@ import {
 } from "./quality-company-docs.ts";
 import { parseQualityDropFiles, qualityDropLeaks } from "./quality-folder-drops.ts";
 import { checkQualityDrop } from "./quality-folders.ts";
-import type { PublicUser } from "./types.ts";
+import { isQualityLibraryLockName } from "./quality-vault-shared.ts";
 
-export type QualityDocUser = Pick<PublicUser, "email" | "name" | "role">;
+export type QualityDocUser = QualityCompanyDocActor;
+
+export {
+  QUALITY_COMPANY_DOC_EDIT_ERROR,
+  QUALITY_COMPANY_DOC_LOCK_ERROR,
+  QUALITY_COMPANY_DOC_LOCKED_NOTE,
+  canMutateQualityCompanyDoc,
+  qualityCompanyDocAcl,
+  type QualityCompanyDocAcl,
+};
+
+export async function resolveQualityCompanyDocAcl(user: QualityDocUser): Promise<QualityCompanyDocAcl> {
+  try {
+    const data = await hydratePositionStore();
+    return qualityCompanyDocAcl(user, {
+      holds: data.holds,
+      catalog: mergePositions(data.positions, data.removedIds),
+    });
+  } catch {
+    return qualityCompanyDocAcl(user);
+  }
+}
 
 export type QualityCompanyDocSaveInput = {
   companyId?: unknown;
@@ -47,6 +82,8 @@ export async function saveQualityCompanyDocDrop(user: QualityDocUser, input: Qua
   if (!isQualityCompanyDocId(folderId, home)) {
     return { ok: false as const, status: 400, error: "Pick a Quality file." };
   }
+  const gate = await qualityCompanyDocWriteGate(user, folderId, home);
+  if (gate) return gate;
   const incoming = parseQualityDropFiles(input.files);
   const check = checkQualityDrop(incoming);
   if (!check.accepted.length) {
@@ -128,6 +165,8 @@ export async function listQualityCompanyDocDrop(
   return {
     briefs: briefs.map(publicBrief),
     files,
+    locked: Boolean(vault.locked),
+    locksKnown: vault.locksKnown !== false && vault.stored,
     store: vault.store === "drive" ? "drive" as const : "server-json-file" as const,
     stored: vault.stored,
   };
@@ -141,7 +180,7 @@ function mergeCompanyDocListedFiles(
   const files: Array<{ name: string; type: string }> = [];
   for (const file of [...vault, ...extra]) {
     const name = (file.name || "").trim();
-    if (!name || seen.has(name)) continue;
+    if (!name || seen.has(name) || isQualityLibraryLockName(name)) continue;
     seen.add(name);
     files.push({ name, type: qualityCompanyDocPreviewType(file) });
   }
@@ -169,10 +208,102 @@ export async function listQualityCompanyDocDrops(_user: QualityDocUser, companyI
   return {
     folders,
     filesByFolder,
+    locksByFolder: vault.locksByFolder ?? Object.fromEntries(folders.map((folder) => [folder.id, !vault.stored])),
+    locksKnown: vault.locksKnown !== false && vault.stored,
     companyId: home,
     store: vault.store === "drive" ? "drive" as const : "server-json-file" as const,
     stored: vault.stored,
   };
+}
+
+async function qualityCompanyDocWriteGate(user: QualityDocUser, folderId: QualityCompanyDocId, home: string) {
+  const acl = await resolveQualityCompanyDocAcl(user);
+  const listed = await listQualityVaultFiles(leadBriefAdapter("quality"), {
+    companyId: home,
+    folderId,
+    jobId: qualityCompanyDocsJobId(home),
+    companyDocs: true,
+  });
+  const locked = Boolean(listed.locked);
+  const lockKnown = listed.locksKnown !== false && listed.stored;
+  const error = qualityCompanyDocMutateError(acl, locked, lockKnown);
+  if (error) {
+    return { ok: false as const, status: 403, error, rejected: [] as Array<{ name: string; error: string }> };
+  }
+  return null;
+}
+
+export async function removeQualityCompanyDocFile(
+  user: QualityDocUser,
+  input: { companyId?: unknown; folderId?: unknown; fileName?: unknown },
+) {
+  const home = qualityCompanyDocHome(qualityDocCompanyId(input));
+  const folderId = typeof input.folderId === "string" ? input.folderId : "";
+  const fileName = qualityCompanyDocFileName(input.fileName);
+  if (!isQualityCompanyDocId(folderId, home) || !fileName || isQualityLibraryLockName(fileName)) {
+    return { ok: false as const, status: 400, error: "Pick a Quality file." };
+  }
+  const gate = await qualityCompanyDocWriteGate(user, folderId, home);
+  if (gate) return { ok: false as const, status: gate.status, error: gate.error };
+  const jobId = qualityCompanyDocsJobId(home);
+  try {
+    await trashQualityVaultFile(
+      leadBriefAdapter("quality"),
+      { companyId: home, folderId, jobId, companyDocs: true },
+      fileName,
+    );
+    await removeFileFromStoredBriefs("quality", fileName, { jobId, folderId, companyId: home });
+    const listed = await listQualityCompanyDocDrop(user, folderId, home);
+    if (listed.files.some((file) => file.name === fileName)) {
+      return { ok: false as const, status: 503, error: qualityVaultWriteUserError(new Error("leftover"), hasBuildDesk(user)) };
+    }
+    return {
+      ok: true as const,
+      files: listed.files,
+      stored: listed.stored,
+      store: listed.store,
+    };
+  } catch (error) {
+    const status = error instanceof DriveApiError ? error.status : 0;
+    console.warn(`quality-vault: company-doc delete failed; ${status || "err"}`);
+    return {
+      ok: false as const,
+      status: 503,
+      error: qualityVaultWriteUserError(error, hasBuildDesk(user)),
+    };
+  }
+}
+
+export async function lockQualityCompanyDoc(
+  user: QualityDocUser,
+  input: { companyId?: unknown; folderId?: unknown; locked?: unknown },
+) {
+  const home = qualityCompanyDocHome(qualityDocCompanyId(input));
+  const folderId = typeof input.folderId === "string" ? input.folderId : "";
+  if (!isQualityCompanyDocId(folderId, home)) {
+    return { ok: false as const, status: 400, error: "Pick a Quality file." };
+  }
+  const acl = await resolveQualityCompanyDocAcl(user);
+  if (!acl.canLock) {
+    return { ok: false as const, status: 403, error: QUALITY_COMPANY_DOC_LOCK_ERROR };
+  }
+  try {
+    const written = await writeQualityCompanyDocLock(
+      leadBriefAdapter("quality"),
+      { companyId: home, folderId, jobId: qualityCompanyDocsJobId(home), companyDocs: true },
+      input.locked === true,
+      user.email,
+    );
+    return { ok: true as const, locked: written.locked, stored: written.stored, store: written.store };
+  } catch (error) {
+    const status = error instanceof DriveApiError ? error.status : 0;
+    console.warn(`quality-vault: company-doc lock failed; ${status || "err"}`);
+    return {
+      ok: false as const,
+      status: 503,
+      error: qualityVaultWriteUserError(error, hasBuildDesk(user)),
+    };
+  }
 }
 
 export async function readQualityCompanyDocFile(
