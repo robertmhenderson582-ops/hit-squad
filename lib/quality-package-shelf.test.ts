@@ -80,6 +80,13 @@ describe("Quality package shelf ACL", () => {
     assert.equal(site.canBuild, true);
     assert.equal(site.canAttach, true);
     assert.equal(site.seat, "site-qc");
+    const estimator = qualityPackageShelfAcl(
+      { email: "estimator@example.com", name: "Pat", role: "tester" },
+      { catalog, holds: [hold("project-manager", "estimator@example.com")] },
+    );
+    assert.equal(estimator.canBuild, false);
+    assert.equal(estimator.canAttach, true);
+    assert.equal(estimator.seat, "pm");
     assert.equal(qualityPackageShelfAcl(wendell).canAttach, false);
     assert.equal(qualityPackageShelfAcl(owner).canBuild, true);
     assert.equal(isQualityReadyShelfJobId(qualityReadyShelfJobId("day-1-kit")), true);

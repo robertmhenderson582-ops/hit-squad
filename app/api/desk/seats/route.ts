@@ -113,7 +113,7 @@ async function postSeats(request: Request) {
       companies: peekCompanies(),
       actor: desk.actor,
       doors,
-      shared: shared.shared,
+      shared,
       note: "Login created on this desk. Don’t send. First sign-in must change the password.",
     });
   }
