@@ -224,12 +224,12 @@ describe("sandbox estimate isolation", () => {
       ownerEmail: NATHAN_DESK_EMAIL,
       crew: { support: [{ id: "sup-nate" }] },
     };
-    const nathanPut = await upsertVisiblePack(nathan, live, drive);
-    assert.equal(nathanPut.ok, true);
-    const beforeIds = [...drive.files.keys()];
-    assert.ok(beforeIds.includes(HIS_AROMATICS_FILE_ID) || beforeIds.length >= 1);
-    const liveFileId = beforeIds[0];
-    const liveBefore = liveFileId ? await drive.readJson(liveFileId) : "";
+    const liveBefore = JSON.stringify(live);
+    await drive.updateJson(HIS_AROMATICS_FILE_ID, liveBefore, "wood-river-2027-aromatics-turnaround.json", {
+      packId: HIS_AROMATICS_PACK_ID,
+      ownerEmail: NATHAN_DESK_EMAIL,
+    });
+    const liveFileId = HIS_AROMATICS_FILE_ID;
 
     const markPut = await upsertVisiblePack(mark, markAromaticsPack(), drive);
     assert.equal(markPut.ok, true);
