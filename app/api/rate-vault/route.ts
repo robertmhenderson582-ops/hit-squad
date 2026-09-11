@@ -4,14 +4,23 @@ import { enrichReviewWithPreview, resolveRateVaultPreview } from "@/lib/rate-vau
 import { parseConfirmReview, recognizeRateVaultSource } from "@/lib/rate-vault-recognize";
 import { requireRateVault } from "@/lib/rate-vault-server";
 import {
+  RATE_VAULT_B1_BOOK_MIX_ERROR,
   RATE_VAULT_B1_OCIP_MIX_ERROR,
+  isRateVaultBookFace,
   isRateVaultSiteId,
+  packageBookFace,
   stubPublishRateVault,
+  type RateVaultBookFace,
   type RateVaultOcipFace,
   type RateVaultPreviewPackage,
   type RateVaultRecognitionReview,
 } from "@/lib/rate-vault";
-import { mergePreviewFace, previewHasLaneBlend, rateVaultImportMergeFace } from "@/lib/rate-vault-preview";
+import {
+  inferRateVaultBookFace,
+  mergePreviewFace,
+  previewHasLaneBlend,
+  rateVaultImportMergeFace,
+} from "@/lib/rate-vault-preview";
 import { parseRateVaultB1Xlsx, rateVaultPreviewToXlsx, RATE_VAULT_B1_MIME } from "@/lib/rate-vault-xlsx";
 import {
   addRateVaultOwnerSource,
@@ -31,18 +40,38 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function parseBookFace(value: unknown): RateVaultBookFace {
+  return isRateVaultBookFace(value) ? value : "rrff";
+}
+
+function optionalBookFace(value: unknown): RateVaultBookFace | null {
+  return isRateVaultBookFace(value) ? value : null;
+}
+
 async function livePreview(input: {
   siteId?: string | null;
+  bookFace?: RateVaultBookFace | null;
   review?: RateVaultRecognitionReview | null;
   source?: NonNullable<Parameters<typeof resolveRateVaultPreview>[0]>["source"];
   preview?: RateVaultPreviewPackage | null;
 }) {
   if (input.preview) return input.preview;
   const siteId = input.siteId ?? input.review?.guessedSiteId ?? input.source?.siteId ?? "wood-river";
-  const stored = await getRateVaultPackage(siteId);
+  const book =
+    input.bookFace ??
+    inferRateVaultBookFace(input.source) ??
+    inferRateVaultBookFace({
+      id: input.review?.sourceId,
+      title: input.review?.fileName,
+      fileName: input.review?.fileName,
+      kind: input.review?.guessedKind,
+      siteId: input.review?.guessedSiteId,
+    });
+  const stored = await getRateVaultPackage(siteId, book);
   if (stored) return stored;
   return resolveRateVaultPreview({
     siteId,
+    bookFace: book,
     review: input.review,
     source: input.source,
   });
@@ -51,14 +80,24 @@ async function livePreview(input: {
 async function workshopPayload(
   review: RateVaultRecognitionReview | null = null,
   preview?: RateVaultPreviewPackage | null,
+  bookFace: RateVaultBookFace = "rrff",
 ) {
   const [extras, reviews, overrides] = await Promise.all([
     listRateVaultOwnerLibrary(),
     listRateVaultReviews(),
     listRateVaultOverrides(),
   ]);
-  const resolved = preview !== undefined ? preview : await livePreview({ review });
+  const resolved = preview !== undefined ? preview : await livePreview({ review, bookFace });
   const workshop = buildRateVaultWorkshop(extras, reviews, review, overrides, resolved);
+  const rrff =
+    packageBookFace(resolved) === "rrff" && resolved
+      ? resolved
+      : await livePreview({ siteId: resolved?.siteId || "wood-river", bookFace: "rrff" });
+  const tm =
+    packageBookFace(resolved) === "tm" && resolved
+      ? resolved
+      : await livePreview({ siteId: resolved?.siteId || "wood-river", bookFace: "tm" });
+  workshop.bookPreviews = { rrff, tm };
   workshop.buyoffs = await listRateVaultBuyoffs();
   return workshop;
 }
@@ -66,10 +105,12 @@ async function workshopPayload(
 export async function GET(request: Request) {
   const { error } = await requireRateVault(request);
   if (error) return error;
-  const workshop = await workshopPayload();
+  const url = new URL(request.url);
+  const bookFace = parseBookFace(url.searchParams.get("bookFace"));
+  const workshop = await workshopPayload(null, undefined, bookFace);
   return NextResponse.json({
     workshop,
-    versions: await listRateVaultVersions(workshop.preview?.siteId || "wood-river"),
+    versions: await listRateVaultVersions(workshop.preview?.siteId || "wood-river", bookFace),
     buyoffs: workshop.buyoffs,
   });
 }
@@ -93,7 +134,9 @@ export async function POST(request: Request) {
     sourceId?: string;
     review?: Record<string, unknown>;
     ocipFace?: string;
+    bookFace?: string;
     confirmOcipMix?: boolean;
+    confirmBookMix?: boolean;
     versionNote?: string;
     buyoffId?: string;
     buyoffAction?: string;
@@ -114,9 +157,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ publish: stubPublishRateVault(), workshop: await workshopPayload() });
   }
 
+  if (action === "load-preview") {
+    const siteId = isRateVaultSiteId(body.siteId) ? body.siteId : "wood-river";
+    const bookFace = parseBookFace(body.bookFace);
+    const preview = await livePreview({ siteId, bookFace });
+    return NextResponse.json({
+      preview,
+      workshop: await workshopPayload(null, preview, bookFace),
+      versions: await listRateVaultVersions(siteId, bookFace),
+    });
+  }
+
   if (action === "export-b1") {
     const siteId = isRateVaultSiteId(body.siteId) ? body.siteId : "wood-river";
-    const preview = await livePreview({ siteId });
+    const bookFace = parseBookFace(body.bookFace);
+    const preview = await livePreview({ siteId, bookFace });
     if (!preview) {
       return NextResponse.json({ error: "No B-1 package for that site yet." }, { status: 404 });
     }
@@ -127,7 +182,7 @@ export async function POST(request: Request) {
       type: RATE_VAULT_B1_MIME,
       data: Buffer.from(exported.bytes).toString("base64"),
       preview,
-      workshop: await workshopPayload(null, preview),
+      workshop: await workshopPayload(null, preview, bookFace),
     });
   }
 
@@ -152,22 +207,31 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const stored = await getRateVaultPackage(imported.preview.siteId);
-    if (previewHasLaneBlend(stored, imported.preview)) {
+    const viewBook = parseBookFace(body.bookFace);
+    const fileBook = packageBookFace(imported.preview);
+    if (viewBook !== fileBook && !body.confirmBookMix) {
+      return NextResponse.json(
+        { error: RATE_VAULT_B1_BOOK_MIX_ERROR, code: "book-mix", needsConfirm: true },
+        { status: 400 },
+      );
+    }
+    const tagged = { ...imported.preview, bookFace: viewBook };
+    const stored = await getRateVaultPackage(imported.preview.siteId, viewBook);
+    if (previewHasLaneBlend(stored, tagged)) {
       return NextResponse.json(
         { error: "Merit and union lanes stay separate. The package was not applied.", code: "invalid" },
         { status: 400 },
       );
     }
-    const merged = mergePreviewFace(stored, imported.preview, rateVaultImportMergeFace(imported.preview));
+    const merged = mergePreviewFace(stored, tagged, rateVaultImportMergeFace(imported.preview));
     const saved = await upsertRateVaultPackage(merged, typeof body.versionNote === "string" ? body.versionNote : "Imported B-1 Excel");
     if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: saved.status });
     await queueRateVaultBuyoff(saved.preview, saved.preview.version?.note || "Imported B-1 Excel");
     return NextResponse.json({
       preview: saved.preview,
-      versions: await listRateVaultVersions(saved.preview.siteId),
+      versions: await listRateVaultVersions(saved.preview.siteId, viewBook),
       buyoffs: await listRateVaultBuyoffs(),
-      workshop: await workshopPayload(null, saved.preview),
+      workshop: await workshopPayload(null, saved.preview, viewBook),
     });
   }
 
@@ -189,12 +253,13 @@ export async function POST(request: Request) {
 
   if (action === "restore-b1") {
     const siteId = isRateVaultSiteId(body.siteId) ? body.siteId : "wood-river";
-    const restored = await restoreRateVaultLastGood(siteId);
+    const bookFace = parseBookFace(body.bookFace);
+    const restored = await restoreRateVaultLastGood(siteId, bookFace);
     if (!restored.ok) return NextResponse.json({ error: restored.error }, { status: restored.status });
     return NextResponse.json({
       preview: restored.preview,
-      versions: await listRateVaultVersions(siteId),
-      workshop: await workshopPayload(null, restored.preview),
+      versions: await listRateVaultVersions(siteId, bookFace),
+      workshop: await workshopPayload(null, restored.preview, bookFace),
     });
   }
 
@@ -225,9 +290,20 @@ export async function POST(request: Request) {
     if ("error" in recognized) {
       return NextResponse.json({ error: recognized.error }, { status: recognized.status });
     }
-    const preview = await livePreview({ review: recognized, source: linked });
+    const bookFace =
+      optionalBookFace(body.bookFace) ||
+      inferRateVaultBookFace(
+        linked || {
+          id: recognized.sourceId,
+          title: recognized.fileName,
+          fileName: recognized.fileName,
+          kind: recognized.guessedKind,
+          siteId: recognized.guessedSiteId,
+        },
+      );
+    const preview = await livePreview({ review: recognized, source: linked, bookFace });
     const review = enrichReviewWithPreview(recognized, preview);
-    return NextResponse.json({ review, preview, workshop: await workshopPayload(review, preview) });
+    return NextResponse.json({ review, preview, workshop: await workshopPayload(review, preview, bookFace) });
   }
 
   if (action === "confirm") {
@@ -258,10 +334,18 @@ export async function POST(request: Request) {
         note: "Confirmed from Rate Vault recognition. Metadata only.",
       });
     }
+    const bookFace = inferRateVaultBookFace(linked || {
+      id: recognized.sourceId,
+      title: recognized.fileName,
+      fileName: recognized.fileName,
+      kind: recognized.guessedKind,
+      siteId: parsed.siteId,
+    });
     const preview = await livePreview({
       review: recognized,
       source: linked,
       siteId: parsed.siteId,
+      bookFace,
     });
     const review = enrichReviewWithPreview(recognized, preview);
     const confirmed = await confirmRateVaultReview(parsed);
@@ -270,7 +354,7 @@ export async function POST(request: Request) {
       preview,
       confirmed,
       writesRateBook: false,
-      workshop: await workshopPayload(review, preview),
+      workshop: await workshopPayload(review, preview, bookFace),
     });
   }
 

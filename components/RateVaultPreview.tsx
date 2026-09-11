@@ -3,8 +3,12 @@
 import { FieldBlock } from "@/components/FieldMark";
 import {
   RATE_VAULT_B1_BURDEN_FAMILIES,
+  RATE_VAULT_BOOK_FACE_LABEL,
+  RATE_VAULT_BOOK_FACES,
   RATE_VAULT_SITES,
+  packageBookFace,
   rateVaultSiteLabel,
+  type RateVaultBookFace,
   type RateVaultBurdenFamily,
   type RateVaultCraftSheet,
   type RateVaultOcipFace,
@@ -48,6 +52,31 @@ export function RateVaultSitePicker({
         {RATE_VAULT_SITES.map((site) => (
           <option key={site.id} value={site.id}>
             {site.label}
+          </option>
+        ))}
+      </select>
+    </FieldBlock>
+  );
+}
+
+export function RateVaultBookPicker({
+  book,
+  onBook,
+}: {
+  book: RateVaultBookFace;
+  onBook: (value: RateVaultBookFace) => void;
+}) {
+  return (
+    <FieldBlock label="Book">
+      <select
+        className="paper-field mt-1"
+        value={book}
+        aria-label="Labor-burden book"
+        onChange={(event) => onBook(event.target.value as RateVaultBookFace)}
+      >
+        {RATE_VAULT_BOOK_FACES.map((id) => (
+          <option key={id} value={id}>
+            {RATE_VAULT_BOOK_FACE_LABEL[id]}
           </option>
         ))}
       </select>
@@ -193,6 +222,19 @@ export function RateVaultPreviewTables({
 }) {
   const viewed = preview && ocipFace !== "both" ? filterPreviewByFace(preview, ocipFace) : preview;
   if (!viewed || !viewed.rows.length) {
+    if (viewed && packageBookFace(viewed) === "tm") {
+      return (
+        <div className="mt-4 space-y-2">
+          <p className="text-xs tracking-[0.14em] text-[#5b6f73]">T&M labor-burden book</p>
+          <h4 className="text-lg font-semibold text-[#163038]">{viewed.title}</h4>
+          {viewed.note ? <p className="text-sm leading-6 text-[#5b6f73]">{viewed.note}</p> : null}
+          <p className="text-sm text-[#5b6f73]">
+            {emptyNote ||
+              `T&M hall rates are not loaded in this vault yet. Switch back to RRFF for the filled Wood River package.`}
+          </p>
+        </div>
+      );
+    }
     return (
       <p className="mt-4 text-sm text-[#5b6f73]">
         {emptyNote || `No B-1 preview for ${rateVaultSiteLabel(siteId) || "this site"} yet.`}
@@ -215,6 +257,7 @@ export function RateVaultPreviewTables({
           {viewed.effective ? ` · effective ${viewed.effective}` : ""}
           {" · "}
           {viewed.rows.length} positions
+          {` · ${packageBookFace(viewed) === "tm" ? "T&M" : "RRFF"}`}
           {ocipFace !== "both" ? ` · ${ocipFace}` : ""}
           {viewed.fixture
             ? " · fixture"

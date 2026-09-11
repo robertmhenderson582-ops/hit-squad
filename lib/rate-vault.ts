@@ -189,6 +189,8 @@ export const RATE_VAULT_B1_IMPORT_ERROR = "Could not import that workbook. Use a
 export const RATE_VAULT_B1_POISON_ERROR = "That workbook is not a valid Rate Vault B-1 package. It was not applied.";
 export const RATE_VAULT_B1_OCIP_MIX_ERROR =
   "That workbook is an OCIP face and this picker is non-OCIP (or the reverse). Confirm to apply it anyway.";
+export const RATE_VAULT_B1_BOOK_MIX_ERROR =
+  "That workbook is an RRFF labor-burden book and this picker is T&M (or the reverse). Confirm to apply it anyway. Books stay separate unless you confirm.";
 export const RATE_VAULT_B1_COMP_SHEET = "COMP Check";
 export const RATE_VAULT_B1_CBA_SHEET = "CBA PLA";
 export const RATE_VAULT_B1_STATE_SHEET = "State law";
@@ -337,6 +339,23 @@ export type RateVaultPreviewSheet = {
 export type RateVaultLane = "union" | "merit";
 export type RateVaultOcipFace = "ocip" | "non-ocip";
 
+/** Wood River Exhibit B-1 labor-burden books. Separate workbooks — never mix RRFF wages with T&M. */
+export const RATE_VAULT_BOOK_FACES = ["rrff", "tm"] as const;
+export type RateVaultBookFace = (typeof RATE_VAULT_BOOK_FACES)[number];
+export const RATE_VAULT_DEFAULT_BOOK_FACE = "rrff" as const;
+export const RATE_VAULT_BOOK_FACE_LABEL: Record<RateVaultBookFace, string> = {
+  rrff: "RRFF",
+  tm: "T&M",
+};
+
+export function isRateVaultBookFace(value: unknown): value is RateVaultBookFace {
+  return value === "rrff" || value === "tm";
+}
+
+export function packageBookFace(preview: { bookFace?: unknown } | null | undefined): RateVaultBookFace {
+  return preview?.bookFace === "tm" ? "tm" : "rrff";
+}
+
 export type RateVaultPreviewRow = {
   id: string;
   sheet: string;
@@ -415,6 +434,7 @@ export type RateVaultPreviewPackage = {
   note: string;
   writesRateBook: false;
   fixture: boolean;
+  bookFace: RateVaultBookFace;
   ocipFace: RateVaultOcipFace | "both";
   version: RateVaultPackageVersion | null;
   sheets: RateVaultPreviewSheet[];
@@ -567,6 +587,7 @@ export type RateVaultBuyoffStatus = (typeof RATE_VAULT_BUYOFF_STATUSES)[number];
 export type RateVaultBuyoffDecision = {
   id: string;
   siteId: RateVaultSiteId;
+  bookFace?: RateVaultBookFace;
   packageId: string;
   title: string;
   status: RateVaultBuyoffStatus;
@@ -597,6 +618,7 @@ export type RateVaultWorkshop = {
   library: RateVaultLibrary;
   review: RateVaultRecognitionReview | null;
   preview: RateVaultPreviewPackage | null;
+  bookPreviews?: Partial<Record<RateVaultBookFace, RateVaultPreviewPackage | null>>;
   buyoffs: RateVaultBuyoffDecision[];
   cbaPla: RateVaultCbaPlaVault;
   stateLaw: RateVaultStateLawVault;

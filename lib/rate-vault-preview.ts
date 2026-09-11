@@ -18,6 +18,8 @@ import {
 import { woodRiverB1CraftSheets } from "./rate-vault-wood-river-b1.ts";
 import {
   isRateVaultSiteId,
+  packageBookFace,
+  type RateVaultBookFace,
   type RateVaultBurdenFamily,
   type RateVaultBurdenLine,
   type RateVaultBurdenUnit,
@@ -43,6 +45,14 @@ export const WOOD_RIVER_B1_PREVIEW_FIXTURE_PATH = "lib/rate-vault/wood-river-b1-
 export const WOOD_RIVER_B1_EXHIBIT_DRIVE_ID = "1HN5FclxjQNw0iHm_hizHbcWM9GZV_Zeu";
 
 export const WOOD_RIVER_B1_EXHIBIT_TITLE = "Wood River Exhibit B-1 RRFF Labor Burden Buildup";
+
+/** Wood River T&M / Union_TM Labor Burden Buildup — catalog by Drive id only. Never commit the xlsx. Separate book from RRFF. */
+export const WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID = "1fFrxkY68TaCJXQa3OYVRZJ5oStJg9kMg";
+
+export const WOOD_RIVER_TM_B1_EXHIBIT_TITLE = "Wood River Exhibit B-1 Union_TM Labor Burden Buildup";
+
+export const WOOD_RIVER_TM_B1_EMPTY_NOTE =
+  "T&M Exhibit B-1 is cataloged as its own Wood River labor-burden book (Drive id 1fFrxkY68TaCJXQa3OYVRZJ5oStJg9kMg, titles like Union_TM Labor Burden Buildup). Official hall numbers stay on Drive — this vault does not invent T&M wages, fringes, or an Illinois composite %. Switch back to RRFF for the filled package. OCIP still filters seats inside this book once rates land. Does not write live Rate Tables.";
 
 export const RATE_VAULT_PREVIEW_COLUMNS: Array<{ header: string; role: RateVaultColumnRole }> = [
   { header: "Craft", role: "craft" },
@@ -108,6 +118,7 @@ export function rowMatchesOcipFace(row: Pick<RateVaultPreviewRow, "ocip">, face:
 export function filterPreviewByFace(preview: RateVaultPreviewPackage, face: RateVaultOcipFace): RateVaultPreviewPackage {
   return {
     ...cloneRateVaultPreview(preview),
+    bookFace: packageBookFace(preview),
     ocipFace: face,
     rows: preview.rows.filter((row) => rowMatchesOcipFace(row, face)),
   };
@@ -225,7 +236,8 @@ export function parseRateVaultPreviewPackage(raw: unknown): RateVaultPreviewPack
   if (!title) return { error: "Preview package needs a title." };
   if (!siteId) return { error: "Preview package needs a P66 site." };
   const rows = Array.isArray(row.rows) ? row.rows.map(parsePreviewRow).filter((item): item is RateVaultPreviewRow => Boolean(item)) : [];
-  if (!rows.length) return { error: "Preview package needs rate rows." };
+  const bookFace: RateVaultBookFace = row.bookFace === "tm" ? "tm" : "rrff";
+  if (!rows.length && bookFace !== "tm") return { error: "Preview package needs rate rows." };
   const parsedSheets = Array.isArray(row.craftSheets)
     ? row.craftSheets.map(parseCraftSheet).filter((item): item is RateVaultCraftSheet => Boolean(item))
     : [];
@@ -251,6 +263,7 @@ export function parseRateVaultPreviewPackage(raw: unknown): RateVaultPreviewPack
     note: text(row.note),
     writesRateBook: false,
     fixture: row.fixture === true,
+    bookFace,
     ocipFace: row.ocipFace === "ocip" || row.ocipFace === "non-ocip" || row.ocipFace === "both" ? row.ocipFace : "both",
     version: parseVersion(row.version),
     sheets,
@@ -291,8 +304,15 @@ export function mergePreviewFace(
   incoming: RateVaultPreviewPackage,
   face: RateVaultOcipFace | "both",
 ): RateVaultPreviewPackage {
+  if (stored && packageBookFace(stored) !== packageBookFace(incoming)) {
+    return { ...cloneRateVaultPreview(incoming), bookFace: packageBookFace(incoming) };
+  }
   if (!stored || face === "both") {
-    return { ...cloneRateVaultPreview(incoming), ocipFace: incoming.ocipFace === "both" || face === "both" ? "both" : face };
+    return {
+      ...cloneRateVaultPreview(incoming),
+      bookFace: packageBookFace(incoming),
+      ocipFace: incoming.ocipFace === "both" || face === "both" ? "both" : face,
+    };
   }
   const kept = stored.rows.filter((row) => !rowMatchesOcipFace(row, face));
   const nextRows = [...kept, ...incoming.rows.filter((row) => rowMatchesOcipFace(row, face))];
@@ -310,6 +330,7 @@ export function mergePreviewFace(
     ...cloneRateVaultPreview(incoming),
     id: stored.id,
     siteId: stored.siteId,
+    bookFace: packageBookFace(stored),
     ocipFace: kept.length && incoming.rows.some((row) => rowMatchesOcipFace(row, face)) ? "both" : face,
     rows: ripplePreviewRowsFromB1Sheets(nextRows, burden, fringes, craftSheets),
     burden,
@@ -320,10 +341,16 @@ export function mergePreviewFace(
 
 export function previewHasLaneBlend(stored: RateVaultPreviewPackage | null, incoming: RateVaultPreviewPackage) {
   if (!stored) return false;
+  if (packageBookFace(stored) !== packageBookFace(incoming)) return false;
   return incoming.rows.some((row) => {
     const prior = stored.rows.find((item) => item.id === row.id);
     return Boolean(prior && prior.lane !== row.lane);
   });
+}
+
+export function previewHasBookBlend(stored: RateVaultPreviewPackage | null, incoming: RateVaultPreviewPackage) {
+  if (!stored) return false;
+  return packageBookFace(stored) !== packageBookFace(incoming);
 }
 
 export function rateVaultCompCheck(preview: RateVaultPreviewPackage) {
@@ -346,6 +373,7 @@ export function loadWoodRiverB1PreviewFixture(): RateVaultPreviewPackage {
   const craftSheets = parsed.craftSheets.length ? parsed.craftSheets : woodRiverB1CraftSheets();
   cachedWoodRiver = {
     ...parsed,
+    bookFace: "rrff",
     craftSheets,
     rows: applyB1ToPreviewRows(parsed.rows, craftSheets),
     burden: parsed.burden.length ? parsed.burden : flattenB1Burden(craftSheets),
@@ -354,40 +382,112 @@ export function loadWoodRiverB1PreviewFixture(): RateVaultPreviewPackage {
   return loadWoodRiverB1PreviewFixture();
 }
 
-export function isWoodRiverB1Source(input: {
+let cachedWoodRiverTm: RateVaultPreviewPackage | null = null;
+
+export function loadWoodRiverTmB1PreviewFixture(): RateVaultPreviewPackage {
+  if (cachedWoodRiverTm) return cloneRateVaultPreview(cachedWoodRiverTm);
+  cachedWoodRiverTm = {
+    id: "wood-river-tm-b1-preview",
+    title: WOOD_RIVER_TM_B1_EXHIBIT_TITLE,
+    siteId: "wood-river",
+    sourceId: WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID,
+    sourceTitle: WOOD_RIVER_TM_B1_EXHIBIT_TITLE,
+    effective: null,
+    revision: null,
+    extractedFrom: "demo-seed",
+    note: WOOD_RIVER_TM_B1_EMPTY_NOTE,
+    writesRateBook: false,
+    fixture: true,
+    bookFace: "tm",
+    ocipFace: "both",
+    version: null,
+    sheets: [
+      { name: "Rate Summary", kind: "rate-summary" },
+      { name: "Burden Summary", kind: "burden-summary" },
+      { name: "Fringes", kind: "fringes" },
+    ],
+    craftSheets: [],
+    burden: [],
+    fringes: [],
+    rows: [],
+  };
+  return loadWoodRiverTmB1PreviewFixture();
+}
+
+type WoodRiverSourceHint = {
   id?: string | null;
   driveId?: string | null;
   title?: string | null;
   fileName?: string | null;
+  note?: string | null;
   kind?: RateVaultSourceKind | "unknown" | null;
   siteId?: string | null;
-} | null | undefined) {
+  bookFace?: RateVaultBookFace | null;
+};
+
+function sourceHay(input: WoodRiverSourceHint) {
+  return [input.title, input.fileName].filter(Boolean).join(" ");
+}
+
+export function isWoodRiverTmB1Source(input: WoodRiverSourceHint | null | undefined) {
   if (!input) return false;
+  if (input.bookFace === "tm") return true;
+  const id = [input.id, input.driveId].filter(Boolean).join(" ");
+  if (id.includes(WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID)) return true;
+  if (id.includes(WOOD_RIVER_B1_EXHIBIT_DRIVE_ID)) return false;
+  const hay = sourceHay(input);
+  if (/\brrff\b/i.test(hay)) return false;
+  if (/\bunion[_\s-]*tm\b/i.test(hay)) return true;
+  if (/\btm\b[\s_-]*labor[\s_-]*burden|labor[\s_-]*burden[\s_-]*\btm\b/i.test(hay) && /wood\s*river|exhibit\s*b/i.test(hay)) {
+    return true;
+  }
+  return false;
+}
+
+export function isWoodRiverRrffB1Source(input: WoodRiverSourceHint | null | undefined) {
+  if (!input) return false;
+  if (input.bookFace === "tm" || isWoodRiverTmB1Source(input)) return false;
   const id = [input.id, input.driveId].filter(Boolean).join(" ");
   if (id.includes(WOOD_RIVER_B1_EXHIBIT_DRIVE_ID)) return true;
-  const hay = [input.title, input.fileName].filter(Boolean).join(" ");
+  const hay = sourceHay(input);
+  if (/\brrff\b/i.test(hay) && /wood\s*river|exhibit\s*b/i.test(hay)) return true;
+  return false;
+}
+
+export function inferRateVaultBookFace(input: WoodRiverSourceHint | null | undefined): RateVaultBookFace {
+  if (input?.bookFace === "rrff" || input?.bookFace === "tm") return input.bookFace;
+  return isWoodRiverTmB1Source(input) ? "tm" : "rrff";
+}
+
+export function isWoodRiverB1Source(input: WoodRiverSourceHint | null | undefined) {
+  if (!input) return false;
+  if (isWoodRiverTmB1Source(input) || isWoodRiverRrffB1Source(input)) return true;
+  const id = [input.id, input.driveId].filter(Boolean).join(" ");
+  if (id.includes(WOOD_RIVER_B1_EXHIBIT_DRIVE_ID) || id.includes(WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID)) return true;
+  const hay = sourceHay(input);
   if (/wood\s*river/i.test(hay) && /exhibit\s*b[\s-]*1/i.test(hay)) return true;
   return input.kind === "b1-exhibit" && input.siteId === "wood-river";
 }
 
 export function resolveRateVaultPreview(input: {
   siteId?: string | null;
+  bookFace?: RateVaultBookFace | null;
   source?: Pick<RateVaultSourceEntry, "id" | "driveId" | "title" | "kind" | "siteId"> | null;
   review?: Pick<RateVaultRecognitionReview, "sourceId" | "fileName" | "guessedKind" | "guessedSiteId"> | null;
 } = {}): RateVaultPreviewPackage | null {
   const siteId = input.siteId ?? input.source?.siteId ?? input.review?.guessedSiteId ?? "wood-river";
+  const reviewHint = {
+    id: input.review?.sourceId,
+    title: input.review?.fileName,
+    fileName: input.review?.fileName,
+    kind: input.review?.guessedKind,
+    siteId: input.review?.guessedSiteId,
+  };
   const woodRiver =
-    isWoodRiverB1Source(input.source) ||
-    isWoodRiverB1Source({
-      id: input.review?.sourceId,
-      title: input.review?.fileName,
-      fileName: input.review?.fileName,
-      kind: input.review?.guessedKind,
-      siteId: input.review?.guessedSiteId,
-    }) ||
-    siteId === "wood-river";
-  if (woodRiver && (siteId === "wood-river" || !siteId)) return loadWoodRiverB1PreviewFixture();
-  return null;
+    isWoodRiverB1Source(input.source) || isWoodRiverB1Source(reviewHint) || siteId === "wood-river";
+  if (!(woodRiver && (siteId === "wood-river" || !siteId))) return null;
+  const book = input.bookFace ?? inferRateVaultBookFace(input.source || reviewHint);
+  return book === "tm" ? loadWoodRiverTmB1PreviewFixture() : loadWoodRiverB1PreviewFixture();
 }
 
 export function previewSheetsFromPackage(preview: RateVaultPreviewPackage | null): RateVaultSheetSniff[] {
@@ -447,13 +547,19 @@ export function enrichReviewWithPreview(
       ? review.snippets
       : [preview.title, preview.note, ...preview.rows.slice(0, 3).map((row) => `${row.position} · ${formatRateVaultMoney(row.billRate)}`)].filter(Boolean),
     extractNote: review.extractNote.includes("no binary")
-      ? "Linked Drive id — visual package loaded from the Wood River B-1 preview fixture. Confirm before mapping. Layouts are not universal."
+      ? preview.bookFace === "tm"
+        ? "Linked Drive id — T&M book face loaded. Hall rates are not in this vault yet. Confirm before mapping. Layouts are not universal."
+        : "Linked Drive id — visual package loaded from the Wood River B-1 preview fixture. Confirm before mapping. Layouts are not universal."
       : review.extractNote,
   };
 }
 
-export function defaultRateVaultPreview(siteId: RateVaultSiteId | "" | null = "wood-river") {
-  return siteId === "wood-river" || !siteId ? loadWoodRiverB1PreviewFixture() : null;
+export function defaultRateVaultPreview(
+  siteId: RateVaultSiteId | "" | null = "wood-river",
+  bookFace: RateVaultBookFace = "rrff",
+) {
+  if (siteId && siteId !== "wood-river") return null;
+  return bookFace === "tm" ? loadWoodRiverTmB1PreviewFixture() : loadWoodRiverB1PreviewFixture();
 }
 
 export function previewRowGroups(rows: readonly RateVaultPreviewRow[]) {
@@ -474,6 +580,7 @@ export function cloneRateVaultPreview(preview: RateVaultPreviewPackage): RateVau
   return {
     ...preview,
     writesRateBook: false,
+    bookFace: packageBookFace(preview),
     ocipFace: preview.ocipFace || "both",
     version: preview.version ? { ...preview.version } : null,
     sheets: preview.sheets.map((sheet) => ({ ...sheet })),

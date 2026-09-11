@@ -15,8 +15,11 @@ import {
   RATE_VAULT_BUYOFF_STATUSES,
   buyoffStatusForAction,
   isRateVaultBuyoffAction,
+  isRateVaultBookFace,
   isRateVaultSiteId,
   isRateVaultSourceKind,
+  packageBookFace,
+  type RateVaultBookFace,
   type RateVaultBuyoffAction,
   type RateVaultBuyoffDecision,
   type RateVaultConfirmedReview,
@@ -25,10 +28,27 @@ import {
   type RateVaultSourceEntry,
   type RateVaultSourceOverride,
 } from "./rate-vault.ts";
-import { cloneRateVaultPreview, loadWoodRiverB1PreviewFixture, parseRateVaultPreviewPackage, stampRateVaultVersion } from "./rate-vault-preview.ts";
+import {
+  cloneRateVaultPreview,
+  defaultRateVaultPreview,
+  parseRateVaultPreviewPackage,
+  stampRateVaultVersion,
+} from "./rate-vault-preview.ts";
 
-type PackageStamp = RateVaultPackageVersion & { siteId: string };
-type LastGoodRow = { siteId: string; preview: RateVaultPreviewPackage };
+type PackageStamp = RateVaultPackageVersion & { siteId: string; bookFace?: RateVaultBookFace };
+type LastGoodRow = { siteId: string; bookFace?: RateVaultBookFace; preview: RateVaultPreviewPackage };
+
+function stampBookFace(siteId: string, bookFace?: RateVaultBookFace | null): RateVaultBookFace {
+  return bookFace === "tm" ? "tm" : "rrff";
+}
+
+function samePackageSlot(
+  left: { siteId: string; bookFace?: RateVaultBookFace | null },
+  siteId: string,
+  bookFace: RateVaultBookFace,
+) {
+  return left.siteId === siteId && stampBookFace(left.siteId, left.bookFace) === bookFace;
+}
 
 type StoreFile = {
   extras?: RateVaultSourceEntry[];
@@ -130,7 +150,11 @@ async function persist() {
       reviews: cloneReviews(reviews),
       overrides: overrides.map((row) => ({ ...row })),
       packages: packages.map(sanitizePackage),
-      lastGood: lastGood.map((row) => ({ siteId: row.siteId, preview: sanitizePackage(row.preview) })),
+      lastGood: lastGood.map((row) => ({
+        siteId: row.siteId,
+        bookFace: stampBookFace(row.siteId, row.bookFace ?? packageBookFace(row.preview)),
+        preview: sanitizePackage(row.preview),
+      })),
       versions: versions.map((row) => ({ ...row })),
       buyoffs: buyoffs.map(sanitizeBuyoff),
     },
@@ -307,9 +331,12 @@ export async function listRateVaultPackages() {
   return packages.map(cloneRateVaultPreview);
 }
 
-export async function getRateVaultPackage(siteId: string | null | undefined) {
+export async function getRateVaultPackage(
+  siteId: string | null | undefined,
+  bookFace: RateVaultBookFace = "rrff",
+) {
   await hydrateRateVaultStore();
-  const match = packages.find((row) => row.siteId === siteId);
+  const match = packages.find((row) => samePackageSlot(row, siteId || "", bookFace));
   return match ? cloneRateVaultPreview(match) : null;
 }
 
@@ -322,7 +349,11 @@ function parseLastGood(raw: unknown): LastGoodRow[] {
     if (!isRateVaultSiteId(item.siteId) || !item.preview) continue;
     const preview = parseRateVaultPreviewPackage(item.preview);
     if ("error" in preview) continue;
-    out.push({ siteId: item.siteId, preview: sanitizePackage(preview) });
+    out.push({
+      siteId: item.siteId,
+      bookFace: stampBookFace(item.siteId, item.bookFace ?? packageBookFace(preview)),
+      preview: sanitizePackage(preview),
+    });
   }
   return out;
 }
@@ -333,7 +364,15 @@ function parseVersions(raw: unknown): PackageStamp[] {
     if (!row || typeof row !== "object") return [];
     const item = row as PackageStamp;
     if (!isRateVaultSiteId(item.siteId) || typeof item.id !== "string" || typeof item.at !== "string") return [];
-    return [{ siteId: item.siteId, id: item.id, at: item.at, note: typeof item.note === "string" ? item.note : "Imported B-1 Excel" }];
+    return [
+      {
+        siteId: item.siteId,
+        bookFace: isRateVaultBookFace(item.bookFace) ? item.bookFace : stampBookFace(item.siteId, undefined),
+        id: item.id,
+        at: item.at,
+        note: typeof item.note === "string" ? item.note : "Imported B-1 Excel",
+      },
+    ];
   });
 }
 
@@ -345,12 +384,14 @@ export async function upsertRateVaultPackage(raw: RateVaultPreviewPackage, note 
     extractedFrom: raw.extractedFrom,
   });
   if ("error" in parsed) return { ok: false as const, status: 400, error: parsed.error };
+  const book = packageBookFace(parsed);
   const previous =
-    packages.find((row) => row.siteId === parsed.siteId) ??
-    (parsed.siteId === "wood-river" ? loadWoodRiverB1PreviewFixture() : null);
+    packages.find((row) => samePackageSlot(row, parsed.siteId, book)) ??
+    defaultRateVaultPreview(parsed.siteId, book);
   const stamped = stampRateVaultVersion(
     {
       ...parsed,
+      bookFace: book,
       fixture: raw.fixture === true,
       extractedFrom: raw.extractedFrom || parsed.extractedFrom,
       writesRateBook: false,
@@ -359,37 +400,43 @@ export async function upsertRateVaultPackage(raw: RateVaultPreviewPackage, note 
   );
   const preview = sanitizePackage(stamped);
   if (previous) {
-    lastGood = [...lastGood.filter((row) => row.siteId !== preview.siteId), { siteId: preview.siteId, preview: cloneRateVaultPreview(previous) }];
+    lastGood = [
+      ...lastGood.filter((row) => !samePackageSlot(row, preview.siteId, book)),
+      { siteId: preview.siteId, bookFace: book, preview: cloneRateVaultPreview(previous) },
+    ];
     versions = [
-      { siteId: preview.siteId, ...(preview.version || { id: `v-${Date.now()}`, at: new Date().toISOString(), note }) },
-      ...versions.filter((row) => row.siteId === preview.siteId).slice(0, 7),
-      ...versions.filter((row) => row.siteId !== preview.siteId),
+      { siteId: preview.siteId, bookFace: book, ...(preview.version || { id: `v-${Date.now()}`, at: new Date().toISOString(), note }) },
+      ...versions.filter((row) => samePackageSlot(row, preview.siteId, book)).slice(0, 7),
+      ...versions.filter((row) => !samePackageSlot(row, preview.siteId, book)),
     ];
   }
-  packages = [...packages.filter((row) => row.siteId !== preview.siteId), preview];
+  packages = [...packages.filter((row) => !samePackageSlot(row, preview.siteId, book)), preview];
   await persist();
   return { ok: true as const, preview: cloneRateVaultPreview(preview) };
 }
 
-export async function listRateVaultVersions(siteId: string) {
+export async function listRateVaultVersions(siteId: string, bookFace: RateVaultBookFace = "rrff") {
   await hydrateRateVaultStore();
-  return versions.filter((row) => row.siteId === siteId).map((row) => ({ ...row }));
+  return versions.filter((row) => samePackageSlot(row, siteId, bookFace)).map((row) => ({ ...row }));
 }
 
-export async function restoreRateVaultLastGood(siteId: string) {
+export async function restoreRateVaultLastGood(siteId: string, bookFace: RateVaultBookFace = "rrff") {
   await hydrateRateVaultStore();
-  const saved = lastGood.find((row) => row.siteId === siteId);
+  const saved = lastGood.find((row) => samePackageSlot(row, siteId, bookFace));
   if (!saved) return { ok: false as const, status: 404, error: "No last-good package to restore." };
-  const current = packages.find((row) => row.siteId === siteId) ?? null;
+  const current = packages.find((row) => samePackageSlot(row, siteId, bookFace)) ?? null;
   if (current) {
-    lastGood = [...lastGood.filter((row) => row.siteId !== siteId), { siteId, preview: cloneRateVaultPreview(current) }];
+    lastGood = [
+      ...lastGood.filter((row) => !samePackageSlot(row, siteId, bookFace)),
+      { siteId, bookFace, preview: cloneRateVaultPreview(current) },
+    ];
   }
-  const preview = stampRateVaultVersion(saved.preview, "Restored last-good package");
-  packages = [...packages.filter((row) => row.siteId !== siteId), sanitizePackage(preview)];
+  const preview = stampRateVaultVersion({ ...saved.preview, bookFace }, "Restored last-good package");
+  packages = [...packages.filter((row) => !samePackageSlot(row, siteId, bookFace)), sanitizePackage(preview)];
   versions = [
-    { siteId, ...(preview.version || { id: `v-restore`, at: new Date().toISOString(), note: "Restored last-good package" }) },
-    ...versions.filter((row) => row.siteId === siteId).slice(0, 7),
-    ...versions.filter((row) => row.siteId !== siteId),
+    { siteId, bookFace, ...(preview.version || { id: `v-restore`, at: new Date().toISOString(), note: "Restored last-good package" }) },
+    ...versions.filter((row) => samePackageSlot(row, siteId, bookFace)).slice(0, 7),
+    ...versions.filter((row) => !samePackageSlot(row, siteId, bookFace)),
   ];
   await persist();
   return { ok: true as const, preview: cloneRateVaultPreview(preview) };
@@ -399,6 +446,7 @@ function sanitizeBuyoff(row: RateVaultBuyoffDecision): RateVaultBuyoffDecision {
   return {
     id: row.id,
     siteId: row.siteId,
+    bookFace: stampBookFace(row.siteId, row.bookFace),
     packageId: row.packageId,
     title: row.title,
     status: row.status,
@@ -425,6 +473,7 @@ function parseBuyoffs(raw: unknown): RateVaultBuyoffDecision[] {
       sanitizeBuyoff({
         id: item.id,
         siteId: item.siteId,
+        bookFace: stampBookFace(item.siteId, item.bookFace),
         packageId: typeof item.packageId === "string" ? item.packageId : item.id,
         title: typeof item.title === "string" ? item.title : "Rate package",
         status,
@@ -446,9 +495,11 @@ export async function listRateVaultBuyoffs() {
 
 export async function queueRateVaultBuyoff(preview: RateVaultPreviewPackage, note = "Imported B-1 Excel") {
   await hydrateRateVaultStore();
+  const book = packageBookFace(preview);
   const row: RateVaultBuyoffDecision = {
-    id: `buyoff-${preview.siteId}-${Date.now()}`,
+    id: `buyoff-${preview.siteId}-${book}-${Date.now()}`,
     siteId: preview.siteId,
+    bookFace: book,
     packageId: preview.id,
     title: preview.title,
     status: "pending",
@@ -458,7 +509,12 @@ export async function queueRateVaultBuyoff(preview: RateVaultPreviewPackage, not
     decidedBy: null,
     writesRateBook: false,
   };
-  buyoffs = [row, ...buyoffs.filter((item) => item.siteId !== preview.siteId || item.status !== "pending")].slice(0, 40);
+  buyoffs = [
+    row,
+    ...buyoffs.filter(
+      (item) => item.siteId !== preview.siteId || stampBookFace(item.siteId, item.bookFace) !== book || item.status !== "pending",
+    ),
+  ].slice(0, 40);
   await persist();
   return sanitizeBuyoff(row);
 }

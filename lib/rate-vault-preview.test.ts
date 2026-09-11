@@ -37,6 +37,7 @@ describe("Rate Vault Wood River B-1 preview", () => {
     assert.equal(fixture.sourceId, WOOD_RIVER_B1_EXHIBIT_DRIVE_ID);
     assert.equal(fixture.writesRateBook, false);
     assert.equal(fixture.fixture, true);
+    assert.equal(fixture.bookFace, "rrff");
     assert.equal(fixture.id, parsed.id);
     assert.ok(fixture.rows.length >= 8);
     assert.ok(fixture.craftSheets.length >= 4);

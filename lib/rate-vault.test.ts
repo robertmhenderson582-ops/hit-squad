@@ -280,6 +280,9 @@ describe("Rate Vault scaffold", () => {
     assert.match(desk, /export-b1/);
     assert.match(desk, /restore-b1/);
     assert.match(desk, /Confirm OCIP mix/);
+    assert.match(desk, /Confirm book mix/);
+    assert.match(desk, /RateVaultBookPicker/);
+    assert.match(desk, /load-preview/);
     assert.match(desk, /decide-buyoff/);
     assert.match(desk, /Rate package buyoff/);
     assert.match(desk, /Request changes/);
@@ -291,7 +294,12 @@ describe("Rate Vault scaffold", () => {
     assert.doesNotMatch(desk, /rate-vault-xlsx/);
     assert.match(preview, /wood-river-b1-preview-fixture\.json/);
     assert.match(preview, /1HN5FclxjQNw0iHm_hizHbcWM9GZV_Zeu/);
+    assert.match(preview, /1fFrxkY68TaCJXQa3OYVRZJ5oStJg9kMg/);
+    assert.match(preview, /bookFace/);
     assert.match(library, /Wood River Exhibit B-1 RRFF Labor Burden Buildup/);
+    assert.match(library, /Wood River Exhibit B-1 Union_TM Labor Burden Buildup/);
+    assert.match(previewUi, /Labor-burden book/);
+    assert.match(previewUi, /T&M labor-burden book/);
     assert.match(previewUi, /Fringes Subtotal/);
     assert.match(previewUi, /Pay Tax FICA-MC/);
     assert.doesNotMatch(previewUi, /SUTA — Illinois|Composite 39/);
@@ -343,6 +351,10 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /last-good/);
     assert.match(docs, /Rate package buyoff/);
     assert.match(docs, /OCIP/);
+    assert.match(docs, /book switch/i);
+    assert.match(docs, /1fFrxkY68TaCJXQa3OYVRZJ5oStJg9kMg/);
+    assert.match(docs, /Confirm book mix/);
+    assert.match(docs, /Union_TM/);
     assert.doesNotMatch(library, /siteId:\s*"monroe"/);
     assert.doesNotMatch(library, /Monroe Energy/);
     assert.doesNotMatch(vaultModule, /id: "monroe"/);
@@ -361,6 +373,9 @@ describe("Rate Vault scaffold", () => {
     assert.match(api, /export-b1/);
     assert.match(api, /import-b1/);
     assert.match(api, /rateVaultImportMergeFace/);
+    assert.match(api, /book-mix/);
+    assert.match(api, /confirmBookMix/);
+    assert.match(api, /load-preview/);
     assert.match(preview, /rateVaultImportMergeFace/);
     assert.doesNotMatch(api, /fileFace \|\| viewFace \|\| "ocip"/);
     assert.match(api, /restore-b1/);

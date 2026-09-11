@@ -28,8 +28,10 @@ import {
   RATE_VAULT_STATE_LAW_SECTION,
   RATE_VAULT_STATE_LAW_SITES,
   isRateVaultB1ExcelName,
+  isRateVaultBookFace,
   isRateVaultSiteId,
   looksLikeForeignRateVaultSite,
+  packageBookFace,
   rateVaultSiteLabel,
   type RateVaultBurdenFamily,
   type RateVaultBurdenLine,
@@ -199,9 +201,10 @@ export function isRateVaultB1SpareId(id: string) {
   return SPARE_ID_RE.test(id);
 }
 
-export function rateVaultB1FileName(preview: Pick<RateVaultPreviewPackage, "siteId" | "title">) {
+export function rateVaultB1FileName(preview: Pick<RateVaultPreviewPackage, "siteId" | "title" | "bookFace">) {
   const site = rateVaultSiteLabel(preview.siteId).replace(/\s+/g, "-") || "P66";
-  return `${site}-B1-Rate-Vault.xlsx`;
+  const book = packageBookFace(preview) === "tm" ? "-TM" : "";
+  return `${site}-B1${book}-Rate-Vault.xlsx`;
 }
 
 export { isRateVaultB1ExcelName };
@@ -230,6 +233,11 @@ function parseOcipFace(raw?: string): RateVaultOcipFace | "both" {
   const value = (raw || "").trim().toLowerCase();
   if (value === "ocip" || value === "non-ocip" || value === "both") return value;
   return "both";
+}
+
+function parseBookFace(raw?: string) {
+  const value = (raw || "").trim().toLowerCase();
+  return isRateVaultBookFace(value) ? value : "rrff";
 }
 
 function packageMap(sheet: ExcelJS.Worksheet) {
@@ -325,6 +333,7 @@ export async function rateVaultPreviewToXlsx(
     ["sourceTitle", exported.sourceTitle],
     ["note", exported.note],
     ["ocipFace", face || exported.ocipFace || "both"],
+    ["bookFace", packageBookFace(exported)],
     ["requiredSheets", RATE_VAULT_B1_REQUIRED_SHEETS.join("|")],
   ];
   meta.forEach(([key, value], index) => {
@@ -739,7 +748,10 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
     if (burdenAmt.ripple) burdenRippleIds.add(id);
   }
   if (poison) return poison;
-  if (!rows.length) return fail("empty", "That workbook has no rate positions. The package was not applied.");
+  const bookFace = parseBookFace(meta.get("bookface"));
+  if (!rows.length && bookFace !== "tm") {
+    return fail("empty", "That workbook has no rate positions. The package was not applied.");
+  }
 
   const title = meta.get("title") || `${rateVaultSiteLabel(siteId)} B-1`;
   const parsed = parseRateVaultPreviewPackage({
@@ -755,6 +767,7 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
       "Imported from a Rate Vault B-1 Excel export. This book is the vault package — not a parallel copy. Live Rate Tables stay off.",
     writesRateBook: false,
     fixture: false,
+    bookFace,
     ocipFace: parseOcipFace(meta.get("ocipface")),
     sheets: [
       { name: RATE_VAULT_B1_RATE_SHEET, kind: "rate-summary" },

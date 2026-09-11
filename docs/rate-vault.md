@@ -16,7 +16,7 @@ Owner-eyes-only B-1 / rate builder workshop inside Hit Squad. Default grant is t
 
 First-class workshop modules (`RATE_VAULT_SECTIONS` ids): `library`, `halls`, `contractor`, `cba-pla`, `state-law`, `p66`, `publish`.
 
-The B-1 Builder face is a guided path (`RATE_VAULT_BUILDER_STEPS`): **Sources → Recognize → Map crafts → Burden / build → Publish preview**. Burden / Publish show a **visual rate package** (positions × wage / fringe / burden / bill) friendlier than a raw Exhibit B-1. Sites v1: Wood River is the full demo path (opening Rate Vault auto-loads the RRFF craft-sheet fixture — Pay Tax / Ins / Misc / O/H / Profit plus hall Fringes Subtotal). Bayway / Rodeo / Ferndale / Billings use the same shell and stay empty until their B-1 is linked. Merit and union lanes stay visible and mapped separately — never blended. OCIP and non-OCIP faces are selectable. Publish stays a stub and does not write live estimate Rate Tables. A thin **Rate package buyoff** hinge (Approve / Reject / Request changes) stamps a decision only — approve does not write Rate Tables.
+The B-1 Builder face is a guided path (`RATE_VAULT_BUILDER_STEPS`): **Sources → Recognize → Map crafts → Burden / build → Publish preview**. Burden / Publish show a **visual rate package** (positions × wage / fringe / burden / bill) friendlier than a raw Exhibit B-1. Sites v1: Wood River is the full demo path (opening Rate Vault auto-loads the RRFF craft-sheet fixture — Pay Tax / Ins / Misc / O/H / Profit plus hall Fringes Subtotal). A book switch on Burden / Publish picks **RRFF** or **T&M** — two different P66 Exhibit B-1 labor-burden workbooks, not an OCIP filter. Default remains RRFF. Switching books loads that book’s package; rows never blend. OCIP / non-OCIP still filters seats **inside** the selected book. Bayway / Rodeo / Ferndale / Billings use the same shell and stay empty until their B-1 is linked. Merit and union lanes stay visible and mapped separately — never blended. Publish stays a stub and does not write live estimate Rate Tables. A thin **Rate package buyoff** hinge (Approve / Reject / Request changes) stamps a decision only — approve does not write Rate Tables. Bill OT/DT formula work stays parked.
 
 `cba-pla` is its own pane — **CBA / PLA** (CBA & PLA vault). It is not nested under P66 / site rules. For sites without a dedicated P66 rate book (Wood River, Bayway), hall CBA/PLA rules drive OT, fringes, eligibility, and clock, and must feed the published rate package.
 
@@ -32,13 +32,20 @@ Seeded kinds: `cba`, `pla`, `gppma`, `local-craft-sheet`, `b1-exhibit`, `rate-bu
 
 Sites indexed: Wood River, Bayway, Rodeo, Ferndale, Billings, and East Coast COMP. Prefer the latest book per site. Older B-1 faces stay in the catalog as archived / not primary. Ambiguous folder refs and clearly non-P66 books (Monroe PLA / Local 420 / Exhibit C Monroe, Yates) stay out of the default seed rather than appearing as a foreign site.
 
-Wood River now has a primary `b1-exhibit` — **Wood River Exhibit B-1 RRFF Labor Burden Buildup** (`1HN5FclxjQNw0iHm_hizHbcWM9GZV_Zeu`). Catalog by Drive id only. Never commit the ~24 MB `.xlsx`. This is the RRFF labor-burden book, not the TM labor-burden face.
+Wood River has two primary `b1-exhibit` labor-burden books. They are separate workbooks — never silently mix RRFF wages/burden with T&M.
+
+| Book | UI label | Drive id | Title |
+| --- | --- | --- | --- |
+| `rrff` (default) | **RRFF** | `1HN5FclxjQNw0iHm_hizHbcWM9GZV_Zeu` | Wood River Exhibit B-1 RRFF Labor Burden Buildup |
+| `tm` | **T&M** | `1fFrxkY68TaCJXQa3OYVRZJ5oStJg9kMg` | Wood River Exhibit B-1 Union_TM Labor Burden Buildup |
+
+Catalog by Drive id only. Never commit the official ~24–25 MB `.xlsx` / `.xlsm`. RRFF is the filled craft-sheet fixture. T&M is cataloged and switchable; hall numbers are **not** invented in this vault (empty / not-linked state until the official Union_TM book is ingested). OCIP still filters seats inside whichever book is selected.
 
 ## Visual B-1 preview
 
 Selecting the Wood River B-1 library card (or opening Burden / Publish) loads a filled package from the checked-in JSON fixture `lib/rate-vault/wood-river-b1-preview-fixture.json`. That file is metadata and rate rows only — no workbook bytes. Burden / build is driven by ingested B-1 craft-sheet columns: **Pay Tax FICA-MC / FUI / SUI**, **Ins W/C / Emp Liab / Gen Liab / Umbrella**, **Misc Small / Cons / PPE**, **O/H**, **Profit**, and **Fringes Subtotal** as $/hr hall by hall. Dollars imply % of taxable base wage. The official Burden Summary pivot can be an empty shell — do not trust it over craft-sheet columns. This is not a placeholder Illinois composite (no invented WC 14.20 / tools 1.85 / bundled overhead-and-fee).
 
-Site pickers on Burden and Publish default to Wood River. Other P66 sites stay empty until their fixtures land. Recognize → map → burden stays wired: a linked Drive title still produces a review card, and the Wood River path injects fixture columns when no binary was dropped. Confirm never writes a live rate book. The Publish button remains `stubPublishRateVault()`.
+Site pickers on Burden and Publish default to Wood River. The **Book** picker (RRFF / T&M) sits next to site and OCIP on those panes. Other P66 sites stay empty until their fixtures land. Recognize → map → burden stays wired: a linked Drive title still produces a review card, and the Wood River RRFF path injects fixture columns when no binary was dropped. The T&M catalog card loads the T&M book face (empty until hall rates land). Confirm never writes a live rate book. The Publish button remains `stubPublishRateVault()`.
 
 ## B-1 Excel export / import (vault-internal)
 
@@ -55,7 +62,7 @@ The export is the **lean Rate Vault face** and the **formula check to the site**
 - **COMP Check** — key totals (positions, wage / fringe / burden / bill, Pay Tax stack %, fringe $) via formulas that pull Rate Summary / Burden Summary / Fringes. Not a raw dump of the giant COMP xlsm.
 - **CBA PLA** and **State law** — read-only rule summary tabs (Excel forbids `/` in the CBA sheet name). Editable rate cells stay on Rate Summary / Burden Summary only.
 
-Export tags the selected OCIP face (`ocip` / `non-ocip` / both). A both-faces book **replaces** the stored package on import — do not default that book onto an OCIP-only merge (that dropped craft / non-OCIP wage and fringe edits). An OCIP-only (or non-OCIP-only) export still merges just that face and ripples hall Fringes / Burden onto kept rows. Import refuses mixing an OCIP workbook into a non-OCIP picker (or the reverse) unless the owner clicks **Confirm OCIP mix**. Merit vs union lanes never blend on mapped rows.
+Export tags the selected **book** (`rrff` / `tm`) and OCIP face (`ocip` / `non-ocip` / both). Stored packages, last-good, and versions are keyed by site + book so an RRFF import cannot drop T&M (or the reverse). A both-faces OCIP book **replaces** the stored package **for that book only** — do not default that book onto an OCIP-only merge (that dropped craft / non-OCIP wage and fringe edits). An OCIP-only (or non-OCIP-only) export still merges just that face and ripples hall Fringes / Burden onto kept rows, still inside one book. Import refuses mixing an OCIP workbook into a non-OCIP picker (or the reverse) unless the owner clicks **Confirm OCIP mix**. Import refuses mixing an RRFF workbook into a T&M picker (or the reverse) unless the owner clicks **Confirm book mix**. Confirm applies the file to the current picker only — it does not blend RRFF rows into T&M. Merit vs union lanes never blend on mapped rows.
 
 Re-import writes the edited package into `rate-vault.json` (`packages[]` — metadata / rate rows only, never workbook bytes). Each successful import stamps a **version** (date + note) and keeps a **last-good** package so Restore last-good can roll back. GET / recognize / Burden / Publish prefer that stored package over the Wood River fixture so a library-card click does not wipe offline edits. Owner and James share one canonical Drive vault package — no device-kick.
 

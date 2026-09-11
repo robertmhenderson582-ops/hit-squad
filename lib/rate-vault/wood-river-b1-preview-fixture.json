@@ -7,9 +7,10 @@
   "effective": "2025-01-01",
   "revision": "RRFF 12.23.24",
   "extractedFrom": "wood-river-rrff-b1-craft-sheets",
-  "note": "Wood River RRFF Exhibit B-1 craft sheets — Pay Tax FICA-MC / FUI / SUI, Ins, Misc, O/H, Profit, and Fringes Subtotal as $/hr hall by hall. Burden Summary pivot in the official book is an empty shell; craft-sheet columns are the source. Not a placeholder Illinois composite. Not the TM labor-burden face. Does not write live Rate Tables.",
+  "note": "Wood River RRFF Exhibit B-1 craft sheets — Pay Tax FICA-MC / FUI / SUI, Ins, Misc, O/H, Profit, and Fringes Subtotal as $/hr hall by hall. Burden Summary pivot in the official book is an empty shell; craft-sheet columns are the source. Not a placeholder Illinois composite. Separate labor-burden book from T&M / Union_TM — never mix wages or burden. Does not write live Rate Tables.",
   "writesRateBook": false,
   "fixture": true,
+  "bookFace": "rrff",
   "ocipFace": "both",
   "sheets": [
     {

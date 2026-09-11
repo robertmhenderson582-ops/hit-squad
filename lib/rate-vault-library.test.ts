@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { WOOD_RIVER_B1_EXHIBIT_DRIVE_ID, WOOD_RIVER_B1_EXHIBIT_TITLE } from "./rate-vault-preview.ts";
+import {
+  WOOD_RIVER_B1_EXHIBIT_DRIVE_ID,
+  WOOD_RIVER_B1_EXHIBIT_TITLE,
+  WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID,
+  WOOD_RIVER_TM_B1_EXHIBIT_TITLE,
+} from "./rate-vault-preview.ts";
 import {
   buildRateVaultWorkshop,
   filterRateVaultLibrary,
@@ -15,6 +20,7 @@ import {
 
 const REQUIRED_IDS = [
   WOOD_RIVER_B1_EXHIBIT_DRIVE_ID,
+  WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID,
   "17YtnXtCcIXq68sROl3_VwkIo6PHYzTIR",
   "1bhDSXSP1huQEOifr6f9ZeRhNje9cXZ42",
   "1nUCFfLflJDT7N5NRY2h22vRzWYxMt_mX",
@@ -65,6 +71,13 @@ describe("Rate Vault source library", () => {
     assert.equal(woodRiverB1?.siteId, "wood-river");
     assert.equal(woodRiverB1?.primary, true);
     assert.equal(woodRiverB1?.title, WOOD_RIVER_B1_EXHIBIT_TITLE);
+    const woodRiverTm = seed.find((row) => row.driveId === WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID);
+    assert.equal(woodRiverTm?.kind, "b1-exhibit");
+    assert.equal(woodRiverTm?.siteId, "wood-river");
+    assert.equal(woodRiverTm?.primary, true);
+    assert.equal(woodRiverTm?.title, WOOD_RIVER_TM_B1_EXHIBIT_TITLE);
+    assert.match(woodRiverTm?.note || "", /separate book from RRFF/i);
+    assert.match(woodRiverB1?.note || "", /separate book from T&M/i);
     assert.equal(seed.some((row) => row.kind === "b1-exhibit" && row.siteId === "rodeo" && row.primary), true);
     const oldBayway = seed.find((row) => row.driveId === "15SH7BjS8yEQRO8u34uMaF6EHBXQcgovm");
     assert.equal(oldBayway?.archived, true);
