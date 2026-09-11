@@ -7,6 +7,7 @@ import {
   RATE_VAULT_B1_IMPORT_ERROR,
   RATE_VAULT_B1_KIND,
   RATE_VAULT_B1_MARKER,
+  RATE_VAULT_B1_META_SHEET,
   RATE_VAULT_B1_PACKAGE_SHEET,
   RATE_VAULT_B1_RATE_SHEET,
   RATE_VAULT_B1_REQUIRED_SHEETS,
@@ -17,6 +18,7 @@ import {
   RATE_VAULT_B1_RATE_HEADERS,
   isRateVaultBurdenRippleFormula,
   isRateVaultFringeRippleFormula,
+  findRateVaultB1MetaSheet,
   parseRateVaultB1Xlsx,
   rateVaultB1FileName,
   rateVaultPreviewToXlsx,
@@ -44,15 +46,20 @@ describe("Rate Vault B-1 Excel export / import", () => {
 
     const workbook = await loadWorkbook(exported.bytes);
     const names = workbook.worksheets.map((sheet) => sheet.name);
-    assert.ok(names.includes(RATE_VAULT_B1_PACKAGE_SHEET));
+    assert.equal(names[0], RATE_VAULT_B1_RATE_SHEET);
+    assert.equal(workbook.views[0]?.activeTab ?? 0, 0);
+    assert.ok(names.includes(RATE_VAULT_B1_META_SHEET));
     assert.ok(names.includes(RATE_VAULT_B1_RATE_SHEET));
     assert.ok(names.includes(RATE_VAULT_B1_BURDEN_SHEET));
     assert.ok(names.includes("COMP Check"));
     assert.ok(names.includes("Fringes"));
     assert.ok(names.includes("CBA PLA"));
     assert.ok(names.includes("State law"));
+    assert.equal(names.includes(RATE_VAULT_B1_PACKAGE_SHEET), false);
 
-    const pack = workbook.getWorksheet(RATE_VAULT_B1_PACKAGE_SHEET);
+    const pack = findRateVaultB1MetaSheet(workbook);
+    assert.equal(pack?.name, RATE_VAULT_B1_META_SHEET);
+    assert.equal(pack?.state, "hidden");
     assert.equal(pack?.getCell("A1").value, RATE_VAULT_B1_MARKER);
     assert.equal(pack?.getCell("B2").value, RATE_VAULT_B1_KIND);
     assert.equal(pack?.getCell("B3").value, "wood-river");
@@ -73,7 +80,11 @@ describe("Rate Vault B-1 Excel export / import", () => {
     const burdenFormula = rates.getCell("H2").formula || "";
     assert.equal(isRateVaultFringeRippleFormula(fringeFormula, 2), true);
     assert.equal(isRateVaultBurdenRippleFormula(burdenFormula, 2), true);
-    assert.deepEqual(names, [...RATE_VAULT_B1_REQUIRED_SHEETS]);
+    assert.deepEqual(
+      names.filter((name) => name !== RATE_VAULT_B1_META_SHEET),
+      [...RATE_VAULT_B1_REQUIRED_SHEETS],
+    );
+    assert.equal(names[names.length - 1], RATE_VAULT_B1_META_SHEET);
     assert.ok(exported.bytes.byteLength < RATE_VAULT_B1_EXPORT_MAX_BYTES);
     assert.match(String(pack?.getCell("A18").value || ""), /Lean Rate Vault B-1 face/);
     const journeymanRow = fixture.rows.findIndex((row) => row.position === "Boilermaker Journeyman") + 2;
@@ -315,7 +326,7 @@ describe("Rate Vault B-1 Excel export / import", () => {
     const fixture = loadWoodRiverB1PreviewFixture();
     const exported = await rateVaultPreviewToXlsx(fixture);
     const workbook = await loadWorkbook(exported.bytes);
-    const monroePack = workbook.getWorksheet(RATE_VAULT_B1_PACKAGE_SHEET);
+    const monroePack = workbook.getWorksheet(RATE_VAULT_B1_META_SHEET);
     assert.ok(monroePack);
     monroePack.getCell("B4").value = "Monroe Energy Trainer B-1";
     const buffer = await workbook.xlsx.writeBuffer();
@@ -333,7 +344,7 @@ describe("Rate Vault B-1 Excel export / import", () => {
     const fixture = loadWoodRiverB1PreviewFixture();
     const exported = await rateVaultPreviewToXlsx(fixture);
     const workbook = await loadWorkbook(exported.bytes);
-    const forged = workbook.getWorksheet(RATE_VAULT_B1_PACKAGE_SHEET);
+    const forged = workbook.getWorksheet(RATE_VAULT_B1_META_SHEET);
     assert.ok(forged);
     forged.getCell("B3").value = "beaumont";
     const buffer = await workbook.xlsx.writeBuffer();
@@ -479,7 +490,7 @@ describe("Rate Vault B-1 Excel export / import", () => {
     const fixture = loadWoodRiverB1PreviewFixture();
     const exported = await rateVaultPreviewToXlsx(fixture, { ocipFace: "ocip" });
     const workbook = await loadWorkbook(exported.bytes);
-    const pack = workbook.getWorksheet(RATE_VAULT_B1_PACKAGE_SHEET);
+    const pack = workbook.getWorksheet(RATE_VAULT_B1_META_SHEET);
     assert.equal(String(pack?.getCell("B14").value || ""), "ocip");
     const rates = workbook.getWorksheet(RATE_VAULT_B1_RATE_SHEET);
     assert.ok(rates);
@@ -567,5 +578,53 @@ describe("Rate Vault B-1 Excel export / import", () => {
     const exported = await rateVaultPreviewToXlsx(fixture);
     assert.ok(exported.bytes.byteLength < RATE_VAULT_B1_EXPORT_MAX_BYTES);
     assert.match(exported.fileName, /TM/);
+  });
+
+  it("opens Wood River T&M + OCIP on Rate Summary with hidden machine meta", async () => {
+    const fixture = loadWoodRiverTmB1PreviewFixture();
+    const exported = await rateVaultPreviewToXlsx(fixture, { ocipFace: "ocip" });
+    const workbook = await loadWorkbook(exported.bytes);
+    assert.equal(workbook.worksheets[0]?.name, RATE_VAULT_B1_RATE_SHEET);
+    assert.equal(workbook.worksheets[0]?.state, "visible");
+    assert.equal(workbook.views[0]?.activeTab ?? 0, 0);
+    assert.equal(workbook.worksheets[0]?.getCell("A1").value, "Position");
+    assert.equal(workbook.worksheets[0]?.getCell("A1").fill?.fgColor?.argb, "FF0F5F6D");
+    const last = workbook.worksheets[workbook.worksheets.length - 1];
+    assert.equal(last?.name, RATE_VAULT_B1_META_SHEET);
+    assert.equal(last?.state, "hidden");
+    assert.equal(last?.getCell("A2").value, "kind");
+    assert.equal(last?.getCell("B2").value, RATE_VAULT_B1_KIND);
+    assert.equal(String(last?.getCell("B14").value || ""), "ocip");
+    assert.equal(String(last?.getCell("B15").value || ""), "tm");
+    const imported = await parseRateVaultB1Xlsx({
+      fileName: exported.fileName,
+      bytes: exported.bytes,
+    });
+    assert.equal(imported.ok, true);
+    if (!imported.ok) return;
+    assert.equal(imported.preview.bookFace, "tm");
+    assert.equal(imported.preview.ocipFace, "ocip");
+    assert.ok(imported.preview.rows.length > 0);
+    assert.equal(imported.preview.rows.every((row) => row.ocip), true);
+  });
+
+  it("still imports machine metadata from a legacy B-1 Package first tab", async () => {
+    const fixture = loadWoodRiverB1PreviewFixture();
+    const exported = await rateVaultPreviewToXlsx(fixture);
+    const workbook = await loadWorkbook(exported.bytes);
+    const meta = workbook.getWorksheet(RATE_VAULT_B1_META_SHEET);
+    assert.ok(meta);
+    meta.name = RATE_VAULT_B1_PACKAGE_SHEET;
+    meta.state = "visible";
+    const buffer = await workbook.xlsx.writeBuffer();
+    const imported = await parseRateVaultB1Xlsx({
+      fileName: exported.fileName,
+      bytes: new Uint8Array(buffer),
+    });
+    assert.equal(imported.ok, true);
+    if (!imported.ok) return;
+    assert.equal(imported.preview.siteId, "wood-river");
+    assert.equal(imported.preview.bookFace, "rrff");
+    assert.ok(imported.preview.rows.length >= 8);
   });
 });

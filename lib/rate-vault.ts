@@ -181,7 +181,15 @@ export const RATE_VAULT_CRAFT_DRAG = "application/x-hitsquad-rate-craft";
 /** Vault-internal B-1 Excel — same credibility bar as estimate Excel (formula check to the site). */
 export const RATE_VAULT_B1_KIND = "rate-vault-b1";
 export const RATE_VAULT_B1_MARKER = "HIT SQUAD RATE VAULT B-1";
+/** Hidden machine-metadata tab on new exports. Import still accepts the lean-face name. */
+export const RATE_VAULT_B1_META_SHEET = "_meta";
+/** Legacy first-tab name from the Rate Vault B-1 rewire. Import still finds it. */
 export const RATE_VAULT_B1_PACKAGE_SHEET = "B-1 Package";
+export const RATE_VAULT_B1_META_SHEET_ALIASES = [
+  RATE_VAULT_B1_META_SHEET,
+  "Package",
+  RATE_VAULT_B1_PACKAGE_SHEET,
+] as const;
 export const RATE_VAULT_B1_RATE_SHEET = "Rate Summary";
 export const RATE_VAULT_B1_BURDEN_SHEET = "Burden Summary";
 export const RATE_VAULT_B1_SPARE_POSITIONS = 5;
@@ -197,8 +205,8 @@ export const RATE_VAULT_B1_STATE_SHEET = "State law";
 export const RATE_VAULT_B1_FRINGE_SHEET = "Fringes";
 /** Lean Rate Vault face — not the ~25 MB official Exhibit B-1. Room for hall B-1 control columns. */
 export const RATE_VAULT_B1_EXPORT_MAX_BYTES = 250_000;
+/** Visible human tabs — Rate Summary is index 0 / the tab Excel opens on. */
 export const RATE_VAULT_B1_REQUIRED_SHEETS = [
-  RATE_VAULT_B1_PACKAGE_SHEET,
   RATE_VAULT_B1_RATE_SHEET,
   RATE_VAULT_B1_BURDEN_SHEET,
   RATE_VAULT_B1_FRINGE_SHEET,

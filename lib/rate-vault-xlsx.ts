@@ -16,7 +16,8 @@ import {
   RATE_VAULT_B1_IMPORT_ERROR,
   RATE_VAULT_B1_KIND,
   RATE_VAULT_B1_MARKER,
-  RATE_VAULT_B1_PACKAGE_SHEET,
+  RATE_VAULT_B1_META_SHEET,
+  RATE_VAULT_B1_META_SHEET_ALIASES,
   RATE_VAULT_B1_POISON_ERROR,
   RATE_VAULT_B1_RATE_SHEET,
   RATE_VAULT_B1_REQUIRED_SHEETS,
@@ -142,6 +143,11 @@ export const RATE_VAULT_B1_MIME = "application/vnd.openxmlformats-officedocument
 const MONEY_FMT = "$#,##0.00";
 const PCT_FMT = "0.00";
 const SPARE_ID_RE = /^xlsx-spare-/i;
+/** Hit Squad teal chrome — local copy so this writer never imports estimate-xlsx. */
+const HS_STEEL = "FF0F5F6D";
+const HS_STEEL_DEEP = "FF083943";
+const HS_WHITE = "FFFFFFFF";
+const HS_INK = "FF102226";
 
 export type RateVaultB1ImportOk = {
   ok: true;
@@ -271,6 +277,15 @@ function sheetByName(workbook: ExcelJS.Workbook, name: string) {
   return workbook.worksheets.find((sheet) => sheet.name.trim().toLowerCase() === needle) ?? null;
 }
 
+/** Machine key/value dump — hidden `_meta`, last-sheet `Package`, or legacy `B-1 Package`. */
+export function findRateVaultB1MetaSheet(workbook: ExcelJS.Workbook) {
+  for (const name of RATE_VAULT_B1_META_SHEET_ALIASES) {
+    const sheet = sheetByName(workbook, name);
+    if (sheet && text(sheet.getCell("A1").value) === RATE_VAULT_B1_MARKER) return sheet;
+  }
+  return workbook.worksheets.find((sheet) => text(sheet.getCell("A1").value) === RATE_VAULT_B1_MARKER) ?? null;
+}
+
 function parseOcipFace(raw?: string): RateVaultOcipFace | "both" {
   const value = (raw || "").trim().toLowerCase();
   if (value === "ocip" || value === "non-ocip" || value === "both") return value;
@@ -337,12 +352,73 @@ function applyMoneyStyle(cell: ExcelJS.Cell) {
   cell.numFmt = MONEY_FMT;
 }
 
+function solidFill(argb: string): ExcelJS.Fill {
+  return { type: "pattern", pattern: "solid", fgColor: { argb } };
+}
+
 function applyHeader(row: ExcelJS.Row, headers: readonly string[]) {
+  row.height = 20;
   headers.forEach((header, index) => {
     const cell = row.getCell(index + 1);
     cell.value = header;
-    cell.font = { bold: true };
+    cell.font = { bold: true, color: { argb: HS_WHITE }, name: "Calibri", size: 10 };
+    cell.fill = solidFill(HS_STEEL);
+    cell.alignment = { vertical: "middle", wrapText: true };
   });
+}
+
+function bookFaceLabel(preview: RateVaultPreviewPackage) {
+  return packageBookFace(preview) === "tm" ? "TM" : "RRFF";
+}
+
+function ocipFaceLabel(face: RateVaultOcipFace | "both" | undefined) {
+  if (face === "ocip") return "OCIP";
+  if (face === "non-ocip") return "non-OCIP";
+  return "OCIP + non-OCIP";
+}
+
+function applyVisibleSheetChrome(
+  sheet: ExcelJS.Worksheet,
+  preview: RateVaultPreviewPackage,
+  face: RateVaultOcipFace | undefined,
+  freezeRows = 1,
+) {
+  const site = rateVaultSiteLabel(preview.siteId);
+  const title = excelHeaderSafe(preview.title || `${site} B-1`, 40);
+  const revision = preview.revision ? `Rev ${preview.revision}` : "";
+  const banner = [site, bookFaceLabel(preview), ocipFaceLabel(face || preview.ocipFace), revision]
+    .filter(Boolean)
+    .join("  ·  ");
+  sheet.properties.tabColor = { argb: HS_STEEL };
+  sheet.headerFooter.oddHeader = `&L&B HIT SQUAD / PROJECT CONTROLS &C ${excelHeaderSafe(banner, 48)} &R Confidential`;
+  sheet.headerFooter.evenHeader = sheet.headerFooter.oddHeader;
+  sheet.headerFooter.oddFooter = `&L Produced by Hit Squad Rate Vault &C ${excelHeaderSafe(title, 40)} &R Page &P of &N`;
+  sheet.headerFooter.evenFooter = sheet.headerFooter.oddFooter;
+  sheet.views = [
+    freezeRows > 0
+      ? {
+          state: "frozen",
+          xSplit: 0,
+          ySplit: freezeRows,
+          activeCell: "A2",
+          showGridLines: true,
+        }
+      : { state: "normal", activeCell: "A1", showGridLines: true },
+  ];
+  sheet.pageSetup.orientation = "landscape";
+  sheet.pageSetup.fitToPage = true;
+  sheet.pageSetup.fitToWidth = 1;
+  sheet.pageSetup.fitToHeight = 0;
+  sheet.pageSetup.horizontalCentered = true;
+}
+
+function excelHeaderSafe(value: string, max = 48) {
+  return value.replace(/&/g, "and").replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+function applyTitleChrome(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, color: { argb: HS_WHITE }, name: "Calibri", size: 12 };
+  cell.fill = solidFill(HS_STEEL_DEEP);
 }
 
 function rideCell(value: boolean) {
@@ -475,37 +551,12 @@ export async function rateVaultPreviewToXlsx(
   const exported = face ? filterPreviewByFace(preview, face) : preview;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Hit Squad Rate Vault";
+  workbook.lastModifiedBy = "Hit Squad Rate Vault";
   workbook.created = new Date();
-
-  const pack = workbook.addWorksheet(RATE_VAULT_B1_PACKAGE_SHEET);
-  pack.getCell("A1").value = RATE_VAULT_B1_MARKER;
-  pack.getCell("A1").font = { bold: true };
-  const meta: Array<[string, string | boolean]> = [
-    ["kind", RATE_VAULT_B1_KIND],
-    ["siteId", exported.siteId],
-    ["title", exported.title],
-    ["revision", exported.revision || ""],
-    ["packageId", exported.id],
-    ["writesRateBook", false],
-    ["extractedFrom", exported.extractedFrom],
-    ["fixture", exported.fixture],
-    ["effective", exported.effective || ""],
-    ["sourceId", exported.sourceId || ""],
-    ["sourceTitle", exported.sourceTitle],
-    ["note", exported.note],
-    ["ocipFace", face || exported.ocipFace || "both"],
-    ["bookFace", packageBookFace(exported)],
-    ["requiredSheets", RATE_VAULT_B1_REQUIRED_SHEETS.join("|")],
-  ];
-  meta.forEach(([key, value], index) => {
-    const row = index + 2;
-    pack.getCell(`A${row}`).value = key;
-    pack.getCell(`B${row}`).value = typeof value === "boolean" ? String(value) : value;
-  });
-  pack.getCell("A18").value =
-    "Lean Rate Vault B-1 face — not the ~25 MB official Exhibit B-1. No pivots, no OCIP/staff dumps, no unused shells. Rate Summary Fringe / Burden pull Fringes and Burden Summary. Edit those tabs (or wages), drop this file back. Preview updates from this book — not a parallel copy. CBA / PLA, State law, and COMP Check are read-only. Live Rate Tables stay off until Publish is wired.";
-  pack.getColumn(1).width = 18;
-  pack.getColumn(2).width = 72;
+  workbook.modified = new Date();
+  workbook.title = exported.title;
+  workbook.subject = `${bookFaceLabel(exported)} · ${ocipFaceLabel(face || exported.ocipFace)}`;
+  workbook.calcProperties = { fullCalcOnLoad: true };
 
   const rates = workbook.addWorksheet(RATE_VAULT_B1_RATE_SHEET);
   applyHeader(rates.getRow(1), RATE_VAULT_B1_RATE_HEADERS);
@@ -536,6 +587,7 @@ export async function rateVaultPreviewToXlsx(
   [22, 16, 10, 16, 18, 12, 12, 12, 12, 12, 12, 10, 10, 22, 18].forEach((width, index) => {
     rates.getColumn(index + 1).width = width;
   });
+  applyVisibleSheetChrome(rates, exported, face);
 
   const burden = workbook.addWorksheet(RATE_VAULT_B1_BURDEN_SHEET);
   applyHeader(burden.getRow(1), RATE_VAULT_B1_BURDEN_HEADERS);
@@ -570,6 +622,7 @@ export async function rateVaultPreviewToXlsx(
   [14, 22, 12, 12, 28, 14, 12, 16, 16, 16, 8, 10, 10, 10, 40, 18, 10].forEach((width, index) => {
     burden.getColumn(index + 1).width = width;
   });
+  applyVisibleSheetChrome(burden, exported, face);
 
   const fringes = workbook.addWorksheet(RATE_VAULT_B1_FRINGE_SHEET);
   applyHeader(fringes.getRow(1), RATE_VAULT_B1_FRINGE_HEADERS);
@@ -603,28 +656,72 @@ export async function rateVaultPreviewToXlsx(
   [32, 16, 10, 22, 12, 12, 14, 12, 16, 16, 16, 8, 10, 10, 10, 40, 18, 10].forEach((width, index) => {
     fringes.getColumn(index + 1).width = width;
   });
+  applyVisibleSheetChrome(fringes, exported, face);
 
-  addCompCheckSheet(workbook, exported);
-  addReadOnlyRulesSheet(workbook, RATE_VAULT_B1_CBA_SHEET, RATE_VAULT_CBA_PLA_SECTION.title, [
+  addCompCheckSheet(workbook, exported, face);
+  addReadOnlyRulesSheet(workbook, RATE_VAULT_B1_CBA_SHEET, RATE_VAULT_CBA_PLA_SECTION.title, exported, face, [
     RATE_VAULT_CBA_PLA_SECTION.note,
     ...RATE_VAULT_CBA_PLA_RULES.map((rule) => `${rule.label} — captured on the vault later; this tab is read-only.`),
   ]);
-  addReadOnlyRulesSheet(workbook, RATE_VAULT_B1_STATE_SHEET, RATE_VAULT_STATE_LAW_SECTION.title, [
+  addReadOnlyRulesSheet(workbook, RATE_VAULT_B1_STATE_SHEET, RATE_VAULT_STATE_LAW_SECTION.title, exported, face, [
     RATE_VAULT_STATE_LAW_SECTION.note,
     ...RATE_VAULT_STATE_LAW_SITES.map((row) => `${row.site} — ${row.state}`),
     ...RATE_VAULT_STATE_LAW_RULES.map((rule) => `${rule.label} — captured on the vault later; this tab is read-only.`),
   ]);
+  writePackageMetaSheet(workbook, exported, face);
+  workbook.views = [{ x: 0, y: 0, width: 12000, height: 8000, firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
   const buffer = await workbook.xlsx.writeBuffer();
   return { fileName: rateVaultB1FileName(exported), bytes: new Uint8Array(buffer) };
 }
 
-function addCompCheckSheet(workbook: ExcelJS.Workbook, preview: RateVaultPreviewPackage) {
+function writePackageMetaSheet(
+  workbook: ExcelJS.Workbook,
+  exported: RateVaultPreviewPackage,
+  face: RateVaultOcipFace | undefined,
+) {
+  const pack = workbook.addWorksheet(RATE_VAULT_B1_META_SHEET, { state: "hidden" });
+  pack.state = "hidden";
+  pack.getCell("A1").value = RATE_VAULT_B1_MARKER;
+  pack.getCell("A1").font = { bold: true };
+  const meta: Array<[string, string | boolean]> = [
+    ["kind", RATE_VAULT_B1_KIND],
+    ["siteId", exported.siteId],
+    ["title", exported.title],
+    ["revision", exported.revision || ""],
+    ["packageId", exported.id],
+    ["writesRateBook", false],
+    ["extractedFrom", exported.extractedFrom],
+    ["fixture", exported.fixture],
+    ["effective", exported.effective || ""],
+    ["sourceId", exported.sourceId || ""],
+    ["sourceTitle", exported.sourceTitle],
+    ["note", exported.note],
+    ["ocipFace", face || exported.ocipFace || "both"],
+    ["bookFace", packageBookFace(exported)],
+    ["requiredSheets", RATE_VAULT_B1_REQUIRED_SHEETS.join("|")],
+  ];
+  meta.forEach(([key, value], index) => {
+    const row = index + 2;
+    pack.getCell(`A${row}`).value = key;
+    pack.getCell(`B${row}`).value = typeof value === "boolean" ? String(value) : value;
+  });
+  pack.getCell("A18").value =
+    "Lean Rate Vault B-1 face — not the ~25 MB official Exhibit B-1. No pivots, no OCIP/staff dumps, no unused shells. Rate Summary Fringe / Burden pull Fringes and Burden Summary. Edit those tabs (or wages), drop this file back. Preview updates from this book — not a parallel copy. CBA / PLA, State law, and COMP Check are read-only. Live Rate Tables stay off until Publish is wired.";
+  pack.getColumn(1).width = 18;
+  pack.getColumn(2).width = 72;
+}
+
+function addCompCheckSheet(
+  workbook: ExcelJS.Workbook,
+  preview: RateVaultPreviewPackage,
+  face: RateVaultOcipFace | undefined,
+) {
   const check = rateVaultCompCheck(preview);
   const lastRate = Math.max(preview.rows.length + 1, 2);
   const sheet = workbook.addWorksheet(RATE_VAULT_B1_COMP_SHEET);
   sheet.getCell("A1").value = "COMP check — key totals from this Rate Vault B-1 (not the giant COMP xlsm)";
-  sheet.getCell("A1").font = { bold: true };
+  applyTitleChrome(sheet.getCell("A1"));
   const lines: Array<[string, ExcelJS.CellValue]> = [
     ["Positions", { formula: `COUNTA('${RATE_VAULT_B1_RATE_SHEET}'!A2:A${lastRate})`, result: check.positions }],
     ["Wage total", { formula: `SUM('${RATE_VAULT_B1_RATE_SHEET}'!F2:F${lastRate})`, result: check.wageTotal }],
@@ -638,22 +735,38 @@ function addCompCheckSheet(workbook: ExcelJS.Workbook, preview: RateVaultPreview
     const row = index + 3;
     sheet.getCell(`A${row}`).value = label;
     sheet.getCell(`B${row}`).value = value;
+    sheet.getCell(`A${row}`).font = { color: { argb: HS_INK }, name: "Calibri" };
   });
+  applyMoneyStyle(sheet.getCell("B4"));
+  applyMoneyStyle(sheet.getCell("B5"));
+  applyMoneyStyle(sheet.getCell("B6"));
+  applyMoneyStyle(sheet.getCell("B7"));
+  sheet.getCell("B8").numFmt = PCT_FMT;
+  applyMoneyStyle(sheet.getCell("B9"));
   sheet.getCell("A10").value = "Site reconcile: these formulas pull Rate Summary / Burden Summary. Typed-over guts fail import.";
   sheet.getColumn(1).width = 22;
   sheet.getColumn(2).width = 22;
+  applyVisibleSheetChrome(sheet, preview, face, 0);
   void sheet.protect("", { selectLockedCells: true, selectUnlockedCells: true });
 }
 
-function addReadOnlyRulesSheet(workbook: ExcelJS.Workbook, name: string, title: string, lines: string[]) {
+function addReadOnlyRulesSheet(
+  workbook: ExcelJS.Workbook,
+  name: string,
+  title: string,
+  preview: RateVaultPreviewPackage,
+  face: RateVaultOcipFace | undefined,
+  lines: string[],
+) {
   const sheet = workbook.addWorksheet(name);
   sheet.getCell("A1").value = title;
-  sheet.getCell("A1").font = { bold: true };
+  applyTitleChrome(sheet.getCell("A1"));
   sheet.getCell("A2").value = "Read-only rule summary. Edit wages on Rate Summary. Edit fringe $ and burden % on Fringes / Burden Summary — Rate Summary formulas pull those tabs.";
   lines.forEach((line, index) => {
     sheet.getCell(`A${index + 4}`).value = line;
   });
   sheet.getColumn(1).width = 88;
+  applyVisibleSheetChrome(sheet, preview, face, 0);
   void sheet.protect("", { selectLockedCells: true, selectUnlockedCells: true });
 }
 
@@ -731,7 +844,7 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
     return fail("not-vault-b1", RATE_VAULT_B1_IMPORT_ERROR);
   }
 
-  const packSheet = sheetByName(workbook, RATE_VAULT_B1_PACKAGE_SHEET);
+  const packSheet = findRateVaultB1MetaSheet(workbook);
   const marker = packSheet ? text(packSheet.getCell("A1").value) : "";
   if (!packSheet || marker !== RATE_VAULT_B1_MARKER) {
     return fail("not-vault-b1", RATE_VAULT_B1_IMPORT_ERROR);

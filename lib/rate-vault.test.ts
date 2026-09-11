@@ -355,6 +355,8 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /B-1 Excel export \/ import/);
     assert.match(docs, /formula check to the site/);
     assert.match(docs, /lean Rate Vault face/);
+    assert.match(docs, /hidden last-tab `_meta`/);
+    assert.match(docs, /Excel opens on \*\*Rate Summary\*\*/);
     assert.match(xlsx, /rateVaultFringeRippleFormula/);
     assert.match(xlsx, /rateVaultBurdenRippleFormula/);
     assert.match(xlsx, /Family must not be "pay-tax"/);
@@ -459,6 +461,9 @@ describe("Rate Vault scaffold", () => {
     assert.match(store, /lastGood/);
     assert.match(store, /queueRateVaultBuyoff/);
     assert.match(xlsx, /RATE_VAULT_B1_MARKER/);
+    assert.match(xlsx, /RATE_VAULT_B1_META_SHEET/);
+    assert.match(xlsx, /findRateVaultB1MetaSheet/);
+    assert.match(xlsx, /activeTab: 0/);
     assert.match(xlsx, /rateVaultPreviewToXlsx/);
     assert.match(xlsx, /parseRateVaultB1Xlsx/);
     assert.doesNotMatch(xlsx, FORBIDDEN_IMPORT);
