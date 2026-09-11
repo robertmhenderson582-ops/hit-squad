@@ -1,5 +1,5 @@
 import { companyName, type CompanyId } from "./companies.ts";
-import { QUALITY_BRIEFS_VAULT_NAME, briefsFolderId, qualityFolderId } from "./drive-data.ts";
+import { QUALITY_BRIEFS_VAULT_NAME, QUALITY_CONTROL_MANUAL_FILE_ID, briefsFolderId, qualityFolderId } from "./drive-data.ts";
 import { DRIVE_FOLDER_MIME, DriveApiError, type DriveAdapter, type DriveFile } from "./drive-estimates.ts";
 import type { LeadFile } from "./lead-briefs.ts";
 import {
@@ -185,13 +185,24 @@ function isQualityVaultFolder(row: DriveFile) {
   return Boolean(row.id && row.name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
 }
 
-function qualityVaultListedFile(row: DriveFile) {
+export function isProtectedQualityCompanyDocFile(fileId?: string | null) {
+  return (fileId || "").trim() === QUALITY_CONTROL_MANUAL_FILE_ID;
+}
+
+type QualityVaultListedName = {
+  name: string;
+  type: string;
+  protected?: boolean;
+};
+
+function qualityVaultListedFile(row: DriveFile): QualityVaultListedName {
   return {
     name: row.name,
     type: qualityCompanyDocPreviewType({
       name: row.name,
       type: row.mimeType && row.mimeType !== DRIVE_FOLDER_MIME ? row.mimeType : "application/octet-stream",
     }),
+    ...(isProtectedQualityCompanyDocFile(row.id) ? { protected: true as const } : {}),
   };
 }
 
@@ -209,7 +220,7 @@ export async function listQualityCompanyDocVaultFolders(
   place: { companyId?: string; who?: string },
 ) {
   const folders = qualityCompanyDocsListedFor(place.companyId);
-  const empty = Object.fromEntries(folders.map((folder) => [folder.id, [] as Array<{ name: string; type: string }>]));
+  const empty = Object.fromEntries(folders.map((folder) => [folder.id, [] as QualityVaultListedName[]]));
   const unlocked = Object.fromEntries(folders.map((folder) => [folder.id, false])) as Record<string, boolean>;
   if (!qualityDriveReady(drive)) {
     return {
@@ -238,7 +249,7 @@ export async function listQualityCompanyDocVaultFolders(
         const label = qualityVaultFolderName(qualityCompanyDocLabel(folder.id, place.companyId));
         const bucket = bucketKids.find((row) => row.name === label && isQualityVaultFolder(row));
         if (!bucket?.id) {
-          return [folder.id, [] as Array<{ name: string; type: string }>, { locked: false, known: true }] as const;
+          return [folder.id, [] as QualityVaultListedName[], { locked: false, known: true }] as const;
         }
         const kids = await drive!.listChildren!(bucket.id);
         const files = kids
@@ -250,7 +261,7 @@ export async function listQualityCompanyDocVaultFolders(
     return {
       filesByFolder: Object.fromEntries(listed.map(([id, files]) => [id, files])) as Record<
         string,
-        Array<{ name: string; type: string }>
+        QualityVaultListedName[]
       >,
       locksByFolder: Object.fromEntries(listed.map(([id, , lock]) => [id, lock.locked])) as Record<string, boolean>,
       locksKnown: listed.every(([, , lock]) => lock.known),
@@ -282,7 +293,7 @@ export async function listQualityVaultFiles(
 ) {
   if (!qualityDriveReady(drive)) {
     return {
-      files: [] as Array<{ name: string; type: string }>,
+      files: [] as QualityVaultListedName[],
       locked: true,
       locksKnown: false,
       store: "unconfigured" as const,
@@ -295,7 +306,7 @@ export async function listQualityVaultFiles(
       const kids = await drive!.listChildren!(parent);
       const existing = kids.find((row) => row.name === name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
       if (!existing?.id) {
-        return { files: [], locked: false, locksKnown: true, store: "drive" as const, stored: true as const };
+        return { files: [] as QualityVaultListedName[], locked: false, locksKnown: true, store: "drive" as const, stored: true as const };
       }
       parent = existing.id;
     }
@@ -306,7 +317,7 @@ export async function listQualityVaultFiles(
     const lock = qualityLibraryLockFromKids(kids);
     return { files, locked: lock.locked, locksKnown: lock.known, store: "drive" as const, stored: true as const };
   } catch {
-    return { files: [], locked: true, locksKnown: false, store: "drive" as const, stored: false as const };
+    return { files: [] as QualityVaultListedName[], locked: true, locksKnown: false, store: "drive" as const, stored: false as const };
   }
 }
 
@@ -320,7 +331,7 @@ async function qualityVaultFolderId(drive: DriveAdapter, place: QualityVaultPlac
   return parent;
 }
 
-/** Trash a vaulted company-doc file. Fail closed — missing Drive or a leftover file is an error. */
+/** Trash vaulted extras by name. Never trash the standing Quality Control Manual PDF. */
 export async function trashQualityVaultFile(
   drive: DriveAdapter | null | undefined,
   place: QualityVaultPlace,
@@ -330,16 +341,36 @@ export async function trashQualityVaultFile(
   if (!wanted || isQualityLibraryLockName(wanted)) throw new Error(QUALITY_VAULT_WRITE_ERROR);
   if (!qualityDriveReady(drive) || !drive?.deleteJson) throw new Error(QUALITY_VAULT_WRITE_ERROR);
   const folderId = await qualityVaultFolderId(drive as DriveAdapter, place);
-  if (!folderId) return { missing: true as const, store: "drive" as const, stored: true as const };
+  if (!folderId) {
+    return { missing: true as const, protectedKept: false, trashed: 0, store: "drive" as const, stored: true as const };
+  }
   const kids = await drive.listChildren!(folderId);
-  const row = kids.find((item) => isQualityVaultFile(item) && item.name === wanted);
-  if (!row?.id) return { missing: true as const, store: "drive" as const, stored: true as const };
-  await drive.deleteJson(row.id);
+  const matches = kids.filter((item) => isQualityVaultFile(item) && item.name === wanted && item.id);
+  const extras = matches.filter((item) => !isProtectedQualityCompanyDocFile(item.id));
+  const protectedKept = matches.some((item) => isProtectedQualityCompanyDocFile(item.id));
+  if (!extras.length) {
+    return {
+      missing: !protectedKept,
+      protectedKept,
+      trashed: 0,
+      store: "drive" as const,
+      stored: true as const,
+    };
+  }
+  for (const row of extras) {
+    await drive.deleteJson(row.id);
+  }
   const leftover = (await drive.listChildren!(folderId)).find(
-    (item) => isQualityVaultFile(item) && item.name === wanted,
+    (item) => isQualityVaultFile(item) && item.name === wanted && !isProtectedQualityCompanyDocFile(item.id),
   );
   if (leftover?.id) throw new Error(QUALITY_VAULT_WRITE_ERROR);
-  return { missing: false as const, store: "drive" as const, stored: true as const };
+  return {
+    missing: false as const,
+    protectedKept,
+    trashed: extras.length,
+    store: "drive" as const,
+    stored: true as const,
+  };
 }
 
 export async function writeQualityCompanyDocLock(

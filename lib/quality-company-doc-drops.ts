@@ -6,6 +6,7 @@ import { hydratePositionStore } from "./org-positions-store.ts";
 import { mergePositions } from "./org-positions.ts";
 import {
   QUALITY_COMPANY_DOC_EDIT_ERROR,
+  QUALITY_COMPANY_DOC_KEEP_ERROR,
   QUALITY_COMPANY_DOC_LOCK_ERROR,
   QUALITY_COMPANY_DOC_LOCKED_NOTE,
   canMutateQualityCompanyDoc,
@@ -47,6 +48,7 @@ export type QualityDocUser = QualityCompanyDocActor;
 
 export {
   QUALITY_COMPANY_DOC_EDIT_ERROR,
+  QUALITY_COMPANY_DOC_KEEP_ERROR,
   QUALITY_COMPANY_DOC_LOCK_ERROR,
   QUALITY_COMPANY_DOC_LOCKED_NOTE,
   canMutateQualityCompanyDoc,
@@ -145,7 +147,7 @@ export async function listQualityCompanyDocDrop(
 ) {
   const home = qualityCompanyDocHome(companyId);
   if (!isQualityCompanyDocId(docId, home)) {
-    return { briefs: [] as PublicLeadBrief[], files: [] as Array<{ name: string; type: string }> };
+    return { briefs: [] as PublicLeadBrief[], files: [] as Array<{ name: string; type: string; protected?: boolean }> };
   }
   const jobId = qualityCompanyDocsJobId(home);
   const [briefs, vault] = await Promise.all([
@@ -173,16 +175,26 @@ export async function listQualityCompanyDocDrop(
 }
 
 function mergeCompanyDocListedFiles(
-  vault: Array<{ name: string; type?: string }>,
-  extra: Array<{ name: string; type?: string }>,
+  vault: Array<{ name: string; type?: string; protected?: boolean }>,
+  extra: Array<{ name: string; type?: string; protected?: boolean }>,
 ) {
   const seen = new Set<string>();
-  const files: Array<{ name: string; type: string }> = [];
+  const files: Array<{ name: string; type: string; protected?: boolean }> = [];
   for (const file of [...vault, ...extra]) {
     const name = (file.name || "").trim();
-    if (!name || seen.has(name) || isQualityLibraryLockName(name)) continue;
+    if (!name || isQualityLibraryLockName(name)) continue;
+    const listed = {
+      name,
+      type: qualityCompanyDocPreviewType(file),
+      ...(file.protected ? { protected: true as const } : {}),
+    };
+    if (seen.has(name)) {
+      const row = files.find((item) => item.name === name);
+      if (row && !file.protected) delete row.protected;
+      continue;
+    }
     seen.add(name);
-    files.push({ name, type: qualityCompanyDocPreviewType(file) });
+    files.push(listed);
   }
   return files;
 }
@@ -191,7 +203,7 @@ export async function listQualityCompanyDocDrops(_user: QualityDocUser, companyI
   const home = qualityCompanyDocHome(companyId);
   const folders = qualityCompanyDocsListedFor(home);
   const jobId = qualityCompanyDocsJobId(home);
-  const filesByFolder: Record<string, Array<{ name: string; type: string }>> = Object.fromEntries(
+  const filesByFolder: Record<string, Array<{ name: string; type: string; protected?: boolean }>> = Object.fromEntries(
     folders.map((folder) => [folder.id, []]),
   );
   const [briefs, vault] = await Promise.all([
@@ -247,15 +259,19 @@ export async function removeQualityCompanyDocFile(
   if (gate) return { ok: false as const, status: gate.status, error: gate.error };
   const jobId = qualityCompanyDocsJobId(home);
   try {
-    await trashQualityVaultFile(
+    const trashed = await trashQualityVaultFile(
       leadBriefAdapter("quality"),
       { companyId: home, folderId, jobId, companyDocs: true },
       fileName,
     );
     await removeFileFromStoredBriefs("quality", fileName, { jobId, folderId, companyId: home });
     const listed = await listQualityCompanyDocDrop(user, folderId, home);
-    if (listed.files.some((file) => file.name === fileName)) {
+    const leftover = listed.files.filter((file) => file.name === fileName);
+    if (leftover.some((file) => !file.protected)) {
       return { ok: false as const, status: 503, error: qualityVaultWriteUserError(new Error("leftover"), hasBuildDesk(user)) };
+    }
+    if (leftover.length && !trashed.trashed) {
+      return { ok: false as const, status: 400, error: QUALITY_COMPANY_DOC_KEEP_ERROR };
     }
     return {
       ok: true as const,

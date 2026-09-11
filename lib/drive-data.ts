@@ -35,6 +35,9 @@ export const DRIVE_WRITE_ERROR = "Could not save. Try again.";
 /** Existing Hit Squad Quality room under Data. Never expose this id to testers. */
 export const QUALITY_ROOM_ID = "1A7anV1UKx8m7IgUW2uVpwWHxB5fHerOg";
 
+/** Standing Madison Quality Control Manual PDF. Soft-trash extras; never this file. */
+export const QUALITY_CONTROL_MANUAL_FILE_ID = "1IATimbehupRHwa9zgXfrGuCh6hvWdWmF";
+
 export function qualityFolderId(env: Record<string, string | undefined> = process.env) {
   return env.DRIVE_QUALITY_FOLDER_ID?.trim() || QUALITY_ROOM_ID;
 }

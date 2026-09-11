@@ -220,9 +220,43 @@ export function QualityCompanyDocViewer({
             {lockedNote
               ? lockedNote
               : canRemove
-                ? "Madison company files. Drop on the bar to add. Click a name to open it."
+                ? "Madison company files. Drop on the bar to add. Click a name to open it. Remove a file, then confirm."
                 : "Madison company files. Click a name to open it."}
           </p>
+          {confirmRemove ? (
+            <div
+              className="mt-3 rounded-sm border border-[#8a2a2a] bg-white px-3 py-3"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="quality-company-doc-remove-title"
+              aria-describedby="quality-company-doc-remove-name"
+            >
+              <p id="quality-company-doc-remove-title" className="text-sm font-semibold text-[#163038]">
+                Remove this file from {title}?
+              </p>
+              <p id="quality-company-doc-remove-name" className="mt-1 text-sm text-[#5b6f73]">
+                {confirmRemove} leaves this library.
+              </p>
+              <div className="mt-3 flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  className="rounded-sm border border-steel px-3 py-1.5 text-sm text-steel"
+                  disabled={removing}
+                  onClick={() => setConfirmRemove(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="rounded-sm bg-[#8a2a2a] px-3 py-1.5 text-sm text-white"
+                  disabled={removing}
+                  onClick={() => void confirmAndRemove(confirmRemove)}
+                >
+                  {removing ? "Removing…" : "Confirm remove"}
+                </button>
+              </div>
+            </div>
+          ) : null}
           <div className="mt-4 grid gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
             <ul className="space-y-1">
               {listed.length ? (
@@ -247,35 +281,16 @@ export function QualityCompanyDocViewer({
                           ) : null}
                           {file.vaulted ? "" : ` · ${QUALITY_UNVAULTED_MARK}`}
                         </button>
-                        {canRemove ? (
-                          confirmRemove === file.name ? (
-                            <span className="flex shrink-0 flex-col gap-1">
-                              <button
-                                type="button"
-                                className="text-xs text-[#8a2a2a] underline"
-                                disabled={removing}
-                                onClick={() => void confirmAndRemove(file.name)}
-                              >
-                                {removing ? "Removing…" : "Confirm"}
-                              </button>
-                              <button
-                                type="button"
-                                className="text-xs text-[#5b6f73] underline"
-                                disabled={removing}
-                                onClick={() => setConfirmRemove(null)}
-                              >
-                                Cancel
-                              </button>
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              className="shrink-0 text-xs text-[#8a2a2a] underline"
-                              onClick={() => setConfirmRemove(file.name)}
-                            >
-                              Remove
-                            </button>
-                          )
+                        {canRemove && !file.protected ? (
+                          <button
+                            type="button"
+                            className="shrink-0 text-xs text-[#8a2a2a] underline"
+                            disabled={removing}
+                            aria-haspopup="dialog"
+                            onClick={() => setConfirmRemove(file.name)}
+                          >
+                            Remove
+                          </button>
                         ) : null}
                       </div>
                       {current && zipMembers.length ? (
@@ -322,6 +337,17 @@ export function QualityCompanyDocViewer({
                       {memberFile ? `${selected.name} / ${memberFile.name}` : selected.name}
                     </p>
                     <div className="flex flex-wrap items-center gap-3">
+                      {canRemove && selected && !selected.protected && !memberFile ? (
+                        <button
+                          type="button"
+                          className="text-sm text-[#8a2a2a] underline"
+                          disabled={removing}
+                          aria-haspopup="dialog"
+                          onClick={() => setConfirmRemove(selected.name)}
+                        >
+                          Remove
+                        </button>
+                      ) : null}
                       {memberFile ? (
                         <button
                           type="button"

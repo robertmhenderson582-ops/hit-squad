@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   QUALITY_COMPANY_DOC_EDIT_ERROR,
+  QUALITY_COMPANY_DOC_KEEP_ERROR,
   QUALITY_COMPANY_DOC_LOCK_ERROR,
   QUALITY_COMPANY_DOC_LOCKED_NOTE,
   canMutateQualityCompanyDoc,
@@ -91,5 +92,6 @@ describe("Quality company-doc ACL seats", () => {
     assert.equal(qualityCompanyDocMutateError(chanceAcl, true, true), QUALITY_COMPANY_DOC_LOCKED_NOTE);
     assert.equal(qualityCompanyDocMutateError(qualityCompanyDocAcl(wendell), false, true), QUALITY_COMPANY_DOC_EDIT_ERROR);
     assert.match(QUALITY_COMPANY_DOC_LOCK_ERROR, /Corporate Quality or the owner/);
+    assert.match(QUALITY_COMPANY_DOC_KEEP_ERROR, /company Quality Control Manual/);
   });
 });
