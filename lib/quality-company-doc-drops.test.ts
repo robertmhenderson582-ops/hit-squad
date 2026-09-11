@@ -14,10 +14,12 @@ import {
   listQualityCompanyDocDrop,
   listQualityCompanyDocDrops,
   qualityCompanyDocRowId,
+  readQualityCompanyDocFile,
   saveQualityCompanyDocDrop,
 } from "./quality-company-doc-drops.ts";
 import { QUALITY_DROP_TYPE_ERROR } from "./quality-folder-drops.ts";
 import { qualityCompanyDocsJobId } from "./quality-company-docs.ts";
+import { qualityDropLeaks } from "./quality-vault-shared.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-quality-docs-"));
 const chance = { email: "chancec318@yahoo.com", name: "Chance Middlebrooks", role: "tester" as const };
@@ -67,17 +69,15 @@ describe("Quality company document vault drops", { concurrency: 1 }, () => {
     const chanceManual = await listQualityCompanyDocDrop(chance, "quality-control-manual", "madison");
     const chanceForms = await listQualityCompanyDocDrop(chance, "forms", "madison");
     const wendellManual = await listQualityCompanyDocDrop(wendell, "quality-control-manual", "madison");
-    assert.deepEqual(
-      chanceManual.files.map((file) => file.name),
-      ["qc-manual.pdf"],
-    );
+    assert.equal(chanceManual.files.some((file) => file.name === "qc-manual.pdf"), true);
+    assert.equal(chanceManual.files.some((file) => file.name === "wendell.pdf"), true);
     assert.deepEqual(
       chanceForms.files.map((file) => file.name),
       ["form.pdf"],
     );
     assert.deepEqual(
-      wendellManual.files.map((file) => file.name),
-      ["wendell.pdf"],
+      wendellManual.files.map((file) => file.name).sort(),
+      ["qc-manual.pdf", "wendell.pdf"],
     );
 
     const ownerList = await listQualityCompanyDocDrops(owner, "madison");
@@ -105,5 +105,32 @@ describe("Quality company document vault drops", { concurrency: 1 }, () => {
       files: [pdf("nope.pdf")],
     });
     assert.equal(invented.ok, false);
+  });
+
+  it("opens a company-doc file for Chance without leaking Drive ids", async () => {
+    resetLeadBriefStoreForTests(join(dir, "view"));
+    useLeadBriefVaultForTests(memoryDrive());
+    const saved = await saveQualityCompanyDocDrop(chance, {
+      companyId: "madison",
+      folderId: "quality-control-manual",
+      files: [pdf("qc-manual.pdf", "madison-manual")],
+    });
+    assert.equal(saved.ok, true);
+    const opened = await readQualityCompanyDocFile(chance, "quality-control-manual", "qc-manual.pdf", "madison");
+    assert.equal(opened.file?.name, "qc-manual.pdf");
+    assert.equal(opened.file?.data, pdf("qc-manual.pdf", "madison-manual").data);
+    assert.equal(opened.store, "drive");
+    assert.equal(qualityDropLeaks(opened), false);
+    assert.equal("id" in (opened.file || {}), false);
+    const missing = await readQualityCompanyDocFile(chance, "quality-control-manual", "missing.pdf", "madison");
+    assert.equal(missing.file, null);
+    const wood = await listQualityCompanyDocDrops(chance, "madison");
+    const rodeo = await listQualityCompanyDocDrops(wendell, "madison");
+    assert.deepEqual(
+      wood.filesByFolder["quality-control-manual"]?.map((file) => file.name),
+      rodeo.filesByFolder["quality-control-manual"]?.map((file) => file.name),
+    );
+    assert.equal(wood.companyId, "madison");
+    assert.equal(rodeo.companyId, "madison");
   });
 });

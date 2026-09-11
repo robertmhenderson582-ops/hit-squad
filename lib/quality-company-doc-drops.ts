@@ -2,12 +2,14 @@ import { hasBuildDesk } from "./desk-role.ts";
 import { leadBriefAdapter, listStoredBriefs, publicBrief, saveStoredBrief } from "./lead-brief-store.ts";
 import type { LeadFile, PublicLeadBrief } from "./lead-briefs.ts";
 import { DriveApiError } from "./drive-estimates.ts";
-import { listQualityVaultFiles, persistQualityVaultFiles, qualityVaultWriteUserError } from "./quality-vault.ts";
+import { listQualityVaultFiles, persistQualityVaultFiles, qualityVaultWriteUserError, readQualityVaultFile } from "./quality-vault.ts";
 import {
   isQualityCompanyDocId,
   mergeQualityCompanyDocFiles,
+  publicQualityCompanyDocFile,
   qualityCompanyDocBriefId,
   qualityCompanyDocDropsFor,
+  qualityCompanyDocFileName,
   qualityCompanyDocHome,
   qualityCompanyDocLabel,
   qualityCompanyDocsJobId,
@@ -100,16 +102,14 @@ export async function listQualityCompanyDocDrop(
     return { briefs: [] as PublicLeadBrief[], files: [] as Array<{ name: string; type: string }> };
   }
   const jobId = qualityCompanyDocsJobId(home);
-  const who = hasBuildDesk(user) ? undefined : user.email;
-  const briefs = await listStoredBriefs("quality", who, { jobId, folderId: docId, companyId: home });
-  const mine = qualityCompanyDocDropsFor(briefs, home, docId, hasBuildDesk(user) ? undefined : user.email);
+  const briefs = await listStoredBriefs("quality", undefined, { jobId, folderId: docId, companyId: home });
+  const mine = qualityCompanyDocDropsFor(briefs, home, docId);
   const briefFiles = mine.flatMap((row) => (row.files ?? []).filter((file) => file.name));
   const vault = await listQualityVaultFiles(leadBriefAdapter("quality"), {
     companyId: home,
     folderId: docId,
     jobId,
     companyDocs: true,
-    who,
   });
   const files = vault.stored
     ? [...vault.files, ...briefFiles].filter((file, index, rows) => rows.findIndex((row) => row.name === file.name) === index)
@@ -135,6 +135,47 @@ export async function listQualityCompanyDocDrops(user: QualityDocUser, companyId
     if (listed.stored) stored = true;
   }
   return { folders, filesByFolder, companyId: home, store, stored };
+}
+
+export async function readQualityCompanyDocFile(
+  _user: QualityDocUser,
+  docId: QualityCompanyDocId,
+  fileName: string,
+  companyId?: string,
+) {
+  const home = qualityCompanyDocHome(companyId);
+  const wanted = qualityCompanyDocFileName(fileName);
+  if (!wanted || !isQualityCompanyDocId(docId, home)) {
+    return { file: null, store: "unconfigured" as const, stored: false as const };
+  }
+  const jobId = qualityCompanyDocsJobId(home);
+  const vault = await readQualityVaultFile(
+    leadBriefAdapter("quality"),
+    { companyId: home, folderId: docId, jobId, companyDocs: true },
+    wanted,
+  );
+  const fromVault = publicQualityCompanyDocFile(vault.file);
+  if (fromVault) {
+    return { file: fromVault, store: vault.store, stored: vault.stored };
+  }
+  const briefs = await listStoredBriefs("quality", undefined, { jobId, folderId: docId, companyId: home });
+  const mine = qualityCompanyDocDropsFor(briefs, home, docId);
+  for (const brief of mine) {
+    const match = (brief.files ?? []).find((file) => qualityCompanyDocFileName(file.name) === wanted);
+    const fromBrief = publicQualityCompanyDocFile(
+      match && "data" in match
+        ? { name: match.name, type: match.type, data: typeof match.data === "string" ? match.data : "" }
+        : null,
+    );
+    if (fromBrief) {
+      return {
+        file: fromBrief,
+        store: vault.store === "drive" ? ("drive" as const) : ("server-json-file" as const),
+        stored: vault.stored,
+      };
+    }
+  }
+  return { file: null, store: vault.store, stored: vault.stored };
 }
 
 export function qualityCompanyDocRowId(who: string, companyId: string, docId: QualityCompanyDocId) {

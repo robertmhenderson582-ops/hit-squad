@@ -59,10 +59,65 @@ export function qualityCompanyDocHome(companyId?: string | null): CompanyId {
   return "madison";
 }
 
-export function qualityRailCompanyId(jobCompanyId?: string | null, assignedCompanyId?: string | null): CompanyId {
-  if (showsQualityCompanyDocs(jobCompanyId)) return (jobCompanyId || "").trim().toLowerCase();
+/**
+ * Left rail is company-wide. Job / site must never remap Chance’s Madison home.
+ * Assigned company wins only when it has a live Quality catalog; otherwise Madison.
+ */
+export function qualityRailCompanyId(_jobCompanyId?: string | null, assignedCompanyId?: string | null): CompanyId {
   if (showsQualityCompanyDocs(assignedCompanyId)) return (assignedCompanyId || "").trim().toLowerCase();
   return "madison";
+}
+
+export type QualityCompanyDocViewKind = "pdf" | "image" | "office" | "text" | "other";
+
+export function qualityCompanyDocFileName(value: unknown) {
+  if (typeof value !== "string") return "";
+  return value.replace(/\\/g, "/").split("/").pop()?.trim() || "";
+}
+
+export function qualityCompanyDocViewKind(file: { name?: string; type?: string }): QualityCompanyDocViewKind {
+  const name = qualityCompanyDocFileName(file.name).toLowerCase();
+  const type = (file.type || "").split(";")[0].trim().toLowerCase();
+  if (type.includes("pdf") || name.endsWith(".pdf")) return "pdf";
+  if (type.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/.test(name)) return "image";
+  if (
+    type.includes("word") ||
+    type.includes("excel") ||
+    type.includes("spreadsheet") ||
+    type.includes("msword") ||
+    /\.(docx?|xlsx?|csv)$/.test(name)
+  ) {
+    return "office";
+  }
+  if (type.startsWith("text/") || name.endsWith(".txt")) return "text";
+  return "other";
+}
+
+export function primaryQualityCompanyDocFile<T extends { name?: string; vaulted?: boolean }>(
+  files: readonly T[],
+): T | null {
+  const listed = files.filter((file) => qualityCompanyDocFileName(file.name));
+  if (!listed.length) return null;
+  const vaulted = listed.filter((file) => file.vaulted);
+  const pool = vaulted.length ? vaulted : listed;
+  return pool[pool.length - 1] ?? null;
+}
+
+export function qualityCompanyDocViewPath(companyId: string, docId: QualityCompanyDocId, fileName: string) {
+  const home = qualityCompanyDocHome(companyId);
+  const file = qualityCompanyDocFileName(fileName);
+  return `/api/desk/briefs?kind=quality&scope=company-docs&company=${encodeURIComponent(home)}&folder=${encodeURIComponent(docId)}&file=${encodeURIComponent(file)}`;
+}
+
+export function publicQualityCompanyDocFile(file: { name?: string; type?: string; data?: string } | null) {
+  const name = qualityCompanyDocFileName(file?.name);
+  const data = typeof file?.data === "string" ? file.data : "";
+  if (!name || !data) return null;
+  return {
+    name,
+    type: file?.type?.trim() || "application/octet-stream",
+    data,
+  };
 }
 
 export function cloneQualityCompanyDocTemplate(companyId: CompanyId, source = "madison"): QualityCompanyDocTemplate {
