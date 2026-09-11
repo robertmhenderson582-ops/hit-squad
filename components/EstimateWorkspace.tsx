@@ -11,6 +11,7 @@ import { estimatePackageHeader } from "@/lib/display";
 import { ShareTurnover } from "@/components/ShareTurnover";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { ThemeFlip } from "@/components/ThemeFlip";
+import { DeskHelpBar } from "@/components/DeskHelpBar";
 import { FieldTrialBanner } from "@/components/FieldTrialBanner";
 import { EstimateTotalRail } from "@/components/EstimateTotalRail";
 import { BuildingFileModal } from "@/components/BuildingFileModal";
@@ -322,6 +323,7 @@ export function EstimateWorkspace({
   return (
     <div className={paper ? "desk-day min-h-screen overflow-x-hidden bg-[#d8e4e2]" : "industrial-root"} data-capture-root>
       <FieldTrialBanner />
+      <DeskHelpBar />
       <header className={paper ? "est-chrome" : "est-chrome hud-bezel"}>
         <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">

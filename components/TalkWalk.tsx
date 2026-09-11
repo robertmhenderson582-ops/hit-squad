@@ -9,6 +9,7 @@ import {
 } from "@/lib/talk-walk";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { NOVUS_HELP_EMAIL } from "@/lib/desk-help";
 import { canDesignerShip } from "@/lib/desk-role";
 
 type TalkMode = "closed" | "briefing" | "walk" | "updated";
@@ -66,7 +67,7 @@ export function TalkWalkProvider({ children }: { children: React.ReactNode }) {
             <p className="mt-3 text-sm leading-6 text-[#163038]">
               {desk?.showInboxSuggestionBox
                 ? "Email is out. Messages, tickets, and screenshots stay in Inbox and Tickets. This short walk shows the Inbox FAB, Enter to send, and the Ticket beacon."
-                : "Inbox and Suggestion Box are off this desk for now. For tickets and help, email hitsquad.novus@gmail.com. Use regular email to communicate."}
+                : `Inbox and Suggestion Box are off this desk for now. For tickets and help, email ${NOVUS_HELP_EMAIL}. Use regular email to communicate.`}
             </p>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               <button type="button" onClick={() => finish(true)} className="rounded-lg border border-steel px-4 py-2 text-steel">

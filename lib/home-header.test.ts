@@ -30,6 +30,7 @@ describe("Sample A home header chrome", () => {
     assert.match(chrome, /home-corner-settings/);
     assert.match(chrome, /home-owner-signout/);
     assert.match(chrome, /FieldTrialBanner/);
+    assert.match(chrome, /DeskHelpBar/);
     assert.match(banner, /Field trial — not a release/);
 
     assert.match(css, /\.home-corner-chrome \{/);

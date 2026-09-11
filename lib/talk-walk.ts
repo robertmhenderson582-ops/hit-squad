@@ -1,3 +1,5 @@
+import { NOVUS_HELP_EMAIL } from "./desk-help.ts";
+
 export const TALK_WALK_VERSION = 3;
 export const TALK_WALK_KEY = "hs_talk_walk";
 
@@ -23,7 +25,7 @@ export const TALK_STEPS = [
 export const HIDDEN_INBOX_TALK_STEPS = [
   {
     title: "How we talk",
-    body: "Inbox and Suggestion Box are off this desk for now. For tickets and help, email hitsquad.novus@gmail.com. Use regular email to communicate.",
+    body: `Inbox and Suggestion Box are off this desk for now. For tickets and help, email ${NOVUS_HELP_EMAIL}. Use regular email to communicate.`,
   },
 ] as const;
 

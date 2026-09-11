@@ -5,6 +5,7 @@ import type { Density, ThemeChoice, TypeSize } from "@/lib/display";
 import { useDisplay } from "@/components/DisplayProvider";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { NOVUS_HELP_EMAIL } from "@/lib/desk-help";
 import { hasBuildDesk } from "@/lib/desk-role";
 
 const THEMES: { value: ThemeChoice; title: string; copy: string }[] = [
@@ -30,7 +31,7 @@ export function DisplayDesk() {
             onChange={(on) => desk?.setShowInboxSuggestionBox(on)}
           />
           <p className="mt-2 text-sm text-[#5b6f73]">
-            Off by default for every seat, including Owner. Testers use hitsquad.novus@gmail.com
+            Off by default for every seat, including Owner. Testers use {NOVUS_HELP_EMAIL}
             for tickets and help, and regular email to talk. Modules stay in the codebase. Flip
             this on when Robert wants the radios and FABs back.
           </p>
