@@ -12,10 +12,15 @@ import {
 } from "./lead-brief-store.ts";
 import { memoryDrive } from "./drive-estimates.ts";
 import {
+  QUALITY_COMPANY_DOC_EDIT_ERROR,
+  QUALITY_COMPANY_DOC_LOCK_ERROR,
+  QUALITY_COMPANY_DOC_LOCKED_NOTE,
   listQualityCompanyDocDrop,
   listQualityCompanyDocDrops,
+  lockQualityCompanyDoc,
   qualityCompanyDocRowId,
   readQualityCompanyDocFile,
+  removeQualityCompanyDocFile,
   saveQualityCompanyDocDrop,
 } from "./quality-company-doc-drops.ts";
 import { QUALITY_DROP_TYPE_ERROR } from "./quality-folder-drops.ts";
@@ -66,7 +71,14 @@ describe("Quality company document vault drops", { concurrency: 1 }, () => {
       folderId: "forms",
       files: [pdf("form.pdf")],
     });
-    await saveQualityCompanyDocDrop(wendell, {
+    const blockedWendell = await saveQualityCompanyDocDrop(wendell, {
+      companyId: "madison",
+      folderId: "quality-control-manual",
+      files: [pdf("wendell.pdf")],
+    });
+    assert.equal(blockedWendell.ok, false);
+    if (!blockedWendell.ok) assert.equal(blockedWendell.error, QUALITY_COMPANY_DOC_EDIT_ERROR);
+    await saveQualityCompanyDocDrop(owner, {
       companyId: "madison",
       folderId: "quality-control-manual",
       files: [pdf("wendell.pdf")],
@@ -203,5 +215,109 @@ describe("Quality company document vault drops", { concurrency: 1 }, () => {
     assert.match(drops, /listQualityCompanyDocVaultFolders/);
     assert.match(drops, /Promise\.all/);
     assert.doesNotMatch(drops, /for \(const folder of folders\) \{\s*const listed = await listQualityCompanyDocDrop/);
+  });
+
+  it("lets Chance add and remove until Owner locks the bar", async () => {
+    resetLeadBriefStoreForTests(join(dir, "acl"));
+    useLeadBriefVaultForTests(memoryDrive());
+    const saved = await saveQualityCompanyDocDrop(chance, {
+      companyId: "madison",
+      folderId: "forms",
+      files: [pdf("form.pdf")],
+    });
+    assert.equal(saved.ok, true);
+    const lockedByChance = await lockQualityCompanyDoc(chance, {
+      companyId: "madison",
+      folderId: "forms",
+      locked: true,
+    });
+    assert.equal(lockedByChance.ok, false);
+    if (!lockedByChance.ok) assert.equal(lockedByChance.error, QUALITY_COMPANY_DOC_LOCK_ERROR);
+
+    const locked = await lockQualityCompanyDoc(owner, {
+      companyId: "madison",
+      folderId: "forms",
+      locked: true,
+    });
+    assert.equal(locked.ok, true);
+    if (locked.ok) assert.equal(locked.locked, true);
+
+    const dropped = await saveQualityCompanyDocDrop(chance, {
+      companyId: "madison",
+      folderId: "forms",
+      files: [pdf("late.pdf")],
+    });
+    assert.equal(dropped.ok, false);
+    if (!dropped.ok) assert.equal(dropped.error, QUALITY_COMPANY_DOC_LOCKED_NOTE);
+
+    const removed = await removeQualityCompanyDocFile(chance, {
+      companyId: "madison",
+      folderId: "forms",
+      fileName: "form.pdf",
+    });
+    assert.equal(removed.ok, false);
+    if (!removed.ok) assert.equal(removed.error, QUALITY_COMPANY_DOC_LOCKED_NOTE);
+
+    const ownerDrop = await saveQualityCompanyDocDrop(owner, {
+      companyId: "madison",
+      folderId: "forms",
+      files: [pdf("owner.pdf")],
+    });
+    assert.equal(ownerDrop.ok, true);
+
+    const unlocked = await lockQualityCompanyDoc(owner, {
+      companyId: "madison",
+      folderId: "forms",
+      locked: false,
+    });
+    assert.equal(unlocked.ok, true);
+
+    const cleared = await removeQualityCompanyDocFile(chance, {
+      companyId: "madison",
+      folderId: "forms",
+      fileName: "form.pdf",
+    });
+    assert.equal(cleared.ok, true);
+    const listed = await listQualityCompanyDocDrop(chance, "forms", "madison");
+    assert.equal(listed.files.some((file) => file.name === "form.pdf"), false);
+    assert.equal(listed.files.some((file) => file.name === "owner.pdf"), true);
+    assert.equal(listed.locked, false);
+    assert.equal(
+      (await listQualityCompanyDocDrops(owner, "madison")).locksByFolder.forms,
+      false,
+    );
+    const viewer = await saveQualityCompanyDocDrop(wendell, {
+      companyId: "madison",
+      folderId: "forms",
+      files: [pdf("nope.pdf")],
+    });
+    assert.equal(viewer.ok, false);
+    if (!viewer.ok) assert.equal(viewer.error, QUALITY_COMPANY_DOC_EDIT_ERROR);
+    const route = source("../app/api/desk/briefs/route.ts");
+    assert.match(route, /removeQualityCompanyDocFile/);
+    assert.match(route, /lockQualityCompanyDoc/);
+    assert.match(route, /export async function DELETE/);
+  });
+
+  it("fails closed when lock state cannot be read", async () => {
+    const drive = memoryDrive();
+    resetLeadBriefStoreForTests(join(dir, "lock-fail"));
+    useLeadBriefVaultForTests({
+      ...drive,
+      configured: true,
+      async listChildren() {
+        throw new Error("drive down");
+      },
+    });
+    const dropped = await saveQualityCompanyDocDrop(chance, {
+      companyId: "madison",
+      folderId: "code-documents",
+      files: [pdf("code.pdf")],
+    });
+    assert.equal(dropped.ok, false);
+    if (!dropped.ok) assert.equal(dropped.error, QUALITY_COMPANY_DOC_LOCKED_NOTE);
+    const listed = await listQualityCompanyDocDrops(chance, "madison");
+    assert.equal(listed.locksKnown, false);
+    assert.equal(listed.locksByFolder["code-documents"], true);
   });
 });

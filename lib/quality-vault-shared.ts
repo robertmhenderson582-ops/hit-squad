@@ -8,6 +8,14 @@ export const QUALITY_VAULT_SHARE_ERROR =
 export const QUALITY_VAULT_MISSING_ERROR =
   "Quality vault folder was not found. Confirm the Quality room is shared with the vault account.";
 export const QUALITY_UNVAULTED_MARK = "on this desk only — not saved yet";
+/** Per-bar lock marker inside a company-doc vault folder. Never a library file. */
+export const QUALITY_LIBRARY_LOCK_NAME = "quality-library.lock.json";
+export const QUALITY_LIBRARY_LOCK_KIND = "quality-library-lock";
+export const QUALITY_COMPANY_DOC_LOCKED_NOTE = "Corporate locked this library";
+
+export function isQualityLibraryLockName(name?: string | null) {
+  return (name || "").trim() === QUALITY_LIBRARY_LOCK_NAME;
+}
 
 export type QualityVaultPlace = {
   companyId?: string;
@@ -51,7 +59,7 @@ export function mergeVaultedQualityFiles(
   const seen = new Set<string>();
   for (const file of vault) {
     const name = (file.name || "").trim();
-    if (!name || seen.has(name)) continue;
+    if (!name || seen.has(name) || isQualityLibraryLockName(name)) continue;
     seen.add(name);
     listed.push({
       name,
@@ -61,7 +69,7 @@ export function mergeVaultedQualityFiles(
   }
   for (const file of local) {
     const name = (file.name || "").trim();
-    if (!name || seen.has(name) || !file.data) continue;
+    if (!name || seen.has(name) || isQualityLibraryLockName(name) || !file.data) continue;
     seen.add(name);
     listed.push({
       name,

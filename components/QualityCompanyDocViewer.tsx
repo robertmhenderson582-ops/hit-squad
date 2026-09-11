@@ -35,7 +35,10 @@ export function QualityCompanyDocViewer({
   files,
   selectedName,
   viewAs,
+  canRemove,
+  lockedNote,
   onSelect,
+  onRemove,
   onClose,
 }: {
   open: boolean;
@@ -45,7 +48,10 @@ export function QualityCompanyDocViewer({
   files: QualityListedFile[];
   selectedName: string | null;
   viewAs?: string | null;
+  canRemove?: boolean;
+  lockedNote?: string | null;
   onSelect: (name: string) => void;
+  onRemove?: (name: string) => Promise<void>;
   onClose: () => void;
 }) {
   const listed = files.filter((file) => file.name);
@@ -57,6 +63,8 @@ export function QualityCompanyDocViewer({
   const [zipMembers, setZipMembers] = useState<QualityCompanyDocZipMember[]>([]);
   const [zipMemberPath, setZipMemberPath] = useState<string | null>(null);
   const [memberFile, setMemberFile] = useState<{ name: string; type: string; data: string } | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
   const zipCacheRef = useRef<{ name: string; type: string; data: string } | null>(null);
   const libraryKind: QualityCompanyDocViewKind = selected
     ? qualityCompanyDocViewKind({ name: selected.name, type: qualityCompanyDocPreviewType(selected) })
@@ -70,6 +78,7 @@ export function QualityCompanyDocViewer({
     setZipMemberPath(null);
     setMemberFile(null);
     setZipMembers([]);
+    setConfirmRemove(null);
   }, [selectedName]);
 
   useEffect(() => {
@@ -164,7 +173,22 @@ export function QualityCompanyDocViewer({
       setZipMemberPath(null);
       setMemberFile(null);
     }
+    setConfirmRemove(null);
     onSelect(name);
+  }
+
+  async function confirmAndRemove(name: string) {
+    if (!onRemove || !canRemove) return;
+    setRemoving(true);
+    setNote(null);
+    try {
+      await onRemove(name);
+      setConfirmRemove(null);
+    } catch (error) {
+      setNote(error instanceof Error && error.message ? error.message : "Could not remove that file.");
+    } finally {
+      setRemoving(false);
+    }
   }
 
   if (!open) return null;
@@ -193,7 +217,11 @@ export function QualityCompanyDocViewer({
             </button>
           </div>
           <p className="mt-1 text-sm text-[#5b6f73]">
-            Madison company files. Drop on the bar to add. Click a name to open it.
+            {lockedNote
+              ? lockedNote
+              : canRemove
+                ? "Madison company files. Drop on the bar to add. Click a name to open it."
+                : "Madison company files. Click a name to open it."}
           </p>
           <div className="mt-4 grid gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
             <ul className="space-y-1">
@@ -202,22 +230,54 @@ export function QualityCompanyDocViewer({
                   const current = file.name === selected?.name;
                   return (
                     <li key={file.name}>
-                      <button
-                        type="button"
-                        className={`w-full rounded-sm border px-3 py-2 text-left text-sm ${
-                          current ? "border-steel bg-steel/10" : "border-steel"
-                        }`}
-                        aria-current={current && !zipMemberPath ? "true" : undefined}
-                        onClick={() => selectLibraryFile(file.name)}
-                      >
-                        {file.name}
-                        {qualityCompanyDocArchiveName(file.name) ? (
-                          <span className="ml-2 rounded-sm border border-steel px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[#5b6f73]">
-                            archive
-                          </span>
+                      <div className="flex items-start gap-2">
+                        <button
+                          type="button"
+                          className={`min-w-0 flex-1 rounded-sm border px-3 py-2 text-left text-sm ${
+                            current ? "border-steel bg-steel/10" : "border-steel"
+                          }`}
+                          aria-current={current && !zipMemberPath ? "true" : undefined}
+                          onClick={() => selectLibraryFile(file.name)}
+                        >
+                          {file.name}
+                          {qualityCompanyDocArchiveName(file.name) ? (
+                            <span className="ml-2 rounded-sm border border-steel px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[#5b6f73]">
+                              archive
+                            </span>
+                          ) : null}
+                          {file.vaulted ? "" : ` · ${QUALITY_UNVAULTED_MARK}`}
+                        </button>
+                        {canRemove ? (
+                          confirmRemove === file.name ? (
+                            <span className="flex shrink-0 flex-col gap-1">
+                              <button
+                                type="button"
+                                className="text-xs text-[#8a2a2a] underline"
+                                disabled={removing}
+                                onClick={() => void confirmAndRemove(file.name)}
+                              >
+                                {removing ? "Removing…" : "Confirm"}
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs text-[#5b6f73] underline"
+                                disabled={removing}
+                                onClick={() => setConfirmRemove(null)}
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="shrink-0 text-xs text-[#8a2a2a] underline"
+                              onClick={() => setConfirmRemove(file.name)}
+                            >
+                              Remove
+                            </button>
+                          )
                         ) : null}
-                        {file.vaulted ? "" : ` · ${QUALITY_UNVAULTED_MARK}`}
-                      </button>
+                      </div>
                       {current && zipMembers.length ? (
                         <ul className="mt-1 ml-3 space-y-1" aria-label={`Files in ${file.name}`}>
                           {zipMembers.map((member) => {
@@ -243,7 +303,9 @@ export function QualityCompanyDocViewer({
                   );
                 })
               ) : (
-                <li className="text-sm text-[#5b6f73]">Nothing in this bucket yet. Drop a file on the bar to add it.</li>
+                <li className="text-sm text-[#5b6f73]">
+                  {canRemove ? "Nothing in this bucket yet. Drop a file on the bar to add it." : "Nothing in this bucket yet."}
+                </li>
               )}
             </ul>
             <div className="min-h-64 rounded-sm border border-steel bg-white px-3 py-3">

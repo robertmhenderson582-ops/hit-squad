@@ -183,6 +183,42 @@ async function persist(kind: LeadBriefKind, briefs: StoredLeadBrief[]): Promise<
   return merged;
 }
 
+async function persistExact(kind: LeadBriefKind, briefs: StoredLeadBrief[]): Promise<StoredLeadBrief[]> {
+  const drive = resolveAdapter(kind);
+  if (!drive?.configured) throw new Error(briefVaultWriteError(kind));
+  const vault = briefsVault(kind);
+  await writeVaultJson(drive, vault.name, vault.kind, { briefs }, briefsFolderId(kind));
+  writeCache(kind, briefs);
+  return briefs;
+}
+
+/** Strip a file from matching briefs. Writes the exact next index — empty files must not merge back. */
+export async function removeFileFromStoredBriefs(
+  kind: LeadBriefKind,
+  fileName: string,
+  filter?: { jobId?: string; folderId?: string; companyId?: string },
+) {
+  const wanted = sanitizeFileName(fileName);
+  if (!wanted) return 0;
+  const briefs = await readVaultBriefs(kind);
+  const jobId = filter?.jobId?.trim() || "";
+  const folderId = filter?.folderId?.trim() || "";
+  const companyId = filter?.companyId?.trim() || "";
+  let changed = 0;
+  const next = briefs.map((brief) => {
+    if (jobId && (brief.jobId || "") !== jobId) return brief;
+    if (folderId && (brief.folderId || "") !== folderId) return brief;
+    if (companyId && (brief.companyId || "") && brief.companyId !== companyId) return brief;
+    const files = brief.files.filter((file) => file.name !== wanted);
+    if (files.length === brief.files.length) return brief;
+    changed += 1;
+    return { ...brief, files };
+  });
+  if (!changed) return 0;
+  await persistExact(kind, next);
+  return changed;
+}
+
 export async function hydrateLeadBriefStore(kind: LeadBriefKind): Promise<StoredLeadBrief[]> {
   const drive = resolveAdapter(kind);
   if (!drive?.configured) return [];
