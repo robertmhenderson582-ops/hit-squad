@@ -803,7 +803,6 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
         craft: hall || null,
         local: null,
         sheet: hall || null,
-        ridesOt,
         ...readB1Controls(burdenCols, row, ridesOt, {
           unit,
           label,
@@ -847,7 +846,6 @@ export async function parseRateVaultB1Xlsx(input: RateVaultB1XlsxInput): Promise
         local: text(row.getCell(fringeCols.Local || 3).value) || null,
         sheet,
         note,
-        ridesOt,
         ...readB1Controls(fringeCols, row, ridesOt, { unit, label, craft, sheet, note }),
       });
     }
