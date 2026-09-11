@@ -81,7 +81,7 @@ export const RATE_VAULT_B1_BURDEN_HEADERS = [
   "Rate %",
   "$ / hr",
   "Hall",
-  RATE_VAULT_B1_RATE_KIND_LABEL,
+  "Rate $/%/Varies",
   "Base",
   "ST Calc",
   "OT Calc",
@@ -101,7 +101,7 @@ export const RATE_VAULT_B1_FRINGE_HEADERS = [
   "Fringe",
   "$ / hr",
   "Rate %",
-  RATE_VAULT_B1_RATE_KIND_LABEL,
+  "Rate $/%/Varies",
   "Base",
   "ST Calc",
   "OT Calc",
@@ -428,17 +428,22 @@ function readOptionalMult(cell: ExcelJS.Cell) {
   return "ok" in read ? read.value : null;
 }
 
+function headerText(row: ExcelJS.Row, cols: Record<string, number>, header: string) {
+  const col = cols[header];
+  return col ? text(row.getCell(col).value) : "";
+}
+
 function readB1Controls(
   cols: Record<string, number>,
   row: ExcelJS.Row,
   ridesOt: boolean,
   extras: { unit?: string; label?: string; craft?: string | null; sheet?: string | null; note?: string },
 ) {
-  const rateKind = text(row.getCell(cols[RATE_VAULT_B1_RATE_KIND_LABEL] || 0).value);
-  const base = text(row.getCell(cols.Base || 0).value);
-  const calcSt = text(row.getCell(cols["ST Calc"] || 0).value);
-  const calcOt = text(row.getCell(cols["OT Calc"] || 0).value);
-  const calcDt = text(row.getCell(cols["DT Calc"] || 0).value);
+  const rateKind = headerText(row, cols, RATE_VAULT_B1_RATE_KIND_LABEL);
+  const base = headerText(row, cols, "Base");
+  const calcSt = headerText(row, cols, "ST Calc");
+  const calcOt = headerText(row, cols, "OT Calc");
+  const calcDt = headerText(row, cols, "DT Calc");
   const mult = cols.Mult ? readOptionalMult(row.getCell(cols.Mult)) : null;
   return normalizeRateVaultB1Controls({
     rateKind,

@@ -63,7 +63,7 @@ Legacy `ridesOt` still maps in for older packages: `true` → OT/DT Calc **Hours
 
 Desk Burden / Publish show every control. `POST /api/rate-vault` `action: "patch-b1-line"` persists a line and ripples Bill OT/DT so Export uses the stored package.
 
-Drop Down List strings from a later desk extract of the official workbook append to `lib/rate-vault/b1-dropdowns.json` (`extra` plus each list). Unknown option strings are never dropped. Do not invent Illinois composites or Shahan.
+Drop Down List strings from a later desk extract of the official workbook append to `lib/rate-vault/b1-dropdowns.json` (`extra` plus each list). Unknown option strings are never dropped. Do not invent Illinois composites or names that are not in the book.
 
 ## B-1 Excel export / import (vault-internal)
 
