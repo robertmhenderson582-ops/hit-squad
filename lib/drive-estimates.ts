@@ -14,6 +14,7 @@ import {
 } from "./estimate-pack.ts";
 import { packBaselineMoneyWriteError, packBaselineWriteException } from "./family-a-vault-write.ts";
 import { decidePackWrite, integrityErrorMessage } from "./pack-integrity.ts";
+import { isSandboxEstimateOwner } from "./estimate-isolation.ts";
 import {
   applyHisIdentity,
   HIS_AROMATICS_FILE_ID,
@@ -21,6 +22,7 @@ import {
   HIS_AROMATICS_PACK_ID,
   HIS_AROMATICS_STUB_ID,
   HIS_TM_FILE_ID,
+  hisFileByDriveId,
   hisFileForPackId,
   hisKnownEstimateFiles,
   hisMatchForPack,
@@ -1092,6 +1094,18 @@ async function writePackFile(
       ? existing
       : knownHisFile(pack.packId);
   if (target?.id === HIS_AROMATICS_FREEZE_FILE_ID) target = knownHisFile(pack.packId);
+  const pinnedHis = target ? hisFileByDriveId(target.id) : null;
+  if (pinnedHis && isSandboxEstimateOwner(pack.ownerEmail)) {
+    throw new Error("PACK_OWNED_ELSEWHERE");
+  }
+  if (
+    pinnedHis &&
+    pack.packId &&
+    pinnedHis.packId &&
+    pack.packId.trim().toLowerCase() !== pinnedHis.packId.trim().toLowerCase()
+  ) {
+    target = null;
+  }
   const current = target ? await readExistingSnapshot(adapter, target.id) : null;
   const decision = decidePackWrite(pack, current);
   if (decision.action === "keep-last-good" && current && target) {

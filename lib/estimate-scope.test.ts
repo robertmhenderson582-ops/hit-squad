@@ -74,6 +74,14 @@ describe("estimate vault scope", () => {
       ),
       "jameshcainjr@gmail.com",
     );
+    assert.equal(
+      packOwnerEmailForWrite(otherTester, otherTester.email, {
+        packId: "new-mark-arom",
+        title: "2027 Aromatics Turnaround",
+        site: "Wood River — Roxana, IL",
+      }),
+      otherTester.email,
+    );
     assert.equal(canWritePack(tester, ownerPack), false);
     assert.equal(canWritePack(tester, testerPack), true);
     assert.equal(canWritePack(novus, ownerPack), true);
