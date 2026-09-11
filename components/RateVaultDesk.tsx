@@ -1307,7 +1307,8 @@ function BurdenPane({
         <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
           Friendlier than a raw Exhibit B-1, same guts: hall craft sheets with Pay Tax, Ins,
           Misc, O/H, Profit, and Fringes Subtotal as $ / hr, plus the hall Rate $/%/Varies,
-          Base Wage vs Tax BW, ST/OT/DT Calc, Mult, and ride flags. Export is a lean B-1 face —
+          BW (K) vs Tax BW (P), ST/OT/DT Calc (ST, OT, DT, ST-ONLY, OT-ONLY), Mult, and ride flags.
+          Export is a lean B-1 face —
           not the 25 MB official book. Fringe and burden cells pull the Fringes / Burden tabs.
           Edit those offline, drop the same file here, and this desk updates. Live Rate Tables
           stay stubbed.

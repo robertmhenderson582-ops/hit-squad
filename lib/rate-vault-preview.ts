@@ -17,6 +17,7 @@ import {
   ripplePreviewRowsFromB1Sheets,
   withB1Controls,
 } from "./rate-vault-b1.ts";
+import { inferRateVaultB1CraftType, inferRateVaultB1RateClass } from "./rate-vault-b1-options.ts";
 import { woodRiverB1CraftSheets } from "./rate-vault-wood-river-b1.ts";
 import { WOOD_RIVER_TM_B1_PACKAGE_NOTE, woodRiverTmB1CraftSheets } from "./rate-vault-wood-river-tm-b1.ts";
 import {
@@ -264,6 +265,19 @@ function parseCraftSheet(raw: unknown, index: number): RateVaultCraftSheet | nul
     group: text(row.group) || sheet,
     revision: text(row.revision) || null,
     effective: text(row.effective) || null,
+    rateClass: inferRateVaultB1RateClass({
+      rateClass: text(row.rateClass) || undefined,
+      lane: row.lane === "merit" ? "merit" : "union",
+      craft,
+      sheet,
+      group: text(row.group) || sheet,
+    }),
+    craftType: inferRateVaultB1CraftType({
+      craftType: text(row.craftType) || undefined,
+      craft,
+      sheet,
+      group: text(row.group) || sheet,
+    }),
     representativeWage: money(row.representativeWage),
     representativePosition: text(row.representativePosition) || craft,
     fringes,

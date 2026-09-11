@@ -1,0 +1,10 @@
+{
+  "note": "Wood River Exhibit B-1 Drop Down List — exact strings from the desk extract. ST/OT/DT Calc is A1:A5 → hall sheet row 7. % base is E1:E2 → row 8. Rate $/ %/Varies is the row-6 cell format/text, not a DV list. Rate Class and Craft Type are also in the book. Do not invent, rename, or collapse. Unknown later extract strings append via b1-dropdowns.json.",
+  "source": "desk extract 2026-09-11 — Drop Down List A1:A5, E1:E2, row-6 Rate $/ %/Varies, Rate Class, Craft Type",
+  "calc": ["ST", "OT", "DT", "ST-ONLY", "OT-ONLY"],
+  "base": ["BW (K)", "Tax BW (P)"],
+  "rateKind": ["$", "%", "Varies"],
+  "rateClass": ["Merit", "Union"],
+  "craftType": ["Staff", "Craft", "Engineer", "All"],
+  "ride": ["Y", "N"]
+}

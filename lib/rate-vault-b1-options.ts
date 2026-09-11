@@ -1,17 +1,20 @@
 /**
  * Wood River Exhibit B-1 rate-builder controls.
  *
- * The official hall sheet is not a three-way fringe enum. Row-6 and the
- * header block expose Rate $ / % / Varies, ST/OT/DT Calc, Mult, Base Wage
- * vs Tax BW, and ST/OT/DT ride flags — the same surface on Fringes and on
- * Pay Tax / Ins / Misc / O/H / Profit. Drop Down List strings from a later
- * desk extract merge through `b1-dropdowns.json` without rewriting this file.
+ * Desk extract (2026-09-11): ST/OT/DT Calc is Drop Down List A1:A5 → hall
+ * sheet row 7 (`ST`, `OT`, `DT`, `ST-ONLY`, `OT-ONLY`). % base is E1:E2 →
+ * row 8 (`BW (K)`, `Tax BW (P)`). Rate $/ %/Varies is row-6 cell format/text.
+ * Rate Class (`Merit`, `Union`) and Craft Type (`Staff`, `Craft`, `Engineer`,
+ * `All`) are also in the book. Do not rename or collapse those labels.
  *
- * Legacy `ridesOt` maps in. Unknown book strings are kept, never discarded.
+ * Further Drop Down List strings merge through `b1-dropdowns.json`.
+ * Legacy `ridesOt` maps into the five calc values without deleting options.
  */
 
+import fringeOptions from "./rate-vault/b1-fringe-options.json" with { type: "json" };
 import dropdownSeed from "./rate-vault/b1-dropdowns.json" with { type: "json" };
 
+export const RATE_VAULT_B1_FRINGE_OPTIONS_PATH = "lib/rate-vault/b1-fringe-options.json";
 export const RATE_VAULT_B1_DROPDOWN_EXTENSION_PATH = "lib/rate-vault/b1-dropdowns.json";
 
 export const RATE_VAULT_B1_RATE_KIND_LABEL = "Rate $/%/Varies";
@@ -27,17 +30,29 @@ export const RATE_VAULT_B1_RIDE_LABELS = {
   ot: "Ride OT",
   dt: "Ride DT",
 } as const;
+export const RATE_VAULT_B1_RATE_CLASS_LABEL = "Rate Class";
+export const RATE_VAULT_B1_CRAFT_TYPE_LABEL = "Craft Type";
 export const RATE_VAULT_B1_REVISION_LABEL = "Revision";
 export const RATE_VAULT_B1_EFF_THROUGH_LABEL = "Eff Through";
 
+export const RATE_VAULT_B1_CALC_MODES = ["ST", "OT", "DT", "ST-ONLY", "OT-ONLY"] as const;
+export const RATE_VAULT_B1_BASE_MODES = ["BW (K)", "Tax BW (P)"] as const;
+export const RATE_VAULT_B1_RATE_KIND_MODES = ["$", "%", "Varies"] as const;
+export const RATE_VAULT_B1_RATE_CLASSES = ["Merit", "Union"] as const;
+export const RATE_VAULT_B1_CRAFT_TYPES = ["Staff", "Craft", "Engineer", "All"] as const;
+
 export const RATE_VAULT_B1_BUCKETS = ["st", "ot", "dt"] as const;
 export type RateVaultB1Bucket = (typeof RATE_VAULT_B1_BUCKETS)[number];
+export type RateVaultB1CalcMode = (typeof RATE_VAULT_B1_CALC_MODES)[number];
+export type RateVaultB1CalcClass = RateVaultB1CalcMode | "other";
 
 export type RateVaultB1DropdownCatalog = {
   rateKind: string[];
   base: string[];
   calc: string[];
   ride: string[];
+  rateClass?: string[];
+  craftType?: string[];
   rateType?: string[];
   extra?: Record<string, string[]>;
   note?: string;
@@ -45,11 +60,12 @@ export type RateVaultB1DropdownCatalog = {
 };
 
 const DEFAULT_CATALOG: RateVaultB1DropdownCatalog = {
-  rateKind: ["$", "%", "Varies"],
-  base: ["Base Wage", "Tax BW"],
-  calc: ["Hours Worked", "Hours Paid", "Straight Time", "Y", "N", "Varies"],
+  rateKind: [...RATE_VAULT_B1_RATE_KIND_MODES],
+  base: [...RATE_VAULT_B1_BASE_MODES],
+  calc: [...RATE_VAULT_B1_CALC_MODES],
   ride: ["Y", "N"],
-  rateType: ["1-ST"],
+  rateClass: [...RATE_VAULT_B1_RATE_CLASSES],
+  craftType: [...RATE_VAULT_B1_CRAFT_TYPES],
   extra: {},
 };
 
@@ -67,25 +83,32 @@ function mergeList(base: readonly string[], extra: readonly unknown[] | undefine
   return uniqStrings([...base, ...(extra ?? [])]);
 }
 
+function catalogFrom(raw: unknown): Partial<RateVaultB1DropdownCatalog> {
+  return raw && typeof raw === "object" ? (raw as Partial<RateVaultB1DropdownCatalog>) : {};
+}
+
 export function mergeRateVaultB1Dropdowns(
   extra?: Partial<RateVaultB1DropdownCatalog> | null,
 ): RateVaultB1DropdownCatalog {
-  const seed = dropdownSeed && typeof dropdownSeed === "object" ? dropdownSeed : DEFAULT_CATALOG;
+  const seed = catalogFrom(fringeOptions);
+  const ext = catalogFrom(dropdownSeed);
   const extraMap = extra?.extra && typeof extra.extra === "object" ? extra.extra : {};
   const seedExtra = seed.extra && typeof seed.extra === "object" ? seed.extra : {};
-  const extraKeys = uniqStrings([...Object.keys(seedExtra), ...Object.keys(extraMap)]);
+  const extExtra = ext.extra && typeof ext.extra === "object" ? ext.extra : {};
+  const extraKeys = uniqStrings([...Object.keys(seedExtra), ...Object.keys(extExtra), ...Object.keys(extraMap)]);
   const mergedExtra: Record<string, string[]> = {};
   for (const key of extraKeys) {
-    mergedExtra[key] = mergeList(seedExtra[key] ?? [], extraMap[key]);
+    mergedExtra[key] = mergeList(seedExtra[key] ?? [], [...(extExtra[key] ?? []), ...(extraMap[key] ?? [])]);
   }
   return {
-    note: extra?.note || seed.note || DEFAULT_CATALOG.note,
-    source: extra?.source || seed.source || DEFAULT_CATALOG.source,
-    rateKind: mergeList(DEFAULT_CATALOG.rateKind, [...(seed.rateKind ?? []), ...(extra?.rateKind ?? [])]),
-    base: mergeList(DEFAULT_CATALOG.base, [...(seed.base ?? []), ...(extra?.base ?? [])]),
-    calc: mergeList(DEFAULT_CATALOG.calc, [...(seed.calc ?? []), ...(extra?.calc ?? [])]),
-    ride: mergeList(DEFAULT_CATALOG.ride, [...(seed.ride ?? []), ...(extra?.ride ?? [])]),
-    rateType: mergeList(DEFAULT_CATALOG.rateType ?? [], [...(seed.rateType ?? []), ...(extra?.rateType ?? [])]),
+    note: extra?.note || ext.note || seed.note || DEFAULT_CATALOG.note,
+    source: extra?.source || ext.source || seed.source || DEFAULT_CATALOG.source,
+    rateKind: mergeList(DEFAULT_CATALOG.rateKind, [...(seed.rateKind ?? []), ...(ext.rateKind ?? []), ...(extra?.rateKind ?? [])]),
+    base: mergeList(DEFAULT_CATALOG.base, [...(seed.base ?? []), ...(ext.base ?? []), ...(extra?.base ?? [])]),
+    calc: mergeList(DEFAULT_CATALOG.calc, [...(seed.calc ?? []), ...(ext.calc ?? []), ...(extra?.calc ?? [])]),
+    ride: mergeList(DEFAULT_CATALOG.ride ?? [], [...(seed.ride ?? []), ...(ext.ride ?? []), ...(extra?.ride ?? [])]),
+    rateClass: mergeList(DEFAULT_CATALOG.rateClass ?? [], [...(seed.rateClass ?? []), ...(ext.rateClass ?? []), ...(extra?.rateClass ?? [])]),
+    craftType: mergeList(DEFAULT_CATALOG.craftType ?? [], [...(seed.craftType ?? []), ...(ext.craftType ?? []), ...(extra?.craftType ?? [])]),
     extra: mergedExtra,
   };
 }
@@ -101,8 +124,11 @@ export function retainRateVaultB1Option(list: readonly string[], value: string |
   return list.includes(next) ? list.slice() : [...list, next];
 }
 
-export function rateVaultB1SelectOptions(kind: keyof Pick<RateVaultB1DropdownCatalog, "rateKind" | "base" | "calc" | "ride">, current?: string | null) {
-  return retainRateVaultB1Option(rateVaultB1DropdownCatalog()[kind], current);
+export function rateVaultB1SelectOptions(
+  kind: keyof Pick<RateVaultB1DropdownCatalog, "rateKind" | "base" | "calc" | "ride" | "rateClass" | "craftType">,
+  current?: string | null,
+) {
+  return retainRateVaultB1Option(rateVaultB1DropdownCatalog()[kind] ?? [], current);
 }
 
 export type RateVaultB1Controls = {
@@ -156,48 +182,76 @@ export function classifyRateVaultB1RateKind(value: string | null | undefined): "
   return raw ? "other" : "$";
 }
 
-export function classifyRateVaultB1Base(value: string | null | undefined): "Base Wage" | "Tax BW" | "other" {
+export function classifyRateVaultB1Base(value: string | null | undefined): "BW (K)" | "Tax BW (P)" | "other" {
   const raw = text(value);
-  if (/tax\s*bw|taxable/i.test(raw)) return "Tax BW";
-  if (/base\s*wage|bw\b/i.test(raw)) return "Base Wage";
-  return raw ? "other" : "Tax BW";
+  if (/tax\s*bw|taxable|\(P\)/i.test(raw)) return "Tax BW (P)";
+  if (/bw\s*\(K\)|base\s*wage|^bw$/i.test(raw)) return "BW (K)";
+  return raw ? "other" : "Tax BW (P)";
+}
+
+export function normalizeRateVaultB1Base(value: string | null | undefined, fallback: "BW (K)" | "Tax BW (P)" = "Tax BW (P)") {
+  const raw = text(value);
+  if (!raw) return fallback;
+  const kind = classifyRateVaultB1Base(raw);
+  if (kind === "other") return raw;
+  return kind;
 }
 
 export function classifyRateVaultB1Calc(
   value: string | null | undefined,
-): "hours-worked" | "hours-paid" | "straight-time" | "varies" | "y" | "n" | "other" {
+  bucket: RateVaultB1Bucket = "ot",
+): RateVaultB1CalcClass {
   const raw = text(value);
-  if (!raw) return "hours-worked";
-  if (/straight|st\s*only|st-only|only\s*pay\s*on\s*straight/i.test(raw)) return "straight-time";
-  if (/hours?\s*paid|hour-paid|paid\s*hours/i.test(raw)) return "hours-paid";
-  if (/hours?\s*worked|hour-worked|clock/i.test(raw)) return "hours-worked";
-  if (/^varies$/i.test(raw)) return "varies";
-  if (/^(y|yes|true|1)$/i.test(raw)) return "y";
-  if (/^(n|no|false|0)$/i.test(raw)) return "n";
+  if (!raw) return "ST";
+  if (/^st-only$/i.test(raw) || /straight(\s*time)?(\s*only)?/i.test(raw)) return "ST-ONLY";
+  if (/^ot-only$/i.test(raw)) return "OT-ONLY";
+  if (/^dt$/i.test(raw)) return "DT";
+  if (/^ot$/i.test(raw)) return "OT";
+  if (/^st$/i.test(raw)) return "ST";
+  if (/^y$/i.test(raw)) return bucket === "dt" ? "DT" : "OT";
+  if (/^n$/i.test(raw)) return "ST-ONLY";
+  if (/hour/i.test(raw) && /paid/i.test(raw)) return bucket === "dt" ? "DT" : "OT";
+  if (/hour/i.test(raw) && /work/i.test(raw)) return "ST";
   return "other";
 }
 
-function calcFromClass(kind: ReturnType<typeof classifyRateVaultB1Calc>, original?: string) {
-  if (kind === "hours-paid") return "Hours Paid";
-  if (kind === "straight-time") return "Straight Time";
-  if (kind === "varies") return "Varies";
-  if (kind === "y") return "Y";
-  if (kind === "n") return "N";
-  if (kind === "other" && text(original)) return text(original);
-  return "Hours Worked";
+export function normalizeRateVaultB1Calc(value: string | null | undefined, bucket: RateVaultB1Bucket = "ot") {
+  const raw = text(value);
+  if (!raw) return "";
+  if ((RATE_VAULT_B1_CALC_MODES as readonly string[]).includes(raw)) return raw;
+  const kind = classifyRateVaultB1Calc(raw, bucket);
+  return kind === "other" ? raw : kind;
 }
 
 function noteSuggestsStraight(note: string, label: string) {
-  return /straight\s*(time\s*)?only|does not pay on ot|ot\/dt fringe contribution is \$0/i.test(`${note} ${label}`);
+  return /st-only|does not pay on ot|ot\/dt fringe contribution is \$0/i.test(`${note} ${label}`);
 }
 
-function ratioClass(st: number, ot: number | null | undefined) {
+function ratioClass(st: number, ot: number | null | undefined): RateVaultB1CalcMode | "custom" | null {
   if (!(st > 0) || ot == null || !Number.isFinite(ot)) return null;
-  if (Math.abs(ot) <= MONEY_TOL) return "straight-time" as const;
+  if (Math.abs(ot) <= MONEY_TOL) return "ST-ONLY";
   const ratio = ot / st;
-  if (Math.abs(ratio - 1) <= MONEY_TOL) return "hours-worked" as const;
-  if (Math.abs(ratio - 1.5) <= 0.06) return "hours-paid" as const;
-  return "varies" as const;
+  if (Math.abs(ratio - 1) <= MONEY_TOL) return "ST";
+  if (Math.abs(ratio - 1.5) <= 0.06) return "OT";
+  if (Math.abs(ratio - 2) <= 0.06) return "DT";
+  return "custom";
+}
+
+export function inferRateVaultB1RateClass(input: { lane?: string | null; craft?: string | null; sheet?: string | null; group?: string | null; rateClass?: string | null }) {
+  const explicit = text(input.rateClass);
+  if (explicit) return explicit;
+  if (/merit/i.test([input.lane, input.craft, input.sheet, input.group].filter(Boolean).join(" "))) return "Merit";
+  return "Union";
+}
+
+export function inferRateVaultB1CraftType(input: { craft?: string | null; sheet?: string | null; group?: string | null; craftType?: string | null }) {
+  const explicit = text(input.craftType);
+  if (explicit) return explicit;
+  const hay = [input.craft, input.sheet, input.group].filter(Boolean).join(" ");
+  if (/engineer/i.test(hay)) return "Engineer";
+  if (/staff/i.test(hay)) return "Staff";
+  if (/\ball\b/i.test(hay)) return "All";
+  return "Craft";
 }
 
 export function inferRateVaultB1Controls(input: RateVaultB1ControlInput = {}): RateVaultB1Controls {
@@ -205,7 +259,10 @@ export function inferRateVaultB1Controls(input: RateVaultB1ControlInput = {}): R
   const rateKind =
     text(input.rateKind) ||
     (unit === "pct-taxable" ? "%" : /varies/i.test(text(input.note)) ? "Varies" : "$");
-  const base = text(input.base) || (classifyRateVaultB1RateKind(rateKind) === "%" ? "Tax BW" : "Base Wage");
+  const base = normalizeRateVaultB1Base(
+    input.base,
+    classifyRateVaultB1RateKind(rateKind) === "%" ? "Tax BW (P)" : "BW (K)",
+  );
   const note = text(input.note);
   const label = text(input.label);
   const meritHealth =
@@ -214,32 +271,35 @@ export function inferRateVaultB1Controls(input: RateVaultB1ControlInput = {}): R
   const ridesOt = input.ridesOt === true;
 
   let calcOt =
-    text(input.calcOt) ||
-    (meritHealth ? "Straight Time" : "") ||
-    (fromAmounts ? calcFromClass(fromAmounts) : "") ||
-    (noteSuggestsStraight(note, label) ? "Straight Time" : "") ||
-    (ridesOt ? "Hours Paid" : "Hours Worked");
-  let calcDt = text(input.calcDt) || calcOt;
-  let calcSt = text(input.calcSt) || "Hours Worked";
+    normalizeRateVaultB1Calc(input.calcOt, "ot") ||
+    (meritHealth ? "ST-ONLY" : "") ||
+    (fromAmounts && fromAmounts !== "custom" ? fromAmounts : "") ||
+    (noteSuggestsStraight(note, label) ? "ST-ONLY" : "") ||
+    (ridesOt ? "OT" : "ST");
+  let calcSt = normalizeRateVaultB1Calc(input.calcSt, "st") || "ST";
+  let calcDt = normalizeRateVaultB1Calc(input.calcDt, "dt");
+  if (!calcDt) {
+    if (meritHealth || calcOt === "ST-ONLY") calcDt = "ST-ONLY";
+    else if (calcOt === "OT-ONLY") calcDt = "OT-ONLY";
+    else if (ridesOt || calcOt === "OT" || calcOt === "DT") calcDt = "DT";
+    else calcDt = calcOt;
+  }
 
-  if (!text(input.calcOt) && fromAmounts === "varies" && ridesOt) calcOt = "Hours Paid";
-  if (!text(input.calcDt)) calcDt = calcOt;
+  if (!text(input.calcOt) && fromAmounts === "custom" && ridesOt) calcOt = "OT";
 
   const rideSt = parseRideFlag(input.rideFlagSt ?? input.rideSt, true);
   const explicitOtRide = input.rideFlagOt != null || input.rideOt != null;
   const rideOt = parseRideFlag(
     input.rideFlagOt ?? input.rideOt,
-    classifyRateVaultB1Calc(calcOt) === "straight-time" || classifyRateVaultB1Calc(calcOt) === "n"
-      ? false
-      : true,
+    classifyRateVaultB1Calc(calcOt, "ot") === "ST-ONLY" ? false : true,
   );
   const rideDt = parseRideFlag(
     input.rideFlagDt ?? input.rideDt,
-    explicitOtRide ? rideOt : classifyRateVaultB1Calc(calcDt) === "straight-time" || classifyRateVaultB1Calc(calcDt) === "n" ? false : true,
+    explicitOtRide ? rideOt : classifyRateVaultB1Calc(calcDt, "dt") === "ST-ONLY" ? false : true,
   );
 
   let mult = typeof input.mult === "number" && Number.isFinite(input.mult) ? input.mult : null;
-  if (mult == null && fromAmounts === "varies" && (Number(input.amountHr) || 0) > 0 && input.amountOt != null) {
+  if (mult == null && fromAmounts === "custom" && (Number(input.amountHr) || 0) > 0 && input.amountOt != null) {
     mult = Math.round((input.amountOt / Number(input.amountHr)) * 10000) / 10000;
   }
 
@@ -258,8 +318,8 @@ export function inferRateVaultB1Controls(input: RateVaultB1ControlInput = {}): R
 
 export function ridesOtFromB1Controls(controls: Pick<RateVaultB1Controls, "calcOt" | "rideOt" | "mult">) {
   if (!controls.rideOt) return false;
-  const kind = classifyRateVaultB1Calc(controls.calcOt);
-  return kind === "hours-paid" || kind === "y" || (kind === "varies" && (controls.mult ?? 0) > 1 + MONEY_TOL);
+  const kind = classifyRateVaultB1Calc(controls.calcOt, "ot");
+  return kind === "OT" || kind === "DT" || kind === "OT-ONLY";
 }
 
 export function unitFromB1RateKind(rateKind: string): "pct-taxable" | "amount-hr" {
@@ -271,14 +331,23 @@ export function normalizeRateVaultB1Controls(input: RateVaultB1ControlInput = {}
   return { ...controls, ridesOt: ridesOtFromB1Controls(controls) };
 }
 
-export function b1PaidHours(bucket: RateVaultB1Bucket, mult: number | null) {
-  if (bucket === "st") return 1;
+export function b1OtMult(mult: number | null) {
+  if (mult != null && Number.isFinite(mult)) return mult;
+  return 1.5;
+}
+
+export function b1DtMult(mult: number | null) {
   if (mult != null && Number.isFinite(mult)) {
-    if (bucket === "dt" && Math.abs(mult - 1.5) <= 0.02) return 2;
+    if (Math.abs(mult - 1.5) <= 0.02) return 2;
     return mult;
   }
-  if (bucket === "ot") return 1.5;
-  if (bucket === "dt") return 2;
+  return 2;
+}
+
+export function b1PaidHours(bucket: RateVaultB1Bucket, mult: number | null) {
+  if (bucket === "st") return 1;
+  if (bucket === "ot") return b1OtMult(mult);
+  if (bucket === "dt") return b1DtMult(mult);
   return 1;
 }
 
@@ -286,11 +355,12 @@ export function b1BucketFactor(controls: RateVaultB1Controls, bucket: RateVaultB
   const ride = bucket === "st" ? controls.rideSt : bucket === "ot" ? controls.rideOt : controls.rideDt;
   if (!ride) return 0;
   const calc = bucket === "st" ? controls.calcSt : bucket === "ot" ? controls.calcOt : controls.calcDt;
-  const kind = classifyRateVaultB1Calc(calc);
-  if (kind === "straight-time" || kind === "n") return bucket === "st" ? 1 : 0;
-  if (kind === "hours-worked") return 1;
-  if (kind === "hours-paid" || kind === "y") return b1PaidHours(bucket, controls.mult);
-  if (kind === "varies") return bucket === "st" ? 1 : b1PaidHours(bucket, controls.mult ?? 1);
+  const kind = classifyRateVaultB1Calc(calc, bucket);
+  if (kind === "ST-ONLY") return bucket === "st" ? 1 : 0;
+  if (kind === "OT-ONLY") return bucket === "ot" ? b1OtMult(controls.mult) : 0;
+  if (kind === "ST") return 1;
+  if (kind === "OT") return b1OtMult(controls.mult);
+  if (kind === "DT") return b1DtMult(controls.mult);
   if (kind === "other") return bucket === "st" ? 1 : controls.mult != null ? b1PaidHours(bucket, controls.mult) : 1;
   return 1;
 }
@@ -315,16 +385,16 @@ export function recognizeFringeControlsFromHallAmounts(input: {
   });
 }
 
-/** Desk / API patch — keep unknown book strings; never coerce to a three-way enum. */
+/** Desk / API patch — keep unknown book strings; never coerce off the extract list. */
 export function parseRateVaultB1LinePatch(raw: unknown): Partial<RateVaultB1Controls> {
   if (!raw || typeof raw !== "object") return {};
   const row = raw as Record<string, unknown>;
   const patch: Partial<RateVaultB1Controls> = {};
   if (typeof row.rateKind === "string") patch.rateKind = row.rateKind.trim();
   if (typeof row.base === "string") patch.base = row.base.trim();
-  if (typeof row.calcSt === "string") patch.calcSt = row.calcSt.trim();
-  if (typeof row.calcOt === "string") patch.calcOt = row.calcOt.trim();
-  if (typeof row.calcDt === "string") patch.calcDt = row.calcDt.trim();
+  if (typeof row.calcSt === "string") patch.calcSt = normalizeRateVaultB1Calc(row.calcSt, "st") || row.calcSt.trim();
+  if (typeof row.calcOt === "string") patch.calcOt = normalizeRateVaultB1Calc(row.calcOt, "ot") || row.calcOt.trim();
+  if (typeof row.calcDt === "string") patch.calcDt = normalizeRateVaultB1Calc(row.calcDt, "dt") || row.calcDt.trim();
   if (row.mult === null) patch.mult = null;
   else if (typeof row.mult === "number" && Number.isFinite(row.mult)) patch.mult = row.mult;
   else if (typeof row.mult === "string" && row.mult.trim() === "") patch.mult = null;

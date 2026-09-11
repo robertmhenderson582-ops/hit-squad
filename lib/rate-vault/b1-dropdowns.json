@@ -1,10 +1,11 @@
 {
-  "note": "Wood River Exhibit B-1 Drop Down List extension point. Seeded from hall-sheet comments and the GPPMA template labels already in this vault (Rate $/ %/Varies, ST/OT/DT Calc, Base Wage vs Tax BW, ride Y/N). A desk-side extract of the official workbook’s data validations should append every additional option string here — unknown book strings stay first-class and are never dropped. Do not invent Illinois composites or names that are not in the book.",
-  "source": "fixtures + TM extract notes + GPPMA template pattern",
-  "rateKind": ["$", "%", "Varies"],
-  "base": ["Base Wage", "Tax BW"],
-  "calc": ["Hours Worked", "Hours Paid", "Straight Time", "Y", "N", "Varies"],
-  "ride": ["Y", "N"],
-  "rateType": ["1-ST"],
+  "note": "Extension point for additional official B-1 option strings. Canonical lists live in b1-fringe-options.json (desk extract). Append every extra Drop Down List value here — unknown book strings stay first-class. Do not invent Illinois composites or names that are not in the book.",
+  "source": "desk extract extension — merge onto lib/rate-vault/b1-fringe-options.json",
+  "calc": [],
+  "base": [],
+  "rateKind": [],
+  "rateClass": [],
+  "craftType": [],
+  "ride": [],
   "extra": {}
 }

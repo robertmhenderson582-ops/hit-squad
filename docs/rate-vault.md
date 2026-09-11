@@ -49,21 +49,23 @@ Site pickers on Burden and Publish default to Wood River. The **Book** picker (R
 
 ## Exhibit B-1 rate-builder controls
 
-Wood River hall sheets are not a three-way `{hours-worked, hours-paid, straight-only}` enum. Rate Vault keeps the same surface the GPPMA / Exhibit B-1 template exposes:
+Wood River hall sheets are not a three-way enum. Desk extract (2026-09-11) lists **16** distinct option strings. Product UI and stored modes use those exact labels.
 
 | Control | Book labels | Notes |
 | --- | --- | --- |
-| Rate $/%/Varies | `$`, `%`, `Varies` | Row-6 rate kind. `%` is taxable-base percent; `$` is $/hr. |
-| Base | `Base Wage`, `Tax BW` | `%` lines default to Tax BW. |
-| ST Calc / OT Calc / DT Calc | `Hours Worked`, `Hours Paid`, `Straight Time`, `Y`, `N`, `Varies` | Per-bucket. Unknown book strings stay first-class. |
-| Mult | number or blank | Used by Hours Paid / Y / Varies when the hall is not a plain 1.5 / 2. |
+| Rate $/%/Varies | `$`, `%`, `Varies` | Row-6 cell format / text, not a DV list. |
+| Base | `BW (K)`, `Tax BW (P)` | Drop Down List E1:E2 → row 8. `%` lines default to Tax BW (P). |
+| ST Calc / OT Calc / DT Calc | `ST`, `OT`, `DT`, `ST-ONLY`, `OT-ONLY` | Drop Down List A1:A5 → row 7. Keep all five. Closest mapping for readers only: ST ≈ hours worked, DT ≈ hours paid, ST-ONLY ≈ straight only — do not rename the product. `OT` multiplies 1.5; `DT` multiplies 2. `OT-ONLY` bills the OT bucket only. |
+| Rate Class | `Merit`, `Union` | Also in the book. |
+| Craft Type | `Staff`, `Craft`, `Engineer`, `All` | Also in the book. |
+| Mult | number or blank | Used when a hall is not a plain 1.5 / 2. |
 | Ride ST / Ride OT / Ride DT | `Y`, `N` | Column ride flags on Fringes **and** Pay Tax / Ins / Misc / O/H / Profit. |
 
-Legacy `ridesOt` still maps in for older packages: `true` → OT/DT Calc **Hours Paid** + Ride Y; `false` → **Hours Worked** + Ride Y (parks the ST $ on OT/DT — Laborer / Teamster honesty). That map does **not** delete or hide the other book choices. Merit Health without `ridesOt` recognizes as **Straight Time** / Ride OT N (hall does not pay that fringe on OT/DT).
+Legacy `ridesOt` still maps in: `true` → OT Calc **OT** + DT Calc **DT** + Ride Y; `false` → **ST** + Ride Y (parks the ST $ on OT/DT — Laborer / Teamster honesty). That map does **not** delete or hide the other book choices. Merit Health without `ridesOt` recognizes as **ST-ONLY** / Ride OT N.
 
 Desk Burden / Publish show every control. `POST /api/rate-vault` `action: "patch-b1-line"` persists a line and ripples Bill OT/DT so Export uses the stored package.
 
-Drop Down List strings from a later desk extract of the official workbook append to `lib/rate-vault/b1-dropdowns.json` (`extra` plus each list). Unknown option strings are never dropped. Do not invent Illinois composites or names that are not in the book.
+Canonical lists: `lib/rate-vault/b1-fringe-options.json`. Further Drop Down List strings append to `lib/rate-vault/b1-dropdowns.json`. Unknown option strings are never dropped. Do not invent Illinois composites or names that are not in the book.
 
 ## B-1 Excel export / import (vault-internal)
 

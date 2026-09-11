@@ -89,7 +89,7 @@ describe("Rate Vault B-1 Excel export / import", () => {
     assert.equal(burden?.getCell("H1").value, "ST Calc");
     assert.equal(burden?.getCell("I1").value, "OT Calc");
     assert.equal(String(burden?.getCell("F2").value || ""), "%");
-    assert.equal(String(burden?.getCell("G2").value || ""), "Tax BW");
+    assert.equal(String(burden?.getCell("G2").value || ""), "Tax BW (P)");
     const totalRow = (fixture.burden.length || 0) + 2;
     const totalFormula =
       burden?.getCell(`C${totalRow}`).formula ||
@@ -513,8 +513,8 @@ describe("Rate Vault B-1 Excel export / import", () => {
     });
     assert.ok(target);
     assert.equal(String(fringes.getCell(target, 7).value || ""), "$");
-    assert.equal(String(fringes.getCell(target, 9).value || ""), "Hours Worked");
-    assert.equal(String(fringes.getCell(target, 10).value || ""), "Hours Paid");
+    assert.equal(String(fringes.getCell(target, 9).value || ""), "ST");
+    assert.equal(String(fringes.getCell(target, 10).value || ""), "OT");
     fringes.getCell(target, 10).value = "Book Custom Mode";
     fringes.getCell(target, 12).value = 1.25;
     fringes.getCell(target, 14).value = "Y";
@@ -555,9 +555,10 @@ describe("Rate Vault B-1 Excel export / import", () => {
     if (!imported.ok) return;
     const hw = imported.preview.fringes.find((line) => line.label === "H&W" && line.sheet.includes("BOILERMAKER"));
     const labor = imported.preview.fringes.find((line) => line.label === "Health & Welfare" && /LABORER/i.test(line.sheet));
-    assert.equal(hw?.calcOt, "Hours Paid");
+    assert.equal(hw?.calcOt, "OT");
+    assert.equal(hw?.calcDt, "DT");
     assert.equal(hw?.rideOt, true);
-    assert.equal(labor?.calcOt, "Hours Worked");
+    assert.equal(labor?.calcOt, "ST");
     assert.equal(labor?.rideOt, true);
   });
 

@@ -221,8 +221,10 @@ export type RateVaultBurdenUnit = "pct-taxable" | "amount-hr";
 
 /** Exhibit B-1 hall-sheet builder controls. Not a three-way fringe enum. */
 export const RATE_VAULT_B1_RATE_KINDS = ["$", "%", "Varies"] as const;
-export const RATE_VAULT_B1_BASES = ["Base Wage", "Tax BW"] as const;
-export const RATE_VAULT_B1_CALC_OPTIONS = ["Hours Worked", "Hours Paid", "Straight Time", "Y", "N", "Varies"] as const;
+export const RATE_VAULT_B1_BASES = ["BW (K)", "Tax BW (P)"] as const;
+export const RATE_VAULT_B1_CALC_OPTIONS = ["ST", "OT", "DT", "ST-ONLY", "OT-ONLY"] as const;
+export const RATE_VAULT_B1_RATE_CLASSES = ["Merit", "Union"] as const;
+export const RATE_VAULT_B1_CRAFT_TYPES = ["Staff", "Craft", "Engineer", "All"] as const;
 
 /** P66 Rate Vault seat — James Hutton. Not James Cain. Not the tester circle. */
 export const RATE_VAULT_JAMES_EMAIL = "jhut26@gmail.com";
@@ -427,6 +429,8 @@ export type RateVaultCraftSheet = {
   group: string;
   revision: string | null;
   effective: string | null;
+  rateClass: string;
+  craftType: string;
   representativeWage: number;
   representativePosition: string;
   fringes: RateVaultFringeLine[];

@@ -36,7 +36,7 @@ describe("Rate Vault B-1 craft-sheet math", () => {
     const meritLead = b1RatesForCraftSheet(merit, 90);
     assert.equal(meritLead.wage, 90);
     assert.equal(meritLead.fringe, 11.05);
-    assert.equal(merit.fringes.find((line) => line.label === "Health")?.calcOt, "Straight Time");
+    assert.equal(merit.fringes.find((line) => line.label === "Health")?.calcOt, "ST-ONLY");
     assert.equal(merit.fringes.find((line) => line.label === "Health")?.rideOt, false);
     assert.equal(meritLead.billOt, 164.88);
     assert.equal(b1RatesForCraftSheet(merit, 72).bill, 93.89);
@@ -123,25 +123,31 @@ describe("Rate Vault B-1 craft-sheet math", () => {
       local: "363",
       sheet: "WOODRIVER BOILERMAKER RRFF",
     };
-    const worked = fringeLine({ ...base, calcOt: "Hours Worked", calcDt: "Hours Worked", rideOt: true, rideDt: true });
-    assert.equal(fringeOnBucket(worked, 40, "ot"), 10);
-    assert.equal(fringeOnBucket(worked, 40, "dt"), 10);
+    const st = fringeLine({ ...base, calcOt: "ST", calcDt: "ST", rideOt: true, rideDt: true });
+    assert.equal(fringeOnBucket(st, 40, "ot"), 10);
+    assert.equal(fringeOnBucket(st, 40, "dt"), 10);
 
-    const paid = fringeLine({ ...base, calcOt: "Hours Paid", calcDt: "Hours Paid", rideOt: true, rideDt: true });
-    assert.equal(fringeOnBucket(paid, 40, "ot"), 15);
-    assert.equal(fringeOnBucket(paid, 40, "dt"), 20);
+    const ot = fringeLine({ ...base, calcOt: "OT", calcDt: "OT", rideOt: true, rideDt: true });
+    assert.equal(fringeOnBucket(ot, 40, "ot"), 15);
+    assert.equal(fringeOnBucket(ot, 40, "dt"), 15);
 
-    const straight = fringeLine({ ...base, calcOt: "Straight Time", calcDt: "Straight Time", rideOt: false, rideDt: false });
+    const dt = fringeLine({ ...base, calcOt: "DT", calcDt: "DT", rideOt: true, rideDt: true });
+    assert.equal(fringeOnBucket(dt, 40, "ot"), 20);
+    assert.equal(fringeOnBucket(dt, 40, "dt"), 20);
+
+    const mixed = fringeLine({ ...base, id: "mixed", calcOt: "OT", calcDt: "DT", rideOt: true, rideDt: true });
+    assert.equal(fringeOnBucket(mixed, 40, "ot"), 15);
+    assert.equal(fringeOnBucket(mixed, 40, "dt"), 20);
+
+    const straight = fringeLine({ ...base, calcOt: "ST-ONLY", calcDt: "ST-ONLY", rideOt: false, rideDt: false });
+    assert.equal(fringeOnBucket(straight, 40, "st"), 10);
     assert.equal(fringeOnBucket(straight, 40, "ot"), 0);
     assert.equal(fringeOnBucket(straight, 40, "dt"), 0);
 
-    const yes = fringeLine({ ...base, calcOt: "Y", calcDt: "Y", rideOt: true, rideDt: true });
-    assert.equal(fringeOnBucket(yes, 40, "ot"), 15);
-    const no = fringeLine({ ...base, calcOt: "N", calcDt: "N" });
-    assert.equal(fringeOnBucket(no, 40, "ot"), 0);
-
-    const varies = fringeLine({ ...base, calcOt: "Varies", calcDt: "Varies", mult: 0.6667, rideOt: true, rideDt: true });
-    assert.equal(fringeOnBucket(varies, 40, "ot"), 6.67);
+    const otOnly = fringeLine({ ...base, id: "ot-only", calcSt: "OT-ONLY", calcOt: "OT-ONLY", calcDt: "OT-ONLY", rideOt: true, rideDt: true });
+    assert.equal(fringeOnBucket(otOnly, 40, "st"), 0);
+    assert.equal(fringeOnBucket(otOnly, 40, "ot"), 15);
+    assert.equal(fringeOnBucket(otOnly, 40, "dt"), 0);
 
     const pctTax = fringeLine({
       ...base,
@@ -150,29 +156,33 @@ describe("Rate Vault B-1 craft-sheet math", () => {
       amountHr: 0,
       ratePct: 10,
       unit: "pct-taxable",
-      base: "Tax BW",
-      calcOt: "Hours Paid",
-      calcDt: "Hours Paid",
+      base: "Tax BW (P)",
+      calcOt: "OT",
+      calcDt: "DT",
       rideOt: true,
       rideDt: true,
     });
     assert.equal(fringeOnBucket(pctTax, 40, "ot"), 6);
-    const pctBase = fringeLine({ ...pctTax, id: "annuity-bw", base: "Base Wage" });
+    const pctBase = fringeLine({ ...pctTax, id: "annuity-bw", base: "BW (K)" });
     assert.equal(fringeOnBucket(pctBase, 40, "ot"), 6);
 
     const custom = fringeLine({ ...base, id: "custom", calcOt: "Book Custom Mode", rideOt: true, mult: 1.25 });
     assert.equal(custom.calcOt, "Book Custom Mode");
     assert.equal(fringeOnBucket(custom, 40, "ot"), 12.5);
     assert.equal(rateVaultB1SelectOptions("calc", "Book Custom Mode").includes("Book Custom Mode"), true);
-    assert.deepEqual(retainRateVaultB1Option(["Hours Worked"], "Book Custom Mode"), ["Hours Worked", "Book Custom Mode"]);
+    assert.deepEqual(retainRateVaultB1Option(["ST"], "Book Custom Mode"), ["ST", "Book Custom Mode"]);
+    assert.deepEqual(rateVaultB1SelectOptions("calc"), ["ST", "OT", "DT", "ST-ONLY", "OT-ONLY"]);
+    assert.deepEqual(rateVaultB1SelectOptions("base"), ["BW (K)", "Tax BW (P)"]);
   });
 
-  it("maps legacy ridesOt without hiding B-1 choices, and patches change Bill OT/DT", () => {
+  it("maps legacy ridesOt into the five calc modes without deleting options, and patches change Bill OT/DT", () => {
     const rides = inferRateVaultB1Controls({ ridesOt: true, unit: "amount-hr" });
-    assert.equal(rides.calcOt, "Hours Paid");
+    assert.equal(rides.calcOt, "OT");
+    assert.equal(rides.calcDt, "DT");
     assert.equal(rides.rideOt, true);
     const parked = inferRateVaultB1Controls({ ridesOt: false, unit: "amount-hr" });
-    assert.equal(parked.calcOt, "Hours Worked");
+    assert.equal(parked.calcOt, "ST");
+    assert.equal(parked.calcDt, "ST");
     assert.equal(parked.rideOt, true);
 
     const fixture = loadWoodRiverB1PreviewFixture();
@@ -180,11 +190,12 @@ describe("Rate Vault B-1 craft-sheet math", () => {
     const hw = fixture.fringes.find((line) => line.label === "H&W" && line.sheet.includes("BOILERMAKER"));
     assert.ok(gf && hw);
     assert.equal(gf.billOt, 140.21);
-    assert.equal(hw.calcOt, "Hours Paid");
-    const next = applyB1LineControlsToPreview(fixture, hw.id, parseRateVaultB1LinePatch({ calcOt: "Straight Time", rideOt: false }));
+    assert.equal(hw.calcOt, "OT");
+    assert.equal(hw.calcDt, "DT");
+    const next = applyB1LineControlsToPreview(fixture, hw.id, parseRateVaultB1LinePatch({ calcOt: "ST-ONLY", rideOt: false }));
     const patched = next.rows.find((row) => row.position === "Boilermaker General Foreman");
     const patchedLine = next.fringes.find((line) => line.id === hw.id);
-    assert.equal(patchedLine?.calcOt, "Straight Time");
+    assert.equal(patchedLine?.calcOt, "ST-ONLY");
     assert.equal(patchedLine?.rideOt, false);
     assert.ok((patched?.billOt ?? 0) < (gf.billOt ?? 0));
     assert.equal(Math.round(((gf.billOt ?? 0) - (patched?.billOt ?? 0)) * 100) / 100, 10.61);

@@ -307,6 +307,9 @@ function CraftSheetBurden({
         {sheet.lane === "merit" ? " · merit" : ""}
       </h5>
       <p className="mt-1 text-sm text-[#5b6f73]">
+        Rate Class {sheet.rateClass} · Craft Type {sheet.craftType}
+      </p>
+      <p className="mt-1 text-sm text-[#5b6f73]">
         {sheet.representativePosition} @ {formatRateVaultMoney(wage)} taxable BW · Fringes Subtotal{" "}
         {formatRateVaultMoney(fringeTotal)} / hr · burden {formatRateVaultMoney(burdenTotal)} (
         {formatRateVaultPct(wage ? (burdenTotal / wage) * 100 : 0)} of BW)
@@ -519,9 +522,10 @@ export function RateVaultPreviewTables({
         <p className="mt-1 text-sm text-[#5b6f73]">
           Pay Tax FICA-MC / FUI / SUI {formatRateVaultPct(payTaxPct)} of taxable BW on every Wood River hall sheet.
           Insurance, misc, O/H, and profit stay on the craft sheet — not a site-wide Illinois composite. Fringes
-          Subtotal is $ / hr, hall by hall. Rate $/%/Varies, Base (Base Wage / Tax BW), ST Calc / OT Calc / DT Calc,
-          Mult, and Ride ST / Ride OT / Ride DT are the Exhibit B-1 builder controls — Hours Worked, Hours Paid,
-          Straight Time, Y, N, and Varies stay first-class, not a three-way shorthand.
+          Subtotal is $ / hr, hall by hall. Rate $/%/Varies, Base (BW (K) / Tax BW (P)), ST Calc / OT Calc / DT Calc
+          (ST, OT, DT, ST-ONLY, OT-ONLY), Mult, Ride ST / Ride OT / Ride DT, Rate Class (Merit / Union), and Craft Type
+          (Staff / Craft / Engineer / All) are the Exhibit B-1 builder controls — exact book labels, not a three-way
+          shorthand.
         </p>
         {halls.length ? (
           <div className="mt-3 grid gap-4">
