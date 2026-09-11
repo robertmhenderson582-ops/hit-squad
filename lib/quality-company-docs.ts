@@ -68,7 +68,7 @@ export function qualityRailCompanyId(_jobCompanyId?: string | null, assignedComp
   return "madison";
 }
 
-export type QualityCompanyDocViewKind = "pdf" | "image" | "office" | "text" | "other";
+export type QualityCompanyDocViewKind = "pdf" | "image" | "office" | "text" | "zip" | "other";
 
 export function qualityCompanyDocFileName(value: unknown) {
   if (typeof value !== "string") return "";
@@ -89,8 +89,13 @@ export function qualityCompanyDocViewKind(file: { name?: string; type?: string }
   ) {
     return "office";
   }
+  if (type.includes("zip") || name.endsWith(".zip")) return "zip";
   if (type.startsWith("text/") || name.endsWith(".txt")) return "text";
   return "other";
+}
+
+export function qualityCompanyDocArchiveName(value: unknown) {
+  return qualityCompanyDocFileName(value).toLowerCase().endsWith(".zip");
 }
 
 export function primaryQualityCompanyDocFile<T extends { name?: string; vaulted?: boolean }>(

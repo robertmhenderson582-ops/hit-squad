@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ModalPortal } from "@/components/ModalPortal";
 import { viewAsInit } from "@/lib/desk-scope";
 import { leadToBytes } from "@/lib/lead-briefs";
 import {
+  pickQualityCompanyDocZipMember,
+  readQualityCompanyDocZipMembers,
+  type QualityCompanyDocZipMember,
+} from "@/lib/quality-company-doc-zip";
+import {
   primaryQualityCompanyDocFile,
+  qualityCompanyDocArchiveName,
   qualityCompanyDocViewKind,
   qualityCompanyDocViewPath,
   type QualityCompanyDocId,
+  type QualityCompanyDocViewKind,
 } from "@/lib/quality-company-docs";
 import { QUALITY_UNVAULTED_MARK, type QualityListedFile } from "@/lib/quality-vault-shared";
 
@@ -45,7 +52,19 @@ export function QualityCompanyDocViewer({
   const [text, setText] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const kind = selected ? qualityCompanyDocViewKind(selected) : "other";
+  const [zipMembers, setZipMembers] = useState<QualityCompanyDocZipMember[]>([]);
+  const [zipMemberPath, setZipMemberPath] = useState<string | null>(null);
+  const [memberFile, setMemberFile] = useState<{ name: string; type: string; data: string } | null>(null);
+  const zipCacheRef = useRef<{ name: string; type: string; data: string } | null>(null);
+  const libraryKind: QualityCompanyDocViewKind = selected ? qualityCompanyDocViewKind(selected) : "other";
+  const kind = memberFile ? qualityCompanyDocViewKind(memberFile) : libraryKind;
+  const previewName = memberFile?.name ?? selected?.name ?? "";
+
+  useEffect(() => {
+    setZipMemberPath(null);
+    setMemberFile(null);
+    setZipMembers([]);
+  }, [selectedName]);
 
   useEffect(() => {
     if (!open || !selected) {
@@ -66,7 +85,12 @@ export function QualityCompanyDocViewer({
       try {
         let data = selected.data || "";
         let type = selected.type || "application/octet-stream";
-        if (!data) {
+        const cached = zipCacheRef.current;
+        const reuseZip = qualityCompanyDocViewKind(selected) === "zip" && cached?.name === selected.name && cached.data;
+        if (!data && reuseZip && cached) {
+          data = cached.data;
+          type = cached.type || type;
+        } else if (!data) {
           const response = await fetch(
             qualityCompanyDocViewPath(home, docId, selected.name),
             viewAsInit(viewAs),
@@ -83,6 +107,32 @@ export function QualityCompanyDocViewer({
         }
         if (cancelled) return;
         const file = { name: selected.name, type, data };
+        if (qualityCompanyDocViewKind(file) === "zip") {
+          zipCacheRef.current = file;
+          const bytes = leadToBytes(file);
+          const members = await readQualityCompanyDocZipMembers(bytes);
+          if (cancelled) return;
+          setZipMembers(members);
+          if (zipMemberPath) {
+            const member = await pickQualityCompanyDocZipMember(bytes, zipMemberPath);
+            if (!member) throw new Error("Could not open that file in the pack.");
+            if (cancelled) return;
+            setMemberFile(member);
+            objectUrl = bytesToObjectUrl(member);
+            if (qualityCompanyDocViewKind(member) === "text") {
+              setText(new TextDecoder().decode(leadToBytes(member)));
+            }
+            setHref(objectUrl);
+            return;
+          }
+          setMemberFile(null);
+          objectUrl = bytesToObjectUrl(file);
+          setHref(objectUrl);
+          return;
+        }
+        zipCacheRef.current = null;
+        setZipMembers([]);
+        setMemberFile(null);
         objectUrl = bytesToObjectUrl(file);
         if (qualityCompanyDocViewKind(file) === "text") {
           setText(new TextDecoder().decode(leadToBytes(file)));
@@ -101,7 +151,15 @@ export function QualityCompanyDocViewer({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [docId, home, open, selected?.data, selected?.name, selected?.type, viewAs]);
+  }, [docId, home, open, selected?.data, selected?.name, selected?.type, viewAs, zipMemberPath]);
+
+  function selectLibraryFile(name: string) {
+    if (name !== selected?.name || qualityCompanyDocViewKind({ name }) === "zip") {
+      setZipMemberPath(null);
+      setMemberFile(null);
+    }
+    onSelect(name);
+  }
 
   if (!open) return null;
 
@@ -143,12 +201,38 @@ export function QualityCompanyDocViewer({
                         className={`w-full rounded-sm border px-3 py-2 text-left text-sm ${
                           current ? "border-steel bg-steel/10" : "border-steel"
                         }`}
-                        aria-current={current ? "true" : undefined}
-                        onClick={() => onSelect(file.name)}
+                        aria-current={current && !zipMemberPath ? "true" : undefined}
+                        onClick={() => selectLibraryFile(file.name)}
                       >
                         {file.name}
+                        {qualityCompanyDocArchiveName(file.name) ? (
+                          <span className="ml-2 rounded-sm border border-steel px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[#5b6f73]">
+                            archive
+                          </span>
+                        ) : null}
                         {file.vaulted ? "" : ` · ${QUALITY_UNVAULTED_MARK}`}
                       </button>
+                      {current && zipMembers.length ? (
+                        <ul className="mt-1 ml-3 space-y-1" aria-label={`Files in ${file.name}`}>
+                          {zipMembers.map((member) => {
+                            const memberCurrent = member.path === zipMemberPath;
+                            return (
+                              <li key={member.path}>
+                                <button
+                                  type="button"
+                                  className={`w-full rounded-sm border px-3 py-1.5 text-left text-sm ${
+                                    memberCurrent ? "border-steel bg-steel/10" : "border-steel"
+                                  }`}
+                                  aria-current={memberCurrent ? "true" : undefined}
+                                  onClick={() => setZipMemberPath(member.path)}
+                                >
+                                  {member.name}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : null}
                     </li>
                   );
                 })
@@ -160,31 +244,66 @@ export function QualityCompanyDocViewer({
               {!selected ? (
                 <p className="text-sm text-[#5b6f73]">Pick a file to bring it out.</p>
               ) : loading ? (
-                <p className="text-sm">Opening {selected.name}…</p>
+                <p className="text-sm">Opening {previewName}…</p>
               ) : note ? (
                 <p className="text-sm text-[#8a2a2a]">{note}</p>
               ) : (
                 <>
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold">{selected.name}</p>
-                    {href ? (
-                      <a
-                        href={href}
-                        download={selected.name}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm text-steel underline"
-                      >
-                        Open / download
-                      </a>
-                    ) : null}
+                    <p className="text-sm font-semibold">
+                      {memberFile ? `${selected.name} / ${memberFile.name}` : selected.name}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {memberFile ? (
+                        <button
+                          type="button"
+                          className="text-sm text-steel underline"
+                          onClick={() => {
+                            setZipMemberPath(null);
+                            setMemberFile(null);
+                          }}
+                        >
+                          Back to pack
+                        </button>
+                      ) : null}
+                      {href ? (
+                        <a
+                          href={href}
+                          download={previewName}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-sm text-steel underline"
+                        >
+                          {libraryKind === "zip" && !memberFile ? "Download pack" : "Open / download"}
+                        </a>
+                      ) : null}
+                    </div>
                   </div>
+                  {libraryKind === "zip" && !memberFile ? (
+                    zipMembers.length ? (
+                      <ul className="space-y-1" aria-label="Files in this pack">
+                        {zipMembers.map((member) => (
+                          <li key={member.path}>
+                            <button
+                              type="button"
+                              className="w-full rounded-sm border border-steel px-3 py-2 text-left text-sm"
+                              onClick={() => setZipMemberPath(member.path)}
+                            >
+                              {member.name}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-[#5b6f73]">This pack has no files to open here.</p>
+                    )
+                  ) : null}
                   {kind === "pdf" && href ? (
-                    <iframe title={selected.name} src={href} className="h-[28rem] w-full border-0" />
+                    <iframe title={previewName} src={href} className="h-[28rem] w-full border-0" />
                   ) : null}
                   {kind === "image" && href ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={href} alt={selected.name} className="max-h-[28rem] w-full object-contain" />
+                    <img src={href} alt={previewName} className="max-h-[28rem] w-full object-contain" />
                   ) : null}
                   {kind === "text" && text != null ? (
                     <pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap text-sm">{text}</pre>

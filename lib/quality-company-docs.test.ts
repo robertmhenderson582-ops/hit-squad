@@ -166,6 +166,9 @@ describe("Quality company document catalog", () => {
       "office",
     );
     assert.equal(qualityCompanyDocViewKind({ name: "note.txt", type: "text/plain" }), "text");
+    assert.equal(qualityCompanyDocViewKind({ name: "ASME IX.zip", type: "application/zip" }), "zip");
+    assert.equal(qualityCompanyDocViewKind({ name: "codes.zip", type: "application/x-zip-compressed" }), "zip");
+    assert.equal(qualityCompanyDocViewKind({ name: "codes.zip" }), "zip");
     assert.equal(
       primaryQualityCompanyDocFile([
         { name: "older.pdf", vaulted: true },
@@ -182,6 +185,10 @@ describe("Quality company document catalog", () => {
     assert.match(viewer, /quality-company-doc-library/);
     assert.match(viewer, /Open \/ download/);
     assert.match(viewer, /iframe/);
+    assert.match(viewer, /archive/);
+    assert.match(viewer, /readQualityCompanyDocZipMembers/);
+    assert.match(viewer, /pickQualityCompanyDocZipMember/);
+    assert.match(viewer, /Back to pack/);
     assert.doesNotMatch(viewer, /drive\.google\.com/);
   });
 });
