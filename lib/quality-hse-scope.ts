@@ -1,10 +1,12 @@
 import { catalogSites } from "./desk-data.ts";
+import { isQualityVaultSeat } from "./desk-role.ts";
 import { catalogSeedsAllowedOnDesk, jobsOnDesk, omitCatalogSeedJobs } from "./jobs.ts";
 import { clientFolderId } from "./quality-hse-modules.ts";
 import { jobTree, type JobTreeCompany } from "./job-tree.ts";
 import { isRetiredPeerCompany, isRetiredPeerCompanyName, type CompanyId, type CompanyScope } from "./companies.ts";
 import type { JobMenuState } from "./job-menu.ts";
 import type { LocalPack, StorageLike } from "./local-estimates.ts";
+import { mergeQualityVaultJobs } from "./quality-vault-jobs.ts";
 import type { JobRecord, SiteRecord } from "./types.ts";
 
 /**
@@ -190,7 +192,11 @@ export function attachLegacyClientModule(
   }
 }
 
-/** Same job list the Jobs tree uses for this seat — awarded, Locked, and live packs. */
+/**
+ * Quality / HSE job picker. Madison catalog + pack identities for Quality seats.
+ * Not the Drive email-dump folder tree — Chance’s files show after refresh via
+ * listQualityVaultFiles (Drive path + briefs index), not as dump-folder nodes.
+ */
 export function qualityHseJobTree(input: {
   scope?: CompanyScope | null;
   serverJobs?: JobRecord[];
@@ -201,13 +207,30 @@ export function qualityHseJobTree(input: {
   menu?: JobMenuState | null;
 }): JobTreeCompany[] {
   const packs = input.packs ?? [];
-  const includeSeeds = catalogSeedsAllowedOnDesk(input.scope, input.seat);
-  const deskJobs = jobsOnDesk(input.serverJobs ?? [], packs, Boolean(input.viewingAs), input.scope, input.menu, {
+  const qualitySeat = isQualityVaultSeat({
+    email: input.scope?.email,
+    role: input.scope?.isOwner ? "owner" : input.scope?.role,
+  });
+  const includeSeeds = catalogSeedsAllowedOnDesk(input.scope, input.seat) || Boolean(qualitySeat && !input.scope?.isOwner);
+  let deskJobs = jobsOnDesk(input.serverJobs ?? [], packs, Boolean(input.viewingAs), input.scope, input.menu, {
     includeSeeds,
     seat: input.seat,
   });
+  if (qualitySeat && !input.scope?.isOwner) {
+    const madisonJobs = jobsOnDesk(
+      input.serverJobs ?? [],
+      packs,
+      Boolean(input.viewingAs),
+      { isOwner: false, email: input.scope?.email || "", companyId: "madison", role: input.scope?.role },
+      input.menu,
+      { includeSeeds: true, seat: input.seat },
+    );
+    deskJobs = mergeQualityVaultJobs(deskJobs, madisonJobs);
+  }
   return jobTree({
-    scope: input.scope,
+    scope: qualitySeat && !input.scope?.isOwner
+      ? { isOwner: false, email: input.scope?.email || "", companyId: "madison", role: input.scope?.role }
+      : input.scope,
     jobs: includeSeeds ? deskJobs : omitCatalogSeedJobs(deskJobs),
     sites: input.sites ?? catalogSites(),
     packs,

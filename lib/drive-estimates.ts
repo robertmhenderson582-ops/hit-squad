@@ -504,7 +504,14 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       return confirmDriveWrite(getAccessToken, fileId, content);
     },
     async listChildren(folderId) {
-      return listByQuery(`'${escapeDriveQueryValue(folderId)}' in parents and trashed=false`);
+      const q = `'${escapeDriveQueryValue(folderId)}' in parents and trashed=false`;
+      try {
+        const kids = await listByQuery(q);
+        if (kids.length) return kids;
+      } catch {
+        // Shared Quality / Data rooms live outside My Drive spaces=drive.
+      }
+      return listByQuery(q, { accessible: true });
     },
     async createFolder(parentId, name) {
       const response = await fetch(driveApiUrl("/drive/v3/files"), {

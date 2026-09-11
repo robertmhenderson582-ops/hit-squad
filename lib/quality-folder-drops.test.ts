@@ -80,6 +80,8 @@ describe("Quality folder vault drops", { concurrency: 1 }, () => {
     });
 
     const chanceWelders = await listQualityFolderDrops(chance, "job-b17", "welders");
+    assert.equal(chanceWelders.stored, true);
+    assert.equal(chanceWelders.store, "drive");
     const wendellWelders = await listQualityFolderDrops(wendell, "job-b17", "welders");
     const chanceWps = await listQualityFolderDrops(chance, "job-b17", "wps");
     const chanceOtherJob = await listQualityFolderDrops(chance, "job-other", "welders");
@@ -118,6 +120,7 @@ describe("Quality folder vault drops", { concurrency: 1 }, () => {
     assert.equal(hidden.every((row) => row.who === chance.email), true);
     assert.equal(qualityDropLeaks(chanceWelders), false);
     assert.equal(qualityDropLeaks({ file: QUALITY_BRIEFS_VAULT_NAME }), true);
+    assert.equal(qualityDropLeaks("hitsquad-vault@hit-squad-vault.iam.gserviceaccount.com"), true);
     assert.equal(QUALITY_FOLDERS.length, 12);
     assert.equal(first.brief.companyId, undefined);
   });
@@ -247,6 +250,9 @@ describe("Quality folder vault drops", { concurrency: 1 }, () => {
     assert.match(failed.error, /Could not save/);
     const leftover = await listStoredBriefs("quality", chance.email, { jobId: "job-b17", folderId: "travelers" });
     assert.equal(leftover.length, 0);
+    const listed = await listQualityFolderDrops(chance, "job-b17", "travelers");
+    assert.equal(listed.stored, false);
+    assert.deepEqual(listed.files, []);
   });
 
   it("requires a job and a known folder before any write", async () => {

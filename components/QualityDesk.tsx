@@ -6,11 +6,13 @@ import { ModuleRegister, type RegisterField } from "@/components/ModuleRegister"
 import { QualityCompanyDocRail } from "@/components/QualityCompanyDocRail";
 import { QualityDay1Card } from "@/components/QualityDay1Card";
 import { QualityFolderDrop } from "@/components/QualityFolderDrop";
+import { QualityVaultOwnerTree } from "@/components/QualityVaultOwnerTree";
 import { RollingChartMap } from "@/components/RollingChartMap";
 import { useQualityHseJobTree } from "@/components/useQualityHseJobTree";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { assignedCompanyId, companyName, companyScopeFor, inferCompanyIdFromParts, type CompanyId } from "@/lib/companies";
+import { buildDeskChrome, isQualityVaultSeat } from "@/lib/desk-role";
 import { qualityRailCompanyId } from "@/lib/quality-company-docs";
 import { showsQualityFolderDesk } from "@/lib/quality-folders";
 import { canSeeMadisonManuals, madisonManualLabel, type QualityDay1 } from "@/lib/quality-day1";
@@ -85,6 +87,7 @@ export function QualityDesk() {
   const [tab, setTab] = useState<QualityDeskTabId>("board");
   const [module, setModule] = useState<QualityModuleState>(emptyQualityModule);
   const chance = owner?.viewAs === "chance";
+  const buildDesk = buildDeskChrome(user, owner?.viewAs);
   const manuals = canSeeMadisonManuals(user, companyScopeFor(user));
   const clients = cascadeClients(tree);
   const sites = cascadeSites(tree, pick.clientId);
@@ -97,8 +100,14 @@ export function QualityDesk() {
   const companyId =
     cascadeCompanyId(tree, pick) ||
     inferCompanyIdFromParts(selectedClient?.name, selectedSite?.name, selectedJob?.title, selectedJob?.code);
-  const showFolderDesk = showsQualityFolderDesk(companyId);
-  const railCompanyId = qualityRailCompanyId(companyId, assignedCompanyId(companyScopeFor(user)));
+  const vaultCompanyId =
+    showsQualityFolderDesk(companyId)
+      ? companyId
+      : isQualityVaultSeat(user) && jobOpen
+        ? "madison"
+        : companyId;
+  const showFolderDesk = showsQualityFolderDesk(vaultCompanyId);
+  const railCompanyId = qualityRailCompanyId(vaultCompanyId || companyId, assignedCompanyId(companyScopeFor(user)));
 
   useEffect(() => {
     if (!ready) return;
@@ -177,6 +186,7 @@ export function QualityDesk() {
         onChange={changeScope}
         alias={alias}
       />
+      {buildDesk ? <QualityVaultOwnerTree /> : null}
       {!jobOpen ? <PickJobEmpty kind="quality" /> : null}
       {jobOpen ? (
         <>
@@ -196,8 +206,10 @@ export function QualityDesk() {
           {showFolderDesk ? (
             <QualityFolderDrop
               jobId={pick.jobId}
-              companyId={companyId}
-              companyLabel={companyId ? companyName(companyId as CompanyId) : undefined}
+              companyId={vaultCompanyId || companyId}
+              companyLabel={
+                (vaultCompanyId || companyId) ? companyName((vaultCompanyId || companyId) as CompanyId) : undefined
+              }
               siteLabel={selectedSite?.name}
               jobLabel={selectedJob?.title || selectedJob?.code}
             />
