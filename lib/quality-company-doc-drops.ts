@@ -42,7 +42,6 @@ import {
 import { parseQualityDropFiles, qualityDropLeaks } from "./quality-folder-drops.ts";
 import { checkQualityDrop } from "./quality-folders.ts";
 import { isQualityLibraryLockName } from "./quality-vault-shared.ts";
-import type { PublicUser } from "./types.ts";
 
 export type QualityDocUser = QualityCompanyDocActor;
 
