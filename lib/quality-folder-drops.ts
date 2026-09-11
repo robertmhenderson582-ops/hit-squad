@@ -20,6 +20,7 @@ import {
   type QualityFolderId,
 } from "./quality-folders.ts";
 import { DriveApiError } from "./drive-estimates.ts";
+import { isQualityReadyShelfJobId } from "./quality-package-shelf.ts";
 import {
   listQualityVaultFiles,
   listQualityVaultTree,
@@ -113,6 +114,8 @@ export async function saveQualityFolderDrop(user: QualityDropUser, input: Qualit
       jobLabel,
       folderId,
       who,
+      shelf: isQualityReadyShelfJobId(jobId),
+      packageLabel: jobLabel,
     }, check.accepted as LeadFile[]);
     const brief = await saveStoredBrief({
       kind: "quality",
@@ -175,6 +178,8 @@ export async function listQualityFolderDrops(
     jobLabel: place?.jobLabel,
     folderId,
     who,
+    shelf: isQualityReadyShelfJobId(job),
+    packageLabel: place?.jobLabel,
   });
   const files = vault.stored ? mergeVaultedQualityNames(vault.files, briefFiles) : [];
   return {

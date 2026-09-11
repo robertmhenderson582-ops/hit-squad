@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
-import { FieldBlock } from "@/components/FieldMark";
 import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { fileToLead, type LeadFile } from "@/lib/lead-briefs";
@@ -10,12 +9,10 @@ import { viewAsInit } from "@/lib/desk-scope";
 import {
   QUALITY_DROP_ACCEPT,
   checkQualityDrop,
-  isQualityFolderId,
   mergeQualityFolderFiles,
   qualityFolderLabel,
   qualityFoldersFor,
   readQualityFolderFiles,
-  readQualityFolderPick,
   writeQualityFolderFiles,
   writeQualityFolderPick,
   type QualityFolderId,
@@ -34,12 +31,14 @@ function dropFileFromBrowser(file: File) {
 
 export function QualityFolderDrop({
   jobId,
+  folderId,
   companyId,
   companyLabel,
   siteLabel,
   jobLabel,
 }: {
   jobId: string;
+  folderId: QualityFolderId;
   companyId?: string;
   companyLabel?: string;
   siteLabel?: string;
@@ -48,9 +47,8 @@ export function QualityFolderDrop({
   const folders = qualityFoldersFor(companyId || "madison");
   const { user } = useSession();
   const owner = useOwnerDesk();
-  const selectRef = useRef<HTMLSelectElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [folderId, setFolderId] = useState<QualityFolderId>(() => readQualityFolderPick(jobId));
   const [files, setFiles] = useState<QualityListedFile[]>([]);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -59,14 +57,13 @@ export function QualityFolderDrop({
   const [over, setOver] = useState(false);
 
   useEffect(() => {
-    const next = readQualityFolderPick(jobId);
-    setFolderId(next);
-    setFiles(mergeVaultedQualityFiles([], readQualityFolderFiles(jobId, next)));
+    writeQualityFolderPick(jobId, folderId);
+    setFiles(mergeVaultedQualityFiles([], readQualityFolderFiles(jobId, folderId)));
     setNote(null);
     setSavedAt(null);
-    const frame = window.requestAnimationFrame(() => selectRef.current?.focus());
+    const frame = window.requestAnimationFrame(() => dropRef.current?.focus());
     return () => window.cancelAnimationFrame(frame);
-  }, [jobId]);
+  }, [folderId, jobId]);
 
   useEffect(() => {
     if (!jobId || !folderId) return;
@@ -105,14 +102,6 @@ export function QualityFolderDrop({
       cancelled = true;
     };
   }, [companyId, companyLabel, folderId, jobId, jobLabel, owner?.viewAs, siteLabel, user?.email]);
-
-  function pickFolder(next: QualityFolderId) {
-    setFolderId(next);
-    writeQualityFolderPick(jobId, next);
-    setFiles(mergeVaultedQualityFiles([], readQualityFolderFiles(jobId, next)));
-    setNote(null);
-    setSavedAt(null);
-  }
 
   async function persistVault(nextFiles: LeadFile[]) {
     const response = await fetch("/api/desk/briefs", viewAsInit(owner?.viewAs, {
@@ -219,32 +208,15 @@ export function QualityFolderDrop({
 
   return (
     <section className="plant-card px-4 py-4">
-      <h2 className="font-display text-xl">Quality folders</h2>
+      <h2 className="font-display text-xl">{folder}</h2>
       <p className="mt-2 text-sm">
-        Pick a folder, then drop files into it. Success shows only after the Quality vault
-        confirms the write. Testers only see their own files.
+        Drop files into this radio. Success shows only after the Quality vault confirms the
+        write. Testers only see their own files.
       </p>
-      <div className="mt-3 max-w-md">
-        <FieldBlock label="Folder">
-          <select
-            ref={selectRef}
-            id="quality-folder-pick"
-            value={folderId}
-            onChange={(event) => {
-              if (isQualityFolderId(event.target.value, companyId)) pickFolder(event.target.value);
-            }}
-            className="paper-field mt-1"
-            aria-label="Quality folder"
-          >
-            {folders.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </FieldBlock>
-      </div>
       <div
+        ref={dropRef}
+        id="quality-folder-drop"
+        tabIndex={-1}
         className={`mt-4 rounded-sm border border-dashed px-4 py-6 ${
           over ? "border-steel bg-steel/5" : "border-steel"
         }`}

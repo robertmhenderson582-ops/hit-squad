@@ -91,6 +91,12 @@ test("Add user submit shows ADDING…, times out, and does not stay stuck", () =
   assert.match(desk, /removeOptimisticSeat/);
   assert.match(desk, /DESK_SEATS_CHANGED_EVENT/);
   assert.doesNotMatch(desk, /invite email sent/i);
+  assert.match(desk, /Send invite from Novus Gmail/);
+  assert.match(desk, /send: true/);
+  assert.match(desk, /DOORS \/ PERMISSIONS/);
+  assert.match(desk, /doors: owner \? addDoors/);
+  assert.match(seats, /applyVaultAclForSeat/);
+  assert.match(seats, /normalizeSeatDoors/);
   assert.match(people, /DESK_SEATS_CHANGED_EVENT/);
   assert.match(seats, /listSeatRows\(\{ hydrate: false \}\)/);
   assert.match(seats, /peekCompanies\(\)/);

@@ -14,6 +14,8 @@ export type OrgPositionKind = (typeof ORG_POSITION_KINDS)[number];
 
 export const PRESIDENT_POSITION_ID = "president";
 export const PROJECT_MANAGER_POSITION_ID = "project-manager";
+export const CORPORATE_QC_MANAGER_POSITION_ID = "corporate-qc-manager";
+export const SITE_QC_MANAGER_POSITION_ID = "site-qc-manager";
 
 export const POSITION_ID_RE = /^[a-z][a-z0-9:-]{0,79}$/;
 
@@ -168,6 +170,20 @@ export function seedPositions(divisions: Division[] = []): OrgPosition[] {
       id: PROJECT_MANAGER_POSITION_ID,
       kind: "project-manager",
       label: "Project Manager",
+      desk: "field",
+      seed: true,
+    },
+    {
+      id: CORPORATE_QC_MANAGER_POSITION_ID,
+      kind: "custom",
+      label: "Corporate QC Manager",
+      desk: "corporate",
+      seed: true,
+    },
+    {
+      id: SITE_QC_MANAGER_POSITION_ID,
+      kind: "custom",
+      label: "Site QC Manager",
       desk: "field",
       seed: true,
     },
@@ -373,6 +389,9 @@ export function canGrantPosition(
   if (opts?.canSeeCompany === false) return { error: "Pick a company on this desk." };
   if (opts?.canSeeTarget === false) return { error: "Hit Squad seats stay on the owner desk." };
   if (alreadyHolds(holds, position.id, target.email)) return { error: "That seat already holds this position." };
+  if (position.id === CORPORATE_QC_MANAGER_POSITION_ID && actor.role !== "owner") {
+    return { error: "Only the owner assigns Corporate QC Manager." };
+  }
   const rank = actorRank(actor, holds, catalog);
   if (rank < kindRank(position.kind)) return { error: "That permission is above your seat." };
   return { ok: true };

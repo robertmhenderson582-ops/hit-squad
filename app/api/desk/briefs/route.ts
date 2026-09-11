@@ -24,6 +24,11 @@ import {
 import { isQualityCompanyDocId, qualityCompanyDocsListedFor } from "@/lib/quality-company-docs";
 import { listQualityFolderDrops, listQualityVaultOwnerTree, saveQualityFolderDrop } from "@/lib/quality-folder-drops";
 import { isQualityFolderId, qualityFoldersListedFor } from "@/lib/quality-folders";
+import {
+  attachQualityPackageShelfKit,
+  listQualityPackageShelf,
+  saveQualityPackageShelfKit,
+} from "@/lib/quality-package-shelf-drops";
 
 function qualityCompanyId(request: URLSearchParams | { companyId?: string; company?: string }) {
   if (request instanceof URLSearchParams) {
@@ -50,6 +55,15 @@ export async function GET(request: Request) {
   const fileName = params.get("file")?.trim() || "";
   const companyId = qualityCompanyId(params);
   const companyDocs = params.get("scope") === "company-docs" || isQualityCompanyDocId(folderId, companyId || undefined);
+  if (kind === "quality" && params.get("scope") === "package-shelf") {
+    const listed = await listQualityPackageShelf(user, companyId || undefined);
+    return NextResponse.json({
+      kits: listed.kits,
+      acl: listed.acl,
+      store: listed.store,
+      stored: listed.stored,
+    });
+  }
   if (kind === "quality" && params.get("tree") === "1") {
     if (!hasBuildDesk(user)) return NextResponse.json({ error: "Build desk only." }, { status: 403 });
     const tree = await listQualityVaultOwnerTree(user);
@@ -151,12 +165,40 @@ export async function POST(request: Request) {
     locked?: boolean;
     fileName?: string;
     file?: string;
+    packageId?: string;
+    name?: string;
   };
   const companyId = qualityCompanyId(body);
   if (!isLeadBriefKind(body.kind)) {
     return NextResponse.json({ error: "Pick a desk." }, { status: 400 });
   }
   const user = body.kind === "quality" ? await scopedDeskUser(session, request) : session;
+
+  if (body.kind === "quality" && body.scope === "package-shelf") {
+    if (body.action === "attach") {
+      const result = await attachQualityPackageShelfKit(user, { ...body, companyId: companyId || undefined });
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json({
+        brief: result.brief,
+        attached: result.attached,
+        stored: result.stored,
+        store: result.store,
+      });
+    }
+    const result = await saveQualityPackageShelfKit(user, { ...body, companyId: companyId || undefined });
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.error, rejected: "rejected" in result ? result.rejected : undefined },
+        { status: result.status },
+      );
+    }
+    return NextResponse.json({
+      brief: result.brief,
+      kit: result.kit,
+      stored: result.stored,
+      store: result.store,
+    });
+  }
 
   if (body.kind === "quality" && (body.scope === "company-docs" || isQualityCompanyDocId(body.folderId, companyId || undefined))) {
     if (body.action === "lock") {

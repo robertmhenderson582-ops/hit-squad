@@ -122,9 +122,10 @@ describe("Quality company document catalog", () => {
     const railIndex = quality.indexOf("<QualityCompanyDocRail");
     const jobOpenIndex = quality.indexOf("{jobOpen ?");
     const dropIndex = quality.indexOf("<QualityFolderDrop");
-    const tabsIndex = quality.indexOf('role="tablist"');
+    const radioIndex = quality.indexOf('role="radiogroup"');
     assert.equal(railIndex >= 0 && railIndex < jobOpenIndex, true);
-    assert.equal(dropIndex > jobOpenIndex && tabsIndex > dropIndex, true);
+    assert.equal(radioIndex > 0 && radioIndex < dropIndex, true);
+    assert.equal(dropIndex > jobOpenIndex, true);
     assert.match(rail, /quality-company-docs/);
     assert.match(rail, /onDrop/);
     assert.match(rail, /type="file"/);

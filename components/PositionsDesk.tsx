@@ -103,9 +103,10 @@ export function PositionsDesk({ focusDivisionId }: { focusDivisionId?: string } 
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Positions</h2>
         <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
-          Assign people to President, Division Head, Project Manager, or a title you add. Revoke and
-          rename use the same controls on every seat. Titles stack — Division Head does not strip
-          Owner. Future positions use this desk.           Corporate desks stay plumbing only.
+          Assign people to President, Division Head, Project Manager, Corporate QC Manager, Site QC
+          Manager, or a title you add. Revoke and rename use the same controls on every seat. Titles
+          stack — Corporate QC Manager does not strip Owner. Only the owner assigns Corporate QC.
+          Corporate desks stay plumbing only.
           {actor && actor.rank < 80
             ? " You can only assign titles at or below your own seat."
             : ""}
@@ -129,7 +130,7 @@ export function PositionsDesk({ focusDivisionId }: { focusDivisionId?: string } 
                   {row.seed ? " · Seeded seat" : ""}
                 </p>
               </div>
-              {row.kind === "custom" ? (
+              {row.kind === "custom" && !row.seed ? (
                 <button
                   type="button"
                   disabled={busy}

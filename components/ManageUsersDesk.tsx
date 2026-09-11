@@ -7,6 +7,8 @@ import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { COMPANIES, assignmentChoices, companyName, type Company, type CompanyId } from "@/lib/companies";
 import { canAddUsers, canUseFollow, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
+import { NOVUS_INVITE_FROM, inviteEmailAllowed } from "@/lib/invite-mail";
+import { SEAT_DOORS, type SeatDoorId } from "@/lib/vault-acl";
 import type { SeatGrantActor } from "@/lib/org-positions";
 import { lensPeopleFromSeats } from "@/lib/desk-people";
 import { followSeatFromEmail } from "@/lib/follow";
@@ -56,6 +58,10 @@ export function ManageUsersDesk() {
   const [seatNote, setSeatNote] = useState<string | null>(null);
   const [recoveryOnce, setRecoveryOnce] = useState<string | null>(null);
   const [open, setOpen] = useState({ seats: true, add: true, roster: false });
+  const [addDoors, setAddDoors] = useState<SeatDoorId[]>([]);
+  const [invite, setInvite] = useState<{ name: string; email: string; password: string; doors: SeatDoorId[] } | null>(null);
+  const [inviteNote, setInviteNote] = useState<string | null>(null);
+  const [sendingInvite, setSendingInvite] = useState(false);
 
   async function loadSeats() {
     const response = await fetch("/api/desk/seats", { credentials: "include", cache: "no-store" });
@@ -227,6 +233,15 @@ export function ManageUsersDesk() {
     setAddRole(nextRole);
     setAddCompanyId(addableCompanies[0]?.id || (nextRole === "president" ? "madison" : "hitsquad"));
     setNote("Login created. Don’t send. First sign-in must change the password. No invite sent.");
+    if (owner) {
+      setInvite({
+        name: pending.name,
+        email: pending.email,
+        password,
+        doors: addDoors,
+      });
+      setInviteNote("Invite card is ready. Novus Gmail does not send until you click Send.");
+    }
     window.dispatchEvent(new Event(DESK_SEATS_CHANGED_EVENT));
   }
 
@@ -285,6 +300,7 @@ export function ManageUsersDesk() {
             password,
             companyId,
             role: addRole,
+            doors: owner ? addDoors : undefined,
           }),
         },
         SEATS_REQUEST_DEADLINE_MS,
@@ -304,6 +320,40 @@ export function ManageUsersDesk() {
       setNote(message);
     } finally {
       setAdding(false);
+    }
+  }
+
+  async function onSendInvite() {
+    if (!invite || sendingInvite) return;
+    if (!inviteEmailAllowed(invite.email)) {
+      setInviteNote("Never email madisonltd.com.");
+      return;
+    }
+    setSendingInvite(true);
+    setInviteNote(null);
+    try {
+      const response = await fetch("/api/desk/invite", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: invite.email,
+          name: invite.name,
+          password: invite.password,
+          doors: invite.doors,
+          send: true,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string; sent?: boolean; note?: string };
+      if (!response.ok || !data.sent) {
+        setInviteNote(data.error || data.note || "Novus Gmail did not send. The invite card stays here.");
+        return;
+      }
+      setInviteNote(data.note || "Novus Gmail delivered the invite after you clicked Send.");
+    } catch {
+      setInviteNote("Novus Gmail did not send. The invite card stays here.");
+    } finally {
+      setSendingInvite(false);
     }
   }
 
@@ -528,6 +578,31 @@ export function ManageUsersDesk() {
                   ))}
                 </select>
               </label>
+              {owner ? (
+                <fieldset className="sm:col-span-2">
+                  <legend className="text-xs tracking-[0.14em] text-[#5b6f73]">DOORS / PERMISSIONS</legend>
+                  <p className="mt-1 text-sm text-[#5b6f73]">
+                    Quality shares the Quality vault. HSE and Estimates share those rooms. Privileges
+                    stay on Settings → Privileges.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    {SEAT_DOORS.map((door) => (
+                      <label key={door} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={addDoors.includes(door)}
+                          onChange={() =>
+                            setAddDoors((current) =>
+                              current.includes(door) ? current.filter((item) => item !== door) : [...current, door],
+                            )
+                          }
+                        />
+                        {door === "quality" ? "Quality" : door === "hse" ? "HSE" : "Estimates"}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
               <PasswordField
                 label="One-time password"
                 autoComplete="new-password"
@@ -551,6 +626,29 @@ export function ManageUsersDesk() {
               <p role="status" className="mt-3 text-sm text-[#163038]">
                 {note}
               </p>
+            ) : null}
+            {owner && invite ? (
+              <section className="mt-5 rounded-sm border border-steel px-4 py-4" aria-label="Send invite from Novus Gmail">
+                <h3 className="text-lg font-semibold text-[#163038]">Send invite from Novus Gmail</h3>
+                <p className="mt-2 text-sm text-[#5b6f73]">
+                  From {NOVUS_INVITE_FROM}. This does not send until you click Send. Never emails
+                  madisonltd.com. Vault folders for the chosen doors are already shared when the
+                  seat landed.
+                </p>
+                <p className="mt-2 text-sm text-[#163038]">
+                  To {invite.email} · doors {invite.doors.length ? invite.doors.join(", ") : "none"}
+                </p>
+                <p className="mt-2 break-all font-mono text-sm text-[#163038]">{invite.password}</p>
+                <button
+                  type="button"
+                  disabled={sendingInvite || !inviteEmailAllowed(invite.email)}
+                  onClick={() => void onSendInvite()}
+                  className="mt-3 rounded-lg bg-steel px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {sendingInvite ? "SENDING…" : "Send invite from Novus Gmail"}
+                </button>
+                {inviteNote ? <p className="mt-2 text-sm text-[#163038]">{inviteNote}</p> : null}
+              </section>
             ) : null}
           </Collapsible>
 

@@ -24,6 +24,10 @@ export const QUALITY_MODULE_CATALOG = [
 export type QualityFolderId = (typeof QUALITY_MODULE_CATALOG)[number]["id"];
 export type QualityFolderDef = { id: QualityFolderId; label: string };
 
+/** Desk radios — the catalog is the nav. No Board / NCR / Day-1 register tabs. */
+export const QUALITY_DESK_RADIOS = QUALITY_MODULE_CATALOG;
+export type QualityDeskRadioId = QualityFolderId;
+
 export type QualityFolderTemplate = {
   companyId: CompanyId;
   live: boolean;
@@ -142,6 +146,10 @@ export function isQualityFolderId(value: unknown, companyId?: string | null): va
   if (typeof value !== "string") return false;
   const catalog = companyId ? qualityFoldersFor(companyId) : QUALITY_MODULE_CATALOG;
   return catalog.some((folder) => folder.id === value);
+}
+
+export function isQualityDeskRadio(value: string, companyId?: string | null): value is QualityDeskRadioId {
+  return isQualityFolderId(value, companyId);
 }
 
 export function qualityFolderLabel(id: QualityFolderId, companyId?: string | null) {

@@ -275,9 +275,9 @@ describe("Quality / HSE job scope", () => {
     assert.match(picks, /Pick a job/);
     assert.doesNotMatch(quality, /Client folder/);
     assert.doesNotMatch(hse, /Client folder/);
-    assert.match(quality, /readQualityModuleForJob/);
+    assert.match(quality, /QUALITY_DESK_RADIOS/);
     assert.match(hse, /readHseModuleForJob/);
-    assert.match(quality, /writeQualityModuleForJob/);
+    assert.match(quality, /QualityPackageShelf/);
     assert.match(hse, /writeHseModuleForJob/);
     assert.match(quality, /PickJobEmpty/);
     assert.match(hse, /PickJobEmpty/);

@@ -14,9 +14,8 @@ import type { PublicUser } from "./types.ts";
  * | Owner (Robert)        | `role === "owner"`                                        |
  * | Field QC / QC Manager | `isQualityVaultSeat` — Chance’s VISUAL_ROSTER             |
  * |                       | `"Trusted / Quality"` (+ Owner / Novus via build desk)    |
- * | Corporate QC Manager  | **Missing.** No privilege id, no seeded org position.     |
- * |                       | Lock is Owner-only unless a custom org position is later  |
- * |                       | held with `desk: "corporate"` and a Quality / QC label.   |
+ * | Corporate QC Manager  | Seeded org seat `corporate-qc-manager` (Owner assigns).   |
+ * |                       | `holdsCorporateQualityPosition` — lock + unlock.          |
  *
  * `VIEW_RESPONSIBILITIES` includes "Quality manager" — view-as filter only.
  * `RosterModules.quality` is unused for this ACL.
