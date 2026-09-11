@@ -8,10 +8,14 @@ import {
   WOOD_RIVER_B1_EXHIBIT_DRIVE_ID,
   WOOD_RIVER_B1_EXHIBIT_TITLE,
   WOOD_RIVER_B1_PREVIEW_FIXTURE_PATH,
+  WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID,
+  WOOD_RIVER_TM_B1_EXHIBIT_TITLE,
+  WOOD_RIVER_TM_B1_PREVIEW_FIXTURE_PATH,
   enrichReviewWithPreview,
   filterPreviewByFace,
   isWoodRiverB1Source,
   loadWoodRiverB1PreviewFixture,
+  loadWoodRiverTmB1PreviewFixture,
   mergePreviewFace,
   parseRateVaultPreviewPackage,
   rateVaultImportMergeFace,
@@ -146,5 +150,47 @@ describe("Rate Vault Wood River B-1 preview", () => {
       bothMerged.rows.find((row) => row.position === "Boilermaker Journeyman")?.wage,
       (fixture.rows.find((row) => row.position === "Boilermaker Journeyman")?.wage ?? 0) + 1,
     );
+  });
+
+  it("loads the checked-in T&M fixture without mixing RRFF hall splits", () => {
+    const raw = JSON.parse(source("./rate-vault/wood-river-tm-b1-preview-fixture.json"));
+    const parsed = parseRateVaultPreviewPackage(raw);
+    assert.equal("error" in parsed, false);
+    if ("error" in parsed) return;
+    const fixture = loadWoodRiverTmB1PreviewFixture();
+    const rrff = loadWoodRiverB1PreviewFixture();
+    assert.equal(fixture.siteId, "wood-river");
+    assert.equal(fixture.title, WOOD_RIVER_TM_B1_EXHIBIT_TITLE);
+    assert.equal(fixture.sourceId, WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID);
+    assert.equal(fixture.writesRateBook, false);
+    assert.equal(fixture.fixture, true);
+    assert.equal(fixture.bookFace, "tm");
+    assert.equal(fixture.id, parsed.id);
+    assert.equal(fixture.rows.length, 183);
+    assert.equal(fixture.craftSheets.length, 8);
+    assert.ok(fixture.burden.some((line) => line.label === "Pay Tax FICA-MC" && line.ratePct === 7.65));
+    assert.ok(fixture.burden.some((line) => line.label === "Pay Tax SUI" && line.ratePct === 8.55));
+    assert.equal(
+      fixture.burden.some((line) => /suta|illinois composite|overhead & fee/i.test(line.label)),
+      false,
+    );
+    assert.equal(
+      fixture.fringes.some((line) => line.sheet.includes("BOILERMAKER") && line.label === "H&W"),
+      false,
+    );
+    assert.ok(fixture.fringes.some((line) => line.label === "Fringes Subtotal" && line.amountHr === 36.89));
+    assert.ok(fixture.fringes.some((line) => line.label === "Fringes Subtotal" && line.amountHr === 21.5));
+    assert.equal(fixture.rows.every((row) => previewRowAddsUp(row)), true);
+    assert.equal(rrff.bookFace, "rrff");
+    assert.ok(rrff.fringes.some((line) => line.label === "H&W" && line.amountHr === 7.07));
+    assert.equal(
+      rrff.rows.some((row) => row.position === "Boilermaker Journeyman" && row.wage === 45.6),
+      true,
+    );
+    assert.match(WOOD_RIVER_TM_B1_PREVIEW_FIXTURE_PATH, /wood-river-tm-b1-preview-fixture\.json/);
+    assert.doesNotMatch(JSON.stringify(fixture), /PK.*word\/document|monroe|yates|shahan/i);
+    assert.doesNotMatch(JSON.stringify(raw), /shahan/i);
+    assert.equal(resolveRateVaultPreview({ siteId: "wood-river", bookFace: "tm" })?.bookFace, "tm");
+    assert.equal(resolveRateVaultPreview({ siteId: "wood-river" })?.bookFace, "rrff");
   });
 });

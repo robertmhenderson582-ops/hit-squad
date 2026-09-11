@@ -4,7 +4,7 @@
 - Drive catalog id: `1fFrxkY68TaCJXQa3OYVRZJ5oStJg9kMg` / vault copy `11yTuFWKa-T9of8peqKrRASkGAmkXBMiL`
 - Extracted at: `2026-09-11T11:26:45Z` (UTC)
 - Reader: openpyxl `read_only=True`, `data_only=True`
-- Output: `wood-river-tm-b1-extract.json`
+- Output: `wood-river-tm-b1-extract.json` (raw extract). Rate Vault loads the derived compact fixture `wood-river-tm-b1-preview-fixture.json` — metadata and rate rows only, no workbook bytes.
 - Halls populated: **8**
 - Positions (nonzero ST Base Wage): **183**
 

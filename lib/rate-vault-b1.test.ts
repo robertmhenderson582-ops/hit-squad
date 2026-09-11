@@ -5,8 +5,9 @@ import {
   craftSheetsFromFlat,
   looksLikePlaceholderIllinoisComposite,
 } from "./rate-vault-b1.ts";
-import { loadWoodRiverB1PreviewFixture } from "./rate-vault-preview.ts";
+import { loadWoodRiverB1PreviewFixture, loadWoodRiverTmB1PreviewFixture } from "./rate-vault-preview.ts";
 import { woodRiverB1CraftSheets } from "./rate-vault-wood-river-b1.ts";
+import { woodRiverTmB1CraftSheets } from "./rate-vault-wood-river-tm-b1.ts";
 
 describe("Rate Vault B-1 craft-sheet math", () => {
   it("matches filled Wood River RRFF ST / OT pairs", () => {
@@ -76,6 +77,28 @@ describe("Rate Vault B-1 craft-sheet math", () => {
     );
     assert.equal(
       fixture.rows.some((row) => row.position === "Boilermaker Journeyman" && row.fringe === 36.14),
+      true,
+    );
+  });
+
+  it("keeps T&M Fringes Subtotal honesty and does not invent RRFF splits", () => {
+    const tm = loadWoodRiverTmB1PreviewFixture();
+    const sheets = woodRiverTmB1CraftSheets();
+    const bm = sheets.find((sheet) => sheet.id === "wr-tm-bm");
+    const pf = sheets.find((sheet) => sheet.id === "wr-tm-pf");
+    assert.ok(bm && pf);
+    assert.equal(bm.fringes.length, 1);
+    assert.equal(bm.fringes[0]?.label, "Fringes Subtotal");
+    assert.equal(bm.fringes[0]?.amountHr, 36.89);
+    assert.equal(pf.fringes[0]?.amountHr, 21.5);
+    const gf = b1RatesForCraftSheet(bm, 50.6);
+    assert.equal(gf.wage, 50.6);
+    assert.equal(gf.fringe, 36.89);
+    assert.equal(looksLikePlaceholderIllinoisComposite(tm.burden), false);
+    assert.equal(tm.writesRateBook, false);
+    assert.equal(tm.bookFace, "tm");
+    assert.equal(
+      tm.rows.some((row) => row.position === "BOILERMAKER GENERAL FOREMAN" && row.fringe === 36.89 && row.wage === 50.6),
       true,
     );
   });

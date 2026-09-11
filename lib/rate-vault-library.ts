@@ -89,7 +89,7 @@ const SEED: readonly SeedRow[] = [
     kind: "b1-exhibit",
     siteId: "wood-river",
     primary: true,
-    note: "Primary Wood River T&M (Union_TM) Exhibit B-1 labor-burden workbook. Separate book from RRFF — pick T&M on Burden / Publish; OCIP still filters seats inside this book. Catalog by Drive id only; hall rates are not invented here. The official ~25 MB xlsx stays on Drive.",
+    note: "Primary Wood River T&M (Union_TM) Exhibit B-1 labor-burden workbook. Separate book from RRFF — pick T&M on Burden / Publish; OCIP still filters seats inside this book. Visual package is craft-sheet Pay Tax / Ins / Misc / O/H / Profit plus hall Fringes Subtotal (union halls do not expose H&W/Pension component columns). Catalog by Drive id only; the official ~25 MB xlsx stays on Drive.",
   },
   {
     driveId: "1aP0etQYJxWo003IUa8bVWWoDpOAwk1m2",

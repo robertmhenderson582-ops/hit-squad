@@ -49,18 +49,40 @@ describe("Rate Vault Wood River book switch", { concurrency: 1 }, () => {
     assert.doesNotMatch(JSON.stringify(rrff), /shahan/i);
   });
 
-  it("loads a separate empty T&M package and does not bleed RRFF rows", () => {
+  it("loads a separate filled T&M package and does not bleed RRFF rows", () => {
     const rrff = loadWoodRiverB1PreviewFixture();
     const tm = loadWoodRiverTmB1PreviewFixture();
     assert.equal(tm.bookFace, "tm");
     assert.equal(tm.title, WOOD_RIVER_TM_B1_EXHIBIT_TITLE);
     assert.equal(tm.sourceId, WOOD_RIVER_TM_B1_EXHIBIT_DRIVE_ID);
     assert.equal(tm.writesRateBook, false);
-    assert.equal(tm.rows.length, 0);
-    assert.equal(tm.craftSheets.length, 0);
-    assert.match(tm.note, /does not invent/i);
+    assert.ok(tm.rows.length >= 8);
+    assert.equal(tm.rows.length, 183);
+    assert.equal(tm.craftSheets.length, 8);
+    assert.match(tm.note, /Fringes Subtotal/i);
     assert.match(tm.note, /Union_TM/i);
+    assert.match(tm.note, /not invented RRFF splits/i);
     assert.doesNotMatch(tm.note, /shahan/i);
+    const lead = tm.rows.find((row) => row.position === "LEAD SITE BOILERMAKER 01");
+    const pfJw = tm.rows.find((row) => row.position === "PIPEFITTER JOURNEYMAN" && row.sheet.includes("PIPEFITTER") && row.local === "553");
+    const bmGf = tm.rows.find((row) => row.position === "BOILERMAKER GENERAL FOREMAN");
+    assert.ok(lead && pfJw && bmGf);
+    assert.equal(lead.wage, 71);
+    assert.ok(Math.abs(lead.billRate - 141.9) <= 0.03);
+    assert.equal(pfJw.wage, 49.03);
+    assert.equal(pfJw.fringe, 21.5);
+    assert.equal(bmGf.wage, 50.6);
+    assert.equal(bmGf.fringe, 36.89);
+    assert.equal(
+      tm.craftSheets
+        .filter((sheet) => sheet.lane === "union")
+        .every((sheet) => sheet.fringes.length === 1 && sheet.fringes[0]?.label === "Fringes Subtotal"),
+      true,
+    );
+    assert.equal(
+      tm.craftSheets.some((sheet) => sheet.lane === "merit" && sheet.fringes.some((line) => line.label === "401K")),
+      true,
+    );
     assert.equal(
       resolveRateVaultPreview({ siteId: "wood-river", bookFace: "tm" })?.id,
       tm.id,
@@ -78,8 +100,15 @@ describe("Rate Vault Wood River book switch", { concurrency: 1 }, () => {
     assert.equal(previewHasBookBlend(rrff, tm), true);
     const merged = mergePreviewFace(rrff, tm, "both");
     assert.equal(merged.bookFace, "tm");
-    assert.equal(merged.rows.length, 0);
-    assert.equal(merged.rows.some((row) => /boilermaker journeyman/i.test(row.position)), false);
+    assert.ok(merged.rows.length >= 8);
+    assert.equal(merged.rows.some((row) => row.position === "Boilermaker Journeyman"), false);
+    assert.equal(merged.rows.some((row) => row.position === "LEAD SITE BOILERMAKER 01"), true);
+    const rrffAfterSwitch = resolveRateVaultPreview({ siteId: "wood-river", bookFace: "rrff" });
+    assert.equal(rrffAfterSwitch?.bookFace, "rrff");
+    assert.equal(
+      rrffAfterSwitch?.rows.some((row) => row.position === "Boilermaker Journeyman" && row.wage === 45.6),
+      true,
+    );
   });
 
   it("infers RRFF vs T&M from Drive id and title without mixing", () => {
@@ -103,9 +132,12 @@ describe("Rate Vault Wood River book switch", { concurrency: 1 }, () => {
     assert.equal(ocip.bookFace, "rrff");
     assert.equal(ocip.rows.every((row) => row.ocip), true);
     assert.ok(ocip.rows.length < rrff.rows.length);
-    const tmOcip = filterPreviewByFace(loadWoodRiverTmB1PreviewFixture(), "ocip");
+    const tm = loadWoodRiverTmB1PreviewFixture();
+    const tmOcip = filterPreviewByFace(tm, "ocip");
     assert.equal(tmOcip.bookFace, "tm");
-    assert.equal(tmOcip.rows.length, 0);
+    assert.equal(tmOcip.rows.every((row) => row.ocip), true);
+    assert.ok(tmOcip.rows.length > 0);
+    assert.ok(tmOcip.rows.length < tm.rows.length);
   });
 
   it("tags export with the selected book and refuses a silent mix on import", async () => {
@@ -139,7 +171,11 @@ describe("Rate Vault Wood River book switch", { concurrency: 1 }, () => {
     assert.equal(importedTm.ok, true);
     if (!importedTm.ok) return;
     assert.equal(importedTm.preview.bookFace, "tm");
-    assert.equal(importedTm.preview.rows.length, 0);
+    assert.ok(importedTm.preview.rows.length >= 8);
+    assert.equal(
+      importedTm.preview.rows.some((row) => row.position === "LEAD SITE BOILERMAKER 01" && row.wage === 71),
+      true,
+    );
     assert.match(RATE_VAULT_B1_BOOK_MIX_ERROR, /RRFF/);
     assert.match(RATE_VAULT_B1_BOOK_MIX_ERROR, /T&M/);
     assert.equal(importedRrff.preview.bookFace === importedTm.preview.bookFace, false);
@@ -159,11 +195,17 @@ describe("Rate Vault Wood River book switch", { concurrency: 1 }, () => {
       ),
     });
     assert.equal(savedRrff.ok, true);
+    const tm = loadWoodRiverTmB1PreviewFixture();
+    const lead = tm.rows.find((row) => row.position === "LEAD SITE BOILERMAKER 01");
+    assert.ok(lead);
     const savedTm = await upsertRateVaultPackage({
-      ...loadWoodRiverTmB1PreviewFixture(),
+      ...tm,
       fixture: false,
       extractedFrom: "vault-xlsx-import",
-      note: "Imported T&M stub — still empty.",
+      note: "Imported T&M Union_TM package.",
+      rows: tm.rows.map((row) =>
+        row.id === lead?.id ? { ...row, wage: 88.88, billRate: 88.88 + row.fringe + row.burden } : row,
+      ),
     });
     assert.equal(savedTm.ok, true);
     const listed = await listRateVaultPackages();
@@ -171,7 +213,8 @@ describe("Rate Vault Wood River book switch", { concurrency: 1 }, () => {
     const loadedRrff = await getRateVaultPackage("wood-river", "rrff");
     const loadedTm = await getRateVaultPackage("wood-river", "tm");
     assert.equal(loadedRrff?.rows.find((row) => row.id === journeyman?.id)?.wage, 77.77);
-    assert.equal(loadedTm?.rows.length, 0);
+    assert.equal(loadedTm?.rows.find((row) => row.id === lead?.id)?.wage, 88.88);
+    assert.ok((loadedTm?.rows.length ?? 0) >= 8);
     assert.equal(loadedTm?.bookFace, "tm");
     assert.equal(loadedRrff?.bookFace, "rrff");
     assert.doesNotMatch(JSON.stringify(loadedTm), /Boilermaker Journeyman/);

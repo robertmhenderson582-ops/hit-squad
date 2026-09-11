@@ -437,7 +437,7 @@ export function RateVaultDesk() {
       setNote(
         data.preview
           ? book === "tm"
-            ? "T&M book loaded. Hall rates are not in this vault yet — switch back to RRFF for the filled package."
+            ? "Visual package loaded from the Wood River T&M B-1 fixture. Confirm or open Burden / Publish to scroll the table."
             : "Visual package loaded from the Wood River B-1 fixture. Confirm or open Burden / Publish to scroll the table."
           : "Guessed from the Drive title and path. Confirm or correct before mapping.",
       );
@@ -1337,7 +1337,7 @@ function BurdenPane({
           ocipFace={ocipFace}
           emptyNote={
             bookFace === "tm"
-              ? "T&M hall rates are not loaded in this vault yet. Official Union_TM numbers stay on Drive. Switch back to RRFF for the filled Wood River package."
+              ? "No T&M seats in this view. Switch OCIP or pick RRFF for the other Wood River book."
               : "No B-1 preview for this site yet. Wood River is seeded — pick it to see the package."
           }
         />
@@ -1477,7 +1477,7 @@ function PublishPane({
         ocipFace={ocipFace}
         emptyNote={
           bookFace === "tm"
-            ? "T&M hall rates are not loaded in this vault yet. Official Union_TM numbers stay on Drive. Switch back to RRFF for the filled Wood River package."
+            ? "No T&M seats in this view. Switch OCIP or pick RRFF for the other Wood River book."
             : "No B-1 preview for this site yet. Wood River is seeded — pick it to scroll the package."
         }
       />
