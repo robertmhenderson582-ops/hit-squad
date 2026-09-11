@@ -49,6 +49,9 @@ describe("Home four doors", () => {
     assert.equal(homeDockLabels().includes("Purchasing"), false);
     assert.equal(homeDockLabels().includes("Scoreboard"), false);
     assert.equal(homeDockLabels().includes("Rate Vault"), false);
+    assert.equal(homeDockLabels().includes("Inbox"), false);
+    assert.equal(homeDockLabels().includes("Suggestion Box"), false);
+    assert.equal(HOME_DOCK_TILES.some((tile) => tile.href === "/inbox" || tile.href === "/tickets"), false);
     assert.equal(
       HOME_DOCK_TILES.some((tile) => tile.key === RATE_VAULT_DOOR.key || tile.href === RATE_VAULT_DOOR.href),
       false,

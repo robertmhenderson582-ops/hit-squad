@@ -91,12 +91,15 @@ type OwnerDeskState = {
   viewResponsibility: ViewResponsibility;
   viewSite: string;
   republish: RepublishState | null;
+  showInboxSuggestionBox: boolean;
+  inboxChromeReady: boolean;
   lensReady: boolean;
   people: DeskPerson[];
   setAliasesOn: (on: boolean) => void;
   setFollowSeat: (seat: FollowSeat, land?: string) => void;
   setViewAs: (seat: ViewAsSeat) => void;
   setViewLens: (responsibility: ViewResponsibility, site: string) => void;
+  setShowInboxSuggestionBox: (on: boolean) => void;
   alias: (text: string) => string;
   applyingAliases: boolean;
 };
@@ -130,6 +133,8 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
   const [viewResponsibility, setViewResponsibility] = useState<ViewResponsibility>("Estimator");
   const [viewSite, setViewSite] = useState("Wood River — Roxana, IL");
   const [republish, setRepublish] = useState<RepublishState | null>(null);
+  const [showInboxSuggestionBox, setShowInboxSuggestionBoxState] = useState(false);
+  const [inboxChromeReady, setInboxChromeReady] = useState(false);
   const [lensReady, setLensReady] = useState(!hasBuildDesk(user));
   const people = useDeskPeople();
 
@@ -179,19 +184,39 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       fetch("/api/desk/owner-settings", { credentials: "include", cache: "no-store" })
         .then((response) => response.json())
         .then((data) => {
+          if (typeof data.showInboxSuggestionBox === "boolean") {
+            setShowInboxSuggestionBoxState(data.showInboxSuggestionBox);
+          }
           if (data.republish) setRepublish(data.republish);
+          setInboxChromeReady(true);
         })
-        .catch(() => undefined);
+        .catch(() => setInboxChromeReady(true));
       return;
     }
     if (!hasBuildDesk(user)) {
-      setLensReady(true);
+      fetch("/api/desk/owner-settings", { credentials: "include", cache: "no-store" })
+        .then((response) => response.json())
+        .then((data) => {
+          if (typeof data.showInboxSuggestionBox === "boolean") {
+            setShowInboxSuggestionBoxState(data.showInboxSuggestionBox);
+          }
+          if (data.republish) setRepublish(data.republish);
+          setInboxChromeReady(true);
+          setLensReady(true);
+        })
+        .catch(() => {
+          setInboxChromeReady(true);
+          setLensReady(true);
+        });
       return;
     }
     fetch("/api/desk/owner-settings", { credentials: "include", cache: "no-store" })
       .then((response) => response.json())
       .then((data) => {
         if (typeof data.aliasesOn === "boolean") setAliasesOnState(data.aliasesOn);
+        if (typeof data.showInboxSuggestionBox === "boolean") {
+          setShowInboxSuggestionBoxState(data.showInboxSuggestionBox);
+        }
         const nextFollow = preferredFollowSeat(readStoredFollow(), data.followSeat);
         setFollowSeatState(nextFollow);
         writeStoredFollow(nextFollow);
@@ -201,9 +226,13 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
         if (data.viewResponsibility) setViewResponsibility(data.viewResponsibility);
         if (data.viewSite) setViewSite(data.viewSite);
         if (data.republish) setRepublish(data.republish);
+        setInboxChromeReady(true);
         setLensReady(true);
       })
-      .catch(() => setLensReady(true));
+      .catch(() => {
+        setInboxChromeReady(true);
+        setLensReady(true);
+      });
   }, [tester, user]);
 
   const viewedSeat = hasBuildDesk(user) && viewingAsOther(viewAs) ? testerFromViewAs(viewAs, people) : undefined;
@@ -229,6 +258,13 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     setAliasesOnState(on);
     saveSettings({ aliasesOn: on });
     noteFeature(on ? "Aliases tester view on" : "Aliases real names");
+  }, [user]);
+
+  const setShowInboxSuggestionBox = useCallback((on: boolean) => {
+    if (isTester(user) || !hasBuildDesk(user)) return;
+    setShowInboxSuggestionBoxState(on);
+    saveSettings({ showInboxSuggestionBox: on });
+    noteFeature(on ? "Show Inbox & Suggestion Box" : "Hide Inbox & Suggestion Box");
   }, [user]);
 
   const setFollowSeat = useCallback((seat: FollowSeat, nextLand?: string) => {
@@ -294,16 +330,19 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       viewResponsibility,
       viewSite,
       republish,
+      showInboxSuggestionBox,
+      inboxChromeReady,
       lensReady,
       people,
       setAliasesOn,
       setFollowSeat,
       setViewAs,
       setViewLens,
+      setShowInboxSuggestionBox,
       alias,
       applyingAliases,
     }),
-    [aliasesOn, followSeat, viewAs, viewResponsibility, viewSite, republish, lensReady, people, setAliasesOn, setFollowSeat, setViewAs, setViewLens, alias, applyingAliases],
+    [aliasesOn, followSeat, viewAs, viewResponsibility, viewSite, republish, showInboxSuggestionBox, inboxChromeReady, lensReady, people, setAliasesOn, setFollowSeat, setViewAs, setViewLens, setShowInboxSuggestionBox, alias, applyingAliases],
   );
 
   return <OwnerDeskContext.Provider value={value}>{children}</OwnerDeskContext.Provider>;

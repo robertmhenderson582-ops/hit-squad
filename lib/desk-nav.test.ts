@@ -25,6 +25,9 @@ describe("desk chrome nav", () => {
     assert.deepEqual(deskNavLabels(), ["Settings"]);
     assert.equal(deskNavHasHeaderModules(), false);
     assert.equal(DESK_NAV.some((item) => item.href === "/settings"), true);
+    assert.equal(DESK_NAV.some((item) => item.href === "/inbox" || item.href === "/tickets"), false);
+    assert.equal(deskNavLabels().includes("Inbox"), false);
+    assert.equal(deskNavLabels().includes("Suggestion Box"), false);
     const chrome = readFileSync(fileURLToPath(new URL("../components/DeskChrome.tsx", import.meta.url)), "utf8");
     assert.equal(/Change orders|Future Modules|Cost \/ PPR/.test(chrome), false);
   });

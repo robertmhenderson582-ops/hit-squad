@@ -3,10 +3,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   readTalkWalk,
-  TALK_STEPS,
+  talkStepsForDesk,
   TALK_WALK_VERSION,
   writeTalkWalk,
 } from "@/lib/talk-walk";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { canDesignerShip } from "@/lib/desk-role";
 
@@ -20,6 +21,8 @@ const TalkWalkContext = createContext<TalkWalkApi>({ openWalk: () => undefined }
 
 export function TalkWalkProvider({ children }: { children: React.ReactNode }) {
   const { user, status } = useSession();
+  const desk = useOwnerDesk();
+  const steps = talkStepsForDesk(desk?.showInboxSuggestionBox);
   const [mode, setMode] = useState<TalkMode>("closed");
   const [step, setStep] = useState(0);
 
@@ -61,8 +64,9 @@ export function TalkWalkProvider({ children }: { children: React.ReactNode }) {
             <p className="text-xs tracking-[0.16em] text-[#5b6f73]">HOW WE TALK</p>
             <h2 className="mt-2 font-display text-2xl text-[#163038]">Briefing</h2>
             <p className="mt-3 text-sm leading-6 text-[#163038]">
-              Email is out. Messages, tickets, and screenshots stay in Inbox and Tickets. This short
-              walk shows the Inbox FAB, Enter to send, and the Ticket beacon.
+              {desk?.showInboxSuggestionBox
+                ? "Email is out. Messages, tickets, and screenshots stay in Inbox and Tickets. This short walk shows the Inbox FAB, Enter to send, and the Ticket beacon."
+                : "Inbox and Suggestion Box are off this desk for now. For tickets and help, email hitsquad.novus@gmail.com. Use regular email to communicate."}
             </p>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               <button type="button" onClick={() => finish(true)} className="rounded-lg border border-steel px-4 py-2 text-steel">
@@ -95,8 +99,8 @@ export function TalkWalkProvider({ children }: { children: React.ReactNode }) {
         <div className="talk-scrim">
           <section className="talk-card">
             <p className="text-xs tracking-[0.16em] text-[#5b6f73]">HOW WE TALK</p>
-            <h2 className="mt-2 font-display text-2xl text-[#163038]">{TALK_STEPS[step].title}</h2>
-            <p className="mt-3 text-sm leading-6 text-[#163038]">{TALK_STEPS[step].body}</p>
+            <h2 className="mt-2 font-display text-2xl text-[#163038]">{steps[Math.min(step, steps.length - 1)].title}</h2>
+            <p className="mt-3 text-sm leading-6 text-[#163038]">{steps[Math.min(step, steps.length - 1)].body}</p>
             <div className="mt-5 flex flex-wrap justify-between gap-2">
               <button type="button" onClick={() => finish(true)} className="text-sm text-steel underline">
                 Skip
@@ -110,12 +114,12 @@ export function TalkWalkProvider({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (step + 1 >= TALK_STEPS.length) finish(false);
+                    if (step + 1 >= steps.length) finish(false);
                     else setStep((n) => n + 1);
                   }}
                   className="rounded-lg bg-steel px-4 py-2 text-white"
                 >
-                  {step + 1 >= TALK_STEPS.length ? "Done" : "Next"}
+                  {step + 1 >= steps.length ? "Done" : "Next"}
                 </button>
               </div>
             </div>

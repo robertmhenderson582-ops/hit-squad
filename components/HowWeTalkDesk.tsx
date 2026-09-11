@@ -1,14 +1,17 @@
 "use client";
 
-import { TALK_STEPS } from "@/lib/talk-walk";
+import { talkStepsForDesk } from "@/lib/talk-walk";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { useTalkWalk } from "@/components/TalkWalk";
 import { hasBuildDesk } from "@/lib/desk-role";
 
 export function HowWeTalkDesk() {
   const { user } = useSession();
+  const desk = useOwnerDesk();
   const { openWalk } = useTalkWalk();
   const owner = hasBuildDesk(user);
+  const steps = talkStepsForDesk(desk?.showInboxSuggestionBox);
 
   return (
     <section className="plant-card px-5 py-5">
@@ -19,7 +22,7 @@ export function HowWeTalkDesk() {
         {owner ? " You can skip." : ""}
       </p>
       <dl className="mt-4 space-y-3">
-        {TALK_STEPS.map((step) => (
+        {steps.map((step) => (
           <div key={step.title}>
             <dt className="font-semibold text-[#163038]">{step.title}</dt>
             <dd className="text-sm text-[#5b6f73]">{step.body}</dd>

@@ -3,6 +3,9 @@
 import { playInboxChime } from "@/lib/chime";
 import type { Density, ThemeChoice, TypeSize } from "@/lib/display";
 import { useDisplay } from "@/components/DisplayProvider";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useSession } from "@/components/SessionProvider";
+import { hasBuildDesk } from "@/lib/desk-role";
 
 const THEMES: { value: ThemeChoice; title: string; copy: string }[] = [
   { value: "night", title: "Night", copy: "instrument-cluster HUD — hairline frames, teal and amber readouts. Default desk." },
@@ -12,9 +15,27 @@ const THEMES: { value: ThemeChoice; title: string; copy: string }[] = [
 
 export function DisplayDesk() {
   const { prefs, setPrefs } = useDisplay();
+  const { user } = useSession();
+  const desk = useOwnerDesk();
+  const ownerFlip = Boolean(desk && hasBuildDesk(user));
+  const inboxChromeOn = Boolean(desk?.showInboxSuggestionBox);
 
   return (
     <div className="space-y-5">
+      {ownerFlip ? (
+        <section className="plant-card px-5 py-5">
+          <Toggle
+            label="Show Inbox & Suggestion Box"
+            on={inboxChromeOn}
+            onChange={(on) => desk?.setShowInboxSuggestionBox(on)}
+          />
+          <p className="mt-2 text-sm text-[#5b6f73]">
+            Off by default for every seat, including Owner. Testers use hitsquad.novus@gmail.com
+            for tickets and help, and regular email to talk. Modules stay in the codebase. Flip
+            this on when Robert wants the radios and FABs back.
+          </p>
+        </section>
+      ) : null}
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Display</h2>
         <p className="mt-2 text-sm text-[#5b6f73]">
@@ -89,20 +110,22 @@ export function DisplayDesk() {
         </p>
       </section>
 
-      <section className="plant-card px-5 py-5">
-        <Toggle
-          label="Inbox sound"
-          on={prefs.inboxSound}
-          onChange={(on) => {
-            setPrefs({ inboxSound: on });
-            if (on) playInboxChime();
-          }}
-        />
-        <p className="mt-2 text-sm text-[#5b6f73]">
-          New Inbox messages play a short chime, on by default. Toggle off on that device. Click
-          Inbox once so the browser allows audio. Flip the toggle on to hear a preview.
-        </p>
-      </section>
+      {inboxChromeOn ? (
+        <section className="plant-card px-5 py-5">
+          <Toggle
+            label="Inbox sound"
+            on={prefs.inboxSound}
+            onChange={(on) => {
+              setPrefs({ inboxSound: on });
+              if (on) playInboxChime();
+            }}
+          />
+          <p className="mt-2 text-sm text-[#5b6f73]">
+            New Inbox messages play a short chime, on by default. Toggle off on that device. Click
+            Inbox once so the browser allows audio. Flip the toggle on to hear a preview.
+          </p>
+        </section>
+      ) : null}
     </div>
   );
 }

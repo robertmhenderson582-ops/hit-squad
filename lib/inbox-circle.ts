@@ -61,6 +61,25 @@ export function canUseSuggestionBox(user?: { email?: string } | null): boolean {
   return canUseInbox(user);
 }
 
+/** Owner settings flag. Default off hides Inbox + Suggestion Box chrome for every seat. */
+export function inboxSuggestionBoxChromeOn(showInboxSuggestionBox?: boolean | null) {
+  return showInboxSuggestionBox === true;
+}
+
+export function canSeeInboxUi(
+  user?: (PrivilegeViewer & { email?: string }) | null,
+  showInboxSuggestionBox?: boolean | null,
+): boolean {
+  return inboxSuggestionBoxChromeOn(showInboxSuggestionBox) && canUseInbox(user);
+}
+
+export function canSeeSuggestionBoxUi(
+  user?: { email?: string } | null,
+  showInboxSuggestionBox?: boolean | null,
+): boolean {
+  return inboxSuggestionBoxChromeOn(showInboxSuggestionBox) && canUseSuggestionBox(user);
+}
+
 export function canReceiveDeskBot(user?: { email?: string } | null): boolean {
   return canUseInbox(user);
 }

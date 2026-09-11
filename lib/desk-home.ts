@@ -78,7 +78,7 @@ export const JOB_SCOPED_TILES: readonly HomeDockTile[] = [
   { href: "/purchasing", key: "purchasing", label: "Purchasing", note: "Tools and consumables" },
 ] as const;
 
-const DEAD_HOME_DOORS = ["/standalone", "/payroll", "/team", "/scheduling", "/modules", "/scoreboard"] as const;
+const DEAD_HOME_DOORS = ["/standalone", "/payroll", "/team", "/scheduling", "/modules", "/scoreboard", "/inbox", "/tickets"] as const;
 const BURIED_JOB_HREFS = new Set(JOB_SCOPED_TILES.map((tile) => tile.href));
 
 export function companyDoorLogoSrc(companies: Array<{ logo?: string | null }> = []) {
