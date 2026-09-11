@@ -494,7 +494,7 @@ describe("Rate Vault B-1 Excel export / import", () => {
     const exported = await rateVaultPreviewToXlsx(fixture, { ocipFace: "ocip" });
     const workbook = await loadWorkbook(exported.bytes);
     const pack = workbook.getWorksheet(RATE_VAULT_B1_META_SHEET);
-    assert.equal(String(pack?.getCell("B14").value || ""), "ocip");
+    assert.equal(String(pack?.getCell("B14").value || ""), "both");
     const rates = workbook.getWorksheet(RATE_VAULT_B1_RATE_SHEET);
     assert.ok(rates);
     const lanes = new Set<string>();
@@ -506,9 +506,16 @@ describe("Rate Vault B-1 Excel export / import", () => {
       lanes.add(String(row.getCell(12).value || ""));
       faces.add(String(row.getCell(13).value || ""));
     });
-    assert.equal(faces.has("non-OCIP"), false);
     assert.equal(faces.has("OCIP"), true);
     assert.equal(lanes.has("union") || lanes.has("merit"), true);
+    const sheets = new Set<string>();
+    rates.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const position = String(row.getCell(1).value || "");
+      if (!position) return;
+      sheets.add(String(row.getCell(5).value || ""));
+    });
+    assert.equal(sheets.has("WOODRIVER BOILERMAKER RRFF"), true);
   });
 
   it("round-trips Exhibit B-1 calc / ride / Mult strings, including unknown book options", async () => {
@@ -597,7 +604,7 @@ describe("Rate Vault B-1 Excel export / import", () => {
     assert.equal(last?.state, "hidden");
     assert.equal(last?.getCell("A2").value, "kind");
     assert.equal(last?.getCell("B2").value, RATE_VAULT_B1_KIND);
-    assert.equal(String(last?.getCell("B14").value || ""), "ocip");
+    assert.equal(String(last?.getCell("B14").value || ""), "both");
     assert.equal(String(last?.getCell("B15").value || ""), "tm");
     const imported = await parseRateVaultB1Xlsx({
       fileName: exported.fileName,
@@ -606,9 +613,20 @@ describe("Rate Vault B-1 Excel export / import", () => {
     assert.equal(imported.ok, true);
     if (!imported.ok) return;
     assert.equal(imported.preview.bookFace, "tm");
-    assert.equal(imported.preview.ocipFace, "ocip");
+    assert.equal(imported.preview.ocipFace, "both");
     assert.ok(imported.preview.rows.length > 0);
-    assert.equal(imported.preview.rows.every((row) => row.ocip), true);
+    const sheets = new Map<string, number>();
+    for (const row of imported.preview.rows) {
+      sheets.set(row.sheet, (sheets.get(row.sheet) || 0) + 1);
+    }
+    assert.equal(imported.preview.rows.length, 183);
+    assert.equal(sheets.get("WOODRIVER BOILERMAKER TM"), 36);
+    assert.equal(sheets.get("WOODRIVER PIPEFITTER TM"), 15);
+    assert.equal(sheets.get("WOODRIVER LABORER TM"), 12);
+    assert.equal(sheets.get("WOODRIVER BM STAFF TM"), 28);
+    assert.equal(sheets.get("WOODRIVER PF STAFF TM"), 27);
+    assert.equal(imported.preview.rows.some((row) => row.position === "BOILERMAKER GENERAL FOREMAN"), true);
+    assert.equal(imported.preview.rows.some((row) => row.position === "PIPEFITTER JOURNEYMAN"), true);
   });
 
   it("widens Rate Summary columns so Wood River T&M + OCIP values fit at open", async () => {

@@ -119,12 +119,36 @@ export function rowMatchesOcipFace(row: Pick<RateVaultPreviewRow, "ocip">, face:
   return face === "ocip" ? row.ocip : !row.ocip;
 }
 
+/** True only when one hall tab has both OCIP and non-OCIP wage rows. */
+export function hallHasOcipPair(rows: readonly Pick<RateVaultPreviewRow, "sheet" | "ocip">[], sheet: string) {
+  let ocip = false;
+  let non = false;
+  for (const row of rows) {
+    if (row.sheet !== sheet) continue;
+    if (row.ocip) ocip = true;
+    else non = true;
+    if (ocip && non) return true;
+  }
+  return false;
+}
+
+/**
+ * OCIP picker drops a hall only when that hall has both faces.
+ * Union_TM / RRFF craft locals (BM L363, PF L553, Laborer) are tagged
+ * non-OCIP because the group cell lacks the word OCIP — they are still
+ * the Direct Craft seats for a T&M+OCIP package, not a second book.
+ */
 export function filterPreviewByFace(preview: RateVaultPreviewPackage, face: RateVaultOcipFace): RateVaultPreviewPackage {
+  const paired = new Set(
+    [...new Set(preview.rows.map((row) => row.sheet))].filter((sheet) => hallHasOcipPair(preview.rows, sheet)),
+  );
+  const rows = preview.rows.filter((row) => !paired.has(row.sheet) || rowMatchesOcipFace(row, face));
+  const includedOpposite = rows.some((row) => !rowMatchesOcipFace(row, face));
   return {
     ...cloneRateVaultPreview(preview),
     bookFace: packageBookFace(preview),
-    ocipFace: face,
-    rows: preview.rows.filter((row) => rowMatchesOcipFace(row, face)),
+    ocipFace: includedOpposite ? "both" : face,
+    rows,
   };
 }
 

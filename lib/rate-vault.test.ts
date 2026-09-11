@@ -267,6 +267,8 @@ describe("Rate Vault scaffold", () => {
     assert.match(desk, /Review card/);
     assert.match(desk, /B-1 Builder steps/);
     assert.match(desk, /Rate Vault builder drop/);
+    assert.match(desk, /step !== "recognize"/);
+    assert.match(desk, /Recognize keeps only the pane drop/);
     assert.match(desk, /Rate Vault source upload/);
     assert.match(desk, /Recognize rate sheet/);
     assert.match(desk, /Map crafts upload/);
@@ -288,6 +290,8 @@ describe("Rate Vault scaffold", () => {
     assert.match(desk, /Rate package buyoff/);
     assert.match(desk, /Request changes/);
     assert.match(desk, /Live write to Jobs \/ Rates stays stubbed/);
+    assert.match(previewUi, /filterPreviewByFace\(preview, ocipFace\)/);
+    assert.match(previewUi, /Desk Rate Summary \/ position list/);
     assert.match(previewUi, /Wood River B-1 rate package/);
     assert.match(previewUi, /Burden \+ fringes/);
     assert.match(previewUi, /Fringes Subtotal/);
@@ -298,6 +302,7 @@ describe("Rate Vault scaffold", () => {
     assert.match(preview, /1HN5FclxjQNw0iHm_hizHbcWM9GZV_Zeu/);
     assert.match(preview, /1fFrxkY68TaCJXQa3OYVRZJ5oStJg9kMg/);
     assert.match(preview, /bookFace/);
+    assert.match(preview, /hallHasOcipPair/);
     assert.match(library, /Wood River Exhibit B-1 RRFF Labor Burden Buildup/);
     assert.match(library, /Wood River Exhibit B-1 Union_TM Labor Burden Buildup/);
     assert.match(previewUi, /Labor-burden book/);
@@ -345,6 +350,7 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /never commit/i);
     assert.match(docs, /Drag and drop/);
     assert.match(docs, /Quality folders/);
+    assert.match(docs, /Recognize keeps only the pane drop/);
     assert.match(docs, /wood-river-b1-preview-fixture/);
     assert.match(docs, /wood-river-tm-b1-preview-fixture/);
     assert.match(docs, /Pay Tax FICA-MC/);
@@ -358,6 +364,7 @@ describe("Rate Vault scaffold", () => {
     assert.match(docs, /hidden last-tab `_meta`/);
     assert.match(docs, /Excel opens on \*\*Rate Summary\*\*/);
     assert.match(docs, /column widths that fit Position/);
+    assert.match(docs, /WOODRIVER BOILERMAKER TM/);
     assert.match(xlsx, /rateVaultFringeRippleFormula/);
     assert.match(xlsx, /rateVaultBurdenRippleFormula/);
     assert.match(xlsx, /Family must not be "pay-tax"/);

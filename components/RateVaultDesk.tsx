@@ -562,15 +562,17 @@ export function RateVaultDesk() {
         <p className="mt-3 text-sm leading-6 text-[#5b6f73]">
           {RATE_VAULT_BUILDER_STEPS.find((item) => item.id === step)?.note}
         </p>
-        <div className="mt-4">
-          <RateVaultFileDrop
-            label="Drop a rate sheet on any Builder step"
-            note="PDF, Word, or Excel. Same zone on Sources, Recognize, Map, Burden, and Publish. Binaries stay off git."
-            ariaLabel="Rate Vault builder drop"
-            onFile={(file) => void recognizeFile(file, undefined, step === "sources" ? "recognize" : step)}
-            onSource={(sourceId) => void recognizeSourceId(sourceId, step === "sources" ? "recognize" : step)}
-          />
-        </div>
+        {step !== "recognize" ? (
+          <div className="mt-4">
+            <RateVaultFileDrop
+              label="Drop a rate sheet on any Builder step"
+              note="PDF, Word, or Excel. Same zone on Sources, Map, Burden, and Publish. Recognize keeps only the pane drop. Binaries stay off git."
+              ariaLabel="Rate Vault builder drop"
+              onFile={(file) => void recognizeFile(file, undefined, step === "sources" ? "recognize" : step)}
+              onSource={(sourceId) => void recognizeSourceId(sourceId, step === "sources" ? "recognize" : step)}
+            />
+          </div>
+        ) : null}
       </nav>
 
       {step === "sources" ? (
