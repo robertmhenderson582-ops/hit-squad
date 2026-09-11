@@ -3,7 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import { memoryDrive } from "./drive-estimates.ts";
 import {
   RATE_VAULT_B1_BOOK_MIX_ERROR,
-  RATE_VAULT_B1_PACKAGE_SHEET,
+  RATE_VAULT_B1_META_SHEET,
   packageBookFace,
 } from "./rate-vault.ts";
 import { seedRateVaultLibrary } from "./rate-vault-library.ts";
@@ -153,12 +153,12 @@ describe("Rate Vault Wood River book switch", { concurrency: 1 }, () => {
     const ExcelJS = (await import("exceljs")).default;
     const rrffBook = new ExcelJS.Workbook();
     await rrffBook.xlsx.load(rrffXlsx.bytes as unknown as ArrayBuffer);
-    const rrffPack = rrffBook.getWorksheet(RATE_VAULT_B1_PACKAGE_SHEET);
+    const rrffPack = rrffBook.getWorksheet(RATE_VAULT_B1_META_SHEET);
     assert.equal(String(rrffPack?.getCell("B15").value || ""), "rrff");
 
     const tmBook = new ExcelJS.Workbook();
     await tmBook.xlsx.load(tmXlsx.bytes as unknown as ArrayBuffer);
-    const tmPack = tmBook.getWorksheet(RATE_VAULT_B1_PACKAGE_SHEET);
+    const tmPack = tmBook.getWorksheet(RATE_VAULT_B1_META_SHEET);
     assert.equal(String(tmPack?.getCell("B15").value || ""), "tm");
 
     const importedRrff = await parseRateVaultB1Xlsx({ fileName: rrffXlsx.fileName, bytes: rrffXlsx.bytes });
