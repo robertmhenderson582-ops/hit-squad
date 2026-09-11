@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { HSE_PACKAGE_SLOTS } from "./hse-day1.ts";
 import {
   HSE_EXECUTE_LANES,
@@ -48,6 +50,10 @@ describe("HSE module store", () => {
     assert.equal(read.lanes.incidents[0]?.cells.note, "near miss");
     assert.equal(hseModuleJobKey("job-new-b1726"), `${HSE_MODULE_PREFIX}job:job-new-b1726`);
     writeHseModuleForJob("job-new-b1726", state, store);
+    const source = readFileSync(fileURLToPath(new URL("./hse-module.ts", import.meta.url)), "utf8");
+    assert.match(source, /localStorage-only/);
+    assert.match(source, /fail-closed vault path/);
+    assert.doesNotMatch(source, /1zYl2dEvW21|1KKpYqirYrJo99faLufX5wLLayG8u3UUN/);
     assert.equal(readHseModuleForJob("job-new-b1726", store).lanes.incidents[0]?.cells.note, "near miss");
     assert.equal(readHseModuleForJob("job-other", store).lanes.incidents.length, 0);
   });

@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { briefsFolderId, briefsVault, readVaultJson, writeVaultJson } from "./drive-data.ts";
 import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
-import type { LeadBrief, LeadFile, PublicLeadBrief } from "./lead-briefs.ts";
+import { HSE_VAULT_WRITE_ERROR, type LeadBrief, type LeadFile, type PublicLeadBrief } from "./lead-briefs.ts";
 import { QUALITY_VAULT_WRITE_ERROR } from "./quality-vault.ts";
 
 export type LeadBriefKind = "quality" | "hse";
@@ -38,6 +38,14 @@ export function leadBriefAdapter() {
 
 export function qualityBriefsRequireDrive() {
   return Boolean(resolveAdapter()?.configured);
+}
+
+export function hseBriefsRequireDrive() {
+  return Boolean(resolveAdapter()?.configured);
+}
+
+function briefVaultWriteError(kind: LeadBriefKind) {
+  return kind === "hse" ? HSE_VAULT_WRITE_ERROR : QUALITY_VAULT_WRITE_ERROR;
 }
 
 export function leadBriefStorePath(kind: LeadBriefKind) {
@@ -131,18 +139,6 @@ export function mergeLeadBriefs(vault: StoredLeadBrief[], incoming: StoredLeadBr
   return [...map.values()].sort((a, b) => b.savedAt.localeCompare(a.savedAt) || a.id.localeCompare(b.id));
 }
 
-function readCache(kind: LeadBriefKind): StoredLeadBrief[] {
-  const file = leadBriefStorePath(kind);
-  if (cache[kind] && loadedFrom[kind] === file) return cache[kind] as StoredLeadBrief[];
-  try {
-    cache[kind] = parseLeadBriefFile(JSON.parse(readFileSync(file, "utf8")), kind);
-  } catch {
-    cache[kind] = [];
-  }
-  loadedFrom[kind] = file;
-  return cache[kind] as StoredLeadBrief[];
-}
-
 function writeCache(kind: LeadBriefKind, briefs: StoredLeadBrief[]) {
   cache[kind] = briefs;
   const file = leadBriefStorePath(kind);
@@ -164,14 +160,6 @@ function resolveAdapter(): DriveAdapter | null {
   return drive.configured ? drive : null;
 }
 
-function readDiskBriefs(kind: LeadBriefKind): StoredLeadBrief[] {
-  try {
-    return parseLeadBriefFile(JSON.parse(readFileSync(leadBriefStorePath(kind), "utf8")), kind);
-  } catch {
-    return [];
-  }
-}
-
 async function readVaultBriefs(kind: LeadBriefKind): Promise<StoredLeadBrief[]> {
   const drive = resolveAdapter();
   if (!drive) return [];
@@ -179,70 +167,26 @@ async function readVaultBriefs(kind: LeadBriefKind): Promise<StoredLeadBrief[]> 
   const folderId = briefsFolderId(kind);
   const fromRoom = await readVaultJson(drive, vault.name, vault.kind, folderId);
   if (fromRoom) return parseLeadBriefFile(fromRoom, kind);
-  if (kind === "quality") {
-    const fromData = await readVaultJson(drive, vault.name, vault.kind);
-    return parseLeadBriefFile(fromData, kind);
-  }
-  return parseLeadBriefFile(null, kind);
-}
-
-function briefsNeedVaultWrite(vault: StoredLeadBrief[], merged: StoredLeadBrief[]) {
-  if (merged.length !== vault.length) return true;
-  const byId = new Map(vault.map((row) => [row.id, row]));
-  return merged.some((row) => {
-    const existing = byId.get(row.id);
-    return !existing || row.files.length > existing.files.length || Boolean(row.describe && !existing.describe);
-  });
+  const fromData = await readVaultJson(drive, vault.name, vault.kind);
+  return parseLeadBriefFile(fromData, kind);
 }
 
 async function persist(kind: LeadBriefKind, briefs: StoredLeadBrief[]): Promise<StoredLeadBrief[]> {
   const drive = resolveAdapter();
-  if (kind === "quality") {
-    if (!drive?.configured) throw new Error(QUALITY_VAULT_WRITE_ERROR);
-    const merged = mergeLeadBriefs(await readVaultBriefs(kind), briefs);
-    const vault = briefsVault(kind);
-    await writeVaultJson(drive, vault.name, vault.kind, { briefs: merged }, briefsFolderId(kind));
-    writeCache(kind, merged);
-    return merged;
-  }
-  if (drive) {
-    const merged = mergeLeadBriefs(await readVaultBriefs(kind), briefs);
-    writeCache(kind, merged);
-    const vault = briefsVault(kind);
-    await writeVaultJson(drive, vault.name, vault.kind, { briefs: merged }, briefsFolderId(kind));
-    return merged;
-  }
-  const merged = mergeLeadBriefs(readDiskBriefs(kind), briefs);
+  if (!drive?.configured) throw new Error(briefVaultWriteError(kind));
+  const merged = mergeLeadBriefs(await readVaultBriefs(kind), briefs);
+  const vault = briefsVault(kind);
+  await writeVaultJson(drive, vault.name, vault.kind, { briefs: merged }, briefsFolderId(kind));
   writeCache(kind, merged);
   return merged;
 }
 
 export async function hydrateLeadBriefStore(kind: LeadBriefKind): Promise<StoredLeadBrief[]> {
-  const cached = readCache(kind);
   const drive = resolveAdapter();
-  if (kind === "quality") {
-    if (!drive?.configured) return [];
-    const vault = await readVaultBriefs(kind);
-    writeCache(kind, vault);
-    return vault;
-  }
-  if (drive) {
-    try {
-      const vault = await readVaultBriefs(kind);
-      const merged = mergeLeadBriefs(vault, cached);
-      writeCache(kind, merged);
-      if (briefsNeedVaultWrite(vault, merged)) {
-        const named = briefsVault(kind);
-        await writeVaultJson(drive, named.name, named.kind, { briefs: merged }, briefsFolderId(kind));
-      }
-    } catch {
-      // Keep the local cache.
-    }
-    return readCache(kind);
-  }
-  const merged = mergeLeadBriefs(readDiskBriefs(kind), cached);
-  writeCache(kind, merged);
-  return readCache(kind);
+  if (!drive?.configured) return [];
+  const vault = await readVaultBriefs(kind);
+  writeCache(kind, vault);
+  return vault;
 }
 
 export function briefIdFor(kind: LeadBriefKind, who: string, jobId = "", folderId = "") {

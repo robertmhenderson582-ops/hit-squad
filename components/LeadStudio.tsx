@@ -4,7 +4,15 @@ import { FormEvent, useEffect, useState } from "react";
 import { noteFeatureTrail } from "@/components/FeatureTrail";
 import { useSession } from "@/components/SessionProvider";
 import { canDesignerShip } from "@/lib/desk-role";
-import { fileToLead, leadToBytes, readBrief, writeBrief, type LeadFile, type PublicLeadBrief } from "@/lib/lead-briefs";
+import {
+  HSE_VAULT_WRITE_ERROR,
+  fileToLead,
+  leadToBytes,
+  readBrief,
+  writeBrief,
+  type LeadFile,
+  type PublicLeadBrief,
+} from "@/lib/lead-briefs";
 import { buildZip } from "@/lib/zip";
 
 const JOBS = [
@@ -88,16 +96,20 @@ export function LeadStudio({ title, kind, jobId = "" }: { title: string; kind: "
       error?: string;
       brief?: PublicLeadBrief;
     };
-    if (!response.ok) {
-      throw new Error(typeof data.error === "string" && data.error ? data.error : "Could not save. Try again.");
+    const saved = data.brief;
+    if (!response.ok || !saved?.savedAt) {
+      throw new Error(
+        typeof data.error === "string" && data.error
+          ? data.error
+          : kind === "hse"
+            ? HSE_VAULT_WRITE_ERROR
+            : "Could not save. Try again.",
+      );
     }
-    const stamp = data.brief?.savedAt || new Date().toLocaleString("en-GB", { hour12: false });
+    const stamp = saved.savedAt;
     setSavedAt(stamp);
     persist({ describe: body.describe, files: body.files, savedAt: stamp });
-    const saved = data.brief;
-    if (saved) {
-      setSavedBriefs((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
-    }
+    setSavedBriefs((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
     return stamp;
   }
 

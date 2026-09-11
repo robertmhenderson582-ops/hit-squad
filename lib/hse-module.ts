@@ -11,6 +11,10 @@ import type { StorageLike } from "./local-estimates.ts";
 
 export const HSE_MODULE_PREFIX = "hs_hse_module_v1:";
 
+// Parked: Day1 / execute-lane state is localStorage-only. A filled board is not a
+// confirmed Drive write. Full HSE folder DnD is out of scope this turn — LeadStudio
+// briefs Save is the fail-closed vault path.
+
 export const HSE_EXECUTE_LANES = [
   {
     id: "incidents",

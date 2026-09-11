@@ -18,6 +18,7 @@ import {
   RATES_VAULT_NAME,
   QUALITY_BRIEFS_VAULT_KIND,
   QUALITY_BRIEFS_VAULT_NAME,
+  INBOX_VAULT_FILE_ID,
   INBOX_VAULT_KIND,
   INBOX_VAULT_NAME,
   findVaultJsonFile,
@@ -68,7 +69,7 @@ describe("vault named json", () => {
     assert.equal(await readVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND), null);
   });
 
-  it("keeps quality briefs apart from tickets and prefers the newest inbox.json", async () => {
+  it("keeps quality briefs apart from tickets", async () => {
     const drive = memoryDrive();
     await writeVaultJson(drive, QUALITY_BRIEFS_VAULT_NAME, QUALITY_BRIEFS_VAULT_KIND, {
       briefs: [{ id: "brief-quality-chancec318@yahoo.com", who: "chancec318@yahoo.com" }],
@@ -80,16 +81,95 @@ describe("vault named json", () => {
     );
     assert.equal(briefs?.briefs[0].id, "brief-quality-chancec318@yahoo.com");
     assert.equal(await readVaultJson(drive, TICKETS_VAULT_NAME, TICKETS_VAULT_KIND), null);
+  });
 
-    await drive.createJson("folder", INBOX_VAULT_NAME, JSON.stringify({ messages: [{ id: "old" }] }), {
+  it("pins inbox.json I/O to the canonical file id and never creates a sibling", async () => {
+    resetVaultFileIdsForTests();
+    const inner = memoryDrive();
+    inner.files.set(INBOX_VAULT_FILE_ID, {
+      file: {
+        id: INBOX_VAULT_FILE_ID,
+        name: INBOX_VAULT_NAME,
+        properties: { kind: INBOX_VAULT_KIND },
+        modifiedTime: "2026-09-11T00:00:00.000Z",
+      },
+      content: `${JSON.stringify({ messages: [{ id: "canonical" }] })}\n`,
+    });
+    const orphanA = await inner.createJson("folder", INBOX_VAULT_NAME, JSON.stringify({ messages: [{ id: "orphan-a" }] }), {
       kind: INBOX_VAULT_KIND,
     });
-    const newer = await drive.createJson("folder", INBOX_VAULT_NAME, JSON.stringify({ messages: [{ id: "new" }] }), {
+    const orphanB = await inner.createJson("folder", INBOX_VAULT_NAME, JSON.stringify({ messages: [{ id: "orphan-b" }] }), {
       kind: INBOX_VAULT_KIND,
     });
-    drive.files.get(newer.id)!.file.modifiedTime = "2026-09-02T21:00:00.000Z";
+    inner.files.get(orphanA.id)!.file.modifiedTime = "2026-09-01T00:00:00.000Z";
+    inner.files.get(orphanB.id)!.file.modifiedTime = "2026-09-12T00:00:00.000Z";
+    let created = 0;
+    const updated: string[] = [];
+    const drive: DriveAdapter = {
+      configured: true,
+      async listJson() {
+        return [...inner.files.values()].map((row) => row.file);
+      },
+      async listAccessibleJson() {
+        return [...inner.files.values()].map((row) => row.file);
+      },
+      readJson: (fileId) => inner.readJson(fileId),
+      async createJson() {
+        created += 1;
+        throw new Error("createJson must not mint a fourth inbox.json");
+      },
+      async updateJson(fileId, content, name, properties) {
+        updated.push(fileId);
+        return inner.updateJson(fileId, content, name, properties);
+      },
+      deleteJson: (fileId) => inner.deleteJson(fileId),
+      confirmWrite: (fileId, content) => inner.confirmWrite!(fileId, content),
+    };
     const found = await findVaultJsonFile(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND);
-    assert.equal(found?.id, newer.id);
+    assert.equal(found?.id, INBOX_VAULT_FILE_ID);
+    await writeVaultJson(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND, { messages: [{ id: "kept" }] });
+    assert.equal(created, 0);
+    assert.deepEqual(updated, [INBOX_VAULT_FILE_ID]);
+    const canonical = JSON.parse(await inner.readJson(INBOX_VAULT_FILE_ID)) as { messages: Array<{ id: string }> };
+    assert.equal(canonical.messages[0].id, "kept");
+    const leftoverA = JSON.parse(await inner.readJson(orphanA.id)) as { messages: Array<{ id: string }> };
+    const leftoverB = JSON.parse(await inner.readJson(orphanB.id)) as { messages: Array<{ id: string }> };
+    assert.equal(leftoverA.messages[0].id, "orphan-a");
+    assert.equal(leftoverB.messages[0].id, "orphan-b");
+  });
+
+  it("never createJson a second inbox.json when the known id is pinned", async () => {
+    resetVaultFileIdsForTests();
+    const inner = memoryDrive();
+    inner.files.set(INBOX_VAULT_FILE_ID, {
+      file: { id: INBOX_VAULT_FILE_ID, name: INBOX_VAULT_NAME, properties: { kind: INBOX_VAULT_KIND } },
+      content: `${JSON.stringify({ messages: [] })}\n`,
+    });
+    let created = 0;
+    const drive: DriveAdapter = {
+      configured: true,
+      async listJson() {
+        return [];
+      },
+      async listAccessibleJson() {
+        return [];
+      },
+      readJson: (fileId) => inner.readJson(fileId),
+      async createJson() {
+        created += 1;
+        throw new Error("createJson must not mint a second inbox.json");
+      },
+      updateJson: (fileId, content, name, properties) => inner.updateJson(fileId, content, name, properties),
+      deleteJson: (fileId) => inner.deleteJson(fileId),
+      confirmWrite: (fileId, content) => inner.confirmWrite!(fileId, content),
+    };
+    const found = await findVaultJsonFile(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND);
+    assert.equal(found?.id, INBOX_VAULT_FILE_ID);
+    await writeVaultJson(drive, INBOX_VAULT_NAME, INBOX_VAULT_KIND, { messages: [{ id: "pinned" }] });
+    assert.equal(created, 0);
+    assert.equal([...inner.files.keys()].includes(INBOX_VAULT_FILE_ID), true);
+    const inbox = JSON.parse(await inner.readJson(INBOX_VAULT_FILE_ID)) as { messages: Array<{ id: string }> };
+    assert.equal(inbox.messages[0].id, "pinned");
   });
 
   it("updates vault JSON by accessible name or stored id when the parent folder cannot be listed", async () => {

@@ -39,8 +39,13 @@ export function qualityFolderId(env: Record<string, string | undefined> = proces
   return env.DRIVE_QUALITY_FOLDER_ID?.trim() || QUALITY_ROOM_ID;
 }
 
+/** Owner HSE room when set. Otherwise the Data / Estimates room already shared with the desk. */
+export function hseFolderId(env: Record<string, string | undefined> = process.env) {
+  return env.DRIVE_HSE_FOLDER_ID?.trim() || dataFolderId(env);
+}
+
 export function briefsFolderId(kind: "quality" | "hse", env: Record<string, string | undefined> = process.env) {
-  return kind === "quality" ? qualityFolderId(env) : dataFolderId(env);
+  return kind === "quality" ? qualityFolderId(env) : hseFolderId(env);
 }
 
 /** Production seats.json. Shared with the vault SA; the Estimates parent folder is not. */
@@ -49,9 +54,13 @@ export const SEATS_VAULT_FILE_ID = "1d3lzLDxCPwC963fdplsnwYgrDEanohZc";
 /** Production tickets.json. Suggestion Box / desk tickets. Never expose this id to testers. */
 export const TICKETS_VAULT_FILE_ID = "1s4D47FvkOm1G8qYVP3-klKOkkpDyGFFu";
 
+/** Production inbox.json. Canonical Estimates-room file. Never expose this id to testers. */
+export const INBOX_VAULT_FILE_ID = "1KKpYqirYrJo99faLufX5wLLayG8u3UUN";
+
 const KNOWN_VAULT_FILE_IDS: Record<string, string> = {
   [SEATS_VAULT_NAME]: SEATS_VAULT_FILE_ID,
   [TICKETS_VAULT_NAME]: TICKETS_VAULT_FILE_ID,
+  [INBOX_VAULT_NAME]: INBOX_VAULT_FILE_ID,
 };
 
 const rememberedVaultFileIds = new Map<string, string>();
@@ -124,8 +133,8 @@ async function fileFromStoredId(adapter: DriveAdapter, name: string, kind: strin
   const knownId = KNOWN_VAULT_FILE_IDS[name] || "";
   const id = rememberedVaultFileIds.get(vaultFileKey(name, kind)) || envId || knownId;
   if (!id) return null;
-  // SEATS_VAULT_FILE_ID / TICKETS_VAULT_FILE_ID / DRIVE_*_FILE_ID: PATCH by id even if GET media throws.
-  // Never fall through to createJson in the unlistable Estimates folder.
+  // SEATS / TICKETS / INBOX / DRIVE_*_FILE_ID: PATCH by id even if GET media throws.
+  // Never fall through to createJson — sibling inbox.json orphans must not win.
   if (!(envId || knownId)) {
     try {
       await adapter.readJson(id);
@@ -140,7 +149,7 @@ async function fileFromStoredId(adapter: DriveAdapter, name: string, kind: strin
 export async function findVaultJsonFile(adapter: DriveAdapter, name: string, kind: string, folderId = dataFolderId()) {
   if (!adapter.configured) return null;
   const pinned = await fileFromStoredId(adapter, name, kind);
-  // seats.json: always PATCH the known production id. A zombie OAuth list must not redirect writes.
+  // seats.json / tickets.json / inbox.json: always PATCH the known production id. A zombie list must not redirect writes.
   if (pinned && (KNOWN_VAULT_FILE_IDS[name] || vaultEnvFileId(name))) return pinned;
   const fromFolder = pickNewestMatch(await listFolderJson(adapter, folderId), name, kind);
   if (fromFolder) {
@@ -166,8 +175,11 @@ export async function readVaultJson<T>(
   try {
     return JSON.parse(await adapter.readJson(file.id)) as T;
   } catch (error) {
-    // Pinned tickets.json may not exist yet in tests / first boot. A 403 still fails closed.
-    if (name === TICKETS_VAULT_NAME && !(error instanceof DriveApiError && error.status === 403)) {
+    // Pinned tickets.json / inbox.json may not exist yet in tests / first boot. A 403 still fails closed.
+    if (
+      (name === TICKETS_VAULT_NAME || name === INBOX_VAULT_NAME) &&
+      !(error instanceof DriveApiError && error.status === 403)
+    ) {
       return null;
     }
     throw error;
@@ -212,7 +224,7 @@ export async function writeVaultJson(
   const properties = { kind };
   const pinnedId = KNOWN_VAULT_FILE_IDS[name] || vaultEnvFileId(name);
   const existing = await findVaultJsonFile(adapter, name, kind, folderId);
-  // seats.json / tickets.json: never createJson. A folder 403 must not mint a second file.
+  // seats.json / tickets.json / inbox.json: never createJson. A folder 403 must not mint another file.
   if (!existing && pinnedId) {
     throw new Error("vault file id not writable");
   }
@@ -221,6 +233,9 @@ export async function writeVaultJson(
   }
   if (!existing && name === TICKETS_VAULT_NAME) {
     throw new Error("tickets vault must PATCH known id");
+  }
+  if (!existing && name === INBOX_VAULT_NAME) {
+    throw new Error("inbox vault must PATCH known id");
   }
   const seatsDenied =
     name === SEATS_VAULT_NAME && (existing?.id || pinnedId)
