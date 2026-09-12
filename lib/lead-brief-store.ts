@@ -41,7 +41,7 @@ export function qualityBriefsRequireDrive() {
 }
 
 export function hseBriefsRequireDrive() {
-  return Boolean(resolveAdapter()?.configured);
+  return Boolean(resolveAdapter("hse")?.configured);
 }
 
 function briefVaultWriteError(kind: LeadBriefKind) {
@@ -231,8 +231,8 @@ export function briefIdFor(kind: LeadBriefKind, who: string, jobId = "", folderI
   const email = who.trim().toLowerCase();
   const job = jobId.trim();
   const folder = folderId.trim();
-  if (kind === "quality" && job && folder) {
-    return `brief-quality-${email}-job:${job}-folder:${folder}`;
+  if ((kind === "quality" || kind === "hse") && job && folder) {
+    return `brief-${kind}-${email}-job:${job}-folder:${folder}`;
   }
   return `brief-${kind}-${email}`;
 }

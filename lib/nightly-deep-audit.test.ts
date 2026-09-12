@@ -11,7 +11,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-const REQUIRED_AUDIT_FILES = ["quality-template-form-audit.test.ts"] as const;
+const REQUIRED_AUDIT_FILES = ["quality-template-form-audit.test.ts", "hse-template-form-audit.test.ts"] as const;
 
 describe("Nightly deep audit registry", () => {
   it("runs every lib/*-audit.test.ts from package.json test", () => {

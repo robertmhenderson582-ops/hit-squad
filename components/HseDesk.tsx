@@ -1,30 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { HseDay1Card } from "@/components/HseDay1Card";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { JobScopePicks, PickJobEmpty } from "@/components/JobScopePicks";
-import { LeadStudio } from "@/components/LeadStudio";
-import { ModuleRegister } from "@/components/ModuleRegister";
+import { HseCompanyDocRail } from "@/components/HseCompanyDocRail";
+import { HseFolderDrop } from "@/components/HseFolderDrop";
+import { HsePackageShelf } from "@/components/HsePackageShelf";
+import { HseTemplateForm, type HseTemplateFormSession } from "@/components/HseTemplateForm";
+import { HseVaultOwnerTree } from "@/components/HseVaultOwnerTree";
 import { useQualityHseJobTree } from "@/components/useQualityHseJobTree";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { companyScopeFor } from "@/lib/companies";
-import { canSeeHesRoster, canSeeMadisonSafetyManuals } from "@/lib/hse-day1";
+import { viewAsInit } from "@/lib/desk-scope";
+import { assignedCompanyId, companyName, companyScopeFor, inferCompanyIdFromParts, type CompanyId } from "@/lib/companies";
+import { buildDeskChrome, isHseVaultSeat } from "@/lib/desk-role";
+import { hseRailCompanyId } from "@/lib/hse-company-docs";
 import {
-  HSE_EXECUTE_LANES,
-  addHseLaneRow,
-  emptyHseModule,
-  hseBoardCounts,
-  hseDay1CompleteCount,
-  patchHseLaneRow,
-  readHseModuleForJob,
-  removeHseLaneRow,
-  writeHseModuleForJob,
-  type HseModuleState,
-} from "@/lib/hse-module";
+  HSE_DESK_RADIOS,
+  isHseDeskRadio,
+  hseDeskVaultCompanyId,
+  readHseFolderPick,
+  showsHseFolderDesk,
+  writeHseFolderPick,
+  type HseDeskRadioId,
+} from "@/lib/hse-folders";
+import { canSeeMadisonSafetyManuals } from "@/lib/hse-day1";
+import { madisonManualLabel } from "@/lib/quality-day1";
 import {
   HSE_JOB_SCOPE_KEY,
   cascadeClients,
+  cascadeCompanyId,
   cascadeJobs,
   cascadeSites,
   readJobScope,
@@ -32,12 +36,9 @@ import {
   writeJobScope,
   type JobScopePick,
 } from "@/lib/quality-hse-scope";
-
-const LANE_GROUPS = [
-  { id: "talks", title: "Talks", note: "JSA and toolbox talks you can add rows to." },
-  { id: "permits", title: "Permits", note: "Field permits for this job. Not a plant permit office." },
-  { id: "observations", title: "Observations", note: "Incidents, near misses, and observations. No invented hours." },
-] as const;
+import { hseTemplateFillAcl, type HseTemplateFillAcl } from "@/lib/hse-template-form";
+import { hseCompanyDocAcl } from "@/lib/hse-company-doc-acl";
+import { hsePackageShelfAcl } from "@/lib/hse-package-shelf";
 
 export function HseDesk() {
   const alias = useAlias();
@@ -45,19 +46,33 @@ export function HseDesk() {
   const { user } = useSession();
   const { tree, ready } = useQualityHseJobTree();
   const [pick, setPick] = useState<JobScopePick>(() => readJobScope(HSE_JOB_SCOPE_KEY));
-  const [module, setModule] = useState<HseModuleState>(emptyHseModule);
+  const [radio, setRadio] = useState<HseDeskRadioId>(() => readHseFolderPick(pick.jobId || "desk"));
   const assigned = owner?.viewAs === "wendell" || owner?.viewAs === "benny";
+  const buildDesk = buildDeskChrome(user, owner?.viewAs);
   const manuals = canSeeMadisonSafetyManuals(user, companyScopeFor(user));
-  const roster = canSeeHesRoster(user);
   const clients = cascadeClients(tree);
   const sites = cascadeSites(tree, pick.clientId);
   const siteJobs = cascadeJobs(tree, pick.clientId, pick.siteId);
   const jobOpen = Boolean(pick.jobId);
-  const counts = jobOpen ? hseBoardCounts(module) : null;
-  const day1Done = jobOpen ? hseDay1CompleteCount(module.day1) : null;
   const selectedJob = siteJobs.find((job) => job.id === pick.jobId);
   const selectedSite = sites.find((site) => site.id === pick.siteId);
   const selectedClient = clients.find((client) => client.id === pick.clientId);
+  const companyId =
+    cascadeCompanyId(tree, pick) ||
+    inferCompanyIdFromParts(selectedClient?.name, selectedSite?.name, selectedJob?.title, selectedJob?.code);
+  const vaultCompanyId = hseDeskVaultCompanyId(companyId, {
+    hseSeat: isHseVaultSeat(user) || buildDesk,
+  });
+  const showFolderDesk = showsHseFolderDesk(vaultCompanyId);
+  const railCompanyId = hseRailCompanyId(undefined, assignedCompanyId(companyScopeFor(user)));
+  const radios = HSE_DESK_RADIOS;
+  const [formSession, setFormSession] = useState<HseTemplateFormSession | null>(null);
+  const [kits, setKits] = useState<Array<{ id: string; name: string }>>([]);
+  const [fillAcl, setFillAcl] = useState<HseTemplateFillAcl>(() =>
+    hseTemplateFillAcl(hseCompanyDocAcl(user), hsePackageShelfAcl(user)),
+  );
+  const [formNote, setFormNote] = useState<string | null>(null);
+  const [fillTick, setFillTick] = useState(0);
 
   useEffect(() => {
     if (!ready) return;
@@ -72,27 +87,73 @@ export function HseDesk() {
   }, [ready, tree]);
 
   useEffect(() => {
-    if (!pick.jobId) {
-      setModule(emptyHseModule());
-      return;
-    }
-    setModule(readHseModuleForJob(pick.jobId, undefined, pick.clientId));
-  }, [pick.clientId, pick.jobId]);
+    setRadio(readHseFolderPick(pick.jobId || "desk"));
+  }, [pick.jobId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const company = vaultCompanyId || companyId;
+    const query = company ? `&company=${encodeURIComponent(company)}` : "";
+    void fetch(`/api/desk/briefs?kind=hse&scope=template-fill${query}`, viewAsInit(owner?.viewAs))
+      .then(async (response) => {
+        const data = (await response.json().catch(() => ({}))) as {
+          kits?: Array<{ id?: string; name?: string }>;
+          acl?: HseTemplateFillAcl;
+        };
+        if (cancelled || !response.ok) return;
+        if (data.acl) setFillAcl(data.acl);
+        setKits(
+          (data.kits ?? [])
+            .filter((kit) => typeof kit.id === "string" && typeof kit.name === "string")
+            .map((kit) => ({ id: kit.id as string, name: kit.name as string })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setFillAcl(hseTemplateFillAcl(hseCompanyDocAcl(user), hsePackageShelfAcl(user)));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, owner?.viewAs, user?.email, vaultCompanyId, fillTick]);
+
+  function openTemplateForm(session: HseTemplateFormSession) {
+    setFormNote(null);
+    setFormSession(session);
+  }
 
   function changeScope(next: JobScopePick) {
     setPick(next);
     writeJobScope(HSE_JOB_SCOPE_KEY, next);
   }
 
-  function persist(next: HseModuleState) {
-    if (!pick.jobId) return;
-    setModule(next);
-    // Day1 / lane rows stay on this desk only. Briefs Save is the fail-closed vault path.
-    writeHseModuleForJob(pick.jobId, next);
+  function openRadio(next: string) {
+    if (!isHseDeskRadio(next, vaultCompanyId || undefined)) return;
+    setRadio(next);
+    writeHseFolderPick(pick.jobId || "desk", next);
+  }
+
+  function onRadioKey(event: KeyboardEvent<HTMLDivElement>) {
+    const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+    if (!keys.includes(event.key)) return;
+    event.preventDefault();
+    const index = radios.findIndex((item) => item.id === radio);
+    if (event.key === "Home") return openRadio(radios[0].id);
+    if (event.key === "End") return openRadio(radios[radios.length - 1].id);
+    const step = event.key === "ArrowRight" ? 1 : -1;
+    const next = (index + step + radios.length) % radios.length;
+    openRadio(radios[next].id);
   }
 
   return (
-    <div className="field-desk mt-4 space-y-5">
+    <>
+    <div className="field-desk mt-4 grid gap-5 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
+      <HseCompanyDocRail
+        companyId={railCompanyId}
+        onOpenForm={(docId, fileName) =>
+          openTemplateForm({ source: "company-docs", folderId: docId, fileName })
+        }
+      />
+      <div className="space-y-5">
       <JobScopePicks
         clients={clients}
         sites={sites}
@@ -101,7 +162,69 @@ export function HseDesk() {
         onChange={changeScope}
         alias={alias}
       />
-      {!jobOpen ? <PickJobEmpty kind="hse" /> : null}
+      {buildDesk ? <HseVaultOwnerTree key={`vault-${fillTick}`} refresh={fillTick} /> : null}
+      {showFolderDesk ? (
+        <HsePackageShelf
+          key={`shelf-${fillTick}`}
+          companyId={vaultCompanyId || companyId}
+          companyLabel={(vaultCompanyId || companyId) ? companyName((vaultCompanyId || companyId) as CompanyId) : undefined}
+          jobId={pick.jobId || undefined}
+          siteLabel={selectedSite?.name}
+          jobLabel={selectedJob?.title || selectedJob?.code}
+          onOpenFilled={(fileName, packageId, packageName) =>
+            openTemplateForm({
+              source: "catalog",
+              folderId: "packages",
+              dest: "prepackage",
+              destPackageId: packageId,
+              destPackageName: packageName,
+              filledName: fileName,
+            })
+          }
+        />
+      ) : null}
+      {showFolderDesk ? (
+        <div
+          role="radiogroup"
+          aria-label="HSE"
+          className="flex flex-wrap gap-2"
+          onKeyDown={onRadioKey}
+        >
+          {radios.map((item) => {
+            const selected = radio === item.id;
+            return (
+              <span key={item.id} className="inline-flex items-center gap-1">
+                <label
+                  className={`rounded-sm border px-3 py-1.5 text-sm ${
+                    selected ? "border-steel bg-steel text-white" : "border-steel text-steel"
+                  }`}
+                >
+                  <input
+                    id={`hse-radio-${item.id}`}
+                    type="radio"
+                    name="hse-desk-radio"
+                    className="sr-only"
+                    checked={selected}
+                    onChange={() => openRadio(item.id)}
+                  />
+                  {item.label}
+                </label>
+                <button
+                  type="button"
+                  className="rounded-sm border border-steel px-2 py-1.5 text-xs text-steel"
+                  onClick={() => {
+                    openRadio(item.id);
+                    openTemplateForm({ source: "catalog", folderId: item.id });
+                  }}
+                >
+                  Open form
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+      {!jobOpen && radio !== "packages" ? <PickJobEmpty kind="hse" /> : null}
       {jobOpen ? (
         <>
           {selectedJob ? (
@@ -111,72 +234,92 @@ export function HseDesk() {
               {selectedClient ? ` · ${alias(selectedClient.name)}` : ""}
             </p>
           ) : null}
-          <LeadStudio title="HSE lead studio" kind="hse" jobId={pick.jobId} />
-          {assigned ? (
-            <p className="plant-card px-4 py-3 text-base text-[#163038]">
-              This is your HSE desk. Fill the package table, then type talks, permits, and observations. Drops you
-              save stay on this job.
+          {assigned && showFolderDesk ? (
+            <p className="plant-card px-4 py-3 text-sm">
+              This is your HSE desk. Pick a safety radio, then drop files or open the form. Company
+              manuals and JSAs stay on the left rail.
             </p>
           ) : null}
-          {manuals ? <p className="text-base text-[#163038]">Madison Safety Manual / HES SOPs</p> : null}
-          {roster ? <p className="text-base text-[#163038]">HES Reporting roster stays owner-only.</p> : null}
-
-          <section className="plant-card px-4 py-4">
-            <h2 className="font-display text-xl text-[#163038]">BOARD</h2>
-            <p className="mt-1 text-base text-[#163038]">Open counts. Click a tile to jump to that lane.</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <button
-                type="button"
-                onClick={() => document.getElementById("hse-day1")?.scrollIntoView({ behavior: "smooth" })}
-                className="rounded-sm border border-[#c5d4d4] bg-[#fbf8f0] px-4 py-3 text-left"
-              >
-                <p className="text-sm font-semibold text-[#163038]">Day-1 package</p>
-                <p className="mt-2 font-display text-3xl text-[#163038]">{day1Done}</p>
-              </button>
-              {HSE_EXECUTE_LANES.map((lane) => (
-                <button
-                  key={lane.id}
-                  type="button"
-                  onClick={() => document.getElementById(`hse-${lane.id}`)?.scrollIntoView({ behavior: "smooth" })}
-                  className="rounded-sm border border-[#c5d4d4] bg-[#fbf8f0] px-4 py-3 text-left"
-                >
-                  <p className="text-sm font-semibold text-[#163038]">{lane.title}</p>
-                  <p className="mt-2 font-display text-3xl text-[#163038]">{counts?.[lane.id] ?? ""}</p>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <div id="hse-day1">
-            <HseDay1Card
-              value={module.day1}
-              plant={module.plant}
-              onChange={(day1) => persist({ ...module, day1 })}
-              onPlant={(plant) => persist({ ...module, plant })}
+          {showFolderDesk ? (
+            <HseFolderDrop
+              key={`${pick.jobId}:${radio}:${fillTick}`}
+              jobId={pick.jobId}
+              folderId={radio}
+              companyId={vaultCompanyId || companyId}
+              companyLabel={
+                (vaultCompanyId || companyId) ? companyName((vaultCompanyId || companyId) as CompanyId) : undefined
+              }
+              siteLabel={selectedSite?.name}
+              jobLabel={selectedJob?.title || selectedJob?.code}
+              onOpenFilled={(fileName) =>
+                openTemplateForm({
+                  source: "catalog",
+                  folderId: radio,
+                  dest: "job",
+                  destJobId: pick.jobId,
+                  filledName: fileName,
+                })
+              }
+              onRemoveFilled={async (fileName) => {
+                const response = await fetch(
+                  "/api/desk/briefs",
+                  viewAsInit(owner?.viewAs, {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      kind: "hse",
+                      scope: "template-fill",
+                      dest: "job",
+                      jobId: pick.jobId,
+                      folderId: radio,
+                      fileName,
+                      companyId: vaultCompanyId || companyId,
+                      companyLabel:
+                        (vaultCompanyId || companyId)
+                          ? companyName((vaultCompanyId || companyId) as CompanyId)
+                          : undefined,
+                      siteLabel: selectedSite?.name,
+                      jobLabel: selectedJob?.title || selectedJob?.code,
+                    }),
+                  }),
+                );
+                const data = (await response.json().catch(() => ({}))) as { error?: string };
+                if (!response.ok) {
+                  setFormNote(typeof data.error === "string" ? data.error : "Could not remove that filled copy.");
+                  return;
+                }
+                setFormNote(`Removed ${fileName}. The rail template is unchanged.`);
+                setFillTick((n) => n + 1);
+              }}
             />
-          </div>
-          {LANE_GROUPS.map((group) => (
-            <section key={group.id} className="space-y-3">
-              <div className="px-1">
-                <h2 className="font-display text-xl text-[#163038]">{group.title}</h2>
-                <p className="mt-1 text-base text-[#163038]">{group.note}</p>
-              </div>
-              {HSE_EXECUTE_LANES.filter((lane) => lane.group === group.id).map((lane) => (
-                <ModuleRegister
-                  key={lane.id}
-                  id={`hse-${lane.id}`}
-                  title={lane.title}
-                  fields={lane.fields}
-                  rows={module.lanes[lane.id]}
-                  onAdd={() => persist(addHseLaneRow(module, lane.id))}
-                  onPatch={(rowId, field, value) => persist(patchHseLaneRow(module, lane.id, rowId, field, value))}
-                  onRemove={(rowId) => persist(removeHseLaneRow(module, lane.id, rowId))}
-                />
-              ))}
-            </section>
-          ))}
+          ) : null}
+          {manuals ? <p className="text-sm">{madisonManualLabel("hse")}</p> : null}
         </>
       ) : null}
+      {formNote ? <p className="text-sm text-[#5b6f73]">{formNote}</p> : null}
+      </div>
     </div>
+      <HseTemplateForm
+        open={Boolean(formSession)}
+        session={formSession}
+        clients={clients}
+        sites={sites}
+        jobs={siteJobs}
+        jobPick={pick}
+        onJobPick={changeScope}
+        kits={kits}
+        fillAcl={fillAcl}
+        companyId={vaultCompanyId || companyId || railCompanyId}
+        companyLabel={
+          (vaultCompanyId || companyId) ? companyName((vaultCompanyId || companyId) as CompanyId) : undefined
+        }
+        onClose={() => setFormSession(null)}
+        onSaved={(note) => {
+          setFormNote(note);
+          setFormSession(null);
+          setFillTick((n) => n + 1);
+        }}
+      />
+    </>
   );
 }

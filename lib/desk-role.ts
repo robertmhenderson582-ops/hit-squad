@@ -39,6 +39,15 @@ export function isQualityVaultSeat(user?: { email?: string; role?: string } | nu
   return /quality/i.test(roster?.permission || "");
 }
 
+/** Wendell / Benny HSE seats (and build desk). Does not open Inbox or Suggestion Box. */
+export function isHseVaultSeat(user?: { email?: string; role?: string } | null): boolean {
+  if (!user?.email) return false;
+  if (hasBuildDesk(user)) return true;
+  const email = user.email.trim().toLowerCase();
+  const roster = VISUAL_ROSTER.find((row) => row.email === email);
+  return /\bhse\b/i.test(roster?.permission || "");
+}
+
 /** Owner, Novus, and President — Madison work modules, Activity view, presence. */
 export function hasWorkingDesk(user?: PrivilegeViewer | null): boolean {
   return hasBuildDesk(user) || isPresident(user);
