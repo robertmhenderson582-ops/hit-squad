@@ -7,6 +7,7 @@ import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { NOVUS_HELP_EMAIL } from "@/lib/desk-help";
 import { hasBuildDesk } from "@/lib/desk-role";
+import { DEFAULT_HIGH_USAGE_THRESHOLD, isHighUsageClock } from "@/lib/usage-clock";
 
 const THEMES: { value: ThemeChoice; title: string; copy: string }[] = [
   { value: "night", title: "Night", copy: "instrument-cluster HUD — hairline frames, teal and amber readouts. Default desk." },
@@ -23,6 +24,70 @@ export function DisplayDesk() {
 
   return (
     <div className="space-y-5">
+      {ownerFlip ? (
+        <section className="plant-card px-5 py-5">
+          <h2 className="text-2xl font-semibold text-[#163038]">Usage clock</h2>
+          <p className="mt-2 text-sm text-[#5b6f73]">
+            Owner-entered only — the desk does not meter live Cursor spend. When usage is high,
+            every seat sees a Home note. New builds and ideas may slow so a reserve stays for
+            must-need emergency fixes. That is not a failure of the desk. Inbox and Suggestion
+            Box stay hidden.
+          </p>
+          <div className="mt-4">
+            <Toggle
+              label="Show high-usage note"
+              on={Boolean(desk?.showHighUsageNote)}
+              onChange={(on) => desk?.setUsageClock({ showHighUsageNote: on })}
+            />
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              Usage %
+              <input
+                type="number"
+                min={0}
+                max={100}
+                inputMode="numeric"
+                placeholder="unset"
+                value={desk?.usagePercent ?? ""}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  desk?.setUsageClock({ usagePercent: raw === "" ? null : Number(raw) });
+                }}
+                className="paper-field mt-1"
+              />
+            </label>
+            <label className="block text-sm">
+              High at ≥
+              <input
+                type="number"
+                min={0}
+                max={100}
+                inputMode="numeric"
+                value={desk?.highUsageThreshold ?? DEFAULT_HIGH_USAGE_THRESHOLD}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  desk?.setUsageClock({
+                    highUsageThreshold: raw === "" ? DEFAULT_HIGH_USAGE_THRESHOLD : Number(raw),
+                  });
+                }}
+                className="paper-field mt-1"
+              />
+            </label>
+          </div>
+          <p className="mt-2 text-sm text-[#5b6f73]">
+            Note is {isHighUsageClock(desk) ? "showing" : "hidden"} on Home for the whole desk.
+            Hide by turning the toggle off and leaving % blank or below the threshold.
+          </p>
+          <button
+            type="button"
+            className="mt-3 rounded-lg border border-steel px-4 py-2 text-sm text-steel"
+            onClick={() => desk?.setUsageClock({ showHighUsageNote: false, usagePercent: null })}
+          >
+            Clear high-usage flag
+          </button>
+        </section>
+      ) : null}
       {ownerFlip ? (
         <section className="plant-card px-5 py-5">
           <Toggle

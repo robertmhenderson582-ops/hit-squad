@@ -26,6 +26,9 @@ export async function POST(request: Request) {
     viewResponsibility?: string;
     viewSite?: string;
     showInboxSuggestionBox?: boolean;
+    showHighUsageNote?: boolean;
+    usagePercent?: number | null;
+    highUsageThreshold?: number;
     action?: string;
     waitMinutes?: RepublishWait;
     note?: string;
@@ -47,6 +50,9 @@ export async function POST(request: Request) {
       viewResponsibility: body.viewResponsibility as never,
       viewSite: body.viewSite,
       showInboxSuggestionBox: body.showInboxSuggestionBox,
+      showHighUsageNote: body.showHighUsageNote,
+      usagePercent: body.usagePercent,
+      highUsageThreshold: body.highUsageThreshold,
     }),
   );
 }

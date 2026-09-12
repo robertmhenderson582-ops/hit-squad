@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandMark } from "@/components/BrandMark";
+import { HighUsageNote } from "@/components/HighUsageNote";
 import { HomeDock } from "@/components/HomeDock";
 import { HOME_KICKER, HOME_WORDMARK } from "@/lib/desk-home";
 
@@ -21,6 +22,7 @@ export function DeskHero({ logo = null }: { logo?: string | null }) {
           </span>
         ) : null}
       </div>
+      <HighUsageNote />
       <HomeDock />
     </section>
   );
