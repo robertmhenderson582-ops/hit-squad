@@ -8,6 +8,7 @@ import { useSession } from "@/components/SessionProvider";
 import { fileToLead, type LeadFile } from "@/lib/lead-briefs";
 import { viewAsInit } from "@/lib/desk-scope";
 import { QUALITY_DROP_ACCEPT, checkQualityDrop } from "@/lib/quality-folders";
+import { isQualityFilledCopyName } from "@/lib/quality-template-form";
 import type { QualityPackageShelfAcl } from "@/lib/quality-package-shelf";
 import {
   QUALITY_VAULT_WRITE_ERROR,
@@ -33,12 +34,14 @@ export function QualityPackageShelf({
   jobId,
   siteLabel,
   jobLabel,
+  onOpenFilled,
 }: {
   companyId?: string;
   companyLabel?: string;
   jobId?: string;
   siteLabel?: string;
   jobLabel?: string;
+  onOpenFilled?: (fileName: string, packageId: string, packageName: string) => void;
 }) {
   const { user } = useSession();
   const owner = useOwnerDesk();
@@ -249,6 +252,21 @@ export function QualityPackageShelf({
                     ? kit.files.map((file) => file.name).join(" · ")
                     : "Empty kit — drop files after you pick it"}
                 </p>
+                {onOpenFilled && kit.files.some((file) => isQualityFilledCopyName(file.name)) ? (
+                  <ul className="mt-2 space-y-1">
+                    {kit.files.filter((file) => isQualityFilledCopyName(file.name)).map((file) => (
+                      <li key={file.name}>
+                        <button
+                          type="button"
+                          className="text-xs text-steel underline"
+                          onClick={() => onOpenFilled(file.name, kit.id, kit.name)}
+                        >
+                          Open form · {file.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </li>
             );
           })}

@@ -132,11 +132,12 @@ describe("Quality company document catalog", () => {
     assert.match(rail, /doc\.label/);
     assert.match(rail, /openLibrary/);
     assert.match(rail, /QualityCompanyDocViewer/);
+    assert.match(rail, /Open form/);
     assert.match(rail, /Drop a file on a bar/);
     assert.match(rail, /QUALITY_COMPANY_DOC_LOCKED_NOTE/);
     assert.match(rail, /action: "lock"/);
     assert.match(rail, /canRemove/);
-    assert.match(rail, /Remove a file there, then confirm/);
+    assert.match(rail, /onOpenForm/);
     assert.match(quality, /qualityRailCompanyId\(undefined, assignedCompanyId/);
     assert.doesNotMatch(rail, /drive\.google\.com|1[A-Za-z0-9_-]{20,}/);
     const catalog = source("./quality-company-docs.ts");
@@ -192,7 +193,8 @@ describe("Quality company document catalog", () => {
     );
     const viewer = source("../components/QualityCompanyDocViewer.tsx");
     assert.match(viewer, /quality-company-doc-library/);
-    assert.match(viewer, /Open \/ download/);
+    assert.match(viewer, /Open form/);
+    assert.match(viewer, /Download blank/);
     assert.match(viewer, /iframe/);
     assert.match(viewer, /archive/);
     assert.match(viewer, /readQualityCompanyDocZipMembers/);

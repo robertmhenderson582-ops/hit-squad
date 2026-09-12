@@ -39,6 +39,7 @@ export function QualityCompanyDocViewer({
   lockedNote,
   onSelect,
   onRemove,
+  onOpenForm,
   onClose,
 }: {
   open: boolean;
@@ -52,6 +53,7 @@ export function QualityCompanyDocViewer({
   lockedNote?: string | null;
   onSelect: (name: string) => void;
   onRemove?: (name: string) => Promise<void>;
+  onOpenForm?: (name: string) => void;
   onClose: () => void;
 }) {
   const listed = files.filter((file) => file.name);
@@ -220,8 +222,8 @@ export function QualityCompanyDocViewer({
             {lockedNote
               ? lockedNote
               : canRemove
-                ? "Madison company files. Drop on the bar to add. Click a name to open it. Remove a file, then confirm."
-                : "Madison company files. Click a name to open it."}
+                ? "Blank templates stay here. Open form fills a copy. Drop on the bar to add. Remove a file, then confirm."
+                : "Blank templates stay here. Open form fills a copy. Click a name to preview the blank."}
           </p>
           {confirmRemove ? (
             <div
@@ -360,6 +362,15 @@ export function QualityCompanyDocViewer({
                           Back to pack
                         </button>
                       ) : null}
+                      {onOpenForm && selected && !memberFile ? (
+                        <button
+                          type="button"
+                          className="text-sm text-steel underline"
+                          onClick={() => onOpenForm(selected.name)}
+                        >
+                          Open form
+                        </button>
+                      ) : null}
                       {href ? (
                         <a
                           href={href}
@@ -368,7 +379,7 @@ export function QualityCompanyDocViewer({
                           rel="noreferrer"
                           className="text-sm text-steel underline"
                         >
-                          {libraryKind === "zip" && !memberFile ? "Download pack" : "Open / download"}
+                          {libraryKind === "zip" && !memberFile ? "Download pack" : "Download blank"}
                         </a>
                       ) : null}
                     </div>

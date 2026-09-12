@@ -48,6 +48,8 @@ describe("Quality desk radios", () => {
     const drop = source("../components/QualityFolderDrop.tsx");
     assert.match(desk, /role="radiogroup"/);
     assert.match(desk, /QUALITY_DESK_RADIOS/);
+    assert.match(desk, /Open form/);
+    assert.match(desk, /QualityTemplateForm/);
     assert.match(desk, /folderId=\{radio\}/);
     assert.match(desk, /QualityPackageShelf/);
     assert.match(desk, /QualityCompanyDocRail/);
