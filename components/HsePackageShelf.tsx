@@ -15,6 +15,7 @@ import {
   hseVaultStored,
   type HseListedFile,
 } from "@/lib/hse-vault-shared";
+import { filterVaultListedFiles, vaultListViewerForSeat } from "@/lib/vault-list-filter";
 
 type Kit = {
   id: string;
@@ -45,6 +46,7 @@ export function HsePackageShelf({
 }) {
   const { user } = useSession();
   const owner = useOwnerDesk();
+  const viewer = vaultListViewerForSeat(user, owner?.viewAs);
   const inputRef = useRef<HTMLInputElement>(null);
   const [kits, setKits] = useState<Kit[]>([]);
   const [acl, setAcl] = useState<HsePackageShelfAcl>({ canBuild: false, canAttach: false, seat: "viewer" });
@@ -66,7 +68,11 @@ export function HsePackageShelf({
       acl?: HsePackageShelfAcl;
     };
     if (!response.ok) return;
-    setKits(Array.isArray(data.kits) ? data.kits : []);
+    setKits(
+      Array.isArray(data.kits)
+        ? data.kits.map((kit) => ({ ...kit, files: filterVaultListedFiles(kit.files ?? [], viewer) }))
+        : [],
+    );
     if (data.acl) setAcl(data.acl);
   }
 

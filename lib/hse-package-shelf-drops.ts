@@ -29,6 +29,7 @@ import {
 } from "./hse-package-shelf.ts";
 import { persistHseVaultFiles, hseVaultWriteUserError } from "./hse-vault.ts";
 import type { HseListedFile } from "./hse-vault-shared.ts";
+import { filterVaultListedFiles } from "./vault-list-filter.ts";
 
 export type HsePackageKit = {
   id: string;
@@ -71,7 +72,10 @@ export async function listHsePackageShelf(
       id: row.jobId?.slice(HSE_READY_SHELF_PREFIX.length + 1) || row.id,
       jobId: row.jobId || "",
       name: row.describe || "Ready package",
-      files: (row.files ?? []).map((file) => ({ name: file.name, type: file.type, vaulted: true })),
+      files: filterVaultListedFiles(
+        (row.files ?? []).map((file) => ({ name: file.name, type: file.type, vaulted: true })),
+        user,
+      ),
       savedAt: row.savedAt,
       who: row.who,
     }))

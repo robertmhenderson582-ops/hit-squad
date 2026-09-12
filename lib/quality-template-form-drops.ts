@@ -264,7 +264,7 @@ export async function readQualityTemplateFill(
     who,
   };
   for (const folderId of readFolders) {
-    const vault = await readQualityVaultFile(leadBriefAdapter("quality"), { ...place, folderId }, fileName);
+    const vault = await readQualityVaultFile(leadBriefAdapter("quality"), { ...place, folderId }, fileName, user);
     if (!vault.file?.data) continue;
     const parsed = qualityTemplateFormFromLead(vault.file);
     if (!parsed) return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR };

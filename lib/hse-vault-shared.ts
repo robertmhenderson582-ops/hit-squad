@@ -1,5 +1,7 @@
 /** Client-safe HSE vault copy and list helpers. No Drive / Node imports. */
 
+import { vaultFileVisibleToViewer, type VaultListViewer } from "./vault-list-filter.ts";
+
 export const HSE_VAULT_WRITE_ERROR =
   "Could not save to the HSE vault. Those files are only on this desk. Try again.";
 /** Owner / build desk only. Never send to testers. No SA email, no Drive ids. */
@@ -66,12 +68,13 @@ export function mergeHseListedProtected(
 export function mergeVaultedHseFiles(
   vault: Array<{ name?: string; type?: string; protected?: boolean }>,
   local: Array<{ name?: string; type?: string; data?: string }>,
+  viewer?: VaultListViewer,
 ): HseListedFile[] {
   const listed: HseListedFile[] = [];
   const seen = new Set<string>();
   for (const file of vault) {
     const name = (file.name || "").trim();
-    if (!name || isHseLibraryLockName(name)) continue;
+    if (!name || isHseLibraryLockName(name) || !vaultFileVisibleToViewer(file, viewer)) continue;
     if (seen.has(name)) {
       const row = listed.find((item) => item.name === name);
       if (row) row.protected = mergeHseListedProtected(row.protected, file.protected);
@@ -87,7 +90,7 @@ export function mergeVaultedHseFiles(
   }
   for (const file of local) {
     const name = (file.name || "").trim();
-    if (!name || seen.has(name) || isHseLibraryLockName(name) || !file.data) continue;
+    if (!name || seen.has(name) || isHseLibraryLockName(name) || !vaultFileVisibleToViewer(file, viewer) || !file.data) continue;
     seen.add(name);
     listed.push({
       name,

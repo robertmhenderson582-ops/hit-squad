@@ -29,6 +29,11 @@ import {
 } from "./quality-vault.ts";
 import type { QualityVaultTreeRow } from "./quality-vault-shared.ts";
 import type { PublicUser } from "./types.ts";
+import {
+  filterVaultBriefsForViewer,
+  filterVaultListedFiles,
+  filterVaultTreeForViewer,
+} from "./vault-list-filter.ts";
 
 export type QualityDropUser = Pick<PublicUser, "email" | "name" | "role">;
 
@@ -180,10 +185,10 @@ export async function listQualityFolderDrops(
     who,
     shelf: isQualityReadyShelfJobId(job),
     packageLabel: place?.jobLabel,
-  });
-  const files = vault.stored ? mergeVaultedQualityNames(vault.files, briefFiles) : [];
+  }, user);
+  const files = vault.stored ? filterVaultListedFiles(mergeVaultedQualityNames(vault.files, briefFiles), user) : [];
   return {
-    briefs: briefs.map(publicBrief),
+    briefs: filterVaultBriefsForViewer(briefs.map(publicBrief), user),
     files,
     store: vault.store === "drive" ? "drive" as const : "server-json-file" as const,
     stored: vault.stored,
@@ -207,7 +212,7 @@ function mergeVaultedQualityNames(
 
 export async function listQualityVaultOwnerTree(user: QualityDropUser) {
   if (!hasBuildDesk(user)) return [] as QualityVaultTreeRow[];
-  return listQualityVaultTree(leadBriefAdapter("quality"));
+  return filterVaultTreeForViewer(await listQualityVaultTree(leadBriefAdapter("quality")), user);
 }
 
 export function qualityFolderRowId(who: string, jobId: string, folderId: QualityFolderId) {

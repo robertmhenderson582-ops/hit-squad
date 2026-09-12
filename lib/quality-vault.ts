@@ -28,6 +28,11 @@ import {
   type QualityVaultPlace,
   type QualityVaultTreeRow,
 } from "./quality-vault-shared.ts";
+import {
+  filterVaultListedFiles,
+  vaultFileVisibleToViewer,
+  type VaultListViewer,
+} from "./vault-list-filter.ts";
 
 export {
   QUALITY_LIBRARY_LOCK_KIND,
@@ -183,6 +188,10 @@ function isQualityVaultFile(row: DriveFile) {
   return Boolean(name) && name !== QUALITY_BRIEFS_VAULT_NAME && !isQualityLibraryLock(row);
 }
 
+function isQualityListableFile(row: DriveFile) {
+  return Boolean((row.name || "").trim()) && row.mimeType !== DRIVE_FOLDER_MIME;
+}
+
 export function qualityLibraryLockFromKids(kids: DriveFile[]) {
   const lock = kids.find((row) => isQualityLibraryLock(row));
   if (!lock) return { locked: false, known: true as const };
@@ -226,6 +235,7 @@ async function findQualityVaultChild(drive: DriveAdapter, parent: string, name: 
 export async function listQualityCompanyDocVaultFolders(
   drive: DriveAdapter | null | undefined,
   place: { companyId?: string; who?: string },
+  viewer?: VaultListViewer,
 ) {
   const folders = qualityCompanyDocsListedFor(place.companyId);
   const empty = Object.fromEntries(folders.map((folder) => [folder.id, [] as QualityVaultListedName[]]));
@@ -260,9 +270,10 @@ export async function listQualityCompanyDocVaultFolders(
           return [folder.id, [] as QualityVaultListedName[], { locked: false, known: true }] as const;
         }
         const kids = await drive!.listChildren!(bucket.id);
-        const files = kids
-          .filter((row) => qualityVaultFileVisible(row, place.who))
-          .map((row) => qualityVaultListedFile(row));
+        const files = filterVaultListedFiles(
+          kids.filter((row) => qualityVaultFileVisible(row, place.who)).map((row) => qualityVaultListedFile(row)),
+          viewer,
+        );
         return [folder.id, files, qualityLibraryLockFromKids(kids)] as const;
       }),
     );
@@ -288,7 +299,7 @@ export async function listQualityCompanyDocVaultFolders(
 }
 
 export function qualityVaultFileVisible(row: DriveFile, who?: string) {
-  if (!isQualityVaultFile(row)) return false;
+  if (!isQualityListableFile(row)) return false;
   const key = (who || "").trim().toLowerCase();
   if (!key) return true;
   return (row.properties?.who || "").trim().toLowerCase() === key;
@@ -298,6 +309,7 @@ export function qualityVaultFileVisible(row: DriveFile, who?: string) {
 export async function listQualityVaultFiles(
   drive: DriveAdapter | null | undefined,
   place: QualityVaultPlace,
+  viewer?: VaultListViewer,
 ) {
   if (!qualityDriveReady(drive)) {
     return {
@@ -319,9 +331,10 @@ export async function listQualityVaultFiles(
       parent = existing.id;
     }
     const kids = await drive!.listChildren!(parent);
-    const files = kids
-      .filter((row) => qualityVaultFileVisible(row, place.who))
-      .map((row) => qualityVaultListedFile(row));
+    const files = filterVaultListedFiles(
+      kids.filter((row) => qualityVaultFileVisible(row, place.who)).map((row) => qualityVaultListedFile(row)),
+      viewer,
+    );
     const lock = qualityLibraryLockFromKids(kids);
     return { files, locked: lock.locked, locksKnown: lock.known, store: "drive" as const, stored: true as const };
   } catch {
@@ -455,10 +468,14 @@ export async function readQualityVaultFile(
   drive: DriveAdapter | null | undefined,
   place: QualityVaultPlace,
   fileName: string,
+  viewer?: VaultListViewer,
 ) {
   const wanted = (fileName || "").replace(/\\/g, "/").split("/").pop()?.trim() || "";
   if (!wanted || !qualityDriveReady(drive) || !drive?.readBytes) {
     return { file: null, store: "unconfigured" as const, stored: false as const };
+  }
+  if (!vaultFileVisibleToViewer(wanted, viewer)) {
+    return { file: null, store: "drive" as const, stored: true as const };
   }
   try {
     let parent = qualityFolderId();
@@ -512,7 +529,7 @@ export async function listQualityVaultTree(drive: DriveAdapter | null | undefine
 
 async function walkQualityVaultTree(drive: DriveAdapter, parent: string, path: string[]): Promise<QualityVaultTreeRow[]> {
   const kids = await drive.listChildren!(parent);
-  const files = kids.filter(isQualityVaultFile).map((row) => row.name);
+  const files = kids.filter(isQualityListableFile).map((row) => row.name);
   const rows: QualityVaultTreeRow[] = files.length ? [{ path: path.length ? path : ["Quality"], files }] : [];
   for (const folder of kids.filter((row) => row.mimeType === DRIVE_FOLDER_MIME && row.id && row.name)) {
     rows.push(...(await walkQualityVaultTree(drive, folder.id, [...path, folder.name])));

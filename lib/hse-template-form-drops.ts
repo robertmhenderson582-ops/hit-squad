@@ -264,7 +264,7 @@ export async function readHseTemplateFill(
     who,
   };
   for (const folderId of readFolders) {
-    const vault = await readHseVaultFile(leadBriefAdapter("hse"), { ...place, folderId }, fileName);
+    const vault = await readHseVaultFile(leadBriefAdapter("hse"), { ...place, folderId }, fileName, user);
     if (!vault.file?.data) continue;
     const parsed = hseTemplateFormFromLead(vault.file);
     if (!parsed) return { ok: false as const, status: 400, error: HSE_TEMPLATE_FILL_TEMPLATE_ERROR };

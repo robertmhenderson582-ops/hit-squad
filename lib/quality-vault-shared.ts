@@ -1,5 +1,7 @@
 /** Client-safe Quality vault copy and list helpers. No Drive / Node imports. */
 
+import { vaultFileVisibleToViewer, type VaultListViewer } from "./vault-list-filter.ts";
+
 export const QUALITY_VAULT_WRITE_ERROR =
   "Could not save to the Quality vault. Those files are only on this desk. Try again.";
 /** Owner / build desk only. Never send to testers. No SA email, no Drive ids. */
@@ -66,12 +68,13 @@ export function mergeQualityListedProtected(
 export function mergeVaultedQualityFiles(
   vault: Array<{ name?: string; type?: string; protected?: boolean }>,
   local: Array<{ name?: string; type?: string; data?: string }>,
+  viewer?: VaultListViewer,
 ): QualityListedFile[] {
   const listed: QualityListedFile[] = [];
   const seen = new Set<string>();
   for (const file of vault) {
     const name = (file.name || "").trim();
-    if (!name || isQualityLibraryLockName(name)) continue;
+    if (!name || isQualityLibraryLockName(name) || !vaultFileVisibleToViewer(file, viewer)) continue;
     if (seen.has(name)) {
       const row = listed.find((item) => item.name === name);
       if (row) row.protected = mergeQualityListedProtected(row.protected, file.protected);
@@ -87,7 +90,7 @@ export function mergeVaultedQualityFiles(
   }
   for (const file of local) {
     const name = (file.name || "").trim();
-    if (!name || seen.has(name) || isQualityLibraryLockName(name) || !file.data) continue;
+    if (!name || seen.has(name) || isQualityLibraryLockName(name) || !vaultFileVisibleToViewer(file, viewer) || !file.data) continue;
     seen.add(name);
     listed.push({
       name,

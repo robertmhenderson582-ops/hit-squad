@@ -35,6 +35,7 @@ import {
   qualityVaultStored,
   type QualityListedFile,
 } from "@/lib/quality-vault-shared";
+import { vaultListViewerForSeat } from "@/lib/vault-list-filter";
 
 function dropFileFromBrowser(file: File) {
   return { name: file.name, type: file.type, bytes: file.size };
@@ -55,11 +56,12 @@ export function QualityCompanyDocRail({
   const docs = qualityCompanyDocsListedFor(home);
   const { user } = useSession();
   const owner = useOwnerDesk();
+  const viewer = vaultListViewerForSeat(user, owner?.viewAs);
   const inputRef = useRef<HTMLInputElement>(null);
   const [docId, setDocId] = useState<QualityCompanyDocId>(() => readQualityCompanyDocPick(home));
   const [filesByDoc, setFilesByDoc] = useState<Record<string, QualityListedFile[]>>(() =>
     Object.fromEntries(
-      docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], readQualityCompanyDocFiles(home, doc.id))]),
+      docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], readQualityCompanyDocFiles(home, doc.id), viewer)]),
     ),
   );
   const [note, setNote] = useState<string | null>(null);
@@ -83,7 +85,7 @@ export function QualityCompanyDocRail({
     setDocId(next);
     setFilesByDoc(
       Object.fromEntries(
-        docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], readQualityCompanyDocFiles(home, doc.id))]),
+        docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], readQualityCompanyDocFiles(home, doc.id), viewer)]),
       ),
     );
     setNote(null);
@@ -113,7 +115,7 @@ export function QualityCompanyDocRail({
           setFilesByDoc((current) => {
             const hasAny = docs.some((doc) => (current[doc.id] ?? []).length);
             if (hasAny) return current;
-            return Object.fromEntries(docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], locals[doc.id] ?? [])]));
+            return Object.fromEntries(docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], locals[doc.id] ?? [], viewer)]));
           });
           return;
         }
@@ -127,7 +129,7 @@ export function QualityCompanyDocRail({
           Object.fromEntries(
             docs.map((doc) => [
               doc.id,
-              mergeVaultedQualityFiles(data.filesByFolder?.[doc.id] ?? [], locals[doc.id] ?? []),
+              mergeVaultedQualityFiles(data.filesByFolder?.[doc.id] ?? [], locals[doc.id] ?? [], viewer),
             ]),
           ),
         );
@@ -140,7 +142,7 @@ export function QualityCompanyDocRail({
           const hasAny = docs.some((doc) => (current[doc.id] ?? []).length);
           if (hasAny) return current;
           return Object.fromEntries(
-            docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], readQualityCompanyDocFiles(home, doc.id))]),
+            docs.map((doc) => [doc.id, mergeVaultedQualityFiles([], readQualityCompanyDocFiles(home, doc.id), viewer)]),
           );
         });
       });
@@ -261,7 +263,7 @@ export function QualityCompanyDocRail({
           .map(fileToLead),
       );
       const saved = await persistVault(target, incoming);
-      const vaulted = mergeVaultedQualityFiles(saved.brief?.files ?? incoming.map((file) => ({ name: file.name, type: file.type })), []);
+      const vaulted = mergeVaultedQualityFiles(saved.brief?.files ?? incoming.map((file) => ({ name: file.name, type: file.type })), [], viewer);
       setFilesByDoc((current) => ({ ...current, [target]: vaulted }));
       writeQualityCompanyDocFiles(home, target, []);
       if (incoming.length) noteFeatureTrail("import");
@@ -299,6 +301,7 @@ export function QualityCompanyDocRail({
         [target]: mergeVaultedQualityFiles(
           (current[target] ?? []).filter((file) => file.vaulted),
           leftover,
+          viewer,
         ),
       }));
       setNoteKind("err");
@@ -347,7 +350,7 @@ export function QualityCompanyDocRail({
     if (!response.ok || !qualityVaultStored(data.store, data.stored) || !data.files) {
       throw new Error(typeof data.error === "string" && data.error ? data.error : QUALITY_VAULT_WRITE_ERROR);
     }
-    const next = mergeVaultedQualityFiles(data.files, []);
+    const next = mergeVaultedQualityFiles(data.files, [], viewer);
     writeQualityCompanyDocFiles(home, docId, []);
     setFilesByDoc((current) => ({ ...current, [docId]: next }));
     if (openFileName === name) setOpenFileName(primaryQualityCompanyDocFile(next)?.name || null);

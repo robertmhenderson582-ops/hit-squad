@@ -25,6 +25,7 @@ import {
   hseVaultStored,
   type HseListedFile,
 } from "@/lib/hse-vault-shared";
+import { vaultListViewerForSeat } from "@/lib/vault-list-filter";
 
 function dropFileFromBrowser(file: File) {
   return { name: file.name, type: file.type, bytes: file.size };
@@ -52,6 +53,7 @@ export function HseFolderDrop({
   const folders = hseFoldersFor(companyId || "madison");
   const { user } = useSession();
   const owner = useOwnerDesk();
+  const viewer = vaultListViewerForSeat(user, owner?.viewAs);
   const dropRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<HseListedFile[]>([]);
@@ -63,7 +65,7 @@ export function HseFolderDrop({
 
   useEffect(() => {
     writeHseFolderPick(jobId, folderId);
-    setFiles(mergeVaultedHseFiles([], readHseFolderFiles(jobId, folderId)));
+    setFiles(mergeVaultedHseFiles([], readHseFolderFiles(jobId, folderId), viewer));
     setNote(null);
     setSavedAt(null);
     const frame = window.requestAnimationFrame(() => dropRef.current?.focus());
@@ -95,18 +97,18 @@ export function HseFolderDrop({
             : data.briefs?.[0]?.files ?? []
           : [];
         const vaulted = hseVaultStored(data.store, data.stored) ? listed : [];
-        setFiles(mergeVaultedHseFiles(vaulted, readHseFolderFiles(jobId, folderId)));
+        setFiles(mergeVaultedHseFiles(vaulted, readHseFolderFiles(jobId, folderId), viewer));
         const stamp = vaulted.length ? data.briefs?.[0]?.savedAt : undefined;
         if (stamp) setSavedAt(stamp);
         else setSavedAt(null);
       })
       .catch(() => {
-        if (!cancelled) setFiles(mergeVaultedHseFiles([], readHseFolderFiles(jobId, folderId)));
+        if (!cancelled) setFiles(mergeVaultedHseFiles([], readHseFolderFiles(jobId, folderId), viewer));
       });
     return () => {
       cancelled = true;
     };
-  }, [companyId, companyLabel, folderId, jobId, jobLabel, owner?.viewAs, siteLabel, user?.email]);
+  }, [companyId, companyLabel, folderId, jobId, jobLabel, owner?.viewAs, siteLabel, user?.email, viewer]);
 
   async function persistVault(nextFiles: LeadFile[]) {
     const response = await fetch("/api/desk/briefs", viewAsInit(owner?.viewAs, {
@@ -162,7 +164,7 @@ export function HseFolderDrop({
       );
       const saved = await persistVault(incoming);
       const vaulted = saved.brief?.files ?? [];
-      setFiles(mergeVaultedHseFiles(vaulted, []));
+      setFiles(mergeVaultedHseFiles(vaulted, [], viewer));
       writeHseFolderFiles(jobId, folderId, []);
       if (saved.brief?.savedAt) setSavedAt(saved.brief.savedAt);
       if (incoming.length) noteFeatureTrail("import");
@@ -194,6 +196,7 @@ export function HseFolderDrop({
       setFiles(mergeVaultedHseFiles(
         files.filter((file) => file.vaulted),
         leftover,
+        viewer,
       ));
       setNoteKind("err");
       setNote(
