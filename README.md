@@ -38,7 +38,7 @@ Local owner password is the value in `.env.example` / `.env.local` (`OWNER_PASSW
 | `DRIVE_DATA_FOLDER_ID` | Optional. Data room for companies, Activity, tickets, inbox, lead briefs, seat hashes, and owner settings. Falls back to the Estimates room. Server-only. Do not expose to testers. |
 | `DRIVE_TICKETS_FILE_ID` | Optional. Production `tickets.json` id when the Data folder is not listable. Suggestion Box writes fail closed if Drive does not confirm. Server-only. |
 | `DRIVE_QUALITY_FOLDER_ID` | Optional. Quality vault room. Default is the existing Hit Squad Quality folder (company → site → job). Quality uploads fail closed if Drive is down. Server-only. |
-| `DRIVE_HSE_FOLDER_ID` | Optional. HSE vault room for `hse-briefs.json`. Falls back to the Data / Estimates room. HSE LeadStudio Save fails closed if Drive does not confirm. Server-only. |
+| `DRIVE_HSE_FOLDER_ID` | Optional. HSE vault room (company → site → job, safety-file rail, Ready HSE packages, `hse-briefs.json`). Falls back to the Data / Estimates room. HSE vault writes fail closed if Drive does not confirm. Server-only. |
 | `DRIVE_INBOX_FILE_ID` | Optional. Production `inbox.json` id when sibling orphans exist in the Estimates room. Inbox reads/writes pin the known file. Server-only. |
 
 The session cookie is named `hs_session`. It is `HttpOnly`, `Path=/`, `SameSite=Lax`, and `Secure` when `AUTH_COOKIE_SECURE=true` (or when `NODE_ENV=production` unless you force it off).

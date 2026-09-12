@@ -16,6 +16,7 @@ import {
   canSeeRateVault,
   canSeeRateVaultDoor,
   isQualityVaultSeat,
+  isHseVaultSeat,
   canAddUsers,
   canManagePositions,
   canManageUsers,
@@ -113,12 +114,17 @@ test("Rate Vault stays owner-eyes-only until Privileges grants it", () => {
 test("Chance is the Quality vault seat; Wendell is not; Inbox stays locked", () => {
   const chance = { role: "tester" as const, email: "chancec318@yahoo.com" };
   const wendell = { role: "tester" as const, email: "wlanderno@yahoo.com" };
+  const benny = { role: "tester" as const, email: "bccamp2@gmail.com" };
   const owner = { role: "owner" as const, email: OWNER_LOGIN_EMAIL };
   assert.equal(isQualityVaultSeat(chance), true);
   assert.equal(isQualityVaultSeat(wendell), false);
   assert.equal(isQualityVaultSeat(owner), true);
   assert.equal(isQualityVaultSeat({ role: "tester", email: "nathanboyte@gmail.com" }), false);
   assert.equal(hasBuildDesk(chance), false);
+  assert.equal(isHseVaultSeat(wendell), true);
+  assert.equal(isHseVaultSeat(benny), true);
+  assert.equal(isHseVaultSeat(chance), false);
+  assert.equal(isHseVaultSeat(owner), true);
 });
 
 test("operator has build desk; testers do not", () => {

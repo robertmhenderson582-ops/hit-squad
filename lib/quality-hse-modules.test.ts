@@ -121,8 +121,8 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.doesNotMatch(quality, /QUALITY_SECTIONS/);
     assert.match(quality, /QUALITY_DESK_RADIOS/);
     assert.match(quality, /JobScopePicks/);
-    assert.match(hse, /HseDay1Card/);
-    assert.match(hse, /HSE_EXECUTE_LANES/);
+    assert.match(hse, /HSE_DESK_RADIOS/);
+    assert.match(hse, /HseCompanyDocRail/);
     assert.match(qualityCard, /QUALITY_PACKAGE_FORMS/);
     assert.match(qualityCard, /Inspection plan \/ ITP/);
     assert.match(qualityCard, /Weld map/);
@@ -224,7 +224,8 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.match(hseLib, /HSE_PACKAGE_SLOTS/);
     assert.match(hseMod, /Incidents \/ near misses/);
     assert.match(hseMod, /Toolbox talks/);
-    assert.match(hse, /ModuleRegister/);
+    assert.match(hse, /HSE_DESK_RADIOS/);
+    assert.match(hseMod, /HSE_EXECUTE_LANES/);
     assert.doesNotMatch(hseCard, /Hours on this estimate|scoreboard until real hours exist/);
     assert.doesNotMatch(hse, /1zYl2dEvW21|hse-briefs\.json/);
     assert.doesNotMatch(hseCard, /29\.1|sling form/i);
