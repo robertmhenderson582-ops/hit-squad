@@ -119,6 +119,13 @@ export type OwnerSettings = {
    * the desk chrome for every seat until Robert turns them back on.
    */
   showInboxSuggestionBox?: boolean;
+  /**
+   * Owner-entered Cursor / agent usage. No live spend API.
+   * Home shows a whole-desk note when the flag is on or % is at/above threshold.
+   */
+  showHighUsageNote?: boolean;
+  usagePercent?: number | null;
+  highUsageThreshold?: number;
 };
 
 export const VIEW_AS_HIDDEN_SETTINGS = [

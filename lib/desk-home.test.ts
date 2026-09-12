@@ -51,6 +51,7 @@ describe("home doors", () => {
     assert.match(hero, /HOME_WORDMARK/);
     assert.match(hero, /HOME_KICKER/);
     assert.match(hero, /HomeDock/);
+    assert.match(hero, /HighUsageNote/);
     assert.match(hero, /hero-company-logo/);
     assert.equal(/COMPANY_DESK_DOOR/.test(hero), false);
     assert.match(wordmark, /HIT SQUAD/);

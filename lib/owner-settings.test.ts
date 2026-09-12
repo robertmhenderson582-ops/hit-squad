@@ -48,6 +48,28 @@ describe("owner settings vault persist", () => {
     assert.equal(again.regularClient?.["site-ferndale"], true);
   });
 
+  it("defaults the high-usage clock off and persists Owner % / flag", async () => {
+    const drive = memoryDrive();
+    useOwnerSettingsVaultForTests(drive);
+    const first = await getOwnerSettings();
+    assert.equal(first.showHighUsageNote, false);
+    assert.equal(first.usagePercent, null);
+    assert.equal(first.highUsageThreshold, 70);
+    await setOwnerSettings({ showHighUsageNote: true, usagePercent: 82, highUsageThreshold: 70 });
+    forgetOwnerSettingsCacheForTests();
+    useOwnerSettingsVaultForTests(drive);
+    const again = await getOwnerSettings();
+    assert.equal(again.showHighUsageNote, true);
+    assert.equal(again.usagePercent, 82);
+    assert.equal(again.highUsageThreshold, 70);
+    await setOwnerSettings({ showHighUsageNote: false, usagePercent: null });
+    forgetOwnerSettingsCacheForTests();
+    useOwnerSettingsVaultForTests(drive);
+    const cleared = await getOwnerSettings();
+    assert.equal(cleared.showHighUsageNote, false);
+    assert.equal(cleared.usagePercent, null);
+  });
+
   it("defaults Inbox and Suggestion Box chrome off and persists the owner flip", async () => {
     const drive = memoryDrive();
     useOwnerSettingsVaultForTests(drive);

@@ -11,6 +11,7 @@ import {
   type OwnerSettings,
   type RepublishWait,
 } from "./owner-desk.ts";
+import { DEFAULT_HIGH_USAGE_THRESHOLD, parseUsagePercent, parseUsageThreshold } from "./usage-clock.ts";
 
 const BUILD_STAMP = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "local";
 const REPUBLISH_WAITS: RepublishWait[] = [0, 5, 10, 15];
@@ -31,6 +32,9 @@ function defaultSettings(): OwnerSettings {
       inboxNotice: null,
     },
     showInboxSuggestionBox: false,
+    showHighUsageNote: false,
+    usagePercent: null,
+    highUsageThreshold: DEFAULT_HIGH_USAGE_THRESHOLD,
   };
 }
 
@@ -54,6 +58,9 @@ export function parseOwnerSettings(raw: unknown): OwnerSettings {
   const row = raw as Partial<OwnerSettings>;
   if (typeof row.aliasesOn === "boolean") next.aliasesOn = row.aliasesOn;
   if (typeof row.showInboxSuggestionBox === "boolean") next.showInboxSuggestionBox = row.showInboxSuggestionBox;
+  if (typeof row.showHighUsageNote === "boolean") next.showHighUsageNote = row.showHighUsageNote;
+  if ("usagePercent" in row) next.usagePercent = parseUsagePercent(row.usagePercent);
+  if (row.highUsageThreshold !== undefined) next.highUsageThreshold = parseUsageThreshold(row.highUsageThreshold);
   if (isFollowSeat(row.followSeat)) next.followSeat = row.followSeat;
   if (isViewAsSeat(row.viewAs)) next.viewAs = row.viewAs;
   if (row.viewResponsibility && VIEW_RESPONSIBILITIES.includes(row.viewResponsibility)) {
@@ -172,6 +179,9 @@ export async function setOwnerSettings(next: Partial<OwnerSettings>): Promise<Ow
   await hydrateOwnerSettings();
   if (typeof next.aliasesOn === "boolean") settings.aliasesOn = next.aliasesOn;
   if (typeof next.showInboxSuggestionBox === "boolean") settings.showInboxSuggestionBox = next.showInboxSuggestionBox;
+  if (typeof next.showHighUsageNote === "boolean") settings.showHighUsageNote = next.showHighUsageNote;
+  if (next.usagePercent !== undefined) settings.usagePercent = parseUsagePercent(next.usagePercent);
+  if (next.highUsageThreshold !== undefined) settings.highUsageThreshold = parseUsageThreshold(next.highUsageThreshold);
   if (isFollowSeat(next.followSeat)) settings.followSeat = next.followSeat;
   if (isViewAsSeat(next.viewAs)) settings.viewAs = next.viewAs;
   if (next.viewResponsibility && VIEW_RESPONSIBILITIES.includes(next.viewResponsibility)) {

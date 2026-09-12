@@ -19,12 +19,24 @@ import {
   type ViewAsSeat,
   type ViewResponsibility,
 } from "@/lib/owner-desk";
+import { DEFAULT_HIGH_USAGE_THRESHOLD, parseUsagePercent, parseUsageThreshold } from "@/lib/usage-clock";
 import { followLandPath } from "@/lib/follow";
 import { isJosephEmail, testerByEmail } from "@/lib/tester-seats";
 
 const JOSEPH_VIEW_KEY = "hs_joseph_view";
 const VIEW_AS_STORE = "hs_view_as";
 const FOLLOW_STORE = "hs_follow";
+
+function applyUsageClockState(
+  data: Partial<OwnerSettings>,
+  setShow: (on: boolean) => void,
+  setPercent: (value: number | null) => void,
+  setThreshold: (value: number) => void,
+) {
+  setShow(data.showHighUsageNote === true);
+  setPercent(parseUsagePercent(data.usagePercent));
+  setThreshold(parseUsageThreshold(data.highUsageThreshold));
+}
 
 function readStoredViewAs(): ViewAsSeat | undefined {
   if (typeof window === "undefined") return undefined;
@@ -92,6 +104,9 @@ type OwnerDeskState = {
   viewSite: string;
   republish: RepublishState | null;
   showInboxSuggestionBox: boolean;
+  showHighUsageNote: boolean;
+  usagePercent: number | null;
+  highUsageThreshold: number;
   inboxChromeReady: boolean;
   lensReady: boolean;
   people: DeskPerson[];
@@ -100,6 +115,11 @@ type OwnerDeskState = {
   setViewAs: (seat: ViewAsSeat) => void;
   setViewLens: (responsibility: ViewResponsibility, site: string) => void;
   setShowInboxSuggestionBox: (on: boolean) => void;
+  setUsageClock: (next: {
+    showHighUsageNote?: boolean;
+    usagePercent?: number | null;
+    highUsageThreshold?: number;
+  }) => void;
   alias: (text: string) => string;
   applyingAliases: boolean;
 };
@@ -134,6 +154,9 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
   const [viewSite, setViewSite] = useState("Wood River — Roxana, IL");
   const [republish, setRepublish] = useState<RepublishState | null>(null);
   const [showInboxSuggestionBox, setShowInboxSuggestionBoxState] = useState(false);
+  const [showHighUsageNote, setShowHighUsageNoteState] = useState(false);
+  const [usagePercent, setUsagePercentState] = useState<number | null>(null);
+  const [highUsageThreshold, setHighUsageThresholdState] = useState(DEFAULT_HIGH_USAGE_THRESHOLD);
   const [inboxChromeReady, setInboxChromeReady] = useState(false);
   const [lensReady, setLensReady] = useState(!hasBuildDesk(user));
   const people = useDeskPeople();
@@ -187,6 +210,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
           if (typeof data.showInboxSuggestionBox === "boolean") {
             setShowInboxSuggestionBoxState(data.showInboxSuggestionBox);
           }
+          applyUsageClockState(data, setShowHighUsageNoteState, setUsagePercentState, setHighUsageThresholdState);
           if (data.republish) setRepublish(data.republish);
           setInboxChromeReady(true);
         })
@@ -200,6 +224,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
           if (typeof data.showInboxSuggestionBox === "boolean") {
             setShowInboxSuggestionBoxState(data.showInboxSuggestionBox);
           }
+          applyUsageClockState(data, setShowHighUsageNoteState, setUsagePercentState, setHighUsageThresholdState);
           if (data.republish) setRepublish(data.republish);
           setInboxChromeReady(true);
           setLensReady(true);
@@ -217,6 +242,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
         if (typeof data.showInboxSuggestionBox === "boolean") {
           setShowInboxSuggestionBoxState(data.showInboxSuggestionBox);
         }
+        applyUsageClockState(data, setShowHighUsageNoteState, setUsagePercentState, setHighUsageThresholdState);
         const nextFollow = preferredFollowSeat(readStoredFollow(), data.followSeat);
         setFollowSeatState(nextFollow);
         writeStoredFollow(nextFollow);
@@ -265,6 +291,25 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     setShowInboxSuggestionBoxState(on);
     saveSettings({ showInboxSuggestionBox: on });
     noteFeature(on ? "Show Inbox & Suggestion Box" : "Hide Inbox & Suggestion Box");
+  }, [user]);
+
+  const setUsageClock = useCallback((
+    next: {
+      showHighUsageNote?: boolean;
+      usagePercent?: number | null;
+      highUsageThreshold?: number;
+    },
+  ) => {
+    if (isTester(user) || !hasBuildDesk(user)) return;
+    if (typeof next.showHighUsageNote === "boolean") setShowHighUsageNoteState(next.showHighUsageNote);
+    if (next.usagePercent !== undefined) setUsagePercentState(parseUsagePercent(next.usagePercent));
+    if (next.highUsageThreshold !== undefined) setHighUsageThresholdState(parseUsageThreshold(next.highUsageThreshold));
+    saveSettings(next);
+    noteFeature(
+      next.showHighUsageNote === false && next.usagePercent == null
+        ? "Usage clock cleared"
+        : "Usage clock updated",
+    );
   }, [user]);
 
   const setFollowSeat = useCallback((seat: FollowSeat, nextLand?: string) => {
@@ -331,6 +376,9 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       viewSite,
       republish,
       showInboxSuggestionBox,
+      showHighUsageNote,
+      usagePercent,
+      highUsageThreshold,
       inboxChromeReady,
       lensReady,
       people,
@@ -339,10 +387,11 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       setViewAs,
       setViewLens,
       setShowInboxSuggestionBox,
+      setUsageClock,
       alias,
       applyingAliases,
     }),
-    [aliasesOn, followSeat, viewAs, viewResponsibility, viewSite, republish, showInboxSuggestionBox, inboxChromeReady, lensReady, people, setAliasesOn, setFollowSeat, setViewAs, setViewLens, setShowInboxSuggestionBox, alias, applyingAliases],
+    [aliasesOn, followSeat, viewAs, viewResponsibility, viewSite, republish, showInboxSuggestionBox, showHighUsageNote, usagePercent, highUsageThreshold, inboxChromeReady, lensReady, people, setAliasesOn, setFollowSeat, setViewAs, setViewLens, setShowInboxSuggestionBox, setUsageClock, alias, applyingAliases],
   );
 
   return <OwnerDeskContext.Provider value={value}>{children}</OwnerDeskContext.Provider>;
