@@ -181,6 +181,10 @@ describe("Quality always-displayed template forms", () => {
     assert.match(drop, /onOpenFilled/);
     assert.match(shelf, /onOpenFilled/);
     assert.match(route, /template-fill/);
+    assert.match(route, /ripple: result\.ripple/);
+    assert.match(desk, /key=\{`shelf-\$\{fillTick\}`\}/);
+    assert.match(desk, /refresh=\{fillTick\}/);
+    assert.match(desk, /key=\{`vault-\$\{fillTick\}`\}/);
     assert.doesNotMatch(form, /@gmail\.com|tester email/i);
     assert.doesNotMatch(desk, /inbox|suggestion box/i);
   });

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { qualityDropLeaks, qualityVaultStored, type QualityVaultTreeRow } from "@/lib/quality-vault-shared";
 
-export function QualityVaultOwnerTree() {
+export function QualityVaultOwnerTree({ refresh = 0 }: { refresh?: number }) {
   const [rows, setRows] = useState<QualityVaultTreeRow[]>([]);
   const [note, setNote] = useState<string | null>(null);
 
@@ -32,7 +32,7 @@ export function QualityVaultOwnerTree() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refresh]);
 
   return (
     <section className="plant-card px-4 py-4">

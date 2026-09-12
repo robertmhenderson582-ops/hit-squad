@@ -93,6 +93,11 @@ describe("Quality template fill vault paths", { concurrency: 1 }, () => {
     assert.equal(isQualityCompanyDocsJobId(saved.jobId), false);
     const listed = await listQualityFolderDrops(chance, "job-b17", "flange-log", "madison");
     assert.equal(listed.files.some((file) => file.name === first.name), true);
+    const jobPackage = await listQualityFolderDrops(chance, "job-b17", "packages", "madison");
+    assert.equal(jobPackage.files.some((file) => file.name === first.name), true);
+    if (saved.ok) {
+      assert.deepEqual(saved.ripple.surfaces, ["job-folder", "job-package", "vault-tree", "briefs-index"]);
+    }
     const rail = await listQualityCompanyDocDrop(chance, "forms", "madison");
     assert.equal(rail.files.some((file) => file.name === first.name), false);
     assert.equal(rail.files.some((file) => file.name === "2.7.19 Madison Flange Log Rev.1.pdf"), false);
@@ -143,6 +148,8 @@ describe("Quality template fill vault paths", { concurrency: 1 }, () => {
     assert.equal(removed.ok, true);
     const gone = await listQualityFolderDrops(chance, "job-b17", "flange-log", "madison");
     assert.equal(gone.files.some((file) => file.name === first.name), false);
+    const gonePackage = await listQualityFolderDrops(chance, "job-b17", "packages", "madison");
+    assert.equal(gonePackage.files.some((file) => file.name === first.name), false);
   });
 
   it("saves to a Ready prepackage, retrieves, edits, and keeps the kit off the rail", async () => {

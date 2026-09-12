@@ -228,6 +228,7 @@ export async function POST(request: Request) {
         folderId: result.folderId,
         stored: result.stored,
         store: result.store,
+        ripple: result.ripple,
       });
     }
     const result = await saveQualityTemplateFill(user, { ...body, companyId: companyId || undefined });
@@ -247,6 +248,7 @@ export async function POST(request: Request) {
       kit: "kit" in result ? result.kit : undefined,
       stored: result.stored,
       store: result.store,
+      ripple: result.ripple,
     });
   }
 

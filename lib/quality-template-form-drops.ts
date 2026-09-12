@@ -39,6 +39,11 @@ import {
   type QualityTemplateFillDest,
   type QualityTemplateSourceKind,
 } from "./quality-template-form.ts";
+import {
+  qualityTemplateFillHomeFolder,
+  qualityTemplateFillRippleFolders,
+  qualityTemplateFillRipplePlan,
+} from "./quality-template-form-ripple.ts";
 import { readQualityVaultFile, trashQualityVaultFile, qualityVaultWriteUserError } from "./quality-vault.ts";
 
 export type QualityTemplateFillUser = QualityDropUser & QualityDocUser;
@@ -109,34 +114,43 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
   if (!parsed) {
     return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR };
   }
-  const folderId = isQualityFolderId(input.folderId) ? input.folderId : parsed.folderId;
+  const folderId = qualityTemplateFillHomeFolder(dest, parsed.folderId, isQualityFolderId(input.folderId) ? input.folderId : null);
   if (!isQualityFolderId(folderId)) {
     return { ok: false as const, status: 400, error: "Pick a Quality folder." };
   }
   const companyId = typeof input.companyId === "string" ? input.companyId : undefined;
   const companyLabel = typeof input.companyLabel === "string" ? input.companyLabel : undefined;
+  const ripple = qualityTemplateFillRipplePlan(dest, folderId);
 
   if (dest === "job") {
     const jobId = typeof input.jobId === "string" ? input.jobId.trim() : "";
     if (!jobId || isQualityCompanyDocsJobId(jobId) || isQualityReadyShelfJobId(jobId)) {
       return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_JOB_ERROR };
     }
-    const saved = await saveQualityFolderDrop(user, {
-      jobId,
-      folderId,
-      files: [incoming],
-      companyId,
-      companyLabel,
-      siteLabel: typeof input.siteLabel === "string" ? input.siteLabel : undefined,
-      jobLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
-    });
-    if (!saved.ok) return saved;
+    const folders = qualityTemplateFillRippleFolders(dest, folderId);
+    let saved: Awaited<ReturnType<typeof saveQualityFolderDrop>> | null = null;
+    for (const rippleFolder of folders) {
+      saved = await saveQualityFolderDrop(user, {
+        jobId,
+        folderId: rippleFolder,
+        files: [incoming],
+        companyId,
+        companyLabel,
+        siteLabel: typeof input.siteLabel === "string" ? input.siteLabel : undefined,
+        jobLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
+      });
+      if (!saved.ok) return saved;
+    }
+    if (!saved || !saved.ok) {
+      return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_JOB_ERROR };
+    }
     return {
       ...saved,
       dest: "job" as const,
       fileName: incoming.name,
       folderId,
       jobId,
+      ripple,
     };
   }
 
@@ -167,6 +181,7 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
     folderId: "packages" as QualityFolderId,
     packageId,
     jobId: qualityReadyShelfJobId(packageId),
+    ripple,
   };
 }
 
@@ -270,7 +285,7 @@ export async function removeQualityTemplateFill(user: QualityTemplateFillUser, i
     return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR };
   }
   const companyId = typeof input.companyId === "string" ? input.companyId : undefined;
-  const folderId = isQualityFolderId(input.folderId)
+  const requestedFolder = isQualityFolderId(input.folderId)
     ? input.folderId
     : dest === "prepackage"
       ? "packages"
@@ -282,26 +297,53 @@ export async function removeQualityTemplateFill(user: QualityTemplateFillUser, i
       : typeof input.jobId === "string"
         ? input.jobId.trim()
         : "";
-  if (!jobId || isQualityCompanyDocsJobId(jobId) || !folderId) {
+  if (!jobId || isQualityCompanyDocsJobId(jobId) || !requestedFolder) {
     return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_DEST_ERROR };
   }
+  const peek = await readQualityTemplateFill(user, {
+    dest,
+    jobId,
+    folderId: requestedFolder,
+    packageId,
+    fileName,
+    companyId,
+    companyLabel: input.companyLabel,
+    siteLabel: input.siteLabel,
+    jobLabel: input.jobLabel,
+  });
+  const folderId = peek.ok
+    ? qualityTemplateFillHomeFolder(dest, peek.form.folderId, requestedFolder)
+    : requestedFolder;
+  const ripple = qualityTemplateFillRipplePlan(dest, folderId);
+  const folders = dest === "job" ? qualityTemplateFillRippleFolders(dest, folderId) : [requestedFolder];
   try {
-    await trashQualityVaultFile(
-      leadBriefAdapter("quality"),
-      {
-        companyId,
-        companyLabel: typeof input.companyLabel === "string" ? input.companyLabel : undefined,
-        siteLabel: typeof input.siteLabel === "string" ? input.siteLabel : undefined,
-        jobId,
-        jobLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
-        folderId,
-        shelf: dest === "prepackage",
-        who: user.email.trim().toLowerCase(),
-      },
+    for (const rippleFolder of folders) {
+      await trashQualityVaultFile(
+        leadBriefAdapter("quality"),
+        {
+          companyId,
+          companyLabel: typeof input.companyLabel === "string" ? input.companyLabel : undefined,
+          siteLabel: typeof input.siteLabel === "string" ? input.siteLabel : undefined,
+          jobId,
+          jobLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
+          folderId: rippleFolder,
+          shelf: dest === "prepackage",
+          who: user.email.trim().toLowerCase(),
+        },
+        fileName,
+      );
+      await removeFileFromStoredBriefs("quality", fileName, { jobId, folderId: rippleFolder, companyId });
+    }
+    return {
+      ok: true as const,
       fileName,
-    );
-    await removeFileFromStoredBriefs("quality", fileName, { jobId, folderId, companyId });
-    return { ok: true as const, fileName, dest, jobId, folderId, stored: true as const, store: "drive" as const };
+      dest,
+      jobId,
+      folderId,
+      stored: true as const,
+      store: "drive" as const,
+      ripple,
+    };
   } catch (error) {
     return {
       ok: false as const,

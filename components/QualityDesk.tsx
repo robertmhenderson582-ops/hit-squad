@@ -113,7 +113,7 @@ export function QualityDesk() {
     return () => {
       cancelled = true;
     };
-  }, [companyId, owner?.viewAs, user?.email, vaultCompanyId]);
+  }, [companyId, owner?.viewAs, user?.email, vaultCompanyId, fillTick]);
 
   function openTemplateForm(session: QualityTemplateFormSession) {
     setFormNote(null);
@@ -161,7 +161,7 @@ export function QualityDesk() {
         onChange={changeScope}
         alias={alias}
       />
-      {buildDesk ? <QualityVaultOwnerTree /> : null}
+      {buildDesk ? <QualityVaultOwnerTree key={`vault-${fillTick}`} refresh={fillTick} /> : null}
       {showFolderDesk ? (
         <QualityPackageShelf
           key={`shelf-${fillTick}`}
