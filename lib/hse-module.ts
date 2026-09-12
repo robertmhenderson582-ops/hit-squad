@@ -11,8 +11,8 @@ import type { StorageLike } from "./local-estimates.ts";
 
 export const HSE_MODULE_PREFIX = "hs_hse_module_v1:";
 
-// Parked: Day1 / execute-lane state is localStorage-only. The HSE desk vault
-// (rail / radios / Ready shelf / template fills) is the fail-closed Drive path.
+// Parked: Day1 / execute-lane state is localStorage-only. The HSE desk
+// (rail / radios / Ready shelf / template fills) is the fail-closed vault path.
 
 export const HSE_EXECUTE_LANES = [
   {

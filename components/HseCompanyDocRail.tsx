@@ -441,9 +441,7 @@ export function HseCompanyDocRail({
                         if (onOpenForm) onOpenForm(doc.id, primaryHseCompanyDocFile(listed)?.name);
                         else openLibrary(doc.id);
                       }}
-                    >
-                      Edit
-                    </button>
+                    >Edit</button>
                   ) : null}
                   <button
                     type="button"

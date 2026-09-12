@@ -15,6 +15,7 @@ import {
 import { memoryDrive } from "./drive-estimates.ts";
 import { HSE_VAULT_WRITE_ERROR } from "./lead-briefs.ts";
 import {
+  briefIdFor,
   forgetLeadBriefCacheForTests,
   hseBriefsRequireDrive,
   listStoredBriefs,
@@ -136,6 +137,43 @@ describe("lead brief store", { concurrency: 1 }, () => {
     const vault = await readVaultJson<{ briefs?: StoredLeadBrief[] }>(drive, HSE_BRIEFS_VAULT_NAME, HSE_BRIEFS_VAULT_KIND);
     assert.equal(vault?.briefs?.[0]?.files[0]?.data, "JVBERi0x");
     assert.deepEqual(publicBrief(saved).files, [{ name: "jsa.pdf", type: "application/pdf" }]);
+  });
+
+  it("HSE job-folder briefs keep separate ids so a Packages ripple does not smash JSA", async () => {
+    const drive = memoryDrive();
+    resetLeadBriefStoreForTests(join(dir, "hse-folders"));
+    useLeadBriefVaultForTests(drive);
+    assert.equal(
+      briefIdFor("hse", "wlanderno@yahoo.com", "job-b17", "jsa"),
+      "brief-hse-wlanderno@yahoo.com-job:job-b17-folder:jsa",
+    );
+    assert.notEqual(
+      briefIdFor("hse", "wlanderno@yahoo.com", "job-b17", "jsa"),
+      briefIdFor("hse", "wlanderno@yahoo.com", "job-b17", "packages"),
+    );
+    const jsa = await saveStoredBrief({
+      kind: "hse",
+      who: "wlanderno@yahoo.com",
+      whoName: "Wendell Landerno",
+      describe: "JSA",
+      files: [{ name: "Madison JSA — Boiler 17 — 2026-09-12 — Wendell.txt", type: "text/plain", data: "QQ==" }],
+      jobId: "job-b17",
+      folderId: "jsa",
+      companyId: "madison",
+    });
+    const packs = await saveStoredBrief({
+      kind: "hse",
+      who: "wlanderno@yahoo.com",
+      whoName: "Wendell Landerno",
+      describe: "Packages",
+      files: [{ name: "Madison JSA — Boiler 17 — 2026-09-12 — Wendell.txt", type: "text/plain", data: "QQ==" }],
+      jobId: "job-b17",
+      folderId: "packages",
+      companyId: "madison",
+    });
+    assert.notEqual(jsa.id, packs.id);
+    assert.equal((await listStoredBriefs("hse", "wlanderno@yahoo.com", { jobId: "job-b17", folderId: "jsa" })).length, 1);
+    assert.equal((await listStoredBriefs("hse", "wlanderno@yahoo.com", { jobId: "job-b17", folderId: "packages" })).length, 1);
   });
 
   it("HSE Save fails closed when Drive is missing and does not look saved", async () => {
