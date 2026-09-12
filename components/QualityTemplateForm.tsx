@@ -20,6 +20,7 @@ import {
   type JobScopeSite,
 } from "@/lib/quality-hse-scope";
 import {
+  QUALITY_TEMPLATE_FILL_EMPTY_ERROR,
   QUALITY_TEMPLATE_FILL_VIEW_ERROR,
   QUALITY_TEMPLATE_FORM_MARK,
   addQualityTemplateRow,
@@ -118,7 +119,11 @@ export function QualityTemplateForm({
   const owner = useOwnerDesk();
   const { user } = useSession();
   const def = session
-    ? qualityTemplateFormDef({ source: session.source, folderId: session.folderId, fileName: session.fileName })
+    ? qualityTemplateFormDef({
+        source: session.source,
+        folderId: session.folderId,
+        fileName: session.fileName || session.filledName,
+      })
     : null;
   const [record, setRecord] = useState<QualityTemplateFormRecord>(() =>
     def ? emptyQualityTemplateFormRecord(def) : { fields: {}, rows: [] },
@@ -199,6 +204,10 @@ export function QualityTemplateForm({
   async function persist() {
     if (!canSave) {
       setNote(QUALITY_TEMPLATE_FILL_VIEW_ERROR);
+      return;
+    }
+    if (!qualityTemplateFormHasWork(record)) {
+      setNote(QUALITY_TEMPLATE_FILL_EMPTY_ERROR);
       return;
     }
     if (dest === "job" && !jobPick.jobId) {
@@ -439,7 +448,7 @@ export function QualityTemplateForm({
               <button
                 type="button"
                 className="rounded-sm bg-steel px-3 py-1.5 text-sm text-white"
-                disabled={saving || loading}
+                disabled={saving || loading || !qualityTemplateFormHasWork(record)}
                 onClick={() => void persist()}
               >
                 {saving ? "Saving…" : editing ? "Save filled copy" : "Save as new"}

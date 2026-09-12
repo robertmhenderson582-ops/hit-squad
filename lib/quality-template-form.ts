@@ -39,6 +39,7 @@ export const QUALITY_TEMPLATE_FILL_DEST_ERROR =
   "Pick a job or a Ready prepackage. The company rail is not a save destination.";
 export const QUALITY_TEMPLATE_FILL_JOB_ERROR = "Pick a job for this filled copy.";
 export const QUALITY_TEMPLATE_FILL_PREPACKAGE_ERROR = "Pick or name a Ready prepackage for this filled copy.";
+export const QUALITY_TEMPLATE_FILL_EMPTY_ERROR = "Fill the form before saving a copy.";
 
 export type QualityTemplateSourceKind = "company-docs" | "catalog";
 export type QualityTemplateFillDest = "job" | "prepackage";
@@ -380,11 +381,32 @@ export function qualityTemplateFormForCompanyDoc(
   return COMPANY_DOC_FORMS[docId];
 }
 
+/** Feed-out: a filled copy listed on Packages still opens its home sheet, not the Packages cover. */
+export function qualityTemplateFormDefFromFilledName(fileName?: string | null): QualityTemplateFormDef | null {
+  const raw = qualityCompanyDocFileName(fileName);
+  if (!isQualityFilledCopyName(raw)) return null;
+  const title = raw.split(" — ")[0]?.trim() || "";
+  if (!title) return null;
+  const defs = [
+    ...QUALITY_MODULE_CATALOG.map((row) => qualityTemplateFormForCatalog(row.id)),
+    ...QUALITY_COMPANY_DOC_CATALOG.map((row) => qualityTemplateFormForCompanyDoc(row.id)),
+  ].filter((def): def is QualityTemplateFormDef => Boolean(def));
+  const wanted = title.toLowerCase();
+  return (
+    defs
+      .slice()
+      .sort((left, right) => right.title.length - left.title.length)
+      .find((def) => def.title.toLowerCase() === wanted || wanted.startsWith(`${def.title.toLowerCase()} `)) || null
+  );
+}
+
 export function qualityTemplateFormDef(input: {
   source: QualityTemplateSourceKind;
   folderId?: string | null;
   fileName?: string | null;
 }): QualityTemplateFormDef | null {
+  const fromFilled = qualityTemplateFormDefFromFilledName(input.fileName);
+  if (fromFilled) return fromFilled;
   if (input.source === "catalog") return qualityTemplateFormForCatalog(input.folderId);
   return qualityTemplateFormForCompanyDoc(input.folderId, input.fileName);
 }

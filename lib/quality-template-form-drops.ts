@@ -27,6 +27,7 @@ import {
 } from "./quality-package-shelf.ts";
 import {
   QUALITY_TEMPLATE_FILL_DEST_ERROR,
+  QUALITY_TEMPLATE_FILL_EMPTY_ERROR,
   QUALITY_TEMPLATE_FILL_JOB_ERROR,
   QUALITY_TEMPLATE_FILL_PREPACKAGE_ERROR,
   QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR,
@@ -36,11 +37,13 @@ import {
   qualityTemplateCanSave,
   qualityTemplateFillAcl,
   qualityTemplateFormFromLead,
+  qualityTemplateFormHasWork,
   type QualityTemplateFillDest,
   type QualityTemplateSourceKind,
 } from "./quality-template-form.ts";
 import {
   qualityTemplateFillHomeFolder,
+  qualityTemplateFillReadFolders,
   qualityTemplateFillRippleFolders,
   qualityTemplateFillRipplePlan,
 } from "./quality-template-form-ripple.ts";
@@ -109,7 +112,7 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
   }
   const incoming = incomingFillFile(input);
   if (!incoming) {
-    return { ok: false as const, status: 400, error: "Fill the form before saving a copy." };
+    return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_EMPTY_ERROR };
   }
   const sourceName = typeof input.sourceName === "string" ? input.sourceName : "";
   if (qualityFilledCopyCollidesWithTemplate(incoming.name, sourceName) || !isQualityFilledCopyName(incoming.name)) {
@@ -118,6 +121,9 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
   const parsed = qualityTemplateFormFromLead(incoming);
   if (!parsed) {
     return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR };
+  }
+  if (!qualityTemplateFormHasWork({ fields: parsed.fields, rows: parsed.rows })) {
+    return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_EMPTY_ERROR };
   }
   const folderId = qualityTemplateFillHomeFolder(dest, parsed.folderId, isQualityFolderId(input.folderId) ? input.folderId : null);
   if (!isQualityFolderId(folderId)) {
@@ -133,6 +139,7 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
       return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_JOB_ERROR };
     }
     const folders = qualityTemplateFillRippleFolders(dest, folderId);
+    const written: typeof folders = [];
     let saved: Awaited<ReturnType<typeof saveQualityFolderDrop>> | null = null;
     for (const rippleFolder of folders) {
       saved = await saveQualityFolderDrop(user, {
@@ -144,7 +151,21 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
         siteLabel: typeof input.siteLabel === "string" ? input.siteLabel : undefined,
         jobLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
       });
-      if (!saved.ok) return saved;
+      if (!saved.ok) {
+        await rollbackQualityTemplateFillWrites({
+          user,
+          dest,
+          jobId,
+          companyId,
+          companyLabel,
+          siteLabel: typeof input.siteLabel === "string" ? input.siteLabel : undefined,
+          jobLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
+          folders: written,
+          fileName: incoming.name,
+        });
+        return saved;
+      }
+      written.push(rippleFolder);
     }
     if (!saved || !saved.ok) {
       return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_JOB_ERROR };
@@ -215,10 +236,10 @@ export async function readQualityTemplateFill(
     return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR };
   }
   const companyId = typeof input.companyId === "string" && input.companyId.trim() ? input.companyId.trim() : undefined;
-  const folderId = isQualityFolderId(input.folderId)
-    ? input.folderId
-    : dest === "prepackage"
-      ? "packages"
+  const requestedFolder = dest === "prepackage"
+    ? "packages"
+    : isQualityFolderId(input.folderId)
+      ? input.folderId
       : "";
   const packageId = typeof input.packageId === "string" ? input.packageId.trim() : "";
   const jobId =
@@ -227,56 +248,105 @@ export async function readQualityTemplateFill(
       : typeof input.jobId === "string"
         ? input.jobId.trim()
         : "";
-  if (!jobId || isQualityCompanyDocsJobId(jobId) || !folderId) {
+  if (!jobId || isQualityCompanyDocsJobId(jobId) || !requestedFolder) {
     return { ok: false as const, status: 400, error: dest === "prepackage" ? QUALITY_TEMPLATE_FILL_PREPACKAGE_ERROR : QUALITY_TEMPLATE_FILL_JOB_ERROR };
   }
   const who = hasBuildDesk(user) ? undefined : user.email;
-  const briefs = await listStoredBriefs("quality", who, { jobId, folderId, companyId });
-  const fromBrief = briefs.flatMap((row) => row.files).find((file) => file.name === fileName && file.data);
-  if (fromBrief?.data) {
-    const parsed = qualityTemplateFormFromLead(fromBrief);
+  const readFolders = qualityTemplateFillReadFolders(dest, requestedFolder);
+  const place = {
+    companyId,
+    companyLabel: typeof input.companyLabel === "string" ? input.companyLabel : undefined,
+    siteLabel: typeof input.siteLabel === "string" ? input.siteLabel : undefined,
+    jobId,
+    jobLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
+    shelf: dest === "prepackage",
+    packageLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
+    who,
+  };
+  for (const folderId of readFolders) {
+    const vault = await readQualityVaultFile(leadBriefAdapter("quality"), { ...place, folderId }, fileName);
+    if (!vault.file?.data) continue;
+    const parsed = qualityTemplateFormFromLead(vault.file);
     if (!parsed) return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR };
     return {
       ok: true as const,
-      file: fromBrief,
+      file: vault.file,
       form: parsed,
       dest,
       jobId,
-      folderId,
+      folderId: parsed.folderId || folderId,
+      store: vault.store,
+      stored: vault.stored,
+    };
+  }
+  const briefs = await listStoredBriefs("quality", who, dest === "job" ? { jobId, companyId } : { jobId, folderId: "packages", companyId });
+  const ranked = briefs
+    .flatMap((row) => (row.files ?? []).map((file) => ({ file, folderId: row.folderId || requestedFolder })))
+    .filter((row) => row.file.name === fileName && row.file.data)
+    .sort((left, right) => {
+      if (left.folderId === requestedFolder && right.folderId !== requestedFolder) return -1;
+      if (right.folderId === requestedFolder && left.folderId !== requestedFolder) return 1;
+      return 0;
+    });
+  const fromBrief = ranked[0];
+  if (fromBrief?.file.data) {
+    const parsed = qualityTemplateFormFromLead(fromBrief.file);
+    if (!parsed) return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR };
+    return {
+      ok: true as const,
+      file: fromBrief.file,
+      form: parsed,
+      dest,
+      jobId,
+      folderId: parsed.folderId || fromBrief.folderId,
       store: "drive" as const,
       stored: true as const,
     };
   }
-  const vault = await readQualityVaultFile(
-    leadBriefAdapter("quality"),
-    {
-      companyId,
-      companyLabel: typeof input.companyLabel === "string" ? input.companyLabel : undefined,
-      siteLabel: typeof input.siteLabel === "string" ? input.siteLabel : undefined,
-      jobId,
-      jobLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
-      folderId,
-      shelf: dest === "prepackage",
-      packageLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
-      who,
-    },
-    fileName,
-  );
-  if (!vault.file?.data) {
-    return { ok: false as const, status: 404, error: "Filled copy not found." };
+  return { ok: false as const, status: 404, error: "Filled copy not found." };
+}
+
+async function rollbackQualityTemplateFillWrites(input: {
+  user: QualityTemplateFillUser;
+  dest: QualityTemplateFillDest;
+  jobId: string;
+  companyId?: string;
+  companyLabel?: string;
+  siteLabel?: string;
+  jobLabel?: string;
+  folders: QualityFolderId[];
+  fileName: string;
+}) {
+  for (const folderId of input.folders) {
+    try {
+      await trashQualityVaultFile(
+        leadBriefAdapter("quality"),
+        {
+          companyId: input.companyId,
+          companyLabel: input.companyLabel,
+          siteLabel: input.siteLabel,
+          jobId: input.jobId,
+          jobLabel: input.jobLabel,
+          folderId,
+          shelf: input.dest === "prepackage",
+          who: input.user.email.trim().toLowerCase(),
+        },
+        input.fileName,
+      );
+      await removeFileFromStoredBriefs("quality", input.fileName, {
+        jobId: input.jobId,
+        folderId,
+        companyId: input.companyId,
+      });
+    } catch {
+      // Keep rolling back the rest so a partial ripple does not stay listed.
+    }
   }
-  const parsed = qualityTemplateFormFromLead(vault.file);
-  if (!parsed) return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR };
-  return {
-    ok: true as const,
-    file: vault.file,
-    form: parsed,
-    dest,
-    jobId,
-    folderId,
-    store: vault.store,
-    stored: vault.stored,
-  };
+  try {
+    await trashQualityVaultNamedCopies(leadBriefAdapter("quality"), input.fileName, input.companyId);
+  } catch {
+    // Named-copy sweep is best-effort after a failed second write.
+  }
 }
 
 export async function removeQualityTemplateFill(user: QualityTemplateFillUser, input: QualityTemplateFillSaveInput) {

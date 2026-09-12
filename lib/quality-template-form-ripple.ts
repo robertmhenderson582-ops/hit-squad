@@ -55,6 +55,17 @@ export function qualityTemplateFillHomeFolder(
   return qualityTemplateFillJobPackageFolder();
 }
 
+/** Folders to try when pulling a filled copy back out. Prepackage lives on the Ready shelf packages folder. */
+export function qualityTemplateFillReadFolders(
+  dest: QualityTemplateFillDest,
+  folderId?: string | null,
+): QualityFolderId[] {
+  if (dest === "prepackage") return [qualityTemplateFillJobPackageFolder()];
+  const folder = isQualityFolderId(folderId) ? folderId : qualityTemplateFillJobPackageFolder();
+  if (folder === "packages") return ["packages"];
+  return [folder, "packages"];
+}
+
 /** Job vault folders to write/remove. Prepackage dest writes the Ready shelf, not a job folder. */
 export function qualityTemplateFillRippleFolders(
   dest: QualityTemplateFillDest,

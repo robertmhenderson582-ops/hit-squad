@@ -26,6 +26,7 @@ import {
   qualityTemplateCompanyDocIds,
   qualityTemplateFillAcl,
   qualityTemplateFormDef,
+  qualityTemplateFormDefFromFilledName,
   qualityTemplateFormForCatalog,
   qualityTemplateFormForCompanyDoc,
   qualityTemplateFormFromLead,
@@ -185,7 +186,29 @@ describe("Quality always-displayed template forms", () => {
     assert.match(desk, /key=\{`shelf-\$\{fillTick\}`\}/);
     assert.match(desk, /refresh=\{fillTick\}/);
     assert.match(desk, /key=\{`vault-\$\{fillTick\}`\}/);
+    assert.match(form, /QUALITY_TEMPLATE_FILL_EMPTY_ERROR/);
+    assert.match(form, /qualityTemplateFormHasWork\(record\)/);
+    assert.match(form, /session.fileName \|\| session.filledName/);
     assert.doesNotMatch(form, /@gmail\.com|tester email/i);
     assert.doesNotMatch(desk, /inbox|suggestion box/i);
+  });
+
+  it("feeds a filled copy back out on the home sheet even when listed under Packages", () => {
+    const named = qualityFilledCopyName({
+      title: "Flange Log",
+      destLabel: "Boiler 17",
+      userName: "Chance Middlebrooks",
+      at: new Date(2026, 8, 12, 12, 0, 0),
+    });
+    const fromPackages = qualityTemplateFormDef({
+      source: "catalog",
+      folderId: "packages",
+      fileName: named,
+    });
+    assert.equal(fromPackages?.folderId, "flange-log");
+    assert.equal(qualityTemplateFormDefFromFilledName(named)?.id, "flange-log");
+    assert.equal(qualityTemplateFormHasWork({ fields: {}, rows: [] }), false);
+    assert.equal(qualityTemplateFormHasWork({ fields: { job: "   " }, rows: [] }), false);
+    assert.equal(qualityTemplateFormHasWork({ fields: { job: "Boiler 17" }, rows: [] }), true);
   });
 });
