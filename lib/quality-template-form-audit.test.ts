@@ -189,6 +189,9 @@ describe("Nightly deep audit — Quality template fill ripple", { concurrency: 1
       folderId: "packages",
       fileName: first.name,
       companyId: "madison",
+      companyLabel: "Madison",
+      siteLabel: "Wood River",
+      jobLabel: "Boiler 17",
     });
     assert.equal(removed.ok, true);
     const gone = await auditQualityTemplateFillGone({

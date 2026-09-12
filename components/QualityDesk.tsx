@@ -273,6 +273,12 @@ export function QualityDesk() {
                       folderId: radio,
                       fileName,
                       companyId: vaultCompanyId || companyId,
+                      companyLabel:
+                        (vaultCompanyId || companyId)
+                          ? companyName((vaultCompanyId || companyId) as CompanyId)
+                          : undefined,
+                      siteLabel: selectedSite?.name,
+                      jobLabel: selectedJob?.title || selectedJob?.code,
                     }),
                   }),
                 );

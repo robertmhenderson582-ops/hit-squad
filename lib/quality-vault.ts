@@ -3,6 +3,7 @@ import { QUALITY_BRIEFS_VAULT_NAME, QUALITY_CONTROL_MANUAL_FILE_ID, briefsFolder
 import { DRIVE_FOLDER_MIME, DriveApiError, type DriveAdapter, type DriveFile } from "./drive-estimates.ts";
 import type { LeadFile } from "./lead-briefs.ts";
 import {
+  QUALITY_COMPANY_DOC_CATALOG,
   QUALITY_COMPANY_DOC_GOOGLE_NATIVE_ERROR,
   isQualityCompanyDocsJobId,
   qualityCompanyDocGoogleNativeType,
@@ -378,6 +379,45 @@ export async function trashQualityVaultFile(
     store: "drive" as const,
     stored: true as const,
   };
+}
+
+function isQualityCompanyDocVaultFolder(name: string, companyId?: string) {
+  const label = qualityVaultFolderName(name);
+  return QUALITY_COMPANY_DOC_CATALOG.some(
+    (doc) => qualityVaultFolderName(qualityCompanyDocLabel(doc.id, companyId)) === label,
+  );
+}
+
+/**
+ * Ripple remove: trash every vaulted copy of a filled filename.
+ * Never touches company-rail libraries or the standing Quality Control Manual.
+ */
+export async function trashQualityVaultNamedCopies(
+  drive: DriveAdapter | null | undefined,
+  fileName: string,
+  companyId?: string,
+) {
+  const wanted = (fileName || "").replace(/\\/g, "/").split("/").pop()?.trim() || "";
+  if (!wanted || isQualityLibraryLockName(wanted)) throw new Error(QUALITY_VAULT_WRITE_ERROR);
+  if (!qualityDriveReady(drive) || !drive?.deleteJson || !drive.listChildren) {
+    throw new Error(QUALITY_VAULT_WRITE_ERROR);
+  }
+  let trashed = 0;
+  async function walk(parent: string, path: string[]) {
+    const kids = await drive!.listChildren!(parent);
+    const railFolder = path.length === 2 && isQualityCompanyDocVaultFolder(path[1] || "", companyId);
+    for (const item of kids) {
+      if (!isQualityVaultFile(item) || item.name !== wanted || !item.id) continue;
+      if (railFolder || isProtectedQualityCompanyDocFile(item.id)) continue;
+      await drive!.deleteJson!(item.id);
+      trashed += 1;
+    }
+    for (const folder of kids.filter(isQualityVaultFolder)) {
+      await walk(folder.id, [...path, folder.name || ""]);
+    }
+  }
+  await walk(qualityFolderId(), []);
+  return { trashed, store: "drive" as const, stored: true as const };
 }
 
 export async function writeQualityCompanyDocLock(

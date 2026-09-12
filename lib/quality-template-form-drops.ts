@@ -44,7 +44,12 @@ import {
   qualityTemplateFillRippleFolders,
   qualityTemplateFillRipplePlan,
 } from "./quality-template-form-ripple.ts";
-import { readQualityVaultFile, trashQualityVaultFile, qualityVaultWriteUserError } from "./quality-vault.ts";
+import {
+  readQualityVaultFile,
+  trashQualityVaultFile,
+  trashQualityVaultNamedCopies,
+  qualityVaultWriteUserError,
+} from "./quality-vault.ts";
 
 export type QualityTemplateFillUser = QualityDropUser & QualityDocUser;
 
@@ -334,6 +339,7 @@ export async function removeQualityTemplateFill(user: QualityTemplateFillUser, i
       );
       await removeFileFromStoredBriefs("quality", fileName, { jobId, folderId: rippleFolder, companyId });
     }
+    await trashQualityVaultNamedCopies(leadBriefAdapter("quality"), fileName, companyId);
     return {
       ok: true as const,
       fileName,
