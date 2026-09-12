@@ -29,6 +29,12 @@ import {
   listQualityPackageShelf,
   saveQualityPackageShelfKit,
 } from "@/lib/quality-package-shelf-drops";
+import {
+  listQualityTemplateFillDestinations,
+  readQualityTemplateFill,
+  removeQualityTemplateFill,
+  saveQualityTemplateFill,
+} from "@/lib/quality-template-form-drops";
 
 function qualityCompanyId(request: URLSearchParams | { companyId?: string; company?: string }) {
   if (request instanceof URLSearchParams) {
@@ -55,6 +61,37 @@ export async function GET(request: Request) {
   const fileName = params.get("file")?.trim() || "";
   const companyId = qualityCompanyId(params);
   const companyDocs = params.get("scope") === "company-docs" || isQualityCompanyDocId(folderId, companyId || undefined);
+  if (kind === "quality" && params.get("scope") === "template-fill") {
+    const fileName = params.get("file")?.trim() || params.get("fileName")?.trim() || "";
+    if (fileName) {
+      const listed = await readQualityTemplateFill(user, {
+        dest: params.get("dest"),
+        jobId: jobId || undefined,
+        folderId: folderId || undefined,
+        packageId: params.get("packageId"),
+        fileName,
+        companyId: companyId || undefined,
+        companyLabel: params.get("companyLabel") || undefined,
+        siteLabel: params.get("site") || params.get("siteLabel") || undefined,
+        jobLabel: params.get("jobLabel") || undefined,
+      });
+      if (!listed.ok) return NextResponse.json({ error: listed.error }, { status: listed.status });
+      return NextResponse.json({
+        file: listed.file,
+        form: listed.form,
+        dest: listed.dest,
+        jobId: listed.jobId,
+        folderId: listed.folderId,
+        store: listed.store,
+        stored: listed.stored,
+      });
+    }
+    const listed = await listQualityTemplateFillDestinations(user, companyId || undefined);
+    return NextResponse.json({
+      acl: listed.acl,
+      kits: listed.kits,
+    });
+  }
   if (kind === "quality" && params.get("scope") === "package-shelf") {
     const listed = await listQualityPackageShelf(user, companyId || undefined);
     return NextResponse.json({
@@ -164,15 +201,56 @@ export async function POST(request: Request) {
     action?: string;
     locked?: boolean;
     fileName?: string;
-    file?: string;
+    file?: { name?: string; type?: string; data?: string } | string;
     packageId?: string;
+    packageName?: string;
     name?: string;
+    dest?: string;
+    source?: string;
+    sourceFolder?: string;
+    sourceName?: string;
+    replace?: boolean;
   };
   const companyId = qualityCompanyId(body);
   if (!isLeadBriefKind(body.kind)) {
     return NextResponse.json({ error: "Pick a desk." }, { status: 400 });
   }
   const user = body.kind === "quality" ? await scopedDeskUser(session, request) : session;
+
+  if (body.kind === "quality" && body.scope === "template-fill") {
+    if (body.action === "remove") {
+      const result = await removeQualityTemplateFill(user, { ...body, companyId: companyId || undefined });
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json({
+        dest: result.dest,
+        fileName: result.fileName,
+        jobId: result.jobId,
+        folderId: result.folderId,
+        stored: result.stored,
+        store: result.store,
+        ripple: result.ripple,
+      });
+    }
+    const result = await saveQualityTemplateFill(user, { ...body, companyId: companyId || undefined });
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.error, rejected: "rejected" in result ? result.rejected : undefined },
+        { status: result.status },
+      );
+    }
+    return NextResponse.json({
+      dest: result.dest,
+      fileName: result.fileName,
+      jobId: result.jobId,
+      folderId: result.folderId,
+      packageId: "packageId" in result ? result.packageId : undefined,
+      brief: result.brief,
+      kit: "kit" in result ? result.kit : undefined,
+      stored: result.stored,
+      store: result.store,
+      ripple: result.ripple,
+    });
+  }
 
   if (body.kind === "quality" && body.scope === "package-shelf") {
     if (body.action === "attach") {
@@ -286,8 +364,24 @@ export async function DELETE(request: Request) {
     company?: string;
     fileName?: string;
     file?: string;
+    dest?: string;
+    jobId?: string;
+    packageId?: string;
   };
   const companyId = qualityCompanyId(body);
+  if (body.kind === "quality" && body.scope === "template-fill") {
+    const user = await scopedDeskUser(session, request);
+    const result = await removeQualityTemplateFill(user, { ...body, companyId: companyId || undefined });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    return NextResponse.json({
+      dest: result.dest,
+      fileName: result.fileName,
+      jobId: result.jobId,
+      folderId: result.folderId,
+      stored: result.stored,
+      store: result.store,
+    });
+  }
   if (body.kind !== "quality" || (body.scope !== "company-docs" && !isQualityCompanyDocId(body.folderId, companyId || undefined))) {
     return NextResponse.json({ error: "Pick a Quality file." }, { status: 400 });
   }

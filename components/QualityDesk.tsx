@@ -5,10 +5,12 @@ import { JobScopePicks, PickJobEmpty } from "@/components/JobScopePicks";
 import { QualityCompanyDocRail } from "@/components/QualityCompanyDocRail";
 import { QualityFolderDrop } from "@/components/QualityFolderDrop";
 import { QualityPackageShelf } from "@/components/QualityPackageShelf";
+import { QualityTemplateForm, type QualityTemplateFormSession } from "@/components/QualityTemplateForm";
 import { QualityVaultOwnerTree } from "@/components/QualityVaultOwnerTree";
 import { useQualityHseJobTree } from "@/components/useQualityHseJobTree";
 import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { viewAsInit } from "@/lib/desk-scope";
 import { assignedCompanyId, companyName, companyScopeFor, inferCompanyIdFromParts, type CompanyId } from "@/lib/companies";
 import { buildDeskChrome, isQualityVaultSeat } from "@/lib/desk-role";
 import { qualityRailCompanyId } from "@/lib/quality-company-docs";
@@ -33,6 +35,9 @@ import {
   writeJobScope,
   type JobScopePick,
 } from "@/lib/quality-hse-scope";
+import { qualityTemplateFillAcl, type QualityTemplateFillAcl } from "@/lib/quality-template-form";
+import { qualityCompanyDocAcl } from "@/lib/quality-company-doc-acl";
+import { qualityPackageShelfAcl } from "@/lib/quality-package-shelf";
 
 export function QualityDesk() {
   const alias = useAlias();
@@ -60,6 +65,13 @@ export function QualityDesk() {
   const showFolderDesk = showsQualityFolderDesk(vaultCompanyId);
   const railCompanyId = qualityRailCompanyId(undefined, assignedCompanyId(companyScopeFor(user)));
   const radios = QUALITY_DESK_RADIOS;
+  const [formSession, setFormSession] = useState<QualityTemplateFormSession | null>(null);
+  const [kits, setKits] = useState<Array<{ id: string; name: string }>>([]);
+  const [fillAcl, setFillAcl] = useState<QualityTemplateFillAcl>(() =>
+    qualityTemplateFillAcl(qualityCompanyDocAcl(user), qualityPackageShelfAcl(user)),
+  );
+  const [formNote, setFormNote] = useState<string | null>(null);
+  const [fillTick, setFillTick] = useState(0);
 
   useEffect(() => {
     if (!ready) return;
@@ -76,6 +88,37 @@ export function QualityDesk() {
   useEffect(() => {
     setRadio(readQualityFolderPick(pick.jobId || "desk"));
   }, [pick.jobId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const company = vaultCompanyId || companyId;
+    const query = company ? `&company=${encodeURIComponent(company)}` : "";
+    void fetch(`/api/desk/briefs?kind=quality&scope=template-fill${query}`, viewAsInit(owner?.viewAs))
+      .then(async (response) => {
+        const data = (await response.json().catch(() => ({}))) as {
+          kits?: Array<{ id?: string; name?: string }>;
+          acl?: QualityTemplateFillAcl;
+        };
+        if (cancelled || !response.ok) return;
+        if (data.acl) setFillAcl(data.acl);
+        setKits(
+          (data.kits ?? [])
+            .filter((kit) => typeof kit.id === "string" && typeof kit.name === "string")
+            .map((kit) => ({ id: kit.id as string, name: kit.name as string })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setFillAcl(qualityTemplateFillAcl(qualityCompanyDocAcl(user), qualityPackageShelfAcl(user)));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, owner?.viewAs, user?.email, vaultCompanyId, fillTick]);
+
+  function openTemplateForm(session: QualityTemplateFormSession) {
+    setFormNote(null);
+    setFormSession(session);
+  }
 
   function changeScope(next: JobScopePick) {
     setPick(next);
@@ -101,8 +144,14 @@ export function QualityDesk() {
   }
 
   return (
+    <>
     <div className="field-desk mt-4 grid gap-5 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
-      <QualityCompanyDocRail companyId={railCompanyId} />
+      <QualityCompanyDocRail
+        companyId={railCompanyId}
+        onOpenForm={(docId, fileName) =>
+          openTemplateForm({ source: "company-docs", folderId: docId, fileName })
+        }
+      />
       <div className="space-y-5">
       <JobScopePicks
         clients={clients}
@@ -112,14 +161,25 @@ export function QualityDesk() {
         onChange={changeScope}
         alias={alias}
       />
-      {buildDesk ? <QualityVaultOwnerTree /> : null}
+      {buildDesk ? <QualityVaultOwnerTree key={`vault-${fillTick}`} refresh={fillTick} /> : null}
       {showFolderDesk ? (
         <QualityPackageShelf
+          key={`shelf-${fillTick}`}
           companyId={vaultCompanyId || companyId}
           companyLabel={(vaultCompanyId || companyId) ? companyName((vaultCompanyId || companyId) as CompanyId) : undefined}
           jobId={pick.jobId || undefined}
           siteLabel={selectedSite?.name}
           jobLabel={selectedJob?.title || selectedJob?.code}
+          onOpenFilled={(fileName, packageId, packageName) =>
+            openTemplateForm({
+              source: "catalog",
+              folderId: "packages",
+              dest: "prepackage",
+              destPackageId: packageId,
+              destPackageName: packageName,
+              filledName: fileName,
+            })
+          }
         />
       ) : null}
       {showFolderDesk ? (
@@ -132,22 +192,33 @@ export function QualityDesk() {
           {radios.map((item) => {
             const selected = radio === item.id;
             return (
-              <label
-                key={item.id}
-                className={`rounded-sm border px-3 py-1.5 text-sm ${
-                  selected ? "border-steel bg-steel text-white" : "border-steel text-steel"
-                }`}
-              >
-                <input
-                  id={`quality-radio-${item.id}`}
-                  type="radio"
-                  name="quality-desk-radio"
-                  className="sr-only"
-                  checked={selected}
-                  onChange={() => openRadio(item.id)}
-                />
-                {item.label}
-              </label>
+              <span key={item.id} className="inline-flex items-center gap-1">
+                <label
+                  className={`rounded-sm border px-3 py-1.5 text-sm ${
+                    selected ? "border-steel bg-steel text-white" : "border-steel text-steel"
+                  }`}
+                >
+                  <input
+                    id={`quality-radio-${item.id}`}
+                    type="radio"
+                    name="quality-desk-radio"
+                    className="sr-only"
+                    checked={selected}
+                    onChange={() => openRadio(item.id)}
+                  />
+                  {item.label}
+                </label>
+                <button
+                  type="button"
+                  className="rounded-sm border border-steel px-2 py-1.5 text-xs text-steel"
+                  onClick={() => {
+                    openRadio(item.id);
+                    openTemplateForm({ source: "catalog", folderId: item.id });
+                  }}
+                >
+                  Open form
+                </button>
+              </span>
             );
           })}
         </div>
@@ -170,6 +241,7 @@ export function QualityDesk() {
           ) : null}
           {showFolderDesk ? (
             <QualityFolderDrop
+              key={`${pick.jobId}:${radio}:${fillTick}`}
               jobId={pick.jobId}
               folderId={radio}
               companyId={vaultCompanyId || companyId}
@@ -178,12 +250,75 @@ export function QualityDesk() {
               }
               siteLabel={selectedSite?.name}
               jobLabel={selectedJob?.title || selectedJob?.code}
+              onOpenFilled={(fileName) =>
+                openTemplateForm({
+                  source: "catalog",
+                  folderId: radio,
+                  dest: "job",
+                  destJobId: pick.jobId,
+                  filledName: fileName,
+                })
+              }
+              onRemoveFilled={async (fileName) => {
+                const response = await fetch(
+                  "/api/desk/briefs",
+                  viewAsInit(owner?.viewAs, {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      kind: "quality",
+                      scope: "template-fill",
+                      dest: "job",
+                      jobId: pick.jobId,
+                      folderId: radio,
+                      fileName,
+                      companyId: vaultCompanyId || companyId,
+                      companyLabel:
+                        (vaultCompanyId || companyId)
+                          ? companyName((vaultCompanyId || companyId) as CompanyId)
+                          : undefined,
+                      siteLabel: selectedSite?.name,
+                      jobLabel: selectedJob?.title || selectedJob?.code,
+                    }),
+                  }),
+                );
+                const data = (await response.json().catch(() => ({}))) as { error?: string };
+                if (!response.ok) {
+                  setFormNote(typeof data.error === "string" ? data.error : "Could not remove that filled copy.");
+                  return;
+                }
+                setFormNote(`Removed ${fileName}. The rail template is unchanged.`);
+                setFillTick((n) => n + 1);
+              }}
             />
           ) : null}
           {manuals ? <p className="text-sm">{madisonManualLabel("quality")}</p> : null}
         </>
       ) : null}
+      {formNote ? <p className="text-sm text-[#5b6f73]">{formNote}</p> : null}
       </div>
     </div>
+      <QualityTemplateForm
+        open={Boolean(formSession)}
+        session={formSession}
+        clients={clients}
+        sites={sites}
+        jobs={siteJobs}
+        jobPick={pick}
+        onJobPick={changeScope}
+        kits={kits}
+        fillAcl={fillAcl}
+        companyId={vaultCompanyId || companyId || railCompanyId}
+        companyLabel={
+          (vaultCompanyId || companyId) ? companyName((vaultCompanyId || companyId) as CompanyId) : undefined
+        }
+        onClose={() => setFormSession(null)}
+        onSaved={(note) => {
+          setFormNote(note);
+          setFormSession(null);
+          setFillTick((n) => n + 1);
+        }}
+      />
+    </>
   );
 }

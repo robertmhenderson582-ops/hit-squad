@@ -44,7 +44,13 @@ function localByDoc(home: string, docs: ReadonlyArray<{ id: string }>) {
   return Object.fromEntries(docs.map((doc) => [doc.id, readQualityCompanyDocFiles(home, doc.id as QualityCompanyDocId)]));
 }
 
-export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
+export function QualityCompanyDocRail({
+  companyId,
+  onOpenForm,
+}: {
+  companyId?: string;
+  onOpenForm?: (docId: QualityCompanyDocId, fileName?: string) => void;
+}) {
   const home = qualityCompanyDocHome(companyId);
   const docs = qualityCompanyDocsListedFor(home);
   const { user } = useSession();
@@ -351,8 +357,8 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
     <aside id="quality-company-docs" className="plant-card h-fit px-3 py-4" aria-label="Quality files">
       <p className="mb-3 text-xs text-[#5b6f73]">
         {acl.canAddRemove
-          ? "Drop a file on a bar to save it. Click a bar to open that library. Remove a file there, then confirm."
-          : "Click a bar to open that library."}
+          ? "Open form fills the blank. Drop a file on a bar to keep the template. Files opens the library. Save a filled copy to a job or Ready prepackage — never this rail."
+          : "Open form fills the blank template. The rail stays empty. Files opens the library."}
       </p>
       <ul className="space-y-2">
         {docs.map((doc) => {
@@ -385,7 +391,11 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
                     className="w-full text-left text-sm font-semibold"
                     aria-current={selected ? "true" : undefined}
                     aria-haspopup="dialog"
-                    onClick={() => openLibrary(doc.id)}
+                    onClick={() =>
+                      onOpenForm
+                        ? onOpenForm(doc.id, primaryQualityCompanyDocFile(listed)?.name)
+                        : openLibrary(doc.id)
+                    }
                   >
                     {doc.label}
                   </button>
@@ -407,11 +417,30 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
                     : overId === doc.id
                       ? "Drop to save here"
                       : listed.length
-                        ? `${listed.length} file${listed.length === 1 ? "" : "s"} · click to open`
+                        ? `${listed.length} file${listed.length === 1 ? "" : "s"} · Open form`
                         : editable
-                          ? "Drop files here"
-                          : "Click to open"}
+                          ? "Drop the blank template here"
+                          : "Open form"}
                 </p>
+                <div className="mt-2 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    className="text-xs text-steel underline"
+                    onClick={() => {
+                      if (onOpenForm) onOpenForm(doc.id, primaryQualityCompanyDocFile(listed)?.name);
+                      else openLibrary(doc.id);
+                    }}
+                  >
+                    Open form
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs text-steel underline"
+                    onClick={() => openLibrary(doc.id)}
+                  >
+                    Files
+                  </button>
+                </div>
               </div>
             </li>
           );
@@ -450,6 +479,14 @@ export function QualityCompanyDocRail({ companyId }: { companyId?: string }) {
         lockedNote={!selectedEditable && docLocked(docId) ? QUALITY_COMPANY_DOC_LOCKED_NOTE : null}
         onSelect={setOpenFileName}
         onRemove={removeLibraryFile}
+        onOpenForm={
+          onOpenForm
+            ? (name) => {
+                setLibraryOpen(false);
+                onOpenForm(docId, name);
+              }
+            : undefined
+        }
         onClose={() => setLibraryOpen(false)}
       />
     </aside>

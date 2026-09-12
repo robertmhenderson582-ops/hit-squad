@@ -17,6 +17,7 @@ import {
   writeQualityFolderPick,
   type QualityFolderId,
 } from "@/lib/quality-folders";
+import { isQualityFilledCopyName } from "@/lib/quality-template-form";
 import {
   QUALITY_UNVAULTED_MARK,
   QUALITY_VAULT_WRITE_ERROR,
@@ -36,6 +37,8 @@ export function QualityFolderDrop({
   companyLabel,
   siteLabel,
   jobLabel,
+  onOpenFilled,
+  onRemoveFilled,
 }: {
   jobId: string;
   folderId: QualityFolderId;
@@ -43,6 +46,8 @@ export function QualityFolderDrop({
   companyLabel?: string;
   siteLabel?: string;
   jobLabel?: string;
+  onOpenFilled?: (fileName: string) => void;
+  onRemoveFilled?: (fileName: string) => Promise<void>;
 }) {
   const folders = qualityFoldersFor(companyId || "madison");
   const { user } = useSession();
@@ -210,8 +215,9 @@ export function QualityFolderDrop({
     <section className="plant-card px-4 py-4">
       <h2 className="font-display text-xl">{folder}</h2>
       <p className="mt-2 text-sm">
-        Drop files into this radio. Success shows only after the Quality vault confirms the
-        write. Testers only see their own files.
+        Open form on the radio fills the blank sheet. Drop extra files here. Filled copies
+        saved from the form land in this job folder under a new name. Testers only see their
+        own files.
       </p>
       <div
         ref={dropRef}
@@ -249,9 +255,33 @@ export function QualityFolderDrop({
       {listed.length ? (
         <ul className="mt-3 space-y-1 text-sm">
           {listed.map((file) => (
-            <li key={file.name}>
-              {file.name}
-              {file.vaulted ? "" : ` · ${QUALITY_UNVAULTED_MARK}`}
+            <li key={file.name} className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                {file.name}
+                {file.vaulted ? "" : ` · ${QUALITY_UNVAULTED_MARK}`}
+              </span>
+              {isQualityFilledCopyName(file.name) ? (
+                <span className="flex gap-3">
+                  {onOpenFilled ? (
+                    <button type="button" className="text-xs text-steel underline" onClick={() => onOpenFilled(file.name)}>
+                      Open form
+                    </button>
+                  ) : null}
+                  {onRemoveFilled ? (
+                    <button
+                      type="button"
+                      className="text-xs text-[#8a2a2a] underline"
+                      onClick={() =>
+                        void onRemoveFilled(file.name).then(() => {
+                          setFiles((current) => current.filter((row) => row.name !== file.name));
+                        })
+                      }
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </span>
+              ) : null}
             </li>
           ))}
         </ul>
