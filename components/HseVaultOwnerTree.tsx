@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useSession } from "@/components/SessionProvider";
 import { hseDropLeaks, hseVaultStored, type HseVaultTreeRow } from "@/lib/hse-vault-shared";
+import { filterVaultTreeForViewer, vaultListViewerForSeat } from "@/lib/vault-list-filter";
 
 export function HseVaultOwnerTree({ refresh = 0 }: { refresh?: number }) {
+  const { user } = useSession();
+  const owner = useOwnerDesk();
+  const viewer = vaultListViewerForSeat(user, owner?.viewAs);
   const [rows, setRows] = useState<HseVaultTreeRow[]>([]);
   const [note, setNote] = useState<string | null>(null);
 
@@ -23,7 +29,12 @@ export function HseVaultOwnerTree({ refresh = 0 }: { refresh?: number }) {
           setNote(typeof data.error === "string" ? data.error : null);
           return;
         }
-        setRows(data.tree.filter((row) => Array.isArray(row.path) && Array.isArray(row.files)));
+        setRows(
+          filterVaultTreeForViewer(
+            data.tree.filter((row) => Array.isArray(row.path) && Array.isArray(row.files)),
+            viewer,
+          ),
+        );
         setNote(null);
       })
       .catch(() => {
@@ -32,13 +43,13 @@ export function HseVaultOwnerTree({ refresh = 0 }: { refresh?: number }) {
     return () => {
       cancelled = true;
     };
-  }, [refresh]);
+  }, [refresh, viewer]);
 
   return (
     <section className="plant-card px-4 py-4">
       <h2 className="font-display text-xl">HSE vault</h2>
       <p className="mt-2 text-sm">
-        HSE room listing (names only). Job picker uses Madison jobs, not email dumps. Testers never see this tree.
+        HSE room listing (names only). Job picker uses Madison jobs, not email dumps. Testers never see this tree. Owner can inspect site JSON here.
       </p>
       {rows.length ? (
         <ul className="mt-3 space-y-2 text-sm">

@@ -13,6 +13,17 @@ import { isQualityVaultSeat } from "./desk-role.ts";
 import { type SeatDoorId } from "./seat-doors.ts";
 
 export { SEAT_DOORS, isSeatDoorId, normalizeSeatDoors, type SeatDoorId } from "./seat-doors.ts";
+export {
+  VAULT_SITE_JSON_NAMES,
+  filterVaultBriefsForViewer,
+  filterVaultFilesByFolder,
+  filterVaultListedFiles,
+  filterVaultTreeForViewer,
+  isVaultInfrastructureFile,
+  vaultFileVisibleToViewer,
+  vaultListViewerForSeat,
+  type VaultListViewer,
+} from "./vault-list-filter.ts";
 
 export const VAULT_ACL_SHARE_ERROR = "Could not share the vault folder. Confirm the desk Drive account can add people.";
 

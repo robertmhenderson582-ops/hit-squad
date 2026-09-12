@@ -43,6 +43,11 @@ import {
 import { parseQualityDropFiles, qualityDropLeaks } from "./quality-folder-drops.ts";
 import { checkQualityDrop } from "./quality-folders.ts";
 import { isQualityLibraryLockName } from "./quality-vault-shared.ts";
+import {
+  filterVaultBriefsForViewer,
+  filterVaultListedFiles,
+  vaultFileVisibleToViewer,
+} from "./vault-list-filter.ts";
 
 export type QualityDocUser = QualityCompanyDocActor;
 
@@ -157,15 +162,15 @@ export async function listQualityCompanyDocDrop(
       folderId: docId,
       jobId,
       companyDocs: true,
-    }),
+    }, user),
   ]);
   const mine = qualityCompanyDocDropsFor(briefs, home, docId);
   const briefFiles = mine.flatMap((row) => (row.files ?? []).filter((file) => file.name));
   const files = vault.stored
-    ? mergeCompanyDocListedFiles(vault.files, briefFiles)
+    ? filterVaultListedFiles(mergeCompanyDocListedFiles(vault.files, briefFiles), user)
     : [];
   return {
-    briefs: briefs.map(publicBrief),
+    briefs: filterVaultBriefsForViewer(briefs.map(publicBrief), user),
     files,
     locked: Boolean(vault.locked),
     locksKnown: vault.locksKnown !== false && vault.stored,
@@ -199,7 +204,7 @@ function mergeCompanyDocListedFiles(
   return files;
 }
 
-export async function listQualityCompanyDocDrops(_user: QualityDocUser, companyId?: string) {
+export async function listQualityCompanyDocDrops(user: QualityDocUser, companyId?: string) {
   const home = qualityCompanyDocHome(companyId);
   const folders = qualityCompanyDocsListedFor(home);
   const jobId = qualityCompanyDocsJobId(home);
@@ -208,13 +213,13 @@ export async function listQualityCompanyDocDrops(_user: QualityDocUser, companyI
   );
   const [briefs, vault] = await Promise.all([
     listStoredBriefs("quality", undefined, { jobId, companyId: home }),
-    listQualityCompanyDocVaultFolders(leadBriefAdapter("quality"), { companyId: home }),
+    listQualityCompanyDocVaultFolders(leadBriefAdapter("quality"), { companyId: home }, user),
   ]);
   for (const folder of folders) {
     const mine = qualityCompanyDocDropsFor(briefs, home, folder.id);
     const briefFiles = mine.flatMap((row) => (row.files ?? []).filter((file) => file.name));
     filesByFolder[folder.id] = vault.stored
-      ? mergeCompanyDocListedFiles(vault.filesByFolder[folder.id] ?? [], briefFiles)
+      ? filterVaultListedFiles(mergeCompanyDocListedFiles(vault.filesByFolder[folder.id] ?? [], briefFiles), user)
       : [];
   }
   return {
@@ -323,7 +328,7 @@ export async function lockQualityCompanyDoc(
 }
 
 export async function readQualityCompanyDocFile(
-  _user: QualityDocUser,
+  user: QualityDocUser,
   docId: QualityCompanyDocId,
   fileName: string,
   companyId?: string,
@@ -333,11 +338,15 @@ export async function readQualityCompanyDocFile(
   if (!wanted || !isQualityCompanyDocId(docId, home)) {
     return { file: null, store: "unconfigured" as const, stored: false as const };
   }
+  if (!vaultFileVisibleToViewer(wanted, user)) {
+    return { file: null, store: "drive" as const, stored: true as const };
+  }
   const jobId = qualityCompanyDocsJobId(home);
   const vault = await readQualityVaultFile(
     leadBriefAdapter("quality"),
     { companyId: home, folderId: docId, jobId, companyDocs: true },
     wanted,
+    user,
   );
   if (("error" in vault && vault.error) || qualityCompanyDocGoogleNativeType(vault.file?.type)) {
     return {

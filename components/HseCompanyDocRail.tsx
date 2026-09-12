@@ -35,6 +35,7 @@ import {
   hseVaultStored,
   type HseListedFile,
 } from "@/lib/hse-vault-shared";
+import { vaultListViewerForSeat } from "@/lib/vault-list-filter";
 
 function dropFileFromBrowser(file: File) {
   return { name: file.name, type: file.type, bytes: file.size };
@@ -55,11 +56,12 @@ export function HseCompanyDocRail({
   const docs = hseCompanyDocsListedFor(home);
   const { user } = useSession();
   const owner = useOwnerDesk();
+  const viewer = vaultListViewerForSeat(user, owner?.viewAs);
   const inputRef = useRef<HTMLInputElement>(null);
   const [docId, setDocId] = useState<HseCompanyDocId>(() => readHseCompanyDocPick(home));
   const [filesByDoc, setFilesByDoc] = useState<Record<string, HseListedFile[]>>(() =>
     Object.fromEntries(
-      docs.map((doc) => [doc.id, mergeVaultedHseFiles([], readHseCompanyDocFiles(home, doc.id))]),
+      docs.map((doc) => [doc.id, mergeVaultedHseFiles([], readHseCompanyDocFiles(home, doc.id), viewer)]),
     ),
   );
   const [note, setNote] = useState<string | null>(null);
@@ -83,7 +85,7 @@ export function HseCompanyDocRail({
     setDocId(next);
     setFilesByDoc(
       Object.fromEntries(
-        docs.map((doc) => [doc.id, mergeVaultedHseFiles([], readHseCompanyDocFiles(home, doc.id))]),
+        docs.map((doc) => [doc.id, mergeVaultedHseFiles([], readHseCompanyDocFiles(home, doc.id), viewer)]),
       ),
     );
     setNote(null);
@@ -113,7 +115,7 @@ export function HseCompanyDocRail({
           setFilesByDoc((current) => {
             const hasAny = docs.some((doc) => (current[doc.id] ?? []).length);
             if (hasAny) return current;
-            return Object.fromEntries(docs.map((doc) => [doc.id, mergeVaultedHseFiles([], locals[doc.id] ?? [])]));
+            return Object.fromEntries(docs.map((doc) => [doc.id, mergeVaultedHseFiles([], locals[doc.id] ?? [], viewer)]));
           });
           return;
         }
@@ -127,7 +129,7 @@ export function HseCompanyDocRail({
           Object.fromEntries(
             docs.map((doc) => [
               doc.id,
-              mergeVaultedHseFiles(data.filesByFolder?.[doc.id] ?? [], locals[doc.id] ?? []),
+              mergeVaultedHseFiles(data.filesByFolder?.[doc.id] ?? [], locals[doc.id] ?? [], viewer),
             ]),
           ),
         );
@@ -140,7 +142,7 @@ export function HseCompanyDocRail({
           const hasAny = docs.some((doc) => (current[doc.id] ?? []).length);
           if (hasAny) return current;
           return Object.fromEntries(
-            docs.map((doc) => [doc.id, mergeVaultedHseFiles([], readHseCompanyDocFiles(home, doc.id))]),
+            docs.map((doc) => [doc.id, mergeVaultedHseFiles([], readHseCompanyDocFiles(home, doc.id), viewer)]),
           );
         });
       });
@@ -261,7 +263,7 @@ export function HseCompanyDocRail({
           .map(fileToLead),
       );
       const saved = await persistVault(target, incoming);
-      const vaulted = mergeVaultedHseFiles(saved.brief?.files ?? incoming.map((file) => ({ name: file.name, type: file.type })), []);
+      const vaulted = mergeVaultedHseFiles(saved.brief?.files ?? incoming.map((file) => ({ name: file.name, type: file.type })), [], viewer);
       setFilesByDoc((current) => ({ ...current, [target]: vaulted }));
       writeHseCompanyDocFiles(home, target, []);
       if (incoming.length) noteFeatureTrail("import");
@@ -299,6 +301,7 @@ export function HseCompanyDocRail({
         [target]: mergeVaultedHseFiles(
           (current[target] ?? []).filter((file) => file.vaulted),
           leftover,
+          viewer,
         ),
       }));
       setNoteKind("err");
@@ -347,7 +350,7 @@ export function HseCompanyDocRail({
     if (!response.ok || !hseVaultStored(data.store, data.stored) || !data.files) {
       throw new Error(typeof data.error === "string" && data.error ? data.error : HSE_VAULT_WRITE_ERROR);
     }
-    const next = mergeVaultedHseFiles(data.files, []);
+    const next = mergeVaultedHseFiles(data.files, [], viewer);
     writeHseCompanyDocFiles(home, docId, []);
     setFilesByDoc((current) => ({ ...current, [docId]: next }));
     if (openFileName === name) setOpenFileName(primaryHseCompanyDocFile(next)?.name || null);

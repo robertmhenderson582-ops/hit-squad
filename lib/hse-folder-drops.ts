@@ -29,6 +29,11 @@ import {
 } from "./hse-vault.ts";
 import type { HseVaultTreeRow } from "./hse-vault-shared.ts";
 import type { PublicUser } from "./types.ts";
+import {
+  filterVaultBriefsForViewer,
+  filterVaultListedFiles,
+  filterVaultTreeForViewer,
+} from "./vault-list-filter.ts";
 
 export type HseDropUser = Pick<PublicUser, "email" | "name" | "role">;
 
@@ -180,10 +185,10 @@ export async function listHseFolderDrops(
     who,
     shelf: isHseReadyShelfJobId(job),
     packageLabel: place?.jobLabel,
-  });
-  const files = vault.stored ? mergeVaultedHseNames(vault.files, briefFiles) : [];
+  }, user);
+  const files = vault.stored ? filterVaultListedFiles(mergeVaultedHseNames(vault.files, briefFiles), user) : [];
   return {
-    briefs: briefs.map(publicBrief),
+    briefs: filterVaultBriefsForViewer(briefs.map(publicBrief), user),
     files,
     store: vault.store === "drive" ? "drive" as const : "server-json-file" as const,
     stored: vault.stored,
@@ -207,7 +212,7 @@ function mergeVaultedHseNames(
 
 export async function listHseVaultOwnerTree(user: HseDropUser) {
   if (!hasBuildDesk(user)) return [] as HseVaultTreeRow[];
-  return listHseVaultTree(leadBriefAdapter("hse"));
+  return filterVaultTreeForViewer(await listHseVaultTree(leadBriefAdapter("hse")), user);
 }
 
 export function hseFolderRowId(who: string, jobId: string, folderId: HseFolderId) {

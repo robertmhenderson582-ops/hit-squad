@@ -28,6 +28,11 @@ import {
   type HseVaultPlace,
   type HseVaultTreeRow,
 } from "./hse-vault-shared.ts";
+import {
+  filterVaultListedFiles,
+  vaultFileVisibleToViewer,
+  type VaultListViewer,
+} from "./vault-list-filter.ts";
 
 export {
   HSE_LIBRARY_LOCK_KIND,
@@ -183,6 +188,10 @@ function isHseVaultFile(row: DriveFile) {
   return Boolean(name) && name !== HSE_BRIEFS_VAULT_NAME && !isHseLibraryLock(row);
 }
 
+function isHseListableFile(row: DriveFile) {
+  return Boolean((row.name || "").trim()) && row.mimeType !== DRIVE_FOLDER_MIME;
+}
+
 export function hseLibraryLockFromKids(kids: DriveFile[]) {
   const lock = kids.find((row) => isHseLibraryLock(row));
   if (!lock) return { locked: false, known: true as const };
@@ -227,6 +236,7 @@ async function findHseVaultChild(drive: DriveAdapter, parent: string, name: stri
 export async function listHseCompanyDocVaultFolders(
   drive: DriveAdapter | null | undefined,
   place: { companyId?: string; who?: string },
+  viewer?: VaultListViewer,
 ) {
   const folders = hseCompanyDocsListedFor(place.companyId);
   const empty = Object.fromEntries(folders.map((folder) => [folder.id, [] as HseVaultListedName[]]));
@@ -261,9 +271,10 @@ export async function listHseCompanyDocVaultFolders(
           return [folder.id, [] as HseVaultListedName[], { locked: false, known: true }] as const;
         }
         const kids = await drive!.listChildren!(bucket.id);
-        const files = kids
-          .filter((row) => hseVaultFileVisible(row, place.who))
-          .map((row) => hseVaultListedFile(row));
+        const files = filterVaultListedFiles(
+          kids.filter((row) => hseVaultFileVisible(row, place.who)).map((row) => hseVaultListedFile(row)),
+          viewer,
+        );
         return [folder.id, files, hseLibraryLockFromKids(kids)] as const;
       }),
     );
@@ -289,7 +300,7 @@ export async function listHseCompanyDocVaultFolders(
 }
 
 export function hseVaultFileVisible(row: DriveFile, who?: string) {
-  if (!isHseVaultFile(row)) return false;
+  if (!isHseListableFile(row)) return false;
   const key = (who || "").trim().toLowerCase();
   if (!key) return true;
   return (row.properties?.who || "").trim().toLowerCase() === key;
@@ -299,6 +310,7 @@ export function hseVaultFileVisible(row: DriveFile, who?: string) {
 export async function listHseVaultFiles(
   drive: DriveAdapter | null | undefined,
   place: HseVaultPlace,
+  viewer?: VaultListViewer,
 ) {
   if (!hseDriveReady(drive)) {
     return {
@@ -320,9 +332,10 @@ export async function listHseVaultFiles(
       parent = existing.id;
     }
     const kids = await drive!.listChildren!(parent);
-    const files = kids
-      .filter((row) => hseVaultFileVisible(row, place.who))
-      .map((row) => hseVaultListedFile(row));
+    const files = filterVaultListedFiles(
+      kids.filter((row) => hseVaultFileVisible(row, place.who)).map((row) => hseVaultListedFile(row)),
+      viewer,
+    );
     const lock = hseLibraryLockFromKids(kids);
     return { files, locked: lock.locked, locksKnown: lock.known, store: "drive" as const, stored: true as const };
   } catch {
@@ -456,10 +469,14 @@ export async function readHseVaultFile(
   drive: DriveAdapter | null | undefined,
   place: HseVaultPlace,
   fileName: string,
+  viewer?: VaultListViewer,
 ) {
   const wanted = (fileName || "").replace(/\\/g, "/").split("/").pop()?.trim() || "";
   if (!wanted || !hseDriveReady(drive) || !drive?.readBytes) {
     return { file: null, store: "unconfigured" as const, stored: false as const };
+  }
+  if (!vaultFileVisibleToViewer(wanted, viewer)) {
+    return { file: null, store: "drive" as const, stored: true as const };
   }
   try {
     let parent = hseFolderId();
@@ -513,7 +530,7 @@ export async function listHseVaultTree(drive: DriveAdapter | null | undefined): 
 
 async function walkHseVaultTree(drive: DriveAdapter, parent: string, path: string[]): Promise<HseVaultTreeRow[]> {
   const kids = await drive.listChildren!(parent);
-  const files = kids.filter(isHseVaultFile).map((row) => row.name);
+  const files = kids.filter(isHseListableFile).map((row) => row.name);
   const rows: HseVaultTreeRow[] = files.length ? [{ path: path.length ? path : ["HSE"], files }] : [];
   for (const folder of kids.filter((row) => row.mimeType === DRIVE_FOLDER_MIME && row.id && row.name)) {
     rows.push(...(await walkHseVaultTree(drive, folder.id, [...path, folder.name])));

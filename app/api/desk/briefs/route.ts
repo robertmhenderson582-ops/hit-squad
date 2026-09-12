@@ -58,6 +58,7 @@ import {
   removeHseTemplateFill,
   saveHseTemplateFill,
 } from "@/lib/hse-template-form-drops";
+import { filterVaultBriefsForViewer } from "@/lib/vault-list-filter";
 
 function qualityCompanyId(request: URLSearchParams | { companyId?: string; company?: string }) {
   if (request instanceof URLSearchParams) {
@@ -308,7 +309,7 @@ export async function GET(request: Request) {
     ? await listStoredBriefs(kind, undefined, jobId ? { jobId, companyId: companyId || undefined } : undefined)
     : await listStoredBriefs(kind, user.email, jobId ? { jobId, companyId: companyId || undefined } : undefined);
   return NextResponse.json({
-    briefs: briefs.map(publicBrief),
+    briefs: filterVaultBriefsForViewer(briefs.map(publicBrief), user),
     folders: kind === "quality" ? qualityFoldersListedFor(companyId) : kind === "hse" ? hseFoldersListedFor(companyId) : undefined,
     store: leadBriefStoreKind(kind === "quality" ? "quality" : "hse"),
     stored: kind === "quality" || kind === "hse" ? leadBriefStoreKind(kind) === "drive" : undefined,

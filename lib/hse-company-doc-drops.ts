@@ -43,6 +43,11 @@ import {
 import { parseHseDropFiles, hseDropLeaks } from "./hse-folder-drops.ts";
 import { checkHseDrop } from "./hse-folders.ts";
 import { isHseLibraryLockName } from "./hse-vault-shared.ts";
+import {
+  filterVaultBriefsForViewer,
+  filterVaultListedFiles,
+  vaultFileVisibleToViewer,
+} from "./vault-list-filter.ts";
 
 export type HseDocUser = HseCompanyDocActor;
 
@@ -157,15 +162,15 @@ export async function listHseCompanyDocDrop(
       folderId: docId,
       jobId,
       companyDocs: true,
-    }),
+    }, user),
   ]);
   const mine = hseCompanyDocDropsFor(briefs, home, docId);
   const briefFiles = mine.flatMap((row) => (row.files ?? []).filter((file) => file.name));
   const files = vault.stored
-    ? mergeCompanyDocListedFiles(vault.files, briefFiles)
+    ? filterVaultListedFiles(mergeCompanyDocListedFiles(vault.files, briefFiles), user)
     : [];
   return {
-    briefs: briefs.map(publicBrief),
+    briefs: filterVaultBriefsForViewer(briefs.map(publicBrief), user),
     files,
     locked: Boolean(vault.locked),
     locksKnown: vault.locksKnown !== false && vault.stored,
@@ -199,7 +204,7 @@ function mergeCompanyDocListedFiles(
   return files;
 }
 
-export async function listHseCompanyDocDrops(_user: HseDocUser, companyId?: string) {
+export async function listHseCompanyDocDrops(user: HseDocUser, companyId?: string) {
   const home = hseCompanyDocHome(companyId);
   const folders = hseCompanyDocsListedFor(home);
   const jobId = hseCompanyDocsJobId(home);
@@ -208,13 +213,13 @@ export async function listHseCompanyDocDrops(_user: HseDocUser, companyId?: stri
   );
   const [briefs, vault] = await Promise.all([
     listStoredBriefs("hse", undefined, { jobId, companyId: home }),
-    listHseCompanyDocVaultFolders(leadBriefAdapter("hse"), { companyId: home }),
+    listHseCompanyDocVaultFolders(leadBriefAdapter("hse"), { companyId: home }, user),
   ]);
   for (const folder of folders) {
     const mine = hseCompanyDocDropsFor(briefs, home, folder.id);
     const briefFiles = mine.flatMap((row) => (row.files ?? []).filter((file) => file.name));
     filesByFolder[folder.id] = vault.stored
-      ? mergeCompanyDocListedFiles(vault.filesByFolder[folder.id] ?? [], briefFiles)
+      ? filterVaultListedFiles(mergeCompanyDocListedFiles(vault.filesByFolder[folder.id] ?? [], briefFiles), user)
       : [];
   }
   return {
@@ -323,7 +328,7 @@ export async function lockHseCompanyDoc(
 }
 
 export async function readHseCompanyDocFile(
-  _user: HseDocUser,
+  user: HseDocUser,
   docId: HseCompanyDocId,
   fileName: string,
   companyId?: string,
@@ -333,11 +338,15 @@ export async function readHseCompanyDocFile(
   if (!wanted || !isHseCompanyDocId(docId, home)) {
     return { file: null, store: "unconfigured" as const, stored: false as const };
   }
+  if (!vaultFileVisibleToViewer(wanted, user)) {
+    return { file: null, store: "drive" as const, stored: true as const };
+  }
   const jobId = hseCompanyDocsJobId(home);
   const vault = await readHseVaultFile(
     leadBriefAdapter("hse"),
     { companyId: home, folderId: docId, jobId, companyDocs: true },
     wanted,
+    user,
   );
   if (("error" in vault && vault.error) || hseCompanyDocGoogleNativeType(vault.file?.type)) {
     return {
