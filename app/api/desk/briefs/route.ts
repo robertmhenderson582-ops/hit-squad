@@ -444,7 +444,7 @@ export async function POST(request: Request) {
     const result = await saveQualityFolderDrop(user, { ...body, companyId: companyId || undefined });
     if (!result.ok) {
       return NextResponse.json(
-        { error: result.error, rejected: result.rejected },
+        { error: result.error, rejected: "rejected" in result ? result.rejected : undefined },
         { status: result.status },
       );
     }
@@ -551,7 +551,7 @@ export async function POST(request: Request) {
     const result = await saveHseFolderDrop(user, { ...body, companyId: companyId || undefined });
     if (!result.ok) {
       return NextResponse.json(
-        { error: result.error, rejected: result.rejected },
+        { error: result.error, rejected: "rejected" in result ? result.rejected : undefined },
         { status: result.status },
       );
     }

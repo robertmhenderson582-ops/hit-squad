@@ -92,9 +92,9 @@ export async function saveHseFolderDrop(user: HseDropUser, input: HseFolderSaveI
   const jobId = typeof input.jobId === "string" ? input.jobId.trim() : "";
   const folderId = typeof input.folderId === "string" ? input.folderId : "";
   const companyId = hseDropCompanyId(input);
-  if (!jobId) return { ok: false as const, status: 400, error: "Pick a job." };
+  if (!jobId) return { ok: false as const, status: 400, error: "Pick a job.", rejected: [] };
   if (!hseFolderAllowed(folderId, companyId) || !isHseFolderId(folderId, companyId)) {
-    return { ok: false as const, status: 400, error: "Pick a HSE folder." };
+    return { ok: false as const, status: 400, error: "Pick a HSE folder.", rejected: [] };
   }
   const incoming = parseHseDropFiles(input.files);
   const check = checkHseDrop(incoming);

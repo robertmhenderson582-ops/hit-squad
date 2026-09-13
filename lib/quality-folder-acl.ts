@@ -21,5 +21,5 @@ export async function resolveQualityFolderMutateAcl(
 export async function qualityFolderWriteGate(user: QualityCompanyDocActor) {
   const acl = await resolveQualityFolderMutateAcl(user);
   if (acl.canSaveJob) return null;
-  return { ok: false as const, status: 403, error: QUALITY_FOLDER_VIEW_ERROR };
+  return { ok: false as const, status: 403, error: QUALITY_FOLDER_VIEW_ERROR, rejected: [] };
 }

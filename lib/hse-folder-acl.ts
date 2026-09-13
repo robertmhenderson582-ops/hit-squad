@@ -19,5 +19,5 @@ export async function resolveHseFolderMutateAcl(user: HseCompanyDocActor): Promi
 export async function hseFolderWriteGate(user: HseCompanyDocActor) {
   const acl = await resolveHseFolderMutateAcl(user);
   if (acl.canSaveJob) return null;
-  return { ok: false as const, status: 403, error: HSE_FOLDER_VIEW_ERROR };
+  return { ok: false as const, status: 403, error: HSE_FOLDER_VIEW_ERROR, rejected: [] };
 }
