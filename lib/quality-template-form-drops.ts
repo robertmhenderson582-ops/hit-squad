@@ -431,9 +431,7 @@ export async function removeQualityTemplateFill(user: QualityTemplateFillUser, i
 
 export async function listQualityTemplateFillDestinations(user: QualityTemplateFillUser, companyId?: string) {
   const acl = await resolveFillAcl(user);
-  const shelf = acl.canSavePrepackage || acl.canSaveJob
-    ? await listQualityPackageShelf(user, companyId)
-    : { kits: [], acl: { canBuild: false, canAttach: false, seat: "viewer" as const }, store: "drive" as const, stored: true };
+  const shelf = await listQualityPackageShelf(user, companyId);
   return { acl, kits: shelf.kits };
 }
 

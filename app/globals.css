@@ -1184,6 +1184,16 @@ textarea:focus {
   color: #163038;
 }
 
+.paper-field-view,
+.paper-field-view:disabled,
+.paper-field-view[readonly] {
+  background: #e8eeee;
+  color: #5b6f73;
+  cursor: default;
+  pointer-events: none;
+  opacity: 1;
+}
+
 .field-mark {
   font-size: 0.875rem;
   font-weight: 600;

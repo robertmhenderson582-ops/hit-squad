@@ -22,7 +22,7 @@ import {
   type InboxPerson,
   type InboxThread,
 } from "@/lib/inbox";
-import { canReceiveDeskBot, canUseInbox } from "@/lib/inbox-circle";
+import { canReceiveDeskBot, canUseInbox, INBOX_NEW_MESSAGE_TOAST, inboxNotifyAllowed } from "@/lib/inbox-circle";
 import { applyWhatsNew, DESK_PERSON_ID } from "@/lib/whats-new";
 import { useDisplay } from "@/components/DisplayProvider";
 import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
@@ -75,6 +75,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
     : watched || viewed || user?.id || user?.email || "tester";
   const inboxEmail = lens?.email || user?.email || "";
   const inboxOn = canUseInbox(lens || user);
+  const inboxNotifyOn = inboxNotifyAllowed(lens || user, desk?.showInboxSuggestionBox);
 
   const [open, setOpen] = useState(false);
   const [composing, setComposing] = useState(false);
@@ -127,7 +128,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   );
 
   const loadRemote = useCallback(async () => {
-    if (!inboxOn) return null;
+    if (!inboxNotifyOn) return null;
     const response = await deskFetch("/api/desk/inbox");
     if (!response.ok) return null;
     const data = (await response.json().catch(() => ({}))) as {
@@ -141,7 +142,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       hiddenMessageIds: data.hiddenMessageIds,
       hiddenPersonIds: data.hiddenPersonIds,
     };
-  }, [inboxOn]);
+  }, [inboxNotifyOn]);
 
   useEffect(() => {
     if (status !== "authenticated" || !user) {
@@ -157,24 +158,25 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       hiddenMessageIdsRef.current = new Set(hides.messageIds);
       hiddenPersonIdsRef.current = new Set(hides.personIds);
       const stored = omitHiddenPersonThreads(readThreads(seat, ownerChrome), hides.personIds);
-      const local = canReceiveDeskBot(lens || user)
-        ? applyWhatsNew(stored, seat, ownerChrome, inboxEmail)
-        : stored.filter((thread) => thread.personId !== DESK_PERSON_ID);
+      const local =
+        inboxNotifyOn && canReceiveDeskBot(lens || user)
+          ? applyWhatsNew(stored, seat, ownerChrome, inboxEmail)
+          : stored.filter((thread) => thread.personId !== DESK_PERSON_ID);
       setThreads(local);
       setActiveId(null);
       setSelectedIds([]);
       setComposing(false);
     }
     setReady(true);
-    if (!inboxOn) return;
+    if (!inboxNotifyOn) return;
     void loadRemote().then((remote) => {
       if (!remote) return;
       applyRemote(remote.threads, remote);
     });
-  }, [applyRemote, identityKey, inboxEmail, inboxOn, loadRemote, ownerChrome, seat, status, user]);
+  }, [applyRemote, identityKey, inboxEmail, inboxNotifyOn, lens, loadRemote, ownerChrome, seat, status, user]);
 
   useEffect(() => {
-    if (!ready || !inboxOn) return;
+    if (!ready || !inboxNotifyOn) return;
     const id = window.setInterval(() => {
       void loadRemote().then((remote) => {
         if (!remote) return;
@@ -182,7 +184,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       });
     }, 4000);
     return () => window.clearInterval(id);
-  }, [applyRemote, inboxOn, loadRemote, ready]);
+  }, [applyRemote, inboxNotifyOn, loadRemote, ready]);
 
   useEffect(() => {
     if (!ready || status !== "authenticated" || !user) return;
@@ -197,20 +199,28 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
 
   const announce = useCallback(
     (preview: string) => {
+      if (!inboxNotifyOn) return;
       setToast(preview);
       if (prefs.inboxSound) playInboxChime();
       window.setTimeout(() => setToast(null), 4200);
     },
-    [prefs.inboxSound],
+    [inboxNotifyOn, prefs.inboxSound],
   );
 
   useEffect(() => {
-    if (!ready) return;
+    if (!inboxNotifyOn) {
+      setToast(null);
+      setOpen(false);
+    }
+  }, [inboxNotifyOn]);
+
+  useEffect(() => {
+    if (!ready || !inboxNotifyOn) return;
     if (sessionStorage.getItem(`hs_inbox_announced:${seat}`)) return;
     if (unread === 0) return;
     sessionStorage.setItem(`hs_inbox_announced:${seat}`, "1");
-    announce("New inbox message");
-  }, [announce, ready, seat, unread]);
+    announce(INBOX_NEW_MESSAGE_TOAST);
+  }, [announce, inboxNotifyOn, ready, seat, unread]);
 
   const persist = useCallback((next: InboxThread[] | ((current: InboxThread[]) => InboxThread[])) => {
     setThreads((current) => {
@@ -252,10 +262,10 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   );
 
   const openInbox = useCallback(() => {
-    if (!inboxOn) return;
+    if (!inboxNotifyOn) return;
     unlockInboxAudio();
     setOpen(true);
-  }, [inboxOn]);
+  }, [inboxNotifyOn]);
 
   const closeInbox = useCallback(() => {
     setOpen(false);
@@ -263,12 +273,12 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const startDraft = useCallback(() => {
-    if (!inboxOn) return;
+    if (!inboxNotifyOn) return;
     unlockInboxAudio();
     setComposing(true);
     setActiveId(null);
     setOpen(true);
-  }, [inboxOn]);
+  }, [inboxNotifyOn]);
 
   const startThread = useCallback(
     (person: InboxPerson) => {

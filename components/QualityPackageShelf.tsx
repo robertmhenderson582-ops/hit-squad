@@ -202,15 +202,15 @@ export function QualityPackageShelf({
     }
   }
 
-  if (!acl.canBuild && !acl.canAttach) return null;
+  const viewOnly = !acl.canBuild && !acl.canAttach;
 
   return (
     <section className="plant-card px-4 py-4" aria-label="Ready Quality packages">
       <h2 className="font-display text-xl">Ready Quality packages</h2>
       <p className="mt-2 text-sm">
-        Pre-build a job kit here before the job exists. It stays on the Quality vault shelf — not
-        the company rail. Corporate QC, Site QC, and a PM / estimator can attach it to an estimate
-        or job.
+        {viewOnly
+          ? "View only. Open a filled copy to read it. This seat cannot add, attach, replace, or remove Ready packages."
+          : "Pre-build a job kit here before the job exists. It stays on the Quality vault shelf — not the company rail. Corporate QC, Site QC, and a PM / estimator can attach it to an estimate or job."}
       </p>
       {acl.canBuild ? (
         <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">

@@ -17,7 +17,8 @@ import {
 } from "./lead-brief-store.ts";
 import { qualityCompanyDocsJobId } from "./quality-company-docs.ts";
 import { listQualityCompanyDocDrop } from "./quality-company-doc-drops.ts";
-import { listQualityFolderDrops } from "./quality-folder-drops.ts";
+import { QUALITY_FOLDER_VIEW_ERROR } from "./quality-folder-acl.ts";
+import { listQualityFolderDrops, saveQualityFolderDrop } from "./quality-folder-drops.ts";
 import { qualityReadyShelfJobId } from "./quality-package-shelf.ts";
 import {
   QUALITY_TEMPLATE_FEED_RULE,
@@ -236,6 +237,14 @@ describe("Quality template fill break matrix", { concurrency: 1 }, () => {
     });
     assert.equal(viewer.ok, false);
     if (!viewer.ok) assert.equal(viewer.error, QUALITY_TEMPLATE_FILL_VIEW_ERROR);
+
+    const folderViewer = await saveQualityFolderDrop(wendell, {
+      jobId: "job-b17",
+      folderId: "flange-log",
+      files: [{ name: "sneak.pdf", type: "application/pdf", data: Buffer.from("no").toString("base64") }],
+    });
+    assert.equal(folderViewer.ok, false);
+    if (!folderViewer.ok) assert.equal(folderViewer.error, QUALITY_FOLDER_VIEW_ERROR);
 
     const pmKit = await saveQualityTemplateFill(nathan, {
       dest: "prepackage",

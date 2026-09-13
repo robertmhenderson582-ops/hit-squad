@@ -163,7 +163,7 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.doesNotMatch(quality, /BOARD/);
     assert.doesNotMatch(quality, /QUALITY_DESK_TABS/);
     assert.match(quality, /QUALITY_DESK_RADIOS/);
-    assert.match(quality, /role="radiogroup"/);
+    assert.match(quality, /DeskCatalogRadios/);
     assert.match(quality, /QualityFolderDrop/);
     assert.match(quality, /companyLabel/);
     assert.match(quality, /siteLabel/);
@@ -176,7 +176,7 @@ describe("Quality and HSE have no estimate interaction", () => {
     assert.match(companyDocs, /Code Documents/);
     assert.match(companyDocs, /Forms/);
     assert.match(companyDocs, /Quality Updates/);
-    assert.match(quality, /role="radiogroup"/);
+    assert.match(quality, /DeskCatalogRadios/);
     assert.match(quality, /useQualityHseJobTree/);
     const folders = source("./quality-folders.ts");
     assert.match(folders, /QUALITY_MODULE_CATALOG/);

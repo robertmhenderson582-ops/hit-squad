@@ -196,8 +196,8 @@ export function DeskFabs() {
   return (
     <>
     <div className={`desk-fabs print-hide ${hiddenForShot || markupSrc ? "hs-fabs-quiet" : ""}`}>
-      {inbox.toast ? <div className="inbox-toast">{inbox.toast}</div> : null}
-      {note && !showTicket && !markupSrc ? <p className="fab-note">{note}</p> : null}
+      {showInbox && inbox.toast ? <div className="inbox-toast">{inbox.toast}</div> : null}
+      {showTickets && note && !showTicket && !markupSrc ? <p className="fab-note">{note}</p> : null}
 
       {showInbox && inbox.open ? (
         <section className="inbox-card" role="dialog" aria-label="Inbox" data-capture="ignore">

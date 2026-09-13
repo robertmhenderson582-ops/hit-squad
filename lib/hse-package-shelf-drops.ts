@@ -57,9 +57,6 @@ export async function listHsePackageShelf(
   companyId?: string,
 ): Promise<{ kits: HsePackageKit[]; acl: HsePackageShelfAcl; store: "drive" | "server-json-file"; stored: boolean }> {
   const acl = await resolveHsePackageShelfAcl(user);
-  if (!acl.canBuild && !acl.canAttach) {
-    return { kits: [], acl, store: "drive" as const, stored: true };
-  }
   const briefs = await hydrateLeadBriefStore("hse");
   const company = (companyId || "").trim();
   const kits = briefs

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useState } from "react";
+import { DeskCatalogRadios } from "@/components/DeskCatalogRadios";
 import { JobScopePicks, PickJobEmpty } from "@/components/JobScopePicks";
 import { QualityCompanyDocRail } from "@/components/QualityCompanyDocRail";
 import { QualityFolderDrop } from "@/components/QualityFolderDrop";
@@ -131,18 +132,6 @@ export function QualityDesk() {
     writeQualityFolderPick(pick.jobId || "desk", next);
   }
 
-  function onRadioKey(event: KeyboardEvent<HTMLDivElement>) {
-    const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
-    if (!keys.includes(event.key)) return;
-    event.preventDefault();
-    const index = radios.findIndex((item) => item.id === radio);
-    if (event.key === "Home") return openRadio(radios[0].id);
-    if (event.key === "End") return openRadio(radios[radios.length - 1].id);
-    const step = event.key === "ArrowRight" ? 1 : -1;
-    const next = (index + step + radios.length) % radios.length;
-    openRadio(radios[next].id);
-  }
-
   return (
     <>
     <div className="field-desk mt-4 grid gap-5 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
@@ -183,45 +172,19 @@ export function QualityDesk() {
         />
       ) : null}
       {showFolderDesk ? (
-        <div
-          role="radiogroup"
-          aria-label="Quality"
-          className="flex flex-wrap gap-2"
-          onKeyDown={onRadioKey}
-        >
-          {radios.map((item) => {
-            const selected = radio === item.id;
-            return (
-              <span key={item.id} className="inline-flex items-center gap-1">
-                <label
-                  className={`rounded-sm border px-3 py-1.5 text-sm ${
-                    selected ? "border-steel bg-steel text-white" : "border-steel text-steel"
-                  }`}
-                >
-                  <input
-                    id={`quality-radio-${item.id}`}
-                    type="radio"
-                    name="quality-desk-radio"
-                    className="sr-only"
-                    checked={selected}
-                    onChange={() => openRadio(item.id)}
-                  />
-                  {item.label}
-                </label>
-                <button
-                  type="button"
-                  className="rounded-sm border border-steel px-2 py-1.5 text-xs text-steel"
-                  onClick={() => {
-                    openRadio(item.id);
-                    openTemplateForm({ source: "catalog", folderId: item.id });
-                  }}
-                >
-                  Open form
-                </button>
-              </span>
-            );
-          })}
-        </div>
+        <DeskCatalogRadios
+          name="quality-desk-radio"
+          groupLabel="Quality"
+          idPrefix="quality-radio"
+          items={radios}
+          value={radio}
+          openLabel="Open form"
+          onSelect={openRadio}
+          onOpen={(id) => {
+            openRadio(id);
+            openTemplateForm({ source: "catalog", folderId: id });
+          }}
+        />
       ) : null}
       {!jobOpen && radio !== "packages" ? <PickJobEmpty kind="quality" /> : null}
       {jobOpen ? (
@@ -250,6 +213,7 @@ export function QualityDesk() {
               }
               siteLabel={selectedSite?.name}
               jobLabel={selectedJob?.title || selectedJob?.code}
+              canMutate={fillAcl.canSaveJob}
               onOpenFilled={(fileName) =>
                 openTemplateForm({
                   source: "catalog",

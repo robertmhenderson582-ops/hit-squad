@@ -20,10 +20,12 @@ import {
   saveQualityFolderDrop,
   visibleQualityBriefsForTester,
 } from "./quality-folder-drops.ts";
+import { QUALITY_FOLDER_VIEW_ERROR } from "./quality-folder-acl.ts";
 import { QUALITY_FOLDERS } from "./quality-folders.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-quality-folders-"));
 const chance = { email: "chancec318@yahoo.com", name: "Chance Middlebrooks", role: "tester" as const };
+const nathan = { email: "nathanboyte@gmail.com", name: "Nathan Boyte", role: "tester" as const };
 const wendell = { email: "wlanderno@yahoo.com", name: "Wendell Landerno", role: "tester" as const };
 const owner = { email: "robertmhenderson582@gmail.com", name: "Robert Henderson", role: "owner" as const };
 
@@ -73,16 +75,24 @@ describe("Quality folder vault drops", { concurrency: 1 }, () => {
       folderId: "wps",
       files: [pdf("wps.pdf")],
     });
-    await saveQualityFolderDrop(wendell, {
+    const viewerWrite = await saveQualityFolderDrop(wendell, {
       jobId: "job-b17",
       folderId: "welders",
       files: [pdf("wendell.pdf")],
+    });
+    assert.equal(viewerWrite.ok, false);
+    if (!viewerWrite.ok) assert.equal(viewerWrite.error, QUALITY_FOLDER_VIEW_ERROR);
+
+    await saveQualityFolderDrop(nathan, {
+      jobId: "job-b17",
+      folderId: "welders",
+      files: [pdf("nathan.pdf")],
     });
 
     const chanceWelders = await listQualityFolderDrops(chance, "job-b17", "welders");
     assert.equal(chanceWelders.stored, true);
     assert.equal(chanceWelders.store, "drive");
-    const wendellWelders = await listQualityFolderDrops(wendell, "job-b17", "welders");
+    const nathanWelders = await listQualityFolderDrops(nathan, "job-b17", "welders");
     const chanceWps = await listQualityFolderDrops(chance, "job-b17", "wps");
     const chanceOtherJob = await listQualityFolderDrops(chance, "job-other", "welders");
     assert.deepEqual(
@@ -90,8 +100,8 @@ describe("Quality folder vault drops", { concurrency: 1 }, () => {
       ["card.pdf", "stamp.pdf"],
     );
     assert.deepEqual(
-      wendellWelders.files.map((file) => file.name),
-      ["wendell.pdf"],
+      nathanWelders.files.map((file) => file.name),
+      ["nathan.pdf"],
     );
     assert.deepEqual(
       chanceWps.files.map((file) => file.name),
@@ -99,17 +109,17 @@ describe("Quality folder vault drops", { concurrency: 1 }, () => {
     );
     assert.deepEqual(chanceOtherJob.files, []);
     assert.equal(
-      chanceWelders.files.some((file) => file.name === "wendell.pdf"),
+      chanceWelders.files.some((file) => file.name === "nathan.pdf"),
       false,
     );
     assert.equal(
-      wendellWelders.files.some((file) => file.name === "stamp.pdf"),
+      nathanWelders.files.some((file) => file.name === "stamp.pdf"),
       false,
     );
 
     const ownerList = await listQualityFolderDrops(owner, "job-b17", "welders");
     assert.equal(ownerList.files.some((file) => file.name === "stamp.pdf"), true);
-    assert.equal(ownerList.files.some((file) => file.name === "wendell.pdf"), true);
+    assert.equal(ownerList.files.some((file) => file.name === "nathan.pdf"), true);
 
     const vault = await readVaultJson<{ briefs?: StoredLeadBrief[] }>(
       drive,

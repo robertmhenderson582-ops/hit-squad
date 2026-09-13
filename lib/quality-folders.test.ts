@@ -228,14 +228,14 @@ describe("Quality folder catalog", () => {
     assert.match(quality, /isQualityVaultSeat/);
     assert.match(quality, /QualityVaultOwnerTree/);
     assert.match(quality, /QUALITY_DESK_RADIOS/);
-    assert.match(quality, /role="radiogroup"/);
+    assert.match(quality, /DeskCatalogRadios/);
     assert.match(quality, /QualityPackageShelf/);
     assert.doesNotMatch(quality, /LeadStudio/);
     assert.doesNotMatch(quality, /QUALITY_DESK_TABS/);
     assert.doesNotMatch(quality, /quality-folder-pick/);
     assert.doesNotMatch(drop, /quality-folder-pick/);
     assert.doesNotMatch(drop, /<select/);
-    const radioIndex = quality.indexOf('role="radiogroup"');
+    const radioIndex = quality.indexOf("<DeskCatalogRadios");
     const dropIndex = quality.indexOf("<QualityFolderDrop");
     assert.equal(radioIndex > 0 && dropIndex > radioIndex, true);
     assert.match(drop, /folderId/);

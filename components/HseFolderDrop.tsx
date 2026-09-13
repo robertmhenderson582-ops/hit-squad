@@ -40,6 +40,7 @@ export function HseFolderDrop({
   jobLabel,
   onOpenFilled,
   onRemoveFilled,
+  canMutate = false,
 }: {
   jobId: string;
   folderId: HseFolderId;
@@ -49,6 +50,7 @@ export function HseFolderDrop({
   jobLabel?: string;
   onOpenFilled?: (fileName: string) => void;
   onRemoveFilled?: (fileName: string) => Promise<void>;
+  canMutate?: boolean;
 }) {
   const folders = hseFoldersFor(companyId || "madison");
   const { user } = useSession();
@@ -139,6 +141,11 @@ export function HseFolderDrop({
   }
 
   async function onFiles(list: FileList | File[] | null) {
+    if (!canMutate) {
+      setNoteKind("err");
+      setNote("View only — this seat cannot add or remove files here.");
+      return;
+    }
     const picked = Array.from(list ?? []);
     if (!picked.length) return;
     const check = checkHseDrop(picked.map(dropFileFromBrowser));
@@ -218,19 +225,20 @@ export function HseFolderDrop({
     <section className="plant-card px-4 py-4">
       <h2 className="font-display text-xl">{folder}</h2>
       <p className="mt-2 text-sm">
-        Open form on the radio fills the blank sheet. Drop extra files here. Filled copies
-        saved from the form land in this job folder under a new name. Testers only see their
-        own files.
+        {canMutate
+          ? "Activate the selected radio to Open form and fill the blank sheet. Drop extra files here. Filled copies saved from the form land in this job folder under a new name. Testers only see their own files."
+          : "View only. Open a filled copy to read it. This seat cannot drop, replace, or remove files here."}
       </p>
       <div
         ref={dropRef}
         id="hse-folder-drop"
         tabIndex={-1}
         className={`mt-4 rounded-sm border border-dashed px-4 py-6 ${
-          over ? "border-steel bg-steel/5" : "border-steel"
+          over && canMutate ? "border-steel bg-steel/5" : "border-steel"
         }`}
         onDragOver={(event) => {
           event.preventDefault();
+          if (!canMutate) return;
           setOver(true);
         }}
         onDragLeave={() => setOver(false)}
@@ -240,19 +248,25 @@ export function HseFolderDrop({
           void onFiles(event.dataTransfer.files);
         }}
       >
-        <p className="text-sm font-semibold">Drop files into {folder}</p>
+        <p className="text-sm font-semibold">{canMutate ? `Drop files into ${folder}` : `Files in ${folder}`}</p>
         <p className="mt-1 text-sm text-[#5b6f73]">
-          PDF, Excel, Word, CSV, pictures, or text. 15 MB each, 50 MB per drop.
+          {canMutate
+            ? "PDF, Excel, Word, CSV, pictures, or text. 15 MB each, 50 MB per drop."
+            : "View only — drop, replace, and remove stay off for this seat."}
         </p>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept={HSE_DROP_ACCEPT}
-          className="paper-field mt-3"
-          disabled={saving}
-          onChange={(event) => void onFiles(event.target.files)}
-        />
+        {canMutate ? (
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept={HSE_DROP_ACCEPT}
+            className="paper-field mt-3"
+            disabled={saving}
+            onChange={(event) => void onFiles(event.target.files)}
+          />
+        ) : (
+          <input ref={inputRef} type="file" className="hidden" tabIndex={-1} aria-hidden="true" />
+        )}
         {saving ? <p className="mt-2 text-sm">Saving into {folder}…</p> : null}
       </div>
       {listed.length ? (
@@ -270,7 +284,7 @@ export function HseFolderDrop({
                       Open form
                     </button>
                   ) : null}
-                  {onRemoveFilled ? (
+                  {canMutate && onRemoveFilled ? (
                     <button
                       type="button"
                       className="text-xs text-[#8a2a2a] underline"
@@ -290,7 +304,9 @@ export function HseFolderDrop({
         </ul>
       ) : (
         <p className="mt-3 text-sm text-[#5b6f73]">
-          Nothing in {folder} on this job yet. Drop a file or use the picker.
+          {canMutate
+            ? `Nothing in ${folder} on this job yet. Drop a file or use the picker.`
+            : `Nothing in ${folder} on this job yet.`}
         </p>
       )}
       {savedAt ? <p className="mt-2 text-xs text-[#5b6f73]">Last saved {savedAt}</p> : null}

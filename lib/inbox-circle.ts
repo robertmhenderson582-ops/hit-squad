@@ -80,6 +80,23 @@ export function canSeeSuggestionBoxUi(
   return inboxSuggestionBoxChromeOn(showInboxSuggestionBox) && canUseSuggestionBox(user);
 }
 
+/** Toast, chime, badge pulse, and poll-driven "new inbox" flash. Same switch as hidden Inbox radios. */
+export const INBOX_NEW_MESSAGE_TOAST = "New inbox message";
+
+export function inboxNotifyAllowed(
+  user?: (PrivilegeViewer & { email?: string }) | null,
+  showInboxSuggestionBox?: boolean | null,
+): boolean {
+  return canSeeInboxUi(user, showInboxSuggestionBox);
+}
+
+export function suggestionBoxNotifyAllowed(
+  user?: { email?: string } | null,
+  showInboxSuggestionBox?: boolean | null,
+): boolean {
+  return canSeeSuggestionBoxUi(user, showInboxSuggestionBox);
+}
+
 export function canReceiveDeskBot(user?: { email?: string } | null): boolean {
   return canUseInbox(user);
 }
