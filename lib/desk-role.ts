@@ -171,6 +171,43 @@ export function viewingAsOther(viewAs?: string | null): boolean {
   return Boolean(viewAs && viewAs !== "owner");
 }
 
+function rosterPermission(email?: string): string | undefined {
+  if (!email) return undefined;
+  const needle = email.trim().toLowerCase();
+  return VISUAL_ROSTER.find((row) => row.email.toLowerCase() === needle)?.permission;
+}
+
+/** Tester / vault-seat kicker from roster permission. Not OWNER DESK. */
+export function permissionDeskLabel(email?: string): string {
+  const permission = rosterPermission(email);
+  if (!permission) return "DESK";
+  if (/\bhse\b/i.test(permission)) return "HSE DESK";
+  if (/quality/i.test(permission)) return "QUALITY DESK";
+  if (/\bpm\b/i.test(permission)) return "PM DESK";
+  if (/staff/i.test(permission)) return "STAFF DESK";
+  return "DESK";
+}
+
+/**
+ * Hero / header desk kicker.
+ * OWNER DESK only when the real signed-in session is Owner and the lens is owner
+ * (viewAs / Follow are not someone else). Viewing as anyone else uses that
+ * person's role or roster permission — never OWNER DESK.
+ */
+export function chromeDeskLabel(
+  session?: { role?: string; email?: string } | null,
+  viewAs?: string | null,
+  lens?: { role?: string; email?: string } | null,
+  followSeat?: string | null,
+): string {
+  const viewingOther = viewingAsOther(activeLensSeat(viewAs, followSeat));
+  if (isOwner(session) && !viewingOther) return "OWNER DESK";
+  const person = viewingOther ? lens : session ?? lens;
+  if (isPresident(person)) return "PRESIDENT DESK";
+  if (isOperator(person)) return "OPERATOR DESK";
+  return permissionDeskLabel(person?.email);
+}
+
 type LensPerson = { id: string; email: string; name: string; role?: string };
 
 export function testerFromViewAs(

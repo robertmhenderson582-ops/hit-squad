@@ -8,6 +8,7 @@ import {
   canOpenRates,
   canUseRateBuilder,
   canUseViewAs,
+  chromeDeskLabel,
   isProjectManagerOrAbove,
   hasBuildDesk,
   hasWorkingDesk,
@@ -360,4 +361,38 @@ test("View as a President vault seat applies the President lens", () => {
   assert.equal(pageAllowedForSeat(lens, { ownerOnly: true }), false);
   assert.equal(pageAllowedForSeat(lens, { viewAs: true }), false);
   assert.equal(lensUser(owner, "operator-novus", null, [freddy])?.email, owner.email);
+});
+
+test("OWNER DESK is only the real owner on their own desk", () => {
+  const owner = {
+    id: "owner-robert-henderson",
+    email: OWNER_LOGIN_EMAIL,
+    name: "Robert Henderson",
+    role: "owner" as const,
+  };
+  const freddy = {
+    id: "custom-freddy",
+    email: "president.example@example.com",
+    name: "Freddy Grimland",
+    role: "president" as const,
+  };
+  const chance = lensUser(owner, "chance");
+  const nathan = lensUser(owner, "nathan");
+  const freddyLens = lensUser(owner, freddy.id, null, [freddy]);
+
+  assert.equal(chromeDeskLabel(owner, "owner", owner), "OWNER DESK");
+  assert.equal(chromeDeskLabel(owner, "owner", owner, "owner"), "OWNER DESK");
+
+  assert.equal(chromeDeskLabel(owner, freddy.id, freddyLens), "PRESIDENT DESK");
+  assert.notEqual(chromeDeskLabel(owner, freddy.id, freddyLens), "OWNER DESK");
+  assert.equal(chromeDeskLabel(owner, freddy.id, owner), "DESK");
+
+  assert.equal(chromeDeskLabel(owner, "chance", chance), "QUALITY DESK");
+  assert.notEqual(chromeDeskLabel(owner, "chance", chance), "OWNER DESK");
+  assert.equal(chromeDeskLabel(owner, "nathan", nathan), "PM DESK");
+  assert.notEqual(chromeDeskLabel(owner, "nathan", nathan), "OWNER DESK");
+
+  assert.equal(chromeDeskLabel(freddy, "owner", freddy), "PRESIDENT DESK");
+  assert.equal(chromeDeskLabel({ role: "operator", email: NOVUS_EMAIL }, "owner"), "OPERATOR DESK");
+  assert.equal(chromeDeskLabel(chance, "owner", chance), "QUALITY DESK");
 });

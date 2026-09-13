@@ -15,9 +15,9 @@ import { ThemeFlip } from "@/components/ThemeFlip";
 import { Wordmark } from "@/components/Wordmark";
 import { noteSessionEnd } from "@/components/FeatureTrail";
 import { FUTURE_MODULES } from "@/components/FutureModulesDesk";
-import { useLensUser } from "@/components/OwnerDeskContext";
+import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
-import { canOpenRates, isOperator, isPresident, isTester } from "@/lib/desk-role";
+import { canOpenRates, chromeDeskLabel } from "@/lib/desk-role";
 import { DESK_NAV } from "@/lib/desk-nav";
 import { RateVaultOnlyRedirect } from "@/components/RateVaultOnlyRedirect";
 
@@ -46,6 +46,7 @@ function ChromeInner({
   const pathname = usePathname();
   const { user, signOut } = useSession();
   const lens = useLensUser();
+  const desk = useOwnerDesk();
   const { resolvedTheme } = useDisplay();
   const paper = resolvedTheme === "day";
   const hero = variant === "hero";
@@ -58,13 +59,7 @@ function ChromeInner({
   const rail = (active: boolean) =>
     paper ? `rounded px-3 py-2 ${active ? "paper-rail-active" : "paper-rail"}` : `hud-rail px-3 py-2 ${active ? "hud-rail-active" : ""}`;
 
-  const deskLabel = isTester(lens)
-    ? "DESK"
-    : isPresident(user)
-      ? "PRESIDENT DESK"
-      : isOperator(user)
-        ? "OPERATOR DESK"
-        : "OWNER DESK";
+  const deskLabel = chromeDeskLabel(user, desk?.viewAs, lens, desk?.followSeat);
   const displayName = lens?.name || user?.name;
   const displayEmail = lens?.email || user?.email;
   const navItems = NAV.filter((item) => item.href !== "/rates" || canOpenRates(lens));
