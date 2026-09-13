@@ -71,4 +71,16 @@ describe("Sample A home header chrome", () => {
     assert.doesNotMatch(hero, /home-title-card|home-owner-card/);
     assert.doesNotMatch(home, /home-title-card|paper-header/);
   });
+
+  it("uses the viewed seat for the owner-card kicker, never OWNER DESK while Viewing as", () => {
+    const chrome = source("../components/DeskChrome.tsx");
+    assert.match(chrome, /useOwnerDesk/);
+    assert.match(chrome, /useLensUser/);
+    assert.match(chrome, /chromeDeskLabel\(user, desk\?\.viewAs, lens, desk\?\.followSeat\)/);
+    assert.match(chrome, /home-owner-kicker/);
+    assert.equal((chrome.match(/\{deskLabel\}/g) || []).length, 3);
+    assert.doesNotMatch(chrome, /isTester\(lens\)/);
+    assert.doesNotMatch(chrome, /isPresident\(user\)/);
+    assert.doesNotMatch(chrome, /: "OWNER DESK"/);
+  });
 });
