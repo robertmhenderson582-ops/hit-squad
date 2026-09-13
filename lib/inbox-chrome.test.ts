@@ -4,7 +4,14 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { HOME_DOCK_TILES } from "./desk-home.ts";
 import { DESK_NAV } from "./desk-nav.ts";
-import { canSeeInboxUi, canSeeSuggestionBoxUi, inboxSuggestionBoxChromeOn } from "./inbox-circle.ts";
+import {
+  canSeeInboxUi,
+  canSeeSuggestionBoxUi,
+  INBOX_NEW_MESSAGE_TOAST,
+  inboxNotifyAllowed,
+  inboxSuggestionBoxChromeOn,
+  suggestionBoxNotifyAllowed,
+} from "./inbox-circle.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { talkStepsForDesk } from "./talk-walk.ts";
 
@@ -46,6 +53,27 @@ describe("Inbox and Suggestion Box chrome is owner-gated", () => {
     assert.match(ticketsRoute, /canUseSuggestionBox/);
     assert.match(inboxRoute, /canUseInbox/);
     assert.match(source("./ticket-store.ts"), /TICKETS_VAULT/);
+  });
+
+  it("does not fire Inbox or Suggestion Box notify chrome while those modules stay hidden", () => {
+    assert.equal(INBOX_NEW_MESSAGE_TOAST, "New inbox message");
+    assert.equal(inboxNotifyAllowed({ role: "owner", email: OWNER_LOGIN_EMAIL }, false), false);
+    assert.equal(inboxNotifyAllowed({ role: "owner", email: OWNER_LOGIN_EMAIL }, undefined), false);
+    assert.equal(inboxNotifyAllowed({ role: "owner", email: OWNER_LOGIN_EMAIL }, true), true);
+    assert.equal(suggestionBoxNotifyAllowed({ email: OWNER_LOGIN_EMAIL }, false), false);
+    assert.equal(suggestionBoxNotifyAllowed({ email: OWNER_LOGIN_EMAIL }, true), true);
+
+    const provider = source("../components/InboxProvider.tsx");
+    const fabs = source("../components/DeskFabs.tsx");
+    assert.match(provider, /inboxNotifyAllowed/);
+    assert.match(provider, /inboxNotifyOn/);
+    assert.match(provider, /INBOX_NEW_MESSAGE_TOAST/);
+    assert.match(provider, /if \(!inboxNotifyOn\) return;/);
+    assert.match(provider, /if \(!ready \|\| !inboxNotifyOn\) return;/);
+    assert.match(provider, /if \(!inboxNotifyOn\) \{\s*setToast\(null\);/);
+    assert.match(fabs, /showInbox && inbox\.toast/);
+    assert.match(fabs, /showTickets && note/);
+    assert.doesNotMatch(fabs, /\{inbox\.toast \? <div className="inbox-toast">/);
   });
 
   it("keeps How we talk off Inbox while chrome is hidden", () => {
