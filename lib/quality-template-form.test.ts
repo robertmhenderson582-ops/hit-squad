@@ -172,6 +172,8 @@ describe("Quality always-displayed template forms", () => {
     assert.match(desk, /QualityTemplateForm/);
     assert.match(desk, /openTemplateForm/);
     assert.match(desk, /Open form/);
+    assert.match(desk, /DeskCatalogRadios/);
+    assert.doesNotMatch(desk, /<button[\s\S]{0,240}Open form/);
     assert.match(rail, /onOpenForm/);
     assert.match(rail, /Open form/);
     assert.match(viewer, /Open form/);

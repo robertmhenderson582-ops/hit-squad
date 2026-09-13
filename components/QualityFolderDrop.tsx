@@ -218,7 +218,7 @@ export function QualityFolderDrop({
     <section className="plant-card px-4 py-4">
       <h2 className="font-display text-xl">{folder}</h2>
       <p className="mt-2 text-sm">
-        Open form on the radio fills the blank sheet. Drop extra files here. Filled copies
+        Activate the selected radio to Open form and fill the blank sheet. Drop extra files here. Filled copies
         saved from the form land in this job folder under a new name. Testers only see their
         own files.
       </p>

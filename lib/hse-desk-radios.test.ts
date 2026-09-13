@@ -43,10 +43,17 @@ describe("HSE desk radios", () => {
     assert.equal(isHseDeskRadio("flange-log"), false);
 
     const desk = source("../components/HseDesk.tsx");
+    const radiosUi = source("../components/DeskCatalogRadios.tsx");
     const drop = source("../components/HseFolderDrop.tsx");
-    assert.match(desk, /role="radiogroup"/);
+    assert.match(desk, /DeskCatalogRadios/);
     assert.match(desk, /HSE_DESK_RADIOS/);
     assert.match(desk, /Open form/);
+    assert.match(desk, /onOpen=/);
+    assert.doesNotMatch(desk, /inline-flex items-center gap-1/);
+    assert.doesNotMatch(desk, /<button[\s\S]{0,240}Open form/);
+    assert.match(radiosUi, /role="radiogroup"/);
+    assert.match(radiosUi, /if \(selected\) onOpen/);
+    assert.doesNotMatch(radiosUi, /<button/);
     assert.match(desk, /HseTemplateForm/);
     assert.match(desk, /folderId=\{radio\}/);
     assert.match(desk, /HsePackageShelf/);

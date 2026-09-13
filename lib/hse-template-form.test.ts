@@ -134,6 +134,8 @@ describe("HSE always-displayed template forms", () => {
     const rail = source("../components/HseCompanyDocRail.tsx");
     assert.match(desk, /HseTemplateForm/);
     assert.match(desk, /Open form/);
+    assert.match(desk, /DeskCatalogRadios/);
+    assert.doesNotMatch(desk, /<button[\s\S]{0,240}Open form/);
     assert.match(form, /Print Madison JSA/);
     assert.match(form, /isMadisonJsaForm/);
     assert.match(form, /window\.print/);

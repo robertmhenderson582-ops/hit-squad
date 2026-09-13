@@ -122,7 +122,7 @@ describe("Quality company document catalog", () => {
     const railIndex = quality.indexOf("<QualityCompanyDocRail");
     const jobOpenIndex = quality.indexOf("{jobOpen ?");
     const dropIndex = quality.indexOf("<QualityFolderDrop");
-    const radioIndex = quality.indexOf('role="radiogroup"');
+    const radioIndex = quality.indexOf("<DeskCatalogRadios");
     assert.equal(railIndex >= 0 && railIndex < jobOpenIndex, true);
     assert.equal(radioIndex > 0 && radioIndex < dropIndex, true);
     assert.equal(dropIndex > jobOpenIndex, true);
