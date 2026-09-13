@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { DeskTemplateFieldInput, DeskTemplateFormRows } from "@/components/DeskTemplateFormFields";
 import { FieldBlock } from "@/components/FieldMark";
 import { JobScopePicks } from "@/components/JobScopePicks";
 import { ModalPortal } from "@/components/ModalPortal";
@@ -44,7 +45,6 @@ import {
   type QualityTemplateSourceKind,
 } from "@/lib/quality-template-form";
 import { QUALITY_VAULT_WRITE_ERROR } from "@/lib/quality-vault-shared";
-import type { QualityFieldDef } from "@/lib/quality-day1";
 
 export type QualityTemplateFormSession = {
   source: QualityTemplateSourceKind;
@@ -59,32 +59,6 @@ export type QualityTemplateFormSession = {
 };
 
 type Kit = { id: string; name: string };
-
-function fieldInput(def: QualityFieldDef, value: string, onChange: (next: string) => void, readOnly: boolean) {
-  if (def.kind === "yesno") {
-    return (
-      <select
-        className="paper-field mt-1"
-        value={value === "yes" ? "yes" : value === "no" ? "no" : ""}
-        disabled={readOnly}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        <option value="">Blank</option>
-        <option value="yes">Yes</option>
-        <option value="no">No</option>
-      </select>
-    );
-  }
-  return (
-    <input
-      className="paper-field mt-1"
-      type={def.kind === "date" ? "date" : "text"}
-      value={value}
-      readOnly={readOnly}
-      onChange={(event) => onChange(event.target.value)}
-    />
-  );
-}
 
 export function QualityTemplateForm({
   open,
@@ -193,8 +167,8 @@ export function QualityTemplateForm({
       sourceName: session?.fileName,
     });
   }, [def, destLabel, filledName, session?.fileName, user?.name]);
-  const readOnly = fillAcl.readOnly || !qualityTemplateCanSave(fillAcl, dest);
-  const canSave = qualityTemplateCanSave(fillAcl, dest);
+  const viewOnly = fillAcl.readOnly;
+  const canSave = !viewOnly && qualityTemplateCanSave(fillAcl, dest);
   const editing = Boolean(filledName);
 
   if (!open || !session || !def) return null;
@@ -331,7 +305,7 @@ export function QualityTemplateForm({
             </button>
           </div>
           <p className="mt-1 text-sm text-[#5b6f73]">
-            {readOnly
+            {viewOnly
               ? "View only. This seat can read the form and cannot save over a job or prepackage."
               : editing
                 ? "Editing a filled copy. Re-save updates that copy. The always-present blank stays on the rail."
@@ -346,16 +320,21 @@ export function QualityTemplateForm({
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {formDef.fields.map((field) => (
               <FieldBlock key={field.id} label={field.label}>
-                {fieldInput(field, record.fields[field.id] || "", (next) => setRecord(patchQualityTemplateField(record, field.id, next)), readOnly)}
+                <DeskTemplateFieldInput
+                  def={field}
+                  value={record.fields[field.id] || ""}
+                  viewOnly={viewOnly}
+                  onChange={(next) => setRecord(patchQualityTemplateField(record, field.id, next))}
+                />
               </FieldBlock>
             ))}
           </div>
           {formDef.rowFields.length ? (
-            <FormRows
+            <DeskTemplateFormRows
               hint={formDef.hint}
               fields={formDef.rowFields}
               rows={record.rows}
-              readOnly={readOnly}
+              viewOnly={viewOnly}
               onAdd={() => setRecord(addQualityTemplateRow(record))}
               onPatch={(rowId, field, next) => setRecord(patchQualityTemplateRow(record, rowId, field, next))}
               onRemove={(rowId) => setRecord(removeQualityTemplateRow(record, rowId))}
@@ -459,86 +438,6 @@ export function QualityTemplateForm({
         </div>
       </div>
     </ModalPortal>
-  );
-}
-
-function FormRows({
-  hint,
-  fields,
-  rows,
-  readOnly,
-  onAdd,
-  onPatch,
-  onRemove,
-}: {
-  hint?: string;
-  fields: readonly QualityFieldDef[];
-  rows: Array<{ id: string; cells: Record<string, string> }>;
-  readOnly: boolean;
-  onAdd: () => void;
-  onPatch: (rowId: string, field: string, value: string) => void;
-  onRemove: (rowId: string) => void;
-}) {
-  return (
-    <div className="mt-4">
-      {hint ? <p className="text-sm text-[#5b6f73]">{hint}</p> : null}
-      {!readOnly ? (
-        <div className="mt-2 flex justify-end">
-          <button type="button" onClick={onAdd} className="rounded-sm bg-steel px-3 py-1.5 text-sm text-white">
-            + Add row
-          </button>
-        </div>
-      ) : null}
-      <div className="mt-2 overflow-x-auto">
-        <table className="field-register-table min-w-full text-left">
-          <thead>
-            <tr>
-              {fields.map((field) => (
-                <th key={field.id} className="whitespace-nowrap px-2 py-2">
-                  {field.label}
-                </th>
-              ))}
-              <th className="px-2 py-2">
-                <span className="sr-only">Remove</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr className="border-t border-[#c5d4d4]">
-                <td colSpan={fields.length + 1} className="px-2 py-4 text-sm">
-                  Empty. Add a row to type.
-                </td>
-              </tr>
-            ) : (
-              rows.map((row) => (
-                <tr key={row.id} className="border-t border-[#c5d4d4]">
-                  {fields.map((field) => (
-                    <td key={field.id} className="px-2 py-2">
-                      <input
-                        className="paper-field"
-                        type={field.kind === "date" ? "date" : "text"}
-                        value={row.cells[field.id] || ""}
-                        readOnly={readOnly}
-                        aria-label={field.label}
-                        onChange={(event) => onPatch(row.id, field.id, event.target.value)}
-                      />
-                    </td>
-                  ))}
-                  <td className="px-2 py-2">
-                    {!readOnly ? (
-                      <button type="button" onClick={() => onRemove(row.id)} className="text-sm text-steel underline">
-                        Remove
-                      </button>
-                    ) : null}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
   );
 }
 

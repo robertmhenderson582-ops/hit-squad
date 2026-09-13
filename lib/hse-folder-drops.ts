@@ -1,4 +1,5 @@
 import { hasBuildDesk } from "./desk-role.ts";
+import { hseFolderWriteGate } from "./hse-folder-acl.ts";
 import {
   leadBriefAdapter,
   listStoredBriefs,
@@ -86,6 +87,8 @@ export function hseFolderSaveError(input: HseFolderSaveInput) {
 }
 
 export async function saveHseFolderDrop(user: HseDropUser, input: HseFolderSaveInput) {
+  const denied = await hseFolderWriteGate(user);
+  if (denied) return denied;
   const jobId = typeof input.jobId === "string" ? input.jobId.trim() : "";
   const folderId = typeof input.folderId === "string" ? input.folderId : "";
   const companyId = hseDropCompanyId(input);

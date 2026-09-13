@@ -214,6 +214,7 @@ export function HseDesk() {
               }
               siteLabel={selectedSite?.name}
               jobLabel={selectedJob?.title || selectedJob?.code}
+              canMutate={fillAcl.canSaveJob}
               onOpenFilled={(fileName) =>
                 openTemplateForm({
                   source: "catalog",

@@ -57,9 +57,6 @@ export async function listQualityPackageShelf(
   companyId?: string,
 ): Promise<{ kits: QualityPackageKit[]; acl: QualityPackageShelfAcl; store: "drive" | "server-json-file"; stored: boolean }> {
   const acl = await resolveQualityPackageShelfAcl(user);
-  if (!acl.canBuild && !acl.canAttach) {
-    return { kits: [], acl, store: "drive" as const, stored: true };
-  }
   const briefs = await hydrateLeadBriefStore("quality");
   const company = (companyId || "").trim();
   const kits = briefs

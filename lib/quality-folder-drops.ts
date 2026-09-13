@@ -1,4 +1,5 @@
 import { hasBuildDesk } from "./desk-role.ts";
+import { qualityFolderWriteGate } from "./quality-folder-acl.ts";
 import {
   leadBriefAdapter,
   listStoredBriefs,
@@ -86,6 +87,8 @@ export function qualityFolderSaveError(input: QualityFolderSaveInput) {
 }
 
 export async function saveQualityFolderDrop(user: QualityDropUser, input: QualityFolderSaveInput) {
+  const denied = await qualityFolderWriteGate(user);
+  if (denied) return denied;
   const jobId = typeof input.jobId === "string" ? input.jobId.trim() : "";
   const folderId = typeof input.folderId === "string" ? input.folderId : "";
   const companyId = qualityDropCompanyId(input);

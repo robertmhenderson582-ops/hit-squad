@@ -61,6 +61,7 @@ describe("vault ACL share hooks", () => {
 const dir = mkdtempSync(join(tmpdir(), "hs-vault-list-acl-"));
 const chance = { email: "chancec318@yahoo.com", name: "Chance Middlebrooks", role: "tester" as const };
 const nathan = { email: "nathanboyte@gmail.com", name: "Nathan Boyte", role: "tester" as const };
+const wendell = { email: "wlanderno@yahoo.com", name: "Wendell Landerno", role: "tester" as const };
 const novus = { email: "robertmhenderson582+novus@gmail.com", name: "Novus", role: "operator" as const };
 const owner = { email: "robertmhenderson582@gmail.com", name: "Robert Henderson", role: "owner" as const };
 
@@ -232,15 +233,15 @@ describe("vault listing ACL — hide site plumbing from users", () => {
       jobLabel: "Boiler 17",
       folderId: "jsa",
     };
-    const hseSaved = await saveHseFolderDrop(chance, {
+    const hseSaved = await saveHseFolderDrop(wendell, {
       ...hsePlace,
-      files: [pdf("jsa.pdf"), { name: "Madison JSA — Boiler 17 — 2026-09-12 — Chance.txt", type: "text/plain", data: Buffer.from("jsa").toString("base64") }],
+      files: [pdf("jsa.pdf"), { name: "Madison JSA — Boiler 17 — 2026-09-12 — Wendell.txt", type: "text/plain", data: Buffer.from("jsa").toString("base64") }],
     });
     assert.equal(hseSaved.ok, true);
     const hseFolder = await ensureHseVaultPath(drive, hsePlace);
-    await drive.createJson(hseFolder, "hse-briefs.json", "{}\n", { kind: "hse-briefs", who: chance.email });
-    await drive.createJson(hseFolder, "inbox.json", "{}\n", { kind: "inbox", who: chance.email });
-    const chanceHse = await listHseFolderDrops(chance, "job-b17", "jsa", "madison", {
+    await drive.createJson(hseFolder, "hse-briefs.json", "{}\n", { kind: "hse-briefs", who: wendell.email });
+    await drive.createJson(hseFolder, "inbox.json", "{}\n", { kind: "inbox", who: wendell.email });
+    const chanceHse = await listHseFolderDrops(wendell, "job-b17", "jsa", "madison", {
       siteLabel: "Wood River",
       jobLabel: "Boiler 17",
     });

@@ -159,6 +159,21 @@ describe("Quality always-displayed template forms", () => {
     const ownerAcl = qualityTemplateFillAcl(qualityCompanyDocAcl(owner), qualityPackageShelfAcl(owner));
     assert.equal(ownerAcl.canSaveJob, true);
     assert.equal(ownerAcl.canSavePrepackage, true);
+    const form = source("../components/QualityTemplateForm.tsx");
+    const fields = source("../components/DeskTemplateFormFields.tsx");
+    const drop = source("../components/QualityFolderDrop.tsx");
+    const desk = source("../components/QualityDesk.tsx");
+    const shelf = source("../components/QualityPackageShelf.tsx");
+    assert.match(form, /viewOnly = fillAcl.readOnly/);
+    assert.match(form, /DeskTemplateFieldInput/);
+    assert.match(fields, /paper-field-view/);
+    assert.match(fields, /disabled=\{viewOnly\}/);
+    assert.match(fields, /No rows on this form/);
+    assert.match(fields, /\+ Add row/);
+    assert.match(drop, /canMutate/);
+    assert.match(desk, /canMutate=\{fillAcl.canSaveJob\}/);
+    assert.match(shelf, /View only\. Open a filled copy/);
+    assert.doesNotMatch(shelf, /if \(!acl.canBuild && !acl.canAttach\) return null/);
   });
 
   it("locks Open form on every always-displayed radio and the company rail", () => {

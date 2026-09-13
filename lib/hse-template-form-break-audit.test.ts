@@ -14,7 +14,8 @@ import {
   useLeadBriefVaultForTests,
 } from "./lead-brief-store.ts";
 import { hseCompanyDocsJobId } from "./hse-company-docs.ts";
-import { listHseFolderDrops } from "./hse-folder-drops.ts";
+import { HSE_FOLDER_VIEW_ERROR } from "./hse-folder-acl.ts";
+import { listHseFolderDrops, saveHseFolderDrop } from "./hse-folder-drops.ts";
 import { hseReadyShelfJobId } from "./hse-package-shelf.ts";
 import {
   HSE_TEMPLATE_FEED_RULE,
@@ -231,6 +232,14 @@ describe("HSE template fill break matrix", { concurrency: 1 }, () => {
     });
     assert.equal(viewer.ok, false);
     if (!viewer.ok) assert.equal(viewer.error, HSE_TEMPLATE_FILL_VIEW_ERROR);
+
+    const folderViewer = await saveHseFolderDrop(chance, {
+      jobId: "job-b17",
+      folderId: "jsa",
+      files: [{ name: "sneak.pdf", type: "application/pdf", data: Buffer.from("no").toString("base64") }],
+    });
+    assert.equal(folderViewer.ok, false);
+    if (!folderViewer.ok) assert.equal(folderViewer.error, HSE_FOLDER_VIEW_ERROR);
 
     const pmKit = await saveHseTemplateFill(nathan, {
       dest: "prepackage",
