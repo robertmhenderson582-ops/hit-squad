@@ -1820,17 +1820,17 @@ test("verifyPassword caps previousHashes bcrypt checks", () => {
     ...Array.from({ length: 3 }, (_, i) => bcrypt.hashSync(`decoy-${i}`, 4)),
     ...Array.from({ length: PREVIOUS_HASH_VERIFY_CAP + 40 }, (_, i) => ("$2b$04$" + `pad${i}`).padEnd(60, "x")),
   ];
-  const user = {
+  const user: Parameters<typeof verifyPassword>[0] = {
     id: "cap-seat",
     email: "cap@example.com",
     name: "Cap",
-    role: "estimator" as const,
+    role: "estimator",
     passwordHash: primary,
     previousHashes: decoys,
     mustChangePassword: false,
   };
-  assert.equal(verifyPassword(user as any, "primary-ok-password"), true);
-  assert.equal(verifyPassword({ ...user, passwordHash: primary } as any, "nope-not-a-password"), false);
+  assert.equal(verifyPassword(user, "primary-ok-password"), true);
+  assert.equal(verifyPassword({ ...user, passwordHash: primary }, "nope-not-a-password"), false);
 });
 
 test("prepareLoginSeats returns while Drive hydrate is hung and owner can still login", async () => {
