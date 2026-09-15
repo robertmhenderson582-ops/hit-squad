@@ -5,7 +5,7 @@ import {
   qualityCompanyDocLabel,
   type QualityCompanyDocId,
 } from "./quality-company-docs.ts";
-import { qualityCompanyDocAcl, type QualityCompanyDocAcl } from "./quality-company-doc-acl.ts";
+import { qualityCompanyDocAcl, type QualityCompanyDocAcl, type QualityCompanyDocActor } from "./quality-company-doc-acl.ts";
 import {
   QUALITY_FORM_FIELDS,
   QUALITY_FORM_ROW_FIELDS,
@@ -543,7 +543,7 @@ export function qualityTemplateCanSave(acl: QualityTemplateFillAcl, dest: Qualit
 /** Seat lens wins over a stale Owner fillAcl so View as Wendell cannot show Save. */
 export function qualityTemplateFormViewOnly(
   fillAcl: QualityTemplateFillAcl,
-  seat?: { email?: string; name?: string; role?: string } | null,
+  seat?: QualityCompanyDocActor | null,
 ) {
   if (fillAcl.readOnly) return true;
   if (!seat) return false;

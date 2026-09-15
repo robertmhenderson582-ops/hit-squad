@@ -5,7 +5,7 @@ import {
   hseCompanyDocLabel,
   type HseCompanyDocId,
 } from "./hse-company-docs.ts";
-import { hseCompanyDocAcl, type HseCompanyDocAcl } from "./hse-company-doc-acl.ts";
+import { hseCompanyDocAcl, type HseCompanyDocAcl, type HseCompanyDocActor } from "./hse-company-doc-acl.ts";
 import { HSE_EXECUTE_LANES } from "./hse-module.ts";
 import {
   HSE_MODULE_CATALOG,
@@ -433,7 +433,7 @@ export function hseTemplateCanSave(acl: HseTemplateFillAcl, dest: HseTemplateFil
 /** Seat lens wins over a stale Owner fillAcl so View as Wendell cannot show Save. */
 export function hseTemplateFormViewOnly(
   fillAcl: HseTemplateFillAcl,
-  seat?: { email?: string; name?: string; role?: string } | null,
+  seat?: HseCompanyDocActor | null,
 ) {
   if (fillAcl.readOnly) return true;
   if (!seat) return false;
