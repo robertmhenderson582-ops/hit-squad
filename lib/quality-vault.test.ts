@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { QUALITY_BRIEFS_VAULT_KIND, QUALITY_BRIEFS_VAULT_NAME, QUALITY_CONTROL_MANUAL_FILE_ID, qualityFolderId, readVaultJson } from "./drive-data.ts";
-import { DRIVE_FOLDER_MIME, DriveApiError, memoryDrive } from "./drive-estimates.ts";
+import { DRIVE_FOLDER_MIME, DRIVE_SHORTCUT_MIME, DriveApiError, memoryDrive } from "./drive-estimates.ts";
 import {
   forgetLeadBriefCacheForTests,
   listStoredBriefs,
@@ -22,6 +22,7 @@ import {
   QUALITY_VAULT_WRITE_ERROR,
   listQualityCompanyDocVaultFolders,
   isProtectedQualityCompanyDocFile,
+  ensureQualityVaultPath,
   listQualityVaultFiles,
   mergeVaultedQualityFiles,
   persistQualityVaultFiles,
@@ -104,6 +105,16 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
       ["stamp.pdf:true", "local.pdf:false"],
     );
     assert.match(QUALITY_UNVAULTED_MARK, /on this desk only/);
+    assert.deepEqual(
+      qualityVaultPath({
+        companyId: "madison",
+        companyLabel: "Phillips 66",
+        siteLabel: "Wood River — Roxana, IL",
+        jobLabel: "Madison CAT 2 (Pit Stop)",
+        folderId: "flange-log",
+      }),
+      ["Phillips 66", "Wood River - Roxana, IL", "Madison CAT 2 (Pit Stop)", "Flange Log"],
+    );
   });
 
   it("writes the real file plus quality-briefs.json under the Quality room path", async () => {
@@ -217,6 +228,150 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
     assert.equal(buckets.stored, true);
     assert.equal(buckets.filesByFolder["quality-control-manual"]?.some((file) => file.name === "qc-manual.pdf"), true);
     assert.equal(buckets.filesByFolder["code-documents"]?.some((file) => file.name === "x.pdf" && file.type === "application/pdf"), true);
+  });
+
+  it("does not treat a same-name file as a folder parent and still creates the job path", async () => {
+    const drive = memoryDrive();
+    const root = qualityFolderId();
+    drive.tree.set("file-madison", {
+      file: {
+        id: "file-madison",
+        name: "Madison",
+        mimeType: "application/pdf",
+        parents: [root],
+      },
+      bytes: new Uint8Array([1]),
+    });
+    const created: string[] = [];
+    const folderId = await ensureQualityVaultPath(
+      drive,
+      {
+        companyId: "madison",
+        siteLabel: "Wood River — Roxana, IL",
+        jobLabel: "Madison CAT 2 (Pit Stop)",
+        folderId: "flange-log",
+      },
+      created,
+    );
+    assert.ok(folderId);
+    assert.ok(created.length >= 3);
+    const madison = (await drive.listChildren(root)).find(
+      (row) => row.name === "Madison" && row.mimeType === DRIVE_FOLDER_MIME,
+    );
+    assert.ok(madison);
+    assert.notEqual(madison.id, "file-madison");
+    const site = await child(drive, madison.id, "Wood River - Roxana, IL");
+    assert.ok(site);
+    const job = await child(drive, site.id, "Madison CAT 2 (Pit Stop)");
+    assert.ok(job);
+    const folder = await child(drive, job.id, "Flange Log");
+    assert.ok(folder);
+    assert.equal(folder.id, folderId);
+  });
+
+  it("follows a shortcut-to-folder instead of POSTing a child under the shortcut id", async () => {
+    const drive = memoryDrive();
+    const root = qualityFolderId();
+    const real = await drive.createFolder(root, "Phillips 66");
+    drive.tree.set("shortcut-p66", {
+      file: {
+        id: "shortcut-p66",
+        name: "Phillips 66",
+        mimeType: DRIVE_SHORTCUT_MIME,
+        parents: [root],
+        shortcutDetails: { targetId: real.id, targetMimeType: DRIVE_FOLDER_MIME },
+      },
+      bytes: new Uint8Array(),
+    });
+    drive.tree.delete(real.id);
+    drive.tree.set(real.id, {
+      file: { ...real, parents: ["other-root"] },
+      bytes: new Uint8Array(),
+    });
+    const created: string[] = [];
+    const folderId = await ensureQualityVaultPath(
+      drive,
+      {
+        companyLabel: "Phillips 66",
+        siteLabel: "Wood River — Roxana, IL",
+        jobLabel: "Madison CAT 2 (Pit Stop)",
+        folderId: "flange-log",
+      },
+      created,
+    );
+    const site = await child(drive, real.id, "Wood River - Roxana, IL");
+    assert.ok(site);
+    assert.equal(site.parents?.includes(real.id), true);
+    assert.equal(site.parents?.includes("shortcut-p66"), false);
+    const job = await child(drive, site.id, "Madison CAT 2 (Pit Stop)");
+    assert.ok(job);
+    const folder = await child(drive, job.id, "Flange Log");
+    assert.ok(folder);
+    assert.equal(folder.id, folderId);
+  });
+
+  it("recovers a createFolder 400 when the named folder is already on Drive", async () => {
+    const inner = memoryDrive();
+    const root = qualityFolderId();
+    const existing = await inner.createFolder(root, "Madison");
+    let hidMadison = true;
+    const drive = {
+      ...inner,
+      configured: true,
+      async listChildren(folderId: string) {
+        const kids = await inner.listChildren(folderId);
+        if (hidMadison && folderId === root) {
+          hidMadison = false;
+          return kids.filter((row) => row.name !== "Madison");
+        }
+        return kids;
+      },
+      async createFolder(parentId: string, name: string) {
+        if (name === "Madison") throw new DriveApiError(400, "400 The specified parent is not a folder.");
+        return inner.createFolder(parentId, name);
+      },
+    };
+    const folderId = await ensureQualityVaultPath(drive, {
+      companyId: "madison",
+      siteLabel: "Wood River",
+      jobLabel: "Boiler 17",
+      folderId: "flange-log",
+    });
+    assert.ok(folderId);
+    const site = await child(inner, existing.id, "Wood River");
+    assert.ok(site);
+  });
+
+  it("fails closed on an unrecovered folder 400 and rolls back empty segments", async () => {
+    const inner = memoryDrive();
+    resetLeadBriefStoreForTests(join(dir, "folder-400"));
+    const broken = {
+      ...inner,
+      configured: true,
+      async createFolder() {
+        throw new DriveApiError(400, "400 The specified parent is not a folder.");
+      },
+    };
+    useLeadBriefVaultForTests(broken);
+    const failed = await saveQualityFolderDrop(owner, {
+      jobId: "job-cat2",
+      folderId: "flange-log",
+      companyId: "madison",
+      companyLabel: "Phillips 66",
+      siteLabel: "Wood River — Roxana, IL",
+      jobLabel: "Madison CAT 2 (Pit Stop)",
+      files: [pdf("flange-log.pdf")],
+    });
+    assert.equal(failed.ok, false);
+    if (!failed.ok) {
+      assert.equal(failed.status, 503);
+      assert.match(failed.error, /Could not save to the Quality vault/);
+    }
+    assert.equal((await inner.listChildren(qualityFolderId())).length, 0);
+    assert.equal(
+      (await listStoredBriefs("quality", owner.email, { jobId: "job-cat2", folderId: "flange-log" })).length,
+      0,
+    );
   });
 
   it("fails closed when Drive is missing and does not advertise a local brief as saved", async () => {

@@ -1,6 +1,15 @@
 import { companyName, type CompanyId } from "./companies.ts";
 import { QUALITY_BRIEFS_VAULT_NAME, QUALITY_CONTROL_MANUAL_FILE_ID, briefsFolderId, qualityFolderId } from "./drive-data.ts";
-import { DRIVE_FOLDER_MIME, DriveApiError, type DriveAdapter, type DriveFile } from "./drive-estimates.ts";
+import {
+  DRIVE_FOLDER_MIME,
+  DriveApiError,
+  driveFolderName,
+  isDriveFolderRow,
+  sameDriveFolderName,
+  writableDriveFolderId,
+  type DriveAdapter,
+  type DriveFile,
+} from "./drive-estimates.ts";
 import type { LeadFile } from "./lead-briefs.ts";
 import {
   QUALITY_COMPANY_DOC_CATALOG,
@@ -69,13 +78,7 @@ export function qualityVaultWriteUserError(error: unknown, ownerFacing: boolean)
 }
 
 export function qualityVaultFolderName(name: string) {
-  const cleaned = name
-    .replace(/[\\/]+/g, " - ")
-    .replace(/\s+/g, " ")
-    .replace(/[<>:"|?*]/g, "-")
-    .trim()
-    .slice(0, 80);
-  return cleaned || "folder";
+  return driveFolderName(name);
 }
 
 export function qualityCompanyVaultLabel(companyId?: string, companyLabel?: string) {
@@ -126,15 +129,27 @@ export async function ensureQualityVaultPath(
   let parent = qualityFolderId();
   for (const name of qualityVaultPath(place)) {
     const kids = await drive.listChildren!(parent);
-    const existing = kids.find((row) => row.name === name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
-    if (existing?.id) {
-      parent = existing.id;
+    const existing = kids.find((row) => sameDriveFolderName(row.name, name) && isDriveFolderRow(row));
+    const existingId = writableDriveFolderId(existing);
+    if (existingId) {
+      parent = existingId;
       continue;
     }
-    const folder = await drive.createFolder!(parent, name);
-    if (!folder?.id) throw new Error(QUALITY_VAULT_WRITE_ERROR);
-    created.push(folder.id);
-    parent = folder.id;
+    try {
+      const folder = await drive.createFolder!(parent, name);
+      const folderId = writableDriveFolderId(folder) || folder?.id;
+      if (!folderId) throw new Error(QUALITY_VAULT_WRITE_ERROR);
+      created.push(folderId);
+      parent = folderId;
+    } catch (error) {
+      if (!(error instanceof DriveApiError) || (error.status !== 400 && error.status !== 403)) throw error;
+      const again = (await drive.listChildren!(parent)).find(
+        (row) => sameDriveFolderName(row.name, name) && isDriveFolderRow(row),
+      );
+      const recovered = writableDriveFolderId(again);
+      if (!recovered) throw error;
+      parent = recovered;
+    }
   }
   return parent;
 }
@@ -283,7 +298,7 @@ export function qualityLibraryLockFromKids(kids: DriveFile[]) {
 }
 
 function isQualityVaultFolder(row: DriveFile) {
-  return Boolean(row.id && row.name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
+  return isDriveFolderRow(row);
 }
 
 export function isProtectedQualityCompanyDocFile(fileId?: string | null) {
@@ -309,7 +324,10 @@ function qualityVaultListedFile(row: DriveFile): QualityVaultListedName {
 
 async function findQualityVaultChild(drive: DriveAdapter, parent: string, name: string) {
   const kids = await drive.listChildren!(parent);
-  return kids.find((row) => row.name === name && isQualityVaultFolder(row)) ?? null;
+  const existing = kids.find((row) => sameDriveFolderName(row.name, name) && isQualityVaultFolder(row));
+  if (!existing) return null;
+  const id = writableDriveFolderId(existing);
+  return id ? { ...existing, id } : null;
 }
 
 /**
@@ -349,7 +367,7 @@ export async function listQualityCompanyDocVaultFolders(
     const listed = await Promise.all(
       folders.map(async (folder) => {
         const label = qualityVaultFolderName(qualityCompanyDocLabel(folder.id, place.companyId));
-        const bucket = bucketKids.find((row) => row.name === label && isQualityVaultFolder(row));
+        const bucket = bucketKids.find((row) => sameDriveFolderName(row.name, label) && isQualityVaultFolder(row));
         if (!bucket?.id) {
           return [folder.id, [] as QualityVaultListedName[], { locked: false, known: true }] as const;
         }
@@ -408,11 +426,12 @@ export async function listQualityVaultFiles(
     let parent = qualityFolderId();
     for (const name of qualityVaultPath(place)) {
       const kids = await drive!.listChildren!(parent);
-      const existing = kids.find((row) => row.name === name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
-      if (!existing?.id) {
+      const existing = kids.find((row) => sameDriveFolderName(row.name, name) && isQualityVaultFolder(row));
+      const existingId = writableDriveFolderId(existing);
+      if (!existingId) {
         return { files: [] as QualityVaultListedName[], locked: false, locksKnown: true, store: "drive" as const, stored: true as const };
       }
-      parent = existing.id;
+      parent = existingId;
     }
     const kids = await drive!.listChildren!(parent);
     const files = filterVaultListedFiles(
@@ -565,11 +584,12 @@ export async function readQualityVaultFile(
     let parent = qualityFolderId();
     for (const name of qualityVaultPath(place)) {
       const kids = await drive.listChildren!(parent);
-      const existing = kids.find((row) => row.name === name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
-      if (!existing?.id) {
+      const existing = kids.find((row) => sameDriveFolderName(row.name, name) && isQualityVaultFolder(row));
+      const existingId = writableDriveFolderId(existing);
+      if (!existingId) {
         return { file: null, store: "drive" as const, stored: true as const };
       }
-      parent = existing.id;
+      parent = existingId;
     }
     const kids = await drive.listChildren!(parent);
     const row = kids.find((item) => qualityVaultFileVisible(item, place.who) && item.name === wanted);
