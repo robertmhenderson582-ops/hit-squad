@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   const incomingClaim = await readSeatClaim(cookieValue(request, SEAT_CLAIM_COOKIE));
   // Cookie / local seats can authenticate if Drive stalls. Soft-timeout hydrate
   // + persist — hung seats.json left LoginForm submitting on CHECKING SESSION.
-  const { hydrateMs, persistMs } = await prepareLoginSeats({ email, claim: incomingClaim });
+  const { hydrateMs, persistMs, hydrated } = await prepareLoginSeats({ email, claim: incomingClaim });
 
   const outcome = loginOutcome({
     email,
@@ -87,6 +87,12 @@ export async function POST(request: Request) {
   }
 
   if (outcome.status === "needsCreate") {
+    if (!hydrated) {
+      return NextResponse.json(
+        { error: "Desk vault is catching up. Try again in a moment.", vaultPersisted: false },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ needsCreate: true });
   }
   if (outcome.status === "needsPassword") {

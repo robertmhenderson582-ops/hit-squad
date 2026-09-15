@@ -34,6 +34,19 @@ test("existing-hash seat sees the password field without a probe hop", () => {
   assert.equal(login.includes("Need to get back in?"), true);
 });
 
+test("unhydrated vault 503 keeps LoginForm on password, not FIRST SIGN-IN", () => {
+  const route = readFileSync(fileURLToPath(new URL("../app/api/auth/login/route.ts", import.meta.url)), "utf8");
+  const session = readFileSync(fileURLToPath(new URL("../components/SessionProvider.tsx", import.meta.url)), "utf8");
+  const login = readFileSync(fileURLToPath(new URL("../components/LoginForm.tsx", import.meta.url)), "utf8");
+  assert.match(route, /if \(!hydrated\)/);
+  assert.match(route, /Desk vault is catching up\. Try again in a moment\./);
+  assert.match(route, /vaultPersisted: false/);
+  assert.match(session, /data\.needsCreate === true \? "create" : "password"/);
+  assert.match(session, /if \(data\.needsCreate === true\) \{\s*return "create";/);
+  assert.match(login, /if \(next === "create"\)/);
+  assert.match(login, /FIRST SIGN-IN/);
+});
+
 test("needsCreate still switches to one create step, never for the owner", () => {
   assert.equal(loginShowsCreateFields("create", TESTER), true);
   assert.equal(loginShowsPasswordField("create", TESTER), false);
