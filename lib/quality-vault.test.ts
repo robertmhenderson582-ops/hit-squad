@@ -17,7 +17,10 @@ import { qualityDropLeaks } from "./quality-vault-shared.ts";
 import {
   QUALITY_LIBRARY_LOCK_NAME,
   QUALITY_UNVAULTED_MARK,
+  QUALITY_VAULT_FOLDER_ERROR,
   QUALITY_VAULT_MISSING_ERROR,
+  QUALITY_VAULT_OAUTH_ERROR,
+  QUALITY_VAULT_QUOTA_ERROR,
   QUALITY_VAULT_SHARE_ERROR,
   QUALITY_VAULT_WRITE_ERROR,
   listQualityCompanyDocVaultFolders,
@@ -365,7 +368,7 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
     assert.equal(failed.ok, false);
     if (!failed.ok) {
       assert.equal(failed.status, 503);
-      assert.match(failed.error, /Could not save to the Quality vault/);
+      assert.equal(failed.error, QUALITY_VAULT_FOLDER_ERROR);
     }
     assert.equal((await inner.listChildren(qualityFolderId())).length, 0);
     assert.equal(
@@ -458,9 +461,25 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
     assert.equal(qualityVaultWriteUserError(leaked, false), QUALITY_VAULT_WRITE_ERROR);
     assert.equal(qualityVaultWriteUserError(leaked, true), QUALITY_VAULT_SHARE_ERROR);
     assert.equal(qualityVaultWriteUserError(new DriveApiError(404, "folder 1A7anV1UKx8m7IgUW2uVpwWHxB5fHerOg"), true), QUALITY_VAULT_MISSING_ERROR);
+    assert.equal(
+      qualityVaultWriteUserError(
+        new DriveApiError(403, "Quota exceeded for quota metric 'Total Query Cost' and limit 'Units per minute per user'"),
+        true,
+      ),
+      QUALITY_VAULT_QUOTA_ERROR,
+    );
+    assert.equal(qualityVaultWriteUserError(new DriveApiError(400, "invalid_grant"), true), QUALITY_VAULT_OAUTH_ERROR);
+    assert.equal(
+      qualityVaultWriteUserError(new DriveApiError(400, "400 The specified parent is not a folder."), true),
+      QUALITY_VAULT_FOLDER_ERROR,
+    );
+    assert.equal(qualityVaultWriteUserError(new DriveApiError(403, "Quota exceeded for quota metric 'Total Query Cost'"), false), QUALITY_VAULT_WRITE_ERROR);
     assert.equal(qualityDropLeaks(QUALITY_VAULT_WRITE_ERROR), false);
     assert.equal(qualityDropLeaks(QUALITY_VAULT_SHARE_ERROR), false);
     assert.equal(qualityDropLeaks(QUALITY_VAULT_MISSING_ERROR), false);
+    assert.equal(qualityDropLeaks(QUALITY_VAULT_QUOTA_ERROR), false);
+    assert.equal(qualityDropLeaks(QUALITY_VAULT_OAUTH_ERROR), false);
+    assert.equal(qualityDropLeaks(QUALITY_VAULT_FOLDER_ERROR), false);
     assert.equal(qualityDropLeaks(leaked.message), true);
 
     const drive = memoryDrive();

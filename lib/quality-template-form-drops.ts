@@ -1,5 +1,5 @@
 import { hasBuildDesk } from "./desk-role.ts";
-import { DriveApiError } from "./drive-estimates.ts";
+import { DriveApiError, driveFailureKind } from "./drive-estimates.ts";
 import {
   leadBriefAdapter,
   listStoredBriefs,
@@ -448,6 +448,8 @@ export async function removeQualityTemplateFill(user: QualityTemplateFillUser, i
       ripple,
     };
   } catch (error) {
+    const status = error instanceof DriveApiError ? error.status : 0;
+    console.warn(`quality-vault: template write failed; ${status || "err"} ${driveFailureKind(error)}`);
     return {
       ok: false as const,
       status: 503,

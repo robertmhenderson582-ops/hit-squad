@@ -20,7 +20,7 @@ import {
   showsHseFolderDesk,
   type HseFolderId,
 } from "./hse-folders.ts";
-import { DriveApiError } from "./drive-estimates.ts";
+import { DriveApiError, driveFailureKind } from "./drive-estimates.ts";
 import { isHseReadyShelfJobId } from "./hse-package-shelf.ts";
 import {
   listHseVaultFiles,
@@ -157,7 +157,7 @@ export async function saveHseFolderDrop(user: HseDropUser, input: HseFolderSaveI
     }
   } catch (error) {
     const status = error instanceof DriveApiError ? error.status : 0;
-    console.warn(`hse-vault: folder write failed; ${status || "err"}`);
+    console.warn(`hse-vault: folder write failed; ${status || "err"} ${driveFailureKind(error)}`);
     return {
       ok: false as const,
       status: 503,

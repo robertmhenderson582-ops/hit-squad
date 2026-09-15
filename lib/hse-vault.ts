@@ -3,6 +3,7 @@ import { HSE_BRIEFS_VAULT_NAME, briefsFolderId, hseFolderId } from "./drive-data
 import {
   DRIVE_FOLDER_MIME,
   DriveApiError,
+  driveFailureKind,
   driveFolderName,
   isDriveFolderRow,
   sameDriveFolderName,
@@ -27,7 +28,10 @@ import {
   HSE_LIBRARY_LOCK_KIND,
   HSE_LIBRARY_LOCK_NAME,
   HSE_UNVAULTED_MARK,
+  HSE_VAULT_FOLDER_ERROR,
   HSE_VAULT_MISSING_ERROR,
+  HSE_VAULT_OAUTH_ERROR,
+  HSE_VAULT_QUOTA_ERROR,
   HSE_VAULT_SHARE_ERROR,
   HSE_VAULT_WRITE_ERROR,
   isHseLibraryLockName,
@@ -47,7 +51,10 @@ export {
   HSE_LIBRARY_LOCK_KIND,
   HSE_LIBRARY_LOCK_NAME,
   HSE_UNVAULTED_MARK,
+  HSE_VAULT_FOLDER_ERROR,
   HSE_VAULT_MISSING_ERROR,
+  HSE_VAULT_OAUTH_ERROR,
+  HSE_VAULT_QUOTA_ERROR,
   HSE_VAULT_SHARE_ERROR,
   HSE_VAULT_WRITE_ERROR,
   isHseLibraryLockName,
@@ -68,12 +75,15 @@ export function hseVaultDriveStatus(error: unknown) {
   return 0;
 }
 
-/** Testers always get HSE_VAULT_WRITE_ERROR. Owner sees share/missing copy on 403/404. */
+/** Testers always get HSE_VAULT_WRITE_ERROR. Owner sees quota / oauth / folder / share / missing. */
 export function hseVaultWriteUserError(error: unknown, ownerFacing: boolean) {
   if (!ownerFacing) return HSE_VAULT_WRITE_ERROR;
-  const status = hseVaultDriveStatus(error);
-  if (status === 403) return HSE_VAULT_SHARE_ERROR;
-  if (status === 404) return HSE_VAULT_MISSING_ERROR;
+  const kind = driveFailureKind(error);
+  if (kind === "quota") return HSE_VAULT_QUOTA_ERROR;
+  if (kind === "oauth") return HSE_VAULT_OAUTH_ERROR;
+  if (kind === "folder") return HSE_VAULT_FOLDER_ERROR;
+  if (kind === "share") return HSE_VAULT_SHARE_ERROR;
+  if (kind === "missing") return HSE_VAULT_MISSING_ERROR;
   return HSE_VAULT_WRITE_ERROR;
 }
 

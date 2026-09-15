@@ -3,6 +3,7 @@ import { QUALITY_BRIEFS_VAULT_NAME, QUALITY_CONTROL_MANUAL_FILE_ID, briefsFolder
 import {
   DRIVE_FOLDER_MIME,
   DriveApiError,
+  driveFailureKind,
   driveFolderName,
   isDriveFolderRow,
   sameDriveFolderName,
@@ -27,7 +28,10 @@ import {
   QUALITY_LIBRARY_LOCK_KIND,
   QUALITY_LIBRARY_LOCK_NAME,
   QUALITY_UNVAULTED_MARK,
+  QUALITY_VAULT_FOLDER_ERROR,
   QUALITY_VAULT_MISSING_ERROR,
+  QUALITY_VAULT_OAUTH_ERROR,
+  QUALITY_VAULT_QUOTA_ERROR,
   QUALITY_VAULT_SHARE_ERROR,
   QUALITY_VAULT_WRITE_ERROR,
   isQualityLibraryLockName,
@@ -47,7 +51,10 @@ export {
   QUALITY_LIBRARY_LOCK_KIND,
   QUALITY_LIBRARY_LOCK_NAME,
   QUALITY_UNVAULTED_MARK,
+  QUALITY_VAULT_FOLDER_ERROR,
   QUALITY_VAULT_MISSING_ERROR,
+  QUALITY_VAULT_OAUTH_ERROR,
+  QUALITY_VAULT_QUOTA_ERROR,
   QUALITY_VAULT_SHARE_ERROR,
   QUALITY_VAULT_WRITE_ERROR,
   isQualityLibraryLockName,
@@ -68,12 +75,15 @@ export function qualityVaultDriveStatus(error: unknown) {
   return 0;
 }
 
-/** Testers always get QUALITY_VAULT_WRITE_ERROR. Owner sees share/missing copy on 403/404. */
+/** Testers always get QUALITY_VAULT_WRITE_ERROR. Owner sees quota / oauth / folder / share / missing. */
 export function qualityVaultWriteUserError(error: unknown, ownerFacing: boolean) {
   if (!ownerFacing) return QUALITY_VAULT_WRITE_ERROR;
-  const status = qualityVaultDriveStatus(error);
-  if (status === 403) return QUALITY_VAULT_SHARE_ERROR;
-  if (status === 404) return QUALITY_VAULT_MISSING_ERROR;
+  const kind = driveFailureKind(error);
+  if (kind === "quota") return QUALITY_VAULT_QUOTA_ERROR;
+  if (kind === "oauth") return QUALITY_VAULT_OAUTH_ERROR;
+  if (kind === "folder") return QUALITY_VAULT_FOLDER_ERROR;
+  if (kind === "share") return QUALITY_VAULT_SHARE_ERROR;
+  if (kind === "missing") return QUALITY_VAULT_MISSING_ERROR;
   return QUALITY_VAULT_WRITE_ERROR;
 }
 
