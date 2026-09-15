@@ -1,6 +1,15 @@
 import { companyName, type CompanyId } from "./companies.ts";
 import { HSE_BRIEFS_VAULT_NAME, briefsFolderId, hseFolderId } from "./drive-data.ts";
-import { DRIVE_FOLDER_MIME, DriveApiError, type DriveAdapter, type DriveFile } from "./drive-estimates.ts";
+import {
+  DRIVE_FOLDER_MIME,
+  DriveApiError,
+  driveFolderName,
+  isDriveFolderRow,
+  sameDriveFolderName,
+  writableDriveFolderId,
+  type DriveAdapter,
+  type DriveFile,
+} from "./drive-estimates.ts";
 import type { LeadFile } from "./lead-briefs.ts";
 import {
   HSE_COMPANY_DOC_CATALOG,
@@ -69,13 +78,7 @@ export function hseVaultWriteUserError(error: unknown, ownerFacing: boolean) {
 }
 
 export function hseVaultFolderName(name: string) {
-  const cleaned = name
-    .replace(/[\\/]+/g, " - ")
-    .replace(/\s+/g, " ")
-    .replace(/[<>:"|?*]/g, "-")
-    .trim()
-    .slice(0, 80);
-  return cleaned || "folder";
+  return driveFolderName(name);
 }
 
 export function hseCompanyVaultLabel(companyId?: string, companyLabel?: string) {
@@ -126,15 +129,27 @@ export async function ensureHseVaultPath(
   let parent = hseFolderId();
   for (const name of hseVaultPath(place)) {
     const kids = await drive.listChildren!(parent);
-    const existing = kids.find((row) => row.name === name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
-    if (existing?.id) {
-      parent = existing.id;
+    const existing = kids.find((row) => sameDriveFolderName(row.name, name) && isDriveFolderRow(row));
+    const existingId = writableDriveFolderId(existing);
+    if (existingId) {
+      parent = existingId;
       continue;
     }
-    const folder = await drive.createFolder!(parent, name);
-    if (!folder?.id) throw new Error(HSE_VAULT_WRITE_ERROR);
-    created.push(folder.id);
-    parent = folder.id;
+    try {
+      const folder = await drive.createFolder!(parent, name);
+      const folderId = writableDriveFolderId(folder) || folder?.id;
+      if (!folderId) throw new Error(HSE_VAULT_WRITE_ERROR);
+      created.push(folderId);
+      parent = folderId;
+    } catch (error) {
+      if (!(error instanceof DriveApiError) || (error.status !== 400 && error.status !== 403)) throw error;
+      const again = (await drive.listChildren!(parent)).find(
+        (row) => sameDriveFolderName(row.name, name) && isDriveFolderRow(row),
+      );
+      const recovered = writableDriveFolderId(again);
+      if (!recovered) throw error;
+      parent = recovered;
+    }
   }
   return parent;
 }
@@ -283,7 +298,7 @@ export function hseLibraryLockFromKids(kids: DriveFile[]) {
 }
 
 function isHseVaultFolder(row: DriveFile) {
-  return Boolean(row.id && row.name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
+  return isDriveFolderRow(row);
 }
 
 /** No standing HSE PDF id is checked in. Empty-but-correct vault folders are enough. */
@@ -310,7 +325,10 @@ function hseVaultListedFile(row: DriveFile): HseVaultListedName {
 
 async function findHseVaultChild(drive: DriveAdapter, parent: string, name: string) {
   const kids = await drive.listChildren!(parent);
-  return kids.find((row) => row.name === name && isHseVaultFolder(row)) ?? null;
+  const existing = kids.find((row) => sameDriveFolderName(row.name, name) && isHseVaultFolder(row));
+  if (!existing) return null;
+  const id = writableDriveFolderId(existing);
+  return id ? { ...existing, id } : null;
 }
 
 /**
@@ -350,7 +368,7 @@ export async function listHseCompanyDocVaultFolders(
     const listed = await Promise.all(
       folders.map(async (folder) => {
         const label = hseVaultFolderName(hseCompanyDocLabel(folder.id, place.companyId));
-        const bucket = bucketKids.find((row) => row.name === label && isHseVaultFolder(row));
+        const bucket = bucketKids.find((row) => sameDriveFolderName(row.name, label) && isHseVaultFolder(row));
         if (!bucket?.id) {
           return [folder.id, [] as HseVaultListedName[], { locked: false, known: true }] as const;
         }
@@ -409,11 +427,12 @@ export async function listHseVaultFiles(
     let parent = hseFolderId();
     for (const name of hseVaultPath(place)) {
       const kids = await drive!.listChildren!(parent);
-      const existing = kids.find((row) => row.name === name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
-      if (!existing?.id) {
+      const existing = kids.find((row) => sameDriveFolderName(row.name, name) && isHseVaultFolder(row));
+      const existingId = writableDriveFolderId(existing);
+      if (!existingId) {
         return { files: [] as HseVaultListedName[], locked: false, locksKnown: true, store: "drive" as const, stored: true as const };
       }
-      parent = existing.id;
+      parent = existingId;
     }
     const kids = await drive!.listChildren!(parent);
     const files = filterVaultListedFiles(
@@ -566,11 +585,12 @@ export async function readHseVaultFile(
     let parent = hseFolderId();
     for (const name of hseVaultPath(place)) {
       const kids = await drive.listChildren!(parent);
-      const existing = kids.find((row) => row.name === name && (!row.mimeType || row.mimeType === DRIVE_FOLDER_MIME));
-      if (!existing?.id) {
+      const existing = kids.find((row) => sameDriveFolderName(row.name, name) && isHseVaultFolder(row));
+      const existingId = writableDriveFolderId(existing);
+      if (!existingId) {
         return { file: null, store: "drive" as const, stored: true as const };
       }
-      parent = existing.id;
+      parent = existingId;
     }
     const kids = await drive.listChildren!(parent);
     const row = kids.find((item) => hseVaultFileVisible(item, place.who) && item.name === wanted);

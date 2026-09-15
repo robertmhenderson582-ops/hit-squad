@@ -22,7 +22,12 @@ import {
   upsertEstimateInDrive,
   vaultDriveAdapter,
   DriveApiError,
+  DRIVE_FOLDER_MIME,
+  DRIVE_SHORTCUT_MIME,
   SEATS_SA_OPEN_ERROR,
+  driveFolderName,
+  sameDriveFolderName,
+  writableDriveFolderId,
 } from "./drive-estimates.ts";
 import { estimateFileName, parseIncomingPack, publicPack, responseLeaksDrive, type EstimatePackSnapshot } from "./estimate-pack.ts";
 import { defaultPhaseSchedule } from "./phase-schedule.ts";
@@ -144,6 +149,13 @@ describe("drive estimate upsert", () => {
           headers: { "content-type": "application/json" },
         });
       }
+      if (url.includes("/drive/v3/files/folder") && method === "GET") {
+        assert.equal(headers.get("authorization"), "Bearer ya29.test-oauth");
+        return new Response(JSON.stringify({ id: "folder", mimeType: DRIVE_FOLDER_MIME }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
       if (url.startsWith("https://www.googleapis.com/upload/drive/v3/files")) {
         assert.equal(headers.get("authorization"), "Bearer ya29.test-oauth");
         return new Response(JSON.stringify({ id: "file-oauth-1", name: "wood-river-cat-2-pit-stop.json" }), {
@@ -160,11 +172,15 @@ describe("drive estimate upsert", () => {
         ownerEmail: "nathanboyte@gmail.com",
       });
       assert.equal(file.id, "file-oauth-1");
-      assert.equal(calls.length, 2);
       assert.equal(calls[0].url, "https://oauth2.googleapis.com/token");
       assert.equal(calls[0].method, "POST");
-      assert.match(calls[1].url, /upload\/drive\/v3\/files/);
-      assert.equal(calls[1].auth, "Bearer ya29.test-oauth");
+      assert.equal(
+        calls.some((call) => call.url.includes("/drive/v3/files/folder") && call.method === "GET"),
+        true,
+      );
+      const upload = calls.find((call) => call.url.includes("/upload/drive/v3/files"));
+      assert.ok(upload);
+      assert.equal(upload.auth, "Bearer ya29.test-oauth");
       await adapter.createJson("folder", "second.json", "{}", { packId: "new-second", ownerEmail: "nathanboyte@gmail.com" });
       assert.equal(calls.filter((call) => call.url === "https://oauth2.googleapis.com/token").length, 1);
       assert.match(calls[1].url, /supportsAllDrives=true/);
@@ -1319,6 +1335,131 @@ describe("drive estimate upsert", () => {
     } finally {
       globalThis.fetch = previous;
       console.warn = warn;
+      resetDriveTokenCache();
+    }
+  });
+});
+
+describe("Drive folder create", () => {
+  it("sanitizes job-tree names and refuses to treat a file as a folder parent", () => {
+    assert.equal(driveFolderName("Wood River — Roxana, IL"), "Wood River - Roxana, IL");
+    assert.equal(sameDriveFolderName("Wood River — Roxana, IL", "Wood River - Roxana, IL"), true);
+    assert.equal(writableDriveFolderId({ id: "file-1", mimeType: "application/pdf" }), null);
+    assert.equal(writableDriveFolderId({ id: "folder-1", mimeType: DRIVE_FOLDER_MIME }), "folder-1");
+    assert.equal(
+      writableDriveFolderId({
+        id: "shortcut-1",
+        mimeType: DRIVE_SHORTCUT_MIME,
+        shortcutDetails: { targetId: "real-folder", targetMimeType: DRIVE_FOLDER_MIME },
+      }),
+      "real-folder",
+    );
+  });
+
+  it("resolves a shortcut parent and still fail-closes when createFolder 400 cannot be recovered", async () => {
+    resetDriveTokenCache();
+    const calls: Array<{ method: string; url: string; body: string }> = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || "GET").toUpperCase();
+      const body = typeof init?.body === "string" ? init.body : "";
+      calls.push({ method, url, body });
+      if (url.startsWith("https://oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.test-oauth", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/drive/v3/files/shortcut-room") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            id: "shortcut-room",
+            mimeType: DRIVE_SHORTCUT_MIME,
+            shortcutDetails: { targetId: "real-room", targetMimeType: DRIVE_FOLDER_MIME },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.includes("/drive/v3/files/real-room") && method === "GET") {
+        return new Response(
+          JSON.stringify({ id: "real-room", mimeType: DRIVE_FOLDER_MIME, name: "Quality" }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.includes("/drive/v3/files") && !url.includes("/upload") && method === "GET" && url.includes("q=")) {
+        return new Response(JSON.stringify({ files: [] }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/drive/v3/files") && !url.includes("/upload") && method === "POST") {
+        const parsed = JSON.parse(body) as { name?: string; parents?: string[] };
+        assert.equal(parsed.parents?.[0], "real-room");
+        assert.equal(parsed.name, "Wood River - Roxana, IL");
+        assert.match(url, /supportsAllDrives=true/);
+        return new Response(JSON.stringify({ error: { message: "The specified parent is not a folder." } }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error(`unexpected fetch ${method} ${url}`);
+    }) as typeof fetch;
+    try {
+      const adapter = driveAdapter(oauthEnv);
+      await assert.rejects(() => adapter.createFolder!("shortcut-room", "Wood River — Roxana, IL"), (error: unknown) => {
+        assert.ok(error instanceof DriveApiError);
+        assert.equal(error.status, 400);
+        return true;
+      });
+      assert.equal(
+        calls.some((call) => call.method === "POST" && call.body.includes('"parents":["real-room"]')),
+        true,
+      );
+    } finally {
+      globalThis.fetch = previous;
+      resetDriveTokenCache();
+    }
+  });
+
+  it("reuses an existing folder after createFolder returns 400", async () => {
+    resetDriveTokenCache();
+    let posted = false;
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || "GET").toUpperCase();
+      if (url.startsWith("https://oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.test-oauth", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/drive/v3/files/room") && method === "GET") {
+        return new Response(JSON.stringify({ id: "room", mimeType: DRIVE_FOLDER_MIME }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/drive/v3/files") && !url.includes("/upload") && method === "GET" && url.includes("q=")) {
+        const files = posted
+          ? [{ id: "existing-site", name: "Wood River - Roxana, IL", mimeType: DRIVE_FOLDER_MIME }]
+          : [];
+        return new Response(JSON.stringify({ files }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/drive/v3/files") && method === "POST") {
+        posted = true;
+        return new Response(JSON.stringify({ error: { message: "The specified parent is not a folder." } }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error(`unexpected fetch ${method} ${url}`);
+    }) as typeof fetch;
+    try {
+      const adapter = driveAdapter(oauthEnv);
+      const folder = await adapter.createFolder!("room", "Wood River — Roxana, IL");
+      assert.equal(folder.id, "existing-site");
+      assert.equal(folder.mimeType, DRIVE_FOLDER_MIME);
+    } finally {
+      globalThis.fetch = previous;
       resetDriveTokenCache();
     }
   });

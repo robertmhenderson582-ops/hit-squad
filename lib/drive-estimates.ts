@@ -31,6 +31,7 @@ import {
 import { canonicalEmail, isOwnerIdentity } from "./identity.ts";
 
 export const DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
+export const DRIVE_SHORTCUT_MIME = "application/vnd.google-apps.shortcut";
 
 export type DriveFile = {
   id: string;
@@ -39,7 +40,42 @@ export type DriveFile = {
   modifiedTime?: string;
   mimeType?: string;
   parents?: string[];
+  shortcutDetails?: { targetId?: string; targetMimeType?: string };
 };
+
+/** Drive folder names. Em-dash / smart-quote labels from the job tree must not 400 files.create. */
+export function driveFolderName(name: string) {
+  const cleaned = name
+    .replace(/[\\/]+/g, " - ")
+    .replace(/[\u2012\u2013\u2014\u2015\u2212]/g, "-")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/\s+/g, " ")
+    .replace(/[<>:"|?*]/g, "-")
+    .trim()
+    .slice(0, 80);
+  return cleaned || "folder";
+}
+
+export function sameDriveFolderName(left: string, right: string) {
+  return driveFolderName(left) === driveFolderName(right);
+}
+
+/** Real folder id. Follows a shortcut-to-folder. Never treats missing mimeType as a folder. */
+export function writableDriveFolderId(row?: Pick<DriveFile, "id" | "mimeType" | "shortcutDetails"> | null) {
+  if (!row?.id) return null;
+  if (row.mimeType === DRIVE_FOLDER_MIME) return row.id;
+  if (row.mimeType === DRIVE_SHORTCUT_MIME) {
+    const target = (row.shortcutDetails?.targetId || "").trim();
+    const targetMime = row.shortcutDetails?.targetMimeType;
+    if (target && (!targetMime || targetMime === DRIVE_FOLDER_MIME)) return target;
+  }
+  return null;
+}
+
+export function isDriveFolderRow(row?: Pick<DriveFile, "id" | "name" | "mimeType" | "shortcutDetails"> | null) {
+  return Boolean(row?.id && row.name && writableDriveFolderId(row));
+}
 
 export type DriveAdapter = {
   configured: boolean;
@@ -263,19 +299,37 @@ export function memoryDrive(): DriveAdapter & {
       return files.get(fileId)?.content === content;
     },
     async listChildren(folderId) {
-      return [...tree.values()].map((row) => row.file).filter((file) => file.parents?.includes(folderId));
+      const resolved = writableDriveFolderId(tree.get(folderId)?.file) || folderId;
+      return [...tree.values()]
+        .map((row) => row.file)
+        .filter((file) => file.parents?.includes(resolved) || file.parents?.includes(folderId))
+        .map((file) => {
+          const target = writableDriveFolderId(file);
+          return target && target !== file.id ? { ...file, id: target, mimeType: DRIVE_FOLDER_MIME } : file;
+        });
     },
     async createFolder(parentId, name) {
+      const parent = tree.get(parentId)?.file;
+      const resolved = writableDriveFolderId(parent) || parentId;
+      if (parent && parent.mimeType && !writableDriveFolderId(parent)) {
+        throw new DriveApiError(400, "400 The specified parent is not a folder.");
+      }
       const existing = [...tree.values()].find(
-        (row) => row.file.parents?.includes(parentId) && row.file.name === name && row.file.mimeType === DRIVE_FOLDER_MIME,
+        (row) =>
+          (row.file.parents?.includes(resolved) || row.file.parents?.includes(parentId)) &&
+          sameDriveFolderName(row.file.name, name) &&
+          writableDriveFolderId(row.file),
       );
-      if (existing) return existing.file;
+      if (existing) {
+        const id = writableDriveFolderId(existing.file) || existing.file.id;
+        return { ...existing.file, id, mimeType: DRIVE_FOLDER_MIME, parents: [resolved] };
+      }
       n += 1;
       return putTree({
         id: `folder-${n}`,
-        name,
+        name: driveFolderName(name),
         mimeType: DRIVE_FOLDER_MIME,
-        parents: [parentId],
+        parents: [resolved],
       });
     },
     async uploadBytes(folderId, name, bytes, mimeType, properties) {
@@ -407,17 +461,20 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
     return { authorization: `Bearer ${token}`, ...extra };
   }
 
-  async function listByQuery(q: string, opts?: { accessible?: boolean }) {
+  async function listByQuery(q: string, opts?: { accessible?: boolean; allDrives?: boolean }) {
     const files: DriveFile[] = [];
     let pageToken = "";
     do {
       const params: Record<string, string> = {
         q,
-        fields: "nextPageToken,files(id,name,mimeType,parents,properties,modifiedTime)",
+        fields: "nextPageToken,files(id,name,mimeType,parents,properties,modifiedTime,shortcutDetails)",
         pageSize: "100",
         includeItemsFromAllDrives: "true",
       };
-      if (opts?.accessible) {
+      if (opts?.allDrives) {
+        // Shared Quality / HSE rooms: spaces=drive misses Team Drive children (empty or 400).
+        params.corpora = "allDrives";
+      } else if (opts?.accessible) {
         // Shared-with-me files live outside the SA My Drive. Do not set spaces=drive.
         params.corpora = "user";
       } else {
@@ -434,6 +491,66 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
     return files;
   }
 
+  async function getFileMetadata(fileId: string, fields: string) {
+    const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { fields }), {
+      headers: await authHeaders(),
+    });
+    const data = (await response.json().catch(() => null)) as (DriveFile & { error?: unknown }) | null;
+    if (!response.ok) throw driveHttpError(response.status, data, "stat");
+    if (!data?.id) throw new DriveApiError(response.status || 404, "stat");
+    return data;
+  }
+
+  async function resolveWritableFolderParent(folderId: string) {
+    try {
+      const row = await getFileMetadata(folderId, "id,name,mimeType,shortcutDetails");
+      const resolved = writableDriveFolderId(row);
+      if (resolved) return resolved;
+      if (row.mimeType && row.mimeType !== DRIVE_FOLDER_MIME) {
+        throw new DriveApiError(400, "400 The specified parent is not a folder.");
+      }
+    } catch (error) {
+      if (error instanceof DriveApiError && error.status === 400) throw error;
+    }
+    return folderId;
+  }
+
+  function listedFolderRow(row: DriveFile, parentId: string): DriveFile {
+    const target = writableDriveFolderId(row);
+    if (target && (row.mimeType === DRIVE_SHORTCUT_MIME || target !== row.id)) {
+      return { ...row, id: target, mimeType: DRIVE_FOLDER_MIME, parents: row.parents || [parentId] };
+    }
+    return row;
+  }
+
+  async function listChildrenOf(folderId: string) {
+    const parent = await resolveWritableFolderParent(folderId);
+    const q = `'${escapeDriveQueryValue(parent)}' in parents and trashed=false`;
+    const seen = new Map<string, DriveFile>();
+    for (const opts of [undefined, { accessible: true as const }, { allDrives: true as const }]) {
+      try {
+        for (const row of await listByQuery(q, opts)) {
+          const next = listedFolderRow(row, parent);
+          if (next.id && !seen.has(next.id)) seen.set(next.id, next);
+        }
+        if (seen.size) break;
+      } catch {
+        // Shared Quality / Data rooms live outside My Drive spaces=drive.
+      }
+    }
+    return [...seen.values()];
+  }
+
+  async function findNamedChildFolder(parentId: string, name: string) {
+    const wanted = driveFolderName(name);
+    const kids = await listChildrenOf(parentId);
+    const existing = kids.find((row) => sameDriveFolderName(row.name, wanted) && writableDriveFolderId(row));
+    if (!existing) return null;
+    const id = writableDriveFolderId(existing);
+    if (!id) return null;
+    return { id, name: existing.name || wanted, mimeType: DRIVE_FOLDER_MIME, parents: [parentId] };
+  }
+
   return {
     configured: true,
     async listJson(folderId) {
@@ -444,13 +561,14 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       return listByQuery(`${named}trashed=false and mimeType='application/json'`, { accessible: true });
     },
     async statFile(fileId) {
-      const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { fields: "id,name,modifiedTime,md5Checksum" }), {
-        headers: await authHeaders(),
-      });
-      const data = (await response.json().catch(() => null)) as (DriveFile & { error?: unknown }) | null;
-      if (!response.ok) throw driveHttpError(response.status, data, "stat");
-      if (!data?.id) throw new DriveApiError(response.status || 404, "stat");
-      return { id: data.id, name: data.name, modifiedTime: data.modifiedTime };
+      const data = await getFileMetadata(fileId, "id,name,mimeType,modifiedTime,md5Checksum,shortcutDetails");
+      return {
+        id: data.id,
+        name: data.name,
+        mimeType: data.mimeType,
+        modifiedTime: data.modifiedTime,
+        shortcutDetails: data.shortcutDetails,
+      };
     },
     async readJson(fileId) {
       const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { alt: "media" }), {
@@ -463,8 +581,9 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       return response.text();
     },
     async createJson(folderId, name, content, properties) {
+      const parent = await resolveWritableFolderParent(folderId);
       const boundary = `hs_pack_${Date.now()}`;
-      const meta = { name, parents: [folderId], mimeType: "application/json", properties };
+      const meta = { name, parents: [parent], mimeType: "application/json", properties };
       const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
       const response = await fetch(driveApiUrl("/upload/drive/v3/files", { uploadType: "multipart" }), {
         method: "POST",
@@ -521,28 +640,33 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       return confirmDriveWrite(getAccessToken, fileId, content);
     },
     async listChildren(folderId) {
-      const q = `'${escapeDriveQueryValue(folderId)}' in parents and trashed=false`;
-      try {
-        const kids = await listByQuery(q);
-        if (kids.length) return kids;
-      } catch {
-        // Shared Quality / Data rooms live outside My Drive spaces=drive.
-      }
-      return listByQuery(q, { accessible: true });
+      return listChildrenOf(folderId);
     },
     async createFolder(parentId, name) {
-      const response = await fetch(driveApiUrl("/drive/v3/files"), {
-        method: "POST",
-        headers: await authHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify({ name, mimeType: DRIVE_FOLDER_MIME, parents: [parentId] }),
-      });
+      const parent = await resolveWritableFolderParent(parentId);
+      const folderName = driveFolderName(name);
+      const existing = await findNamedChildFolder(parent, folderName);
+      if (existing) return existing;
+      const response = await fetch(
+        driveApiUrl("/drive/v3/files", { fields: "id,name,mimeType,parents" }),
+        {
+          method: "POST",
+          headers: await authHeaders({ "content-type": "application/json" }),
+          body: JSON.stringify({ name: folderName, mimeType: DRIVE_FOLDER_MIME, parents: [parent] }),
+        },
+      );
       const file = (await response.json()) as DriveFile & { error?: unknown };
-      if (!file.id) throw driveHttpError(response.status || 400, file, "folder");
-      return { id: file.id, name: file.name || name, mimeType: DRIVE_FOLDER_MIME, parents: [parentId] };
+      if (file.id) return { id: file.id, name: file.name || folderName, mimeType: DRIVE_FOLDER_MIME, parents: [parent] };
+      if (response.status === 400 || response.status === 403) {
+        const recovered = await findNamedChildFolder(parent, folderName);
+        if (recovered) return recovered;
+      }
+      throw driveHttpError(response.status || 400, file, "folder");
     },
     async uploadBytes(folderId, name, bytes, mimeType, properties) {
+      const parent = await resolveWritableFolderParent(folderId);
       const boundary = `hs_bytes_${Date.now()}`;
-      const meta = { name, parents: [folderId], mimeType, properties };
+      const meta = { name, parents: [parent], mimeType, properties };
       const head = Buffer.from(
         `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`,
       );
@@ -555,7 +679,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       });
       const file = (await response.json()) as DriveFile & { error?: unknown };
       if (!file.id) throw driveHttpError(response.status || 400, file, "upload");
-      return { id: file.id, name: file.name || name, mimeType, parents: [folderId], properties };
+      return { id: file.id, name: file.name || name, mimeType, parents: [parent], properties };
     },
     async updateBytes(fileId, bytes, mimeType) {
       const response = await fetch(
