@@ -9,11 +9,11 @@ import { HsePackageShelf } from "@/components/HsePackageShelf";
 import { HseTemplateForm, type HseTemplateFormSession } from "@/components/HseTemplateForm";
 import { HseVaultOwnerTree } from "@/components/HseVaultOwnerTree";
 import { useQualityHseJobTree } from "@/components/useQualityHseJobTree";
-import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useAlias, useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { viewAsInit } from "@/lib/desk-scope";
 import { assignedCompanyId, companyName, companyScopeFor, inferCompanyIdFromParts, type CompanyId } from "@/lib/companies";
-import { buildDeskChrome, isHseVaultSeat } from "@/lib/desk-role";
+import { buildDeskChrome, deskLensKey, isHseVaultSeat } from "@/lib/desk-role";
 import { hseRailCompanyId } from "@/lib/hse-company-docs";
 import {
   HSE_DESK_RADIOS,
@@ -44,7 +44,10 @@ import { hsePackageShelfAcl } from "@/lib/hse-package-shelf";
 export function HseDesk() {
   const alias = useAlias();
   const owner = useOwnerDesk();
+  const lens = useLensUser();
   const { user } = useSession();
+  const actor = lens ?? user;
+  const actorKey = deskLensKey(actor);
   const { tree, ready } = useQualityHseJobTree();
   const [pick, setPick] = useState<JobScopePick>(() => readJobScope(HSE_JOB_SCOPE_KEY));
   const [radio, setRadio] = useState<HseDeskRadioId>(() => readHseFolderPick(pick.jobId || "desk"));
@@ -70,10 +73,14 @@ export function HseDesk() {
   const [formSession, setFormSession] = useState<HseTemplateFormSession | null>(null);
   const [kits, setKits] = useState<Array<{ id: string; name: string }>>([]);
   const [fillAcl, setFillAcl] = useState<HseTemplateFillAcl>(() =>
-    hseTemplateFillAcl(hseCompanyDocAcl(user), hsePackageShelfAcl(user)),
+    hseTemplateFillAcl(hseCompanyDocAcl(actor), hsePackageShelfAcl(actor)),
   );
   const [formNote, setFormNote] = useState<string | null>(null);
   const [fillTick, setFillTick] = useState(0);
+
+  useEffect(() => {
+    setFillAcl(hseTemplateFillAcl(hseCompanyDocAcl(actor), hsePackageShelfAcl(actor)));
+  }, [actorKey]);
 
   useEffect(() => {
     if (!ready) return;
@@ -110,12 +117,12 @@ export function HseDesk() {
         );
       })
       .catch(() => {
-        if (!cancelled) setFillAcl(hseTemplateFillAcl(hseCompanyDocAcl(user), hsePackageShelfAcl(user)));
+        if (!cancelled) setFillAcl(hseTemplateFillAcl(hseCompanyDocAcl(actor), hsePackageShelfAcl(actor)));
       });
     return () => {
       cancelled = true;
     };
-  }, [companyId, owner?.viewAs, user?.email, vaultCompanyId, fillTick]);
+  }, [actorKey, companyId, owner?.viewAs, user?.email, vaultCompanyId, fillTick]);
 
   function openTemplateForm(session: HseTemplateFormSession) {
     setFormNote(null);

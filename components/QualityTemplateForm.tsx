@@ -5,7 +5,7 @@ import { DeskTemplateFieldInput, DeskTemplateFormRows } from "@/components/DeskT
 import { FieldBlock } from "@/components/FieldMark";
 import { JobScopePicks } from "@/components/JobScopePicks";
 import { ModalPortal } from "@/components/ModalPortal";
-import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useAlias, useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { viewAsInit } from "@/lib/desk-scope";
 import { qualityCompanyDocFileName } from "@/lib/quality-company-docs";
@@ -31,6 +31,7 @@ import {
   patchQualityTemplateRow,
   qualityFilledCopyName,
   qualityTemplateCanSave,
+  qualityTemplateFormViewOnly,
   qualityTemplateFormDef,
   qualityTemplateFormHasWork,
   qualityTemplateFormTitle,
@@ -91,6 +92,7 @@ export function QualityTemplateForm({
 }) {
   const alias = useAlias();
   const owner = useOwnerDesk();
+  const lens = useLensUser();
   const { user } = useSession();
   const def = session
     ? qualityTemplateFormDef({
@@ -167,7 +169,7 @@ export function QualityTemplateForm({
       sourceName: session?.fileName,
     });
   }, [def, destLabel, filledName, session?.fileName, user?.name]);
-  const viewOnly = fillAcl.readOnly;
+  const viewOnly = qualityTemplateFormViewOnly(fillAcl, lens);
   const canSave = !viewOnly && qualityTemplateCanSave(fillAcl, dest);
   const editing = Boolean(filledName);
 

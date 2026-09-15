@@ -49,6 +49,7 @@ import {
 } from "./hse-template-form-ripple.ts";
 import {
   readHseVaultFile,
+  rollbackHseVaultPersist,
   trashHseVaultFile,
   trashHseVaultNamedCopies,
   hseVaultWriteUserError,
@@ -192,6 +193,7 @@ export async function saveHseTemplateFill(user: HseTemplateFillUser, input: HseT
     return { ok: false as const, status: 400, error: named.error || HSE_TEMPLATE_FILL_PREPACKAGE_ERROR };
   }
   const packageId = existingId || newHsePackageId("label" in named ? named.label : "kit");
+  const kitJobId = hseReadyShelfJobId(packageId);
   const saved = await saveHsePackageShelfKit(user, {
     packageId,
     name: "label" in named ? named.label : existingId,
@@ -199,7 +201,32 @@ export async function saveHseTemplateFill(user: HseTemplateFillUser, input: HseT
     companyId,
     companyLabel,
   });
-  if (!saved.ok) return saved;
+  if (!saved.ok) {
+    await rollbackHseTemplateFillWrites({
+      user,
+      dest: "prepackage",
+      jobId: kitJobId,
+      companyId,
+      companyLabel,
+      jobLabel: "label" in named ? named.label : undefined,
+      folders: ["packages"],
+      fileName: incoming.name,
+    });
+    await rollbackHseVaultPersist(leadBriefAdapter("hse"), {
+      place: {
+        companyId,
+        companyLabel,
+        jobId: kitJobId,
+        jobLabel: "label" in named ? named.label : undefined,
+        folderId: "packages",
+        shelf: true,
+        packageLabel: "label" in named ? named.label : undefined,
+        who: user.email.trim().toLowerCase(),
+      },
+      fileNames: [incoming.name],
+    });
+    return saved;
+  }
   return {
     ...saved,
     dest: "prepackage" as const,

@@ -8,7 +8,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
+import { qualityFolderId } from "./drive-data.ts";
+import { DRIVE_FOLDER_MIME, memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
+import { qualityVaultPath } from "./quality-vault.ts";
 import {
   forgetLeadBriefCacheForTests,
   listStoredBriefs,
@@ -48,6 +50,7 @@ const dir = mkdtempSync(join(tmpdir(), "hs-quality-fill-break-"));
 const chance = { email: "chancec318@yahoo.com", name: "Chance Middlebrooks", role: "tester" as const };
 const nathan = { email: "nathanboyte@gmail.com", name: "Nathan Boyte", role: "tester" as const };
 const wendell = { email: "wlanderno@yahoo.com", name: "Wendell Landerno", role: "tester" as const };
+const owner = { email: "robertmhenderson582@gmail.com", name: "Robert Henderson", role: "owner" as const };
 
 afterEach(() => {
   forgetLeadBriefCacheForTests();
@@ -406,5 +409,88 @@ describe("Quality template fill break matrix", { concurrency: 1 }, () => {
       companyId: "madison",
     });
     assert.equal(missing.ok, false);
+  });
+
+  it("Owner saves a job fill and a Ready prepackage, then feeds both back out", async () => {
+    const drive = memoryDrive();
+    resetLeadBriefStoreForTests(join(dir, "break-owner"));
+    useLeadBriefVaultForTests(drive);
+    const jobFile = fillFile("Boiler 17");
+    const job = await saveQualityTemplateFill(owner, {
+      dest: "job",
+      jobId: "job-b17",
+      folderId: "flange-log",
+      companyId: "madison",
+      companyLabel: "Madison",
+      siteLabel: "Wood River",
+      jobLabel: "Boiler 17",
+      files: [jobFile],
+    });
+    assert.equal(job.ok, true);
+    if (!job.ok) return;
+    const fromJob = await readQualityTemplateFill(owner, {
+      dest: "job",
+      jobId: "job-b17",
+      folderId: "flange-log",
+      fileName: jobFile.name,
+      companyId: "madison",
+    });
+    assert.equal(fromJob.ok, true);
+    const kitFile = fillFile("Night kit");
+    const kit = await saveQualityTemplateFill(owner, {
+      dest: "prepackage",
+      packageName: "Night kit",
+      companyId: "madison",
+      companyLabel: "Madison",
+      files: [kitFile],
+    });
+    assert.equal(kit.ok, true);
+    if (!kit.ok) return;
+    const fromShelf = await readQualityTemplateFill(owner, {
+      dest: "prepackage",
+      packageId: kit.packageId,
+      fileName: kitFile.name,
+      companyId: "madison",
+    });
+    assert.equal(fromShelf.ok, true);
+    const rail = await listQualityCompanyDocDrop(owner, "forms", "madison");
+    assert.equal(rail.files.some((file) => file.name === jobFile.name || file.name === kitFile.name), false);
+  });
+
+  it("rolls back an empty Ready kit folder when the file write fails", async () => {
+    const inner = memoryDrive();
+    resetLeadBriefStoreForTests(join(dir, "break-kit-orphan"));
+    useLeadBriefVaultForTests({
+      ...inner,
+      uploadBytes: async () => {
+        throw new Error("injected vault fail");
+      },
+    });
+    const first = fillFile("Night kit");
+    const saved = await saveQualityTemplateFill(owner, {
+      dest: "prepackage",
+      packageName: "Night kit",
+      companyId: "madison",
+      companyLabel: "Madison",
+      files: [first],
+    });
+    assert.equal(saved.ok, false);
+    const path = qualityVaultPath({
+      companyId: "madison",
+      companyLabel: "Madison",
+      folderId: "packages",
+      shelf: true,
+      packageLabel: "Night kit",
+    });
+    let parent = qualityFolderId();
+    for (const name of path) {
+      const kids = await inner.listChildren(parent);
+      const row = kids.find((item) => item.name === name && item.mimeType === DRIVE_FOLDER_MIME);
+      assert.equal(row, undefined, name);
+      if (!row?.id) break;
+      parent = row.id;
+    }
+    const briefs = await listStoredBriefs("quality", owner.email);
+    assert.equal(briefs.some((row) => row.files.some((file) => file.name === first.name)), false);
   });
 });

@@ -263,6 +263,37 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
     assert.equal(owner.role, "owner");
   });
 
+  it("rolls back empty folders created before a failed Ready file write", async () => {
+    const inner = memoryDrive();
+    resetLeadBriefStoreForTests(join(dir, "kit-orphan"));
+    const broken = {
+      ...inner,
+      configured: true,
+      async uploadBytes() {
+        throw new Error("injected vault fail");
+      },
+    };
+    useLeadBriefVaultForTests(broken);
+    const place = {
+      companyId: "madison",
+      companyLabel: "Madison",
+      folderId: "packages",
+      jobId: "quality-ready-shelf:night-kit",
+      jobLabel: "Night kit",
+      shelf: true as const,
+      packageLabel: "Night kit",
+    };
+    await assert.rejects(() => persistQualityVaultFiles(broken, place, [pdf("Flange Log — Night kit — 2026-09-14 — Robert.txt")]));
+    let parent = qualityFolderId();
+    for (const name of qualityVaultPath(place)) {
+      const kids = await inner.listChildren(parent);
+      const row = kids.find((item) => item.name === name && item.mimeType === DRIVE_FOLDER_MIME);
+      assert.equal(row, undefined, name);
+      if (!row?.id) break;
+      parent = row.id;
+    }
+  });
+
   it("keeps testers on the vault write error and gives the owner a 403/404 share diagnostic", async () => {
     const leaked = new DriveApiError(
       403,

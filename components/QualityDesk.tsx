@@ -9,11 +9,11 @@ import { QualityPackageShelf } from "@/components/QualityPackageShelf";
 import { QualityTemplateForm, type QualityTemplateFormSession } from "@/components/QualityTemplateForm";
 import { QualityVaultOwnerTree } from "@/components/QualityVaultOwnerTree";
 import { useQualityHseJobTree } from "@/components/useQualityHseJobTree";
-import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useAlias, useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { viewAsInit } from "@/lib/desk-scope";
 import { assignedCompanyId, companyName, companyScopeFor, inferCompanyIdFromParts, type CompanyId } from "@/lib/companies";
-import { buildDeskChrome, isQualityVaultSeat } from "@/lib/desk-role";
+import { buildDeskChrome, deskLensKey, isQualityVaultSeat } from "@/lib/desk-role";
 import { qualityRailCompanyId } from "@/lib/quality-company-docs";
 import {
   QUALITY_DESK_RADIOS,
@@ -43,7 +43,10 @@ import { qualityPackageShelfAcl } from "@/lib/quality-package-shelf";
 export function QualityDesk() {
   const alias = useAlias();
   const owner = useOwnerDesk();
+  const lens = useLensUser();
   const { user } = useSession();
+  const actor = lens ?? user;
+  const actorKey = deskLensKey(actor);
   const { tree, ready } = useQualityHseJobTree();
   const [pick, setPick] = useState<JobScopePick>(() => readJobScope(QUALITY_JOB_SCOPE_KEY));
   const [radio, setRadio] = useState<QualityDeskRadioId>(() => readQualityFolderPick(pick.jobId || "desk"));
@@ -69,10 +72,14 @@ export function QualityDesk() {
   const [formSession, setFormSession] = useState<QualityTemplateFormSession | null>(null);
   const [kits, setKits] = useState<Array<{ id: string; name: string }>>([]);
   const [fillAcl, setFillAcl] = useState<QualityTemplateFillAcl>(() =>
-    qualityTemplateFillAcl(qualityCompanyDocAcl(user), qualityPackageShelfAcl(user)),
+    qualityTemplateFillAcl(qualityCompanyDocAcl(actor), qualityPackageShelfAcl(actor)),
   );
   const [formNote, setFormNote] = useState<string | null>(null);
   const [fillTick, setFillTick] = useState(0);
+
+  useEffect(() => {
+    setFillAcl(qualityTemplateFillAcl(qualityCompanyDocAcl(actor), qualityPackageShelfAcl(actor)));
+  }, [actorKey]);
 
   useEffect(() => {
     if (!ready) return;
@@ -109,12 +116,12 @@ export function QualityDesk() {
         );
       })
       .catch(() => {
-        if (!cancelled) setFillAcl(qualityTemplateFillAcl(qualityCompanyDocAcl(user), qualityPackageShelfAcl(user)));
+        if (!cancelled) setFillAcl(qualityTemplateFillAcl(qualityCompanyDocAcl(actor), qualityPackageShelfAcl(actor)));
       });
     return () => {
       cancelled = true;
     };
-  }, [companyId, owner?.viewAs, user?.email, vaultCompanyId, fillTick]);
+  }, [actorKey, companyId, owner?.viewAs, user?.email, vaultCompanyId, fillTick]);
 
   function openTemplateForm(session: QualityTemplateFormSession) {
     setFormNote(null);
