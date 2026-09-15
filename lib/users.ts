@@ -686,8 +686,8 @@ export function scheduleSessionVaultCatchUp(work: () => Promise<void>): void {
   });
 }
 
-/** Soft bound for login Drive reads/writes. Healthy vaults finish well under this. */
-export const LOGIN_SEAT_DEADLINE_MS = 2500;
+/** Soft bound for login Drive reads/writes. ~1MB seats.json cold SA fetch often exceeds 2.5s. */
+export const LOGIN_SEAT_DEADLINE_MS = 8000;
 
 export async function awaitSeatDeadline<T>(
   work: Promise<T>,
@@ -768,9 +768,13 @@ export function findSeatForSession(session: { id?: string; email?: string }) {
 
 export const GENERIC_SIGNIN_ERROR = "Sign-in failed. Check the email and password.";
 
+/** Max prior hashes to bcrypt-check after primary. Unbounded previousHashes DoS login. */
+export const PREVIOUS_HASH_VERIFY_CAP = 32;
+
 export function verifyPassword(user: StoredUser, password: string): boolean {
   if (!password) return false;
-  const hashes = [user.passwordHash, ...(user.previousHashes ?? [])].filter((hash): hash is string => Boolean(hash));
+  const previous = (user.previousHashes ?? []).slice(0, PREVIOUS_HASH_VERIFY_CAP);
+  const hashes = [user.passwordHash, ...previous].filter((hash): hash is string => Boolean(hash));
   for (const hash of hashes) {
     if (!BCRYPT_HASH.test(hash)) continue;
     if (bcrypt.compareSync(password, hash)) {
