@@ -662,10 +662,18 @@ export function toPublicUser(user: StoredUser): PublicUser {
   };
 }
 
-/** Seat store wins over a stale session / hs_seat_claim cookie for FIRST SIGN-IN. */
+/**
+ * Vault-backed seat flag wins over a stale cookie for FIRST SIGN-IN.
+ * An unhydrated seed (no passwordHash) must not restick mustChange from the seed default.
+ */
 export function liveSessionUser(session: PublicUser): PublicUser {
   const seat = findSeatForSession(session);
-  return seat ? toPublicUser(seat) : session;
+  if (!seat) return session;
+  const pub = toPublicUser(seat);
+  if (!seat.passwordHash) {
+    return { ...pub, mustChangePassword: Boolean(session.mustChangePassword) };
+  }
+  return pub;
 }
 
 /**

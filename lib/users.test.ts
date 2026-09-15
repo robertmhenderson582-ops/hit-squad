@@ -63,6 +63,7 @@ const ISSUED = "issued-seat-secret";
 const OTHER = "other-seat-secret";
 const SHORT = "short7";
 const TESTER = "nathanboyte@gmail.com";
+const BENNY = "bccamp2@gmail.com";
 const UNKNOWN = "not-on-this-desk@example.com";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-seats-"));
@@ -1487,6 +1488,23 @@ test("login skips seat vault flush on normal password auth", () => {
   assert.match(route, /if \(createdPassword\) \{[\s\S]*flushSeatVault\(\)/);
 });
 
+test("login route fails closed on needsCreate when hydrate did not complete", () => {
+  const route = readFileSync(fileURLToPath(new URL("../app/api/auth/login/route.ts", import.meta.url)), "utf8");
+  assert.match(route, /const \{ hydrateMs, persistMs, hydrated \}/);
+  const needsCreate = route.slice(route.indexOf('outcome.status === "needsCreate"'));
+  const hydratedGuard = needsCreate.indexOf("!hydrated");
+  const createAnswer = needsCreate.indexOf("needsCreate: true");
+  assert.ok(hydratedGuard >= 0, "route must check hydrated before answering needsCreate");
+  assert.ok(createAnswer > hydratedGuard, "needsCreate must stay behind the hydrated guard");
+  assert.match(needsCreate, /Desk vault is catching up\. Try again in a moment\./);
+  assert.match(needsCreate, /vaultPersisted: false/);
+  assert.match(needsCreate, /status: 503/);
+  assert.doesNotMatch(
+    needsCreate.slice(0, createAnswer),
+    /needsCreate:\s*true/,
+  );
+});
+
 test("persistExistingOwnerHash skips Drive write when seats.json already has the owner hash", async () => {
   const ownerHash = bcrypt.hashSync(CHOSEN, 12);
   writeFileSync(
@@ -1977,4 +1995,55 @@ test("stale mustChange true claim cannot restick a cleared owner vault row", asy
   if (signedIn.status === "authenticated") {
     assert.equal(signedIn.user.mustChangePassword, false);
   }
+});
+
+test("unhydrated tester seed must not restick mustChange over a cleared cookie", () => {
+  const seat = findUserByEmail(BENNY);
+  assert.ok(seat);
+  assert.equal(seat.id, "tester-benny");
+  assert.equal(seat.passwordHash, undefined);
+  assert.equal(seat.mustChangePassword, true);
+
+  const live = liveSessionUser({
+    id: "tester-benny",
+    email: BENNY,
+    name: "Benny Camp",
+    role: "tester",
+    mustChangePassword: false,
+  });
+  assert.equal(live.email, BENNY);
+  assert.equal(live.mustChangePassword, false);
+});
+
+test("liveSessionUser still gates when a local hash row has mustChange true", async () => {
+  const issued = await issueSeatPassword(TESTER, ISSUED);
+  assert.equal("ok" in issued, true);
+  const stored = findUserByEmail(TESTER);
+  assert.ok(stored?.passwordHash);
+  assert.equal(stored.mustChangePassword, true);
+
+  const live = liveSessionUser({
+    id: stored.id,
+    email: stored.email,
+    name: stored.name,
+    role: "tester",
+    mustChangePassword: false,
+  });
+  assert.equal(live.mustChangePassword, true);
+});
+
+test("unhydrated hung Drive must not answer needsCreate for a seeded tester", async () => {
+  useSeatVaultForTests(hangDrive());
+  const prep = await prepareLoginSeats({ email: BENNY, deadlineMs: 80 });
+  assert.equal(prep.hydrated, false);
+  assert.equal(findUserByEmail(BENNY)?.passwordHash, undefined);
+  assert.equal(loginOutcome({ email: BENNY }).status, "needsCreate");
+  const route = readFileSync(fileURLToPath(new URL("../app/api/auth/login/route.ts", import.meta.url)), "utf8");
+  assert.match(route, /hydrated/);
+  assert.match(route, /if \(!hydrated\)/);
+  assert.match(route, /status: 503/);
+  assert.doesNotMatch(
+    route,
+    /if \(outcome\.status === "needsCreate"\) \{\s*return NextResponse\.json\(\{ needsCreate: true \}\)/,
+  );
 });
