@@ -17,6 +17,7 @@ import {
   hseFilledCopyCollidesWithTemplate,
   hseFilledCopyName,
   hseTemplateCanSave,
+  hseTemplateFormViewOnly,
   hseTemplateCatalogIds,
   hseTemplateCompanyDocIds,
   hseTemplateFillAcl,
@@ -126,6 +127,9 @@ describe("HSE always-displayed template forms", () => {
     assert.equal(hseTemplateCanSave(pmAcl, "prepackage"), false);
     assert.equal(viewerAcl.readOnly, true);
     assert.equal(hseTemplateCanSave(viewerAcl, "job"), false);
+    assert.equal(hseTemplateFormViewOnly(ownerAcl, owner), false);
+    assert.equal(hseTemplateFormViewOnly(ownerAcl, chance), true);
+    assert.equal(hseTemplateFormViewOnly(viewerAcl, owner), true);
   });
 
   it("wires Open form, Madison JSA print, and Edit on the JSAs rail", () => {
@@ -139,7 +143,10 @@ describe("HSE always-displayed template forms", () => {
     const fields = source("../components/DeskTemplateFormFields.tsx");
     const drop = source("../components/HseFolderDrop.tsx");
     const shelf = source("../components/HsePackageShelf.tsx");
-    assert.match(form, /viewOnly = fillAcl.readOnly/);
+    assert.match(form, /viewOnly = hseTemplateFormViewOnly\(fillAcl, lens\)/);
+    assert.match(form, /useLensUser/);
+    assert.match(desk, /useLensUser/);
+    assert.match(desk, /hseTemplateFillAcl\(hseCompanyDocAcl\(actor\)/);
     assert.match(form, /DeskTemplateFieldInput/);
     assert.match(fields, /paper-field-view/);
     assert.match(fields, /No rows on this form/);

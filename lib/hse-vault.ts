@@ -117,7 +117,11 @@ function decodeLeadBytes(file: LeadFile) {
   return Uint8Array.from(Buffer.from(file.data, "base64"));
 }
 
-export async function ensureHseVaultPath(drive: DriveAdapter, place: HseVaultPlace) {
+export async function ensureHseVaultPath(
+  drive: DriveAdapter,
+  place: HseVaultPlace,
+  created: string[] = [],
+) {
   if (!hseDriveReady(drive)) throw new Error(HSE_VAULT_WRITE_ERROR);
   let parent = hseFolderId();
   for (const name of hseVaultPath(place)) {
@@ -127,9 +131,10 @@ export async function ensureHseVaultPath(drive: DriveAdapter, place: HseVaultPla
       parent = existing.id;
       continue;
     }
-    const created = await drive.createFolder!(parent, name);
-    if (!created?.id) throw new Error(HSE_VAULT_WRITE_ERROR);
-    parent = created.id;
+    const folder = await drive.createFolder!(parent, name);
+    if (!folder?.id) throw new Error(HSE_VAULT_WRITE_ERROR);
+    created.push(folder.id);
+    parent = folder.id;
   }
   return parent;
 }
@@ -137,6 +142,42 @@ export async function ensureHseVaultPath(drive: DriveAdapter, place: HseVaultPla
 function hseFileProperties(who?: string): Record<string, string> {
   const stamp = (who || "").trim().toLowerCase();
   return stamp ? { kind: "hse-file", who: stamp } : { kind: "hse-file" };
+}
+
+async function confirmHseVaultBytes(drive: DriveAdapter, fileId: string, bytes: Uint8Array) {
+  if (!drive.readBytes) return true;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const confirmed = await drive.readBytes(fileId);
+      if (confirmed.length === bytes.length) return true;
+    } catch {
+      // Media can lag the upload id. Retry before fail-closed rollback.
+    }
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 80 * (attempt + 1)));
+  }
+  return false;
+}
+
+async function uploadHseVaultFile(
+  drive: DriveAdapter,
+  folderId: string,
+  file: LeadFile,
+  bytes: Uint8Array,
+  mime: string,
+  who?: string,
+) {
+  const properties = hseFileProperties(who);
+  try {
+    const row = await drive.uploadBytes!(folderId, file.name, bytes, mime, properties);
+    if (row?.id) return row;
+  } catch (error) {
+    if (mime !== "text/plain") throw error;
+  }
+  if (mime === "text/plain") {
+    const row = await drive.uploadBytes!(folderId, file.name, bytes, "application/octet-stream", properties);
+    if (row?.id) return row;
+  }
+  throw new Error(HSE_VAULT_WRITE_ERROR);
 }
 
 export async function writeHseVaultFiles(drive: DriveAdapter, folderId: string, files: LeadFile[], who?: string) {
@@ -150,15 +191,48 @@ export async function writeHseVaultFiles(drive: DriveAdapter, folderId: string, 
     const existing = kids.find((row) => row.name === file.name && row.mimeType !== DRIVE_FOLDER_MIME);
     const row = existing?.id
       ? await drive.updateBytes!(existing.id, bytes, mime)
-      : await drive.uploadBytes!(folderId, file.name, bytes, mime, hseFileProperties(who));
+      : await uploadHseVaultFile(drive, folderId, file, bytes, mime, who);
     if (!row?.id) throw new Error(HSE_VAULT_WRITE_ERROR);
-    const confirmed = drive.readBytes ? await drive.readBytes(row.id) : bytes;
-    if (drive.readBytes && confirmed.length !== bytes.length) throw new Error(HSE_VAULT_WRITE_ERROR);
+    if (!(await confirmHseVaultBytes(drive, row.id, bytes))) throw new Error(HSE_VAULT_WRITE_ERROR);
     written.push({ ...row, properties: { ...row.properties, ...hseFileProperties(who) } });
     if (existing) existing.id = row.id;
     else kids.push({ ...row, name: file.name });
   }
   return written;
+}
+
+export async function trashHseVaultFolderIfEmpty(drive: DriveAdapter | null | undefined, folderId: string) {
+  const id = folderId.trim();
+  if (!id || !hseDriveReady(drive) || !drive?.deleteJson || !drive.listChildren) return { trashed: false as const };
+  const kids = await drive.listChildren(id);
+  if (kids.some((row) => row.id && (row.name || "").trim())) return { trashed: false as const };
+  await drive.deleteJson(id);
+  return { trashed: true as const };
+}
+
+/** Undo a failed persist: trash this write's files, then empty folders this call created. */
+export async function rollbackHseVaultPersist(
+  drive: DriveAdapter | null | undefined,
+  input: {
+    place: HseVaultPlace;
+    created?: string[];
+    fileNames?: string[];
+  },
+) {
+  for (const name of input.fileNames ?? []) {
+    try {
+      await trashHseVaultFile(drive, input.place, name);
+    } catch {
+      // Keep sweeping so a failed confirm does not leave a named copy listed.
+    }
+  }
+  for (const folderId of [...(input.created ?? [])].reverse()) {
+    try {
+      await trashHseVaultFolderIfEmpty(drive, folderId);
+    } catch {
+      // Leaf-first. A leftover parent is retried after its children go.
+    }
+  }
 }
 
 export async function persistHseVaultFiles(
@@ -169,10 +243,20 @@ export async function persistHseVaultFiles(
   if (!hseDriveReady(drive)) throw new Error(HSE_VAULT_WRITE_ERROR);
   const incoming = files.filter((file) => file.name && file.data);
   if (!incoming.length) throw new Error("Drop at least one file.");
-  const folderId = await ensureHseVaultPath(drive as DriveAdapter, place);
-  const written = await writeHseVaultFiles(drive as DriveAdapter, folderId, incoming, place.who);
-  if (written.length !== incoming.length) throw new Error(HSE_VAULT_WRITE_ERROR);
-  return { folderId, files: written, path: hseVaultPath(place), store: "drive" as const };
+  const created: string[] = [];
+  try {
+    const folderId = await ensureHseVaultPath(drive as DriveAdapter, place, created);
+    const written = await writeHseVaultFiles(drive as DriveAdapter, folderId, incoming, place.who);
+    if (written.length !== incoming.length) throw new Error(HSE_VAULT_WRITE_ERROR);
+    return { folderId, files: written, path: hseVaultPath(place), store: "drive" as const, created };
+  } catch (error) {
+    await rollbackHseVaultPersist(drive, {
+      place,
+      created,
+      fileNames: incoming.map((file) => file.name),
+    });
+    throw error;
+  }
 }
 
 function isHseLibraryLock(row: DriveFile) {

@@ -5,7 +5,7 @@ import {
   qualityCompanyDocLabel,
   type QualityCompanyDocId,
 } from "./quality-company-docs.ts";
-import type { QualityCompanyDocAcl } from "./quality-company-doc-acl.ts";
+import { qualityCompanyDocAcl, type QualityCompanyDocAcl } from "./quality-company-doc-acl.ts";
 import {
   QUALITY_FORM_FIELDS,
   QUALITY_FORM_ROW_FIELDS,
@@ -23,7 +23,7 @@ import {
   type QualityFolderId,
 } from "./quality-folders.ts";
 import { QUALITY_SECTIONS } from "./quality-module.ts";
-import type { QualityPackageShelfAcl } from "./quality-package-shelf.ts";
+import { qualityPackageShelfAcl, type QualityPackageShelfAcl } from "./quality-package-shelf.ts";
 import { emptyRegisterRow, hydrateRegisterRows, type ModuleRegisterRow } from "./register-rows.ts";
 
 /** Magic first line. Filled copies round-trip; blank rail templates never use this mark. */
@@ -538,6 +538,16 @@ export function qualityTemplateFillAcl(
 
 export function qualityTemplateCanSave(acl: QualityTemplateFillAcl, dest: QualityTemplateFillDest) {
   return dest === "job" ? acl.canSaveJob : acl.canSavePrepackage;
+}
+
+/** Seat lens wins over a stale Owner fillAcl so View as Wendell cannot show Save. */
+export function qualityTemplateFormViewOnly(
+  fillAcl: QualityTemplateFillAcl,
+  seat?: { email?: string; name?: string; role?: string } | null,
+) {
+  if (fillAcl.readOnly) return true;
+  if (!seat) return false;
+  return qualityTemplateFillAcl(qualityCompanyDocAcl(seat), qualityPackageShelfAcl(seat)).readOnly;
 }
 
 export function serializeQualityTemplateForm(payload: QualityTemplateFormPayload) {

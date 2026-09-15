@@ -22,6 +22,7 @@ import {
   qualityFilledCopyCollidesWithTemplate,
   qualityFilledCopyName,
   qualityTemplateCanSave,
+  qualityTemplateFormViewOnly,
   qualityTemplateCatalogIds,
   qualityTemplateCompanyDocIds,
   qualityTemplateFillAcl,
@@ -159,12 +160,18 @@ describe("Quality always-displayed template forms", () => {
     const ownerAcl = qualityTemplateFillAcl(qualityCompanyDocAcl(owner), qualityPackageShelfAcl(owner));
     assert.equal(ownerAcl.canSaveJob, true);
     assert.equal(ownerAcl.canSavePrepackage, true);
+    assert.equal(qualityTemplateFormViewOnly(ownerAcl, owner), false);
+    assert.equal(qualityTemplateFormViewOnly(ownerAcl, wendell), true);
+    assert.equal(qualityTemplateFormViewOnly(viewer, owner), true);
     const form = source("../components/QualityTemplateForm.tsx");
     const fields = source("../components/DeskTemplateFormFields.tsx");
     const drop = source("../components/QualityFolderDrop.tsx");
     const desk = source("../components/QualityDesk.tsx");
     const shelf = source("../components/QualityPackageShelf.tsx");
-    assert.match(form, /viewOnly = fillAcl.readOnly/);
+    assert.match(form, /viewOnly = qualityTemplateFormViewOnly\(fillAcl, lens\)/);
+    assert.match(form, /useLensUser/);
+    assert.match(desk, /useLensUser/);
+    assert.match(desk, /qualityTemplateFillAcl\(qualityCompanyDocAcl\(actor\)/);
     assert.match(form, /DeskTemplateFieldInput/);
     assert.match(fields, /paper-field-view/);
     assert.match(fields, /disabled=\{viewOnly\}/);

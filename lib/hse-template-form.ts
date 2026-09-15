@@ -5,7 +5,7 @@ import {
   hseCompanyDocLabel,
   type HseCompanyDocId,
 } from "./hse-company-docs.ts";
-import type { HseCompanyDocAcl } from "./hse-company-doc-acl.ts";
+import { hseCompanyDocAcl, type HseCompanyDocAcl } from "./hse-company-doc-acl.ts";
 import { HSE_EXECUTE_LANES } from "./hse-module.ts";
 import {
   HSE_MODULE_CATALOG,
@@ -14,7 +14,7 @@ import {
   resolveHseFolder,
   type HseFolderId,
 } from "./hse-folders.ts";
-import type { HsePackageShelfAcl } from "./hse-package-shelf.ts";
+import { hsePackageShelfAcl, type HsePackageShelfAcl } from "./hse-package-shelf.ts";
 import type { QualityFieldDef } from "./quality-day1.ts";
 import { emptyRegisterRow, hydrateRegisterRows, type ModuleRegisterRow } from "./register-rows.ts";
 
@@ -428,6 +428,16 @@ export function hseTemplateFillAcl(
 
 export function hseTemplateCanSave(acl: HseTemplateFillAcl, dest: HseTemplateFillDest) {
   return dest === "job" ? acl.canSaveJob : acl.canSavePrepackage;
+}
+
+/** Seat lens wins over a stale Owner fillAcl so View as Wendell cannot show Save. */
+export function hseTemplateFormViewOnly(
+  fillAcl: HseTemplateFillAcl,
+  seat?: { email?: string; name?: string; role?: string } | null,
+) {
+  if (fillAcl.readOnly) return true;
+  if (!seat) return false;
+  return hseTemplateFillAcl(hseCompanyDocAcl(seat), hsePackageShelfAcl(seat)).readOnly;
 }
 
 export function serializeHseTemplateForm(payload: HseTemplateFormPayload) {

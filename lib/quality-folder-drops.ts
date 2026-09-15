@@ -27,6 +27,7 @@ import {
   listQualityVaultTree,
   persistQualityVaultFiles,
   qualityVaultWriteUserError,
+  rollbackQualityVaultPersist,
 } from "./quality-vault.ts";
 import type { QualityVaultTreeRow } from "./quality-vault-shared.ts";
 import type { PublicUser } from "./types.ts";
@@ -113,37 +114,47 @@ export async function saveQualityFolderDrop(user: QualityDropUser, input: Qualit
   const companyLabel = typeof input.companyLabel === "string" ? input.companyLabel : undefined;
   const siteLabel = typeof input.siteLabel === "string" ? input.siteLabel : undefined;
   const jobLabel = typeof input.jobLabel === "string" ? input.jobLabel : undefined;
+  const place = {
+    companyId,
+    companyLabel,
+    siteLabel,
+    jobId,
+    jobLabel,
+    folderId,
+    who,
+    shelf: isQualityReadyShelfJobId(jobId),
+    packageLabel: jobLabel,
+  };
   try {
-    await persistQualityVaultFiles(leadBriefAdapter("quality"), {
-      companyId,
-      companyLabel,
-      siteLabel,
-      jobId,
-      jobLabel,
-      folderId,
-      who,
-      shelf: isQualityReadyShelfJobId(jobId),
-      packageLabel: jobLabel,
-    }, check.accepted as LeadFile[]);
-    const brief = await saveStoredBrief({
-      kind: "quality",
-      who,
-      whoName: user.name,
-      describe: qualityFolderLabel(folderId, companyId),
-      files: merged,
-      jobId,
-      folderId,
-      companyId,
-      mergeFiles: true,
-    });
-    return {
-      ok: true as const,
-      brief: publicBrief(brief),
-      rejected: check.rejected,
-      kept: merged.map((file) => file.name),
-      stored: true as const,
-      store: "drive" as const,
-    };
+    const persisted = await persistQualityVaultFiles(leadBriefAdapter("quality"), place, check.accepted as LeadFile[]);
+    try {
+      const brief = await saveStoredBrief({
+        kind: "quality",
+        who,
+        whoName: user.name,
+        describe: qualityFolderLabel(folderId, companyId),
+        files: merged,
+        jobId,
+        folderId,
+        companyId,
+        mergeFiles: true,
+      });
+      return {
+        ok: true as const,
+        brief: publicBrief(brief),
+        rejected: check.rejected,
+        kept: merged.map((file) => file.name),
+        stored: true as const,
+        store: "drive" as const,
+      };
+    } catch (error) {
+      await rollbackQualityVaultPersist(leadBriefAdapter("quality"), {
+        place,
+        created: persisted.created,
+        fileNames: check.accepted.map((file) => file.name),
+      });
+      throw error;
+    }
   } catch (error) {
     const status = error instanceof DriveApiError ? error.status : 0;
     console.warn(`quality-vault: folder write failed; ${status || "err"}`);

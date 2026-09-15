@@ -117,7 +117,11 @@ function decodeLeadBytes(file: LeadFile) {
   return Uint8Array.from(Buffer.from(file.data, "base64"));
 }
 
-export async function ensureQualityVaultPath(drive: DriveAdapter, place: QualityVaultPlace) {
+export async function ensureQualityVaultPath(
+  drive: DriveAdapter,
+  place: QualityVaultPlace,
+  created: string[] = [],
+) {
   if (!qualityDriveReady(drive)) throw new Error(QUALITY_VAULT_WRITE_ERROR);
   let parent = qualityFolderId();
   for (const name of qualityVaultPath(place)) {
@@ -127,9 +131,10 @@ export async function ensureQualityVaultPath(drive: DriveAdapter, place: Quality
       parent = existing.id;
       continue;
     }
-    const created = await drive.createFolder!(parent, name);
-    if (!created?.id) throw new Error(QUALITY_VAULT_WRITE_ERROR);
-    parent = created.id;
+    const folder = await drive.createFolder!(parent, name);
+    if (!folder?.id) throw new Error(QUALITY_VAULT_WRITE_ERROR);
+    created.push(folder.id);
+    parent = folder.id;
   }
   return parent;
 }
@@ -137,6 +142,42 @@ export async function ensureQualityVaultPath(drive: DriveAdapter, place: Quality
 function qualityFileProperties(who?: string): Record<string, string> {
   const stamp = (who || "").trim().toLowerCase();
   return stamp ? { kind: "quality-file", who: stamp } : { kind: "quality-file" };
+}
+
+async function confirmQualityVaultBytes(drive: DriveAdapter, fileId: string, bytes: Uint8Array) {
+  if (!drive.readBytes) return true;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const confirmed = await drive.readBytes(fileId);
+      if (confirmed.length === bytes.length) return true;
+    } catch {
+      // Media can lag the upload id. Retry before fail-closed rollback.
+    }
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 80 * (attempt + 1)));
+  }
+  return false;
+}
+
+async function uploadQualityVaultFile(
+  drive: DriveAdapter,
+  folderId: string,
+  file: LeadFile,
+  bytes: Uint8Array,
+  mime: string,
+  who?: string,
+) {
+  const properties = qualityFileProperties(who);
+  try {
+    const row = await drive.uploadBytes!(folderId, file.name, bytes, mime, properties);
+    if (row?.id) return row;
+  } catch (error) {
+    if (mime !== "text/plain") throw error;
+  }
+  if (mime === "text/plain") {
+    const row = await drive.uploadBytes!(folderId, file.name, bytes, "application/octet-stream", properties);
+    if (row?.id) return row;
+  }
+  throw new Error(QUALITY_VAULT_WRITE_ERROR);
 }
 
 export async function writeQualityVaultFiles(drive: DriveAdapter, folderId: string, files: LeadFile[], who?: string) {
@@ -150,15 +191,48 @@ export async function writeQualityVaultFiles(drive: DriveAdapter, folderId: stri
     const existing = kids.find((row) => row.name === file.name && row.mimeType !== DRIVE_FOLDER_MIME);
     const row = existing?.id
       ? await drive.updateBytes!(existing.id, bytes, mime)
-      : await drive.uploadBytes!(folderId, file.name, bytes, mime, qualityFileProperties(who));
+      : await uploadQualityVaultFile(drive, folderId, file, bytes, mime, who);
     if (!row?.id) throw new Error(QUALITY_VAULT_WRITE_ERROR);
-    const confirmed = drive.readBytes ? await drive.readBytes(row.id) : bytes;
-    if (drive.readBytes && confirmed.length !== bytes.length) throw new Error(QUALITY_VAULT_WRITE_ERROR);
+    if (!(await confirmQualityVaultBytes(drive, row.id, bytes))) throw new Error(QUALITY_VAULT_WRITE_ERROR);
     written.push({ ...row, properties: { ...row.properties, ...qualityFileProperties(who) } });
     if (existing) existing.id = row.id;
     else kids.push({ ...row, name: file.name });
   }
   return written;
+}
+
+export async function trashQualityVaultFolderIfEmpty(drive: DriveAdapter | null | undefined, folderId: string) {
+  const id = folderId.trim();
+  if (!id || !qualityDriveReady(drive) || !drive?.deleteJson || !drive.listChildren) return { trashed: false as const };
+  const kids = await drive.listChildren(id);
+  if (kids.some((row) => row.id && (row.name || "").trim())) return { trashed: false as const };
+  await drive.deleteJson(id);
+  return { trashed: true as const };
+}
+
+/** Undo a failed persist: trash this write's files, then empty folders this call created. */
+export async function rollbackQualityVaultPersist(
+  drive: DriveAdapter | null | undefined,
+  input: {
+    place: QualityVaultPlace;
+    created?: string[];
+    fileNames?: string[];
+  },
+) {
+  for (const name of input.fileNames ?? []) {
+    try {
+      await trashQualityVaultFile(drive, input.place, name);
+    } catch {
+      // Keep sweeping so a failed confirm does not leave a named copy listed.
+    }
+  }
+  for (const folderId of [...(input.created ?? [])].reverse()) {
+    try {
+      await trashQualityVaultFolderIfEmpty(drive, folderId);
+    } catch {
+      // Leaf-first. A leftover parent is retried after its children go.
+    }
+  }
 }
 
 export async function persistQualityVaultFiles(
@@ -169,10 +243,20 @@ export async function persistQualityVaultFiles(
   if (!qualityDriveReady(drive)) throw new Error(QUALITY_VAULT_WRITE_ERROR);
   const incoming = files.filter((file) => file.name && file.data);
   if (!incoming.length) throw new Error("Drop at least one file.");
-  const folderId = await ensureQualityVaultPath(drive as DriveAdapter, place);
-  const written = await writeQualityVaultFiles(drive as DriveAdapter, folderId, incoming, place.who);
-  if (written.length !== incoming.length) throw new Error(QUALITY_VAULT_WRITE_ERROR);
-  return { folderId, files: written, path: qualityVaultPath(place), store: "drive" as const };
+  const created: string[] = [];
+  try {
+    const folderId = await ensureQualityVaultPath(drive as DriveAdapter, place, created);
+    const written = await writeQualityVaultFiles(drive as DriveAdapter, folderId, incoming, place.who);
+    if (written.length !== incoming.length) throw new Error(QUALITY_VAULT_WRITE_ERROR);
+    return { folderId, files: written, path: qualityVaultPath(place), store: "drive" as const, created };
+  } catch (error) {
+    await rollbackQualityVaultPersist(drive, {
+      place,
+      created,
+      fileNames: incoming.map((file) => file.name),
+    });
+    throw error;
+  }
 }
 
 function isQualityLibraryLock(row: DriveFile) {

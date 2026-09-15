@@ -5,7 +5,7 @@ import { DeskTemplateFieldInput, DeskTemplateFormRows } from "@/components/DeskT
 import { FieldBlock } from "@/components/FieldMark";
 import { JobScopePicks } from "@/components/JobScopePicks";
 import { ModalPortal } from "@/components/ModalPortal";
-import { useAlias, useOwnerDesk } from "@/components/OwnerDeskContext";
+import { useAlias, useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { viewAsInit } from "@/lib/desk-scope";
 import { hseCompanyDocFileName } from "@/lib/hse-company-docs";
@@ -31,6 +31,7 @@ import {
   patchHseTemplateRow,
   hseFilledCopyName,
   hseTemplateCanSave,
+  hseTemplateFormViewOnly,
   hseTemplateFormDef,
   hseTemplateFormHasWork,
   hseTemplateFormTitle,
@@ -92,6 +93,7 @@ export function HseTemplateForm({
 }) {
   const alias = useAlias();
   const owner = useOwnerDesk();
+  const lens = useLensUser();
   const { user } = useSession();
   const def = session
     ? hseTemplateFormDef({
@@ -168,7 +170,7 @@ export function HseTemplateForm({
       sourceName: session?.fileName,
     });
   }, [def, destLabel, filledName, session?.fileName, user?.name]);
-  const viewOnly = fillAcl.readOnly;
+  const viewOnly = hseTemplateFormViewOnly(fillAcl, lens);
   const canSave = !viewOnly && hseTemplateCanSave(fillAcl, dest);
   const editing = Boolean(filledName);
 

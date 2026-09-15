@@ -49,6 +49,7 @@ import {
 } from "./quality-template-form-ripple.ts";
 import {
   readQualityVaultFile,
+  rollbackQualityVaultPersist,
   trashQualityVaultFile,
   trashQualityVaultNamedCopies,
   qualityVaultWriteUserError,
@@ -192,6 +193,7 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
     return { ok: false as const, status: 400, error: named.error || QUALITY_TEMPLATE_FILL_PREPACKAGE_ERROR };
   }
   const packageId = existingId || newQualityPackageId("label" in named ? named.label : "kit");
+  const kitJobId = qualityReadyShelfJobId(packageId);
   const saved = await saveQualityPackageShelfKit(user, {
     packageId,
     name: "label" in named ? named.label : existingId,
@@ -199,7 +201,32 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
     companyId,
     companyLabel,
   });
-  if (!saved.ok) return saved;
+  if (!saved.ok) {
+    await rollbackQualityTemplateFillWrites({
+      user,
+      dest: "prepackage",
+      jobId: kitJobId,
+      companyId,
+      companyLabel,
+      jobLabel: "label" in named ? named.label : undefined,
+      folders: ["packages"],
+      fileName: incoming.name,
+    });
+    await rollbackQualityVaultPersist(leadBriefAdapter("quality"), {
+      place: {
+        companyId,
+        companyLabel,
+        jobId: kitJobId,
+        jobLabel: "label" in named ? named.label : undefined,
+        folderId: "packages",
+        shelf: true,
+        packageLabel: "label" in named ? named.label : undefined,
+        who: user.email.trim().toLowerCase(),
+      },
+      fileNames: [incoming.name],
+    });
+    return saved;
+  }
   return {
     ...saved,
     dest: "prepackage" as const,
