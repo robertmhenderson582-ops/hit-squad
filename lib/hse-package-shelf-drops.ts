@@ -1,5 +1,5 @@
 import { hasBuildDesk } from "./desk-role.ts";
-import { DriveApiError } from "./drive-estimates.ts";
+import { DriveApiError, driveFailureKind } from "./drive-estimates.ts";
 import { mergePositions } from "./org-positions.ts";
 import { hydratePositionStore } from "./org-positions-store.ts";
 import {
@@ -214,6 +214,7 @@ export async function attachHsePackageShelfKit(
     };
   } catch (error) {
     const status = error instanceof DriveApiError ? error.status : 0;
+    console.warn(`hse-vault: shelf attach failed; ${status || "err"} ${driveFailureKind(error)}`);
     return {
       ok: false as const,
       status: 503,

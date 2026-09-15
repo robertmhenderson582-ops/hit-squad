@@ -9,6 +9,12 @@ export const HSE_VAULT_SHARE_ERROR =
   "HSE vault is not writable by the desk. Share the HSE room with the vault account as writer.";
 export const HSE_VAULT_MISSING_ERROR =
   "HSE vault folder was not found. Confirm the HSE room is shared with the vault account.";
+export const HSE_VAULT_QUOTA_ERROR =
+  "Drive Total Query Cost quota was exceeded. HSE Save did not write. Wait a minute and try again.";
+export const HSE_VAULT_OAUTH_ERROR =
+  "Owner Drive OAuth refresh failed (invalid_grant). HSE Save did not write. Reconnect Drive access.";
+export const HSE_VAULT_FOLDER_ERROR =
+  "HSE vault folder could not be created. The parent is not a writable folder.";
 export const HSE_UNVAULTED_MARK = "on this desk only — not saved yet";
 /** Per-bar lock marker inside a company-doc vault folder. Never a library file. */
 export const HSE_LIBRARY_LOCK_NAME = "hse-library.lock.json";

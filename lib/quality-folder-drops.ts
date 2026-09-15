@@ -20,7 +20,7 @@ import {
   showsQualityFolderDesk,
   type QualityFolderId,
 } from "./quality-folders.ts";
-import { DriveApiError } from "./drive-estimates.ts";
+import { DriveApiError, driveFailureKind } from "./drive-estimates.ts";
 import { isQualityReadyShelfJobId } from "./quality-package-shelf.ts";
 import {
   listQualityVaultFiles,
@@ -157,7 +157,7 @@ export async function saveQualityFolderDrop(user: QualityDropUser, input: Qualit
     }
   } catch (error) {
     const status = error instanceof DriveApiError ? error.status : 0;
-    console.warn(`quality-vault: folder write failed; ${status || "err"}`);
+    console.warn(`quality-vault: folder write failed; ${status || "err"} ${driveFailureKind(error)}`);
     return {
       ok: false as const,
       status: 503,

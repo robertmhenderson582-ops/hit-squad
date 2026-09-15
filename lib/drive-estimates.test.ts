@@ -22,6 +22,7 @@ import {
   upsertEstimateInDrive,
   vaultDriveAdapter,
   DriveApiError,
+  driveFailureKind,
   DRIVE_FOLDER_MIME,
   DRIVE_SHORTCUT_MIME,
   SEATS_SA_OPEN_ERROR,
@@ -1460,6 +1461,182 @@ describe("Drive folder create", () => {
       assert.equal(folder.mimeType, DRIVE_FOLDER_MIME);
     } finally {
       globalThis.fetch = previous;
+      resetDriveTokenCache();
+    }
+  });
+});
+
+describe("Drive list cost and oauth fail-fast", () => {
+  it("classifies quota, oauth, and folder failures without leaking vault ids", () => {
+    assert.equal(
+      driveFailureKind(
+        new DriveApiError(
+          403,
+          "Quota exceeded for quota metric 'Total Query Cost' and limit 'Units per minute per user' of service 'drive.googleapis.com'",
+        ),
+      ),
+      "quota",
+    );
+    assert.equal(driveFailureKind(new DriveApiError(400, "invalid_grant")), "oauth");
+    assert.equal(driveFailureKind(new Error("Token has been expired or revoked.")), "oauth");
+    assert.equal(driveFailureKind(new DriveApiError(400, "400 The specified parent is not a folder.")), "folder");
+    assert.equal(
+      driveFailureKind(new DriveApiError(403, "The user does not have sufficient permissions for this file.")),
+      "share",
+    );
+  });
+
+  it("lists children with corpora=user once, caches the result, and never fans out allDrives on a hit", async () => {
+    resetDriveTokenCache();
+    const queries: string[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || "GET").toUpperCase();
+      if (url.startsWith("https://oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.test-oauth", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/drive/v3/files/room") && method === "GET" && !url.includes("q=")) {
+        return new Response(JSON.stringify({ id: "room", mimeType: DRIVE_FOLDER_MIME, name: "Quality" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/drive/v3/files") && method === "GET" && url.includes("q=")) {
+        const parsed = new URL(url);
+        queries.push(`${parsed.searchParams.get("corpora") || parsed.searchParams.get("spaces") || "none"}`);
+        return new Response(
+          JSON.stringify({
+            files: [{ id: "p66", name: "Phillips 66", mimeType: DRIVE_FOLDER_MIME, parents: ["room"] }],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`unexpected fetch ${method} ${url}`);
+    }) as typeof fetch;
+    try {
+      const adapter = driveAdapter(oauthEnv);
+      const first = await adapter.listChildren!("room");
+      const second = await adapter.listChildren!("room");
+      assert.equal(first[0]?.id, "p66");
+      assert.equal(second[0]?.id, "p66");
+      assert.deepEqual(queries, ["user"]);
+      assert.equal(queries.includes("allDrives"), false);
+      assert.equal(queries.includes("drive"), false);
+    } finally {
+      globalThis.fetch = previous;
+      resetDriveTokenCache();
+    }
+  });
+
+  it("stops listing after a quota 403 and does not retry allDrives", async () => {
+    resetDriveTokenCache();
+    const queries: string[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || "GET").toUpperCase();
+      if (url.startsWith("https://oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.test-oauth", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/drive/v3/files/room") && method === "GET" && !url.includes("q=")) {
+        return new Response(JSON.stringify({ id: "room", mimeType: DRIVE_FOLDER_MIME }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/drive/v3/files") && method === "GET" && url.includes("q=")) {
+        const parsed = new URL(url);
+        queries.push(parsed.searchParams.get("corpora") || parsed.searchParams.get("spaces") || "none");
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "Quota exceeded for quota metric 'Total Query Cost' and limit 'Units per minute per user'",
+            },
+          }),
+          { status: 403, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`unexpected fetch ${method} ${url}`);
+    }) as typeof fetch;
+    try {
+      const adapter = driveAdapter(oauthEnv);
+      await assert.rejects(() => adapter.listChildren!("room"), (error: unknown) => {
+        assert.ok(error instanceof DriveApiError);
+        assert.equal(driveFailureKind(error), "quota");
+        return true;
+      });
+      assert.deepEqual(queries, ["user"]);
+    } finally {
+      globalThis.fetch = previous;
+      resetDriveTokenCache();
+    }
+  });
+
+  it("does not retry OAuth refresh after invalid_grant on a vault list", async () => {
+    resetDriveTokenCache();
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const grants: string[] = [];
+    const warnings: string[] = [];
+    const previous = globalThis.fetch;
+    const warn = console.warn;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || "GET").toUpperCase();
+      const body = typeof init?.body === "string" ? init.body : init?.body instanceof URLSearchParams ? init.body.toString() : "";
+      if (url.startsWith("https://oauth2.googleapis.com/token")) {
+        const params = new URLSearchParams(body);
+        const grant = params.get("grant_type") || "";
+        grants.push(grant);
+        if (grant === "refresh_token") {
+          return new Response(JSON.stringify({ error: "invalid_grant" }), {
+            status: 400,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ access_token: "ya29.test-sa", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/upload/drive/v3/files/") && method === "PATCH") {
+        return new Response(
+          JSON.stringify({
+            error: { message: "Quota exceeded for quota metric 'Total Query Cost' and limit 'Units per minute per user'" },
+          }),
+          { status: 403, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`unexpected fetch ${method} ${url}`);
+    }) as typeof fetch;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+    try {
+      const adapter = vaultDriveAdapter({
+        ...oauthEnv,
+        GOOGLE_CLIENT_EMAIL: "vault@hitsquad.iam.gserviceaccount.com",
+        GOOGLE_PRIVATE_KEY: pem,
+      });
+      await assert.rejects(() => adapter.updateJson("1d3lzLDxCPwC963fdplsnwYgrDEanohZc", '{"hashes":{}}'), (error: unknown) => {
+        assert.ok(error instanceof DriveApiError);
+        assert.equal(driveFailureKind(error), "quota");
+        return true;
+      });
+      await assert.rejects(() => adapter.updateJson("1d3lzLDxCPwC963fdplsnwYgrDEanohZc", '{"hashes":{}}'));
+      assert.equal(grants.filter((grant) => grant === "refresh_token").length, 1);
+      assert.equal(warnings.some((line) => line.includes("oauth vault write skipped; invalid_grant")), true);
+      assert.equal(warnings.every((line) => !line.includes("test-oauth-refresh-token")), true);
+    } finally {
+      globalThis.fetch = previous;
+      console.warn = warn;
       resetDriveTokenCache();
     }
   });

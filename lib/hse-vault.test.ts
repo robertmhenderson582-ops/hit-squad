@@ -1,9 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { HSE_READY_SHELF_FOLDER } from "./hse-package-shelf.ts";
-import { DRIVE_FOLDER_MIME, DRIVE_SHORTCUT_MIME, memoryDrive } from "./drive-estimates.ts";
+import { DRIVE_FOLDER_MIME, DRIVE_SHORTCUT_MIME, DriveApiError, memoryDrive } from "./drive-estimates.ts";
 import { hseFolderId } from "./drive-data.ts";
-import { ensureHseVaultPath, hseVaultPath, isProtectedHseCompanyDocFile } from "./hse-vault.ts";
+import {
+  ensureHseVaultPath,
+  HSE_VAULT_FOLDER_ERROR,
+  HSE_VAULT_OAUTH_ERROR,
+  HSE_VAULT_QUOTA_ERROR,
+  HSE_VAULT_SHARE_ERROR,
+  HSE_VAULT_WRITE_ERROR,
+  hseVaultPath,
+  hseVaultWriteUserError,
+  isProtectedHseCompanyDocFile,
+} from "./hse-vault.ts";
 import { hseDropLeaks } from "./hse-vault-shared.ts";
 
 describe("HSE vault paths", () => {
@@ -71,5 +81,22 @@ describe("HSE vault paths", () => {
     const kids = await drive.listChildren(real.id);
     assert.equal(kids.some((row) => row.name === "Wood River - Roxana, IL"), true);
     assert.ok(folderId);
+  });
+
+  it("keeps testers on the desk-only toast and distinguishes quota, oauth, and folder for Owner", () => {
+    const quota = new DriveApiError(403, "Quota exceeded for quota metric 'Total Query Cost'");
+    const oauth = new DriveApiError(400, "invalid_grant");
+    const folder = new DriveApiError(400, "400 The specified parent is not a folder.");
+    assert.equal(hseVaultWriteUserError(quota, false), HSE_VAULT_WRITE_ERROR);
+    assert.equal(hseVaultWriteUserError(quota, true), HSE_VAULT_QUOTA_ERROR);
+    assert.equal(hseVaultWriteUserError(oauth, true), HSE_VAULT_OAUTH_ERROR);
+    assert.equal(hseVaultWriteUserError(folder, true), HSE_VAULT_FOLDER_ERROR);
+    assert.equal(
+      hseVaultWriteUserError(new DriveApiError(403, "The user does not have sufficient permissions for this file."), true),
+      HSE_VAULT_SHARE_ERROR,
+    );
+    assert.equal(hseDropLeaks(HSE_VAULT_QUOTA_ERROR), false);
+    assert.equal(hseDropLeaks(HSE_VAULT_OAUTH_ERROR), false);
+    assert.equal(hseDropLeaks(HSE_VAULT_FOLDER_ERROR), false);
   });
 });

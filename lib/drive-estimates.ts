@@ -142,6 +142,40 @@ function sanitizeDriveMessage(message: string) {
     .slice(0, 180);
 }
 
+export type DriveFailureKind = "quota" | "oauth" | "folder" | "share" | "missing" | "generic";
+
+function driveErrorText(error: unknown) {
+  return error instanceof Error ? error.message : String(error ?? "");
+}
+
+export function isOauthInvalidGrant(error: unknown) {
+  return /invalid_grant|expired or revoked/i.test(driveErrorText(error));
+}
+
+export function isDriveQuotaError(error: unknown) {
+  const text = driveErrorText(error);
+  const status = error instanceof DriveApiError ? error.status : 0;
+  return (status === 403 || /\b403\b/.test(text)) && /quota|units per minute|query cost/i.test(text);
+}
+
+export function isDriveFolderParentError(error: unknown) {
+  const text = driveErrorText(error);
+  const status = error instanceof DriveApiError ? error.status : 0;
+  return (status === 400 || /\b400\b/.test(text)) && /not a folder|specified parent/i.test(text);
+}
+
+/** Ops-facing class. Never include SA email, tokens, or Drive ids in the return value. */
+export function driveFailureKind(error: unknown): DriveFailureKind {
+  if (isOauthInvalidGrant(error)) return "oauth";
+  if (isDriveQuotaError(error)) return "quota";
+  if (isDriveFolderParentError(error)) return "folder";
+  const status = error instanceof DriveApiError ? error.status : 0;
+  const text = driveErrorText(error);
+  if (status === 403 || /\b403\b/.test(text)) return "share";
+  if (status === 404 || /\b404\b/.test(text)) return "missing";
+  return "generic";
+}
+
 type ServiceAccount = {
   client_email: string;
   private_key: string;
@@ -159,6 +193,41 @@ let cachedSaToken: CachedToken | null = null;
 const cachedOAuthTokens = new Map<string, CachedToken>();
 /** Once OAuth refresh or a Drive call fails, stay on the service account for this isolate. */
 let oauthDriveFailedOver = false;
+/** Refresh token is dead. Do not retry OAuth — each attempt multiplies SA quota burn. */
+let oauthInvalidGrant = false;
+
+type DriveListMode = "drive" | "user" | "allDrives";
+const LIST_CHILDREN_TTL_MS = 20_000;
+const EMPTY_LIST_CHILDREN_TTL_MS = 4_000;
+const LIST_QUERY_TTL_MS = 15_000;
+const RESOLVED_FOLDER_TTL_MS = 60_000;
+/** Last corpora that actually returned children. Happy-path reads reuse this only. */
+let listChildrenModeHint: DriveListMode | null = null;
+const listChildrenCache = new Map<string, { at: number; files: DriveFile[] }>();
+const listChildrenInflight = new Map<string, Promise<DriveFile[]>>();
+const listQueryCache = new Map<string, { at: number; files: DriveFile[] }>();
+const resolvedFolderParents = new Map<string, { at: number; id: string }>();
+
+function driveListModeOpts(mode: DriveListMode) {
+  if (mode === "allDrives") return { allDrives: true as const };
+  if (mode === "user") return { accessible: true as const };
+  return undefined;
+}
+
+function rememberWritableFolder(folderId: string) {
+  const id = folderId.trim();
+  if (id) resolvedFolderParents.set(id, { at: Date.now(), id });
+}
+
+function invalidateDriveListCache(folderId?: string) {
+  if (!folderId) {
+    listChildrenCache.clear();
+    listQueryCache.clear();
+    return;
+  }
+  listChildrenCache.delete(folderId);
+  listQueryCache.clear();
+}
 
 /** Owner Estimates room. Live packs only. Never Workbooks / Nathan. */
 export const ESTIMATES_ROOM_ID = "1y6Q3TOnpXzV-Y1oeqjjrHfSXt9hcIrgW";
@@ -226,6 +295,12 @@ export function resetDriveTokenCache() {
   cachedSaToken = null;
   cachedOAuthTokens.clear();
   oauthDriveFailedOver = false;
+  oauthInvalidGrant = false;
+  listChildrenModeHint = null;
+  listChildrenCache.clear();
+  listChildrenInflight.clear();
+  listQueryCache.clear();
+  resolvedFolderParents.clear();
 }
 
 export function memoryDrive(): DriveAdapter & {
@@ -405,6 +480,9 @@ async function googleAccessToken(account: ServiceAccount) {
 }
 
 async function oauthAccessToken(client: OAuthClient) {
+  if (oauthInvalidGrant) {
+    throw new DriveApiError(400, "invalid_grant", "oauth");
+  }
   const now = Math.floor(Date.now() / 1000);
   const cached = cachedTokenValue(cachedOAuthTokens.get(client.refreshToken), now);
   if (cached) return cached;
@@ -420,7 +498,13 @@ async function oauthAccessToken(client: OAuthClient) {
   });
   const data = (await response.json()) as { access_token?: string; expires_in?: number; error?: unknown };
   if (!response.ok || !data.access_token) {
-    throw new DriveApiError(response.status || 401, driveApiError(data, "token"), "oauth");
+    const message = driveApiError(data, "token");
+    if (isOauthInvalidGrant(message) || /invalid_grant/i.test(message)) {
+      oauthInvalidGrant = true;
+      oauthDriveFailedOver = true;
+      cachedOAuthTokens.delete(client.refreshToken);
+    }
+    throw new DriveApiError(response.status || 401, message, "oauth");
   }
   const next = { value: data.access_token, exp: now + (Number(data.expires_in) || 3600) };
   cachedOAuthTokens.set(client.refreshToken, next);
@@ -461,7 +545,13 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
     return { authorization: `Bearer ${token}`, ...extra };
   }
 
-  async function listByQuery(q: string, opts?: { accessible?: boolean; allDrives?: boolean }) {
+  async function listByQuery(q: string, opts?: { accessible?: boolean; allDrives?: boolean; fresh?: boolean }) {
+    const mode: DriveListMode = opts?.allDrives ? "allDrives" : opts?.accessible ? "user" : "drive";
+    const cacheKey = `${mode}|${q}`;
+    if (!opts?.fresh) {
+      const cached = listQueryCache.get(cacheKey);
+      if (cached && Date.now() - cached.at <= LIST_QUERY_TTL_MS) return cached.files;
+    }
     const files: DriveFile[] = [];
     let pageToken = "";
     do {
@@ -488,6 +578,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       if (Array.isArray(data.files)) files.push(...data.files);
       pageToken = typeof data.nextPageToken === "string" ? data.nextPageToken : "";
     } while (pageToken);
+    listQueryCache.set(cacheKey, { at: Date.now(), files });
     return files;
   }
 
@@ -502,16 +593,25 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
   }
 
   async function resolveWritableFolderParent(folderId: string) {
+    const cached = resolvedFolderParents.get(folderId);
+    if (cached && Date.now() - cached.at <= RESOLVED_FOLDER_TTL_MS) return cached.id;
     try {
       const row = await getFileMetadata(folderId, "id,name,mimeType,shortcutDetails");
       const resolved = writableDriveFolderId(row);
-      if (resolved) return resolved;
+      if (resolved) {
+        rememberWritableFolder(folderId);
+        rememberWritableFolder(resolved);
+        if (resolved !== folderId) resolvedFolderParents.set(folderId, { at: Date.now(), id: resolved });
+        return resolved;
+      }
       if (row.mimeType && row.mimeType !== DRIVE_FOLDER_MIME) {
         throw new DriveApiError(400, "400 The specified parent is not a folder.");
       }
     } catch (error) {
+      if (isDriveQuotaError(error) || isOauthInvalidGrant(error)) throw error;
       if (error instanceof DriveApiError && error.status === 400) throw error;
     }
+    rememberWritableFolder(folderId);
     return folderId;
   }
 
@@ -523,27 +623,60 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
     return row;
   }
 
-  async function listChildrenOf(folderId: string) {
+  async function listChildrenUncached(folderId: string, fresh: boolean) {
     const parent = await resolveWritableFolderParent(folderId);
     const q = `'${escapeDriveQueryValue(parent)}' in parents and trashed=false`;
+    // Remembered corpora only on the happy path. Cold start: user, then My Drive, allDrives last.
+    const modes: DriveListMode[] = listChildrenModeHint ? [listChildrenModeHint] : ["user", "drive", "allDrives"];
     const seen = new Map<string, DriveFile>();
-    for (const opts of [undefined, { accessible: true as const }, { allDrives: true as const }]) {
+    for (const mode of modes) {
       try {
-        for (const row of await listByQuery(q, opts)) {
+        for (const row of await listByQuery(q, { ...driveListModeOpts(mode), fresh })) {
           const next = listedFolderRow(row, parent);
           if (next.id && !seen.has(next.id)) seen.set(next.id, next);
         }
-        if (seen.size) break;
-      } catch {
-        // Shared Quality / Data rooms live outside My Drive spaces=drive.
+        if (seen.size) {
+          listChildrenModeHint = mode;
+          rememberWritableFolder(parent);
+          for (const row of seen.values()) {
+            const id = writableDriveFolderId(row);
+            if (id) rememberWritableFolder(id);
+          }
+          return [...seen.values()];
+        }
+      } catch (error) {
+        if (isDriveQuotaError(error) || isOauthInvalidGrant(error)) throw error;
+        // Wrong corpus / 404 — try the next mode only on a cold start.
       }
     }
+    rememberWritableFolder(parent);
     return [...seen.values()];
   }
 
-  async function findNamedChildFolder(parentId: string, name: string) {
+  async function listChildrenOf(folderId: string, opts?: { bypassCache?: boolean }) {
+    if (!opts?.bypassCache) {
+      const cached = listChildrenCache.get(folderId);
+      if (cached) {
+        const ttl = cached.files.length ? LIST_CHILDREN_TTL_MS : EMPTY_LIST_CHILDREN_TTL_MS;
+        if (Date.now() - cached.at <= ttl) return cached.files;
+      }
+      const inflight = listChildrenInflight.get(folderId);
+      if (inflight) return inflight;
+    }
+    const work = listChildrenUncached(folderId, Boolean(opts?.bypassCache));
+    if (!opts?.bypassCache) listChildrenInflight.set(folderId, work);
+    try {
+      const files = await work;
+      listChildrenCache.set(folderId, { at: Date.now(), files });
+      return files;
+    } finally {
+      listChildrenInflight.delete(folderId);
+    }
+  }
+
+  async function findNamedChildFolder(parentId: string, name: string, bypassCache = false) {
     const wanted = driveFolderName(name);
-    const kids = await listChildrenOf(parentId);
+    const kids = await listChildrenOf(parentId, { bypassCache });
     const existing = kids.find((row) => sameDriveFolderName(row.name, wanted) && writableDriveFolderId(row));
     if (!existing) return null;
     const id = writableDriveFolderId(existing);
@@ -592,6 +725,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       });
       const file = (await response.json()) as DriveFile & { error?: { message?: string } | string };
       if (!file.id) throw driveHttpError(response.status || 400, file, "create");
+      invalidateDriveListCache(parent);
       return { id: file.id, name: file.name || name, properties };
     },
     async updateJson(fileId, content, name, properties) {
@@ -635,6 +769,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
         const payload = await response.json().catch(() => null);
         throw driveHttpError(response.status, payload, "delete");
       }
+      invalidateDriveListCache();
     },
     async confirmWrite(fileId, content) {
       return confirmDriveWrite(getAccessToken, fileId, content);
@@ -656,12 +791,19 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
         },
       );
       const file = (await response.json()) as DriveFile & { error?: unknown };
-      if (file.id) return { id: file.id, name: file.name || folderName, mimeType: DRIVE_FOLDER_MIME, parents: [parent] };
+      if (file.id) {
+        invalidateDriveListCache(parent);
+        rememberWritableFolder(file.id);
+        return { id: file.id, name: file.name || folderName, mimeType: DRIVE_FOLDER_MIME, parents: [parent] };
+      }
+      const created = driveHttpError(response.status || 400, file, "folder");
+      if (isDriveQuotaError(created) || isOauthInvalidGrant(created)) throw created;
       if (response.status === 400 || response.status === 403) {
-        const recovered = await findNamedChildFolder(parent, folderName);
+        invalidateDriveListCache(parent);
+        const recovered = await findNamedChildFolder(parent, folderName, true);
         if (recovered) return recovered;
       }
-      throw driveHttpError(response.status || 400, file, "folder");
+      throw created;
     },
     async uploadBytes(folderId, name, bytes, mimeType, properties) {
       const parent = await resolveWritableFolderParent(folderId);
@@ -679,6 +821,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       });
       const file = (await response.json()) as DriveFile & { error?: unknown };
       if (!file.id) throw driveHttpError(response.status || 400, file, "upload");
+      invalidateDriveListCache(parent);
       return { id: file.id, name: file.name || name, mimeType, parents: [parent], properties };
     },
     async updateBytes(fileId, bytes, mimeType) {
@@ -827,6 +970,14 @@ function logVaultSaFallback() {
   console.warn("drive: service account vault write failed; trying OAuth");
 }
 
+function logVaultOauthSkipped() {
+  console.warn("drive: oauth vault write skipped; invalid_grant");
+}
+
+function shouldSkipOauthFallback(error?: unknown) {
+  return oauthInvalidGrant || isOauthInvalidGrant(error);
+}
+
 export function isSeatsOpenDenied(error: unknown) {
   const status = error instanceof DriveApiError ? error.status : 0;
   return status === 401 || status === 403 || status === 404;
@@ -900,8 +1051,14 @@ function withVaultWritePreference(sa: DriveAdapter, oauth: DriveAdapter): DriveA
   async function preferSa<T>(op: (drive: DriveAdapter) => Promise<T>): Promise<T> {
     try {
       return await op(sa);
-    } catch {
-      return op(oauth);
+    } catch (error) {
+      if (shouldSkipOauthFallback(error)) throw error;
+      try {
+        return await op(oauth);
+      } catch (oauthError) {
+        if (isOauthInvalidGrant(oauthError)) throw error;
+        throw oauthError;
+      }
     }
   }
   async function writeLanded(drive: DriveAdapter, fileId: string, content: string) {
@@ -932,17 +1089,21 @@ function withVaultWritePreference(sa: DriveAdapter, oauth: DriveAdapter): DriveA
       saError = error;
     }
     if (saError) logVaultWriteFailure("service-account", saError);
-    logVaultSaFallback();
-    try {
-      const written = await op(oauth);
-      if (await writeLanded(oauth, fileId || written.id, content)) return written;
-      oauthError = new DriveApiError(409, "zombie", "oauth");
-    } catch (error) {
-      oauthError = error;
+    if (shouldSkipOauthFallback(saError)) {
+      logVaultOauthSkipped();
+    } else {
+      logVaultSaFallback();
+      try {
+        const written = await op(oauth);
+        if (await writeLanded(oauth, fileId || written.id, content)) return written;
+        oauthError = new DriveApiError(409, "zombie", "oauth");
+      } catch (error) {
+        oauthError = error;
+      }
+      if (oauthError) logVaultWriteFailure("oauth", oauthError);
     }
-    if (oauthError) logVaultWriteFailure("oauth", oauthError);
     if (saWrote && (await writeLanded(sa, fileId || saWrote.id, content))) return saWrote;
-    if (saError instanceof DriveApiError && isSeatsOpenDenied(saError)) {
+    if (saError instanceof DriveApiError && isSeatsOpenDenied(saError) && !isDriveQuotaError(saError)) {
       throw new DriveApiError(saError.status, SEATS_SA_OPEN_ERROR, "service-account");
     }
     throw saError instanceof Error
@@ -958,11 +1119,18 @@ function withVaultWritePreference(sa: DriveAdapter, oauth: DriveAdapter): DriveA
       preferSa((drive) => (drive.listAccessibleJson ? drive.listAccessibleJson(name) : drive.listJson(""))),
     readJson: (fileId) => preferSa((drive) => drive.readJson(fileId)),
     createJson: async (folderId, name, content, properties) => {
+      let saError: unknown;
       try {
         const written = await sa.createJson(folderId, name, content, properties);
         if (await writeConfirmed(sa, written.id, content)) return written;
+        saError = new DriveApiError(409, "zombie", "service-account");
       } catch (error) {
-        logVaultWriteFailure("service-account", error);
+        saError = error;
+      }
+      if (saError) logVaultWriteFailure("service-account", saError);
+      if (shouldSkipOauthFallback(saError)) {
+        logVaultOauthSkipped();
+        throw saError instanceof Error ? saError : new Error("vault write not confirmed");
       }
       logVaultSaFallback();
       try {

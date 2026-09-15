@@ -1,7 +1,7 @@
 import { hasBuildDesk } from "./desk-role.ts";
 import { leadBriefAdapter, listStoredBriefs, publicBrief, removeFileFromStoredBriefs, saveStoredBrief } from "./lead-brief-store.ts";
 import type { LeadFile, PublicLeadBrief } from "./lead-briefs.ts";
-import { DriveApiError } from "./drive-estimates.ts";
+import { DriveApiError, driveFailureKind } from "./drive-estimates.ts";
 import { hydratePositionStore } from "./org-positions-store.ts";
 import { mergePositions } from "./org-positions.ts";
 import {
@@ -135,7 +135,7 @@ export async function saveHseCompanyDocDrop(user: HseDocUser, input: HseCompanyD
     };
   } catch (error) {
     const status = error instanceof DriveApiError ? error.status : 0;
-    console.warn(`hse-vault: company-doc write failed; ${status || "err"}`);
+    console.warn(`hse-vault: company-doc write failed; ${status || "err"} ${driveFailureKind(error)}`);
     return {
       ok: false as const,
       status: 503,
@@ -286,7 +286,7 @@ export async function removeHseCompanyDocFile(
     };
   } catch (error) {
     const status = error instanceof DriveApiError ? error.status : 0;
-    console.warn(`hse-vault: company-doc delete failed; ${status || "err"}`);
+    console.warn(`hse-vault: company-doc delete failed; ${status || "err"} ${driveFailureKind(error)}`);
     return {
       ok: false as const,
       status: 503,
@@ -318,7 +318,7 @@ export async function lockHseCompanyDoc(
     return { ok: true as const, locked: written.locked, stored: written.stored, store: written.store };
   } catch (error) {
     const status = error instanceof DriveApiError ? error.status : 0;
-    console.warn(`hse-vault: company-doc lock failed; ${status || "err"}`);
+    console.warn(`hse-vault: company-doc lock failed; ${status || "err"} ${driveFailureKind(error)}`);
     return {
       ok: false as const,
       status: 503,
