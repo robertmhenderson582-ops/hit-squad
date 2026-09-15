@@ -1,5 +1,6 @@
 export const SESSION_LOAD_DEADLINE_MS = 4000;
-export const AUTH_REQUEST_DEADLINE_MS = 8000;
+/** Must cover prepareLoginSeats hydrate+persist (2× LOGIN_SEAT_DEADLINE_MS) + cold start. */
+export const AUTH_REQUEST_DEADLINE_MS = 20000;
 export const AUTH_TIMEOUT_ERROR = "Sign-in timed out. Try again.";
 /** Jobs overlay must clear even when vault / Drive list hangs. */
 export const JOBS_REFRESH_DEADLINE_MS = 8000;

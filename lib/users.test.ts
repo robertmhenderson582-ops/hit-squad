@@ -48,6 +48,7 @@ import {
   liveSessionUser,
   scheduleSessionVaultCatchUp,
   LOGIN_SEAT_DEADLINE_MS,
+  PREVIOUS_HASH_VERIFY_CAP,
   awaitSeatDeadline,
   prepareLoginSeats,
 } from "./users.ts";
@@ -1800,7 +1801,7 @@ test("scheduleSessionVaultCatchUp returns while Drive hydrate is still hung", as
 });
 
 test("awaitSeatDeadline returns timedOut while the work is still hung", async () => {
-  assert.ok(LOGIN_SEAT_DEADLINE_MS <= 3000);
+  assert.ok(LOGIN_SEAT_DEADLINE_MS <= 10000);
   assert.ok(LOGIN_SEAT_DEADLINE_MS >= 1000);
   const finished = await awaitSeatDeadline(Promise.resolve("ok"), 80);
   assert.equal(finished.timedOut, false);
@@ -1809,6 +1810,27 @@ test("awaitSeatDeadline returns timedOut while the work is still hung", async ()
   const result = await awaitSeatDeadline(new Promise(() => {}), 40);
   assert.equal(result.timedOut, true);
   assert.ok(Date.now() - started < 200, "deadline must not wait on hung work");
+});
+
+test("verifyPassword caps previousHashes bcrypt checks", () => {
+  assert.ok(PREVIOUS_HASH_VERIFY_CAP <= 64);
+  assert.ok(PREVIOUS_HASH_VERIFY_CAP >= 8);
+  const primary = bcrypt.hashSync("primary-ok-password", 4);
+  const decoys = [
+    ...Array.from({ length: 3 }, (_, i) => bcrypt.hashSync(`decoy-${i}`, 4)),
+    ...Array.from({ length: PREVIOUS_HASH_VERIFY_CAP + 40 }, (_, i) => ("$2b$04$" + `pad${i}`).padEnd(60, "x")),
+  ];
+  const user: Parameters<typeof verifyPassword>[0] = {
+    id: "cap-seat",
+    email: "cap@example.com",
+    name: "Cap",
+    role: "estimator",
+    passwordHash: primary,
+    previousHashes: decoys,
+    mustChangePassword: false,
+  };
+  assert.equal(verifyPassword(user, "primary-ok-password"), true);
+  assert.equal(verifyPassword({ ...user, passwordHash: primary }, "nope-not-a-password"), false);
 });
 
 test("prepareLoginSeats returns while Drive hydrate is hung and owner can still login", async () => {
