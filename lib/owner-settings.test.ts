@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, beforeEach, describe, it } from "node:test";
 
-import { memoryDrive } from "./drive-estimates.ts";
+import { SETTINGS_VAULT_KIND, SETTINGS_VAULT_NAME, writeVaultJson } from "./drive-data.ts";
+import { memoryDrive, type DriveAdapter } from "./drive-estimates.ts";
 import {
   forgetOwnerSettingsCacheForTests,
   getOwnerSettings,
@@ -68,6 +69,90 @@ describe("owner settings vault persist", () => {
     const cleared = await getOwnerSettings();
     assert.equal(cleared.showHighUsageNote, false);
     assert.equal(cleared.usagePercent, null);
+  });
+
+  it("re-reads Drive on GET so a warm isolate sees another instance's usage clock", async () => {
+    const drive = memoryDrive();
+    useOwnerSettingsVaultForTests(drive);
+    await getOwnerSettings();
+    await writeVaultJson(drive, SETTINGS_VAULT_NAME, SETTINGS_VAULT_KIND, {
+      showHighUsageNote: true,
+      usagePercent: 90,
+      highUsageThreshold: 70,
+    });
+    const again = await getOwnerSettings();
+    assert.equal(again.showHighUsageNote, true);
+    assert.equal(again.usagePercent, 90);
+  });
+
+  it("does not let a stale isolate overwrite the usage clock with a View-as write", async () => {
+    const drive = memoryDrive();
+    useOwnerSettingsVaultForTests(drive);
+    await getOwnerSettings();
+    await writeVaultJson(drive, SETTINGS_VAULT_NAME, SETTINGS_VAULT_KIND, {
+      aliasesOn: true,
+      showHighUsageNote: true,
+      usagePercent: 82,
+      highUsageThreshold: 70,
+    });
+    await setOwnerSettings({ viewAs: "nathan" });
+    forgetOwnerSettingsCacheForTests();
+    useOwnerSettingsVaultForTests(drive);
+    const again = await getOwnerSettings();
+    assert.equal(again.showHighUsageNote, true);
+    assert.equal(again.usagePercent, 82);
+    assert.equal(again.viewAs, "nathan");
+    assert.equal(again.aliasesOn, true);
+  });
+
+  it("rolls back a usage-clock flip when Drive write fails", async () => {
+    const inner = memoryDrive();
+    const drive: DriveAdapter = {
+      configured: true,
+      listJson: (folderId) => inner.listJson(folderId),
+      listAccessibleJson: (name) => inner.listAccessibleJson!(name),
+      readJson: (fileId) => inner.readJson(fileId),
+      async createJson() {
+        throw new Error("vault write not confirmed");
+      },
+      async updateJson() {
+        throw new Error("vault write not confirmed");
+      },
+      deleteJson: (fileId) => inner.deleteJson(fileId),
+    };
+    useOwnerSettingsVaultForTests(drive);
+    await assert.rejects(() => setOwnerSettings({ showHighUsageNote: true, usagePercent: 82 }));
+    assert.equal((await getOwnerSettings()).showHighUsageNote, false);
+    assert.equal((await getOwnerSettings()).usagePercent, null);
+    forgetOwnerSettingsCacheForTests();
+    useOwnerSettingsVaultForTests(drive);
+    const cold = await getOwnerSettings();
+    assert.equal(cold.showHighUsageNote, false);
+    assert.equal(cold.usagePercent, null);
+  });
+
+  it("keeps a confirmed usage clock when a later Drive write fails", async () => {
+    const inner = memoryDrive();
+    useOwnerSettingsVaultForTests(inner);
+    await setOwnerSettings({ showHighUsageNote: true, usagePercent: 82 });
+    const failing: DriveAdapter = {
+      configured: true,
+      listJson: (folderId) => inner.listJson(folderId),
+      listAccessibleJson: (name) => inner.listAccessibleJson!(name),
+      readJson: (fileId) => inner.readJson(fileId),
+      createJson: (folderId, name, content, properties) => inner.createJson(folderId, name, content, properties),
+      async updateJson() {
+        throw new Error("vault write not confirmed");
+      },
+      deleteJson: (fileId) => inner.deleteJson(fileId),
+    };
+    forgetOwnerSettingsCacheForTests();
+    useOwnerSettingsVaultForTests(failing);
+    await getOwnerSettings();
+    await assert.rejects(() => setOwnerSettings({ showHighUsageNote: false, usagePercent: null }));
+    const stillHigh = await getOwnerSettings();
+    assert.equal(stillHigh.showHighUsageNote, true);
+    assert.equal(stillHigh.usagePercent, 82);
   });
 
   it("defaults Inbox and Suggestion Box chrome off and persists the owner flip", async () => {

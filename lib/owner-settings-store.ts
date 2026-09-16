@@ -111,7 +111,7 @@ function writeCache(data: OwnerSettings) {
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify(settings, null, 2) + "\n", "utf8");
   } catch {
-    // Best-effort only. A failed write must not wipe the previous file.
+    // Best-effort only. A failed sidecar write must not undo a confirmed vault write.
   }
 }
 
@@ -123,10 +123,12 @@ function resolveAdapter(): DriveAdapter | null {
 }
 
 async function persist() {
-  writeCache(settings);
-  setRegularClientOverrides(settings.regularClient ?? {});
+  const data = snapshot();
   const drive = resolveAdapter();
-  if (drive) await writeVaultJson(drive, SETTINGS_VAULT_NAME, SETTINGS_VAULT_KIND, snapshot());
+  // Drive is the source of truth on Vercel. /tmp + memory look saved only until the isolate dies.
+  if (drive) await writeVaultJson(drive, SETTINGS_VAULT_NAME, SETTINGS_VAULT_KIND, data);
+  writeCache(data);
+  setRegularClientOverrides(data.regularClient ?? {});
 }
 
 function clearStaleRepublish() {
@@ -144,39 +146,62 @@ function clearStaleRepublish() {
   return false;
 }
 
-async function hydrateOwnerSettings(): Promise<OwnerSettings> {
-  if (hydrated) {
-    clearStaleRepublish();
-    return snapshot();
-  }
+type SettingsSource = "vault" | "cache" | "empty";
+
+async function refreshFromVault(): Promise<SettingsSource> {
   const cache = readCache();
   const drive = resolveAdapter();
   if (drive) {
     try {
       const vault = await readVaultJson(drive, SETTINGS_VAULT_NAME, SETTINGS_VAULT_KIND);
-      if (vault) writeCache(parseOwnerSettings(vault));
-      else if (cache) {
-        writeCache(cache);
-        await writeVaultJson(drive, SETTINGS_VAULT_NAME, SETTINGS_VAULT_KIND, snapshot());
+      if (vault) {
+        writeCache(parseOwnerSettings(vault));
+        return "vault";
       }
+      if (cache) {
+        writeCache(cache);
+        return "cache";
+      }
+      return "empty";
     } catch {
-      if (cache) writeCache(cache);
+      if (cache) {
+        writeCache(cache);
+        return "cache";
+      }
+      return "empty";
     }
-  } else if (cache) {
+  }
+  if (cache) {
     writeCache(cache);
+    return "cache";
+  }
+  return "empty";
+}
+
+async function hydrateOwnerSettings(opts?: { refresh?: boolean }): Promise<OwnerSettings> {
+  if (hydrated && !opts?.refresh) {
+    clearStaleRepublish();
+    return snapshot();
+  }
+  const previous = hydrated ? snapshot() : null;
+  const source = await refreshFromVault();
+  if (source === "empty" && previous) {
+    // Failed Drive read with no /tmp — keep the last good snapshot. Do not persist defaults.
+    settings = parseOwnerSettings(previous);
   }
   hydrated = true;
-  if (clearStaleRepublish()) await persist();
+  if (source !== "empty" && clearStaleRepublish()) {
+    try {
+      await persist();
+    } catch {
+      // Republish stamp cleanup must not fail a settings read.
+    }
+  }
   setRegularClientOverrides(settings.regularClient ?? {});
   return snapshot();
 }
 
-export async function getOwnerSettings(): Promise<OwnerSettings> {
-  return hydrateOwnerSettings();
-}
-
-export async function setOwnerSettings(next: Partial<OwnerSettings>): Promise<OwnerSettings> {
-  await hydrateOwnerSettings();
+function applyOwnerSettingsPatch(next: Partial<OwnerSettings>) {
   if (typeof next.aliasesOn === "boolean") settings.aliasesOn = next.aliasesOn;
   if (typeof next.showInboxSuggestionBox === "boolean") settings.showInboxSuggestionBox = next.showInboxSuggestionBox;
   if (typeof next.showHighUsageNote === "boolean") settings.showHighUsageNote = next.showHighUsageNote;
@@ -192,52 +217,68 @@ export async function setOwnerSettings(next: Partial<OwnerSettings>): Promise<Ow
   if (next.regularClient && typeof next.regularClient === "object") {
     settings.regularClient = { ...(settings.regularClient ?? {}), ...next.regularClient };
   }
-  await persist();
-  return snapshot();
+}
+
+export async function getOwnerSettings(): Promise<OwnerSettings> {
+  return hydrateOwnerSettings({ refresh: true });
+}
+
+export async function setOwnerSettings(next: Partial<OwnerSettings>): Promise<OwnerSettings> {
+  return persistPatchedSettings(() => applyOwnerSettingsPatch(next));
 }
 
 export function peekRegularClientOverrides(): Record<string, boolean> {
   return { ...(settings.regularClient ?? {}) };
 }
 
-export async function setSiteRegularClient(siteId: string, regularClient: boolean): Promise<OwnerSettings> {
-  await hydrateOwnerSettings();
-  settings.regularClient = { ...(settings.regularClient ?? {}), [siteId]: regularClient };
-  writeRegularClientOverride(siteId, regularClient);
-  await persist();
+async function persistPatchedSettings(apply: () => void): Promise<OwnerSettings> {
+  await hydrateOwnerSettings({ refresh: true });
+  const previous = snapshot();
+  apply();
+  try {
+    await persist();
+  } catch (error) {
+    settings = parseOwnerSettings(previous);
+    throw error;
+  }
   return snapshot();
+}
+
+export async function setSiteRegularClient(siteId: string, regularClient: boolean): Promise<OwnerSettings> {
+  return persistPatchedSettings(() => {
+    settings.regularClient = { ...(settings.regularClient ?? {}), [siteId]: regularClient };
+    writeRegularClientOverride(siteId, regularClient);
+  });
 }
 
 export async function startRepublish(waitMinutes: RepublishWait, note: string): Promise<OwnerSettings> {
-  await hydrateOwnerSettings();
-  const until = waitMinutes === 0 ? Date.now() : Date.now() + waitMinutes * 60 * 1000;
-  settings.republish = {
-    waitMinutes,
-    note,
-    until,
-    active: true,
-    buildStamp: BUILD_STAMP,
-    inboxNotice:
-      waitMinutes === 0
-        ? "Desk locked for a republish. Owner stays in."
-        : `Desk republish in ${waitMinutes} minutes.${note ? ` ${note}` : ""}`,
-  };
-  await persist();
-  return snapshot();
+  return persistPatchedSettings(() => {
+    const until = waitMinutes === 0 ? Date.now() : Date.now() + waitMinutes * 60 * 1000;
+    settings.republish = {
+      waitMinutes,
+      note,
+      until,
+      active: true,
+      buildStamp: BUILD_STAMP,
+      inboxNotice:
+        waitMinutes === 0
+          ? "Desk locked for a republish. Owner stays in."
+          : `Desk republish in ${waitMinutes} minutes.${note ? ` ${note}` : ""}`,
+    };
+  });
 }
 
 export async function clearRepublish(): Promise<OwnerSettings> {
-  await hydrateOwnerSettings();
-  settings.republish = {
-    waitMinutes: 5,
-    note: "",
-    until: null,
-    active: false,
-    buildStamp: BUILD_STAMP,
-    inboxNotice: "We’re back.",
-  };
-  await persist();
-  return snapshot();
+  return persistPatchedSettings(() => {
+    settings.republish = {
+      waitMinutes: 5,
+      note: "",
+      until: null,
+      active: false,
+      buildStamp: BUILD_STAMP,
+      inboxNotice: "We’re back.",
+    };
+  });
 }
 
 export function resetOwnerSettingsForTests() {

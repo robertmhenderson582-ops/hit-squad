@@ -127,12 +127,26 @@ type OwnerDeskState = {
 const OwnerDeskContext = createContext<OwnerDeskState | null>(null);
 
 async function saveSettings(next: Partial<OwnerSettings>) {
-  await fetch("/api/desk/owner-settings", {
+  const response = await fetch("/api/desk/owner-settings", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(next),
-  }).catch(() => undefined);
+  });
+  const data = (await response.json().catch(() => ({}))) as Partial<OwnerSettings> & { error?: string };
+  if (!response.ok) {
+    throw new Error(typeof data.error === "string" ? data.error : "Could not save. Try again.");
+  }
+  return data;
+}
+
+async function loadOwnerSettings() {
+  const response = await fetch("/api/desk/owner-settings", { credentials: "include", cache: "no-store" });
+  const data = (await response.json().catch(() => ({}))) as Partial<OwnerSettings> & { error?: string };
+  if (!response.ok) {
+    throw new Error(typeof data.error === "string" ? data.error : "Could not load settings.");
+  }
+  return data;
 }
 
 async function noteFeature(detail: string) {
@@ -159,7 +173,16 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
   const [highUsageThreshold, setHighUsageThresholdState] = useState(DEFAULT_HIGH_USAGE_THRESHOLD);
   const [inboxChromeReady, setInboxChromeReady] = useState(false);
   const [lensReady, setLensReady] = useState(!hasBuildDesk(user));
+  const clockEpochRef = useRef(0);
   const people = useDeskPeople();
+
+  const applyClockIfCurrent = useCallback(
+    (epoch: number, data: Partial<OwnerSettings>) => {
+      if (epoch !== clockEpochRef.current) return;
+      applyUsageClockState(data, setShowHighUsageNoteState, setUsagePercentState, setHighUsageThresholdState);
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     // Session still loading: keep stored View as Nathan. Do not reset to owner leftover.
@@ -192,6 +215,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
   }, [followSeat, user, viewAs]);
 
   useEffect(() => {
+    const epoch = clockEpochRef.current;
     if (tester) {
       setAliasesOnState(tester.aliased);
       setFollowSeatState("owner");
@@ -204,13 +228,12 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
         if (saved.viewResponsibility) setViewResponsibility(saved.viewResponsibility);
         if (saved.viewSite) setViewSite(saved.viewSite);
       }
-      fetch("/api/desk/owner-settings", { credentials: "include", cache: "no-store" })
-        .then((response) => response.json())
+      loadOwnerSettings()
         .then((data) => {
           if (typeof data.showInboxSuggestionBox === "boolean") {
             setShowInboxSuggestionBoxState(data.showInboxSuggestionBox);
           }
-          applyUsageClockState(data, setShowHighUsageNoteState, setUsagePercentState, setHighUsageThresholdState);
+          applyClockIfCurrent(epoch, data);
           if (data.republish) setRepublish(data.republish);
           setInboxChromeReady(true);
         })
@@ -218,13 +241,12 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     if (!hasBuildDesk(user)) {
-      fetch("/api/desk/owner-settings", { credentials: "include", cache: "no-store" })
-        .then((response) => response.json())
+      loadOwnerSettings()
         .then((data) => {
           if (typeof data.showInboxSuggestionBox === "boolean") {
             setShowInboxSuggestionBoxState(data.showInboxSuggestionBox);
           }
-          applyUsageClockState(data, setShowHighUsageNoteState, setUsagePercentState, setHighUsageThresholdState);
+          applyClockIfCurrent(epoch, data);
           if (data.republish) setRepublish(data.republish);
           setInboxChromeReady(true);
           setLensReady(true);
@@ -235,14 +257,13 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
         });
       return;
     }
-    fetch("/api/desk/owner-settings", { credentials: "include", cache: "no-store" })
-      .then((response) => response.json())
+    loadOwnerSettings()
       .then((data) => {
         if (typeof data.aliasesOn === "boolean") setAliasesOnState(data.aliasesOn);
         if (typeof data.showInboxSuggestionBox === "boolean") {
           setShowInboxSuggestionBoxState(data.showInboxSuggestionBox);
         }
-        applyUsageClockState(data, setShowHighUsageNoteState, setUsagePercentState, setHighUsageThresholdState);
+        applyClockIfCurrent(epoch, data);
         const nextFollow = preferredFollowSeat(readStoredFollow(), data.followSeat);
         setFollowSeatState(nextFollow);
         writeStoredFollow(nextFollow);
@@ -259,7 +280,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
         setInboxChromeReady(true);
         setLensReady(true);
       });
-  }, [tester, user]);
+  }, [applyClockIfCurrent, tester, user]);
 
   const viewedSeat = hasBuildDesk(user) && viewingAsOther(viewAs) ? testerFromViewAs(viewAs, people) : undefined;
   const aliasSeat = viewedSeat
@@ -282,14 +303,14 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
   const setAliasesOn = useCallback((on: boolean) => {
     if (isTester(user) || !hasBuildDesk(user)) return;
     setAliasesOnState(on);
-    saveSettings({ aliasesOn: on });
+    void saveSettings({ aliasesOn: on }).catch(() => undefined);
     noteFeature(on ? "Aliases tester view on" : "Aliases real names");
   }, [user]);
 
   const setShowInboxSuggestionBox = useCallback((on: boolean) => {
     if (isTester(user) || !hasBuildDesk(user)) return;
     setShowInboxSuggestionBoxState(on);
-    saveSettings({ showInboxSuggestionBox: on });
+    void saveSettings({ showInboxSuggestionBox: on }).catch(() => undefined);
     noteFeature(on ? "Show Inbox & Suggestion Box" : "Hide Inbox & Suggestion Box");
   }, [user]);
 
@@ -301,16 +322,32 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     },
   ) => {
     if (isTester(user) || !hasBuildDesk(user)) return;
+    const epoch = ++clockEpochRef.current;
     if (typeof next.showHighUsageNote === "boolean") setShowHighUsageNoteState(next.showHighUsageNote);
     if (next.usagePercent !== undefined) setUsagePercentState(parseUsagePercent(next.usagePercent));
     if (next.highUsageThreshold !== undefined) setHighUsageThresholdState(parseUsageThreshold(next.highUsageThreshold));
-    saveSettings(next);
+    void saveSettings(next)
+      .then((data) => {
+        applyClockIfCurrent(epoch, data);
+        if (epoch === clockEpochRef.current) clockEpochRef.current += 1;
+      })
+      .catch(() => {
+        void loadOwnerSettings()
+          .then((data) => {
+            applyClockIfCurrent(epoch, data);
+            if (epoch === clockEpochRef.current) clockEpochRef.current += 1;
+          })
+          .catch(() => {
+            applyClockIfCurrent(epoch, { showHighUsageNote: false, usagePercent: null });
+            if (epoch === clockEpochRef.current) clockEpochRef.current += 1;
+          });
+      });
     noteFeature(
       next.showHighUsageNote === false && next.usagePercent == null
         ? "Usage clock cleared"
         : "Usage clock updated",
     );
-  }, [user]);
+  }, [applyClockIfCurrent, user]);
 
   const setFollowSeat = useCallback((seat: FollowSeat, nextLand?: string) => {
     if (!canUseFollow(user)) return;
@@ -318,7 +355,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     writeStoredFollow(seat);
     writeStoredViewAs(lens);
     setVaultViewAs(seat === "owner" ? null : seat);
-    saveSettings({ followSeat: seat, viewAs: lens });
+    void saveSettings({ followSeat: seat, viewAs: lens }).catch(() => undefined);
     noteFeature(seat === "owner" ? "Stopped Follow" : `Follow ${seat} screen`);
     if (seat !== "owner") {
       const land = followLandPath(nextLand ?? "/");
@@ -341,7 +378,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     if (!hasBuildDesk(user)) return;
     writeStoredViewAs(seat);
     setVaultViewAs(activeLensSeat(seat, followSeat));
-    saveSettings({ viewAs: seat });
+    void saveSettings({ viewAs: seat }).catch(() => undefined);
     noteFeature(seat === "owner" ? "View as owner" : `View as ${seat}`);
     if (seat !== "owner") {
       void hydrateFromVault(undefined, { viewAs: seat }).finally(() => {
@@ -361,7 +398,7 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     if (!hasBuildDesk(user)) return;
-    saveSettings({ viewResponsibility: responsibility, viewSite: site });
+    void saveSettings({ viewResponsibility: responsibility, viewSite: site }).catch(() => undefined);
     noteFeature(`View as ${responsibility} · ${site}`);
   }, [user]);
 

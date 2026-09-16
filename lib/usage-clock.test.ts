@@ -95,6 +95,16 @@ describe("Home + Settings wiring", () => {
     assert.match(api, /usagePercent/);
     assert.match(ctx, /setUsageClock/);
     assert.match(ctx, /applyUsageClockState/);
+    assert.match(ctx, /applyClockIfCurrent/);
+    assert.match(ctx, /response\.ok/);
+    assert.match(ctx, /loadOwnerSettings/);
+    assert.match(ctx, /if \(tester\)/);
+    assert.match(ctx, /if \(!hasBuildDesk\(user\)\)/);
+    assert.match(api, /DRIVE_WRITE_ERROR/);
+    assert.match(api, /"showHighUsageNote" in body/);
+    assert.match(store, /refresh: true/);
+    assert.match(store, /writeVaultJson/);
+    assert.match(store, /settings = parseOwnerSettings\(previous\)/);
     assert.match(css, /\.usage-clock-note \{/);
     assert.doesNotMatch(hero, /cursor\.com|spend api|usage\/meter/i);
     assert.doesNotMatch(display, /cursor\.com\/|openai|anthropic/i);
