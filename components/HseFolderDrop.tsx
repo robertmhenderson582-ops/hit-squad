@@ -226,7 +226,7 @@ export function HseFolderDrop({
       <h2 className="font-display text-xl">{folder}</h2>
       <p className="mt-2 text-sm">
         {canMutate
-          ? "Activate the selected radio to Open form and fill the blank sheet. Drop extra files here. Filled copies saved from the form land in this job folder under a new name. Testers only see their own files."
+          ? "Activate the selected radio to Open form and fill the blank sheet. Drop extra files here. Filled copies saved from the form land in this job folder under a new name. Users only see their own files."
           : "View only. Open a filled copy to read it. This seat cannot drop, replace, or remove files here."}
       </p>
       <div

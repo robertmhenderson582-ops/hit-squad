@@ -98,7 +98,7 @@ export function FollowDesk() {
           Follow opens that person&apos;s desk — the same view they see — not a remote desktop and
           not a fake plant wall. Live people jump to the top. Green pulse and Live tag while they
           are on the desk. Grey and no pulse after about 90 seconds. Last seen stays a day after
-          idle. You do not show in your own list. Password fields stay blank. Testers never see this
+          idle. You do not show in your own list. Password fields stay blank. Users never see this
           list or that they are watched.
         </p>
       </section>
@@ -177,8 +177,8 @@ export function FollowDesk() {
                   : "Whole-catalog aliases stay on."
               }`
             : desk.aliasesOn
-              ? "Owner tester view — Ironwood / Midwest names. Follow an aliased seat to check that lens."
-              : "Owner view — real names. Turn aliases on to preview tester view."}
+              ? "Owner user view — Ironwood / Midwest names. Follow an aliased seat to check that lens."
+              : "Owner view — real names. Turn aliases on to preview user view."}
         </p>
       </section>
     </div>

@@ -157,7 +157,7 @@ export function TicketsDesk() {
             </button>
           </div>
         ) : (
-          <p className="text-sm text-[#5b6f73]">Your tickets only. Testers cannot delete.</p>
+          <p className="text-sm text-[#5b6f73]">Your tickets only. Users cannot delete.</p>
         )}
       </div>
       {error ? <p className="mt-3 text-sm text-[#b74120]">{error}</p> : null}

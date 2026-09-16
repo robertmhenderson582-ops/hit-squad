@@ -3,16 +3,15 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import {
-  APPROVAL_STATUSES,
   addLogRow,
   changeOrderNoun,
+  CONTRACTOR_LOG_COLUMNS,
   DEFAULT_CHANGE_ORDER_SHELL,
   emptyFcrPacket,
   FCR_BLOCKS,
   FCR_DAY_LABELS,
   FCR_DAYS,
   fcrSummary,
-  IMPACT_LEVELS,
   LOG_STATUSES,
   MILEAGE_YES_FLAT,
   peopleFromJob,
@@ -64,11 +63,12 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
   return (
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        On-job {noun} packet. Hours come from this job’s Crew billable rates. Mileage Yes is a
-        flat ${MILEAGE_YES_FLAT}, not times headcount. East Coast still does not turn 12s into DT.
-        Log is the field home — rows stay on this estimate after refresh or another device.
+        On-job Change Orders log. {noun} math stays under the hood. Hours come from this job’s Crew
+        billable rates. Mileage Yes is a flat ${MILEAGE_YES_FLAT}, not times headcount. East Coast
+        still does not turn 12s into DT. Log is the field home — rows stay on this estimate after
+        refresh or another device.
       </p>
-      <nav className="flex flex-wrap gap-2 text-sm" aria-label={`${noun} packet`}>
+      <nav className="flex flex-wrap gap-2 text-sm" aria-label="Change Orders packet">
         {SHELLS.map((item) => (
           <button
             key={item}
@@ -76,7 +76,7 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
             onClick={() => setShell(item)}
             className={`rounded px-3 py-1.5 ${shell === item ? "bg-steel text-white" : "border border-steel text-steel"}`}
           >
-            {item === "Log" ? `${noun} log` : item}
+            {item === "Log" ? "Change Orders log" : item}
           </button>
         ))}
       </nav>
@@ -85,9 +85,10 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
         <section className="plant-card px-5 py-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-semibold text-[#163038]">{noun} log</h2>
+              <h2 className="text-2xl font-semibold text-[#163038]">Change Orders log</h2>
               <p className="mt-1 text-sm text-[#5b6f73]">
-                Monroe-style header, then one row per {noun}. Adding a row writes the live pack.
+                Contractor log — SCR, request, who asked, status, and scope. Adding a row writes the
+                live pack.
               </p>
             </div>
             <button
@@ -95,7 +96,7 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
               onClick={() => persist(addLogRow(packet))}
               className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white"
             >
-              + Add {noun}
+              + Add Change Order
             </button>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -134,27 +135,9 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
             <table className="min-w-full text-left text-sm">
               <thead className="text-xs tracking-[0.1em] text-[#5b6f73]">
                 <tr>
-                  {[
-                    "SCR #",
-                    "Request Date",
-                    "Requested By",
-                    "Reviewed By",
-                    "Status",
-                    "Scope Change Description",
-                    "Project Impact",
-                    "Impact Level",
-                    "Approved By",
-                    "Approval Status",
-                    "Approval Date",
-                    "Approved MH",
-                    "Approved Cost $",
-                    "Changes to Plan",
-                    "Revised Comp Date",
-                    "Notes",
-                    "Logged By",
-                  ].map((header) => (
-                    <th key={header} className="px-2 py-2">
-                      {header}
+                  {CONTRACTOR_LOG_COLUMNS.map((column) => (
+                    <th key={column.key} className="px-2 py-2">
+                      {column.label}
                     </th>
                   ))}
                 </tr>
@@ -162,28 +145,21 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
               <tbody>
                 {packet.log.length === 0 ? (
                   <tr>
-                    <td colSpan={17} className="px-2 py-6 text-[#5b6f73]">
-                      <p>No {noun}s on this job yet.</p>
+                    <td colSpan={CONTRACTOR_LOG_COLUMNS.length} className="px-2 py-6 text-[#5b6f73]">
+                      <p>No Change Orders on this job yet.</p>
                       <button
                         type="button"
                         onClick={() => persist(addLogRow(packet))}
                         className="mt-3 rounded-lg bg-steel px-3 py-1.5 text-sm text-white"
                       >
-                        + Add {noun}
+                        + Add Change Order
                       </button>
                     </td>
                   </tr>
                 ) : (
                   packet.log.map((row, index) => (
                     <tr key={row.id} className="border-t border-[#d5e0de] align-top">
-                      {(
-                        [
-                          ["scr", 8],
-                          ["requestDate", 10],
-                          ["requestedBy", 10],
-                          ["reviewedBy", 10],
-                        ] as const
-                      ).map(([key]) => (
+                      {(["scr", "requestDate", "requestedBy"] as const).map((key) => (
                         <td key={key} className="px-2 py-2">
                           <input
                             className="paper-field min-w-[7rem]"
@@ -211,113 +187,17 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
                           ))}
                         </select>
                       </td>
-                      {(["scope", "impact"] as const).map((key) => (
-                        <td key={key} className="px-2 py-2">
-                          <input
-                            className="paper-field min-w-[8rem]"
-                            value={row[key]}
-                            onChange={(event) => {
-                              const next = packet.log.slice();
-                              next[index] = { ...row, [key]: event.target.value };
-                              persist({ ...packet, log: next });
-                            }}
-                          />
-                        </td>
-                      ))}
-                      <td className="px-2 py-2">
-                        <select
-                          className="paper-field"
-                          value={row.impactLevel}
-                          onChange={(event) => {
-                            const next = packet.log.slice();
-                            next[index] = { ...row, impactLevel: event.target.value as (typeof IMPACT_LEVELS)[number] };
-                            persist({ ...packet, log: next });
-                          }}
-                        >
-                          {IMPACT_LEVELS.map((item) => (
-                            <option key={item}>{item}</option>
-                          ))}
-                        </select>
-                      </td>
                       <td className="px-2 py-2">
                         <input
-                          className="paper-field min-w-[7rem]"
-                          value={row.approvedBy}
+                          className="paper-field min-w-[12rem]"
+                          value={row.scope}
                           onChange={(event) => {
                             const next = packet.log.slice();
-                            next[index] = { ...row, approvedBy: event.target.value };
+                            next[index] = { ...row, scope: event.target.value };
                             persist({ ...packet, log: next });
                           }}
                         />
                       </td>
-                      <td className="px-2 py-2">
-                        <select
-                          className="paper-field"
-                          value={row.approvalStatus}
-                          onChange={(event) => {
-                            const next = packet.log.slice();
-                            next[index] = {
-                              ...row,
-                              approvalStatus: event.target.value as (typeof APPROVAL_STATUSES)[number],
-                            };
-                            persist({ ...packet, log: next });
-                          }}
-                        >
-                          {APPROVAL_STATUSES.map((item) => (
-                            <option key={item}>{item}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          className="paper-field min-w-[7rem]"
-                          value={row.approvalDate}
-                          onChange={(event) => {
-                            const next = packet.log.slice();
-                            next[index] = { ...row, approvalDate: event.target.value };
-                            persist({ ...packet, log: next });
-                          }}
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          className="paper-field w-20"
-                          value={row.approvedMh || ""}
-                          onChange={(event) => {
-                            const next = packet.log.slice();
-                            next[index] = { ...row, approvedMh: Number(event.target.value) || 0 };
-                            persist({ ...packet, log: next });
-                          }}
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          className="paper-field w-24"
-                          value={row.approvedCost || ""}
-                          onChange={(event) => {
-                            const next = packet.log.slice();
-                            next[index] = { ...row, approvedCost: Number(event.target.value) || 0 };
-                            persist({ ...packet, log: next });
-                          }}
-                        />
-                      </td>
-                      {(["planChanges", "revisedComp", "notes", "loggedBy"] as const).map((key) => (
-                        <td key={key} className="px-2 py-2">
-                          <input
-                            className="paper-field min-w-[7rem]"
-                            value={row[key]}
-                            onChange={(event) => {
-                              const next = packet.log.slice();
-                              next[index] = { ...row, [key]: event.target.value };
-                              persist({ ...packet, log: next });
-                            }}
-                          />
-                        </td>
-                      ))}
                     </tr>
                   ))
                 )}

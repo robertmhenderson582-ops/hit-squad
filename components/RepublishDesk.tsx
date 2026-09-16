@@ -41,7 +41,7 @@ export function RepublishDesk() {
       <h2 className="text-2xl font-semibold text-[#163038]">Heads up — republish</h2>
       <p className="mt-2 text-sm text-[#5b6f73]">
         Look only. This does not take the live site down. Immediate / 5 / 10 / 15 puts a sticky
-        banner and countdown on testers. Immediate locks testers; owner stays in. Inbox notice goes
+        banner and countdown on users. Immediate locks users; owner stays in. Inbox notice goes
         to people signed in right now, not the whole roster. A new build clears an old Wait.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -82,7 +82,7 @@ export function RepublishDesk() {
       {state?.active ? (
         <p className="mt-4 text-sm text-[#163038]">
           {state.waitMinutes === 0
-            ? "Immediate chrome. Testers lock. Owner stays in. The live site is still up."
+            ? "Immediate chrome. Users lock. Owner stays in. The live site is still up."
             : `Banner up. Save. Comes down in ${state.waitMinutes} minutes.`}
           {state.note ? ` ${state.note}` : ""}
         </p>

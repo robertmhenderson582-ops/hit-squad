@@ -22,7 +22,7 @@ function roleLabel(role: string) {
   if (role === "owner") return "Owner";
   if (role === "operator") return "Operator";
   if (role === "president") return "President";
-  return "Tester";
+  return "User";
 }
 
 function kindLabel(kind: string) {

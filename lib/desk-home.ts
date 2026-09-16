@@ -74,7 +74,7 @@ export const HOME_DOCK_TILES: readonly HomeDockTile[] = [
 export const JOB_SCOPED_TILES: readonly HomeDockTile[] = [
   { href: "/rates", key: "rates", label: "Rates", note: "Wage books", rates: true },
   { href: "/cost", key: "cost", label: "Cost / PPR", note: "On-job cost report" },
-  { href: "/change-orders", key: "change-orders", label: "Change orders", note: "ECR / FCR log" },
+  { href: "/change-orders", key: "change-orders", label: "Change Orders", note: "Contractor log" },
   { href: "/purchasing", key: "purchasing", label: "Purchasing", note: "Tools and consumables" },
 ] as const;
 

@@ -8,6 +8,7 @@ import {
   SESSION_LOAD_DEADLINE_MS,
   fetchJsonWithDeadline,
 } from "@/lib/session-fetch";
+import { clearJobTreeExpand } from "@/lib/job-tree-session";
 import type { PublicUser } from "@/lib/types";
 
 type SessionStatus = "loading" | "authenticated" | "unauthenticated";
@@ -165,6 +166,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     // Login JSON + Set-Cookie is enough to open the desk. Do not block on a
     // second session GET. Soft-verify in the background and overlay live flags.
+    clearJobTreeExpand();
     setUser(data.user);
     setStatus("authenticated");
     setError(null);
@@ -177,6 +179,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    clearJobTreeExpand();
     await fetch("/api/auth/logout", {
       method: "POST",
       credentials: "include",

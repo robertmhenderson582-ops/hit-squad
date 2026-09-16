@@ -61,7 +61,7 @@ function RepublishBanner({ now }: { now: number }) {
     <div className="republish-banner mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
       <p>
         {pub.waitMinutes === 0
-          ? "Immediate republish. Testers lock. Owner stays in."
+          ? "Immediate republish. Users lock. Owner stays in."
           : `Heads up — republish. Comes down in ${mins}:${String(secs).padStart(2, "0")}. Save.`}
         {pub.note ? ` ${pub.note}` : ""}
       </p>

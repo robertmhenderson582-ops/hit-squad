@@ -194,9 +194,21 @@ export function changeOrderNoun(client = "", site = ""): "ECR" | "FCR" {
   return usesEcrCopy(client, site) ? "ECR" : "FCR";
 }
 
-export function changeOrderTabLabel(client = "", site = ""): string {
-  return usesEcrCopy(client, site) ? "ECR" : "Change orders";
+/** Contractor log tab — not a client change-order register. ECR/FCR math stays under the hood. */
+export function changeOrderTabLabel(_client = "", _site = ""): string {
+  return "Change Orders";
 }
+
+export const CONTRACTOR_LOG_FIELDS = ["scr", "requestDate", "requestedBy", "status", "scope"] as const;
+export type ContractorLogField = (typeof CONTRACTOR_LOG_FIELDS)[number];
+
+export const CONTRACTOR_LOG_COLUMNS: Array<{ key: ContractorLogField; label: string }> = [
+  { key: "scr", label: "SCR #" },
+  { key: "requestDate", label: "Request Date" },
+  { key: "requestedBy", label: "Requested By" },
+  { key: "status", label: "Status" },
+  { key: "scope", label: "Scope Change Description" },
+];
 
 export function addLogRow(packet: FcrPacket, patch: Partial<FcrLogRow> = {}): FcrPacket {
   return { ...packet, log: [...packet.log, { ...blankLogRow(), ...patch }] };

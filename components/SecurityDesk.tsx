@@ -89,7 +89,7 @@ export function SecurityDesk() {
         <p className="mt-2 text-sm text-[#5b6f73]">
           Default 15 minutes with no mouse, keyboard, or tap. One-minute warning: Stay signed in or
           Lock now. After lock: Session locked — sign in again. Don’t lock means this owner seat will
-          not idle-lock on this device. Testers and staff always lock at 15 minutes and cannot pick
+          not idle-lock on this device. Users and staff always lock at 15 minutes and cannot pick
           Don’t lock. Set 30 minutes or 1 hour here if 15 is too tight for a long bid.
         </p>
         <div className="mt-4 space-y-2">

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { PrivilegeId } from "@/lib/privileges";
 
-type SeatRow = { id: string; email: string; name: string; role: string };
+type SeatRow = { id: string; email: string; name: string; role: string; jobTitle?: string };
 type PrivilegeRow = { id: PrivilegeId; label: string; detail: string };
 
 export function PrivilegesDesk() {
@@ -95,7 +95,7 @@ export function PrivilegesDesk() {
             {seats.length === 0 ? <option value="">No users yet</option> : null}
             {seats.map((row) => (
               <option key={row.id} value={row.email}>
-                {row.name} · {row.role === "president" ? "President" : "Tester"} · {row.email}
+                {row.name} · {row.role === "president" ? "President" : row.jobTitle || "User"} · {row.email}
               </option>
             ))}
           </select>
@@ -104,7 +104,7 @@ export function PrivilegesDesk() {
           <p className="mt-2 text-sm text-[#5b6f73]">
             {selected.role === "president"
               ? "President seat. Madison-only people until Hit Squad seats is granted."
-              : "Tester seat. Owner-only items stay off unless you grant them here."}
+              : "User seat. Owner-only items stay off unless you grant them here."}
           </p>
         ) : null}
       </section>

@@ -210,7 +210,7 @@ export function LoginForm() {
             {gate === "recover" ? (
               <p className="text-sm leading-6 text-paper-cream/90">
                 Use the one-time recovery password issued for this seat, then change it in Settings.
-                The owner issues tester recovery from Settings → Users. This is not a temp-password
+                The owner issues user recovery from Settings → Users. This is not a temp-password
                 create screen.
               </p>
             ) : null}

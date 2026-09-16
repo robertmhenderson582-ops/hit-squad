@@ -7,6 +7,7 @@ import { useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { COMPANIES, assignmentChoices, companyName, type Company, type CompanyId } from "@/lib/companies";
 import { canAddUsers, canUseFollow, isOwner, NOVUS_EMAIL } from "@/lib/desk-role";
+import { DEFAULT_JOB_ROLE, loginRoleForJobTitle, mergeJobRoleCatalog } from "@/lib/job-roles";
 import { NOVUS_INVITE_FROM, inviteEmailAllowed } from "@/lib/invite-policy";
 import { SEAT_DOORS, type SeatDoorId } from "@/lib/seat-doors";
 import type { SeatGrantActor } from "@/lib/org-positions";
@@ -26,7 +27,7 @@ import {
 import { fetchJsonWithDeadline } from "@/lib/session-fetch";
 import type { PublicUser, RosterEntry } from "@/lib/types";
 
-type SeatRow = PublicUser & { passwordIssued: boolean; companyId?: string };
+type SeatRow = PublicUser & { passwordIssued: boolean; companyId?: string; jobTitle?: string };
 
 function seatCompanyId(row: SeatRow): CompanyId {
   return (row.companyId || "hitsquad").trim() || "hitsquad";
@@ -51,6 +52,9 @@ export function ManageUsersDesk() {
   const [password, setPassword] = useState("");
   const [addCompanyId, setAddCompanyId] = useState<CompanyId>("hitsquad");
   const [addRole, setAddRole] = useState<"tester" | "president">("tester");
+  const [addJobTitle, setAddJobTitle] = useState<string>(DEFAULT_JOB_ROLE);
+  const [jobRoles, setJobRoles] = useState<string[]>(() => mergeJobRoleCatalog());
+  const [newRole, setNewRole] = useState("");
   const [issueEmail, setIssueEmail] = useState(NOVUS_EMAIL);
   const [issuePassword, setIssuePassword] = useState("");
   const [note, setNote] = useState<string | null>(null);
@@ -70,6 +74,7 @@ export function ManageUsersDesk() {
       setSeats(data.seats ?? []);
       if (Array.isArray(data.companies)) setCompanies(data.companies);
       if (data.actor) setActor(data.actor);
+      if (Array.isArray(data.jobRoles)) setJobRoles(data.jobRoles);
     }
   }
 
@@ -96,7 +101,10 @@ export function ManageUsersDesk() {
 
   useEffect(() => {
     if (!actor) return;
-    if (!actor.addableRoles.includes(addRole)) setAddRole("tester");
+    if (!actor.addableRoles.includes(addRole)) {
+      setAddRole("tester");
+      if (addJobTitle === "President") setAddJobTitle(DEFAULT_JOB_ROLE);
+    }
     if (actor.addableCompanyIds.length && !actor.addableCompanyIds.includes(addCompanyId)) {
       setAddCompanyId(actor.addableCompanyIds[0] as CompanyId);
     }
@@ -125,6 +133,43 @@ export function ManageUsersDesk() {
     setSeats(data.seats ?? []);
     if (Array.isArray(data.companies)) setCompanies(data.companies);
     setSeatNote("Company assignment saved. Changing it is the reverse of assign.");
+  }
+
+  async function onAssignJobTitle(email: string, jobTitle: string) {
+    setSeatNote(null);
+    const response = await fetch("/api/desk/seats", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, jobTitle }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setSeatNote(data.error || "Could not save that role.");
+      return;
+    }
+    setSeats(data.seats ?? []);
+    if (Array.isArray(data.jobRoles)) setJobRoles(data.jobRoles);
+    setSeatNote("Role saved. Privileges and vault doors stay as they were.");
+  }
+
+  async function onAddJobRole(event: FormEvent) {
+    event.preventDefault();
+    setSeatNote(null);
+    const response = await fetch("/api/desk/owner-settings", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobRoles: [newRole] }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setSeatNote(data.error || "Could not add that role.");
+      return;
+    }
+    setJobRoles(mergeJobRoleCatalog(data.jobRoles));
+    setNewRole("");
+    setSeatNote("Role added to the catalog. It is on the Role list.");
   }
 
   async function onAddCompany(event: FormEvent) {
@@ -231,6 +276,7 @@ export function ManageUsersDesk() {
     setPassword("");
     const nextRole = addableRoles.includes("president") && addRole === "president" ? "president" : "tester";
     setAddRole(nextRole);
+    setAddJobTitle(nextRole === "president" ? "President" : DEFAULT_JOB_ROLE);
     setAddCompanyId(addableCompanies[0]?.id || (nextRole === "president" ? "madison" : "hitsquad"));
     setNote("Login created. Don’t send. First sign-in must change the password. No invite sent.");
     if (owner) {
@@ -300,6 +346,7 @@ export function ManageUsersDesk() {
             password,
             companyId,
             role: addRole,
+            jobTitle: addJobTitle,
             doors: owner ? addDoors : undefined,
           }),
         },
@@ -380,8 +427,8 @@ export function ManageUsersDesk() {
         onToggle={() => setOpen((current) => ({ ...current, seats: !current.seats }))}
       >
         <p className="text-sm leading-6 text-[#5b6f73]">
-          Robert Henderson stays the only owner. Novus is a hidden operator seat. Testers never see
-          this list, Novus, or each other. Add a tester below, or issue a one-time password for a
+          Robert Henderson stays the only owner. Novus is a hidden operator seat. Users never see
+          this list, Novus, or each other. Add a user below, or issue a one-time password for a
           seat already on this desk. Don’t send. They change it on first sign-in. No invite email.
         </p>
         <div className="mt-4 overflow-x-auto">
@@ -401,13 +448,28 @@ export function ManageUsersDesk() {
                   <td className="px-2 py-2">{row.name}</td>
                   <td className="px-2 py-2">{row.email}</td>
                   <td className="px-2 py-2">
-                    {row.role === "owner"
-                      ? "Owner"
-                      : row.role === "operator"
-                        ? "Operator"
-                        : row.role === "president"
-                          ? "President"
-                          : "Tester"}
+                    {row.role === "owner" ? (
+                      "Owner"
+                    ) : row.role === "operator" ? (
+                      "Operator"
+                    ) : owner ? (
+                      <select
+                        value={row.jobTitle || (row.role === "president" ? "President" : DEFAULT_JOB_ROLE)}
+                        onChange={(event) => onAssignJobTitle(row.email, event.target.value)}
+                        className="paper-field"
+                        aria-label={`Role for ${row.name}`}
+                      >
+                        {jobRoles
+                          .filter((title) => title !== "President" || addableRoles.includes("president"))
+                          .map((title) => (
+                            <option key={title} value={title}>
+                              {title}
+                            </option>
+                          ))}
+                      </select>
+                    ) : (
+                      row.jobTitle || (row.role === "president" ? "President" : DEFAULT_JOB_ROLE)
+                    )}
                   </td>
                   <td className="px-2 py-2">
                     {row.role === "owner" ? (
@@ -475,6 +537,24 @@ export function ManageUsersDesk() {
             </label>
             <button type="submit" className="rounded-lg border border-steel px-4 py-2 text-steel sm:col-span-2">
               Add company
+            </button>
+          </form>
+        ) : null}
+        {owner ? (
+          <form onSubmit={onAddJobRole} className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="sm:col-span-2">
+              <span className="text-xs tracking-[0.14em] text-[#5b6f73]">ADD ROLE</span>
+              <input
+                value={newRole}
+                onChange={(event) => setNewRole(event.target.value)}
+                className="paper-field mt-1"
+                placeholder="Role title"
+                required
+                minLength={2}
+              />
+            </label>
+            <button type="submit" className="rounded-lg border border-steel px-4 py-2 text-steel sm:col-span-2">
+              Add role
             </button>
           </form>
         ) : null}
@@ -548,9 +628,13 @@ export function ManageUsersDesk() {
               <label>
                 <span className="text-xs tracking-[0.14em] text-[#5b6f73]">ROLE</span>
                 <select
-                  value={addRole}
+                  value={addJobTitle}
                   onChange={(event) => {
-                    const next = event.target.value === "president" ? "president" : "tester";
+                    const title = event.target.value;
+                    setAddJobTitle(title);
+                    const next = loginRoleForJobTitle(title) === "president" && addableRoles.includes("president")
+                      ? "president"
+                      : "tester";
                     setAddRole(next);
                     if (next === "president" && addCompanyId === "hitsquad") setAddCompanyId("madison");
                   }}
@@ -558,8 +642,13 @@ export function ManageUsersDesk() {
                   aria-label="Role for the new user"
                   disabled={adding}
                 >
-                  <option value="tester">Tester</option>
-                  {addableRoles.includes("president") ? <option value="president">President</option> : null}
+                  {jobRoles
+                    .filter((title) => title !== "President" || addableRoles.includes("president"))
+                    .map((title) => (
+                      <option key={title} value={title}>
+                        {title}
+                      </option>
+                    ))}
                 </select>
               </label>
               <label>
@@ -675,7 +764,7 @@ export function ManageUsersDesk() {
                   {roster.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-2 py-4 text-[#5b6f73]">
-                        Empty visual book. Use Add user for a login. Novus is not a tester.
+                        Empty visual book. Use Add user for a login. Novus is not a user seat.
                       </td>
                     </tr>
                   ) : (

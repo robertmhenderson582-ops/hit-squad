@@ -218,6 +218,17 @@ test("issuing James a password fails closed when the seats vault write fails", a
   assert.equal(findUserByEmail(RATE_VAULT_JAMES_EMAIL)?.passwordHash, undefined);
 });
 
+test("seeded users keep login role tester and get mapped job titles", () => {
+  assert.equal(toPublicUser(findUserByEmail("chancec318@yahoo.com")!).jobTitle, "Quality Manager");
+  assert.equal(toPublicUser(findUserByEmail("wlanderno@yahoo.com")!).jobTitle, "HSE Manager");
+  assert.equal(toPublicUser(findUserByEmail("bccamp2@gmail.com")!).jobTitle, "Site Safety Manager");
+  assert.equal(toPublicUser(findUserByEmail("nathanboyte@gmail.com")!).jobTitle, "Project Manager");
+  assert.equal(toPublicUser(findUserByEmail(JOSEPH_EMAIL)!).jobTitle, "Project Manager");
+  assert.equal(toPublicUser(findUserByEmail(SHANE_EMAIL)!).jobTitle, "Project Controls");
+  assert.equal(findUserByEmail("chancec318@yahoo.com")!.role, "tester");
+  assert.equal(findUserByEmail("wlanderno@yahoo.com")!.role, "tester");
+});
+
 test("Shane Smith is a tester seat that must create a password on first visit", () => {
   const shane = findUserByEmail("Shane@APControlsLLC.com");
   assert.ok(shane);

@@ -250,7 +250,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
           </div>
           <p className="mt-5 text-sm text-[#5b6f73]">
             {plantJobsLine(tally)} Start an estimate for this plant with + New estimate. SCRs live on that
-            job’s Change orders tab. People assigns who owns change orders, HSE, or quality on{" "}
+            job’s Change Orders tab. People assigns who owns change orders, HSE, or quality on{" "}
             {alias(plant.name)}.
           </p>
         </>
@@ -278,7 +278,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
         </div>
       ) : null}
 
-      {tab === "Change orders" ? (
+      {tab === "Change Orders" ? (
         <div className="mt-6">
           <ChangeOrderDesk />
         </div>
@@ -289,7 +289,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
           <h3 className="text-xl font-semibold text-[#163038]">People</h3>
           <p className="mt-2 text-sm text-[#5b6f73]">
             People is not Users. Users is who may sign in. People is who owns change orders, HSE, or
-            Quality on {alias(plant.name)}. Testers stay anonymous unless they share this shop. Empty
+            Quality on {alias(plant.name)}. Users stay anonymous unless they share this shop. Empty
             until you pick someone — no seeded logins.
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">

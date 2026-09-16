@@ -7,6 +7,7 @@ import { JobMenuActions } from "@/components/JobMenuActions";
 import { JobScopedTools } from "@/components/JobScopedTools";
 import { JobTreeDesk } from "@/components/JobTreeDesk";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
+import { useSession } from "@/components/SessionProvider";
 import { useDeskBoard } from "@/components/useDeskBoard";
 import { useDisplay } from "@/components/DisplayProvider";
 import { useEstimateModal } from "@/components/EstimateModalContext";
@@ -23,10 +24,12 @@ import { companyScopeFor, isStandaloneId, type CompanyId } from "@/lib/companies
 import type { Division } from "@/lib/divisions";
 import { catalogSeedsAllowedOnDesk, jobsOnDesk, omitCatalogSeedJobs, omitCatalogSeedPacks, packForJob } from "@/lib/jobs";
 import { jobTree, stickyOpenCompanyId, toggleOpenCompanyId } from "@/lib/job-tree";
+import { jobTreeExpandStore, readJobTreeExpand, writeJobTreeExpand } from "@/lib/job-tree-session";
 import type { JobRecord } from "@/lib/types";
 
 export function JobsDesk() {
   const alias = useAlias();
+  const { user } = useSession();
   const { lens, seat, viewingAs, lensReady, lensKey } = useDeskLens();
   const { openNewEstimate } = useEstimateModal();
   const { board } = useDeskBoard();
@@ -40,9 +43,26 @@ export function JobsDesk() {
   const [tick, setTick] = useState(0);
   const [packTick, setPackTick] = useState(0);
   const [openCompanyId, setOpenCompanyId] = useState<string | null>("");
+  const [openReady, setOpenReady] = useState(false);
   const [hydrating, setHydrating] = useState(true);
   const lensRef = useRef(lens);
   lensRef.current = lens;
+  const seatEmail = (user?.email || "").trim().toLowerCase();
+
+  useEffect(() => {
+    if (!seatEmail) return;
+    const saved = readJobTreeExpand(jobTreeExpandStore(), seatEmail);
+    setOpenCompanyId(saved.openCompanyId || "");
+    setOpenReady(true);
+  }, [seatEmail]);
+
+  useEffect(() => {
+    if (!seatEmail || !openReady) return;
+    writeJobTreeExpand(jobTreeExpandStore(), {
+      email: seatEmail,
+      openCompanyId: openCompanyId || "",
+    });
+  }, [seatEmail, openReady, openCompanyId]);
 
   useEffect(() => {
     snapshotOwnerDesk(lensRef.current);

@@ -11,6 +11,7 @@ import {
   type OwnerSettings,
   type RepublishWait,
 } from "./owner-desk.ts";
+import { parseJobRoleCatalog, parseSeatJobTitles } from "./job-roles.ts";
 import { DEFAULT_HIGH_USAGE_THRESHOLD, parseUsagePercent, parseUsageThreshold } from "./usage-clock.ts";
 
 const BUILD_STAMP = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "local";
@@ -35,6 +36,8 @@ function defaultSettings(): OwnerSettings {
     showHighUsageNote: false,
     usagePercent: null,
     highUsageThreshold: DEFAULT_HIGH_USAGE_THRESHOLD,
+    jobRoles: [],
+    seatJobTitles: {},
   };
 }
 
@@ -85,6 +88,8 @@ export function parseOwnerSettings(raw: unknown): OwnerSettings {
     }
     next.regularClient = nextMap;
   }
+  next.jobRoles = parseJobRoleCatalog(row.jobRoles);
+  next.seatJobTitles = parseSeatJobTitles(row.seatJobTitles);
   return next;
 }
 
@@ -93,6 +98,8 @@ function snapshot(): OwnerSettings {
     ...settings,
     republish: { ...settings.republish },
     regularClient: { ...(settings.regularClient ?? {}) },
+    jobRoles: [...(settings.jobRoles ?? [])],
+    seatJobTitles: { ...(settings.seatJobTitles ?? {}) },
   };
 }
 
@@ -216,6 +223,15 @@ function applyOwnerSettingsPatch(next: Partial<OwnerSettings>) {
   if (next.republish) settings.republish = { ...settings.republish, ...next.republish, buildStamp: BUILD_STAMP };
   if (next.regularClient && typeof next.regularClient === "object") {
     settings.regularClient = { ...(settings.regularClient ?? {}), ...next.regularClient };
+  }
+  if (Array.isArray(next.jobRoles)) {
+    settings.jobRoles = parseJobRoleCatalog([...(settings.jobRoles ?? []), ...next.jobRoles]);
+  }
+  if (next.seatJobTitles && typeof next.seatJobTitles === "object") {
+    settings.seatJobTitles = {
+      ...(settings.seatJobTitles ?? {}),
+      ...parseSeatJobTitles(next.seatJobTitles),
+    };
   }
 }
 

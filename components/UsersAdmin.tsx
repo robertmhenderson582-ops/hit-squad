@@ -15,9 +15,9 @@ export function UsersAdmin() {
           <div>
             <h2 className="text-2xl font-semibold text-[#163038]">Aliases</h2>
             <p className="mt-1 text-sm text-[#5b6f73]">
-              Whole catalog, not only P66. Off = real names on the owner blotter. On = tester view.
+              Whole catalog, not only P66. Off = real names on the owner blotter. On = user view.
               Nathan, John, Wendell, Benny, and Chance stay on real names. Mark, Cody, Bill, James,
-              and Joseph stay aliased. Testers never see this switch.
+              and Joseph stay aliased. Users never see this switch.
             </p>
           </div>
           <button
@@ -60,7 +60,7 @@ export function UsersAdmin() {
         <h2 className="text-2xl font-semibold text-[#163038]">View as</h2>
         <p className="mt-1 text-sm text-[#5b6f73]">
           Responsibility + site lens for Owner and Joseph later. This is not Follow. Follow watches a
-          tester’s screen and stays Robert-only.
+          user’s screen and stays Robert-only.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button

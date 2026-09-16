@@ -171,6 +171,20 @@ describe("owner settings vault persist", () => {
     assert.equal((await getOwnerSettings()).showInboxSuggestionBox, false);
   });
 
+  it("persists Owner-added job roles and per-seat titles without wiping the usage clock", async () => {
+    const drive = memoryDrive();
+    useOwnerSettingsVaultForTests(drive);
+    await setOwnerSettings({ showHighUsageNote: true, usagePercent: 82 });
+    await setOwnerSettings({ jobRoles: ["Night Clerk"], seatJobTitles: { "chancec318@yahoo.com": "Quality Site Manager" } });
+    forgetOwnerSettingsCacheForTests();
+    useOwnerSettingsVaultForTests(drive);
+    const again = await getOwnerSettings();
+    assert.deepEqual(again.jobRoles, ["Night Clerk"]);
+    assert.equal(again.seatJobTitles?.["chancec318@yahoo.com"], "Quality Site Manager");
+    assert.equal(again.showHighUsageNote, true);
+    assert.equal(again.usagePercent, 82);
+  });
+
   it("does not vault presence", () => {
     const presence = readFileSync(fileURLToPath(new URL("./presence.ts", import.meta.url)), "utf8");
     assert.equal(/drive-data/.test(presence), false);
