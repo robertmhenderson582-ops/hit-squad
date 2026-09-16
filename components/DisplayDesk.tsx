@@ -96,7 +96,7 @@ export function DisplayDesk() {
             onChange={(on) => desk?.setShowInboxSuggestionBox(on)}
           />
           <p className="mt-2 text-sm text-[#5b6f73]">
-            Off by default for every seat, including Owner. Testers use {NOVUS_HELP_EMAIL}
+            Off by default for every seat, including Owner. Users use {NOVUS_HELP_EMAIL}
             for tickets and help, and regular email to talk. Modules stay in the codebase. Flip
             this on when Robert wants the radios and FABs back.
           </p>

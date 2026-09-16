@@ -46,7 +46,7 @@ export function InboxPanel({ compact = false }: { compact?: boolean }) {
   }
 
   async function emptyAll() {
-    if (await confirmRemove("Tickets stay. Testers stay on their own threads.", { title: "Empty inbox?", confirmLabel: "Empty" })) {
+    if (await confirmRemove("Tickets stay. Users stay on their own threads.", { title: "Empty inbox?", confirmLabel: "Empty" })) {
       inbox.emptyInbox();
     }
   }

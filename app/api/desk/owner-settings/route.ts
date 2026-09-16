@@ -38,6 +38,8 @@ export async function POST(request: Request) {
     showHighUsageNote?: boolean;
     usagePercent?: number | null;
     highUsageThreshold?: number;
+    jobRoles?: string[];
+    seatJobTitles?: Record<string, string>;
     action?: string;
     waitMinutes?: RepublishWait;
     note?: string;
@@ -61,5 +63,7 @@ export async function POST(request: Request) {
   if ("showHighUsageNote" in body) patch.showHighUsageNote = body.showHighUsageNote;
   if ("usagePercent" in body) patch.usagePercent = body.usagePercent;
   if ("highUsageThreshold" in body) patch.highUsageThreshold = body.highUsageThreshold;
+  if (Array.isArray(body.jobRoles)) patch.jobRoles = body.jobRoles;
+  if (body.seatJobTitles && typeof body.seatJobTitles === "object") patch.seatJobTitles = body.seatJobTitles;
   return jsonSettings(() => setOwnerSettings(patch));
 }

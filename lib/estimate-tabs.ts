@@ -12,7 +12,7 @@ export const BASE_ESTIMATE_TABS = [
   { id: "equipment", label: "Equipment", icon: "⛟" },
   { id: "subs", label: "Subcontractor", icon: "▣" },
   { id: "costs", label: "Other Cost", icon: "▤" },
-  { id: "change-orders", label: "Change orders", icon: "⚖" },
+  { id: "change-orders", label: "Change Orders", icon: "⚖" },
   { id: "cost-report", label: "Cost report", icon: "📊" },
   { id: "purchasing", label: "Purchasing", icon: "🧾" },
   { id: "wage-lookup", label: "Wage lookup", icon: "＄" },

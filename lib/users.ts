@@ -17,6 +17,7 @@ import { canonicalEmail, identityBucket, isOwnerAliasSeat, isOwnerIdentity, reso
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
 import { RATE_VAULT_JAMES_EMAIL, RATE_VAULT_JAMES_ID, RATE_VAULT_JAMES_NAME } from "./rate-vault.ts";
+import { defaultJobRoleForSeat, loginRoleForJobTitle, parseJobRoleLabel } from "./job-roles.ts";
 import type { PublicUser, SeatHashClaim } from "./types.ts";
 
 export type { SeatHashClaim };
@@ -33,6 +34,7 @@ export type ExtraSeat = {
   email: string;
   name: string;
   role?: "tester" | "president";
+  jobTitle?: string;
 };
 
 type SeatHashRow = {
@@ -226,7 +228,9 @@ export function parseExtraSeats(raw: unknown): ExtraSeat[] {
     }
     if (name.length < 2 || name.length > 80) continue;
     const role = row.role === "president" ? ("president" as const) : undefined;
-    extras.push({ id, email, name, ...(role ? { role } : {}) });
+    const parsedTitle = parseJobRoleLabel(row.jobTitle);
+    const jobTitle = "label" in parsedTitle ? parsedTitle.label : undefined;
+    extras.push({ id, email, name, ...(role ? { role } : {}), ...(jobTitle ? { jobTitle } : {}) });
     seen.add(email);
     seen.add(id);
     seen.add(bucket);
@@ -264,6 +268,7 @@ function extrasFromUsers(users: StoredUser[]): ExtraSeat[] {
       email: user.email,
       name: user.name,
       role: user.role === "president" ? "president" : "tester",
+      ...(user.jobTitle ? { jobTitle: user.jobTitle } : {}),
     });
     seen.add(user.email);
   }
@@ -602,6 +607,7 @@ function seedUsers(): StoredUser[] {
       email: seat.email,
       name: seat.name,
       role: "tester",
+      jobTitle: defaultJobRoleForSeat({ email: seat.email, name: seat.name, role: "tester" }),
       mustChangePassword: saved ? Boolean(saved.mustChangePassword) : true,
       passwordHash: saved?.passwordHash,
       previousHashes: saved?.previousHashes,
@@ -616,6 +622,11 @@ function seedUsers(): StoredUser[] {
     email: RATE_VAULT_JAMES_EMAIL,
     name: RATE_VAULT_JAMES_NAME,
     role: "tester",
+    jobTitle: defaultJobRoleForSeat({
+      email: RATE_VAULT_JAMES_EMAIL,
+      name: RATE_VAULT_JAMES_NAME,
+      role: "tester",
+    }),
     mustChangePassword: jamesSaved ? Boolean(jamesSaved.mustChangePassword) : true,
     passwordHash: jamesSaved?.passwordHash,
     previousHashes: jamesSaved?.previousHashes,
@@ -633,6 +644,11 @@ function seedUsers(): StoredUser[] {
         email: seat.email,
         name: seat.name,
         role: seat.role === "president" ? ("president" as const) : ("tester" as const),
+        jobTitle: seat.jobTitle || defaultJobRoleForSeat({
+          email: seat.email,
+          name: seat.name,
+          role: seat.role === "president" ? "president" : "tester",
+        }),
         mustChangePassword: saved ? Boolean(saved.mustChangePassword) : true,
         passwordHash: saved?.passwordHash,
         previousHashes: saved?.previousHashes,
@@ -657,6 +673,7 @@ export function toPublicUser(user: StoredUser): PublicUser {
     email: user.email,
     name: user.name,
     role: user.role,
+    jobTitle: defaultJobRoleForSeat(user),
     mustChangePassword: Boolean(user.mustChangePassword),
     privileges: user.role === "owner" ? undefined : peekPrivileges(user.email),
   };
@@ -990,10 +1007,13 @@ export async function createSeat(input: {
   password?: string;
   companyId?: string;
   role?: string;
+  jobTitle?: string;
 }): Promise<{ ok: true; user: PublicUser } | { error: string }> {
   const name = typeof input.name === "string" ? input.name.trim().replace(/\s+/g, " ") : "";
   const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
   const password = typeof input.password === "string" ? input.password : "";
+  const parsedTitle = parseJobRoleLabel(input.jobTitle);
+  const jobTitle = "label" in parsedTitle ? parsedTitle.label : undefined;
   const role = input.role === "president" ? ("president" as const) : ("tester" as const);
   const companyId =
     typeof input.companyId === "string" && input.companyId.trim()
@@ -1026,6 +1046,7 @@ export async function createSeat(input: {
     email,
     name,
     role,
+    jobTitle: jobTitle || defaultJobRoleForSeat({ email, name, role }),
     passwordHash: bcrypt.hashSync(password, 12),
     mustChangePassword: true,
   };
@@ -1063,6 +1084,39 @@ export async function setExtraSeatRole(
   }
   if (reservedEmails().has(user.email)) return { error: "Seeded seats keep their login role." };
   user.role = role;
+  try {
+    persistHashes(users, { replaceEmails: [user.email], confirm: true });
+  } catch {
+    return { error: "Could not save that assignment." };
+  }
+  try {
+    await flushSeatVault();
+  } catch {
+    pendingVault = Promise.resolve();
+    return { error: "Could not save that assignment." };
+  }
+  return { ok: true, user: toPublicUser(user) };
+}
+
+/** Extra vault seats. Seeded logins keep tester/president; title still saves on extras. */
+export async function setExtraSeatJobTitle(
+  email: string,
+  jobTitle: string,
+): Promise<{ ok: true; user: PublicUser } | { error: string }> {
+  const key = email.trim().toLowerCase();
+  const parsed = parseJobRoleLabel(jobTitle);
+  if ("error" in parsed) return { error: parsed.error };
+  await hydrateSeatStore();
+  const users = ownerUsers();
+  const user = users.find((row) => row.email === key);
+  if (!user) return { error: "That seat is not on this desk." };
+  if (user.role === "owner" || user.role === "operator") {
+    return { error: "Owner and Novus stay on their desks." };
+  }
+  user.jobTitle = parsed.label;
+  if (!reservedEmails().has(user.email)) {
+    user.role = loginRoleForJobTitle(parsed.label);
+  }
   try {
     persistHashes(users, { replaceEmails: [user.email], confirm: true });
   } catch {

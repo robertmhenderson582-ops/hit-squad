@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import {
   APPROVAL_STATUSES,
   addLogRow,
+  CONTRACTOR_LOG_COLUMNS,
   blankLogRow,
   changeOrderNoun,
   changeOrderTabLabel,
@@ -306,14 +307,25 @@ test("P66 / Wood River and the unset default read ECR; Log is the field home", (
   assert.equal(usesEcrCopy("Phillips 66", "Wood River — Roxana, IL"), true);
   assert.equal(usesEcrCopy("P66", "Madison"), true);
   assert.equal(changeOrderNoun("Phillips 66", WOOD), "ECR");
-  assert.equal(changeOrderTabLabel("Phillips 66", WOOD), "ECR");
+  assert.equal(changeOrderTabLabel("Phillips 66", WOOD), "Change Orders");
   assert.equal(changeOrderNoun("Georgia Power", "Plant Yates"), "FCR");
-  assert.equal(changeOrderTabLabel("Georgia Power", "Plant Yates"), "Change orders");
+  assert.equal(changeOrderTabLabel("Georgia Power", "Plant Yates"), "Change Orders");
+  assert.deepEqual(
+    CONTRACTOR_LOG_COLUMNS.map((column) => column.key),
+    ["scr", "requestDate", "requestedBy", "status", "scope"],
+  );
+  assert.equal(CONTRACTOR_LOG_COLUMNS.some((column) => column.key === "reviewedBy"), false);
+  assert.equal(CONTRACTOR_LOG_COLUMNS.some((column) => column.key === "approvedCost"), false);
   const packet = readFileSync(fileURLToPath(new URL("../components/ChangeOrderPacket.tsx", import.meta.url)), "utf8");
   assert.match(packet, /changeOrderNoun/);
   assert.match(packet, /DEFAULT_CHANGE_ORDER_SHELL/);
   assert.match(packet, /onEstimateSheets/);
   assert.match(packet, /addLogRow/);
+  assert.match(packet, /CONTRACTOR_LOG_COLUMNS/);
+  assert.match(packet, /Change Orders log/);
+  assert.doesNotMatch(packet, /Reviewed By/);
+  assert.doesNotMatch(packet, /Approved Cost/);
+  assert.doesNotMatch(packet, /Logged By/);
   assert.doesNotMatch(packet, /On-job FCR packet/);
   assert.doesNotMatch(packet, /\+ Add FCR/);
   const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");

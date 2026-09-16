@@ -10,9 +10,9 @@ export function ChangeOrderDesk() {
   return (
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        Standalone change-order list is parked. The V1 FCR packet lives on the estimate Change
-        orders tab — log, estimate from this job’s hours, and SCR. Mileage Yes is a flat $2,500,
-        not times headcount.
+        Standalone Change Orders list is parked. The V1 packet lives on the estimate Change
+        Orders tab — contractor log, estimate from this job’s hours, and SCR. Mileage Yes is a
+        flat $2,500, not times headcount.
       </p>
       <nav className="flex flex-wrap gap-2 text-sm">
         {SHELLS.map((item) => (
@@ -29,11 +29,11 @@ export function ChangeOrderDesk() {
 
       {shell === "Log" ? (
         <section className="plant-card px-4 py-4">
-          <h2 className="font-display text-xl tracking-wide">Change-order log</h2>
+          <h2 className="font-display text-xl tracking-wide">Change Orders log</h2>
           <table className="mt-3 min-w-full text-left text-sm">
             <thead className="font-mono text-[10px] tracking-[0.16em] text-[#5b6f73]">
               <tr>
-                {["NO.", "ESTIMATE", "SCOPE", "ORIGIN", "STATUS"].map((header) => (
+                {["SCR #", "REQUEST DATE", "REQUESTED BY", "STATUS", "SCOPE CHANGE DESCRIPTION"].map((header) => (
                   <th key={header} className="px-2 py-2">
                     {header}
                   </th>

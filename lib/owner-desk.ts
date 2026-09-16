@@ -126,6 +126,10 @@ export type OwnerSettings = {
   showHighUsageNote?: boolean;
   usagePercent?: number | null;
   highUsageThreshold?: number;
+  /** Owner-appended Role dropdown titles. Seeded titles are merged at read time. */
+  jobRoles?: string[];
+  /** Per-seat job title overrides. Login role / privileges stay put. */
+  seatJobTitles?: Record<string, string>;
 };
 
 export const VIEW_AS_HIDDEN_SETTINGS = [

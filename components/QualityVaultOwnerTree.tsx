@@ -49,7 +49,7 @@ export function QualityVaultOwnerTree({ refresh = 0 }: { refresh?: number }) {
     <section className="plant-card px-4 py-4">
       <h2 className="font-display text-xl">Quality vault</h2>
       <p className="mt-2 text-sm">
-        Quality room listing (names only). Job picker uses Madison jobs, not email dumps. Testers never see this tree. Owner can inspect site JSON here.
+        Quality room listing (names only). Job picker uses Madison jobs, not email dumps. Users never see this tree. Owner can inspect site JSON here.
       </p>
       {rows.length ? (
         <ul className="mt-3 space-y-2 text-sm">

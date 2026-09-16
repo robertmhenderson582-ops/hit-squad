@@ -45,7 +45,7 @@ describe("Home four doors", () => {
     assert.equal(homeDockLabels().filter((label) => label === "HSE").length, 1);
     assert.equal(homeDockLabels().includes("Rates"), false);
     assert.equal(homeDockLabels().includes("Cost / PPR"), false);
-    assert.equal(homeDockLabels().includes("Change orders"), false);
+    assert.equal(homeDockLabels().includes("Change Orders"), false);
     assert.equal(homeDockLabels().includes("Purchasing"), false);
     assert.equal(homeDockLabels().includes("Scoreboard"), false);
     assert.equal(homeDockLabels().includes("Rate Vault"), false);
@@ -60,8 +60,8 @@ describe("Home four doors", () => {
     assert.match(SCOREBOARD_DOOR.note, /parked/i);
   });
 
-  it("keeps Rates · Cost / PPR · Change orders · Purchasing under Jobs", () => {
-    assert.deepEqual(jobScopedLabels(), ["Rates", "Cost / PPR", "Change orders", "Purchasing"]);
+  it("keeps Rates · Cost / PPR · Change Orders · Purchasing under Jobs", () => {
+    assert.deepEqual(jobScopedLabels(), ["Rates", "Cost / PPR", "Change Orders", "Purchasing"]);
     assert.deepEqual(jobScopedHrefs(), ["/rates", "/cost", "/change-orders", "/purchasing"]);
     assert.deepEqual(
       jobScopedTiles(false).map((tile) => tile.key),

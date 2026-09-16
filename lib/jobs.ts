@@ -63,7 +63,7 @@ const JOBS: JobRecord[] = [
   },
 ];
 
-export const PLANT_TABS = ["Overview", "Estimates", "Abiding", "Change orders", "People"] as const;
+export const PLANT_TABS = ["Overview", "Estimates", "Abiding", "Change Orders", "People"] as const;
 export type PlantTab = (typeof PLANT_TABS)[number];
 
 export function jobByCode(code: string | null | undefined, extras: JobRecord[] = []): JobRecord | undefined {
@@ -204,14 +204,14 @@ export function plantTabFromQuery(value: string | null | undefined): PlantTab {
   const key = (value || "").trim().toLowerCase().replace(/[\s_]+/g, "-");
   if (key === "estimates") return "Estimates";
   if (key === "abiding") return "Abiding";
-  if (key === "change-orders" || key === "changeorders") return "Change orders";
+  if (key === "change-orders" || key === "changeorders") return "Change Orders";
   if (key === "people") return "People";
   return "Overview";
 }
 
 export function plantTabQuery(tab: PlantTab) {
   if (tab === "Overview") return null;
-  if (tab === "Change orders") return "change-orders";
+  if (tab === "Change Orders") return "change-orders";
   return tab.toLowerCase();
 }
 

@@ -2,14 +2,21 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { JobHandoffMark } from "@/components/JobHandoffMark";
 import { JobMenuActions } from "@/components/JobMenuActions";
 import { useAlias, useDeskLens } from "@/components/OwnerDeskContext";
+import { useSession } from "@/components/SessionProvider";
 import { StatusStamp } from "@/components/StatusStamp";
 import { useDisplay } from "@/components/DisplayProvider";
 import { estimateForJob } from "@/lib/estimate-open";
+import { jobCardFace } from "@/lib/job-card-face";
 import { packForJob } from "@/lib/jobs";
+import {
+  jobTreeExpandStore,
+  readJobTreeExpand,
+  writeJobTreeExpand,
+} from "@/lib/job-tree-session";
 import {
   clientIsCollapsible,
   divisionIsCollapsible,
@@ -60,13 +67,35 @@ export function JobTreeDesk({
 }) {
   const alias = useAlias();
   const { lens } = useDeskLens();
+  const { user } = useSession();
   const router = useRouter();
   const { resolvedTheme } = useDisplay();
   const night = resolvedTheme === "night";
   const openId = resolveOpenCompanyId(openCompanyId, tree);
+  const seatEmail = (user?.email || "").trim().toLowerCase();
   const [collapsedDivisions, setCollapsedDivisions] = useState<Set<string>>(() => new Set());
   const [collapsedClients, setCollapsedClients] = useState<Set<string>>(() => new Set());
   const [collapsedSites, setCollapsedSites] = useState<Set<string>>(() => new Set());
+  const [expandReady, setExpandReady] = useState(false);
+
+  useEffect(() => {
+    if (!seatEmail) return;
+    const saved = readJobTreeExpand(jobTreeExpandStore(), seatEmail);
+    setCollapsedDivisions(new Set(saved.collapsedDivisions));
+    setCollapsedClients(new Set(saved.collapsedClients));
+    setCollapsedSites(new Set(saved.collapsedSites));
+    setExpandReady(true);
+  }, [seatEmail]);
+
+  useEffect(() => {
+    if (!seatEmail || !expandReady) return;
+    writeJobTreeExpand(jobTreeExpandStore(), {
+      email: seatEmail,
+      collapsedDivisions: [...collapsedDivisions],
+      collapsedClients: [...collapsedClients],
+      collapsedSites: [...collapsedSites],
+    });
+  }, [seatEmail, expandReady, collapsedDivisions, collapsedClients, collapsedSites]);
 
   function renderClients(company: JobTreeCompany, clients: JobTreeClient[], keyPrefix: string) {
     return clients.map((client) => {
@@ -142,6 +171,10 @@ export function JobTreeDesk({
                           const estimate = estimateForJob(job, estimates);
                           const pack = packForJob(job, packs, estimate?.id);
                           const href = jobEstimateHref(job, estimates, packs);
+                          const face = jobCardFace(
+                            pack,
+                            typeof window === "undefined" ? null : window.localStorage,
+                          );
                           return (
                             <article
                               key={job.id}
@@ -170,6 +203,18 @@ export function JobTreeDesk({
                                 <div>
                                   <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">WINDOW</dt>
                                   <dd className="mt-1 font-mono text-xs">{job.window}</dd>
+                                </div>
+                                <div>
+                                  <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">
+                                    GRAND TOTAL
+                                  </dt>
+                                  <dd className="mt-1 font-mono text-xs text-amber-label">{face.grandTotalLabel}</dd>
+                                </div>
+                                <div>
+                                  <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">
+                                    PHASE STARTS
+                                  </dt>
+                                  <dd className="mt-1 font-mono text-xs">{face.phaseStartsLabel}</dd>
                                 </div>
                                 <div>
                                   <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">

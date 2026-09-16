@@ -19,6 +19,8 @@ export type PublicUser = {
   email: string;
   name: string;
   role: DeskRole;
+  /** Phase 1 job title (Quality Manager, Foreman, …). Not the login seat. */
+  jobTitle?: string;
   mustChangePassword?: boolean;
   privileges?: PrivilegeId[];
 };
