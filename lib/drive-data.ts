@@ -154,6 +154,10 @@ export async function findVaultJsonFile(adapter: DriveAdapter, name: string, kin
   const pinned = await fileFromStoredId(adapter, name, kind);
   // seats.json / tickets.json / inbox.json: always PATCH the known production id. A zombie list must not redirect writes.
   if (pinned && (KNOWN_VAULT_FILE_IDS[name] || vaultEnvFileId(name))) return pinned;
+  // settings.json: reuse a remembered id so GET refresh does not list the Data room every time.
+  if (pinned && name === SETTINGS_VAULT_NAME && rememberedVaultFileIds.get(vaultFileKey(name, kind)) === pinned.id) {
+    return pinned;
+  }
   const fromFolder = pickNewestMatch(await listFolderJson(adapter, folderId), name, kind);
   if (fromFolder) {
     rememberVaultFileId(name, kind, fromFolder.id);
@@ -239,6 +243,9 @@ export async function writeVaultJson(
   }
   if (!existing && name === INBOX_VAULT_NAME) {
     throw new Error("inbox vault must PATCH known id");
+  }
+  if (!existing && name === SETTINGS_VAULT_NAME && process.env.VERCEL) {
+    throw new Error("settings vault must PATCH existing file");
   }
   const seatsDenied =
     name === SEATS_VAULT_NAME && (existing?.id || pinnedId)

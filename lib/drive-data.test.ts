@@ -61,6 +61,43 @@ describe("vault named json", () => {
     assert.equal(await readVaultJson(drive, ACTIVITY_VAULT_NAME, ACTIVITY_VAULT_KIND), null);
   });
 
+  it("does not mint a sibling settings.json on Vercel when the vault file cannot be found", async () => {
+    const previous = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    resetVaultFileIdsForTests();
+    let created = 0;
+    const drive: DriveAdapter = {
+      configured: true,
+      async listJson() {
+        return [];
+      },
+      async listAccessibleJson() {
+        return [];
+      },
+      async readJson() {
+        throw new Error("missing");
+      },
+      async createJson() {
+        created += 1;
+        throw new Error("createJson must not mint a second settings.json");
+      },
+      async updateJson() {
+        throw new Error("updateJson must not run");
+      },
+      async deleteJson() {},
+    };
+    try {
+      await assert.rejects(
+        () => writeVaultJson(drive, SETTINGS_VAULT_NAME, SETTINGS_VAULT_KIND, { showHighUsageNote: true }),
+        /settings vault must PATCH existing file/,
+      );
+      assert.equal(created, 0);
+    } finally {
+      if (previous == null) delete process.env.VERCEL;
+      else process.env.VERCEL = previous;
+    }
+  });
+
   it("keeps rates.json apart from tickets and companies", async () => {
     const drive = memoryDrive();
     await writeVaultJson(drive, RATES_VAULT_NAME, RATES_VAULT_KIND, { catalog: [{ description: "Skip Pan", monthly: 847 }] });
