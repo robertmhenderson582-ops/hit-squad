@@ -52,7 +52,7 @@ export function ManageUsersDesk() {
   const [password, setPassword] = useState("");
   const [addCompanyId, setAddCompanyId] = useState<CompanyId>("hitsquad");
   const [addRole, setAddRole] = useState<"tester" | "president">("tester");
-  const [addJobTitle, setAddJobTitle] = useState(DEFAULT_JOB_ROLE);
+  const [addJobTitle, setAddJobTitle] = useState<string>(DEFAULT_JOB_ROLE);
   const [jobRoles, setJobRoles] = useState<string[]>(() => mergeJobRoleCatalog());
   const [newRole, setNewRole] = useState("");
   const [issueEmail, setIssueEmail] = useState(NOVUS_EMAIL);
