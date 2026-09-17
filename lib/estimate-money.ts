@@ -196,10 +196,16 @@ export function hydrateAnalyticsStcPct(value: unknown): number | null {
   return Math.max(0, n);
 }
 
-function sumPresentPcts(...values: unknown[]) {
-  const parsed = values.map(hydrateAnalyticsStcPct);
-  if (parsed.every((value) => value == null)) return null;
-  return parsed.reduce((sum, value) => sum + (value ?? 0), 0);
+function sumPresentPcts(...values: unknown[]): number | null {
+  let total = 0;
+  let present = false;
+  for (const value of values) {
+    const parsed = hydrateAnalyticsStcPct(value);
+    if (parsed == null) continue;
+    present = true;
+    total += parsed;
+  }
+  return present ? total : null;
 }
 
 /** One STC & PPE %. Migrates old tool + consumables + ppe overrides by summing present values. */
