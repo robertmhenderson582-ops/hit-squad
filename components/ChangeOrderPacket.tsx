@@ -417,11 +417,7 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
           site={site}
           client={client}
           packId={packId || ""}
-<<<<<<< HEAD
           canEdit={canWrite}
-=======
-          canEdit={canEdit}
->>>>>>> 010b0f4 (Fix SCR attachment typecheck so the workbook pack id can be empty.)
           viewAs={owner?.viewAs}
           onPersist={persist}
           onSubmit={submitSelected}
