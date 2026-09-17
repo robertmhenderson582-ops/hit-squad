@@ -9,10 +9,13 @@ export const SUBS_CONTINGENCY_LABEL = "Subs contingency";
 export const CBA_INCREASE_LABEL = "CBA increase";
 export const MORE_FUND_LABEL = "M.O.R.E. fund";
 
-/** Analytics STC & PPE % override (percent points). Null = combined craft/staff book. */
+/** Predicted savings % on the STC & PPE budget. Null = default 35. Not % of base wage. */
 export type AnalyticsStcOverride = {
-  stcPpePct: number | null;
+  stcPpeSavingsPct: number | null;
 };
+
+/** Former Yates D25:D27 profit share, now the desk default predicted-savings %. */
+export const ANALYTICS_STC_PPE_SAVINGS_DEFAULT = 35;
 
 export type AnalyticsMode = "pct" | "locked";
 
@@ -83,7 +86,7 @@ export type JobMoney = {
   moreFundPerHour: number | null;
   /** Plant / job holidays (YYYY-MM-DD). No billable hours those days. */
   holidays: string[];
-  /** Live-pack Analytics STC & PPE % override. Null = combined craft/staff book. */
+  /** Live-pack predicted savings % on the STC & PPE budget. Null = 35. */
   analyticsStc: AnalyticsStcOverride;
   analyticsBridge: AnalyticsBridgeMeta;
 };
@@ -135,7 +138,7 @@ function pctOf(amount: number, pct: number) {
 }
 
 export function emptyAnalyticsStc(): AnalyticsStcOverride {
-  return { stcPpePct: null };
+  return { stcPpeSavingsPct: null };
 }
 
 export function emptyAnalyticsNb(): AnalyticsNbDrag {
@@ -196,23 +199,22 @@ export function hydrateAnalyticsStcPct(value: unknown): number | null {
   return Math.max(0, n);
 }
 
-function sumPresentPcts(...values: unknown[]): number | null {
-  let total = 0;
-  let present = false;
-  for (const value of values) {
-    const parsed = hydrateAnalyticsStcPct(value);
-    if (parsed == null) continue;
-    present = true;
-    total += parsed;
-  }
-  return present ? total : null;
-}
-
-/** One STC & PPE %. Migrates old tool + consumables + ppe overrides by summing present values. */
+/**
+ * Predicted savings % on the STC & PPE budget. Empty → null (desk uses 35).
+ * Old `stcPpePct` / tool / con / ppe were BW burden, not savings — reset to default.
+ */
 export function hydrateAnalyticsStc(raw: unknown): AnalyticsStcOverride {
   const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  if ("stcPpePct" in row) return { stcPpePct: hydrateAnalyticsStcPct(row.stcPpePct) };
-  return { stcPpePct: sumPresentPcts(row.toolPct, row.consumablesPct, row.ppePct) };
+  if ("stcPpeSavingsPct" in row) return { stcPpeSavingsPct: hydrateAnalyticsStcPct(row.stcPpeSavingsPct) };
+  return { stcPpeSavingsPct: null };
+}
+
+export function stcPpeSavingsPctPoints(override: AnalyticsStcOverride = emptyAnalyticsStc()): number {
+  return override.stcPpeSavingsPct ?? ANALYTICS_STC_PPE_SAVINGS_DEFAULT;
+}
+
+export function stcPpeSavingsRate(override: AnalyticsStcOverride = emptyAnalyticsStc()): number {
+  return stcPpeSavingsPctPoints(override) / 100;
 }
 
 function lockedStcRate(value: unknown, fallback: number) {
