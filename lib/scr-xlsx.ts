@@ -162,6 +162,12 @@ type BuiltSection = {
   totalRef: string;
 };
 
+type ScrEstimateSheet = WorkbookSheet & {
+  sections: BuiltSection[];
+  packetHoursRef: string;
+  packetTotalRef: string;
+};
+
 function writeCraftTable(cells: SheetCell[], startRow: number, row: FcrLogRow) {
   const header = startRow;
   pushText(cells, `A${header}`, "CRAFT");
@@ -254,7 +260,7 @@ function writeScrSection(cells: SheetCell[], startRow: number, row: FcrLogRow): 
   return { titleRow, hoursRef, costRef, laborRef, claimsRef, totalRef };
 }
 
-function buildEstimateSheet(input: ScrXlsxInput, packet: FcrPacket, when = new Date()): WorkbookSheet & { sections: BuiltSection[] } {
+function buildEstimateSheet(input: ScrXlsxInput, packet: FcrPacket, when = new Date()): ScrEstimateSheet {
   const cells: SheetCell[] = [];
   const merges = titleBlock(cells, input, "H", when);
   pushText(cells, "A5", SCR_ESTIMATE_TITLE);
@@ -290,13 +296,13 @@ function buildEstimateSheet(input: ScrXlsxInput, packet: FcrPacket, when = new D
     sections,
     packetHoursRef: `B${packetRow}`,
     packetTotalRef: `H${packetRow}`,
-  } as WorkbookSheet & { sections: BuiltSection[]; packetHoursRef: string; packetTotalRef: string };
+  };
 }
 
 function buildCoverSheet(
   input: ScrXlsxInput,
   packet: FcrPacket,
-  estimate: WorkbookSheet & { sections: BuiltSection[]; packetHoursRef: string; packetTotalRef: string },
+  estimate: ScrEstimateSheet,
   when = new Date(),
 ): WorkbookSheet {
   const cells: SheetCell[] = [];
@@ -360,7 +366,7 @@ function buildCoverSheet(
   };
 }
 
-function buildLogSheet(input: ScrXlsxInput, packet: FcrPacket, estimate: WorkbookSheet & { sections: BuiltSection[] }, when = new Date()): WorkbookSheet {
+function buildLogSheet(input: ScrXlsxInput, packet: FcrPacket, estimate: ScrEstimateSheet, when = new Date()): WorkbookSheet {
   const cells: SheetCell[] = [];
   const merges = titleBlock(cells, input, "G", when);
   pushText(cells, "A5", "Change Orders log");

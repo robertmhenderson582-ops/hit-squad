@@ -25,7 +25,6 @@ import {
   SCR_EXPORT_CONFIDENTIAL,
   SCR_EXPORT_ERROR,
   SCR_HOURS_LABEL,
-  SCR_TOTAL_LABEL,
   SCR_XLSX_SHEETS,
   buildScrWorkbook,
   scrToXlsx,
