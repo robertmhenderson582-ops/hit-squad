@@ -15,7 +15,9 @@ import {
   analyticsMarkupDollars,
   deriveEstimateAnalytics,
 } from "./estimate-analytics.ts";
-import { deskPackageBreakdown, deskPackageTotal } from "./estimate-desk-total.ts";
+import { deskPackageBreakdown, deskPackageTotal, type DeskPackageInput } from "./estimate-desk-total.ts";
+import { boiler17B1FilledSnapshot } from "./wood-river-b1.ts";
+import { BOILER17_CLIENT, BOILER17_SITE } from "./boiler-17.ts";
 import { estimateMarkupDollars } from "./estimate-total.ts";
 import { largeToolAmount, thirdPartyCost } from "./equipment-sheet.ts";
 import { computeRangeHours } from "./hours-clock.ts";
@@ -200,6 +202,30 @@ describe("Yates Analytics model", () => {
     const wage = lookupCompWageRow(row.position, WOOD.site, "Merit");
     assert.ok(wage?.baseSt);
     assert.equal(staff.oh, Math.round(staff.baseWageHours * wage.baseSt * YATES_ANALYTICS_BURDEN.staff.oh * 100) / 100);
+  });
+
+  it("fills Phase 1 lines on a Wood River Boiler 17 pack", () => {
+    const pack = boiler17B1FilledSnapshot();
+    const input: DeskPackageInput = {
+      crew: pack.crew as DeskPackageInput["crew"],
+      site: pack.site || BOILER17_SITE,
+      client: pack.client || BOILER17_CLIENT,
+      otherCost: pack.otherCost as DeskPackageInput["otherCost"],
+      jobMeta: pack.jobMeta as DeskPackageInput["jobMeta"],
+    };
+    const sheet = deriveEstimateAnalytics(input);
+    const desk = deskPackageBreakdown(input);
+    assert.equal(sheet.hasBaseWage, true);
+    assert.equal(analyticsLine(sheet, "total-price")?.amount, desk.total);
+    assert.equal((analyticsLine(sheet, "total-hours")?.amount ?? 0) > 0, true);
+    assert.equal((analyticsLine(sheet, "total-oh-base-wages")?.amount ?? 0) > 0, true);
+    assert.equal((analyticsLine(sheet, "total-profit-base-wages")?.amount ?? 0) > 0, true);
+    assert.equal((analyticsLine(sheet, "tool")?.amount ?? 0) > 0, true);
+    assert.equal((analyticsLine(sheet, "ppe")?.amount ?? 0) > 0, true);
+    assert.equal((analyticsLine(sheet, "subtotal-profit")?.amount ?? 0) > 0, true);
+    assert.equal((analyticsLine(sheet, "margin")?.amount ?? 0) > 0, true);
+    assert.equal((analyticsLine(sheet, "profit-per-work-hour")?.amount ?? 0) > 0, true);
+    assert.equal(estimateTabIdsForSite(BOILER17_SITE, BOILER17_CLIENT).includes("analytics"), true);
   });
 });
 
