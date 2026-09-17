@@ -1290,4 +1290,36 @@ describe("estimate pack snapshot", () => {
     assert.equal(kept?.status, "In progress");
     assert.equal((kept?.jobMeta as { jobNumber?: string })?.jobNumber, "108451");
   });
+
+  it("Owner Locked and seven-day per diem survive a stale vault hydrate", () => {
+    const local = cat2({
+      updatedAt: 500,
+      status: "Locked",
+      jobMeta: { jobNumber: "JN-41", area: "CAT", perDiemMode: "seven-day" },
+    });
+    const staleVault = cat2({
+      updatedAt: 100,
+      status: "In progress",
+      jobMeta: { jobNumber: "JN-41", area: "CAT" },
+    });
+    const picked = pickPack(local, staleVault);
+    assert.equal(picked?.status, "Locked");
+    assert.equal((picked?.jobMeta as { perDiemMode?: string })?.perDiemMode, "seven-day");
+
+    const store = memoryStore();
+    applyPackToStore(store, local);
+    assert.equal(mergeVaultIntoLocal(store, staleVault), "local");
+    const kept = collectPack(store, "new-cat2pit");
+    assert.equal(kept?.status, "Locked");
+    assert.equal((kept?.jobMeta as { perDiemMode?: string })?.perDiemMode, "seven-day");
+
+    const newerMissingMode = cat2({
+      updatedAt: 900,
+      status: "Locked",
+      jobMeta: { jobNumber: "JN-41", area: "CAT" },
+    });
+    const keptMode = pickPack(local, newerMissingMode);
+    assert.equal(keptMode?.status, "Locked");
+    assert.equal((keptMode?.jobMeta as { perDiemMode?: string })?.perDiemMode, "seven-day");
+  });
 });

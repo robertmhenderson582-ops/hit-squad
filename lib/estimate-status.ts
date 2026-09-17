@@ -94,16 +94,18 @@ export function writeEstimateStatus(estimateId: string, status: EstimateStatus, 
 }
 
 /**
- * Keep a live workflow status. HIS / B-1 awarded default Locked cannot wipe
- * vault In progress (or Review / Budgetary / Draft).
+ * Prefer the incoming status, including Owner/PM Locked.
+ * Pass seedLocked for HIS / B-1 awarded default Locked so it cannot wipe a
+ * live In progress / Review / Budgetary / Draft.
  */
 export function keepLiveEstimateStatus(
   incoming?: string | null,
   existing?: string | null,
+  seedLocked = false,
 ): EstimateStatus | "" {
   const next = (incoming || "").trim();
   const prev = (existing || "").trim();
-  const kept = next === "Locked" && prev && prev !== "Locked" ? prev : next || prev;
+  const kept = seedLocked && next === "Locked" && prev && prev !== "Locked" ? prev : next || prev;
   return isEstimateStatus(kept) ? kept : "";
 }
 

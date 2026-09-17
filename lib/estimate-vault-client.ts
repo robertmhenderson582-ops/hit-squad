@@ -39,6 +39,7 @@ export const ESTIMATE_VAULT_DEBOUNCE_MS = 1500;
 
 const debounce = scheduleOnce(ESTIMATE_VAULT_DEBOUNCE_MS);
 const lastBody = new Map<string, string>();
+const queuedUpserts = new Set<string>();
 let hydratePromise: Promise<EstimatePackSnapshot[]> | null = null;
 let hydrateSeat: string | null = null;
 let currentViewAs: string | null = null;
@@ -84,6 +85,7 @@ export function resetVaultHydrateForTests() {
   hydrateSeat = null;
   currentViewAs = null;
   lastBody.clear();
+  queuedUpserts.clear();
 }
 
 export function vaultListHydratePending(opts?: { viewAs?: string | null }) {
@@ -100,6 +102,16 @@ export function isLeftoverOwnerCopy(pack: { ownerEmail?: string; sharedWith?: st
   return true;
 }
 
+/** Land queued Owner/PM writes before a View-as hydrate paints the shared pack. */
+export async function flushQueuedVaultUpserts(store?: StorageLike | null) {
+  const target = browserStore(store);
+  const ids = [...queuedUpserts];
+  for (const packId of ids) {
+    await flushVaultUpsert(packId, target);
+    queuedUpserts.delete(packId);
+  }
+}
+
 /** Drive vault is canonical. Hydrate so every seat sees the same live pack after hard-refresh. */
 export async function hydrateFromVault(
   store?: StorageLike | null,
@@ -107,6 +119,7 @@ export async function hydrateFromVault(
 ): Promise<EstimatePackSnapshot[]> {
   const target = browserStore(store);
   if (!target) return [];
+  await flushQueuedVaultUpserts(target);
   const seat = requestedVaultSeat(opts) || "owner";
   if (seat === "owner" || seat === "nathan") bustHisLeftoverOnce(target);
   if (hydratePromise && hydrateSeat === seat) {
@@ -209,6 +222,7 @@ export async function hydrateOpenPack(
 ): Promise<EstimatePackSnapshot[]> {
   const target = browserStore(store);
   if (!target || !packId) return [];
+  await flushQueuedVaultUpserts(target);
   const seat = requestedVaultSeat(opts) || "owner";
   const list = hydrateFromVault(store, opts);
   try {
@@ -268,7 +282,6 @@ async function readVaultPutResult(response: Response) {
 }
 
 export async function flushVaultUpsert(packId: string, store?: StorageLike | null) {
-  if (currentViewAs) return { ok: true as const };
   if (!isLocalPackId(packId)) return { ok: false as const };
   const target = browserStore(store);
   if (!target) return { ok: false as const };
@@ -293,7 +306,6 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   }
   const body = JSON.stringify({ pack });
   if (lastBody.get(packId) === body) return { ok: true as const };
-  if (currentViewAs) return { ok: true as const };
   try {
     let response = await putVaultPack(body);
     if (!response.ok && isTransientVaultStatus(response.status)) {
@@ -337,8 +349,10 @@ export function scheduleVaultUpsert(
   onResult?: (result: VaultUpsertResult) => void,
 ) {
   if (!isLocalPackId(packId)) return;
+  queuedUpserts.add(packId);
   debounce(packId, () => {
     void flushVaultUpsert(packId, store).then((result) => {
+      queuedUpserts.delete(packId);
       onResult?.(result);
     });
   });

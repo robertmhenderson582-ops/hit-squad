@@ -173,7 +173,7 @@ function withVaultIdentity(local: EstimatePackSnapshot, vault: EstimatePackSnaps
     transferredTo: vault.transferredTo,
     transferredToName: vault.transferredToName,
     transferredFromName: vault.transferredFromName,
-    status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
+    status: mergeLiveStatus(local, vault) || vault.status || local.status,
   };
 }
 
@@ -243,15 +243,61 @@ function jobNumberFromMeta(meta: unknown) {
   return typeof row?.jobNumber === "string" ? row.jobNumber.trim() : "";
 }
 
+function perDiemModeFromMeta(meta: unknown) {
+  const row = asRecord(meta);
+  if (!row || !("perDiemMode" in row)) return "";
+  const mode = row.perDiemMode;
+  return typeof mode === "string" && mode.trim() ? mode.trim() : "";
+}
+
+function withJobMetaFields(meta: unknown, patch: Record<string, unknown>) {
+  const row = asRecord(meta);
+  return row ? { ...row, ...patch } : meta;
+}
+
+/** Thin / awarded-default Locked must not wipe a live workflow status. */
+function incomingLooksSeedLocked(
+  incoming?: EstimatePackSnapshot | null,
+  existing?: EstimatePackSnapshot | null,
+) {
+  if ((incoming?.status || "") !== "Locked") return false;
+  const prev = (existing?.status || "").trim();
+  if (!prev || prev === "Locked") return false;
+  const incomingNumber = jobNumberFromMeta(incoming?.jobMeta);
+  const existingNumber = jobNumberFromMeta(existing?.jobMeta);
+  if (existingNumber && !incomingNumber) return true;
+  return Boolean(packHasSheets(existing) && !packHasSheets(incoming));
+}
+
+function mergeLiveStatus(
+  incoming?: EstimatePackSnapshot | null,
+  existing?: EstimatePackSnapshot | null,
+) {
+  return (
+    keepLiveEstimateStatus(incoming?.status, existing?.status, incomingLooksSeedLocked(incoming, existing)) ||
+    incoming?.status ||
+    existing?.status
+  );
+}
+
 function pickJobMetaForPack(newer: EstimatePackSnapshot, older: EstimatePackSnapshot) {
   if (packHasForeignAfeName(newer) && !packHasForeignAfeName(older)) return older.jobMeta ?? newer.jobMeta;
   if (!packHasForeignAfeName(newer) && packHasForeignAfeName(older)) return newer.jobMeta ?? older.jobMeta;
   const picked = newer.jobMeta ?? older.jobMeta;
   const newerNumber = jobNumberFromMeta(newer.jobMeta);
   const olderNumber = jobNumberFromMeta(older.jobMeta);
-  if (newerNumber || !olderNumber) return picked;
-  const row = asRecord(picked);
-  return row ? { ...row, jobNumber: olderNumber } : older.jobMeta ?? newer.jobMeta;
+  const newerMode = perDiemModeFromMeta(newer.jobMeta);
+  const olderMode = perDiemModeFromMeta(older.jobMeta);
+  const mode = newerMode || olderMode;
+  let next = picked;
+  if (olderNumber && !newerNumber) {
+    const row = asRecord(next);
+    next = row ? { ...row, jobNumber: olderNumber } : older.jobMeta ?? newer.jobMeta;
+  }
+  if (mode && !perDiemModeFromMeta(next)) {
+    next = withJobMetaFields(next, { perDiemMode: mode });
+  }
+  return next;
 }
 
 export function equipmentHasWork(value: unknown) {
@@ -469,7 +515,7 @@ export function pickPack(
         transferredTo: vault.transferredTo,
         transferredToName: vault.transferredToName,
         transferredFromName: vault.transferredFromName,
-        status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
+        status: mergeLiveStatus(local, vault) || vault.status || local.status,
       };
     }
     if (packClockIsSeedSmashed(local) && !aromaticsSourceCanRestore(vault)) {
@@ -481,7 +527,7 @@ export function pickPack(
         transferredTo: vault.transferredTo ?? local.transferredTo,
         transferredToName: vault.transferredToName ?? local.transferredToName,
         transferredFromName: vault.transferredFromName ?? local.transferredFromName,
-        status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
+        status: mergeLiveStatus(local, vault) || vault.status || local.status,
       };
     }
     if (packClockIsSeedSmashed(vault) && !packClockIsSeedSmashed(local)) {
@@ -496,7 +542,7 @@ export function pickPack(
         transferredTo: vault.transferredTo,
         transferredToName: vault.transferredToName,
         transferredFromName: vault.transferredFromName,
-        status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
+        status: mergeLiveStatus(local, vault) || vault.status || local.status,
       };
     }
   } else if (packClockIsSeedSmashed(local) && !packClockIsSeedSmashed(vault)) {
@@ -508,7 +554,7 @@ export function pickPack(
       transferredTo: vault.transferredTo,
       transferredToName: vault.transferredToName,
       transferredFromName: vault.transferredFromName,
-      status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
+      status: mergeLiveStatus(local, vault) || vault.status || local.status,
     };
   } else if (packClockIsSeedSmashed(vault) && !packClockIsSeedSmashed(local)) {
     return restorePackClock(vault, local);
@@ -540,7 +586,7 @@ export function pickPack(
       transferredTo: vault.transferredTo,
       transferredToName: vault.transferredToName,
       transferredFromName: vault.transferredFromName,
-      status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
+      status: mergeLiveStatus(local, vault) || vault.status || local.status,
       jobMeta: pickJobMetaForPack({ ...vault, jobMeta: vault.jobMeta }, local),
     };
   }
@@ -559,7 +605,7 @@ export function pickPack(
     fcr: pickFcr(newer.fcr, older.fcr),
     costReport: pickCostReport(newer.costReport, older.costReport),
     purchasing: pickPurchasing(newer.purchasing, older.purchasing),
-    status: keepLiveEstimateStatus(newer.status, older.status) || newer.status || older.status,
+    status: mergeLiveStatus(newer, older) || newer.status || older.status,
     createdAt: Math.min(local.createdAt || newer.createdAt, vault.createdAt || newer.createdAt) || newer.createdAt,
     ownerEmail: vault.ownerEmail || newer.ownerEmail,
     sharedWith: vault.sharedWith,
@@ -687,8 +733,7 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
       transferredToName: pack.transferredToName,
       transferredFromName: pack.transferredFromName,
       replaceHandoff: true,
-      status:
-        (keepLiveEstimateStatus(pack.status, existing?.status) || pack.status) as EstimateStatus | undefined,
+      status: (mergeLiveStatus(pack, existing) || pack.status) as EstimateStatus | undefined,
     },
     store,
   );
@@ -724,12 +769,15 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
       const existingMeta = existing?.jobMeta ?? readStoreJson(store, `${JOB_META_PREFIX}${key}`);
       const incomingNumber = jobNumberFromMeta(pack.jobMeta);
       const existingNumber = jobNumberFromMeta(existingMeta);
+      const incomingMode = perDiemModeFromMeta(pack.jobMeta);
+      const existingMode = perDiemModeFromMeta(existingMeta);
       const row = asRecord(pack.jobMeta);
-      writeStoreJson(
-        store,
-        `${JOB_META_PREFIX}${key}`,
-        incomingNumber || !existingNumber || !row ? pack.jobMeta : { ...row, jobNumber: existingNumber },
-      );
+      let nextMeta: unknown =
+        incomingNumber || !existingNumber || !row ? pack.jobMeta : { ...row, jobNumber: existingNumber };
+      if (!incomingMode && existingMode) {
+        nextMeta = withJobMetaFields(nextMeta, { perDiemMode: existingMode });
+      }
+      writeStoreJson(store, `${JOB_META_PREFIX}${key}`, nextMeta);
     }
   }
   if (pack.activities != null) writeStoreJson(store, `${ACTIVITY_STORE_PREFIX}${key}`, normalizeWorkActivities(pack.activities));
