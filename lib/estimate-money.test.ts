@@ -6,6 +6,7 @@ import {
   cbaIncreaseDollars,
   emptyJobMoney,
   hydrateAnalyticsBridge,
+  hydrateAnalyticsStc,
   hydrateJobMoney,
   isCbaCraftLane,
   laborContingencyDollars,
@@ -46,11 +47,11 @@ describe("M.O.R.E. fund", () => {
       "2026-09-16",
     ]);
     assert.deepEqual(emptyJobMeta().holidays, []);
-    assert.deepEqual(emptyJobMoney().analyticsStc, { toolPct: null, consumablesPct: null, ppePct: null });
-    assert.deepEqual(hydrateJobMoney({}).analyticsStc, { toolPct: null, consumablesPct: null, ppePct: null });
-    assert.deepEqual(emptyJobMeta().analyticsStc, { toolPct: null, consumablesPct: null, ppePct: null });
+    assert.deepEqual(emptyJobMoney().analyticsStc, { stcPpePct: null });
+    assert.deepEqual(hydrateJobMoney({}).analyticsStc, { stcPpePct: null });
+    assert.deepEqual(emptyJobMeta().analyticsStc, { stcPpePct: null });
     assert.equal(emptyJobMoney().analyticsBridge.mode, "pct");
-    assert.equal(emptyJobMoney().analyticsBridge.locked.toolPerHour, 0.5);
+    assert.equal(emptyJobMoney().analyticsBridge.locked.stcPpePerHour, 3.6);
     assert.equal(emptyJobMoney().analyticsBridge.locked.ohPerHour, null);
     assert.equal(hydrateJobMoney({}).analyticsBridge.locked.profitPerHour, null);
     assert.equal(emptyJobMoney().analyticsBridge.erosionPerHour, WR_EAST_BRIDGE_SEED.erosionPerHour);
@@ -70,9 +71,7 @@ describe("Wood River Analytics bridge seeds", () => {
     assert.equal(seeded.nb.siteClasses, 16718);
     assert.equal(seeded.extraPd, null);
     assert.equal(seeded.jvic, 944335.07);
-    assert.equal(seeded.locked.toolPerHour, 0.5);
-    assert.equal(seeded.locked.consumablesPerHour, 1.25);
-    assert.equal(seeded.locked.ppePerHour, 1.85);
+    assert.equal(seeded.locked.stcPpePerHour, 3.6);
     assert.equal(seeded.locked.ohPerHour, null);
     assert.equal(seeded.locked.profitPerHour, null);
     assert.equal(seeded.erosionPctOfBw, null);
@@ -106,6 +105,18 @@ describe("Wood River Analytics bridge seeds", () => {
     assert.equal(owner.nb.drugDisa, 12);
     assert.equal(owner.nb.safety920, 0);
     assert.equal(owner.nb.siteClasses, 99);
+  });
+
+  it("migrates old Tool / Con / PPE overrides into one STC & PPE field", () => {
+    assert.deepEqual(hydrateAnalyticsStc({ toolPct: 5, consumablesPct: 0, ppePct: 2.75 }), { stcPpePct: 7.75 });
+    assert.deepEqual(hydrateAnalyticsStc({ stcPpePct: 8, toolPct: 1 }), { stcPpePct: 8 });
+    assert.deepEqual(hydrateAnalyticsStc({ stcPpePct: 0 }), { stcPpePct: 0 });
+    assert.deepEqual(hydrateAnalyticsStc({}), { stcPpePct: null });
+    assert.equal(hydrateAnalyticsBridge({ locked: { toolPerHour: 0.5, consumablesPerHour: 1.25, ppePerHour: 1.85 } }).locked.stcPpePerHour, 3.6);
+    assert.equal(hydrateAnalyticsBridge({ locked: { toolPerHour: 1, consumablesPerHour: 1, ppePerHour: 2 } }).locked.stcPpePerHour, 4);
+    assert.equal(hydrateAnalyticsBridge({ locked: { stcPpePerHour: 0 } }).locked.stcPpePerHour, 0);
+    assert.equal(hydrateAnalyticsBridge({ locked: { stcPpePerHour: 5, toolPerHour: 1 } }).locked.stcPpePerHour, 5);
+    assert.equal(hydrateJobMoney({}).analyticsBridge.locked.stcPpePerHour, 3.6);
   });
 });
 
