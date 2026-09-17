@@ -6,11 +6,13 @@ import {
   applyReturnLocally,
   applyTransferLocally,
   flushLocalPacksToVault,
+  flushPendingVaultUpserts,
   flushVaultUpsert,
   hydrateFromVault,
   hydrateOpenPack,
   isLeftoverOwnerCopy,
   resetVaultHydrateForTests,
+  scheduleVaultUpsert,
   setVaultViewAs,
   shareVaultPack,
   transferVaultPack,
@@ -1719,6 +1721,146 @@ describe("local transfer commit", () => {
       assert.equal(findLocalPack("new-cat2pit", store)?.title, "Cat 2 Pit Stop");
       assert.equal(urls.some((url) => url.includes("/api/desk/estimates/new-cat2pit")), true);
       assert.equal(urls.some((url) => /\/api\/desk\/estimates\/?$/.test(url) || url.endsWith("/api/desk/estimates")), true);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("hydrateOpenPack does not paint stale vault status or perDiemMode over a newer local pack", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    applyPackToStore(store, {
+      packId: "new-cat2pit",
+      key: "new:new-cat2pit",
+      title: "Cat 2 Pit Stop",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 100,
+      updatedAt: 800,
+      ownerEmail: OWNER_LOGIN_EMAIL,
+      status: "Locked",
+      jobMeta: { jobNumber: "2218", perDiemMode: "seven-day" },
+      schedule: { phases: [{ id: "pre", on: true, start: "2026-09-01" }] },
+      crew: { support: [{ id: "sup-1" }] },
+    });
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/desk/estimates/new-cat2pit")) {
+        return new Response(
+          JSON.stringify({
+            pack: {
+              packId: "new-cat2pit",
+              key: "new:new-cat2pit",
+              title: "Cat 2 Pit Stop",
+              client: "Phillips 66",
+              site: "Wood River — Roxana, IL",
+              siteId: "site-madison",
+              createdAt: 100,
+              updatedAt: 200,
+              ownerEmail: OWNER_LOGIN_EMAIL,
+              status: "In progress",
+              jobMeta: { jobNumber: "2218", perDiemMode: "days-worked" },
+              schedule: { phases: [{ id: "pre", on: true, start: "2026-09-01" }] },
+              crew: { support: [{ id: "sup-1" }] },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ persisted: true, packs: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      await hydrateOpenPack("new-cat2pit", store);
+      const kept = collectPack(store, "new-cat2pit");
+      assert.equal(kept?.status, "Locked");
+      assert.equal((kept?.jobMeta as { perDiemMode?: string })?.perDiemMode, "seven-day");
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("View as Nathan still flushes the shared pack; Chance does not", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    applyPackToStore(store, {
+      packId: "new-cat2pit",
+      key: "new:new-cat2pit",
+      title: "Cat 2 Pit Stop",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 100,
+      updatedAt: 800,
+      ownerEmail: OWNER_LOGIN_EMAIL,
+      status: "Locked",
+      jobMeta: { perDiemMode: "seven-day" },
+      schedule: { phases: [{ id: "pre", on: true, start: "2026-09-01" }] },
+      crew: { support: [{ id: "sup-1" }] },
+    });
+    const bodies: Array<{ pack?: { status?: string; jobMeta?: { perDiemMode?: string } } }> = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const raw = typeof init?.body === "string" ? init.body : "";
+      if (raw) bodies.push(JSON.parse(raw) as (typeof bodies)[number]);
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      setVaultViewAs("nathan");
+      const nathan = await flushVaultUpsert("new-cat2pit", store);
+      assert.equal(nathan.ok, true);
+      assert.equal(bodies[0]?.pack?.status, "Locked");
+      assert.equal(bodies[0]?.pack?.jobMeta?.perDiemMode, "seven-day");
+      setVaultViewAs("chance");
+      const chance = await flushVaultUpsert("new-cat2pit", store);
+      assert.equal(chance.ok, true);
+      assert.equal(bodies.length, 1);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("flushes a queued Owner write before View as hydrates the shared pack", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    applyPackToStore(store, {
+      packId: "new-cat2pit",
+      key: "new:new-cat2pit",
+      title: "Cat 2 Pit Stop",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 100,
+      updatedAt: 800,
+      ownerEmail: OWNER_LOGIN_EMAIL,
+      status: "Review",
+      jobMeta: { perDiemMode: "seven-day" },
+      schedule: { phases: [{ id: "pre", on: true, start: "2026-09-01" }] },
+      crew: { support: [{ id: "sup-1" }] },
+    });
+    let puts = 0;
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(init?.method || "GET").toUpperCase() === "PUT") puts += 1;
+      return new Response(JSON.stringify({ persisted: true, packs: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      scheduleVaultUpsert("new-cat2pit", store);
+      await flushPendingVaultUpserts();
+      assert.equal(puts, 1);
+      const desk = readFileSync(fileURLToPath(new URL("../components/OwnerDeskContext.tsx", import.meta.url)), "utf8");
+      assert.match(desk, /flushPendingVaultUpserts/);
+      assert.match(desk, /setVaultViewAs\(activeLensSeat/);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();

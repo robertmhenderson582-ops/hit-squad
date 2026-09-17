@@ -152,6 +152,8 @@ describe("per diem mode ripple", () => {
     assert.match(setup, /seven-day/);
     assert.match(setup, /choice-tile/);
     assert.match(setup, /choice-tile-on/);
+    assert.match(setup, /disabled=\{estimateWriteLocked\}/);
+    assert.match(setup, /if \(estimateWriteLocked\) return;/);
     assert.doesNotMatch(setup, /selected \? "border-steel bg-white"/);
     assert.match(analytics, /choice-tile-on/);
     assert.doesNotMatch(analytics, /selected \? "border-steel bg-white"/);

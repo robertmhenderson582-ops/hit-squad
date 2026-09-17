@@ -394,9 +394,9 @@ export function JobSetupCard({
             return (
               <label
                 key={option.id}
-                className={`choice-tile block cursor-pointer rounded-lg border px-3 py-3 ${
+                className={`choice-tile block rounded-lg border px-3 py-3 ${
                   selected ? "choice-tile-on" : ""
-                }`}
+                } ${estimateWriteLocked ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
               >
                 <span className="choice-tile-title flex items-center gap-2 text-sm font-semibold">
                   <input
@@ -404,7 +404,11 @@ export function JobSetupCard({
                     name="per-diem-mode"
                     className="accent-steel"
                     checked={selected}
-                    onChange={() => pack.setJobMeta((current) => ({ ...current, perDiemMode: option.id }))}
+                    disabled={estimateWriteLocked}
+                    onChange={() => {
+                      if (estimateWriteLocked) return;
+                      pack.setJobMeta((current) => ({ ...current, perDiemMode: option.id }));
+                    }}
                   />
                   {option.title}
                 </span>

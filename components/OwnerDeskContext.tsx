@@ -6,7 +6,7 @@ import { useSession } from "@/components/SessionProvider";
 import { aliasText, shouldApplyAliases } from "@/lib/catalog-aliases";
 import type { DeskPerson } from "@/lib/desk-people";
 import { activeLensSeat, canUseFollow, canUseViewAs, deskLensKey, hasBuildDesk, isPresident, isTester, lensUser, testerFromViewAs, viewingAsOther } from "@/lib/desk-role";
-import { hydrateFromVault, setVaultViewAs } from "@/lib/estimate-vault-client";
+import { flushPendingVaultUpserts, hydrateFromVault, setVaultViewAs } from "@/lib/estimate-vault-client";
 import {
   aliasLensFor,
   isFollowSeat,
@@ -354,16 +354,21 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     const lens = seat === "owner" ? "owner" : seat;
     writeStoredFollow(seat);
     writeStoredViewAs(lens);
-    setVaultViewAs(seat === "owner" ? null : seat);
     void saveSettings({ followSeat: seat, viewAs: lens }).catch(() => undefined);
     noteFeature(seat === "owner" ? "Stopped Follow" : `Follow ${seat} screen`);
     if (seat !== "owner") {
       const land = followLandPath(nextLand ?? "/");
-      void hydrateFromVault(undefined, { viewAs: seat }).finally(() => {
-        window.location.assign(land);
-      });
+      void flushPendingVaultUpserts()
+        .then(() => {
+          setVaultViewAs(seat);
+          return hydrateFromVault(undefined, { viewAs: seat });
+        })
+        .finally(() => {
+          window.location.assign(land);
+        });
       return;
     }
+    setVaultViewAs(null);
     setFollowSeatState("owner");
     setViewAsState("owner");
   }, [user]);
@@ -377,15 +382,20 @@ export function OwnerDeskProvider({ children }: { children: React.ReactNode }) {
     }
     if (!hasBuildDesk(user)) return;
     writeStoredViewAs(seat);
-    setVaultViewAs(activeLensSeat(seat, followSeat));
     void saveSettings({ viewAs: seat }).catch(() => undefined);
     noteFeature(seat === "owner" ? "View as owner" : `View as ${seat}`);
     if (seat !== "owner") {
-      void hydrateFromVault(undefined, { viewAs: seat }).finally(() => {
-        setViewAsState(seat);
-      });
+      void flushPendingVaultUpserts()
+        .then(() => {
+          setVaultViewAs(activeLensSeat(seat, followSeat));
+          return hydrateFromVault(undefined, { viewAs: seat });
+        })
+        .finally(() => {
+          setViewAsState(seat);
+        });
       return;
     }
+    setVaultViewAs(null);
     setViewAsState("owner");
   }, [followSeat, user]);
 

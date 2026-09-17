@@ -15,7 +15,8 @@ import { isSamePerson } from "./identity.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import { JOB_MENU_KEY, clearHisJobMenuLeftover } from "./job-menu.ts";
 import { omitCatalogSeedPacks } from "./jobs.ts";
-import { keepLiveEstimateStatus } from "./estimate-status.ts";
+import { isBoiler17Identity } from "./boiler-17.ts";
+import { keepLiveEstimateStatus, preferIncomingEstimateStatus } from "./estimate-status.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 import { mergeRodeoMonroeWakeCards, shouldPaintWakeCards } from "./rodeo-monroe-wake.ts";
 
@@ -176,7 +177,12 @@ function preferDeskPack(current: LocalPack, next: LocalPack): LocalPack {
     transferredFromName: newer.transferredFromName || older.transferredFromName,
     transferredTo: newer.transferredTo || older.transferredTo,
     transferredToName: newer.transferredToName || older.transferredToName,
-    status: keepLiveEstimateStatus(newer.status, older.status) || newer.status || older.status,
+    status:
+      (isBoiler17Identity(newer) || isBoiler17Identity(older)
+        ? keepLiveEstimateStatus(newer.status, older.status)
+        : preferIncomingEstimateStatus(newer.status, older.status)) ||
+      newer.status ||
+      older.status,
     updatedAt: Math.max(current.updatedAt || 0, next.updatedAt || 0),
   };
   const his = hisMatchForPack(merged) || hisMatchForPack(current) || hisMatchForPack(next);

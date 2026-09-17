@@ -76,6 +76,32 @@ describe("estimate vault service", () => {
     assert.equal(await getVisiblePack(tester, "new-cat2pit", drive), null);
   });
 
+  it("Owner Locked and seven-day per diem persist on the shared vault pack", async () => {
+    const drive = memoryDrive();
+    const first = await upsertVisiblePack(
+      owner,
+      cat2({ status: "In progress", jobMeta: { jobNumber: "2218", perDiemMode: "days-worked" } }),
+      drive,
+    );
+    assert.equal(first.ok, true);
+    const next = await upsertVisiblePack(
+      owner,
+      cat2({
+        updatedAt: 800,
+        status: "Locked",
+        jobMeta: { jobNumber: "2218", perDiemMode: "seven-day" },
+      }),
+      drive,
+    );
+    assert.equal(next.ok, true);
+    if (!next.ok) return;
+    assert.equal(next.pack.status, "Locked");
+    assert.equal((next.pack.jobMeta as { perDiemMode?: string } | undefined)?.perDiemMode, "seven-day");
+    const stored = await getVisiblePack(owner, "new-cat2pit", drive);
+    assert.equal(stored?.status, "Locked");
+    assert.equal((stored?.jobMeta as { perDiemMode?: string } | undefined)?.perDiemMode, "seven-day");
+  });
+
   it("lets testers persist their own pack without seeing anyone else's", async () => {
     const drive = memoryDrive();
     await upsertVisiblePack(owner, cat2(), drive);

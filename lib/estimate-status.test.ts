@@ -11,6 +11,7 @@ import {
   estimateStatusLaneFromRegular,
   isEstimateLocked,
   keepLiveEstimateStatus,
+  preferIncomingEstimateStatus,
   needsStatusConfirm,
   parseEstimateStatus,
   readEstimateStatus,
@@ -82,6 +83,10 @@ describe("estimate status", () => {
     assert.equal(keepLiveEstimateStatus("In progress", "Locked"), "In progress");
     assert.equal(keepLiveEstimateStatus("", "In progress"), "In progress");
     assert.equal(keepLiveEstimateStatus("Locked", ""), "Locked");
+    assert.equal(preferIncomingEstimateStatus("Locked", "In progress"), "Locked");
+    assert.equal(preferIncomingEstimateStatus("In progress", "Locked"), "In progress");
+    assert.equal(preferIncomingEstimateStatus("", "Review"), "Review");
+    assert.equal(preferIncomingEstimateStatus("Budgetary", ""), "Budgetary");
     assert.match(statusConfirmCopy("Draft", "Submitted"), /Draft to Submitted/);
     const store = memoryStorage();
     writeEstimateStatus("new-demo", "Submitted", store);

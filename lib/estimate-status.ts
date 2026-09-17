@@ -107,6 +107,20 @@ export function keepLiveEstimateStatus(
   return isEstimateStatus(kept) ? kept : "";
 }
 
+/**
+ * Shared Owner↔PM pack: the incoming workflow status wins, including Locked.
+ * Blank incoming keeps the existing live status.
+ */
+export function preferIncomingEstimateStatus(
+  incoming?: string | null,
+  existing?: string | null,
+): EstimateStatus | "" {
+  const next = (incoming || "").trim();
+  const prev = (existing || "").trim();
+  const kept = next || prev;
+  return isEstimateStatus(kept) ? kept : "";
+}
+
 /** Pack snapshot wins. localStorage mirrors for paint / Awarded lists only. */
 export function resolveEstimateStatus(
   packStatus: unknown,

@@ -1290,4 +1290,50 @@ describe("estimate pack snapshot", () => {
     assert.equal(kept?.status, "In progress");
     assert.equal((kept?.jobMeta as { jobNumber?: string })?.jobNumber, "108451");
   });
+
+  it("shared Owner↔PM pack keeps Locked and seven-day per diem through local→vault→hydrate", () => {
+    const live = cat2({
+      updatedAt: 800,
+      status: "Locked",
+      jobMeta: { jobNumber: "2218", perDiemMode: "seven-day" },
+    });
+    const staleVault = cat2({
+      updatedAt: 200,
+      status: "In progress",
+      jobMeta: { jobNumber: "2218", perDiemMode: "days-worked" },
+    });
+    const fromOwner = pickPack(live, staleVault);
+    assert.equal(fromOwner?.status, "Locked");
+    assert.equal((fromOwner?.jobMeta as { perDiemMode?: string })?.perDiemMode, "seven-day");
+
+    const fromVault = pickPack(
+      cat2({ updatedAt: 200, status: "In progress", jobMeta: { jobNumber: "2218", perDiemMode: "days-worked" } }),
+      live,
+    );
+    assert.equal(fromVault?.status, "Locked");
+    assert.equal((fromVault?.jobMeta as { perDiemMode?: string })?.perDiemMode, "seven-day");
+
+    const missingMode = cat2({
+      updatedAt: 900,
+      status: "Review",
+      jobMeta: { jobNumber: "2218" },
+    });
+    const keptMode = pickPack(live, missingMode);
+    assert.equal(keptMode?.status, "Review");
+    assert.equal((keptMode?.jobMeta as { perDiemMode?: string })?.perDiemMode, "seven-day");
+
+    const ownerDesk = memoryStore();
+    applyPackToStore(ownerDesk, staleVault);
+    applyPackToStore(ownerDesk, live);
+    assert.equal(collectPack(ownerDesk, "new-cat2pit")?.status, "Locked");
+    assert.equal((collectPack(ownerDesk, "new-cat2pit")?.jobMeta as { perDiemMode?: string })?.perDiemMode, "seven-day");
+    mergeVaultIntoLocal(ownerDesk, staleVault);
+    assert.equal(collectPack(ownerDesk, "new-cat2pit")?.status, "Locked");
+    assert.equal((collectPack(ownerDesk, "new-cat2pit")?.jobMeta as { perDiemMode?: string })?.perDiemMode, "seven-day");
+
+    const nathanDesk = memoryStore();
+    mergeVaultIntoLocal(nathanDesk, live);
+    assert.equal(collectPack(nathanDesk, "new-cat2pit")?.status, "Locked");
+    assert.equal((collectPack(nathanDesk, "new-cat2pit")?.jobMeta as { perDiemMode?: string })?.perDiemMode, "seven-day");
+  });
 });

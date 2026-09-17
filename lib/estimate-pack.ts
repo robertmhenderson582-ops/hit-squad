@@ -16,9 +16,11 @@ import {
   rememberPackFingerprint,
 } from "./pack-integrity.ts";
 import { catalogSites } from "./desk-data.ts";
+import { isBoiler17Identity } from "./boiler-17.ts";
 import {
   keepLiveEstimateStatus,
   parseEstimateStatus,
+  preferIncomingEstimateStatus,
   resolveEstimateStatus,
   type EstimateStatus,
 } from "./estimate-status.ts";
@@ -164,7 +166,27 @@ export function packClockIsSeedSmashed(pack: EstimatePackSnapshot | null | undef
   return isDefaultSeedSchedule(pack.schedule) && crewHasRows(pack.crew) && !crewHasCustomClock(pack.crew);
 }
 
+function sharedPackStatus(
+  incoming?: string | null,
+  existing?: string | null,
+  pack?: { packId?: string; title?: string } | null,
+): EstimateStatus | "" {
+  if (isBoiler17Identity(pack)) return keepLiveEstimateStatus(incoming, existing);
+  return preferIncomingEstimateStatus(incoming, existing);
+}
+
+function statusFromNewerPack(newer: EstimatePackSnapshot, older: EstimatePackSnapshot) {
+  return (
+    sharedPackStatus(newer.status, older.status, newer) ||
+    sharedPackStatus(newer.status, older.status, older) ||
+    newer.status ||
+    older.status
+  );
+}
+
 function withVaultIdentity(local: EstimatePackSnapshot, vault: EstimatePackSnapshot): EstimatePackSnapshot {
+  const newer = (local.updatedAt || 0) >= (vault.updatedAt || 0) ? local : vault;
+  const older = newer === local ? vault : local;
   return {
     ...local,
     ownerEmail: vault.ownerEmail || local.ownerEmail,
@@ -173,7 +195,8 @@ function withVaultIdentity(local: EstimatePackSnapshot, vault: EstimatePackSnaps
     transferredTo: vault.transferredTo,
     transferredToName: vault.transferredToName,
     transferredFromName: vault.transferredFromName,
-    status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
+    status: statusFromNewerPack(newer, older),
+    jobMeta: pickJobMetaForPack(newer, older),
   };
 }
 
@@ -243,15 +266,29 @@ function jobNumberFromMeta(meta: unknown) {
   return typeof row?.jobNumber === "string" ? row.jobNumber.trim() : "";
 }
 
+function perDiemModeFromMeta(meta: unknown) {
+  const row = asRecord(meta);
+  return typeof row?.perDiemMode === "string" && row.perDiemMode.trim() ? row.perDiemMode.trim() : "";
+}
+
+function withKeptJobMetaFields(meta: unknown, older: unknown) {
+  const row = asRecord(meta);
+  if (!row) return meta;
+  const next = { ...row };
+  if (!jobNumberFromMeta(next) && jobNumberFromMeta(older)) {
+    next.jobNumber = jobNumberFromMeta(older);
+  }
+  if (!perDiemModeFromMeta(next) && perDiemModeFromMeta(older)) {
+    next.perDiemMode = perDiemModeFromMeta(older);
+  }
+  return next;
+}
+
 function pickJobMetaForPack(newer: EstimatePackSnapshot, older: EstimatePackSnapshot) {
   if (packHasForeignAfeName(newer) && !packHasForeignAfeName(older)) return older.jobMeta ?? newer.jobMeta;
   if (!packHasForeignAfeName(newer) && packHasForeignAfeName(older)) return newer.jobMeta ?? older.jobMeta;
   const picked = newer.jobMeta ?? older.jobMeta;
-  const newerNumber = jobNumberFromMeta(newer.jobMeta);
-  const olderNumber = jobNumberFromMeta(older.jobMeta);
-  if (newerNumber || !olderNumber) return picked;
-  const row = asRecord(picked);
-  return row ? { ...row, jobNumber: olderNumber } : older.jobMeta ?? newer.jobMeta;
+  return withKeptJobMetaFields(picked, older.jobMeta) ?? older.jobMeta ?? newer.jobMeta;
 }
 
 export function equipmentHasWork(value: unknown) {
@@ -469,7 +506,10 @@ export function pickPack(
         transferredTo: vault.transferredTo,
         transferredToName: vault.transferredToName,
         transferredFromName: vault.transferredFromName,
-        status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
+        status: statusFromNewerPack(
+          (local.updatedAt || 0) >= (vault.updatedAt || 0) ? local : vault,
+          (local.updatedAt || 0) >= (vault.updatedAt || 0) ? vault : local,
+        ),
       };
     }
     if (packClockIsSeedSmashed(local) && !aromaticsSourceCanRestore(vault)) {
@@ -481,7 +521,10 @@ export function pickPack(
         transferredTo: vault.transferredTo ?? local.transferredTo,
         transferredToName: vault.transferredToName ?? local.transferredToName,
         transferredFromName: vault.transferredFromName ?? local.transferredFromName,
-        status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
+        status: statusFromNewerPack(
+          (local.updatedAt || 0) >= (vault.updatedAt || 0) ? local : vault,
+          (local.updatedAt || 0) >= (vault.updatedAt || 0) ? vault : local,
+        ),
       };
     }
     if (packClockIsSeedSmashed(vault) && !packClockIsSeedSmashed(local)) {
@@ -496,7 +539,10 @@ export function pickPack(
         transferredTo: vault.transferredTo,
         transferredToName: vault.transferredToName,
         transferredFromName: vault.transferredFromName,
-        status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
+        status: statusFromNewerPack(
+          (local.updatedAt || 0) >= (vault.updatedAt || 0) ? local : vault,
+          (local.updatedAt || 0) >= (vault.updatedAt || 0) ? vault : local,
+        ),
       };
     }
   } else if (packClockIsSeedSmashed(local) && !packClockIsSeedSmashed(vault)) {
@@ -508,7 +554,10 @@ export function pickPack(
       transferredTo: vault.transferredTo,
       transferredToName: vault.transferredToName,
       transferredFromName: vault.transferredFromName,
-      status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
+      status: statusFromNewerPack(
+        (local.updatedAt || 0) >= (vault.updatedAt || 0) ? local : vault,
+        (local.updatedAt || 0) >= (vault.updatedAt || 0) ? vault : local,
+      ),
     };
   } else if (packClockIsSeedSmashed(vault) && !packClockIsSeedSmashed(local)) {
     return restorePackClock(vault, local);
@@ -540,8 +589,14 @@ export function pickPack(
       transferredTo: vault.transferredTo,
       transferredToName: vault.transferredToName,
       transferredFromName: vault.transferredFromName,
-      status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
-      jobMeta: pickJobMetaForPack({ ...vault, jobMeta: vault.jobMeta }, local),
+      status: statusFromNewerPack(
+        (local.updatedAt || 0) >= (vault.updatedAt || 0) ? local : vault,
+        (local.updatedAt || 0) >= (vault.updatedAt || 0) ? vault : local,
+      ),
+      jobMeta: pickJobMetaForPack(
+        (local.updatedAt || 0) >= (vault.updatedAt || 0) ? local : vault,
+        (local.updatedAt || 0) >= (vault.updatedAt || 0) ? vault : local,
+      ),
     };
   }
   const newer = (local.updatedAt || 0) >= (vault.updatedAt || 0) ? local : vault;
@@ -559,7 +614,7 @@ export function pickPack(
     fcr: pickFcr(newer.fcr, older.fcr),
     costReport: pickCostReport(newer.costReport, older.costReport),
     purchasing: pickPurchasing(newer.purchasing, older.purchasing),
-    status: keepLiveEstimateStatus(newer.status, older.status) || newer.status || older.status,
+    status: statusFromNewerPack(newer, older),
     createdAt: Math.min(local.createdAt || newer.createdAt, vault.createdAt || newer.createdAt) || newer.createdAt,
     ownerEmail: vault.ownerEmail || newer.ownerEmail,
     sharedWith: vault.sharedWith,
@@ -688,7 +743,7 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
       transferredFromName: pack.transferredFromName,
       replaceHandoff: true,
       status:
-        (keepLiveEstimateStatus(pack.status, existing?.status) || pack.status) as EstimateStatus | undefined,
+        (sharedPackStatus(pack.status, existing?.status, pack) || pack.status) as EstimateStatus | undefined,
     },
     store,
   );
@@ -722,14 +777,7 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
       // Foreign AFE (e.g. P66 Rodeo U-250 on Boiler 17) cannot stamp this pack.
     } else {
       const existingMeta = existing?.jobMeta ?? readStoreJson(store, `${JOB_META_PREFIX}${key}`);
-      const incomingNumber = jobNumberFromMeta(pack.jobMeta);
-      const existingNumber = jobNumberFromMeta(existingMeta);
-      const row = asRecord(pack.jobMeta);
-      writeStoreJson(
-        store,
-        `${JOB_META_PREFIX}${key}`,
-        incomingNumber || !existingNumber || !row ? pack.jobMeta : { ...row, jobNumber: existingNumber },
-      );
+      writeStoreJson(store, `${JOB_META_PREFIX}${key}`, withKeptJobMetaFields(pack.jobMeta, existingMeta) ?? pack.jobMeta);
     }
   }
   if (pack.activities != null) writeStoreJson(store, `${ACTIVITY_STORE_PREFIX}${key}`, normalizeWorkActivities(pack.activities));
@@ -805,17 +853,44 @@ export function parseIncomingPack(input: unknown): { ok: true; pack: EstimatePac
   };
 }
 
-export function scheduleOnce(wait: number) {
+export type ScheduleOnce = ((key: string, fn: () => void) => void) & {
+  flush(key?: string): void;
+  cancel(): void;
+  pending(): string[];
+};
+
+export function scheduleOnce(wait: number): ScheduleOnce {
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
-  return (key: string, fn: () => void) => {
+  const fns = new Map<string, () => void>();
+  const schedule = ((key: string, fn: () => void) => {
     const prev = timers.get(key);
     if (prev) clearTimeout(prev);
+    fns.set(key, fn);
     timers.set(
       key,
       setTimeout(() => {
         timers.delete(key);
+        fns.delete(key);
         fn();
       }, wait),
     );
+  }) as ScheduleOnce;
+  schedule.flush = (key?: string) => {
+    const keys = key ? [key] : [...fns.keys()];
+    for (const next of keys) {
+      const timer = timers.get(next);
+      if (timer) clearTimeout(timer);
+      timers.delete(next);
+      const fn = fns.get(next);
+      fns.delete(next);
+      fn?.();
+    }
   };
+  schedule.cancel = () => {
+    for (const timer of timers.values()) clearTimeout(timer);
+    timers.clear();
+    fns.clear();
+  };
+  schedule.pending = () => [...fns.keys()];
+  return schedule;
 }

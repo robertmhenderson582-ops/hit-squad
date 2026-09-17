@@ -1,4 +1,6 @@
+import { testerFromViewAs } from "./desk-role.ts";
 import { VIEW_AS_HEADER, viewAsInit, viewAsSeatFromValue } from "./desk-scope.ts";
+import { canEditEstimateWork } from "./module-access.ts";
 import {
   collectPack,
   mergeVaultIntoLocal,
@@ -39,9 +41,33 @@ export const ESTIMATE_VAULT_DEBOUNCE_MS = 1500;
 
 const debounce = scheduleOnce(ESTIMATE_VAULT_DEBOUNCE_MS);
 const lastBody = new Map<string, string>();
+const inflightUpserts = new Map<string, Promise<{ ok: boolean }>>();
 let hydratePromise: Promise<EstimatePackSnapshot[]> | null = null;
 let hydrateSeat: string | null = null;
 let currentViewAs: string | null = null;
+
+/** Viewer lenses must not flush. Owner / PM (including View as Nathan) share one vault pack. */
+function viewAsBlocksVaultFlush() {
+  if (!currentViewAs) return false;
+  const lens = testerFromViewAs(currentViewAs);
+  if (!lens) return true;
+  return !canEditEstimateWork({ email: lens.email, role: "tester" });
+}
+
+function trackVaultUpsert(packId: string, run: Promise<VaultUpsertResult>) {
+  inflightUpserts.set(packId, run);
+  void run.finally(() => {
+    if (inflightUpserts.get(packId) === run) inflightUpserts.delete(packId);
+  });
+  return run;
+}
+
+/** Flush queued Owner/PM writes before a View-as hydrate paints the shared pack. */
+export async function flushPendingVaultUpserts() {
+  debounce.flush();
+  const pending = [...inflightUpserts.values()];
+  if (pending.length) await Promise.all(pending);
+}
 
 export function setVaultViewAs(seat?: string | null) {
   const next = viewAsSeatFromValue(seat);
@@ -80,6 +106,8 @@ function browserStore(store?: StorageLike | null): StorageLike | null {
 }
 
 export function resetVaultHydrateForTests() {
+  debounce.cancel();
+  inflightUpserts.clear();
   hydratePromise = null;
   hydrateSeat = null;
   currentViewAs = null;
@@ -267,8 +295,8 @@ async function readVaultPutResult(response: Response) {
   return { ok: false as const, error };
 }
 
-export async function flushVaultUpsert(packId: string, store?: StorageLike | null) {
-  if (currentViewAs) return { ok: true as const };
+async function flushVaultUpsertNow(packId: string, store?: StorageLike | null) {
+  if (viewAsBlocksVaultFlush()) return { ok: true as const };
   if (!isLocalPackId(packId)) return { ok: false as const };
   const target = browserStore(store);
   if (!target) return { ok: false as const };
@@ -278,8 +306,8 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   }
   const pack = collectPack(target, packId);
   if (!pack) return { ok: false as const };
-  // View-as / President lens already returned above. Smashed viewer leftover must not
-  // re-upload over Drive. Editors = owner (Robert) OR assigned PM/estimator.
+  // Viewer leftover already returned above. Smashed local must not re-upload over Drive.
+  // Editors = owner (Robert) OR assigned PM/estimator, including View as Nathan.
   if (packClockIsSeedSmashed(pack) || shouldSkipIntegrityFlush(pack)) {
     return { ok: true as const, skipped: true as const };
   }
@@ -293,7 +321,7 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
   }
   const body = JSON.stringify({ pack });
   if (lastBody.get(packId) === body) return { ok: true as const };
-  if (currentViewAs) return { ok: true as const };
+  if (viewAsBlocksVaultFlush()) return { ok: true as const };
   try {
     let response = await putVaultPack(body);
     if (!response.ok && isTransientVaultStatus(response.status)) {
@@ -312,6 +340,10 @@ export async function flushVaultUpsert(packId: string, store?: StorageLike | nul
       return { ok: false as const, error: "Could not store that package." };
     }
   }
+}
+
+export function flushVaultUpsert(packId: string, store?: StorageLike | null) {
+  return trackVaultUpsert(packId, flushVaultUpsertNow(packId, store));
 }
 
 export type VaultUpsertResult = Awaited<ReturnType<typeof flushVaultUpsert>>;
