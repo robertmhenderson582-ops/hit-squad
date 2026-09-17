@@ -14,6 +14,8 @@ import {
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
 import { packSnapshotToXlsxInput } from "./estimate-pack-xlsx.ts";
+import { jobNumberForPack } from "./boiler-17.ts";
+import { jobCodeFromPackId } from "./his-wood-river.ts";
 import type { LocalPack, StorageLike } from "./local-estimates.ts";
 import { liveJobSetupPhases, PHASE_NAMES, parseYmd, type PhaseScheduleState } from "./phase-schedule.ts";
 import { isWakeIdentityOnly } from "./rodeo-monroe-wake.ts";
@@ -23,6 +25,9 @@ export type JobCardFace = {
   grandTotalLabel: string;
   phaseStarts: Array<{ id: string; name: string; start: string; startLabel: string }>;
   phaseStartsLabel: string;
+  statusLabel: string;
+  jobCode: string;
+  jobNumber: string;
 };
 
 const EMPTY_FACE: JobCardFace = {
@@ -30,6 +35,9 @@ const EMPTY_FACE: JobCardFace = {
   grandTotalLabel: "—",
   phaseStarts: [],
   phaseStartsLabel: "—",
+  statusLabel: "",
+  jobCode: "",
+  jobNumber: "",
 };
 
 export function formatJobCardMoney(amount: number): string {
@@ -80,16 +88,45 @@ export function jobCardGrandTotal(pack?: EstimatePackSnapshot | null): number | 
   return Math.round(total * 100) / 100;
 }
 
+function jobCodeForCard(pack?: { packId?: string; code?: string } | null) {
+  const coded = (pack?.code || "").trim().toUpperCase();
+  if (/^EST-/.test(coded)) return coded;
+  return jobCodeFromPackId(pack?.packId || "");
+}
+
+function statusForCard(
+  pack?: { status?: string } | null,
+  snapshot?: EstimatePackSnapshot | null,
+) {
+  const live = (pack?.status || "").trim();
+  if (live) return live;
+  const stored = (snapshot?.status || "").trim();
+  return stored;
+}
+
 export function jobCardFace(
-  pack?: Pick<LocalPack, "packId" | "title" | "client" | "site"> | null,
+  pack?: (Pick<LocalPack, "packId" | "title" | "client" | "site"> & { status?: string; code?: string; jobNumber?: string }) | null,
   store?: StorageLike | null,
 ): JobCardFace {
-  if (!pack?.packId || !store) return EMPTY_FACE;
+  const jobCode = jobCodeForCard(pack);
+  const jobNumber = jobNumberForPack(pack, pack);
+  if (!pack?.packId || !store) {
+    return {
+      ...EMPTY_FACE,
+      statusLabel: (pack?.status || "").trim(),
+      jobCode,
+      jobNumber,
+    };
+  }
   const snapshot = collectPack(store, pack.packId);
+  const meta = snapshot?.jobMeta as { jobNumber?: string } | undefined;
+  const liveJobNumber = jobNumberForPack({ ...pack, jobNumber: pack.jobNumber }, meta);
   if (!snapshot) {
     return {
       ...EMPTY_FACE,
-      phaseStartsLabel: "—",
+      statusLabel: (pack.status || "").trim(),
+      jobCode,
+      jobNumber: liveJobNumber,
     };
   }
   const grandTotal = jobCardGrandTotal(snapshot);
@@ -103,5 +140,8 @@ export function jobCardFace(
       : scheduleHasWork(snapshot.schedule)
         ? "—"
         : "—",
+    statusLabel: statusForCard(pack, snapshot),
+    jobCode,
+    jobNumber: liveJobNumber,
   };
 }

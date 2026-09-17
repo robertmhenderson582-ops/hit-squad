@@ -233,10 +233,20 @@ function pickCrewForPack(newer: EstimatePackSnapshot, older: EstimatePackSnapsho
   return pickCrew(newer.crew, older.crew);
 }
 
+function jobNumberFromMeta(meta: unknown) {
+  const row = asRecord(meta);
+  return typeof row?.jobNumber === "string" ? row.jobNumber.trim() : "";
+}
+
 function pickJobMetaForPack(newer: EstimatePackSnapshot, older: EstimatePackSnapshot) {
   if (packHasForeignAfeName(newer) && !packHasForeignAfeName(older)) return older.jobMeta ?? newer.jobMeta;
   if (!packHasForeignAfeName(newer) && packHasForeignAfeName(older)) return newer.jobMeta ?? older.jobMeta;
-  return newer.jobMeta ?? older.jobMeta;
+  const picked = newer.jobMeta ?? older.jobMeta;
+  const newerNumber = jobNumberFromMeta(newer.jobMeta);
+  const olderNumber = jobNumberFromMeta(older.jobMeta);
+  if (newerNumber || !olderNumber) return picked;
+  const row = asRecord(picked);
+  return row ? { ...row, jobNumber: olderNumber } : older.jobMeta ?? newer.jobMeta;
 }
 
 export function equipmentHasWork(value: unknown) {
@@ -525,6 +535,8 @@ export function pickPack(
       transferredTo: vault.transferredTo,
       transferredToName: vault.transferredToName,
       transferredFromName: vault.transferredFromName,
+      status: vault.status || local.status,
+      jobMeta: pickJobMetaForPack({ ...vault, jobMeta: vault.jobMeta }, local),
     };
   }
   const newer = (local.updatedAt || 0) >= (vault.updatedAt || 0) ? local : vault;
@@ -703,7 +715,15 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
     if (packHasForeignAfeName(pack) && existing && !packHasForeignAfeName(existing)) {
       // Foreign AFE (e.g. P66 Rodeo U-250 on Boiler 17) cannot stamp this pack.
     } else {
-      writeStoreJson(store, `${JOB_META_PREFIX}${key}`, pack.jobMeta);
+      const existingMeta = existing?.jobMeta ?? readStoreJson(store, `${JOB_META_PREFIX}${key}`);
+      const incomingNumber = jobNumberFromMeta(pack.jobMeta);
+      const existingNumber = jobNumberFromMeta(existingMeta);
+      const row = asRecord(pack.jobMeta);
+      writeStoreJson(
+        store,
+        `${JOB_META_PREFIX}${key}`,
+        incomingNumber || !existingNumber || !row ? pack.jobMeta : { ...row, jobNumber: existingNumber },
+      );
     }
   }
   if (pack.activities != null) writeStoreJson(store, `${ACTIVITY_STORE_PREFIX}${key}`, normalizeWorkActivities(pack.activities));

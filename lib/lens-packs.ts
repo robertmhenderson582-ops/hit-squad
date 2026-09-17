@@ -75,6 +75,7 @@ export function snapshotLensPack(
     | "transferredTo"
     | "transferredToName"
     | "transferredFromName"
+    | "status"
   >,
 ): LocalPack {
   return {
@@ -94,6 +95,7 @@ export function snapshotLensPack(
     transferredTo: pack.transferredTo,
     transferredToName: pack.transferredToName,
     transferredFromName: pack.transferredFromName,
+    status: pack.status,
   };
 }
 
@@ -173,6 +175,7 @@ function preferDeskPack(current: LocalPack, next: LocalPack): LocalPack {
     transferredFromName: newer.transferredFromName || older.transferredFromName,
     transferredTo: newer.transferredTo || older.transferredTo,
     transferredToName: newer.transferredToName || older.transferredToName,
+    status: newer.status || older.status,
     updatedAt: Math.max(current.updatedAt || 0, next.updatedAt || 0),
   };
   const his = hisMatchForPack(merged) || hisMatchForPack(current) || hisMatchForPack(next);
