@@ -390,12 +390,11 @@ function preferWorkingFigure(fromPack: string, fromJob: string) {
   return pack || job;
 }
 
-function overlayJobCardFace(job: JobRecord, fromPack: JobRecord, pack: LocalPack): JobRecord {
+function overlayJobCardFace(job: JobRecord, fromPack: JobRecord): JobRecord {
   return {
     ...job,
     code: preferJobCode(fromPack.code, job.code),
     title: (fromPack.title || "").trim() || job.title,
-    status: pack.status || fromPack.status || job.status,
     window: (fromPack.window || "").trim() || job.window,
     workingFigure: preferWorkingFigure(fromPack.workingFigure, job.workingFigure),
     hseNote: (fromPack.hseNote || "").trim() || job.hseNote,
@@ -414,7 +413,7 @@ export function localPackToJob(pack: LocalPack, ownerId = "owner-robert-henderso
     client: pack.client,
     discipline: "mechanical",
     kind: "estimate",
-    status: pack.status || "OPEN",
+    status: "OPEN",
     window: wake?.window || (boiler ? "2026" : "This job"),
     workingFigure:
       boiler17WorkingFigure(pack) ||
@@ -436,7 +435,7 @@ export function mergeLocalJobs(jobs: JobRecord[], packs: LocalPack[]): JobRecord
   const merged = jobs.map((job) => {
     seen.add(job.id);
     const extra = extraById.get(job.id);
-    return extra ? overlayJobCardFace(job, extra.job, extra.pack) : job;
+    return extra ? overlayJobCardFace(job, extra.job) : job;
   });
   return [...merged, ...extras.filter((row) => !seen.has(row.job.id)).map((row) => row.job)];
 }

@@ -190,6 +190,8 @@ describe("job card face", () => {
     const thinFace = jobCardFace({ ...boilerId, status: undefined }, memoryStore());
     assert.equal(thinFace.jobNumber, "108451");
     assert.equal(thinFace.jobCode, "EST-B1726");
+    const lockedHis = jobCardFace({ ...boilerId, status: "Locked" }, boilerStore);
+    assert.equal(lockedHis.statusLabel, "In progress");
 
     const css = readFileSync(fileURLToPath(new URL("../app/globals.css", import.meta.url)), "utf8");
     assert.match(css, /\.job-face-title[\s\S]*font-size:\s*1\.85rem/);

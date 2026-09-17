@@ -243,9 +243,9 @@ describe("local estimate packs", () => {
       code: "new-b1726",
       title: "Boiler 17 2026",
       client: "Phillips 66",
-      discipline: "mechanical",
+      discipline: "mechanical" as const,
       kind: "estimate" as const,
-      status: "OPEN",
+      status: "OPEN" as const,
       window: "",
       workingFigure: "",
       hseNote: "",
@@ -253,7 +253,8 @@ describe("local estimate packs", () => {
     const merged = mergeLocalJobs([thin], [pack]);
     const job = merged.find((row) => row.id === "job-new-b1726");
     assert.equal(job?.code, "EST-B1726");
-    assert.equal(job?.status, "In progress");
+    assert.equal(job?.status, "OPEN");
+    assert.equal(pack.status, "In progress");
     assert.match(job?.workingFigure || "", /JN 108451/);
     assert.match(job?.workingFigure || "", /In progress/);
   });

@@ -16,7 +16,12 @@ import {
   rememberPackFingerprint,
 } from "./pack-integrity.ts";
 import { catalogSites } from "./desk-data.ts";
-import { parseEstimateStatus, resolveEstimateStatus, type EstimateStatus } from "./estimate-status.ts";
+import {
+  keepLiveEstimateStatus,
+  parseEstimateStatus,
+  resolveEstimateStatus,
+  type EstimateStatus,
+} from "./estimate-status.ts";
 import { clampStatusForSite, regularClientFromParts } from "./site-regular.ts";
 import { ACTIVITY_STORE_PREFIX, activitiesHaveWork, normalizeWorkActivities } from "./work-activities.ts";
 import { FCR_STORE_PREFIX, fcrPacketHasWork } from "./change-order-packet.ts";
@@ -168,7 +173,7 @@ function withVaultIdentity(local: EstimatePackSnapshot, vault: EstimatePackSnaps
     transferredTo: vault.transferredTo,
     transferredToName: vault.transferredToName,
     transferredFromName: vault.transferredFromName,
-    status: vault.status || local.status,
+    status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
   };
 }
 
@@ -464,7 +469,7 @@ export function pickPack(
         transferredTo: vault.transferredTo,
         transferredToName: vault.transferredToName,
         transferredFromName: vault.transferredFromName,
-        status: vault.status || local.status,
+        status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
       };
     }
     if (packClockIsSeedSmashed(local) && !aromaticsSourceCanRestore(vault)) {
@@ -476,7 +481,7 @@ export function pickPack(
         transferredTo: vault.transferredTo ?? local.transferredTo,
         transferredToName: vault.transferredToName ?? local.transferredToName,
         transferredFromName: vault.transferredFromName ?? local.transferredFromName,
-        status: vault.status || local.status,
+        status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
       };
     }
     if (packClockIsSeedSmashed(vault) && !packClockIsSeedSmashed(local)) {
@@ -491,7 +496,7 @@ export function pickPack(
         transferredTo: vault.transferredTo,
         transferredToName: vault.transferredToName,
         transferredFromName: vault.transferredFromName,
-        status: vault.status || local.status,
+        status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
       };
     }
   } else if (packClockIsSeedSmashed(local) && !packClockIsSeedSmashed(vault)) {
@@ -503,7 +508,7 @@ export function pickPack(
       transferredTo: vault.transferredTo,
       transferredToName: vault.transferredToName,
       transferredFromName: vault.transferredFromName,
-      status: vault.status || local.status,
+      status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
     };
   } else if (packClockIsSeedSmashed(vault) && !packClockIsSeedSmashed(local)) {
     return restorePackClock(vault, local);
@@ -535,7 +540,7 @@ export function pickPack(
       transferredTo: vault.transferredTo,
       transferredToName: vault.transferredToName,
       transferredFromName: vault.transferredFromName,
-      status: vault.status || local.status,
+      status: keepLiveEstimateStatus(vault.status, local.status) || vault.status || local.status,
       jobMeta: pickJobMetaForPack({ ...vault, jobMeta: vault.jobMeta }, local),
     };
   }
@@ -554,7 +559,7 @@ export function pickPack(
     fcr: pickFcr(newer.fcr, older.fcr),
     costReport: pickCostReport(newer.costReport, older.costReport),
     purchasing: pickPurchasing(newer.purchasing, older.purchasing),
-    status: newer.status || older.status,
+    status: keepLiveEstimateStatus(newer.status, older.status) || newer.status || older.status,
     createdAt: Math.min(local.createdAt || newer.createdAt, vault.createdAt || newer.createdAt) || newer.createdAt,
     ownerEmail: vault.ownerEmail || newer.ownerEmail,
     sharedWith: vault.sharedWith,
@@ -682,7 +687,8 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
       transferredToName: pack.transferredToName,
       transferredFromName: pack.transferredFromName,
       replaceHandoff: true,
-      status: pack.status,
+      status:
+        (keepLiveEstimateStatus(pack.status, existing?.status) || pack.status) as EstimateStatus | undefined,
     },
     store,
   );

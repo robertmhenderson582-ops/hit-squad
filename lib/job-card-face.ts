@@ -99,8 +99,11 @@ function statusForCard(
   snapshot?: EstimatePackSnapshot | null,
 ) {
   const live = (pack?.status || "").trim();
-  if (live) return live;
   const stored = (snapshot?.status || "").trim();
+  // Vault / collectPack wins when it has a real workflow status.
+  // HIS awarded default Locked must not beat vault In progress.
+  if (stored && stored !== "Draft") return stored;
+  if (live) return live;
   return stored;
 }
 

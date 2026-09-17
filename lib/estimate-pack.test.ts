@@ -1276,13 +1276,16 @@ describe("estimate pack snapshot", () => {
       status: undefined,
       jobMeta: { area: "Boiler 17" },
     };
+    const hisLocked = { ...thin, status: "Locked" as const };
     const picked = pickPack(live, thin);
     assert.equal(picked?.status, "In progress");
+    assert.equal(pickPack(live, hisLocked)?.status, "In progress");
     assert.equal((picked?.jobMeta as { jobNumber?: string })?.jobNumber, "108451");
 
     const store = memoryStore();
     applyPackToStore(store, live);
     applyPackToStore(store, thin);
+    applyPackToStore(store, hisLocked);
     const kept = collectPack(store, "new-b1726");
     assert.equal(kept?.status, "In progress");
     assert.equal((kept?.jobMeta as { jobNumber?: string })?.jobNumber, "108451");

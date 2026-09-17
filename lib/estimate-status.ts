@@ -93,6 +93,20 @@ export function writeEstimateStatus(estimateId: string, status: EstimateStatus, 
   }
 }
 
+/**
+ * Keep a live workflow status. HIS / B-1 awarded default Locked cannot wipe
+ * vault In progress (or Review / Budgetary / Draft).
+ */
+export function keepLiveEstimateStatus(
+  incoming?: string | null,
+  existing?: string | null,
+): EstimateStatus | "" {
+  const next = (incoming || "").trim();
+  const prev = (existing || "").trim();
+  const kept = next === "Locked" && prev && prev !== "Locked" ? prev : next || prev;
+  return isEstimateStatus(kept) ? kept : "";
+}
+
 /** Pack snapshot wins. localStorage mirrors for paint / Awarded lists only. */
 export function resolveEstimateStatus(
   packStatus: unknown,

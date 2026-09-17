@@ -233,13 +233,9 @@ test("thin owner/lens snapshot cannot blank Boiler 17 status after hydrate", () 
   rememberLocalPack(
     {
       packId: "new-b1726",
-      key: "new:new-b1726",
       title: "Boiler 17 2026",
       client: "Phillips 66",
       site: "Wood River — Roxana, IL",
-      siteId: "site-madison",
-      createdAt: 1,
-      updatedAt: 10,
       ownerEmail: owner.email,
       status: "In progress",
     },
@@ -257,6 +253,7 @@ test("thin owner/lens snapshot cannot blank Boiler 17 status after hydrate", () 
         createdAt: 1,
         updatedAt: 900,
         ownerEmail: owner.email,
+        status: "Locked",
       }),
     ],
     store,
