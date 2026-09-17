@@ -7,18 +7,11 @@ export function scrCompositeRates(craft: string, site = "", client = "") {
   const title = craft.trim();
   if (!title) return { st: 0, ot: 0, dt: 0 };
   const fromBook = wageLookupPositions(site, client).find((row) => row.title === title);
-  if (fromBook && (Number(fromBook.st) || Number(fromBook.ot) || Number(fromBook.dt))) {
-    return {
-      st: Math.max(0, Number(fromBook.st) || 0),
-      ot: Math.max(0, Number(fromBook.ot) || 0),
-      dt: Math.max(0, Number(fromBook.dt) || 0),
-    };
-  }
-  const row = lookupShahanLabor(title, wageLookupOpts(site));
+  const billed = lookupShahanLabor(title, wageLookupOpts(site));
   return {
-    st: Math.max(0, Number(row?.st) || 0),
-    ot: Math.max(0, Number(row?.ot) || 0),
-    dt: Math.max(0, Number(row?.dt) || 0),
+    st: Math.max(0, Number(fromBook?.st) || Number(billed?.st) || 0),
+    ot: Math.max(0, Number(fromBook?.ot) || Number(billed?.ot) || 0),
+    dt: Math.max(0, Number(fromBook?.dt) || Number(billed?.dt) || 0),
   };
 }
 

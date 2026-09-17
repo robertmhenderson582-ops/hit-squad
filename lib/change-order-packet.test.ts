@@ -517,9 +517,9 @@ test("SCR estimate craft + claim lines persist on the store", () => {
 
 test("composite ST/OT come from the plant book, not invented rates", () => {
   const rates = scrCompositeRates("Boilermaker Journeyman", WOOD, P66);
-  assert.ok(rates.st > 0);
-  assert.ok(rates.ot > 0);
-  assert.notEqual(rates.ot, rates.st);
+  assert.equal(rates.st, 108.38);
+  assert.equal(rates.ot, 152.78);
+  assert.equal(rates.dt, 197.19);
   const empty = scrCompositeRates("", WOOD, P66);
   assert.deepEqual(empty, { st: 0, ot: 0, dt: 0 });
 });
