@@ -3,7 +3,13 @@ import { notifyEstimateSheets } from "./sheet-events.ts";
 
 export const FCR_STORE_PREFIX = "hs_fcr_v1:";
 export const MILEAGE_YES_FLAT = 2500;
-export const DEFAULT_CHANGE_ORDER_SHELL = "Log";
+export const CHANGE_ORDER_SHELLS = ["Log", "Estimate"] as const;
+export type ChangeOrderShell = (typeof CHANGE_ORDER_SHELLS)[number];
+export const DEFAULT_CHANGE_ORDER_SHELL: ChangeOrderShell = "Log";
+export const CHANGE_ORDER_SHELL_LABELS: Record<ChangeOrderShell, string> = {
+  Log: "SCR Log",
+  Estimate: "Estimate workbook",
+};
 
 /** Browser cache or a test store. Vault hydrate writes this key; vault is source of truth after merge. */
 export type FcrStoreLike = {
@@ -77,6 +83,11 @@ export type FcrLogRow = {
   scopeCost: number;
   craftLines: ScrCraftLine[];
   claimLines: ScrClaimLine[];
+  /**
+   * When set, the row is on the SCR Log. Empty = draft workbook only.
+   * Revise keeps this stamp and the same SCR #.
+   */
+  submittedAt: string;
 };
 
 /** Simple SCR craft line — hours × composite ST/OT (DT optional). Not a day-grid. */
@@ -227,6 +238,7 @@ export function blankLogRow(): FcrLogRow {
     scopeCost: 0,
     craftLines: [],
     claimLines: [],
+    submittedAt: "",
   };
 }
 
@@ -347,7 +359,62 @@ export const CONTRACTOR_LOG_COLUMNS: Array<{ key: ContractorLogField; label: str
 ];
 
 export function addLogRow(packet: FcrPacket, patch: Partial<FcrLogRow> = {}): FcrPacket {
-  return { ...packet, log: [...packet.log, normalizeLogRow({ ...blankLogRow(), ...patch })] };
+  const merged = { ...blankLogRow(), ...patch };
+  if (!("submittedAt" in patch) && rowHasFiledIdentity(merged)) {
+    merged.submittedAt = merged.requestDate.trim() || "legacy";
+  }
+  return { ...packet, log: [...packet.log, normalizeLogRow(merged)] };
+}
+
+export function logRowIsSubmitted(row: Pick<FcrLogRow, "submittedAt">) {
+  return Boolean(String(row.submittedAt || "").trim());
+}
+
+export function submittedLogRows(packet: Pick<FcrPacket, "log">) {
+  return packet.log.filter((row) => logRowIsSubmitted(row));
+}
+
+function rowHasFiledIdentity(row: Partial<FcrLogRow>) {
+  return Boolean(
+    (typeof row.scr === "string" && row.scr.trim()) ||
+      (typeof row.scope === "string" && row.scope.trim()) ||
+      (typeof row.requestDate === "string" && row.requestDate.trim()) ||
+      (typeof row.requestedBy === "string" && row.requestedBy.trim()) ||
+      Number(row.scopeHours) ||
+      Number(row.scopeCost) ||
+      (Array.isArray(row.craftLines) && row.craftLines.length) ||
+      (Array.isArray(row.claimLines) && row.claimLines.length),
+  );
+}
+
+export function nextScrNumber(packet: Pick<FcrPacket, "log">) {
+  let max = 0;
+  for (const row of packet.log) {
+    const match = /^(?:SCR|ECR)-(\d+)$/i.exec(String(row.scr || "").trim());
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return `SCR-${max + 1}`;
+}
+
+export function ensureDraftRow(packet: FcrPacket): { packet: FcrPacket; id: string } {
+  const draft = packet.log.find((row) => !logRowIsSubmitted(row));
+  if (draft) return { packet, id: draft.id };
+  const next = addLogRow(packet, { submittedAt: "" });
+  return { packet: next, id: next.log[next.log.length - 1]!.id };
+}
+
+/** Promote a workbook row onto the SCR Log. Already-submitted rows stay the same SCR #. */
+export function submitScrEstimate(packet: FcrPacket, id: string, when = new Date()): FcrPacket {
+  return patchLogRow(packet, id, (row) => {
+    if (logRowIsSubmitted(row)) return row;
+    const stamp = when.toISOString();
+    return {
+      ...row,
+      submittedAt: stamp,
+      requestDate: row.requestDate.trim() || stamp.slice(0, 10),
+      scr: row.scr.trim() || nextScrNumber(packet),
+    };
+  });
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -373,6 +440,11 @@ export function fcrPacketHasWork(value: unknown) {
 function normalizeLogRow(row: Partial<FcrLogRow> | null | undefined): FcrLogRow {
   const blank = blankLogRow();
   if (!row || typeof row !== "object") return blank;
+  const rawHasSubmitted = "submittedAt" in row;
+  let submittedAt = typeof row.submittedAt === "string" ? row.submittedAt : "";
+  if (!rawHasSubmitted && rowHasFiledIdentity(row)) {
+    submittedAt = (typeof row.requestDate === "string" && row.requestDate.trim()) || "legacy";
+  }
   return withSyncedScope({
     ...blank,
     ...row,
@@ -390,6 +462,7 @@ function normalizeLogRow(row: Partial<FcrLogRow> | null | undefined): FcrLogRow 
     scopeCost: Number(row.scopeCost) || 0,
     craftLines: Array.isArray(row.craftLines) ? row.craftLines.map((line) => blankCraftLine(line)) : [],
     claimLines: Array.isArray(row.claimLines) ? row.claimLines.map((line) => blankClaimLine(line)) : [],
+    submittedAt,
   });
 }
 

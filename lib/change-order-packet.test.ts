@@ -7,6 +7,8 @@ import {
   addClaimLine,
   addCraftLine,
   addLogRow,
+  CHANGE_ORDER_SHELLS,
+  CHANGE_ORDER_SHELL_LABELS,
   CLAIMABLE_COST_PRESETS,
   CLAIMABLE_COST_TYPES,
   claimTypeNeedsHours,
@@ -19,6 +21,11 @@ import {
   craftLineHours,
   craftLineLabor,
   DEFAULT_CHANGE_ORDER_SHELL,
+  ensureDraftRow,
+  logRowIsSubmitted,
+  nextScrNumber,
+  submitScrEstimate,
+  submittedLogRows,
   emptyFcrHeader,
   emptyFcrPacket,
   emptyScr,
@@ -34,6 +41,7 @@ import {
   mileageDollars,
   MILEAGE_YES_FLAT,
   parseFcrPacket,
+  patchLogRow,
   peopleFromJob,
   peopleHours,
   readFcrPacket,
@@ -101,6 +109,7 @@ test("V1 on-job packet shape stays locked to the Drive books", () => {
     "scopeCost",
     "craftLines",
     "claimLines",
+    "submittedAt",
   ]);
   assert.deepEqual(Object.keys(emptyScr()), [
     "taRm",
@@ -316,7 +325,11 @@ function memoryStore(seed: Record<string, string> = {}) {
   };
 }
 
-test("P66 / Wood River and the unset default read ECR; Log is the field home", () => {
+test("P66 / Wood River and the unset default read ECR; SCR is Log + workbook only", () => {
+  assert.deepEqual([...CHANGE_ORDER_SHELLS], ["Log", "Estimate"]);
+  assert.equal(CHANGE_ORDER_SHELLS.length, 2);
+  assert.equal(CHANGE_ORDER_SHELL_LABELS.Log, "SCR Log");
+  assert.equal(CHANGE_ORDER_SHELL_LABELS.Estimate, "Estimate workbook");
   assert.equal(DEFAULT_CHANGE_ORDER_SHELL, "Log");
   assert.equal(usesEcrCopy(), true);
   assert.equal(usesEcrCopy("Phillips 66", "Wood River — Roxana, IL"), true);
@@ -335,10 +348,13 @@ test("P66 / Wood River and the unset default read ECR; Log is the field home", (
   const packet = readFileSync(fileURLToPath(new URL("../components/ChangeOrderPacket.tsx", import.meta.url)), "utf8");
   assert.match(packet, /changeOrderNoun/);
   assert.match(packet, /DEFAULT_CHANGE_ORDER_SHELL/);
+  assert.match(packet, /CHANGE_ORDER_SHELLS/);
   assert.match(packet, /onEstimateSheets/);
-  assert.match(packet, /addLogRow/);
+  assert.match(packet, /submitScrEstimate/);
   assert.match(packet, /CONTRACTOR_LOG_COLUMNS/);
-  assert.match(packet, /Change Orders log/);
+  assert.match(packet, /SCR Log/);
+  assert.match(packet, /Estimate workbook/);
+  assert.match(packet, /Submit to SCR Log/);
   assert.match(packet, /Scope change hours/);
   assert.match(packet, /Scope change money/);
   assert.match(packet, /\+ Add craft/);
@@ -360,6 +376,13 @@ test("P66 / Wood River and the unset default read ECR; Log is the field home", (
   assert.doesNotMatch(packet, /\+ Add FCR/);
   assert.doesNotMatch(packet, /Load from Crew/);
   assert.doesNotMatch(packet, /FCR_DAY_LABELS/);
+  assert.doesNotMatch(packet, /SCR form/);
+  assert.doesNotMatch(packet, /\["Log", "Estimate", "SCR"\]/);
+  const desk = readFileSync(fileURLToPath(new URL("../components/ChangeOrderDesk.tsx", import.meta.url)), "utf8");
+  assert.match(desk, /CHANGE_ORDER_SHELLS/);
+  assert.match(desk, /SCR Log/);
+  assert.match(desk, /Estimate workbook/);
+  assert.doesNotMatch(desk, /shell === "SCR"/);
   const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
   const tabs = readFileSync(fileURLToPath(new URL("./estimate-tabs.ts", import.meta.url)), "utf8");
   assert.match(tabs, /changeOrderTabLabel/);
@@ -540,6 +563,41 @@ test("composite ST/OT come from the plant book, not invented rates", () => {
   assert.equal(rates.dt, 197.19);
   const empty = scrCompositeRates("", WOOD, P66);
   assert.deepEqual(empty, { st: 0, ot: 0, dt: 0 });
+});
+
+test("submit promotes a draft workbook onto the SCR Log without minting a new number on revise", () => {
+  const draft = ensureDraftRow(emptyFcrPacket());
+  assert.equal(logRowIsSubmitted(draft.packet.log[0]!), false);
+  assert.equal(submittedLogRows(draft.packet).length, 0);
+  let packet = addCraftLine(draft.packet, draft.id, {
+    id: "c1",
+    craft: "Welder",
+    stHours: 8,
+    stRate: 90,
+  });
+  assert.equal(submittedLogRows(packet).length, 0);
+  packet = submitScrEstimate(packet, draft.id, new Date("2026-09-17T06:30:00Z"));
+  const posted = submittedLogRows(packet);
+  assert.equal(posted.length, 1);
+  assert.equal(posted[0]?.id, draft.id);
+  assert.equal(posted[0]?.scr, "SCR-1");
+  assert.equal(posted[0]?.requestDate, "2026-09-17");
+  assert.equal(posted[0]?.submittedAt, "2026-09-17T06:30:00.000Z");
+  const revised = submitScrEstimate(
+    patchLogRow(packet, draft.id, { scope: "Night hydrotest", status: "Pending" }),
+    draft.id,
+    new Date("2026-09-18T12:00:00Z"),
+  );
+  assert.equal(revised.log[0]?.scr, "SCR-1");
+  assert.equal(revised.log[0]?.submittedAt, "2026-09-17T06:30:00.000Z");
+  assert.equal(revised.log[0]?.status, "Pending");
+  assert.equal(revised.log[0]?.scope, "Night hydrotest");
+  assert.equal(nextScrNumber(revised), "SCR-2");
+  const legacy = parseFcrPacket({
+    log: [{ id: "old-1", scr: "ECR-12", scope: "Extra weld" }],
+  });
+  assert.equal(logRowIsSubmitted(legacy.log[0]!), true);
+  assert.equal(submittedLogRows(legacy).length, 1);
 });
 
 test("plant-book composite dollars round to cents on the claim", () => {

@@ -8,7 +8,8 @@ import { useSession } from "@/components/SessionProvider";
 import {
   addClaimLine,
   addCraftLine,
-  addLogRow,
+  CHANGE_ORDER_SHELLS,
+  CHANGE_ORDER_SHELL_LABELS,
   changeOrderNoun,
   CLAIMABLE_COST_TYPES,
   claimTypeNeedsHours,
@@ -17,12 +18,16 @@ import {
   craftLineLabor,
   DEFAULT_CHANGE_ORDER_SHELL,
   emptyFcrPacket,
-  fcrSummary,
+  ensureDraftRow,
+  logRowIsSubmitted,
   LOG_STATUSES,
   logRowScope,
   patchLogRow,
   readFcrPacket,
+  submitScrEstimate,
+  submittedLogRows,
   writeFcrPacket,
+  type ChangeOrderShell,
   type FcrLogRow,
   type FcrPacket,
   type ScrClaimLine,
@@ -51,8 +56,6 @@ async function fetchScrCompanyLogo(client: string, site: string): Promise<string
   }
 }
 
-const SHELLS = ["Log", "Estimate", "SCR"] as const;
-
 function money(value: number) {
   return value ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
 }
@@ -71,7 +74,7 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
   const pack = useEstimatePackage();
   const { user } = useSession();
   const noun = changeOrderNoun(client, site);
-  const [shell, setShell] = useState<(typeof SHELLS)[number]>(DEFAULT_CHANGE_ORDER_SHELL);
+  const [shell, setShell] = useState<ChangeOrderShell>(DEFAULT_CHANGE_ORDER_SHELL);
   const [packet, setPacket] = useState<FcrPacket>(emptyFcrPacket);
   const [selectedId, setSelectedId] = useState("");
   const exportLock = useRef(false);
@@ -109,18 +112,29 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
     }
   }
 
-  function addOrder(patch: Partial<FcrLogRow> = {}) {
-    const next = addLogRow(packet, patch);
-    const added = next.log[next.log.length - 1];
-    if (added) setSelectedId(added.id);
-    persist(next);
-    return next;
+  const posted = submittedLogRows(packet);
+  const selected = packet.log.find((row) => row.id === selectedId) ?? null;
+  const logColSpan = CONTRACTOR_LOG_COLUMNS.length + 3;
+
+  function openWorkbook(id?: string) {
+    if (id && packet.log.some((row) => row.id === id)) {
+      setSelectedId(id);
+      setShell("Estimate");
+      return;
+    }
+    const next = ensureDraftRow(packet);
+    persist(next.packet);
+    setSelectedId(next.id);
+    setShell("Estimate");
   }
 
-  const selected = packet.log.find((row) => row.id === selectedId) ?? packet.log[0] ?? null;
-  const selectedScope = selected ? logRowScope(selected) : null;
-  const summary = fcrSummary(packet, 0, 0);
-  const logColSpan = CONTRACTOR_LOG_COLUMNS.length + 2;
+  function submitSelected() {
+    const source = selected ? { packet, id: selected.id } : ensureDraftRow(packet);
+    const next = submitScrEstimate(source.packet, source.id);
+    persist(next);
+    setSelectedId(source.id);
+    setShell("Log");
+  }
 
   async function exportWorkbook() {
     if (exportLock.current || exportBusy) return;
@@ -156,22 +170,22 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
   return (
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        On-job Change Orders log. {noun} math stays under the hood. Scope change takes hours and
-        money. The SCR estimate is a short workbook — craft lines at composite ST / OT (DT optional)
-        plus claimable pass-throughs — not the full day-grid desk. Export Excel builds the same
-        family of client-submittable proof as the Estimate tab. Totals stay on this estimate after
-        refresh or another device.
+        Two surfaces only: the Estimate workbook, then Submit onto the SCR Log. {noun} math stays
+        under the hood. Fill craft lines at composite ST / OT (DT optional) plus claimable
+        pass-throughs — not the full day-grid desk. Submit posts that packet as a log row. Open a
+        submitted row to revise the same SCR # in place; status lives on the log. Export Excel is
+        the client-submittable proof.
       </p>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <nav className="flex flex-wrap gap-2 text-sm" aria-label="Change Orders packet">
-          {SHELLS.map((item) => (
+        <nav className="flex flex-wrap gap-2 text-sm" aria-label="SCR packet">
+          {CHANGE_ORDER_SHELLS.map((item) => (
             <button
               key={item}
               type="button"
-              onClick={() => setShell(item)}
+              onClick={() => (item === "Estimate" ? openWorkbook(selectedId || undefined) : setShell(item))}
               className={`rounded px-3 py-1.5 ${shell === item ? "bg-steel text-white" : "border border-steel text-steel"}`}
             >
-              {item === "Log" ? "Change Orders log" : item}
+              {CHANGE_ORDER_SHELL_LABELS[item]}
             </button>
           ))}
         </nav>
@@ -195,18 +209,19 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
         <section className="plant-card px-5 py-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-semibold text-[#163038]">Change Orders log</h2>
+              <h2 className="text-2xl font-semibold text-[#163038]">SCR Log</h2>
               <p className="mt-1 text-sm text-[#5b6f73]">
-                Contractor log — SCR, request, who asked, status, and scope change (description,
-                hours, and money). Adding a row writes the live pack.
+                Register of submitted SCRs — number, request, who asked, status, and scope change
+                (description, hours, and money). Open a row to revise the same estimate packet.
+                Status and register fields stay editable here.
               </p>
             </div>
             <button
               type="button"
-              onClick={() => addOrder()}
-              className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white"
+              onClick={() => openWorkbook()}
+              className="rounded-lg border border-steel px-3 py-1.5 text-sm text-steel"
             >
-              + Add Change Order
+              New estimate
             </button>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -252,24 +267,25 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
                   ))}
                   <th className="px-2 py-2">Hours</th>
                   <th className="px-2 py-2">$</th>
+                  <th className="px-2 py-2" />
                 </tr>
               </thead>
               <tbody>
-                {packet.log.length === 0 ? (
+                {posted.length === 0 ? (
                   <tr>
                     <td colSpan={logColSpan} className="px-2 py-6 text-[#5b6f73]">
-                      <p>No Change Orders on this job yet.</p>
+                      <p>No submitted SCRs on this job yet. Fill the Estimate workbook, then Submit.</p>
                       <button
                         type="button"
-                        onClick={() => addOrder()}
+                        onClick={() => openWorkbook()}
                         className="mt-3 rounded-lg bg-steel px-3 py-1.5 text-sm text-white"
                       >
-                        + Add Change Order
+                        Open Estimate workbook
                       </button>
                     </td>
                   </tr>
                 ) : (
-                  packet.log.map((row) => {
+                  posted.map((row) => {
                     const scope = logRowScope(row);
                     return (
                       <tr key={row.id} className="border-t border-[#d5e0de] align-top">
@@ -334,6 +350,15 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
                             }
                           />
                         </td>
+                        <td className="px-2 py-2">
+                          <button
+                            type="button"
+                            className="text-sm text-steel"
+                            onClick={() => openWorkbook(row.id)}
+                          >
+                            Open
+                          </button>
+                        </td>
                       </tr>
                     );
                   })
@@ -351,85 +376,10 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
           crafts={crafts}
           site={site}
           client={client}
-          onSelect={setSelectedId}
-          onAddOrder={() => addOrder()}
           onPersist={persist}
+          onSubmit={submitSelected}
+          onNew={() => openWorkbook()}
         />
-      ) : null}
-
-      {shell === "SCR" ? (
-        <section className="plant-card space-y-3 px-5 py-5">
-          <h2 className="text-2xl font-semibold text-[#163038]">SCR form</h2>
-          <p className="text-sm text-[#5b6f73]">
-            Scope-change hours and money roll from the Estimate workbook (craft labor + claimable
-            costs). Cost is not a note-only field. Export Excel is the client-submittable SCR
-            proof — same chrome as the Estimate package.
-          </p>
-          {(
-            [
-              ["taRm", "TA / RM"],
-              ["categories", "Categories"],
-              ["moc", "MOC"],
-              ["sap", "SAP"],
-            ] as const
-          ).map(([key, label]) => (
-            <label key={key} className="block text-sm">
-              {label}
-              <input
-                className="paper-field mt-1"
-                value={packet.scr[key]}
-                onChange={(event) => persist({ ...packet, scr: { ...packet.scr, [key]: event.target.value } })}
-              />
-            </label>
-          ))}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              Hours
-              <input
-                className="paper-field mt-1"
-                readOnly
-                aria-label="Scope change hours"
-                value={numField(selectedScope?.hours ?? summary.scrHours)}
-              />
-            </label>
-            <label className="block text-sm">
-              Cost $
-              <input
-                className="paper-field mt-1"
-                readOnly
-                aria-label="Scope change money"
-                value={numField(selectedScope?.cost ?? summary.scrCost)}
-              />
-            </label>
-          </div>
-          <label className="block text-sm">
-            Cost note
-            <input
-              className="paper-field mt-1"
-              value={packet.scr.costNote}
-              onChange={(event) => persist({ ...packet, scr: { ...packet.scr, costNote: event.target.value } })}
-            />
-          </label>
-          {(
-            [
-              ["scheduleNote", "Schedule"],
-              ["signOff", "Sign-off"],
-            ] as const
-          ).map(([key, label]) => (
-            <label key={key} className="block text-sm">
-              {label}
-              <input
-                className="paper-field mt-1"
-                value={packet.scr[key]}
-                onChange={(event) => persist({ ...packet, scr: { ...packet.scr, [key]: event.target.value } })}
-              />
-            </label>
-          ))}
-          <p className="text-sm text-[#163038]">
-            Craft labor {money(summary.scrLabor)} · Claims {money(summary.scrClaims)} · SCR total{" "}
-            {money(summary.scrCost || summary.total)}
-          </p>
-        </section>
       ) : null}
       {exportModal ? (
         <BuildingFileModal
@@ -447,20 +397,21 @@ function ScrEstimateWorkbook({
   crafts,
   site,
   client,
-  onSelect,
-  onAddOrder,
   onPersist,
+  onSubmit,
+  onNew,
 }: {
   packet: FcrPacket;
   selected: FcrLogRow | null;
   crafts: string[];
   site?: string;
   client?: string;
-  onSelect: (id: string) => void;
-  onAddOrder: () => void;
   onPersist: (next: FcrPacket) => void;
+  onSubmit: () => void;
+  onNew: () => void;
 }) {
   const scope = selected ? logRowScope(selected) : null;
+  const posted = selected ? logRowIsSubmitted(selected) : false;
 
   function applyCraft(line: ScrCraftLine, patch: Partial<ScrCraftLine>) {
     if (!selected) return;
@@ -489,37 +440,81 @@ function ScrEstimateWorkbook({
 
   return (
     <section className="plant-card px-5 py-5">
-      <h2 className="text-2xl font-semibold text-[#163038]">SCR estimate</h2>
-      <p className="mt-1 text-sm text-[#5b6f73]">
-        Simpler than the full estimate desk. Add craft lines — pick a craft, enter hours, price with
-        composite ST / OT (DT optional). Labor $ is hours × those rates. Add claimable cost lines
-        (Subcontractor, Third-party rental, Material — describe + $; hours only when that type
-        needs them). The catalog stays extensible for other pass-throughs. The SCR total is craft
-        labor plus claims.
-      </p>
-      {packet.log.length === 0 ? (
-        <div className="mt-4 text-sm text-[#5b6f73]">
-          <p>Add a Change Order to estimate scope-change hours and money.</p>
-          <button type="button" onClick={onAddOrder} className="mt-3 rounded-lg bg-steel px-3 py-1.5 text-sm text-white">
-            + Add Change Order
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold text-[#163038]">Estimate workbook</h2>
+          <p className="mt-1 text-sm text-[#5b6f73]">
+            Simpler than the full estimate desk. Add craft lines — pick a craft, enter hours, price
+            with composite ST / OT (DT optional). Labor $ is hours × those rates. Add claimable
+            cost lines (Subcontractor, Third-party rental, Material — describe + $; hours only when
+            that type needs them). Submit posts this packet onto the SCR Log. Opening a log row
+            edits the same SCR # in place — it does not mint a new number.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={onNew} className="rounded-lg border border-steel px-3 py-1.5 text-sm text-steel">
+            New estimate
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white"
+          >
+            {posted ? "View SCR Log" : "Submit to SCR Log"}
           </button>
         </div>
-      ) : (
+      </div>
+      {selected ? (
         <>
-          <label className="mt-4 block text-sm">
-            Change Order
-            <select
-              className="paper-field mt-1 max-w-xl"
-              value={selected?.id || ""}
-              onChange={(event) => onSelect(event.target.value)}
-            >
-              {packet.log.map((row) => (
-                <option key={row.id} value={row.id}>
-                  {(row.scr || "Untitled")}{row.scope ? ` — ${row.scope}` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
+          <p className="mt-3 text-sm text-[#163038]">
+            {posted
+              ? `${selected.scr || "Untitled"} is on the SCR Log. Edits save on this packet.`
+              : "Draft — not on the SCR Log until you Submit."}
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="block text-sm">
+              SCR #
+              <input
+                className="paper-field mt-1"
+                value={selected.scr}
+                onChange={(event) => onPersist(patchLogRow(packet, selected.id, { scr: event.target.value }))}
+              />
+            </label>
+            <label className="block text-sm">
+              Requested by
+              <input
+                className="paper-field mt-1"
+                value={selected.requestedBy}
+                onChange={(event) =>
+                  onPersist(patchLogRow(packet, selected.id, { requestedBy: event.target.value }))
+                }
+              />
+            </label>
+            <label className="block text-sm">
+              Scope change
+              <input
+                className="paper-field mt-1"
+                value={selected.scope}
+                onChange={(event) => onPersist(patchLogRow(packet, selected.id, { scope: event.target.value }))}
+              />
+            </label>
+            {(
+              [
+                ["taRm", "TA / RM"],
+                ["moc", "MOC"],
+                ["sap", "SAP"],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="block text-sm">
+                {label}
+                <input
+                  className="paper-field mt-1"
+                  value={packet.scr[key]}
+                  onChange={(event) => onPersist({ ...packet, scr: { ...packet.scr, [key]: event.target.value } })}
+                />
+              </label>
+            ))}
+          </div>
 
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <h3 className="font-semibold text-[#163038]">Craft lines</h3>
