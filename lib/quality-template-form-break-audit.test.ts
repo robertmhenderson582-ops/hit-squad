@@ -44,6 +44,7 @@ import {
   removeQualityTemplateFill,
   saveQualityTemplateFill,
 } from "./quality-template-form-drops.ts";
+import { useQualityVaultDeadlineForTests } from "./quality-vault.ts";
 import { auditQualityTemplateFillRipple } from "./quality-template-form-audit.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "hs-quality-fill-break-"));
@@ -55,6 +56,7 @@ const owner = { email: "robertmhenderson582@gmail.com", name: "Robert Henderson"
 afterEach(() => {
   forgetLeadBriefCacheForTests();
   resetLeadBriefStoreForTests();
+  useQualityVaultDeadlineForTests();
 });
 
 function source(rel: string) {
@@ -150,6 +152,14 @@ describe("Quality template fill break matrix", { concurrency: 1 }, () => {
     assert.match(form, /QUALITY_TEMPLATE_FILL_EMPTY_ERROR/);
     assert.match(form, /session.fileName \|\| session.filledName/);
     assert.match(form, /Download filled copy/);
+    assert.match(form, /fetchJsonWithDeadline/);
+    assert.match(form, /QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS/);
+    assert.match(form, /QUALITY_VAULT_WRITE_TIMEOUT_ERROR/);
+    assert.match(form, /setSaving\(false\);\s*setLoading\(false\)/);
+    assert.match(form, /saveGen\.current \+= 1/);
+    assert.match(form, /if \(gen === saveGen\.current\) setSaving\(false\)/);
+    assert.match(form, /hydrateQualityTemplateFormRecord/);
+    assert.doesNotMatch(form, /await fetch\(\s*"\/api\/desk\/briefs"/);
     const pkg = source("../package.json");
     assert.match(pkg, /quality-template-form-break-audit\.test\.ts/);
   });
@@ -492,5 +502,116 @@ describe("Quality template fill break matrix", { concurrency: 1 }, () => {
     }
     const briefs = await listStoredBriefs("quality", owner.email);
     assert.equal(briefs.some((row) => row.files.some((file) => file.name === first.name)), false);
+  });
+
+  it("Q-01 hung persist fails closed and Q-02 Wendell reads Owner-saved field values", async () => {
+    const { QUALITY_TEMPLATE_FORM_MARK, qualityFilledCopyName, qualityTemplateFormForCompanyDoc, qualityTemplateFormToLead } =
+      await import("./quality-template-form.ts");
+    const { QUALITY_VAULT_WRITE_TIMEOUT_ERROR } = await import("./quality-vault.ts");
+    const hung = memoryDrive();
+    resetLeadBriefStoreForTests(join(dir, "break-q01-timeout"));
+    useLeadBriefVaultForTests({
+      ...hung,
+      uploadBytes: () => new Promise(() => {}),
+    });
+    useQualityVaultDeadlineForTests(40);
+    const def = qualityTemplateFormForCompanyDoc("quality-control-manual")!;
+    const name = qualityFilledCopyName({
+      title: def.title,
+      destLabel: "Madison CAT 2",
+      userName: owner.name,
+      at: new Date(2026, 8, 16, 20, 44, 0),
+    });
+    const qcFile = qualityTemplateFormToLead(
+      {
+        mark: QUALITY_TEMPLATE_FORM_MARK,
+        id: def.id,
+        title: def.title,
+        folderId: def.folderId,
+        source: "company-docs",
+        sourceFolder: "quality-control-manual",
+        sourceName: "Madison QC Manual Edition 06 Rev 2.pdf",
+        dest: "job",
+        destLabel: "Madison CAT 2",
+        savedAt: "2026-09-16T20:44:00.000Z",
+        user: owner.name,
+        fields: { notes: "AUDIT-2026-09-16-NIGHT", job: "Madison CAT 2" },
+        rows: [],
+      },
+      name,
+    );
+    const started = Date.now();
+    const timedOut = await saveQualityTemplateFill(owner, {
+      dest: "job",
+      jobId: "job-cat2",
+      folderId: def.folderId,
+      companyId: "madison",
+      companyLabel: "Madison",
+      siteLabel: "Wood River",
+      jobLabel: "Madison CAT 2",
+      sourceName: "Madison QC Manual Edition 06 Rev 2.pdf",
+      files: [qcFile],
+    });
+    useQualityVaultDeadlineForTests();
+    assert.equal(timedOut.ok, false);
+    if (!timedOut.ok) assert.equal(timedOut.error, QUALITY_VAULT_WRITE_TIMEOUT_ERROR);
+    assert.ok(Date.now() - started < 400, "timeout must clear Saving… without waiting on Drive");
+    const leftover = await listStoredBriefs("quality", owner.email, { jobId: "job-cat2" });
+    assert.equal(leftover.some((row) => row.files.some((file) => file.name === qcFile.name)), false);
+
+    const drive = memoryDrive();
+    resetLeadBriefStoreForTests(join(dir, "break-q02-wendell"));
+    useLeadBriefVaultForTests(drive);
+    const saved = await saveQualityTemplateFill(owner, {
+      dest: "job",
+      jobId: "job-cat2",
+      folderId: def.folderId,
+      companyId: "madison",
+      companyLabel: "Madison",
+      siteLabel: "Wood River",
+      jobLabel: "Madison CAT 2",
+      sourceName: "Madison QC Manual Edition 06 Rev 2.pdf",
+      files: [qcFile],
+    });
+    assert.equal(saved.ok, true);
+    const viewed = await readQualityTemplateFill(wendell, {
+      dest: "job",
+      jobId: "job-cat2",
+      folderId: def.folderId,
+      fileName: qcFile.name,
+      companyId: "madison",
+    });
+    assert.equal(viewed.ok, true);
+    if (viewed.ok) {
+      assert.equal(viewed.form.fields.notes, "AUDIT-2026-09-16-NIGHT");
+      assert.equal(viewed.form.fields.job, "Madison CAT 2");
+    }
+    const denied = await saveQualityTemplateFill(wendell, {
+      dest: "job",
+      jobId: "job-cat2",
+      folderId: def.folderId,
+      files: [qcFile],
+    });
+    assert.equal(denied.ok, false);
+    if (!denied.ok) assert.equal(denied.error, QUALITY_TEMPLATE_FILL_VIEW_ERROR);
+
+    const kitFile = fillFile("Night kit");
+    const kit = await saveQualityTemplateFill(owner, {
+      dest: "prepackage",
+      packageName: "Night kit",
+      companyId: "madison",
+      companyLabel: "Madison",
+      files: [kitFile],
+    });
+    assert.equal(kit.ok, true);
+    if (!kit.ok) return;
+    const fromShelf = await readQualityTemplateFill(wendell, {
+      dest: "prepackage",
+      packageId: kit.packageId,
+      fileName: kitFile.name,
+      companyId: "madison",
+    });
+    assert.equal(fromShelf.ok, true);
+    if (fromShelf.ok) assert.equal(fromShelf.form.fields.job, "Boiler 17");
   });
 });

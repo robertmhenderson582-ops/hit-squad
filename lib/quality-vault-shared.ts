@@ -4,6 +4,11 @@ import { vaultFileVisibleToViewer, type VaultListViewer } from "./vault-list-fil
 
 export const QUALITY_VAULT_WRITE_ERROR =
   "Could not save to the Quality vault. Those files are only on this desk. Try again.";
+/** Server persist fail-closed. Client save fetch is a few seconds longer so the desk can show this copy. */
+export const QUALITY_VAULT_WRITE_DEADLINE_MS = 50_000;
+export const QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS = 55_000;
+export const QUALITY_VAULT_WRITE_TIMEOUT_ERROR =
+  "Could not save to the Quality vault. The write timed out. Those files are only on this desk. Try again.";
 /** Owner / build desk only. Never send to testers. No SA email, no Drive ids. */
 export const QUALITY_VAULT_SHARE_ERROR =
   "Quality vault is not writable by the desk. Share the Quality room with the vault account as writer.";
