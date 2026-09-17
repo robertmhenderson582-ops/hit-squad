@@ -6,11 +6,13 @@ import {
   applyReturnLocally,
   applyTransferLocally,
   flushLocalPacksToVault,
+  flushQueuedVaultUpserts,
   flushVaultUpsert,
   hydrateFromVault,
   hydrateOpenPack,
   isLeftoverOwnerCopy,
   resetVaultHydrateForTests,
+  scheduleVaultUpsert,
   setVaultViewAs,
   shareVaultPack,
   transferVaultPack,
@@ -1719,6 +1721,82 @@ describe("local transfer commit", () => {
       assert.equal(findLocalPack("new-cat2pit", store)?.title, "Cat 2 Pit Stop");
       assert.equal(urls.some((url) => url.includes("/api/desk/estimates/new-cat2pit")), true);
       assert.equal(urls.some((url) => /\/api\/desk\/estimates\/?$/.test(url) || url.endsWith("/api/desk/estimates")), true);
+    } finally {
+      globalThis.fetch = previous;
+      resetVaultHydrateForTests();
+    }
+  });
+
+  it("View as still flushes the shared pack and hydrate keeps Locked + seven-day", async () => {
+    resetVaultHydrateForTests();
+    const store = memoryStore();
+    const packId = "new-cat2pit";
+    applyPackToStore(store, {
+      packId,
+      key: `new:${packId}`,
+      title: "Cat 2 Pit Stop",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 100,
+      updatedAt: 500,
+      ownerEmail: OWNER_LOGIN_EMAIL,
+      status: "Locked",
+      jobMeta: { jobNumber: "JN-41", area: "CAT", perDiemMode: "seven-day" },
+      schedule: { phases: [{ id: "pre", on: true, start: "2026-09-01" }] },
+      crew: { direct: [{ id: "bm-1", craft: "Boilermaker" }] },
+    });
+    const bodies: Array<{ pack?: { status?: string; jobMeta?: { perDiemMode?: string } } }> = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PUT") {
+        bodies.push(JSON.parse(String(init.body || "{}")));
+        return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+      }
+      const url = String(input);
+      if (url.includes(`/api/desk/estimates/${packId}`)) {
+        return new Response(
+          JSON.stringify({
+            pack: {
+              packId,
+              key: `new:${packId}`,
+              title: "Cat 2 Pit Stop",
+              client: "Phillips 66",
+              site: "Wood River — Roxana, IL",
+              siteId: "site-madison",
+              createdAt: 100,
+              updatedAt: 100,
+              ownerEmail: OWNER_LOGIN_EMAIL,
+              status: "In progress",
+              jobMeta: { jobNumber: "JN-41", area: "CAT" },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ persisted: true, packs: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      setVaultViewAs("nathan");
+      const flushed = await flushVaultUpsert(packId, store);
+      assert.equal(flushed.ok, true);
+      assert.equal(bodies[0]?.pack?.status, "Locked");
+      assert.equal(bodies[0]?.pack?.jobMeta?.perDiemMode, "seven-day");
+
+      scheduleVaultUpsert(packId, store);
+      await flushQueuedVaultUpserts(store);
+      await hydrateOpenPack(packId, store);
+      const kept = collectPack(store, packId);
+      assert.equal(kept?.status, "Locked");
+      assert.equal((kept?.jobMeta as { perDiemMode?: string })?.perDiemMode, "seven-day");
+
+      const src = readFileSync(fileURLToPath(new URL("./estimate-vault-client.ts", import.meta.url)), "utf8");
+      assert.doesNotMatch(src, /if \(currentViewAs\) return \{ ok: true as const \}/);
+      const packSrc = readFileSync(fileURLToPath(new URL("../components/EstimatePackage.tsx", import.meta.url)), "utf8");
+      assert.match(packSrc, /writeJobMeta\(estimateKey, resolved\)/);
     } finally {
       globalThis.fetch = previous;
       resetVaultHydrateForTests();

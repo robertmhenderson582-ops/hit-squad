@@ -374,7 +374,7 @@ export function JobSetupCard({
       </div>
       <div className="mt-6">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">PER DIEM DAYS</span>
-        <fieldset className="mt-2 grid gap-2 sm:grid-cols-2">
+        <fieldset disabled={estimateWriteLocked} className="mt-2 grid gap-2 sm:grid-cols-2">
           <legend className="sr-only">Per diem day count</legend>
           {(
             [
@@ -394,9 +394,9 @@ export function JobSetupCard({
             return (
               <label
                 key={option.id}
-                className={`choice-tile block cursor-pointer rounded-lg border px-3 py-3 ${
+                className={`choice-tile block rounded-lg border px-3 py-3 ${
                   selected ? "choice-tile-on" : ""
-                }`}
+                } ${estimateWriteLocked ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
               >
                 <span className="choice-tile-title flex items-center gap-2 text-sm font-semibold">
                   <input
@@ -404,6 +404,7 @@ export function JobSetupCard({
                     name="per-diem-mode"
                     className="accent-steel"
                     checked={selected}
+                    disabled={estimateWriteLocked}
                     onChange={() => pack.setJobMeta((current) => ({ ...current, perDiemMode: option.id }))}
                   />
                   {option.title}

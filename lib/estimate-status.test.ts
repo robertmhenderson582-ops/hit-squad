@@ -78,7 +78,8 @@ describe("estimate status", () => {
     assert.equal(statusNeedsManager("Awarded", "Review"), true);
     assert.equal(isEstimateLocked("Locked"), true);
     assert.equal(isEstimateLocked("Draft"), false);
-    assert.equal(keepLiveEstimateStatus("Locked", "In progress"), "In progress");
+    assert.equal(keepLiveEstimateStatus("Locked", "In progress"), "Locked");
+    assert.equal(keepLiveEstimateStatus("Locked", "In progress", true), "In progress");
     assert.equal(keepLiveEstimateStatus("In progress", "Locked"), "In progress");
     assert.equal(keepLiveEstimateStatus("", "In progress"), "In progress");
     assert.equal(keepLiveEstimateStatus("Locked", ""), "Locked");

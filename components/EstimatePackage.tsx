@@ -563,7 +563,16 @@ export function EstimatePackageProvider({
       },
       setJobMeta(next) {
         if (!canEditEstimate) return;
-        setJobMetaState((current) => (typeof next === "function" ? next(current) : next));
+        setJobMetaState((current) => {
+          const resolved = typeof next === "function" ? next(current) : next;
+          writeJobMeta(estimateKey, resolved);
+          const packId = packIdFromStoreKey(estimateKey);
+          if (packId) {
+            touchLocalPack(packId);
+            queueVaultUpsert(packId);
+          }
+          return resolved;
+        });
       },
       setPackStatus(next) {
         if (!canEditEstimate) return null;
