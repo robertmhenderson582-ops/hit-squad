@@ -206,5 +206,3 @@ export async function readScrAttachmentFile(
     stored: true as const,
   };
 }
-
-export { QUALITY_VAULT_WRITE_ERROR };
