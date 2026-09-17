@@ -386,11 +386,11 @@ export function JobSetupCard({
             return (
               <label
                 key={option.id}
-                className={`block cursor-pointer rounded-lg border px-3 py-3 ${
-                  selected ? "border-steel bg-white" : "border-[#d5e0de] bg-[#f4f1e8]"
+                className={`choice-tile block cursor-pointer rounded-lg border px-3 py-3 ${
+                  selected ? "choice-tile-on" : ""
                 }`}
               >
-                <span className="flex items-center gap-2 text-sm font-semibold text-[#163038]">
+                <span className="choice-tile-title flex items-center gap-2 text-sm font-semibold">
                   <input
                     type="radio"
                     name="per-diem-mode"
@@ -400,7 +400,7 @@ export function JobSetupCard({
                   />
                   {option.title}
                 </span>
-                <span className="mt-1 block text-xs text-[#5b6f73]">{option.note}</span>
+                <span className="choice-tile-note mt-1 block text-xs">{option.note}</span>
               </label>
             );
           })}

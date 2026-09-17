@@ -194,11 +194,11 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
           return (
             <label
               key={option.id}
-              className={`min-w-[14rem] flex-1 cursor-pointer rounded-lg border px-3 py-3 ${
-                selected ? "border-steel bg-white" : "border-[#d5e0de] bg-[#f4f1e8]"
+              className={`choice-tile min-w-[14rem] flex-1 cursor-pointer rounded-lg border px-3 py-3 ${
+                selected ? "choice-tile-on" : ""
               }`}
             >
-              <span className="flex items-center gap-2 text-sm font-semibold text-[#163038]">
+              <span className="choice-tile-title flex items-center gap-2 text-sm font-semibold">
                 <input
                   type="radio"
                   name="analytics-burden-mode"
@@ -208,7 +208,7 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
                 />
                 {option.title}
               </span>
-              <span className="mt-1 block text-xs text-[#5b6f73]">{option.note}</span>
+              <span className="choice-tile-note mt-1 block text-xs">{option.note}</span>
             </label>
           );
         })}
