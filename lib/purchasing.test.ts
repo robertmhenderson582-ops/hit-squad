@@ -172,7 +172,7 @@ describe("Purchasing Day-1 ledger", () => {
     const tabs = readFileSync(fileURLToPath(new URL("./estimate-tabs.ts", import.meta.url)), "utf8");
     assert.match(tabs, /id: "purchasing"/);
     assert.match(tabs, /label: "Purchasing"/);
-    assert.match(workspace, /item.id === "purchasing" \? " print-hide"/);
+    assert.match(workspace, /item.id === "purchasing" \|\| item.id === "analytics"/);
     assert.doesNotMatch(workspace, /readPurchasing|purchasingCostSlice/);
     assert.match(detail, /tab === "purchasing"/);
     assert.match(fresh, /tab === "purchasing"/);

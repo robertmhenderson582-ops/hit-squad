@@ -444,7 +444,7 @@ export function EstimateWorkspace({
               }}
               className={`rounded-t px-3 py-2 text-sm ${
                 tab === item.id ? "bg-[#0f5f6d] text-white" : "text-white/75 hover:text-white"
-              }${item.id === "purchasing" ? " print-hide" : ""}`}
+              }${item.id === "purchasing" || item.id === "analytics" ? " print-hide" : ""}`}
             >
               <span className="mr-1.5 opacity-80" aria-hidden="true">
                 {item.icon}

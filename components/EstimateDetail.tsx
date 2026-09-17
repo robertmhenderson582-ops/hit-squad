@@ -6,6 +6,7 @@ import { EstimateWorkbook } from "@/components/EstimateWorkbook";
 import { EstimateWorkspace, type EstimateTab } from "@/components/EstimateWorkspace";
 import { ChangeOrderPacket } from "@/components/ChangeOrderPacket";
 import { CostReportDesk } from "@/components/CostReportDesk";
+import { EstimateAnalyticsDesk } from "@/components/EstimateAnalyticsDesk";
 import { PurchasingDesk } from "@/components/PurchasingDesk";
 import { EquipmentDesk } from "@/components/EquipmentDesk";
 import { OtherCostDesk } from "@/components/OtherCostDesk";
@@ -186,6 +187,8 @@ function EstimateDetailBody({
       {tab === "change-orders" ? <ChangeOrderPacket client={estimate.client} site={siteName} /> : null}
 
       {tab === "cost-report" ? <CostReportDesk client={estimate.client} site={siteName} /> : null}
+
+      {tab === "analytics" ? <EstimateAnalyticsDesk client={estimate.client} site={siteName} /> : null}
 
       {tab === "purchasing" ? <PurchasingDesk client={estimate.client} site={siteName} /> : null}
 
