@@ -7,6 +7,7 @@ import {
   addClaimLine,
   addCraftLine,
   addLogRow,
+  CLAIMABLE_COST_PRESETS,
   CLAIMABLE_COST_TYPES,
   claimTypeNeedsHours,
   CONTRACTOR_LOG_COLUMNS,
@@ -343,6 +344,8 @@ test("P66 / Wood River and the unset default read ECR; Log is the field home", (
   assert.match(packet, /\+ Add craft/);
   assert.match(packet, /Claimable costs/);
   assert.match(packet, /Third-party rental/);
+  assert.match(packet, /Material/);
+  assert.match(packet, /CLAIMABLE_COST_TYPES/);
   assert.match(packet, /from \"@\/lib\/scr-rates\"/);
   assert.doesNotMatch(packet, /Reviewed By/);
   assert.doesNotMatch(packet, /Approved Cost/);
@@ -437,16 +440,19 @@ test("craft labor is hours × composite ST/OT and DT is optional", () => {
 });
 
 test("SCR total rolls craft labor plus claimable cost lines", () => {
+  assert.deepEqual([...CLAIMABLE_COST_PRESETS], ["Subcontractor", "Third-party rental", "Material"]);
   assert.deepEqual([...CLAIMABLE_COST_TYPES], [
     "Subcontractor",
     "Third-party rental",
-    "Equipment",
     "Material",
+    "Equipment",
     "Travel",
     "Other",
   ]);
+  assert.equal(CLAIMABLE_COST_TYPES.includes("Material"), true);
   assert.equal(claimTypeNeedsHours("Subcontractor"), true);
   assert.equal(claimTypeNeedsHours("Third-party rental"), false);
+  assert.equal(claimTypeNeedsHours("Material"), false);
   assert.equal(claimTypeNeedsHours("Custom labor"), true);
   let packet = addLogRow(emptyFcrPacket(), { id: "scr-1", scr: "SCR-4", scope: "Extra weld", scopeHours: 99, scopeCost: 9 });
   packet = addCraftLine(packet, "scr-1", {
@@ -470,23 +476,29 @@ test("SCR total rolls craft labor plus claimable cost lines", () => {
     description: "40-ton crane",
     amount: 2400,
   });
+  packet = addClaimLine(packet, "scr-1", {
+    id: "cl3",
+    type: "Material",
+    description: "Alloy rod",
+    amount: 375,
+  });
   const row = packet.log[0];
   assert.ok(row);
   const scope = logRowScope(row);
   assert.equal(scope.hasLines, true);
   assert.equal(scope.labor, 10 * 80 + 2 * 120);
-  assert.equal(scope.claims, 3900);
+  assert.equal(scope.claims, 4275);
   assert.equal(scope.hours, 12 + 6);
-  assert.equal(scope.cost, 1040 + 3900);
+  assert.equal(scope.cost, 1040 + 4275);
   assert.equal(row.scopeHours, scope.hours);
   assert.equal(row.scopeCost, scope.cost);
   const summary = fcrSummary({ ...packet, sub: 100, equipment: 50, misc: 25 });
   assert.equal(summary.scrLabor, 1040);
-  assert.equal(summary.scrClaims, 3900);
+  assert.equal(summary.scrClaims, 4275);
   assert.equal(summary.scrTyped, 0);
-  assert.equal(summary.scrCost, 4940);
+  assert.equal(summary.scrCost, 5315);
   assert.equal(summary.sub, 100);
-  assert.equal(summary.total, 4940 + 175);
+  assert.equal(summary.total, 5315 + 175);
 });
 
 test("SCR estimate craft + claim lines persist on the store", () => {

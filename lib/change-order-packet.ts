@@ -18,12 +18,17 @@ export const FCR_BLOCKS = ["Staff Day", "Staff Night", "Craft Day", "Craft Night
 export const FCR_DAYS = ["mo", "tu", "we", "th", "fr", "sa", "su"] as const;
 export const FCR_DAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] as const;
 
-/** Pass-through / claimable cost types on an SCR estimate. Custom types stay allowed. */
-export const CLAIMABLE_COST_TYPES = [
+/** Named first-class claim types. Catalog stays extensible beyond these. */
+export const CLAIMABLE_COST_PRESETS = [
   "Subcontractor",
   "Third-party rental",
-  "Equipment",
   "Material",
+] as const;
+
+/** Pass-through / claimable cost types on an SCR estimate. Custom types stay allowed. */
+export const CLAIMABLE_COST_TYPES = [
+  ...CLAIMABLE_COST_PRESETS,
+  "Equipment",
   "Travel",
   "Other",
 ] as const;

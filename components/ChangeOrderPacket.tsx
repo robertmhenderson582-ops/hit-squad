@@ -410,8 +410,9 @@ function ScrEstimateWorkbook({
       <p className="mt-1 text-sm text-[#5b6f73]">
         Simpler than the full estimate desk. Add craft lines — pick a craft, enter hours, price with
         composite ST / OT (DT optional). Labor $ is hours × those rates. Add claimable cost lines
-        (subcontractor, third-party rental, and the same pattern for other pass-throughs). The SCR
-        total is craft labor plus claims.
+        (Subcontractor, Third-party rental, Material — describe + $; hours only when that type
+        needs them). The catalog stays extensible for other pass-throughs. The SCR total is craft
+        labor plus claims.
       </p>
       {packet.log.length === 0 ? (
         <div className="mt-4 text-sm text-[#5b6f73]">
@@ -548,8 +549,8 @@ function ScrEstimateWorkbook({
                 {!selected?.claimLines.length ? (
                   <tr>
                     <td colSpan={5} className="px-2 py-3 text-[#5b6f73]">
-                      No claimable cost lines yet. Use Subcontractor, Third-party rental, or type another
-                      pass-through.
+                      No claimable cost lines yet. Use Subcontractor, Third-party rental, Material, or
+                      type another pass-through.
                     </td>
                   </tr>
                 ) : (
