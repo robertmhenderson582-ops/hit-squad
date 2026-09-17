@@ -10,6 +10,7 @@ import {
   fcrSummary,
   logRowScope,
   parseFcrPacket,
+  scrAttachmentNames,
   type FcrLogRow,
   type FcrPacket,
   type FcrScr,
@@ -36,6 +37,8 @@ export const SCR_TOTAL_LABEL = "SCR TOTAL $";
 export const SCR_HOURS_LABEL = "Scope-change hours";
 export const SCR_COST_LABEL = "Scope-change $";
 export const SCR_EXPORT_CONFIDENTIAL = "Confidential scope change request";
+export const SCR_ATTACHMENTS_LABEL = "Backup attachments";
+export const SCR_ATTACHMENTS_NOTE = "files live in the desk pack";
 
 export const SCR_XLSX_SHEETS = {
   cover: "Cover",
@@ -227,6 +230,19 @@ function writeClaimTable(cells: SheetCell[], startRow: number, row: FcrLogRow) {
   return { header, first, last, claimsRow };
 }
 
+function writeAttachmentList(cells: SheetCell[], startRow: number, row: FcrLogRow) {
+  pushText(cells, `A${startRow}`, `${SCR_ATTACHMENTS_LABEL} (${SCR_ATTACHMENTS_NOTE})`);
+  const names = scrAttachmentNames(row);
+  if (!names.length) {
+    pushText(cells, `A${startRow + 1}`, "None");
+    return { header: startRow, lastRow: startRow + 1 };
+  }
+  names.forEach((name, index) => {
+    pushText(cells, `A${startRow + 1 + index}`, name);
+  });
+  return { header: startRow, lastRow: startRow + names.length };
+}
+
 function writeScrSection(cells: SheetCell[], startRow: number, row: FcrLogRow): BuiltSection {
   const titleRow = startRow;
   const scope = logRowScope(row);
@@ -245,7 +261,8 @@ function writeScrSection(cells: SheetCell[], startRow: number, row: FcrLogRow): 
   const claimHeader = craft.laborRow + 2;
   pushText(cells, `A${claimHeader - 1}`, "Claimable costs — Material, Subcontractor, Third-party rental, and other pass-throughs");
   const claims = writeClaimTable(cells, claimHeader, row);
-  const totalRow = claims.claimsRow + 2;
+  const attachments = writeAttachmentList(cells, claims.claimsRow + 2, row);
+  const totalRow = attachments.lastRow + 2;
   pushText(cells, `A${totalRow}`, SCR_TOTAL_LABEL);
   const laborRef = `H${craft.laborRow}`;
   const claimsRef = `D${claims.claimsRow}`;

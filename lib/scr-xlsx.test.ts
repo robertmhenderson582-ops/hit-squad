@@ -8,6 +8,7 @@ import {
   addClaimLine,
   addCraftLine,
   addLogRow,
+  addScrAttachments,
   emptyFcrPacket,
   fcrSummary,
 } from "./change-order-packet.ts";
@@ -19,6 +20,7 @@ import {
   estimateExportProducer,
 } from "./estimate-xlsx.ts";
 import {
+  SCR_ATTACHMENTS_LABEL,
   SCR_COST_LABEL,
   SCR_DOCUMENT_TITLE,
   SCR_ESTIMATE_TITLE,
@@ -185,6 +187,19 @@ describe("SCR Excel export", () => {
     const sheets = buildScrWorkbook({ ...WOOD, packet });
     assert.equal(fcrSummary(packet).scrCost, 5815);
     assert.equal(scrWorkbookTotal(sheets), 5815);
+  });
+
+  it("lists backup attachment filenames on the SCR estimate workbook", () => {
+    const packet = addScrAttachments(fixturePacket(), "scr-1", [
+      { id: "att-1", name: "IPS pack.pdf", type: "application/pdf", size: 1200, addedBy: "Robert", driveId: "d1" },
+      { id: "att-2", name: "scope-photo.jpg", type: "image/jpeg", size: 800, addedBy: "Robert", driveId: "d2" },
+    ]);
+    const sheets = buildScrWorkbook({ ...WOOD, packet });
+    const estimate = sheets.find((sheet) => sheet.name === SCR_XLSX_SHEETS.estimate)!;
+    assert.ok(estimate.cells.some((cell) => cell.type === "text" && String(cell.value).startsWith(SCR_ATTACHMENTS_LABEL)));
+    assert.ok(estimate.cells.some((cell) => cell.type === "text" && cell.value === "IPS pack.pdf"));
+    assert.ok(estimate.cells.some((cell) => cell.type === "text" && cell.value === "scope-photo.jpg"));
+    assert.equal(scrWorkbookTotal(sheets), fcrSummary(packet).scrCost);
   });
 
   it("reuses Estimate export chrome and wires the SCR tab Export Excel path", () => {

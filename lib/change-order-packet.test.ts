@@ -7,6 +7,7 @@ import {
   addClaimLine,
   addCraftLine,
   addLogRow,
+  addScrAttachments,
   CHANGE_ORDER_SHELLS,
   CHANGE_ORDER_SHELL_LABELS,
   CLAIMABLE_COST_PRESETS,
@@ -45,6 +46,8 @@ import {
   peopleFromJob,
   peopleHours,
   readFcrPacket,
+  removeScrAttachment,
+  scrAttachmentNames,
   usesEcrCopy,
   writeFcrPacket,
 } from "./change-order-packet.ts";
@@ -109,6 +112,7 @@ test("V1 on-job packet shape stays locked to the Drive books", () => {
     "scopeCost",
     "craftLines",
     "claimLines",
+    "attachments",
     "submittedAt",
   ]);
   assert.deepEqual(Object.keys(emptyScr()), [
@@ -369,6 +373,13 @@ test("P66 / Wood River and the unset default read ECR; SCR is Log + workbook onl
   assert.match(packet, /Export Excel/);
   assert.match(packet, /company-logo/);
   assert.match(packet, /exporterDisplayName/);
+  assert.match(packet, /Backup attachments/);
+  assert.match(packet, /addScrAttachments/);
+  assert.match(packet, /removeScrAttachment/);
+  assert.match(packet, /canEditChangeOrders/);
+  assert.match(packet, /CHANGE_ORDERS_DENIED/);
+  assert.match(packet, /from \"@\/lib\/module-access\"/);
+  assert.match(packet, /scr-attachments/);
   assert.doesNotMatch(packet, /Reviewed By/);
   assert.doesNotMatch(packet, /Approved Cost/);
   assert.doesNotMatch(packet, /Logged By/);
@@ -619,4 +630,47 @@ test("plant-book composite dollars round to cents on the claim", () => {
   assert.equal(scope.claims, 375);
   assert.equal(scope.cost, 1645.68);
   assert.equal(String(scope.cost).includes("999"), false);
+});
+
+test("SCR backup attachments add, remove, and survive submit to the log", () => {
+  const store = memoryStore();
+  const key = "new:new-scr-att";
+  let packet = addLogRow(emptyFcrPacket(), { id: "scr-att", submittedAt: "" });
+  packet = addScrAttachments(
+    packet,
+    "scr-att",
+    [
+      {
+        id: "att-1",
+        name: "IPS pack.pdf",
+        type: "application/pdf",
+        size: 2048,
+        addedBy: "Robert Henderson",
+        driveId: "drive-ips-1",
+      },
+      {
+        id: "att-2",
+        name: "scope-photo.jpg",
+        type: "image/jpeg",
+        size: 4096,
+        addedBy: "Robert Henderson",
+        driveId: "drive-photo-1",
+      },
+    ],
+    new Date("2026-09-17T07:47:00Z"),
+  );
+  assert.deepEqual(scrAttachmentNames(packet.log[0]!), ["IPS pack.pdf", "scope-photo.jpg"]);
+  assert.equal(packet.log[0]?.attachments[0]?.addedAt, "2026-09-17T07:47:00.000Z");
+  assert.equal(packet.log[0]?.attachments[0]?.driveId, "drive-ips-1");
+  packet = removeScrAttachment(packet, "scr-att", "att-2");
+  assert.deepEqual(scrAttachmentNames(packet.log[0]!), ["IPS pack.pdf"]);
+  writeFcrPacket(key, packet, store);
+  const posted = submitScrEstimate(readFcrPacket(key, store), "scr-att", new Date("2026-09-17T08:00:00Z"));
+  assert.equal(logRowIsSubmitted(posted.log[0]!), true);
+  assert.equal(posted.log[0]?.scr, "SCR-1");
+  assert.deepEqual(scrAttachmentNames(posted.log[0]!), ["IPS pack.pdf"]);
+  assert.equal(posted.log[0]?.attachments[0]?.driveId, "drive-ips-1");
+  const revised = submitScrEstimate(posted, "scr-att", new Date("2026-09-18T12:00:00Z"));
+  assert.equal(revised.log[0]?.scr, "SCR-1");
+  assert.deepEqual(scrAttachmentNames(revised.log[0]!), ["IPS pack.pdf"]);
 });
