@@ -4,12 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BuildingFileModal } from "@/components/BuildingFileModal";
 import { CatalogPick } from "@/components/CatalogPick";
 import { useEstimatePackage } from "@/components/EstimatePackage";
-import { useLensUser } from "@/components/OwnerDeskContext";
+import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { canEditChangeOrders, CHANGE_ORDERS_DENIED } from "@/lib/module-access";
 import {
   addClaimLine,
   addCraftLine,
+  addScrAttachments,
   CHANGE_ORDER_SHELLS,
   CHANGE_ORDER_SHELL_LABELS,
   changeOrderNoun,
@@ -26,15 +27,22 @@ import {
   logRowScope,
   patchLogRow,
   readFcrPacket,
+  removeScrAttachment,
+  scrAttachmentOpenUrl,
   submitScrEstimate,
   submittedLogRows,
   writeFcrPacket,
   type ChangeOrderShell,
   type FcrLogRow,
   type FcrPacket,
+  type ScrAttachment,
   type ScrClaimLine,
   type ScrCraftLine,
 } from "@/lib/change-order-packet";
+import { viewAsInit } from "@/lib/desk-scope";
+import { fileToLead } from "@/lib/lead-briefs";
+import { QUALITY_DROP_ACCEPT, checkQualityDrop } from "@/lib/quality-folders";
+import { SCR_ATTACHMENT_VIEW_ERROR, SCR_ATTACHMENT_WRITE_ERROR } from "@/lib/scr-attachment-shared";
 import { companyLogoFromApiPayload } from "@/lib/estimate-company-logo";
 import { packIdFromEstimateKey } from "@/lib/estimate-pack";
 import { estimateCompanyName, exporterDisplayName } from "@/lib/estimate-xlsx";
@@ -72,12 +80,36 @@ function crewTitles(pack: ReturnType<typeof useEstimatePackage>) {
     .filter(Boolean);
 }
 
+function formatBytes(value: number) {
+  const bytes = Math.max(0, Number(value) || 0);
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function attachmentKind(file: Pick<ScrAttachment, "name" | "type">) {
+  const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".") + 1).toUpperCase() : "";
+  if (/pdf/i.test(file.type) || ext === "PDF") return "PDF";
+  if (/image/i.test(file.type) || /^(PNG|JPE?G|WEBP|GIF)$/.test(ext)) return "Photo";
+  if (/sheet|excel|csv/i.test(file.type) || /^(XLSX?|CSV)$/.test(ext)) return "Spreadsheet";
+  if (/word|document/i.test(file.type) || /^DOCX?$/.test(ext)) return "Document";
+  return ext || "File";
+}
+
+function formatAddedAt(value: string) {
+  const stamp = Date.parse(value);
+  if (!Number.isFinite(stamp)) return value || "—";
+  return new Date(stamp).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+}
+
 export function ChangeOrderPacket({ client, site }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
   const { user } = useSession();
   const lens = useLensUser();
+  const owner = useOwnerDesk();
   const canWrite = canEditChangeOrders(lens);
   const noun = changeOrderNoun(client, site);
+  const packId = packIdFromEstimateKey(pack.estimateKey);
   const [shell, setShell] = useState<ChangeOrderShell>(DEFAULT_CHANGE_ORDER_SHELL);
   const [packet, setPacket] = useState<FcrPacket>(emptyFcrPacket);
   const [selectedId, setSelectedId] = useState("");
@@ -384,6 +416,9 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
           crafts={crafts}
           site={site}
           client={client}
+          packId={packId || ""}
+          canEdit={canWrite}
+          viewAs={owner?.viewAs}
           onPersist={persist}
           onSubmit={submitSelected}
           onNew={() => openWorkbook()}
@@ -405,6 +440,9 @@ function ScrEstimateWorkbook({
   crafts,
   site,
   client,
+  packId,
+  canEdit,
+  viewAs,
   onPersist,
   onSubmit,
   onNew,
@@ -414,6 +452,9 @@ function ScrEstimateWorkbook({
   crafts: string[];
   site?: string;
   client?: string;
+  packId: string;
+  canEdit: boolean;
+  viewAs?: string | null;
   onPersist: (next: FcrPacket) => void;
   onSubmit: () => void;
   onNew: () => void;
@@ -708,6 +749,15 @@ function ScrEstimateWorkbook({
             </table>
           </div>
 
+          <ScrBackupAttachments
+            packet={packet}
+            selected={selected}
+            packId={packId}
+            canEdit={canEdit}
+            viewAs={viewAs}
+            onPersist={onPersist}
+          />
+
           <p className="mt-4 text-sm text-[#163038]">
             Craft hours{" "}
             {selected?.craftLines.reduce((sum, line) => sum + craftLineHours(line), 0) ?? 0}h · Labor{" "}
@@ -719,5 +769,240 @@ function ScrEstimateWorkbook({
         <p className="mt-4 text-sm text-[#5b6f73]">Open a submitted SCR or start a new estimate to add lines.</p>
       )}
     </section>
+  );
+}
+
+function dropFileFromBrowser(file: File) {
+  return { name: file.name, type: file.type, bytes: file.size };
+}
+
+function ScrBackupAttachments({
+  packet,
+  selected,
+  packId,
+  canEdit,
+  viewAs,
+  onPersist,
+}: {
+  packet: FcrPacket;
+  selected: FcrLogRow;
+  packId: string;
+  canEdit: boolean;
+  viewAs?: string | null;
+  onPersist: (next: FcrPacket) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+
+  async function attachFiles(list: FileList | File[] | null) {
+    if (!canEdit) {
+      setNote(SCR_ATTACHMENT_VIEW_ERROR);
+      return;
+    }
+    if (!packId) {
+      setNote("Open this estimate from the job card before attaching backups.");
+      return;
+    }
+    const picked = Array.from(list ?? []);
+    if (!picked.length) return;
+    const check = checkQualityDrop(picked.map(dropFileFromBrowser));
+    if (!check.accepted.length) {
+      setNote(
+        check.rejected.length
+          ? check.rejected.map((row) => `${row.name}: ${row.error}`).join(" · ")
+          : "error" in check && check.error
+            ? check.error
+            : "Attach at least one file.",
+      );
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+    setBusy(true);
+    setNote("");
+    try {
+      const acceptedNames = new Set(check.accepted.map((file) => file.name));
+      const leads = await Promise.all(picked.filter((file) => acceptedNames.has(file.name)).map(fileToLead));
+      const response = await fetch(
+        `/api/desk/estimates/${encodeURIComponent(packId)}/scr-attachments`,
+        viewAsInit(viewAs, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rowId: selected.id, files: leads }),
+        }),
+      );
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        attachments?: Array<Partial<ScrAttachment>>;
+      };
+      if (!response.ok || !Array.isArray(data.attachments) || !data.attachments.length) {
+        throw new Error(typeof data.error === "string" && data.error ? data.error : SCR_ATTACHMENT_WRITE_ERROR);
+      }
+      onPersist(addScrAttachments(packet, selected.id, data.attachments));
+      if (check.rejected.length) {
+        setNote(check.rejected.map((row) => `${row.name}: ${row.error}`).join(" · "));
+      }
+    } catch (error) {
+      setNote(error instanceof Error && error.message ? error.message : SCR_ATTACHMENT_WRITE_ERROR);
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function removeFile(file: ScrAttachment) {
+    if (!canEdit) {
+      setNote(SCR_ATTACHMENT_VIEW_ERROR);
+      return;
+    }
+    setBusy(true);
+    setNote("");
+    try {
+      if (file.driveId && packId) {
+        const response = await fetch(
+          `/api/desk/estimates/${encodeURIComponent(packId)}/scr-attachments`,
+          viewAsInit(viewAs, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rowId: selected.id, driveId: file.driveId, fileName: file.name }),
+          }),
+        );
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        if (!response.ok) {
+          throw new Error(typeof data.error === "string" && data.error ? data.error : SCR_ATTACHMENT_WRITE_ERROR);
+        }
+      }
+      onPersist(removeScrAttachment(packet, selected.id, file.id));
+    } catch (error) {
+      setNote(error instanceof Error && error.message ? error.message : SCR_ATTACHMENT_WRITE_ERROR);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function downloadHref(file: ScrAttachment) {
+    if (!packId || !file.driveId) return "";
+    const query = new URLSearchParams({ rowId: selected.id, fileId: file.driveId });
+    return `/api/desk/estimates/${encodeURIComponent(packId)}/scr-attachments?${query}`;
+  }
+
+  async function downloadFile(file: ScrAttachment) {
+    const href = downloadHref(file);
+    if (!href) return;
+    try {
+      const response = await fetch(href, viewAsInit(viewAs));
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        setNote(typeof data.error === "string" && data.error ? data.error : "Could not download that backup.");
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = file.name;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setNote("Could not download that backup.");
+    }
+  }
+
+  return (
+    <div className="mt-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-[#163038]">Backup attachments</h3>
+          <p className="mt-1 text-sm text-[#5b6f73]">
+            PDFs, photos, and other docs that back this claim — IPS pack, drawings, quotes. Files
+            save with the estimate pack, not only on this browser.
+          </p>
+        </div>
+        {canEdit ? (
+          <label className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white">
+            {busy ? "Saving…" : "Attach"}
+            <input
+              ref={inputRef}
+              type="file"
+              multiple
+              accept={QUALITY_DROP_ACCEPT}
+              className="sr-only"
+              disabled={busy}
+              onChange={(event) => void attachFiles(event.target.files)}
+            />
+          </label>
+        ) : null}
+      </div>
+      <div className="mt-2 overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="text-xs tracking-[0.1em] text-[#5b6f73]">
+            <tr>
+              {["NAME", "TYPE / SIZE", "ADDED BY", "WHEN", ""].map((header) => (
+                <th key={header} className="px-2 py-2">
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {!selected.attachments.length ? (
+              <tr>
+                <td colSpan={5} className="px-2 py-3 text-[#5b6f73]">
+                  No backup files on this SCR yet.
+                </td>
+              </tr>
+            ) : (
+              selected.attachments.map((file) => {
+                const openUrl = scrAttachmentOpenUrl(file.driveId);
+                const downloadUrl = downloadHref(file);
+                return (
+                  <tr key={file.id} className="border-t border-[#d5e0de] align-top">
+                    <td className="px-2 py-2">{file.name}</td>
+                    <td className="px-2 py-2">
+                      {attachmentKind(file)} · {formatBytes(file.size)}
+                    </td>
+                    <td className="px-2 py-2">{file.addedBy || "—"}</td>
+                    <td className="px-2 py-2">{formatAddedAt(file.addedAt)}</td>
+                    <td className="px-2 py-2">
+                      <span className="flex flex-wrap gap-3">
+                        {openUrl ? (
+                          <a href={openUrl} target="_blank" rel="noreferrer" className="text-sm text-steel">
+                            Open
+                          </a>
+                        ) : null}
+                        {downloadUrl ? (
+                          <button
+                            type="button"
+                            className="text-sm text-steel"
+                            onClick={() => void downloadFile(file)}
+                          >
+                            Download
+                          </button>
+                        ) : null}
+                        {canEdit ? (
+                          <button
+                            type="button"
+                            className="text-sm text-steel"
+                            disabled={busy}
+                            onClick={() => void removeFile(file)}
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+      {note ? (
+        <p className="mt-2 text-sm text-amber-flare" role="alert">
+          {note}
+        </p>
+      ) : null}
+    </div>
   );
 }

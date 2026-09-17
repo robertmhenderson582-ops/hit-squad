@@ -84,6 +84,11 @@ export type FcrLogRow = {
   craftLines: ScrCraftLine[];
   claimLines: ScrClaimLine[];
   /**
+   * Backup docs for this SCR (PDF, photos, IPS pack, quotes).
+   * Metadata rides on the packet; bytes live in the estimate Drive vault.
+   */
+  attachments: ScrAttachment[];
+  /**
    * When set, the row is on the SCR Log. Empty = draft workbook only.
    * Revise keeps this stamp and the same SCR #.
    */
@@ -109,6 +114,17 @@ export type ScrClaimLine = {
   description: string;
   amount: number;
   hours: number;
+};
+
+/** Backup file on an SCR estimate. Drive id is set after the vault write. */
+export type ScrAttachment = {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  addedBy: string;
+  addedAt: string;
+  driveId: string;
 };
 
 export type FcrPeopleRow = {
@@ -238,6 +254,7 @@ export function blankLogRow(): FcrLogRow {
     scopeCost: 0,
     craftLines: [],
     claimLines: [],
+    attachments: [],
     submittedAt: "",
   };
 }
@@ -329,6 +346,52 @@ export function addCraftLine(packet: FcrPacket, logId: string, patch: Partial<Sc
 
 export function addClaimLine(packet: FcrPacket, logId: string, patch: Partial<ScrClaimLine> = {}): FcrPacket {
   return patchLogRow(packet, logId, (row) => ({ ...row, claimLines: [...row.claimLines, blankClaimLine(patch)] }));
+}
+
+export function blankAttachment(patch: Partial<ScrAttachment> = {}): ScrAttachment {
+  return {
+    id: typeof patch.id === "string" && patch.id.trim() ? patch.id : uid("scr-att"),
+    name: typeof patch.name === "string" ? patch.name.replace(/\\/g, "/").split("/").pop()?.trim() || "" : "",
+    type: typeof patch.type === "string" && patch.type.trim() ? patch.type.trim() : "application/octet-stream",
+    size: Math.max(0, Number(patch.size) || 0),
+    addedBy: typeof patch.addedBy === "string" ? patch.addedBy.trim() : "",
+    addedAt: typeof patch.addedAt === "string" ? patch.addedAt : "",
+    driveId: typeof patch.driveId === "string" ? patch.driveId.trim() : "",
+  };
+}
+
+export function addScrAttachments(
+  packet: FcrPacket,
+  logId: string,
+  files: Array<Partial<ScrAttachment>>,
+  when = new Date(),
+): FcrPacket {
+  const stamp = when.toISOString();
+  const incoming = files
+    .map((file) => blankAttachment({ ...file, addedAt: file.addedAt || stamp }))
+    .filter((file) => file.name);
+  if (!incoming.length) return packet;
+  return patchLogRow(packet, logId, (row) => ({ ...row, attachments: [...row.attachments, ...incoming] }));
+}
+
+export function removeScrAttachment(packet: FcrPacket, logId: string, attachmentId: string): FcrPacket {
+  const id = attachmentId.trim();
+  if (!id) return packet;
+  return patchLogRow(packet, logId, (row) => ({
+    ...row,
+    attachments: row.attachments.filter((item) => item.id !== id),
+  }));
+}
+
+export function scrAttachmentNames(row: Pick<FcrLogRow, "attachments">) {
+  return (Array.isArray(row.attachments) ? row.attachments : [])
+    .map((item) => (item.name || "").trim())
+    .filter(Boolean);
+}
+
+export function scrAttachmentOpenUrl(driveId: string) {
+  const id = driveId.trim();
+  return id ? `https://drive.google.com/file/d/${id}/view` : "";
 }
 
 /** P66 / Wood River field path — and the default when site/client are unset. */
@@ -462,6 +525,9 @@ function normalizeLogRow(row: Partial<FcrLogRow> | null | undefined): FcrLogRow 
     scopeCost: Number(row.scopeCost) || 0,
     craftLines: Array.isArray(row.craftLines) ? row.craftLines.map((line) => blankCraftLine(line)) : [],
     claimLines: Array.isArray(row.claimLines) ? row.claimLines.map((line) => blankClaimLine(line)) : [],
+    attachments: Array.isArray(row.attachments)
+      ? row.attachments.map((file) => blankAttachment(file)).filter((file) => file.name)
+      : [],
     submittedAt,
   });
 }
