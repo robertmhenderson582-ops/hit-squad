@@ -18,6 +18,7 @@ import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import {
   ANALYTICS_BRIDGE_SEED_NOTE,
+  ANALYTICS_STC_PPE_SAVINGS_DEFAULT,
   emptyAnalyticsLocked,
   emptyAnalyticsNb,
   emptyAnalyticsStc,
@@ -250,9 +251,9 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
                             />
                             <DraftNumber
                               label="Predicted savings percent"
-                              value={savings ? stcPpeSavingsPctPoints(savings) : null}
+                              value={savings ? stcPpeSavingsPctPoints(savings) : ANALYTICS_STC_PPE_SAVINGS_DEFAULT}
                               suffix="%"
-                              placeholder="set…"
+                              placeholder={String(ANALYTICS_STC_PPE_SAVINGS_DEFAULT)}
                               testId="stc-ppe-savings"
                               onCommit={setStcSavingsPct}
                             />

@@ -87,10 +87,10 @@ describe("Yates Analytics model", () => {
     assert.equal(yatesStcPpeRate("craft"), 0.0975);
     assert.equal(yatesStcPpeRate("staff"), 0.0575);
     assert.match(read("./estimate-analytics.ts"), /Phase 2 \(omitted\): Procurement\/Subcontracts/);
-    assert.match(stcDefaultHint(), /Predicted savings you expect to keep/);
-    assert.match(stcDefaultHint(), /Set when you have recovery data/);
+    assert.match(stcDefaultHint(), /Predicted savings % — seeded 0 from WR actuals/);
+    assert.match(stcDefaultHint(), /CCU1 overspend vs recovery/);
     assert.match(stcDefaultHint(), /Not % of base wage/);
-    assert.match(stcDefaultHint(), /Former book 35%/);
+    assert.match(stcDefaultHint(), /Rodeo-style ~25%/);
     assert.doesNotMatch(stcDefaultHint(), /Yates|base wage burden|Default 35%/i);
     assert.deepEqual(emptyJobMoney().analyticsStc, emptyAnalyticsStc());
     assert.deepEqual(emptyJobMeta().analyticsStc, emptyAnalyticsStc());
@@ -467,9 +467,10 @@ describe("Analytics tab wiring", () => {
     assert.match(desk, /stcDefaultHint/);
     assert.match(desk, /stcPpeSavingsPct|setStcSavingsPct/);
     assert.match(desk, /Predicted savings/);
-    assert.match(desk, /set when you have recovery data|stcDefaultHint/);
-    assert.match(desk, /placeholder="set…"/);
-    assert.doesNotMatch(desk, /ANALYTICS_STC_PPE_SAVINGS_DEFAULT/);
+    assert.match(desk, /ANALYTICS_STC_PPE_SAVINGS_DEFAULT/);
+    assert.match(desk, /stcDefaultHint/);
+    assert.match(desk, /CCU1 overspend vs recovery|stcDefaultHint/);
+    assert.doesNotMatch(desk, /10–15|10-15/);
     assert.match(desk, /stcPpePerHour/);
     assert.match(desk, /\$3\.60\/hr/);
     assert.doesNotMatch(desk, /Yates|yates/);
