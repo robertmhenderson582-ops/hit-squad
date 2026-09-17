@@ -263,7 +263,7 @@ describe("sandbox estimate isolation", () => {
 
     const hijack = await upsertVisiblePack(mark, markAromaticsPack({ packId: HIS_AROMATICS_PACK_ID }), drive);
     assert.equal(hijack.ok, false);
-    if (!hijack.ok) assert.equal(hijack.status, 403);
+    if (!hijack.ok) assert.equal(hijack.status, 404);
     if (liveFileId) assert.equal(await drive.readJson(liveFileId), liveBefore);
   });
 

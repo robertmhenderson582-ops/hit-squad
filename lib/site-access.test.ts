@@ -161,8 +161,9 @@ describe("site people wiring", () => {
     const api = source("../app/api/desk/site-access/route.ts");
     assert.match(plant, /PlantPeopleDesk/);
     assert.match(people, /SITE_ACCESS_DURATION_COPY/);
-    assert.match(people, /takes a duration to complete/);
+    assert.match(source("./site-access.ts"), /takes a duration to complete/);
     assert.equal(people.toLowerCase().includes("pending owner approval"), false);
+    assert.equal(source("./site-access.ts").toLowerCase().includes("pending owner approval"), false);
     assert.match(people, /TOOL_ROOM_WINDOW_COPY/);
     assert.match(api, /scopedDeskUser/);
     assert.match(api, /grant-site-access/);
