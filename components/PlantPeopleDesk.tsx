@@ -3,7 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLensUser } from "@/components/OwnerDeskContext";
 import { canAssignSitePeople } from "@/lib/module-access";
-import { SITE_ACCESS_DURATION_COPY, type PublicSiteAccessGrant } from "@/lib/site-access";
+import {
+  SITE_ACCESS_DURATION_COPY,
+  SITE_ACCESS_OWNER_PM_COPY,
+  SITE_ACCESS_WINDOW_COPY,
+  defaultFieldAccessWindow,
+  fieldAccessTimeboxedFor,
+  type PublicSiteAccessGrant,
+} from "@/lib/site-access";
 import {
   defaultToolRoomWindow,
   TOOL_ROOM_OWNER_PM_COPY,
@@ -20,11 +27,13 @@ export function PlantPeopleDesk({
   siteId,
   siteName,
   people,
+  jobStartYmd,
   postEndYmd,
 }: {
   siteId: string;
   siteName: string;
   people: Person[];
+  jobStartYmd?: string | null;
   postEndYmd?: string | null;
 }) {
   const lens = useLensUser();
@@ -33,18 +42,29 @@ export function PlantPeopleDesk({
   const [duties, setDuties] = useState<ToolRoomDuty[]>([]);
   const [accessEmail, setAccessEmail] = useState("");
   const [dutyEmail, setDutyEmail] = useState("");
-  const fallbackWindow = useMemo(() => defaultToolRoomWindow(postEndYmd), [postEndYmd]);
-  const [startYmd, setStartYmd] = useState(fallbackWindow.start);
-  const [endYmd, setEndYmd] = useState(fallbackWindow.end);
+  const accessWindow = useMemo(
+    () => defaultFieldAccessWindow(jobStartYmd, postEndYmd),
+    [jobStartYmd, postEndYmd],
+  );
+  const dutyWindow = useMemo(() => defaultToolRoomWindow(postEndYmd), [postEndYmd]);
+  const [startYmd, setStartYmd] = useState(accessWindow.start);
+  const [endYmd, setEndYmd] = useState(accessWindow.end);
+  const [dutyStartYmd, setDutyStartYmd] = useState(dutyWindow.start);
+  const [dutyEndYmd, setDutyEndYmd] = useState(dutyWindow.end);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
   const roster = people.filter((row) => typeof row.email === "string" && row.email.includes("@"));
 
   useEffect(() => {
-    setStartYmd(fallbackWindow.start);
-    setEndYmd(fallbackWindow.end);
-  }, [fallbackWindow.start, fallbackWindow.end]);
+    setStartYmd(accessWindow.start);
+    setEndYmd(accessWindow.end);
+  }, [accessWindow.start, accessWindow.end]);
+
+  useEffect(() => {
+    setDutyStartYmd(dutyWindow.start);
+    setDutyEndYmd(dutyWindow.end);
+  }, [dutyWindow.start, dutyWindow.end]);
 
   async function load() {
     const response = await fetch(`/api/desk/site-access?siteId=${encodeURIComponent(siteId)}`, {
@@ -89,6 +109,8 @@ export function PlantPeopleDesk({
     if (data.toolRoom) setDuties(data.toolRoom);
   }
 
+  const accessPerson = roster.find((row) => row.email === accessEmail);
+  const accessTimeboxed = fieldAccessTimeboxedFor(accessPerson || (accessEmail ? { email: accessEmail } : null));
   const dutyPerson = roster.find((row) => row.email === dutyEmail);
   const dutyTimeboxed = toolRoomTimeboxedFor(dutyPerson || (dutyEmail ? { email: dutyEmail } : null));
 
@@ -108,10 +130,10 @@ export function PlantPeopleDesk({
       <div>
         <h4 className="text-lg font-semibold text-[#163038]">Site access</h4>
         <p className="mt-1 text-sm text-[#5b6f73]">
-          Project Managers grant access on this plant. {SITE_ACCESS_DURATION_COPY}
+          Project Managers grant access on this plant. {SITE_ACCESS_DURATION_COPY} {SITE_ACCESS_WINDOW_COPY}
         </p>
         {canAssign ? (
-          <div className="mt-3 flex flex-wrap items-end gap-2">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
               Person
               <select
@@ -124,27 +146,60 @@ export function PlantPeopleDesk({
                 {roster.map((row) => (
                   <option key={row.id} value={row.email}>
                     {row.name}
+                    {row.jobTitle ? ` · ${row.jobTitle}` : ""}
                   </option>
                 ))}
               </select>
             </label>
-            <button
-              type="button"
-              disabled={!accessEmail}
-              onClick={() => {
-                const person = roster.find((row) => row.email === accessEmail);
-                setNote(SITE_ACCESS_DURATION_COPY);
-                void post({
-                  action: "grant-site-access",
-                  email: accessEmail,
-                  name: person?.name,
-                  siteName,
-                });
-              }}
-              className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white disabled:opacity-50"
-            >
-              Grant access
-            </button>
+            {accessTimeboxed ? (
+              <>
+                <label className="block text-sm">
+                  Window start
+                  <input
+                    type="date"
+                    className="paper-field mt-1"
+                    value={startYmd}
+                    onChange={(event) => setStartYmd(event.target.value)}
+                    aria-label="Site access window start"
+                  />
+                </label>
+                <label className="block text-sm">
+                  Window end
+                  <input
+                    type="date"
+                    className="paper-field mt-1"
+                    value={endYmd}
+                    onChange={(event) => setEndYmd(event.target.value)}
+                    aria-label="Site access window end"
+                  />
+                </label>
+              </>
+            ) : accessEmail ? (
+              <p className="self-end text-sm text-[#5b6f73]">{SITE_ACCESS_OWNER_PM_COPY}</p>
+            ) : null}
+            <div className="flex flex-wrap items-end gap-2">
+              <button
+                type="button"
+                disabled={!accessEmail}
+                onClick={() => {
+                  const person = roster.find((row) => row.email === accessEmail);
+                  setNote(SITE_ACCESS_DURATION_COPY);
+                  void post({
+                    action: "grant-site-access",
+                    email: accessEmail,
+                    name: person?.name,
+                    siteName,
+                    startYmd,
+                    endYmd,
+                    jobStartYmd,
+                    postEndYmd,
+                  });
+                }}
+                className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white disabled:opacity-50"
+              >
+                Grant access
+              </button>
+            </div>
           </div>
         ) : (
           <p className="mt-2 text-sm text-[#5b6f73]">Owner and Project Managers grant site access.</p>
@@ -156,15 +211,42 @@ export function PlantPeopleDesk({
               <span>
                 <span className="font-medium text-[#163038]">{grant.name || grant.email}</span>
                 <span className="ml-2 text-[#5b6f73]">{grant.copy}</span>
+                {grant.timeboxed ? (
+                  <span className="ml-2 text-[#5b6f73]">
+                    {grant.startYmd || "—"} → {grant.endYmd || "—"}
+                  </span>
+                ) : (
+                  <span className="ml-2 text-[#5b6f73]">{SITE_ACCESS_OWNER_PM_COPY}</span>
+                )}
               </span>
               {canAssign ? (
-                <button
-                  type="button"
-                  onClick={() => void post({ action: "revoke-site-access", email: grant.email })}
-                  className="text-sm text-steel"
-                >
-                  Revoke
-                </button>
+                <span className="flex flex-wrap gap-2">
+                  {grant.timeboxed ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void post({
+                          action: "extend-site-access",
+                          email: grant.email,
+                          startYmd,
+                          endYmd,
+                          jobStartYmd,
+                          postEndYmd,
+                        })
+                      }
+                      className="text-sm text-steel"
+                    >
+                      Extend
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void post({ action: "revoke-site-access", email: grant.email })}
+                    className="text-sm text-steel"
+                  >
+                    Revoke
+                  </button>
+                </span>
               ) : null}
             </li>
           ))}
@@ -200,8 +282,8 @@ export function PlantPeopleDesk({
                   <input
                     type="date"
                     className="paper-field mt-1"
-                    value={startYmd}
-                    onChange={(event) => setStartYmd(event.target.value)}
+                    value={dutyStartYmd}
+                    onChange={(event) => setDutyStartYmd(event.target.value)}
                   />
                 </label>
                 <label className="block text-sm">
@@ -209,8 +291,8 @@ export function PlantPeopleDesk({
                   <input
                     type="date"
                     className="paper-field mt-1"
-                    value={endYmd}
-                    onChange={(event) => setEndYmd(event.target.value)}
+                    value={dutyEndYmd}
+                    onChange={(event) => setDutyEndYmd(event.target.value)}
                   />
                 </label>
               </>
@@ -227,8 +309,8 @@ export function PlantPeopleDesk({
                     action: "assign-tool-room",
                     email: dutyEmail,
                     name: person?.name,
-                    startYmd,
-                    endYmd,
+                    startYmd: dutyStartYmd,
+                    endYmd: dutyEndYmd,
                     postEndYmd,
                   });
                   setNote("Tool Room attendant window saved.");

@@ -20,6 +20,8 @@ import {
   canTouchEstimatePack,
   ESTIMATE_WRITE_DENIED,
 } from "./module-access.ts";
+import { fieldSeatHasLiveSiteAccess, SITE_ACCESS_EXPIRED_COPY } from "./site-access.ts";
+import { listSiteAccessGrants } from "./site-access-store.ts";
 import { applyHisIdentity, hisMatchForPack } from "./his-wood-river.ts";
 import { hydratedHandoffExtras } from "./desk-scope-server.ts";
 import {
@@ -203,6 +205,12 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
   }
   if (!canTouchEstimatePack(user)) {
     return { ok: false as const, status: 403, error: ESTIMATE_WRITE_DENIED };
+  }
+  const sitePack = claimed || parsed.pack;
+  if (
+    !fieldSeatHasLiveSiteAccess(user, sitePack, await listSiteAccessGrants())
+  ) {
+    return { ok: false as const, status: 403, error: SITE_ACCESS_EXPIRED_COPY };
   }
   const sliced = applyModuleWriteSlices(parsed.pack, claimed, user);
   const merged = pickPack(sliced, claimed) || sliced;

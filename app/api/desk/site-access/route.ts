@@ -8,6 +8,7 @@ import {
   canSilentApproveSiteAccess,
   canWriteSiteAccess,
   createSiteAccessGrant,
+  extendSiteAccessGrant,
   failSiteAccessGrant,
   publicSiteAccessGrant,
   siteAccessGrantId,
@@ -47,7 +48,7 @@ async function assigneeFor(email: string) {
 function plantPayload(siteId: string, grants: Awaited<ReturnType<typeof listSiteAccessGrants>>) {
   return {
     siteId,
-    grants: grants.map(publicSiteAccessGrant),
+    grants: grants.map((grant) => publicSiteAccessGrant(grant)),
   };
 }
 
@@ -88,6 +89,7 @@ export async function POST(request: Request) {
     startYmd?: string;
     endYmd?: string;
     postEndYmd?: string;
+    jobStartYmd?: string;
   };
   const siteId = siteIdOf(body.siteId);
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
@@ -100,15 +102,21 @@ export async function POST(request: Request) {
     }
     if (!siteId) return NextResponse.json({ error: "Pick a site." }, { status: 400 });
     if (!email.includes("@")) return NextResponse.json({ error: "Pick a person." }, { status: 400 });
+    const assignee = await assigneeFor(email);
     const grant = await upsertSiteAccessGrant(
       createSiteAccessGrant({
         siteId,
         siteName: body.siteName,
         email,
-        name: body.name,
+        name: body.name || assignee.name,
         grantedByEmail: user.email,
         grantedByName: user.name,
         actor: user,
+        assignee,
+        startYmd: body.startYmd,
+        endYmd: body.endYmd,
+        jobStartYmd: body.jobStartYmd,
+        postEndYmd: body.postEndYmd,
         now,
       }),
     );
@@ -128,6 +136,30 @@ export async function POST(request: Request) {
     await removeSiteAccessGrant(siteAccessGrantId(siteId, email));
     return NextResponse.json({
       ok: true,
+      ...plantPayload(siteId, await listSiteAccessGrants(siteId)),
+      toolRoom: await listToolRoomDuties(siteId),
+    });
+  }
+
+  if (action === "extend-site-access") {
+    if (!canWriteSiteAccess(user)) {
+      return NextResponse.json({ error: "Owner and Project Managers set the access window." }, { status: 403 });
+    }
+    if (!siteId || !email.includes("@")) return NextResponse.json({ error: "Pick a person." }, { status: 400 });
+    const current = await getSiteAccessGrant(siteAccessGrantId(siteId, email));
+    if (!current) return NextResponse.json({ error: "Could not complete that grant." }, { status: 404 });
+    const next = extendSiteAccessGrant(current, {
+      actor: user,
+      startYmd: body.startYmd,
+      endYmd: body.endYmd,
+      jobStartYmd: body.jobStartYmd,
+      postEndYmd: body.postEndYmd,
+    });
+    if ("error" in next) return NextResponse.json({ error: next.error }, { status: 400 });
+    await upsertSiteAccessGrant(next);
+    return NextResponse.json({
+      ok: true,
+      grant: publicSiteAccessGrant(next),
       ...plantPayload(siteId, await listSiteAccessGrants(siteId)),
       toolRoom: await listToolRoomDuties(siteId),
     });

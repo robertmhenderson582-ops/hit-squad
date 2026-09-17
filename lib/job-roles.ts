@@ -21,7 +21,9 @@ export const SEED_JOB_ROLES = [
   "Document Clerk",
   "Field Clerk",
   "Time Keeper",
+  "General Foreman",
   "Foreman",
+  "Tool Room attendant",
 ] as const;
 
 export type SeedJobRole = (typeof SEED_JOB_ROLES)[number];

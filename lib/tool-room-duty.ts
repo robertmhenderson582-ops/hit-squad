@@ -1,7 +1,6 @@
-import { isOwner, isProjectManager } from "./desk-role.ts";
 import { canAssignSitePeople, type ModuleAccessUser } from "./module-access.ts";
 import { addDays, formatYmd, liveJobSetupPhases, parseYmd, PHASE_STORE_PREFIX, type PhaseScheduleState } from "./phase-schedule.ts";
-import { normalizeSiteId } from "./site-access.ts";
+import { fieldAccessTimeboxedFor, normalizeSiteId } from "./site-access.ts";
 
 export const TOOL_ROOM_AFTER_POST_DAYS = 14;
 export const TOOL_ROOM_OWNER_PM_COPY = "Owner and Project Manager seats are not time-boxed.";
@@ -43,29 +42,51 @@ export function latestJobSetupPostEnd(packs: Array<{ schedule?: unknown }> = [])
   return latest;
 }
 
+function schedulesFromStore(
+  packs: Array<{ key?: string; schedule?: unknown }> = [],
+  store?: { getItem(key: string): string | null } | null,
+): Array<{ schedule?: unknown }> {
+  return packs.map((pack) => {
+    if (pack.schedule) return { schedule: pack.schedule };
+    if (!store || !pack.key) return {};
+    try {
+      const raw = store.getItem(`${PHASE_STORE_PREFIX}${pack.key}`);
+      return raw ? { schedule: JSON.parse(raw) } : {};
+    } catch {
+      return {};
+    }
+  });
+}
+
 export function latestJobSetupPostEndFromStore(
   packs: Array<{ key?: string; schedule?: unknown }> = [],
   store?: { getItem(key: string): string | null } | null,
 ): string | null {
-  return latestJobSetupPostEnd(
-    packs.map((pack) => {
-      if (pack.schedule) return { schedule: pack.schedule };
-      if (!store || !pack.key) return {};
-      try {
-        const raw = store.getItem(`${PHASE_STORE_PREFIX}${pack.key}`);
-        return raw ? { schedule: JSON.parse(raw) } : {};
-      } catch {
-        return {};
-      }
-    }),
-  );
+  return latestJobSetupPostEnd(schedulesFromStore(packs, store));
 }
 
+export function earliestJobSetupStart(packs: Array<{ schedule?: unknown }> = []): string | null {
+  let earliest: string | null = null;
+  for (const pack of packs) {
+    const phases = liveJobSetupPhases(pack.schedule as PhaseScheduleState | undefined);
+    for (const phase of phases) {
+      if (!phase.start || !parseYmd(phase.start)) continue;
+      if (!earliest || phase.start < earliest) earliest = phase.start;
+    }
+  }
+  return earliest;
+}
+
+export function earliestJobSetupStartFromStore(
+  packs: Array<{ key?: string; schedule?: unknown }> = [],
+  store?: { getItem(key: string): string | null } | null,
+): string | null {
+  return earliestJobSetupStart(schedulesFromStore(packs, store));
+}
+
+/** Same band as site-access grants: GF → Tool Room attendant only. Owner/PM never. */
 export function toolRoomTimeboxedFor(user?: ModuleAccessUser | null): boolean {
-  if (!user) return true;
-  if (isOwner(user)) return false;
-  if (isProjectManager(user)) return false;
-  return true;
+  return fieldAccessTimeboxedFor(user);
 }
 
 export function createToolRoomDuty(input: {

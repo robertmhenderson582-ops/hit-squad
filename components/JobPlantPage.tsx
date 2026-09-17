@@ -24,7 +24,7 @@ import { westCoastClockNote } from "@/lib/abiding-documents";
 import { AbidingDocumentsDesk } from "@/components/AbidingDocumentsDesk";
 import { PlantPeopleDesk } from "@/components/PlantPeopleDesk";
 import { packsForViewedDesk } from "@/lib/lens-packs";
-import { latestJobSetupPostEndFromStore } from "@/lib/tool-room-duty";
+import { earliestJobSetupStartFromStore, latestJobSetupPostEndFromStore } from "@/lib/tool-room-duty";
 import { catalogSites } from "@/lib/desk-data";
 import { wakeShells } from "@/lib/rodeo-monroe-wake";
 import { driveViewUrl } from "@/lib/work-folder";
@@ -115,6 +115,8 @@ export function JobPlantPage({ slug }: { slug: string }) {
     setLocalJobs(packs.map((pack) => localPackToJob(pack)));
     setPlantPacks(packs);
   }, [board, companyId, lensKey, viewingAs, seat]);
+  const jobStartYmd =
+    typeof window === "undefined" ? null : earliestJobSetupStartFromStore(plantPacks, window.localStorage);
   const postEndYmd =
     typeof window === "undefined" ? null : latestJobSetupPostEndFromStore(plantPacks, window.localStorage);
   const openedJob = jobByCode(jobCode, localJobs);
@@ -295,6 +297,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
           siteId={slug}
           siteName={alias(plant.name)}
           people={people}
+          jobStartYmd={jobStartYmd}
           postEndYmd={postEndYmd}
         />
       ) : null}

@@ -68,6 +68,9 @@ export function SiteAccessQueueDesk() {
             </p>
             <p className="mt-1 text-sm text-[#5b6f73]">
               From {grant.grantedByName || grant.grantedByEmail}
+              {grant.timeboxed
+                ? ` · ${grant.startYmd || "—"} → ${grant.endYmd || "—"}`
+                : " · not time-boxed"}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button

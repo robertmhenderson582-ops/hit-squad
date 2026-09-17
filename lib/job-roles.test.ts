@@ -35,7 +35,9 @@ describe("job roles phase 1", () => {
         "Document Clerk",
         "Field Clerk",
         "Time Keeper",
+        "General Foreman",
         "Foreman",
+        "Tool Room attendant",
       ],
     );
     assert.equal(parseJobRoleLabel("  Night Clerk  ").label, "Night Clerk");
