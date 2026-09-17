@@ -227,12 +227,10 @@ export async function buildXlsx(sheetName: string, cells: SheetCell[], merges: s
   return buildWorkbook([{ name: sheetName, cells, merges }]);
 }
 
-export function downloadXlsx(filename: string, bytes: Uint8Array) {
+function downloadBytes(filename: string, bytes: Uint8Array, type: string) {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
-  const blob = new Blob([copy.buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
+  const blob = new Blob([copy.buffer], { type });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -241,4 +239,12 @@ export function downloadXlsx(filename: string, bytes: Uint8Array) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+export function downloadXlsx(filename: string, bytes: Uint8Array) {
+  downloadBytes(filename, bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+}
+
+export function downloadZip(filename: string, bytes: Uint8Array) {
+  downloadBytes(filename, bytes, "application/zip");
 }

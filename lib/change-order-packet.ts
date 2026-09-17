@@ -17,7 +17,24 @@ export type FcrStoreLike = {
   setItem(key: string, value: string): void;
 };
 
-export const LOG_STATUSES = ["Open", "Pending", "Cancelled"] as const;
+/** Client-facing SCR status. Legacy Open/Pending → Submitted; Cancelled → Rejected. */
+export const SCR_STATUSES = ["Submitted", "Approved", "Rejected"] as const;
+export const LOG_STATUSES = SCR_STATUSES;
+export const SCR_TYPES = ["Addition", "Credit"] as const;
+export const SCR_TYPE_LABELS: Record<(typeof SCR_TYPES)[number], string> = {
+  Addition: "Addition",
+  Credit: "Credit / deletion",
+};
+export const SCR_WHY_REASONS = [
+  "Pipe / equipment bust",
+  "Missed in estimate",
+  "Owner directed scope add",
+  "Field discovery",
+  "Design change / IFC late",
+  "Other",
+] as const;
+export const DEFAULT_SCOPE_ID_LABEL = "Scope ID #";
+export const P66_SCOPE_ID_LABEL = "IPS #";
 export const IMPACT_LEVELS = ["Low", "High", "Critical"] as const;
 export const APPROVAL_STATUSES = ["Approved", "Pending"] as const;
 export const FCR_BLOCKS = ["Staff Day", "Staff Night", "Craft Day", "Craft Night"] as const;
@@ -40,7 +57,10 @@ export const CLAIMABLE_COST_TYPES = [
 ] as const;
 export type ClaimableCostType = (typeof CLAIMABLE_COST_TYPES)[number];
 
-export type LogStatus = (typeof LOG_STATUSES)[number];
+export type ScrStatus = (typeof SCR_STATUSES)[number];
+export type LogStatus = ScrStatus;
+export type ScrType = (typeof SCR_TYPES)[number];
+export type ScrWhyReason = (typeof SCR_WHY_REASONS)[number];
 export type ImpactLevel = (typeof IMPACT_LEVELS)[number];
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 export type FcrBlock = (typeof FCR_BLOCKS)[number];
@@ -64,8 +84,19 @@ export type FcrLogRow = {
   requestDate: string;
   requestedBy: string;
   reviewedBy: string;
-  status: LogStatus;
+  status: ScrStatus;
+  /** Client-issued identifier (P66 or other). Same field on every job. */
+  clientScrId: string;
+  /** Addition grows scope; Credit / deletion is presented signed. */
+  scrType: ScrType;
+  /** Plant / association number. Label is packet.scopeIdLabel (Scope ID # or IPS #). */
+  scopeId: string;
   scope: string;
+  whyReasons: ScrWhyReason[];
+  whyOther: string;
+  phaseId: string;
+  scheduleImpact: boolean;
+  shiftId: string;
   impact: string;
   impactLevel: ImpactLevel;
   approvedBy: string;
@@ -95,16 +126,22 @@ export type FcrLogRow = {
   submittedAt: string;
 };
 
-/** Simple SCR craft line — hours × composite ST/OT (DT optional). Not a day-grid. */
+/** Simple SCR craft line — one hours box × locked schedule-aware composite $/hr. */
 export type ScrCraftLine = {
   id: string;
   craft: string;
-  stHours: number;
-  otHours: number;
-  dtHours: number;
-  stRate: number;
-  otRate: number;
-  dtRate: number;
+  hours: number;
+  rate: number;
+};
+
+/** Legacy ST/OT/DT craft fields. Hours migrate by summing; rate from weighted labor. */
+export type LegacyScrCraftPatch = Partial<ScrCraftLine> & {
+  stHours?: number;
+  otHours?: number;
+  dtHours?: number;
+  stRate?: number;
+  otRate?: number;
+  dtRate?: number;
 };
 
 /** Claimable pass-through line. Dollars required; hours when the type needs them. */
@@ -159,6 +196,8 @@ export type FcrPacket = {
   equipment: number;
   misc: number;
   scr: FcrScr;
+  /** Renamable Scope ID # label. P66 may seed IPS #. Same field on every client. */
+  scopeIdLabel?: string;
 };
 
 export type FcrJobRow = {
@@ -237,8 +276,16 @@ export function blankLogRow(): FcrLogRow {
     requestDate: "",
     requestedBy: "",
     reviewedBy: "",
-    status: "Open",
+    status: "Submitted",
+    clientScrId: "",
+    scrType: "Addition",
+    scopeId: "",
     scope: "",
+    whyReasons: [],
+    whyOther: "",
+    phaseId: "",
+    scheduleImpact: false,
+    shiftId: "",
     impact: "",
     impactLevel: "Low",
     approvedBy: "",
@@ -259,16 +306,46 @@ export function blankLogRow(): FcrLogRow {
   };
 }
 
-export function blankCraftLine(patch: Partial<ScrCraftLine> = {}): ScrCraftLine {
+function cents(value: number) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function legacyCraftHours(patch: LegacyScrCraftPatch) {
+  return (
+    Math.max(0, Number(patch.stHours) || 0) +
+    Math.max(0, Number(patch.otHours) || 0) +
+    Math.max(0, Number(patch.dtHours) || 0)
+  );
+}
+
+function legacyCraftLabor(patch: LegacyScrCraftPatch) {
+  const st = Math.max(0, Number(patch.stHours) || 0) * Math.max(0, Number(patch.stRate) || 0);
+  const ot = Math.max(0, Number(patch.otHours) || 0) * Math.max(0, Number(patch.otRate) || 0);
+  const dt = Math.max(0, Number(patch.dtHours) || 0) * Math.max(0, Number(patch.dtRate) || 0);
+  return cents(st + ot + dt);
+}
+
+export function migrateCraftHours(patch: LegacyScrCraftPatch = {}) {
+  if (patch.hours != null && String(patch.hours) !== "") {
+    return Math.max(0, Number(patch.hours) || 0);
+  }
+  return legacyCraftHours(patch);
+}
+
+export function migrateCraftRate(patch: LegacyScrCraftPatch = {}) {
+  if (patch.rate != null && Number(patch.rate) > 0) return cents(Number(patch.rate) || 0);
+  const hours = migrateCraftHours(patch);
+  const labor = legacyCraftLabor(patch);
+  if (hours > 0 && labor > 0) return cents(labor / hours);
+  return Math.max(0, Number(patch.stRate) || 0);
+}
+
+export function blankCraftLine(patch: LegacyScrCraftPatch = {}): ScrCraftLine {
   return {
     id: typeof patch.id === "string" && patch.id.trim() ? patch.id : uid("scr-craft"),
     craft: typeof patch.craft === "string" ? patch.craft : "",
-    stHours: Math.max(0, Number(patch.stHours) || 0),
-    otHours: Math.max(0, Number(patch.otHours) || 0),
-    dtHours: Math.max(0, Number(patch.dtHours) || 0),
-    stRate: Math.max(0, Number(patch.stRate) || 0),
-    otRate: Math.max(0, Number(patch.otRate) || 0),
-    dtRate: Math.max(0, Number(patch.dtRate) || 0),
+    hours: migrateCraftHours(patch),
+    rate: migrateCraftRate(patch),
   };
 }
 
@@ -287,36 +364,42 @@ export function claimTypeNeedsHours(type = "") {
   return /subcontractor|\blabor\b/i.test(type.trim());
 }
 
-function cents(value: number) {
-  return Math.round((Number(value) || 0) * 100) / 100;
+export function scrSign(type: string | undefined) {
+  return type === "Credit" ? -1 : 1;
 }
 
-export function craftLineHours(line: Pick<ScrCraftLine, "stHours" | "otHours" | "dtHours">) {
-  return Math.max(0, Number(line.stHours) || 0) + Math.max(0, Number(line.otHours) || 0) + Math.max(0, Number(line.dtHours) || 0);
+export function craftLineHours(line: Pick<ScrCraftLine, "hours"> | LegacyScrCraftPatch) {
+  return migrateCraftHours(line);
 }
 
-export function craftLineLabor(line: Pick<ScrCraftLine, "stHours" | "otHours" | "dtHours" | "stRate" | "otRate" | "dtRate">) {
-  const st = Math.max(0, Number(line.stHours) || 0) * Math.max(0, Number(line.stRate) || 0);
-  const ot = Math.max(0, Number(line.otHours) || 0) * Math.max(0, Number(line.otRate) || 0);
-  const dt = Math.max(0, Number(line.dtHours) || 0) * Math.max(0, Number(line.dtRate) || 0);
-  return cents(st + ot + dt);
+export function craftLineLabor(line: Pick<ScrCraftLine, "hours" | "rate"> | LegacyScrCraftPatch, sign = 1) {
+  const hours = migrateCraftHours(line);
+  const rate = migrateCraftRate(line);
+  return cents(sign * hours * rate);
 }
 
-export function logRowScope(row: Pick<FcrLogRow, "scopeHours" | "scopeCost" | "craftLines" | "claimLines">) {
+export function logRowScope(
+  row: Pick<FcrLogRow, "scopeHours" | "scopeCost" | "craftLines" | "claimLines"> & { scrType?: string },
+) {
   const craftLines = Array.isArray(row.craftLines) ? row.craftLines : [];
   const claimLines = Array.isArray(row.claimLines) ? row.claimLines : [];
-  const labor = cents(craftLines.reduce((sum, line) => sum + craftLineLabor(line), 0));
-  const claims = cents(claimLines.reduce((sum, line) => sum + Math.max(0, Number(line.amount) || 0), 0));
+  const sign = scrSign(row.scrType);
+  const labor = cents(craftLines.reduce((sum, line) => sum + craftLineLabor(line, sign), 0));
+  const claims = cents(
+    sign * claimLines.reduce((sum, line) => sum + Math.max(0, Number(line.amount) || 0), 0),
+  );
   const hours =
     craftLines.reduce((sum, line) => sum + craftLineHours(line), 0) +
     claimLines.reduce((sum, line) => sum + Math.max(0, Number(line.hours) || 0), 0);
   const hasLines = craftLines.length > 0 || claimLines.length > 0;
+  const typed = cents(Number(row.scopeCost) || 0);
   return {
     hours: hasLines ? hours : Math.max(0, Number(row.scopeHours) || 0),
-    cost: hasLines ? cents(labor + claims) : cents(row.scopeCost),
+    cost: hasLines ? cents(labor + claims) : cents(sign * Math.abs(typed)),
     labor,
     claims,
     hasLines,
+    sign,
   };
 }
 
@@ -340,7 +423,7 @@ export function patchLogRow(
   };
 }
 
-export function addCraftLine(packet: FcrPacket, logId: string, patch: Partial<ScrCraftLine> = {}): FcrPacket {
+export function addCraftLine(packet: FcrPacket, logId: string, patch: LegacyScrCraftPatch = {}): FcrPacket {
   return patchLogRow(packet, logId, (row) => ({ ...row, craftLines: [...row.craftLines, blankCraftLine(patch)] }));
 }
 
@@ -414,12 +497,58 @@ export const CONTRACTOR_LOG_FIELDS = ["scr", "requestDate", "requestedBy", "stat
 export type ContractorLogField = (typeof CONTRACTOR_LOG_FIELDS)[number];
 
 export const CONTRACTOR_LOG_COLUMNS: Array<{ key: ContractorLogField; label: string }> = [
-  { key: "scr", label: "SCR #" },
+  { key: "scr", label: "Hit Squad SCR #" },
   { key: "requestDate", label: "Request Date" },
   { key: "requestedBy", label: "Requested By" },
   { key: "status", label: "Status" },
-  { key: "scope", label: "Scope Change Description" },
+  { key: "scope", label: "SCR issue" },
 ];
+
+export function seedScopeIdLabel(client = "", site = "", existing = "") {
+  if ((existing || "").trim()) return (existing || "").trim();
+  const hay = `${client} ${site}`.toLowerCase();
+  if (/phillips 66|\bp66\b/.test(hay)) return P66_SCOPE_ID_LABEL;
+  return DEFAULT_SCOPE_ID_LABEL;
+}
+
+export function clientScrIdPlaceholder(client = "", site = "") {
+  const hay = `${client} ${site}`.toLowerCase();
+  if (/phillips 66|\bp66\b/.test(hay)) return "P66 SCR #";
+  return "Client SCR ID";
+}
+
+export function clientScrIdHelp(_client = "", _site = "") {
+  return "Fill once the client issues it — after our submit / their review.";
+}
+
+export function applyScrClientLabels(packet: FcrPacket, client = "", site = ""): FcrPacket {
+  return { ...packet, scopeIdLabel: seedScopeIdLabel(client, site, packet.scopeIdLabel) };
+}
+
+export function isScrWhyReason(value: string): value is ScrWhyReason {
+  return (SCR_WHY_REASONS as readonly string[]).includes(value);
+}
+
+export function toggleScrWhy(reasons: readonly string[] | undefined, reason: string): ScrWhyReason[] {
+  const current = (reasons ?? []).filter(isScrWhyReason);
+  if (!isScrWhyReason(reason)) return current;
+  return current.includes(reason) ? current.filter((item) => item !== reason) : [...current, reason];
+}
+
+export function scrWhyText(row: Pick<FcrLogRow, "whyReasons" | "whyOther">) {
+  const reasons = (row.whyReasons ?? []).filter(isScrWhyReason);
+  const note = (row.whyOther || "").trim();
+  return reasons
+    .map((reason) => (reason === "Other" && note ? `Other: ${note}` : reason))
+    .join("; ");
+}
+
+export function formatScrMoney(value: number) {
+  const amount = Math.round((Number(value) || 0) * 100) / 100;
+  if (!amount) return "—";
+  const abs = Math.abs(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return amount < 0 ? `($${abs})` : `$${abs}`;
+}
 
 export function addLogRow(packet: FcrPacket, patch: Partial<FcrLogRow> = {}): FcrPacket {
   const merged = { ...blankLogRow(), ...patch };
@@ -459,10 +588,19 @@ export function nextScrNumber(packet: Pick<FcrPacket, "log">) {
   return `SCR-${max + 1}`;
 }
 
+export function ensureScrIdentity(packet: FcrPacket, id: string): FcrPacket {
+  const row = packet.log.find((item) => item.id === id);
+  if (!row || row.scr.trim()) return packet;
+  return patchLogRow(packet, id, { scr: nextScrNumber(packet) });
+}
+
 export function ensureDraftRow(packet: FcrPacket): { packet: FcrPacket; id: string } {
   const draft = packet.log.find((row) => !logRowIsSubmitted(row));
-  if (draft) return { packet, id: draft.id };
-  const next = addLogRow(packet, { submittedAt: "" });
+  if (draft) {
+    const next = ensureScrIdentity(packet, draft.id);
+    return { packet: next, id: draft.id };
+  }
+  const next = addLogRow(packet, { submittedAt: "", scr: nextScrNumber(packet) });
   return { packet: next, id: next.log[next.log.length - 1]!.id };
 }
 
@@ -476,6 +614,7 @@ export function submitScrEstimate(packet: FcrPacket, id: string, when = new Date
       submittedAt: stamp,
       requestDate: row.requestDate.trim() || stamp.slice(0, 10),
       scr: row.scr.trim() || nextScrNumber(packet),
+      status: SCR_STATUSES.includes(row.status) ? row.status : "Submitted",
     };
   });
 }
@@ -500,6 +639,21 @@ export function fcrPacketHasWork(value: unknown) {
   return Boolean(scr && Object.values(scr).some(filledText));
 }
 
+function normalizeScrStatus(value: unknown): ScrStatus {
+  if (value === "Approved") return "Approved";
+  if (value === "Rejected" || value === "Cancelled") return "Rejected";
+  return "Submitted";
+}
+
+function normalizeScrType(value: unknown): ScrType {
+  return value === "Credit" ? "Credit" : "Addition";
+}
+
+function normalizeWhyReasons(value: unknown): ScrWhyReason[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isScrWhyReason);
+}
+
 function normalizeLogRow(row: Partial<FcrLogRow> | null | undefined): FcrLogRow {
   const blank = blankLogRow();
   if (!row || typeof row !== "object") return blank;
@@ -508,11 +662,20 @@ function normalizeLogRow(row: Partial<FcrLogRow> | null | undefined): FcrLogRow 
   if (!rawHasSubmitted && rowHasFiledIdentity(row)) {
     submittedAt = (typeof row.requestDate === "string" && row.requestDate.trim()) || "legacy";
   }
+  const raw = row as Partial<FcrLogRow> & Record<string, unknown>;
   return withSyncedScope({
     ...blank,
     ...row,
     id: typeof row.id === "string" && row.id.trim() ? row.id : blank.id,
-    status: LOG_STATUSES.includes(row.status as LogStatus) ? (row.status as LogStatus) : blank.status,
+    status: normalizeScrStatus(row.status),
+    clientScrId: typeof raw.clientScrId === "string" ? raw.clientScrId : blank.clientScrId,
+    scrType: normalizeScrType(raw.scrType),
+    scopeId: typeof raw.scopeId === "string" ? raw.scopeId : blank.scopeId,
+    whyReasons: normalizeWhyReasons(raw.whyReasons),
+    whyOther: typeof raw.whyOther === "string" ? raw.whyOther : blank.whyOther,
+    phaseId: typeof raw.phaseId === "string" ? raw.phaseId : blank.phaseId,
+    scheduleImpact: Boolean(raw.scheduleImpact),
+    shiftId: typeof raw.shiftId === "string" ? raw.shiftId : blank.shiftId,
     impactLevel: IMPACT_LEVELS.includes(row.impactLevel as ImpactLevel)
       ? (row.impactLevel as ImpactLevel)
       : blank.impactLevel,
@@ -543,6 +706,7 @@ export function parseFcrPacket(raw: unknown): FcrPacket {
     equipment: Number(parsed.equipment) || 0,
     misc: Number(parsed.misc) || 0,
     scr: { ...emptyScr(), ...parsed.scr },
+    scopeIdLabel: typeof parsed.scopeIdLabel === "string" ? parsed.scopeIdLabel : "",
   };
 }
 
@@ -557,7 +721,16 @@ export function emptyScr(): FcrScr {
 }
 
 export function emptyFcrPacket(): FcrPacket {
-  return { header: emptyFcrHeader(), log: [], people: [], sub: 0, equipment: 0, misc: 0, scr: emptyScr() };
+  return {
+    header: emptyFcrHeader(),
+    log: [],
+    people: [],
+    sub: 0,
+    equipment: 0,
+    misc: 0,
+    scr: emptyScr(),
+    scopeIdLabel: "",
+  };
 }
 
 export function mileageDollars(mileage: boolean) {

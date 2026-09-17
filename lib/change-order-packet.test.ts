@@ -38,6 +38,11 @@ import {
   FCR_STORE_PREFIX,
   IMPACT_LEVELS,
   LOG_STATUSES,
+  SCR_STATUSES,
+  SCR_TYPES,
+  SCR_WHY_REASONS,
+  formatScrMoney,
+  migrateCraftHours,
   logRowScope,
   mileageDollars,
   MILEAGE_YES_FLAT,
@@ -79,7 +84,17 @@ function range(partial: {
 }
 
 test("V1 on-job packet shape stays locked to the Drive books", () => {
-  assert.deepEqual([...LOG_STATUSES], ["Open", "Pending", "Cancelled"]);
+  assert.deepEqual([...LOG_STATUSES], [...SCR_STATUSES]);
+  assert.deepEqual([...SCR_STATUSES], ["Submitted", "Approved", "Rejected"]);
+  assert.deepEqual([...SCR_TYPES], ["Addition", "Credit"]);
+  assert.deepEqual([...SCR_WHY_REASONS], [
+    "Pipe / equipment bust",
+    "Missed in estimate",
+    "Owner directed scope add",
+    "Field discovery",
+    "Design change / IFC late",
+    "Other",
+  ]);
   assert.deepEqual([...IMPACT_LEVELS], ["Low", "High", "Critical"]);
   assert.deepEqual([...APPROVAL_STATUSES], ["Approved", "Pending"]);
   assert.deepEqual([...FCR_BLOCKS], ["Staff Day", "Staff Night", "Craft Day", "Craft Night"]);
@@ -96,7 +111,15 @@ test("V1 on-job packet shape stays locked to the Drive books", () => {
     "requestedBy",
     "reviewedBy",
     "status",
+    "clientScrId",
+    "scrType",
+    "scopeId",
     "scope",
+    "whyReasons",
+    "whyOther",
+    "phaseId",
+    "scheduleImpact",
+    "shiftId",
     "impact",
     "impactLevel",
     "approvedBy",
@@ -361,16 +384,22 @@ test("P66 / Wood River and the unset default read ECR; SCR is Log + workbook onl
   assert.match(packet, /Submit to SCR Log/);
   assert.match(packet, /Scope change hours/);
   assert.match(packet, /Scope change money/);
+  assert.match(packet, /Hit Squad SCR #/);
+  assert.match(packet, /Client SCR ID/);
+  assert.match(packet, /Why this is an SCR/);
+  assert.match(packet, /Credit \/ deletion/);
+  assert.doesNotMatch(packet, /ST HRS/);
+  assert.doesNotMatch(packet, /stHours/);
   assert.match(packet, /\+ Add craft/);
   assert.match(packet, /Claimable costs/);
   assert.match(packet, /Third-party rental/);
   assert.match(packet, /Material/);
   assert.match(packet, /CLAIMABLE_COST_TYPES/);
   assert.match(packet, /from \"@\/lib\/scr-rates\"/);
-  assert.match(packet, /scrToXlsx/);
-  assert.match(packet, /downloadXlsx/);
+  assert.match(packet, /scrToZip/);
+  assert.match(packet, /downloadZip/);
   assert.match(packet, /BuildingFileModal/);
-  assert.match(packet, /Export Excel/);
+  assert.match(packet, /Download package \(ZIP\)/);
   assert.match(packet, /company-logo/);
   assert.match(packet, /exporterDisplayName/);
   assert.match(packet, /Backup attachments/);
@@ -461,7 +490,7 @@ test("scope change holds hours and money without a workbook", () => {
   assert.equal(summary.total, 1800);
 });
 
-test("craft labor is hours × composite ST/OT and DT is optional", () => {
+test("craft labor is hours × locked composite $/hr; legacy ST/OT/DT hours sum", () => {
   const stOt = blankCraftLine({
     id: "bm",
     craft: "Boilermaker Journeyman",
@@ -470,13 +499,16 @@ test("craft labor is hours × composite ST/OT and DT is optional", () => {
     stRate: 100,
     otRate: 150,
   });
+  assert.equal(migrateCraftHours({ stHours: 8, otHours: 2, dtHours: 4 }), 14);
   assert.equal(craftLineHours(stOt), 10);
-  assert.equal(craftLineLabor(stOt), 8 * 100 + 2 * 150);
-  const withDt = blankCraftLine({ ...stOt, dtHours: 4, dtRate: 200 });
-  assert.equal(craftLineHours(withDt), 14);
-  assert.equal(craftLineLabor(withDt), 800 + 300 + 800);
-  const zeroDt = blankCraftLine({ ...stOt, dtHours: 0, dtRate: 200 });
-  assert.equal(craftLineLabor(zeroDt), 1100);
+  assert.equal(stOt.hours, 10);
+  assert.equal(stOt.rate, 110);
+  assert.equal(craftLineLabor(stOt), 10 * 110);
+  const modern = blankCraftLine({ craft: "Welder", hours: 12, rate: 142.5 });
+  assert.equal(craftLineHours(modern), 12);
+  assert.equal(craftLineLabor(modern), 1710);
+  assert.equal(craftLineLabor(modern, -1), -1710);
+  assert.equal(formatScrMoney(-17100), "($17,100.00)");
 });
 
 test("SCR total rolls craft labor plus claimable cost lines", () => {
@@ -498,10 +530,8 @@ test("SCR total rolls craft labor plus claimable cost lines", () => {
   packet = addCraftLine(packet, "scr-1", {
     id: "c1",
     craft: "Pipefitter Journeyman",
-    stHours: 10,
-    otHours: 2,
-    stRate: 80,
-    otRate: 120,
+    hours: 12,
+    rate: 80,
   });
   packet = addClaimLine(packet, "scr-1", {
     id: "cl1",
@@ -526,19 +556,19 @@ test("SCR total rolls craft labor plus claimable cost lines", () => {
   assert.ok(row);
   const scope = logRowScope(row);
   assert.equal(scope.hasLines, true);
-  assert.equal(scope.labor, 10 * 80 + 2 * 120);
+  assert.equal(scope.labor, 12 * 80);
   assert.equal(scope.claims, 4275);
   assert.equal(scope.hours, 12 + 6);
-  assert.equal(scope.cost, 1040 + 4275);
+  assert.equal(scope.cost, 960 + 4275);
   assert.equal(row.scopeHours, scope.hours);
   assert.equal(row.scopeCost, scope.cost);
   const summary = fcrSummary({ ...packet, sub: 100, equipment: 50, misc: 25 });
-  assert.equal(summary.scrLabor, 1040);
+  assert.equal(summary.scrLabor, 960);
   assert.equal(summary.scrClaims, 4275);
   assert.equal(summary.scrTyped, 0);
-  assert.equal(summary.scrCost, 5315);
+  assert.equal(summary.scrCost, 5235);
   assert.equal(summary.sub, 100);
-  assert.equal(summary.total, 5315 + 175);
+  assert.equal(summary.total, 5235 + 175);
 });
 
 test("SCR estimate craft + claim lines persist on the store", () => {
@@ -558,8 +588,8 @@ test("SCR estimate craft + claim lines persist on the store", () => {
   writeFcrPacket(key, packet, store);
   const read = readFcrPacket(key, store);
   assert.equal(read.log[0]?.craftLines[0]?.craft, "Welder");
-  assert.equal(read.log[0]?.craftLines[0]?.stHours, 8);
-  assert.equal(read.log[0]?.craftLines[0]?.stRate, 90);
+  assert.equal(read.log[0]?.craftLines[0]?.hours, 8);
+  assert.equal(read.log[0]?.craftLines[0]?.rate, 90);
   assert.equal(read.log[0]?.claimLines[0]?.type, "Third-party rental");
   assert.equal(read.log[0]?.claimLines[0]?.amount, 400);
   assert.equal(read.log[0]?.scopeHours, 8);
@@ -595,13 +625,14 @@ test("submit promotes a draft workbook onto the SCR Log without minting a new nu
   assert.equal(posted[0]?.requestDate, "2026-09-17");
   assert.equal(posted[0]?.submittedAt, "2026-09-17T06:30:00.000Z");
   const revised = submitScrEstimate(
-    patchLogRow(packet, draft.id, { scope: "Night hydrotest", status: "Pending" }),
+    patchLogRow(packet, draft.id, { scope: "Night hydrotest", status: "Approved", clientScrId: "WR-11877" }),
     draft.id,
     new Date("2026-09-18T12:00:00Z"),
   );
   assert.equal(revised.log[0]?.scr, "SCR-1");
   assert.equal(revised.log[0]?.submittedAt, "2026-09-17T06:30:00.000Z");
-  assert.equal(revised.log[0]?.status, "Pending");
+  assert.equal(revised.log[0]?.status, "Approved");
+  assert.equal(revised.log[0]?.clientScrId, "WR-11877");
   assert.equal(revised.log[0]?.scope, "Night hydrotest");
   assert.equal(nextScrNumber(revised), "SCR-2");
   const legacy = parseFcrPacket({
