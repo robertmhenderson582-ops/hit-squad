@@ -116,7 +116,7 @@ describe("Wood River Analytics bridge seeds", () => {
     assert.deepEqual(hydrateAnalyticsStc({ stcPpeSavingsPct: 10 }), { stcPpeSavingsPct: 10 });
     assert.deepEqual(hydrateAnalyticsStc({ stcPpeSavingsPct: 0 }), { stcPpeSavingsPct: 0 });
     assert.deepEqual(hydrateAnalyticsStc({}), { stcPpeSavingsPct: null });
-    assert.equal(stcPpeSavingsPctPoints(emptyAnalyticsStc()), 0);
+    assert.equal(stcPpeSavingsPctPoints(emptyAnalyticsStc()), null);
     assert.equal(stcPpeSavingsRate(emptyAnalyticsStc()), 0);
     assert.equal(stcPpeSavingsRate({ stcPpeSavingsPct: 35 }), 0.35);
     assert.equal(stcPpeSavingsRate({ stcPpeSavingsPct: 0 }), 0);

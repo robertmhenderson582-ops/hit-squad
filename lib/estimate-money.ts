@@ -9,14 +9,12 @@ export const SUBS_CONTINGENCY_LABEL = "Subs contingency";
 export const CBA_INCREASE_LABEL = "CBA increase";
 export const MORE_FUND_LABEL = "M.O.R.E. fund";
 
-/** Predicted savings % on the STC & PPE budget. Null = apply WR default 0. Not % of base wage. */
+/** Predicted savings % on the STC & PPE budget. Null = unset until recovery data. Not % of base wage. */
 export type AnalyticsStcOverride = {
   stcPpeSavingsPct: number | null;
 };
 
-/** CCU1 108375 NR: cost $76,434 vs recovery $30,615 — overspend, no positive save. */
-export const ANALYTICS_STC_PPE_SAVINGS_DEFAULT = 0;
-/** Former book D25:D27 share. Optimism, not a WR actual. Do not apply. */
+/** Former book D25:D27 share. Not a WR actual and not applied until Owner types a %. */
 export const ANALYTICS_STC_PPE_BOOK_SAVINGS = 35;
 
 export type AnalyticsMode = "pct" | "locked";
@@ -88,7 +86,7 @@ export type JobMoney = {
   moreFundPerHour: number | null;
   /** Plant / job holidays (YYYY-MM-DD). No billable hours those days. */
   holidays: string[];
-  /** Live-pack predicted savings % on the STC & PPE budget. Null = WR default 0. */
+  /** Live-pack predicted savings % on the STC & PPE budget. Null = unset. */
   analyticsStc: AnalyticsStcOverride;
   analyticsBridge: AnalyticsBridgeMeta;
 };
@@ -202,9 +200,9 @@ export function hydrateAnalyticsStcPct(value: unknown): number | null {
 }
 
 /**
- * Predicted savings % on the STC & PPE budget. Empty → null (desk applies 0).
- * Old `stcPpePct` / tool / con / ppe were BW burden, not savings — reset to 0.
- * Do not invent a mid rate (10–15) without a sourced WR surplus job.
+ * Predicted savings % on the STC & PPE budget. Empty → null (no predicted save).
+ * Old `stcPpePct` / tool / con / ppe were BW burden, not savings — leave blank.
+ * Do not seed CCU1 0% or former book 35% as stored truth.
  */
 export function hydrateAnalyticsStc(raw: unknown): AnalyticsStcOverride {
   const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -212,13 +210,14 @@ export function hydrateAnalyticsStc(raw: unknown): AnalyticsStcOverride {
   return { stcPpeSavingsPct: null };
 }
 
-export function stcPpeSavingsPctPoints(override: AnalyticsStcOverride = emptyAnalyticsStc()): number {
-  return override.stcPpeSavingsPct ?? ANALYTICS_STC_PPE_SAVINGS_DEFAULT;
+export function stcPpeSavingsPctPoints(override: AnalyticsStcOverride = emptyAnalyticsStc()): number | null {
+  return override.stcPpeSavingsPct;
 }
 
-/** Null / missing % uses the WR actual default (0). Owner 0 is the same number, stored if typed. */
+/** Unset % contributes $0 until Owner types a rate. That is not a CCU1 seed. */
 export function stcPpeSavingsRate(override: AnalyticsStcOverride = emptyAnalyticsStc()): number {
-  return stcPpeSavingsPctPoints(override) / 100;
+  const pct = stcPpeSavingsPctPoints(override);
+  return pct == null ? 0 : pct / 100;
 }
 
 function lockedStcRate(value: unknown, fallback: number) {
