@@ -707,6 +707,8 @@ function ScrEstimateWorkbook({
             {money(scope?.cost ?? 0)}
           </p>
         </>
+      ) : (
+        <p className="mt-4 text-sm text-[#5b6f73]">Open a submitted SCR or start a new estimate to add lines.</p>
       )}
     </section>
   );
