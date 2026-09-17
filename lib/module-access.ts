@@ -1,7 +1,6 @@
 import { isOwner, isProjectManager } from "./desk-role.ts";
 import { hasPrivilege, type PrivilegeViewer } from "./privileges.ts";
 
-export const ESTIMATE_WRITE_PRIVILEGE = "estimates" as const;
 export const CHANGE_ORDERS_PRIVILEGE = "change-orders" as const;
 export const STC_ORDER_PRIVILEGE = "stc-order" as const;
 
@@ -16,11 +15,10 @@ export type ModuleAccessUser = PrivilegeViewer & {
   jobTitle?: string;
 };
 
-/** Owner, Project Manager title / seat, or an explicit estimates grant. */
+/** Owner or Project Manager title / seat only. Not an assignable privilege. */
 export function canEditEstimateWork(user?: ModuleAccessUser | null): boolean {
   if (!user) return false;
   if (isOwner(user)) return true;
-  if (hasPrivilege(user, ESTIMATE_WRITE_PRIVILEGE)) return true;
   return isProjectManager(user);
 }
 
@@ -36,4 +34,9 @@ export function canOrderStc(user?: ModuleAccessUser | null): boolean {
 
 export function canTouchEstimatePack(user?: ModuleAccessUser | null): boolean {
   return canEditEstimateWork(user) || canEditChangeOrders(user) || canOrderStc(user);
+}
+
+/** PM site-access grants and GF → Tool Room windows. Owner always. */
+export function canAssignSitePeople(user?: ModuleAccessUser | null): boolean {
+  return canEditEstimateWork(user);
 }

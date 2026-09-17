@@ -312,7 +312,7 @@ describe("estimate vault service", () => {
       subcontractor: { lines: [{ id: "sb-1", vendor: "Apex NDE", qty: 2, rate: 85 }], cards: [] },
       fcr: { log: [{ id: "fcr-1", scr: "SCR-1" }], people: [], sub: 0, equipment: 0, misc: 0 },
     });
-    const saved = await upsertVisiblePack(tester, full, drive);
+    const saved = await upsertVisiblePack(owner, full, drive);
     assert.equal(saved.ok, true);
     const thin = cat2({
       packId: "new-mtaajdwa-f7539",

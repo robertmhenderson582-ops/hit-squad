@@ -104,7 +104,8 @@ describe("estimate vault scope", () => {
     assert.equal(canWritePack(president, ownerPack), false);
     assert.equal(canWritePack(president, { ...ownerPack, ownerEmail: president.email }), true);
     assert.equal(canEditAssignedEstimate(chance, chancePack), false);
-    assert.equal(canEditAssignedEstimate({ ...chance, privileges: ["estimates"] }, chancePack), true);
+    assert.equal(canEditAssignedEstimate({ ...chance, privileges: ["estimates"] }, chancePack), false);
+    assert.equal(canEditAssignedEstimate({ ...chance, privileges: ["change-orders"] }, chancePack), false);
     assert.equal(isEstimateViewerNotEditor(tester, shared), false);
     assert.equal(isEstimateViewerNotEditor(novus, ownerPack), true);
     assert.equal(isEstimateViewerNotEditor(chance, chancePack), true);

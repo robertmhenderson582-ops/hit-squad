@@ -58,13 +58,20 @@ function applyModuleWriteSlices(
   claimed: EstimatePackSnapshot | null,
   user: ScopeUser,
 ): EstimatePackSnapshot {
-  if (!claimed || canEditAssignedEstimate(user, claimed)) return incoming;
-  return {
-    ...claimed,
-    fcr: canEditChangeOrders(user) ? incoming.fcr : claimed.fcr,
-    purchasing: canOrderStc(user) ? incoming.purchasing : claimed.purchasing,
+  const keepFcr = canEditChangeOrders(user);
+  const keepPurchasing = canOrderStc(user);
+  const base = claimed && !canEditAssignedEstimate(user, claimed) ? claimed : incoming;
+  const next: EstimatePackSnapshot = {
+    ...base,
     updatedAt: incoming.updatedAt || Date.now(),
   };
+  if (keepFcr) next.fcr = incoming.fcr;
+  else if (claimed) next.fcr = claimed.fcr;
+  else delete next.fcr;
+  if (keepPurchasing) next.purchasing = incoming.purchasing;
+  else if (claimed) next.purchasing = claimed.purchasing;
+  else delete next.purchasing;
+  return next;
 }
 
 /** Map Drive / integrity throws to a banner the desk can actually act on. */

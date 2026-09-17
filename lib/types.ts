@@ -13,7 +13,6 @@ export type PrivilegeId =
   | "designer-ship"
   | "security-billing"
   | "rate-vault"
-  | "estimates"
   | "change-orders"
   | "stc-order";
 

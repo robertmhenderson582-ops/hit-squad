@@ -19,9 +19,9 @@ export const OWNER_ONLY_PRIVILEGES: readonly PrivilegeId[] = [
   "rate-vault",
 ] as const;
 
-/** Phase 2 module writes. Owner grants these per seat. Owner always has them. */
+/** Phase 2 module writes. Owner grants these per seat. Owner always has them.
+ * Estimate / job-card / calendar write is Owner + Project Manager only — not listed here. */
 export const MODULE_ASSIGN_PRIVILEGES: readonly PrivilegeId[] = [
-  "estimates",
   "change-orders",
   "stc-order",
 ] as const;
@@ -79,10 +79,6 @@ export const PRIVILEGE_COPY: Record<PrivilegeId, { label: string; detail: string
   "rate-vault": {
     label: "Rate Vault",
     detail: "P66 B-1 / rate builder workshop. Owner plus the Rate Vault seat. Hidden from testers unless granted.",
-  },
-  estimates: {
-    label: "Estimate write",
-    detail: "Edit job cards, estimate calendars, and pack fill. Project Managers already have this. Grant to a non-PM seat if Owner assigns it later.",
   },
   "change-orders": {
     label: "Change Orders",

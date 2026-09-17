@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     shared: PRESIDENT_SHARED,
     grants: await listPrivilegeGrants(),
     seats: (await listSeatRows()).filter((row) => row.role !== "owner" && row.role !== "operator"),
-    note: "Pick a user. Grant owner-only items or assign Change Orders / STC order. President is not seeded — add the login when the email is known.",
+    note: "Pick a user. Grant owner-only items or assign Change Orders / STC order. Estimate write stays Owner and Project Managers only. President is not seeded — add the login when the email is known.",
   });
 }
 

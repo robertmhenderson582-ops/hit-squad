@@ -189,7 +189,7 @@ export function visibleDeskPacks(
 
 /**
  * 2026-09-17 Phase 2 lock: estimate fill / calendars / job-card work.
- * Owner (Robert) can edit every pack. Project Managers (or an estimates grant)
+ * Owner (Robert) can edit every pack. Project Managers only
  * can edit packs on their desk (owned or shared). View-as uses the lens seat —
  * not Owner write. Non-PM seats stay view-only even on a pack they own.
  */

@@ -125,8 +125,8 @@ export function PrivilegesDesk() {
       <section className="plant-card px-5 py-5">
         <h3 className="text-xl font-semibold text-[#163038]">Assignable modules</h3>
         <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
-          Change Orders and STC order stay off until you assign them here. Project Managers already
-          edit estimate packs — grant Estimate write only if a non-PM seat should fill calendars.
+          Change Orders and STC order stay off until you assign them here. Estimate write, job
+          cards, and calendars stay Owner and Project Managers only — not an assignable grant.
           Owner always has every item.
         </p>
         <div className="mt-4 space-y-3">

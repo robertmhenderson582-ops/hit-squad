@@ -7,12 +7,12 @@ import { canEditAssignedEstimate } from "./estimate-scope.ts";
 import { ESTIMATE_WRITE_DENIED, upsertVisiblePack } from "./estimate-vault.ts";
 import { memoryDrive } from "./drive-estimates.ts";
 import {
+  canAssignSitePeople,
   canEditChangeOrders,
   canEditEstimateWork,
   canOrderStc,
   CHANGE_ORDERS_DENIED,
   CHANGE_ORDERS_PRIVILEGE,
-  ESTIMATE_WRITE_PRIVILEGE,
   STC_ORDER_DENIED,
   STC_ORDER_PRIVILEGE,
 } from "./module-access.ts";
@@ -71,7 +71,10 @@ describe("Phase 2 module access", () => {
     assert.equal(canEditEstimateWork(shane), false);
     assert.equal(canEditEstimateWork(president), false);
     assert.equal(canEditEstimateWork(viewedAsChance), false);
-    assert.equal(canEditEstimateWork({ ...chance, privileges: [ESTIMATE_WRITE_PRIVILEGE] }), true);
+    assert.equal(canAssignSitePeople(owner), true);
+    assert.equal(canAssignSitePeople(nathan), true);
+    assert.equal(canAssignSitePeople(chance), false);
+    assert.equal(canEditEstimateWork({ ...chance, privileges: ["estimates" as never, CHANGE_ORDERS_PRIVILEGE] }), false);
 
     assert.equal(canEditAssignedEstimate(owner, ownerPack), true);
     assert.equal(canEditAssignedEstimate(owner, nathanPack), true);
@@ -165,6 +168,82 @@ describe("Phase 2 module access", () => {
     }
   });
 
+  it("vault: PM estimate write without CO/STC privilege cannot persist those slices", async () => {
+    const drive = memoryDrive();
+    const seed = {
+      packId: "new-nathan-slice",
+      key: "new:new-nathan-slice",
+      title: "Wood River — slice lock",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      createdAt: 100,
+      updatedAt: 200,
+      ownerEmail: nathan.email,
+      crew: { staff: [{ id: "st-keep" }] },
+      fcr: { header: { pm: "Prior CO" }, log: [{ id: "scr-keep" }] },
+      purchasing: { notes: "Prior STC", lines: [{ id: "po-keep" }] },
+    };
+    const seeded = await upsertVisiblePack(owner, seed, drive);
+    assert.equal(seeded.ok, true);
+
+    const pmOnly = await upsertVisiblePack(
+      nathan,
+      {
+        ...seed,
+        updatedAt: 400,
+        title: "Wood River — Nathan edit",
+        crew: { staff: [{ id: "st-nathan" }] },
+        fcr: { header: { pm: "Stolen CO" }, log: [{ id: "scr-stolen" }] },
+        purchasing: { notes: "Stolen STC", lines: [{ id: "po-stolen" }] },
+      },
+      drive,
+    );
+    assert.equal(pmOnly.ok, true);
+    if (pmOnly.ok) {
+      assert.equal(pmOnly.pack.title, "Wood River — Nathan edit");
+      assert.equal(((pmOnly.pack.crew as { staff?: Array<{ id: string }> })?.staff || [])[0]?.id, "st-nathan");
+      assert.equal((pmOnly.pack.fcr as { header?: { pm?: string } } | undefined)?.header?.pm, "Prior CO");
+      assert.equal(((pmOnly.pack.fcr as { log?: Array<{ id: string }> })?.log || [])[0]?.id, "scr-keep");
+      assert.equal((pmOnly.pack.purchasing as { notes?: string } | undefined)?.notes, "Prior STC");
+      assert.equal(((pmOnly.pack.purchasing as { lines?: Array<{ id: string }> })?.lines || [])[0]?.id, "po-keep");
+    }
+
+    const pmWithCo = await upsertVisiblePack(
+      { ...nathan, privileges: [CHANGE_ORDERS_PRIVILEGE] },
+      {
+        ...seed,
+        updatedAt: 500,
+        title: "Wood River — Nathan CO",
+        crew: { staff: [{ id: "st-co" }] },
+        fcr: { header: { pm: "Granted CO" }, log: [{ id: "scr-granted" }] },
+        purchasing: { notes: "Still stolen STC", lines: [{ id: "po-still" }] },
+      },
+      drive,
+    );
+    assert.equal(pmWithCo.ok, true);
+    if (pmWithCo.ok) {
+      assert.equal((pmWithCo.pack.fcr as { header?: { pm?: string } } | undefined)?.header?.pm, "Granted CO");
+      assert.equal((pmWithCo.pack.purchasing as { notes?: string } | undefined)?.notes, "Prior STC");
+    }
+
+    const ownerAll = await upsertVisiblePack(
+      owner,
+      {
+        ...seed,
+        updatedAt: 600,
+        title: "Wood River — Owner all",
+        fcr: { header: { pm: "Owner CO" } },
+        purchasing: { notes: "Owner STC" },
+      },
+      drive,
+    );
+    assert.equal(ownerAll.ok, true);
+    if (ownerAll.ok) {
+      assert.equal((ownerAll.pack.fcr as { header?: { pm?: string } } | undefined)?.header?.pm, "Owner CO");
+      assert.equal((ownerAll.pack.purchasing as { notes?: string } | undefined)?.notes, "Owner STC");
+    }
+  });
+
   it("wires Privileges assignment copy and estimate / CO / STC write locks", () => {
     const privileges = source("../components/PrivilegesDesk.tsx");
     const api = source("../app/api/desk/privileges/route.ts");
@@ -176,6 +255,8 @@ describe("Phase 2 module access", () => {
 
     assert.match(privileges, /Assignable modules/);
     assert.match(privileges, /Change Orders and STC order/);
+    assert.match(privileges, /not an assignable grant/);
+    assert.equal(privileges.includes("Estimate write only if"), false);
     assert.match(api, /MODULE_ASSIGN_PRIVILEGES/);
     assert.match(setup, /Owner and Project Managers can edit job cards/);
     assert.match(changeOrders, /canEditChangeOrders/);

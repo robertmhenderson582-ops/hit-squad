@@ -38,11 +38,11 @@ test("locked matrix lists shared President items and grantable owner-only items"
   assert.equal(isPrivilegeId("manage-users"), true);
   assert.equal(isPrivilegeId("hitsquad-seats"), true);
   assert.equal(isPrivilegeId("rate-vault"), true);
-  assert.equal(isPrivilegeId("estimates"), true);
+  assert.equal(isPrivilegeId("estimates"), false);
   assert.equal(isPrivilegeId("change-orders"), true);
   assert.equal(isPrivilegeId("stc-order"), true);
   assert.equal(isPrivilegeId("not-a-privilege"), false);
-  assert.deepEqual([...MODULE_ASSIGN_PRIVILEGES], ["estimates", "change-orders", "stc-order"]);
+  assert.deepEqual([...MODULE_ASSIGN_PRIVILEGES], ["change-orders", "stc-order"]);
   assert.equal(GRANTABLE_PRIVILEGES.includes("change-orders"), true);
   assert.equal(OWNER_ONLY_PRIVILEGES.includes("change-orders"), false);
 });
