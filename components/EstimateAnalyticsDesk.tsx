@@ -6,7 +6,7 @@ import { readFcrPacket } from "@/lib/change-order-packet";
 import {
   ANALYTICS_STC_LINES,
   deriveEstimateAnalytics,
-  yatesStcHint,
+  stcDefaultHint,
   type AnalyticsKind,
   type AnalyticsLineId,
   type EstimateAnalytics,
@@ -37,12 +37,12 @@ function stcRow(id: AnalyticsLineId) {
 
 function StcPctField({
   label,
-  yatesKey,
+  burdenKey,
   value,
   onCommit,
 }: {
   label: string;
-  yatesKey: "tool" | "consumables" | "ppe";
+  burdenKey: "tool" | "consumables" | "ppe";
   value: number | null;
   onCommit: (raw: string) => void;
 }) {
@@ -57,7 +57,7 @@ function StcPctField({
         step={0.01}
         inputMode="decimal"
         className="paper-field w-[4.5rem] px-2 py-1 text-right text-sm text-[#163038]"
-        placeholder="Yates"
+        placeholder="Default"
         value={shown}
         onChange={(event) => {
           const raw = event.target.value;
@@ -70,7 +70,7 @@ function StcPctField({
           if (draft != null) onCommit(draft);
           setDraft(null);
         }}
-        data-analytics-stc={yatesKey}
+        data-analytics-stc={burdenKey}
         aria-label={`${label} percent`}
       />
       <span>%</span>
@@ -155,12 +155,12 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
                             <span>{line.label}</span>
                             <StcPctField
                               label={line.label}
-                              yatesKey={stc.yatesKey}
+                              burdenKey={stc.burdenKey}
                               value={override}
                               onCommit={(raw) => setStcPct(stc.overrideKey, raw)}
                             />
                             <span className="text-[11px] text-[#5b6f73]">
-                              {override == null ? yatesStcHint(stc.yatesKey) : "Override applies to craft and staff"}
+                              {override == null ? stcDefaultHint(stc.burdenKey) : "Override applies to craft and staff"}
                             </span>
                           </div>
                         ) : (

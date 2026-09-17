@@ -52,17 +52,18 @@ export type AnalyticsBurdenLane = keyof typeof YATES_ANALYTICS_BURDEN;
 export type { AnalyticsStcOverride };
 
 export const ANALYTICS_STC_LINES = [
-  { id: "tool" as const, overrideKey: "toolPct" as const, yatesKey: "tool" as const },
-  { id: "consumables" as const, overrideKey: "consumablesPct" as const, yatesKey: "consumables" as const },
-  { id: "ppe" as const, overrideKey: "ppePct" as const, yatesKey: "ppe" as const },
+  { id: "tool" as const, overrideKey: "toolPct" as const, burdenKey: "tool" as const },
+  { id: "consumables" as const, overrideKey: "consumablesPct" as const, burdenKey: "consumables" as const },
+  { id: "ppe" as const, overrideKey: "ppePct" as const, burdenKey: "ppe" as const },
 ];
 
-function yatesPctPoints(rate: number) {
+function burdenPctPoints(rate: number) {
   return String(Math.round(rate * 10000) / 100);
 }
 
-export function yatesStcHint(key: "tool" | "consumables" | "ppe"): string {
-  return `Yates craft ${yatesPctPoints(YATES_ANALYTICS_BURDEN.craft[key])}% · staff ${yatesPctPoints(YATES_ANALYTICS_BURDEN.staff[key])}%`;
+/** Desk copy — craft/staff default rates only. Do not name the source workbook. */
+export function stcDefaultHint(key: "tool" | "consumables" | "ppe"): string {
+  return `Craft ${burdenPctPoints(YATES_ANALYTICS_BURDEN.craft[key])}% · staff ${burdenPctPoints(YATES_ANALYTICS_BURDEN.staff[key])}%`;
 }
 
 /** Locked Phase 1 labels — match the Yates Analytics sheet. Do not rename. */

@@ -15,7 +15,7 @@ import {
   analyticsMarkupDollars,
   analyticsRollup,
   deriveEstimateAnalytics,
-  yatesStcHint,
+  stcDefaultHint,
 } from "./estimate-analytics.ts";
 import { deskPackageBreakdown, deskPackageTotal, type DeskPackageInput } from "./estimate-desk-total.ts";
 import { boiler17B1FilledSnapshot } from "./wood-river-b1.ts";
@@ -73,8 +73,11 @@ describe("Yates Analytics model", () => {
     assert.equal(YATES_ANALYTICS_BURDEN.staff.oh, 0.17);
     assert.equal(YATES_ANALYTICS_BURDEN.staff.tool, 0.015);
     assert.match(read("./estimate-analytics.ts"), /Phase 2 \(omitted\): Procurement\/Subcontracts/);
-    assert.match(yatesStcHint("tool"), /craft 3\.5% · staff 1\.5%/);
-    assert.match(yatesStcHint("ppe"), /craft 2\.75% · staff 2\.75%/);
+    assert.equal(stcDefaultHint("tool"), "Craft 3.5% · staff 1.5%");
+    assert.equal(stcDefaultHint("ppe"), "Craft 2.75% · staff 2.75%");
+    assert.doesNotMatch(stcDefaultHint("tool"), /Yates/i);
+    assert.doesNotMatch(stcDefaultHint("consumables"), /Yates/i);
+    assert.doesNotMatch(stcDefaultHint("ppe"), /Yates/i);
     assert.deepEqual(emptyJobMoney().analyticsStc, emptyAnalyticsStc());
     assert.deepEqual(emptyJobMeta().analyticsStc, emptyAnalyticsStc());
   });
@@ -338,10 +341,11 @@ describe("Analytics tab wiring", () => {
     assert.doesNotMatch(desk, /Phase 2 later|Read-only|for this live estimate|Procurement\/Subcontracts/);
     assert.match(desk, /setJobMeta/);
     assert.match(desk, /analyticsStc/);
-    assert.match(desk, /data-analytics-stc=\{yatesKey\}/);
+    assert.match(desk, /data-analytics-stc=\{burdenKey\}/);
     assert.match(desk, /StcPctField/);
     assert.match(desk, /ANALYTICS_STC_LINES/);
-    assert.match(desk, /yatesStcHint/);
+    assert.match(desk, /stcDefaultHint/);
+    assert.doesNotMatch(desk, /Yates|yates/);
     assert.match(desk, /paper-field/);
     assert.match(desk, /onChange/);
     assert.doesNotMatch(desk, /<textarea|<select/);
