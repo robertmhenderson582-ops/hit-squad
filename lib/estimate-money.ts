@@ -9,6 +9,13 @@ export const SUBS_CONTINGENCY_LABEL = "Subs contingency";
 export const CBA_INCREASE_LABEL = "CBA increase";
 export const MORE_FUND_LABEL = "M.O.R.E. fund";
 
+/** Analytics Tool / Consumables / PPE % override (percent points). Null = Yates CRAFT/STAFF. */
+export type AnalyticsStcOverride = {
+  toolPct: number | null;
+  consumablesPct: number | null;
+  ppePct: number | null;
+};
+
 export type JobMoney = {
   laborContingencyPct: number;
   equipmentContingencyPct: number;
@@ -20,6 +27,8 @@ export type JobMoney = {
   moreFundPerHour: number | null;
   /** Plant / job holidays (YYYY-MM-DD). No billable hours those days. */
   holidays: string[];
+  /** Live-pack Analytics STC & PPE % overrides. Null field = Yates default for that line. */
+  analyticsStc: AnalyticsStcOverride;
 };
 
 export type MoneyCrewLane = "staff" | "generalForeman" | "foreman" | "direct" | "support";
@@ -68,6 +77,10 @@ function pctOf(amount: number, pct: number) {
   return roundCents(amount * (rate / 100));
 }
 
+export function emptyAnalyticsStc(): AnalyticsStcOverride {
+  return { toolPct: null, consumablesPct: null, ppePct: null };
+}
+
 export function emptyJobMoney(): JobMoney {
   return {
     laborContingencyPct: 0,
@@ -78,6 +91,7 @@ export function emptyJobMoney(): JobMoney {
     cbaIncreaseDate: "",
     moreFundPerHour: null,
     holidays: [],
+    analyticsStc: emptyAnalyticsStc(),
   };
 }
 
@@ -85,6 +99,23 @@ function signedNumber(value: unknown): number | null {
   if (value == null || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+/** Percent-point override. Empty / invalid → null (Yates default). 0 is a real override. */
+export function hydrateAnalyticsStcPct(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, n);
+}
+
+export function hydrateAnalyticsStc(raw: unknown): AnalyticsStcOverride {
+  const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    toolPct: hydrateAnalyticsStcPct(row.toolPct),
+    consumablesPct: hydrateAnalyticsStcPct(row.consumablesPct),
+    ppePct: hydrateAnalyticsStcPct(row.ppePct),
+  };
 }
 
 function nonNeg(value: unknown, fallback = 0) {
@@ -107,6 +138,7 @@ export function hydrateJobMoney(raw: Partial<JobMoney> | Record<string, unknown>
     cbaIncreaseDate: typeof row.cbaIncreaseDate === "string" ? row.cbaIncreaseDate : "",
     moreFundPerHour: more,
     holidays: hydrateHolidays(row.holidays),
+    analyticsStc: hydrateAnalyticsStc(row.analyticsStc),
   };
 }
 

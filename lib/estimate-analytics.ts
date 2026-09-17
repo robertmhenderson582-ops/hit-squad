@@ -14,7 +14,14 @@
  */
 import { equipmentTotals, thirdPartyCost, type EquipmentSheet } from "./equipment-sheet.ts";
 import { deskPackageBreakdown, type DeskPackageInput } from "./estimate-desk-total.ts";
-import { hydrateJobMoney, type MoneyCrew, type MoneyCrewLane, type MoneyHourRow } from "./estimate-money.ts";
+import {
+  emptyAnalyticsStc,
+  hydrateJobMoney,
+  type AnalyticsStcOverride,
+  type MoneyCrew,
+  type MoneyCrewLane,
+  type MoneyHourRow,
+} from "./estimate-money.ts";
 import { estimateMarkupDollars } from "./estimate-total.ts";
 import { computeRowHours } from "./hours-clock.ts";
 import { defaultLaborClass } from "./labor-class.ts";
@@ -26,7 +33,7 @@ export const ANALYTICS_TAB_ID = "analytics" as const;
 export const ANALYTICS_TAB_LABEL = "Analytics";
 export const ANALYTICS_NOUN = "Analytics";
 export const ANALYTICS_LIVE_NOTE =
-  "Profit / OH / Tool-Con-PPE from the live estimate pack. Read-only. Margin stays on this tab — not the Estimate Total rail.";
+  "Profit / OH from the live estimate pack. Tool / Consumables / PPE % can be set here (Yates craft/staff defaults). Margin stays on this tab — not the Estimate Total rail.";
 export const ANALYTICS_PHASE2_NOTE =
   "Phase 2 later: Procurement/Subcontracts (Est.), freight / sales-tax markup, Updated Total Profit.";
 
@@ -46,6 +53,22 @@ export const YATES_ANALYTICS_BURDEN = {
 } as const;
 
 export type AnalyticsBurdenLane = keyof typeof YATES_ANALYTICS_BURDEN;
+
+export type { AnalyticsStcOverride };
+
+export const ANALYTICS_STC_LINES = [
+  { id: "tool" as const, overrideKey: "toolPct" as const, yatesKey: "tool" as const },
+  { id: "consumables" as const, overrideKey: "consumablesPct" as const, yatesKey: "consumables" as const },
+  { id: "ppe" as const, overrideKey: "ppePct" as const, yatesKey: "ppe" as const },
+];
+
+function yatesPctPoints(rate: number) {
+  return String(Math.round(rate * 10000) / 100);
+}
+
+export function yatesStcHint(key: "tool" | "consumables" | "ppe"): string {
+  return `Yates craft ${yatesPctPoints(YATES_ANALYTICS_BURDEN.craft[key])}% · staff ${yatesPctPoints(YATES_ANALYTICS_BURDEN.staff[key])}%`;
+}
 
 /** Locked Phase 1 labels — match the Yates Analytics sheet. Do not rename. */
 export const ANALYTICS_PHASE1_LINES = [
@@ -139,13 +162,34 @@ export type AnalyticsBurdenHours = {
   profit: number;
 };
 
-/** Hours × COMP BW × Yates model %. Skips seats with no priced baseSt. Never billed ST. */
+function rateFromPctPoints(pct: number | null, fallback: number): number {
+  if (pct == null) return fallback;
+  return pct / 100;
+}
+
+/** Yates CRAFT/STAFF table, with a single Tool / Con / PPE override applied to every lane when set. */
+export function analyticsBurdenRates(
+  lane: MoneyCrewLane,
+  override: AnalyticsStcOverride = emptyAnalyticsStc(),
+) {
+  const yates = YATES_ANALYTICS_BURDEN[burdenLane(lane)];
+  return {
+    tool: rateFromPctPoints(override.toolPct, yates.tool),
+    consumables: rateFromPctPoints(override.consumablesPct, yates.consumables),
+    ppe: rateFromPctPoints(override.ppePct, yates.ppe),
+    oh: yates.oh,
+    profit: yates.profit,
+  };
+}
+
+/** Hours × COMP BW × Yates model % (or pack STC override). Skips seats with no priced baseSt. Never billed ST. */
 export function analyticsBurdenFromCrew(
   crew: MoneyCrew,
   site = "",
   client = "",
   holidays: string[] = [],
   opts: ShahanLookupOpts = {},
+  override: AnalyticsStcOverride = emptyAnalyticsStc(),
 ): AnalyticsBurdenHours {
   const lookup = wageLookupOpts(site, opts);
   const next: AnalyticsBurdenHours = {
@@ -158,7 +202,7 @@ export function analyticsBurdenFromCrew(
     profit: 0,
   };
   for (const [lane, rows] of crewLanes(crew)) {
-    const rates = YATES_ANALYTICS_BURDEN[burdenLane(lane)];
+    const rates = analyticsBurdenRates(lane, override);
     for (const row of rows ?? []) {
       if (!row.position.trim()) continue;
       const hours = computeRowHours(row, site, client, crew.otAfter8, "", holidays).hours;
@@ -214,13 +258,15 @@ function packHours(input: DeskPackageInput, burden: AnalyticsBurdenHours): numbe
 }
 
 export function deriveEstimateAnalytics(input: DeskPackageInput): EstimateAnalytics {
-  const holidays = hydrateJobMoney(input.jobMeta).holidays;
+  const jobMoney = hydrateJobMoney(input.jobMeta);
+  const holidays = jobMoney.holidays;
   const burden = analyticsBurdenFromCrew(
     input.crew ?? {},
     input.site ?? "",
     input.client ?? "",
     holidays,
     wageLookupOpts(input.site ?? ""),
+    jobMoney.analyticsStc,
   );
   const hours = packHours(input, burden);
   const breakdown = deskPackageBreakdown({ ...input, hours });

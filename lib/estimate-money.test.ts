@@ -43,6 +43,9 @@ describe("M.O.R.E. fund", () => {
       "2026-09-16",
     ]);
     assert.deepEqual(emptyJobMeta().holidays, []);
+    assert.deepEqual(emptyJobMoney().analyticsStc, { toolPct: null, consumablesPct: null, ppePct: null });
+    assert.deepEqual(hydrateJobMoney({}).analyticsStc, { toolPct: null, consumablesPct: null, ppePct: null });
+    assert.deepEqual(emptyJobMeta().analyticsStc, { toolPct: null, consumablesPct: null, ppePct: null });
   });
 });
 
