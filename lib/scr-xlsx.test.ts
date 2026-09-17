@@ -56,12 +56,8 @@ function fixturePacket() {
   packet = addCraftLine(packet, "scr-1", {
     id: "c1",
     craft: "Pipefitter Journeyman",
-    stHours: 10,
-    otHours: 2,
-    dtHours: 0,
-    stRate: 80,
-    otRate: 120,
-    dtRate: 160,
+    hours: 12,
+    rate: 80,
   });
   packet = addClaimLine(packet, "scr-1", {
     id: "cl1",
@@ -119,13 +115,13 @@ describe("SCR Excel export", () => {
     assert.ok(estimate.cells.some((cell) => cell.type === "text" && cell.value === "Third-party rental"));
     assert.ok(
       estimate.cells.some(
-        (cell) =>
-          cell.type === "formula" &&
-          /N\(B\d+\)\*N\(E\d+\)\+N\(C\d+\)\*N\(F\d+\)\+N\(D\d+\)\*N\(G\d+\)/.test(cell.value),
+        (cell) => cell.type === "formula" && /[-]?1\*\(N\(B\d+\)\*N\(C\d+\)\)/.test(cell.value),
       ),
     );
+    assert.ok(estimate.cells.some((cell) => cell.type === "text" && cell.value === "Hit Squad SCR # SCR-4  ·  Client SCR ID —  ·  Submitted"));
+    assert.ok(estimate.cells.some((cell) => cell.type === "text" && /IPS #/.test(cell.value)));
     const desk = fcrSummary(packet).scrCost;
-    assert.equal(desk, 5315);
+    assert.equal(desk, 5235);
     assert.equal(scrWorkbookTotal(sheets), desk);
     const book = evaluateWorkbook(sheets);
     const hoursLabel = estimate.cells.find((cell) => cell.type === "text" && cell.value === SCR_HOURS_LABEL);
@@ -185,8 +181,8 @@ describe("SCR Excel export", () => {
     let packet = fixturePacket();
     packet = addLogRow(packet, { id: "typed", scr: "SCR-5", scope: "Standby", scopeHours: 4, scopeCost: 500 });
     const sheets = buildScrWorkbook({ ...WOOD, packet });
-    assert.equal(fcrSummary(packet).scrCost, 5815);
-    assert.equal(scrWorkbookTotal(sheets), 5815);
+    assert.equal(fcrSummary(packet).scrCost, 5735);
+    assert.equal(scrWorkbookTotal(sheets), 5735);
   });
 
   it("lists backup attachment filenames on the SCR estimate workbook", () => {
@@ -216,10 +212,10 @@ describe("SCR Excel export", () => {
     assert.match(estimateExportProducer("Madison"), /Produced by Madison/);
     assert.match(ESTIMATE_EXPORT_CONFIDENTIAL, /Confidential/);
     const desk = readFileSync(fileURLToPath(new URL("../components/ChangeOrderPacket.tsx", import.meta.url)), "utf8");
-    assert.match(desk, /scrToXlsx/);
-    assert.match(desk, /downloadXlsx/);
+    assert.match(desk, /scrToZip/);
+    assert.match(desk, /downloadZip/);
     assert.match(desk, /BuildingFileModal/);
-    assert.match(desk, /Export Excel/);
+    assert.match(desk, /Download package \(ZIP\)/);
     assert.match(desk, /company-logo/);
     assert.match(desk, /exporterDisplayName/);
     assert.match(desk, /status: pack\.status/);

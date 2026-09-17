@@ -11,10 +11,16 @@ import {
   logRowScope,
   parseFcrPacket,
   scrAttachmentNames,
+  SCR_TYPE_LABELS,
+  seedScopeIdLabel,
+  scrSign,
+  scrWhyText,
   type FcrLogRow,
   type FcrPacket,
   type FcrScr,
 } from "./change-order-packet.ts";
+import { PHASE_NAMES } from "./phase-schedule.ts";
+import { scrShiftLabel } from "./scr-rates.ts";
 import { clampEstimateStatus, parseEstimateStatus } from "./estimate-status.ts";
 import { slugify } from "./estimate-pack.ts";
 import {
@@ -39,6 +45,14 @@ export const SCR_COST_LABEL = "Scope-change $";
 export const SCR_EXPORT_CONFIDENTIAL = "Confidential scope change request";
 export const SCR_ATTACHMENTS_LABEL = "Backup attachments";
 export const SCR_ATTACHMENTS_NOTE = "files live in the desk pack";
+export const SCR_HIT_SQUAD_NUMBER_LABEL = "Hit Squad SCR #";
+export const SCR_CLIENT_ID_LABEL = "Client SCR ID";
+export const SCR_TYPE_LABEL = "Type";
+export const SCR_ISSUE_LABEL = "SCR issue";
+export const SCR_WHY_LABEL = "Why this is an SCR";
+export const SCR_PHASE_LABEL = "Phase";
+export const SCR_SHIFT_LABEL = "Schedule impact";
+export const SCR_CREDIT_NOTE = "Credit / deletion totals are signed.";
 
 export const SCR_XLSX_SHEETS = {
   cover: "Cover",
@@ -76,7 +90,7 @@ function pushFormula(cells: SheetCell[], ref: string, value: string, numFmt?: st
 }
 
 function moneyFmt() {
-  return "$#,##0.00";
+  return "$#,##0.00;($#,##0.00)";
 }
 
 function hoursFmt() {
@@ -145,7 +159,24 @@ function titleBlock(cells: SheetCell[], input: ScrXlsxInput, lastCol: string, wh
 
 function logLabel(row: FcrLogRow) {
   const scr = row.scr.trim() || "Untitled";
-  return row.scope.trim() ? `${scr}  ·  ${row.scope.trim()}` : scr;
+  const type = SCR_TYPE_LABELS[row.scrType] || row.scrType;
+  const issue = row.scope.trim();
+  return issue ? `${scr}  ·  ${type}  ·  ${issue}` : `${scr}  ·  ${type}`;
+}
+
+function scopeIdLabelOf(input: ScrXlsxInput, packet: FcrPacket) {
+  return seedScopeIdLabel(input.client, input.site, packet.scopeIdLabel);
+}
+
+function phaseName(row: FcrLogRow) {
+  if (!row.phaseId) return "—";
+  const named = PHASE_NAMES[row.phaseId as keyof typeof PHASE_NAMES];
+  return named || row.phaseId;
+}
+
+function scheduleLine(row: FcrLogRow) {
+  if (!row.scheduleImpact) return "None — phase default";
+  return scrShiftLabel(row.shiftId) || row.shiftId || "—";
 }
 
 export function scrXlsxFilename(input: Pick<ScrXlsxInput, "site" | "title" | "client" | "companyName"> = {}) {
@@ -173,42 +204,31 @@ type ScrEstimateSheet = WorkbookSheet & {
 
 function writeCraftTable(cells: SheetCell[], startRow: number, row: FcrLogRow) {
   const header = startRow;
+  const sign = scrSign(row.scrType);
   pushText(cells, `A${header}`, "CRAFT");
-  pushText(cells, `B${header}`, "ST HRS");
-  pushText(cells, `C${header}`, "OT HRS");
-  pushText(cells, `D${header}`, "DT HRS");
-  pushText(cells, `E${header}`, "ST $/HR");
-  pushText(cells, `F${header}`, "OT $/HR");
-  pushText(cells, `G${header}`, "DT $/HR");
-  pushText(cells, `H${header}`, "LABOR $");
+  pushText(cells, `B${header}`, "HOURS");
+  pushText(cells, `C${header}`, "$/HR");
+  pushText(cells, `D${header}`, "LABOR $");
   const lines = row.craftLines.length ? row.craftLines : [];
   const first = header + 1;
   lines.forEach((line, index) => {
     const r = first + index;
     pushText(cells, `A${r}`, line.craft || "—");
-    pushNum(cells, `B${r}`, line.stHours, hoursFmt());
-    pushNum(cells, `C${r}`, line.otHours, hoursFmt());
-    pushNum(cells, `D${r}`, line.dtHours, hoursFmt());
-    pushNum(cells, `E${r}`, line.stRate, moneyFmt());
-    pushNum(cells, `F${r}`, line.otRate, moneyFmt());
-    pushNum(cells, `G${r}`, line.dtRate, moneyFmt());
-    pushFormula(
-      cells,
-      `H${r}`,
-      `${nCell(`B${r}`)}*${nCell(`E${r}`)}+${nCell(`C${r}`)}*${nCell(`F${r}`)}+${nCell(`D${r}`)}*${nCell(`G${r}`)}`,
-      moneyFmt(),
-    );
+    pushNum(cells, `B${r}`, line.hours, hoursFmt());
+    pushNum(cells, `C${r}`, line.rate, moneyFmt());
+    pushFormula(cells, `D${r}`, `${sign}*(${nCell(`B${r}`)}*${nCell(`C${r}`)})`, moneyFmt());
   });
   const last = lines.length ? first + lines.length - 1 : header;
   const laborRow = last + 1;
   pushText(cells, `A${laborRow}`, "Craft labor");
-  if (lines.length) pushFormula(cells, `H${laborRow}`, `SUM(H${first}:H${last})`, moneyFmt());
-  else pushNum(cells, `H${laborRow}`, 0, moneyFmt());
+  if (lines.length) pushFormula(cells, `D${laborRow}`, `SUM(D${first}:D${last})`, moneyFmt());
+  else pushNum(cells, `D${laborRow}`, 0, moneyFmt());
   return { header, first, last, laborRow };
 }
 
 function writeClaimTable(cells: SheetCell[], startRow: number, row: FcrLogRow) {
   const header = startRow;
+  const sign = scrSign(row.scrType);
   pushText(cells, `A${header}`, "TYPE");
   pushText(cells, `B${header}`, "DESCRIPTION");
   pushText(cells, `C${header}`, "HOURS");
@@ -220,7 +240,7 @@ function writeClaimTable(cells: SheetCell[], startRow: number, row: FcrLogRow) {
     pushText(cells, `A${r}`, line.type || "—");
     pushText(cells, `B${r}`, line.description || "—");
     pushNum(cells, `C${r}`, line.hours, hoursFmt());
-    pushNum(cells, `D${r}`, line.amount, moneyFmt());
+    pushNum(cells, `D${r}`, sign * Math.max(0, Number(line.amount) || 0), moneyFmt());
   });
   const last = lines.length ? first + lines.length - 1 : header;
   const claimsRow = last + 1;
@@ -243,30 +263,34 @@ function writeAttachmentList(cells: SheetCell[], startRow: number, row: FcrLogRo
   return { header: startRow, lastRow: startRow + names.length };
 }
 
-function writeScrSection(cells: SheetCell[], startRow: number, row: FcrLogRow): BuiltSection {
+function writeScrSection(cells: SheetCell[], startRow: number, row: FcrLogRow, scopeIdLabel: string): BuiltSection {
   const titleRow = startRow;
   const scope = logRowScope(row);
   pushText(cells, `A${titleRow}`, logLabel(row));
-  pushText(cells, `A${titleRow + 1}`, `Requested ${row.requestDate || "—"}  ·  ${row.requestedBy || "—"}  ·  ${row.status}`);
-  pushText(cells, `A${titleRow + 2}`, row.scope || "Scope change");
-  pushText(cells, `A${titleRow + 3}`, SCR_HOURS_LABEL);
-  const hoursRow = titleRow + 3;
+  pushText(cells, `A${titleRow + 1}`, `${SCR_HIT_SQUAD_NUMBER_LABEL} ${row.scr || "—"}  ·  ${SCR_CLIENT_ID_LABEL} ${row.clientScrId || "—"}  ·  ${row.status}`);
+  pushText(cells, `A${titleRow + 2}`, `${SCR_TYPE_LABEL}: ${SCR_TYPE_LABELS[row.scrType] || row.scrType}  ·  ${scopeIdLabel} ${row.scopeId || "—"}`);
+  pushText(cells, `A${titleRow + 3}`, `${SCR_PHASE_LABEL}: ${phaseName(row)}  ·  ${SCR_SHIFT_LABEL}: ${scheduleLine(row)}`);
+  pushText(cells, `A${titleRow + 4}`, `${SCR_ISSUE_LABEL}: ${row.scope || "—"}`);
+  pushText(cells, `A${titleRow + 5}`, `${SCR_WHY_LABEL}: ${scrWhyText(row) || "—"}`);
+  if (row.scrType === "Credit") pushText(cells, `A${titleRow + 6}`, SCR_CREDIT_NOTE);
+  const hoursRow = titleRow + 7;
+  pushText(cells, `A${hoursRow}`, SCR_HOURS_LABEL);
   const hoursRef = `B${hoursRow}`;
   pushNum(cells, hoursRef, scope.hours, hoursFmt());
   pushText(cells, `C${hoursRow}`, SCR_COST_LABEL);
   const costRef = `D${hoursRow}`;
 
-  pushText(cells, `A${titleRow + 5}`, "Craft labor — hours × composite ST / OT (DT optional)");
-  const craft = writeCraftTable(cells, titleRow + 6, row);
+  pushText(cells, `A${titleRow + 9}`, "Craft labor — hours × locked schedule-aware composite $/hr. No ST / OT / DT columns.");
+  const craft = writeCraftTable(cells, titleRow + 10, row);
   const claimHeader = craft.laborRow + 2;
   pushText(cells, `A${claimHeader - 1}`, "Claimable costs — Material, Subcontractor, Third-party rental, and other pass-throughs");
   const claims = writeClaimTable(cells, claimHeader, row);
   const attachments = writeAttachmentList(cells, claims.claimsRow + 2, row);
   const totalRow = attachments.lastRow + 2;
   pushText(cells, `A${totalRow}`, SCR_TOTAL_LABEL);
-  const laborRef = `H${craft.laborRow}`;
+  const laborRef = `D${craft.laborRow}`;
   const claimsRef = `D${claims.claimsRow}`;
-  const totalRef = `H${totalRow}`;
+  const totalRef = `D${totalRow}`;
   if (scope.hasLines) {
     pushFormula(cells, totalRef, `${nCell(laborRef)}+${nCell(claimsRef)}`, moneyFmt());
     pushFormula(cells, costRef, totalRef, moneyFmt());
@@ -279,27 +303,28 @@ function writeScrSection(cells: SheetCell[], startRow: number, row: FcrLogRow): 
 
 function buildEstimateSheet(input: ScrXlsxInput, packet: FcrPacket, when = new Date()): ScrEstimateSheet {
   const cells: SheetCell[] = [];
-  const merges = titleBlock(cells, input, "H", when);
+  const merges = titleBlock(cells, input, "D", when);
   pushText(cells, "A5", SCR_ESTIMATE_TITLE);
-  merges.push("A5:H5");
+  merges.push("A5:D5");
+  const scopeIdLabel = scopeIdLabelOf(input, packet);
   const rows = packet.log.length ? packet.log : [addLogRow(emptyFcrPacket()).log[0]!];
   const headerRows = [5];
   const sections: BuiltSection[] = [];
   let cursor = 7;
   rows.forEach((row, index) => {
     if (index > 0) cursor += 2;
-    const section = writeScrSection(cells, cursor, row);
+    const section = writeScrSection(cells, cursor, row, scopeIdLabel);
     sections.push(section);
-    headerRows.push(section.titleRow, section.titleRow + 6);
+    headerRows.push(section.titleRow, section.titleRow + 10);
     cursor = Number(/(\d+)$/.exec(section.totalRef)?.[1] || cursor) + 1;
   });
   const packetRow = cursor + 1;
   pushText(cells, `A${packetRow}`, SCR_TOTAL_LABEL);
   if (sections.length) {
-    pushFormula(cells, `H${packetRow}`, sections.map((section) => nCell(section.totalRef)).join("+"), moneyFmt());
+    pushFormula(cells, `D${packetRow}`, sections.map((section) => nCell(section.totalRef)).join("+"), moneyFmt());
     pushFormula(cells, `B${packetRow}`, sections.map((section) => nCell(section.hoursRef)).join("+"), hoursFmt());
   } else {
-    pushNum(cells, `H${packetRow}`, 0, moneyFmt());
+    pushNum(cells, `D${packetRow}`, 0, moneyFmt());
     pushNum(cells, `B${packetRow}`, 0, hoursFmt());
   }
   return {
@@ -312,7 +337,7 @@ function buildEstimateSheet(input: ScrXlsxInput, packet: FcrPacket, when = new D
     printTitlesRow: "1:3",
     sections,
     packetHoursRef: `B${packetRow}`,
-    packetTotalRef: `H${packetRow}`,
+    packetTotalRef: `D${packetRow}`,
   };
 }
 
@@ -385,28 +410,38 @@ function buildCoverSheet(
 
 function buildLogSheet(input: ScrXlsxInput, packet: FcrPacket, estimate: ScrEstimateSheet, when = new Date()): WorkbookSheet {
   const cells: SheetCell[] = [];
-  const merges = titleBlock(cells, input, "G", when);
+  const merges = titleBlock(cells, input, "H", when);
   pushText(cells, "A5", "Change Orders log");
-  merges.push("A5:G5");
+  merges.push("A5:H5");
   const header = 7;
-  ["SCR #", "Request Date", "Requested By", "Status", "Scope Change Description", "Hours", "$"].forEach((label, index) => {
+  [
+    "Hit Squad SCR #",
+    "Client SCR ID",
+    "Type",
+    "Status",
+    "Scope ID",
+    "SCR issue",
+    "Hours",
+    "$",
+  ].forEach((label, index) => {
     pushText(cells, `${String.fromCharCode(65 + index)}${header}`, label);
   });
   packet.log.forEach((row, index) => {
     const r = header + 1 + index;
     const section = estimate.sections[index];
     pushText(cells, `A${r}`, row.scr || "—");
-    pushText(cells, `B${r}`, row.requestDate || "—");
-    pushText(cells, `C${r}`, row.requestedBy || "—");
+    pushText(cells, `B${r}`, row.clientScrId || "—");
+    pushText(cells, `C${r}`, SCR_TYPE_LABELS[row.scrType] || row.scrType);
     pushText(cells, `D${r}`, row.status);
-    pushText(cells, `E${r}`, row.scope || "—");
+    pushText(cells, `E${r}`, row.scopeId || "—");
+    pushText(cells, `F${r}`, row.scope || "—");
     if (section) {
-      pushFormula(cells, `F${r}`, sheetRef(SCR_XLSX_SHEETS.estimate, section.hoursRef), hoursFmt());
-      pushFormula(cells, `G${r}`, sheetRef(SCR_XLSX_SHEETS.estimate, section.costRef), moneyFmt());
+      pushFormula(cells, `G${r}`, sheetRef(SCR_XLSX_SHEETS.estimate, section.hoursRef), hoursFmt());
+      pushFormula(cells, `H${r}`, sheetRef(SCR_XLSX_SHEETS.estimate, section.costRef), moneyFmt());
     } else {
       const scope = logRowScope(row);
-      pushNum(cells, `F${r}`, scope.hours, hoursFmt());
-      pushNum(cells, `G${r}`, scope.cost, moneyFmt());
+      pushNum(cells, `G${r}`, scope.hours, hoursFmt());
+      pushNum(cells, `H${r}`, scope.cost, moneyFmt());
     }
   });
   if (!packet.log.length) pushText(cells, `A${header + 1}`, "No Change Orders on this job yet.");
@@ -438,7 +473,7 @@ export function scrWorkbookTotal(sheets: WorkbookSheet[]) {
   const label = labels.at(-1);
   if (!estimate || !label) return 0;
   const row = label.ref.slice(1);
-  return money(Number(evaluateWorkbook(sheets).evalAt(estimate.name, `H${row}`)) || 0);
+  return money(Number(evaluateWorkbook(sheets).evalAt(estimate.name, `D${row}`)) || 0);
 }
 
 export async function scrToXlsx(input: ScrXlsxInput = {}): Promise<Uint8Array> {
