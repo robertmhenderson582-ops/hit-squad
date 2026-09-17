@@ -338,7 +338,8 @@ describe("Analytics tab wiring", () => {
     assert.match(desk, /ANALYTICS_LIVE_NOTE/);
     assert.match(desk, /setJobMeta/);
     assert.match(desk, /analyticsStc/);
-    assert.match(desk, /data-analytics-stc=\{stc\.yatesKey\}/);
+    assert.match(desk, /data-analytics-stc=\{yatesKey\}/);
+    assert.match(desk, /StcPctField/);
     assert.match(desk, /ANALYTICS_STC_LINES/);
     assert.match(desk, /yatesStcHint/);
     assert.match(desk, /paper-field/);

@@ -38,6 +38,49 @@ function stcRow(id: AnalyticsLineId) {
   return ANALYTICS_STC_LINES.find((row) => row.id === id);
 }
 
+function StcPctField({
+  label,
+  yatesKey,
+  value,
+  onCommit,
+}: {
+  label: string;
+  yatesKey: "tool" | "consumables" | "ppe";
+  value: number | null;
+  onCommit: (raw: string) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (value == null ? "" : String(value));
+  return (
+    <label className="inline-flex items-center gap-1 text-xs text-[#5b6f73]">
+      <span className="sr-only">{label} percent</span>
+      <input
+        type="number"
+        min={0}
+        step={0.01}
+        inputMode="decimal"
+        className="paper-field w-[4.5rem] px-2 py-1 text-right text-sm text-[#163038]"
+        placeholder="Yates"
+        value={shown}
+        onChange={(event) => {
+          const raw = event.target.value;
+          setDraft(raw);
+          if (raw.trim() === "" || (Number.isFinite(Number(raw)) && !raw.endsWith("."))) {
+            onCommit(raw);
+          }
+        }}
+        onBlur={() => {
+          if (draft != null) onCommit(draft);
+          setDraft(null);
+        }}
+        data-analytics-stc={yatesKey}
+        aria-label={`${label} percent`}
+      />
+      <span>%</span>
+    </label>
+  );
+}
+
 export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
   const [tick, setTick] = useState(0);
@@ -123,22 +166,12 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
                         {stc ? (
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                             <span>{line.label}</span>
-                            <label className="inline-flex items-center gap-1 text-xs text-[#5b6f73]">
-                              <span className="sr-only">{line.label} percent</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                inputMode="decimal"
-                                className="paper-field w-[4.5rem] px-2 py-1 text-right text-sm text-[#163038]"
-                                placeholder="Yates"
-                                value={override == null ? "" : String(override)}
-                                onChange={(event) => setStcPct(stc.overrideKey, event.target.value)}
-                                data-analytics-stc={stc.yatesKey}
-                                aria-label={`${line.label} percent`}
-                              />
-                              <span>%</span>
-                            </label>
+                            <StcPctField
+                              label={line.label}
+                              yatesKey={stc.yatesKey}
+                              value={override}
+                              onCommit={(raw) => setStcPct(stc.overrideKey, raw)}
+                            />
                             <span className="text-[11px] text-[#5b6f73]">
                               {override == null ? yatesStcHint(stc.yatesKey) : "Override applies to craft and staff"}
                             </span>
