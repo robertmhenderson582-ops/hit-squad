@@ -48,6 +48,7 @@ import {
   qualityTemplateFillRipplePlan,
 } from "./quality-template-form-ripple.ts";
 import {
+  awaitQualityVaultDeadline,
   readQualityVaultFile,
   rollbackQualityVaultPersist,
   trashQualityVaultFile,
@@ -93,6 +94,14 @@ async function resolveFillAcl(user: QualityTemplateFillUser) {
     resolveQualityPackageShelfAcl(user),
   ]);
   return qualityTemplateFillAcl(companyAcl, shelfAcl);
+}
+
+/**
+ * Named job / Ready fills are shared vault copies. Retrieve must not hide
+ * Owner or peer content behind the viewer's email. Write ACL stays separate.
+ */
+export function qualityTemplateFillSharedReadWho() {
+  return undefined as string | undefined;
 }
 
 function incomingFillFile(input: QualityTemplateFillSaveInput): LeadFile | null {
@@ -143,15 +152,37 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
     const written: typeof folders = [];
     let saved: Awaited<ReturnType<typeof saveQualityFolderDrop>> | null = null;
     for (const rippleFolder of folders) {
-      saved = await saveQualityFolderDrop(user, {
-        jobId,
-        folderId: rippleFolder,
-        files: [incoming],
-        companyId,
-        companyLabel,
-        siteLabel: typeof input.siteLabel === "string" ? input.siteLabel : undefined,
-        jobLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
-      });
+      try {
+        saved = await awaitQualityVaultDeadline(
+          saveQualityFolderDrop(user, {
+            jobId,
+            folderId: rippleFolder,
+            files: [incoming],
+            companyId,
+            companyLabel,
+            siteLabel: typeof input.siteLabel === "string" ? input.siteLabel : undefined,
+            jobLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
+          }),
+        );
+      } catch (error) {
+        await rollbackQualityTemplateFillWrites({
+          user,
+          dest,
+          jobId,
+          companyId,
+          companyLabel,
+          siteLabel: typeof input.siteLabel === "string" ? input.siteLabel : undefined,
+          jobLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
+          folders: [...written, rippleFolder],
+          fileName: incoming.name,
+        });
+        return {
+          ok: false as const,
+          status: 503,
+          error: qualityVaultWriteUserError(error, hasBuildDesk(user)),
+          rejected: [],
+        };
+      }
       if (!saved.ok) {
         await rollbackQualityTemplateFillWrites({
           user,
@@ -161,7 +192,7 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
           companyLabel,
           siteLabel: typeof input.siteLabel === "string" ? input.siteLabel : undefined,
           jobLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
-          folders: written,
+          folders: [...written, rippleFolder],
           fileName: incoming.name,
         });
         return saved;
@@ -194,13 +225,47 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
   }
   const packageId = existingId || newQualityPackageId("label" in named ? named.label : "kit");
   const kitJobId = qualityReadyShelfJobId(packageId);
-  const saved = await saveQualityPackageShelfKit(user, {
-    packageId,
-    name: "label" in named ? named.label : existingId,
-    files: [incoming],
-    companyId,
-    companyLabel,
-  });
+  let saved: Awaited<ReturnType<typeof saveQualityPackageShelfKit>>;
+  try {
+    saved = await awaitQualityVaultDeadline(
+      saveQualityPackageShelfKit(user, {
+        packageId,
+        name: "label" in named ? named.label : existingId,
+        files: [incoming],
+        companyId,
+        companyLabel,
+      }),
+    );
+  } catch (error) {
+    await rollbackQualityTemplateFillWrites({
+      user,
+      dest: "prepackage",
+      jobId: kitJobId,
+      companyId,
+      companyLabel,
+      jobLabel: "label" in named ? named.label : undefined,
+      folders: ["packages"],
+      fileName: incoming.name,
+    });
+    await rollbackQualityVaultPersist(leadBriefAdapter("quality"), {
+      place: {
+        companyId,
+        companyLabel,
+        jobId: kitJobId,
+        jobLabel: "label" in named ? named.label : undefined,
+        folderId: "packages",
+        shelf: true,
+        packageLabel: "label" in named ? named.label : undefined,
+        who: user.email.trim().toLowerCase(),
+      },
+      fileNames: [incoming.name],
+    });
+    return {
+      ok: false as const,
+      status: 503,
+      error: qualityVaultWriteUserError(error, hasBuildDesk(user)),
+    };
+  }
   if (!saved.ok) {
     await rollbackQualityTemplateFillWrites({
       user,
@@ -278,7 +343,7 @@ export async function readQualityTemplateFill(
   if (!jobId || isQualityCompanyDocsJobId(jobId) || !requestedFolder) {
     return { ok: false as const, status: 400, error: dest === "prepackage" ? QUALITY_TEMPLATE_FILL_PREPACKAGE_ERROR : QUALITY_TEMPLATE_FILL_JOB_ERROR };
   }
-  const who = hasBuildDesk(user) ? undefined : user.email;
+  const who = qualityTemplateFillSharedReadWho();
   const readFolders = qualityTemplateFillReadFolders(dest, requestedFolder);
   const place = {
     companyId,

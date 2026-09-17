@@ -13,7 +13,11 @@ import {
 } from "./lead-brief-store.ts";
 import { saveQualityCompanyDocDrop } from "./quality-company-doc-drops.ts";
 import { listQualityFolderDrops, listQualityVaultOwnerTree, saveQualityFolderDrop } from "./quality-folder-drops.ts";
-import { qualityDropLeaks } from "./quality-vault-shared.ts";
+import {
+  QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS,
+  QUALITY_VAULT_WRITE_DEADLINE_MS,
+  qualityDropLeaks,
+} from "./quality-vault-shared.ts";
 import {
   QUALITY_LIBRARY_LOCK_NAME,
   QUALITY_UNVAULTED_MARK,
@@ -23,6 +27,9 @@ import {
   QUALITY_VAULT_QUOTA_ERROR,
   QUALITY_VAULT_SHARE_ERROR,
   QUALITY_VAULT_WRITE_ERROR,
+  QUALITY_VAULT_WRITE_TIMEOUT_ERROR,
+  awaitQualityVaultDeadline,
+  useQualityVaultDeadlineForTests,
   listQualityCompanyDocVaultFolders,
   isProtectedQualityCompanyDocFile,
   ensureQualityVaultPath,
@@ -44,6 +51,7 @@ const owner = { email: "robertmhenderson582@gmail.com", name: "Robert Henderson"
 afterEach(() => {
   forgetLeadBriefCacheForTests();
   resetLeadBriefStoreForTests();
+  useQualityVaultDeadlineForTests();
 });
 
 function pdf(name: string, text = name) {
@@ -474,7 +482,13 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
       QUALITY_VAULT_FOLDER_ERROR,
     );
     assert.equal(qualityVaultWriteUserError(new DriveApiError(403, "Quota exceeded for quota metric 'Total Query Cost'"), false), QUALITY_VAULT_WRITE_ERROR);
+    assert.equal(qualityVaultWriteUserError(new Error(QUALITY_VAULT_WRITE_TIMEOUT_ERROR), false), QUALITY_VAULT_WRITE_TIMEOUT_ERROR);
+    assert.equal(qualityVaultWriteUserError(new Error(QUALITY_VAULT_WRITE_TIMEOUT_ERROR), true), QUALITY_VAULT_WRITE_TIMEOUT_ERROR);
+    assert.ok(QUALITY_VAULT_WRITE_DEADLINE_MS >= 45_000 && QUALITY_VAULT_WRITE_DEADLINE_MS <= 60_000);
+    assert.ok(QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS > QUALITY_VAULT_WRITE_DEADLINE_MS);
+    assert.ok(QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS <= 60_000);
     assert.equal(qualityDropLeaks(QUALITY_VAULT_WRITE_ERROR), false);
+    assert.equal(qualityDropLeaks(QUALITY_VAULT_WRITE_TIMEOUT_ERROR), false);
     assert.equal(qualityDropLeaks(QUALITY_VAULT_SHARE_ERROR), false);
     assert.equal(qualityDropLeaks(QUALITY_VAULT_MISSING_ERROR), false);
     assert.equal(qualityDropLeaks(QUALITY_VAULT_QUOTA_ERROR), false);
@@ -626,5 +640,18 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
       ).map((file) => `${file.name}:${file.protected ? "keep" : "drop"}`),
       ["Quality Control Manual.pdf:drop"],
     );
+  });
+
+  it("fails closed when vault persist hangs and does not wait on Drive", async () => {
+    const started = Date.now();
+    await assert.rejects(
+      () => awaitQualityVaultDeadline(new Promise(() => {}), 40),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.message, QUALITY_VAULT_WRITE_TIMEOUT_ERROR);
+        return true;
+      },
+    );
+    assert.ok(Date.now() - started < 300, "hung persist must fail closed within the deadline");
   });
 });

@@ -213,6 +213,11 @@ describe("Quality always-displayed template forms", () => {
     assert.match(form, /QUALITY_TEMPLATE_FILL_EMPTY_ERROR/);
     assert.match(form, /qualityTemplateFormHasWork\(record\)/);
     assert.match(form, /session.fileName \|\| session.filledName/);
+    assert.match(form, /fetchJsonWithDeadline/);
+    assert.match(form, /QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS/);
+    assert.match(form, /QUALITY_VAULT_WRITE_TIMEOUT_ERROR/);
+    assert.match(form, /setSaving\(false\);\s*setLoading\(false\)/);
+    assert.match(form, /hydrateQualityTemplateFormRecord/);
     assert.doesNotMatch(form, /@gmail\.com|tester email/i);
     assert.doesNotMatch(desk, /inbox|suggestion box/i);
   });

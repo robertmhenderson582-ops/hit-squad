@@ -33,7 +33,10 @@ import {
   QUALITY_VAULT_OAUTH_ERROR,
   QUALITY_VAULT_QUOTA_ERROR,
   QUALITY_VAULT_SHARE_ERROR,
+  QUALITY_VAULT_WRITE_DEADLINE_MS,
   QUALITY_VAULT_WRITE_ERROR,
+  QUALITY_VAULT_WRITE_TIMEOUT_ERROR,
+  QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS,
   isQualityLibraryLockName,
   mergeVaultedQualityFiles,
   qualityVaultStored,
@@ -56,7 +59,10 @@ export {
   QUALITY_VAULT_OAUTH_ERROR,
   QUALITY_VAULT_QUOTA_ERROR,
   QUALITY_VAULT_SHARE_ERROR,
+  QUALITY_VAULT_WRITE_DEADLINE_MS,
   QUALITY_VAULT_WRITE_ERROR,
+  QUALITY_VAULT_WRITE_TIMEOUT_ERROR,
+  QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS,
   isQualityLibraryLockName,
   mergeVaultedQualityFiles,
   qualityVaultStored,
@@ -75,8 +81,11 @@ export function qualityVaultDriveStatus(error: unknown) {
   return 0;
 }
 
-/** Testers always get QUALITY_VAULT_WRITE_ERROR. Owner sees quota / oauth / folder / share / missing. */
+/** Testers always get QUALITY_VAULT_WRITE_ERROR. Timeout copy is safe for every seat. Owner sees quota / oauth / folder / share / missing. */
 export function qualityVaultWriteUserError(error: unknown, ownerFacing: boolean) {
+  if (error instanceof Error && error.message === QUALITY_VAULT_WRITE_TIMEOUT_ERROR) {
+    return QUALITY_VAULT_WRITE_TIMEOUT_ERROR;
+  }
   if (!ownerFacing) return QUALITY_VAULT_WRITE_ERROR;
   const kind = driveFailureKind(error);
   if (kind === "quota") return QUALITY_VAULT_QUOTA_ERROR;
@@ -260,6 +269,30 @@ export async function rollbackQualityVaultPersist(
   }
 }
 
+let qualityVaultDeadlineOverrideMs: number | undefined;
+
+export function useQualityVaultDeadlineForTests(ms?: number) {
+  qualityVaultDeadlineOverrideMs = ms;
+}
+
+/** Fail closed when Drive never settles. Existing persist rollback still runs. */
+export async function awaitQualityVaultDeadline<T>(
+  work: Promise<T>,
+  ms = qualityVaultDeadlineOverrideMs ?? QUALITY_VAULT_WRITE_DEADLINE_MS,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(QUALITY_VAULT_WRITE_TIMEOUT_ERROR)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export async function persistQualityVaultFiles(
   drive: DriveAdapter | null | undefined,
   place: QualityVaultPlace,
@@ -270,10 +303,12 @@ export async function persistQualityVaultFiles(
   if (!incoming.length) throw new Error("Drop at least one file.");
   const created: string[] = [];
   try {
-    const folderId = await ensureQualityVaultPath(drive as DriveAdapter, place, created);
-    const written = await writeQualityVaultFiles(drive as DriveAdapter, folderId, incoming, place.who);
-    if (written.length !== incoming.length) throw new Error(QUALITY_VAULT_WRITE_ERROR);
-    return { folderId, files: written, path: qualityVaultPath(place), store: "drive" as const, created };
+    return await awaitQualityVaultDeadline((async () => {
+      const folderId = await ensureQualityVaultPath(drive as DriveAdapter, place, created);
+      const written = await writeQualityVaultFiles(drive as DriveAdapter, folderId, incoming, place.who);
+      if (written.length !== incoming.length) throw new Error(QUALITY_VAULT_WRITE_ERROR);
+      return { folderId, files: written, path: qualityVaultPath(place), store: "drive" as const, created };
+    })());
   } catch (error) {
     await rollbackQualityVaultPersist(drive, {
       place,

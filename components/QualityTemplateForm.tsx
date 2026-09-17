@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DeskTemplateFieldInput, DeskTemplateFormRows } from "@/components/DeskTemplateFormFields";
 import { FieldBlock } from "@/components/FieldMark";
 import { JobScopePicks } from "@/components/JobScopePicks";
@@ -26,6 +26,7 @@ import {
   QUALITY_TEMPLATE_FORM_MARK,
   addQualityTemplateRow,
   emptyQualityTemplateFormRecord,
+  hydrateQualityTemplateFormRecord,
   isQualityFilledCopyName,
   patchQualityTemplateField,
   patchQualityTemplateRow,
@@ -45,7 +46,12 @@ import {
   type QualityTemplateFormRecord,
   type QualityTemplateSourceKind,
 } from "@/lib/quality-template-form";
-import { QUALITY_VAULT_WRITE_ERROR } from "@/lib/quality-vault-shared";
+import { fetchJsonWithDeadline } from "@/lib/session-fetch";
+import {
+  QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS,
+  QUALITY_VAULT_WRITE_ERROR,
+  QUALITY_VAULT_WRITE_TIMEOUT_ERROR,
+} from "@/lib/quality-vault-shared";
 
 export type QualityTemplateFormSession = {
   source: QualityTemplateSourceKind;
@@ -111,47 +117,67 @@ export function QualityTemplateForm({
   const [note, setNote] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const saveGen = useRef(0);
 
   useEffect(() => {
+    saveGen.current += 1;
+    setSaving(false);
+    setLoading(false);
     if (!open || !session || !def) return;
     setDest(session.dest || (jobPick.jobId ? "job" : "prepackage"));
     setPackageId(session.destPackageId || "");
     setPackageName(session.destPackageName || "");
     setFilledName(session.filledName || "");
     setNote(null);
+    let cancelled = false;
     if (session.record) {
-      setRecord(session.record);
-      setLoading(false);
-      return;
+      setRecord(hydrateQualityTemplateFormRecord(session.record, def));
+      return () => {
+        cancelled = true;
+      };
     }
     if (session.filledName) {
       setLoading(true);
-      void fetch(
-        `/api/desk/briefs?kind=quality&scope=template-fill&dest=${encodeURIComponent(session.dest || "job")}&file=${encodeURIComponent(session.filledName)}${session.destJobId ? `&jobId=${encodeURIComponent(session.destJobId)}` : ""}${session.destPackageId ? `&packageId=${encodeURIComponent(session.destPackageId)}` : ""}${def.folderId ? `&folder=${encodeURIComponent(def.folderId)}` : ""}${companyId ? `&company=${encodeURIComponent(companyId)}` : ""}`,
+      const destKind = session.dest || "job";
+      const siteName = sites.find((site) => site.id === jobPick.siteId)?.name;
+      const destJob = jobs.find((job) => job.id === (session.destJobId || jobPick.jobId));
+      const jobName = destJob?.title || destJob?.code;
+      const destLabel = destKind === "prepackage" ? session.destPackageName : jobName;
+      void fetchJsonWithDeadline<{
+        form?: { fields?: Record<string, string>; rows?: QualityTemplateFormRecord["rows"] };
+        error?: string;
+      }>(
+        `/api/desk/briefs?kind=quality&scope=template-fill&dest=${encodeURIComponent(destKind)}&file=${encodeURIComponent(session.filledName)}${session.destJobId ? `&jobId=${encodeURIComponent(session.destJobId)}` : ""}${session.destPackageId ? `&packageId=${encodeURIComponent(session.destPackageId)}` : ""}${def.folderId ? `&folder=${encodeURIComponent(def.folderId)}` : ""}${companyId ? `&company=${encodeURIComponent(companyId)}` : ""}${companyLabel ? `&companyLabel=${encodeURIComponent(companyLabel)}` : ""}${siteName ? `&siteLabel=${encodeURIComponent(siteName)}` : ""}${destLabel ? `&jobLabel=${encodeURIComponent(destLabel)}` : ""}`,
         viewAsInit(owner?.viewAs),
+        QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS,
+        "Could not open that filled copy.",
       )
-        .then(async (response) => {
-          const data = (await response.json().catch(() => ({}))) as {
-            form?: { fields?: Record<string, string>; rows?: QualityTemplateFormRecord["rows"] };
-            error?: string;
-          };
-          if (!response.ok || !data.form) {
-            setNote(typeof data.error === "string" ? data.error : "Could not open that filled copy.");
+        .then((result) => {
+          if (cancelled) return;
+          if (!result.ok || !result.data.form) {
+            setNote(typeof result.data.error === "string" ? result.data.error : "Could not open that filled copy.");
             setRecord(emptyQualityTemplateFormRecord(def));
             return;
           }
-          setRecord({ fields: data.form.fields ?? {}, rows: data.form.rows ?? [] });
+          setRecord(hydrateQualityTemplateFormRecord(result.data.form, def));
         })
         .catch(() => {
+          if (cancelled) return;
           setNote("Could not open that filled copy.");
           setRecord(emptyQualityTemplateFormRecord(def));
         })
-        .finally(() => setLoading(false));
-      return;
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
     }
     setRecord(emptyQualityTemplateFormRecord(def));
-    setLoading(false);
-  }, [companyId, def?.id, jobPick.jobId, open, owner?.viewAs, session?.dest, session?.destJobId, session?.destPackageId, session?.fileName, session?.filledName, session?.folderId, session?.source]);
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, companyLabel, def?.id, jobPick.jobId, jobPick.siteId, open, owner?.viewAs, session?.dest, session?.destJobId, session?.destPackageId, session?.destPackageName, session?.fileName, session?.filledName, session?.folderId, session?.source]);
 
   const title = def ? qualityTemplateFormTitle(def, session?.fileName) : "Quality form";
   const selectedJob = jobs.find((job) => job.id === jobPick.jobId);
@@ -194,6 +220,7 @@ export function QualityTemplateForm({
       setNote("Name a Ready prepackage, or pick one on the shelf.");
       return;
     }
+    const gen = saveGen.current;
     setSaving(true);
     setNote(null);
     const name = filledName || previewName;
@@ -214,7 +241,7 @@ export function QualityTemplateForm({
     };
     const file = qualityTemplateFormToLead(payload, name);
     try {
-      const response = await fetch(
+      const result = await fetchJsonWithDeadline<{ error?: string; fileName?: string }>(
         "/api/desk/briefs",
         viewAsInit(owner?.viewAs, {
           method: "POST",
@@ -239,22 +266,27 @@ export function QualityTemplateForm({
             replace: Boolean(filledName),
           }),
         }),
+        QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS,
+        QUALITY_VAULT_WRITE_TIMEOUT_ERROR,
       );
-      const data = (await response.json().catch(() => ({}))) as { error?: string; fileName?: string };
-      if (!response.ok) {
-        throw new Error(typeof data.error === "string" && data.error ? data.error : QUALITY_VAULT_WRITE_ERROR);
+      if (gen !== saveGen.current) return;
+      if (!result.ok) {
+        throw new Error(
+          typeof result.data.error === "string" && result.data.error ? result.data.error : QUALITY_VAULT_WRITE_ERROR,
+        );
       }
-      setFilledName(data.fileName || name);
+      setFilledName(result.data.fileName || name);
       const savedNote =
         dest === "job"
-          ? `Saved ${data.fileName || name} under ${alias(selectedJob?.title || selectedJob?.code || "this job")}. The rail template is unchanged.`
-          : `Saved ${data.fileName || name} on the Ready prepackage shelf. The rail template is unchanged.`;
+          ? `Saved ${result.data.fileName || name} under ${alias(selectedJob?.title || selectedJob?.code || "this job")}. The rail template is unchanged.`
+          : `Saved ${result.data.fileName || name} on the Ready prepackage shelf. The rail template is unchanged.`;
       setNote(savedNote);
       onSaved?.(savedNote);
     } catch (error) {
+      if (gen !== saveGen.current) return;
       setNote(error instanceof Error && error.message ? error.message : QUALITY_VAULT_WRITE_ERROR);
     } finally {
-      setSaving(false);
+      if (gen === saveGen.current) setSaving(false);
     }
   }
 

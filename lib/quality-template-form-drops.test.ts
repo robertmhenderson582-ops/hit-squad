@@ -24,6 +24,7 @@ import {
   qualityTemplateFormToLead,
 } from "./quality-template-form.ts";
 import {
+  qualityTemplateFillSharedReadWho,
   readQualityTemplateFill,
   removeQualityTemplateFill,
   saveQualityTemplateFill,
@@ -257,6 +258,17 @@ describe("Quality template fill vault paths", { concurrency: 1 }, () => {
     assert.equal(pmJob.ok, true);
     const briefs = await listStoredBriefs("quality", nathan.email, { jobId: "job-b17", folderId: "flange-log" });
     assert.equal(briefs[0]?.files.some((file) => file.name === good.name), true);
+
+    const viewed = await readQualityTemplateFill(wendell, {
+      dest: "job",
+      jobId: "job-b17",
+      folderId: "flange-log",
+      fileName: good.name,
+      companyId: "madison",
+    });
+    assert.equal(viewed.ok, true);
+    if (viewed.ok) assert.equal(viewed.form.fields.job, "Boiler 17");
+    assert.equal(qualityTemplateFillSharedReadWho(), undefined);
   });
 
   it("saves a filled copy for every catalog radio without writing company-docs", async () => {
