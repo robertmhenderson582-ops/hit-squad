@@ -5,6 +5,7 @@ import { useEstimatePackage } from "@/components/EstimatePackage";
 import { readFcrPacket } from "@/lib/change-order-packet";
 import {
   ANALYTICS_STC_LINES,
+  ANALYTICS_STC_PPE_LABEL,
   deriveEstimateAnalytics,
   stcDefaultHint,
   type AnalyticsKind,
@@ -20,12 +21,12 @@ import {
   emptyAnalyticsNb,
   emptyAnalyticsStc,
   hydrateAnalyticsBridge,
+  hydrateAnalyticsStc,
   hydrateAnalyticsStcPct,
   type AnalyticsBridgeMeta,
   type AnalyticsLockedAdders,
   type AnalyticsMode,
   type AnalyticsNbDrag,
-  type AnalyticsStcOverride,
 } from "@/lib/estimate-money";
 import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
@@ -149,11 +150,10 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
     });
   }
 
-  function setStcPct(key: keyof AnalyticsStcOverride, raw: string) {
-    const value = hydrateAnalyticsStcPct(raw);
+  function setStcPct(raw: string) {
     pack.setJobMeta((current) => ({
       ...current,
-      analyticsStc: { ...emptyAnalyticsStc(), ...current.analyticsStc, [key]: value },
+      analyticsStc: { ...emptyAnalyticsStc(), stcPpePct: hydrateAnalyticsStcPct(raw) },
     }));
   }
 
@@ -164,7 +164,7 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
       locked: {
         ...emptyAnalyticsLocked(),
         ...current.locked,
-        [key]: key === "ohPerHour" || key === "profitPerHour" ? parsed : (parsed ?? emptyAnalyticsLocked()[key]),
+        [key]: key === "stcPpePerHour" ? (parsed ?? emptyAnalyticsLocked().stcPpePerHour) : parsed,
       },
     }));
   }
@@ -184,8 +184,8 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
         <legend className="sr-only">Analytics burden mode</legend>
         {(
           [
-            { id: "pct" as const, title: "% of base wage", note: "Tool / Consumables / PPE from hours × base wage × %." },
-            { id: "locked" as const, title: "Locked $/hr COMP adders", note: "Hours × editable $/hr. East WR STC defaults 0.50 / 1.25 / 1.85." },
+            { id: "pct" as const, title: "% of base wage", note: "STC & PPE from hours × base wage × one combined %." },
+            { id: "locked" as const, title: "Locked $/hr COMP adders", note: "Hours × editable $/hr. East WR STC & PPE default $3.60/hr." },
           ] satisfies Array<{ id: AnalyticsMode; title: string; note: string }>
         ).map((option) => {
           const selected = bridgeMeta.mode === option.id;
@@ -226,19 +226,15 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
               <tbody>
                 {sheet.lines.map((line) => {
                   const stc = stcRow(line.id);
-                  const override = stc ? (pack.jobMeta.analyticsStc ?? emptyAnalyticsStc())[stc.overrideKey] : null;
+                  const override = stc ? hydrateAnalyticsStc(pack.jobMeta.analyticsStc).stcPpePct : null;
                   const lockedKey =
-                    line.id === "tool"
-                      ? "toolPerHour"
-                      : line.id === "consumables"
-                        ? "consumablesPerHour"
-                        : line.id === "ppe"
-                          ? "ppePerHour"
-                          : line.id === "oh" || line.id === "total-oh-base-wages"
-                            ? "ohPerHour"
-                            : line.id === "labor" || line.id === "total-profit-base-wages"
-                              ? "profitPerHour"
-                              : null;
+                    line.id === "stc-ppe"
+                      ? "stcPpePerHour"
+                      : line.id === "oh" || line.id === "total-oh-base-wages"
+                        ? "ohPerHour"
+                        : line.id === "labor" || line.id === "total-profit-base-wages"
+                          ? "profitPerHour"
+                          : null;
                   return (
                     <tr key={line.id} className="border-t border-[#d5e0de]" data-analytics-line={line.id}>
                       <td className="px-2 py-2">
@@ -250,11 +246,11 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
                               value={override}
                               suffix="%"
                               placeholder="Default"
-                              testId={stc.burdenKey}
-                              onCommit={(raw) => setStcPct(stc.overrideKey, raw)}
+                              testId="stc-ppe"
+                              onCommit={setStcPct}
                             />
                             <span className="text-[11px] text-[#5b6f73]">
-                              {override == null ? stcDefaultHint(stc.burdenKey) : "Override applies to craft and staff"}
+                              {override == null ? stcDefaultHint() : "Override applies to craft and staff"}
                             </span>
                           </div>
                         ) : stc && lockedMode ? (
@@ -262,19 +258,10 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
                             <span>{line.label}</span>
                             <DraftNumber
                               label={`${line.label} dollars per hour`}
-                              value={bridgeMeta.locked[stc.burdenKey === "tool" ? "toolPerHour" : stc.burdenKey === "consumables" ? "consumablesPerHour" : "ppePerHour"]}
+                              value={bridgeMeta.locked.stcPpePerHour}
                               suffix="$/hr"
-                              testId={`${stc.burdenKey}-locked`}
-                              onCommit={(raw) =>
-                                setLocked(
-                                  stc.burdenKey === "tool"
-                                    ? "toolPerHour"
-                                    : stc.burdenKey === "consumables"
-                                      ? "consumablesPerHour"
-                                      : "ppePerHour",
-                                  raw,
-                                )
-                              }
+                              testId="stc-ppe-locked"
+                              onCommit={(raw) => setLocked("stcPpePerHour", raw)}
                             />
                           </div>
                         ) : lockedMode && lockedKey && (lockedKey === "ohPerHour" || lockedKey === "profitPerHour") ? (
@@ -304,8 +291,9 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
           </div>
         </section>
 
-        <section className="plant-card px-5 py-5" aria-label="Tool / Con / PPE">
-          <h3 className="text-lg font-semibold text-[#163038]">Tool / Con / PPE</h3>
+        <section className="plant-card px-5 py-5" aria-label={ANALYTICS_STC_PPE_LABEL}>
+          <h3 className="text-lg font-semibold text-[#163038]">{ANALYTICS_STC_PPE_LABEL}</h3>
+          <p className="mt-1 text-xs text-[#5b6f73]">Overall budget. Coding is not split.</p>
           <ul className="mt-4 space-y-3">
             {sheet.rollups.map((row) => (
               <li key={row.id} className="flex items-baseline justify-between gap-3">

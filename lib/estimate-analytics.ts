@@ -1,9 +1,10 @@
 /**
  * Phase 1 Analytics — Yates workbook `Analytics` sheet, rippled from the live pack.
  *
- * Labels are locked to that sheet. Do not invent columns. Margin lives here only
- * (never on the Estimate Total rail). Base-wage OH / profit / Tool / Con / PPE
- * use COMP BW / `baseSt`, same lock as CBA % — never billed ST.
+ * Margin lives here only (never on the Estimate Total rail). Base-wage OH /
+ * profit / STC & PPE use COMP BW / `baseSt`, same lock as CBA % — never billed ST.
+ * Accounting coding of Tool / Consumables / PPE is unreliable — one overall
+ * STC & PPE budget line only.
  *
  * Yates Labor Ratebuilder CRAFT / STAFF % of BW is the Phase 1 model until a
  * site-specific Analytics book (Monroe) is on disk. CAT 2 / Wood River T&M
@@ -24,6 +25,7 @@ import {
   hydrateJobMoney,
   WR_EAST_BRIDGE_SEED,
   WR_EAST_LOCKED_STC,
+  WR_EAST_LOCKED_STC_PER_HOUR,
   type AnalyticsBridgeMeta,
   type AnalyticsLockedAdders,
   type AnalyticsMode,
@@ -42,7 +44,7 @@ import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
 export const ANALYTICS_TAB_ID = "analytics" as const;
 export const ANALYTICS_TAB_LABEL = "Analytics";
 
-/** Yates Analytics D25:D27 — Tool / Consumables / PPE profit share of those budgets. */
+/** Yates Analytics D25:D27 — profit share of the combined STC & PPE budget. */
 export const ANALYTICS_TOOL_PROFIT_SHARE = 0.35;
 /** Yates Analytics D28 — OH contribution is 25% of Total OH Based off Base Wages. */
 export const ANALYTICS_OH_PROFIT_SHARE = 0.25;
@@ -60,35 +62,33 @@ export const YATES_ANALYTICS_BURDEN = {
 export type AnalyticsBurdenLane = keyof typeof YATES_ANALYTICS_BURDEN;
 
 export type { AnalyticsBridgeMeta, AnalyticsLockedAdders, AnalyticsMode, AnalyticsStcOverride };
-export { WR_EAST_BRIDGE_SEED, WR_EAST_LOCKED_STC };
+export { WR_EAST_BRIDGE_SEED, WR_EAST_LOCKED_STC, WR_EAST_LOCKED_STC_PER_HOUR };
 
-export const WR_EAST_LOCKED_STC_PER_HOUR =
-  WR_EAST_LOCKED_STC.toolPerHour + WR_EAST_LOCKED_STC.consumablesPerHour + WR_EAST_LOCKED_STC.ppePerHour;
+export const ANALYTICS_STC_PPE_LABEL = "STC & PPE";
 
-export const ANALYTICS_STC_LINES = [
-  { id: "tool" as const, overrideKey: "toolPct" as const, burdenKey: "tool" as const },
-  { id: "consumables" as const, overrideKey: "consumablesPct" as const, burdenKey: "consumables" as const },
-  { id: "ppe" as const, overrideKey: "ppePct" as const, burdenKey: "ppe" as const },
-];
+export const ANALYTICS_STC_LINES = [{ id: "stc-ppe" as const, overrideKey: "stcPpePct" as const }];
 
 function burdenPctPoints(rate: number) {
   return String(Math.round(rate * 10000) / 100);
 }
 
-/** Desk copy — craft/staff default rates only. Do not name the source workbook. */
-export function stcDefaultHint(key: "tool" | "consumables" | "ppe"): string {
-  return `Craft ${burdenPctPoints(YATES_ANALYTICS_BURDEN.craft[key])}% · staff ${burdenPctPoints(YATES_ANALYTICS_BURDEN.staff[key])}%`;
+export function yatesStcPpeRate(lane: AnalyticsBurdenLane): number {
+  const row = YATES_ANALYTICS_BURDEN[lane];
+  return Math.round((row.tool + row.consumables + row.ppe) * 10000) / 10000;
 }
 
-/** Locked Phase 1 labels — match the Yates Analytics sheet. Do not rename. */
+/** Desk copy — combined craft/staff default. Do not name the source workbook. */
+export function stcDefaultHint(): string {
+  return `Craft ${burdenPctPoints(yatesStcPpeRate("craft"))}% · staff ${burdenPctPoints(yatesStcPpeRate("staff"))}%`;
+}
+
+/** Phase 1 labels. Tool / Consumables / PPE collapsed to one STC & PPE overall budget. */
 export const ANALYTICS_PHASE1_LINES = [
   { id: "total-price", label: "Total Price" },
   { id: "total-hours", label: "Total Hours" },
   { id: "total-oh-base-wages", label: "Total OH Based off Base Wages" },
   { id: "total-profit-base-wages", label: "Total Profit Based off Base Wages" },
-  { id: "tool", label: "Tool" },
-  { id: "consumables", label: "Consumables" },
-  { id: "ppe", label: "PPE" },
+  { id: "stc-ppe", label: ANALYTICS_STC_PPE_LABEL },
   { id: "oh", label: "OH" },
   { id: "labor", label: "Labor" },
   { id: "markup", label: "Markup (MISC. & General Rental)" },
@@ -100,11 +100,7 @@ export const ANALYTICS_PHASE1_LINES = [
 
 export type AnalyticsLineId = (typeof ANALYTICS_PHASE1_LINES)[number]["id"];
 
-export const ANALYTICS_ROLLUP_LINES = [
-  { id: "rollup-tool", label: "Tool" },
-  { id: "rollup-con", label: "Con" },
-  { id: "rollup-ppe", label: "PPE" },
-] as const;
+export const ANALYTICS_ROLLUP_LINES = [{ id: "rollup-stc-ppe", label: ANALYTICS_STC_PPE_LABEL }] as const;
 
 export type AnalyticsKind = "money" | "hours" | "percent" | "per-hour";
 
@@ -167,9 +163,7 @@ export type AnalyticsBurdenHours = {
   hours: number;
   baseWageHours: number;
   baseWageDollars: number;
-  tool: number;
-  consumables: number;
-  ppe: number;
+  stcPpe: number;
   oh: number;
   profit: number;
 };
@@ -203,16 +197,14 @@ function rateFromPctPoints(pct: number | null, fallback: number): number {
   return pct / 100;
 }
 
-/** Yates CRAFT/STAFF table, with a single Tool / Con / PPE override applied to every lane when set. */
+/** Combined STC & PPE % of BW. Override applies to every lane; blank uses lane tool+con+ppe sum. */
 export function analyticsBurdenRates(
   lane: MoneyCrewLane,
   override: AnalyticsStcOverride = emptyAnalyticsStc(),
 ) {
   const yates = YATES_ANALYTICS_BURDEN[burdenLane(lane)];
   return {
-    tool: rateFromPctPoints(override.toolPct, yates.tool),
-    consumables: rateFromPctPoints(override.consumablesPct, yates.consumables),
-    ppe: rateFromPctPoints(override.ppePct, yates.ppe),
+    stcPpe: rateFromPctPoints(override.stcPpePct, yatesStcPpeRate(burdenLane(lane))),
     oh: yates.oh,
     profit: yates.profit,
   };
@@ -232,9 +224,7 @@ export function analyticsBurdenFromCrew(
     hours: 0,
     baseWageHours: 0,
     baseWageDollars: 0,
-    tool: 0,
-    consumables: 0,
-    ppe: 0,
+    stcPpe: 0,
     oh: 0,
     profit: 0,
   };
@@ -252,9 +242,7 @@ export function analyticsBurdenFromCrew(
       next.baseWageHours += hours;
       const base = hours * baseWage;
       next.baseWageDollars += base;
-      next.tool += base * rates.tool;
-      next.consumables += base * rates.consumables;
-      next.ppe += base * rates.ppe;
+      next.stcPpe += base * rates.stcPpe;
       next.oh += base * rates.oh;
       next.profit += base * rates.profit;
     }
@@ -263,9 +251,7 @@ export function analyticsBurdenFromCrew(
     hours: next.hours,
     baseWageHours: next.baseWageHours,
     baseWageDollars: money(next.baseWageDollars),
-    tool: money(next.tool),
-    consumables: money(next.consumables),
-    ppe: money(next.ppe),
+    stcPpe: money(next.stcPpe),
     oh: money(next.oh),
     profit: money(next.profit),
   };
@@ -274,12 +260,9 @@ export function analyticsBurdenFromCrew(
 export function lockedAdderBudgets(hours: number, locked: AnalyticsLockedAdders) {
   const hrs = Math.max(0, hours);
   return {
-    tool: money(hrs * locked.toolPerHour),
-    consumables: money(hrs * locked.consumablesPerHour),
-    ppe: money(hrs * locked.ppePerHour),
+    stc: money(hrs * locked.stcPpePerHour),
     oh: locked.ohPerHour == null ? null : money(hrs * locked.ohPerHour),
     profit: locked.profitPerHour == null ? null : money(hrs * locked.profitPerHour),
-    stc: money(hrs * (locked.toolPerHour + locked.consumablesPerHour + locked.ppePerHour)),
   };
 }
 
@@ -344,26 +327,19 @@ export function deriveEstimateAnalytics(input: DeskPackageInput): EstimateAnalyt
     holidays,
   );
 
-  const bookTool = hasBaseWage ? burden.tool : null;
-  const bookCon = hasBaseWage ? burden.consumables : null;
-  const bookPpe = hasBaseWage ? burden.ppe : null;
+  const bookStc = hasBaseWage ? burden.stcPpe : null;
   const bookOh = hasBaseWage ? burden.oh : null;
   const bookLabor = hasBaseWage ? burden.profit : null;
   const useLocked = bridgeMeta.mode === "locked";
-  const shownTool = useLocked ? locked.tool : bookTool;
-  const shownCon = useLocked ? locked.consumables : bookCon;
-  const shownPpe = useLocked ? locked.ppe : bookPpe;
+  const shownStc = useLocked ? locked.stc : bookStc;
   const shownOh = useLocked && locked.oh != null ? locked.oh : bookOh;
   const shownLabor = useLocked && locked.profit != null ? locked.profit : bookLabor;
-  const toolProfit = shownTool != null ? money(shownTool * ANALYTICS_TOOL_PROFIT_SHARE) : null;
-  const conProfit = shownCon != null ? money(shownCon * ANALYTICS_TOOL_PROFIT_SHARE) : null;
-  const ppeProfit = shownPpe != null ? money(shownPpe * ANALYTICS_TOOL_PROFIT_SHARE) : null;
+  const stcProfit = shownStc != null ? money(shownStc * ANALYTICS_TOOL_PROFIT_SHARE) : null;
   const ohProfit = shownOh != null ? money(shownOh * ANALYTICS_OH_PROFIT_SHARE) : null;
   const laborProfit = shownLabor;
-  const contributionReady =
-    toolProfit != null && conProfit != null && ppeProfit != null && ohProfit != null && laborProfit != null;
+  const contributionReady = stcProfit != null && ohProfit != null && laborProfit != null;
   const subtotal = contributionReady
-    ? money(toolProfit + conProfit + ppeProfit + ohProfit + laborProfit + markup + coe)
+    ? money(stcProfit + ohProfit + laborProfit + markup + coe)
     : null;
   const price = breakdown.total > 0 ? money(breakdown.total) : breakdown.total === 0 ? 0 : null;
   const amounts: Record<AnalyticsLineId, number | null> = {
@@ -371,9 +347,7 @@ export function deriveEstimateAnalytics(input: DeskPackageInput): EstimateAnalyt
     "total-hours": hours > 0 ? hours : hours === 0 ? 0 : null,
     "total-oh-base-wages": shownOh,
     "total-profit-base-wages": shownLabor,
-    tool: toolProfit,
-    consumables: conProfit,
-    ppe: ppeProfit,
+    "stc-ppe": stcProfit,
     oh: ohProfit,
     labor: laborProfit,
     markup: markup > 0 ? markup : 0,
@@ -384,22 +358,12 @@ export function deriveEstimateAnalytics(input: DeskPackageInput): EstimateAnalyt
   };
 
   const bookProfit =
-    hasBaseWage && bookTool != null && bookCon != null && bookPpe != null && bookOh != null && bookLabor != null
-      ? money(
-          money(bookTool * ANALYTICS_TOOL_PROFIT_SHARE) +
-            money(bookCon * ANALYTICS_TOOL_PROFIT_SHARE) +
-            money(bookPpe * ANALYTICS_TOOL_PROFIT_SHARE) +
-            money(bookOh * ANALYTICS_OH_PROFIT_SHARE) +
-            bookLabor +
-            markup +
-            coe,
-        )
+    hasBaseWage && bookStc != null && bookOh != null && bookLabor != null
+      ? money(money(bookStc * ANALYTICS_TOOL_PROFIT_SHARE) + money(bookOh * ANALYTICS_OH_PROFIT_SHARE) + bookLabor + markup + coe)
       : null;
   const lockedProfit = hasBaseWage
     ? money(
-        money(locked.tool * ANALYTICS_TOOL_PROFIT_SHARE) +
-          money(locked.consumables * ANALYTICS_TOOL_PROFIT_SHARE) +
-          money(locked.ppe * ANALYTICS_TOOL_PROFIT_SHARE) +
+        money(locked.stc * ANALYTICS_TOOL_PROFIT_SHARE) +
           money((locked.oh ?? bookOh ?? 0) * ANALYTICS_OH_PROFIT_SHARE) +
           (locked.profit ?? bookLabor ?? 0) +
           markup +
@@ -407,7 +371,7 @@ export function deriveEstimateAnalytics(input: DeskPackageInput): EstimateAnalyt
       )
     : null;
   const afterLockedProfit = useLocked ? lockedProfit : bookProfit;
-  const bookStcBudget = money((bookTool ?? 0) + (bookCon ?? 0) + (bookPpe ?? 0));
+  const bookStcBudget = money(bookStc ?? 0);
   const erosion =
     money((bridgeMeta.erosionPerHour ?? 0) * lockedHours + ((bridgeMeta.erosionPctOfBw ?? 0) / 100) * burden.baseWageDollars);
   const stcDrag = useLocked ? 0 : money((bookStcBudget - locked.stc) * ANALYTICS_TOOL_PROFIT_SHARE);
@@ -426,7 +390,7 @@ export function deriveEstimateAnalytics(input: DeskPackageInput): EstimateAnalyt
       id: "stc-embed",
       label: "STC book vs COMP embed",
       amount: stcDrag,
-      note: `Book STC $${bookStcBudget.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} vs $${bridgeMeta.locked.toolPerHour + bridgeMeta.locked.consumablesPerHour + bridgeMeta.locked.ppePerHour}/hr × ${lockedHours.toLocaleString("en-US", { maximumFractionDigits: 1 })} hrs.`,
+      note: `Book STC $${bookStcBudget.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} vs $${bridgeMeta.locked.stcPpePerHour}/hr × ${lockedHours.toLocaleString("en-US", { maximumFractionDigits: 1 })} hrs.`,
     },
     {
       id: "nb",
@@ -462,11 +426,7 @@ export function deriveEstimateAnalytics(input: DeskPackageInput): EstimateAnalyt
       kind: lineKind(row.id),
       amount: amounts[row.id],
     })),
-    rollups: [
-      { id: "rollup-tool", label: "Tool", amount: shownTool },
-      { id: "rollup-con", label: "Con", amount: shownCon },
-      { id: "rollup-ppe", label: "PPE", amount: shownPpe },
-    ],
+    rollups: [{ id: "rollup-stc-ppe", label: ANALYTICS_STC_PPE_LABEL, amount: shownStc }],
     bridge: {
       mode: bridgeMeta.mode,
       hours: lockedHours,
@@ -479,7 +439,7 @@ export function deriveEstimateAnalytics(input: DeskPackageInput): EstimateAnalyt
       packPd,
       bookStcBudget,
       lockedStcBudget: locked.stc,
-      lockedStcPerHour: money(bridgeMeta.locked.toolPerHour + bridgeMeta.locked.consumablesPerHour + bridgeMeta.locked.ppePerHour),
+      lockedStcPerHour: money(bridgeMeta.locked.stcPpePerHour),
       drags,
       dragTotal,
     },

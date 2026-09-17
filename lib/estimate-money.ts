@@ -9,21 +9,22 @@ export const SUBS_CONTINGENCY_LABEL = "Subs contingency";
 export const CBA_INCREASE_LABEL = "CBA increase";
 export const MORE_FUND_LABEL = "M.O.R.E. fund";
 
-/** Analytics Tool / Consumables / PPE % override (percent points). Null = Yates CRAFT/STAFF. */
+/** Analytics STC & PPE % override (percent points). Null = combined craft/staff book. */
 export type AnalyticsStcOverride = {
-  toolPct: number | null;
-  consumablesPct: number | null;
-  ppePct: number | null;
+  stcPpePct: number | null;
 };
 
 export type AnalyticsMode = "pct" | "locked";
 
-/** East WR Merit misc (Bolt / Amend 11) — sourced STC $/hr. Do not invent OH/Profit $. */
+/** East WR Merit misc (Bolt / Amend 11) — sourced split, desk uses the sum only. */
 export const WR_EAST_LOCKED_STC = {
   toolPerHour: 0.5,
   consumablesPerHour: 1.25,
   ppePerHour: 1.85,
 } as const;
+
+export const WR_EAST_LOCKED_STC_PER_HOUR =
+  WR_EAST_LOCKED_STC.toolPerHour + WR_EAST_LOCKED_STC.consumablesPerHour + WR_EAST_LOCKED_STC.ppePerHour;
 
 /**
  * Wood River dig seeds for empty bridge fields (Coker 108441 / cat-vs-coker).
@@ -48,9 +49,7 @@ export const ANALYTICS_BRIDGE_SEED_NOTE =
   "Blank fields use Wood River dig seeds from recent actuals (Coker / CCU1). Editable. Not a lock.";
 
 export type AnalyticsLockedAdders = {
-  toolPerHour: number;
-  consumablesPerHour: number;
-  ppePerHour: number;
+  stcPpePerHour: number;
   ohPerHour: number | null;
   profitPerHour: number | null;
 };
@@ -84,7 +83,7 @@ export type JobMoney = {
   moreFundPerHour: number | null;
   /** Plant / job holidays (YYYY-MM-DD). No billable hours those days. */
   holidays: string[];
-  /** Live-pack Analytics STC & PPE % overrides. Null field = Yates default for that line. */
+  /** Live-pack Analytics STC & PPE % override. Null = combined craft/staff book. */
   analyticsStc: AnalyticsStcOverride;
   analyticsBridge: AnalyticsBridgeMeta;
 };
@@ -136,7 +135,7 @@ function pctOf(amount: number, pct: number) {
 }
 
 export function emptyAnalyticsStc(): AnalyticsStcOverride {
-  return { toolPct: null, consumablesPct: null, ppePct: null };
+  return { stcPpePct: null };
 }
 
 export function emptyAnalyticsNb(): AnalyticsNbDrag {
@@ -150,9 +149,7 @@ export function emptyAnalyticsNb(): AnalyticsNbDrag {
 
 export function emptyAnalyticsLocked(): AnalyticsLockedAdders {
   return {
-    toolPerHour: WR_EAST_LOCKED_STC.toolPerHour,
-    consumablesPerHour: WR_EAST_LOCKED_STC.consumablesPerHour,
-    ppePerHour: WR_EAST_LOCKED_STC.ppePerHour,
+    stcPpePerHour: WR_EAST_LOCKED_STC_PER_HOUR,
     ohPerHour: null,
     profitPerHour: null,
   };
@@ -191,7 +188,7 @@ function signedNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Percent-point override. Empty / invalid → null (Yates default). 0 is a real override. */
+/** Percent-point override. Empty / invalid → null (book default). 0 is a real override. */
 export function hydrateAnalyticsStcPct(value: unknown): number | null {
   if (value == null || value === "") return null;
   const n = Number(value);
@@ -199,13 +196,23 @@ export function hydrateAnalyticsStcPct(value: unknown): number | null {
   return Math.max(0, n);
 }
 
+function sumPresentPcts(...values: unknown[]): number | null {
+  let total = 0;
+  let present = false;
+  for (const value of values) {
+    const parsed = hydrateAnalyticsStcPct(value);
+    if (parsed == null) continue;
+    present = true;
+    total += parsed;
+  }
+  return present ? total : null;
+}
+
+/** One STC & PPE %. Migrates old tool + consumables + ppe overrides by summing present values. */
 export function hydrateAnalyticsStc(raw: unknown): AnalyticsStcOverride {
   const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  return {
-    toolPct: hydrateAnalyticsStcPct(row.toolPct),
-    consumablesPct: hydrateAnalyticsStcPct(row.consumablesPct),
-    ppePct: hydrateAnalyticsStcPct(row.ppePct),
-  };
+  if ("stcPpePct" in row) return { stcPpePct: hydrateAnalyticsStcPct(row.stcPpePct) };
+  return { stcPpePct: sumPresentPcts(row.toolPct, row.consumablesPct, row.ppePct) };
 }
 
 function lockedStcRate(value: unknown, fallback: number) {
@@ -217,10 +224,18 @@ function lockedStcRate(value: unknown, fallback: number) {
 export function hydrateAnalyticsLocked(raw: unknown): AnalyticsLockedAdders {
   const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const defaults = emptyAnalyticsLocked();
+  const hasCombined = row.stcPpePerHour != null && row.stcPpePerHour !== "";
+  const hasSplit =
+    (row.toolPerHour != null && row.toolPerHour !== "") ||
+    (row.consumablesPerHour != null && row.consumablesPerHour !== "") ||
+    (row.ppePerHour != null && row.ppePerHour !== "");
+  const migratedSplit = hasSplit
+    ? lockedStcRate(row.toolPerHour, WR_EAST_LOCKED_STC.toolPerHour) +
+      lockedStcRate(row.consumablesPerHour, WR_EAST_LOCKED_STC.consumablesPerHour) +
+      lockedStcRate(row.ppePerHour, WR_EAST_LOCKED_STC.ppePerHour)
+    : defaults.stcPpePerHour;
   return {
-    toolPerHour: lockedStcRate(row.toolPerHour, defaults.toolPerHour),
-    consumablesPerHour: lockedStcRate(row.consumablesPerHour, defaults.consumablesPerHour),
-    ppePerHour: lockedStcRate(row.ppePerHour, defaults.ppePerHour),
+    stcPpePerHour: hasCombined ? lockedStcRate(row.stcPpePerHour, defaults.stcPpePerHour) : migratedSplit,
     ohPerHour: hydrateAnalyticsStcPct(row.ohPerHour),
     profitPerHour: hydrateAnalyticsStcPct(row.profitPerHour),
   };
