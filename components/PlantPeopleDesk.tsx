@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLensUser } from "@/components/OwnerDeskContext";
 import { canAssignSitePeople } from "@/lib/module-access";
-import { SITE_ACCESS_DURATION_COPY, type SiteAccessGrant } from "@/lib/site-access";
+import { SITE_ACCESS_DURATION_COPY, type PublicSiteAccessGrant } from "@/lib/site-access";
 import {
   defaultToolRoomWindow,
   TOOL_ROOM_OWNER_PM_COPY,
@@ -14,7 +14,7 @@ import {
 
 type Person = { id: string; email?: string; name: string; jobTitle?: string; role?: string };
 
-type PublicGrant = SiteAccessGrant & { status: "provisioning" | "live"; copy: string };
+type PublicGrant = PublicSiteAccessGrant;
 
 export function PlantPeopleDesk({
   siteId,
@@ -134,7 +134,12 @@ export function PlantPeopleDesk({
               onClick={() => {
                 const person = roster.find((row) => row.email === accessEmail);
                 setNote(SITE_ACCESS_DURATION_COPY);
-                void post({ action: "grant-site-access", email: accessEmail, name: person?.name });
+                void post({
+                  action: "grant-site-access",
+                  email: accessEmail,
+                  name: person?.name,
+                  siteName,
+                });
               }}
               className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white disabled:opacity-50"
             >

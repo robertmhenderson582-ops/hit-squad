@@ -3,8 +3,18 @@ import { readSession } from "@/lib/auth";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { cookieValue } from "@/lib/http";
 import { defaultJobRoleForSeat } from "@/lib/job-roles";
-import { canWriteSiteAccess, createSiteAccessGrant, siteAccessGrantId, siteAccessMaskCopy, siteAccessStatus } from "@/lib/site-access";
 import {
+  applySiteAccessGrant,
+  canSilentApproveSiteAccess,
+  canWriteSiteAccess,
+  createSiteAccessGrant,
+  failSiteAccessGrant,
+  publicSiteAccessGrant,
+  siteAccessGrantId,
+} from "@/lib/site-access";
+import {
+  getSiteAccessGrant,
+  listPendingSiteAccessGrants,
   listSiteAccessGrants,
   listToolRoomDuties,
   removeSiteAccessGrant,
@@ -34,12 +44,11 @@ async function assigneeFor(email: string) {
   };
 }
 
-function publicGrants(grants: Awaited<ReturnType<typeof listSiteAccessGrants>>, now: number) {
-  return grants.map((grant) => ({
-    ...grant,
-    status: siteAccessStatus(grant, now),
-    copy: siteAccessMaskCopy(grant, now),
-  }));
+function plantPayload(siteId: string, grants: Awaited<ReturnType<typeof listSiteAccessGrants>>) {
+  return {
+    siteId,
+    grants: grants.map(publicSiteAccessGrant),
+  };
 }
 
 export async function GET(request: Request) {
@@ -47,13 +56,20 @@ export async function GET(request: Request) {
   if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   const user = await scopedDeskUser(session, request);
   const url = new URL(request.url);
+  if (url.searchParams.get("queue") === "1") {
+    if (!canSilentApproveSiteAccess(user)) {
+      return NextResponse.json({ error: "That section is not on this desk." }, { status: 403 });
+    }
+    return NextResponse.json({
+      queue: await listPendingSiteAccessGrants(),
+      grants: await listSiteAccessGrants(),
+    });
+  }
   const siteId = siteIdOf(url.searchParams.get("siteId"));
   if (!siteId) return NextResponse.json({ error: "Pick a site." }, { status: 400 });
-  const now = Date.now();
   return NextResponse.json({
-    siteId,
+    ...plantPayload(siteId, await listSiteAccessGrants(siteId)),
     canAssign: canWriteSiteAccess(user),
-    grants: publicGrants(await listSiteAccessGrants(siteId), now),
     toolRoom: await listToolRoomDuties(siteId),
   });
 }
@@ -65,17 +81,16 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     action?: string;
     siteId?: string;
+    siteName?: string;
     email?: string;
     name?: string;
+    grantId?: string;
     startYmd?: string;
     endYmd?: string;
     postEndYmd?: string;
   };
   const siteId = siteIdOf(body.siteId);
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-  if (!siteId) return NextResponse.json({ error: "Pick a site." }, { status: 400 });
-  if (!email.includes("@")) return NextResponse.json({ error: "Pick a person." }, { status: 400 });
-
   const action = body.action;
   const now = Date.now();
 
@@ -83,19 +98,24 @@ export async function POST(request: Request) {
     if (!canWriteSiteAccess(user)) {
       return NextResponse.json({ error: "Owner and Project Managers grant site access." }, { status: 403 });
     }
+    if (!siteId) return NextResponse.json({ error: "Pick a site." }, { status: 400 });
+    if (!email.includes("@")) return NextResponse.json({ error: "Pick a person." }, { status: 400 });
     const grant = await upsertSiteAccessGrant(
       createSiteAccessGrant({
         siteId,
+        siteName: body.siteName,
         email,
         name: body.name,
         grantedByEmail: user.email,
+        grantedByName: user.name,
+        actor: user,
         now,
       }),
     );
     return NextResponse.json({
       ok: true,
-      grant: { ...grant, status: siteAccessStatus(grant, now), copy: siteAccessMaskCopy(grant, now) },
-      grants: publicGrants(await listSiteAccessGrants(siteId), now),
+      grant: publicSiteAccessGrant(grant),
+      ...plantPayload(siteId, await listSiteAccessGrants(siteId)),
       toolRoom: await listToolRoomDuties(siteId),
     });
   }
@@ -104,11 +124,35 @@ export async function POST(request: Request) {
     if (!canWriteSiteAccess(user)) {
       return NextResponse.json({ error: "Owner and Project Managers grant site access." }, { status: 403 });
     }
+    if (!siteId || !email.includes("@")) return NextResponse.json({ error: "Pick a person." }, { status: 400 });
     await removeSiteAccessGrant(siteAccessGrantId(siteId, email));
     return NextResponse.json({
       ok: true,
-      grants: publicGrants(await listSiteAccessGrants(siteId), now),
+      ...plantPayload(siteId, await listSiteAccessGrants(siteId)),
       toolRoom: await listToolRoomDuties(siteId),
+    });
+  }
+
+  if (action === "apply-site-access" || action === "fail-site-access") {
+    if (!canSilentApproveSiteAccess(user)) {
+      return NextResponse.json({ error: "That section is not on this desk." }, { status: 403 });
+    }
+    const id =
+      typeof body.grantId === "string" && body.grantId.trim()
+        ? body.grantId.trim()
+        : siteId && email.includes("@")
+          ? siteAccessGrantId(siteId, email)
+          : "";
+    const current = id ? await getSiteAccessGrant(id) : null;
+    if (!current) return NextResponse.json({ error: "Could not complete that grant." }, { status: 404 });
+    const next = action === "apply-site-access" ? applySiteAccessGrant(current, user, now) : failSiteAccessGrant(current, user, now);
+    if ("error" in next) return NextResponse.json({ error: next.error }, { status: 400 });
+    await upsertSiteAccessGrant(next);
+    return NextResponse.json({
+      ok: true,
+      grant: next,
+      queue: await listPendingSiteAccessGrants(),
+      grants: await listSiteAccessGrants(),
     });
   }
 
@@ -116,6 +160,7 @@ export async function POST(request: Request) {
     if (!canWriteToolRoomDuty(user)) {
       return NextResponse.json({ error: "Owner and Project Managers assign Tool Room duty." }, { status: 403 });
     }
+    if (!siteId || !email.includes("@")) return NextResponse.json({ error: "Pick a person." }, { status: 400 });
     const assignee = await assigneeFor(email);
     const duty = await upsertToolRoomDuty(
       createToolRoomDuty({
@@ -133,7 +178,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       duty,
-      grants: publicGrants(await listSiteAccessGrants(siteId), now),
+      ...plantPayload(siteId, await listSiteAccessGrants(siteId)),
       toolRoom: await listToolRoomDuties(siteId),
     });
   }
@@ -142,10 +187,11 @@ export async function POST(request: Request) {
     if (!canWriteToolRoomDuty(user)) {
       return NextResponse.json({ error: "Owner and Project Managers assign Tool Room duty." }, { status: 403 });
     }
+    if (!siteId || !email.includes("@")) return NextResponse.json({ error: "Pick a person." }, { status: 400 });
     await removeToolRoomDuty(toolRoomDutyId(siteId, email));
     return NextResponse.json({
       ok: true,
-      grants: publicGrants(await listSiteAccessGrants(siteId), now),
+      ...plantPayload(siteId, await listSiteAccessGrants(siteId)),
       toolRoom: await listToolRoomDuties(siteId),
     });
   }

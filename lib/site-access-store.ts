@@ -108,6 +108,16 @@ export async function listSiteAccessGrants(siteId?: string): Promise<SiteAccessG
   return key ? data.grants.filter((row) => row.siteId === key) : [...data.grants];
 }
 
+export async function listPendingSiteAccessGrants(): Promise<SiteAccessGrant[]> {
+  const data = await hydrateSiteAccessStore();
+  return data.grants.filter((row) => row.state === "pending");
+}
+
+export async function getSiteAccessGrant(id: string): Promise<SiteAccessGrant | null> {
+  const data = await hydrateSiteAccessStore();
+  return data.grants.find((row) => row.id === id) ?? null;
+}
+
 export async function listToolRoomDuties(siteId?: string): Promise<ToolRoomDuty[]> {
   const data = await hydrateSiteAccessStore();
   const key = siteId ? siteId.trim().toLowerCase() : "";

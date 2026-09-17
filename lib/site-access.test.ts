@@ -2,18 +2,23 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import {
   SITE_ACCESS_DURATION_COPY,
+  SITE_ACCESS_FAILED_COPY,
   SITE_ACCESS_LIVE_COPY,
-  SITE_ACCESS_PROVISION_MS,
+  applySiteAccessGrant,
+  canSilentApproveSiteAccess,
   canWriteSiteAccess,
   createSiteAccessGrant,
+  failSiteAccessGrant,
+  publicSiteAccessGrant,
   siteAccessIsLive,
   siteAccessMaskCopy,
-  siteAccessStatus,
 } from "./site-access.ts";
 import {
+  listPendingSiteAccessGrants,
   listSiteAccessGrants,
   listToolRoomDuties,
   removeSiteAccessGrant,
@@ -32,8 +37,9 @@ import {
   toolRoomTimeboxedFor,
 } from "./tool-room-duty.ts";
 
-const owner = { email: OWNER_LOGIN_EMAIL, role: "owner" as const, jobTitle: "Owner" };
-const nathan = { email: "nathanboyte@gmail.com", role: "tester" as const, jobTitle: "Project Manager" };
+const owner = { email: OWNER_LOGIN_EMAIL, role: "owner" as const, jobTitle: "Owner", name: "Robert" };
+const novus = { email: NOVUS_EMAIL, role: "operator" as const, name: "Novus" };
+const nathan = { email: "nathanboyte@gmail.com", role: "tester" as const, jobTitle: "Project Manager", name: "Nathan" };
 const chance = { email: "chancec318@yahoo.com", role: "tester" as const, jobTitle: "Quality Manager" };
 const mark = { email: "marks544@yahoo.com", role: "tester" as const, jobTitle: "Foreman" };
 
@@ -42,46 +48,87 @@ function source(rel: string) {
 }
 
 describe("PM site access grants", () => {
-  it("lets Owner and PM grant; silently Owner-approves; masks duration until live", () => {
+  it("lets Owner and PM grant; PM stays pending until Owner/Novus apply", () => {
     assert.equal(canWriteSiteAccess(owner), true);
     assert.equal(canWriteSiteAccess(nathan), true);
     assert.equal(canWriteSiteAccess(chance), false);
     assert.equal(canWriteSiteAccess(mark), false);
+    assert.equal(canSilentApproveSiteAccess(owner), true);
+    assert.equal(canSilentApproveSiteAccess(novus), true);
+    assert.equal(canSilentApproveSiteAccess(nathan), false);
 
     const now = 1_700_000_000_000;
-    const grant = createSiteAccessGrant({
+    const pending = createSiteAccessGrant({
       siteId: "wood-river",
+      siteName: "Wood River",
       email: mark.email,
       name: "Mark Schneider",
       grantedByEmail: nathan.email,
+      grantedByName: nathan.name,
+      actor: nathan,
       now,
     });
-    assert.equal(grant.approvedByOwner, true);
-    assert.equal(grant.liveAt, now + SITE_ACCESS_PROVISION_MS);
-    assert.equal(siteAccessStatus(grant, now), "provisioning");
-    assert.equal(siteAccessIsLive(grant, now), false);
-    assert.equal(siteAccessMaskCopy(grant, now), SITE_ACCESS_DURATION_COPY);
-    assert.equal(siteAccessMaskCopy(grant, now).toLowerCase().includes("pending"), false);
-    assert.equal(siteAccessMaskCopy(grant, now).toLowerCase().includes("approval"), false);
-    assert.equal(siteAccessMaskCopy(grant, now).toLowerCase().includes("owner"), false);
-    assert.equal(siteAccessStatus(grant, grant.liveAt), "live");
-    assert.equal(siteAccessMaskCopy(grant, grant.liveAt), SITE_ACCESS_LIVE_COPY);
+    assert.equal(pending.state, "pending");
+    assert.equal(pending.approvedByOwner, false);
+    assert.equal(siteAccessIsLive(pending), false);
+    assert.equal(siteAccessMaskCopy(pending), SITE_ACCESS_DURATION_COPY);
+    assert.match(SITE_ACCESS_DURATION_COPY, /usually finishes within a few hours/);
+    assert.equal(siteAccessMaskCopy(pending).toLowerCase().includes("pending"), false);
+    assert.equal(siteAccessMaskCopy(pending).toLowerCase().includes("approval"), false);
+    assert.equal(siteAccessMaskCopy(pending).toLowerCase().includes("owner"), false);
+    assert.equal(publicSiteAccessGrant(pending).status, "working");
+    assert.equal("approvedByOwner" in publicSiteAccessGrant(pending), false);
+    assert.equal(siteAccessIsLive({ ...pending }), false);
+    assert.equal(siteAccessMaskCopy(pending), SITE_ACCESS_DURATION_COPY);
+
+    const applied = applySiteAccessGrant(pending, owner, now + 10);
+    if ("error" in applied) throw new Error(applied.error);
+    assert.equal(applied.state, "live");
+    assert.equal(applied.approvedByOwner, true);
+    assert.equal(siteAccessIsLive(applied), true);
+    assert.equal(siteAccessMaskCopy(applied), SITE_ACCESS_LIVE_COPY);
+
+    const denied = failSiteAccessGrant(pending, novus, now + 11);
+    if ("error" in denied) throw new Error(denied.error);
+    assert.equal(denied.state, "failed");
+    assert.equal(denied.approvedByOwner, false);
+    assert.equal(siteAccessIsLive(denied), false);
+    assert.equal(siteAccessMaskCopy(denied), SITE_ACCESS_FAILED_COPY);
+    assert.equal(SITE_ACCESS_FAILED_COPY.toLowerCase().includes("denied"), false);
+    assert.equal(SITE_ACCESS_FAILED_COPY.toLowerCase().includes("owner"), false);
+
+    assert.equal("error" in applySiteAccessGrant(pending, nathan), true);
+    const ownerGrant = createSiteAccessGrant({
+      siteId: "wood-river",
+      email: mark.email,
+      grantedByEmail: owner.email,
+      actor: owner,
+      now,
+    });
+    assert.equal(ownerGrant.state, "live");
+    assert.equal(siteAccessIsLive(ownerGrant), true);
   });
 
-  it("persists grants in the site-access store", async () => {
+  it("persists pending grants until Owner applies them", async () => {
     useMemorySiteAccess();
     const grant = createSiteAccessGrant({
       siteId: "Wood-River",
       email: mark.email,
       name: "Mark",
       grantedByEmail: nathan.email,
+      actor: nathan,
       now: 10,
     });
     await upsertSiteAccessGrant(grant);
     const listed = await listSiteAccessGrants("wood-river");
     assert.equal(listed.length, 1);
-    assert.equal(listed[0]?.email, mark.email);
-    assert.equal(listed[0]?.approvedByOwner, true);
+    assert.equal(listed[0]?.state, "pending");
+    assert.equal((await listPendingSiteAccessGrants())[0]?.email, mark.email);
+    const applied = applySiteAccessGrant(listed[0]!, owner, 20);
+    if ("error" in applied) throw new Error(applied.error);
+    await upsertSiteAccessGrant(applied);
+    assert.equal((await listPendingSiteAccessGrants()).length, 0);
+    assert.equal((await listSiteAccessGrants("wood-river"))[0]?.state, "live");
     await removeSiteAccessGrant(grant.id);
     assert.deepEqual(await listSiteAccessGrants("wood-river"), []);
   });
@@ -163,18 +210,27 @@ describe("GF Tool Room attendant window", () => {
 });
 
 describe("site people wiring", () => {
-  it("keeps duration copy and Tool Room window on the People tab", () => {
+  it("keeps duration copy on People and Owner/Novus queue off that tab", () => {
     const plant = source("../components/JobPlantPage.tsx");
     const people = source("../components/PlantPeopleDesk.tsx");
     const api = source("../app/api/desk/site-access/route.ts");
+    const queue = source("../components/SiteAccessQueueDesk.tsx");
+    const shell = source("../components/SettingsShell.tsx");
     assert.match(plant, /PlantPeopleDesk/);
     assert.match(people, /SITE_ACCESS_DURATION_COPY/);
-    assert.match(source("./site-access.ts"), /takes a duration to complete/);
+    assert.match(source("./site-access.ts"), /usually finishes within a few hours/);
     assert.equal(people.toLowerCase().includes("pending owner approval"), false);
+    assert.equal(people.toLowerCase().includes("approve"), false);
     assert.equal(source("./site-access.ts").toLowerCase().includes("pending owner approval"), false);
     assert.match(people, /TOOL_ROOM_WINDOW_COPY/);
     assert.match(api, /scopedDeskUser/);
     assert.match(api, /grant-site-access/);
-    assert.match(api, /assign-tool-room/);
+    assert.match(api, /apply-site-access/);
+    assert.match(api, /searchParams.get\("queue"\)/);
+    assert.match(queue, /queue=1/);
+    assert.equal(api.includes("nodemailer") || api.includes("invite-mail"), false);
+    assert.match(queue, /Apply access/);
+    assert.match(queue, /Owner desk and Novus queue/);
+    assert.match(shell, /\/settings\/site-access/);
   });
 });
