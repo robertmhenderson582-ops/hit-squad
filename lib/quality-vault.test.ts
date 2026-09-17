@@ -14,6 +14,7 @@ import {
 import { saveQualityCompanyDocDrop } from "./quality-company-doc-drops.ts";
 import { listQualityFolderDrops, listQualityVaultOwnerTree, saveQualityFolderDrop } from "./quality-folder-drops.ts";
 import {
+  QUALITY_TEMPLATE_FILL_OPEN_DEADLINE_MS,
   QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS,
   QUALITY_VAULT_WRITE_DEADLINE_MS,
   qualityDropLeaks,
@@ -484,9 +485,10 @@ describe("Quality vault persist", { concurrency: 1 }, () => {
     assert.equal(qualityVaultWriteUserError(new DriveApiError(403, "Quota exceeded for quota metric 'Total Query Cost'"), false), QUALITY_VAULT_WRITE_ERROR);
     assert.equal(qualityVaultWriteUserError(new Error(QUALITY_VAULT_WRITE_TIMEOUT_ERROR), false), QUALITY_VAULT_WRITE_TIMEOUT_ERROR);
     assert.equal(qualityVaultWriteUserError(new Error(QUALITY_VAULT_WRITE_TIMEOUT_ERROR), true), QUALITY_VAULT_WRITE_TIMEOUT_ERROR);
-    assert.ok(QUALITY_VAULT_WRITE_DEADLINE_MS >= 45_000 && QUALITY_VAULT_WRITE_DEADLINE_MS <= 60_000);
+    assert.ok(QUALITY_VAULT_WRITE_DEADLINE_MS >= 60_000 && QUALITY_VAULT_WRITE_DEADLINE_MS <= 80_000);
     assert.ok(QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS > QUALITY_VAULT_WRITE_DEADLINE_MS);
-    assert.ok(QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS <= 60_000);
+    assert.ok(QUALITY_TEMPLATE_FILL_OPEN_DEADLINE_MS > QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS);
+    assert.ok(QUALITY_TEMPLATE_FILL_OPEN_DEADLINE_MS >= 90_000);
     assert.equal(qualityDropLeaks(QUALITY_VAULT_WRITE_ERROR), false);
     assert.equal(qualityDropLeaks(QUALITY_VAULT_WRITE_TIMEOUT_ERROR), false);
     assert.equal(qualityDropLeaks(QUALITY_VAULT_SHARE_ERROR), false);

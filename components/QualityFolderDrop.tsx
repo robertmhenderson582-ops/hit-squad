@@ -81,26 +81,42 @@ export function QualityFolderDrop({
     const companyName = companyLabel ? `&companyLabel=${encodeURIComponent(companyLabel)}` : "";
     const site = siteLabel ? `&siteLabel=${encodeURIComponent(siteLabel)}` : "";
     const job = jobLabel ? `&jobLabel=${encodeURIComponent(jobLabel)}` : "";
-    void fetch(
-      `/api/desk/briefs?kind=quality&jobId=${encodeURIComponent(jobId)}&folder=${encodeURIComponent(folderId)}${company}${companyName}${site}${job}`,
-      viewAsInit(owner?.viewAs),
+    const folders = folderId === "packages" ? [folderId] : [folderId, "packages" as const];
+    void Promise.all(
+      folders.map((folder) =>
+        fetch(
+          `/api/desk/briefs?kind=quality&jobId=${encodeURIComponent(jobId)}&folder=${encodeURIComponent(folder)}${company}${companyName}${site}${job}`,
+          viewAsInit(owner?.viewAs),
+        ).then(async (response) => {
+          const data = (await response.json().catch(() => ({}))) as {
+            files?: Array<{ name?: string; type?: string }>;
+            briefs?: Array<{ savedAt?: string; files?: Array<{ name?: string; type?: string }> }>;
+            store?: string;
+            stored?: boolean;
+          };
+          return { folder, response, data };
+        }),
+      ),
     )
-      .then(async (response) => {
-        const data = (await response.json().catch(() => ({}))) as {
-          files?: Array<{ name?: string; type?: string }>;
-          briefs?: Array<{ savedAt?: string; files?: Array<{ name?: string; type?: string }> }>;
-          store?: string;
-          stored?: boolean;
-        };
+      .then((rows) => {
         if (cancelled) return;
-        const listed = response.ok
-          ? Array.isArray(data.files)
-            ? data.files
-            : data.briefs?.[0]?.files ?? []
+        const home = rows[0];
+        const listed = home.response.ok
+          ? Array.isArray(home.data.files)
+            ? home.data.files
+            : home.data.briefs?.[0]?.files ?? []
           : [];
-        const vaulted = qualityVaultStored(data.store, data.stored) ? listed : [];
+        const rippleFills = rows.slice(1).flatMap((row) => {
+          const files = row.response.ok
+            ? Array.isArray(row.data.files)
+              ? row.data.files
+              : row.data.briefs?.[0]?.files ?? []
+            : [];
+          return files.filter((file) => isQualityFilledCopyName(file.name));
+        });
+        const vaulted = qualityVaultStored(home.data.store, home.data.stored) ? [...listed, ...rippleFills] : rippleFills;
         setFiles(mergeVaultedQualityFiles(vaulted, readQualityFolderFiles(jobId, folderId), viewer));
-        const stamp = vaulted.length ? data.briefs?.[0]?.savedAt : undefined;
+        const stamp = vaulted.length ? home.data.briefs?.[0]?.savedAt : undefined;
         if (stamp) setSavedAt(stamp);
         else setSavedAt(null);
       })
@@ -281,7 +297,7 @@ export function QualityFolderDrop({
                 <span className="flex gap-3">
                   {onOpenFilled ? (
                     <button type="button" className="text-xs text-steel underline" onClick={() => onOpenFilled(file.name)}>
-                      Open form
+                      Open filled copy
                     </button>
                   ) : null}
                   {canMutate && onRemoveFilled ? (

@@ -94,6 +94,7 @@ export async function GET(request: Request) {
         jobId: jobId || undefined,
         folderId: folderId || undefined,
         packageId: params.get("packageId"),
+        packageName: params.get("packageName") || params.get("jobLabel") || undefined,
         fileName,
         companyId: companyId || undefined,
         companyLabel: params.get("companyLabel") || undefined,

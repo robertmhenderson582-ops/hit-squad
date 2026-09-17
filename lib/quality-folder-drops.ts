@@ -20,6 +20,7 @@ import {
   showsQualityFolderDesk,
   type QualityFolderId,
 } from "./quality-folders.ts";
+import { isQualityFilledCopyName } from "./quality-template-form.ts";
 import { DriveApiError, driveFailureKind } from "./drive-estimates.ts";
 import { isQualityReadyShelfJobId } from "./quality-package-shelf.ts";
 import {
@@ -185,10 +186,17 @@ export async function listQualityFolderDrops(
     };
   }
   // Briefs index is metadata after a confirmed Drive write. Refresh merges Drive names + brief names.
-  const who = hasBuildDesk(user) ? undefined : user.email;
-  const briefs = await listStoredBriefs("quality", who, { jobId: job, folderId, companyId: company });
-  const mine = qualityFolderDropsFor(briefs, job, folderId, hasBuildDesk(user) ? undefined : user.email);
-  const briefFiles = mine.flatMap((row) => row.files);
+  // Job folder drops stay per-seat. Named filled copies are shared so View-as Wendell can Open them.
+  const personalWho = hasBuildDesk(user) ? undefined : user.email;
+  const briefs = await listStoredBriefs("quality", personalWho, { jobId: job, folderId, companyId: company });
+  const sharedBriefs = personalWho
+    ? await listStoredBriefs("quality", undefined, { jobId: job, folderId, companyId: company })
+    : briefs;
+  const mine = qualityFolderDropsFor(briefs, job, folderId, personalWho);
+  const briefFiles = [
+    ...mine.flatMap((row) => row.files),
+    ...sharedBriefs.flatMap((row) => (row.files ?? []).filter((file) => isQualityFilledCopyName(file.name))),
+  ];
   const vault = await listQualityVaultFiles(leadBriefAdapter("quality"), {
     companyId: company,
     companyLabel: place?.companyLabel,
@@ -196,11 +204,15 @@ export async function listQualityFolderDrops(
     jobId: job,
     jobLabel: place?.jobLabel,
     folderId,
-    who,
+    who: undefined,
     shelf: isQualityReadyShelfJobId(job),
     packageLabel: place?.jobLabel,
   }, user);
-  const files = vault.stored ? filterVaultListedFiles(mergeVaultedQualityNames(vault.files, briefFiles), user) : [];
+  const personalNames = new Set(mine.flatMap((row) => row.files.map((file) => file.name)));
+  const vaultFiles = vault.files.filter(
+    (file) => !personalWho || isQualityFilledCopyName(file.name) || personalNames.has(file.name),
+  );
+  const files = vault.stored ? filterVaultListedFiles(mergeVaultedQualityNames(vaultFiles, briefFiles), user) : [];
   return {
     briefs: filterVaultBriefsForViewer(briefs.map(publicBrief), user),
     files,
