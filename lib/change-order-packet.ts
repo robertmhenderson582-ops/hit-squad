@@ -517,7 +517,9 @@ export function clientScrIdPlaceholder(client = "", site = "") {
   return "Client SCR ID";
 }
 
-export function clientScrIdHelp(_client = "", _site = "") {
+export function clientScrIdHelp(client = "", site = "") {
+  void client;
+  void site;
   return "Fill once the client issues it — after our submit / their review.";
 }
 
