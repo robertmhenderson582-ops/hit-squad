@@ -5,15 +5,17 @@ import { fileURLToPath } from "node:url";
 import {
   ANALYTICS_OH_PROFIT_SHARE,
   ANALYTICS_PHASE1_LINES,
-  ANALYTICS_PHASE2_NOTE,
   ANALYTICS_TAB_ID,
   ANALYTICS_TAB_LABEL,
   ANALYTICS_TOOL_PROFIT_SHARE,
   YATES_ANALYTICS_BURDEN,
   analyticsBurdenFromCrew,
+  analyticsBurdenRates,
   analyticsLine,
   analyticsMarkupDollars,
+  analyticsRollup,
   deriveEstimateAnalytics,
+  yatesStcHint,
 } from "./estimate-analytics.ts";
 import { deskPackageBreakdown, deskPackageTotal, type DeskPackageInput } from "./estimate-desk-total.ts";
 import { boiler17B1FilledSnapshot } from "./wood-river-b1.ts";
@@ -23,6 +25,8 @@ import { largeToolAmount, thirdPartyCost } from "./equipment-sheet.ts";
 import { computeRangeHours } from "./hours-clock.ts";
 import { estimateTabIdsForSite } from "./estimate-tabs.ts";
 import { lookupCompWageRow } from "./wage-lookup.ts";
+import { emptyAnalyticsStc, emptyJobMoney, hydrateAnalyticsStc, hydrateJobMoney } from "./estimate-money.ts";
+import { emptyJobMeta, hydrateJobMeta } from "./staffing-plan.ts";
 
 function read(rel: string) {
   return readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
@@ -68,7 +72,11 @@ describe("Yates Analytics model", () => {
     assert.equal(YATES_ANALYTICS_BURDEN.craft.profit, 0.15);
     assert.equal(YATES_ANALYTICS_BURDEN.staff.oh, 0.17);
     assert.equal(YATES_ANALYTICS_BURDEN.staff.tool, 0.015);
-    assert.match(ANALYTICS_PHASE2_NOTE, /Procurement\/Subcontracts/);
+    assert.match(read("./estimate-analytics.ts"), /Phase 2 \(omitted\): Procurement\/Subcontracts/);
+    assert.match(yatesStcHint("tool"), /craft 3\.5% · staff 1\.5%/);
+    assert.match(yatesStcHint("ppe"), /craft 2\.75% · staff 2\.75%/);
+    assert.deepEqual(emptyJobMoney().analyticsStc, emptyAnalyticsStc());
+    assert.deepEqual(emptyJobMeta().analyticsStc, emptyAnalyticsStc());
   });
 
   it("uses COMP BW for OH / profit, not billed ST", () => {
@@ -227,10 +235,87 @@ describe("Yates Analytics model", () => {
     assert.equal((analyticsLine(sheet, "profit-per-work-hour")?.amount ?? 0) > 0, true);
     assert.equal(estimateTabIdsForSite(BOILER17_SITE, BOILER17_CLIENT).includes("analytics"), true);
   });
+
+  it("overrides Tool / Consumables / PPE % from pack jobMeta — dollars = hours × baseSt × %", () => {
+    const crew = { direct: [{ position: "Boilermaker Journeyman", ranges: [WEEK] }] };
+    const yates = deriveEstimateAnalytics({ crew, ...WOOD });
+    const yatesBurden = analyticsBurdenFromCrew(crew, WOOD.site, WOOD.client);
+    const wage = lookupCompWageRow("Boilermaker Journeyman", WOOD.site);
+    assert.ok(wage?.baseSt);
+    const hours = yatesBurden.baseWageHours;
+    const base = hours * wage.baseSt;
+    assert.equal(analyticsRollup(yates, "rollup-tool")?.amount, Math.round(base * YATES_ANALYTICS_BURDEN.craft.tool * 100) / 100);
+
+    const override = { toolPct: 4, consumablesPct: 2, ppePct: 1 };
+    const sheet = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: { analyticsStc: override } });
+    const burden = analyticsBurdenFromCrew(crew, WOOD.site, WOOD.client, [], {}, override);
+    assert.equal(burden.tool, Math.round(base * 0.04 * 100) / 100);
+    assert.equal(burden.consumables, Math.round(base * 0.02 * 100) / 100);
+    assert.equal(burden.ppe, Math.round(base * 0.01 * 100) / 100);
+    assert.equal(analyticsRollup(sheet, "rollup-tool")?.amount, burden.tool);
+    assert.equal(analyticsRollup(sheet, "rollup-con")?.amount, burden.consumables);
+    assert.equal(analyticsRollup(sheet, "rollup-ppe")?.amount, burden.ppe);
+    assert.equal(analyticsLine(sheet, "tool")?.amount, Math.round(burden.tool * ANALYTICS_TOOL_PROFIT_SHARE * 100) / 100);
+    assert.equal(analyticsLine(sheet, "consumables")?.amount, Math.round(burden.consumables * ANALYTICS_TOOL_PROFIT_SHARE * 100) / 100);
+    assert.equal(analyticsLine(sheet, "ppe")?.amount, Math.round(burden.ppe * ANALYTICS_TOOL_PROFIT_SHARE * 100) / 100);
+    assert.equal(burden.tool !== yatesBurden.tool, true);
+    assert.equal(burden.oh, yatesBurden.oh);
+    assert.equal(burden.profit, yatesBurden.profit);
+    assert.equal(analyticsLine(sheet, "total-oh-base-wages")?.amount, yatesBurden.oh);
+  });
+
+  it("cleared override hydrates back to Yates craft/staff split", () => {
+    const row = { position: "Lead Site 01", laborClassOverride: "Merit" as const, ranges: [WEEK] };
+    const staffYates = analyticsBurdenFromCrew({ staff: [row] }, WOOD.site, WOOD.client);
+    const staffCleared = analyticsBurdenFromCrew({ staff: [row] }, WOOD.site, WOOD.client, [], {}, {
+      toolPct: null,
+      consumablesPct: null,
+      ppePct: null,
+    });
+    assert.deepEqual(staffCleared, staffYates);
+    const staffOverride = analyticsBurdenFromCrew({ staff: [row] }, WOOD.site, WOOD.client, [], {}, {
+      toolPct: 4,
+      consumablesPct: null,
+      ppePct: null,
+    });
+    assert.equal(staffOverride.tool > staffYates.tool, true);
+    assert.equal(staffOverride.consumables, staffYates.consumables);
+    assert.equal(analyticsBurdenRates("staff").tool, YATES_ANALYTICS_BURDEN.staff.tool);
+    assert.equal(analyticsBurdenRates("direct", { toolPct: 4, consumablesPct: null, ppePct: null }).tool, 0.04);
+    assert.equal(analyticsBurdenRates("staff", { toolPct: 4, consumablesPct: null, ppePct: null }).tool, 0.04);
+  });
+
+  it("persists STC % on jobMeta and hydrates the same rates after a pack round-trip", () => {
+    const stored = {
+      analyticsStc: { toolPct: 5, consumablesPct: 0, ppePct: 2.75 },
+      laborContingencyPct: 3,
+    };
+    const meta = hydrateJobMeta(stored);
+    assert.equal(meta.analyticsStc.toolPct, 5);
+    assert.equal(meta.analyticsStc.consumablesPct, 0);
+    assert.equal(meta.analyticsStc.ppePct, 2.75);
+    const again = hydrateJobMeta(JSON.parse(JSON.stringify(meta)) as Record<string, unknown>);
+    assert.deepEqual(again.analyticsStc, meta.analyticsStc);
+    assert.deepEqual(hydrateJobMoney(JSON.parse(JSON.stringify(meta))).analyticsStc, meta.analyticsStc);
+    assert.deepEqual(hydrateAnalyticsStc({ toolPct: "", consumablesPct: "nope", ppePct: -1 }), {
+      toolPct: null,
+      consumablesPct: null,
+      ppePct: 0,
+    });
+    assert.deepEqual(hydrateJobMoney({}).analyticsStc, emptyAnalyticsStc());
+
+    const crew = { direct: [{ position: "Boilermaker Journeyman", ranges: [WEEK] }] };
+    const live = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: meta });
+    const hydrated = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: again });
+    assert.deepEqual(hydrated.rollups, live.rollups);
+    assert.equal(analyticsLine(live, "consumables")?.amount, 0);
+    const yates = deriveEstimateAnalytics({ crew, ...WOOD });
+    assert.equal((analyticsRollup(live, "rollup-tool")?.amount ?? 0) > (analyticsRollup(yates, "rollup-tool")?.amount ?? 0), true);
+  });
 });
 
 describe("Analytics tab wiring", () => {
-  it("adds a read-only Analytics tab on the estimate desk", () => {
+  it("adds an Analytics tab with editable Tool / Consumables / PPE % on the estimate desk", () => {
     const tabs = read("./estimate-tabs.ts");
     const detail = read("../components/EstimateDetail.tsx");
     const fresh = read("../components/NewEstimateForm.tsx");
@@ -249,8 +334,17 @@ describe("Analytics tab wiring", () => {
     assert.match(fresh, /EstimateAnalyticsDesk/);
     assert.match(workspace, /item.id === "purchasing" \|\| item.id === "analytics"/);
     assert.match(desk, /deriveEstimateAnalytics/);
-    assert.match(desk, /read-only|Read-only|ANALYTICS_LIVE_NOTE/);
-    assert.doesNotMatch(desk, /onChange|paper-field|<input|<textarea|<select/);
+    assert.doesNotMatch(desk, /ANALYTICS_LIVE_NOTE|ANALYTICS_PHASE2_NOTE|ANALYTICS_NOUN/);
+    assert.doesNotMatch(desk, /Phase 2 later|Read-only|for this live estimate|Procurement\/Subcontracts/);
+    assert.match(desk, /setJobMeta/);
+    assert.match(desk, /analyticsStc/);
+    assert.match(desk, /data-analytics-stc=\{yatesKey\}/);
+    assert.match(desk, /StcPctField/);
+    assert.match(desk, /ANALYTICS_STC_LINES/);
+    assert.match(desk, /yatesStcHint/);
+    assert.match(desk, /paper-field/);
+    assert.match(desk, /onChange/);
+    assert.doesNotMatch(desk, /<textarea|<select/);
     assert.doesNotMatch(rail, /deriveEstimateAnalytics|margin/i);
     assert.doesNotMatch(total, /deriveEstimateAnalytics|Analytics/);
     assert.doesNotMatch(deskTotal, /deriveEstimateAnalytics|Analytics/);
