@@ -39,9 +39,13 @@ import {
 
 export const ESTIMATE_VAULT_DEBOUNCE_MS = 1500;
 
+export type VaultUpsertResult =
+  | { ok: true; skipped?: true }
+  | { ok: false; skipped?: "integrity"; error?: string };
+
 const debounce = scheduleOnce(ESTIMATE_VAULT_DEBOUNCE_MS);
 const lastBody = new Map<string, string>();
-const inflightUpserts = new Map<string, Promise<{ ok: boolean }>>();
+const inflightUpserts = new Map<string, Promise<VaultUpsertResult>>();
 let hydratePromise: Promise<EstimatePackSnapshot[]> | null = null;
 let hydrateSeat: string | null = null;
 let currentViewAs: string | null = null;
@@ -54,7 +58,7 @@ function viewAsBlocksVaultFlush() {
   return !canEditEstimateWork({ email: lens.email, role: "tester" });
 }
 
-function trackVaultUpsert(packId: string, run: Promise<VaultUpsertResult>) {
+function trackVaultUpsert(packId: string, run: Promise<VaultUpsertResult>): Promise<VaultUpsertResult> {
   inflightUpserts.set(packId, run);
   void run.finally(() => {
     if (inflightUpserts.get(packId) === run) inflightUpserts.delete(packId);
@@ -295,7 +299,7 @@ async function readVaultPutResult(response: Response) {
   return { ok: false as const, error };
 }
 
-async function flushVaultUpsertNow(packId: string, store?: StorageLike | null) {
+async function flushVaultUpsertNow(packId: string, store?: StorageLike | null): Promise<VaultUpsertResult> {
   if (viewAsBlocksVaultFlush()) return { ok: true as const };
   if (!isLocalPackId(packId)) return { ok: false as const };
   const target = browserStore(store);
@@ -342,11 +346,9 @@ async function flushVaultUpsertNow(packId: string, store?: StorageLike | null) {
   }
 }
 
-export function flushVaultUpsert(packId: string, store?: StorageLike | null) {
+export function flushVaultUpsert(packId: string, store?: StorageLike | null): Promise<VaultUpsertResult> {
   return trackVaultUpsert(packId, flushVaultUpsertNow(packId, store));
 }
-
-export type VaultUpsertResult = Awaited<ReturnType<typeof flushVaultUpsert>>;
 
 function ownedByThisVault(pack: { ownerEmail?: string }, deskEmail = ownerVaultEmail()) {
   const ownerEmail = pack.ownerEmail || "";
