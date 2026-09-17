@@ -4,9 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { readFcrPacket } from "@/lib/change-order-packet";
 import {
-  ANALYTICS_LIVE_NOTE,
-  ANALYTICS_NOUN,
-  ANALYTICS_PHASE2_NOTE,
   ANALYTICS_STC_LINES,
   deriveEstimateAnalytics,
   yatesStcHint,
@@ -135,19 +132,9 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
 
   return (
     <div className="mt-4 space-y-5">
-      <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
-        {ANALYTICS_NOUN} for this live estimate. {ANALYTICS_LIVE_NOTE} Base-wage OH / profit use COMP BW, not
-        billed ST. {ANALYTICS_PHASE2_NOTE}
-      </p>
-
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
         <section className="plant-card px-5 py-5" aria-label="Analytics">
           <h2 className="text-2xl font-semibold text-[#163038]">Profit breakdown</h2>
-          <p className="mt-1 text-sm text-[#5b6f73]">
-            Yates Analytics lines. Tool / Consumables / PPE % are pack overrides — blank keeps the Yates
-            craft/staff split. A dash means that workbook field is not available on this pack yet — no
-            invented dollars.
-          </p>
           <div className="mt-4 overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="text-xs tracking-[0.12em] text-[#5b6f73]">
@@ -193,7 +180,6 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
 
         <section className="plant-card px-5 py-5" aria-label="Tool / Con / PPE">
           <h3 className="text-lg font-semibold text-[#163038]">Tool / Con / PPE</h3>
-          <p className="mt-1 text-sm text-[#5b6f73]">Budget rollups from COMP BW × hours × %. Not Purchasing actuals.</p>
           <ul className="mt-4 space-y-3">
             {sheet.rollups.map((row) => (
               <li key={row.id} className="flex items-baseline justify-between gap-3">

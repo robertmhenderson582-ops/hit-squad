@@ -31,11 +31,6 @@ import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
 
 export const ANALYTICS_TAB_ID = "analytics" as const;
 export const ANALYTICS_TAB_LABEL = "Analytics";
-export const ANALYTICS_NOUN = "Analytics";
-export const ANALYTICS_LIVE_NOTE =
-  "Profit / OH from the live estimate pack. Tool / Consumables / PPE % can be set here (Yates craft/staff defaults). Margin stays on this tab — not the Estimate Total rail.";
-export const ANALYTICS_PHASE2_NOTE =
-  "Phase 2 later: Procurement/Subcontracts (Est.), freight / sales-tax markup, Updated Total Profit.";
 
 /** Yates Analytics D25:D27 — Tool / Consumables / PPE profit share of those budgets. */
 export const ANALYTICS_TOOL_PROFIT_SHARE = 0.35;

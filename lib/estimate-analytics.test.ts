@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import {
   ANALYTICS_OH_PROFIT_SHARE,
   ANALYTICS_PHASE1_LINES,
-  ANALYTICS_PHASE2_NOTE,
   ANALYTICS_TAB_ID,
   ANALYTICS_TAB_LABEL,
   ANALYTICS_TOOL_PROFIT_SHARE,
@@ -73,7 +72,7 @@ describe("Yates Analytics model", () => {
     assert.equal(YATES_ANALYTICS_BURDEN.craft.profit, 0.15);
     assert.equal(YATES_ANALYTICS_BURDEN.staff.oh, 0.17);
     assert.equal(YATES_ANALYTICS_BURDEN.staff.tool, 0.015);
-    assert.match(ANALYTICS_PHASE2_NOTE, /Procurement\/Subcontracts/);
+    assert.match(read("./estimate-analytics.ts"), /Phase 2 \(omitted\): Procurement\/Subcontracts/);
     assert.match(yatesStcHint("tool"), /craft 3\.5% · staff 1\.5%/);
     assert.match(yatesStcHint("ppe"), /craft 2\.75% · staff 2\.75%/);
     assert.deepEqual(emptyJobMoney().analyticsStc, emptyAnalyticsStc());
@@ -335,7 +334,8 @@ describe("Analytics tab wiring", () => {
     assert.match(fresh, /EstimateAnalyticsDesk/);
     assert.match(workspace, /item.id === "purchasing" \|\| item.id === "analytics"/);
     assert.match(desk, /deriveEstimateAnalytics/);
-    assert.match(desk, /ANALYTICS_LIVE_NOTE/);
+    assert.doesNotMatch(desk, /ANALYTICS_LIVE_NOTE|ANALYTICS_PHASE2_NOTE|ANALYTICS_NOUN/);
+    assert.doesNotMatch(desk, /Phase 2 later|Read-only|for this live estimate|Procurement\/Subcontracts/);
     assert.match(desk, /setJobMeta/);
     assert.match(desk, /analyticsStc/);
     assert.match(desk, /data-analytics-stc=\{yatesKey\}/);
