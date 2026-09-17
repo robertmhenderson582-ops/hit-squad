@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BuildingFileModal } from "@/components/BuildingFileModal";
 import { CatalogPick } from "@/components/CatalogPick";
 import { useEstimatePackage } from "@/components/EstimatePackage";
+import { useSession } from "@/components/SessionProvider";
 import {
   addClaimLine,
   addCraftLine,
@@ -26,9 +28,28 @@ import {
   type ScrClaimLine,
   type ScrCraftLine,
 } from "@/lib/change-order-packet";
+import { companyLogoFromApiPayload } from "@/lib/estimate-company-logo";
+import { packIdFromEstimateKey } from "@/lib/estimate-pack";
+import { estimateCompanyName, exporterDisplayName } from "@/lib/estimate-xlsx";
+import { findLocalPack } from "@/lib/local-estimates";
 import { onEstimateSheets } from "@/lib/sheet-events";
 import { shahanCrewTitle } from "@/lib/shahan-wood-river";
 import { scrCompositeRates, scrCraftOptions } from "@/lib/scr-rates";
+import { SCR_EXPORT_ERROR, scrToXlsx, scrXlsxFilename } from "@/lib/scr-xlsx";
+import { regularClientFromParts } from "@/lib/site-regular";
+import { yieldToUi } from "@/lib/ui-yield";
+import { downloadXlsx } from "@/lib/xlsx-minimal";
+
+async function fetchScrCompanyLogo(client: string, site: string): Promise<string | null> {
+  try {
+    const query = new URLSearchParams({ client, site });
+    const res = await fetch(`/api/desk/company-logo?${query}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return companyLogoFromApiPayload(await res.json());
+  } catch {
+    return null;
+  }
+}
 
 const SHELLS = ["Log", "Estimate", "SCR"] as const;
 
@@ -48,10 +69,17 @@ function crewTitles(pack: ReturnType<typeof useEstimatePackage>) {
 
 export function ChangeOrderPacket({ client, site }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
+  const { user } = useSession();
   const noun = changeOrderNoun(client, site);
   const [shell, setShell] = useState<(typeof SHELLS)[number]>(DEFAULT_CHANGE_ORDER_SHELL);
   const [packet, setPacket] = useState<FcrPacket>(emptyFcrPacket);
   const [selectedId, setSelectedId] = useState("");
+  const exportLock = useRef(false);
+  const [exportError, setExportError] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportModal, setExportModal] = useState(false);
+  const jobTitle = findLocalPack(packIdFromEstimateKey(pack.estimateKey) || "")?.title || "Estimate";
+  const company = estimateCompanyName({ client, site, title: jobTitle });
 
   const crafts = useMemo(
     () => scrCraftOptions(site, client, crewTitles(pack)),
@@ -94,26 +122,74 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
   const summary = fcrSummary(packet, 0, 0);
   const logColSpan = CONTRACTOR_LOG_COLUMNS.length + 2;
 
+  async function exportWorkbook() {
+    if (exportLock.current || exportBusy) return;
+    exportLock.current = true;
+    setExportError("");
+    setExportBusy(true);
+    setExportModal(true);
+    await yieldToUi();
+    try {
+      const bytes = await scrToXlsx({
+        title: jobTitle,
+        client,
+        site,
+        packet,
+        preparedBy: exporterDisplayName(user?.name, user?.email),
+        status: pack.status,
+        regularClient: regularClientFromParts(site, client),
+        companyName: company,
+        companyLogo: await fetchScrCompanyLogo(client || "", site || ""),
+        selectedId,
+      });
+      if (!bytes.byteLength) throw new Error("empty-workbook");
+      downloadXlsx(scrXlsxFilename({ site, title: jobTitle, client, companyName: company }), bytes);
+      setExportModal(false);
+    } catch {
+      setExportError(SCR_EXPORT_ERROR);
+    } finally {
+      exportLock.current = false;
+      setExportBusy(false);
+    }
+  }
+
   return (
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
         On-job Change Orders log. {noun} math stays under the hood. Scope change takes hours and
         money. The SCR estimate is a short workbook — craft lines at composite ST / OT (DT optional)
-        plus claimable pass-throughs — not the full day-grid desk. Totals stay on this estimate after
+        plus claimable pass-throughs — not the full day-grid desk. Export Excel builds the same
+        family of client-submittable proof as the Estimate tab. Totals stay on this estimate after
         refresh or another device.
       </p>
-      <nav className="flex flex-wrap gap-2 text-sm" aria-label="Change Orders packet">
-        {SHELLS.map((item) => (
-          <button
-            key={item}
-            type="button"
-            onClick={() => setShell(item)}
-            className={`rounded px-3 py-1.5 ${shell === item ? "bg-steel text-white" : "border border-steel text-steel"}`}
-          >
-            {item === "Log" ? "Change Orders log" : item}
-          </button>
-        ))}
-      </nav>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <nav className="flex flex-wrap gap-2 text-sm" aria-label="Change Orders packet">
+          {SHELLS.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setShell(item)}
+              className={`rounded px-3 py-1.5 ${shell === item ? "bg-steel text-white" : "border border-steel text-steel"}`}
+            >
+              {item === "Log" ? "Change Orders log" : item}
+            </button>
+          ))}
+        </nav>
+        <button
+          type="button"
+          title="Export Excel workbook"
+          disabled={exportBusy}
+          onClick={() => void exportWorkbook()}
+          className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white disabled:opacity-60"
+        >
+          {exportBusy ? "Building file…" : "Export Excel"}
+        </button>
+      </div>
+      {exportError ? (
+        <p className="text-sm text-amber-flare" role="alert">
+          {exportError}
+        </p>
+      ) : null}
 
       {shell === "Log" ? (
         <section className="plant-card px-5 py-5">
@@ -286,7 +362,8 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
           <h2 className="text-2xl font-semibold text-[#163038]">SCR form</h2>
           <p className="text-sm text-[#5b6f73]">
             Scope-change hours and money roll from the Estimate workbook (craft labor + claimable
-            costs). Cost is not a note-only field.
+            costs). Cost is not a note-only field. Export Excel is the client-submittable SCR
+            proof — same chrome as the Estimate package.
           </p>
           {(
             [
@@ -353,6 +430,12 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
             {money(summary.scrCost || summary.total)}
           </p>
         </section>
+      ) : null}
+      {exportModal ? (
+        <BuildingFileModal
+          error={exportBusy ? "" : exportError}
+          onDismissError={!exportBusy && exportError ? () => setExportModal(false) : undefined}
+        />
       ) : null}
     </div>
   );

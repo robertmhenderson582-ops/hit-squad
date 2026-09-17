@@ -347,6 +347,12 @@ test("P66 / Wood River and the unset default read ECR; Log is the field home", (
   assert.match(packet, /Material/);
   assert.match(packet, /CLAIMABLE_COST_TYPES/);
   assert.match(packet, /from \"@\/lib\/scr-rates\"/);
+  assert.match(packet, /scrToXlsx/);
+  assert.match(packet, /downloadXlsx/);
+  assert.match(packet, /BuildingFileModal/);
+  assert.match(packet, /Export Excel/);
+  assert.match(packet, /company-logo/);
+  assert.match(packet, /exporterDisplayName/);
   assert.doesNotMatch(packet, /Reviewed By/);
   assert.doesNotMatch(packet, /Approved Cost/);
   assert.doesNotMatch(packet, /Logged By/);
