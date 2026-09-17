@@ -3,7 +3,13 @@ import { notifyEstimateSheets } from "./sheet-events.ts";
 
 export const FCR_STORE_PREFIX = "hs_fcr_v1:";
 export const MILEAGE_YES_FLAT = 2500;
-export const DEFAULT_CHANGE_ORDER_SHELL = "Log";
+export const CHANGE_ORDER_SHELLS = ["Log", "Estimate"] as const;
+export type ChangeOrderShell = (typeof CHANGE_ORDER_SHELLS)[number];
+export const DEFAULT_CHANGE_ORDER_SHELL: ChangeOrderShell = "Log";
+export const CHANGE_ORDER_SHELL_LABELS: Record<ChangeOrderShell, string> = {
+  Log: "SCR Log",
+  Estimate: "Estimate workbook",
+};
 
 /** Browser cache or a test store. Vault hydrate writes this key; vault is source of truth after merge. */
 export type FcrStoreLike = {
@@ -17,6 +23,22 @@ export const APPROVAL_STATUSES = ["Approved", "Pending"] as const;
 export const FCR_BLOCKS = ["Staff Day", "Staff Night", "Craft Day", "Craft Night"] as const;
 export const FCR_DAYS = ["mo", "tu", "we", "th", "fr", "sa", "su"] as const;
 export const FCR_DAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] as const;
+
+/** Named first-class claim types. Catalog stays extensible beyond these. */
+export const CLAIMABLE_COST_PRESETS = [
+  "Subcontractor",
+  "Third-party rental",
+  "Material",
+] as const;
+
+/** Pass-through / claimable cost types on an SCR estimate. Custom types stay allowed. */
+export const CLAIMABLE_COST_TYPES = [
+  ...CLAIMABLE_COST_PRESETS,
+  "Equipment",
+  "Travel",
+  "Other",
+] as const;
+export type ClaimableCostType = (typeof CLAIMABLE_COST_TYPES)[number];
 
 export type LogStatus = (typeof LOG_STATUSES)[number];
 export type ImpactLevel = (typeof IMPACT_LEVELS)[number];
@@ -55,6 +77,38 @@ export type FcrLogRow = {
   revisedComp: string;
   notes: string;
   loggedBy: string;
+  /** Scope-change hours. Workbook lines overwrite this when present. */
+  scopeHours: number;
+  /** Scope-change money. Workbook lines overwrite this when present. */
+  scopeCost: number;
+  craftLines: ScrCraftLine[];
+  claimLines: ScrClaimLine[];
+  /**
+   * When set, the row is on the SCR Log. Empty = draft workbook only.
+   * Revise keeps this stamp and the same SCR #.
+   */
+  submittedAt: string;
+};
+
+/** Simple SCR craft line — hours × composite ST/OT (DT optional). Not a day-grid. */
+export type ScrCraftLine = {
+  id: string;
+  craft: string;
+  stHours: number;
+  otHours: number;
+  dtHours: number;
+  stRate: number;
+  otRate: number;
+  dtRate: number;
+};
+
+/** Claimable pass-through line. Dollars required; hours when the type needs them. */
+export type ScrClaimLine = {
+  id: string;
+  type: string;
+  description: string;
+  amount: number;
+  hours: number;
 };
 
 export type FcrPeopleRow = {
@@ -180,7 +234,101 @@ export function blankLogRow(): FcrLogRow {
     revisedComp: "",
     notes: "",
     loggedBy: "",
+    scopeHours: 0,
+    scopeCost: 0,
+    craftLines: [],
+    claimLines: [],
+    submittedAt: "",
   };
+}
+
+export function blankCraftLine(patch: Partial<ScrCraftLine> = {}): ScrCraftLine {
+  return {
+    id: typeof patch.id === "string" && patch.id.trim() ? patch.id : uid("scr-craft"),
+    craft: typeof patch.craft === "string" ? patch.craft : "",
+    stHours: Math.max(0, Number(patch.stHours) || 0),
+    otHours: Math.max(0, Number(patch.otHours) || 0),
+    dtHours: Math.max(0, Number(patch.dtHours) || 0),
+    stRate: Math.max(0, Number(patch.stRate) || 0),
+    otRate: Math.max(0, Number(patch.otRate) || 0),
+    dtRate: Math.max(0, Number(patch.dtRate) || 0),
+  };
+}
+
+export function blankClaimLine(patch: Partial<ScrClaimLine> = {}): ScrClaimLine {
+  return {
+    id: typeof patch.id === "string" && patch.id.trim() ? patch.id : uid("scr-claim"),
+    type: typeof patch.type === "string" && patch.type.trim() ? patch.type.trim() : "Subcontractor",
+    description: typeof patch.description === "string" ? patch.description : "",
+    amount: Math.max(0, Number(patch.amount) || 0),
+    hours: Math.max(0, Number(patch.hours) || 0),
+  };
+}
+
+/** Subcontractor (and labor-like types) take hours; rentals and materials are dollars only. */
+export function claimTypeNeedsHours(type = "") {
+  return /subcontractor|\blabor\b/i.test(type.trim());
+}
+
+function cents(value: number) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+export function craftLineHours(line: Pick<ScrCraftLine, "stHours" | "otHours" | "dtHours">) {
+  return Math.max(0, Number(line.stHours) || 0) + Math.max(0, Number(line.otHours) || 0) + Math.max(0, Number(line.dtHours) || 0);
+}
+
+export function craftLineLabor(line: Pick<ScrCraftLine, "stHours" | "otHours" | "dtHours" | "stRate" | "otRate" | "dtRate">) {
+  const st = Math.max(0, Number(line.stHours) || 0) * Math.max(0, Number(line.stRate) || 0);
+  const ot = Math.max(0, Number(line.otHours) || 0) * Math.max(0, Number(line.otRate) || 0);
+  const dt = Math.max(0, Number(line.dtHours) || 0) * Math.max(0, Number(line.dtRate) || 0);
+  return cents(st + ot + dt);
+}
+
+export function logRowScope(row: Pick<FcrLogRow, "scopeHours" | "scopeCost" | "craftLines" | "claimLines">) {
+  const craftLines = Array.isArray(row.craftLines) ? row.craftLines : [];
+  const claimLines = Array.isArray(row.claimLines) ? row.claimLines : [];
+  const labor = cents(craftLines.reduce((sum, line) => sum + craftLineLabor(line), 0));
+  const claims = cents(claimLines.reduce((sum, line) => sum + Math.max(0, Number(line.amount) || 0), 0));
+  const hours =
+    craftLines.reduce((sum, line) => sum + craftLineHours(line), 0) +
+    claimLines.reduce((sum, line) => sum + Math.max(0, Number(line.hours) || 0), 0);
+  const hasLines = craftLines.length > 0 || claimLines.length > 0;
+  return {
+    hours: hasLines ? hours : Math.max(0, Number(row.scopeHours) || 0),
+    cost: hasLines ? cents(labor + claims) : cents(row.scopeCost),
+    labor,
+    claims,
+    hasLines,
+  };
+}
+
+function withSyncedScope(row: FcrLogRow): FcrLogRow {
+  const scope = logRowScope(row);
+  return { ...row, scopeHours: scope.hours, scopeCost: scope.cost };
+}
+
+export function patchLogRow(
+  packet: FcrPacket,
+  id: string,
+  patch: Partial<FcrLogRow> | ((row: FcrLogRow) => FcrLogRow),
+): FcrPacket {
+  return {
+    ...packet,
+    log: packet.log.map((row) => {
+      if (row.id !== id) return row;
+      const next = typeof patch === "function" ? patch(row) : { ...row, ...patch };
+      return withSyncedScope(next);
+    }),
+  };
+}
+
+export function addCraftLine(packet: FcrPacket, logId: string, patch: Partial<ScrCraftLine> = {}): FcrPacket {
+  return patchLogRow(packet, logId, (row) => ({ ...row, craftLines: [...row.craftLines, blankCraftLine(patch)] }));
+}
+
+export function addClaimLine(packet: FcrPacket, logId: string, patch: Partial<ScrClaimLine> = {}): FcrPacket {
+  return patchLogRow(packet, logId, (row) => ({ ...row, claimLines: [...row.claimLines, blankClaimLine(patch)] }));
 }
 
 /** P66 / Wood River field path — and the default when site/client are unset. */
@@ -211,7 +359,62 @@ export const CONTRACTOR_LOG_COLUMNS: Array<{ key: ContractorLogField; label: str
 ];
 
 export function addLogRow(packet: FcrPacket, patch: Partial<FcrLogRow> = {}): FcrPacket {
-  return { ...packet, log: [...packet.log, { ...blankLogRow(), ...patch }] };
+  const merged = { ...blankLogRow(), ...patch };
+  if (!("submittedAt" in patch) && rowHasFiledIdentity(merged)) {
+    merged.submittedAt = merged.requestDate.trim() || "legacy";
+  }
+  return { ...packet, log: [...packet.log, normalizeLogRow(merged)] };
+}
+
+export function logRowIsSubmitted(row: Pick<FcrLogRow, "submittedAt">) {
+  return Boolean(String(row.submittedAt || "").trim());
+}
+
+export function submittedLogRows(packet: Pick<FcrPacket, "log">) {
+  return packet.log.filter((row) => logRowIsSubmitted(row));
+}
+
+function rowHasFiledIdentity(row: Partial<FcrLogRow>) {
+  return Boolean(
+    (typeof row.scr === "string" && row.scr.trim()) ||
+      (typeof row.scope === "string" && row.scope.trim()) ||
+      (typeof row.requestDate === "string" && row.requestDate.trim()) ||
+      (typeof row.requestedBy === "string" && row.requestedBy.trim()) ||
+      Number(row.scopeHours) ||
+      Number(row.scopeCost) ||
+      (Array.isArray(row.craftLines) && row.craftLines.length) ||
+      (Array.isArray(row.claimLines) && row.claimLines.length),
+  );
+}
+
+export function nextScrNumber(packet: Pick<FcrPacket, "log">) {
+  let max = 0;
+  for (const row of packet.log) {
+    const match = /^(?:SCR|ECR)-(\d+)$/i.exec(String(row.scr || "").trim());
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return `SCR-${max + 1}`;
+}
+
+export function ensureDraftRow(packet: FcrPacket): { packet: FcrPacket; id: string } {
+  const draft = packet.log.find((row) => !logRowIsSubmitted(row));
+  if (draft) return { packet, id: draft.id };
+  const next = addLogRow(packet, { submittedAt: "" });
+  return { packet: next, id: next.log[next.log.length - 1]!.id };
+}
+
+/** Promote a workbook row onto the SCR Log. Already-submitted rows stay the same SCR #. */
+export function submitScrEstimate(packet: FcrPacket, id: string, when = new Date()): FcrPacket {
+  return patchLogRow(packet, id, (row) => {
+    if (logRowIsSubmitted(row)) return row;
+    const stamp = when.toISOString();
+    return {
+      ...row,
+      submittedAt: stamp,
+      requestDate: row.requestDate.trim() || stamp.slice(0, 10),
+      scr: row.scr.trim() || nextScrNumber(packet),
+    };
+  });
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -237,7 +440,12 @@ export function fcrPacketHasWork(value: unknown) {
 function normalizeLogRow(row: Partial<FcrLogRow> | null | undefined): FcrLogRow {
   const blank = blankLogRow();
   if (!row || typeof row !== "object") return blank;
-  return {
+  const rawHasSubmitted = "submittedAt" in row;
+  let submittedAt = typeof row.submittedAt === "string" ? row.submittedAt : "";
+  if (!rawHasSubmitted && rowHasFiledIdentity(row)) {
+    submittedAt = (typeof row.requestDate === "string" && row.requestDate.trim()) || "legacy";
+  }
+  return withSyncedScope({
     ...blank,
     ...row,
     id: typeof row.id === "string" && row.id.trim() ? row.id : blank.id,
@@ -250,7 +458,12 @@ function normalizeLogRow(row: Partial<FcrLogRow> | null | undefined): FcrLogRow 
       : blank.approvalStatus,
     approvedMh: Number(row.approvedMh) || 0,
     approvedCost: Number(row.approvedCost) || 0,
-  };
+    scopeHours: Number(row.scopeHours) || 0,
+    scopeCost: Number(row.scopeCost) || 0,
+    craftLines: Array.isArray(row.craftLines) ? row.craftLines.map((line) => blankCraftLine(line)) : [],
+    claimLines: Array.isArray(row.claimLines) ? row.claimLines.map((line) => blankClaimLine(line)) : [],
+    submittedAt,
+  });
 }
 
 export function parseFcrPacket(raw: unknown): FcrPacket {
@@ -411,6 +624,12 @@ export function fcrSummary(packet: FcrPacket, laborRate = 0, pdRate = 0) {
   const mileage = packet.people.reduce((sum, row) => sum + mileageDollars(row.mileage), 0);
   const staffHours = hours(staff);
   const craftHours = hours(craft);
+  const scopes = (packet.log ?? []).map((row) => logRowScope(row));
+  const scrHours = scopes.reduce((sum, row) => sum + row.hours, 0);
+  const scrLabor = cents(scopes.reduce((sum, row) => sum + row.labor, 0));
+  const scrClaims = cents(scopes.reduce((sum, row) => sum + row.claims, 0));
+  const scrTyped = cents(scopes.reduce((sum, row) => sum + (row.hasLines ? 0 : row.cost), 0));
+  const scrCost = cents(scrLabor + scrClaims + scrTyped);
   return {
     staffHours,
     craftHours,
@@ -421,6 +640,11 @@ export function fcrSummary(packet: FcrPacket, laborRate = 0, pdRate = 0) {
     sub: Math.max(0, packet.sub),
     equipment: Math.max(0, packet.equipment),
     misc: Math.max(0, packet.misc),
+    scrHours,
+    scrLabor,
+    scrClaims,
+    scrTyped,
+    scrCost,
     total:
       staffHours * laborRate +
       craftHours * laborRate +
@@ -428,7 +652,8 @@ export function fcrSummary(packet: FcrPacket, laborRate = 0, pdRate = 0) {
       mileage +
       Math.max(0, packet.sub) +
       Math.max(0, packet.equipment) +
-      Math.max(0, packet.misc),
+      Math.max(0, packet.misc) +
+      scrCost,
   };
 }
 
