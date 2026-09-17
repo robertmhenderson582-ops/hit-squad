@@ -4,7 +4,7 @@
  * Margin lives here only (never on the Estimate Total rail). Base-wage OH /
  * profit use COMP BW / `baseSt`, same lock as CBA % — never billed ST.
  * STC & PPE budget is hours × locked $/hr (East WR $3.60). The editable % is
- * predicted savings on that budget, default 35% — not % of base wage.
+ * predicted savings on that budget — blank until recovery data, not % of base wage.
  *
  * Yates Labor Ratebuilder CRAFT / STAFF % of BW is the Phase 1 model until a
  * site-specific Analytics book (Monroe) is on disk. CAT 2 / Wood River T&M
@@ -44,7 +44,7 @@ import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
 export const ANALYTICS_TAB_ID = "analytics" as const;
 export const ANALYTICS_TAB_LABEL = "Analytics";
 
-/** Default predicted savings on the STC & PPE budget (former D25:D27 share). */
+/** Former book D25:D27 share. Not applied; desk stays blank until Owner sets a %. */
 export const ANALYTICS_TOOL_PROFIT_SHARE = 0.35;
 /** Yates Analytics D28 — OH contribution is 25% of Total OH Based off Base Wages. */
 export const ANALYTICS_OH_PROFIT_SHARE = 0.25;
@@ -69,7 +69,7 @@ export const ANALYTICS_STC_PPE_LABEL = "STC & PPE";
 export const ANALYTICS_STC_LINES = [{ id: "stc-ppe" as const, overrideKey: "stcPpeSavingsPct" as const }];
 
 export const ANALYTICS_STC_SAVINGS_HINT =
-  "Predicted savings on the STC & PPE budget. Default 35%. Not % of base wage.";
+  "Predicted savings you expect to keep on this budget. Set when you have recovery data. Not % of base wage. Rodeo-style ~25% only if recovery clears cost. Former book 35% is not a WR actual.";
 
 export function yatesStcPpeRate(lane: AnalyticsBurdenLane): number {
   const row = YATES_ANALYTICS_BURDEN[lane];

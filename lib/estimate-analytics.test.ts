@@ -87,8 +87,11 @@ describe("Yates Analytics model", () => {
     assert.equal(yatesStcPpeRate("craft"), 0.0975);
     assert.equal(yatesStcPpeRate("staff"), 0.0575);
     assert.match(read("./estimate-analytics.ts"), /Phase 2 \(omitted\): Procurement\/Subcontracts/);
-    assert.equal(stcDefaultHint(), "Predicted savings on the STC & PPE budget. Default 35%. Not % of base wage.");
-    assert.doesNotMatch(stcDefaultHint(), /Yates|base wage burden/i);
+    assert.match(stcDefaultHint(), /Predicted savings you expect to keep/);
+    assert.match(stcDefaultHint(), /Set when you have recovery data/);
+    assert.match(stcDefaultHint(), /Not % of base wage/);
+    assert.match(stcDefaultHint(), /Former book 35%/);
+    assert.doesNotMatch(stcDefaultHint(), /Yates|base wage burden|Default 35%/i);
     assert.deepEqual(emptyJobMoney().analyticsStc, emptyAnalyticsStc());
     assert.deepEqual(emptyJobMeta().analyticsStc, emptyAnalyticsStc());
   });
@@ -132,7 +135,8 @@ describe("Yates Analytics model", () => {
     assert.equal(sheet.hasBaseWage, false);
     assert.equal(analyticsLine(sheet, "total-oh-base-wages")?.amount, null);
     assert.equal(analyticsLine(sheet, "total-profit-base-wages")?.amount, null);
-    assert.equal((analyticsLine(sheet, "stc-ppe")?.amount ?? 0) > 0, true);
+    assert.equal(analyticsLine(sheet, "stc-ppe")?.amount, 0);
+    assert.equal((analyticsRollup(sheet, "rollup-stc-ppe")?.amount ?? 0) > 0, true);
     assert.equal(analyticsLine(sheet, "subtotal-profit")?.amount, null);
     assert.equal(analyticsLine(sheet, "margin")?.amount, null);
     assert.equal(analyticsLine(sheet, "profit-per-work-hour")?.amount, null);
@@ -200,9 +204,10 @@ describe("Yates Analytics model", () => {
     const burden = analyticsBurdenFromCrew(crew, WOOD.site, WOOD.client);
     assert.equal(analyticsLine(sheet, "total-oh-base-wages")?.amount, burden.oh);
     assert.equal(analyticsLine(sheet, "total-profit-base-wages")?.amount, burden.profit);
+    assert.equal(analyticsLine(sheet, "stc-ppe")?.amount, 0);
     assert.equal(
-      analyticsLine(sheet, "stc-ppe")?.amount,
-      Math.round(burden.hours * WR_EAST_LOCKED_STC_PER_HOUR * ANALYTICS_TOOL_PROFIT_SHARE * 100) / 100,
+      analyticsRollup(sheet, "rollup-stc-ppe")?.amount,
+      Math.round(burden.hours * WR_EAST_LOCKED_STC_PER_HOUR * 100) / 100,
     );
     assert.equal(analyticsLine(sheet, "oh")?.amount, Math.round(burden.oh * ANALYTICS_OH_PROFIT_SHARE * 100) / 100);
     assert.equal(analyticsLine(sheet, "labor")?.amount, burden.profit);
@@ -244,7 +249,8 @@ describe("Yates Analytics model", () => {
     assert.equal((analyticsLine(sheet, "total-hours")?.amount ?? 0) > 0, true);
     assert.equal((analyticsLine(sheet, "total-oh-base-wages")?.amount ?? 0) > 0, true);
     assert.equal((analyticsLine(sheet, "total-profit-base-wages")?.amount ?? 0) > 0, true);
-    assert.equal((analyticsLine(sheet, "stc-ppe")?.amount ?? 0) > 0, true);
+    assert.equal(analyticsLine(sheet, "stc-ppe")?.amount, 0);
+    assert.equal((analyticsRollup(sheet, "rollup-stc-ppe")?.amount ?? 0) > 0, true);
     assert.equal((analyticsLine(sheet, "subtotal-profit")?.amount ?? 0) > 0, true);
     assert.equal((analyticsLine(sheet, "margin")?.amount ?? 0) > 0, true);
     assert.equal((analyticsLine(sheet, "profit-per-work-hour")?.amount ?? 0) > 0, true);
@@ -257,13 +263,17 @@ describe("Yates Analytics model", () => {
     const hours = book.bridge.hours;
     const budget = Math.round(hours * WR_EAST_LOCKED_STC_PER_HOUR * 100) / 100;
     assert.equal(analyticsRollup(book, "rollup-stc-ppe")?.amount, budget);
-    assert.equal(analyticsLine(book, "stc-ppe")?.amount, Math.round(budget * ANALYTICS_TOOL_PROFIT_SHARE * 100) / 100);
+    assert.equal(analyticsLine(book, "stc-ppe")?.amount, 0);
     assert.equal(sheetSavingsDoesNotResizeBudget(book, budget), true);
 
     const ten = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: { analyticsStc: { stcPpeSavingsPct: 10 } } });
     assert.equal(analyticsRollup(ten, "rollup-stc-ppe")?.amount, budget);
     assert.equal(analyticsLine(ten, "stc-ppe")?.amount, Math.round(budget * 0.1 * 100) / 100);
-    assert.equal((analyticsLine(ten, "stc-ppe")?.amount ?? 0) < (analyticsLine(book, "stc-ppe")?.amount ?? 0), true);
+    assert.equal((analyticsLine(ten, "stc-ppe")?.amount ?? 0) > (analyticsLine(book, "stc-ppe")?.amount ?? 0), true);
+
+    const thirtyFive = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: { analyticsStc: { stcPpeSavingsPct: 35 } } });
+    assert.equal(analyticsRollup(thirtyFive, "rollup-stc-ppe")?.amount, budget);
+    assert.equal(analyticsLine(thirtyFive, "stc-ppe")?.amount, Math.round(budget * ANALYTICS_TOOL_PROFIT_SHARE * 100) / 100);
 
     const zero = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: { analyticsStc: { stcPpeSavingsPct: 0 } } });
     assert.equal(analyticsRollup(zero, "rollup-stc-ppe")?.amount, budget);
@@ -272,7 +282,7 @@ describe("Yates Analytics model", () => {
     assert.equal(analyticsBurdenRates("direct").oh, YATES_ANALYTICS_BURDEN.craft.oh);
   });
 
-  it("resets old burden % to the 35% savings default and persists Owner savings", () => {
+  it("leaves old burden % blank and persists Owner savings", () => {
     assert.deepEqual(hydrateAnalyticsStc({}), { stcPpeSavingsPct: null });
     assert.deepEqual(hydrateAnalyticsStc({ stcPpePct: 8 }), { stcPpeSavingsPct: null });
     assert.deepEqual(hydrateAnalyticsStc({ toolPct: 5, consumablesPct: 0, ppePct: 2.75 }), { stcPpeSavingsPct: null });
@@ -292,7 +302,8 @@ describe("Yates Analytics model", () => {
     assert.deepEqual(hydrated.rollups, live.rollups);
     const def = deriveEstimateAnalytics({ crew, ...WOOD });
     assert.equal(analyticsRollup(live, "rollup-stc-ppe")?.amount, analyticsRollup(def, "rollup-stc-ppe")?.amount);
-    assert.equal((analyticsLine(live, "stc-ppe")?.amount ?? 0) < (analyticsLine(def, "stc-ppe")?.amount ?? 0), true);
+    assert.equal(analyticsLine(def, "stc-ppe")?.amount, 0);
+    assert.equal((analyticsLine(live, "stc-ppe")?.amount ?? 0) > (analyticsLine(def, "stc-ppe")?.amount ?? 0), true);
   });
 });
 
@@ -339,7 +350,7 @@ describe("Analytics COMP / MSA bridge", () => {
     assert.equal(analyticsRollup(locked, "rollup-stc-ppe")?.amount, budgets.stc);
     assert.equal(locked.rollups.length, 1);
     assert.equal(budgets.stc, Math.round(hours * WR_EAST_LOCKED_STC_PER_HOUR * 100) / 100);
-    assert.equal(analyticsLine(locked, "stc-ppe")?.amount, Math.round(budgets.stc * ANALYTICS_TOOL_PROFIT_SHARE * 100) / 100);
+    assert.equal(analyticsLine(locked, "stc-ppe")?.amount, 0);
     assert.equal(locked.bridge.lockedStcPerHour, 3.6);
     assert.equal(locked.bridge.lockedStcBudget, budgets.stc);
     assert.equal(locked.bridge.afterLockedProfit != null, true);
@@ -456,6 +467,9 @@ describe("Analytics tab wiring", () => {
     assert.match(desk, /stcDefaultHint/);
     assert.match(desk, /stcPpeSavingsPct|setStcSavingsPct/);
     assert.match(desk, /Predicted savings/);
+    assert.match(desk, /set when you have recovery data|stcDefaultHint/);
+    assert.match(desk, /placeholder="set…"/);
+    assert.doesNotMatch(desk, /ANALYTICS_STC_PPE_SAVINGS_DEFAULT/);
     assert.match(desk, /stcPpePerHour/);
     assert.match(desk, /\$3\.60\/hr/);
     assert.doesNotMatch(desk, /Yates|yates/);

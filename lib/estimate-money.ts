@@ -9,13 +9,13 @@ export const SUBS_CONTINGENCY_LABEL = "Subs contingency";
 export const CBA_INCREASE_LABEL = "CBA increase";
 export const MORE_FUND_LABEL = "M.O.R.E. fund";
 
-/** Predicted savings % on the STC & PPE budget. Null = default 35. Not % of base wage. */
+/** Predicted savings % on the STC & PPE budget. Null = unset (no predicted save). Not % of base wage. */
 export type AnalyticsStcOverride = {
   stcPpeSavingsPct: number | null;
 };
 
-/** Former Yates D25:D27 profit share, now the desk default predicted-savings %. */
-export const ANALYTICS_STC_PPE_SAVINGS_DEFAULT = 35;
+/** Former book D25:D27 share. Not a WR actual and not applied until Owner types a %. */
+export const ANALYTICS_STC_PPE_BOOK_SAVINGS = 35;
 
 export type AnalyticsMode = "pct" | "locked";
 
@@ -86,7 +86,7 @@ export type JobMoney = {
   moreFundPerHour: number | null;
   /** Plant / job holidays (YYYY-MM-DD). No billable hours those days. */
   holidays: string[];
-  /** Live-pack predicted savings % on the STC & PPE budget. Null = 35. */
+  /** Live-pack predicted savings % on the STC & PPE budget. Null = unset. */
   analyticsStc: AnalyticsStcOverride;
   analyticsBridge: AnalyticsBridgeMeta;
 };
@@ -200,8 +200,9 @@ export function hydrateAnalyticsStcPct(value: unknown): number | null {
 }
 
 /**
- * Predicted savings % on the STC & PPE budget. Empty → null (desk uses 35).
- * Old `stcPpePct` / tool / con / ppe were BW burden, not savings — reset to default.
+ * Predicted savings % on the STC & PPE budget. Empty → null (no predicted save).
+ * Old `stcPpePct` / tool / con / ppe were BW burden, not savings — leave blank.
+ * Do not seed CCU1 0% or former book 35% as stored truth.
  */
 export function hydrateAnalyticsStc(raw: unknown): AnalyticsStcOverride {
   const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -209,12 +210,14 @@ export function hydrateAnalyticsStc(raw: unknown): AnalyticsStcOverride {
   return { stcPpeSavingsPct: null };
 }
 
-export function stcPpeSavingsPctPoints(override: AnalyticsStcOverride = emptyAnalyticsStc()): number {
-  return override.stcPpeSavingsPct ?? ANALYTICS_STC_PPE_SAVINGS_DEFAULT;
+export function stcPpeSavingsPctPoints(override: AnalyticsStcOverride = emptyAnalyticsStc()): number | null {
+  return override.stcPpeSavingsPct;
 }
 
+/** Unset % contributes $0 predicted save. Owner 0 is an explicit override. */
 export function stcPpeSavingsRate(override: AnalyticsStcOverride = emptyAnalyticsStc()): number {
-  return stcPpeSavingsPctPoints(override) / 100;
+  const pct = stcPpeSavingsPctPoints(override);
+  return pct == null ? 0 : pct / 100;
 }
 
 function lockedStcRate(value: unknown, fallback: number) {

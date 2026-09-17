@@ -4,10 +4,13 @@ import {
   ANALYTICS_BRIDGE_SEED_NOTE,
   WR_EAST_BRIDGE_SEED,
   cbaIncreaseDollars,
+  emptyAnalyticsStc,
   emptyJobMoney,
   hydrateAnalyticsBridge,
   hydrateAnalyticsStc,
   hydrateJobMoney,
+  stcPpeSavingsPctPoints,
+  stcPpeSavingsRate,
   isCbaCraftLane,
   laborContingencyDollars,
   moneyAdderLines,
@@ -107,12 +110,16 @@ describe("Wood River Analytics bridge seeds", () => {
     assert.equal(owner.nb.siteClasses, 99);
   });
 
-  it("treats old STC burden % as the 35% savings default and keeps Owner savings", () => {
+  it("leaves old STC burden % blank and keeps Owner savings", () => {
     assert.deepEqual(hydrateAnalyticsStc({ toolPct: 5, consumablesPct: 0, ppePct: 2.75 }), { stcPpeSavingsPct: null });
     assert.deepEqual(hydrateAnalyticsStc({ stcPpePct: 8, toolPct: 1 }), { stcPpeSavingsPct: null });
     assert.deepEqual(hydrateAnalyticsStc({ stcPpeSavingsPct: 10 }), { stcPpeSavingsPct: 10 });
     assert.deepEqual(hydrateAnalyticsStc({ stcPpeSavingsPct: 0 }), { stcPpeSavingsPct: 0 });
     assert.deepEqual(hydrateAnalyticsStc({}), { stcPpeSavingsPct: null });
+    assert.equal(stcPpeSavingsPctPoints(emptyAnalyticsStc()), null);
+    assert.equal(stcPpeSavingsRate(emptyAnalyticsStc()), 0);
+    assert.equal(stcPpeSavingsRate({ stcPpeSavingsPct: 35 }), 0.35);
+    assert.equal(stcPpeSavingsRate({ stcPpeSavingsPct: 0 }), 0);
     assert.equal(hydrateAnalyticsBridge({ locked: { toolPerHour: 0.5, consumablesPerHour: 1.25, ppePerHour: 1.85 } }).locked.stcPpePerHour, 3.6);
     assert.equal(hydrateAnalyticsBridge({ locked: { toolPerHour: 1, consumablesPerHour: 1, ppePerHour: 2 } }).locked.stcPpePerHour, 4);
     assert.equal(hydrateAnalyticsBridge({ locked: { stcPpePerHour: 0 } }).locked.stcPpePerHour, 0);
