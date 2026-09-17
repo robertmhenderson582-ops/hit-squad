@@ -206,7 +206,20 @@ export function JobTreeDesk({
                                 </div>
                                 <div className="job-face-stat job-face-stat-phases">
                                   <dt>PHASE STARTS</dt>
-                                  <dd>{face.phaseStartsLabel}</dd>
+                                  <dd>
+                                    {face.phaseStarts.length ? (
+                                      <ul className="job-face-phases">
+                                        {face.phaseStarts.map((row) => (
+                                          <li key={`${row.id}:${row.start}`}>
+                                            <span>{row.name}</span>
+                                            <span>{row.startLabel}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    ) : (
+                                      face.phaseStartsLabel
+                                    )}
+                                  </dd>
                                 </div>
                                 <div className="job-face-stat">
                                   <dt>WINDOW</dt>

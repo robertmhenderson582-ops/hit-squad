@@ -2266,10 +2266,12 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
 }
 
 .job-face-stats {
-  margin: 1.15rem 0 0;
+  margin: 1.05rem 0 0;
+  padding-top: 0.95rem;
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.85rem 1.25rem;
+  border-top: 1px solid rgba(15, 95, 109, 0.16);
 }
 
 .job-face-stats dt {
@@ -2288,14 +2290,33 @@ html[data-easy="on"] { letter-spacing: 0.01em; }
   color: #163038;
 }
 
-.job-face-stat-total dd,
+.job-face-stat-total dd {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #c67a1e;
+}
+
 .job-face-stat-phases dd {
-  font-size: 1.15rem;
+  font-size: 1.02rem;
   font-weight: 600;
 }
 
-.job-face-stat-total dd {
-  color: #c67a1e;
+.job-face-phases {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.job-face-phases li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.15rem 0.75rem;
+  line-height: 1.4;
+}
+
+.job-face-phases li + li {
+  margin-top: 0.2rem;
 }
 
 .job-face-menu {
@@ -2335,6 +2356,10 @@ html[data-density="compact"] .job-face-card.plant-card {
 .industrial-root .site-plate .job-face-meta,
 .industrial-root .plant-card p.job-face-meta {
   color: #d5e4e2;
+}
+
+.industrial-root .job-face-card .job-face-stats {
+  border-top-color: rgba(62, 198, 212, 0.2);
 }
 
 .industrial-root .job-face-card .job-face-stats dt {

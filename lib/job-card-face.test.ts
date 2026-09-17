@@ -160,12 +160,14 @@ describe("job card face", () => {
     assert.match(tree, /job-face-title/);
     assert.match(tree, /job-face-stat-total/);
     assert.match(tree, /job-face-stat-phases/);
+    assert.match(tree, /job-face-phases/);
+    assert.match(tree, /face\.phaseStarts\.map/);
     assert.match(tree, /GRAND TOTAL/);
     assert.match(tree, /PHASE STARTS/);
 
     const css = readFileSync(fileURLToPath(new URL("../app/globals.css", import.meta.url)), "utf8");
     assert.match(css, /\.job-face-title[\s\S]*font-size:\s*1\.85rem/);
-    assert.match(css, /\.job-face-stat-total dd[\s\S]*font-size:\s*1\.15rem/);
+    assert.match(css, /\.job-face-stat-total dd[\s\S]*font-size:\s*1\.2rem/);
     assert.match(css, /\.industrial-root \.job-face-card \.job-face-stat-total dd[\s\S]*#f0a13a/);
   });
 });
