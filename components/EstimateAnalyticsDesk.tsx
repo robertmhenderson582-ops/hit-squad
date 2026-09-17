@@ -55,6 +55,7 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
   );
 
   const sheet: EstimateAnalytics = useMemo(() => {
+    void tick;
     const equipment = readEquipmentSheet(pack.estimateKey);
     const other = syncOtherCostTravel(readOtherCost(pack.estimateKey), pack.crew, {
       staffPerMile: pack.jobMeta.staffMileageRate,
