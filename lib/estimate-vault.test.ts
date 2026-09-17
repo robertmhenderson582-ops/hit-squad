@@ -48,11 +48,12 @@ function cat2(over: Partial<EstimatePackSnapshot> = {}): EstimatePackSnapshot {
 describe("estimate vault service", () => {
   it("upserts the owner pack once and lets Novus read it", async () => {
     const drive = memoryDrive();
-    const first = await upsertVisiblePack(owner, cat2(), drive);
-    const again = await upsertVisiblePack(novus, { ...cat2(), updatedAt: 500, crew: { support: [{ id: "sup-2" }] } }, drive);
+    const first = await upsertVisiblePack(owner, cat2({ crew: { support: [{ id: "sup-2" }] } }), drive);
+    const again = await upsertVisiblePack(novus, { ...cat2(), updatedAt: 500, crew: { support: [{ id: "sup-novus" }] } }, drive);
     assert.equal(first.ok, true);
-    assert.equal(again.ok, true);
-    if (!first.ok || !again.ok) return;
+    assert.equal(again.ok, false);
+    if (!first.ok) return;
+    if (!again.ok) assert.equal(again.status, 403);
     assert.equal(first.stored, true);
     assert.equal(drive.files.size, 1);
     const ownerList = await listVisiblePacks(owner, drive);
@@ -748,17 +749,17 @@ describe("estimate vault service", () => {
       crew: { direct: [{ id: "bm-1", ranges: [{ start: "2026-09-01", end: "2026-09-03" }] }] },
     });
     assert.equal((await upsertVisiblePack(owner, live, drive)).ok, true);
-    const shared = await shareVisiblePack(owner, "new-mtaajdwa-f7539", tester.email, drive, live);
+    const shared = await shareVisiblePack(owner, "new-mtaajdwa-f7539", shane.email, drive, live);
     assert.equal(shared.ok, true);
     const smash = {
       ...live,
       updatedAt: 99_000,
-      ownerEmail: tester.email,
-      sharedWith: [tester.email],
+      ownerEmail: shane.email,
+      sharedWith: [shane.email],
       schedule: defaultPhaseSchedule(),
       crew: { staff: [], direct: [] },
     };
-    const flushed = await upsertVisiblePack(tester, smash, drive);
+    const flushed = await upsertVisiblePack(shane, smash, drive);
     assert.equal(flushed.ok, false);
     if (!flushed.ok) {
       assert.equal(flushed.status, 409);

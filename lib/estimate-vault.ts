@@ -13,6 +13,13 @@ import {
   packVisibleTo,
   type ScopeUser,
 } from "./estimate-scope.ts";
+import {
+  canEditChangeOrders,
+  canEditEstimateWork,
+  canOrderStc,
+  canTouchEstimatePack,
+  ESTIMATE_WRITE_DENIED,
+} from "./module-access.ts";
 import { applyHisIdentity, hisMatchForPack } from "./his-wood-river.ts";
 import { hydratedHandoffExtras } from "./desk-scope-server.ts";
 import {
@@ -44,6 +51,21 @@ import {
 import { packBaselineMoneyWriteError, packBaselineWriteError } from "./family-a-vault-write.ts";
 
 export { RETURN_WRITE_ERROR, SHARE_WRITE_ERROR, TRANSFER_WRITE_ERROR } from "./handoff.ts";
+export { ESTIMATE_WRITE_DENIED } from "./module-access.ts";
+
+function applyModuleWriteSlices(
+  incoming: EstimatePackSnapshot,
+  claimed: EstimatePackSnapshot | null,
+  user: ScopeUser,
+): EstimatePackSnapshot {
+  if (!claimed || canEditAssignedEstimate(user, claimed)) return incoming;
+  return {
+    ...claimed,
+    fcr: canEditChangeOrders(user) ? incoming.fcr : claimed.fcr,
+    purchasing: canOrderStc(user) ? incoming.purchasing : claimed.purchasing,
+    updatedAt: incoming.updatedAt || Date.now(),
+  };
+}
 
 /** Map Drive / integrity throws to a banner the desk can actually act on. */
 export function vaultWriteUserError(error: unknown): { status: number; error: string; skipped?: "integrity" } {
@@ -154,21 +176,29 @@ export async function upsertVisiblePack(user: ScopeUser, incoming: unknown, adap
   if (claimed && !canWritePack(user, claimed)) {
     return { ok: false as const, status: 403, error: "That package is not on this desk." };
   }
-  // 2026-09-08: editors = owner (Robert) OR assigned PM/estimator. Not assignee-only.
-  // Viewers cannot flush a smashed leftover over Drive. ownerEmail is the PM stand-in.
   if (claimed && !canEditAssignedEstimate(user, claimed)) {
     const incoming = parsed.pack;
     const smash = packLooksSmashed(incoming) || shouldSkipIntegrityFlush(incoming);
     const decision = decidePackWrite(incoming, claimed);
-    if (smash || decision.action === "keep-last-good" || decision.action === "refuse") {
-      return {
-        ok: false as const,
-        status: 409,
-        error: "Viewer local cannot overwrite the shared estimate.",
-      };
+    if (!canEditChangeOrders(user) && !canOrderStc(user)) {
+      if (smash || decision.action === "keep-last-good" || decision.action === "refuse") {
+        return {
+          ok: false as const,
+          status: 409,
+          error: "Viewer local cannot overwrite the shared estimate.",
+        };
+      }
+      return { ok: false as const, status: 403, error: ESTIMATE_WRITE_DENIED };
     }
   }
-  const merged = pickPack(parsed.pack, claimed) || parsed.pack;
+  if (!claimed && !canEditEstimateWork(user)) {
+    return { ok: false as const, status: 403, error: ESTIMATE_WRITE_DENIED };
+  }
+  if (!canTouchEstimatePack(user)) {
+    return { ok: false as const, status: 403, error: ESTIMATE_WRITE_DENIED };
+  }
+  const sliced = applyModuleWriteSlices(parsed.pack, claimed, user);
+  const merged = pickPack(sliced, claimed) || sliced;
   const pack = publicPack({
     ...merged,
     ownerEmail: hisMatchForPack(merged) ? applyHisIdentity(merged).ownerEmail : claimed?.ownerEmail || ownerEmail,

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  GRANTABLE_PRIVILEGES,
+  MODULE_ASSIGN_PRIVILEGES,
   OWNER_ONLY_PRIVILEGES,
   PRESIDENT_SHARED,
   grantedPrivileges,
@@ -36,17 +38,23 @@ test("locked matrix lists shared President items and grantable owner-only items"
   assert.equal(isPrivilegeId("manage-users"), true);
   assert.equal(isPrivilegeId("hitsquad-seats"), true);
   assert.equal(isPrivilegeId("rate-vault"), true);
+  assert.equal(isPrivilegeId("estimates"), true);
+  assert.equal(isPrivilegeId("change-orders"), true);
+  assert.equal(isPrivilegeId("stc-order"), true);
   assert.equal(isPrivilegeId("not-a-privilege"), false);
+  assert.deepEqual([...MODULE_ASSIGN_PRIVILEGES], ["estimates", "change-orders", "stc-order"]);
+  assert.equal(GRANTABLE_PRIVILEGES.includes("change-orders"), true);
+  assert.equal(OWNER_ONLY_PRIVILEGES.includes("change-orders"), false);
 });
 
 test("owner has every grantable privilege; President starts with none", () => {
   const owner = { role: "owner", email: "robertmhenderson582@gmail.com" };
   const president = { role: "president", email: "president.example@example.com" };
-  for (const id of OWNER_ONLY_PRIVILEGES) {
+  for (const id of GRANTABLE_PRIVILEGES) {
     assert.equal(hasPrivilege(owner, id), true, id);
     assert.equal(hasPrivilege(president, id), false, id);
   }
-  assert.deepEqual(grantedPrivileges(owner), [...OWNER_ONLY_PRIVILEGES]);
+  assert.deepEqual(grantedPrivileges(owner), [...GRANTABLE_PRIVILEGES]);
   assert.deepEqual(grantedPrivileges(president), []);
   assert.deepEqual(
     grantedPrivileges({ ...president, privileges: ["manage-users", "hitsquad-seats", "bogus"] }),

@@ -78,6 +78,7 @@ export function JobSetupCard({
   const pack = useEstimatePackage();
   const alias = useAlias();
   const lens = useLensUser();
+  const estimateWriteLocked = !pack.canEditEstimate;
   const [estimateType, setEstimateType] = useState<EstimateType>(displayEstimateType(type));
   const [holidayDraft, setHolidayDraft] = useState("");
   const [rateStatus, setRateStatus] = useState("");
@@ -157,6 +158,11 @@ export function JobSetupCard({
         <h1 className="text-3xl font-semibold text-[#163038]">Job setup</h1>
         {author ? <CreatedBy author={author} /> : null}
       </div>
+      {estimateWriteLocked ? (
+        <p className="mt-3 text-sm text-[#5b6f73]">
+          View only. Owner and Project Managers can edit job cards, calendars, and estimate fill.
+        </p>
+      ) : null}
       <div className="mt-5">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">STATUS</span>
@@ -165,7 +171,9 @@ export function JobSetupCard({
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {options.map((item) => {
             const locked =
-              (statusLocked && item !== "Draft") || (statusNeedsManager(liveStatus, item) && !canAward);
+              estimateWriteLocked ||
+              (statusLocked && item !== "Draft") ||
+              (statusNeedsManager(liveStatus, item) && !canAward);
             const active = liveStatus === item;
             return (
               <button

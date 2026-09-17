@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BuildingFileModal } from "@/components/BuildingFileModal";
 import { CatalogPick } from "@/components/CatalogPick";
 import { useEstimatePackage } from "@/components/EstimatePackage";
+import { useLensUser } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
+import { canEditChangeOrders, CHANGE_ORDERS_DENIED } from "@/lib/module-access";
 import {
   addClaimLine,
   addCraftLine,
@@ -73,6 +75,8 @@ function crewTitles(pack: ReturnType<typeof useEstimatePackage>) {
 export function ChangeOrderPacket({ client, site }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
   const { user } = useSession();
+  const lens = useLensUser();
+  const canWrite = canEditChangeOrders(lens);
   const noun = changeOrderNoun(client, site);
   const [shell, setShell] = useState<ChangeOrderShell>(DEFAULT_CHANGE_ORDER_SHELL);
   const [packet, setPacket] = useState<FcrPacket>(emptyFcrPacket);
@@ -105,6 +109,7 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
   }, [pack.estimateKey, pack.ready]);
 
   function persist(next: FcrPacket) {
+    if (!canWrite) return;
     setPacket(next);
     writeFcrPacket(pack.estimateKey, next);
     if (selectedId && !next.log.some((row) => row.id === selectedId)) {
@@ -174,8 +179,10 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
         under the hood. Fill craft lines at composite ST / OT (DT optional) plus claimable
         pass-throughs — not the full day-grid desk. Submit posts that packet as a log row. Open a
         submitted row to revise the same SCR # in place; status lives on the log. Export Excel is
-        the client-submittable proof.
+        the client-submittable proof. Owner assigns Change Orders under Settings → Privileges — not
+        every Project Manager. Owner always can.
       </p>
+      {canWrite ? null : <p className="mt-2 text-sm text-[#5b6f73]">{CHANGE_ORDERS_DENIED}</p>}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <nav className="flex flex-wrap gap-2 text-sm" aria-label="SCR packet">
           {CHANGE_ORDER_SHELLS.map((item) => (
@@ -218,8 +225,9 @@ export function ChangeOrderPacket({ client, site }: { client?: string; site?: st
             </div>
             <button
               type="button"
+              disabled={!canWrite}
               onClick={() => openWorkbook()}
-              className="rounded-lg border border-steel px-3 py-1.5 text-sm text-steel"
+              className="rounded-lg border border-steel px-3 py-1.5 text-sm text-steel disabled:cursor-not-allowed disabled:opacity-50"
             >
               New estimate
             </button>

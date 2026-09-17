@@ -1,7 +1,8 @@
 /**
  * Phase 1 job titles for Managed users.
  * Login seats stay owner / operator / tester / president.
- * These labels are the Role dropdown — not the Phase 2 module matrix.
+ * These labels are the Role dropdown. Phase 2 module writes (estimate fill,
+ * Change Orders, STC order) live on privilege / PM gates — not this list.
  */
 
 export const SEED_JOB_ROLES = [
@@ -51,6 +52,10 @@ export function parseJobRoleLabel(value: unknown): { label: string } | { error: 
 
 export function isSeedJobRole(value: string): value is SeedJobRole {
   return (SEED_JOB_ROLES as readonly string[]).includes(value);
+}
+
+export function isProjectManagerTitle(value?: string | null): boolean {
+  return normalizeJobRoleLabel(value) === "Project Manager";
 }
 
 export function mergeJobRoleCatalog(custom: readonly string[] = []): string[] {

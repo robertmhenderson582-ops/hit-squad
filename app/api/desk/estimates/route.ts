@@ -25,10 +25,11 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  const deskUser = await scopedDeskUser(user, request);
 
   const body = (await request.json().catch(() => ({}))) as { pack?: unknown };
   try {
-    const result = await upsertVisiblePack(user, body.pack ?? body);
+    const result = await upsertVisiblePack(deskUser, body.pack ?? body);
     if (!result.ok) {
       const body: { error: string; skipped?: "integrity" } = { error: result.error };
       if ("skipped" in result && result.skipped === "integrity") body.skipped = "integrity";

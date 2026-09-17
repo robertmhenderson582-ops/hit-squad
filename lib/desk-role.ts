@@ -1,5 +1,6 @@
 import type { PrivilegeId, PublicUser } from "@/lib/types";
-import { hasPrivilege, type PrivilegeViewer } from "./privileges.ts";
+import { defaultJobRoleForSeat, isProjectManagerTitle } from "./job-roles.ts";
+import { hasPrivilege, normalizePrivileges, type PrivilegeViewer } from "./privileges.ts";
 import { VISUAL_ROSTER } from "./owner-desk.ts";
 import { isJosephEmail, testerByEmail, TESTER_SEATS, type TesterSeatDef } from "./tester-seats.ts";
 
@@ -126,9 +127,20 @@ export function canUseRateBuilder(user?: { email?: string; role?: string } | nul
   return hasWorkingDesk(user);
 }
 
-/** Nathan / John Beech roster label is "PM / estimator". Owner and Novus sit above that. */
-export function isProjectManager(user?: { email?: string; role?: string } | null): boolean {
-  if (!user?.email) return false;
+/**
+ * Project Manager seat — Phase 1 job title, then seeded / roster PM.
+ * Stored title wins so Owner remapping Nathan to Foreman drops PM write.
+ * Owner and Novus are not PMs.
+ */
+export function isProjectManager(
+  user?: { email?: string; role?: string; name?: string; jobTitle?: string } | null,
+): boolean {
+  if (!user) return false;
+  if (user.role === "owner" || user.role === "operator") return false;
+  const stored = (user.jobTitle || "").trim();
+  if (stored) return isProjectManagerTitle(stored);
+  if (isProjectManagerTitle(defaultJobRoleForSeat(user))) return true;
+  if (!user.email) return false;
   const email = user.email.trim().toLowerCase();
   const roster = VISUAL_ROSTER.find((row) => row.email === email);
   return Boolean(roster?.permission.includes("PM"));
@@ -208,7 +220,14 @@ export function chromeDeskLabel(
   return permissionDeskLabel(person?.email);
 }
 
-type LensPerson = { id: string; email: string; name: string; role?: string };
+type LensPerson = {
+  id: string;
+  email: string;
+  name: string;
+  role?: string;
+  jobTitle?: string;
+  privileges?: PublicUser["privileges"];
+};
 
 export function testerFromViewAs(
   viewAs?: string | null,
@@ -255,7 +274,16 @@ export function lensUser(
   const seat = testerFromViewAs(seatId, people);
   if (!seat) return session;
   const person = people.find((item) => item.id === seatId || item.email === seat.email || item.id === seat.id);
-  return { id: seat.id, email: seat.email, name: seat.name, role: lensRoleForPerson(person) };
+  const privileges = normalizePrivileges(person?.privileges);
+  const lens: PublicUser = {
+    id: seat.id,
+    email: seat.email,
+    name: seat.name,
+    role: lensRoleForPerson(person),
+  };
+  if (person?.jobTitle) lens.jobTitle = person.jobTitle;
+  if (privileges.length) lens.privileges = privileges;
+  return lens;
 }
 
 /** Stable effect key. lensUser returns a new object while following/viewing as. */

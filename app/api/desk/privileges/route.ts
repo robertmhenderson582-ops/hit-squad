@@ -3,6 +3,7 @@ import { readSession } from "@/lib/auth";
 import { isOwner } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
 import {
+  MODULE_ASSIGN_PRIVILEGES,
   OWNER_ONLY_PRIVILEGES,
   PRESIDENT_SHARED,
   PRIVILEGE_COPY,
@@ -20,10 +21,11 @@ export async function GET(request: Request) {
   await hydrateSeatStore();
   return NextResponse.json({
     privileges: OWNER_ONLY_PRIVILEGES.map((id) => ({ id, ...PRIVILEGE_COPY[id] })),
+    modules: MODULE_ASSIGN_PRIVILEGES.map((id) => ({ id, ...PRIVILEGE_COPY[id] })),
     shared: PRESIDENT_SHARED,
     grants: await listPrivilegeGrants(),
     seats: (await listSeatRows()).filter((row) => row.role !== "owner" && row.role !== "operator"),
-    note: "Pick a user. Grant or revoke owner-only items. President is not seeded — add the login when the email is known.",
+    note: "Pick a user. Grant owner-only items or assign Change Orders / STC order. President is not seeded — add the login when the email is known.",
   });
 }
 

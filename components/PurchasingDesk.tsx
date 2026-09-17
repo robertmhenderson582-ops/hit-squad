@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useEstimatePackage } from "@/components/EstimatePackage";
+import { useLensUser } from "@/components/OwnerDeskContext";
+import { canOrderStc, STC_ORDER_DENIED } from "@/lib/module-access";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { readOtherCost } from "@/lib/other-cost";
 import {
@@ -49,6 +51,8 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
 
 export function PurchasingDesk({ client = "", site = "" }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
+  const lens = useLensUser();
+  const canWrite = canOrderStc(lens);
   const [book, setBook] = useState<PurchasingBook>(() => readPurchasing(""));
   const [otherCost, setOtherCost] = useState(() => (pack.estimateKey ? readOtherCost(pack.estimateKey) : null));
   const [equipment, setEquipment] = useState(() => (pack.estimateKey ? readEquipmentSheet(pack.estimateKey) : null));
@@ -80,6 +84,7 @@ export function PurchasingDesk({ client = "", site = "" }: { client?: string; si
   void site;
 
   function persist(next: PurchasingBook) {
+    if (!canWrite) return;
     setBook(next);
     if (pack.estimateKey) writePurchasing(pack.estimateKey, next);
   }
@@ -102,8 +107,10 @@ export function PurchasingDesk({ client = "", site = "" }: { client?: string; si
     <div className="mt-4 space-y-5">
       <p className="max-w-3xl text-sm leading-6 text-[#5b6f73]">
         {PURCHASING_NOUN} for this live estimate. {PURCHASING_LIVE_NOTE} {PURCHASING_INTERNAL_NOTE}{" "}
-        Same pack store as Cost report / ECR — not a second AP book.
+        Same pack store as Cost report / ECR — not a second AP book. STC / small-tools-consumables
+        ordering is assignable — Owner grants it under Settings → Privileges. Owner always can.
       </p>
+      {canWrite ? null : <p className="mt-2 text-sm text-[#5b6f73]">{STC_ORDER_DENIED}</p>}
 
       <section className="plant-card px-5 py-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -125,8 +132,9 @@ export function PurchasingDesk({ client = "", site = "" }: { client?: string; si
           </label>
           <button
             type="button"
+            disabled={!canWrite}
             onClick={() => persist(savePurchasingSnapshot(book, misc))}
-            className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white"
+            className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             Save dated totals
           </button>
@@ -182,8 +190,9 @@ export function PurchasingDesk({ client = "", site = "" }: { client?: string; si
           </div>
           <button
             type="button"
+            disabled={!canWrite}
             onClick={() => persist(addPurchaseLine(book))}
-            className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white"
+            className="rounded-lg bg-steel px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             Add buy
           </button>

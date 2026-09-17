@@ -90,19 +90,24 @@ describe("estimate vault scope", () => {
     assert.equal(canTransferPack(owner, testerPack), false);
   });
 
-  it("2026-09-08 lock: owner (Robert) OR assigned PM/estimator may edit — not assignee-only", () => {
+  it("2026-09-17 lock: Owner + Project Managers may edit assigned packs — not President or Quality", () => {
     const president = { email: "president.example@example.com", role: "president" as const };
+    const chance = { email: "chancec318@yahoo.com", role: "tester" as const, jobTitle: "Quality Manager" };
+    const chancePack = { ownerEmail: chance.email, packId: "new-chance1" };
     const shared = { ...ownerPack, sharedWith: [tester.email] };
     assert.equal(canEditAssignedEstimate(owner, ownerPack), true);
     assert.equal(canEditAssignedEstimate(owner, testerPack), true);
     assert.equal(canEditAssignedEstimate(tester, testerPack), true);
-    assert.equal(canEditAssignedEstimate(tester, shared), false);
+    assert.equal(canEditAssignedEstimate(tester, shared), true);
     assert.equal(canEditAssignedEstimate(president, ownerPack), false);
-    assert.equal(canEditAssignedEstimate(president, { ...ownerPack, ownerEmail: president.email }), true);
+    assert.equal(canEditAssignedEstimate(president, { ...ownerPack, ownerEmail: president.email }), false);
     assert.equal(canWritePack(president, ownerPack), false);
     assert.equal(canWritePack(president, { ...ownerPack, ownerEmail: president.email }), true);
-    assert.equal(isEstimateViewerNotEditor(tester, shared), true);
+    assert.equal(canEditAssignedEstimate(chance, chancePack), false);
+    assert.equal(canEditAssignedEstimate({ ...chance, privileges: ["estimates"] }, chancePack), true);
+    assert.equal(isEstimateViewerNotEditor(tester, shared), false);
     assert.equal(isEstimateViewerNotEditor(novus, ownerPack), true);
+    assert.equal(isEstimateViewerNotEditor(chance, chancePack), true);
   });
 
   it("lets the current owner turn a pack over; Joseph and Shane cannot take it", () => {
@@ -119,10 +124,9 @@ describe("estimate vault scope", () => {
     const shared = { ...ownerPack, sharedWith: [tester.email] };
     assert.equal(packVisibleTo(tester, shared), true);
     assert.equal(canWritePack(tester, shared), true);
-    // 2026-09-08 lock: editors = owner OR assigned PM/estimator. Shared write still
-    // goes through canWritePack; canEditAssignedEstimate is false (viewer). Assignment field TBD.
-    assert.equal(canEditAssignedEstimate(tester, shared), false);
-    assert.equal(isEstimateViewerNotEditor(tester, shared), true);
+    // Phase 2: Nathan is a PM, so a share onto his desk is writable. Chance would not be.
+    assert.equal(canEditAssignedEstimate(tester, shared), true);
+    assert.equal(isEstimateViewerNotEditor(tester, shared), false);
     assert.equal(canSharePack(tester, shared), false);
     assert.equal(canTransferPack(tester, shared), false);
     assert.equal(packVisibleTo(otherTester, shared), false);
