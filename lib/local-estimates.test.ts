@@ -223,4 +223,39 @@ describe("local estimate packs", () => {
     assert.equal(written?.status, "Locked");
     assert.equal(listLocalPacks(store)[0]?.status, "Locked");
   });
+
+  it("does not let a thin Quality/server job wipe Boiler 17 status, code, or job number", () => {
+    const store = memoryStore();
+    const pack = rememberLocalPack(
+      {
+        packId: "new-b1726",
+        title: "Boiler 17 2026",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        status: "In progress",
+      },
+      store,
+    );
+    assert.ok(pack);
+    const thin = {
+      id: "job-new-b1726",
+      ownerId: "quality-vault",
+      code: "new-b1726",
+      title: "Boiler 17 2026",
+      client: "Phillips 66",
+      discipline: "mechanical" as const,
+      kind: "estimate" as const,
+      status: "OPEN" as const,
+      window: "",
+      workingFigure: "",
+      hseNote: "",
+    };
+    const merged = mergeLocalJobs([thin], [pack]);
+    const job = merged.find((row) => row.id === "job-new-b1726");
+    assert.equal(job?.code, "EST-B1726");
+    assert.equal(job?.status, "OPEN");
+    assert.equal(pack.status, "In progress");
+    assert.match(job?.workingFigure || "", /JN 108451/);
+    assert.match(job?.workingFigure || "", /In progress/);
+  });
 });

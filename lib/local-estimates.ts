@@ -370,6 +370,37 @@ export function localPackToEstimate(pack: LocalPack, ownerId = "owner-robert-hen
   };
 }
 
+function preferJobCode(packCode: string, jobCode: string) {
+  const fromPack = (packCode || "").trim();
+  const fromJob = (jobCode || "").trim();
+  if (/^EST-/i.test(fromPack)) return fromPack;
+  if (/^EST-/i.test(fromJob)) return fromJob;
+  if (fromPack && !/^new-/i.test(fromPack)) return fromPack;
+  if (fromJob && !/^new-/i.test(fromJob)) return fromJob;
+  return fromPack || fromJob;
+}
+
+function preferWorkingFigure(fromPack: string, fromJob: string) {
+  const pack = (fromPack || "").trim();
+  const job = (fromJob || "").trim();
+  if (/JN\s*\d/i.test(pack) || /\$/.test(pack)) return pack;
+  if (/JN\s*\d/i.test(job) || /\$/.test(job)) return job;
+  if (pack && pack !== "Working") return pack;
+  if (job && job !== "Working") return job;
+  return pack || job;
+}
+
+function overlayJobCardFace(job: JobRecord, fromPack: JobRecord): JobRecord {
+  return {
+    ...job,
+    code: preferJobCode(fromPack.code, job.code),
+    title: (fromPack.title || "").trim() || job.title,
+    window: (fromPack.window || "").trim() || job.window,
+    workingFigure: preferWorkingFigure(fromPack.workingFigure, job.workingFigure),
+    hseNote: (fromPack.hseNote || "").trim() || job.hseNote,
+  };
+}
+
 export function localPackToJob(pack: LocalPack, ownerId = "owner-robert-henderson"): JobRecord {
   const estimate = localPackToEstimate(pack, ownerId);
   const wake = wakeMatchForPack(pack);
@@ -398,9 +429,15 @@ export function mergeLocalEstimates(estimates: EstimateRecord[], packs: LocalPac
 }
 
 export function mergeLocalJobs(jobs: JobRecord[], packs: LocalPack[]): JobRecord[] {
-  const extras = packs.map((pack) => localPackToJob(pack));
-  const seen = new Set(jobs.map((row) => row.id));
-  return [...jobs, ...extras.filter((row) => !seen.has(row.id))];
+  const extras = packs.map((pack) => ({ job: localPackToJob(pack), pack }));
+  const extraById = new Map(extras.map((row) => [row.job.id, row]));
+  const seen = new Set<string>();
+  const merged = jobs.map((job) => {
+    seen.add(job.id);
+    const extra = extraById.get(job.id);
+    return extra ? overlayJobCardFace(job, extra.job) : job;
+  });
+  return [...merged, ...extras.filter((row) => !seen.has(row.job.id)).map((row) => row.job)];
 }
 
 export function mergeLocalBoard(board: ForgebookBoard, packs: LocalPack[]): ForgebookBoard {

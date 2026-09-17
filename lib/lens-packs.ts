@@ -15,6 +15,7 @@ import { isSamePerson } from "./identity.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 import { JOB_MENU_KEY, clearHisJobMenuLeftover } from "./job-menu.ts";
 import { omitCatalogSeedPacks } from "./jobs.ts";
+import { keepLiveEstimateStatus } from "./estimate-status.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 import { mergeRodeoMonroeWakeCards, shouldPaintWakeCards } from "./rodeo-monroe-wake.ts";
 
@@ -75,6 +76,7 @@ export function snapshotLensPack(
     | "transferredTo"
     | "transferredToName"
     | "transferredFromName"
+    | "status"
   >,
 ): LocalPack {
   return {
@@ -94,6 +96,7 @@ export function snapshotLensPack(
     transferredTo: pack.transferredTo,
     transferredToName: pack.transferredToName,
     transferredFromName: pack.transferredFromName,
+    status: pack.status,
   };
 }
 
@@ -173,6 +176,7 @@ function preferDeskPack(current: LocalPack, next: LocalPack): LocalPack {
     transferredFromName: newer.transferredFromName || older.transferredFromName,
     transferredTo: newer.transferredTo || older.transferredTo,
     transferredToName: newer.transferredToName || older.transferredToName,
+    status: keepLiveEstimateStatus(newer.status, older.status) || newer.status || older.status,
     updatedAt: Math.max(current.updatedAt || 0, next.updatedAt || 0),
   };
   const his = hisMatchForPack(merged) || hisMatchForPack(current) || hisMatchForPack(next);

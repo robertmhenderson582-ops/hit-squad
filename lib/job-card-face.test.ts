@@ -156,6 +156,9 @@ describe("job card face", () => {
 
     const tree = readFileSync(fileURLToPath(new URL("../components/JobTreeDesk.tsx", import.meta.url)), "utf8");
     assert.match(tree, /jobCardFace/);
+    assert.match(tree, /findDeskPack/);
+    assert.match(tree, /face\.statusLabel/);
+    assert.match(tree, /face\.jobNumber/);
     assert.match(tree, /job-face-card/);
     assert.match(tree, /job-face-title/);
     assert.match(tree, /job-face-stat-total/);
@@ -164,6 +167,31 @@ describe("job card face", () => {
     assert.match(tree, /face\.phaseStarts\.map/);
     assert.match(tree, /GRAND TOTAL/);
     assert.match(tree, /PHASE STARTS/);
+
+    const boilerId = {
+      packId: "new-b1726",
+      key: "new:new-b1726",
+      title: "Boiler 17 2026",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 10,
+      updatedAt: 20,
+      status: "In progress" as const,
+    };
+    const boilerStore = memoryStore({
+      [PACK_INDEX_KEY]: JSON.stringify([boilerId]),
+      [`${PACK_STORE_PREFIX}${boilerId.key}`]: JSON.stringify(boilerId),
+    });
+    const boilerFace = jobCardFace(boilerId, boilerStore);
+    assert.equal(boilerFace.statusLabel, "In progress");
+    assert.equal(boilerFace.jobCode, "EST-B1726");
+    assert.equal(boilerFace.jobNumber, "108451");
+    const thinFace = jobCardFace({ ...boilerId, status: undefined }, memoryStore());
+    assert.equal(thinFace.jobNumber, "108451");
+    assert.equal(thinFace.jobCode, "EST-B1726");
+    const lockedHis = jobCardFace({ ...boilerId, status: "Locked" }, boilerStore);
+    assert.equal(lockedHis.statusLabel, "In progress");
 
     const css = readFileSync(fileURLToPath(new URL("../app/globals.css", import.meta.url)), "utf8");
     assert.match(css, /\.job-face-title[\s\S]*font-size:\s*1\.85rem/);

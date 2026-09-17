@@ -1252,4 +1252,42 @@ describe("estimate pack snapshot", () => {
     assert.equal((afterSmash?.schedule as { projectStart?: string }).projectStart, "2026-09-01");
     assert.equal(packClockIsSeedSmashed(afterSmash), false);
   });
+
+  it("thin follow-up vault cannot blank Boiler 17 status or job number", () => {
+    const live = {
+      packId: "new-b1726",
+      key: "new:new-b1726",
+      title: "Boiler 17 2026",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 50,
+      updatedAt: 100,
+      ownerEmail: "nathanboyte@gmail.com",
+      status: "In progress" as const,
+      jobMeta: { jobNumber: "108451", area: "Boiler 17" },
+      schedule: { projectStart: "2026-08-10", phases: [{ id: "pre", on: true, start: "2026-08-10", stop: "2026-12-06" }] },
+      crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-08-10", end: "2026-12-06" }] }] },
+      equipment: { largeTools: [{ id: "crane-1" }], thirdParty: [] },
+    };
+    const thin = {
+      ...live,
+      updatedAt: 900_000,
+      status: undefined,
+      jobMeta: { area: "Boiler 17" },
+    };
+    const hisLocked = { ...thin, status: "Locked" as const };
+    const picked = pickPack(live, thin);
+    assert.equal(picked?.status, "In progress");
+    assert.equal(pickPack(live, hisLocked)?.status, "In progress");
+    assert.equal((picked?.jobMeta as { jobNumber?: string })?.jobNumber, "108451");
+
+    const store = memoryStore();
+    applyPackToStore(store, live);
+    applyPackToStore(store, thin);
+    applyPackToStore(store, hisLocked);
+    const kept = collectPack(store, "new-b1726");
+    assert.equal(kept?.status, "In progress");
+    assert.equal((kept?.jobMeta as { jobNumber?: string })?.jobNumber, "108451");
+  });
 });

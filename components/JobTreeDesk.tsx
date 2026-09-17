@@ -12,6 +12,7 @@ import { useDisplay } from "@/components/DisplayProvider";
 import { estimateForJob } from "@/lib/estimate-open";
 import { jobCardFace } from "@/lib/job-card-face";
 import { packForJob } from "@/lib/jobs";
+import { findDeskPack } from "@/lib/lens-packs";
 import {
   jobTreeExpandStore,
   readJobTreeExpand,
@@ -171,10 +172,15 @@ export function JobTreeDesk({
                           const estimate = estimateForJob(job, estimates);
                           const pack = packForJob(job, packs, estimate?.id);
                           const href = jobEstimateHref(job, estimates, packs);
+                          const livePack =
+                            (pack?.packId && findDeskPack(pack.packId, undefined, typeof window === "undefined" ? null : window.localStorage)) ||
+                            pack;
                           const face = jobCardFace(
-                            pack,
+                            livePack,
                             typeof window === "undefined" ? null : window.localStorage,
                           );
+                          const stamp = (face.statusLabel || livePack?.status || job.status || "").trim();
+                          const jobCode = face.jobCode || job.code;
                           return (
                             <article
                               key={job.id}
@@ -191,8 +197,11 @@ export function JobTreeDesk({
                               }}
                             >
                               <div className="job-face-head">
-                                <p className="job-face-code">{job.code}</p>
-                                <StatusStamp value={(pack?.status || job.status).toUpperCase()} />
+                                <p className="job-face-code">
+                                  {jobCode}
+                                  {face.jobNumber ? ` · JN ${face.jobNumber}` : ""}
+                                </p>
+                                {stamp ? <StatusStamp value={stamp.toUpperCase()} /> : null}
                               </div>
                               <h4 className="job-face-title">{alias(job.title)}</h4>
                               <JobHandoffMark pack={pack} email={lens?.email} />
@@ -227,7 +236,10 @@ export function JobTreeDesk({
                                 </div>
                                 <div className="job-face-stat">
                                   <dt>WORKING FIGURE</dt>
-                                  <dd>{job.workingFigure}</dd>
+                                  <dd>
+                                    {job.workingFigure ||
+                                      (face.jobNumber ? `JN ${face.jobNumber}` : "—")}
+                                  </dd>
                                 </div>
                                 <div className="job-face-stat">
                                   <dt>HSE</dt>

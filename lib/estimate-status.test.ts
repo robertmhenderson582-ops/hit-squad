@@ -10,6 +10,7 @@ import {
   clampEstimateStatus,
   estimateStatusLaneFromRegular,
   isEstimateLocked,
+  keepLiveEstimateStatus,
   needsStatusConfirm,
   parseEstimateStatus,
   readEstimateStatus,
@@ -77,6 +78,10 @@ describe("estimate status", () => {
     assert.equal(statusNeedsManager("Awarded", "Review"), true);
     assert.equal(isEstimateLocked("Locked"), true);
     assert.equal(isEstimateLocked("Draft"), false);
+    assert.equal(keepLiveEstimateStatus("Locked", "In progress"), "In progress");
+    assert.equal(keepLiveEstimateStatus("In progress", "Locked"), "In progress");
+    assert.equal(keepLiveEstimateStatus("", "In progress"), "In progress");
+    assert.equal(keepLiveEstimateStatus("Locked", ""), "Locked");
     assert.match(statusConfirmCopy("Draft", "Submitted"), /Draft to Submitted/);
     const store = memoryStorage();
     writeEstimateStatus("new-demo", "Submitted", store);

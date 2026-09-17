@@ -228,6 +228,42 @@ test("owner first paint with empty local still has Wood River HIS cards", () => 
   assert.equal(madison?.sites.some((site) => site.id === "site-monroe" && site.jobs.some((job) => job.title === "Monroe 541V")), true);
 });
 
+test("thin owner/lens snapshot cannot blank Boiler 17 status after hydrate", () => {
+  const store = memoryStore();
+  rememberLocalPack(
+    {
+      packId: "new-b1726",
+      title: "Boiler 17 2026",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      ownerEmail: owner.email,
+      status: "In progress",
+    },
+    store,
+  );
+  writeOwnerPacks(
+    [
+      snapshotLensPack({
+        packId: "new-b1726",
+        key: "new:new-b1726",
+        title: "Boiler 17 2026",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+        siteId: "site-madison",
+        createdAt: 1,
+        updatedAt: 900,
+        ownerEmail: owner.email,
+        status: "Locked",
+      }),
+    ],
+    store,
+  );
+  const desk = packsForViewedDesk(owner, false, null, store);
+  const boiler = desk.find((row) => row.packId === "new-b1726");
+  assert.equal(boiler?.status, "In progress");
+  assert.equal(snapshotLensPack({ ...boiler!, status: "In progress" }).status, "In progress");
+});
+
 test("empty vault leftover cannot drop existing packs from the Jobs tree", () => {
   const store = memoryStore();
   rememberLocalPack(
