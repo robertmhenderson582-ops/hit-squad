@@ -178,7 +178,7 @@ export function JobTreeDesk({
                           return (
                             <article
                               key={job.id}
-                              className={`site-plate plant-card estimate-card mt-3 px-4 py-5 ${href ? "cursor-pointer" : ""}`}
+                              className={`job-face-card site-plate plant-card estimate-card mt-3 ${href ? "cursor-pointer" : ""}`}
                               role={href ? "link" : undefined}
                               tabIndex={href ? 0 : undefined}
                               onClick={href ? () => openJob(job) : undefined}
@@ -190,44 +190,38 @@ export function JobTreeDesk({
                                 }
                               }}
                             >
-                              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                                <p className="font-mono text-xs text-steel">{job.code}</p>
+                              <div className="job-face-head">
+                                <p className="job-face-code">{job.code}</p>
                                 <StatusStamp value={(pack?.status || job.status).toUpperCase()} />
                               </div>
-                              <h4 className="mt-1 font-display text-2xl tracking-wide">{alias(job.title)}</h4>
+                              <h4 className="job-face-title">{alias(job.title)}</h4>
                               <JobHandoffMark pack={pack} email={lens?.email} />
-                              <p className="mt-2 text-sm text-[#5b6f73]">
+                              <p className="job-face-meta">
                                 {alias(job.client)} · {job.discipline} · {job.kind.toUpperCase()}
                               </p>
-                              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-                                <div>
-                                  <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">WINDOW</dt>
-                                  <dd className="mt-1 font-mono text-xs">{job.window}</dd>
+                              <dl className="job-face-stats">
+                                <div className="job-face-stat job-face-stat-total">
+                                  <dt>GRAND TOTAL</dt>
+                                  <dd>{face.grandTotalLabel}</dd>
                                 </div>
-                                <div>
-                                  <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">
-                                    GRAND TOTAL
-                                  </dt>
-                                  <dd className="mt-1 font-mono text-xs text-amber-label">{face.grandTotalLabel}</dd>
+                                <div className="job-face-stat job-face-stat-phases">
+                                  <dt>PHASE STARTS</dt>
+                                  <dd>{face.phaseStartsLabel}</dd>
                                 </div>
-                                <div>
-                                  <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">
-                                    PHASE STARTS
-                                  </dt>
-                                  <dd className="mt-1 font-mono text-xs">{face.phaseStartsLabel}</dd>
+                                <div className="job-face-stat">
+                                  <dt>WINDOW</dt>
+                                  <dd>{job.window}</dd>
                                 </div>
-                                <div>
-                                  <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">
-                                    WORKING FIGURE
-                                  </dt>
-                                  <dd className="mt-1 font-mono text-xs text-amber-label">{job.workingFigure}</dd>
+                                <div className="job-face-stat">
+                                  <dt>WORKING FIGURE</dt>
+                                  <dd>{job.workingFigure}</dd>
                                 </div>
-                                <div>
-                                  <dt className="font-mono text-[10px] tracking-[0.2em] text-steel-glow">HSE</dt>
-                                  <dd className="mt-1 font-mono text-xs">{job.hseNote}</dd>
+                                <div className="job-face-stat">
+                                  <dt>HSE</dt>
+                                  <dd>{job.hseNote}</dd>
                                 </div>
                               </dl>
-                              <div className="relative z-20 mt-3" onClick={(event) => event.stopPropagation()}>
+                              <div className="job-face-menu relative z-20" onClick={(event) => event.stopPropagation()}>
                                 <JobMenuActions
                                   id={job.id}
                                   title={job.title}
