@@ -16,6 +16,41 @@ export type AnalyticsStcOverride = {
   ppePct: number | null;
 };
 
+export type AnalyticsMode = "pct" | "locked";
+
+/** East WR Merit misc (Bolt / Amend 11) — sourced STC $/hr. Do not invent OH/Profit $. */
+export const WR_EAST_LOCKED_STC = {
+  toolPerHour: 0.5,
+  consumablesPerHour: 1.25,
+  ppePerHour: 1.85,
+} as const;
+
+export type AnalyticsLockedAdders = {
+  toolPerHour: number;
+  consumablesPerHour: number;
+  ppePerHour: number;
+  ohPerHour: number | null;
+  profitPerHour: number | null;
+};
+
+export type AnalyticsNbDrag = {
+  onboarding: number | null;
+  drugDisa: number | null;
+  safety920: number | null;
+  siteClasses: number | null;
+};
+
+/** Live-pack COMP / MSA bridge. Mode, locked $/hr, and estimate-side drag assumptions. */
+export type AnalyticsBridgeMeta = {
+  mode: AnalyticsMode;
+  locked: AnalyticsLockedAdders;
+  erosionPerHour: number | null;
+  erosionPctOfBw: number | null;
+  nb: AnalyticsNbDrag;
+  extraPd: number | null;
+  jvic: number | null;
+};
+
 export type JobMoney = {
   laborContingencyPct: number;
   equipmentContingencyPct: number;
@@ -29,6 +64,7 @@ export type JobMoney = {
   holidays: string[];
   /** Live-pack Analytics STC & PPE % overrides. Null field = Yates default for that line. */
   analyticsStc: AnalyticsStcOverride;
+  analyticsBridge: AnalyticsBridgeMeta;
 };
 
 export type MoneyCrewLane = "staff" | "generalForeman" | "foreman" | "direct" | "support";
@@ -81,6 +117,32 @@ export function emptyAnalyticsStc(): AnalyticsStcOverride {
   return { toolPct: null, consumablesPct: null, ppePct: null };
 }
 
+export function emptyAnalyticsNb(): AnalyticsNbDrag {
+  return { onboarding: null, drugDisa: null, safety920: null, siteClasses: null };
+}
+
+export function emptyAnalyticsLocked(): AnalyticsLockedAdders {
+  return {
+    toolPerHour: WR_EAST_LOCKED_STC.toolPerHour,
+    consumablesPerHour: WR_EAST_LOCKED_STC.consumablesPerHour,
+    ppePerHour: WR_EAST_LOCKED_STC.ppePerHour,
+    ohPerHour: null,
+    profitPerHour: null,
+  };
+}
+
+export function emptyAnalyticsBridge(): AnalyticsBridgeMeta {
+  return {
+    mode: "pct",
+    locked: emptyAnalyticsLocked(),
+    erosionPerHour: null,
+    erosionPctOfBw: null,
+    nb: emptyAnalyticsNb(),
+    extraPd: null,
+    jvic: null,
+  };
+}
+
 export function emptyJobMoney(): JobMoney {
   return {
     laborContingencyPct: 0,
@@ -92,6 +154,7 @@ export function emptyJobMoney(): JobMoney {
     moreFundPerHour: null,
     holidays: [],
     analyticsStc: emptyAnalyticsStc(),
+    analyticsBridge: emptyAnalyticsBridge(),
   };
 }
 
@@ -118,6 +181,47 @@ export function hydrateAnalyticsStc(raw: unknown): AnalyticsStcOverride {
   };
 }
 
+function lockedStcRate(value: unknown, fallback: number) {
+  if (value == null || value === "") return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, n) : fallback;
+}
+
+export function hydrateAnalyticsLocked(raw: unknown): AnalyticsLockedAdders {
+  const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const defaults = emptyAnalyticsLocked();
+  return {
+    toolPerHour: lockedStcRate(row.toolPerHour, defaults.toolPerHour),
+    consumablesPerHour: lockedStcRate(row.consumablesPerHour, defaults.consumablesPerHour),
+    ppePerHour: lockedStcRate(row.ppePerHour, defaults.ppePerHour),
+    ohPerHour: hydrateAnalyticsStcPct(row.ohPerHour),
+    profitPerHour: hydrateAnalyticsStcPct(row.profitPerHour),
+  };
+}
+
+export function hydrateAnalyticsNb(raw: unknown): AnalyticsNbDrag {
+  const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    onboarding: hydrateAnalyticsStcPct(row.onboarding),
+    drugDisa: hydrateAnalyticsStcPct(row.drugDisa),
+    safety920: hydrateAnalyticsStcPct(row.safety920),
+    siteClasses: hydrateAnalyticsStcPct(row.siteClasses),
+  };
+}
+
+export function hydrateAnalyticsBridge(raw: unknown): AnalyticsBridgeMeta {
+  const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    mode: row.mode === "locked" ? "locked" : "pct",
+    locked: hydrateAnalyticsLocked(row.locked),
+    erosionPerHour: hydrateAnalyticsStcPct(row.erosionPerHour),
+    erosionPctOfBw: hydrateAnalyticsStcPct(row.erosionPctOfBw),
+    nb: hydrateAnalyticsNb(row.nb),
+    extraPd: hydrateAnalyticsStcPct(row.extraPd),
+    jvic: hydrateAnalyticsStcPct(row.jvic),
+  };
+}
+
 function nonNeg(value: unknown, fallback = 0) {
   if (value == null || value === "") return fallback;
   const n = Number(value);
@@ -139,6 +243,7 @@ export function hydrateJobMoney(raw: Partial<JobMoney> | Record<string, unknown>
     moreFundPerHour: more,
     holidays: hydrateHolidays(row.holidays),
     analyticsStc: hydrateAnalyticsStc(row.analyticsStc),
+    analyticsBridge: hydrateAnalyticsBridge(row.analyticsBridge),
   };
 }
 

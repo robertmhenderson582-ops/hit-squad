@@ -10,23 +10,29 @@
  * books do not have an Analytics sheet.
  *
  * Phase 2 (omitted): Procurement/Subcontracts stack, freight / tax markup,
- * Updated Total Profit / Procurement contribution.
+ * Updated Total Profit / Procurement contribution. Live Turnip / CPPR actuals
+ * and tariff % are also out — do not invent lock OH/Profit $ or a 9→5 formula.
  */
 import { equipmentTotals, thirdPartyCost, type EquipmentSheet } from "./equipment-sheet.ts";
 import { deskPackageBreakdown, type DeskPackageInput } from "./estimate-desk-total.ts";
 import {
+  emptyAnalyticsBridge,
   emptyAnalyticsStc,
   hydrateJobMoney,
+  WR_EAST_LOCKED_STC,
+  type AnalyticsBridgeMeta,
+  type AnalyticsLockedAdders,
+  type AnalyticsMode,
   type AnalyticsStcOverride,
   type MoneyCrew,
   type MoneyCrewLane,
   type MoneyHourRow,
 } from "./estimate-money.ts";
-import { estimateMarkupDollars } from "./estimate-total.ts";
+import { commercialMarkupRate, estimateMarkupDollars } from "./estimate-total.ts";
 import { computeRowHours } from "./hours-clock.ts";
 import { defaultLaborClass } from "./labor-class.ts";
 import { miscMarkupAmount } from "./other-cost.ts";
-import { shahanCrewTitle, type ShahanLookupOpts } from "./shahan-wood-river.ts";
+import { perDiemDollarsFromCrew, shahanCrewTitle, type ShahanLookupOpts } from "./shahan-wood-river.ts";
 import { lookupCompWageRow, wageLookupOpts } from "./wage-lookup.ts";
 
 export const ANALYTICS_TAB_ID = "analytics" as const;
@@ -49,7 +55,11 @@ export const YATES_ANALYTICS_BURDEN = {
 
 export type AnalyticsBurdenLane = keyof typeof YATES_ANALYTICS_BURDEN;
 
-export type { AnalyticsStcOverride };
+export type { AnalyticsBridgeMeta, AnalyticsLockedAdders, AnalyticsMode, AnalyticsStcOverride };
+export { WR_EAST_LOCKED_STC };
+
+export const WR_EAST_LOCKED_STC_PER_HOUR =
+  WR_EAST_LOCKED_STC.toolPerHour + WR_EAST_LOCKED_STC.consumablesPerHour + WR_EAST_LOCKED_STC.ppePerHour;
 
 export const ANALYTICS_STC_LINES = [
   { id: "tool" as const, overrideKey: "toolPct" as const, burdenKey: "tool" as const },
@@ -113,6 +123,7 @@ export type EstimateAnalytics = {
   rollups: AnalyticsRollup[];
   /** True when any crew hour had a priced COMP / sheeted baseSt. */
   hasBaseWage: boolean;
+  bridge: AnalyticsBridgeSheet;
 };
 
 function money(value: number) {
@@ -151,11 +162,36 @@ function rowOpts(row: MoneyHourRow, opts: ShahanLookupOpts = {}): ShahanLookupOp
 export type AnalyticsBurdenHours = {
   hours: number;
   baseWageHours: number;
+  baseWageDollars: number;
   tool: number;
   consumables: number;
   ppe: number;
   oh: number;
   profit: number;
+};
+
+export type AnalyticsDragLine = {
+  id: string;
+  label: string;
+  amount: number;
+  note: string;
+};
+
+export type AnalyticsBridgeSheet = {
+  mode: AnalyticsMode;
+  hours: number;
+  bookProfit: number | null;
+  bookMargin: number | null;
+  afterLockedProfit: number | null;
+  afterLockedMargin: number | null;
+  bridgedProfit: number | null;
+  bridgedMargin: number | null;
+  packPd: number;
+  bookStcBudget: number;
+  lockedStcBudget: number;
+  lockedStcPerHour: number;
+  drags: AnalyticsDragLine[];
+  dragTotal: number;
 };
 
 function rateFromPctPoints(pct: number | null, fallback: number): number {
@@ -191,6 +227,7 @@ export function analyticsBurdenFromCrew(
   const next: AnalyticsBurdenHours = {
     hours: 0,
     baseWageHours: 0,
+    baseWageDollars: 0,
     tool: 0,
     consumables: 0,
     ppe: 0,
@@ -210,6 +247,7 @@ export function analyticsBurdenFromCrew(
       if (!Number.isFinite(baseWage) || baseWage <= 0) continue;
       next.baseWageHours += hours;
       const base = hours * baseWage;
+      next.baseWageDollars += base;
       next.tool += base * rates.tool;
       next.consumables += base * rates.consumables;
       next.ppe += base * rates.ppe;
@@ -220,6 +258,7 @@ export function analyticsBurdenFromCrew(
   return {
     hours: next.hours,
     baseWageHours: next.baseWageHours,
+    baseWageDollars: money(next.baseWageDollars),
     tool: money(next.tool),
     consumables: money(next.consumables),
     ppe: money(next.ppe),
@@ -227,6 +266,23 @@ export function analyticsBurdenFromCrew(
     profit: money(next.profit),
   };
 }
+
+export function lockedAdderBudgets(hours: number, locked: AnalyticsLockedAdders) {
+  const hrs = Math.max(0, hours);
+  return {
+    tool: money(hrs * locked.toolPerHour),
+    consumables: money(hrs * locked.consumablesPerHour),
+    ppe: money(hrs * locked.ppePerHour),
+    oh: locked.ohPerHour == null ? null : money(hrs * locked.ohPerHour),
+    profit: locked.profitPerHour == null ? null : money(hrs * locked.profitPerHour),
+    stc: money(hrs * (locked.toolPerHour + locked.consumablesPerHour + locked.ppePerHour)),
+  };
+}
+
+function nbDragTotal(nb: AnalyticsBridgeMeta["nb"]) {
+  return money((nb.onboarding ?? 0) + (nb.drugDisa ?? 0) + (nb.safety920 ?? 0) + (nb.siteClasses ?? 0));
+}
+
 
 function thirdPartyCostTotal(equipment: EquipmentSheet | undefined) {
   return (equipment?.thirdParty ?? []).reduce((sum, line) => sum + thirdPartyCost(line), 0);
@@ -256,6 +312,7 @@ function packHours(input: DeskPackageInput, burden: AnalyticsBurdenHours): numbe
 export function deriveEstimateAnalytics(input: DeskPackageInput): EstimateAnalytics {
   const jobMoney = hydrateJobMoney(input.jobMeta);
   const holidays = jobMoney.holidays;
+  const bridgeMeta = jobMoney.analyticsBridge ?? emptyAnalyticsBridge();
   const burden = analyticsBurdenFromCrew(
     input.crew ?? {},
     input.site ?? "",
@@ -269,21 +326,47 @@ export function deriveEstimateAnalytics(input: DeskPackageInput): EstimateAnalyt
   const hasBaseWage = burden.baseWageHours > 0;
   const markup = analyticsMarkupDollars(input);
   const coe = analyticsCoeDollars(input.equipment);
-  const toolProfit = hasBaseWage ? money(burden.tool * ANALYTICS_TOOL_PROFIT_SHARE) : null;
-  const conProfit = hasBaseWage ? money(burden.consumables * ANALYTICS_TOOL_PROFIT_SHARE) : null;
-  const ppeProfit = hasBaseWage ? money(burden.ppe * ANALYTICS_TOOL_PROFIT_SHARE) : null;
-  const ohProfit = hasBaseWage ? money(burden.oh * ANALYTICS_OH_PROFIT_SHARE) : null;
-  const laborProfit = hasBaseWage ? burden.profit : null;
+  const lockedHours = burden.baseWageHours > 0 ? burden.baseWageHours : hours;
+  const locked = lockedAdderBudgets(lockedHours, bridgeMeta.locked);
+  const packPd = perDiemDollarsFromCrew(
+    input.crew ?? {},
+    {
+      staffPerDiemRate: Number(input.jobMeta?.staffPerDiemRate) || 0,
+      craftPerDiemRate: Number(input.jobMeta?.craftPerDiemRate) || 0,
+      perDiemMode: input.jobMeta?.perDiemMode,
+    },
+    input.site ?? "",
+    input.client ?? "",
+    holidays,
+  );
+
+  const bookTool = hasBaseWage ? burden.tool : null;
+  const bookCon = hasBaseWage ? burden.consumables : null;
+  const bookPpe = hasBaseWage ? burden.ppe : null;
+  const bookOh = hasBaseWage ? burden.oh : null;
+  const bookLabor = hasBaseWage ? burden.profit : null;
+  const useLocked = bridgeMeta.mode === "locked";
+  const shownTool = useLocked ? locked.tool : bookTool;
+  const shownCon = useLocked ? locked.consumables : bookCon;
+  const shownPpe = useLocked ? locked.ppe : bookPpe;
+  const shownOh = useLocked && locked.oh != null ? locked.oh : bookOh;
+  const shownLabor = useLocked && locked.profit != null ? locked.profit : bookLabor;
+  const toolProfit = shownTool != null ? money(shownTool * ANALYTICS_TOOL_PROFIT_SHARE) : null;
+  const conProfit = shownCon != null ? money(shownCon * ANALYTICS_TOOL_PROFIT_SHARE) : null;
+  const ppeProfit = shownPpe != null ? money(shownPpe * ANALYTICS_TOOL_PROFIT_SHARE) : null;
+  const ohProfit = shownOh != null ? money(shownOh * ANALYTICS_OH_PROFIT_SHARE) : null;
+  const laborProfit = shownLabor;
   const contributionReady =
     toolProfit != null && conProfit != null && ppeProfit != null && ohProfit != null && laborProfit != null;
   const subtotal = contributionReady
     ? money(toolProfit + conProfit + ppeProfit + ohProfit + laborProfit + markup + coe)
     : null;
+  const price = breakdown.total > 0 ? money(breakdown.total) : breakdown.total === 0 ? 0 : null;
   const amounts: Record<AnalyticsLineId, number | null> = {
-    "total-price": breakdown.total > 0 ? money(breakdown.total) : breakdown.total === 0 ? 0 : null,
+    "total-price": price,
     "total-hours": hours > 0 ? hours : hours === 0 ? 0 : null,
-    "total-oh-base-wages": hasBaseWage ? burden.oh : null,
-    "total-profit-base-wages": hasBaseWage ? burden.profit : null,
+    "total-oh-base-wages": shownOh,
+    "total-profit-base-wages": shownLabor,
     tool: toolProfit,
     consumables: conProfit,
     ppe: ppeProfit,
@@ -296,6 +379,77 @@ export function deriveEstimateAnalytics(input: DeskPackageInput): EstimateAnalyt
     "profit-per-work-hour": subtotal != null && hours > 0 ? money(subtotal / hours) : null,
   };
 
+  const bookProfit =
+    hasBaseWage && bookTool != null && bookCon != null && bookPpe != null && bookOh != null && bookLabor != null
+      ? money(
+          money(bookTool * ANALYTICS_TOOL_PROFIT_SHARE) +
+            money(bookCon * ANALYTICS_TOOL_PROFIT_SHARE) +
+            money(bookPpe * ANALYTICS_TOOL_PROFIT_SHARE) +
+            money(bookOh * ANALYTICS_OH_PROFIT_SHARE) +
+            bookLabor +
+            markup +
+            coe,
+        )
+      : null;
+  const lockedProfit = hasBaseWage
+    ? money(
+        money(locked.tool * ANALYTICS_TOOL_PROFIT_SHARE) +
+          money(locked.consumables * ANALYTICS_TOOL_PROFIT_SHARE) +
+          money(locked.ppe * ANALYTICS_TOOL_PROFIT_SHARE) +
+          money((locked.oh ?? bookOh ?? 0) * ANALYTICS_OH_PROFIT_SHARE) +
+          (locked.profit ?? bookLabor ?? 0) +
+          markup +
+          coe,
+      )
+    : null;
+  const afterLockedProfit = useLocked ? lockedProfit : bookProfit;
+  const bookStcBudget = money((bookTool ?? 0) + (bookCon ?? 0) + (bookPpe ?? 0));
+  const erosion =
+    money((bridgeMeta.erosionPerHour ?? 0) * lockedHours + ((bridgeMeta.erosionPctOfBw ?? 0) / 100) * burden.baseWageDollars);
+  const stcDrag = useLocked ? 0 : money((bookStcBudget - locked.stc) * ANALYTICS_TOOL_PROFIT_SHARE);
+  const nb = nbDragTotal(bridgeMeta.nb);
+  const extraPd = money(bridgeMeta.extraPd ?? 0);
+  const jvic = money(bridgeMeta.jvic ?? 0);
+  const jvicDrag = money(jvic * commercialMarkupRate(input.client ?? "", input.site ?? ""));
+  const drags: AnalyticsDragLine[] = [
+    {
+      id: "erosion",
+      label: "Wage / fringe erosion vs fixed OH + profit",
+      amount: erosion,
+      note: "Fixed adders do not rise with wages.",
+    },
+    {
+      id: "stc-embed",
+      label: "STC book vs COMP embed",
+      amount: stcDrag,
+      note: `Book STC $${bookStcBudget.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} vs $${bridgeMeta.locked.toolPerHour + bridgeMeta.locked.consumablesPerHour + bridgeMeta.locked.ppePerHour}/hr × ${lockedHours.toLocaleString("en-US", { maximumFractionDigits: 1 })} hrs.`,
+    },
+    {
+      id: "nb",
+      label: "NB (no sell)",
+      amount: nb,
+      note: "Onboarding, Drug/DISA, 920, site classes.",
+    },
+    {
+      id: "pd",
+      label: "PD volume",
+      amount: extraPd,
+      note: packPd
+        ? `Pack PD $${packPd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
+        : "Pack PD from the live estimate.",
+    },
+    {
+      id: "jvic",
+      label: "JVIC passthrough (no markup)",
+      amount: jvicDrag,
+      note: "Profit $0. Drag is markup if it had sold.",
+    },
+  ];
+  const dragTotal = money(drags.reduce((sum, row) => sum + row.amount, 0));
+  const bridgedProfit = afterLockedProfit != null ? money(afterLockedProfit - dragTotal) : null;
+  const marginOf = (profit: number | null) =>
+    profit != null && breakdown.total > 0 ? profit / breakdown.total : null;
+
   return {
     hasBaseWage,
     lines: ANALYTICS_PHASE1_LINES.map((row) => ({
@@ -305,10 +459,26 @@ export function deriveEstimateAnalytics(input: DeskPackageInput): EstimateAnalyt
       amount: amounts[row.id],
     })),
     rollups: [
-      { id: "rollup-tool", label: "Tool", amount: hasBaseWage ? burden.tool : null },
-      { id: "rollup-con", label: "Con", amount: hasBaseWage ? burden.consumables : null },
-      { id: "rollup-ppe", label: "PPE", amount: hasBaseWage ? burden.ppe : null },
+      { id: "rollup-tool", label: "Tool", amount: shownTool },
+      { id: "rollup-con", label: "Con", amount: shownCon },
+      { id: "rollup-ppe", label: "PPE", amount: shownPpe },
     ],
+    bridge: {
+      mode: bridgeMeta.mode,
+      hours: lockedHours,
+      bookProfit,
+      bookMargin: marginOf(bookProfit),
+      afterLockedProfit,
+      afterLockedMargin: marginOf(afterLockedProfit),
+      bridgedProfit,
+      bridgedMargin: marginOf(bridgedProfit),
+      packPd,
+      bookStcBudget,
+      lockedStcBudget: locked.stc,
+      lockedStcPerHour: money(bridgeMeta.locked.toolPerHour + bridgeMeta.locked.consumablesPerHour + bridgeMeta.locked.ppePerHour),
+      drags,
+      dragTotal,
+    },
   };
 }
 

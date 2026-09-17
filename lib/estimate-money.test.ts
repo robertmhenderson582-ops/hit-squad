@@ -46,6 +46,10 @@ describe("M.O.R.E. fund", () => {
     assert.deepEqual(emptyJobMoney().analyticsStc, { toolPct: null, consumablesPct: null, ppePct: null });
     assert.deepEqual(hydrateJobMoney({}).analyticsStc, { toolPct: null, consumablesPct: null, ppePct: null });
     assert.deepEqual(emptyJobMeta().analyticsStc, { toolPct: null, consumablesPct: null, ppePct: null });
+    assert.equal(emptyJobMoney().analyticsBridge.mode, "pct");
+    assert.equal(emptyJobMoney().analyticsBridge.locked.toolPerHour, 0.5);
+    assert.equal(emptyJobMoney().analyticsBridge.locked.ohPerHour, null);
+    assert.equal(hydrateJobMoney({}).analyticsBridge.locked.profitPerHour, null);
   });
 });
 

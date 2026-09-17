@@ -14,7 +14,18 @@ import {
 import { fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
-import { emptyAnalyticsStc, hydrateAnalyticsStcPct, type AnalyticsStcOverride } from "@/lib/estimate-money";
+import {
+  emptyAnalyticsBridge,
+  emptyAnalyticsLocked,
+  emptyAnalyticsNb,
+  emptyAnalyticsStc,
+  hydrateAnalyticsStcPct,
+  type AnalyticsBridgeMeta,
+  type AnalyticsLockedAdders,
+  type AnalyticsMode,
+  type AnalyticsNbDrag,
+  type AnalyticsStcOverride,
+} from "@/lib/estimate-money";
 import { readOtherCost, syncOtherCostTravel } from "@/lib/other-cost";
 import { onEstimateSheets } from "@/lib/sheet-events";
 import { readSubSheet } from "@/lib/subcontractor";
@@ -35,29 +46,35 @@ function stcRow(id: AnalyticsLineId) {
   return ANALYTICS_STC_LINES.find((row) => row.id === id);
 }
 
-function StcPctField({
+function DraftNumber({
   label,
-  burdenKey,
   value,
   onCommit,
+  suffix,
+  placeholder = "",
+  step = 0.01,
+  testId,
 }: {
   label: string;
-  burdenKey: "tool" | "consumables" | "ppe";
   value: number | null;
   onCommit: (raw: string) => void;
+  suffix?: string;
+  placeholder?: string;
+  step?: number;
+  testId?: string;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const shown = draft ?? (value == null ? "" : String(value));
   return (
     <label className="inline-flex items-center gap-1 text-xs text-[#5b6f73]">
-      <span className="sr-only">{label} percent</span>
+      <span className="sr-only">{label}</span>
       <input
         type="number"
         min={0}
-        step={0.01}
+        step={step}
         inputMode="decimal"
-        className="paper-field w-[4.5rem] px-2 py-1 text-right text-sm text-[#163038]"
-        placeholder="Default"
+        className="paper-field w-[4.75rem] px-2 py-1 text-right text-sm text-[#163038]"
+        placeholder={placeholder}
         value={shown}
         onChange={(event) => {
           const raw = event.target.value;
@@ -70,10 +87,10 @@ function StcPctField({
           if (draft != null) onCommit(draft);
           setDraft(null);
         }}
-        data-analytics-stc={burdenKey}
-        aria-label={`${label} percent`}
+        data-analytics-field={testId}
+        aria-label={label}
       />
-      <span>%</span>
+      {suffix ? <span>{suffix}</span> : null}
     </label>
   );
 }
@@ -81,6 +98,12 @@ function StcPctField({
 export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
   const [tick, setTick] = useState(0);
+  const bridgeMeta: AnalyticsBridgeMeta = {
+    ...emptyAnalyticsBridge(),
+    ...pack.jobMeta.analyticsBridge,
+    locked: { ...emptyAnalyticsLocked(), ...pack.jobMeta.analyticsBridge?.locked },
+    nb: { ...emptyAnalyticsNb(), ...pack.jobMeta.analyticsBridge?.nb },
+  };
 
   useEffect(() => onEstimateSheets(() => setTick((n) => n + 1)), []);
 
@@ -122,16 +145,77 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
     });
   }, [client, hours.hours, pack.crew, pack.estimateKey, pack.jobMeta, site, tick]);
 
+  function patchBridge(next: Partial<AnalyticsBridgeMeta> | ((current: AnalyticsBridgeMeta) => AnalyticsBridgeMeta)) {
+    pack.setJobMeta((current) => {
+      const base = { ...emptyAnalyticsBridge(), ...current.analyticsBridge };
+      const patched = typeof next === "function" ? next(base) : { ...base, ...next };
+      return { ...current, analyticsBridge: patched };
+    });
+  }
+
   function setStcPct(key: keyof AnalyticsStcOverride, raw: string) {
-    const next = hydrateAnalyticsStcPct(raw);
+    const value = hydrateAnalyticsStcPct(raw);
     pack.setJobMeta((current) => ({
       ...current,
-      analyticsStc: { ...emptyAnalyticsStc(), ...current.analyticsStc, [key]: next },
+      analyticsStc: { ...emptyAnalyticsStc(), ...current.analyticsStc, [key]: value },
     }));
   }
 
+  function setLocked(key: keyof AnalyticsLockedAdders, raw: string) {
+    const parsed = hydrateAnalyticsStcPct(raw);
+    patchBridge((current) => ({
+      ...current,
+      locked: {
+        ...emptyAnalyticsLocked(),
+        ...current.locked,
+        [key]: key === "ohPerHour" || key === "profitPerHour" ? parsed : (parsed ?? emptyAnalyticsLocked()[key]),
+      },
+    }));
+  }
+
+  function setNb(key: keyof AnalyticsNbDrag, raw: string) {
+    patchBridge((current) => ({
+      ...current,
+      nb: { ...emptyAnalyticsNb(), ...current.nb, [key]: hydrateAnalyticsStcPct(raw) },
+    }));
+  }
+
+  const lockedMode = bridgeMeta.mode === "locked";
+
   return (
     <div className="mt-4 space-y-5">
+      <fieldset className="flex flex-wrap gap-3" data-analytics-mode-toggle>
+        <legend className="sr-only">Analytics burden mode</legend>
+        {(
+          [
+            { id: "pct" as const, title: "% of base wage", note: "Tool / Consumables / PPE from hours × base wage × %." },
+            { id: "locked" as const, title: "Locked $/hr COMP adders", note: "Hours × editable $/hr. East WR STC defaults 0.50 / 1.25 / 1.85." },
+          ] satisfies Array<{ id: AnalyticsMode; title: string; note: string }>
+        ).map((option) => {
+          const selected = bridgeMeta.mode === option.id;
+          return (
+            <label
+              key={option.id}
+              className={`min-w-[14rem] flex-1 cursor-pointer rounded-lg border px-3 py-3 ${
+                selected ? "border-steel bg-white" : "border-[#d5e0de] bg-[#f4f1e8]"
+              }`}
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-[#163038]">
+                <input
+                  type="radio"
+                  name="analytics-burden-mode"
+                  className="accent-steel"
+                  checked={selected}
+                  onChange={() => patchBridge({ mode: option.id })}
+                />
+                {option.title}
+              </span>
+              <span className="mt-1 block text-xs text-[#5b6f73]">{option.note}</span>
+            </label>
+          );
+        })}
+      </fieldset>
+
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
         <section className="plant-card px-5 py-5" aria-label="Analytics">
           <h2 className="text-2xl font-semibold text-[#163038]">Profit breakdown</h2>
@@ -147,21 +231,67 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
                 {sheet.lines.map((line) => {
                   const stc = stcRow(line.id);
                   const override = stc ? (pack.jobMeta.analyticsStc ?? emptyAnalyticsStc())[stc.overrideKey] : null;
+                  const lockedKey =
+                    line.id === "tool"
+                      ? "toolPerHour"
+                      : line.id === "consumables"
+                        ? "consumablesPerHour"
+                        : line.id === "ppe"
+                          ? "ppePerHour"
+                          : line.id === "oh" || line.id === "total-oh-base-wages"
+                            ? "ohPerHour"
+                            : line.id === "labor" || line.id === "total-profit-base-wages"
+                              ? "profitPerHour"
+                              : null;
                   return (
                     <tr key={line.id} className="border-t border-[#d5e0de]" data-analytics-line={line.id}>
                       <td className="px-2 py-2">
-                        {stc ? (
+                        {stc && !lockedMode ? (
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                             <span>{line.label}</span>
-                            <StcPctField
-                              label={line.label}
-                              burdenKey={stc.burdenKey}
+                            <DraftNumber
+                              label={`${line.label} percent`}
                               value={override}
+                              suffix="%"
+                              placeholder="Default"
+                              testId={stc.burdenKey}
                               onCommit={(raw) => setStcPct(stc.overrideKey, raw)}
                             />
                             <span className="text-[11px] text-[#5b6f73]">
                               {override == null ? stcDefaultHint(stc.burdenKey) : "Override applies to craft and staff"}
                             </span>
+                          </div>
+                        ) : stc && lockedMode ? (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span>{line.label}</span>
+                            <DraftNumber
+                              label={`${line.label} dollars per hour`}
+                              value={bridgeMeta.locked[stc.burdenKey === "tool" ? "toolPerHour" : stc.burdenKey === "consumables" ? "consumablesPerHour" : "ppePerHour"]}
+                              suffix="$/hr"
+                              testId={`${stc.burdenKey}-locked`}
+                              onCommit={(raw) =>
+                                setLocked(
+                                  stc.burdenKey === "tool"
+                                    ? "toolPerHour"
+                                    : stc.burdenKey === "consumables"
+                                      ? "consumablesPerHour"
+                                      : "ppePerHour",
+                                  raw,
+                                )
+                              }
+                            />
+                          </div>
+                        ) : lockedMode && lockedKey && (lockedKey === "ohPerHour" || lockedKey === "profitPerHour") ? (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span>{line.label}</span>
+                            <DraftNumber
+                              label={`${line.label} dollars per hour`}
+                              value={bridgeMeta.locked[lockedKey]}
+                              suffix="$/hr"
+                              placeholder="—"
+                              testId={lockedKey}
+                              onCommit={(raw) => setLocked(lockedKey, raw)}
+                            />
                           </div>
                         ) : (
                           line.label
@@ -190,6 +320,116 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
           </ul>
         </section>
       </div>
+
+      <section className="plant-card px-5 py-5" aria-label="Drag stack" data-analytics-drag>
+        <h2 className="text-2xl font-semibold text-[#163038]">Drag stack</h2>
+        <p className="mt-1 text-sm text-[#5b6f73]">Estimate-side assumptions. Not Turnip actuals.</p>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div>
+            <p className="text-sm font-semibold text-[#163038]">Wage / fringe erosion vs fixed OH + profit</p>
+            <p className="mt-1 text-xs text-[#5b6f73]">Fixed adders do not rise with wages.</p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <DraftNumber
+                label="Erosion dollars per manhour"
+                value={bridgeMeta.erosionPerHour}
+                suffix="$/MH"
+                testId="erosion-per-hour"
+                onCommit={(raw) => patchBridge({ erosionPerHour: hydrateAnalyticsStcPct(raw) })}
+              />
+              <DraftNumber
+                label="Erosion percent of base wages"
+                value={bridgeMeta.erosionPctOfBw}
+                suffix="% of BW"
+                testId="erosion-pct"
+                onCommit={(raw) => patchBridge({ erosionPctOfBw: hydrateAnalyticsStcPct(raw) })}
+              />
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[#163038]">STC book vs COMP embed</p>
+            <p className="mt-1 text-xs text-[#5b6f73]">{sheet.bridge.drags.find((row) => row.id === "stc-embed")?.note}</p>
+            <p className="mt-2 text-right font-semibold text-[#163038]">
+              {formatAmount("money", sheet.bridge.drags.find((row) => row.id === "stc-embed")?.amount ?? 0)}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[#163038]">NB (no sell)</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <DraftNumber label="Onboarding" value={bridgeMeta.nb.onboarding} suffix="$" placeholder="Onboarding" testId="nb-onboarding" onCommit={(raw) => setNb("onboarding", raw)} />
+              <DraftNumber label="Drug / DISA / Background" value={bridgeMeta.nb.drugDisa} suffix="$" placeholder="Drug/DISA" testId="nb-drug" onCommit={(raw) => setNb("drugDisa", raw)} />
+              <DraftNumber label="NB Safety / Small tools (920)" value={bridgeMeta.nb.safety920} suffix="$" placeholder="920" testId="nb-920" onCommit={(raw) => setNb("safety920", raw)} />
+              <DraftNumber label="Site classes / training" value={bridgeMeta.nb.siteClasses} suffix="$" placeholder="Classes" testId="nb-classes" onCommit={(raw) => setNb("siteClasses", raw)} />
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[#163038]">PD volume</p>
+            <p className="mt-1 text-xs text-[#5b6f73]">
+              Pack PD {formatAmount("money", sheet.bridge.packPd || null)}. Extra drag is an assumption.
+            </p>
+            <div className="mt-2">
+              <DraftNumber
+                label="Extra PD drag"
+                value={bridgeMeta.extraPd}
+                suffix="$"
+                testId="extra-pd"
+                onCommit={(raw) => patchBridge({ extraPd: hydrateAnalyticsStcPct(raw) })}
+              />
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[#163038]">JVIC passthrough (no markup)</p>
+            <p className="mt-1 text-xs text-[#5b6f73]">Profit $0. Drag is the markup if it had sold.</p>
+            <div className="mt-2">
+              <DraftNumber
+                label="JVIC passthrough"
+                value={bridgeMeta.jvic}
+                suffix="$"
+                testId="jvic"
+                onCommit={(raw) => patchBridge({ jvic: hydrateAnalyticsStcPct(raw) })}
+              />
+            </div>
+          </div>
+        </div>
+        <ul className="mt-4 space-y-2 border-t border-[#d5e0de] pt-3 text-sm">
+          {sheet.bridge.drags.map((row) => (
+            <li key={row.id} className="flex items-baseline justify-between gap-3" data-analytics-drag-line={row.id}>
+              <span className="text-[#5b6f73]">{row.label}</span>
+              <span className="font-semibold text-[#163038]">{formatAmount("money", row.amount || null)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="plant-card px-5 py-5" aria-label="Bridge summary" data-analytics-bridge>
+        <h2 className="text-2xl font-semibold text-[#163038]">Bridge summary</h2>
+        <p className="mt-1 text-sm text-[#5b6f73]">Bridged margin is estimate + assumption until actuals land.</p>
+        <dl className="mt-4 space-y-2 text-sm">
+          <div className="flex justify-between gap-3">
+            <dt className="text-[#5b6f73]">Book margin</dt>
+            <dd className="font-semibold text-[#163038]">
+              {formatAmount("money", sheet.bridge.bookProfit)} · {formatAmount("percent", sheet.bridge.bookMargin)}
+            </dd>
+          </div>
+          {lockedMode ? (
+            <div className="flex justify-between gap-3">
+              <dt className="text-[#5b6f73]">After COMP locked adders</dt>
+              <dd className="font-semibold text-[#163038]">
+                {formatAmount("money", sheet.bridge.afterLockedProfit)} · {formatAmount("percent", sheet.bridge.afterLockedMargin)}
+              </dd>
+            </div>
+          ) : null}
+          <div className="flex justify-between gap-3">
+            <dt className="text-[#5b6f73]">After drag stack</dt>
+            <dd className="font-semibold text-[#163038]">{formatAmount("money", sheet.bridge.dragTotal || null)}</dd>
+          </div>
+          <div className="flex justify-between gap-3 border-t border-[#d5e0de] pt-2">
+            <dt className="font-semibold text-[#163038]">Bridged margin</dt>
+            <dd className="font-semibold text-[#163038]" data-analytics-bridged>
+              {formatAmount("money", sheet.bridge.bridgedProfit)} · {formatAmount("percent", sheet.bridge.bridgedMargin)}
+            </dd>
+          </div>
+        </dl>
+      </section>
     </div>
   );
 }

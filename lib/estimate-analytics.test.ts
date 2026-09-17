@@ -15,7 +15,10 @@ import {
   analyticsMarkupDollars,
   analyticsRollup,
   deriveEstimateAnalytics,
+  lockedAdderBudgets,
   stcDefaultHint,
+  WR_EAST_LOCKED_STC,
+  WR_EAST_LOCKED_STC_PER_HOUR,
 } from "./estimate-analytics.ts";
 import { deskPackageBreakdown, deskPackageTotal, type DeskPackageInput } from "./estimate-desk-total.ts";
 import { boiler17B1FilledSnapshot } from "./wood-river-b1.ts";
@@ -25,7 +28,14 @@ import { largeToolAmount, thirdPartyCost } from "./equipment-sheet.ts";
 import { computeRangeHours } from "./hours-clock.ts";
 import { estimateTabIdsForSite } from "./estimate-tabs.ts";
 import { lookupCompWageRow } from "./wage-lookup.ts";
-import { emptyAnalyticsStc, emptyJobMoney, hydrateAnalyticsStc, hydrateJobMoney } from "./estimate-money.ts";
+import {
+  emptyAnalyticsBridge,
+  emptyAnalyticsStc,
+  emptyJobMoney,
+  hydrateAnalyticsBridge,
+  hydrateAnalyticsStc,
+  hydrateJobMoney,
+} from "./estimate-money.ts";
 import { emptyJobMeta, hydrateJobMeta } from "./staffing-plan.ts";
 
 function read(rel: string) {
@@ -317,6 +327,87 @@ describe("Yates Analytics model", () => {
   });
 });
 
+describe("Analytics COMP / MSA bridge", () => {
+  const crew = { direct: [{ position: "Boilermaker Journeyman", ranges: [WEEK] }] };
+
+  it("keeps % of base wage as the book and does not invent lock OH / profit $", () => {
+    const sheet = deriveEstimateAnalytics({ crew, ...WOOD });
+    const book = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: { analyticsBridge: emptyAnalyticsBridge() } });
+    assert.equal(sheet.bridge.mode, "pct");
+    assert.equal(analyticsLine(sheet, "tool")?.amount, analyticsLine(book, "tool")?.amount);
+    assert.equal(sheet.bridge.bookProfit, analyticsLine(sheet, "subtotal-profit")?.amount);
+    assert.equal(WR_EAST_LOCKED_STC.toolPerHour, 0.5);
+    assert.equal(WR_EAST_LOCKED_STC.consumablesPerHour, 1.25);
+    assert.equal(WR_EAST_LOCKED_STC.ppePerHour, 1.85);
+    assert.equal(WR_EAST_LOCKED_STC_PER_HOUR, 3.6);
+    assert.equal(emptyAnalyticsBridge().locked.ohPerHour, null);
+    assert.equal(emptyAnalyticsBridge().locked.profitPerHour, null);
+    assert.equal(hydrateAnalyticsBridge({}).locked.ohPerHour, null);
+    assert.equal(hydrateAnalyticsBridge({ locked: { ohPerHour: 13.15, profitPerHour: 6.33 } }).locked.ohPerHour, 13.15);
+    const lockedBlank = deriveEstimateAnalytics({
+      crew,
+      ...WOOD,
+      jobMeta: { analyticsBridge: { ...emptyAnalyticsBridge(), mode: "locked" } },
+    });
+    assert.equal(lockedBlank.bridge.mode, "locked");
+    assert.notEqual(analyticsLine(lockedBlank, "total-oh-base-wages")?.amount, null);
+    assert.notEqual(analyticsLine(lockedBlank, "total-oh-base-wages")?.amount, 0);
+  });
+
+  it("locked mode uses hours × WR East STC $/hr", () => {
+    const pct = deriveEstimateAnalytics({ crew, ...WOOD });
+    const hours = pct.bridge.hours;
+    const locked = deriveEstimateAnalytics({
+      crew,
+      ...WOOD,
+      jobMeta: { analyticsBridge: { ...emptyAnalyticsBridge(), mode: "locked" } },
+    });
+    const budgets = lockedAdderBudgets(hours, emptyAnalyticsBridge().locked);
+    assert.equal(analyticsRollup(locked, "rollup-tool")?.amount, budgets.tool);
+    assert.equal(analyticsRollup(locked, "rollup-con")?.amount, budgets.consumables);
+    assert.equal(analyticsRollup(locked, "rollup-ppe")?.amount, budgets.ppe);
+    assert.equal(budgets.stc, Math.round(hours * WR_EAST_LOCKED_STC_PER_HOUR * 100) / 100);
+    assert.equal(analyticsLine(locked, "tool")?.amount, Math.round(budgets.tool * ANALYTICS_TOOL_PROFIT_SHARE * 100) / 100);
+    assert.equal(locked.bridge.lockedStcBudget, budgets.stc);
+    assert.equal(locked.bridge.afterLockedProfit != null, true);
+    assert.equal(locked.bridge.bookProfit, pct.bridge.bookProfit);
+  });
+
+  it("drag stack updates bridged margin and persists on jobMeta", () => {
+    const hours = deriveEstimateAnalytics({ crew, ...WOOD }).bridge.hours;
+    const stored = {
+      analyticsBridge: {
+        mode: "pct" as const,
+        locked: emptyAnalyticsBridge().locked,
+        erosionPerHour: 1,
+        erosionPctOfBw: 0,
+        nb: { onboarding: 100, drugDisa: 40, safety920: 25, siteClasses: 10 },
+        extraPd: 50,
+        jvic: 1000,
+      },
+    };
+    const meta = hydrateJobMeta(stored);
+    assert.equal(meta.analyticsBridge.nb.onboarding, 100);
+    const again = hydrateJobMeta(JSON.parse(JSON.stringify(meta)) as Record<string, unknown>);
+    assert.deepEqual(again.analyticsBridge, meta.analyticsBridge);
+    const sheet = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: again });
+    const erosion = sheet.bridge.drags.find((row) => row.id === "erosion")?.amount;
+    const nb = sheet.bridge.drags.find((row) => row.id === "nb")?.amount;
+    const pd = sheet.bridge.drags.find((row) => row.id === "pd")?.amount;
+    const jvic = sheet.bridge.drags.find((row) => row.id === "jvic")?.amount;
+    const stc = sheet.bridge.drags.find((row) => row.id === "stc-embed")?.amount;
+    assert.equal(erosion, Math.round(hours * 100) / 100);
+    assert.equal(nb, 175);
+    assert.equal(pd, 50);
+    assert.equal(jvic, 65);
+    assert.equal((stc ?? 0) !== 0, true);
+    assert.equal(sheet.bridge.bridgedProfit != null, true);
+    assert.equal((sheet.bridge.bookProfit ?? 0) > (sheet.bridge.bridgedProfit ?? 0), true);
+    assert.equal(sheet.bridge.bridgedMargin != null && sheet.bridge.bookMargin != null, true);
+    assert.equal((sheet.bridge.bridgedMargin ?? 0) < (sheet.bridge.bookMargin ?? 0), true);
+  });
+});
+
 describe("Analytics tab wiring", () => {
   it("adds an Analytics tab with editable Tool / Consumables / PPE % on the estimate desk", () => {
     const tabs = read("./estimate-tabs.ts");
@@ -341,11 +432,16 @@ describe("Analytics tab wiring", () => {
     assert.doesNotMatch(desk, /Phase 2 later|Read-only|for this live estimate|Procurement\/Subcontracts/);
     assert.match(desk, /setJobMeta/);
     assert.match(desk, /analyticsStc/);
-    assert.match(desk, /data-analytics-stc=\{burdenKey\}/);
-    assert.match(desk, /StcPctField/);
+    assert.match(desk, /analyticsBridge/);
+    assert.match(desk, /data-analytics-mode-toggle/);
+    assert.match(desk, /data-analytics-drag/);
+    assert.match(desk, /data-analytics-bridge/);
+    assert.match(desk, /Locked \$\/hr COMP adders/);
+    assert.match(desk, /DraftNumber/);
     assert.match(desk, /ANALYTICS_STC_LINES/);
     assert.match(desk, /stcDefaultHint/);
     assert.doesNotMatch(desk, /Yates|yates/);
+    assert.doesNotMatch(desk, /9\s*→\s*5|9%→5%|Turnip import|tariff/i);
     assert.match(desk, /paper-field/);
     assert.match(desk, /onChange/);
     assert.doesNotMatch(desk, /<textarea|<select/);
