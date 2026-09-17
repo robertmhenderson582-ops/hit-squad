@@ -19,12 +19,12 @@ import { checkQualityDrop, mergeQualityFolderFiles } from "./quality-folders.ts"
 import {
   QUALITY_PACKAGE_SHELF_ATTACH_ERROR,
   QUALITY_PACKAGE_SHELF_BUILD_ERROR,
-  QUALITY_READY_SHELF_PREFIX,
   isQualityReadyShelfJobId,
   newQualityPackageId,
   parseQualityPackageName,
   qualityPackageShelfAcl,
   qualityReadyShelfJobId,
+  qualityReadyShelfPackageId,
   type QualityPackageShelfAcl,
 } from "./quality-package-shelf.ts";
 import { persistQualityVaultFiles, qualityVaultWriteUserError } from "./quality-vault.ts";
@@ -66,7 +66,7 @@ export async function listQualityPackageShelf(
       return true;
     })
     .map((row) => ({
-      id: row.jobId?.slice(QUALITY_READY_SHELF_PREFIX.length + 1) || row.id,
+      id: qualityReadyShelfPackageId(row.jobId) || row.id,
       jobId: row.jobId || "",
       name: row.describe || "Ready package",
       files: filterVaultListedFiles(

@@ -24,11 +24,13 @@ import {
   newQualityPackageId,
   parseQualityPackageName,
   qualityReadyShelfJobId,
+  qualityReadyShelfPackageLabel,
 } from "./quality-package-shelf.ts";
 import {
   QUALITY_TEMPLATE_FILL_DEST_ERROR,
   QUALITY_TEMPLATE_FILL_EMPTY_ERROR,
   QUALITY_TEMPLATE_FILL_JOB_ERROR,
+  QUALITY_TEMPLATE_FILL_MISSING_ERROR,
   QUALITY_TEMPLATE_FILL_PREPACKAGE_ERROR,
   QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR,
   QUALITY_TEMPLATE_FILL_VIEW_ERROR,
@@ -310,6 +312,7 @@ export async function readQualityTemplateFill(
     jobId?: unknown;
     folderId?: unknown;
     packageId?: unknown;
+    packageName?: unknown;
     fileName?: unknown;
     companyId?: unknown;
     companyLabel?: unknown;
@@ -345,31 +348,85 @@ export async function readQualityTemplateFill(
   }
   const who = qualityTemplateFillSharedReadWho();
   const readFolders = qualityTemplateFillReadFolders(dest, requestedFolder);
+  const jobLabel = typeof input.jobLabel === "string" ? input.jobLabel.trim() : "";
+  const packageName = typeof input.packageName === "string" ? input.packageName.trim() : "";
+  const packageLabels = [
+    ...new Set(
+      [
+        dest === "prepackage" ? packageName || jobLabel : "",
+        dest === "prepackage" ? qualityReadyShelfPackageLabel(jobId) : "",
+      ].filter(Boolean),
+    ),
+  ];
   const place = {
     companyId,
     companyLabel: typeof input.companyLabel === "string" ? input.companyLabel : undefined,
     siteLabel: typeof input.siteLabel === "string" ? input.siteLabel : undefined,
     jobId,
-    jobLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
+    jobLabel: jobLabel || undefined,
     shelf: dest === "prepackage",
-    packageLabel: typeof input.jobLabel === "string" ? input.jobLabel : undefined,
     who,
   };
-  for (const folderId of readFolders) {
-    const vault = await readQualityVaultFile(leadBriefAdapter("quality"), { ...place, folderId }, fileName, user);
-    if (!vault.file?.data) continue;
-    const parsed = qualityTemplateFormFromLead(vault.file);
-    if (!parsed) return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR };
-    return {
-      ok: true as const,
-      file: vault.file,
-      form: parsed,
-      dest,
-      jobId,
-      folderId: parsed.folderId || folderId,
-      store: vault.store,
-      stored: vault.stored,
-    };
+  const labelPasses = dest === "prepackage" && packageLabels.length ? packageLabels : [place.jobLabel];
+  const triedLabels = new Set(labelPasses.filter(Boolean));
+  async function readFillAt(folderId: string, packageLabel?: string) {
+    return readQualityVaultFile(
+      leadBriefAdapter("quality"),
+      {
+        ...place,
+        folderId,
+        packageLabel: dest === "prepackage" ? packageLabel : undefined,
+        jobLabel: dest === "prepackage" ? packageLabel || place.jobLabel : place.jobLabel,
+      },
+      fileName,
+      user,
+    );
+  }
+  for (const packageLabel of labelPasses) {
+    for (const folderId of readFolders) {
+      const vault = await readFillAt(folderId, packageLabel);
+      if (!vault.file?.data) continue;
+      const parsed = qualityTemplateFormFromLead(vault.file);
+      if (!parsed) return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR };
+      return {
+        ok: true as const,
+        file: vault.file,
+        form: parsed,
+        dest,
+        jobId,
+        folderId: parsed.folderId || folderId,
+        store: vault.store,
+        stored: vault.stored,
+      };
+    }
+  }
+  // Ready kit folder is the human package name. A slugged packageId alone
+  // used to walk "Audit Temp Kit 2026…" and miss Owner's AUDIT-TEMP-KIT folder.
+  if (dest === "prepackage") {
+    const shelf = await listQualityPackageShelf(user, companyId);
+    const extraLabels = [
+      ...new Set(
+        shelf.kits
+          .flatMap((kit) => [kit.name, qualityReadyShelfPackageLabel(kit.jobId)])
+          .filter((label): label is string => Boolean(label) && !triedLabels.has(label)),
+      ),
+    ];
+    for (const packageLabel of extraLabels) {
+      const vault = await readFillAt("packages", packageLabel);
+      if (!vault.file?.data) continue;
+      const parsed = qualityTemplateFormFromLead(vault.file);
+      if (!parsed) return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR };
+      return {
+        ok: true as const,
+        file: vault.file,
+        form: parsed,
+        dest,
+        jobId,
+        folderId: parsed.folderId || "packages",
+        store: vault.store,
+        stored: vault.stored,
+      };
+    }
   }
   const briefs = await listStoredBriefs("quality", who, dest === "job" ? { jobId, companyId } : { jobId, folderId: "packages", companyId });
   const ranked = briefs
@@ -395,7 +452,7 @@ export async function readQualityTemplateFill(
       stored: true as const,
     };
   }
-  return { ok: false as const, status: 404, error: "Filled copy not found." };
+  return { ok: false as const, status: 404, error: QUALITY_TEMPLATE_FILL_MISSING_ERROR };
 }
 
 async function rollbackQualityTemplateFillWrites(input: {

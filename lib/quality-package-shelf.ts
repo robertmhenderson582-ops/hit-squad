@@ -34,7 +34,9 @@ export function isQualityReadyShelfJobId(jobId?: string | null): boolean {
 }
 
 export function qualityReadyShelfJobId(packageId: string) {
-  const id = packageId.trim().toLowerCase().replace(/[^a-z0-9:-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+  const raw = packageId.trim();
+  if (isQualityReadyShelfJobId(raw) && raw !== QUALITY_READY_SHELF_PREFIX) return raw;
+  const id = raw.toLowerCase().replace(/[^a-z0-9:-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
   return `${QUALITY_READY_SHELF_PREFIX}:${id || "kit"}`;
 }
 

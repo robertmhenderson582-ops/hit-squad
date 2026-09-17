@@ -282,4 +282,40 @@ describe("Quality folder vault drops", { concurrency: 1 }, () => {
     if (!noFolder.ok) assert.equal(noFolder.error, "Pick a Quality folder.");
     if (!invented.ok) assert.equal(invented.error, "Pick a Quality folder.");
   });
+
+  it("lists Owner-saved filled copies for Wendell while tester PDFs stay isolated", async () => {
+    resetLeadBriefStoreForTests(join(dir, "shared-fill"));
+    useLeadBriefVaultForTests(memoryDrive());
+    const fillName = "Quality Control Manual — Madison CAT 2 — 2026-09-16 — Robert Henderson.txt";
+    const saved = await saveQualityFolderDrop(owner, {
+      jobId: "job-cat2",
+      folderId: "packages",
+      companyId: "madison",
+      companyLabel: "Madison",
+      siteLabel: "Wood River",
+      jobLabel: "Madison CAT 2",
+      files: [{ name: fillName, type: "text/plain", data: Buffer.from("HS-QUALITY-FORM v1\n{}").toString("base64") }],
+    });
+    assert.equal(saved.ok, true);
+    await saveQualityFolderDrop(nathan, {
+      jobId: "job-cat2",
+      folderId: "packages",
+      companyId: "madison",
+      files: [pdf("nathan.pdf")],
+    });
+    const wendellList = await listQualityFolderDrops(wendell, "job-cat2", "packages", "madison", {
+      companyLabel: "Madison",
+      siteLabel: "Wood River",
+      jobLabel: "Madison CAT 2",
+    });
+    assert.equal(wendellList.files.some((file) => file.name === fillName), true);
+    assert.equal(wendellList.files.some((file) => file.name === "nathan.pdf"), false);
+    const chanceList = await listQualityFolderDrops(chance, "job-cat2", "packages", "madison", {
+      companyLabel: "Madison",
+      siteLabel: "Wood River",
+      jobLabel: "Madison CAT 2",
+    });
+    assert.equal(chanceList.files.some((file) => file.name === fillName), true);
+    assert.equal(chanceList.files.some((file) => file.name === "nathan.pdf"), false);
+  });
 });

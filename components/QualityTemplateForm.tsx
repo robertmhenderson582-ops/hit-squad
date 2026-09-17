@@ -22,8 +22,10 @@ import {
 } from "@/lib/quality-hse-scope";
 import {
   QUALITY_TEMPLATE_FILL_EMPTY_ERROR,
+  QUALITY_TEMPLATE_FILL_OPEN_TIMEOUT_ERROR,
   QUALITY_TEMPLATE_FILL_VIEW_ERROR,
   QUALITY_TEMPLATE_FORM_MARK,
+  qualityTemplateFillOpenNote,
   addQualityTemplateRow,
   emptyQualityTemplateFormRecord,
   hydrateQualityTemplateFormRecord,
@@ -48,6 +50,7 @@ import {
 } from "@/lib/quality-template-form";
 import { fetchJsonWithDeadline } from "@/lib/session-fetch";
 import {
+  QUALITY_TEMPLATE_FILL_OPEN_DEADLINE_MS,
   QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS,
   QUALITY_VAULT_WRITE_ERROR,
   QUALITY_VAULT_WRITE_TIMEOUT_ERROR,
@@ -143,27 +146,33 @@ export function QualityTemplateForm({
       const destJob = jobs.find((job) => job.id === (session.destJobId || jobPick.jobId));
       const jobName = destJob?.title || destJob?.code;
       const destLabel = destKind === "prepackage" ? session.destPackageName : jobName;
+      const folder = destKind === "prepackage" ? "packages" : def.folderId || session.folderId;
       void fetchJsonWithDeadline<{
         form?: { fields?: Record<string, string>; rows?: QualityTemplateFormRecord["rows"] };
         error?: string;
       }>(
-        `/api/desk/briefs?kind=quality&scope=template-fill&dest=${encodeURIComponent(destKind)}&file=${encodeURIComponent(session.filledName)}${session.destJobId ? `&jobId=${encodeURIComponent(session.destJobId)}` : ""}${session.destPackageId ? `&packageId=${encodeURIComponent(session.destPackageId)}` : ""}${def.folderId ? `&folder=${encodeURIComponent(def.folderId)}` : ""}${companyId ? `&company=${encodeURIComponent(companyId)}` : ""}${companyLabel ? `&companyLabel=${encodeURIComponent(companyLabel)}` : ""}${siteName ? `&siteLabel=${encodeURIComponent(siteName)}` : ""}${destLabel ? `&jobLabel=${encodeURIComponent(destLabel)}` : ""}`,
+        `/api/desk/briefs?kind=quality&scope=template-fill&dest=${encodeURIComponent(destKind)}&file=${encodeURIComponent(session.filledName)}${session.destJobId ? `&jobId=${encodeURIComponent(session.destJobId)}` : ""}${session.destPackageId ? `&packageId=${encodeURIComponent(session.destPackageId)}` : ""}${session.destPackageName ? `&packageName=${encodeURIComponent(session.destPackageName)}` : ""}${folder ? `&folder=${encodeURIComponent(folder)}` : ""}${companyId ? `&company=${encodeURIComponent(companyId)}` : ""}${companyLabel ? `&companyLabel=${encodeURIComponent(companyLabel)}` : ""}${siteName ? `&siteLabel=${encodeURIComponent(siteName)}` : ""}${destLabel ? `&jobLabel=${encodeURIComponent(destLabel)}` : ""}`,
         viewAsInit(owner?.viewAs),
-        QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS,
-        "Could not open that filled copy.",
+        QUALITY_TEMPLATE_FILL_OPEN_DEADLINE_MS,
+        QUALITY_TEMPLATE_FILL_OPEN_TIMEOUT_ERROR,
       )
         .then((result) => {
           if (cancelled) return;
           if (!result.ok || !result.data.form) {
-            setNote(typeof result.data.error === "string" ? result.data.error : "Could not open that filled copy.");
+            setNote(qualityTemplateFillOpenNote({ status: result.status, error: result.data.error }));
             setRecord(emptyQualityTemplateFormRecord(def));
             return;
           }
           setRecord(hydrateQualityTemplateFormRecord(result.data.form, def));
         })
-        .catch(() => {
+        .catch((error) => {
           if (cancelled) return;
-          setNote("Could not open that filled copy.");
+          setNote(
+            qualityTemplateFillOpenNote({
+              timedOut: error instanceof Error && error.message === QUALITY_TEMPLATE_FILL_OPEN_TIMEOUT_ERROR,
+              error: error instanceof Error ? error.message : undefined,
+            }),
+          );
           setRecord(emptyQualityTemplateFormRecord(def));
         })
         .finally(() => {

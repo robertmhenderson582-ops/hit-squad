@@ -287,6 +287,10 @@ export function QualityDesk() {
         onSaved={(note) => {
           setFormNote(note);
           setFormSession(null);
+          if (formSession?.dest !== "prepackage") {
+            setRadio("packages");
+            writeQualityFolderPick(pick.jobId || "desk", "packages");
+          }
           setFillTick((n) => n + 1);
         }}
       />

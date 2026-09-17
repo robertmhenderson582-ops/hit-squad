@@ -19,6 +19,7 @@ import {
   isQualityReadyShelfJobId,
   qualityPackageShelfAcl,
   qualityReadyShelfJobId,
+  qualityReadyShelfPackageId,
 } from "./quality-package-shelf.ts";
 import type { OrgPosition, OrgPositionHold } from "./org-positions.ts";
 
@@ -91,6 +92,9 @@ describe("Quality package shelf ACL", () => {
     assert.equal(qualityPackageShelfAcl(owner).canBuild, true);
     assert.equal(isQualityReadyShelfJobId(qualityReadyShelfJobId("day-1-kit")), true);
     assert.equal(isQualityReadyShelfJobId("job-b17"), false);
+    const readyId = "quality-ready-shelf:audit-temp-kit-2026-09-15-2040";
+    assert.equal(qualityReadyShelfJobId(readyId), readyId);
+    assert.equal(qualityReadyShelfPackageId(readyId), "audit-temp-kit-2026-09-15-2040");
   });
 
   it("persists a Ready kit in the Quality vault and attaches it onto a job", async () => {

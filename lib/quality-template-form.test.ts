@@ -7,7 +7,10 @@ import { qualityCompanyDocAcl } from "./quality-company-doc-acl.ts";
 import { QUALITY_MODULE_CATALOG } from "./quality-folders.ts";
 import { qualityPackageShelfAcl } from "./quality-package-shelf.ts";
 import {
+  QUALITY_TEMPLATE_FILL_MISSING_ERROR,
+  QUALITY_TEMPLATE_FILL_OPEN_TIMEOUT_ERROR,
   QUALITY_TEMPLATE_FORM_MARK,
+  qualityTemplateFillOpenNote,
   addQualityTemplateRow,
   emptyQualityTemplateFormRecord,
   hydrateQualityTemplateFormRecord,
@@ -204,17 +207,31 @@ describe("Quality always-displayed template forms", () => {
     assert.match(form, /prepackage/);
     assert.match(form, /Ready prepackage/);
     assert.match(drop, /onOpenFilled/);
+    assert.match(drop, /Open filled copy/);
+    assert.match(drop, /folderId === "packages" \? \[folderId\] : \[folderId, "packages"/);
+    assert.match(desk, /setRadio\("packages"\)/);
+    assert.match(desk, /dest: "prepackage"/);
+    assert.match(desk, /dest: "job"/);
+    assert.match(desk, /folderId: radio/);
+    assert.match(form, /packageName=\$\{encodeURIComponent\(session\.destPackageName\)\}/);
+    assert.match(form, /destKind === "prepackage" \? "packages"/);
     assert.match(shelf, /onOpenFilled/);
     assert.match(route, /template-fill/);
+    assert.match(route, /packageName: params.get\("packageName"\)/);
     assert.match(route, /ripple: result\.ripple/);
     assert.match(desk, /key=\{`shelf-\$\{fillTick\}`\}/);
     assert.match(desk, /refresh=\{fillTick\}/);
     assert.match(desk, /key=\{`vault-\$\{fillTick\}`\}/);
+    assert.equal(qualityTemplateFillOpenNote({ timedOut: true }), QUALITY_TEMPLATE_FILL_OPEN_TIMEOUT_ERROR);
+    assert.equal(qualityTemplateFillOpenNote({ status: 404 }), QUALITY_TEMPLATE_FILL_MISSING_ERROR);
+    assert.equal(qualityTemplateFillOpenNote({ error: "Filled copy not found." }), "Filled copy not found.");
     assert.match(form, /QUALITY_TEMPLATE_FILL_EMPTY_ERROR/);
     assert.match(form, /qualityTemplateFormHasWork\(record\)/);
     assert.match(form, /session.fileName \|\| session.filledName/);
     assert.match(form, /fetchJsonWithDeadline/);
     assert.match(form, /QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS/);
+    assert.match(form, /QUALITY_TEMPLATE_FILL_OPEN_DEADLINE_MS/);
+    assert.match(form, /qualityTemplateFillOpenNote/);
     assert.match(form, /QUALITY_VAULT_WRITE_TIMEOUT_ERROR/);
     assert.match(form, /setSaving\(false\);\s*setLoading\(false\)/);
     assert.match(form, /hydrateQualityTemplateFormRecord/);

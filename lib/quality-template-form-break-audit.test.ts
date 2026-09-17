@@ -118,6 +118,20 @@ function emptyFill() {
   );
 }
 
+async function findNamedVaultFile(drive: ReturnType<typeof memoryDrive>, fileName: string) {
+  const queue = [qualityFolderId()];
+  while (queue.length) {
+    const parent = queue.shift()!;
+    const kids = await drive.listChildren(parent);
+    const match = kids.find((row) => row.name === fileName && row.mimeType !== DRIVE_FOLDER_MIME);
+    if (match) return match;
+    for (const row of kids) {
+      if (row.mimeType === DRIVE_FOLDER_MIME && row.id) queue.push(row.id);
+    }
+  }
+  return null;
+}
+
 function failAfterUploads(inner: ReturnType<typeof memoryDrive>, after: number): DriveAdapter {
   let uploads = 0;
   return {
@@ -154,6 +168,21 @@ describe("Quality template fill break matrix", { concurrency: 1 }, () => {
     assert.match(form, /Download filled copy/);
     assert.match(form, /fetchJsonWithDeadline/);
     assert.match(form, /QUALITY_TEMPLATE_FILL_SAVE_DEADLINE_MS/);
+    assert.match(form, /QUALITY_TEMPLATE_FILL_OPEN_DEADLINE_MS/);
+    assert.match(form, /QUALITY_TEMPLATE_FILL_OPEN_TIMEOUT_ERROR/);
+    assert.match(form, /qualityTemplateFillOpenNote/);
+    assert.match(form, /packageName=\$\{encodeURIComponent\(session\.destPackageName\)\}/);
+    const drop = source("../components/QualityFolderDrop.tsx");
+    assert.match(drop, /Open filled copy/);
+    assert.match(drop, /folderId === "packages" \? \[folderId\] : \[folderId, "packages"/);
+    const desk = source("../components/QualityDesk.tsx");
+    assert.match(desk, /setRadio\("packages"\)/);
+    assert.match(desk, /dest: "prepackage"/);
+    const drops = source("./quality-template-form-drops.ts");
+    assert.match(drops, /qualityTemplateFillSharedReadWho/);
+    assert.match(drops, /listQualityPackageShelf/);
+    const shelf = source("./quality-package-shelf-drops.ts");
+    assert.match(shelf, /qualityReadyShelfPackageId\(row\.jobId\)/);
     assert.match(form, /QUALITY_VAULT_WRITE_TIMEOUT_ERROR/);
     assert.match(form, /setSaving\(false\);\s*setLoading\(false\)/);
     assert.match(form, /saveGen\.current \+= 1/);
@@ -574,18 +603,29 @@ describe("Quality template fill break matrix", { concurrency: 1 }, () => {
       files: [qcFile],
     });
     assert.equal(saved.ok, true);
+    const stamped = await findNamedVaultFile(drive, qcFile.name);
+    assert.equal(stamped?.properties?.who, owner.email.trim().toLowerCase());
     const viewed = await readQualityTemplateFill(wendell, {
       dest: "job",
       jobId: "job-cat2",
       folderId: def.folderId,
       fileName: qcFile.name,
       companyId: "madison",
+      companyLabel: "Madison",
+      siteLabel: "Wood River",
+      jobLabel: "Madison CAT 2",
     });
     assert.equal(viewed.ok, true);
     if (viewed.ok) {
       assert.equal(viewed.form.fields.notes, "AUDIT-2026-09-16-NIGHT");
       assert.equal(viewed.form.fields.job, "Madison CAT 2");
     }
+    const listed = await listQualityFolderDrops(wendell, "job-cat2", "packages", "madison", {
+      companyLabel: "Madison",
+      siteLabel: "Wood River",
+      jobLabel: "Madison CAT 2",
+    });
+    assert.equal(listed.files.some((file) => file.name === qcFile.name), true);
     const denied = await saveQualityTemplateFill(wendell, {
       dest: "job",
       jobId: "job-cat2",
@@ -595,23 +635,74 @@ describe("Quality template fill break matrix", { concurrency: 1 }, () => {
     assert.equal(denied.ok, false);
     if (!denied.ok) assert.equal(denied.error, QUALITY_TEMPLATE_FILL_VIEW_ERROR);
 
-    const kitFile = fillFile("Night kit");
+    const kitName = qualityFilledCopyName({
+      title: def.title,
+      destLabel: "AUDIT-TEMP-KIT-2026-09-15-2040",
+      userName: owner.name,
+      at: new Date(2026, 8, 15, 20, 40, 0),
+    });
+    const kitFile = qualityTemplateFormToLead(
+      {
+        mark: QUALITY_TEMPLATE_FORM_MARK,
+        id: def.id,
+        title: def.title,
+        folderId: def.folderId,
+        source: "company-docs",
+        sourceFolder: "quality-control-manual",
+        sourceName: "Madison QC Manual Edition 06 Rev 2.pdf",
+        dest: "prepackage",
+        destLabel: "AUDIT-TEMP-KIT-2026-09-15-2040",
+        savedAt: "2026-09-15T20:40:00.000Z",
+        user: owner.name,
+        fields: { notes: "AUDIT-2026-09-16-NIGHT-REPROVE", job: "Ready kit" },
+        rows: [],
+      },
+      kitName,
+    );
     const kit = await saveQualityTemplateFill(owner, {
       dest: "prepackage",
-      packageName: "Night kit",
+      packageName: "AUDIT-TEMP-KIT-2026-09-15-2040",
       companyId: "madison",
       companyLabel: "Madison",
       files: [kitFile],
     });
     assert.equal(kit.ok, true);
     if (!kit.ok) return;
+    const kitStamp = await findNamedVaultFile(drive, kitFile.name);
+    assert.equal(kitStamp?.properties?.who, owner.email.trim().toLowerCase());
     const fromShelf = await readQualityTemplateFill(wendell, {
       dest: "prepackage",
       packageId: kit.packageId,
+      packageName: "AUDIT-TEMP-KIT-2026-09-15-2040",
+      folderId: "packages",
       fileName: kitFile.name,
       companyId: "madison",
+      companyLabel: "Madison",
+      jobLabel: "AUDIT-TEMP-KIT-2026-09-15-2040",
     });
     assert.equal(fromShelf.ok, true);
-    if (fromShelf.ok) assert.equal(fromShelf.form.fields.job, "Boiler 17");
+    if (fromShelf.ok) assert.equal(fromShelf.form.fields.notes, "AUDIT-2026-09-16-NIGHT-REPROVE");
+    const fromSlugOnly = await readQualityTemplateFill(wendell, {
+      dest: "prepackage",
+      packageId: kit.packageId,
+      folderId: "packages",
+      fileName: kitFile.name,
+      companyId: "madison",
+      companyLabel: "Madison",
+    });
+    assert.equal(fromSlugOnly.ok, true);
+    if (fromSlugOnly.ok) assert.equal(fromSlugOnly.form.fields.notes, "AUDIT-2026-09-16-NIGHT-REPROVE");
+    const jobAgain = await readQualityTemplateFill(owner, {
+      dest: "job",
+      jobId: "job-cat2",
+      folderId: "packages",
+      fileName: qcFile.name,
+      companyId: "madison",
+      companyLabel: "Madison",
+      siteLabel: "Wood River",
+      jobLabel: "Madison CAT 2",
+    });
+    assert.equal(jobAgain.ok, true);
+    if (jobAgain.ok) assert.equal(jobAgain.form.fields.notes, "AUDIT-2026-09-16-NIGHT");
   });
 });

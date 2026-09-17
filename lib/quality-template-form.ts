@@ -40,6 +40,18 @@ export const QUALITY_TEMPLATE_FILL_DEST_ERROR =
 export const QUALITY_TEMPLATE_FILL_JOB_ERROR = "Pick a job for this filled copy.";
 export const QUALITY_TEMPLATE_FILL_PREPACKAGE_ERROR = "Pick or name a Ready prepackage for this filled copy.";
 export const QUALITY_TEMPLATE_FILL_EMPTY_ERROR = "Fill the form before saving a copy.";
+export const QUALITY_TEMPLATE_FILL_MISSING_ERROR = "Filled copy not found.";
+export const QUALITY_TEMPLATE_FILL_OPEN_ERROR = "Could not open that filled copy.";
+export const QUALITY_TEMPLATE_FILL_OPEN_TIMEOUT_ERROR =
+  "Opening that filled copy timed out. The Quality vault is still on this desk. Try again.";
+
+export function qualityTemplateFillOpenNote(input: { timedOut?: boolean; status?: number; error?: string }) {
+  if (input.timedOut) return QUALITY_TEMPLATE_FILL_OPEN_TIMEOUT_ERROR;
+  const error = typeof input.error === "string" ? input.error.trim() : "";
+  if (error) return error;
+  if (input.status === 404) return QUALITY_TEMPLATE_FILL_MISSING_ERROR;
+  return QUALITY_TEMPLATE_FILL_OPEN_ERROR;
+}
 
 export type QualityTemplateSourceKind = "company-docs" | "catalog";
 export type QualityTemplateFillDest = "job" | "prepackage";
