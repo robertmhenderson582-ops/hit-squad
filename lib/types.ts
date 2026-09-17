@@ -12,7 +12,9 @@ export type PrivilegeId =
   | "unaliased-export"
   | "designer-ship"
   | "security-billing"
-  | "rate-vault";
+  | "rate-vault"
+  | "change-orders"
+  | "stc-order";
 
 export type PublicUser = {
   id: string;

@@ -34,6 +34,7 @@ const SECTIONS: {
   { href: "/settings/sites", label: "Sites", buildDesk: true, privilege: "designer-ship" },
   { href: "/settings/divisions", label: "Divisions", workingDesk: true },
   { href: "/settings/positions", label: "Positions", workingDesk: true, addUsers: true },
+  { href: "/settings/site-access", label: "Site access", buildDesk: true },
   { href: "/settings/checks", label: "Checks", ownerOnly: true },
   { href: "/settings/modules", label: "Future modules" },
 ];

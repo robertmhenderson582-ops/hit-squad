@@ -16,13 +16,15 @@ import { useSession } from "@/components/SessionProvider";
 import { hasWorkingDesk } from "@/lib/desk-role";
 import { peopleVisibleTo } from "@/lib/desk-people";
 import { companyScopeFor } from "@/lib/companies";
-import { VIEW_RESPONSIBILITIES, VISUAL_ROSTER } from "@/lib/owner-desk";
+import { VISUAL_ROSTER } from "@/lib/owner-desk";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
 import { catalogSeedsAllowedOnDesk, jobByCode, plantJobTally, plantJobsLine, plantTabFromQuery, plantTabQuery, PLANT_TABS, visibleSeedJobs, type PlantTab } from "@/lib/jobs";
-import { localPackToJob } from "@/lib/local-estimates";
+import { localPackToJob, type LocalPack } from "@/lib/local-estimates";
 import { westCoastClockNote } from "@/lib/abiding-documents";
 import { AbidingDocumentsDesk } from "@/components/AbidingDocumentsDesk";
+import { PlantPeopleDesk } from "@/components/PlantPeopleDesk";
 import { packsForViewedDesk } from "@/lib/lens-packs";
+import { earliestJobSetupStartFromStore, latestJobSetupPostEndFromStore } from "@/lib/tool-room-duty";
 import { catalogSites } from "@/lib/desk-data";
 import { wakeShells } from "@/lib/rodeo-monroe-wake";
 import { driveViewUrl } from "@/lib/work-folder";
@@ -104,13 +106,19 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const { board, companyId } = useDeskBoard();
   const scope = companyScopeFor(lens, companyId);
   const [localJobs, setLocalJobs] = useState<ReturnType<typeof localPackToJob>[]>([]);
+  const [plantPacks, setPlantPacks] = useState<LocalPack[]>([]);
   const lensRef = useRef(lens);
   lensRef.current = lens;
   useEffect(() => {
     const current = lensRef.current;
     const packs = current ? packsForViewedDesk(current, viewingAs, seat) : [];
     setLocalJobs(packs.map((pack) => localPackToJob(pack)));
+    setPlantPacks(packs);
   }, [board, companyId, lensKey, viewingAs, seat]);
+  const jobStartYmd =
+    typeof window === "undefined" ? null : earliestJobSetupStartFromStore(plantPacks, window.localStorage);
+  const postEndYmd =
+    typeof window === "undefined" ? null : latestJobSetupPostEndFromStore(plantPacks, window.localStorage);
   const openedJob = jobByCode(jobCode, localJobs);
   const closed = readClosed().filter((item) => item.kind === "estimate").map((item) => item.id);
   const plantEstimates = estimatesForPlant(
@@ -285,30 +293,13 @@ export function JobPlantPage({ slug }: { slug: string }) {
       ) : null}
 
       {tab === "People" ? (
-        <section className="site-plate plant-card mt-6 px-5 py-6">
-          <h3 className="text-xl font-semibold text-[#163038]">People</h3>
-          <p className="mt-2 text-sm text-[#5b6f73]">
-            People is not Users. Users is who may sign in. People is who owns change orders, HSE, or
-            Quality on {alias(plant.name)}. Users stay anonymous unless they share this shop. Empty
-            until you pick someone — no seeded logins.
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {VIEW_RESPONSIBILITIES.map((role) => (
-              <label key={role} className="block text-sm">
-                {role}
-                <select className="paper-field mt-1">
-                  <option value="">Not assigned</option>
-                  <option value="anonymous">Anonymous (this shop)</option>
-                  {people.map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {row.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ))}
-          </div>
-        </section>
+        <PlantPeopleDesk
+          siteId={slug}
+          siteName={alias(plant.name)}
+          people={people}
+          jobStartYmd={jobStartYmd}
+          postEndYmd={postEndYmd}
+        />
       ) : null}
     </div>
   );

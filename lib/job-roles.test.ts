@@ -12,6 +12,7 @@ import {
   resolveJobRole,
   SEED_JOB_ROLES,
   systemSeatRoleLabel,
+  isProjectManagerTitle,
 } from "./job-roles.ts";
 
 describe("job roles phase 1", () => {
@@ -34,7 +35,9 @@ describe("job roles phase 1", () => {
         "Document Clerk",
         "Field Clerk",
         "Time Keeper",
+        "General Foreman",
         "Foreman",
+        "Tool Room attendant",
       ],
     );
     assert.equal(parseJobRoleLabel("  Night Clerk  ").label, "Night Clerk");
@@ -45,6 +48,8 @@ describe("job roles phase 1", () => {
     assert.equal(mergeJobRoleCatalog(custom)[0], "President");
     assert.equal(loginRoleForJobTitle("President"), "president");
     assert.equal(loginRoleForJobTitle("Project Manager"), "tester");
+    assert.equal(isProjectManagerTitle("Project Manager"), true);
+    assert.equal(isProjectManagerTitle("Foreman"), false);
     assert.equal(systemSeatRoleLabel("owner"), "Owner");
     assert.equal(systemSeatRoleLabel("operator"), "Operator");
     assert.equal(systemSeatRoleLabel("tester"), null);

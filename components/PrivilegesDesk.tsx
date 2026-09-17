@@ -9,6 +9,7 @@ type PrivilegeRow = { id: PrivilegeId; label: string; detail: string };
 export function PrivilegesDesk() {
   const [seats, setSeats] = useState<SeatRow[]>([]);
   const [privileges, setPrivileges] = useState<PrivilegeRow[]>([]);
+  const [modules, setModules] = useState<PrivilegeRow[]>([]);
   const [shared, setShared] = useState<string[]>([]);
   const [grants, setGrants] = useState<Record<string, PrivilegeId[]>>({});
   const [email, setEmail] = useState("");
@@ -20,6 +21,7 @@ export function PrivilegesDesk() {
     const data = (await response.json().catch(() => ({}))) as {
       seats?: SeatRow[];
       privileges?: PrivilegeRow[];
+      modules?: PrivilegeRow[];
       shared?: string[];
       grants?: Record<string, PrivilegeId[]>;
       note?: string;
@@ -31,6 +33,7 @@ export function PrivilegesDesk() {
     }
     setSeats(Array.isArray(data.seats) ? data.seats : []);
     setPrivileges(Array.isArray(data.privileges) ? data.privileges : []);
+    setModules(Array.isArray(data.modules) ? data.modules : []);
     setShared(Array.isArray(data.shared) ? data.shared : []);
     setGrants(data.grants && typeof data.grants === "object" ? data.grants : {});
     if (data.note) setNote(data.note);
@@ -77,7 +80,8 @@ export function PrivilegesDesk() {
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Privileges</h2>
         <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
-          Pick a user. Grant or revoke owner-only items from the locked matrix. President shares
+          Pick a user. Grant or revoke owner-only items from the locked matrix, or assign Change
+          Orders and STC order. President shares
           Home, Madison work, Activity view, Madison Inbox, profile / password / branding view, and
           Madison presence. Hit Squad seats stay hidden until granted. Do not invent a login email
           — Add user on Manage users when Freddy’s email is known.
@@ -116,6 +120,38 @@ export function PrivilegesDesk() {
             <li key={item}>{item}</li>
           ))}
         </ul>
+      </section>
+
+      <section className="plant-card px-5 py-5">
+        <h3 className="text-xl font-semibold text-[#163038]">Assignable modules</h3>
+        <p className="mt-2 text-sm leading-6 text-[#5b6f73]">
+          Change Orders and STC order stay off until you assign them here. Estimate write, job
+          cards, and calendars stay Owner and Project Managers only — not an assignable grant.
+          Owner always has every item.
+        </p>
+        <div className="mt-4 space-y-3">
+          {modules.map((item) => {
+            const on = current.has(item.id);
+            return (
+              <label
+                key={item.id}
+                className="flex items-start gap-3 rounded-lg border border-[#d5e0de] px-3 py-3"
+              >
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={!email}
+                  onChange={(event) => void toggle(item.id, event.target.checked)}
+                  aria-label={item.label}
+                />
+                <span>
+                  <span className="block text-sm font-medium text-[#163038]">{item.label}</span>
+                  <span className="block text-sm text-[#5b6f73]">{item.detail}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
       </section>
 
       <section className="plant-card px-5 py-5">

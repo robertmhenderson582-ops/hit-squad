@@ -21,7 +21,7 @@ import { rememberLocalPack, renameLocalPackTitle, type StorageLike } from "./loc
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { RODEO_U110_PACK_ID, wakeMatchForPack } from "./rodeo-monroe-wake.ts";
 import { JAMES_EMAIL, JOHN_BEECH_EMAIL, JOSEPH_EMAIL } from "./tester-seats.ts";
-import { listVisiblePacks, upsertVisiblePack } from "./estimate-vault.ts";
+import { ESTIMATE_WRITE_DENIED, listVisiblePacks, upsertVisiblePack } from "./estimate-vault.ts";
 import type { EstimatePackSnapshot } from "./estimate-pack.ts";
 
 const MARK_EMAIL = "marks544@yahoo.com";
@@ -210,7 +210,7 @@ describe("sandbox estimate isolation", () => {
     assert.ok(merged.some((row) => row.packId === HIS_AROMATICS_PACK_ID && row.ownerEmail === NATHAN_DESK_EMAIL));
   });
 
-  it("upserts Mark's HIS-titled pack as his own Drive file and leaves Nathan's live Aromatics file alone", async () => {
+  it("blocks Mark estimate write; sandbox PM HIS-titled pack stays off Nathan's live Aromatics file", async () => {
     const drive = memoryDrive();
     const live: EstimatePackSnapshot = {
       packId: HIS_AROMATICS_PACK_ID,
@@ -232,23 +232,34 @@ describe("sandbox estimate isolation", () => {
     const liveFileId = HIS_AROMATICS_FILE_ID;
 
     const markPut = await upsertVisiblePack(mark, markAromaticsPack(), drive);
-    assert.equal(markPut.ok, true);
-    if (!markPut.ok) return;
-    assert.equal(markPut.pack.ownerEmail, MARK_EMAIL);
-    assert.equal(markPut.pack.packId, "new-mark-arom-1");
-    assert.equal(markPut.pack.title, "2027 Aromatics Turnaround");
+    assert.equal(markPut.ok, false);
+    if (!markPut.ok) {
+      assert.equal(markPut.status, 403);
+      assert.equal(markPut.error, ESTIMATE_WRITE_DENIED);
+    }
+    assert.equal(drive.files.size, 1);
+    if (liveFileId) assert.equal(await drive.readJson(liveFileId), liveBefore);
+
+    const josephPack = markAromaticsPack({
+      packId: "new-joseph-arom-1",
+      key: newEstimateKey("new-joseph-arom-1"),
+      ownerEmail: JOSEPH_EMAIL,
+    });
+    const josephPut = await upsertVisiblePack(joseph, josephPack, drive);
+    assert.equal(josephPut.ok, true);
+    if (!josephPut.ok) return;
+    assert.equal(josephPut.pack.ownerEmail, JOSEPH_EMAIL);
+    assert.equal(josephPut.pack.packId, "new-joseph-arom-1");
     assert.equal(drive.files.size, 2);
     if (liveFileId) assert.equal(await drive.readJson(liveFileId), liveBefore);
 
-    const markAgain = await upsertVisiblePack(mark, markAromaticsPack({ updatedAt: 900 }), drive);
-    assert.equal(markAgain.ok, true);
     const nathanList = await listVisiblePacks(nathan, drive);
     const markDesk = await listVisiblePacks(mark, drive);
     const josephDesk = await listVisiblePacks(joseph, drive);
-    assert.equal(nathanList.packs.some((row) => row.packId === "new-mark-arom-1"), false);
+    assert.equal(nathanList.packs.some((row) => row.packId === "new-joseph-arom-1"), false);
     assert.equal(nathanList.packs.some((row) => row.packId === HIS_AROMATICS_PACK_ID), true);
-    assert.deepEqual(markDesk.packs.map((row) => row.packId), ["new-mark-arom-1"]);
-    assert.deepEqual(josephDesk.packs.map((row) => row.packId), []);
+    assert.deepEqual(markDesk.packs.map((row) => row.packId), []);
+    assert.deepEqual(josephDesk.packs.map((row) => row.packId), ["new-joseph-arom-1"]);
 
     const hijack = await upsertVisiblePack(mark, markAromaticsPack({ packId: HIS_AROMATICS_PACK_ID }), drive);
     assert.equal(hijack.ok, false);

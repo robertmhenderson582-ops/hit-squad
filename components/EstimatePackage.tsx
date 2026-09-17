@@ -65,6 +65,8 @@ import { parseEquipmentSheet, writeEquipmentSheet } from "@/lib/equipment-sheet"
 import { normalizeSubSheet, writeSubSheet, type SubSheet } from "@/lib/subcontractor";
 import { onEstimateSheets } from "@/lib/sheet-events";
 import { emptyOrgChart, readOrgChart, writeOrgChart, type OrgChartState } from "@/lib/org-chart";
+import { useLensUser } from "@/components/OwnerDeskContext";
+import { canEditAssignedEstimate } from "@/lib/estimate-scope";
 
 type CrewState = {
   staff: CraftRow[];
@@ -104,6 +106,7 @@ type EstimatePackageApi = {
   setPackTitle: (title: string) => string | null;
   setActivities: (next: WorkActivity[] | ((current: WorkActivity[]) => WorkActivity[])) => void;
   addCraftRow: () => CraftRow;
+  canEditEstimate: boolean;
   setMultiUnitsOn: (on: boolean) => void;
   addJobUnit: () => void;
   removeJobUnit: (id: string) => void;
@@ -206,6 +209,19 @@ export function EstimatePackageProvider({
   estimateKey: string;
   children: React.ReactNode;
 }) {
+  const lens = useLensUser();
+  const canEditEstimate = useMemo(() => {
+    const packId = packIdFromStoreKey(estimateKey);
+    const local = packId ? findLocalPack(packId) : null;
+    return canEditAssignedEstimate(lens ?? { email: "", role: "tester" }, {
+      packId: packId ?? undefined,
+      ownerEmail: local?.ownerEmail,
+      sharedWith: local?.sharedWith,
+      title: local?.title,
+      client: local?.client,
+      site: local?.site,
+    });
+  }, [estimateKey, lens]);
   const [schedule, setSchedule] = useState<PhaseScheduleState>(() => readSchedule(estimateKey));
   const [crew, setCrewState] = useState<CrewState>(() => syncCrew(readCrew(estimateKey), readSchedule(estimateKey)));
   const [orgChart, setOrgChartState] = useState<OrgChartState>(() => readOrgChart(estimateKey));
@@ -213,6 +229,8 @@ export function EstimatePackageProvider({
   const [activities, setActivitiesState] = useState<WorkActivity[]>(() =>
     normalizeWorkActivities(readActivities(estimateKey) ?? []),
   );
+  const canEditEstimateRef = useRef(canEditEstimate);
+  canEditEstimateRef.current = canEditEstimate;
   const [status, setStatusState] = useState<EstimateStatus>(() => readPackStatus(estimateKey));
   const [ready, setReady] = useState(() => {
     const packId = packIdFromStoreKey(estimateKey);
@@ -306,6 +324,7 @@ export function EstimatePackageProvider({
       paintFromLocal();
       if (!packId) return;
       const runBootFlush = () => {
+        if (!canEditEstimateRef.current) return;
         void (async () => {
           const first = await flushVaultUpsert(packId);
           if (cancelled || !aliveRef.current) return;
@@ -352,7 +371,7 @@ export function EstimatePackageProvider({
   }
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !canEditEstimate) return;
     if (skipSmashedPackWrite()) return;
     writeSchedule(estimateKey, schedule);
     const packId = packIdFromStoreKey(estimateKey);
@@ -360,10 +379,10 @@ export function EstimatePackageProvider({
       touchLocalPack(packId);
       queueVaultUpsert(packId);
     }
-  }, [estimateKey, ready, schedule]);
+  }, [canEditEstimate, estimateKey, ready, schedule]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !canEditEstimate) return;
     if (skipSmashedPackWrite()) return;
     writeCrew(estimateKey, crew);
     persistCrewTravel(estimateKey, crew, {
@@ -375,10 +394,10 @@ export function EstimatePackageProvider({
       touchLocalPack(packId);
       queueVaultUpsert(packId);
     }
-  }, [crew, estimateKey, jobMeta.craftMileageRate, jobMeta.staffMileageRate, ready]);
+  }, [canEditEstimate, crew, estimateKey, jobMeta.craftMileageRate, jobMeta.staffMileageRate, ready]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !canEditEstimate) return;
     if (skipSmashedPackWrite()) return;
     writeOrgChart(estimateKey, orgChart);
     const packId = packIdFromStoreKey(estimateKey);
@@ -386,10 +405,10 @@ export function EstimatePackageProvider({
       touchLocalPack(packId);
       queueVaultUpsert(packId);
     }
-  }, [estimateKey, orgChart, ready]);
+  }, [canEditEstimate, estimateKey, orgChart, ready]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !canEditEstimate) return;
     if (skipSmashedPackWrite()) return;
     writeJobMeta(estimateKey, jobMeta);
     const packId = packIdFromStoreKey(estimateKey);
@@ -397,10 +416,10 @@ export function EstimatePackageProvider({
       touchLocalPack(packId);
       queueVaultUpsert(packId);
     }
-  }, [estimateKey, jobMeta, ready]);
+  }, [canEditEstimate, estimateKey, jobMeta, ready]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !canEditEstimate) return;
     if (skipSmashedPackWrite()) return;
     writeActivities(estimateKey, activities);
     const packId = packIdFromStoreKey(estimateKey);
@@ -408,10 +427,10 @@ export function EstimatePackageProvider({
       touchLocalPack(packId);
       queueVaultUpsert(packId);
     }
-  }, [activities, estimateKey, ready]);
+  }, [activities, canEditEstimate, estimateKey, ready]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !canEditEstimate) return;
     const packId = packIdFromStoreKey(estimateKey);
     if (!packId) return;
     return onEstimateSheets(() => {
@@ -419,7 +438,7 @@ export function EstimatePackageProvider({
       touchLocalPack(packId);
       queueVaultUpsert(packId);
     });
-  }, [estimateKey, ready]);
+  }, [canEditEstimate, estimateKey, ready]);
 
   const api = useMemo<EstimatePackageApi>(
     () => ({
@@ -432,7 +451,9 @@ export function EstimatePackageProvider({
       jobMeta,
       activities,
       status,
+      canEditEstimate,
       setProjectStartDate(start) {
+        if (!canEditEstimate) return;
         setSchedule((current) => {
           const next = setProjectStart(current, start);
           setCrewState((existing) => syncCrew(existing, next));
@@ -440,6 +461,7 @@ export function EstimatePackageProvider({
         });
       },
       patch(id, next) {
+        if (!canEditEstimate) return;
         setSchedule((current) => {
           const updated = patchPhase(current, id, next);
           setCrewState((existing) => syncCrew(existing, updated));
@@ -447,6 +469,7 @@ export function EstimatePackageProvider({
         });
       },
       pickOt(id, pick) {
+        if (!canEditEstimate) return;
         setSchedule((current) => {
           const updated = applyOtPick(current, id, pick);
           setCrewState((existing) => syncCrew(existing, updated));
@@ -454,6 +477,7 @@ export function EstimatePackageProvider({
         });
       },
       setMultiUnitsOn(on) {
+        if (!canEditEstimate) return;
         setSchedule((current) => {
           const updated = setMultiUnits(current, on);
           setCrewState((existing) => syncCrew(existing, updated));
@@ -461,6 +485,7 @@ export function EstimatePackageProvider({
         });
       },
       addJobUnit() {
+        if (!canEditEstimate) return;
         setSchedule((current) => {
           const updated = addUnit(current);
           setCrewState((existing) => syncCrew(existing, updated));
@@ -468,6 +493,7 @@ export function EstimatePackageProvider({
         });
       },
       removeJobUnit(id) {
+        if (!canEditEstimate) return;
         setSchedule((current) => {
           const updated = removeUnit(current, id);
           setCrewState((existing) => syncCrew(existing, updated));
@@ -475,9 +501,11 @@ export function EstimatePackageProvider({
         });
       },
       renameJobUnit(id, name) {
+        if (!canEditEstimate) return;
         setSchedule((current) => renameUnit(current, id, name));
       },
       patchUnit(unitId, id, next) {
+        if (!canEditEstimate) return;
         setSchedule((current) => {
           const updated = patchUnitPhase(current, unitId, id, next);
           setCrewState((existing) => syncCrew(existing, updated));
@@ -485,6 +513,7 @@ export function EstimatePackageProvider({
         });
       },
       pickUnitOt(unitId, id, pick) {
+        if (!canEditEstimate) return;
         setSchedule((current) => {
           const updated = applyUnitOtPick(current, unitId, id, pick);
           setCrewState((existing) => syncCrew(existing, updated));
@@ -492,9 +521,11 @@ export function EstimatePackageProvider({
         });
       },
       setCrew(next) {
+        if (!canEditEstimate) return;
         setCrewState((current) => (typeof next === "function" ? next(current) : next));
       },
       replaceFromImport(next) {
+        if (!canEditEstimate) return;
         if (next.equipment != null) writeEquipmentSheet(estimateKey, parseEquipmentSheet(next.equipment));
         if (next.otherCost != null) writeOtherCost(estimateKey, parseOtherCostJson(next.otherCost));
         if (next.subcontractor != null) {
@@ -527,12 +558,15 @@ export function EstimatePackageProvider({
         }
       },
       setOrgChart(next) {
+        if (!canEditEstimate) return;
         setOrgChartState((current) => (typeof next === "function" ? next(current) : next));
       },
       setJobMeta(next) {
+        if (!canEditEstimate) return;
         setJobMetaState((current) => (typeof next === "function" ? next(current) : next));
       },
       setPackStatus(next) {
+        if (!canEditEstimate) return null;
         const { packId, regularClient } = packSite(estimateKey);
         const parsed = clampEstimateStatus(parseEstimateStatus(next), regularClient);
         setStatusState(parsed);
@@ -547,6 +581,7 @@ export function EstimatePackageProvider({
         return parsed;
       },
       setPackTitle(title) {
+        if (!canEditEstimate) return null;
         const packId = packIdFromStoreKey(estimateKey);
         if (!packId) return null;
         const renamed = renameLocalPackTitle(packId, title);
@@ -558,6 +593,7 @@ export function EstimatePackageProvider({
         return null;
       },
       setActivities(next) {
+        if (!canEditEstimate) return;
         setActivitiesState((current) =>
           normalizeWorkActivities(typeof next === "function" ? next(current) : next),
         );
@@ -566,7 +602,7 @@ export function EstimatePackageProvider({
         return blankCraftRow();
       },
     }),
-    [activities, crew, estimateKey, jobMeta, orgChart, ready, schedule, status, vaultSaveError],
+    [activities, canEditEstimate, crew, estimateKey, jobMeta, orgChart, ready, schedule, status, vaultSaveError],
   );
 
   return <EstimatePackageContext.Provider value={api}>{children}</EstimatePackageContext.Provider>;
@@ -600,6 +636,7 @@ export function useEstimatePackage() {
       },
       setActivities() {},
       addCraftRow: () => blankCraftRow(),
+      canEditEstimate: false,
       setMultiUnitsOn() {},
       addJobUnit() {},
       removeJobUnit() {},

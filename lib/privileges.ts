@@ -19,6 +19,18 @@ export const OWNER_ONLY_PRIVILEGES: readonly PrivilegeId[] = [
   "rate-vault",
 ] as const;
 
+/** Phase 2 module writes. Owner grants these per seat. Owner always has them.
+ * Estimate / job-card / calendar write is Owner + Project Manager only — not listed here. */
+export const MODULE_ASSIGN_PRIVILEGES: readonly PrivilegeId[] = [
+  "change-orders",
+  "stc-order",
+] as const;
+
+export const GRANTABLE_PRIVILEGES: readonly PrivilegeId[] = [
+  ...OWNER_ONLY_PRIVILEGES,
+  ...MODULE_ASSIGN_PRIVILEGES,
+] as const;
+
 export const PRIVILEGE_COPY: Record<PrivilegeId, { label: string; detail: string }> = {
   "manage-users": {
     label: "Manage users",
@@ -68,6 +80,14 @@ export const PRIVILEGE_COPY: Record<PrivilegeId, { label: string; detail: string
     label: "Rate Vault",
     detail: "P66 B-1 / rate builder workshop. Owner plus the Rate Vault seat. Hidden from testers unless granted.",
   },
+  "change-orders": {
+    label: "Change Orders",
+    detail: "Work SCR / Change Orders on a job. Not open to every Project Manager — assign the seat here. Owner always can.",
+  },
+  "stc-order": {
+    label: "STC order",
+    detail: "Small tools / consumables order path. Same assignable gate as Change Orders. Owner always can.",
+  },
 };
 
 /** Locked shared President desk. Not grant/revoke items. */
@@ -87,7 +107,7 @@ export type PrivilegeViewer = {
 };
 
 export function isPrivilegeId(value: unknown): value is PrivilegeId {
-  return typeof value === "string" && (OWNER_ONLY_PRIVILEGES as readonly string[]).includes(value);
+  return typeof value === "string" && (GRANTABLE_PRIVILEGES as readonly string[]).includes(value);
 }
 
 export function normalizePrivileges(raw: unknown): PrivilegeId[] {
@@ -104,7 +124,7 @@ export function hasPrivilege(user: PrivilegeViewer | null | undefined, privilege
 
 export function grantedPrivileges(user: PrivilegeViewer | null | undefined): PrivilegeId[] {
   if (!user) return [];
-  if (user.role === "owner") return [...OWNER_ONLY_PRIVILEGES];
+  if (user.role === "owner") return [...GRANTABLE_PRIVILEGES];
   const next = normalizePrivileges(user.privileges);
   if (isRateVaultJamesEmail(user.email) && !next.includes("rate-vault")) next.push("rate-vault");
   return next;

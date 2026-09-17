@@ -144,6 +144,7 @@ export const VIEW_AS_HIDDEN_SETTINGS = [
   "/settings/branding",
   "/settings/sites",
   "/settings/checks",
+  "/settings/site-access",
 ] as const;
 
 export function seatLabel(seat: FollowSeat, people: Array<{ id: string; name: string }> = []): string {

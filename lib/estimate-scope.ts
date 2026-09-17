@@ -7,9 +7,13 @@ import { canonicalEmail, isOwnerIdentity, isSamePerson } from "./identity.ts";
 import { listLocalPacks, type LocalPack, type StorageLike } from "./local-estimates.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { isRodeoMonroeWakePack } from "./rodeo-monroe-wake.ts";
+import { canEditEstimateWork } from "./module-access.ts";
 import type { PublicUser } from "./types.ts";
 
-export type ScopeUser = Pick<PublicUser, "email" | "role">;
+export type ScopeUser = Pick<PublicUser, "email" | "role"> & {
+  jobTitle?: string;
+  privileges?: readonly string[] | null;
+};
 
 export function normalizeEmails(values?: unknown): string[] {
   if (!Array.isArray(values)) return [];
@@ -184,16 +188,15 @@ export function visibleDeskPacks(
 }
 
 /**
- * 2026-09-08 product lock: editors = owner (Robert) OR the assigned PM/estimator.
- * Not assignee-only — the owner seat always can edit every pack.
- * Assignment emails are not fully wired — pack `ownerEmail` is the PM/estimator stand-in.
- * President / view-as are lens tools, not extra editors unless they are that assigned seat.
- * Everyone else sees the same live Drive pack (read-only intent).
- * Follow-up: job assignment field + read-only UI. This is not a finished write-ACL.
+ * 2026-09-17 Phase 2 lock: estimate fill / calendars / job-card work.
+ * Owner (Robert) can edit every pack. Project Managers only
+ * can edit packs on their desk (owned or shared). View-as uses the lens seat —
+ * not Owner write. Non-PM seats stay view-only even on a pack they own.
  */
 export function canEditAssignedEstimate(user: ScopeUser, pack: ScopedPack) {
   if (isOwner(user)) return true;
-  return isPackOwner(user, pack);
+  if (!canEditEstimateWork(user)) return false;
+  return isPackOwner(user, pack) || packVisibleTo(user, pack);
 }
 
 /** Viewer / lens leftover — must not flush a smashed local over the shared vault. */

@@ -3,6 +3,7 @@ import { canSeeHitSquadSeats, NOVUS_EMAIL } from "./desk-role.ts";
 import { VISUAL_ROSTER } from "./owner-desk.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
 import type { PrivilegeViewer } from "./privileges.ts";
+import type { PrivilegeId } from "./types.ts";
 
 export type DeskPerson = {
   id: string;
@@ -10,6 +11,8 @@ export type DeskPerson = {
   name: string;
   companyId?: CompanyId;
   role?: string;
+  jobTitle?: string;
+  privileges?: PrivilegeId[];
 };
 
 /** View as / Follow roster. Owner and Novus stay off; testers and President stay on. */
@@ -24,6 +27,8 @@ type SeatLike = {
   name?: string;
   role?: string;
   companyId?: string;
+  jobTitle?: string;
+  privileges?: PrivilegeId[];
 };
 
 /** Stable View as / Follow id. Seeded visual ids stay nathan/joseph/… so stored lenses keep working. */
@@ -57,6 +62,8 @@ export function lensPeopleFromSeats(seats: SeatLike[]): DeskPerson[] {
       name,
       companyId,
       ...(row.role ? { role: row.role } : {}),
+      ...(row.jobTitle ? { jobTitle: row.jobTitle } : {}),
+      ...(row.privileges?.length ? { privileges: [...row.privileges] as PrivilegeId[] } : {}),
     });
   }
   return people;
