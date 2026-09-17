@@ -4,11 +4,19 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   APPROVAL_STATUSES,
+  addClaimLine,
+  addCraftLine,
   addLogRow,
+  CLAIMABLE_COST_TYPES,
+  claimTypeNeedsHours,
   CONTRACTOR_LOG_COLUMNS,
+  blankClaimLine,
+  blankCraftLine,
   blankLogRow,
   changeOrderNoun,
   changeOrderTabLabel,
+  craftLineHours,
+  craftLineLabor,
   DEFAULT_CHANGE_ORDER_SHELL,
   emptyFcrHeader,
   emptyFcrPacket,
@@ -21,6 +29,7 @@ import {
   FCR_STORE_PREFIX,
   IMPACT_LEVELS,
   LOG_STATUSES,
+  logRowScope,
   mileageDollars,
   MILEAGE_YES_FLAT,
   parseFcrPacket,
@@ -30,6 +39,7 @@ import {
   usesEcrCopy,
   writeFcrPacket,
 } from "./change-order-packet.ts";
+import { scrCompositeRates } from "./scr-rates.ts";
 
 const WOOD = "Wood River — Roxana, IL";
 const P66 = "Phillips 66";
@@ -86,6 +96,10 @@ test("V1 on-job packet shape stays locked to the Drive books", () => {
     "revisedComp",
     "notes",
     "loggedBy",
+    "scopeHours",
+    "scopeCost",
+    "craftLines",
+    "claimLines",
   ]);
   assert.deepEqual(Object.keys(emptyScr()), [
     "taRm",
@@ -314,8 +328,9 @@ test("P66 / Wood River and the unset default read ECR; Log is the field home", (
     CONTRACTOR_LOG_COLUMNS.map((column) => column.key),
     ["scr", "requestDate", "requestedBy", "status", "scope"],
   );
-  assert.equal(CONTRACTOR_LOG_COLUMNS.some((column) => column.key === "reviewedBy"), false);
-  assert.equal(CONTRACTOR_LOG_COLUMNS.some((column) => column.key === "approvedCost"), false);
+  const contractorKeys = CONTRACTOR_LOG_COLUMNS.map((column) => column.key as string);
+  assert.equal(contractorKeys.includes("reviewedBy"), false);
+  assert.equal(contractorKeys.includes("approvedCost"), false);
   const packet = readFileSync(fileURLToPath(new URL("../components/ChangeOrderPacket.tsx", import.meta.url)), "utf8");
   assert.match(packet, /changeOrderNoun/);
   assert.match(packet, /DEFAULT_CHANGE_ORDER_SHELL/);
@@ -323,11 +338,19 @@ test("P66 / Wood River and the unset default read ECR; Log is the field home", (
   assert.match(packet, /addLogRow/);
   assert.match(packet, /CONTRACTOR_LOG_COLUMNS/);
   assert.match(packet, /Change Orders log/);
+  assert.match(packet, /Scope change hours/);
+  assert.match(packet, /Scope change money/);
+  assert.match(packet, /\+ Add craft/);
+  assert.match(packet, /Claimable costs/);
+  assert.match(packet, /Third-party rental/);
+  assert.match(packet, /from \"@\/lib\/scr-rates\"/);
   assert.doesNotMatch(packet, /Reviewed By/);
   assert.doesNotMatch(packet, /Approved Cost/);
   assert.doesNotMatch(packet, /Logged By/);
   assert.doesNotMatch(packet, /On-job FCR packet/);
   assert.doesNotMatch(packet, /\+ Add FCR/);
+  assert.doesNotMatch(packet, /Load from Crew/);
+  assert.doesNotMatch(packet, /FCR_DAY_LABELS/);
   const workspace = readFileSync(fileURLToPath(new URL("../components/EstimateWorkspace.tsx", import.meta.url)), "utf8");
   const tabs = readFileSync(fileURLToPath(new URL("./estimate-tabs.ts", import.meta.url)), "utf8");
   assert.match(tabs, /changeOrderTabLabel/);
@@ -379,4 +402,124 @@ test("parse + store round-trip keeps Monroe header and log after a fresh device 
   assert.equal(hydrated.log[0]?.impactLevel, "High");
   assert.equal(hydrated.scr.taRm, "TA-9");
   assert.equal(fcrPacketHasWork({ header: { pm: "Ben" } }), true);
+});
+
+test("scope change holds hours and money without a workbook", () => {
+  const row = { ...blankLogRow(), scope: "Night hydrotest", scopeHours: 12, scopeCost: 1800 };
+  const scope = logRowScope(row);
+  assert.equal(scope.hasLines, false);
+  assert.equal(scope.hours, 12);
+  assert.equal(scope.cost, 1800);
+  const packet = addLogRow(emptyFcrPacket(), { id: "scr-typed", scopeHours: 12, scopeCost: 1800 });
+  const summary = fcrSummary(packet);
+  assert.equal(summary.scrHours, 12);
+  assert.equal(summary.scrTyped, 1800);
+  assert.equal(summary.scrCost, 1800);
+  assert.equal(summary.total, 1800);
+});
+
+test("craft labor is hours × composite ST/OT and DT is optional", () => {
+  const stOt = blankCraftLine({
+    id: "bm",
+    craft: "Boilermaker Journeyman",
+    stHours: 8,
+    otHours: 2,
+    stRate: 100,
+    otRate: 150,
+  });
+  assert.equal(craftLineHours(stOt), 10);
+  assert.equal(craftLineLabor(stOt), 8 * 100 + 2 * 150);
+  const withDt = blankCraftLine({ ...stOt, dtHours: 4, dtRate: 200 });
+  assert.equal(craftLineHours(withDt), 14);
+  assert.equal(craftLineLabor(withDt), 800 + 300 + 800);
+  const zeroDt = blankCraftLine({ ...stOt, dtHours: 0, dtRate: 200 });
+  assert.equal(craftLineLabor(zeroDt), 1100);
+});
+
+test("SCR total rolls craft labor plus claimable cost lines", () => {
+  assert.deepEqual([...CLAIMABLE_COST_TYPES], [
+    "Subcontractor",
+    "Third-party rental",
+    "Equipment",
+    "Material",
+    "Travel",
+    "Other",
+  ]);
+  assert.equal(claimTypeNeedsHours("Subcontractor"), true);
+  assert.equal(claimTypeNeedsHours("Third-party rental"), false);
+  assert.equal(claimTypeNeedsHours("Custom labor"), true);
+  let packet = addLogRow(emptyFcrPacket(), { id: "scr-1", scr: "SCR-4", scope: "Extra weld", scopeHours: 99, scopeCost: 9 });
+  packet = addCraftLine(packet, "scr-1", {
+    id: "c1",
+    craft: "Pipefitter Journeyman",
+    stHours: 10,
+    otHours: 2,
+    stRate: 80,
+    otRate: 120,
+  });
+  packet = addClaimLine(packet, "scr-1", {
+    id: "cl1",
+    type: "Subcontractor",
+    description: "NDE truck",
+    amount: 1500,
+    hours: 6,
+  });
+  packet = addClaimLine(packet, "scr-1", {
+    id: "cl2",
+    type: "Third-party rental",
+    description: "40-ton crane",
+    amount: 2400,
+  });
+  const row = packet.log[0];
+  assert.ok(row);
+  const scope = logRowScope(row);
+  assert.equal(scope.hasLines, true);
+  assert.equal(scope.labor, 10 * 80 + 2 * 120);
+  assert.equal(scope.claims, 3900);
+  assert.equal(scope.hours, 12 + 6);
+  assert.equal(scope.cost, 1040 + 3900);
+  assert.equal(row.scopeHours, scope.hours);
+  assert.equal(row.scopeCost, scope.cost);
+  const summary = fcrSummary({ ...packet, sub: 100, equipment: 50, misc: 25 });
+  assert.equal(summary.scrLabor, 1040);
+  assert.equal(summary.scrClaims, 3900);
+  assert.equal(summary.scrTyped, 0);
+  assert.equal(summary.scrCost, 4940);
+  assert.equal(summary.sub, 100);
+  assert.equal(summary.total, 4940 + 175);
+});
+
+test("SCR estimate craft + claim lines persist on the store", () => {
+  const store = memoryStore();
+  const key = "new:new-scr-desk";
+  const packet = parseFcrPacket({
+    log: [
+      {
+        id: "scr-9",
+        scr: "SCR-9",
+        scope: "Night hydrotest",
+        craftLines: [{ id: "c1", craft: "Welder", stHours: 8, otHours: 0, stRate: 90, otRate: 135 }],
+        claimLines: [{ id: "cl1", type: "Third-party rental", description: "Light plant", amount: 400 }],
+      },
+    ],
+  });
+  writeFcrPacket(key, packet, store);
+  const read = readFcrPacket(key, store);
+  assert.equal(read.log[0]?.craftLines[0]?.craft, "Welder");
+  assert.equal(read.log[0]?.craftLines[0]?.stHours, 8);
+  assert.equal(read.log[0]?.craftLines[0]?.stRate, 90);
+  assert.equal(read.log[0]?.claimLines[0]?.type, "Third-party rental");
+  assert.equal(read.log[0]?.claimLines[0]?.amount, 400);
+  assert.equal(read.log[0]?.scopeHours, 8);
+  assert.equal(read.log[0]?.scopeCost, 8 * 90 + 400);
+  assert.equal(fcrSummary(read).total, 1120);
+});
+
+test("composite ST/OT come from the plant book, not invented rates", () => {
+  const rates = scrCompositeRates("Boilermaker Journeyman", WOOD, P66);
+  assert.ok(rates.st > 0);
+  assert.ok(rates.ot > 0);
+  assert.notEqual(rates.ot, rates.st);
+  const empty = scrCompositeRates("", WOOD, P66);
+  assert.deepEqual(empty, { st: 0, ot: 0, dt: 0 });
 });
