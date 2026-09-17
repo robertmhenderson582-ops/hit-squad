@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { SITE_ACCESS_VAULT_KIND, SITE_ACCESS_VAULT_NAME, readVaultJson, writeVaultJson } from "./drive-data.ts";

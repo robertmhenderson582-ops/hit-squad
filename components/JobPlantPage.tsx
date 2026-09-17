@@ -19,12 +19,12 @@ import { companyScopeFor } from "@/lib/companies";
 import { VISUAL_ROSTER } from "@/lib/owner-desk";
 import { boundOtLabel, siteClockFromText } from "@/lib/hours-clock";
 import { catalogSeedsAllowedOnDesk, jobByCode, plantJobTally, plantJobsLine, plantTabFromQuery, plantTabQuery, PLANT_TABS, visibleSeedJobs, type PlantTab } from "@/lib/jobs";
-import { localPackToJob } from "@/lib/local-estimates";
+import { localPackToJob, type LocalPack } from "@/lib/local-estimates";
 import { westCoastClockNote } from "@/lib/abiding-documents";
 import { AbidingDocumentsDesk } from "@/components/AbidingDocumentsDesk";
 import { PlantPeopleDesk } from "@/components/PlantPeopleDesk";
 import { packsForViewedDesk } from "@/lib/lens-packs";
-import { latestJobSetupPostEnd } from "@/lib/tool-room-duty";
+import { latestJobSetupPostEndFromStore } from "@/lib/tool-room-duty";
 import { catalogSites } from "@/lib/desk-data";
 import { wakeShells } from "@/lib/rodeo-monroe-wake";
 import { driveViewUrl } from "@/lib/work-folder";
@@ -106,7 +106,7 @@ export function JobPlantPage({ slug }: { slug: string }) {
   const { board, companyId } = useDeskBoard();
   const scope = companyScopeFor(lens, companyId);
   const [localJobs, setLocalJobs] = useState<ReturnType<typeof localPackToJob>[]>([]);
-  const [plantPacks, setPlantPacks] = useState<Array<{ schedule?: unknown }>>([]);
+  const [plantPacks, setPlantPacks] = useState<LocalPack[]>([]);
   const lensRef = useRef(lens);
   lensRef.current = lens;
   useEffect(() => {
@@ -115,7 +115,8 @@ export function JobPlantPage({ slug }: { slug: string }) {
     setLocalJobs(packs.map((pack) => localPackToJob(pack)));
     setPlantPacks(packs);
   }, [board, companyId, lensKey, viewingAs, seat]);
-  const postEndYmd = latestJobSetupPostEnd(plantPacks);
+  const postEndYmd =
+    typeof window === "undefined" ? null : latestJobSetupPostEndFromStore(plantPacks, window.localStorage);
   const openedJob = jobByCode(jobCode, localJobs);
   const closed = readClosed().filter((item) => item.kind === "estimate").map((item) => item.id);
   const plantEstimates = estimatesForPlant(

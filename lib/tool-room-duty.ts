@@ -1,6 +1,6 @@
 import { isOwner, isProjectManager } from "./desk-role.ts";
 import { canAssignSitePeople, type ModuleAccessUser } from "./module-access.ts";
-import { addDays, formatYmd, liveJobSetupPhases, parseYmd, type PhaseScheduleState } from "./phase-schedule.ts";
+import { addDays, formatYmd, liveJobSetupPhases, parseYmd, PHASE_STORE_PREFIX, type PhaseScheduleState } from "./phase-schedule.ts";
 import { normalizeSiteId } from "./site-access.ts";
 
 export const TOOL_ROOM_AFTER_POST_DAYS = 14;
@@ -41,6 +41,24 @@ export function latestJobSetupPostEnd(packs: Array<{ schedule?: unknown }> = [])
     }
   }
   return latest;
+}
+
+export function latestJobSetupPostEndFromStore(
+  packs: Array<{ key?: string; schedule?: unknown }> = [],
+  store?: { getItem(key: string): string | null } | null,
+): string | null {
+  return latestJobSetupPostEnd(
+    packs.map((pack) => {
+      if (pack.schedule) return { schedule: pack.schedule };
+      if (!store || !pack.key) return {};
+      try {
+        const raw = store.getItem(`${PHASE_STORE_PREFIX}${pack.key}`);
+        return raw ? { schedule: JSON.parse(raw) } : {};
+      } catch {
+        return {};
+      }
+    }),
+  );
 }
 
 export function toolRoomTimeboxedFor(user?: ModuleAccessUser | null): boolean {

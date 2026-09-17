@@ -27,6 +27,7 @@ import {
   createToolRoomDuty,
   defaultToolRoomWindow,
   latestJobSetupPostEnd,
+  latestJobSetupPostEndFromStore,
   toolRoomDutyIsActive,
   toolRoomTimeboxedFor,
 } from "./tool-room-duty.ts";
@@ -99,6 +100,13 @@ describe("GF Tool Room attendant window", () => {
         },
       },
     ]), "2026-10-01");
+    assert.equal(
+      latestJobSetupPostEndFromStore(
+        [{ key: "new:wr" }],
+        { getItem: (key) => (key.includes("new:wr") ? JSON.stringify({ phases: [{ id: "post", on: true, start: "2026-09-20", stop: "2026-10-01" }] }) : null) },
+      ),
+      "2026-10-01",
+    );
 
     assert.equal(toolRoomTimeboxedFor(owner), false);
     assert.equal(toolRoomTimeboxedFor(nathan), false);
