@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { createPortal } from "react-dom";
 import { useEstimatePackage } from "@/components/EstimatePackage";
 import { useSession } from "@/components/SessionProvider";
-import { readFcrPacket } from "@/lib/change-order-packet";
+import { formatScrMoney, readFcrPacket } from "@/lib/change-order-packet";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { deskPackageBreakdown, fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
 import {
@@ -23,7 +23,7 @@ import { onEstimateSheets } from "@/lib/sheet-events";
 import { readSubSheet } from "@/lib/subcontractor";
 
 function money(value: number) {
-  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return formatScrMoney(value);
 }
 
 function railStyle(pos: EstimateTotalRailPosition | null): CSSProperties | undefined {
@@ -253,7 +253,7 @@ export function EstimateTotalRail({ client = "", site = "" }: { client?: string;
           ) : null}
         </div>
       </div>
-      <p className="est-total-rail-grand hud-readout">{breakdown.total ? money(breakdown.total) : "—"}</p>
+      <p className="est-total-rail-grand hud-readout">{money(breakdown.total)}</p>
       {breakdown.lines.length ? (
         <ul>
           {breakdown.lines.map((line) => (

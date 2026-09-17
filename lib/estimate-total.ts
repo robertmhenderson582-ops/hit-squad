@@ -34,6 +34,14 @@ export function parseDeskDollars(value: string | number | undefined | null): num
   return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
+/** Change Orders / credits keep sign. parseDeskDollars still clamps other buckets to $0. */
+export function parseSignedDeskDollars(value: string | number | undefined | null): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (!value) return 0;
+  const n = Number(String(value).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function isP66Job(client = "", site = ""): boolean {
   const hay = `${client} ${site}`.toLowerCase();
   return /phillips\s*66|\bp66\b|ironwood/.test(hay);
@@ -95,10 +103,12 @@ export function estimateTotalBreakdown(input: {
     { id: "equipment", label: "Equipment", amount: parseDeskDollars(input.equipment) },
     { id: "subcontractor", label: "Subcontractor", amount: parseDeskDollars(input.subcontractor) },
     { id: "other", label: "Other Cost", amount: parseDeskDollars(input.otherCost) },
-    { id: "change-orders", label: "Change orders", amount: parseDeskDollars(input.changeOrders) },
     { id: "markup", label: commercialMarkupLabel(input.client, input.site), amount: parseDeskDollars(input.markup) },
   ]);
-  const extras = signedMoneyLines(input.extras ?? []);
+  const extras = signedMoneyLines([
+    { id: "change-orders", label: "Change orders", amount: parseSignedDeskDollars(input.changeOrders) },
+    ...(input.extras ?? []),
+  ]);
   const subtotal = [...base, ...extras].reduce((sum, line) => sum + line.amount, 0);
   const risk = Math.round(Math.max(0, subtotal) * buildersRiskPct(input.client, input.site) * 100) / 100;
   const lines = risk > 0 ? [...base, ...extras, { id: "risk", label: "Builder's risk", amount: risk }] : [...base, ...extras];

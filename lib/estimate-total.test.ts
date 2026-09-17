@@ -183,6 +183,16 @@ test("Subcontractor is its own rail line, not inside Labor or Other Cost", () =>
   assert.equal(next.total, 1600);
 });
 
+test("credit Change Orders stay on the rail and reduce the desk total", () => {
+  const next = estimateTotalBreakdown({
+    labor: 10000,
+    changeOrders: -17475,
+    hours: 120,
+  });
+  assert.equal(next.lines.find((line) => line.id === "change-orders")?.amount, -17475);
+  assert.equal(next.total, 10000 - 17475);
+});
+
 test("labor dollars stay hidden until a crew cost is actually on the row", () => {
   assert.equal(parseDeskDollars(""), 0);
   assert.equal(parseDeskDollars("$1,250.50"), 1250.5);
