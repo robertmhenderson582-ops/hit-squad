@@ -87,8 +87,11 @@ describe("Yates Analytics model", () => {
     assert.equal(yatesStcPpeRate("craft"), 0.0975);
     assert.equal(yatesStcPpeRate("staff"), 0.0575);
     assert.match(read("./estimate-analytics.ts"), /Phase 2 \(omitted\): Procurement\/Subcontracts/);
-    assert.equal(stcDefaultHint(), "Craft 9.75% · staff 5.75%");
-    assert.doesNotMatch(stcDefaultHint(), /Yates/i);
+    assert.match(stcDefaultHint(), /Predicted savings you expect to keep/);
+    assert.match(stcDefaultHint(), /Set when you have recovery data/);
+    assert.match(stcDefaultHint(), /Not % of base wage/);
+    assert.match(stcDefaultHint(), /Former book 35%/);
+    assert.doesNotMatch(stcDefaultHint(), /Yates|base wage burden|Default 35%|seeded 0|CCU1/i);
     assert.deepEqual(emptyJobMoney().analyticsStc, emptyAnalyticsStc());
     assert.deepEqual(emptyJobMeta().analyticsStc, emptyAnalyticsStc());
   });
@@ -132,7 +135,8 @@ describe("Yates Analytics model", () => {
     assert.equal(sheet.hasBaseWage, false);
     assert.equal(analyticsLine(sheet, "total-oh-base-wages")?.amount, null);
     assert.equal(analyticsLine(sheet, "total-profit-base-wages")?.amount, null);
-    assert.equal(analyticsLine(sheet, "stc-ppe")?.amount, null);
+    assert.equal(analyticsLine(sheet, "stc-ppe")?.amount, 0);
+    assert.equal((analyticsRollup(sheet, "rollup-stc-ppe")?.amount ?? 0) > 0, true);
     assert.equal(analyticsLine(sheet, "subtotal-profit")?.amount, null);
     assert.equal(analyticsLine(sheet, "margin")?.amount, null);
     assert.equal(analyticsLine(sheet, "profit-per-work-hour")?.amount, null);
@@ -200,7 +204,11 @@ describe("Yates Analytics model", () => {
     const burden = analyticsBurdenFromCrew(crew, WOOD.site, WOOD.client);
     assert.equal(analyticsLine(sheet, "total-oh-base-wages")?.amount, burden.oh);
     assert.equal(analyticsLine(sheet, "total-profit-base-wages")?.amount, burden.profit);
-    assert.equal(analyticsLine(sheet, "stc-ppe")?.amount, Math.round(burden.stcPpe * ANALYTICS_TOOL_PROFIT_SHARE * 100) / 100);
+    assert.equal(analyticsLine(sheet, "stc-ppe")?.amount, 0);
+    assert.equal(
+      analyticsRollup(sheet, "rollup-stc-ppe")?.amount,
+      Math.round(burden.hours * WR_EAST_LOCKED_STC_PER_HOUR * 100) / 100,
+    );
     assert.equal(analyticsLine(sheet, "oh")?.amount, Math.round(burden.oh * ANALYTICS_OH_PROFIT_SHARE * 100) / 100);
     assert.equal(analyticsLine(sheet, "labor")?.amount, burden.profit);
     const subtotal = analyticsLine(sheet, "subtotal-profit")?.amount;
@@ -241,80 +249,67 @@ describe("Yates Analytics model", () => {
     assert.equal((analyticsLine(sheet, "total-hours")?.amount ?? 0) > 0, true);
     assert.equal((analyticsLine(sheet, "total-oh-base-wages")?.amount ?? 0) > 0, true);
     assert.equal((analyticsLine(sheet, "total-profit-base-wages")?.amount ?? 0) > 0, true);
-    assert.equal((analyticsLine(sheet, "stc-ppe")?.amount ?? 0) > 0, true);
+    assert.equal(analyticsLine(sheet, "stc-ppe")?.amount, 0);
+    assert.equal((analyticsRollup(sheet, "rollup-stc-ppe")?.amount ?? 0) > 0, true);
     assert.equal((analyticsLine(sheet, "subtotal-profit")?.amount ?? 0) > 0, true);
     assert.equal((analyticsLine(sheet, "margin")?.amount ?? 0) > 0, true);
     assert.equal((analyticsLine(sheet, "profit-per-work-hour")?.amount ?? 0) > 0, true);
     assert.equal(estimateTabIdsForSite(BOILER17_SITE, BOILER17_CLIENT).includes("analytics"), true);
   });
 
-  it("overrides one STC & PPE % from pack jobMeta — dollars = hours × baseSt × %", () => {
+  it("sizes STC & PPE budget from locked $/hr and applies predicted savings %", () => {
     const crew = { direct: [{ position: "Boilermaker Journeyman", ranges: [WEEK] }] };
     const book = deriveEstimateAnalytics({ crew, ...WOOD });
-    const bookBurden = analyticsBurdenFromCrew(crew, WOOD.site, WOOD.client);
-    const wage = lookupCompWageRow("Boilermaker Journeyman", WOOD.site);
-    assert.ok(wage?.baseSt);
-    const hours = bookBurden.baseWageHours;
-    const base = hours * wage.baseSt;
-    assert.equal(analyticsRollup(book, "rollup-stc-ppe")?.amount, Math.round(base * yatesStcPpeRate("craft") * 100) / 100);
+    const hours = book.bridge.hours;
+    const budget = Math.round(hours * WR_EAST_LOCKED_STC_PER_HOUR * 100) / 100;
+    assert.equal(analyticsRollup(book, "rollup-stc-ppe")?.amount, budget);
+    assert.equal(analyticsLine(book, "stc-ppe")?.amount, 0);
+    assert.equal(sheetSavingsDoesNotResizeBudget(book, budget), true);
 
-    const override = { stcPpePct: 7 };
-    const sheet = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: { analyticsStc: override } });
-    const burden = analyticsBurdenFromCrew(crew, WOOD.site, WOOD.client, [], {}, override);
-    assert.equal(burden.stcPpe, Math.round(base * 0.07 * 100) / 100);
-    assert.equal(analyticsRollup(sheet, "rollup-stc-ppe")?.amount, burden.stcPpe);
-    assert.equal(analyticsLine(sheet, "stc-ppe")?.amount, Math.round(burden.stcPpe * ANALYTICS_TOOL_PROFIT_SHARE * 100) / 100);
-    assert.equal(sheet.rollups.length, 1);
-    assert.equal(burden.stcPpe !== bookBurden.stcPpe, true);
-    assert.equal(burden.oh, bookBurden.oh);
-    assert.equal(burden.profit, bookBurden.profit);
-    assert.equal(analyticsLine(sheet, "total-oh-base-wages")?.amount, bookBurden.oh);
-  });
+    const ten = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: { analyticsStc: { stcPpeSavingsPct: 10 } } });
+    assert.equal(analyticsRollup(ten, "rollup-stc-ppe")?.amount, budget);
+    assert.equal(analyticsLine(ten, "stc-ppe")?.amount, Math.round(budget * 0.1 * 100) / 100);
+    assert.equal((analyticsLine(ten, "stc-ppe")?.amount ?? 0) > (analyticsLine(book, "stc-ppe")?.amount ?? 0), true);
 
-  it("cleared override hydrates back to combined craft/staff STC & PPE", () => {
-    const row = { position: "Lead Site 01", laborClassOverride: "Merit" as const, ranges: [WEEK] };
-    const staffBook = analyticsBurdenFromCrew({ staff: [row] }, WOOD.site, WOOD.client);
-    const staffCleared = analyticsBurdenFromCrew({ staff: [row] }, WOOD.site, WOOD.client, [], {}, {
-      stcPpePct: null,
-    });
-    assert.deepEqual(staffCleared, staffBook);
-    const staffOverride = analyticsBurdenFromCrew({ staff: [row] }, WOOD.site, WOOD.client, [], {}, {
-      stcPpePct: 9.75,
-    });
-    assert.equal(staffOverride.stcPpe > staffBook.stcPpe, true);
+    const thirtyFive = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: { analyticsStc: { stcPpeSavingsPct: 35 } } });
+    assert.equal(analyticsRollup(thirtyFive, "rollup-stc-ppe")?.amount, budget);
+    assert.equal(analyticsLine(thirtyFive, "stc-ppe")?.amount, Math.round(budget * ANALYTICS_TOOL_PROFIT_SHARE * 100) / 100);
+
+    const zero = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: { analyticsStc: { stcPpeSavingsPct: 0 } } });
+    assert.equal(analyticsRollup(zero, "rollup-stc-ppe")?.amount, budget);
+    assert.equal(analyticsLine(zero, "stc-ppe")?.amount, 0);
     assert.equal(analyticsBurdenRates("staff").stcPpe, yatesStcPpeRate("staff"));
-    assert.equal(analyticsBurdenRates("direct", { stcPpePct: 4 }).stcPpe, 0.04);
-    assert.equal(analyticsBurdenRates("staff", { stcPpePct: 4 }).stcPpe, 0.04);
+    assert.equal(analyticsBurdenRates("direct").oh, YATES_ANALYTICS_BURDEN.craft.oh);
   });
 
-  it("persists one STC & PPE % and migrates old tool / con / ppe overrides by summing", () => {
-    const stored = {
-      analyticsStc: { toolPct: 5, consumablesPct: 0, ppePct: 2.75 },
-      laborContingencyPct: 3,
-    };
+  it("leaves old burden % blank and persists Owner savings", () => {
+    assert.deepEqual(hydrateAnalyticsStc({}), { stcPpeSavingsPct: null });
+    assert.deepEqual(hydrateAnalyticsStc({ stcPpePct: 8 }), { stcPpeSavingsPct: null });
+    assert.deepEqual(hydrateAnalyticsStc({ toolPct: 5, consumablesPct: 0, ppePct: 2.75 }), { stcPpeSavingsPct: null });
+    assert.deepEqual(hydrateAnalyticsStc({ stcPpeSavingsPct: 10 }), { stcPpeSavingsPct: 10 });
+    assert.deepEqual(hydrateAnalyticsStc({ stcPpeSavingsPct: 0 }), { stcPpeSavingsPct: 0 });
+    assert.deepEqual(hydrateJobMoney({}).analyticsStc, emptyAnalyticsStc());
+
+    const stored = { analyticsStc: { stcPpeSavingsPct: 10 }, laborContingencyPct: 3 };
     const meta = hydrateJobMeta(stored);
-    assert.equal(meta.analyticsStc.stcPpePct, 7.75);
+    assert.equal(meta.analyticsStc.stcPpeSavingsPct, 10);
     const again = hydrateJobMeta(JSON.parse(JSON.stringify(meta)) as Record<string, unknown>);
     assert.deepEqual(again.analyticsStc, meta.analyticsStc);
-    assert.deepEqual(hydrateJobMoney(JSON.parse(JSON.stringify(meta))).analyticsStc, meta.analyticsStc);
-    assert.deepEqual(hydrateAnalyticsStc({ stcPpePct: 8 }), { stcPpePct: 8 });
-    assert.deepEqual(hydrateAnalyticsStc({ stcPpePct: 0 }), { stcPpePct: 0 });
-    assert.deepEqual(hydrateAnalyticsStc({ toolPct: "", consumablesPct: "nope", ppePct: -1 }), {
-      stcPpePct: 0,
-    });
-    assert.deepEqual(hydrateJobMoney({}).analyticsStc, emptyAnalyticsStc());
 
     const crew = { direct: [{ position: "Boilermaker Journeyman", ranges: [WEEK] }] };
     const live = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: meta });
     const hydrated = deriveEstimateAnalytics({ crew, ...WOOD, jobMeta: again });
     assert.deepEqual(hydrated.rollups, live.rollups);
-    const book = deriveEstimateAnalytics({ crew, ...WOOD });
-    assert.equal(
-      (analyticsRollup(live, "rollup-stc-ppe")?.amount ?? 0) < (analyticsRollup(book, "rollup-stc-ppe")?.amount ?? 0),
-      true,
-    );
+    const def = deriveEstimateAnalytics({ crew, ...WOOD });
+    assert.equal(analyticsRollup(live, "rollup-stc-ppe")?.amount, analyticsRollup(def, "rollup-stc-ppe")?.amount);
+    assert.equal(analyticsLine(def, "stc-ppe")?.amount, 0);
+    assert.equal((analyticsLine(live, "stc-ppe")?.amount ?? 0) > (analyticsLine(def, "stc-ppe")?.amount ?? 0), true);
   });
 });
+
+function sheetSavingsDoesNotResizeBudget(sheet: ReturnType<typeof deriveEstimateAnalytics>, budget: number) {
+  return analyticsRollup(sheet, "rollup-stc-ppe")?.amount === budget;
+}
 
 describe("Analytics COMP / MSA bridge", () => {
   const crew = { direct: [{ position: "Boilermaker Journeyman", ranges: [WEEK] }] };
@@ -355,7 +350,7 @@ describe("Analytics COMP / MSA bridge", () => {
     assert.equal(analyticsRollup(locked, "rollup-stc-ppe")?.amount, budgets.stc);
     assert.equal(locked.rollups.length, 1);
     assert.equal(budgets.stc, Math.round(hours * WR_EAST_LOCKED_STC_PER_HOUR * 100) / 100);
-    assert.equal(analyticsLine(locked, "stc-ppe")?.amount, Math.round(budgets.stc * ANALYTICS_TOOL_PROFIT_SHARE * 100) / 100);
+    assert.equal(analyticsLine(locked, "stc-ppe")?.amount, 0);
     assert.equal(locked.bridge.lockedStcPerHour, 3.6);
     assert.equal(locked.bridge.lockedStcBudget, budgets.stc);
     assert.equal(locked.bridge.afterLockedProfit != null, true);
@@ -389,7 +384,7 @@ describe("Analytics COMP / MSA bridge", () => {
     assert.equal(nb, 175);
     assert.equal(pd, 50);
     assert.equal(jvic, 65);
-    assert.equal((stc ?? 0) !== 0, true);
+    assert.equal(stc, 0);
     assert.equal(sheet.bridge.bridgedProfit != null, true);
     assert.equal((sheet.bridge.bookProfit ?? 0) > (sheet.bridge.bridgedProfit ?? 0), true);
     assert.equal(sheet.bridge.bridgedMargin != null && sheet.bridge.bookMargin != null, true);
@@ -470,10 +465,15 @@ describe("Analytics tab wiring", () => {
     assert.match(desk, /ANALYTICS_STC_LINES/);
     assert.match(desk, /ANALYTICS_STC_PPE_LABEL/);
     assert.match(desk, /stcDefaultHint/);
-    assert.match(desk, /stcPpePct|setStcPct/);
+    assert.match(desk, /stcPpeSavingsPct|setStcSavingsPct/);
+    assert.match(desk, /Predicted savings/);
+    assert.match(desk, /placeholder="set…"/);
+    assert.match(desk, /set when you have recovery data|stcDefaultHint/);
+    assert.doesNotMatch(desk, /ANALYTICS_STC_PPE_SAVINGS_DEFAULT|seeded 0|CCU1/);
     assert.match(desk, /stcPpePerHour/);
     assert.match(desk, /\$3\.60\/hr/);
     assert.doesNotMatch(desk, /Yates|yates/);
+    assert.doesNotMatch(desk, /STC & PPE from hours × base wage/);
     assert.doesNotMatch(desk, /0\.50 \/ 1\.25 \/ 1\.85/);
     assert.doesNotMatch(desk, /9\s*→\s*5|9%→5%|Turnip import|tariff/i);
     assert.match(desk, /paper-field/);

@@ -6,6 +6,7 @@ import { readFcrPacket } from "@/lib/change-order-packet";
 import {
   ANALYTICS_STC_LINES,
   ANALYTICS_STC_PPE_LABEL,
+  ANALYTICS_STC_SAVINGS_HINT,
   deriveEstimateAnalytics,
   stcDefaultHint,
   type AnalyticsKind,
@@ -23,6 +24,7 @@ import {
   hydrateAnalyticsBridge,
   hydrateAnalyticsStc,
   hydrateAnalyticsStcPct,
+  stcPpeSavingsPctPoints,
   type AnalyticsBridgeMeta,
   type AnalyticsLockedAdders,
   type AnalyticsMode,
@@ -150,10 +152,10 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
     });
   }
 
-  function setStcPct(raw: string) {
+  function setStcSavingsPct(raw: string) {
     pack.setJobMeta((current) => ({
       ...current,
-      analyticsStc: { ...emptyAnalyticsStc(), stcPpePct: hydrateAnalyticsStcPct(raw) },
+      analyticsStc: { ...emptyAnalyticsStc(), stcPpeSavingsPct: hydrateAnalyticsStcPct(raw) },
     }));
   }
 
@@ -181,11 +183,11 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
   return (
     <div className="mt-4 space-y-5">
       <fieldset className="flex flex-wrap gap-3" data-analytics-mode-toggle>
-        <legend className="sr-only">Analytics burden mode</legend>
+        <legend className="sr-only">Analytics OH / profit mode</legend>
         {(
           [
-            { id: "pct" as const, title: "% of base wage", note: "STC & PPE from hours × base wage × one combined %." },
-            { id: "locked" as const, title: "Locked $/hr COMP adders", note: "Hours × editable $/hr. East WR STC & PPE default $3.60/hr." },
+            { id: "pct" as const, title: "Book OH / profit", note: "OH and labor profit from hours × base wage × book %. STC & PPE budget is always hours × $/hr." },
+            { id: "locked" as const, title: "Locked $/hr COMP adders", note: "Optional OH / profit $/hr. STC & PPE budget stays hours × $/hr. East WR default $3.60/hr." },
           ] satisfies Array<{ id: AnalyticsMode; title: string; note: string }>
         ).map((option) => {
           const selected = bridgeMeta.mode === option.id;
@@ -226,34 +228,17 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
               <tbody>
                 {sheet.lines.map((line) => {
                   const stc = stcRow(line.id);
-                  const override = stc ? hydrateAnalyticsStc(pack.jobMeta.analyticsStc).stcPpePct : null;
+                  const savings = stc ? hydrateAnalyticsStc(pack.jobMeta.analyticsStc) : null;
                   const lockedKey =
-                    line.id === "stc-ppe"
-                      ? "stcPpePerHour"
-                      : line.id === "oh" || line.id === "total-oh-base-wages"
-                        ? "ohPerHour"
-                        : line.id === "labor" || line.id === "total-profit-base-wages"
-                          ? "profitPerHour"
-                          : null;
+                    line.id === "oh" || line.id === "total-oh-base-wages"
+                      ? "ohPerHour"
+                      : line.id === "labor" || line.id === "total-profit-base-wages"
+                        ? "profitPerHour"
+                        : null;
                   return (
                     <tr key={line.id} className="border-t border-[#d5e0de]" data-analytics-line={line.id}>
                       <td className="px-2 py-2">
-                        {stc && !lockedMode ? (
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <span>{line.label}</span>
-                            <DraftNumber
-                              label={`${line.label} percent`}
-                              value={override}
-                              suffix="%"
-                              placeholder="Default"
-                              testId="stc-ppe"
-                              onCommit={setStcPct}
-                            />
-                            <span className="text-[11px] text-[#5b6f73]">
-                              {override == null ? stcDefaultHint() : "Override applies to craft and staff"}
-                            </span>
-                          </div>
-                        ) : stc && lockedMode ? (
+                        {stc ? (
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                             <span>{line.label}</span>
                             <DraftNumber
@@ -263,6 +248,15 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
                               testId="stc-ppe-locked"
                               onCommit={(raw) => setLocked("stcPpePerHour", raw)}
                             />
+                            <DraftNumber
+                              label="Predicted savings percent"
+                              value={savings ? stcPpeSavingsPctPoints(savings) : null}
+                              suffix="%"
+                              placeholder="set…"
+                              testId="stc-ppe-savings"
+                              onCommit={setStcSavingsPct}
+                            />
+                            <span className="text-[11px] text-[#5b6f73]">{stcDefaultHint()}</span>
                           </div>
                         ) : lockedMode && lockedKey && (lockedKey === "ohPerHour" || lockedKey === "profitPerHour") ? (
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -293,7 +287,8 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
 
         <section className="plant-card px-5 py-5" aria-label={ANALYTICS_STC_PPE_LABEL}>
           <h3 className="text-lg font-semibold text-[#163038]">{ANALYTICS_STC_PPE_LABEL}</h3>
-          <p className="mt-1 text-xs text-[#5b6f73]">Overall budget. Coding is not split.</p>
+          <p className="mt-1 text-xs text-[#5b6f73]">Overall budget from hours × $/hr. Coding is not split.</p>
+          <p className="mt-1 text-xs text-[#5b6f73]">{ANALYTICS_STC_SAVINGS_HINT}</p>
           <ul className="mt-4 space-y-3">
             {sheet.rollups.map((row) => (
               <li key={row.id} className="flex items-baseline justify-between gap-3">
@@ -333,7 +328,7 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
             </div>
           </div>
           <div>
-            <p className="text-sm font-semibold text-[#163038]">STC book vs COMP embed</p>
+            <p className="text-sm font-semibold text-[#163038]">STC & PPE budget vs COMP embed</p>
             <p className="mt-1 text-xs text-[#5b6f73]">{sheet.bridge.drags.find((row) => row.id === "stc-embed")?.note}</p>
             <p className="mt-2 text-right font-semibold text-[#163038]">
               {formatAmount("money", sheet.bridge.drags.find((row) => row.id === "stc-embed")?.amount ?? 0)}
