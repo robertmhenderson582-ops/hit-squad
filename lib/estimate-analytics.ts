@@ -12,6 +12,9 @@
  * Phase 2 (omitted): Procurement/Subcontracts stack, freight / tax markup,
  * Updated Total Profit / Procurement contribution. Live Turnip / CPPR actuals
  * and tariff % are also out — do not invent lock OH/Profit $ or a 9→5 formula.
+ *
+ * Empty drag-stack fields hydrate to WR_EAST_BRIDGE_SEED (Coker / CCU1 dig).
+ * Owner 0 or any number wins. extraPd and OH/Profit lock $ stay empty.
  */
 import { equipmentTotals, thirdPartyCost, type EquipmentSheet } from "./equipment-sheet.ts";
 import { deskPackageBreakdown, type DeskPackageInput } from "./estimate-desk-total.ts";
@@ -19,6 +22,7 @@ import {
   emptyAnalyticsBridge,
   emptyAnalyticsStc,
   hydrateJobMoney,
+  WR_EAST_BRIDGE_SEED,
   WR_EAST_LOCKED_STC,
   type AnalyticsBridgeMeta,
   type AnalyticsLockedAdders,
@@ -56,7 +60,7 @@ export const YATES_ANALYTICS_BURDEN = {
 export type AnalyticsBurdenLane = keyof typeof YATES_ANALYTICS_BURDEN;
 
 export type { AnalyticsBridgeMeta, AnalyticsLockedAdders, AnalyticsMode, AnalyticsStcOverride };
-export { WR_EAST_LOCKED_STC };
+export { WR_EAST_BRIDGE_SEED, WR_EAST_LOCKED_STC };
 
 export const WR_EAST_LOCKED_STC_PER_HOUR =
   WR_EAST_LOCKED_STC.toolPerHour + WR_EAST_LOCKED_STC.consumablesPerHour + WR_EAST_LOCKED_STC.ppePerHour;

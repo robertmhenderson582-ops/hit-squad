@@ -17,18 +17,20 @@ import {
   deriveEstimateAnalytics,
   lockedAdderBudgets,
   stcDefaultHint,
+  WR_EAST_BRIDGE_SEED,
   WR_EAST_LOCKED_STC,
   WR_EAST_LOCKED_STC_PER_HOUR,
 } from "./estimate-analytics.ts";
 import { deskPackageBreakdown, deskPackageTotal, type DeskPackageInput } from "./estimate-desk-total.ts";
 import { boiler17B1FilledSnapshot } from "./wood-river-b1.ts";
 import { BOILER17_CLIENT, BOILER17_SITE } from "./boiler-17.ts";
-import { estimateMarkupDollars } from "./estimate-total.ts";
+import { commercialMarkupRate, estimateMarkupDollars } from "./estimate-total.ts";
 import { largeToolAmount, thirdPartyCost } from "./equipment-sheet.ts";
 import { computeRangeHours } from "./hours-clock.ts";
 import { estimateTabIdsForSite } from "./estimate-tabs.ts";
 import { lookupCompWageRow } from "./wage-lookup.ts";
 import {
+  ANALYTICS_BRIDGE_SEED_NOTE,
   emptyAnalyticsBridge,
   emptyAnalyticsStc,
   emptyJobMoney,
@@ -406,6 +408,42 @@ describe("Analytics COMP / MSA bridge", () => {
     assert.equal(sheet.bridge.bridgedMargin != null && sheet.bridge.bookMargin != null, true);
     assert.equal((sheet.bridge.bridgedMargin ?? 0) < (sheet.bridge.bookMargin ?? 0), true);
   });
+
+  it("applies Wood River dig seeds when bridge fields are empty and Owner numbers win", () => {
+    const seeded = deriveEstimateAnalytics({ crew, ...WOOD });
+    const hours = seeded.bridge.hours;
+    const nbSeed =
+      WR_EAST_BRIDGE_SEED.nb.onboarding +
+      WR_EAST_BRIDGE_SEED.nb.drugDisa +
+      WR_EAST_BRIDGE_SEED.nb.safety920 +
+      WR_EAST_BRIDGE_SEED.nb.siteClasses;
+    const jvicSeedDrag = Math.round(WR_EAST_BRIDGE_SEED.jvic * commercialMarkupRate(WOOD.client, WOOD.site) * 100) / 100;
+    assert.equal(seeded.bridge.drags.find((row) => row.id === "erosion")?.amount, Math.round(hours * 0.05 * 100) / 100);
+    assert.equal(seeded.bridge.drags.find((row) => row.id === "nb")?.amount, Math.round(nbSeed * 100) / 100);
+    assert.equal(seeded.bridge.drags.find((row) => row.id === "pd")?.amount, 0);
+    assert.equal(seeded.bridge.drags.find((row) => row.id === "jvic")?.amount, jvicSeedDrag);
+    assert.equal(hydrateAnalyticsBridge({}).locked.ohPerHour, null);
+    assert.equal(hydrateAnalyticsBridge({}).locked.profitPerHour, null);
+    assert.equal(hydrateAnalyticsBridge({}).extraPd, null);
+
+    const owner = deriveEstimateAnalytics({
+      crew,
+      ...WOOD,
+      jobMeta: {
+        analyticsBridge: {
+          ...emptyAnalyticsBridge(),
+          erosionPerHour: 0,
+          jvic: 0,
+          extraPd: 25,
+          nb: { onboarding: 0, drugDisa: 0, safety920: 0, siteClasses: 0 },
+        },
+      },
+    });
+    assert.equal(owner.bridge.drags.find((row) => row.id === "erosion")?.amount, 0);
+    assert.equal(owner.bridge.drags.find((row) => row.id === "nb")?.amount, 0);
+    assert.equal(owner.bridge.drags.find((row) => row.id === "jvic")?.amount, 0);
+    assert.equal(owner.bridge.drags.find((row) => row.id === "pd")?.amount, 25);
+  });
 });
 
 describe("Analytics tab wiring", () => {
@@ -433,10 +471,14 @@ describe("Analytics tab wiring", () => {
     assert.match(desk, /setJobMeta/);
     assert.match(desk, /analyticsStc/);
     assert.match(desk, /analyticsBridge/);
+    assert.match(desk, /hydrateAnalyticsBridge/);
+    assert.match(desk, /ANALYTICS_BRIDGE_SEED_NOTE/);
+    assert.match(desk, /data-analytics-seed-note/);
     assert.match(desk, /data-analytics-mode-toggle/);
     assert.match(desk, /data-analytics-drag/);
     assert.match(desk, /data-analytics-bridge/);
     assert.match(desk, /Locked \$\/hr COMP adders/);
+    assert.match(ANALYTICS_BRIDGE_SEED_NOTE, /dig seeds from recent actuals/);
     assert.match(desk, /DraftNumber/);
     assert.match(desk, /ANALYTICS_STC_LINES/);
     assert.match(desk, /stcDefaultHint/);

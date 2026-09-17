@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  ANALYTICS_BRIDGE_SEED_NOTE,
+  WR_EAST_BRIDGE_SEED,
   cbaIncreaseDollars,
   emptyJobMoney,
+  hydrateAnalyticsBridge,
   hydrateJobMoney,
   isCbaCraftLane,
   laborContingencyDollars,
@@ -50,6 +53,59 @@ describe("M.O.R.E. fund", () => {
     assert.equal(emptyJobMoney().analyticsBridge.locked.toolPerHour, 0.5);
     assert.equal(emptyJobMoney().analyticsBridge.locked.ohPerHour, null);
     assert.equal(hydrateJobMoney({}).analyticsBridge.locked.profitPerHour, null);
+    assert.equal(emptyJobMoney().analyticsBridge.erosionPerHour, WR_EAST_BRIDGE_SEED.erosionPerHour);
+    assert.equal(emptyJobMoney().analyticsBridge.jvic, WR_EAST_BRIDGE_SEED.jvic);
+    assert.equal(emptyJobMoney().analyticsBridge.extraPd, null);
+    assert.deepEqual(emptyJobMoney().analyticsBridge.nb, { ...WR_EAST_BRIDGE_SEED.nb });
+  });
+});
+
+describe("Wood River Analytics bridge seeds", () => {
+  it("hydrates empty / null drag fields to WR dig seeds and keeps Owner overrides", () => {
+    const seeded = hydrateAnalyticsBridge({});
+    assert.equal(seeded.erosionPerHour, 0.05);
+    assert.equal(seeded.nb.onboarding, 126383.43);
+    assert.equal(seeded.nb.drugDisa, 66478.51);
+    assert.equal(seeded.nb.safety920, 48176.58);
+    assert.equal(seeded.nb.siteClasses, 16718);
+    assert.equal(seeded.extraPd, null);
+    assert.equal(seeded.jvic, 944335.07);
+    assert.equal(seeded.locked.toolPerHour, 0.5);
+    assert.equal(seeded.locked.consumablesPerHour, 1.25);
+    assert.equal(seeded.locked.ppePerHour, 1.85);
+    assert.equal(seeded.locked.ohPerHour, null);
+    assert.equal(seeded.locked.profitPerHour, null);
+    assert.equal(seeded.erosionPctOfBw, null);
+    assert.match(ANALYTICS_BRIDGE_SEED_NOTE, /Wood River dig seeds/);
+    assert.equal(ANALYTICS_BRIDGE_SEED_NOTE.includes("9→5"), false);
+
+    const fromNulls = hydrateAnalyticsBridge({
+      erosionPerHour: null,
+      jvic: "",
+      extraPd: null,
+      nb: { onboarding: null, drugDisa: "", safety920: null, siteClasses: null },
+      locked: { ohPerHour: null, profitPerHour: "" },
+    });
+    assert.deepEqual(fromNulls.nb, { ...WR_EAST_BRIDGE_SEED.nb });
+    assert.equal(fromNulls.erosionPerHour, WR_EAST_BRIDGE_SEED.erosionPerHour);
+    assert.equal(fromNulls.jvic, WR_EAST_BRIDGE_SEED.jvic);
+    assert.equal(fromNulls.extraPd, null);
+    assert.equal(fromNulls.locked.ohPerHour, null);
+    assert.equal(fromNulls.locked.profitPerHour, null);
+
+    const owner = hydrateAnalyticsBridge({
+      erosionPerHour: 0,
+      jvic: 0,
+      extraPd: 100,
+      nb: { onboarding: 0, drugDisa: 12, safety920: 0, siteClasses: 99 },
+    });
+    assert.equal(owner.erosionPerHour, 0);
+    assert.equal(owner.jvic, 0);
+    assert.equal(owner.extraPd, 100);
+    assert.equal(owner.nb.onboarding, 0);
+    assert.equal(owner.nb.drugDisa, 12);
+    assert.equal(owner.nb.safety920, 0);
+    assert.equal(owner.nb.siteClasses, 99);
   });
 });
 

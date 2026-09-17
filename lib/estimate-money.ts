@@ -25,6 +25,28 @@ export const WR_EAST_LOCKED_STC = {
   ppePerHour: 1.85,
 } as const;
 
+/**
+ * Wood River dig seeds for empty bridge fields (Coker 108441 / cat-vs-coker).
+ * CMRAVE fringe-only erosion $/hr; Coker WO 502 onboarding; Coker T3 501 Drug/DISA
+ * (billable coding in source); 920 NB safety/small tools; CCU1 Teksolv analog for
+ * site classes; Coker JV Tensioning actual. extraPd stays empty. Do not invent
+ * OH/Profit lock $ or a 9→5 formula.
+ */
+export const WR_EAST_BRIDGE_SEED = {
+  erosionPerHour: 0.05,
+  nb: {
+    onboarding: 126383.43,
+    drugDisa: 66478.51,
+    safety920: 48176.58,
+    siteClasses: 16718,
+  },
+  extraPd: null as number | null,
+  jvic: 944335.07,
+} as const;
+
+export const ANALYTICS_BRIDGE_SEED_NOTE =
+  "Blank fields use Wood River dig seeds from recent actuals (Coker / CCU1). Editable. Not a lock.";
+
 export type AnalyticsLockedAdders = {
   toolPerHour: number;
   consumablesPerHour: number;
@@ -118,7 +140,12 @@ export function emptyAnalyticsStc(): AnalyticsStcOverride {
 }
 
 export function emptyAnalyticsNb(): AnalyticsNbDrag {
-  return { onboarding: null, drugDisa: null, safety920: null, siteClasses: null };
+  return {
+    onboarding: WR_EAST_BRIDGE_SEED.nb.onboarding,
+    drugDisa: WR_EAST_BRIDGE_SEED.nb.drugDisa,
+    safety920: WR_EAST_BRIDGE_SEED.nb.safety920,
+    siteClasses: WR_EAST_BRIDGE_SEED.nb.siteClasses,
+  };
 }
 
 export function emptyAnalyticsLocked(): AnalyticsLockedAdders {
@@ -135,11 +162,11 @@ export function emptyAnalyticsBridge(): AnalyticsBridgeMeta {
   return {
     mode: "pct",
     locked: emptyAnalyticsLocked(),
-    erosionPerHour: null,
+    erosionPerHour: WR_EAST_BRIDGE_SEED.erosionPerHour,
     erosionPctOfBw: null,
     nb: emptyAnalyticsNb(),
-    extraPd: null,
-    jvic: null,
+    extraPd: WR_EAST_BRIDGE_SEED.extraPd,
+    jvic: WR_EAST_BRIDGE_SEED.jvic,
   };
 }
 
@@ -202,11 +229,15 @@ export function hydrateAnalyticsLocked(raw: unknown): AnalyticsLockedAdders {
 export function hydrateAnalyticsNb(raw: unknown): AnalyticsNbDrag {
   const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   return {
-    onboarding: hydrateAnalyticsStcPct(row.onboarding),
-    drugDisa: hydrateAnalyticsStcPct(row.drugDisa),
-    safety920: hydrateAnalyticsStcPct(row.safety920),
-    siteClasses: hydrateAnalyticsStcPct(row.siteClasses),
+    onboarding: coalesceBridgeSeed(hydrateAnalyticsStcPct(row.onboarding), WR_EAST_BRIDGE_SEED.nb.onboarding),
+    drugDisa: coalesceBridgeSeed(hydrateAnalyticsStcPct(row.drugDisa), WR_EAST_BRIDGE_SEED.nb.drugDisa),
+    safety920: coalesceBridgeSeed(hydrateAnalyticsStcPct(row.safety920), WR_EAST_BRIDGE_SEED.nb.safety920),
+    siteClasses: coalesceBridgeSeed(hydrateAnalyticsStcPct(row.siteClasses), WR_EAST_BRIDGE_SEED.nb.siteClasses),
   };
+}
+
+function coalesceBridgeSeed(value: number | null, seed: number | null): number | null {
+  return value != null ? value : seed;
 }
 
 export function hydrateAnalyticsBridge(raw: unknown): AnalyticsBridgeMeta {
@@ -214,11 +245,11 @@ export function hydrateAnalyticsBridge(raw: unknown): AnalyticsBridgeMeta {
   return {
     mode: row.mode === "locked" ? "locked" : "pct",
     locked: hydrateAnalyticsLocked(row.locked),
-    erosionPerHour: hydrateAnalyticsStcPct(row.erosionPerHour),
+    erosionPerHour: coalesceBridgeSeed(hydrateAnalyticsStcPct(row.erosionPerHour), WR_EAST_BRIDGE_SEED.erosionPerHour),
     erosionPctOfBw: hydrateAnalyticsStcPct(row.erosionPctOfBw),
     nb: hydrateAnalyticsNb(row.nb),
     extraPd: hydrateAnalyticsStcPct(row.extraPd),
-    jvic: hydrateAnalyticsStcPct(row.jvic),
+    jvic: coalesceBridgeSeed(hydrateAnalyticsStcPct(row.jvic), WR_EAST_BRIDGE_SEED.jvic),
   };
 }
 

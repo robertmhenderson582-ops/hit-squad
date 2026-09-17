@@ -15,10 +15,11 @@ import { fcrChangeOrderTotal } from "@/lib/estimate-desk-total";
 import { readEquipmentSheet } from "@/lib/equipment-sheet";
 import { computeRowHours, sumSplits } from "@/lib/hours-clock";
 import {
-  emptyAnalyticsBridge,
+  ANALYTICS_BRIDGE_SEED_NOTE,
   emptyAnalyticsLocked,
   emptyAnalyticsNb,
   emptyAnalyticsStc,
+  hydrateAnalyticsBridge,
   hydrateAnalyticsStcPct,
   type AnalyticsBridgeMeta,
   type AnalyticsLockedAdders,
@@ -98,12 +99,7 @@ function DraftNumber({
 export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: string; site?: string }) {
   const pack = useEstimatePackage();
   const [tick, setTick] = useState(0);
-  const bridgeMeta: AnalyticsBridgeMeta = {
-    ...emptyAnalyticsBridge(),
-    ...pack.jobMeta.analyticsBridge,
-    locked: { ...emptyAnalyticsLocked(), ...pack.jobMeta.analyticsBridge?.locked },
-    nb: { ...emptyAnalyticsNb(), ...pack.jobMeta.analyticsBridge?.nb },
-  };
+  const bridgeMeta = hydrateAnalyticsBridge(pack.jobMeta.analyticsBridge);
 
   useEffect(() => onEstimateSheets(() => setTick((n) => n + 1)), []);
 
@@ -147,7 +143,7 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
 
   function patchBridge(next: Partial<AnalyticsBridgeMeta> | ((current: AnalyticsBridgeMeta) => AnalyticsBridgeMeta)) {
     pack.setJobMeta((current) => {
-      const base = { ...emptyAnalyticsBridge(), ...current.analyticsBridge };
+      const base = hydrateAnalyticsBridge(current.analyticsBridge);
       const patched = typeof next === "function" ? next(base) : { ...base, ...next };
       return { ...current, analyticsBridge: patched };
     });
@@ -324,6 +320,9 @@ export function EstimateAnalyticsDesk({ client = "", site = "" }: { client?: str
       <section className="plant-card px-5 py-5" aria-label="Drag stack" data-analytics-drag>
         <h2 className="text-2xl font-semibold text-[#163038]">Drag stack</h2>
         <p className="mt-1 text-sm text-[#5b6f73]">Estimate-side assumptions. Not Turnip actuals.</p>
+        <p className="mt-1 text-xs text-[#5b6f73]" data-analytics-seed-note>
+          {ANALYTICS_BRIDGE_SEED_NOTE}
+        </p>
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <div>
             <p className="text-sm font-semibold text-[#163038]">Wage / fringe erosion vs fixed OH + profit</p>
