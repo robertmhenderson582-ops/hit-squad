@@ -541,3 +541,24 @@ test("composite ST/OT come from the plant book, not invented rates", () => {
   const empty = scrCompositeRates("", WOOD, P66);
   assert.deepEqual(empty, { st: 0, ot: 0, dt: 0 });
 });
+
+test("plant-book composite dollars round to cents on the claim", () => {
+  const line = blankCraftLine({
+    craft: "Pipefitter Journeyman",
+    stHours: 10,
+    otHours: 2,
+    stRate: 99.33,
+    otRate: 138.69,
+  });
+  assert.equal(craftLineLabor(line), 1270.68);
+  const row = {
+    ...blankLogRow(),
+    craftLines: [line],
+    claimLines: [blankClaimLine({ type: "Material", description: "Alloy rod", amount: 375 })],
+  };
+  const scope = logRowScope(row);
+  assert.equal(scope.labor, 1270.68);
+  assert.equal(scope.claims, 375);
+  assert.equal(scope.cost, 1645.68);
+  assert.equal(String(scope.cost).includes("999"), false);
+});

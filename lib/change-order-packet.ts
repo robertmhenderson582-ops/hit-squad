@@ -258,6 +258,10 @@ export function claimTypeNeedsHours(type = "") {
   return /subcontractor|\blabor\b/i.test(type.trim());
 }
 
+function cents(value: number) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
 export function craftLineHours(line: Pick<ScrCraftLine, "stHours" | "otHours" | "dtHours">) {
   return Math.max(0, Number(line.stHours) || 0) + Math.max(0, Number(line.otHours) || 0) + Math.max(0, Number(line.dtHours) || 0);
 }
@@ -266,21 +270,21 @@ export function craftLineLabor(line: Pick<ScrCraftLine, "stHours" | "otHours" | 
   const st = Math.max(0, Number(line.stHours) || 0) * Math.max(0, Number(line.stRate) || 0);
   const ot = Math.max(0, Number(line.otHours) || 0) * Math.max(0, Number(line.otRate) || 0);
   const dt = Math.max(0, Number(line.dtHours) || 0) * Math.max(0, Number(line.dtRate) || 0);
-  return st + ot + dt;
+  return cents(st + ot + dt);
 }
 
 export function logRowScope(row: Pick<FcrLogRow, "scopeHours" | "scopeCost" | "craftLines" | "claimLines">) {
   const craftLines = Array.isArray(row.craftLines) ? row.craftLines : [];
   const claimLines = Array.isArray(row.claimLines) ? row.claimLines : [];
-  const labor = craftLines.reduce((sum, line) => sum + craftLineLabor(line), 0);
-  const claims = claimLines.reduce((sum, line) => sum + Math.max(0, Number(line.amount) || 0), 0);
+  const labor = cents(craftLines.reduce((sum, line) => sum + craftLineLabor(line), 0));
+  const claims = cents(claimLines.reduce((sum, line) => sum + Math.max(0, Number(line.amount) || 0), 0));
   const hours =
     craftLines.reduce((sum, line) => sum + craftLineHours(line), 0) +
     claimLines.reduce((sum, line) => sum + Math.max(0, Number(line.hours) || 0), 0);
   const hasLines = craftLines.length > 0 || claimLines.length > 0;
   return {
     hours: hasLines ? hours : Math.max(0, Number(row.scopeHours) || 0),
-    cost: hasLines ? labor + claims : Math.max(0, Number(row.scopeCost) || 0),
+    cost: hasLines ? cents(labor + claims) : cents(row.scopeCost),
     labor,
     claims,
     hasLines,
@@ -549,10 +553,10 @@ export function fcrSummary(packet: FcrPacket, laborRate = 0, pdRate = 0) {
   const craftHours = hours(craft);
   const scopes = (packet.log ?? []).map((row) => logRowScope(row));
   const scrHours = scopes.reduce((sum, row) => sum + row.hours, 0);
-  const scrLabor = scopes.reduce((sum, row) => sum + row.labor, 0);
-  const scrClaims = scopes.reduce((sum, row) => sum + row.claims, 0);
-  const scrTyped = scopes.reduce((sum, row) => sum + (row.hasLines ? 0 : row.cost), 0);
-  const scrCost = scrLabor + scrClaims + scrTyped;
+  const scrLabor = cents(scopes.reduce((sum, row) => sum + row.labor, 0));
+  const scrClaims = cents(scopes.reduce((sum, row) => sum + row.claims, 0));
+  const scrTyped = cents(scopes.reduce((sum, row) => sum + (row.hasLines ? 0 : row.cost), 0));
+  const scrCost = cents(scrLabor + scrClaims + scrTyped);
   return {
     staffHours,
     craftHours,
