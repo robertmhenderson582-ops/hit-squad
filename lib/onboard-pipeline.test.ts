@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import {
+  CONTROL_CENTER_CHROME,
+  CONTROL_CENTER_TITLE,
   DEFAULT_ONBOARD_PLANT,
   JOHN_BATTUELLO_EMAIL,
   JOHN_BATTUELLO_NAME,
@@ -65,6 +67,8 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(isOnboardPhase1Local("553"), true);
     assert.equal(isOnboardPhase1Local("363"), false);
     assert.equal(TOM_FRIED_EMAIL, "friedt@madisonltd.com");
+    assert.equal(CONTROL_CENTER_TITLE, "Hit Squad Control Center");
+    assert.equal(CONTROL_CENTER_CHROME, "HIT SQUAD CONTROL CENTER");
     assert.equal(JOHN_BATTUELLO_EMAIL, "jbattuello@ualocal553.org");
     assert.deepEqual(hallContactForLocal("553"), {
       name: JOHN_BATTUELLO_NAME,
@@ -229,6 +233,11 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     const drive = source("./drive-data.ts");
     assert.match(page, /OnboardDesk/);
     assert.match(page, /DeskChrome/);
+    assert.match(page, /CONTROL_CENTER_CHROME/);
+    assert.match(desk, /CONTROL_CENTER_TITLE/);
+    assert.match(home, /CONTROL_CENTER_TITLE/);
+    assert.match(hse, /Hit Squad Control Center/);
+    assert.match(source("../app/onboard/layout.tsx"), /CONTROL_CENTER_TITLE/);
     const users = source("./users.ts");
     const roles = source("./job-roles.ts");
     assert.match(desk, /Hall register/);

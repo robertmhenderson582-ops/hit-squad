@@ -154,7 +154,7 @@ export function HseDesk() {
       <p className="plant-card px-4 py-3 text-sm">
         Hall register and the live HSE stage board are on{" "}
         <Link href="/onboard" className="underline">
-          Onboard
+          Hit Squad Control Center
         </Link>
         . Tom Fried (friedt@madisonltd.com) owns drug screen, background, TechSolve, and the P66
         badge notify.

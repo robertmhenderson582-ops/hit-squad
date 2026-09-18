@@ -1,6 +1,6 @@
 import { companyDeskLogoSrc } from "./companies.ts";
 import { canSeeRateVaultDoor } from "./desk-role.ts";
-import { canSeeOnboardDoor } from "./onboard-pipeline.ts";
+import { CONTROL_CENTER_TITLE, canSeeOnboardDoor } from "./onboard-pipeline.ts";
 import { isRateVaultOnlyViewer } from "./rate-vault.ts";
 
 export const HOME_WORDMARK = "HIT SQUAD";
@@ -50,7 +50,7 @@ export const RATE_VAULT_DOOR = {
 export const ONBOARD_DOOR = {
   href: "/onboard",
   key: "onboard",
-  label: "Onboard",
+  label: CONTROL_CENTER_TITLE,
   note: "Hall register · HSE stage board",
 } as const;
 

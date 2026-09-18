@@ -9,6 +9,7 @@ import {
   ONBOARD_CLASSIFICATIONS,
   ONBOARD_STAGES,
   selectableOnboardLocals,
+  CONTROL_CENTER_TITLE,
   TOM_FRIED_NAME,
   defaultCraftForLocal,
   hallContactForLocal,
@@ -187,7 +188,7 @@ export function OnboardDesk() {
     <div className="field-desk onboard-desk mt-4 space-y-5">
       <section className="plant-card px-5 py-5">
         <p className="text-sm uppercase tracking-[0.18em] text-[#5b6f73]">Hall ↔ HSE</p>
-        <h2 className="mt-1 text-2xl font-semibold text-[#163038]">Onboarding board</h2>
+        <h2 className="mt-1 text-2xl font-semibold text-[#163038]">{CONTROL_CENTER_TITLE}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">
           Phase 1 is Local 553 only. Tom Fried (friedt@madisonltd.com) owns drug screen, background,
           TechSolve, and the P66 badge notify. P66 runs actual badging. Every stage change is

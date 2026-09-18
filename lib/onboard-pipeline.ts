@@ -1,5 +1,9 @@
 import { hasBuildDesk, hasWorkingDesk, isHseVaultSeat, isProjectManager } from "./desk-role.ts";
 
+/** User-facing Phase 1 board / module title. Product family stays Hit Squad. */
+export const CONTROL_CENTER_TITLE = "Hit Squad Control Center";
+export const CONTROL_CENTER_CHROME = "HIT SQUAD CONTROL CENTER";
+
 /** Locals. Phase 1 activates 553 only; 363 stays structurally ready. */
 export const ONBOARD_LOCALS = [
   { id: "553", label: "Local 553", craft: "Pipefitter", short: "PF553", union: "UA", phase1: true },
