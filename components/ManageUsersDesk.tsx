@@ -430,8 +430,9 @@ export function ManageUsersDesk() {
           Robert Henderson stays the only owner. Novus is a hidden operator seat. Users never see
           this list, Novus, or each other. Add a user below, or issue a one-time password for a
           seat already on this desk. Don’t send. They change it on first sign-in. No invite email.
-          Hall Local 553 is the Phase 1 hall seat: John Battuello Jr. ·
-          jbattuello@ualocal553.org. Local 363 is not activated yet. Do not invent a 363 contact.
+          Hall Local 553 is the sole Phase 1 hall seat: John Battuello Jr. ·
+          jbattuello@ualocal553.org. Local 363 stays parked (not in this Role list, not seeded).
+          Do not invent a 363 contact.
         </p>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">

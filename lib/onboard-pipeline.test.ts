@@ -58,6 +58,10 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
       selectableOnboardLocals().map((row) => row.id),
       ["553"],
     );
+    assert.equal(
+      ONBOARD_SEED_SEATS.some((row) => /363|boilermaker/i.test(`${row.jobTitle} ${row.email} ${row.name}`)),
+      false,
+    );
     assert.equal(isOnboardPhase1Local("553"), true);
     assert.equal(isOnboardPhase1Local("363"), false);
     assert.equal(TOM_FRIED_EMAIL, "friedt@madisonltd.com");
@@ -226,6 +230,7 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.match(page, /OnboardDesk/);
     assert.match(page, /DeskChrome/);
     const users = source("./users.ts");
+    const roles = source("./job-roles.ts");
     assert.match(desk, /Hall register/);
     assert.match(desk, /P66 badge notify/);
     assert.match(desk, /Tom Fried/);
@@ -245,6 +250,8 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.doesNotMatch(drive, /DRIVE_ONBOARD_PEOPLE_FILE_ID = "1/);
     assert.match(users, /ONBOARD_SEED_SEATS/);
     assert.doesNotMatch(users, /madisonltd\.com/);
+    assert.match(roles, /PARKED_HALL_JOB_ROLES/);
+    assert.match(roles, /Hall Local 363/);
     assert.doesNotMatch(source("./tester-seats.ts"), /friedt@|jbattuello@|tfried@/);
   });
 });

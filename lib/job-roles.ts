@@ -5,13 +5,15 @@
  * Change Orders, STC order) live on privilege / PM gates — not this list.
  */
 
+/** Parked for a later hall. Not a Phase 1 Role option and not a seeded seat. */
+export const PARKED_HALL_JOB_ROLES = ["Hall Local 363"] as const;
+
 export const SEED_JOB_ROLES = [
   "President",
   "Division Manager",
   "HSE Manager",
   "HSE Dispatcher",
   "Hall Local 553",
-  "Hall Local 363",
   "Quality Manager",
   "Accounting Manager",
   "Office Manager",

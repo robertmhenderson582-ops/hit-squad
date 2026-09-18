@@ -9,6 +9,7 @@ import {
   changeOnboardStage,
   createOnboardPerson,
   isOnboardLocalId,
+  isOnboardPhase1Local,
   isOnboardStageId,
   nextOnboardStage,
   visibleOnboardPeople,
@@ -80,8 +81,8 @@ export async function POST(request: Request) {
       if (!canRegisterOnboard(user)) {
         return NextResponse.json({ error: "This seat cannot register people." }, { status: 403 });
       }
-      if (!isOnboardLocalId(body.localId)) {
-        return NextResponse.json({ error: "Pick Local 553." }, { status: 400 });
+      if (!isOnboardLocalId(body.localId) || !isOnboardPhase1Local(body.localId)) {
+        return NextResponse.json({ error: "Phase 1 is Local 553 only." }, { status: 400 });
       }
       const created = createOnboardPerson({
         name: typeof body.name === "string" ? body.name : "",

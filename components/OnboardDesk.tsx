@@ -52,6 +52,7 @@ export function OnboardDesk() {
   const owner = useOwnerDesk();
   const actor = lens ?? user;
   const lockedLocal = hallLocalForSeat(actor);
+  const registerLocals = selectableOnboardLocals();
 
   const [people, setPeople] = useState<OnboardPerson[]>([]);
   const [canRegister, setCanRegister] = useState(true);
@@ -220,10 +221,10 @@ export function OnboardDesk() {
               <select
                 className="paper-field w-full"
                 value={localId}
-                disabled={Boolean(lockedLocal)}
+                disabled={Boolean(lockedLocal) || registerLocals.length <= 1}
                 onChange={(event) => changeLocal(event.target.value as OnboardLocalId)}
               >
-                {selectableOnboardLocals().map((local) => (
+                {registerLocals.map((local) => (
                   <option key={local.id} value={local.id}>
                     {local.label} · {local.short} · {local.craft}
                   </option>

@@ -10,6 +10,7 @@ import {
   parseJobRoleLabel,
   parseSeatJobTitles,
   resolveJobRole,
+  PARKED_HALL_JOB_ROLES,
   SEED_JOB_ROLES,
   systemSeatRoleLabel,
   isProjectManagerTitle,
@@ -25,7 +26,6 @@ describe("job roles phase 1", () => {
         "HSE Manager",
         "HSE Dispatcher",
         "Hall Local 553",
-        "Hall Local 363",
         "Quality Manager",
         "Accounting Manager",
         "Office Manager",
@@ -47,6 +47,9 @@ describe("job roles phase 1", () => {
     assert.equal("error" in parseJobRoleLabel("x"), true);
     const custom = parseJobRoleCatalog(["Night Clerk", "president", "  Quality Manager  ", ""]);
     assert.deepEqual(custom, ["Night Clerk"]);
+    assert.deepEqual([...PARKED_HALL_JOB_ROLES], ["Hall Local 363"]);
+    assert.equal((SEED_JOB_ROLES as readonly string[]).includes("Hall Local 363"), false);
+    assert.equal(mergeJobRoleCatalog().includes("Hall Local 363"), false);
     assert.equal(mergeJobRoleCatalog(custom).includes("Night Clerk"), true);
     assert.equal(mergeJobRoleCatalog(custom)[0], "President");
     assert.equal(loginRoleForJobTitle("President"), "president");
