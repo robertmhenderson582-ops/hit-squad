@@ -245,6 +245,12 @@ export type OnboardPerson = {
   requestId: string;
   legalName: string;
   dateOfBirth: string;
+  /**
+   * RESTRICTED PII. Digits-only 9-digit Social Security number when known.
+   * Empty when the record only has a legacy last-4. Never log this value.
+   */
+  ssn: string;
+  /** Derived last four of `ssn`, or a preserved last-4 from records that never stored a full SSN. */
   ssnLast4: string;
   identityVerifiedBy: string;
   identityVerifiedAt: string;
@@ -265,6 +271,8 @@ export type OnboardPerson = {
 export type OnboardPersonPatch = {
   legalName?: string;
   dateOfBirth?: string;
+  /** RESTRICTED PII. Full 9-digit SSN preferred; last-4 still accepted for legacy saves. */
+  ssn?: string;
   ssnLast4?: string;
   identityVerified?: boolean;
   p66CorporateTraining?: TrainingStatus;
@@ -590,15 +598,63 @@ export function parseTrainingStatus(value: unknown): TrainingStatus {
   return isTrainingStatus(value) ? value : "not-started";
 }
 
+/** RESTRICTED PII. Digits-only 9-digit SSN. Empty when a full SSN is not present. */
+export function parseSsn(value: unknown): string {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (digits.length >= 9) return digits.slice(-9);
+  return "";
+}
+
 export function parseSsnLast4(value: unknown): string {
   const digits = String(value ?? "").replace(/\D/g, "");
   if (digits.length >= 4) return digits.slice(-4);
   return "";
 }
 
-export function maskSsnLast4(ssnLast4: string): string {
-  const last4 = parseSsnLast4(ssnLast4);
+/** Mask any stored SSN or last-4 as •••-••-1234. Safe for unauthorized-adjacent UI. */
+export function maskSsnLast4(ssnOrLast4: string): string {
+  const last4 = parseSsnLast4(ssnOrLast4);
   return last4 ? `•••-••-${last4}` : "";
+}
+
+/** Format digits for the focused SSN input. Last-4 stays ungrouped; 5+ uses XXX-XX-XXXX. */
+export function formatSsnInput(value: unknown): string {
+  const digits = String(value ?? "").replace(/\D/g, "").slice(0, 9);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 5) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+}
+
+/**
+ * Read stored SSN fields. Full 9-digit `ssn` wins; otherwise keep a legacy last-4
+ * on `ssnLast4` without wiping it.
+ */
+export function parseStoredOnboardSsn(row: { ssn?: unknown; ssnLast4?: unknown }): {
+  ssn: string;
+  ssnLast4: string;
+} {
+  const ssn = parseSsn(row.ssn);
+  if (ssn) return { ssn, ssnLast4: ssn.slice(-4) };
+  return { ssn: "", ssnLast4: parseSsnLast4(row.ssnLast4 || row.ssn) };
+}
+
+function applyOnboardSsnPatch(
+  current: Pick<OnboardPerson, "ssn" | "ssnLast4">,
+  raw: unknown,
+): { ssn: string; ssnLast4: string } | { error: string } {
+  const digits = String(raw ?? "").replace(/\D/g, "");
+  if (!digits) return { ssn: "", ssnLast4: "" };
+  if (digits.length >= 9) {
+    const ssn = digits.slice(-9);
+    return { ssn, ssnLast4: ssn.slice(-4) };
+  }
+  if (digits.length === 4) {
+    if (current.ssn.length === 9 && current.ssn.endsWith(digits)) {
+      return { ssn: current.ssn, ssnLast4: digits };
+    }
+    return { ssn: "", ssnLast4: digits };
+  }
+  return { error: "Enter a full 9-digit Social Security number." };
 }
 
 export function displayOnboardName(person: Pick<OnboardPerson, "name" | "legalName" | "identityVerifiedAt">) {
@@ -611,6 +667,7 @@ function emptyIdentity(): Pick<
   OnboardPerson,
   | "legalName"
   | "dateOfBirth"
+  | "ssn"
   | "ssnLast4"
   | "identityVerifiedBy"
   | "identityVerifiedAt"
@@ -629,6 +686,7 @@ function emptyIdentity(): Pick<
   return {
     legalName: "",
     dateOfBirth: "",
+    ssn: "",
     ssnLast4: "",
     identityVerifiedBy: "",
     identityVerifiedAt: "",
@@ -652,6 +710,7 @@ export function redactOnboardPerson(person: OnboardPerson, user?: OnboardViewer 
     ...person,
     legalName: "",
     dateOfBirth: "",
+    ssn: "",
     ssnLast4: "",
     identityVerifiedBy: person.identityVerifiedAt ? "restricted" : "",
   };
@@ -854,7 +913,7 @@ export function parseOnboardPerson(raw: unknown, halls?: readonly OnboardHall[] 
     requestId: typeof row.requestId === "string" ? row.requestId.trim() : "",
     legalName: typeof row.legalName === "string" ? row.legalName.trim() : identity.legalName,
     dateOfBirth: typeof row.dateOfBirth === "string" ? row.dateOfBirth.trim() : identity.dateOfBirth,
-    ssnLast4: parseSsnLast4(row.ssnLast4),
+    ...parseStoredOnboardSsn(row),
     identityVerifiedBy: typeof row.identityVerifiedBy === "string" ? row.identityVerifiedBy.trim() : "",
     identityVerifiedAt: typeof row.identityVerifiedAt === "string" ? row.identityVerifiedAt.trim() : "",
     p66CorporateTraining: parseTrainingStatus(row.p66CorporateTraining),
@@ -1032,12 +1091,19 @@ export function updateOnboardPerson(
   if (tracker && pii) {
     if (patch.legalName != null) next.legalName = patch.legalName.trim();
     if (patch.dateOfBirth != null) next.dateOfBirth = patch.dateOfBirth.trim();
-    if (patch.ssnLast4 != null) next.ssnLast4 = parseSsnLast4(patch.ssnLast4);
+    if (patch.ssn != null || patch.ssnLast4 != null) {
+      const applied = applyOnboardSsnPatch(next, patch.ssn ?? patch.ssnLast4);
+      if ("error" in applied) return applied;
+      const changed = applied.ssn !== next.ssn || applied.ssnLast4 !== next.ssnLast4;
+      next.ssn = applied.ssn;
+      next.ssnLast4 = applied.ssnLast4;
+      if (changed) notes.push("SSN updated");
+    }
     if (patch.identityVerified === true) {
       const stamp = actorStamp(actor);
       next.identityVerifiedBy = stamp.actorName;
       next.identityVerifiedAt = at;
-      notes.push("Legal name / DOB / SSN last 4 verified");
+      notes.push("Legal name / DOB / SSN verified");
     }
     if (patch.p66CorporateTraining && isTrainingStatus(patch.p66CorporateTraining)) {
       next.p66CorporateTraining = patch.p66CorporateTraining;
@@ -1054,6 +1120,7 @@ export function updateOnboardPerson(
   } else if (
     patch.legalName != null ||
     patch.dateOfBirth != null ||
+    patch.ssn != null ||
     patch.ssnLast4 != null ||
     patch.identityVerified ||
     patch.p66CorporateTraining ||
