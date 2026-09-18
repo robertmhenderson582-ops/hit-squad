@@ -1,4 +1,5 @@
 import { hasBuildDesk, hasWorkingDesk, isHseVaultSeat, isProjectManager } from "./desk-role.ts";
+import { isRateVaultOnlyViewer } from "./rate-vault.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
 
 /** User-facing Phase 1 board / module title. Product family stays Hit Squad. */
@@ -375,33 +376,18 @@ export function isOutreachSeat(user?: OnboardViewer | null): boolean {
 
 export function canSeeOnboardBoard(user?: OnboardViewer | null): boolean {
   if (!user) return false;
-  return (
-    hasWorkingDesk(user) ||
-    isHseVaultSeat(user) ||
-    isProjectManager(user) ||
-    isHallSeat(user) ||
-    isBennyCampSeat(user) ||
-    isTomFriedSeat(user) ||
-    isOutreachSeat(user) ||
-    isDebbieTrackerSeat(user)
-  );
+  if (isRateVaultOnlyViewer(user)) return false;
+  return Boolean((user.email || "").trim() || (user.id || "").trim() || (user.name || "").trim());
 }
 
-/** Home dock tile — HSE, halls, Tom, Benny, outreach, and the build desk. Testers keep the four public doors. */
+/** Dispatch is a public Home tile. Rate-Vault-only James stays off this door. */
 export function canSeeOnboardDoor(
   session?: OnboardViewer | null,
   lens?: OnboardViewer | null,
 ): boolean {
   const viewer = lens ?? session;
-  return (
-    hasBuildDesk(viewer) ||
-    isHseVaultSeat(viewer) ||
-    isHallSeat(viewer) ||
-    isBennyCampSeat(viewer) ||
-    isTomFriedSeat(viewer) ||
-    isOutreachSeat(viewer) ||
-    isDebbieTrackerSeat(viewer)
-  );
+  if (!viewer || isRateVaultOnlyViewer(viewer)) return false;
+  return Boolean((viewer.email || "").trim() || (viewer.id || "").trim() || (viewer.name || "").trim() || viewer.role);
 }
 
 export function canRegisterOnboard(user?: OnboardViewer | null, settings?: OnboardSettings | null): boolean {

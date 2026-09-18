@@ -458,7 +458,7 @@ textarea:focus {
 .home-dock {
   position: relative;
   z-index: 4;
-  width: min(49.5rem, calc(100% - 1.5rem));
+  width: min(61.5rem, calc(100% - 1.5rem));
   margin: 0 auto;
 }
 

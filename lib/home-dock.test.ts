@@ -26,9 +26,9 @@ function source(rel: string) {
 }
 
 describe("Home four doors", () => {
-  it("keeps Jobs · Quality · HSE · Accounting on Home and buries job tools", () => {
-    assert.deepEqual(homeDockLabels(), ["Jobs", "Quality", "HSE", "Accounting"]);
-    assert.deepEqual(homeDockHrefs(), ["/jobs", "/quality", "/hse", "/accounting"]);
+  it("keeps Jobs · Quality · HSE · Accounting · Dispatch on Home and buries job tools", () => {
+    assert.deepEqual(homeDockLabels(), ["Jobs", "Quality", "HSE", "Accounting", "Dispatch"]);
+    assert.deepEqual(homeDockHrefs(), ["/jobs", "/quality", "/hse", "/accounting", "/onboard"]);
     assert.equal(HOME_DOCK_TILES.find((tile) => tile.key === "jobs")?.href, COMPANY_DESK_DOOR.href);
     assert.equal(HOME_DOCK_TILES.find((tile) => tile.key === "jobs")?.note, "Company → Division → Client → Site → Job");
     assert.match(HOME_DOCK_TILES.find((tile) => tile.key === "jobs")?.note ?? "", /Division/);
@@ -38,7 +38,7 @@ describe("Home four doors", () => {
     assert.equal(homeDockOmitsJobScopedPeers(), true);
     assert.deepEqual(
       homeDockTiles(false).map((tile) => tile.key),
-      ["jobs", "quality", "hse", "accounting"],
+      ["jobs", "quality", "hse", "accounting", "dispatch"],
     );
     assert.equal(homeDockLabels().includes("Quality / HSE"), false);
     assert.equal(homeDockLabels().filter((label) => label === "Quality").length, 1);
@@ -121,7 +121,7 @@ describe("Home four doors", () => {
     assert.match(chrome, /home-owner-card/);
     assert.match(css, /\.home-dock \{/);
     assert.match(css, /\.home-dock \{\n  position: relative;/);
-    assert.match(css, /\.home-dock \{\n  position: relative;[\s\S]{0,120}width: min\(49\.5rem/);
+    assert.match(css, /\.home-dock \{\n  position: relative;[\s\S]{0,120}width: min\(61\.5rem/);
     assert.match(css, /\.desk-home-root \.desk-hero \{[\s\S]{0,220}justify-content: flex-start;/);
     assert.match(css, /\.desk-home-root \.desk-hero \{[\s\S]{0,240}gap: 0\.85rem;/);
     assert.doesNotMatch(css, /\.home-dock \{[\s\S]{0,160}bottom: 0\.65rem;/);
@@ -160,23 +160,23 @@ describe("Home four doors", () => {
     const granted = { role: "president" as const, privileges: ["rate-vault"] };
     assert.deepEqual(
       homeDockTilesForViewer(nathan).map((tile) => tile.key),
-      ["jobs", "quality", "hse", "accounting"],
+      ["jobs", "quality", "hse", "accounting", "dispatch"],
     );
     assert.deepEqual(
       homeDockTilesForViewer(president).map((tile) => tile.key),
-      ["jobs", "quality", "hse", "accounting"],
+      ["jobs", "quality", "hse", "accounting", "dispatch"],
     );
     assert.deepEqual(
       homeDockTilesForViewer(owner, nathan).map((tile) => tile.key),
-      ["jobs", "quality", "hse", "accounting"],
+      ["jobs", "quality", "hse", "accounting", "dispatch"],
     );
     assert.deepEqual(
       homeDockTilesForViewer(owner, owner).map((tile) => tile.key),
-      ["jobs", "quality", "hse", "accounting", "onboard", "rate-vault"],
+      ["jobs", "quality", "hse", "accounting", "dispatch", "rate-vault"],
     );
     assert.deepEqual(
       homeDockTilesForViewer(granted).map((tile) => tile.key),
-      ["jobs", "quality", "hse", "accounting", "rate-vault"],
+      ["jobs", "quality", "hse", "accounting", "dispatch", "rate-vault"],
     );
     const james = { role: "tester" as const, email: "jhut26@gmail.com" };
     assert.deepEqual(

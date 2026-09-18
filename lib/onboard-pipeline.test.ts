@@ -158,7 +158,7 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(canSeeOnboardBoard(hall553), true);
     assert.equal(canSeeOnboardBoard(tom), true);
     assert.equal(canSeeOnboardBoard(debbie), true);
-    assert.equal(canSeeOnboardBoard(chance), false);
+    assert.equal(canSeeOnboardBoard(chance), true);
     assert.equal(canRegisterOnboard(hall553), false);
     assert.equal(canRegisterOnboard(hall553, hallSettings), true);
     assert.equal(canRegisterOnboard(benny), true);
@@ -180,7 +180,8 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(canSeeOnboardDoor(hall553), true);
     assert.equal(canSeeOnboardDoor(tom), true);
     assert.equal(canSeeOnboardDoor(nathan), true);
-    assert.equal(canSeeOnboardDoor(owner, chance), false);
+    assert.equal(canSeeOnboardDoor(owner, chance), true);
+    assert.equal(canSeeOnboardDoor({ email: "jhut26@gmail.com", role: "tester" }), false);
   });
 
   it("registers a person, advances with an append-only audit, and requires a block reason", () => {
@@ -361,7 +362,9 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.match(page, /DeskChrome/);
     assert.match(page, /CONTROL_CENTER_CHROME/);
     assert.match(desk, /CONTROL_CENTER_TITLE/);
-    assert.match(home, /CONTROL_CENTER_TITLE/);
+    assert.match(home, /label: "Dispatch"/);
+    assert.match(home, /key: "dispatch"/);
+    assert.match(home, /Hiring \+ HSE onboarding board/);
     assert.match(hse, /Hit Squad Control Center/);
     assert.match(source("../app/onboard/layout.tsx"), /CONTROL_CENTER_TITLE/);
     const users = source("./users.ts");
