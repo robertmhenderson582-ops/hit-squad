@@ -12,8 +12,8 @@ import {
   ONBOARD_CLASSIFICATIONS,
   ONBOARD_STAGES,
   selectableOnboardLocals,
+  BENNY_CAMP_NAME,
   CONTROL_CENTER_TITLE,
-  TOM_FRIED_NAME,
   defaultCraftForLocal,
   hallContactForLocal,
   hallLocalForSeat,
@@ -287,9 +287,9 @@ export function OnboardDesk() {
         <p className="text-sm uppercase tracking-[0.18em] text-[#5b6f73]">Hall ↔ HSE</p>
         <h2 className="mt-1 text-2xl font-semibold text-[#163038]">{CONTROL_CENTER_TITLE}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">
-          Phase 1 is Local 553 only. Tom Fried creates a manpower request first; John Battuello Jr.
-          responds with fill count and date; then the hall registers people onto that request. Tom
-          Fried (friedt@madisonltd.com) owns drug screen, background, TechSolve, and the P66 badge notify.
+          Phase 1 is Local 553 only. Benny Camp creates a manpower request first; John Battuello Jr.
+          responds with fill count and date; then the hall registers people onto that request. Benny
+          Camp (bccamp2@gmail.com) owns drug screen, background, TechSolve, and the P66 badge notify.
           P66 runs actual badging. Every create, respond, and stage change is timestamped.
           No email blast. Default plant is {DEFAULT_ONBOARD_PLANT.site} / {DEFAULT_ONBOARD_PLANT.client}.
           Other halls stay parked.
@@ -300,7 +300,7 @@ export function OnboardDesk() {
           </p>
         ) : null}
         <p className="mt-1 text-sm text-[#163038]">
-          HSE dispatcher: Tom Fried · friedt@madisonltd.com
+          HSE dispatcher (temp until Donnie): Benny Camp · bccamp2@gmail.com
         </p>
         {lockedLocal ? (
           <p className="mt-2 text-sm text-[#163038]">This hall seat sees Local {lockedLocal} only.</p>
@@ -379,7 +379,7 @@ export function OnboardDesk() {
         <section className="plant-card px-5 py-5">
           <h3 className="text-lg font-semibold text-[#163038]">Hall manpower inbox</h3>
           <p className="mt-1 text-sm text-[#5b6f73]">
-            Open requests from Tom / HSE. Respond with how many you can fill and when. Then register
+            Open requests from Benny / HSE. Respond with how many you can fill and when. Then register
             people onto that request.
           </p>
           <ul className="mt-4 space-y-3">
@@ -646,7 +646,7 @@ export function OnboardDesk() {
       </section>
 
       <p className="text-xs text-[#5b6f73]">
-        Stage owners on the four HSE columns are {TOM_FRIED_NAME}. This board is the onboarding
+        Stage owners on the four HSE columns are {BENNY_CAMP_NAME}. This board is the onboarding
         pipeline only — hall notify after award and craftsman call-outs stay later.
       </p>
     </div>

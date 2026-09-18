@@ -8,14 +8,16 @@ import {
   CONTROL_CENTER_CHROME,
   CONTROL_CENTER_TITLE,
   DEFAULT_ONBOARD_PLANT,
+  BATTUELLO_LAST_NAME,
+  BENNY_CAMP_EMAIL,
+  BENNY_CAMP_NAME,
   JOHN_BATTUELLO_EMAIL,
   JOHN_BATTUELLO_NAME,
+  JOHNNY_BATTUELLO_NAME,
   ONBOARD_LOCALS,
   ONBOARD_SEED_SEATS,
   ONBOARD_STAGES,
   TOM_FRIED_EMAIL,
-  TOM_FRIED_NAME,
-  TOM_FRIED_TITLE,
   canAdvanceOnboard,
   canCreateManpowerRequest,
   canRegisterOnboard,
@@ -27,6 +29,7 @@ import {
   createOnboardPerson,
   hallContactForLocal,
   hallLocalForSeat,
+  isBennyCampSeat,
   isHallSeat,
   isOnboardPhase1Local,
   isTomFriedSeat,
@@ -51,11 +54,13 @@ const wendell = { email: "wlanderno@yahoo.com", role: "tester" as const, name: "
 const nathan = { email: "nathanboyte@gmail.com", role: "tester" as const, name: "Nathan Boyte", jobTitle: "Project Manager" };
 const hall553 = { email: JOHN_BATTUELLO_EMAIL, role: "tester" as const, name: JOHN_BATTUELLO_NAME, jobTitle: "Hall Local 553" };
 const hall363 = { email: "hall363@example.com", role: "tester" as const, name: "BM 363 BA", jobTitle: "Hall Local 363" };
-const tom = { email: TOM_FRIED_EMAIL, role: "tester" as const, name: TOM_FRIED_NAME, jobTitle: TOM_FRIED_TITLE };
+const benny = { email: BENNY_CAMP_EMAIL, role: "tester" as const, name: BENNY_CAMP_NAME, jobTitle: "Site Safety Manager" };
+const tom = { email: TOM_FRIED_EMAIL, role: "tester" as const, name: "Tom Fried", jobTitle: "HSE Dispatcher" };
+const johnny = { email: JOHN_BATTUELLO_EMAIL, role: "tester" as const, name: JOHNNY_BATTUELLO_NAME, jobTitle: "Hall Local 553" };
 const chance = { email: "chancec318@yahoo.com", role: "tester" as const, name: "Chance", jobTitle: "Quality Manager" };
 
 describe("Hall ↔ HSE onboarding pipeline", () => {
-  it("locks day-one locals, Tom-owned HSE stages, and P66 notify (not badge issued)", () => {
+  it("locks day-one locals, Benny-owned HSE stages, and P66 notify (not badge issued)", () => {
     assert.deepEqual(
       ONBOARD_LOCALS.map((row) => `${row.id}:${row.short}:${row.phase1}`),
       ["553:PF553:true", "363:BM363:false"],
@@ -71,9 +76,14 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(isOnboardPhase1Local("553"), true);
     assert.equal(isOnboardPhase1Local("363"), false);
     assert.equal(TOM_FRIED_EMAIL, "friedt@madisonltd.com");
+    assert.equal(BENNY_CAMP_NAME, "Benny Camp");
+    assert.equal(BENNY_CAMP_EMAIL, "bccamp2@gmail.com");
     assert.equal(CONTROL_CENTER_TITLE, "Hit Squad Control Center");
     assert.equal(CONTROL_CENTER_CHROME, "HIT SQUAD CONTROL CENTER");
+    assert.equal(BATTUELLO_LAST_NAME, "Battuello");
     assert.equal(JOHN_BATTUELLO_EMAIL, "jbattuello@ualocal553.org");
+    assert.equal(JOHN_BATTUELLO_NAME, "John Battuello Jr.");
+    assert.equal(JOHNNY_BATTUELLO_NAME, "Johnny Battuello Jr.");
     assert.deepEqual(hallContactForLocal("553"), {
       name: JOHN_BATTUELLO_NAME,
       email: JOHN_BATTUELLO_EMAIL,
@@ -82,16 +92,16 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(hallContactForLocal("363"), null);
     assert.deepEqual(
       ONBOARD_SEED_SEATS.map((row) => `${row.name}:${row.email}`),
-      [`${JOHN_BATTUELLO_NAME}:${JOHN_BATTUELLO_EMAIL}`, `${TOM_FRIED_NAME}:${TOM_FRIED_EMAIL}`],
+      [`${JOHN_BATTUELLO_NAME}:${JOHN_BATTUELLO_EMAIL}`],
     );
     assert.deepEqual(
       ONBOARD_STAGES.map((row) => row.id),
       ["registered", "waiting-drug", "waiting-background", "techsolve", "notify-badge", "ready", "blocked"],
     );
-    assert.equal(onboardStageOwner("waiting-drug"), TOM_FRIED_NAME);
-    assert.equal(onboardStageOwner("waiting-background"), TOM_FRIED_NAME);
-    assert.equal(onboardStageOwner("techsolve"), TOM_FRIED_NAME);
-    assert.equal(onboardStageOwner("notify-badge"), TOM_FRIED_NAME);
+    assert.equal(onboardStageOwner("waiting-drug"), BENNY_CAMP_NAME);
+    assert.equal(onboardStageOwner("waiting-background"), BENNY_CAMP_NAME);
+    assert.equal(onboardStageOwner("techsolve"), BENNY_CAMP_NAME);
+    assert.equal(onboardStageOwner("notify-badge"), BENNY_CAMP_NAME);
     assert.match(ONBOARD_STAGES.find((row) => row.id === "notify-badge")?.label ?? "", /P66 badge notify/);
     assert.equal(/badge issued/i.test(ONBOARD_STAGES.find((row) => row.id === "notify-badge")?.label ?? ""), false);
     assert.equal(DEFAULT_ONBOARD_PLANT.site, "Wood River");
@@ -101,14 +111,17 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(nextOnboardStage("ready"), null);
   });
 
-  it("gates hall register to one local and keeps Tom/HSE/Owner on the full board", () => {
+  it("gates hall register to one local and keeps Benny/HSE/Owner on the full board", () => {
     assert.equal(hallLocalForSeat(hall553), "553");
+    assert.equal(hallLocalForSeat(johnny), "553");
     assert.equal(hallLocalForSeat(hall363), "363");
     assert.equal(isHallSeat(hall553), true);
     assert.equal(isHallSeat(wendell), false);
-    assert.equal(isTomFriedSeat(tom), true);
+    assert.equal(isTomFriedSeat(tom), false);
+    assert.equal(isBennyCampSeat(benny), true);
     assert.equal(canSeeOnboardBoard(owner), true);
     assert.equal(canSeeOnboardBoard(wendell), true);
+    assert.equal(canSeeOnboardBoard(benny), true);
     assert.equal(canSeeOnboardBoard(nathan), true);
     assert.equal(canSeeOnboardBoard(hall553), true);
     assert.equal(canSeeOnboardBoard(chance), false);
@@ -116,11 +129,13 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(canAdvanceOnboard(owner), true);
     assert.equal(canAdvanceOnboard(novus), true);
     assert.equal(canAdvanceOnboard(wendell), true);
-    assert.equal(canAdvanceOnboard(tom), true);
+    assert.equal(canAdvanceOnboard(benny), true);
+    assert.equal(canAdvanceOnboard(tom), false);
     assert.equal(canAdvanceOnboard(hall553), false);
     assert.equal(canAdvanceOnboard(nathan), false);
     assert.equal(canSeeOnboardDoor(owner, owner), true);
     assert.equal(canSeeOnboardDoor(wendell), true);
+    assert.equal(canSeeOnboardDoor(benny), true);
     assert.equal(canSeeOnboardDoor(hall553), true);
     assert.equal(canSeeOnboardDoor(nathan), false);
     assert.equal(canSeeOnboardDoor(owner, nathan), false);
@@ -151,7 +166,7 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     const advanced = changeOnboardStage(created, {
       toStage: "waiting-drug",
       note: "Sent to clinic",
-      actor: { ...owner, name: TOM_FRIED_NAME },
+      actor: { ...benny, name: BENNY_CAMP_NAME },
       at: "2026-09-18T16:00:00.000Z",
     });
     if ("error" in advanced) throw new Error(advanced.error);
@@ -159,7 +174,7 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(advanced.events.length, 2);
     assert.equal(advanced.events[1]?.fromStage, "registered");
     assert.equal(advanced.events[1]?.toStage, "waiting-drug");
-    assert.equal(advanced.events[1]?.actorName, TOM_FRIED_NAME);
+    assert.equal(advanced.events[1]?.actorName, BENNY_CAMP_NAME);
     assert.equal(advanced.events[1]?.note, "Sent to clinic");
     assert.equal(created.events.length, 1);
 
@@ -246,16 +261,21 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     const roles = source("./job-roles.ts");
     assert.match(desk, /Hall register/);
     assert.match(desk, /P66 badge notify/);
-    assert.match(desk, /Tom Fried/);
-    assert.match(desk, /friedt@madisonltd.com/);
+    assert.match(desk, /Benny Camp/);
+    assert.match(desk, /bccamp2@gmail.com/);
     assert.match(desk, /HSE dispatcher/);
-    assert.match(source("../components/HseDesk.tsx"), /friedt@madisonltd.com/);
-    assert.match(source("../components/ManageUsersDesk.tsx"), /friedt@madisonltd.com/);
+    assert.match(source("../components/HseDesk.tsx"), /bccamp2@gmail.com/);
+    assert.match(source("../components/ManageUsersDesk.tsx"), /bccamp2@gmail.com/);
     assert.match(desk, /John Battuello Jr/);
     assert.match(desk, /jbattuello@ualocal553.org/);
+    assert.doesNotMatch(desk, /Petruello|Butuello/);
+    assert.doesNotMatch(source("./onboard-pipeline.ts"), /Petruello|Butuello/);
     assert.match(desk, /Local 553 hall contact/);
     assert.match(desk, /Audit trail/);
+    assert.doesNotMatch(desk, /friedt@madisonltd.com/);
     assert.doesNotMatch(desk, /tfried@madisonltd.com/);
+    assert.doesNotMatch(source("../components/HseDesk.tsx"), /friedt@madisonltd.com/);
+    assert.doesNotMatch(source("../components/ManageUsersDesk.tsx"), /friedt@madisonltd.com/);
     assert.match(desk, /Manpower request/);
     assert.match(desk, /Hall manpower inbox/);
     assert.match(desk, /hiring package/);
@@ -277,17 +297,18 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.doesNotMatch(source("./tester-seats.ts"), /friedt@|jbattuello@|tfried@/);
   });
 
-  it("lets Tom create a Local 553 manpower request and John respond before register", () => {
-    assert.equal(canCreateManpowerRequest(tom), true);
+  it("lets Benny create a Local 553 manpower request and John respond before register", () => {
+    assert.equal(canCreateManpowerRequest(benny), true);
+    assert.equal(canCreateManpowerRequest(tom), false);
     assert.equal(canCreateManpowerRequest(hall553), false);
     assert.equal(canRespondManpowerRequest(hall553), true);
-    assert.equal(canRespondManpowerRequest(tom), false);
+    assert.equal(canRespondManpowerRequest(benny), false);
 
     const blockedLocal = createManpowerRequest({
       localId: "363",
       dateNeeded: "2026-09-22",
       headcount: 4,
-      actor: tom,
+      actor: benny,
     });
     assert.deepEqual(blockedLocal, { error: "Phase 1 is Local 553 only." });
 
@@ -297,7 +318,7 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
       headcount: 4,
       actor: hall553,
     });
-    assert.deepEqual(hallCreate, { error: "Manpower requests are created by Tom / HSE." });
+    assert.deepEqual(hallCreate, { error: "Manpower requests are created by Benny / HSE." });
 
     const created = createManpowerRequest({
       localId: "553",
@@ -307,7 +328,7 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
       classification: "Journeyman",
       site: "Wood River",
       job: "Cat 2",
-      actor: tom,
+      actor: benny,
       at: "2026-09-18T14:00:00.000Z",
       id: "mr-cat2",
     });
@@ -315,7 +336,7 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(created.status, "open");
     assert.equal(created.headcount, 4);
     assert.equal(created.events[0]?.action, "created");
-    assert.equal(created.events[0]?.actorEmail, TOM_FRIED_EMAIL);
+    assert.equal(created.events[0]?.actorEmail, BENNY_CAMP_EMAIL);
 
     const tomRespond = respondManpowerRequest(created, { fillCount: 3, fillDate: "2026-09-21", actor: tom });
     assert.deepEqual(tomRespond, { error: "Hall seats respond to manpower requests." });

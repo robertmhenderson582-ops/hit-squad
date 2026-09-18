@@ -156,7 +156,7 @@ export function HseDesk() {
         <Link href="/onboard" className="underline">
           Hit Squad Control Center
         </Link>
-        . Tom Fried (friedt@madisonltd.com) owns drug screen, background, TechSolve, and the P66
+        . Benny Camp (bccamp2@gmail.com) owns drug screen, background, TechSolve, and the P66
         badge notify.
       </p>
       <JobScopePicks

@@ -1,4 +1,5 @@
 import { hasBuildDesk, hasWorkingDesk, isHseVaultSeat, isProjectManager } from "./desk-role.ts";
+import { TESTER_SEATS } from "./tester-seats.ts";
 
 /** User-facing Phase 1 board / module title. Product family stays Hit Squad. */
 export const CONTROL_CENTER_TITLE = "Hit Squad Control Center";
@@ -14,22 +15,33 @@ export type OnboardLocalId = (typeof ONBOARD_LOCALS)[number]["id"];
 
 export const ONBOARD_STAGES = [
   { id: "registered", label: "Registered", owner: null, hallOwned: true },
-  { id: "waiting-drug", label: "Waiting on drug screen", owner: "Tom Fried", hallOwned: false },
-  { id: "waiting-background", label: "Waiting on background", owner: "Tom Fried", hallOwned: false },
-  { id: "techsolve", label: "Going to TechSolve", owner: "Tom Fried", hallOwned: false },
-  { id: "notify-badge", label: "P66 badge notify", owner: "Tom Fried", hallOwned: false },
+  { id: "waiting-drug", label: "Waiting on drug screen", owner: "Benny Camp", hallOwned: false },
+  { id: "waiting-background", label: "Waiting on background", owner: "Benny Camp", hallOwned: false },
+  { id: "techsolve", label: "Going to TechSolve", owner: "Benny Camp", hallOwned: false },
+  { id: "notify-badge", label: "P66 badge notify", owner: "Benny Camp", hallOwned: false },
   { id: "ready", label: "Ready / cleared for dispatch", owner: null, hallOwned: false },
   { id: "blocked", label: "Blocked / failed", owner: null, hallOwned: false },
 ] as const;
 
 export type OnboardStageId = (typeof ONBOARD_STAGES)[number]["id"];
 
+/** Parked / future Madison dispatcher until Donnie. Do not seed, email, or activate. */
 export const TOM_FRIED_NAME = "Tom Fried";
 export const TOM_FRIED_EMAIL = "friedt@madisonltd.com";
 export const TOM_FRIED_SEAT_ID = "tester-tom-fried";
 export const TOM_FRIED_TITLE = "HSE Dispatcher";
 
+const BENNY_CAMP_SEAT = TESTER_SEATS.find((row) => row.email === "bccamp2@gmail.com");
+
+/** Existing Hit Squad seat — temp Madison-side stage owner until Donnie. */
+export const BENNY_CAMP_NAME = BENNY_CAMP_SEAT?.name ?? "Benny Camp";
+export const BENNY_CAMP_EMAIL = BENNY_CAMP_SEAT?.email ?? "bccamp2@gmail.com";
+export const BENNY_CAMP_SEAT_ID = BENNY_CAMP_SEAT?.id ?? "tester-benny";
+
+/** Last name spelling lock: Battuello only. Do not use the common misspellings. */
+export const BATTUELLO_LAST_NAME = "Battuello";
 export const JOHN_BATTUELLO_NAME = "John Battuello Jr.";
+export const JOHNNY_BATTUELLO_NAME = "Johnny Battuello Jr.";
 export const JOHN_BATTUELLO_EMAIL = "jbattuello@ualocal553.org";
 export const JOHN_BATTUELLO_SEAT_ID = "tester-john-battuello";
 
@@ -50,13 +62,6 @@ export const ONBOARD_SEED_SEATS: readonly OnboardSeedSeat[] = [
     email: JOHN_BATTUELLO_EMAIL,
     name: JOHN_BATTUELLO_NAME,
     jobTitle: "Hall Local 553",
-    company: "madison",
-  },
-  {
-    id: TOM_FRIED_SEAT_ID,
-    email: TOM_FRIED_EMAIL,
-    name: TOM_FRIED_NAME,
-    jobTitle: TOM_FRIED_TITLE,
     company: "madison",
   },
 ];
@@ -226,6 +231,7 @@ export function hallLocalForSeat(user?: OnboardViewer | null): OnboardLocalId | 
   if (!user) return null;
   const email = (user.email || "").trim().toLowerCase();
   if (email === JOHN_BATTUELLO_EMAIL) return "553";
+  if (/johnny\s+battuello|john\s+battuello/i.test(user.name || "")) return "553";
   const hay = `${user.jobTitle || ""} ${user.name || ""} ${email}`;
   if (/\b553\b|pf553|pipefitter hall|hall local 553/i.test(hay)) return "553";
   if (/\b363\b|bm363|boilermaker hall|hall local 363/i.test(hay)) return "363";
@@ -236,12 +242,16 @@ export function isHallSeat(user?: OnboardViewer | null): boolean {
   return hallLocalForSeat(user) != null;
 }
 
-export function isTomFriedSeat(user?: OnboardViewer | null): boolean {
+/** Parked. Tom is not the Phase 1 dispatcher. */
+export function isTomFriedSeat(_user?: OnboardViewer | null): boolean {
+  return false;
+}
+
+export function isBennyCampSeat(user?: OnboardViewer | null): boolean {
   if (!user) return false;
-  if (user.id === TOM_FRIED_SEAT_ID) return true;
-  if ((user.email || "").trim().toLowerCase() === TOM_FRIED_EMAIL) return true;
-  const hay = `${user.name || ""} ${user.jobTitle || ""}`;
-  return /tom\s+fried/i.test(hay) || new RegExp(TOM_FRIED_TITLE, "i").test(hay);
+  if (user.id === BENNY_CAMP_SEAT_ID) return true;
+  if ((user.email || "").trim().toLowerCase() === BENNY_CAMP_EMAIL) return true;
+  return /benny\s+camp/i.test(`${user.name || ""} ${user.jobTitle || ""}`);
 }
 
 export function canSeeOnboardBoard(user?: OnboardViewer | null): boolean {
@@ -251,17 +261,17 @@ export function canSeeOnboardBoard(user?: OnboardViewer | null): boolean {
     isHseVaultSeat(user) ||
     isProjectManager(user) ||
     isHallSeat(user) ||
-    isTomFriedSeat(user)
+    isBennyCampSeat(user)
   );
 }
 
-/** Home dock tile — HSE, halls, Tom, and the build desk. Testers keep the four public doors. */
+/** Home dock tile — HSE, halls, Benny, and the build desk. Testers keep the four public doors. */
 export function canSeeOnboardDoor(
   session?: OnboardViewer | null,
   lens?: OnboardViewer | null,
 ): boolean {
   const viewer = lens ?? session;
-  return hasBuildDesk(viewer) || isHseVaultSeat(viewer) || isHallSeat(viewer) || isTomFriedSeat(viewer);
+  return hasBuildDesk(viewer) || isHseVaultSeat(viewer) || isHallSeat(viewer) || isBennyCampSeat(viewer);
 }
 
 export function canRegisterOnboard(user?: OnboardViewer | null): boolean {
@@ -270,12 +280,12 @@ export function canRegisterOnboard(user?: OnboardViewer | null): boolean {
 
 export function canAdvanceOnboard(user?: OnboardViewer | null): boolean {
   if (!user) return false;
-  return hasBuildDesk(user) || isHseVaultSeat(user) || isTomFriedSeat(user);
+  return hasBuildDesk(user) || isHseVaultSeat(user) || isBennyCampSeat(user);
 }
 
 export function canCreateManpowerRequest(user?: OnboardViewer | null): boolean {
   if (!user) return false;
-  return hasBuildDesk(user) || isHseVaultSeat(user) || isTomFriedSeat(user);
+  return hasBuildDesk(user) || isHseVaultSeat(user) || isBennyCampSeat(user);
 }
 
 export function canRespondManpowerRequest(user?: OnboardViewer | null): boolean {
@@ -286,7 +296,7 @@ export function canRespondManpowerRequest(user?: OnboardViewer | null): boolean 
 export function visibleOnboardPeople(people: readonly OnboardPerson[], user?: OnboardViewer | null) {
   const local = hallLocalForSeat(user);
   if (!local) return [...people];
-  if (hasBuildDesk(user) || isHseVaultSeat(user) || isTomFriedSeat(user) || hasWorkingDesk(user) || isProjectManager(user)) {
+  if (hasBuildDesk(user) || isHseVaultSeat(user) || isBennyCampSeat(user) || hasWorkingDesk(user) || isProjectManager(user)) {
     return [...people];
   }
   return people.filter((person) => person.localId === local);
@@ -530,7 +540,7 @@ export function peopleByStage(people: readonly OnboardPerson[]) {
 export function visibleManpowerRequests(requests: readonly ManpowerRequest[], user?: OnboardViewer | null) {
   const local = hallLocalForSeat(user);
   if (!local) return [...requests];
-  if (hasBuildDesk(user) || isHseVaultSeat(user) || isTomFriedSeat(user) || hasWorkingDesk(user) || isProjectManager(user)) {
+  if (hasBuildDesk(user) || isHseVaultSeat(user) || isBennyCampSeat(user) || hasWorkingDesk(user) || isProjectManager(user)) {
     return [...requests];
   }
   return requests.filter((row) => row.localId === local);
@@ -614,7 +624,7 @@ export function createManpowerRequest(input: {
   id?: string;
 }): ManpowerRequest | { error: string } {
   if (!canCreateManpowerRequest(input.actor)) {
-    return { error: "Manpower requests are created by Tom / HSE." };
+    return { error: "Manpower requests are created by Benny / HSE." };
   }
   if (!isOnboardLocalId(input.localId)) return { error: "Pick Local 553." };
   if (!isOnboardPhase1Local(input.localId)) return { error: "Phase 1 is Local 553 only." };

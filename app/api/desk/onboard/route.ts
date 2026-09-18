@@ -136,7 +136,7 @@ export async function POST(request: Request) {
 
     if (action === "create-request") {
       if (!canCreateManpowerRequest(user)) {
-        return NextResponse.json({ error: "Manpower requests are created by Tom / HSE." }, { status: 403 });
+        return NextResponse.json({ error: "Manpower requests are created by Benny / HSE." }, { status: 403 });
       }
       if (!isOnboardLocalId(body.localId) || !isOnboardPhase1Local(body.localId)) {
         return NextResponse.json({ error: "Phase 1 is Local 553 only." }, { status: 400 });
@@ -185,7 +185,7 @@ export async function POST(request: Request) {
 
     if (action === "advance" || action === "block" || action === "reopen") {
       if (!canAdvanceOnboard(user)) {
-        return NextResponse.json({ error: "Stage changes on this board go through Tom / HSE." }, { status: 403 });
+        return NextResponse.json({ error: "Stage changes on this board go through Benny / HSE." }, { status: 403 });
       }
       const id = typeof body.id === "string" ? body.id.trim() : "";
       if (!id) return NextResponse.json({ error: "Pick a person." }, { status: 400 });
