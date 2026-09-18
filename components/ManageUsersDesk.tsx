@@ -431,8 +431,9 @@ export function ManageUsersDesk() {
           this list, Novus, or each other. Add a user below, or issue a one-time password for a
           seat already on this desk. Don’t send. They change it on first sign-in. No invite email.
           Hall Local 553 is the sole Phase 1 hall seat: John Battuello Jr. ·
-          jbattuello@ualocal553.org. Local 363 stays parked (not in this Role list, not seeded).
-          Do not invent a 363 contact.
+          jbattuello@ualocal553.org. HSE Dispatcher seat: Tom Fried ·
+          tfried@madisonltd.com. Local 363 stays parked (not in this Role list, not seeded).
+          Do not invent an email.
         </p>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">

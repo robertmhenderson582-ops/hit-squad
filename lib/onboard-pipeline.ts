@@ -21,7 +21,7 @@ export const ONBOARD_STAGES = [
 export type OnboardStageId = (typeof ONBOARD_STAGES)[number]["id"];
 
 export const TOM_FRIED_NAME = "Tom Fried";
-export const TOM_FRIED_EMAIL = "friedt@madisonltd.com";
+export const TOM_FRIED_EMAIL = "tfried@madisonltd.com";
 export const TOM_FRIED_SEAT_ID = "tester-tom-fried";
 export const TOM_FRIED_TITLE = "HSE Dispatcher";
 

@@ -156,7 +156,8 @@ export function HseDesk() {
         <Link href="/onboard" className="underline">
           Onboard
         </Link>
-        . Tom Fried owns drug screen, background, TechSolve, and the P66 badge notify.
+        . Tom Fried (tfried@madisonltd.com) owns drug screen, background, TechSolve, and the P66
+        badge notify.
       </p>
       <JobScopePicks
         clients={clients}

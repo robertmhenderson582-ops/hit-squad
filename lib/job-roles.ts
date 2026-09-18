@@ -43,7 +43,7 @@ const SEEDED_JOB_ROLE_BY_EMAIL: Record<string, SeedJobRole> = {
   "wlanderno@yahoo.com": "HSE Manager",
   "bccamp2@gmail.com": "Site Safety Manager",
   "jbattuello@ualocal553.org": "Hall Local 553",
-  "friedt@madisonltd.com": "HSE Dispatcher",
+  "tfried@madisonltd.com": "HSE Dispatcher",
 };
 
 const JOB_TITLE_MAX = 80;
