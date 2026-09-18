@@ -1,7 +1,7 @@
 import { NOVUS_INVITE_FROM } from "./invite-policy.ts";
 import {
-  TEXOLVE_LOCATION,
-  TEXOLVE_NAME,
+  TECSOLV_LOCATION,
+  TECSOLV_NAME,
   displayOnboardName,
   nextOnboardStage,
   onboardStage,
@@ -76,7 +76,7 @@ export function stepCompleteMail(
     lines.push(`Next step: ${onboardStage(next).label}`);
     lines.push(`Next owner: ${onboardStageOwner(next) || "—"}`);
   } else if (completedStage === "step-5") {
-    lines.push(`Onboarding pipeline complete at ${TEXOLVE_NAME}, ${TEXOLVE_LOCATION}.`);
+    lines.push(`Onboarding pipeline complete at ${TECSOLV_NAME}, ${TECSOLV_LOCATION}.`);
   }
   if (person.requestId) lines.push(`Manpower request: ${person.requestId}`);
   lines.push("");

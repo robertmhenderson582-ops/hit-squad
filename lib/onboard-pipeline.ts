@@ -28,11 +28,10 @@ export type OnboardHall = {
 
 /**
  * Benny + Robert dictation 2026-09-18. Board columns are completed-step states.
- * Training location spelling lock: Texolve. TechSolve is an alternate spelling pending confirm.
+ * Training vendor spelling lock: Tecsolv, Collinsville, Illinois.
  */
-export const TEXOLVE_NAME = "Texolve";
-export const TEXOLVE_LOCATION = "Collinsville, Illinois";
-export const TEXOLVE_SPELLING_NOTE = "TechSolve is an alternate spelling pending confirm.";
+export const TECSOLV_NAME = "Tecsolv";
+export const TECSOLV_LOCATION = "Collinsville, Illinois";
 
 export const HIRE_IN_VERIFIED_FIELD_LABEL = "Verified Employee Received HireIn Link";
 export const HIRE_IN_OUTREACH_OWNERS = "Robert Henderson / Ben Peffley / Nathan Boyte";
@@ -42,7 +41,7 @@ export const ONBOARD_STAGES = [
   { id: "step-2", label: "DISA identity verified / DISA scheduled", owner: "Tom Fried", hallOwned: false, step: 2 },
   {
     id: "step-3",
-    label: "Payroll verified / Texolve scheduled",
+    label: "Payroll verified / Tecsolv scheduled",
     owner: "On-site payroll",
     hallOwned: false,
     step: 3,
@@ -54,7 +53,7 @@ export const ONBOARD_STAGES = [
     hallOwned: false,
     step: 4,
   },
-  { id: "step-5", label: "Texolve complete / Badged", owner: `${TEXOLVE_NAME} / P66`, hallOwned: false, step: 5 },
+  { id: "step-5", label: "Tecsolv complete / Badged", owner: `${TECSOLV_NAME} / P66`, hallOwned: false, step: 5 },
   { id: "blocked", label: "Blocked / failed", owner: null, hallOwned: false, step: 0 },
 ] as const;
 

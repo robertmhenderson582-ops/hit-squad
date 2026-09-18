@@ -15,6 +15,8 @@ import {
   MANPOWER_SCREENING_PLACEHOLDER,
   ONBOARD_CLASSIFICATIONS,
   ONBOARD_STAGES,
+  TECSOLV_LOCATION,
+  TECSOLV_NAME,
   TOM_FRIED_NAME,
   TOM_FRIED_TITLE,
   selectableOnboardLocals,
@@ -482,7 +484,7 @@ export function OnboardDesk() {
           manpower request first; the hall contact responds with fill count and date; then site submits name + phone
           onto that request (Owner can switch Step 1 to hall). DISA DER is Tom Fried (friedt@madisonltd.com) —
           identity, DISA background, and drug. Benny Camp (bccamp2@gmail.com) is temp dispatcher until Donnie.
-          Training is Texolve, Collinsville, Illinois. TechSolve is an alternate spelling pending confirm. Hire-end
+          Training is {TECSOLV_NAME}, {TECSOLV_LOCATION}. Hire-end
           outreach is Robert Henderson / Ben Peffley / Nathan Boyte. Tracker keepers are Tom Fried and Debbie. Every
           create, respond, and stage change is timestamped. No email blast on manpower. End-of-step verification
           emails go to Owner-configured corp + PM lists. Default plant is {DEFAULT_ONBOARD_PLANT.site} /{" "}
@@ -928,7 +930,7 @@ export function OnboardDesk() {
                 </p>
                 {stage.id === "step-3" || stage.id === "step-5" ? (
                   <p className="mt-1 text-xs leading-5 text-[#5b6f73]">
-                    Texolve, Collinsville, Illinois. TechSolve is an alternate spelling pending confirm.
+                    {TECSOLV_NAME}, {TECSOLV_LOCATION}.
                   </p>
                 ) : null}
                 {stage.id === "step-4" ? (
