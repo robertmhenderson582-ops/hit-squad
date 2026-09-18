@@ -6,6 +6,9 @@ import { useSession } from "@/components/SessionProvider";
 import { viewAsInit } from "@/lib/desk-scope";
 import {
   DEFAULT_ONBOARD_PLANT,
+  MANPOWER_CERTS_PLACEHOLDER,
+  MANPOWER_PACKAGE_PLACEHOLDER,
+  MANPOWER_SCREENING_PLACEHOLDER,
   ONBOARD_CLASSIFICATIONS,
   ONBOARD_STAGES,
   selectableOnboardLocals,
@@ -14,18 +17,23 @@ import {
   defaultCraftForLocal,
   hallContactForLocal,
   hallLocalForSeat,
+  manpowerRequestLabel,
   nextOnboardStage,
   onboardLocal,
   onboardStage,
   peopleByStage,
+  type ManpowerRequest,
   type OnboardLocalId,
   type OnboardPerson,
 } from "@/lib/onboard-pipeline";
 
 type BoardPayload = {
   people?: OnboardPerson[];
+  requests?: ManpowerRequest[];
   canRegister?: boolean;
   canAdvance?: boolean;
+  canCreateRequest?: boolean;
+  canRespondRequest?: boolean;
   error?: string;
   stored?: boolean;
   store?: string;
@@ -56,8 +64,11 @@ export function OnboardDesk() {
   const registerLocals = selectableOnboardLocals();
 
   const [people, setPeople] = useState<OnboardPerson[]>([]);
+  const [requests, setRequests] = useState<ManpowerRequest[]>([]);
   const [canRegister, setCanRegister] = useState(true);
   const [canAdvance, setCanAdvance] = useState(false);
+  const [canCreateRequest, setCanCreateRequest] = useState(false);
+  const [canRespondRequest, setCanRespondRequest] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,6 +84,20 @@ export function OnboardDesk() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [referredFor, setReferredFor] = useState("");
+  const [requestId, setRequestId] = useState("");
+
+  const [neededDate, setNeededDate] = useState("");
+  const [headcount, setHeadcount] = useState("1");
+  const [reqTrade, setReqTrade] = useState(defaultCraftForLocal(lockedLocal || "553"));
+  const [reqClass, setReqClass] = useState("Journeyman");
+  const [reqSite, setReqSite] = useState(DEFAULT_ONBOARD_PLANT.site);
+  const [reqJob, setReqJob] = useState("");
+  const [reqCerts, setReqCerts] = useState("");
+  const [reqScreenings, setReqScreenings] = useState(MANPOWER_SCREENING_PLACEHOLDER);
+  const [reqPackage, setReqPackage] = useState("");
+  const [respondId, setRespondId] = useState<string | null>(null);
+  const [fillCount, setFillCount] = useState("");
+  const [fillDate, setFillDate] = useState("");
 
   useEffect(() => {
     if (!lockedLocal) return;
@@ -82,8 +107,11 @@ export function OnboardDesk() {
 
   function applyBoard(data: BoardPayload) {
     if (Array.isArray(data.people)) setPeople(data.people);
+    if (Array.isArray(data.requests)) setRequests(data.requests);
     if (typeof data.canRegister === "boolean") setCanRegister(data.canRegister);
     if (typeof data.canAdvance === "boolean") setCanAdvance(data.canAdvance);
+    if (typeof data.canCreateRequest === "boolean") setCanCreateRequest(data.canCreateRequest);
+    if (typeof data.canRespondRequest === "boolean") setCanRespondRequest(data.canRespondRequest);
     if (data.error) {
       setError(data.error);
       return false;
@@ -138,6 +166,7 @@ export function OnboardDesk() {
           phone,
           email,
           referredFor,
+          requestId,
         }),
       }),
     );
@@ -154,6 +183,74 @@ export function OnboardDesk() {
     setEmail("");
     setReferredFor("");
     setNote(`Registered ${data.person?.name || "person"} at ${localLabel(localId)}.`);
+  }
+
+  async function onCreateRequest(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    setNote(null);
+    const response = await fetch(
+      "/api/desk/onboard",
+      viewAsInit(owner?.viewAs, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create-request",
+          localId,
+          dateNeeded: neededDate,
+          headcount,
+          trade: reqTrade,
+          classification: reqClass,
+          site: reqSite,
+          job: reqJob,
+          requiredCerts: reqCerts,
+          requiredScreenings: reqScreenings,
+          hiringPackageNotes: reqPackage,
+        }),
+      }),
+    );
+    const data = (await response.json().catch(() => ({}))) as BoardPayload & { request?: ManpowerRequest };
+    setSaving(false);
+    if (!response.ok) {
+      setError(data.error || "Could not create that manpower request.");
+      return;
+    }
+    applyBoard(data);
+    if (data.request) setRequestId(data.request.id);
+    setNote(`Manpower request sent to Local 553 hall (${data.request?.id || "saved"}).`);
+  }
+
+  async function onRespondRequest(event: FormEvent, id: string) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    setNote(null);
+    const response = await fetch(
+      "/api/desk/onboard",
+      viewAsInit(owner?.viewAs, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "respond-request",
+          id,
+          fillCount,
+          fillDate,
+        }),
+      }),
+    );
+    const data = (await response.json().catch(() => ({}))) as BoardPayload & { request?: ManpowerRequest };
+    setSaving(false);
+    if (!response.ok) {
+      setError(data.error || "Could not respond to that manpower request.");
+      return;
+    }
+    applyBoard(data);
+    setRespondId(null);
+    setFillCount("");
+    setFillDate("");
+    if (data.request) setRequestId(data.request.id);
+    setNote(`Hall response saved on ${data.request?.id || "request"}.`);
   }
 
   async function postStage(action: "advance" | "block" | "reopen", person: OnboardPerson, extra: Record<string, string> = {}) {
@@ -190,9 +287,11 @@ export function OnboardDesk() {
         <p className="text-sm uppercase tracking-[0.18em] text-[#5b6f73]">Hall ↔ HSE</p>
         <h2 className="mt-1 text-2xl font-semibold text-[#163038]">{CONTROL_CENTER_TITLE}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">
-          Phase 1 is Local 553 only. Tom Fried (friedt@madisonltd.com) owns drug screen, background,
-          TechSolve, and the P66 badge notify. P66 runs actual badging. Every stage change is
-          timestamped. Default plant is {DEFAULT_ONBOARD_PLANT.site} / {DEFAULT_ONBOARD_PLANT.client}.
+          Phase 1 is Local 553 only. Tom Fried creates a manpower request first; John Battuello Jr.
+          responds with fill count and date; then the hall registers people onto that request. Tom
+          Fried (friedt@madisonltd.com) owns drug screen, background, TechSolve, and the P66 badge notify.
+          P66 runs actual badging. Every create, respond, and stage change is timestamped.
+          No email blast. Default plant is {DEFAULT_ONBOARD_PLANT.site} / {DEFAULT_ONBOARD_PLANT.client}.
           Other halls stay parked.
         </p>
         {hallContactForLocal("553") ? (
@@ -207,6 +306,130 @@ export function OnboardDesk() {
           <p className="mt-2 text-sm text-[#163038]">This hall seat sees Local {lockedLocal} only.</p>
         ) : null}
       </section>
+
+      {canCreateRequest ? (
+        <section className="plant-card px-5 py-5">
+          <h3 className="text-lg font-semibold text-[#163038]">Manpower request</h3>
+          <p className="mt-1 text-sm text-[#5b6f73]">
+            Dispatcher create comes before hall register. Routes to John Battuello Jr.
+            (jbattuello@ualocal553.org). Certs, screenings, and hiring package fields are
+            placeholders — not a final hiring list.
+          </p>
+          <form className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={(event) => void onCreateRequest(event)}>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Date needed</span>
+              <input className="paper-field w-full" type="date" value={neededDate} onChange={(event) => setNeededDate(event.target.value)} required />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Quantity / headcount</span>
+              <input className="paper-field w-full" type="number" min={1} value={headcount} onChange={(event) => setHeadcount(event.target.value)} required />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Trade / classification</span>
+              <div className="grid grid-cols-2 gap-2">
+                <input className="paper-field w-full" value={reqTrade} onChange={(event) => setReqTrade(event.target.value)} required />
+                <select className="paper-field w-full" value={reqClass} onChange={(event) => setReqClass(event.target.value)}>
+                  {ONBOARD_CLASSIFICATIONS.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Site / job</span>
+              <div className="grid grid-cols-2 gap-2">
+                <input className="paper-field w-full" value={reqSite} onChange={(event) => setReqSite(event.target.value)} />
+                <input className="paper-field w-full" value={reqJob} placeholder="Job / requisition" onChange={(event) => setReqJob(event.target.value)} />
+              </div>
+            </label>
+            <label className="text-sm md:col-span-2 xl:col-span-3">
+              <span className="mb-1 block text-[#5b6f73]">{MANPOWER_CERTS_PLACEHOLDER}</span>
+              <textarea className="paper-field w-full" rows={2} value={reqCerts} onChange={(event) => setReqCerts(event.target.value)} />
+            </label>
+            <label className="text-sm md:col-span-2 xl:col-span-3">
+              <span className="mb-1 block text-[#5b6f73]">{MANPOWER_SCREENING_PLACEHOLDER}</span>
+              <textarea className="paper-field w-full" rows={2} value={reqScreenings} onChange={(event) => setReqScreenings(event.target.value)} />
+            </label>
+            <label className="text-sm md:col-span-2 xl:col-span-3">
+              <span className="mb-1 block text-[#5b6f73]">{MANPOWER_PACKAGE_PLACEHOLDER}</span>
+              <textarea className="paper-field w-full" rows={2} value={reqPackage} onChange={(event) => setReqPackage(event.target.value)} />
+            </label>
+            <div className="md:col-span-2 xl:col-span-3">
+              <button type="submit" className="rounded-sm bg-steel px-3 py-1.5 text-sm text-white" disabled={saving}>
+                Send manpower request
+              </button>
+            </div>
+          </form>
+          <h4 className="mt-5 text-sm font-semibold text-[#163038]">Request list</h4>
+          <ul className="mt-2 space-y-2">
+            {requests.length === 0 ? <li className="text-sm text-[#5b6f73]">No manpower requests yet.</li> : null}
+            {requests.map((row) => (
+              <li key={row.id} className="rounded-md border border-[#d5e0de] bg-white/70 px-3 py-2 text-sm text-[#163038]">
+                {manpowerRequestLabel(row)}
+                {row.job ? ` · ${row.job}` : ""} · {row.createdByName} · {formatWhen(row.createdAt)}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {canRespondRequest ? (
+        <section className="plant-card px-5 py-5">
+          <h3 className="text-lg font-semibold text-[#163038]">Hall manpower inbox</h3>
+          <p className="mt-1 text-sm text-[#5b6f73]">
+            Open requests from Tom / HSE. Respond with how many you can fill and when. Then register
+            people onto that request.
+          </p>
+          <ul className="mt-4 space-y-3">
+            {requests.filter((row) => row.status === "open").length === 0 ? (
+              <li className="text-sm text-[#5b6f73]">No open manpower requests.</li>
+            ) : null}
+            {requests
+              .filter((row) => row.status === "open")
+              .map((row) => (
+                <li key={row.id} className="rounded-md border border-[#d5e0de] bg-white/70 px-3 py-3">
+                  <p className="text-sm font-medium text-[#163038]">{manpowerRequestLabel(row)}</p>
+                  <p className="mt-1 text-xs text-[#5b6f73]">
+                    {row.site}
+                    {row.job ? ` · ${row.job}` : ""} · {row.classification || "—"} · created {formatWhen(row.createdAt)}
+                  </p>
+                  {row.requiredScreenings ? <p className="mt-1 text-xs text-[#5b6f73]">{row.requiredScreenings}</p> : null}
+                  {respondId === row.id ? (
+                    <form className="mt-3 grid gap-2 md:grid-cols-3" onSubmit={(event) => void onRespondRequest(event, row.id)}>
+                      <label className="text-sm">
+                        <span className="mb-1 block text-[#5b6f73]">Fill count</span>
+                        <input className="paper-field w-full" type="number" min={0} value={fillCount} onChange={(event) => setFillCount(event.target.value)} required />
+                      </label>
+                      <label className="text-sm">
+                        <span className="mb-1 block text-[#5b6f73]">Fill date</span>
+                        <input className="paper-field w-full" type="date" value={fillDate} onChange={(event) => setFillDate(event.target.value)} required />
+                      </label>
+                      <div className="flex items-end">
+                        <button type="submit" className="rounded-sm bg-steel px-3 py-1.5 text-sm text-white" disabled={saving}>
+                          Send hall response
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      className="mt-2 rounded-sm border border-steel px-2.5 py-1 text-xs text-steel"
+                      onClick={() => {
+                        setRespondId(row.id);
+                        setFillCount(String(row.headcount));
+                        setFillDate(row.dateNeeded);
+                      }}
+                    >
+                      Respond
+                    </button>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </section>
+      ) : null}
 
       {canRegister ? (
         <section className="plant-card px-5 py-5">
@@ -260,6 +483,21 @@ export function OnboardDesk() {
               <span className="mb-1 block text-[#5b6f73]">Email (optional)</span>
               <input className="paper-field w-full" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
             </label>
+            {requests.length ? (
+              <label className="text-sm">
+                <span className="mb-1 block text-[#5b6f73]">Manpower request</span>
+                <select className="paper-field w-full" value={requestId} onChange={(event) => setRequestId(event.target.value)}>
+                  <option value="">No request linked</option>
+                  {requests
+                    .filter((row) => row.localId === localId)
+                    .map((row) => (
+                      <option key={row.id} value={row.id}>
+                        {manpowerRequestLabel(row)}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            ) : null}
             <label className="text-sm">
               <span className="mb-1 block text-[#5b6f73]">Referred for job / site (optional)</span>
               <input
@@ -314,6 +552,7 @@ export function OnboardDesk() {
                           {localLabel(person.localId)} · {person.craft}
                           {person.classification ? ` · ${person.classification}` : ""}
                         </p>
+                        {person.requestId ? <p className="mt-0.5 text-xs text-[#5b6f73]">Request {person.requestId}</p> : null}
                         {person.referredFor ? <p className="mt-0.5 text-xs text-[#5b6f73]">{person.referredFor}</p> : null}
                         {person.stage === "blocked" && person.blockedReason ? (
                           <p className="mt-1 text-xs text-[#163038]">Reason: {person.blockedReason}</p>

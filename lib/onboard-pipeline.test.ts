@@ -17,10 +17,13 @@ import {
   TOM_FRIED_NAME,
   TOM_FRIED_TITLE,
   canAdvanceOnboard,
+  canCreateManpowerRequest,
   canRegisterOnboard,
+  canRespondManpowerRequest,
   canSeeOnboardBoard,
   canSeeOnboardDoor,
   changeOnboardStage,
+  createManpowerRequest,
   createOnboardPerson,
   hallContactForLocal,
   hallLocalForSeat,
@@ -31,6 +34,7 @@ import {
   onboardStageOwner,
   parseOnboardFile,
   parseOnboardPerson,
+  respondManpowerRequest,
   peopleByStage,
   selectableOnboardLocals,
   visibleOnboardPeople,
@@ -252,9 +256,15 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.match(desk, /Local 553 hall contact/);
     assert.match(desk, /Audit trail/);
     assert.doesNotMatch(desk, /tfried@madisonltd.com/);
+    assert.match(desk, /Manpower request/);
+    assert.match(desk, /Hall manpower inbox/);
+    assert.match(desk, /hiring package/);
+    assert.match(desk, /No email blast/);
     assert.doesNotMatch(desk, /Local 363|BM363/);
     assert.doesNotMatch(desk, /\bSMS\b|Twilio|Zoom|Teams/i);
-    assert.doesNotMatch(api, /\bSMS\b|Twilio|Zoom|Teams/i);
+    assert.doesNotMatch(api, /\bSMS\b|Twilio|Zoom|Teams|nodemailer|sendMail|mailto:/i);
+    assert.match(api, /create-request/);
+    assert.match(api, /respond-request/);
     assert.match(home, /ONBOARD_DOOR/);
     assert.match(home, /\/onboard/);
     assert.match(hse, /href="\/onboard"/);
@@ -265,5 +275,73 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.match(roles, /PARKED_HALL_JOB_ROLES/);
     assert.match(roles, /Hall Local 363/);
     assert.doesNotMatch(source("./tester-seats.ts"), /friedt@|jbattuello@|tfried@/);
+  });
+
+  it("lets Tom create a Local 553 manpower request and John respond before register", () => {
+    assert.equal(canCreateManpowerRequest(tom), true);
+    assert.equal(canCreateManpowerRequest(hall553), false);
+    assert.equal(canRespondManpowerRequest(hall553), true);
+    assert.equal(canRespondManpowerRequest(tom), false);
+
+    const blockedLocal = createManpowerRequest({
+      localId: "363",
+      dateNeeded: "2026-09-22",
+      headcount: 4,
+      actor: tom,
+    });
+    assert.deepEqual(blockedLocal, { error: "Phase 1 is Local 553 only." });
+
+    const hallCreate = createManpowerRequest({
+      localId: "553",
+      dateNeeded: "2026-09-22",
+      headcount: 4,
+      actor: hall553,
+    });
+    assert.deepEqual(hallCreate, { error: "Manpower requests are created by Tom / HSE." });
+
+    const created = createManpowerRequest({
+      localId: "553",
+      dateNeeded: "2026-09-22",
+      headcount: 4,
+      trade: "Pipefitter",
+      classification: "Journeyman",
+      site: "Wood River",
+      job: "Cat 2",
+      actor: tom,
+      at: "2026-09-18T14:00:00.000Z",
+      id: "mr-cat2",
+    });
+    if ("error" in created) throw new Error(created.error);
+    assert.equal(created.status, "open");
+    assert.equal(created.headcount, 4);
+    assert.equal(created.events[0]?.action, "created");
+    assert.equal(created.events[0]?.actorEmail, TOM_FRIED_EMAIL);
+
+    const tomRespond = respondManpowerRequest(created, { fillCount: 3, fillDate: "2026-09-21", actor: tom });
+    assert.deepEqual(tomRespond, { error: "Hall seats respond to manpower requests." });
+
+    const answered = respondManpowerRequest(created, {
+      fillCount: 3,
+      fillDate: "2026-09-21",
+      actor: hall553,
+      at: "2026-09-18T15:30:00.000Z",
+    });
+    if ("error" in answered) throw new Error(answered.error);
+    assert.equal(answered.status, "responded");
+    assert.equal(answered.fillCount, 3);
+    assert.equal(answered.fillDate, "2026-09-21");
+    assert.equal(answered.events.at(-1)?.action, "responded");
+    assert.equal(answered.events.at(-1)?.actorEmail, JOHN_BATTUELLO_EMAIL);
+
+    const person = createOnboardPerson({
+      name: "Pat Fitter",
+      localId: "553",
+      requestId: answered.id,
+      actor: hall553,
+      id: "ob-pat-req",
+    });
+    if ("error" in person) throw new Error(person.error);
+    assert.equal(person.requestId, "mr-cat2");
+    assert.match(person.events[0]?.note ?? "", /request mr-cat2/);
   });
 });

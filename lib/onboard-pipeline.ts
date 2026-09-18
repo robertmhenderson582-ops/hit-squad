@@ -70,6 +70,13 @@ export const DEFAULT_ONBOARD_PLANT = {
 
 export const ONBOARD_CLASSIFICATIONS = ["Journeyman", "Apprentice", "Foreman", "General Foreman"] as const;
 
+/** Placeholder only — Robert will supply the hiring package later. Do not treat as final. */
+export const MANPOWER_CERTS_PLACEHOLDER = "Required certs (placeholder — hiring package later)";
+export const MANPOWER_SCREENING_PLACEHOLDER =
+  "Drug screen, background, and other screenings (placeholder — hiring package later)";
+export const MANPOWER_PACKAGE_PLACEHOLDER =
+  "Requirements from hiring package (placeholder — Robert will supply later)";
+
 export const ONBOARD_VAULT_WRITE_ERROR =
   "Could not save the onboarding board. The last known people stay on this desk.";
 
@@ -109,11 +116,48 @@ export type OnboardPerson = {
   updatedAt: string;
   createdByName: string;
   createdByEmail: string;
+  requestId: string;
   events: OnboardEvent[];
+};
+
+export type ManpowerRequestStatus = "open" | "responded";
+
+export type ManpowerRequestEvent = {
+  id: string;
+  at: string;
+  actorName: string;
+  actorEmail: string;
+  action: "created" | "responded";
+  note: string;
+};
+
+export type ManpowerRequest = {
+  id: string;
+  localId: OnboardLocalId;
+  dateNeeded: string;
+  headcount: number;
+  trade: string;
+  classification: string;
+  site: string;
+  job: string;
+  requiredCerts: string;
+  requiredScreenings: string;
+  hiringPackageNotes: string;
+  status: ManpowerRequestStatus;
+  createdAt: string;
+  createdByName: string;
+  createdByEmail: string;
+  fillCount: number | null;
+  fillDate: string;
+  respondedAt: string;
+  respondedByName: string;
+  respondedByEmail: string;
+  events: ManpowerRequestEvent[];
 };
 
 export type OnboardFile = {
   people: OnboardPerson[];
+  requests: ManpowerRequest[];
 };
 
 export type OnboardViewer = OnboardActor;
@@ -229,6 +273,16 @@ export function canAdvanceOnboard(user?: OnboardViewer | null): boolean {
   return hasBuildDesk(user) || isHseVaultSeat(user) || isTomFriedSeat(user);
 }
 
+export function canCreateManpowerRequest(user?: OnboardViewer | null): boolean {
+  if (!user) return false;
+  return hasBuildDesk(user) || isHseVaultSeat(user) || isTomFriedSeat(user);
+}
+
+export function canRespondManpowerRequest(user?: OnboardViewer | null): boolean {
+  if (!user) return false;
+  return isHallSeat(user) || hasBuildDesk(user);
+}
+
 export function visibleOnboardPeople(people: readonly OnboardPerson[], user?: OnboardViewer | null) {
   const local = hallLocalForSeat(user);
   if (!local) return [...people];
@@ -331,6 +385,7 @@ export function parseOnboardPerson(raw: unknown): OnboardPerson | null {
     updatedAt: typeof row.updatedAt === "string" && row.updatedAt.trim() ? row.updatedAt : new Date().toISOString(),
     createdByName: typeof row.createdByName === "string" ? row.createdByName.trim() : "",
     createdByEmail: typeof row.createdByEmail === "string" ? row.createdByEmail.trim().toLowerCase() : "",
+    requestId: typeof row.requestId === "string" ? row.requestId.trim() : "",
     events,
   };
 }
@@ -345,7 +400,15 @@ export function parseOnboardFile(raw: unknown): OnboardFile {
     seen.add(person.id);
     people.push(person);
   }
-  return { people };
+  const requests: ManpowerRequest[] = [];
+  const seenRequests = new Set<string>();
+  for (const item of Array.isArray(parsed.requests) ? parsed.requests : []) {
+    const request = parseManpowerRequest(item);
+    if (!request || seenRequests.has(request.id)) continue;
+    seenRequests.add(request.id);
+    requests.push(request);
+  }
+  return { people, requests };
 }
 
 export function createOnboardPerson(input: {
@@ -359,6 +422,7 @@ export function createOnboardPerson(input: {
   siteId?: string;
   site?: string;
   client?: string;
+  requestId?: string;
   actor?: OnboardViewer | null;
   at?: string;
   id?: string;
@@ -399,13 +463,14 @@ export function createOnboardPerson(input: {
     updatedAt: at,
     createdByName: stamp.actorName,
     createdByEmail: stamp.actorEmail,
+    requestId: (input.requestId || "").trim(),
     events: [],
   };
   person.events = appendOnboardEvent(person.events, {
     actor: input.actor,
     fromStage: null,
     toStage: "registered",
-    note: "Hall registered",
+    note: person.requestId ? `Hall registered · request ${person.requestId}` : "Hall registered",
     at,
   });
   return person;
@@ -460,4 +525,197 @@ export function peopleByStage(people: readonly OnboardPerson[]) {
     groups[person.stage].push(person);
   }
   return groups;
+}
+
+export function visibleManpowerRequests(requests: readonly ManpowerRequest[], user?: OnboardViewer | null) {
+  const local = hallLocalForSeat(user);
+  if (!local) return [...requests];
+  if (hasBuildDesk(user) || isHseVaultSeat(user) || isTomFriedSeat(user) || hasWorkingDesk(user) || isProjectManager(user)) {
+    return [...requests];
+  }
+  return requests.filter((row) => row.localId === local);
+}
+
+function parseManpowerEvent(raw: unknown): ManpowerRequestEvent | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Partial<ManpowerRequestEvent>;
+  if (typeof row.id !== "string" || !row.id.trim()) return null;
+  if (typeof row.at !== "string" || !row.at.trim()) return null;
+  if (typeof row.actorName !== "string" || !row.actorName.trim()) return null;
+  if (row.action !== "created" && row.action !== "responded") return null;
+  return {
+    id: row.id.trim(),
+    at: row.at,
+    actorName: row.actorName.trim(),
+    actorEmail: typeof row.actorEmail === "string" ? row.actorEmail.trim().toLowerCase() : "",
+    action: row.action,
+    note: typeof row.note === "string" ? row.note : "",
+  };
+}
+
+export function parseManpowerRequest(raw: unknown): ManpowerRequest | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Partial<ManpowerRequest> & { fillCount?: unknown; headcount?: unknown };
+  if (typeof row.id !== "string" || !row.id.trim()) return null;
+  if (!isOnboardLocalId(row.localId)) return null;
+  const events: ManpowerRequestEvent[] = [];
+  const seen = new Set<string>();
+  for (const item of Array.isArray(row.events) ? row.events : []) {
+    const event = parseManpowerEvent(item);
+    if (!event || seen.has(event.id)) continue;
+    seen.add(event.id);
+    events.push(event);
+  }
+  const headcount = typeof row.headcount === "number" ? row.headcount : Number(row.headcount);
+  const fillCount =
+    row.fillCount == null || row.fillCount === ""
+      ? null
+      : typeof row.fillCount === "number"
+        ? row.fillCount
+        : Number(row.fillCount);
+  return {
+    id: row.id.trim(),
+    localId: row.localId,
+    dateNeeded: typeof row.dateNeeded === "string" ? row.dateNeeded.trim() : "",
+    headcount: Number.isFinite(headcount) && headcount > 0 ? Math.floor(headcount) : 0,
+    trade: typeof row.trade === "string" && row.trade.trim() ? row.trade.trim() : onboardLocal(row.localId).craft,
+    classification: typeof row.classification === "string" ? row.classification.trim() : "",
+    site: typeof row.site === "string" && row.site.trim() ? row.site.trim() : DEFAULT_ONBOARD_PLANT.site,
+    job: typeof row.job === "string" ? row.job.trim() : "",
+    requiredCerts: typeof row.requiredCerts === "string" ? row.requiredCerts.trim() : "",
+    requiredScreenings: typeof row.requiredScreenings === "string" ? row.requiredScreenings.trim() : "",
+    hiringPackageNotes: typeof row.hiringPackageNotes === "string" ? row.hiringPackageNotes.trim() : "",
+    status: row.status === "responded" ? "responded" : "open",
+    createdAt: typeof row.createdAt === "string" && row.createdAt.trim() ? row.createdAt : new Date().toISOString(),
+    createdByName: typeof row.createdByName === "string" ? row.createdByName.trim() : "",
+    createdByEmail: typeof row.createdByEmail === "string" ? row.createdByEmail.trim().toLowerCase() : "",
+    fillCount: fillCount != null && Number.isFinite(fillCount) && fillCount >= 0 ? Math.floor(fillCount) : null,
+    fillDate: typeof row.fillDate === "string" ? row.fillDate.trim() : "",
+    respondedAt: typeof row.respondedAt === "string" ? row.respondedAt.trim() : "",
+    respondedByName: typeof row.respondedByName === "string" ? row.respondedByName.trim() : "",
+    respondedByEmail: typeof row.respondedByEmail === "string" ? row.respondedByEmail.trim().toLowerCase() : "",
+    events,
+  };
+}
+
+export function createManpowerRequest(input: {
+  localId: OnboardLocalId;
+  dateNeeded: string;
+  headcount: number | string;
+  trade?: string;
+  classification?: string;
+  site?: string;
+  job?: string;
+  requiredCerts?: string;
+  requiredScreenings?: string;
+  hiringPackageNotes?: string;
+  actor?: OnboardViewer | null;
+  at?: string;
+  id?: string;
+}): ManpowerRequest | { error: string } {
+  if (!canCreateManpowerRequest(input.actor)) {
+    return { error: "Manpower requests are created by Tom / HSE." };
+  }
+  if (!isOnboardLocalId(input.localId)) return { error: "Pick Local 553." };
+  if (!isOnboardPhase1Local(input.localId)) return { error: "Phase 1 is Local 553 only." };
+  const dateNeeded = input.dateNeeded.trim();
+  if (!dateNeeded) return { error: "Enter the date needed." };
+  const headcount = typeof input.headcount === "number" ? input.headcount : Number(input.headcount);
+  if (!Number.isFinite(headcount) || headcount < 1) return { error: "Enter how many people are needed." };
+  const at = input.at || new Date().toISOString();
+  const stamp = actorStamp(input.actor);
+  const local = onboardLocal(input.localId);
+  const request: ManpowerRequest = {
+    id: input.id || newOnboardId("mr"),
+    localId: input.localId,
+    dateNeeded,
+    headcount: Math.floor(headcount),
+    trade: (input.trade || "").trim() || local.craft,
+    classification: (input.classification || "").trim(),
+    site: (input.site || "").trim() || DEFAULT_ONBOARD_PLANT.site,
+    job: (input.job || "").trim(),
+    requiredCerts: (input.requiredCerts || "").trim(),
+    requiredScreenings: (input.requiredScreenings || "").trim(),
+    hiringPackageNotes: (input.hiringPackageNotes || "").trim(),
+    status: "open",
+    createdAt: at,
+    createdByName: stamp.actorName,
+    createdByEmail: stamp.actorEmail,
+    fillCount: null,
+    fillDate: "",
+    respondedAt: "",
+    respondedByName: "",
+    respondedByEmail: "",
+    events: [
+      {
+        id: newOnboardId("mre"),
+        at,
+        actorName: stamp.actorName,
+        actorEmail: stamp.actorEmail,
+        action: "created",
+        note: `${Math.floor(headcount)} ${local.craft} needed ${dateNeeded}`,
+      },
+    ],
+  };
+  return request;
+}
+
+export function respondManpowerRequest(
+  request: ManpowerRequest,
+  input: {
+    fillCount: number | string;
+    fillDate: string;
+    actor?: OnboardViewer | null;
+    at?: string;
+  },
+): ManpowerRequest | { error: string } {
+  if (!canRespondManpowerRequest(input.actor)) {
+    return { error: "Hall seats respond to manpower requests." };
+  }
+  const hallLocal = hallLocalForSeat(input.actor);
+  if (hallLocal && hallLocal !== request.localId) {
+    return { error: `Hall seats can only respond to Local ${hallLocal}.` };
+  }
+  const hallContact = hallContactForLocal(request.localId);
+  if (hallContact && isHallSeat(input.actor) && !hasBuildDesk(input.actor)) {
+    const email = (input.actor?.email || "").trim().toLowerCase();
+    if (email !== hallContact.email) {
+      return { error: `Local ${request.localId} response is gated to ${hallContact.email}.` };
+    }
+  }
+  if (request.status === "responded") return { error: "That request already has a hall response." };
+  const fillCount = typeof input.fillCount === "number" ? input.fillCount : Number(input.fillCount);
+  if (!Number.isFinite(fillCount) || fillCount < 0) return { error: "Enter how many the hall can fill." };
+  const fillDate = input.fillDate.trim();
+  if (!fillDate) return { error: "Enter when the hall can fill." };
+  const at = input.at || new Date().toISOString();
+  const stamp = actorStamp(input.actor);
+  return {
+    ...request,
+    status: "responded",
+    fillCount: Math.floor(fillCount),
+    fillDate,
+    respondedAt: at,
+    respondedByName: stamp.actorName,
+    respondedByEmail: stamp.actorEmail,
+    events: [
+      ...request.events,
+      {
+        id: newOnboardId("mre"),
+        at,
+        actorName: stamp.actorName,
+        actorEmail: stamp.actorEmail,
+        action: "responded",
+        note: `Can fill ${Math.floor(fillCount)} on ${fillDate}`,
+      },
+    ],
+  };
+}
+
+export function manpowerRequestLabel(request: ManpowerRequest) {
+  const fill =
+    request.status === "responded" && request.fillCount != null
+      ? ` · hall fill ${request.fillCount}${request.fillDate ? ` on ${request.fillDate}` : ""}`
+      : " · open";
+  return `${request.id} · ${request.headcount} ${request.trade} by ${request.dateNeeded}${fill}`;
 }

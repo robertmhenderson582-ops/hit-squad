@@ -6,6 +6,7 @@ import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import {
   ONBOARD_VAULT_WRITE_ERROR,
   parseOnboardFile,
+  type ManpowerRequest,
   type OnboardFile,
   type OnboardPerson,
 } from "./onboard-pipeline.ts";
@@ -41,12 +42,19 @@ export function onboardStoreStatus() {
 }
 
 function emptyFile(): OnboardFile {
-  return { people: [] };
+  return { people: [], requests: [] };
+}
+
+function cloneFile(data: OnboardFile): OnboardFile {
+  return {
+    people: data.people.map((row) => ({ ...row, events: [...row.events] })),
+    requests: data.requests.map((row) => ({ ...row, events: [...row.events] })),
+  };
 }
 
 function readCache(): OnboardFile {
   if (memoryOverride) {
-    return { people: memoryOverride.people.map((row) => ({ ...row, events: [...row.events] })) };
+    return cloneFile(memoryOverride);
   }
   try {
     return parseOnboardFile(JSON.parse(readFileSync(onboardStorePath(), "utf8")));
@@ -57,7 +65,7 @@ function readCache(): OnboardFile {
 
 function writeCache(data: OnboardFile) {
   if (memoryOverride) {
-    memoryOverride = { people: data.people.map((row) => ({ ...row, events: [...row.events] })) };
+    memoryOverride = cloneFile(data);
     lastStore = "memory";
     lastStored = true;
     return;
@@ -108,8 +116,8 @@ export async function hydrateOnboardStore(): Promise<OnboardFile> {
     try {
       const raw = await readVaultJson(drive, ONBOARD_PEOPLE_VAULT_NAME, ONBOARD_PEOPLE_VAULT_KIND);
       const vault = parseOnboardFile(raw);
-      if (vault.people.length) writeCache(vault);
-      else if (cache.people.length && raw == null) {
+      if (vault.people.length || vault.requests.length) writeCache(vault);
+      else if ((cache.people.length || cache.requests.length) && raw == null) {
         await persist(cache);
         return readCache();
       } else if (raw != null) {
@@ -144,8 +152,27 @@ export async function upsertOnboardPerson(person: OnboardPerson): Promise<Onboar
   const data = readCache();
   const next = data.people.filter((row) => row.id !== person.id);
   next.push(person);
-  await persist({ people: next });
+  await persist({ people: next, requests: data.requests });
   return person;
+}
+
+export async function listOnboardRequests(): Promise<ManpowerRequest[]> {
+  const data = await hydrateOnboardStore();
+  return [...data.requests].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export async function getOnboardRequest(id: string): Promise<ManpowerRequest | null> {
+  const data = await hydrateOnboardStore();
+  return data.requests.find((row) => row.id === id) ?? null;
+}
+
+export async function upsertOnboardRequest(request: ManpowerRequest): Promise<ManpowerRequest> {
+  if (!hydrated && !memoryOverride) await hydrateOnboardStore();
+  const data = readCache();
+  const next = data.requests.filter((row) => row.id !== request.id);
+  next.push(request);
+  await persist({ people: data.people, requests: next });
+  return request;
 }
 
 export function resetOnboardForTests() {
@@ -162,7 +189,7 @@ export function resetOnboardForTests() {
 }
 
 export function useMemoryOnboard(seed: OnboardFile = emptyFile()) {
-  memoryOverride = { people: seed.people.map((row) => ({ ...row, events: [...row.events] })) };
+  memoryOverride = cloneFile({ people: seed.people, requests: seed.requests ?? [] });
   hydrated = true;
   injectedAdapter = null;
   lastStore = "memory";
