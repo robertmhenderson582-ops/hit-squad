@@ -1,9 +1,9 @@
 import { hasBuildDesk, hasWorkingDesk, isHseVaultSeat, isProjectManager } from "./desk-role.ts";
 
-/** Day-one locals. Hall seats register only their own local. */
+/** Locals. Phase 1 activates 553 only; 363 stays structurally ready. */
 export const ONBOARD_LOCALS = [
-  { id: "553", label: "Local 553", craft: "Pipefitter", short: "PF553", union: "UA" },
-  { id: "363", label: "Local 363", craft: "Boilermaker", short: "BM363", union: "IBB" },
+  { id: "553", label: "Local 553", craft: "Pipefitter", short: "PF553", union: "UA", phase1: true },
+  { id: "363", label: "Local 363", craft: "Boilermaker", short: "BM363", union: "IBB", phase1: false },
 ] as const;
 
 export type OnboardLocalId = (typeof ONBOARD_LOCALS)[number]["id"];
@@ -21,8 +21,41 @@ export const ONBOARD_STAGES = [
 export type OnboardStageId = (typeof ONBOARD_STAGES)[number]["id"];
 
 export const TOM_FRIED_NAME = "Tom Fried";
-export const TOM_FRIED_SEAT_ID = "seat-tom-fried";
+export const TOM_FRIED_EMAIL = "friedt@madisonltd.com";
+export const TOM_FRIED_SEAT_ID = "tester-tom-fried";
 export const TOM_FRIED_TITLE = "HSE Dispatcher";
+
+export const JOHN_BATTUELLO_NAME = "John Battuello Jr.";
+export const JOHN_BATTUELLO_EMAIL = "jbattuello@ualocal553.org";
+export const JOHN_BATTUELLO_SEAT_ID = "tester-john-battuello";
+
+export const ONBOARD_PHASE1_LOCAL_IDS = ["553"] as const;
+
+export type OnboardSeedSeat = {
+  id: string;
+  email: string;
+  name: string;
+  jobTitle: string;
+  company: "madison";
+};
+
+/** Seeded login seats. Not TESTER_SEATS — that list stays locked at 12. */
+export const ONBOARD_SEED_SEATS: readonly OnboardSeedSeat[] = [
+  {
+    id: JOHN_BATTUELLO_SEAT_ID,
+    email: JOHN_BATTUELLO_EMAIL,
+    name: JOHN_BATTUELLO_NAME,
+    jobTitle: "Hall Local 553",
+    company: "madison",
+  },
+  {
+    id: TOM_FRIED_SEAT_ID,
+    email: TOM_FRIED_EMAIL,
+    name: TOM_FRIED_NAME,
+    jobTitle: TOM_FRIED_TITLE,
+    company: "madison",
+  },
+];
 
 export const DEFAULT_ONBOARD_PLANT = {
   siteId: "wood-river",
@@ -97,6 +130,23 @@ export function isOnboardLocalId(value: unknown): value is OnboardLocalId {
   return typeof value === "string" && LOCAL_IDS.has(value);
 }
 
+export function isOnboardPhase1Local(value: unknown): value is OnboardLocalId {
+  return value === "553";
+}
+
+export function selectableOnboardLocals() {
+  return ONBOARD_LOCALS.filter((row) => row.phase1);
+}
+
+export function onboardSeedByEmail(email?: string | null) {
+  const key = (email || "").trim().toLowerCase();
+  return ONBOARD_SEED_SEATS.find((row) => row.email === key);
+}
+
+export function onboardSeedCompanyForEmail(email?: string | null) {
+  return onboardSeedByEmail(email)?.company;
+}
+
 export function isOnboardStageId(value: unknown): value is OnboardStageId {
   return typeof value === "string" && STAGE_IDS.has(value);
 }
@@ -119,7 +169,9 @@ export function defaultCraftForLocal(localId: OnboardLocalId) {
 
 export function hallLocalForSeat(user?: OnboardViewer | null): OnboardLocalId | null {
   if (!user) return null;
-  const hay = `${user.jobTitle || ""} ${user.name || ""} ${user.email || ""}`;
+  const email = (user.email || "").trim().toLowerCase();
+  if (email === JOHN_BATTUELLO_EMAIL) return "553";
+  const hay = `${user.jobTitle || ""} ${user.name || ""} ${email}`;
   if (/\b553\b|pf553|pipefitter hall|hall local 553/i.test(hay)) return "553";
   if (/\b363\b|bm363|boilermaker hall|hall local 363/i.test(hay)) return "363";
   return null;
@@ -132,6 +184,7 @@ export function isHallSeat(user?: OnboardViewer | null): boolean {
 export function isTomFriedSeat(user?: OnboardViewer | null): boolean {
   if (!user) return false;
   if (user.id === TOM_FRIED_SEAT_ID) return true;
+  if ((user.email || "").trim().toLowerCase() === TOM_FRIED_EMAIL) return true;
   const hay = `${user.name || ""} ${user.jobTitle || ""}`;
   return /tom\s+fried/i.test(hay) || new RegExp(TOM_FRIED_TITLE, "i").test(hay);
 }
@@ -301,7 +354,8 @@ export function createOnboardPerson(input: {
 }): OnboardPerson | { error: string } {
   const name = input.name.trim();
   if (name.length < 2) return { error: "Enter the person's name." };
-  if (!isOnboardLocalId(input.localId)) return { error: "Pick Local 553 or Local 363." };
+  if (!isOnboardLocalId(input.localId)) return { error: "Pick Local 553." };
+  if (!isOnboardPhase1Local(input.localId)) return { error: "Phase 1 is Local 553 only." };
   const hallLocal = hallLocalForSeat(input.actor);
   if (hallLocal && hallLocal !== input.localId) {
     return { error: `Hall seats can only register Local ${hallLocal}.` };

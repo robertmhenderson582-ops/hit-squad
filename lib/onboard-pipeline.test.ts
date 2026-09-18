@@ -6,8 +6,12 @@ import { NOVUS_EMAIL } from "./desk-role.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import {
   DEFAULT_ONBOARD_PLANT,
+  JOHN_BATTUELLO_EMAIL,
+  JOHN_BATTUELLO_NAME,
   ONBOARD_LOCALS,
+  ONBOARD_SEED_SEATS,
   ONBOARD_STAGES,
+  TOM_FRIED_EMAIL,
   TOM_FRIED_NAME,
   TOM_FRIED_TITLE,
   canAdvanceOnboard,
@@ -18,11 +22,14 @@ import {
   createOnboardPerson,
   hallLocalForSeat,
   isHallSeat,
+  isOnboardPhase1Local,
   isTomFriedSeat,
   nextOnboardStage,
   onboardStageOwner,
   parseOnboardFile,
+  parseOnboardPerson,
   peopleByStage,
+  selectableOnboardLocals,
   visibleOnboardPeople,
 } from "./onboard-pipeline.ts";
 import { listOnboardPeople, resetOnboardForTests, upsertOnboardPerson, useMemoryOnboard } from "./onboard-vault.ts";
@@ -35,16 +42,28 @@ const owner = { email: OWNER_LOGIN_EMAIL, role: "owner" as const, name: "Robert 
 const novus = { email: NOVUS_EMAIL, role: "operator" as const, name: "Novus" };
 const wendell = { email: "wlanderno@yahoo.com", role: "tester" as const, name: "Wendell Landerno", jobTitle: "HSE Manager" };
 const nathan = { email: "nathanboyte@gmail.com", role: "tester" as const, name: "Nathan Boyte", jobTitle: "Project Manager" };
-const hall553 = { email: "hall553@example.com", role: "tester" as const, name: "UA 553 BA", jobTitle: "Hall Local 553" };
+const hall553 = { email: JOHN_BATTUELLO_EMAIL, role: "tester" as const, name: JOHN_BATTUELLO_NAME, jobTitle: "Hall Local 553" };
 const hall363 = { email: "hall363@example.com", role: "tester" as const, name: "BM 363 BA", jobTitle: "Hall Local 363" };
-const tom = { email: "", role: "tester" as const, name: TOM_FRIED_NAME, jobTitle: TOM_FRIED_TITLE };
+const tom = { email: TOM_FRIED_EMAIL, role: "tester" as const, name: TOM_FRIED_NAME, jobTitle: TOM_FRIED_TITLE };
 const chance = { email: "chancec318@yahoo.com", role: "tester" as const, name: "Chance", jobTitle: "Quality Manager" };
 
 describe("Hall ↔ HSE onboarding pipeline", () => {
   it("locks day-one locals, Tom-owned HSE stages, and P66 notify (not badge issued)", () => {
     assert.deepEqual(
-      ONBOARD_LOCALS.map((row) => `${row.id}:${row.short}`),
-      ["553:PF553", "363:BM363"],
+      ONBOARD_LOCALS.map((row) => `${row.id}:${row.short}:${row.phase1}`),
+      ["553:PF553:true", "363:BM363:false"],
+    );
+    assert.deepEqual(
+      selectableOnboardLocals().map((row) => row.id),
+      ["553"],
+    );
+    assert.equal(isOnboardPhase1Local("553"), true);
+    assert.equal(isOnboardPhase1Local("363"), false);
+    assert.equal(TOM_FRIED_EMAIL, "friedt@madisonltd.com");
+    assert.equal(JOHN_BATTUELLO_EMAIL, "jbattuello@ualocal553.org");
+    assert.deepEqual(
+      ONBOARD_SEED_SEATS.map((row) => `${row.name}:${row.email}`),
+      [`${JOHN_BATTUELLO_NAME}:${JOHN_BATTUELLO_EMAIL}`, `${TOM_FRIED_NAME}:${TOM_FRIED_EMAIL}`],
     );
     assert.deepEqual(
       ONBOARD_STAGES.map((row) => row.id),
@@ -105,7 +124,7 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(created.events.length, 1);
     assert.equal(created.events[0]?.fromStage, null);
     assert.equal(created.events[0]?.toStage, "registered");
-    assert.equal(created.events[0]?.actorName, "UA 553 BA");
+    assert.equal(created.events[0]?.actorName, JOHN_BATTUELLO_NAME);
 
     const skipped = changeOnboardStage(created, { toStage: "techsolve", actor: owner });
     assert.equal("error" in skipped, true);
@@ -140,13 +159,13 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(blocked.events.at(-1)?.fromStage, "waiting-drug");
 
     const hallOther = createOnboardPerson({ name: "Boiler Hand", localId: "363", actor: hall553 });
-    assert.deepEqual(hallOther, { error: "Hall seats can only register Local 553." });
+    assert.deepEqual(hallOther, { error: "Phase 1 is Local 553 only." });
   });
 
   it("hides the other local from a hall seat and groups the kanban by stage", () => {
     const fitter = createOnboardPerson({ name: "Pat Fitter", localId: "553", actor: hall553, id: "ob-553" });
-    const boiler = createOnboardPerson({ name: "Boiler Hand", localId: "363", actor: hall363, id: "ob-363" });
-    if ("error" in fitter || "error" in boiler) throw new Error("seed");
+    const boiler = parseOnboardPerson({ id: "ob-363", name: "Boiler Hand", localId: "363", stage: "registered" });
+    if ("error" in fitter || !boiler) throw new Error("seed");
     const all = [fitter, boiler];
     assert.deepEqual(
       visibleOnboardPeople(all, hall553).map((row) => row.id),
@@ -192,10 +211,15 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     const drive = source("./drive-data.ts");
     assert.match(page, /OnboardDesk/);
     assert.match(page, /DeskChrome/);
+    const users = source("./users.ts");
     assert.match(desk, /Hall register/);
     assert.match(desk, /P66 badge notify/);
     assert.match(desk, /Tom Fried/);
+    assert.match(desk, /friedt@madisonltd.com/);
+    assert.match(desk, /John Battuello Jr/);
     assert.match(desk, /Audit trail/);
+    assert.doesNotMatch(desk, /tfried@madisonltd.com/);
+    assert.doesNotMatch(desk, /Local 363|BM363/);
     assert.doesNotMatch(desk, /\bSMS\b|Twilio|Zoom|Teams/i);
     assert.doesNotMatch(api, /\bSMS\b|Twilio|Zoom|Teams/i);
     assert.match(home, /ONBOARD_DOOR/);
@@ -203,5 +227,8 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.match(hse, /href="\/onboard"/);
     assert.match(drive, /onboard-people\.json/);
     assert.doesNotMatch(drive, /DRIVE_ONBOARD_PEOPLE_FILE_ID = "1/);
+    assert.match(users, /ONBOARD_SEED_SEATS/);
+    assert.doesNotMatch(users, /madisonltd\.com/);
+    assert.doesNotMatch(source("./tester-seats.ts"), /friedt@|jbattuello@|tfried@/);
   });
 });

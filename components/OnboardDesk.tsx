@@ -7,8 +7,8 @@ import { viewAsInit } from "@/lib/desk-scope";
 import {
   DEFAULT_ONBOARD_PLANT,
   ONBOARD_CLASSIFICATIONS,
-  ONBOARD_LOCALS,
   ONBOARD_STAGES,
+  selectableOnboardLocals,
   TOM_FRIED_NAME,
   defaultCraftForLocal,
   hallLocalForSeat,
@@ -187,9 +187,10 @@ export function OnboardDesk() {
         <p className="text-sm uppercase tracking-[0.18em] text-[#5b6f73]">Hall ↔ HSE</p>
         <h2 className="mt-1 text-2xl font-semibold text-[#163038]">Onboarding board</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">
-          Halls register referred craftsmen. Tom Fried owns drug screen, background, TechSolve, and the
-          P66 badge notify — P66 runs actual badging. Every stage change is timestamped. Default plant
-          is {DEFAULT_ONBOARD_PLANT.site} / {DEFAULT_ONBOARD_PLANT.client}.
+          Phase 1 is Local 553 only — hall seat John Battuello Jr. Tom Fried (friedt@madisonltd.com) owns
+          drug screen, background, TechSolve, and the P66 badge notify. P66 runs actual badging. Every
+          stage change is timestamped. Default plant is {DEFAULT_ONBOARD_PLANT.site} /{" "}
+          {DEFAULT_ONBOARD_PLANT.client}. Other halls stay parked.
         </p>
         {lockedLocal ? (
           <p className="mt-2 text-sm text-[#163038]">This hall seat sees Local {lockedLocal} only.</p>
@@ -213,7 +214,7 @@ export function OnboardDesk() {
                 disabled={Boolean(lockedLocal)}
                 onChange={(event) => changeLocal(event.target.value as OnboardLocalId)}
               >
-                {ONBOARD_LOCALS.map((local) => (
+                {selectableOnboardLocals().map((local) => (
                   <option key={local.id} value={local.id}>
                     {local.label} · {local.short} · {local.craft}
                   </option>

@@ -15,6 +15,7 @@ import {
 import { DriveApiError, SEATS_SA_OPEN_ERROR, isSeatsOpenDenied, vaultDriveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import { canonicalEmail, identityBucket, isOwnerAliasSeat, isOwnerIdentity, resolveIdentity } from "./identity.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
+import { ONBOARD_SEED_SEATS } from "./onboard-pipeline.ts";
 import { TESTER_SEATS } from "./tester-seats.ts";
 import { RATE_VAULT_JAMES_EMAIL, RATE_VAULT_JAMES_ID, RATE_VAULT_JAMES_NAME } from "./rate-vault.ts";
 import { defaultJobRoleForSeat, loginRoleForJobTitle, parseJobRoleLabel } from "./job-roles.ts";
@@ -615,7 +616,27 @@ function seedUsers(): StoredUser[] {
       recoveryConsumed: saved?.recoveryConsumed,
     };
   });
-  const known = new Set<string>([owner.email, novus.email, ...testers.map((seat) => seat.email)]);
+  const onboardSeats: StoredUser[] = ONBOARD_SEED_SEATS.map((seat) => {
+    const saved = persisted[seat.email];
+    return {
+      id: seat.id,
+      email: seat.email,
+      name: seat.name,
+      role: "tester",
+      jobTitle: seat.jobTitle || defaultJobRoleForSeat({ email: seat.email, name: seat.name, role: "tester" }),
+      mustChangePassword: saved ? Boolean(saved.mustChangePassword) : true,
+      passwordHash: saved?.passwordHash,
+      previousHashes: saved?.previousHashes,
+      recoveryHash: saved?.recoveryHash,
+      recoveryConsumed: saved?.recoveryConsumed,
+    };
+  });
+  const known = new Set<string>([
+    owner.email,
+    novus.email,
+    ...testers.map((seat) => seat.email),
+    ...onboardSeats.map((seat) => seat.email),
+  ]);
   const jamesSaved = persisted[RATE_VAULT_JAMES_EMAIL];
   const james: StoredUser = {
     id: RATE_VAULT_JAMES_ID,
@@ -656,7 +677,7 @@ function seedUsers(): StoredUser[] {
         recoveryConsumed: saved?.recoveryConsumed,
       };
     });
-  return [owner, novus, ...testers, james, ...extras];
+  return [owner, novus, ...testers, ...onboardSeats, james, ...extras];
 }
 
 function ownerUsers(): StoredUser[] {

@@ -1,4 +1,5 @@
 import { NOVUS_EMAIL } from "./desk-role.ts";
+import { onboardSeedCompanyForEmail } from "./onboard-pipeline.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { testerByEmail, TESTER_SEATS, type CompanyId } from "./tester-seats.ts";
 
@@ -154,7 +155,7 @@ export function seedCompanyForEmail(email: string): CompanyId {
   if (!key) return "hitsquad";
   if (key === OWNER_LOGIN_EMAIL) return "hitsquad";
   if (key === NOVUS_EMAIL) return "hitsquad";
-  return testerByEmail(key)?.company ?? "hitsquad";
+  return testerByEmail(key)?.company ?? onboardSeedCompanyForEmail(key) ?? "hitsquad";
 }
 
 /** President is Madison. Testers keep seed / persisted assignment. Unknown emails stay Hit Squad. */

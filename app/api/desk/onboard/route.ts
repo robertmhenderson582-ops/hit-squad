@@ -81,7 +81,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "This seat cannot register people." }, { status: 403 });
       }
       if (!isOnboardLocalId(body.localId)) {
-        return NextResponse.json({ error: "Pick Local 553 or Local 363." }, { status: 400 });
+        return NextResponse.json({ error: "Pick Local 553." }, { status: 400 });
       }
       const created = createOnboardPerson({
         name: typeof body.name === "string" ? body.name : "",
