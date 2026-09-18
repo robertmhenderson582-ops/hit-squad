@@ -20,7 +20,12 @@ import {
   type FcrScr,
 } from "./change-order-packet.ts";
 import { PHASE_NAMES } from "./phase-schedule.ts";
-import { scrShiftLabel } from "./scr-rates.ts";
+import {
+  SCR_COMPOSITE_RATE_HEADER,
+  SCR_COMPOSITE_RATE_LABEL,
+  SCR_COMPOSITE_RATE_NOTE,
+  scrShiftLabel,
+} from "./scr-rates.ts";
 import { clampEstimateStatus, parseEstimateStatus } from "./estimate-status.ts";
 import { slugify } from "./estimate-pack.ts";
 import {
@@ -207,7 +212,7 @@ function writeCraftTable(cells: SheetCell[], startRow: number, row: FcrLogRow) {
   const sign = scrSign(row.scrType);
   pushText(cells, `A${header}`, "CRAFT");
   pushText(cells, `B${header}`, "HOURS");
-  pushText(cells, `C${header}`, "$/HR");
+  pushText(cells, `C${header}`, SCR_COMPOSITE_RATE_HEADER);
   pushText(cells, `D${header}`, "LABOR $");
   const lines = row.craftLines.length ? row.craftLines : [];
   const first = header + 1;
@@ -280,7 +285,11 @@ function writeScrSection(cells: SheetCell[], startRow: number, row: FcrLogRow, s
   pushText(cells, `C${hoursRow}`, SCR_COST_LABEL);
   const costRef = `D${hoursRow}`;
 
-  pushText(cells, `A${titleRow + 9}`, "Craft labor — hours × locked schedule-aware composite $/hr. No ST / OT / DT columns.");
+  pushText(
+    cells,
+    `A${titleRow + 9}`,
+    `Craft labor — hours × locked ${SCR_COMPOSITE_RATE_LABEL}. ${SCR_COMPOSITE_RATE_NOTE} No ST / OT / DT columns.`,
+  );
   const craft = writeCraftTable(cells, titleRow + 10, row);
   const claimHeader = craft.laborRow + 2;
   pushText(cells, `A${claimHeader - 1}`, "Claimable costs — Material, Subcontractor, Third-party rental, and other pass-throughs");

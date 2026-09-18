@@ -21,7 +21,12 @@ import {
   toggleScrWhy,
 } from "./change-order-packet.ts";
 import { defaultPhaseSchedule } from "./phase-schedule.ts";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
+  SCR_COMPOSITE_RATE_HEADER,
+  SCR_COMPOSITE_RATE_LABEL,
+  SCR_COMPOSITE_RATE_NOTE,
   scrActiveSchedule,
   scrCompositeHourlyRate,
   scrCompositeRates,
@@ -252,6 +257,45 @@ function memoryStore(seed: Record<string, string> = {}): StorageLike {
     },
   };
 }
+
+describe("SCR composite rate label", () => {
+  it("labels the locked craft rate as Composite $/hr — not billed ST — on desk and Excel", () => {
+    assert.equal(SCR_COMPOSITE_RATE_LABEL, "Composite $/hr");
+    assert.equal(SCR_COMPOSITE_RATE_HEADER, "COMPOSITE $/HR");
+    assert.match(SCR_COMPOSITE_RATE_NOTE, /schedule-weighted composite/i);
+    assert.match(SCR_COMPOSITE_RATE_NOTE, /ST\/OT\/DT/);
+    assert.match(SCR_COMPOSITE_RATE_NOTE, /not billed ST/);
+
+    const desk = readFileSync(fileURLToPath(new URL("../components/ChangeOrderPacket.tsx", import.meta.url)), "utf8");
+    assert.match(desk, /SCR_COMPOSITE_RATE_HEADER/);
+    assert.match(desk, /SCR_COMPOSITE_RATE_NOTE/);
+    assert.match(desk, /SCR_COMPOSITE_RATE_LABEL/);
+    assert.doesNotMatch(desk, /\["CRAFT", "HOURS", "\$\/HR"/);
+
+    const xlsx = readFileSync(fileURLToPath(new URL("./scr-xlsx.ts", import.meta.url)), "utf8");
+    assert.match(xlsx, /SCR_COMPOSITE_RATE_HEADER/);
+    assert.match(xlsx, /SCR_COMPOSITE_RATE_NOTE/);
+    assert.doesNotMatch(xlsx, /pushText\(cells, `C\$\{header\}`, "\$\/HR"\)/);
+
+    let packet = addLogRow(emptyFcrPacket(), { id: "scr-label", scr: "SCR-1", scope: "Extra weld" });
+    packet = addCraftLine(packet, "scr-label", { craft: "Boilermaker Journeyman", hours: 10, rate: 123.45 });
+    const sheets = buildScrWorkbook({ client: P66, site: WOOD, title: "Cat 2", packet });
+    const estimate = sheets.find((sheet) => sheet.name === "SCR Estimate");
+    assert.ok(estimate);
+    assert.ok(estimate.cells.some((cell) => cell.type === "text" && cell.value === SCR_COMPOSITE_RATE_HEADER));
+    assert.ok(
+      estimate.cells.some(
+        (cell) => cell.type === "text" && String(cell.value).includes(SCR_COMPOSITE_RATE_NOTE),
+      ),
+    );
+    assert.equal(
+      estimate.cells.some((cell) => cell.type === "text" && cell.value === "$/HR"),
+      false,
+    );
+    const rateCell = estimate.cells.find((cell) => cell.type === "number" && cell.value === 123.45);
+    assert.ok(rateCell);
+  });
+});
 
 describe("SCR craft dropdown sources", () => {
   it("prefers Rate Vault crafts, then crew extras, then full plant billed catalog — not wage-only", () => {

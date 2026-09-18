@@ -12,6 +12,12 @@ import {
   wageLookupPositions,
 } from "./wage-lookup.ts";
 
+/** Locked craft rate column — schedule-weighted ST/OT/DT, not billed ST. */
+export const SCR_COMPOSITE_RATE_LABEL = "Composite $/hr";
+export const SCR_COMPOSITE_RATE_HEADER = "COMPOSITE $/HR";
+export const SCR_COMPOSITE_RATE_NOTE =
+  "Schedule-weighted composite from the craft's ST/OT/DT for the active phase or shift — not billed ST alone.";
+
 /** Job-pack / Rate Vault / plant-book composite ST/OT/DT. Do not invent rates. */
 export function scrCompositeRates(craft: string, site = "", client = "") {
   const title = craft.trim();
