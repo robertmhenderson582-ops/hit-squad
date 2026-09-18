@@ -432,7 +432,7 @@ export function ManageUsersDesk() {
           seat already on this desk. Don’t send. They change it on first sign-in. No invite email.
           Hall Local 553 is the sole Phase 1 hall seat: John Battuello Jr. ·
           jbattuello@ualocal553.org. HSE Dispatcher seat: Tom Fried ·
-          tfried@madisonltd.com. Local 363 stays parked (not in this Role list, not seeded).
+          friedt@madisonltd.com. Local 363 stays parked (not in this Role list, not seeded).
           Do not invent an email.
         </p>
         <div className="mt-4 overflow-x-auto">

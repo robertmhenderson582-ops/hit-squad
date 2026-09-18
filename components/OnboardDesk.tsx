@@ -189,7 +189,7 @@ export function OnboardDesk() {
         <p className="text-sm uppercase tracking-[0.18em] text-[#5b6f73]">Hall ↔ HSE</p>
         <h2 className="mt-1 text-2xl font-semibold text-[#163038]">Onboarding board</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">
-          Phase 1 is Local 553 only. Tom Fried (tfried@madisonltd.com) owns drug screen, background,
+          Phase 1 is Local 553 only. Tom Fried (friedt@madisonltd.com) owns drug screen, background,
           TechSolve, and the P66 badge notify. P66 runs actual badging. Every stage change is
           timestamped. Default plant is {DEFAULT_ONBOARD_PLANT.site} / {DEFAULT_ONBOARD_PLANT.client}.
           Other halls stay parked.
@@ -200,7 +200,7 @@ export function OnboardDesk() {
           </p>
         ) : null}
         <p className="mt-1 text-sm text-[#163038]">
-          HSE dispatcher: Tom Fried · tfried@madisonltd.com
+          HSE dispatcher: Tom Fried · friedt@madisonltd.com
         </p>
         {lockedLocal ? (
           <p className="mt-2 text-sm text-[#163038]">This hall seat sees Local {lockedLocal} only.</p>

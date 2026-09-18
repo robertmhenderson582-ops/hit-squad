@@ -64,7 +64,7 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     );
     assert.equal(isOnboardPhase1Local("553"), true);
     assert.equal(isOnboardPhase1Local("363"), false);
-    assert.equal(TOM_FRIED_EMAIL, "tfried@madisonltd.com");
+    assert.equal(TOM_FRIED_EMAIL, "friedt@madisonltd.com");
     assert.equal(JOHN_BATTUELLO_EMAIL, "jbattuello@ualocal553.org");
     assert.deepEqual(hallContactForLocal("553"), {
       name: JOHN_BATTUELLO_NAME,
@@ -234,15 +234,15 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.match(desk, /Hall register/);
     assert.match(desk, /P66 badge notify/);
     assert.match(desk, /Tom Fried/);
-    assert.match(desk, /tfried@madisonltd.com/);
+    assert.match(desk, /friedt@madisonltd.com/);
     assert.match(desk, /HSE dispatcher/);
-    assert.match(source("../components/HseDesk.tsx"), /tfried@madisonltd.com/);
-    assert.match(source("../components/ManageUsersDesk.tsx"), /tfried@madisonltd.com/);
+    assert.match(source("../components/HseDesk.tsx"), /friedt@madisonltd.com/);
+    assert.match(source("../components/ManageUsersDesk.tsx"), /friedt@madisonltd.com/);
     assert.match(desk, /John Battuello Jr/);
     assert.match(desk, /jbattuello@ualocal553.org/);
     assert.match(desk, /Local 553 hall contact/);
     assert.match(desk, /Audit trail/);
-    assert.doesNotMatch(desk, /friedt@madisonltd.com/);
+    assert.doesNotMatch(desk, /tfried@madisonltd.com/);
     assert.doesNotMatch(desk, /Local 363|BM363/);
     assert.doesNotMatch(desk, /\bSMS\b|Twilio|Zoom|Teams/i);
     assert.doesNotMatch(api, /\bSMS\b|Twilio|Zoom|Teams/i);

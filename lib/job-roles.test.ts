@@ -72,7 +72,7 @@ describe("job roles phase 1", () => {
     assert.equal(defaultJobRoleForSeat({ email: "wlanderno@yahoo.com", role: "tester" }), "HSE Manager");
     assert.equal(defaultJobRoleForSeat({ email: "bccamp2@gmail.com", role: "tester" }), "Site Safety Manager");
     assert.equal(defaultJobRoleForSeat({ email: "jbattuello@ualocal553.org", role: "tester" }), "Hall Local 553");
-    assert.equal(defaultJobRoleForSeat({ email: "tfried@madisonltd.com", role: "tester" }), "HSE Dispatcher");
+    assert.equal(defaultJobRoleForSeat({ email: "friedt@madisonltd.com", role: "tester" }), "HSE Dispatcher");
     assert.equal(defaultJobRoleForSeat({ email: "nathanboyte@gmail.com", role: "tester" }), "Project Manager");
     assert.equal(defaultJobRoleForSeat({ email: JOHN_BEECH_EMAIL, role: "tester" }), "Project Manager");
     assert.equal(defaultJobRoleForSeat({ email: JOSEPH_EMAIL, role: "tester" }), "Project Manager");
