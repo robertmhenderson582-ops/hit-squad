@@ -13,6 +13,7 @@ export const SEED_JOB_ROLES = [
   "Division Manager",
   "HSE Manager",
   "HSE Dispatcher",
+  "DISA DER",
   "Hall Local 553",
   "Quality Manager",
   "Accounting Manager",
@@ -116,6 +117,7 @@ export function defaultJobRoleForSeat(user?: {
   if (/\bchance\b/.test(name)) return "Quality Manager";
   if (/\bwendell\b/.test(name)) return "HSE Manager";
   if (/\bbenny\b/.test(name)) return "Site Safety Manager";
+  if (/\btom fried\b/.test(name)) return "DISA DER";
   if (/\bnathan\b/.test(name) || /\bjohn beech\b/.test(name) || /\bjoseph\b/.test(name)) {
     return "Project Manager";
   }

@@ -25,6 +25,7 @@ describe("job roles phase 1", () => {
         "Division Manager",
         "HSE Manager",
         "HSE Dispatcher",
+        "DISA DER",
         "Hall Local 553",
         "Quality Manager",
         "Accounting Manager",
@@ -72,6 +73,7 @@ describe("job roles phase 1", () => {
     assert.equal(defaultJobRoleForSeat({ email: "wlanderno@yahoo.com", role: "tester" }), "HSE Manager");
     assert.equal(defaultJobRoleForSeat({ email: "bccamp2@gmail.com", role: "tester" }), "Site Safety Manager");
     assert.equal(defaultJobRoleForSeat({ email: "jbattuello@ualocal553.org", role: "tester" }), "Hall Local 553");
+    assert.equal(defaultJobRoleForSeat({ name: "Tom Fried", role: "tester" }), "DISA DER");
     assert.equal(defaultJobRoleForSeat({ email: "nathanboyte@gmail.com", role: "tester" }), "Project Manager");
     assert.equal(defaultJobRoleForSeat({ email: JOHN_BEECH_EMAIL, role: "tester" }), "Project Manager");
     assert.equal(defaultJobRoleForSeat({ email: JOSEPH_EMAIL, role: "tester" }), "Project Manager");

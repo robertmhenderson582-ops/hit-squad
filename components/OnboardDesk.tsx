@@ -5,18 +5,25 @@ import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { viewAsInit } from "@/lib/desk-scope";
 import {
+  BENNY_CAMP_NAME,
+  CONTROL_CENTER_TITLE,
   DEFAULT_ONBOARD_PLANT,
+  DEFAULT_ONBOARD_SETTINGS,
+  HIRE_IN_OUTREACH_OWNERS,
+  HIRE_IN_VERIFIED_FIELD_LABEL,
+  JOHN_BATTUELLO_EMAIL,
   MANPOWER_CERTS_PLACEHOLDER,
   MANPOWER_PACKAGE_PLACEHOLDER,
   MANPOWER_SCREENING_PLACEHOLDER,
   ONBOARD_CLASSIFICATIONS,
   ONBOARD_STAGES,
+  TOM_FRIED_NAME,
+  TOM_FRIED_TITLE,
   selectableOnboardLocals,
-  BENNY_CAMP_NAME,
-  CONTROL_CENTER_TITLE,
   defaultCraftForLocal,
   hallContactForLocal,
   hallLocalForSeat,
+  maskSsnLast4,
   manpowerRequestLabel,
   nextOnboardStage,
   onboardLocal,
@@ -25,19 +32,29 @@ import {
   type ManpowerRequest,
   type OnboardLocalId,
   type OnboardPerson,
+  type OnboardSettings,
+  type TrainingStatus,
 } from "@/lib/onboard-pipeline";
 
 type BoardPayload = {
   people?: OnboardPerson[];
   requests?: ManpowerRequest[];
+  settings?: OnboardSettings;
   canRegister?: boolean;
   canAdvance?: boolean;
   canCreateRequest?: boolean;
   canRespondRequest?: boolean;
+  canUpdateTracker?: boolean;
+  canUpdateOutreach?: boolean;
+  canSeeRestrictedPii?: boolean;
+  canConfigure?: boolean;
   error?: string;
   stored?: boolean;
   store?: string;
+  notify?: { queued?: boolean; sent?: boolean; recipients?: number; skipped?: string; error?: string };
 };
+
+const TRAINING_OPTIONS: TrainingStatus[] = ["not-started", "scheduled", "complete"];
 
 function formatWhen(value: string) {
   const date = new Date(value);
@@ -55,6 +72,14 @@ function localLabel(id: OnboardLocalId) {
   return `${local.label} · ${local.short}`;
 }
 
+function notifyLine(notify?: BoardPayload["notify"]) {
+  if (!notify) return "";
+  if (notify.error) return ` Verification email: ${notify.error}`;
+  if (notify.skipped) return ` Verification email held — ${notify.skipped}`;
+  if (notify.sent) return ` Verification email sent to ${notify.recipients || 0} corp / PM recipients.`;
+  return "";
+}
+
 export function OnboardDesk() {
   const { user } = useSession();
   const lens = useLensUser();
@@ -65,10 +90,15 @@ export function OnboardDesk() {
 
   const [people, setPeople] = useState<OnboardPerson[]>([]);
   const [requests, setRequests] = useState<ManpowerRequest[]>([]);
-  const [canRegister, setCanRegister] = useState(true);
+  const [settings, setSettings] = useState<OnboardSettings>(DEFAULT_ONBOARD_SETTINGS);
+  const [canRegister, setCanRegister] = useState(false);
   const [canAdvance, setCanAdvance] = useState(false);
   const [canCreateRequest, setCanCreateRequest] = useState(false);
   const [canRespondRequest, setCanRespondRequest] = useState(false);
+  const [canEditTracker, setCanEditTracker] = useState(false);
+  const [canEditOutreach, setCanEditOutreach] = useState(false);
+  const [canSeePii, setCanSeePii] = useState(false);
+  const [canConfigure, setCanConfigure] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,9 +118,9 @@ export function OnboardDesk() {
 
   const [neededDate, setNeededDate] = useState("");
   const [headcount, setHeadcount] = useState("1");
-  const [reqTrade, setReqTrade] = useState(defaultCraftForLocal(lockedLocal || "553"));
+  const [reqTrade, setReqTrade] = useState<string>(defaultCraftForLocal(lockedLocal || "553"));
   const [reqClass, setReqClass] = useState("Journeyman");
-  const [reqSite, setReqSite] = useState(DEFAULT_ONBOARD_PLANT.site);
+  const [reqSite, setReqSite] = useState<string>(DEFAULT_ONBOARD_PLANT.site);
   const [reqJob, setReqJob] = useState("");
   const [reqCerts, setReqCerts] = useState("");
   const [reqScreenings, setReqScreenings] = useState(MANPOWER_SCREENING_PLACEHOLDER);
@@ -98,6 +128,15 @@ export function OnboardDesk() {
   const [respondId, setRespondId] = useState<string | null>(null);
   const [fillCount, setFillCount] = useState("");
   const [fillDate, setFillDate] = useState("");
+
+  const [corpEmails, setCorpEmails] = useState("");
+  const [pmEmails, setPmEmails] = useState("");
+  const [step1Submitter, setStep1Submitter] = useState<"site" | "hall">("site");
+
+  const [legalName, setLegalName] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [ssnLast4, setSsnLast4] = useState("");
+  const [problemNote, setProblemNote] = useState("");
 
   useEffect(() => {
     if (!lockedLocal) return;
@@ -108,10 +147,20 @@ export function OnboardDesk() {
   function applyBoard(data: BoardPayload) {
     if (Array.isArray(data.people)) setPeople(data.people);
     if (Array.isArray(data.requests)) setRequests(data.requests);
+    if (data.settings) {
+      setSettings(data.settings);
+      setStep1Submitter(data.settings.step1Submitter);
+      setCorpEmails(data.settings.corporateEmails.join(", "));
+      setPmEmails(data.settings.pmEmails.join(", "));
+    }
     if (typeof data.canRegister === "boolean") setCanRegister(data.canRegister);
     if (typeof data.canAdvance === "boolean") setCanAdvance(data.canAdvance);
     if (typeof data.canCreateRequest === "boolean") setCanCreateRequest(data.canCreateRequest);
     if (typeof data.canRespondRequest === "boolean") setCanRespondRequest(data.canRespondRequest);
+    if (typeof data.canUpdateTracker === "boolean") setCanEditTracker(data.canUpdateTracker);
+    if (typeof data.canUpdateOutreach === "boolean") setCanEditOutreach(data.canUpdateOutreach);
+    if (typeof data.canSeeRestrictedPii === "boolean") setCanSeePii(data.canSeeRestrictedPii);
+    if (typeof data.canConfigure === "boolean") setCanConfigure(data.canConfigure);
     if (data.error) {
       setError(data.error);
       return false;
@@ -140,11 +189,20 @@ export function OnboardDesk() {
   }, [actor?.email, loadBoard]);
 
   const columns = useMemo(() => peopleByStage(people), [people]);
+  const problemCases = useMemo(() => people.filter((row) => row.problemCase), [people]);
 
   function changeLocal(next: OnboardLocalId) {
     if (lockedLocal) return;
     setLocalId(next);
     setCraft(defaultCraftForLocal(next));
+  }
+
+  function openPerson(person: OnboardPerson) {
+    setOpenId(person.id);
+    setLegalName(person.legalName);
+    setDateOfBirth(person.dateOfBirth);
+    setSsnLast4(person.ssnLast4);
+    setProblemNote(person.problemCaseNote);
   }
 
   async function onRegister(event: FormEvent) {
@@ -177,12 +235,12 @@ export function OnboardDesk() {
       return;
     }
     applyBoard(data);
-    if (data.person) setOpenId(data.person.id);
+    if (data.person) openPerson(data.person);
     setName("");
     setPhone("");
     setEmail("");
     setReferredFor("");
-    setNote(`Registered ${data.person?.name || "person"} at ${localLabel(localId)}.`);
+    setNote(`Submitted ${data.person?.name || "person"} to DISA DER.${notifyLine(data.notify)}`);
   }
 
   async function onCreateRequest(event: FormEvent) {
@@ -253,6 +311,34 @@ export function OnboardDesk() {
     setNote(`Hall response saved on ${data.request?.id || "request"}.`);
   }
 
+  async function onSaveSettings(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    setNote(null);
+    const response = await fetch(
+      "/api/desk/onboard",
+      viewAsInit(owner?.viewAs, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save-settings",
+          step1Submitter,
+          corporateEmails: corpEmails,
+          pmEmails,
+        }),
+      }),
+    );
+    const data = (await response.json().catch(() => ({}))) as BoardPayload;
+    setSaving(false);
+    if (!response.ok) {
+      setError(data.error || "Could not save Owner settings.");
+      return;
+    }
+    applyBoard(data);
+    setNote("Owner settings saved. Empty corp / PM lists do not invent addresses.");
+  }
+
   async function postStage(action: "advance" | "block" | "reopen", person: OnboardPerson, extra: Record<string, string> = {}) {
     setSaving(true);
     setError(null);
@@ -273,12 +359,37 @@ export function OnboardDesk() {
     }
     applyBoard(data);
     if (data.person) {
-      setOpenId(data.person.id);
+      openPerson(data.person);
       const from = extra.note ? ` — ${extra.note}` : "";
-      setNote(`${data.person.name}: ${onboardStage(person.stage).label} → ${onboardStage(data.person.stage).label}${from}`);
+      setNote(`${data.person.name}: ${onboardStage(person.stage).label} → ${onboardStage(data.person.stage).label}${from}.${notifyLine(data.notify)}`);
     }
     setBlockId(null);
     setBlockReason("");
+  }
+
+  async function postTracker(person: OnboardPerson, extra: Record<string, unknown>) {
+    setSaving(true);
+    setError(null);
+    setNote(null);
+    const response = await fetch(
+      "/api/desk/onboard",
+      viewAsInit(owner?.viewAs, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update-tracker", id: person.id, ...extra }),
+      }),
+    );
+    const data = (await response.json().catch(() => ({}))) as BoardPayload & { person?: OnboardPerson };
+    setSaving(false);
+    if (!response.ok) {
+      setError(data.error || "Could not update tracker fields.");
+      return;
+    }
+    applyBoard(data);
+    if (data.person) {
+      openPerson(data.person);
+      setNote(`Tracker updated for ${data.person.name}.`);
+    }
   }
 
   return (
@@ -287,12 +398,15 @@ export function OnboardDesk() {
         <p className="text-sm uppercase tracking-[0.18em] text-[#5b6f73]">Hall ↔ HSE</p>
         <h2 className="mt-1 text-2xl font-semibold text-[#163038]">{CONTROL_CENTER_TITLE}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">
-          Phase 1 is Local 553 only. Benny Camp creates a manpower request first; John Battuello Jr.
-          responds with fill count and date; then the hall registers people onto that request. Benny
-          Camp (bccamp2@gmail.com) owns drug screen, background, TechSolve, and the P66 badge notify.
-          P66 runs actual badging. Every create, respond, and stage change is timestamped.
-          No email blast. Default plant is {DEFAULT_ONBOARD_PLANT.site} / {DEFAULT_ONBOARD_PLANT.client}.
-          Other halls stay parked.
+          Phase 1 is Local 553 only. Tom Fried or Benny Camp create a manpower request first; John Battuello Jr.
+          responds with fill count and date; then site submits name + phone onto that request (Owner can switch Step 1
+          to hall). DISA DER is Tom Fried (friedt@madisonltd.com) — identity, DISA background, and drug. Benny Camp
+          (bccamp2@gmail.com) is temp dispatcher until Donnie. Training is Texolve, Collinsville, Illinois.
+          TechSolve is an alternate spelling pending confirm. Hire-end outreach is Robert Henderson / Ben Peffley /
+          Nathan Boyte. Tracker keepers are Tom Fried and Debbie. Every create, respond, and stage change is
+          timestamped. No email blast on manpower. End-of-step verification emails go to Owner-configured corp + PM
+          lists. Default plant is {DEFAULT_ONBOARD_PLANT.site} / {DEFAULT_ONBOARD_PLANT.client}. Other halls stay
+          parked.
         </p>
         {hallContactForLocal("553") ? (
           <p className="mt-3 text-sm text-[#163038]">
@@ -300,12 +414,51 @@ export function OnboardDesk() {
           </p>
         ) : null}
         <p className="mt-1 text-sm text-[#163038]">
-          HSE dispatcher (temp until Donnie): Benny Camp · bccamp2@gmail.com
+          DISA DER: Tom Fried · friedt@madisonltd.com
+        </p>
+        <p className="mt-1 text-sm text-[#163038]">
+          Temp dispatcher until Donnie: Benny Camp · bccamp2@gmail.com
         </p>
         {lockedLocal ? (
           <p className="mt-2 text-sm text-[#163038]">This hall seat sees Local {lockedLocal} only.</p>
         ) : null}
       </section>
+
+      {canConfigure ? (
+        <section className="plant-card px-5 py-5">
+          <h3 className="text-lg font-semibold text-[#163038]">Owner settings</h3>
+          <p className="mt-1 text-sm text-[#5b6f73]">
+            Corporate and project management lists are placeholders. Do not invent addresses. Step 1 defaults to site
+            submitting name + phone to the DISA DER.
+          </p>
+          <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(event) => void onSaveSettings(event)}>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Step 1 submitter</span>
+              <select
+                className="paper-field w-full"
+                value={step1Submitter}
+                onChange={(event) => setStep1Submitter(event.target.value === "hall" ? "hall" : "site")}
+              >
+                <option value="site">Site submits name + phone</option>
+                <option value="hall">Hall submits name + phone</option>
+              </select>
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Corporate emails (comma-separated)</span>
+              <input className="paper-field w-full" value={corpEmails} onChange={(event) => setCorpEmails(event.target.value)} placeholder="Owner fills later" />
+            </label>
+            <label className="text-sm md:col-span-2">
+              <span className="mb-1 block text-[#5b6f73]">Project management emails (comma-separated)</span>
+              <input className="paper-field w-full" value={pmEmails} onChange={(event) => setPmEmails(event.target.value)} placeholder="Owner fills later" />
+            </label>
+            <div>
+              <button type="submit" className="rounded-sm bg-steel px-3 py-1.5 text-sm text-white" disabled={saving}>
+                Save Owner settings
+              </button>
+            </div>
+          </form>
+        </section>
+      ) : null}
 
       {canCreateRequest ? (
         <section className="plant-card px-5 py-5">
@@ -313,7 +466,7 @@ export function OnboardDesk() {
           <p className="mt-1 text-sm text-[#5b6f73]">
             Dispatcher create comes before hall register. Routes to John Battuello Jr.
             (jbattuello@ualocal553.org). Certs, screenings, and hiring package fields are
-            placeholders — not a final hiring list.
+            placeholders — not a final hiring list. No email blast.
           </p>
           <form className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={(event) => void onCreateRequest(event)}>
             <label className="text-sm">
@@ -379,8 +532,8 @@ export function OnboardDesk() {
         <section className="plant-card px-5 py-5">
           <h3 className="text-lg font-semibold text-[#163038]">Hall manpower inbox</h3>
           <p className="mt-1 text-sm text-[#5b6f73]">
-            Open requests from Benny / HSE. Respond with how many you can fill and when. Then register
-            people onto that request.
+            Open requests from Tom / Benny / HSE. Respond with how many you can fill and when. Then register
+            people onto that request when Step 1 is set to hall.
           </p>
           <ul className="mt-4 space-y-3">
             {requests.filter((row) => row.status === "open").length === 0 ? (
@@ -433,10 +586,13 @@ export function OnboardDesk() {
 
       {canRegister ? (
         <section className="plant-card px-5 py-5">
-          <h3 className="text-lg font-semibold text-[#163038]">Hall register</h3>
+          <h3 className="text-lg font-semibold text-[#163038]">
+            {settings.step1Submitter === "hall" ? "Hall register" : "Submit name + phone to DISA DER"}
+          </h3>
           <p className="mt-1 text-sm text-[#5b6f73]">
-            Name, craft, and local are required. Phone and email stay optional. Local 553 register
-            is gated to John Battuello Jr. (jbattuello@ualocal553.org) when that hall seat is present.
+            Step 1 submits name and phone to Tom Fried. Local 553 hall register is gated to John Battuello Jr.
+            ({JOHN_BATTUELLO_EMAIL}) when Step 1 is set to hall. Restricted PII (legal name, DOB, SSN last 4) is
+            captured by Tom on Step 2 — not on this form.
           </p>
           <form className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={(event) => void onRegister(event)}>
             <label className="text-sm">
@@ -476,8 +632,8 @@ export function OnboardDesk() {
               </div>
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-[#5b6f73]">Phone (optional)</span>
-              <input className="paper-field w-full" value={phone} onChange={(event) => setPhone(event.target.value)} />
+              <span className="mb-1 block text-[#5b6f73]">Phone</span>
+              <input className="paper-field w-full" value={phone} onChange={(event) => setPhone(event.target.value)} required />
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-[#5b6f73]">Email (optional)</span>
@@ -509,10 +665,34 @@ export function OnboardDesk() {
             </label>
             <div className="md:col-span-2 xl:col-span-3">
               <button type="submit" className="rounded-sm bg-steel px-3 py-1.5 text-sm text-white" disabled={saving}>
-                Register person
+                Submit to DISA DER
               </button>
             </div>
           </form>
+        </section>
+      ) : (
+        <section className="plant-card px-5 py-5">
+          <h3 className="text-lg font-semibold text-[#163038]">Hall register</h3>
+          <p className="mt-1 text-sm text-[#5b6f73]">
+            Step 1 name + phone defaults to site. Owner can switch this seat so the hall submits.
+          </p>
+        </section>
+      )}
+
+      {problemCases.length ? (
+        <section className="plant-card px-5 py-5">
+          <h3 className="text-lg font-semibold text-[#163038]">Problem cases</h3>
+          <p className="mt-1 text-sm text-[#5b6f73]">
+            Tracker keepers flag these so {HIRE_IN_OUTREACH_OWNERS} can jump on them.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {problemCases.map((row) => (
+              <li key={row.id} className="text-sm text-[#163038]">
+                {row.name} · {onboardStage(row.stage).label}
+                {row.problemCaseNote ? ` — ${row.problemCaseNote}` : ""}
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
 
@@ -528,10 +708,15 @@ export function OnboardDesk() {
               <header className="mb-3">
                 <h3 className="text-base font-semibold leading-5 text-[#163038]">{stage.label}</h3>
                 <p className="mt-1 text-xs uppercase tracking-[0.12em] text-[#5b6f73]">
-                  {stage.owner ? `Owner · ${stage.owner}` : stage.id === "registered" ? "Owner · Hall" : "Cleared / blocked"}
+                  {stage.owner ? `Owner · ${stage.owner}` : "Cleared / blocked"}
                 </p>
-                {stage.id === "notify-badge" ? (
-                  <p className="mt-1 text-xs leading-5 text-[#5b6f73]">Notify P66 only. Badge is not issued here.</p>
+                {stage.id === "step-3" || stage.id === "step-5" ? (
+                  <p className="mt-1 text-xs leading-5 text-[#5b6f73]">
+                    Texolve, Collinsville, Illinois. TechSolve is an alternate spelling pending confirm.
+                  </p>
+                ) : null}
+                {stage.id === "step-4" ? (
+                  <p className="mt-1 text-xs leading-5 text-[#5b6f73]">Verified Employee Received HireIn Link</p>
                 ) : null}
                 <p className="mt-1 text-xs text-[#5b6f73]">{rows.length} people</p>
               </header>
@@ -545,7 +730,7 @@ export function OnboardDesk() {
                       <button
                         type="button"
                         className="w-full text-left"
-                        onClick={() => setOpenId(open ? null : person.id)}
+                        onClick={() => (open ? setOpenId(null) : openPerson(person))}
                       >
                         <p className="text-sm font-medium text-[#163038]">{person.name}</p>
                         <p className="mt-0.5 text-xs text-[#5b6f73]">
@@ -553,7 +738,11 @@ export function OnboardDesk() {
                           {person.classification ? ` · ${person.classification}` : ""}
                         </p>
                         {person.requestId ? <p className="mt-0.5 text-xs text-[#5b6f73]">Request {person.requestId}</p> : null}
-                        {person.referredFor ? <p className="mt-0.5 text-xs text-[#5b6f73]">{person.referredFor}</p> : null}
+                        {person.phone ? <p className="mt-0.5 text-xs text-[#5b6f73]">{person.phone}</p> : null}
+                        {person.problemCase ? <p className="mt-1 text-xs text-[#163038]">Problem case</p> : null}
+                        {person.verifiedEmployeeReceivedHireInLink ? (
+                          <p className="mt-0.5 text-xs text-[#163038]">{HIRE_IN_VERIFIED_FIELD_LABEL}</p>
+                        ) : null}
                         {person.stage === "blocked" && person.blockedReason ? (
                           <p className="mt-1 text-xs text-[#163038]">Reason: {person.blockedReason}</p>
                         ) : null}
@@ -607,31 +796,173 @@ export function OnboardDesk() {
                               type="button"
                               className="rounded-sm bg-steel px-2.5 py-1 text-xs text-white"
                               disabled={saving}
-                              onClick={() => void postStage("reopen", person, { toStage: "registered" })}
+                              onClick={() => void postStage("reopen", person, { toStage: "step-1" })}
                             >
-                              Reopen to Registered
+                              Reopen to Submitted to DISA DER
                             </button>
                           )}
                         </div>
                       ) : null}
                       {open ? (
-                        <div className="mt-3 border-t border-[#d5e0de] pt-2">
-                          <h4 className="text-xs font-semibold uppercase tracking-[0.12em] text-[#5b6f73]">Audit trail</h4>
-                          <ol className="mt-2 space-y-2">
-                            {person.events.map((event) => (
-                              <li key={event.id} className="text-xs leading-5 text-[#163038]">
-                                <span className="font-medium">{formatWhen(event.at)}</span>
-                                {" · "}
-                                {event.actorName}
-                                {event.actorEmail ? ` <${event.actorEmail}>` : ""}
-                                {" · "}
-                                {event.fromStage ? onboardStage(event.fromStage).label : "—"}
-                                {" → "}
-                                {onboardStage(event.toStage).label}
-                                {event.note ? ` — ${event.note}` : ""}
-                              </li>
-                            ))}
-                          </ol>
+                        <div className="mt-3 space-y-3 border-t border-[#d5e0de] pt-2">
+                          {canSeePii ? (
+                            <div>
+                              <h4 className="text-xs font-semibold uppercase tracking-[0.12em] text-[#5b6f73]">Restricted PII</h4>
+                              <p className="mt-1 text-xs text-[#5b6f73]">Least privilege. Masked SSN last 4. Hall seats do not see this.</p>
+                              {canEditTracker ? (
+                                <form
+                                  className="mt-2 grid gap-2"
+                                  onSubmit={(event) => {
+                                    event.preventDefault();
+                                    void postTracker(person, {
+                                      legalName,
+                                      dateOfBirth,
+                                      ssnLast4,
+                                      identityVerified: true,
+                                    });
+                                  }}
+                                >
+                                  <input className="paper-field w-full" placeholder="Legal name" value={legalName} onChange={(event) => setLegalName(event.target.value)} />
+                                  <input className="paper-field w-full" type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
+                                  <input className="paper-field w-full" inputMode="numeric" maxLength={4} placeholder="SSN last 4" value={ssnLast4} onChange={(event) => setSsnLast4(event.target.value)} />
+                                  <p className="text-xs text-[#5b6f73]">{person.ssnLast4 ? maskSsnLast4(person.ssnLast4) : "No SSN last 4 yet"}</p>
+                                  <button type="submit" className="rounded-sm bg-steel px-2.5 py-1 text-xs text-white" disabled={saving}>
+                                    Verify legal name / DOB / SSN
+                                  </button>
+                                </form>
+                              ) : (
+                                <p className="mt-1 text-xs text-[#163038]">
+                                  {person.legalName || "—"} · {person.dateOfBirth || "—"} · {person.ssnLast4 ? maskSsnLast4(person.ssnLast4) : "—"}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-[#5b6f73]">Restricted PII is hidden on this seat.</p>
+                          )}
+                          {canEditTracker ? (
+                            <div className="grid gap-2">
+                              <h4 className="text-xs font-semibold uppercase tracking-[0.12em] text-[#5b6f73]">P66 training</h4>
+                              <label className="text-xs text-[#5b6f73]">
+                                P66 corporate
+                                <select
+                                  className="paper-field mt-1 w-full"
+                                  value={person.p66CorporateTraining}
+                                  onChange={(event) => void postTracker(person, { p66CorporateTraining: event.target.value })}
+                                >
+                                  {TRAINING_OPTIONS.map((item) => (
+                                    <option key={item} value={item}>
+                                      {item}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="text-xs text-[#5b6f73]">
+                                P66 site-specific
+                                <select
+                                  className="paper-field mt-1 w-full"
+                                  value={person.p66SiteTraining}
+                                  onChange={(event) => void postTracker(person, { p66SiteTraining: event.target.value })}
+                                >
+                                  {TRAINING_OPTIONS.map((item) => (
+                                    <option key={item} value={item}>
+                                      {item}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="text-xs text-[#5b6f73]">
+                                P66 pre-cert
+                                <select
+                                  className="paper-field mt-1 w-full"
+                                  value={person.p66PrecertTraining}
+                                  onChange={(event) => void postTracker(person, { p66PrecertTraining: event.target.value })}
+                                >
+                                  {TRAINING_OPTIONS.map((item) => (
+                                    <option key={item} value={item}>
+                                      {item}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-[#5b6f73]">
+                              P66 corporate {person.p66CorporateTraining} · site-specific {person.p66SiteTraining} · pre-cert{" "}
+                              {person.p66PrecertTraining}
+                            </p>
+                          )}
+                          {canEditOutreach ? (
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                className="rounded-sm border border-steel px-2.5 py-1 text-xs text-steel"
+                                disabled={saving}
+                                onClick={() => void postTracker(person, { hireInLinkSent: !person.hireInLinkSent })}
+                              >
+                                {person.hireInLinkSent ? "Clear HireIn sent" : "Mark HireIn link sent"}
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-sm border border-steel px-2.5 py-1 text-xs text-steel"
+                                disabled={saving}
+                                onClick={() => void postTracker(person, { hireInDeliveryConfirmed: !person.hireInDeliveryConfirmed })}
+                              >
+                                {person.hireInDeliveryConfirmed ? "Clear delivery" : "Confirm HireIn delivery"}
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-sm border border-steel px-2.5 py-1 text-xs text-steel"
+                                disabled={saving}
+                                onClick={() =>
+                                  void postTracker(person, {
+                                    verifiedEmployeeReceivedHireInLink: !person.verifiedEmployeeReceivedHireInLink,
+                                  })
+                                }
+                              >
+                                {HIRE_IN_VERIFIED_FIELD_LABEL}
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-sm border border-steel px-2.5 py-1 text-xs text-steel"
+                                disabled={saving}
+                                onClick={() => void postTracker(person, { tomFriedContactConfirmed: !person.tomFriedContactConfirmed })}
+                              >
+                                {person.tomFriedContactConfirmed ? "Clear Tom contact" : "Confirm Tom Fried contact"}
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-sm border border-steel px-2.5 py-1 text-xs text-steel"
+                                disabled={saving}
+                                onClick={() => void postTracker(person, { problemCase: !person.problemCase, problemCaseNote: problemNote })}
+                              >
+                                {person.problemCase ? "Clear problem case" : "Flag problem case"}
+                              </button>
+                              <input
+                                className="paper-field w-full"
+                                placeholder="Problem case note"
+                                value={problemNote}
+                                onChange={(event) => setProblemNote(event.target.value)}
+                              />
+                            </div>
+                          ) : null}
+                          <div>
+                            <h4 className="text-xs font-semibold uppercase tracking-[0.12em] text-[#5b6f73]">Audit trail</h4>
+                            <ol className="mt-2 space-y-2">
+                              {person.events.map((event) => (
+                                <li key={event.id} className="text-xs leading-5 text-[#163038]">
+                                  <span className="font-medium">{formatWhen(event.at)}</span>
+                                  {" · "}
+                                  {event.actorName}
+                                  {event.actorEmail ? ` <${event.actorEmail}>` : ""}
+                                  {" · "}
+                                  {event.fromStage ? onboardStage(event.fromStage).label : "—"}
+                                  {" → "}
+                                  {onboardStage(event.toStage).label}
+                                  {event.note ? ` — ${event.note}` : ""}
+                                </li>
+                              ))}
+                            </ol>
+                          </div>
                         </div>
                       ) : (
                         <p className="mt-2 text-xs text-[#5b6f73]">Open for audit trail</p>
@@ -646,8 +977,8 @@ export function OnboardDesk() {
       </section>
 
       <p className="text-xs text-[#5b6f73]">
-        Stage owners on the four HSE columns are {BENNY_CAMP_NAME}. This board is the onboarding
-        pipeline only — hall notify after award and craftsman call-outs stay later.
+        Step 2 owner is {TOM_FRIED_NAME} ({TOM_FRIED_TITLE}). Temp dispatcher is {BENNY_CAMP_NAME}. This board is the
+        onboarding pipeline only — hall notify after award and craftsman call-outs stay later.
       </p>
     </div>
   );

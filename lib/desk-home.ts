@@ -45,13 +45,13 @@ export const RATE_VAULT_DOOR = {
 
 /**
  * Hall ↔ HSE onboarding board. Not a public HOME_DOCK_TILES peer.
- * HomeDock appends it for the build desk, HSE seats, hall locals, and Tom.
+ * HomeDock appends it for the build desk, HSE, hall, Tom (DISA DER), Benny, and outreach.
  */
 export const ONBOARD_DOOR = {
   href: "/onboard",
   key: "onboard",
   label: CONTROL_CENTER_TITLE,
-  note: "Hall register · HSE stage board",
+  note: "Manpower request · five-step board",
 } as const;
 
 /** Ease-in bury: not a home door. Do not add back to HOME_DOORS without an owner ask. */

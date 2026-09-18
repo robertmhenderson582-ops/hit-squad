@@ -156,8 +156,8 @@ export function HseDesk() {
         <Link href="/onboard" className="underline">
           Hit Squad Control Center
         </Link>
-        . Benny Camp (bccamp2@gmail.com) owns drug screen, background, TechSolve, and the P66
-        badge notify.
+        . DISA DER is Tom Fried. Benny Camp (bccamp2@gmail.com) is temp dispatcher until
+        Donnie. Training is Texolve, Collinsville, Illinois.
       </p>
       <JobScopePicks
         clients={clients}

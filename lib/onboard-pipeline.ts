@@ -13,27 +13,49 @@ export const ONBOARD_LOCALS = [
 
 export type OnboardLocalId = (typeof ONBOARD_LOCALS)[number]["id"];
 
+/**
+ * Benny + Robert dictation 2026-09-18. Board columns are completed-step states.
+ * Training location spelling lock: Texolve. TechSolve is an alternate spelling pending confirm.
+ */
+export const TEXOLVE_NAME = "Texolve";
+export const TEXOLVE_LOCATION = "Collinsville, Illinois";
+export const TEXOLVE_SPELLING_NOTE = "TechSolve is an alternate spelling pending confirm.";
+
+export const HIRE_IN_VERIFIED_FIELD_LABEL = "Verified Employee Received HireIn Link";
+export const HIRE_IN_OUTREACH_OWNERS = "Robert Henderson / Ben Peffley / Nathan Boyte";
+
 export const ONBOARD_STAGES = [
-  { id: "registered", label: "Registered", owner: null, hallOwned: true },
-  { id: "waiting-drug", label: "Waiting on drug screen", owner: "Benny Camp", hallOwned: false },
-  { id: "waiting-background", label: "Waiting on background", owner: "Benny Camp", hallOwned: false },
-  { id: "techsolve", label: "Going to TechSolve", owner: "Benny Camp", hallOwned: false },
-  { id: "notify-badge", label: "P66 badge notify", owner: "Benny Camp", hallOwned: false },
-  { id: "ready", label: "Ready / cleared for dispatch", owner: null, hallOwned: false },
-  { id: "blocked", label: "Blocked / failed", owner: null, hallOwned: false },
+  { id: "step-1", label: "Submitted to DISA DER", owner: "Site → Tom Fried", hallOwned: false, step: 1 },
+  { id: "step-2", label: "DISA identity verified / DISA scheduled", owner: "Tom Fried", hallOwned: false, step: 2 },
+  {
+    id: "step-3",
+    label: "Payroll verified / Texolve scheduled",
+    owner: "On-site payroll",
+    hallOwned: false,
+    step: 3,
+  },
+  {
+    id: "step-4",
+    label: "Hire-end outreach (Robert / Ben / Nathan)",
+    owner: HIRE_IN_OUTREACH_OWNERS,
+    hallOwned: false,
+    step: 4,
+  },
+  { id: "step-5", label: "Texolve complete / Badged", owner: `${TEXOLVE_NAME} / P66`, hallOwned: false, step: 5 },
+  { id: "blocked", label: "Blocked / failed", owner: null, hallOwned: false, step: 0 },
 ] as const;
 
 export type OnboardStageId = (typeof ONBOARD_STAGES)[number]["id"];
 
-/** Parked / future Madison dispatcher until Donnie. Do not seed, email, or activate. */
+/** DISA DER. Stage owner for identity / drug / background. Review-session email is separate. */
 export const TOM_FRIED_NAME = "Tom Fried";
 export const TOM_FRIED_EMAIL = "friedt@madisonltd.com";
 export const TOM_FRIED_SEAT_ID = "tester-tom-fried";
-export const TOM_FRIED_TITLE = "HSE Dispatcher";
+export const TOM_FRIED_TITLE = "DISA DER";
 
 const BENNY_CAMP_SEAT = TESTER_SEATS.find((row) => row.email === "bccamp2@gmail.com");
 
-/** Existing Hit Squad seat — temp Madison-side stage owner until Donnie. */
+/** Existing Hit Squad seat — temp Madison dispatcher until Donnie. */
 export const BENNY_CAMP_NAME = BENNY_CAMP_SEAT?.name ?? "Benny Camp";
 export const BENNY_CAMP_EMAIL = BENNY_CAMP_SEAT?.email ?? "bccamp2@gmail.com";
 export const BENNY_CAMP_SEAT_ID = BENNY_CAMP_SEAT?.id ?? "tester-benny";
@@ -44,6 +66,14 @@ export const JOHN_BATTUELLO_NAME = "John Battuello Jr.";
 export const JOHNNY_BATTUELLO_NAME = "Johnny Battuello Jr.";
 export const JOHN_BATTUELLO_EMAIL = "jbattuello@ualocal553.org";
 export const JOHN_BATTUELLO_SEAT_ID = "tester-john-battuello";
+
+/** Tracker keeper. Name match only — do not invent a login. */
+export const DEBBIE_TRACKER_NAME = "Debbie";
+
+/** Outreach. Nathan is a seeded PM. Ben Peffley is name-only (cannot git-seed). */
+export const NATHAN_BOYTE_NAME = "Nathan Boyte";
+export const NATHAN_BOYTE_EMAIL = "nathanboyte@gmail.com";
+export const BEN_PEFFLEY_NAME = "Ben Peffley";
 
 export const ONBOARD_PHASE1_LOCAL_IDS = ["553"] as const;
 
@@ -62,6 +92,13 @@ export const ONBOARD_SEED_SEATS: readonly OnboardSeedSeat[] = [
     email: JOHN_BATTUELLO_EMAIL,
     name: JOHN_BATTUELLO_NAME,
     jobTitle: "Hall Local 553",
+    company: "madison",
+  },
+  {
+    id: TOM_FRIED_SEAT_ID,
+    email: TOM_FRIED_EMAIL,
+    name: TOM_FRIED_NAME,
+    jobTitle: TOM_FRIED_TITLE,
     company: "madison",
   },
 ];
@@ -84,6 +121,22 @@ export const MANPOWER_PACKAGE_PLACEHOLDER =
 
 export const ONBOARD_VAULT_WRITE_ERROR =
   "Could not save the onboarding board. The last known people stay on this desk.";
+
+export type Step1Submitter = "site" | "hall";
+export type TrainingStatus = "not-started" | "scheduled" | "complete";
+
+/** Owner-configurable. Empty until Owner fills them — do not invent addresses. */
+export type OnboardSettings = {
+  step1Submitter: Step1Submitter;
+  corporateEmails: string[];
+  pmEmails: string[];
+};
+
+export const DEFAULT_ONBOARD_SETTINGS: OnboardSettings = {
+  step1Submitter: "site",
+  corporateEmails: [],
+  pmEmails: [],
+};
 
 export type OnboardActor = {
   id?: string;
@@ -122,7 +175,40 @@ export type OnboardPerson = {
   createdByName: string;
   createdByEmail: string;
   requestId: string;
+  legalName: string;
+  dateOfBirth: string;
+  ssnLast4: string;
+  identityVerifiedBy: string;
+  identityVerifiedAt: string;
+  p66CorporateTraining: TrainingStatus;
+  p66SiteTraining: TrainingStatus;
+  p66PrecertTraining: TrainingStatus;
+  hireInLinkSent: boolean;
+  hireInLinkSentAt: string;
+  hireInDeliveryConfirmed: boolean;
+  hireInDeliveryConfirmedAt: string;
+  verifiedEmployeeReceivedHireInLink: boolean;
+  tomFriedContactConfirmed: boolean;
+  problemCase: boolean;
+  problemCaseNote: string;
   events: OnboardEvent[];
+};
+
+export type OnboardPersonPatch = {
+  legalName?: string;
+  dateOfBirth?: string;
+  ssnLast4?: string;
+  identityVerified?: boolean;
+  p66CorporateTraining?: TrainingStatus;
+  p66SiteTraining?: TrainingStatus;
+  p66PrecertTraining?: TrainingStatus;
+  hireInLinkSent?: boolean;
+  hireInDeliveryConfirmed?: boolean;
+  verifiedEmployeeReceivedHireInLink?: boolean;
+  tomFriedContactConfirmed?: boolean;
+  problemCase?: boolean;
+  problemCaseNote?: string;
+  note?: string;
 };
 
 export type ManpowerRequestStatus = "open" | "responded";
@@ -163,6 +249,7 @@ export type ManpowerRequest = {
 export type OnboardFile = {
   people: OnboardPerson[];
   requests: ManpowerRequest[];
+  settings: OnboardSettings;
 };
 
 export type OnboardViewer = OnboardActor;
@@ -170,14 +257,17 @@ export type OnboardViewer = OnboardActor;
 const LOCAL_IDS = new Set<string>(ONBOARD_LOCALS.map((row) => row.id));
 const STAGE_IDS = new Set<string>(ONBOARD_STAGES.map((row) => row.id));
 
-const ADVANCE_ORDER: OnboardStageId[] = [
-  "registered",
-  "waiting-drug",
-  "waiting-background",
-  "techsolve",
-  "notify-badge",
-  "ready",
-];
+const LEGACY_STAGE_MAP: Record<string, OnboardStageId> = {
+  registered: "step-1",
+  "waiting-drug": "step-2",
+  "waiting-background": "step-2",
+  techsolve: "step-3",
+  "notify-badge": "step-4",
+  ready: "step-5",
+  blocked: "blocked",
+};
+
+const ADVANCE_ORDER: OnboardStageId[] = ["step-1", "step-2", "step-3", "step-4", "step-5"];
 
 export function isOnboardLocalId(value: unknown): value is OnboardLocalId {
   return typeof value === "string" && LOCAL_IDS.has(value);
@@ -200,8 +290,14 @@ export function onboardSeedCompanyForEmail(email?: string | null) {
   return onboardSeedByEmail(email)?.company;
 }
 
+export function normalizeOnboardStageId(value: unknown): OnboardStageId | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  if (STAGE_IDS.has(value)) return value as OnboardStageId;
+  return LEGACY_STAGE_MAP[value] ?? null;
+}
+
 export function isOnboardStageId(value: unknown): value is OnboardStageId {
-  return typeof value === "string" && STAGE_IDS.has(value);
+  return normalizeOnboardStageId(value) != null && STAGE_IDS.has(String(value));
 }
 
 export function onboardLocal(id: OnboardLocalId) {
@@ -214,6 +310,10 @@ export function onboardStage(id: OnboardStageId) {
 
 export function onboardStageOwner(id: OnboardStageId): string | null {
   return onboardStage(id).owner;
+}
+
+export function onboardStepNumber(id: OnboardStageId): number {
+  return onboardStage(id).step;
 }
 
 export function defaultCraftForLocal(localId: OnboardLocalId) {
@@ -242,9 +342,11 @@ export function isHallSeat(user?: OnboardViewer | null): boolean {
   return hallLocalForSeat(user) != null;
 }
 
-/** Parked. Tom is not the Phase 1 dispatcher. */
-export function isTomFriedSeat(_user?: OnboardViewer | null): boolean {
-  return false;
+export function isTomFriedSeat(user?: OnboardViewer | null): boolean {
+  if (!user) return false;
+  if (user.id === TOM_FRIED_SEAT_ID) return true;
+  if ((user.email || "").trim().toLowerCase() === TOM_FRIED_EMAIL) return true;
+  return /tom\s+fried/i.test(`${user.name || ""} ${user.jobTitle || ""}`);
 }
 
 export function isBennyCampSeat(user?: OnboardViewer | null): boolean {
@@ -254,6 +356,23 @@ export function isBennyCampSeat(user?: OnboardViewer | null): boolean {
   return /benny\s+camp/i.test(`${user.name || ""} ${user.jobTitle || ""}`);
 }
 
+export function isDebbieTrackerSeat(user?: OnboardViewer | null): boolean {
+  if (!user) return false;
+  return /\bdebbie\b/i.test(`${user.name || ""} ${user.jobTitle || ""}`);
+}
+
+export function isTrackerKeeper(user?: OnboardViewer | null): boolean {
+  return isTomFriedSeat(user) || isDebbieTrackerSeat(user);
+}
+
+export function isOutreachSeat(user?: OnboardViewer | null): boolean {
+  if (!user) return false;
+  if (user.role === "owner") return true;
+  const email = (user.email || "").trim().toLowerCase();
+  if (email === NATHAN_BOYTE_EMAIL) return true;
+  return /nathan\s+boyte/i.test(user.name || "") || /ben\s+peffley/i.test(user.name || "");
+}
+
 export function canSeeOnboardBoard(user?: OnboardViewer | null): boolean {
   if (!user) return false;
   return (
@@ -261,31 +380,77 @@ export function canSeeOnboardBoard(user?: OnboardViewer | null): boolean {
     isHseVaultSeat(user) ||
     isProjectManager(user) ||
     isHallSeat(user) ||
-    isBennyCampSeat(user)
+    isBennyCampSeat(user) ||
+    isTomFriedSeat(user) ||
+    isOutreachSeat(user) ||
+    isDebbieTrackerSeat(user)
   );
 }
 
-/** Home dock tile — HSE, halls, Benny, and the build desk. Testers keep the four public doors. */
+/** Home dock tile — HSE, halls, Tom, Benny, outreach, and the build desk. Testers keep the four public doors. */
 export function canSeeOnboardDoor(
   session?: OnboardViewer | null,
   lens?: OnboardViewer | null,
 ): boolean {
   const viewer = lens ?? session;
-  return hasBuildDesk(viewer) || isHseVaultSeat(viewer) || isHallSeat(viewer) || isBennyCampSeat(viewer);
+  return (
+    hasBuildDesk(viewer) ||
+    isHseVaultSeat(viewer) ||
+    isHallSeat(viewer) ||
+    isBennyCampSeat(viewer) ||
+    isTomFriedSeat(viewer) ||
+    isOutreachSeat(viewer) ||
+    isDebbieTrackerSeat(viewer)
+  );
 }
 
-export function canRegisterOnboard(user?: OnboardViewer | null): boolean {
-  return canSeeOnboardBoard(user);
+export function canRegisterOnboard(user?: OnboardViewer | null, settings?: OnboardSettings | null): boolean {
+  if (!user || !canSeeOnboardBoard(user)) return false;
+  if (hasBuildDesk(user) || isHseVaultSeat(user) || isBennyCampSeat(user) || isTomFriedSeat(user)) return true;
+  const submitter = settings?.step1Submitter ?? DEFAULT_ONBOARD_SETTINGS.step1Submitter;
+  return submitter === "hall" && isHallSeat(user);
 }
 
 export function canAdvanceOnboard(user?: OnboardViewer | null): boolean {
   if (!user) return false;
-  return hasBuildDesk(user) || isHseVaultSeat(user) || isBennyCampSeat(user);
+  return (
+    hasBuildDesk(user) ||
+    isHseVaultSeat(user) ||
+    isBennyCampSeat(user) ||
+    isTomFriedSeat(user) ||
+    isDebbieTrackerSeat(user)
+  );
+}
+
+export function canUpdateTracker(user?: OnboardViewer | null): boolean {
+  if (!user) return false;
+  return canAdvanceOnboard(user);
+}
+
+export function canUpdateOutreach(user?: OnboardViewer | null): boolean {
+  if (!user) return false;
+  return canUpdateTracker(user) || isOutreachSeat(user);
+}
+
+export function canSeeRestrictedPii(user?: OnboardViewer | null): boolean {
+  if (!user) return false;
+  if (isHallSeat(user) && !hasBuildDesk(user) && !isHseVaultSeat(user) && !isTomFriedSeat(user)) return false;
+  return (
+    hasBuildDesk(user) ||
+    isHseVaultSeat(user) ||
+    isTomFriedSeat(user) ||
+    isDebbieTrackerSeat(user) ||
+    isBennyCampSeat(user)
+  );
+}
+
+export function canConfigureOnboard(user?: OnboardViewer | null): boolean {
+  return hasBuildDesk(user);
 }
 
 export function canCreateManpowerRequest(user?: OnboardViewer | null): boolean {
   if (!user) return false;
-  return hasBuildDesk(user) || isHseVaultSeat(user) || isBennyCampSeat(user);
+  return hasBuildDesk(user) || isHseVaultSeat(user) || isBennyCampSeat(user) || isTomFriedSeat(user);
 }
 
 export function canRespondManpowerRequest(user?: OnboardViewer | null): boolean {
@@ -293,13 +458,127 @@ export function canRespondManpowerRequest(user?: OnboardViewer | null): boolean 
   return isHallSeat(user) || hasBuildDesk(user);
 }
 
+export function parseEmailList(value: unknown): string[] {
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[,;\n]+/)
+      : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of items) {
+    const email = String(item || "")
+      .trim()
+      .toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+    if (seen.has(email)) continue;
+    seen.add(email);
+    out.push(email);
+  }
+  return out;
+}
+
+export function parseOnboardSettings(raw: unknown): OnboardSettings {
+  const row = raw && typeof raw === "object" ? (raw as Partial<OnboardSettings>) : {};
+  return {
+    step1Submitter: row.step1Submitter === "hall" ? "hall" : "site",
+    corporateEmails: parseEmailList(row.corporateEmails),
+    pmEmails: parseEmailList(row.pmEmails),
+  };
+}
+
+export function isTrainingStatus(value: unknown): value is TrainingStatus {
+  return value === "not-started" || value === "scheduled" || value === "complete";
+}
+
+export function parseTrainingStatus(value: unknown): TrainingStatus {
+  return isTrainingStatus(value) ? value : "not-started";
+}
+
+export function parseSsnLast4(value: unknown): string {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (digits.length >= 4) return digits.slice(-4);
+  return "";
+}
+
+export function maskSsnLast4(ssnLast4: string): string {
+  const last4 = parseSsnLast4(ssnLast4);
+  return last4 ? `•••-••-${last4}` : "";
+}
+
+export function displayOnboardName(person: Pick<OnboardPerson, "name" | "legalName" | "identityVerifiedAt">) {
+  const legal = (person.legalName || "").trim();
+  if (legal && person.identityVerifiedAt) return legal;
+  return person.name;
+}
+
+function emptyIdentity(): Pick<
+  OnboardPerson,
+  | "legalName"
+  | "dateOfBirth"
+  | "ssnLast4"
+  | "identityVerifiedBy"
+  | "identityVerifiedAt"
+  | "p66CorporateTraining"
+  | "p66SiteTraining"
+  | "p66PrecertTraining"
+  | "hireInLinkSent"
+  | "hireInLinkSentAt"
+  | "hireInDeliveryConfirmed"
+  | "hireInDeliveryConfirmedAt"
+  | "verifiedEmployeeReceivedHireInLink"
+  | "tomFriedContactConfirmed"
+  | "problemCase"
+  | "problemCaseNote"
+> {
+  return {
+    legalName: "",
+    dateOfBirth: "",
+    ssnLast4: "",
+    identityVerifiedBy: "",
+    identityVerifiedAt: "",
+    p66CorporateTraining: "not-started",
+    p66SiteTraining: "not-started",
+    p66PrecertTraining: "not-started",
+    hireInLinkSent: false,
+    hireInLinkSentAt: "",
+    hireInDeliveryConfirmed: false,
+    hireInDeliveryConfirmedAt: "",
+    verifiedEmployeeReceivedHireInLink: false,
+    tomFriedContactConfirmed: false,
+    problemCase: false,
+    problemCaseNote: "",
+  };
+}
+
+export function redactOnboardPerson(person: OnboardPerson, user?: OnboardViewer | null): OnboardPerson {
+  if (canSeeRestrictedPii(user)) return person;
+  return {
+    ...person,
+    legalName: "",
+    dateOfBirth: "",
+    ssnLast4: "",
+    identityVerifiedBy: person.identityVerifiedAt ? "restricted" : "",
+  };
+}
+
 export function visibleOnboardPeople(people: readonly OnboardPerson[], user?: OnboardViewer | null) {
   const local = hallLocalForSeat(user);
-  if (!local) return [...people];
-  if (hasBuildDesk(user) || isHseVaultSeat(user) || isBennyCampSeat(user) || hasWorkingDesk(user) || isProjectManager(user)) {
-    return [...people];
+  let rows = [...people];
+  if (
+    local &&
+    !hasBuildDesk(user) &&
+    !isHseVaultSeat(user) &&
+    !isBennyCampSeat(user) &&
+    !isTomFriedSeat(user) &&
+    !hasWorkingDesk(user) &&
+    !isProjectManager(user) &&
+    !isOutreachSeat(user) &&
+    !isDebbieTrackerSeat(user)
+  ) {
+    rows = rows.filter((person) => person.localId === local);
   }
-  return people.filter((person) => person.localId === local);
+  return rows.map((person) => redactOnboardPerson(person, user));
 }
 
 export function nextOnboardStage(stage: OnboardStageId): OnboardStageId | null {
@@ -348,26 +627,32 @@ export function parseOnboardEvent(raw: unknown): OnboardEvent | null {
   if (typeof row.id !== "string" || !row.id.trim()) return null;
   if (typeof row.at !== "string" || !row.at.trim()) return null;
   if (typeof row.actorName !== "string" || !row.actorName.trim()) return null;
-  if (!isOnboardStageId(row.toStage)) return null;
-  if (row.fromStage != null && !isOnboardStageId(row.fromStage)) return null;
+  const toStage = normalizeOnboardStageId(row.toStage);
+  if (!toStage) return null;
+  const fromStage = row.fromStage == null ? null : normalizeOnboardStageId(row.fromStage);
+  if (row.fromStage != null && !fromStage) return null;
   return {
     id: row.id.trim(),
     at: row.at,
     actorName: row.actorName.trim(),
     actorEmail: typeof row.actorEmail === "string" ? row.actorEmail.trim().toLowerCase() : "",
-    fromStage: row.fromStage ?? null,
-    toStage: row.toStage,
+    fromStage,
+    toStage,
     note: typeof row.note === "string" ? row.note : "",
   };
 }
 
+function parseBool(value: unknown): boolean {
+  return value === true || value === "true" || value === 1 || value === "1";
+}
+
 export function parseOnboardPerson(raw: unknown): OnboardPerson | null {
   if (!raw || typeof raw !== "object") return null;
-  const row = raw as Partial<OnboardPerson>;
+  const row = raw as Partial<OnboardPerson> & { stage?: unknown };
   if (typeof row.id !== "string" || !row.id.trim()) return null;
   if (typeof row.name !== "string" || !row.name.trim()) return null;
   if (!isOnboardLocalId(row.localId)) return null;
-  const stage = isOnboardStageId(row.stage) ? row.stage : "registered";
+  const stage = normalizeOnboardStageId(row.stage) ?? "step-1";
   const events: OnboardEvent[] = [];
   const seen = new Set<string>();
   for (const item of Array.isArray(row.events) ? row.events : []) {
@@ -377,6 +662,7 @@ export function parseOnboardPerson(raw: unknown): OnboardPerson | null {
     events.push(event);
   }
   const local = onboardLocal(row.localId);
+  const identity = emptyIdentity();
   return {
     id: row.id.trim(),
     name: row.name.trim(),
@@ -396,6 +682,22 @@ export function parseOnboardPerson(raw: unknown): OnboardPerson | null {
     createdByName: typeof row.createdByName === "string" ? row.createdByName.trim() : "",
     createdByEmail: typeof row.createdByEmail === "string" ? row.createdByEmail.trim().toLowerCase() : "",
     requestId: typeof row.requestId === "string" ? row.requestId.trim() : "",
+    legalName: typeof row.legalName === "string" ? row.legalName.trim() : identity.legalName,
+    dateOfBirth: typeof row.dateOfBirth === "string" ? row.dateOfBirth.trim() : identity.dateOfBirth,
+    ssnLast4: parseSsnLast4(row.ssnLast4),
+    identityVerifiedBy: typeof row.identityVerifiedBy === "string" ? row.identityVerifiedBy.trim() : "",
+    identityVerifiedAt: typeof row.identityVerifiedAt === "string" ? row.identityVerifiedAt.trim() : "",
+    p66CorporateTraining: parseTrainingStatus(row.p66CorporateTraining),
+    p66SiteTraining: parseTrainingStatus(row.p66SiteTraining),
+    p66PrecertTraining: parseTrainingStatus(row.p66PrecertTraining),
+    hireInLinkSent: parseBool(row.hireInLinkSent),
+    hireInLinkSentAt: typeof row.hireInLinkSentAt === "string" ? row.hireInLinkSentAt.trim() : "",
+    hireInDeliveryConfirmed: parseBool(row.hireInDeliveryConfirmed),
+    hireInDeliveryConfirmedAt: typeof row.hireInDeliveryConfirmedAt === "string" ? row.hireInDeliveryConfirmedAt.trim() : "",
+    verifiedEmployeeReceivedHireInLink: parseBool(row.verifiedEmployeeReceivedHireInLink),
+    tomFriedContactConfirmed: parseBool(row.tomFriedContactConfirmed),
+    problemCase: parseBool(row.problemCase),
+    problemCaseNote: typeof row.problemCaseNote === "string" ? row.problemCaseNote.trim() : "",
     events,
   };
 }
@@ -418,7 +720,7 @@ export function parseOnboardFile(raw: unknown): OnboardFile {
     seenRequests.add(request.id);
     requests.push(request);
   }
-  return { people, requests };
+  return { people, requests, settings: parseOnboardSettings(parsed.settings) };
 }
 
 export function createOnboardPerson(input: {
@@ -434,11 +736,22 @@ export function createOnboardPerson(input: {
   client?: string;
   requestId?: string;
   actor?: OnboardViewer | null;
+  settings?: OnboardSettings | null;
   at?: string;
   id?: string;
 }): OnboardPerson | { error: string } {
+  if (!canRegisterOnboard(input.actor, input.settings)) {
+    return {
+      error:
+        (input.settings?.step1Submitter ?? DEFAULT_ONBOARD_SETTINGS.step1Submitter) === "hall"
+          ? "This seat cannot register people."
+          : "Step 1 name and phone are submitted by site (Owner-configurable).",
+    };
+  }
   const name = input.name.trim();
   if (name.length < 2) return { error: "Enter the person's name." };
+  const phone = (input.phone || "").trim();
+  if (phone.length < 7) return { error: "Enter the phone number submitted to the DISA DER." };
   if (!isOnboardLocalId(input.localId)) return { error: "Pick Local 553." };
   if (!isOnboardPhase1Local(input.localId)) return { error: "Phase 1 is Local 553 only." };
   const hallLocal = hallLocalForSeat(input.actor);
@@ -446,7 +759,7 @@ export function createOnboardPerson(input: {
     return { error: `Hall seats can only register Local ${hallLocal}.` };
   }
   const hallContact = hallContactForLocal(input.localId);
-  if (hallContact && isHallSeat(input.actor)) {
+  if (hallContact && isHallSeat(input.actor) && !hasBuildDesk(input.actor)) {
     const email = (input.actor?.email || "").trim().toLowerCase();
     if (email !== hallContact.email) {
       return { error: `Local ${input.localId} register is gated to ${hallContact.email}.` };
@@ -461,26 +774,29 @@ export function createOnboardPerson(input: {
     localId: input.localId,
     craft: (input.craft || "").trim() || local.craft,
     classification: (input.classification || "").trim(),
-    phone: (input.phone || "").trim(),
+    phone,
     email: (input.email || "").trim(),
     referredFor: (input.referredFor || "").trim(),
     siteId: (input.siteId || "").trim() || DEFAULT_ONBOARD_PLANT.siteId,
     site: (input.site || "").trim() || DEFAULT_ONBOARD_PLANT.site,
     client: (input.client || "").trim() || DEFAULT_ONBOARD_PLANT.client,
-    stage: "registered",
+    stage: "step-1",
     blockedReason: "",
     createdAt: at,
     updatedAt: at,
     createdByName: stamp.actorName,
     createdByEmail: stamp.actorEmail,
     requestId: (input.requestId || "").trim(),
+    ...emptyIdentity(),
     events: [],
   };
   person.events = appendOnboardEvent(person.events, {
     actor: input.actor,
     fromStage: null,
-    toStage: "registered",
-    note: person.requestId ? `Hall registered · request ${person.requestId}` : "Hall registered",
+    toStage: "step-1",
+    note: person.requestId
+      ? `Submitted name + phone to DISA DER · request ${person.requestId}`
+      : "Submitted name + phone to DISA DER",
     at,
   });
   return person;
@@ -495,35 +811,131 @@ export function changeOnboardStage(
     at?: string;
   },
 ): OnboardPerson | { error: string } {
-  if (!isOnboardStageId(input.toStage)) return { error: "Pick a stage." };
-  if (input.toStage === person.stage) return { error: "That person is already in that stage." };
-  if (input.toStage === "blocked") {
+  const toStage = normalizeOnboardStageId(input.toStage);
+  if (!toStage) return { error: "Pick a stage." };
+  if (toStage === person.stage) return { error: "That person is already in that stage." };
+  if (toStage === "blocked") {
     const reason = (input.note || "").trim();
     if (!reason) return { error: "Blocked / failed needs a reason." };
   }
-  if (person.stage === "blocked" && input.toStage !== "registered" && input.toStage !== "waiting-drug") {
-    return { error: "Reopen a blocked person to Registered or Waiting on drug screen." };
+  if (person.stage === "blocked" && toStage !== "step-1" && toStage !== "step-2") {
+    return { error: "Reopen a blocked person to Submitted to DISA DER." };
   }
-  if (person.stage !== "blocked" && input.toStage !== "blocked") {
+  if (person.stage !== "blocked" && toStage !== "blocked") {
     const expected = nextOnboardStage(person.stage);
-    if (expected !== input.toStage) {
+    if (expected !== toStage) {
       return { error: expected ? `Next step is ${onboardStage(expected).label}.` : "That person is already cleared." };
     }
   }
   const at = input.at || new Date().toISOString();
   return {
     ...person,
-    stage: input.toStage,
-    blockedReason: input.toStage === "blocked" ? (input.note || "").trim() : "",
+    stage: toStage,
+    blockedReason: toStage === "blocked" ? (input.note || "").trim() : "",
     updatedAt: at,
     events: appendOnboardEvent(person.events, {
       actor: input.actor,
       fromStage: person.stage,
-      toStage: input.toStage,
+      toStage,
       note: input.note,
       at,
     }),
   };
+}
+
+export function updateOnboardPerson(
+  person: OnboardPerson,
+  patch: OnboardPersonPatch,
+  actor?: OnboardViewer | null,
+  at = new Date().toISOString(),
+): OnboardPerson | { error: string } {
+  if (!canUpdateOutreach(actor)) {
+    return { error: "Tracker fields are updated by Tom Fried, Debbie, or the outreach team." };
+  }
+  const tracker = canUpdateTracker(actor);
+  const pii = canSeeRestrictedPii(actor);
+  const next: OnboardPerson = { ...person, updatedAt: at };
+  const notes: string[] = [];
+
+  if (tracker && pii) {
+    if (patch.legalName != null) next.legalName = patch.legalName.trim();
+    if (patch.dateOfBirth != null) next.dateOfBirth = patch.dateOfBirth.trim();
+    if (patch.ssnLast4 != null) next.ssnLast4 = parseSsnLast4(patch.ssnLast4);
+    if (patch.identityVerified === true) {
+      const stamp = actorStamp(actor);
+      next.identityVerifiedBy = stamp.actorName;
+      next.identityVerifiedAt = at;
+      notes.push("Legal name / DOB / SSN last 4 verified");
+    }
+    if (patch.p66CorporateTraining && isTrainingStatus(patch.p66CorporateTraining)) {
+      next.p66CorporateTraining = patch.p66CorporateTraining;
+      notes.push(`P66 corporate training ${patch.p66CorporateTraining}`);
+    }
+    if (patch.p66SiteTraining && isTrainingStatus(patch.p66SiteTraining)) {
+      next.p66SiteTraining = patch.p66SiteTraining;
+      notes.push(`P66 site-specific training ${patch.p66SiteTraining}`);
+    }
+    if (patch.p66PrecertTraining && isTrainingStatus(patch.p66PrecertTraining)) {
+      next.p66PrecertTraining = patch.p66PrecertTraining;
+      notes.push(`P66 pre-cert training ${patch.p66PrecertTraining}`);
+    }
+  } else if (
+    patch.legalName != null ||
+    patch.dateOfBirth != null ||
+    patch.ssnLast4 != null ||
+    patch.identityVerified ||
+    patch.p66CorporateTraining ||
+    patch.p66SiteTraining ||
+    patch.p66PrecertTraining
+  ) {
+    return { error: "Restricted PII and training statuses are least-privilege." };
+  }
+
+  if (patch.hireInLinkSent != null) {
+    next.hireInLinkSent = Boolean(patch.hireInLinkSent);
+    next.hireInLinkSentAt = next.hireInLinkSent ? at : "";
+    notes.push(next.hireInLinkSent ? "HireIn link sent" : "HireIn link cleared");
+  }
+  if (patch.hireInDeliveryConfirmed != null) {
+    next.hireInDeliveryConfirmed = Boolean(patch.hireInDeliveryConfirmed);
+    next.hireInDeliveryConfirmedAt = next.hireInDeliveryConfirmed ? at : "";
+    notes.push(next.hireInDeliveryConfirmed ? "HireIn delivery confirmed" : "HireIn delivery cleared");
+  }
+  if (patch.verifiedEmployeeReceivedHireInLink != null) {
+    next.verifiedEmployeeReceivedHireInLink = Boolean(patch.verifiedEmployeeReceivedHireInLink);
+    notes.push(
+      next.verifiedEmployeeReceivedHireInLink
+        ? HIRE_IN_VERIFIED_FIELD_LABEL
+        : `${HIRE_IN_VERIFIED_FIELD_LABEL} cleared`,
+    );
+  }
+  if (patch.tomFriedContactConfirmed != null) {
+    next.tomFriedContactConfirmed = Boolean(patch.tomFriedContactConfirmed);
+    notes.push(
+      next.tomFriedContactConfirmed
+        ? "Employee confirmed contact with Tom Fried"
+        : "Tom Fried contact cleared",
+    );
+  }
+  if (tracker || isOutreachSeat(actor)) {
+    if (patch.problemCase != null) {
+      next.problemCase = Boolean(patch.problemCase);
+      notes.push(next.problemCase ? "Problem case" : "Problem case cleared");
+    }
+    if (patch.problemCaseNote != null) next.problemCaseNote = patch.problemCaseNote.trim();
+  }
+
+  const extra = (patch.note || "").trim();
+  if (extra) notes.push(extra);
+  if (!notes.length) return { error: "Nothing to update." };
+  next.events = appendOnboardEvent(next.events, {
+    actor,
+    fromStage: person.stage,
+    toStage: person.stage,
+    note: notes.join(" · "),
+    at,
+  });
+  return next;
 }
 
 export function peopleByStage(people: readonly OnboardPerson[]) {
@@ -540,7 +952,14 @@ export function peopleByStage(people: readonly OnboardPerson[]) {
 export function visibleManpowerRequests(requests: readonly ManpowerRequest[], user?: OnboardViewer | null) {
   const local = hallLocalForSeat(user);
   if (!local) return [...requests];
-  if (hasBuildDesk(user) || isHseVaultSeat(user) || isBennyCampSeat(user) || hasWorkingDesk(user) || isProjectManager(user)) {
+  if (
+    hasBuildDesk(user) ||
+    isHseVaultSeat(user) ||
+    isBennyCampSeat(user) ||
+    isTomFriedSeat(user) ||
+    hasWorkingDesk(user) ||
+    isProjectManager(user)
+  ) {
     return [...requests];
   }
   return requests.filter((row) => row.localId === local);
@@ -577,12 +996,13 @@ export function parseManpowerRequest(raw: unknown): ManpowerRequest | null {
     events.push(event);
   }
   const headcount = typeof row.headcount === "number" ? row.headcount : Number(row.headcount);
+  const rawFill = row.fillCount as unknown;
   const fillCount =
-    row.fillCount == null || row.fillCount === ""
+    rawFill == null || rawFill === ""
       ? null
-      : typeof row.fillCount === "number"
-        ? row.fillCount
-        : Number(row.fillCount);
+      : typeof rawFill === "number"
+        ? rawFill
+        : Number(rawFill);
   return {
     id: row.id.trim(),
     localId: row.localId,
@@ -624,7 +1044,7 @@ export function createManpowerRequest(input: {
   id?: string;
 }): ManpowerRequest | { error: string } {
   if (!canCreateManpowerRequest(input.actor)) {
-    return { error: "Manpower requests are created by Benny / HSE." };
+    return { error: "Manpower requests are created by Tom / Benny / HSE." };
   }
   if (!isOnboardLocalId(input.localId)) return { error: "Pick Local 553." };
   if (!isOnboardPhase1Local(input.localId)) return { error: "Phase 1 is Local 553 only." };
