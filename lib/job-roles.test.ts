@@ -10,6 +10,7 @@ import {
   parseJobRoleLabel,
   parseSeatJobTitles,
   resolveJobRole,
+  PARKED_HALL_JOB_ROLES,
   SEED_JOB_ROLES,
   systemSeatRoleLabel,
   isProjectManagerTitle,
@@ -23,6 +24,9 @@ describe("job roles phase 1", () => {
         "President",
         "Division Manager",
         "HSE Manager",
+        "HSE Dispatcher",
+        "DISA DER",
+        "Hall Local 553",
         "Quality Manager",
         "Accounting Manager",
         "Office Manager",
@@ -44,6 +48,9 @@ describe("job roles phase 1", () => {
     assert.equal("error" in parseJobRoleLabel("x"), true);
     const custom = parseJobRoleCatalog(["Night Clerk", "president", "  Quality Manager  ", ""]);
     assert.deepEqual(custom, ["Night Clerk"]);
+    assert.deepEqual([...PARKED_HALL_JOB_ROLES], ["Hall Local 363"]);
+    assert.equal((SEED_JOB_ROLES as readonly string[]).includes("Hall Local 363"), false);
+    assert.equal(mergeJobRoleCatalog().includes("Hall Local 363"), false);
     assert.equal(mergeJobRoleCatalog(custom).includes("Night Clerk"), true);
     assert.equal(mergeJobRoleCatalog(custom)[0], "President");
     assert.equal(loginRoleForJobTitle("President"), "president");
@@ -65,6 +72,8 @@ describe("job roles phase 1", () => {
     assert.equal(defaultJobRoleForSeat({ email: "chancec318@yahoo.com", role: "tester" }), "Quality Manager");
     assert.equal(defaultJobRoleForSeat({ email: "wlanderno@yahoo.com", role: "tester" }), "HSE Manager");
     assert.equal(defaultJobRoleForSeat({ email: "bccamp2@gmail.com", role: "tester" }), "Site Safety Manager");
+    assert.equal(defaultJobRoleForSeat({ email: "jbattuello@ualocal553.org", role: "tester" }), "Hall Local 553");
+    assert.equal(defaultJobRoleForSeat({ name: "Tom Fried", role: "tester" }), "DISA DER");
     assert.equal(defaultJobRoleForSeat({ email: "nathanboyte@gmail.com", role: "tester" }), "Project Manager");
     assert.equal(defaultJobRoleForSeat({ email: JOHN_BEECH_EMAIL, role: "tester" }), "Project Manager");
     assert.equal(defaultJobRoleForSeat({ email: JOSEPH_EMAIL, role: "tester" }), "Project Manager");

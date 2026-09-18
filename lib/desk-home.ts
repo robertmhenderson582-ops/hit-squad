@@ -42,6 +42,17 @@ export const RATE_VAULT_DOOR = {
   note: "Private B-1 workshop",
 } as const;
 
+/**
+ * Public Home dock tile. Same row as Jobs · Quality · HSE · Accounting.
+ * Module lives at `/onboard` (Hit Squad Control Center board).
+ */
+export const ONBOARD_DOOR = {
+  href: "/onboard",
+  key: "dispatch",
+  label: "Dispatch",
+  note: "Hiring + HSE onboarding board",
+} as const;
+
 /** Ease-in bury: not a home door. Do not add back to HOME_DOORS without an owner ask. */
 export const BURIED_HOME_DOORS = [STANDALONE_DOOR] as const;
 
@@ -57,7 +68,7 @@ export type HomeDockTile = {
 };
 
 /**
- * Locked Home doors (Robert 2026-09-08): Jobs · Quality · HSE · Accounting.
+ * Locked Home doors (Robert 2026-09-18): Jobs · Quality · HSE · Accounting · Dispatch.
  * Sample A corner cards + HUD A BrandMark stay. No invented Scoreboard feeds.
  */
 export const HOME_DOCK_TILES: readonly HomeDockTile[] = [
@@ -65,6 +76,7 @@ export const HOME_DOCK_TILES: readonly HomeDockTile[] = [
   { href: "/quality", key: "quality", label: "Quality", note: "Quality studio" },
   { href: "/hse", key: "hse", label: "HSE", note: "Site safety" },
   { href: "/accounting", key: "accounting", label: "Accounting", note: "Not open for trial" },
+  ONBOARD_DOOR,
 ] as const;
 
 /**
@@ -99,8 +111,8 @@ export function homeDockTiles(_canRates = true) {
 
 type RateVaultViewer = { role?: string; privileges?: readonly string[] | null };
 
-/** Public four doors, plus Rate Vault when the session and lens both hold the grant.
- *  A Rate Vault–only lens (James, or View as James) hides Jobs / Quality / HSE / Accounting. */
+/** Public dock tiles, plus Rate Vault when the session and lens both hold the grant.
+ *  A Rate Vault–only lens (James, or View as James) hides Jobs / Quality / HSE / Accounting / Dispatch. */
 export function homeDockTilesForViewer(
   session?: (RateVaultViewer & { email?: string }) | null,
   lens?: (RateVaultViewer & { email?: string }) | null,

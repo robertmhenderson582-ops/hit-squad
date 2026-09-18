@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { DeskCatalogRadios } from "@/components/DeskCatalogRadios";
 import { JobScopePicks, PickJobEmpty } from "@/components/JobScopePicks";
@@ -150,6 +151,14 @@ export function HseDesk() {
         }
       />
       <div className="space-y-5">
+      <p className="plant-card px-4 py-3 text-sm">
+        Hall register and the live HSE stage board are on{" "}
+        <Link href="/onboard" className="underline">
+          Hit Squad Control Center
+        </Link>
+        . DISA DER is Tom Fried. Benny Camp (bccamp2@gmail.com) is temp dispatcher until
+        Donnie. Training is Texolve, Collinsville, Illinois.
+      </p>
       <JobScopePicks
         clients={clients}
         sites={sites}

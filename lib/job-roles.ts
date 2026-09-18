@@ -5,10 +5,16 @@
  * Change Orders, STC order) live on privilege / PM gates — not this list.
  */
 
+/** Parked for a later hall. Not a Phase 1 Role option and not a seeded seat. */
+export const PARKED_HALL_JOB_ROLES = ["Hall Local 363"] as const;
+
 export const SEED_JOB_ROLES = [
   "President",
   "Division Manager",
   "HSE Manager",
+  "HSE Dispatcher",
+  "DISA DER",
+  "Hall Local 553",
   "Quality Manager",
   "Accounting Manager",
   "Office Manager",
@@ -37,6 +43,7 @@ const SEEDED_JOB_ROLE_BY_EMAIL: Record<string, SeedJobRole> = {
   "chancec318@yahoo.com": "Quality Manager",
   "wlanderno@yahoo.com": "HSE Manager",
   "bccamp2@gmail.com": "Site Safety Manager",
+  "jbattuello@ualocal553.org": "Hall Local 553",
 };
 
 const JOB_TITLE_MAX = 80;
@@ -110,6 +117,7 @@ export function defaultJobRoleForSeat(user?: {
   if (/\bchance\b/.test(name)) return "Quality Manager";
   if (/\bwendell\b/.test(name)) return "HSE Manager";
   if (/\bbenny\b/.test(name)) return "Site Safety Manager";
+  if (/\btom fried\b/.test(name)) return "DISA DER";
   if (/\bnathan\b/.test(name) || /\bjohn beech\b/.test(name) || /\bjoseph\b/.test(name)) {
     return "Project Manager";
   }
