@@ -11,6 +11,7 @@ import {
   selectableOnboardLocals,
   TOM_FRIED_NAME,
   defaultCraftForLocal,
+  hallContactForLocal,
   hallLocalForSeat,
   nextOnboardStage,
   onboardLocal,
@@ -187,11 +188,16 @@ export function OnboardDesk() {
         <p className="text-sm uppercase tracking-[0.18em] text-[#5b6f73]">Hall ↔ HSE</p>
         <h2 className="mt-1 text-2xl font-semibold text-[#163038]">Onboarding board</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">
-          Phase 1 is Local 553 only — hall seat John Battuello Jr. Tom Fried (friedt@madisonltd.com) owns
-          drug screen, background, TechSolve, and the P66 badge notify. P66 runs actual badging. Every
-          stage change is timestamped. Default plant is {DEFAULT_ONBOARD_PLANT.site} /{" "}
-          {DEFAULT_ONBOARD_PLANT.client}. Other halls stay parked.
+          Phase 1 is Local 553 only. Tom Fried (friedt@madisonltd.com) owns drug screen, background,
+          TechSolve, and the P66 badge notify. P66 runs actual badging. Every stage change is
+          timestamped. Default plant is {DEFAULT_ONBOARD_PLANT.site} / {DEFAULT_ONBOARD_PLANT.client}.
+          Other halls stay parked.
         </p>
+        {hallContactForLocal("553") ? (
+          <p className="mt-3 text-sm text-[#163038]">
+            Local 553 hall contact: John Battuello Jr. · jbattuello@ualocal553.org
+          </p>
+        ) : null}
         {lockedLocal ? (
           <p className="mt-2 text-sm text-[#163038]">This hall seat sees Local {lockedLocal} only.</p>
         ) : null}
@@ -200,7 +206,10 @@ export function OnboardDesk() {
       {canRegister ? (
         <section className="plant-card px-5 py-5">
           <h3 className="text-lg font-semibold text-[#163038]">Hall register</h3>
-          <p className="mt-1 text-sm text-[#5b6f73]">Name, craft, and local are required. Phone and email stay optional.</p>
+          <p className="mt-1 text-sm text-[#5b6f73]">
+            Name, craft, and local are required. Phone and email stay optional. Local 553 register
+            is gated to John Battuello Jr. (jbattuello@ualocal553.org) when that hall seat is present.
+          </p>
           <form className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={(event) => void onRegister(event)}>
             <label className="text-sm">
               <span className="mb-1 block text-[#5b6f73]">Name</span>

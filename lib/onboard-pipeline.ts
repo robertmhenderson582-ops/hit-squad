@@ -167,6 +167,13 @@ export function defaultCraftForLocal(localId: OnboardLocalId) {
   return onboardLocal(localId).craft;
 }
 
+export function hallContactForLocal(localId: OnboardLocalId) {
+  if (localId === "553") {
+    return { name: JOHN_BATTUELLO_NAME, email: JOHN_BATTUELLO_EMAIL, title: "Hall Local 553" };
+  }
+  return null;
+}
+
 export function hallLocalForSeat(user?: OnboardViewer | null): OnboardLocalId | null {
   if (!user) return null;
   const email = (user.email || "").trim().toLowerCase();
@@ -359,6 +366,13 @@ export function createOnboardPerson(input: {
   const hallLocal = hallLocalForSeat(input.actor);
   if (hallLocal && hallLocal !== input.localId) {
     return { error: `Hall seats can only register Local ${hallLocal}.` };
+  }
+  const hallContact = hallContactForLocal(input.localId);
+  if (hallContact && isHallSeat(input.actor)) {
+    const email = (input.actor?.email || "").trim().toLowerCase();
+    if (email !== hallContact.email) {
+      return { error: `Local ${input.localId} register is gated to ${hallContact.email}.` };
+    }
   }
   const at = input.at || new Date().toISOString();
   const stamp = actorStamp(input.actor);

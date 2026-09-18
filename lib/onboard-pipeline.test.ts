@@ -20,6 +20,7 @@ import {
   canSeeOnboardDoor,
   changeOnboardStage,
   createOnboardPerson,
+  hallContactForLocal,
   hallLocalForSeat,
   isHallSeat,
   isOnboardPhase1Local,
@@ -61,6 +62,12 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(isOnboardPhase1Local("363"), false);
     assert.equal(TOM_FRIED_EMAIL, "friedt@madisonltd.com");
     assert.equal(JOHN_BATTUELLO_EMAIL, "jbattuello@ualocal553.org");
+    assert.deepEqual(hallContactForLocal("553"), {
+      name: JOHN_BATTUELLO_NAME,
+      email: JOHN_BATTUELLO_EMAIL,
+      title: "Hall Local 553",
+    });
+    assert.equal(hallContactForLocal("363"), null);
     assert.deepEqual(
       ONBOARD_SEED_SEATS.map((row) => `${row.name}:${row.email}`),
       [`${JOHN_BATTUELLO_NAME}:${JOHN_BATTUELLO_EMAIL}`, `${TOM_FRIED_NAME}:${TOM_FRIED_EMAIL}`],
@@ -160,6 +167,13 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
 
     const hallOther = createOnboardPerson({ name: "Boiler Hand", localId: "363", actor: hall553 });
     assert.deepEqual(hallOther, { error: "Phase 1 is Local 553 only." });
+
+    const impostor = createOnboardPerson({
+      name: "Pat Fitter",
+      localId: "553",
+      actor: { email: "other@hall.org", name: "Other BA", jobTitle: "Hall Local 553" },
+    });
+    assert.deepEqual(impostor, { error: "Local 553 register is gated to jbattuello@ualocal553.org." });
   });
 
   it("hides the other local from a hall seat and groups the kanban by stage", () => {
@@ -217,6 +231,8 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.match(desk, /Tom Fried/);
     assert.match(desk, /friedt@madisonltd.com/);
     assert.match(desk, /John Battuello Jr/);
+    assert.match(desk, /jbattuello@ualocal553.org/);
+    assert.match(desk, /Local 553 hall contact/);
     assert.match(desk, /Audit trail/);
     assert.doesNotMatch(desk, /tfried@madisonltd.com/);
     assert.doesNotMatch(desk, /Local 363|BM363/);
