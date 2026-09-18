@@ -62,6 +62,8 @@ export type QualityTemplateFormSession = {
   fileName?: string;
   dest?: QualityTemplateFillDest;
   destJobId?: string;
+  destJobLabel?: string;
+  destSiteLabel?: string;
   destPackageId?: string;
   destPackageName?: string;
   filledName?: string;
@@ -142,9 +144,9 @@ export function QualityTemplateForm({
     if (session.filledName) {
       setLoading(true);
       const destKind = session.dest || "job";
-      const siteName = sites.find((site) => site.id === jobPick.siteId)?.name;
+      const siteName = session.destSiteLabel || sites.find((site) => site.id === jobPick.siteId)?.name;
       const destJob = jobs.find((job) => job.id === (session.destJobId || jobPick.jobId));
-      const jobName = destJob?.title || destJob?.code;
+      const jobName = session.destJobLabel || destJob?.title || destJob?.code;
       const destLabel = destKind === "prepackage" ? session.destPackageName : jobName;
       const folder = destKind === "prepackage" ? "packages" : def.folderId || session.folderId;
       void fetchJsonWithDeadline<{
@@ -186,7 +188,7 @@ export function QualityTemplateForm({
     return () => {
       cancelled = true;
     };
-  }, [companyId, companyLabel, def?.id, jobPick.jobId, jobPick.siteId, open, owner?.viewAs, session?.dest, session?.destJobId, session?.destPackageId, session?.destPackageName, session?.fileName, session?.filledName, session?.folderId, session?.source]);
+  }, [companyId, companyLabel, def?.id, jobPick.jobId, jobPick.siteId, open, owner?.viewAs, session?.dest, session?.destJobId, session?.destJobLabel, session?.destPackageId, session?.destPackageName, session?.destSiteLabel, session?.fileName, session?.filledName, session?.folderId, session?.source]);
 
   const title = def ? qualityTemplateFormTitle(def, session?.fileName) : "Quality form";
   const selectedJob = jobs.find((job) => job.id === jobPick.jobId);

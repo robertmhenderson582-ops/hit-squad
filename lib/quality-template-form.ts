@@ -44,6 +44,8 @@ export const QUALITY_TEMPLATE_FILL_MISSING_ERROR = "Filled copy not found.";
 export const QUALITY_TEMPLATE_FILL_OPEN_ERROR = "Could not open that filled copy.";
 export const QUALITY_TEMPLATE_FILL_OPEN_TIMEOUT_ERROR =
   "Opening that filled copy timed out. The Quality vault is still on this desk. Try again.";
+export const QUALITY_TEMPLATE_FILL_RETRIEVE_ERROR =
+  "The filled copy listed but the field values did not persist. Nothing was kept. Try Save as new again.";
 
 export function qualityTemplateFillOpenNote(input: { timedOut?: boolean; status?: number; error?: string }) {
   if (input.timedOut) return QUALITY_TEMPLATE_FILL_OPEN_TIMEOUT_ERROR;
@@ -430,13 +432,24 @@ export function emptyQualityTemplateFormRecord(def: QualityTemplateFormDef): Qua
   return { fields: {}, rows: [] };
 }
 
+function hydrateFieldValue(value: unknown) {
+  if (typeof value === "string") return value;
+  if (value != null && typeof value !== "object") return String(value);
+  return "";
+}
+
 function hydrateFields(raw: unknown, defs: readonly QualityFieldDef[]): Record<string, string> {
-  const incoming = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const incoming = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const fields: Record<string, string> = {};
   for (const def of defs) {
-    const value = incoming[def.id];
-    if (typeof value === "string") fields[def.id] = value;
-    else if (value != null && typeof value !== "object") fields[def.id] = String(value);
+    if (def.id in incoming) fields[def.id] = hydrateFieldValue(incoming[def.id]);
+  }
+  // Keep catalog keys the current def does not know. A Packages fill parsed
+  // with the generic Forms sheet used to drop packageName / contents / notes.
+  for (const [key, value] of Object.entries(incoming)) {
+    if (key in fields) continue;
+    const next = hydrateFieldValue(value);
+    if (next) fields[key] = next;
   }
   return fields;
 }
@@ -588,7 +601,7 @@ export function isQualityFilledCopyText(text?: string | null) {
   return (text || "").startsWith(QUALITY_TEMPLATE_FORM_MARK);
 }
 
-export function parseQualityTemplateForm(text: string): QualityTemplateFormPayload | null {
+export function parseQualityTemplateForm(text: string, fileName?: string | null): QualityTemplateFormPayload | null {
   const raw = text.replace(/^\uFEFF/, "");
   if (!raw.startsWith(QUALITY_TEMPLATE_FORM_MARK)) return null;
   const jsonStart = raw.indexOf("{");
@@ -598,8 +611,11 @@ export function parseQualityTemplateForm(text: string): QualityTemplateFormPaylo
     const folderId = isQualityFolderId(parsed.folderId) ? parsed.folderId : "packages";
     const dest: QualityTemplateFillDest = parsed.dest === "prepackage" ? "prepackage" : "job";
     const source: QualityTemplateSourceKind = parsed.source === "company-docs" ? "company-docs" : "catalog";
+    const named = fileName || parsed.sourceName || "";
     const def =
-      qualityTemplateFormDef({ source, folderId: parsed.id || folderId, fileName: parsed.sourceName }) ||
+      qualityTemplateFormDefFromFilledName(named) ||
+      qualityTemplateFormDef({ source, folderId: parsed.id || folderId, fileName: named }) ||
+      qualityTemplateFormForCatalog(parsed.id || folderId) ||
       qualityTemplateFormForCatalog(folderId) ||
       COMPANY_DOC_FORMS.forms;
     const record = hydrateQualityTemplateFormRecord({ fields: parsed.fields, rows: parsed.rows }, def);
@@ -649,7 +665,7 @@ export function qualityTemplateFormFromLead(file: { name?: string; type?: string
   const binary = typeof atob === "function" ? atob(data) : Buffer.from(data, "base64").toString("binary");
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return parseQualityTemplateForm(qualityTemplateFormFromBytes(bytes));
+  return parseQualityTemplateForm(qualityTemplateFormFromBytes(bytes), file.name);
 }
 
 export function qualityTemplateJobFolder(def: QualityTemplateFormDef): QualityFolderId {

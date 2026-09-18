@@ -213,6 +213,8 @@ describe("Quality always-displayed template forms", () => {
     assert.match(desk, /dest: "prepackage"/);
     assert.match(desk, /dest: "job"/);
     assert.match(desk, /folderId: radio/);
+    assert.match(desk, /destJobLabel: selectedJob/);
+    assert.match(form, /session\.destJobLabel/);
     assert.match(form, /packageName=\$\{encodeURIComponent\(session\.destPackageName\)\}/);
     assert.match(form, /destKind === "prepackage" \? "packages"/);
     assert.match(shelf, /onOpenFilled/);
@@ -256,5 +258,54 @@ describe("Quality always-displayed template forms", () => {
     assert.equal(qualityTemplateFormHasWork({ fields: {}, rows: [] }), false);
     assert.equal(qualityTemplateFormHasWork({ fields: { job: "   " }, rows: [] }), false);
     assert.equal(qualityTemplateFormHasWork({ fields: { job: "Boiler 17" }, rows: [] }), true);
+  });
+
+  it("Packages filled-copy parse keeps header keys even if the JSON id is wrong", () => {
+    const def = qualityTemplateFormForCatalog("packages");
+    assert.ok(def);
+    const named = qualityFilledCopyName({
+      title: def.title,
+      destLabel: "Madison CAT 2 (Pit Stop)",
+      userName: "Robert Henderson",
+      at: new Date(2026, 8, 17, 20, 42, 0),
+    });
+    assert.equal(qualityTemplateFormDefFromFilledName(named)?.id, "packages");
+    assert.equal(qualityTemplateFormDef({ source: "catalog", folderId: "packages", fileName: named })?.id, "packages");
+    const payload: QualityTemplateFormPayload = {
+      mark: QUALITY_TEMPLATE_FORM_MARK,
+      id: "forms",
+      title: "Forms",
+      folderId: "packages",
+      source: "catalog",
+      sourceFolder: "packages",
+      sourceName: "",
+      dest: "job",
+      destLabel: "Madison CAT 2 (Pit Stop)",
+      savedAt: "2026-09-17T20:42:00.000Z",
+      user: "Robert Henderson",
+      fields: {
+        packageName: "CAT 2 night pack",
+        revision: "Rev A",
+        preparedBy: "Robert Henderson",
+        contents: "Cover + weld log",
+        notes: "AUDIT-2026-09-17-NIGHT",
+      },
+      rows: [],
+    };
+    const parsed = parseQualityTemplateForm(serializeQualityTemplateForm(payload), named);
+    assert.ok(parsed);
+    assert.equal(parsed.fields.packageName, "CAT 2 night pack");
+    assert.equal(parsed.fields.notes, "AUDIT-2026-09-17-NIGHT");
+    const fromLead = qualityTemplateFormFromLead(qualityTemplateFormToLead(payload, named));
+    assert.ok(fromLead);
+    assert.equal(fromLead.fields.contents, "Cover + weld log");
+    const formsDef = qualityTemplateFormForCompanyDoc("forms");
+    assert.ok(formsDef);
+    const extras = hydrateQualityTemplateFormRecord({ fields: payload.fields, rows: [] }, formsDef);
+    assert.equal(extras.fields.notes, "AUDIT-2026-09-17-NIGHT");
+    assert.equal(extras.fields.packageName, "CAT 2 night pack");
+    const client = hydrateQualityTemplateFormRecord(extras, def);
+    assert.equal(client.fields.packageName, "CAT 2 night pack");
+    assert.equal(client.fields.revision, "Rev A");
   });
 });

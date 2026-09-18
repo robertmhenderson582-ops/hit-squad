@@ -6,6 +6,7 @@ import {
   driveFailureKind,
   driveFolderName,
   isDriveFolderRow,
+  sameDriveFileName,
   sameDriveFolderName,
   writableDriveFolderId,
   type DriveAdapter,
@@ -637,7 +638,7 @@ export async function readQualityVaultFile(
       parent = existingId;
     }
     const kids = await drive.listChildren!(parent);
-    const row = kids.find((item) => qualityVaultFileVisible(item, place.who) && item.name === wanted);
+    const row = kids.find((item) => qualityVaultFileVisible(item, place.who) && sameDriveFileName(item.name, wanted));
     if (!row?.id) {
       return { file: null, store: "drive" as const, stored: true as const };
     }
@@ -662,6 +663,55 @@ export async function readQualityVaultFile(
       store: "drive" as const,
       stored: true as const,
     };
+  } catch {
+    return { file: null, store: "drive" as const, stored: false as const };
+  }
+}
+
+/**
+ * Last-resort retrieve: walk the Quality tree for a filled filename when the
+ * job-label path misses. Never opens company-rail templates.
+ */
+export async function readQualityVaultNamedFile(
+  drive: DriveAdapter | null | undefined,
+  fileName: string,
+  companyId?: string,
+  viewer?: VaultListViewer,
+) {
+  const wanted = (fileName || "").replace(/\\/g, "/").split("/").pop()?.trim() || "";
+  if (!wanted || !qualityDriveReady(drive) || !drive?.readBytes) {
+    return { file: null, store: "unconfigured" as const, stored: false as const };
+  }
+  if (!vaultFileVisibleToViewer(wanted, viewer)) {
+    return { file: null, store: "drive" as const, stored: true as const };
+  }
+  async function walk(parent: string, path: string[]): Promise<{ name: string; type: string; data: string } | null> {
+    const kids = await drive!.listChildren!(parent);
+    const railFolder = path.length === 2 && isQualityCompanyDocVaultFolder(path[1] || "", companyId);
+    for (const item of kids) {
+      if (!isQualityVaultFile(item) || !item.id || !sameDriveFileName(item.name, wanted)) continue;
+      if (railFolder || isProtectedQualityCompanyDocFile(item.id)) continue;
+      if (qualityCompanyDocGoogleNativeType(item.mimeType)) continue;
+      const bytes = await drive!.readBytes!(item.id);
+      if (!bytes?.length) continue;
+      return {
+        name: item.name,
+        type: qualityCompanyDocPreviewType({
+          name: item.name,
+          type: item.mimeType && item.mimeType !== DRIVE_FOLDER_MIME ? item.mimeType : "application/octet-stream",
+        }),
+        data: Buffer.from(bytes).toString("base64"),
+      };
+    }
+    for (const folder of kids.filter((row) => isQualityVaultFolder(row) && row.id)) {
+      const found = await walk(folder.id, [...path, folder.name || ""]);
+      if (found) return found;
+    }
+    return null;
+  }
+  try {
+    const file = await walk(qualityFolderId(), []);
+    return { file, store: "drive" as const, stored: true as const };
   } catch {
     return { file: null, store: "drive" as const, stored: false as const };
   }

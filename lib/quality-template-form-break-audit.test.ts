@@ -178,6 +178,8 @@ describe("Quality template fill break matrix", { concurrency: 1 }, () => {
     const desk = source("../components/QualityDesk.tsx");
     assert.match(desk, /setRadio\("packages"\)/);
     assert.match(desk, /dest: "prepackage"/);
+    assert.match(desk, /destJobLabel: selectedJob/);
+    assert.match(form, /session\.destJobLabel/);
     const drops = source("./quality-template-form-drops.ts");
     assert.match(drops, /qualityTemplateFillSharedReadWho/);
     assert.match(drops, /listQualityPackageShelf/);
@@ -704,5 +706,166 @@ describe("Quality template fill break matrix", { concurrency: 1 }, () => {
     });
     assert.equal(jobAgain.ok, true);
     if (jobAgain.ok) assert.equal(jobAgain.form.fields.notes, "AUDIT-2026-09-16-NIGHT");
+  });
+
+  it("Q-01 Packages (and Gauges) Owner save→open keeps field values, not a blank listing", async () => {
+    const { QUALITY_TEMPLATE_FORM_MARK, qualityFilledCopyName, qualityTemplateFormForCatalog, qualityTemplateFormToLead } =
+      await import("./quality-template-form.ts");
+    const drive = memoryDrive();
+    resetLeadBriefStoreForTests(join(dir, "break-q01-packages"));
+    useLeadBriefVaultForTests(drive);
+    const marker = "AUDIT-2026-09-17-NIGHT";
+    async function saveAndReopen(folderId: "packages" | "gauges") {
+      const def = qualityTemplateFormForCatalog(folderId)!;
+      const name = qualityFilledCopyName({
+        title: def.title,
+        destLabel: "Madison CAT 2 (Pit Stop)",
+        userName: owner.name,
+        at: new Date(2026, 8, 17, 20, 42, 0),
+      });
+      const fields: Record<string, string> =
+        folderId === "packages"
+          ? {
+              packageName: "CAT 2 night pack",
+              revision: "Rev A",
+              preparedBy: owner.name,
+              contents: "Cover + weld log",
+              notes: marker,
+            }
+          : { job: "Madison CAT 2 (Pit Stop)", preparedBy: owner.name, notes: marker };
+      const file = qualityTemplateFormToLead(
+        {
+          mark: QUALITY_TEMPLATE_FORM_MARK,
+          id: def.id,
+          title: def.title,
+          folderId: def.folderId,
+          source: "catalog",
+          sourceFolder: folderId,
+          dest: "job",
+          destLabel: "Madison CAT 2 (Pit Stop)",
+          savedAt: "2026-09-17T20:42:00.000Z",
+          user: owner.name,
+          fields,
+          rows: folderId === "gauges" ? [{ id: "row-1", cells: { gauge: marker, status: "in" } }] : [],
+        },
+        name,
+      );
+      const saved = await saveQualityTemplateFill(owner, {
+        dest: "job",
+        jobId: "job-cat2",
+        folderId: def.folderId,
+        companyId: "madison",
+        companyLabel: "Madison",
+        siteLabel: "Wood River",
+        jobLabel: "Madison CAT 2 (Pit Stop)",
+        files: [file],
+      });
+      assert.equal(saved.ok, true, folderId);
+      if (!saved.ok) return;
+      const fromPackages = await readQualityTemplateFill(owner, {
+        dest: "job",
+        jobId: "job-cat2",
+        folderId: "packages",
+        fileName: file.name,
+        companyId: "madison",
+        companyLabel: "Madison",
+        siteLabel: "Wood River",
+        jobLabel: "Madison CAT 2 (Pit Stop)",
+      });
+      assert.equal(fromPackages.ok, true, folderId);
+      if (!fromPackages.ok) return;
+      assert.equal(fromPackages.form.fields.notes, marker, folderId);
+      if (folderId === "packages") {
+        assert.equal(fromPackages.form.fields.packageName, "CAT 2 night pack");
+        assert.equal(fromPackages.form.fields.revision, "Rev A");
+        assert.equal(fromPackages.form.fields.contents, "Cover + weld log");
+      }
+      const slugOnly = await readQualityTemplateFill(wendell, {
+        dest: "job",
+        jobId: "job-cat2",
+        folderId: "packages",
+        fileName: file.name,
+        companyId: "madison",
+      });
+      assert.equal(slugOnly.ok, true, `${folderId} no-label`);
+      if (slugOnly.ok) assert.equal(slugOnly.form.fields.notes, marker);
+      const listed = await listQualityFolderDrops(wendell, "job-cat2", "packages", "madison", {
+        companyLabel: "Madison",
+        siteLabel: "Wood River",
+        jobLabel: "Madison CAT 2 (Pit Stop)",
+      });
+      assert.equal(listed.files.some((row) => row.name === file.name), true);
+      const rail = await listQualityCompanyDocDrop(owner, "forms", "madison");
+      assert.equal(rail.files.some((row) => row.name === file.name), false);
+      return file;
+    }
+    const packagesFile = await saveAndReopen("packages");
+    await saveAndReopen("gauges");
+    assert.ok(packagesFile);
+
+    const stamped = await findNamedVaultFile(drive, packagesFile.name);
+    assert.ok(stamped?.id);
+    await drive.updateBytes!(stamped.id, new TextEncoder().encode("not a quality form"), "text/plain");
+    const fromBriefs = await readQualityTemplateFill(owner, {
+      dest: "job",
+      jobId: "job-cat2",
+      folderId: "packages",
+      fileName: packagesFile.name,
+      companyId: "madison",
+      companyLabel: "Madison",
+      siteLabel: "Wood River",
+      jobLabel: "Madison CAT 2 (Pit Stop)",
+    });
+    assert.equal(fromBriefs.ok, true);
+    if (fromBriefs.ok) {
+      assert.equal(fromBriefs.form.fields.notes, marker);
+      assert.equal(fromBriefs.form.fields.packageName, "CAT 2 night pack");
+    }
+
+    const kitName = qualityFilledCopyName({
+      title: "Packages",
+      destLabel: "AUDIT-TEMP-KIT-2026-09-17",
+      userName: owner.name,
+      at: new Date(2026, 8, 17, 20, 42, 0),
+    });
+    const kitFile = qualityTemplateFormToLead(
+      {
+        mark: QUALITY_TEMPLATE_FORM_MARK,
+        id: "packages",
+        title: "Packages",
+        folderId: "packages",
+        source: "catalog",
+        sourceFolder: "packages",
+        dest: "prepackage",
+        destLabel: "AUDIT-TEMP-KIT-2026-09-17",
+        savedAt: "2026-09-17T20:42:00.000Z",
+        user: owner.name,
+        fields: { notes: `${marker}-READY`, packageName: "Ready night pack" },
+        rows: [],
+      },
+      kitName,
+    );
+    const kit = await saveQualityTemplateFill(owner, {
+      dest: "prepackage",
+      packageName: "AUDIT-TEMP-KIT-2026-09-17",
+      companyId: "madison",
+      companyLabel: "Madison",
+      files: [kitFile],
+    });
+    assert.equal(kit.ok, true);
+    if (!kit.ok) return;
+    const fromShelf = await readQualityTemplateFill(wendell, {
+      dest: "prepackage",
+      packageId: kit.packageId,
+      packageName: "AUDIT-TEMP-KIT-2026-09-17",
+      folderId: "packages",
+      fileName: kitFile.name,
+      companyId: "madison",
+    });
+    assert.equal(fromShelf.ok, true);
+    if (fromShelf.ok) {
+      assert.equal(fromShelf.form.fields.notes, `${marker}-READY`);
+      assert.equal(fromShelf.form.fields.packageName, "Ready night pack");
+    }
   });
 });
