@@ -360,8 +360,12 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     const drive = source("./drive-data.ts");
     assert.match(page, /OnboardDesk/);
     assert.match(page, /DeskChrome/);
-    assert.match(page, /CONTROL_CENTER_CHROME/);
-    assert.match(desk, /CONTROL_CENTER_TITLE/);
+    assert.match(page, /titleBrand/);
+    assert.match(page, /controlCenterBrandForUser/);
+    assert.match(api, /controlCenterBrandForUser/);
+    assert.match(api, /listCompanies/);
+    assert.match(desk, /Hall ↔ HSE/);
+    assert.doesNotMatch(desk, /CONTROL_CENTER_TITLE/);
     assert.match(home, /label: "Dispatch"/);
     assert.match(home, /key: "dispatch"/);
     assert.match(home, /Hiring \+ HSE onboarding board/);

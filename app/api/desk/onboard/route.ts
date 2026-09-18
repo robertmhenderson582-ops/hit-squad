@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
+import { listCompanies } from "@/lib/companies-store";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { cookieValue } from "@/lib/http";
+import { controlCenterBrandForUser } from "@/lib/onboard-brand";
 import { notifyStepComplete } from "@/lib/onboard-notify";
 import {
   canAdvanceOnboard,
@@ -49,9 +51,18 @@ function payload(body: Record<string, unknown>, status = 200) {
   return NextResponse.json({ ...onboardStoreStatus(), ...body }, { status });
 }
 
+async function controlCenterBrandPayload(user: Parameters<typeof visibleOnboardPeople>[1]) {
+  try {
+    return controlCenterBrandForUser(user, await listCompanies());
+  } catch {
+    return controlCenterBrandForUser(user, []);
+  }
+}
+
 async function boardFor(user: Parameters<typeof visibleOnboardPeople>[1]) {
   const settings = await getOnboardSettings();
   return {
+    brand: await controlCenterBrandPayload(user),
     people: visibleOnboardPeople(await listOnboardPeople(), user),
     requests: visibleManpowerRequests(await listOnboardRequests(), user),
     settings,

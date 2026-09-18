@@ -6,7 +6,6 @@ import { useSession } from "@/components/SessionProvider";
 import { viewAsInit } from "@/lib/desk-scope";
 import {
   BENNY_CAMP_NAME,
-  CONTROL_CENTER_TITLE,
   DEFAULT_ONBOARD_PLANT,
   DEFAULT_ONBOARD_SETTINGS,
   HIRE_IN_OUTREACH_OWNERS,
@@ -396,7 +395,6 @@ export function OnboardDesk() {
     <div className="field-desk onboard-desk mt-4 space-y-5">
       <section className="plant-card px-5 py-5">
         <p className="text-sm uppercase tracking-[0.18em] text-[#5b6f73]">Hall ↔ HSE</p>
-        <h2 className="mt-1 text-2xl font-semibold text-[#163038]">{CONTROL_CENTER_TITLE}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">
           Phase 1 is Local 553 only. Tom Fried or Benny Camp create a manpower request first; John Battuello Jr.
           responds with fill count and date; then site submits name + phone onto that request (Owner can switch Step 1
