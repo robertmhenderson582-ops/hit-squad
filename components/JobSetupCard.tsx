@@ -301,9 +301,21 @@ export function JobSetupCard({
           className="paper-field mt-2"
           placeholder="Madison JN"
           value={pack.jobMeta.jobNumber}
+          disabled={estimateWriteLocked}
           onChange={(event) => pack.setJobMeta((current) => ({ ...current, jobNumber: event.target.value }))}
         />
         <p className="mt-1 text-xs text-[#5b6f73]">Cost / PPR Job #. Wood River awarded work uses the Madison JN.</p>
+      </label>
+      <label className="mt-4 block">
+        <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">CLIENT PO #</span>
+        <input
+          className="paper-field mt-2"
+          placeholder="P66 PO / client PO"
+          value={pack.jobMeta.clientPoNumber}
+          disabled={estimateWriteLocked}
+          onChange={(event) => pack.setJobMeta((current) => ({ ...current, clientPoNumber: event.target.value }))}
+        />
+        <p className="mt-1 text-xs text-[#5b6f73]">Awarded client PO. Shows on the site Jobs card next to JN. PDFs stay in the vault.</p>
       </label>
       <label className="mt-4 block">
         <span className="text-xs font-semibold tracking-[0.18em] text-[#5b6f73]">AREA / UNIT</span>

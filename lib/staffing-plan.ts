@@ -24,6 +24,8 @@ export type JobMeta = {
   area: string;
   /** Madison / client job number (Cost PPR Job #). */
   jobNumber: string;
+  /** Client purchase order (P66 PO # on awarded Wood River work). */
+  clientPoNumber: string;
   qualityDay1: QualityDay1;
   hseDay1: HseDay1;
   rollingChart: RollingChartState;
@@ -78,6 +80,7 @@ export function hydrateJobMeta(raw: Partial<JobMeta> | Record<string, unknown> |
     afeName: typeof parsed.afeName === "string" ? parsed.afeName : "",
     area: typeof parsed.area === "string" ? parsed.area : "",
     jobNumber: typeof parsed.jobNumber === "string" ? parsed.jobNumber : "",
+    clientPoNumber: typeof parsed.clientPoNumber === "string" ? parsed.clientPoNumber : "",
     ...hydrateJobRates(parsed),
     ...hydrateJobMoney(parsed),
     qualityDay1: hydrateQualityDay1(parsed.qualityDay1),
@@ -93,6 +96,7 @@ export function emptyJobMeta(): JobMeta {
     afeName: "",
     area: "",
     jobNumber: "",
+    clientPoNumber: "",
     ...emptyJobRates(),
     ...emptyJobMoney(),
     qualityDay1: emptyQualityDay1(),

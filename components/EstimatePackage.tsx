@@ -30,8 +30,8 @@ import {
   type PhaseRow,
   type PhaseScheduleState,
 } from "@/lib/phase-schedule";
-import { BOILER17_JOB_NUMBER, defaultStatusForBoiler17, isBoiler17PackId } from "@/lib/boiler-17";
-import { seedBoiler17LocalDefaults } from "@/lib/his-wood-river";
+import { defaultStatusForBoiler17 } from "@/lib/boiler-17";
+import { seedWoodRiverAwardedMeta } from "@/lib/his-wood-river";
 import { isRodeoU110PackId, seedRodeoU110LocalDefaults } from "@/lib/madison-u110";
 import { isRodeoU250PackId, seedRodeoU250LocalDefaults } from "@/lib/madison-u250";
 import { emptyJobMeta, hydrateJobMeta, readJobMeta, writeJobMeta, type JobMeta } from "@/lib/staffing-plan";
@@ -285,8 +285,8 @@ export function EstimatePackageProvider({
           (isDefaultSeedSchedule(localSchedule) && crewHasRows(readCrew(estimateKey)))),
     );
     const paintFromLocal = () => {
-      if (packId && isBoiler17PackId(packId) && typeof window !== "undefined") {
-        seedBoiler17LocalDefaults(window.localStorage, packId);
+      if (packId && typeof window !== "undefined") {
+        seedWoodRiverAwardedMeta(window.localStorage, packId);
       }
       if (packId && isRodeoU110PackId(packId) && typeof window !== "undefined") {
         seedRodeoU110LocalDefaults(window.localStorage, packId);
@@ -299,13 +299,7 @@ export function EstimatePackageProvider({
       setCrewState(syncCrew(readCrew(estimateKey), next));
       setOrgChartState(readOrgChart(estimateKey));
       const nextMeta = readJobMeta(estimateKey);
-      if (packId && isBoiler17PackId(packId) && !nextMeta.jobNumber.trim()) {
-        const seeded = { ...nextMeta, jobNumber: BOILER17_JOB_NUMBER, area: nextMeta.area || "Boiler 17" };
-        writeJobMeta(estimateKey, seeded);
-        setJobMetaState(seeded);
-      } else {
-        setJobMetaState(nextMeta);
-      }
+      setJobMetaState(nextMeta);
       setActivitiesState(normalizeWorkActivities(readActivities(estimateKey) ?? []));
       const nextStatus = readPackStatus(estimateKey);
       setStatusState(nextStatus);

@@ -243,6 +243,11 @@ function jobNumberFromMeta(meta: unknown) {
   return typeof row?.jobNumber === "string" ? row.jobNumber.trim() : "";
 }
 
+function clientPoFromMeta(meta: unknown) {
+  const row = asRecord(meta);
+  return typeof row?.clientPoNumber === "string" ? row.clientPoNumber.trim() : "";
+}
+
 function perDiemModeFromMeta(meta: unknown) {
   const row = asRecord(meta);
   if (!row || !("perDiemMode" in row)) return "";
@@ -286,6 +291,8 @@ function pickJobMetaForPack(newer: EstimatePackSnapshot, older: EstimatePackSnap
   const picked = newer.jobMeta ?? older.jobMeta;
   const newerNumber = jobNumberFromMeta(newer.jobMeta);
   const olderNumber = jobNumberFromMeta(older.jobMeta);
+  const newerPo = clientPoFromMeta(newer.jobMeta);
+  const olderPo = clientPoFromMeta(older.jobMeta);
   const newerMode = perDiemModeFromMeta(newer.jobMeta);
   const olderMode = perDiemModeFromMeta(older.jobMeta);
   const mode = newerMode || olderMode;
@@ -293,6 +300,9 @@ function pickJobMetaForPack(newer: EstimatePackSnapshot, older: EstimatePackSnap
   if (olderNumber && !newerNumber) {
     const row = asRecord(next);
     next = row ? { ...row, jobNumber: olderNumber } : older.jobMeta ?? newer.jobMeta;
+  }
+  if (olderPo && !newerPo) {
+    next = withJobMetaFields(next, { clientPoNumber: olderPo });
   }
   if (mode && !perDiemModeFromMeta(next)) {
     next = withJobMetaFields(next, { perDiemMode: mode });
@@ -769,11 +779,16 @@ export function applyPackToStore(store: StorageLike, pack: EstimatePackSnapshot)
       const existingMeta = existing?.jobMeta ?? readStoreJson(store, `${JOB_META_PREFIX}${key}`);
       const incomingNumber = jobNumberFromMeta(pack.jobMeta);
       const existingNumber = jobNumberFromMeta(existingMeta);
+      const incomingPo = clientPoFromMeta(pack.jobMeta);
+      const existingPo = clientPoFromMeta(existingMeta);
       const incomingMode = perDiemModeFromMeta(pack.jobMeta);
       const existingMode = perDiemModeFromMeta(existingMeta);
       const row = asRecord(pack.jobMeta);
       let nextMeta: unknown =
         incomingNumber || !existingNumber || !row ? pack.jobMeta : { ...row, jobNumber: existingNumber };
+      if (!incomingPo && existingPo) {
+        nextMeta = withJobMetaFields(nextMeta, { clientPoNumber: existingPo });
+      }
       if (!incomingMode && existingMode) {
         nextMeta = withJobMetaFields(nextMeta, { perDiemMode: existingMode });
       }

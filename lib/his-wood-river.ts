@@ -8,6 +8,7 @@ import {
   BOILER17_TITLE,
   BOILER17_WINDOW,
   isBoiler17PackId,
+  jobNumberForPack,
   MIKE_CPPR_108451_STATUS_DATE,
 } from "./boiler-17.ts";
 import { COST_REPORT_STORE_PREFIX } from "./cost-report-prefix.ts";
@@ -109,6 +110,12 @@ export const HIS_WOOD_RIVER_FILES: HisWoodRiverFile[] = [
 export const HIS_AROMATICS_PACK_ID = "new-mtj7bvtk-akmei";
 export const HIS_CAT2_PACK_ID = "new-mtaajdwa-f7539";
 export const HIS_BOILER17_PACK_ID = BOILER17_PACK_ID;
+/** Madison JN on live Cat 2 Pit Stop / CCU2. */
+export const CAT2_JOB_NUMBER = "108474";
+/** P66 PO on awarded Cat 2 Pit Stop. */
+export const CAT2_CLIENT_PO_NUMBER = "4302363210";
+/** Madison JN on 2027 Aromatics when the pack has none yet. */
+export const AROMATICS_JOB_NUMBER = "108463";
 export const HIS_BOILER17_FILE_ID = "1SDOBakDxjUCUE-PgTlBUjqnbgchNlG8Y";
 export const HIS_BOILER17_JOB_CODE = "EST-B1726";
 /** Purged leftover. Trashed Drive file — never restamp, first-paint, or hydrate. */
@@ -484,9 +491,71 @@ export function persistHisWoodRiverCards(store?: StorageLike | null): LocalPack[
       },
       store,
     );
-    seedBoiler17LocalDefaults(store, pack.packId);
+    seedWoodRiverAwardedMeta(store, pack.packId);
   }
   return mergeHisWoodRiverCards(listLocalPacks(store));
+}
+
+function hisPackIdMatches(packId: string, known: string) {
+  return normPackId(packId) === normPackId(known);
+}
+
+function hisFileForJobIds(pack?: { packId?: string; title?: string } | null) {
+  if (!pack) return null;
+  return hisMatchForPack(pack) || hisFileForExactPackId(pack.packId || "");
+}
+
+/** Typed JN first, then Boiler 17 / Cat 2 / Aromatics known seeds. */
+export function awardedJobNumberForPack(
+  pack?: { packId?: string; title?: string; jobNumber?: string } | null,
+  jobMeta?: { jobNumber?: string } | null,
+) {
+  const typed = jobNumberForPack(pack, jobMeta);
+  if (typed) return typed;
+  const his = hisFileForJobIds(pack);
+  if (his?.packId && hisPackIdMatches(his.packId, HIS_CAT2_PACK_ID)) return CAT2_JOB_NUMBER;
+  if (his?.packId && hisPackIdMatches(his.packId, HIS_AROMATICS_PACK_ID)) return AROMATICS_JOB_NUMBER;
+  if (hisPackIdMatches(pack?.packId || "", HIS_CAT2_PACK_ID)) return CAT2_JOB_NUMBER;
+  if (hisPackIdMatches(pack?.packId || "", HIS_AROMATICS_PACK_ID)) return AROMATICS_JOB_NUMBER;
+  return "";
+}
+
+/** Typed client PO first, then Cat 2 known P66 PO. Never invent a blank slot. */
+export function clientPoNumberForPack(
+  pack?: { packId?: string; title?: string; clientPoNumber?: string } | null,
+  jobMeta?: { clientPoNumber?: string } | null,
+) {
+  const typed = (jobMeta?.clientPoNumber || pack?.clientPoNumber || "").trim();
+  if (typed) return typed;
+  const his = hisFileForJobIds(pack);
+  if (his?.packId && hisPackIdMatches(his.packId, HIS_CAT2_PACK_ID)) return CAT2_CLIENT_PO_NUMBER;
+  if (hisPackIdMatches(pack?.packId || "", HIS_CAT2_PACK_ID)) return CAT2_CLIENT_PO_NUMBER;
+  return "";
+}
+
+/** Known Wood River JN / P66 PO on HIS cards. Blank only — never wipe typed values. */
+export function seedWoodRiverAwardedMeta(store: StorageLike, packId: string) {
+  seedBoiler17LocalDefaults(store, packId);
+  if (!hisPackIdMatches(packId, HIS_CAT2_PACK_ID) && !hisPackIdMatches(packId, HIS_AROMATICS_PACK_ID)) return;
+  const key = storageKeyForPack(packId);
+  const meta = hydrateJobMeta(readStoreJson<Partial<JobMeta>>(store, `${JOB_META_PREFIX}${key}`));
+  let next = meta;
+  let changed = false;
+  if (hisPackIdMatches(packId, HIS_CAT2_PACK_ID)) {
+    if (!next.jobNumber.trim()) {
+      next = { ...next, jobNumber: CAT2_JOB_NUMBER };
+      changed = true;
+    }
+    if (!next.clientPoNumber.trim()) {
+      next = { ...next, clientPoNumber: CAT2_CLIENT_PO_NUMBER };
+      changed = true;
+    }
+  }
+  if (hisPackIdMatches(packId, HIS_AROMATICS_PACK_ID) && !next.jobNumber.trim()) {
+    next = { ...next, jobNumber: AROMATICS_JOB_NUMBER };
+    changed = true;
+  }
+  if (changed) writeStoreJson(store, `${JOB_META_PREFIX}${key}`, next);
 }
 
 /** Job # 108451 + Mike CPPR May notes when Cost has not been pasted yet. */
