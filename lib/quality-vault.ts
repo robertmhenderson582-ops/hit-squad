@@ -6,6 +6,8 @@ import {
   driveFailureKind,
   driveFolderName,
   isDriveFolderRow,
+  isDriveQuotaError,
+  isOauthInvalidGrant,
   sameDriveFileName,
   sameDriveFolderName,
   writableDriveFolderId,
@@ -185,7 +187,8 @@ async function confirmQualityVaultBytes(drive: DriveAdapter, fileId: string, byt
     try {
       const confirmed = await drive.readBytes(fileId);
       if (confirmed.length === bytes.length) return true;
-    } catch {
+    } catch (error) {
+      if (isDriveQuotaError(error) || isOauthInvalidGrant(error)) throw error;
       // Media can lag the upload id. Retry before fail-closed rollback.
     }
     if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 80 * (attempt + 1)));
@@ -486,7 +489,8 @@ export async function listQualityVaultFiles(
     );
     const lock = qualityLibraryLockFromKids(kids);
     return { files, locked: lock.locked, locksKnown: lock.known, store: "drive" as const, stored: true as const };
-  } catch {
+  } catch (error) {
+    if (isDriveQuotaError(error) || isOauthInvalidGrant(error)) throw error;
     return { files: [] as QualityVaultListedName[], locked: true, locksKnown: false, store: "drive" as const, stored: false as const };
   }
 }
@@ -663,7 +667,8 @@ export async function readQualityVaultFile(
       store: "drive" as const,
       stored: true as const,
     };
-  } catch {
+  } catch (error) {
+    if (isDriveQuotaError(error) || isOauthInvalidGrant(error)) throw error;
     return { file: null, store: "drive" as const, stored: false as const };
   }
 }
@@ -712,7 +717,8 @@ export async function readQualityVaultNamedFile(
   try {
     const file = await walk(qualityFolderId(), []);
     return { file, store: "drive" as const, stored: true as const };
-  } catch {
+  } catch (error) {
+    if (isDriveQuotaError(error) || isOauthInvalidGrant(error)) throw error;
     return { file: null, store: "drive" as const, stored: false as const };
   }
 }

@@ -2,6 +2,8 @@ import {
   ESTIMATES_ROOM_ID,
   DriveApiError,
   SEATS_SA_OPEN_ERROR,
+  isDriveQuotaError,
+  isOauthInvalidGrant,
   isSeatsOpenDenied,
   type DriveAdapter,
   type DriveFile,
@@ -116,10 +118,15 @@ function pickNewestMatch(files: DriveFile[], name: string, kind: string) {
   );
 }
 
+function rethrowDriveQuota(error: unknown) {
+  if (isDriveQuotaError(error) || isOauthInvalidGrant(error)) throw error;
+}
+
 async function listFolderJson(adapter: DriveAdapter, folderId: string) {
   try {
     return await adapter.listJson(folderId);
-  } catch {
+  } catch (error) {
+    rethrowDriveQuota(error);
     return [];
   }
 }
@@ -128,7 +135,8 @@ async function listAccessibleVaultJson(adapter: DriveAdapter, name: string) {
   if (!adapter.listAccessibleJson) return [];
   try {
     return await adapter.listAccessibleJson(name);
-  } catch {
+  } catch (error) {
+    rethrowDriveQuota(error);
     return [];
   }
 }
@@ -156,8 +164,15 @@ export async function findVaultJsonFile(adapter: DriveAdapter, name: string, kin
   const pinned = await fileFromStoredId(adapter, name, kind);
   // seats.json / tickets.json / inbox.json: always PATCH the known production id. A zombie list must not redirect writes.
   if (pinned && (KNOWN_VAULT_FILE_IDS[name] || vaultEnvFileId(name))) return pinned;
-  // settings.json: reuse a remembered id so GET refresh does not list the Data room every time.
-  if (pinned && name === SETTINGS_VAULT_NAME && rememberedVaultFileIds.get(vaultFileKey(name, kind)) === pinned.id) {
+  // Remembered settings / briefs / positions: reuse the id so Save does not re-list the room.
+  if (
+    pinned &&
+    (name === SETTINGS_VAULT_NAME ||
+      name === QUALITY_BRIEFS_VAULT_NAME ||
+      name === HSE_BRIEFS_VAULT_NAME ||
+      name === POSITIONS_VAULT_NAME) &&
+    rememberedVaultFileIds.get(vaultFileKey(name, kind)) === pinned.id
+  ) {
     return pinned;
   }
   const fromFolder = pickNewestMatch(await listFolderJson(adapter, folderId), name, kind);

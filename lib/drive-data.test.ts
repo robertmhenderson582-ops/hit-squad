@@ -456,4 +456,70 @@ describe("vault named json", () => {
       },
     );
   });
+
+  it("reuses a remembered quality-briefs.json id without listing the room again", async () => {
+    resetVaultFileIdsForTests();
+    const inner = memoryDrive();
+    let lists = 0;
+    const drive: DriveAdapter = {
+      ...inner,
+      async listJson(folderId) {
+        lists += 1;
+        return inner.listJson(folderId);
+      },
+      async listAccessibleJson(name) {
+        lists += 1;
+        return inner.listAccessibleJson ? inner.listAccessibleJson(name) : [];
+      },
+    };
+    await writeVaultJson(drive, QUALITY_BRIEFS_VAULT_NAME, QUALITY_BRIEFS_VAULT_KIND, {
+      briefs: [{ id: "brief-quality-owner", who: "robertmhenderson582@gmail.com" }],
+    });
+    const afterWrite = lists;
+    assert.ok(afterWrite >= 1);
+    const first = await readVaultJson<{ briefs: Array<{ id: string }> }>(
+      drive,
+      QUALITY_BRIEFS_VAULT_NAME,
+      QUALITY_BRIEFS_VAULT_KIND,
+    );
+    const second = await readVaultJson<{ briefs: Array<{ id: string }> }>(
+      drive,
+      QUALITY_BRIEFS_VAULT_NAME,
+      QUALITY_BRIEFS_VAULT_KIND,
+    );
+    assert.equal(first?.briefs[0]?.id, "brief-quality-owner");
+    assert.equal(second?.briefs[0]?.id, "brief-quality-owner");
+    assert.equal(lists, afterWrite);
+  });
+
+  it("does not swallow a Total Query Cost 403 while looking up vault JSON", async () => {
+    resetVaultFileIdsForTests();
+    const drive: DriveAdapter = {
+      configured: true,
+      async listJson() {
+        throw new DriveApiError(403, "Quota exceeded for quota metric 'Total Query Cost'");
+      },
+      async listAccessibleJson() {
+        throw new Error("accessible list must not run after quota");
+      },
+      async readJson() {
+        throw new Error("read must not run after quota");
+      },
+      async createJson() {
+        throw new Error("create must not run");
+      },
+      async updateJson() {
+        throw new Error("update must not run");
+      },
+      async deleteJson() {},
+    };
+    await assert.rejects(
+      () => readVaultJson(drive, QUALITY_BRIEFS_VAULT_NAME, QUALITY_BRIEFS_VAULT_KIND),
+      (error: unknown) => {
+        assert.ok(error instanceof DriveApiError);
+        assert.match(error.message, /Total Query Cost/);
+        return true;
+      },
+    );
+  });
 });
