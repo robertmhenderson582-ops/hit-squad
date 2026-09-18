@@ -1,8 +1,16 @@
 import { LISTED_POSITIONS } from "./craft-labor.ts";
 import { computeRangeHours } from "./hours-clock.ts";
+import type { StorageLike } from "./local-estimates.ts";
 import { liveJobSetupPhases, maskForPhaseDays, PHASE_IDS, PHASE_NAMES, type PhaseRow } from "./phase-schedule.ts";
+import { resolvedCrafts } from "./rate-books.ts";
 import { lookupShahanLabor, uniqueSortedTitles } from "./shahan-wood-river.ts";
-import { wageLookupOpts, wageLookupPositions } from "./wage-lookup.ts";
+import {
+  bookForSite,
+  bookForSiteId,
+  estimateRateContext,
+  wageLookupOpts,
+  wageLookupPositions,
+} from "./wage-lookup.ts";
 
 /** Job-pack / Rate Vault / plant-book composite ST/OT/DT. Do not invent rates. */
 export function scrCompositeRates(craft: string, site = "", client = "") {
@@ -17,10 +25,46 @@ export function scrCompositeRates(craft: string, site = "", client = "") {
   };
 }
 
-export function scrCraftOptions(site = "", client = "", extra: readonly string[] = []) {
-  const book = wageLookupPositions(site, client).map((row) => row.title);
-  const listed = book.length ? book : [...LISTED_POSITIONS];
-  return uniqueSortedTitles([...listed, ...extra]);
+function trimmedTitles(titles: readonly string[]) {
+  return titles.map((title) => title.trim()).filter(Boolean);
+}
+
+/** Rate Vault / builder crafts for this site. Empty when no live builder book. */
+export function scrRateVaultTitles(site = "", client = "", store?: StorageLike | null) {
+  const ctx = estimateRateContext(site, client);
+  if (!ctx.siteId) return [];
+  return trimmedTitles(resolvedCrafts(ctx.companyId, ctx.siteId, undefined, store).map((row) => row.craft));
+}
+
+/** Full plant billed labor catalog titles — not the COMP wage-only subset. */
+export function scrPlantBilledTitles(site = "", client = "") {
+  if (!site.trim() && !client.trim()) return [];
+  const ctx = estimateRateContext(site, client);
+  const plant = bookForSite(site) || bookForSite(client) || bookForSiteId(ctx.siteId);
+  if (!plant?.catalog.length) return [];
+  return trimmedTitles(plant.catalog.map((row) => row.craftName || ""));
+}
+
+/**
+ * SCR craft picker. Wage lookup stays wage-catalog-first; this list does not.
+ * 1. Live Rate Vault / builder crafts when present
+ * 2. Estimate crew extras
+ * 3. Full plant billed catalog as fill-in
+ * 4. Static LISTED_POSITIONS only if nothing else resolves
+ */
+export function scrCraftOptions(
+  site = "",
+  client = "",
+  extra: readonly string[] = [],
+  store?: StorageLike | null,
+) {
+  const vault = scrRateVaultTitles(site, client, store);
+  const extras = trimmedTitles(extra);
+  const plant = scrPlantBilledTitles(site, client);
+  if (vault.length || plant.length) {
+    return uniqueSortedTitles([...vault, ...extras, ...plant]);
+  }
+  return uniqueSortedTitles([...LISTED_POSITIONS, ...extras]);
 }
 
 /** Optional schedule-impact presets. Same list on every client / site. */

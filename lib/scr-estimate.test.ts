@@ -25,9 +25,18 @@ import {
   scrActiveSchedule,
   scrCompositeHourlyRate,
   scrCompositeRates,
+  scrCraftOptions,
   scrPhaseOptions,
+  scrPlantBilledTitles,
+  scrRateVaultTitles,
   scrWeekSplit,
 } from "./scr-rates.ts";
+import { LISTED_POSITIONS } from "./craft-labor.ts";
+import type { StorageLike } from "./local-estimates.ts";
+import { newBuiltCraft } from "./rate-builder.ts";
+import { BILLINGS_SITE_ID, WOOD_RIVER_SITE_ID, saveCraftToLevel } from "./rate-books.ts";
+import { SHAHAN_LABOR, uniqueSortedTitles } from "./shahan-wood-river.ts";
+import { wageLookupPositions } from "./wage-lookup.ts";
 import { scrWorkbookTotal, buildScrWorkbook } from "./scr-xlsx.ts";
 import { scrToZip, scrZipBackupPath, scrZipFilename, SCR_ZIP_BACKUPS_FOLDER } from "./scr-zip.ts";
 
@@ -226,5 +235,83 @@ describe("SCR estimate workbook lock", () => {
         assert.equal(packet.scopeIdLabel, DEFAULT_SCOPE_ID_LABEL);
       }
     }
+  });
+});
+
+function memoryStore(seed: Record<string, string> = {}): StorageLike {
+  const data = { ...seed };
+  return {
+    getItem(key) {
+      return key in data ? data[key] : null;
+    },
+    setItem(key, value) {
+      data[key] = value;
+    },
+    removeItem(key) {
+      delete data[key];
+    },
+  };
+}
+
+describe("SCR craft dropdown sources", () => {
+  it("prefers Rate Vault crafts, then crew extras, then full plant billed catalog — not wage-only", () => {
+    const wageTitles = wageLookupPositions(WOOD, P66).map((row) => row.title);
+    assert.ok(wageTitles.includes("LEAD SITE BOILERMAKER 01"));
+    assert.equal(wageTitles.includes("Lead Site Boilermaker 01"), false);
+
+    const billed = scrPlantBilledTitles(WOOD, P66);
+    assert.ok(billed.includes("Lead Site Boilermaker 01"));
+    assert.ok(billed.includes("Boilermaker Journeyman"));
+    assert.equal(billed.includes("LEAD SITE BOILERMAKER 01"), false);
+    assert.ok(billed.length >= uniqueSortedTitles(SHAHAN_LABOR.map((row) => row.craftName)).length);
+
+    const plantOnly = scrCraftOptions(WOOD, P66);
+    assert.ok(plantOnly.includes("Lead Site Boilermaker 01"));
+    assert.ok(plantOnly.includes("Boilermaker Journeyman"));
+    assert.equal(plantOnly.includes("LEAD SITE BOILERMAKER 01"), false);
+    assert.deepEqual(plantOnly, uniqueSortedTitles(billed));
+    assert.equal(scrRateVaultTitles(WOOD, P66, memoryStore()).length, 0);
+
+    const store = memoryStore();
+    saveCraftToLevel(
+      {
+        companyId: "madison",
+        siteId: WOOD_RIVER_SITE_ID,
+        label: "Wood River vault",
+        craft: newBuiltCraft({ craft: "Vault Welder X" }),
+        level: "site",
+      },
+      store,
+    );
+    const withVault = scrCraftOptions(WOOD, P66, ["Crew Only Title", "  "], store);
+    assert.ok(withVault.includes("Vault Welder X"));
+    assert.ok(withVault.includes("Crew Only Title"));
+    assert.ok(withVault.includes("Lead Site Boilermaker 01"));
+    assert.deepEqual(withVault, uniqueSortedTitles(["Vault Welder X", "Crew Only Title", ...billed]));
+    assert.deepEqual(scrRateVaultTitles(WOOD, P66, store), ["Vault Welder X"]);
+  });
+
+  it("falls back to LISTED_POSITIONS only when vault and plant billed catalog are empty", () => {
+    assert.deepEqual(scrCraftOptions("", ""), uniqueSortedTitles(LISTED_POSITIONS));
+    assert.deepEqual(scrCraftOptions("Billings", P66), uniqueSortedTitles(LISTED_POSITIONS));
+    assert.deepEqual(
+      scrCraftOptions("Billings", P66, ["Freeform Helper"]),
+      uniqueSortedTitles([...LISTED_POSITIONS, "Freeform Helper"]),
+    );
+
+    const store = memoryStore();
+    saveCraftToLevel(
+      {
+        companyId: "madison",
+        siteId: BILLINGS_SITE_ID,
+        label: "Billings vault",
+        craft: newBuiltCraft({ craft: "Billings Operator" }),
+        level: "site",
+      },
+      store,
+    );
+    const vaultOnly = scrCraftOptions("Billings", P66, ["Night Helper"], store);
+    assert.deepEqual(vaultOnly, uniqueSortedTitles(["Billings Operator", "Night Helper"]));
+    assert.equal(LISTED_POSITIONS.every((title) => vaultOnly.includes(title)), false);
   });
 });
