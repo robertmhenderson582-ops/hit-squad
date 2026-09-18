@@ -157,7 +157,7 @@ export function HseDesk() {
           Hit Squad Control Center
         </Link>
         . DISA DER is Tom Fried. Benny Camp (bccamp2@gmail.com) is temp dispatcher until
-        Donnie. Training is Texolve, Collinsville, Illinois.
+        Donnie. Training is Tecsolv, Collinsville, Illinois.
       </p>
       <JobScopePicks
         clients={clients}
