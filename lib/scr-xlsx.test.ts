@@ -33,6 +33,7 @@ import {
   scrWorkbookTotal,
   scrXlsxFilename,
 } from "./scr-xlsx.ts";
+import { SCR_COMPOSITE_RATE_HEADER, SCR_COMPOSITE_RATE_NOTE } from "./scr-rates.ts";
 import { evaluateWorkbook } from "./xlsx-eval.ts";
 
 const WOOD = { client: "Phillips 66", site: "Wood River — Roxana, IL", title: "Cat 2 Pit Stop" };
@@ -109,6 +110,16 @@ describe("SCR Excel export", () => {
     assert.ok(estimate.cells.some((cell) => cell.type === "text" && cell.value === SCR_ESTIMATE_TITLE));
     assert.ok(estimate.cells.some((cell) => cell.type === "text" && cell.value === SCR_HOURS_LABEL));
     assert.ok(estimate.cells.some((cell) => cell.type === "text" && cell.value === SCR_COST_LABEL));
+    assert.ok(estimate.cells.some((cell) => cell.type === "text" && cell.value === SCR_COMPOSITE_RATE_HEADER));
+    assert.ok(
+      estimate.cells.some(
+        (cell) => cell.type === "text" && String(cell.value).includes(SCR_COMPOSITE_RATE_NOTE),
+      ),
+    );
+    assert.equal(
+      estimate.cells.some((cell) => cell.type === "text" && cell.value === "$/HR"),
+      false,
+    );
     assert.ok(estimate.cells.some((cell) => cell.type === "text" && cell.value === "Pipefitter Journeyman"));
     assert.ok(estimate.cells.some((cell) => cell.type === "text" && cell.value === "Material"));
     assert.ok(estimate.cells.some((cell) => cell.type === "text" && cell.value === "Subcontractor"));

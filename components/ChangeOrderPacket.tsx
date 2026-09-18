@@ -67,6 +67,9 @@ import {
   scrCompositeHourlyRate,
   scrCraftOptions,
   scrPhaseOptions,
+  SCR_COMPOSITE_RATE_HEADER,
+  SCR_COMPOSITE_RATE_LABEL,
+  SCR_COMPOSITE_RATE_NOTE,
   SCR_SHIFT_PRESETS,
 } from "@/lib/scr-rates";
 import { SCR_EXPORT_ERROR } from "@/lib/scr-xlsx";
@@ -817,12 +820,13 @@ function ScrEstimateWorkbook({
               + Add craft
             </button>
           </div>
+          <p className="mt-1 text-xs text-[#5b6f73]">{SCR_COMPOSITE_RATE_NOTE}</p>
           <div className="mt-2 overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="text-xs tracking-[0.1em] text-[#5b6f73]">
                 <tr>
-                  {["CRAFT", "HOURS", "$/HR", "LABOR $", ""].map((header) => (
-                    <th key={header} className="px-2 py-2">
+                  {["CRAFT", "HOURS", SCR_COMPOSITE_RATE_HEADER, "LABOR $", ""].map((header) => (
+                    <th key={header || "actions"} className="px-2 py-2">
                       {header}
                     </th>
                   ))}
@@ -864,7 +868,8 @@ function ScrEstimateWorkbook({
                           min={0}
                           step="0.01"
                           className="paper-field w-24"
-                          aria-label="Composite dollars per hour"
+                          aria-label={SCR_COMPOSITE_RATE_LABEL}
+                          title={SCR_COMPOSITE_RATE_NOTE}
                           readOnly
                           value={numField(line.rate)}
                         />
