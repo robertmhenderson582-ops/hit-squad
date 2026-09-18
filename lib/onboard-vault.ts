@@ -28,6 +28,7 @@ let lastStore: "drive" | "server-json-file" | "memory" | "none" = "none";
 let lastStored = false;
 let lastError: string | null = null;
 
+/** Vault JSON may include `ssn` (RESTRICTED PII, digits-only 9-digit SSN) and derived `ssnLast4`. Access is gated in the pipeline, not here. */
 export function onboardStorePath(): string {
   if (process.env.ONBOARD_STORE_PATH) return process.env.ONBOARD_STORE_PATH;
   if (process.env.VERCEL) return "/tmp/hit-squad-onboard-people.json";

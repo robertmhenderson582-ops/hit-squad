@@ -21,6 +21,7 @@ import {
   defaultCraftForLocal,
   hallContactForLocal,
   hallLocalForSeat,
+  formatSsnInput,
   maskSsnLast4,
   manpowerRequestLabel,
   nextOnboardStage,
@@ -154,7 +155,8 @@ export function OnboardDesk() {
 
   const [legalName, setLegalName] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
-  const [ssnLast4, setSsnLast4] = useState("");
+  const [ssn, setSsn] = useState("");
+  const [ssnFocused, setSsnFocused] = useState(false);
   const [problemNote, setProblemNote] = useState("");
 
   useEffect(() => {
@@ -244,7 +246,8 @@ export function OnboardDesk() {
     setOpenId(person.id);
     setLegalName(person.legalName);
     setDateOfBirth(person.dateOfBirth);
-    setSsnLast4(person.ssnLast4);
+    setSsn(person.ssn || person.ssnLast4);
+    setSsnFocused(false);
     setProblemNote(person.problemCaseNote);
   }
 
@@ -808,7 +811,7 @@ export function OnboardDesk() {
             Company working-desk, PM, HSE, Benny, and Tom seats can add people here. Step 1 submits name and phone
             to Tom Fried. A hall seat can register only when Owner sets Step 1 to hall, and only for that hall
             contact&apos;s local (Local 553 is gated to John Battuello Jr. / jbattuello@ualocal553.org). Restricted PII
-            (legal name, DOB, SSN last 4) is captured by Tom on Step 2 — not on this form.
+            (legal name, DOB, full SSN) is captured by Tom on Step 2 — not on this form.
           </p>
           <form className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={(event) => void onRegister(event)}>
             <label className="text-sm">
@@ -1024,7 +1027,7 @@ export function OnboardDesk() {
                           {canSeePii ? (
                             <div>
                               <h4 className="text-xs font-semibold uppercase tracking-[0.12em] text-[#5b6f73]">Restricted PII</h4>
-                              <p className="mt-1 text-xs text-[#5b6f73]">Least privilege. Masked SSN last 4. Hall seats do not see this.</p>
+                              <p className="mt-1 text-xs text-[#5b6f73]">Least privilege. RESTRICTED PII. Masked SSN unless editing. Hall seats do not see this.</p>
                               {canEditTracker ? (
                                 <form
                                   className="mt-2 grid gap-2"
@@ -1033,22 +1036,35 @@ export function OnboardDesk() {
                                     void postTracker(person, {
                                       legalName,
                                       dateOfBirth,
-                                      ssnLast4,
+                                      ssn,
                                       identityVerified: true,
                                     });
                                   }}
                                 >
                                   <input className="paper-field w-full" placeholder="Legal name" value={legalName} onChange={(event) => setLegalName(event.target.value)} />
                                   <input className="paper-field w-full" type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
-                                  <input className="paper-field w-full" inputMode="numeric" maxLength={4} placeholder="SSN last 4" value={ssnLast4} onChange={(event) => setSsnLast4(event.target.value)} />
-                                  <p className="text-xs text-[#5b6f73]">{person.ssnLast4 ? maskSsnLast4(person.ssnLast4) : "No SSN last 4 yet"}</p>
+                                  <input
+                                    className="paper-field w-full"
+                                    inputMode="numeric"
+                                    autoComplete="off"
+                                    autoCorrect="off"
+                                    spellCheck={false}
+                                    maxLength={11}
+                                    placeholder="XXX-XX-XXXX"
+                                    aria-label="Social Security number (restricted PII)"
+                                    value={ssnFocused ? formatSsnInput(ssn) : ssn ? maskSsnLast4(ssn) : ""}
+                                    onFocus={() => setSsnFocused(true)}
+                                    onBlur={() => setSsnFocused(false)}
+                                    onChange={(event) => setSsn(event.target.value.replace(/\D/g, "").slice(0, 9))}
+                                  />
+                                  <p className="text-xs text-[#5b6f73]">{person.ssnLast4 ? maskSsnLast4(person.ssn || person.ssnLast4) : "No SSN yet"}</p>
                                   <button type="submit" className="rounded-sm bg-steel px-2.5 py-1 text-xs text-white" disabled={saving}>
                                     Verify legal name / DOB / SSN
                                   </button>
                                 </form>
                               ) : (
                                 <p className="mt-1 text-xs text-[#163038]">
-                                  {person.legalName || "—"} · {person.dateOfBirth || "—"} · {person.ssnLast4 ? maskSsnLast4(person.ssnLast4) : "—"}
+                                  {person.legalName || "—"} · {person.dateOfBirth || "—"} · {person.ssnLast4 ? maskSsnLast4(person.ssn || person.ssnLast4) : "—"}
                                 </p>
                               )}
                             </div>

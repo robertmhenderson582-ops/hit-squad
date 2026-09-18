@@ -44,6 +44,7 @@ import {
   isHallSeat,
   isOnboardPhase1Local,
   isTomFriedSeat,
+  formatSsnInput,
   maskSsnLast4,
   nextOnboardStage,
   normalizeOnboardStageId,
@@ -53,7 +54,9 @@ import {
   parseOnboardPerson,
   parseOnboardSettings,
   seedOnboardHalls,
+  parseSsn,
   parseSsnLast4,
+  parseStoredOnboardSsn,
   redactOnboardPerson,
   respondManpowerRequest,
   peopleByStage,
@@ -143,8 +146,16 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(normalizeOnboardStageId("techsolve"), "step-3");
     assert.equal(normalizeOnboardStageId("notify-badge"), "step-4");
     assert.equal(normalizeOnboardStageId("ready"), "step-5");
+    assert.equal(parseSsn("123-45-6789"), "123456789");
+    assert.equal(parseSsn("6789"), "");
     assert.equal(parseSsnLast4("123-45-6789"), "6789");
     assert.equal(maskSsnLast4("6789"), "•••-••-6789");
+    assert.equal(maskSsnLast4("123456789"), "•••-••-6789");
+    assert.equal(formatSsnInput("123456789"), "123-45-6789");
+    assert.equal(formatSsnInput("6789"), "6789");
+    assert.equal(formatSsnInput("12345"), "123-45");
+    assert.deepEqual(parseStoredOnboardSsn({ ssnLast4: "6789" }), { ssn: "", ssnLast4: "6789" });
+    assert.deepEqual(parseStoredOnboardSsn({ ssn: "123-45-6789" }), { ssn: "123456789", ssnLast4: "6789" });
   });
 
   it("gates hall register to site by default and keeps Tom on DISA + manpower", () => {
@@ -245,17 +256,47 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
 
     const verified = updateOnboardPerson(
       advanced,
-      { legalName: "Patricia Fitter", dateOfBirth: "1990-01-02", ssnLast4: "123-45-6789", identityVerified: true },
+      { legalName: "Patricia Fitter", dateOfBirth: "1990-01-02", ssn: "123-45-6789", identityVerified: true },
       tom,
       "2026-09-18T16:05:00.000Z",
     );
     if ("error" in verified) throw new Error(verified.error);
     assert.equal(verified.legalName, "Patricia Fitter");
+    assert.equal(verified.ssn, "123456789");
     assert.equal(verified.ssnLast4, "6789");
     assert.equal(verified.identityVerifiedBy, TOM_FRIED_NAME);
+    assert.match(verified.events.at(-1)?.note ?? "", /Legal name \/ DOB \/ SSN verified/);
+    assert.doesNotMatch(verified.events.at(-1)?.note ?? "", /123456789|123-45-6789|SSN last 4/);
     const hallView = redactOnboardPerson(verified, hall553);
+    assert.equal(hallView.ssn, "");
     assert.equal(hallView.ssnLast4, "");
     assert.equal(hallView.legalName, "");
+    const nathanPii = updateOnboardPerson(advanced, { ssn: "123-45-6789" }, nathan);
+    assert.deepEqual(nathanPii, { error: "Restricted PII and training statuses are least-privilege." });
+    const hallPii = updateOnboardPerson(advanced, { ssn: "123-45-6789" }, hall553);
+    assert.deepEqual(hallPii, { error: "Tracker fields are updated by Tom Fried, Debbie, or the outreach team." });
+
+    const last4Only = parseOnboardPerson({
+      id: "ob-legacy-ssn",
+      name: "Legacy Hand",
+      localId: "553",
+      ssnLast4: "4321",
+    });
+    if (!last4Only) throw new Error("legacy ssn");
+    assert.equal(last4Only.ssn, "");
+    assert.equal(last4Only.ssnLast4, "4321");
+    const upgraded = updateOnboardPerson(last4Only, { ssn: "987-65-4321" }, tom);
+    if ("error" in upgraded) throw new Error(upgraded.error);
+    assert.equal(upgraded.ssn, "987654321");
+    assert.equal(upgraded.ssnLast4, "4321");
+    assert.match(upgraded.events.at(-1)?.note ?? "", /SSN updated/);
+    assert.doesNotMatch(upgraded.events.at(-1)?.note ?? "", /987654321|987-65-4321/);
+    const keepFull = updateOnboardPerson(upgraded, { ssnLast4: "4321", identityVerified: true }, tom);
+    if ("error" in keepFull) throw new Error(keepFull.error);
+    assert.equal(keepFull.ssn, "987654321");
+    assert.equal(keepFull.ssnLast4, "4321");
+    const incomplete = updateOnboardPerson(upgraded, { ssn: "98765" }, tom);
+    assert.deepEqual(incomplete, { error: "Enter a full 9-digit Social Security number." });
 
     const blockedEmpty = changeOnboardStage(advanced, { toStage: "blocked", actor: owner });
     assert.deepEqual(blockedEmpty, { error: "Blocked / failed needs a reason." });
@@ -419,6 +460,14 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.match(desk, /hiring package/);
     assert.match(desk, /No email blast/);
     assert.match(desk, /P66 corporate/);
+    assert.match(desk, /placeholder="XXX-XX-XXXX"/);
+    assert.match(desk, /maxLength=\{11\}/);
+    assert.match(desk, /Restricted PII/);
+    assert.match(desk, /full SSN/);
+    assert.doesNotMatch(desk, /placeholder="SSN last 4"|maxLength=\{4\}/);
+    assert.doesNotMatch(desk, /console\.(log|debug|info|warn)/);
+    assert.match(api, /ssn: body\.ssn \?\? body\.ssnLast4/);
+    assert.match(source("./onboard-pipeline.ts"), /RESTRICTED PII\. Digits-only 9-digit/);
     assert.match(desk, /Debbie/);
     assert.match(desk, /Ben Peffley/);
     assert.doesNotMatch(desk, /Local 363|BM363/);

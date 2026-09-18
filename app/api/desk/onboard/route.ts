@@ -135,6 +135,7 @@ export async function POST(request: Request) {
     pmEmails?: string | string[];
     legalName?: string;
     dateOfBirth?: string;
+    ssn?: string;
     ssnLast4?: string;
     identityVerified?: boolean;
     p66CorporateTraining?: string;
@@ -306,6 +307,7 @@ export async function POST(request: Request) {
       const patch: OnboardPersonPatch = {
         legalName: body.legalName,
         dateOfBirth: body.dateOfBirth,
+        ssn: body.ssn ?? body.ssnLast4,
         ssnLast4: body.ssnLast4,
         identityVerified: body.identityVerified,
         p66CorporateTraining: isTrainingStatus(body.p66CorporateTraining) ? body.p66CorporateTraining : undefined,
