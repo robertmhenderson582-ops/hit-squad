@@ -20,8 +20,8 @@ import {
   ONBOARD_LOCALS,
   ONBOARD_SEED_SEATS,
   ONBOARD_STAGES,
-  TECSOLV_LOCATION,
-  TECSOLV_NAME,
+  TEKSOLV_LOCATION,
+  TEKSOLV_NAME,
   TOM_FRIED_EMAIL,
   TOM_FRIED_NAME,
   TOM_FRIED_TITLE,
@@ -85,7 +85,7 @@ const debbie = { name: "Debbie", role: "tester" as const, jobTitle: "Tracker" };
 const hallSettings = { ...DEFAULT_ONBOARD_SETTINGS, step1Submitter: "hall" as const };
 
 describe("Hall ↔ HSE onboarding pipeline", () => {
-  it("locks day-one locals, Benny dictation stages, Tecsolv, and DISA DER Tom", () => {
+  it("locks day-one locals, Benny dictation stages, TekSolv, and DISA DER Tom", () => {
     assert.deepEqual(
       ONBOARD_LOCALS.map((row) => `${row.id}:${row.short}:${row.phase1}`),
       ["553:PF553:true", "363:BM363:false"],
@@ -110,8 +110,8 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(JOHN_BATTUELLO_EMAIL, "jbattuello@ualocal553.org");
     assert.equal(JOHN_BATTUELLO_NAME, "John Battuello Jr.");
     assert.equal(JOHNNY_BATTUELLO_NAME, "Johnny Battuello Jr.");
-    assert.equal(TECSOLV_NAME, "Tecsolv");
-    assert.equal(TECSOLV_LOCATION, "Collinsville, Illinois");
+    assert.equal(TEKSOLV_NAME, "TekSolv");
+    assert.equal(TEKSOLV_LOCATION, "Collinsville, Illinois");
     assert.equal(DEBBIE_TRACKER_NAME, "Debbie");
     assert.equal(HIRE_IN_VERIFIED_FIELD_LABEL, "Verified Employee Received HireIn Link");
     assert.deepEqual(DEFAULT_ONBOARD_SETTINGS, { step1Submitter: "site", corporateEmails: [], pmEmails: [] });
@@ -133,13 +133,17 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
       ["step-1", "step-2", "step-3", "step-4", "step-5", "blocked"],
     );
     assert.equal(onboardStageOwner("step-2"), TOM_FRIED_NAME);
-    assert.match(ONBOARD_STAGES.find((row) => row.id === "step-3")?.label ?? "", /Tecsolv/);
-    assert.match(ONBOARD_STAGES.find((row) => row.id === "step-5")?.label ?? "", /Tecsolv/);
+    assert.match(ONBOARD_STAGES.find((row) => row.id === "step-3")?.label ?? "", /TekSolv/);
+    assert.match(ONBOARD_STAGES.find((row) => row.id === "step-5")?.label ?? "", /TekSolv/);
     assert.match(ONBOARD_STAGES.find((row) => row.id === "step-4")?.label ?? "", /Hire-end outreach/);
     assert.match(ONBOARD_STAGES.find((row) => row.id === "step-5")?.label ?? "", /Badged/);
-    assert.equal(onboardStageOwner("step-5"), `${TECSOLV_NAME} / P66`);
-    assert.doesNotMatch(source("./onboard-pipeline.ts"), /Texolve|TechSolve|TEXOLVE|TECHSOLV|alternate spelling/);
-    assert.doesNotMatch(source("./onboard-notify.ts"), /Texolve|TechSolve|TEXOLVE|TECHSOLV/);
+    assert.equal(onboardStageOwner("step-5"), `${TEKSOLV_NAME} / P66`);
+    assert.match(
+      source("./onboard-pipeline.ts"),
+      /Training vendor spelling lock: TekSolv \(official teksolv\.com brand\)\. Prior lock used Tecsolv; do not use Texolve \/ TechSolve\./,
+    );
+    assert.doesNotMatch(source("./onboard-pipeline.ts"), /TECSOLV_|export const TECSOLV|alternate spelling pending confirm/);
+    assert.doesNotMatch(source("./onboard-notify.ts"), /Tecsolv|TECSOLV|Texolve|TechSolve|TEXOLVE|TECHSOLV/);
     assert.equal(DEFAULT_ONBOARD_PLANT.site, "Wood River");
     assert.equal(DEFAULT_ONBOARD_PLANT.client, "Phillips 66");
     assert.equal(nextOnboardStage("step-1"), "step-2");
@@ -416,8 +420,8 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.match(mail.text, /Legal name \/ DOB \/ SSN are not included/);
     const finished = buildStepCompleteMail(person, "step-5", settings, benny, "2026-09-18T15:00:00.000Z");
     if ("skipped" in finished) throw new Error(finished.skipped);
-    assert.match(finished.text, /Onboarding pipeline complete at Tecsolv, Collinsville, Illinois/);
-    assert.doesNotMatch(finished.text, /Texolve|TechSolve/);
+    assert.match(finished.text, /Onboarding pipeline complete at TekSolv, Collinsville, Illinois/);
+    assert.doesNotMatch(finished.text, /Tecsolv|Texolve|TechSolve/);
   });
 
   it("wires a Hit Squad desk page, vault file, and HSE door without SMS or meeting connectors", () => {
@@ -444,11 +448,11 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     const roles = source("./job-roles.ts");
     assert.match(desk, /Hall register/);
     assert.match(desk, /Submitted to DISA DER/);
-    assert.match(desk, /TECSOLV_NAME/);
-    assert.match(desk, /TECSOLV_LOCATION/);
-    assert.doesNotMatch(desk, /Texolve|TechSolve|TEXOLVE|TECHSOLV|alternate spelling pending confirm/);
-    assert.match(hse, /Training is Tecsolv, Collinsville, Illinois/);
-    assert.doesNotMatch(hse, /Texolve|TechSolve/);
+    assert.match(desk, /TEKSOLV_NAME/);
+    assert.match(desk, /TEKSOLV_LOCATION/);
+    assert.doesNotMatch(desk, /Tecsolv|TECSOLV|Texolve|TechSolve|TEXOLVE|TECHSOLV|alternate spelling pending confirm/);
+    assert.match(hse, /Training is \{TEKSOLV_NAME\}, \{TEKSOLV_LOCATION\}/);
+    assert.doesNotMatch(hse, /Tecsolv|TECSOLV|Texolve|TechSolve/);
     assert.match(desk, /Verified Employee Received HireIn Link/);
     assert.match(desk, /Benny Camp/);
     assert.match(desk, /bccamp2@gmail.com/);

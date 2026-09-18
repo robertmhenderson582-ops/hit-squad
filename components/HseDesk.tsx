@@ -41,6 +41,7 @@ import {
 import { hseTemplateFillAcl, type HseTemplateFillAcl } from "@/lib/hse-template-form";
 import { hseCompanyDocAcl } from "@/lib/hse-company-doc-acl";
 import { hsePackageShelfAcl } from "@/lib/hse-package-shelf";
+import { TEKSOLV_LOCATION, TEKSOLV_NAME } from "@/lib/onboard-pipeline";
 
 export function HseDesk() {
   const alias = useAlias();
@@ -157,7 +158,7 @@ export function HseDesk() {
           Hit Squad Control Center
         </Link>
         . DISA DER is Tom Fried. Benny Camp (bccamp2@gmail.com) is temp dispatcher until
-        Donnie. Training is Tecsolv, Collinsville, Illinois.
+        Donnie. Training is {TEKSOLV_NAME}, {TEKSOLV_LOCATION}.
       </p>
       <JobScopePicks
         clients={clients}
