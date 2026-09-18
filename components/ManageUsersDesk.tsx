@@ -430,6 +430,8 @@ export function ManageUsersDesk() {
           Robert Henderson stays the only owner. Novus is a hidden operator seat. Users never see
           this list, Novus, or each other. Add a user below, or issue a one-time password for a
           seat already on this desk. Don’t send. They change it on first sign-in. No invite email.
+          Hall Local 553 / 363 titles open the Onboard hall register for that local. HSE Dispatcher
+          is the placeholder title for Tom Fried until his login email is known.
         </p>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">

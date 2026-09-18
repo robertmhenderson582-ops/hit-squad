@@ -33,6 +33,7 @@ describe("home doors", () => {
     assert.equal(SCOREBOARD_DOOR.href, "/scoreboard");
     assert.equal(HOME_DOCK_TILES.some((tile) => tile.key === "scoreboard"), false);
     assert.equal(HOME_DOCK_TILES.some((tile) => tile.key === "rate-vault" || tile.href === "/rate-vault"), false);
+    assert.equal(HOME_DOCK_TILES.some((tile) => tile.key === "onboard" || tile.href === "/onboard"), false);
     assert.equal(RATE_VAULT_DOOR.href, "/rate-vault");
     assert.equal(RATE_VAULT_DOOR.label, "Rate Vault");
     assert.equal(

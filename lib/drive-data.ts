@@ -21,6 +21,7 @@ export const HSE_BRIEFS_VAULT_NAME = "hse-briefs.json";
 export const PRIVILEGES_VAULT_NAME = "privileges.json";
 export const POSITIONS_VAULT_NAME = "positions.json";
 export const SITE_ACCESS_VAULT_NAME = "site-access.json";
+export const ONBOARD_PEOPLE_VAULT_NAME = "onboard-people.json";
 export const COMPANIES_VAULT_KIND = "companies";
 export const ACTIVITY_VAULT_KIND = "activity";
 export const TICKETS_VAULT_KIND = "tickets";
@@ -33,6 +34,7 @@ export const HSE_BRIEFS_VAULT_KIND = "hse-briefs";
 export const PRIVILEGES_VAULT_KIND = "privileges";
 export const POSITIONS_VAULT_KIND = "positions";
 export const SITE_ACCESS_VAULT_KIND = "site-access";
+export const ONBOARD_PEOPLE_VAULT_KIND = "onboard-people";
 
 export const DRIVE_WRITE_ERROR = "Could not save. Try again.";
 
@@ -170,7 +172,8 @@ export async function findVaultJsonFile(adapter: DriveAdapter, name: string, kin
     (name === SETTINGS_VAULT_NAME ||
       name === QUALITY_BRIEFS_VAULT_NAME ||
       name === HSE_BRIEFS_VAULT_NAME ||
-      name === POSITIONS_VAULT_NAME) &&
+      name === POSITIONS_VAULT_NAME ||
+      name === ONBOARD_PEOPLE_VAULT_NAME) &&
     rememberedVaultFileIds.get(vaultFileKey(name, kind)) === pinned.id
   ) {
     return pinned;

@@ -1,5 +1,6 @@
 import { companyDeskLogoSrc } from "./companies.ts";
 import { canSeeRateVaultDoor } from "./desk-role.ts";
+import { canSeeOnboardDoor } from "./onboard-pipeline.ts";
 import { isRateVaultOnlyViewer } from "./rate-vault.ts";
 
 export const HOME_WORDMARK = "HIT SQUAD";
@@ -40,6 +41,17 @@ export const RATE_VAULT_DOOR = {
   key: "rate-vault",
   label: "Rate Vault",
   note: "Private B-1 workshop",
+} as const;
+
+/**
+ * Hall ↔ HSE onboarding board. Not a public HOME_DOCK_TILES peer.
+ * HomeDock appends it for the build desk, HSE seats, hall locals, and Tom.
+ */
+export const ONBOARD_DOOR = {
+  href: "/onboard",
+  key: "onboard",
+  label: "Onboard",
+  note: "Hall register · HSE stage board",
 } as const;
 
 /** Ease-in bury: not a home door. Do not add back to HOME_DOORS without an owner ask. */
@@ -110,6 +122,7 @@ export function homeDockTilesForViewer(
     return canSeeRateVaultDoor(session, lens) ? [RATE_VAULT_DOOR] : [];
   }
   const tiles: HomeDockTile[] = homeDockTiles(canRates);
+  if (canSeeOnboardDoor(session, lens)) tiles.push(ONBOARD_DOOR);
   if (canSeeRateVaultDoor(session, lens)) tiles.push(RATE_VAULT_DOOR);
   return tiles;
 }

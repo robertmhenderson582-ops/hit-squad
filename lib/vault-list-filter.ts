@@ -17,6 +17,8 @@ export const VAULT_SITE_JSON_NAMES = [
   "hse-briefs.json",
   "privileges.json",
   "positions.json",
+  "site-access.json",
+  "onboard-people.json",
   "quality-library.lock.json",
   "hse-library.lock.json",
 ] as const;

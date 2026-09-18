@@ -3063,3 +3063,14 @@ html[data-theme="night"] .rfq-sheet {
     color: #5b6f73 !important;
   }
 }
+
+.onboard-board {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
+  align-items: start;
+}
+
+.onboard-column {
+  min-height: 12rem;
+}

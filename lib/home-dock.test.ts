@@ -172,7 +172,7 @@ describe("Home four doors", () => {
     );
     assert.deepEqual(
       homeDockTilesForViewer(owner, owner).map((tile) => tile.key),
-      ["jobs", "quality", "hse", "accounting", "rate-vault"],
+      ["jobs", "quality", "hse", "accounting", "onboard", "rate-vault"],
     );
     assert.deepEqual(
       homeDockTilesForViewer(granted).map((tile) => tile.key),
