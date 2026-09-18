@@ -1587,7 +1587,67 @@ describe("Drive list cost and oauth fail-fast", () => {
     }
   });
 
-  it("does not retry OAuth refresh after invalid_grant on a vault list", async () => {
+  it("does not retry OAuth after a vault Total Query Cost 403", async () => {
+    resetDriveTokenCache();
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const grants: string[] = [];
+    const driveGets: string[] = [];
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || "GET").toUpperCase();
+      const body = typeof init?.body === "string" ? init.body : init?.body instanceof URLSearchParams ? init.body.toString() : "";
+      if (url.startsWith("https://oauth2.googleapis.com/token")) {
+        const params = new URLSearchParams(body);
+        const grant = params.get("grant_type") || "";
+        grants.push(grant);
+        if (grant === "refresh_token") {
+          return new Response(JSON.stringify({ access_token: "ya29.test-oauth", expires_in: 3600 }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ access_token: "ya29.test-sa", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/drive/v3/files") && method === "GET") {
+        driveGets.push(url);
+        return new Response(
+          JSON.stringify({
+            error: { message: "Quota exceeded for quota metric 'Total Query Cost' and limit 'Units per minute per user'" },
+          }),
+          { status: 403, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`unexpected fetch ${method} ${url}`);
+    }) as typeof fetch;
+    try {
+      const adapter = vaultDriveAdapter({
+        ...oauthEnv,
+        GOOGLE_CLIENT_EMAIL: "vault@hitsquad.iam.gserviceaccount.com",
+        GOOGLE_PRIVATE_KEY: pem,
+      });
+      await assert.rejects(() => adapter.listChildren!("room"), (error: unknown) => {
+        assert.ok(error instanceof DriveApiError);
+        assert.equal(driveFailureKind(error), "quota");
+        return true;
+      });
+      await assert.rejects(() => adapter.listChildren!("room"), (error: unknown) => {
+        assert.equal(driveFailureKind(error), "quota");
+        return true;
+      });
+      assert.equal(grants.filter((grant) => grant === "refresh_token").length, 0);
+      assert.ok(driveGets.length <= 2, `quota must not fan out SA+OAuth lists, got ${driveGets.length}`);
+    } finally {
+      globalThis.fetch = previous;
+      resetDriveTokenCache();
+    }
+  });
+
+  it("does not retry OAuth refresh after invalid_grant on a vault write", async () => {
     resetDriveTokenCache();
     const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
     const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
@@ -1617,7 +1677,7 @@ describe("Drive list cost and oauth fail-fast", () => {
       if (url.includes("/upload/drive/v3/files/") && method === "PATCH") {
         return new Response(
           JSON.stringify({
-            error: { message: "Quota exceeded for quota metric 'Total Query Cost' and limit 'Units per minute per user'" },
+            error: { message: "The user does not have sufficient permissions for this file." },
           }),
           { status: 403, headers: { "content-type": "application/json" } },
         );
@@ -1635,7 +1695,7 @@ describe("Drive list cost and oauth fail-fast", () => {
       });
       await assert.rejects(() => adapter.updateJson("1d3lzLDxCPwC963fdplsnwYgrDEanohZc", '{"hashes":{}}'), (error: unknown) => {
         assert.ok(error instanceof DriveApiError);
-        assert.equal(driveFailureKind(error), "quota");
+        assert.equal(driveFailureKind(error), "share");
         return true;
       });
       await assert.rejects(() => adapter.updateJson("1d3lzLDxCPwC963fdplsnwYgrDEanohZc", '{"hashes":{}}'));

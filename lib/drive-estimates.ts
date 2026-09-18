@@ -173,6 +173,20 @@ export function isDriveQuotaError(error: unknown) {
   return (status === 403 || /\b403\b/.test(text)) && /quota|units per minute|query cost/i.test(text);
 }
 
+function rememberDriveFailure(error: unknown) {
+  if (isOauthInvalidGrant(error)) {
+    oauthInvalidGrant = true;
+    oauthDriveFailedOver = true;
+  }
+  if (isDriveQuotaError(error)) driveQuotaExceeded = true;
+}
+
+function throwIfDriveQuotaExceeded() {
+  if (driveQuotaExceeded) {
+    throw new DriveApiError(403, "Quota exceeded for quota metric 'Total Query Cost'");
+  }
+}
+
 export function isDriveFolderParentError(error: unknown) {
   const text = driveErrorText(error);
   const status = error instanceof DriveApiError ? error.status : 0;
@@ -210,6 +224,8 @@ const cachedOAuthTokens = new Map<string, CachedToken>();
 let oauthDriveFailedOver = false;
 /** Refresh token is dead. Do not retry OAuth — each attempt multiplies SA quota burn. */
 let oauthInvalidGrant = false;
+/** Total Query Cost 403. Further Drive calls in this isolate only multiply the burn. */
+let driveQuotaExceeded = false;
 
 type DriveListMode = "drive" | "user" | "allDrives";
 const LIST_CHILDREN_TTL_MS = 20_000;
@@ -311,6 +327,7 @@ export function resetDriveTokenCache() {
   cachedOAuthTokens.clear();
   oauthDriveFailedOver = false;
   oauthInvalidGrant = false;
+  driveQuotaExceeded = false;
   listChildrenModeHint = null;
   listChildrenCache.clear();
   listChildrenInflight.clear();
@@ -538,7 +555,9 @@ function driveApiError(payload: unknown, fallback: string) {
 }
 
 function driveHttpError(status: number, payload: unknown, fallback: string, principal?: "service-account" | "oauth") {
-  return new DriveApiError(status, `${status} ${driveApiError(payload, fallback)}`, principal);
+  const error = new DriveApiError(status, `${status} ${driveApiError(payload, fallback)}`, principal);
+  rememberDriveFailure(error);
+  return error;
 }
 
 function escapeDriveQueryValue(value: string) {
@@ -561,6 +580,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
   }
 
   async function listByQuery(q: string, opts?: { accessible?: boolean; allDrives?: boolean; fresh?: boolean }) {
+    throwIfDriveQuotaExceeded();
     const mode: DriveListMode = opts?.allDrives ? "allDrives" : opts?.accessible ? "user" : "drive";
     const cacheKey = `${mode}|${q}`;
     if (!opts?.fresh) {
@@ -589,7 +609,11 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
       const url = driveApiUrl("/drive/v3/files", params);
       const response = await fetch(url, { headers: await authHeaders() });
       const data = (await response.json()) as { files?: DriveFile[]; nextPageToken?: string; error?: unknown };
-      if (!response.ok) throw driveHttpError(response.status, data, "list");
+      if (!response.ok) {
+        const error = driveHttpError(response.status, data, "list");
+        rememberDriveFailure(error);
+        throw error;
+      }
       if (Array.isArray(data.files)) files.push(...data.files);
       pageToken = typeof data.nextPageToken === "string" ? data.nextPageToken : "";
     } while (pageToken);
@@ -598,11 +622,16 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
   }
 
   async function getFileMetadata(fileId: string, fields: string) {
+    throwIfDriveQuotaExceeded();
     const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { fields }), {
       headers: await authHeaders(),
     });
     const data = (await response.json().catch(() => null)) as (DriveFile & { error?: unknown }) | null;
-    if (!response.ok) throw driveHttpError(response.status, data, "stat");
+    if (!response.ok) {
+      const error = driveHttpError(response.status, data, "stat");
+      rememberDriveFailure(error);
+      throw error;
+    }
     if (!data?.id) throw new DriveApiError(response.status || 404, "stat");
     return data;
   }
@@ -639,6 +668,7 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
   }
 
   async function listChildrenUncached(folderId: string, fresh: boolean) {
+    throwIfDriveQuotaExceeded();
     const parent = await resolveWritableFolderParent(folderId);
     const q = `'${escapeDriveQueryValue(parent)}' in parents and trashed=false`;
     // Remembered corpora only on the happy path. Cold start: user, then My Drive, allDrives last.
@@ -888,11 +918,18 @@ function googleDriveAdapter(getAccessToken: () => Promise<string>): DriveAdapter
 }
 
 async function confirmDriveWriteOnce(getAccessToken: () => Promise<string>, fileId: string, content: string) {
+  throwIfDriveQuotaExceeded();
   const token = await getAccessToken();
   const response = await fetch(driveApiUrl(`/drive/v3/files/${fileId}`, { fields: "id,md5Checksum,modifiedTime" }), {
     headers: { authorization: `Bearer ${token}` },
   });
-  if (!response.ok) return false;
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const error = driveHttpError(response.status, payload, "stat");
+    rememberDriveFailure(error);
+    if (isDriveQuotaError(error) || isOauthInvalidGrant(error)) throw error;
+    return false;
+  }
   const data = (await response.json()) as { id?: string; md5Checksum?: string; modifiedTime?: string };
   if (!data.id) return false;
   const wanted = createHash("md5").update(content).digest("hex");
@@ -911,7 +948,8 @@ async function confirmDriveWrite(getAccessToken: () => Promise<string>, fileId: 
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
       if (await confirmDriveWriteOnce(getAccessToken, fileId, content)) return true;
-    } catch {
+    } catch (error) {
+      if (isDriveQuotaError(error) || isOauthInvalidGrant(error)) throw error;
       // Eventual-consistency or a transient metadata read — retry before failing closed.
     }
     if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 40 * (attempt + 1)));
@@ -990,7 +1028,12 @@ function logVaultOauthSkipped() {
 }
 
 function shouldSkipOauthFallback(error?: unknown) {
-  return oauthInvalidGrant || isOauthInvalidGrant(error);
+  return (
+    oauthInvalidGrant ||
+    isOauthInvalidGrant(error) ||
+    driveQuotaExceeded ||
+    isDriveQuotaError(error)
+  );
 }
 
 export function isSeatsOpenDenied(error: unknown) {
@@ -1003,7 +1046,9 @@ function withServiceAccountFallback(primary: DriveAdapter, secondary: DriveAdapt
     if (oauthDriveFailedOver) return op(secondary);
     try {
       return await op(primary);
-    } catch {
+    } catch (error) {
+      rememberDriveFailure(error);
+      if (shouldSkipOauthFallback(error)) throw error;
       oauthDriveFailedOver = true;
       logOauthDriveFallback();
       return op(secondary);
@@ -1067,11 +1112,13 @@ function withVaultWritePreference(sa: DriveAdapter, oauth: DriveAdapter): DriveA
     try {
       return await op(sa);
     } catch (error) {
+      rememberDriveFailure(error);
       if (shouldSkipOauthFallback(error)) throw error;
       try {
         return await op(oauth);
       } catch (oauthError) {
-        if (isOauthInvalidGrant(oauthError)) throw error;
+        rememberDriveFailure(oauthError);
+        if (isOauthInvalidGrant(oauthError) || isDriveQuotaError(oauthError)) throw error;
         throw oauthError;
       }
     }

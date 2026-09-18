@@ -1,5 +1,5 @@
 import { hasBuildDesk } from "./desk-role.ts";
-import { DriveApiError, driveFailureKind } from "./drive-estimates.ts";
+import { DriveApiError, driveFailureKind, isDriveQuotaError, isOauthInvalidGrant } from "./drive-estimates.ts";
 import {
   leadBriefAdapter,
   listStoredBriefs,
@@ -58,6 +58,8 @@ import {
   trashQualityVaultFile,
   trashQualityVaultNamedCopies,
   qualityVaultWriteUserError,
+  QUALITY_VAULT_OAUTH_ERROR,
+  QUALITY_VAULT_QUOTA_ERROR,
 } from "./quality-vault.ts";
 import { sameDriveFileName } from "./drive-estimates.ts";
 
@@ -219,6 +221,7 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
       expected: parsed,
     });
     if (!verified.ok) {
+      if (isQualityFillQuotaError(verified.error)) return verified;
       await rollbackQualityTemplateFillWrites({
         user,
         dest,
@@ -336,6 +339,7 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
     expected: parsed,
   });
   if (!verified.ok) {
+    if (isQualityFillQuotaError(verified.error)) return verified;
     await rollbackQualityTemplateFillWrites({
       user,
       dest: "prepackage",
@@ -372,6 +376,14 @@ export async function saveQualityTemplateFill(user: QualityTemplateFillUser, inp
   };
 }
 
+function isQualityFillQuotaError(error?: string) {
+  return error === QUALITY_VAULT_QUOTA_ERROR || error === QUALITY_VAULT_OAUTH_ERROR;
+}
+
+function qualityFillDriveUserError(error: unknown, user: QualityTemplateFillUser) {
+  return qualityVaultWriteUserError(error, hasBuildDesk(user));
+}
+
 export async function readQualityTemplateFill(
   user: QualityTemplateFillUser,
   input: {
@@ -385,6 +397,8 @@ export async function readQualityTemplateFill(
     companyLabel?: unknown;
     siteLabel?: unknown;
     jobLabel?: unknown;
+    /** Open/reopen may walk shelf labels + named copies. Save-verify must not. */
+    recover?: boolean;
   },
 ) {
   const dest = destOf(input.dest) || (isQualityReadyShelfJobId(typeof input.jobId === "string" ? input.jobId : "")
@@ -443,6 +457,7 @@ export async function readQualityTemplateFill(
   const labelPasses = jobLabelPasses.length ? jobLabelPasses : [undefined];
   const triedLabels = new Set(labelPasses.filter((label): label is string => Boolean(label)));
   let sawUnparseable = false;
+  const recover = input.recover !== false;
   async function readFillAt(folderId: string, packageLabel?: string) {
     return readQualityVaultFile(
       leadBriefAdapter("quality"),
@@ -473,53 +488,62 @@ export async function readQualityTemplateFill(
       stored,
     };
   }
-  for (const packageLabel of labelPasses) {
-    for (const folderId of readFolders) {
-      const vault = await readFillAt(folderId, packageLabel);
-      if (!vault.file?.data) continue;
-      const hit = parsedFill(vault.file, folderId, "drive", vault.stored);
+  try {
+    for (const packageLabel of labelPasses) {
+      for (const folderId of readFolders) {
+        const vault = await readFillAt(folderId, packageLabel);
+        if (!vault.file?.data) continue;
+        const hit = parsedFill(vault.file, folderId, "drive", vault.stored);
+        if (hit) return hit;
+      }
+    }
+    // Ready kit folder is the human package name. A slugged packageId alone
+    // used to walk "Audit Temp Kit 2026…" and miss Owner's AUDIT-TEMP-KIT folder.
+    if (recover && dest === "prepackage") {
+      const shelf = await listQualityPackageShelf(user, companyId);
+      const extraLabels = [
+        ...new Set(
+          shelf.kits
+            .flatMap((kit) => [kit.name, qualityReadyShelfPackageLabel(kit.jobId)])
+            .filter((label): label is string => Boolean(label) && !triedLabels.has(label)),
+        ),
+      ];
+      for (const packageLabel of extraLabels) {
+        const vault = await readFillAt("packages", packageLabel);
+        if (!vault.file?.data) continue;
+        const hit = parsedFill(vault.file, "packages", "drive", vault.stored);
+        if (hit) return hit;
+      }
+    }
+    const briefs = await listStoredBriefs("quality", who, dest === "job" ? { jobId, companyId } : { jobId, folderId: "packages", companyId });
+    const ranked = briefs
+      .flatMap((row) => (row.files ?? []).map((file) => ({ file, folderId: row.folderId || requestedFolder })))
+      .filter((row) => sameDriveFileName(row.file.name, fileName) && row.file.data)
+      .sort((left, right) => {
+        if (left.folderId === requestedFolder && right.folderId !== requestedFolder) return -1;
+        if (right.folderId === requestedFolder && left.folderId !== requestedFolder) return 1;
+        return 0;
+      });
+    const fromBrief = ranked[0];
+    if (fromBrief?.file.data) {
+      const hit = parsedFill(fromBrief.file, fromBrief.folderId, "drive", true);
       if (hit) return hit;
     }
-  }
-  // Ready kit folder is the human package name. A slugged packageId alone
-  // used to walk "Audit Temp Kit 2026…" and miss Owner's AUDIT-TEMP-KIT folder.
-  if (dest === "prepackage") {
-    const shelf = await listQualityPackageShelf(user, companyId);
-    const extraLabels = [
-      ...new Set(
-        shelf.kits
-          .flatMap((kit) => [kit.name, qualityReadyShelfPackageLabel(kit.jobId)])
-          .filter((label): label is string => Boolean(label) && !triedLabels.has(label)),
-      ),
-    ];
-    for (const packageLabel of extraLabels) {
-      const vault = await readFillAt("packages", packageLabel);
-      if (!vault.file?.data) continue;
-      const hit = parsedFill(vault.file, "packages", "drive", vault.stored);
-      if (hit) return hit;
+    if (recover) {
+      const named = await readQualityVaultNamedFile(leadBriefAdapter("quality"), fileName, companyId, user);
+      if (named.file?.data) {
+        const hit = parsedFill(named.file, requestedFolder, "drive", named.stored);
+        if (hit) return hit;
+      }
     }
+    if (sawUnparseable) return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR };
+    return { ok: false as const, status: 404, error: QUALITY_TEMPLATE_FILL_MISSING_ERROR };
+  } catch (error) {
+    if (isDriveQuotaError(error) || isOauthInvalidGrant(error)) {
+      return { ok: false as const, status: 503, error: qualityFillDriveUserError(error, user) };
+    }
+    throw error;
   }
-  const briefs = await listStoredBriefs("quality", who, dest === "job" ? { jobId, companyId } : { jobId, folderId: "packages", companyId });
-  const ranked = briefs
-    .flatMap((row) => (row.files ?? []).map((file) => ({ file, folderId: row.folderId || requestedFolder })))
-    .filter((row) => sameDriveFileName(row.file.name, fileName) && row.file.data)
-    .sort((left, right) => {
-      if (left.folderId === requestedFolder && right.folderId !== requestedFolder) return -1;
-      if (right.folderId === requestedFolder && left.folderId !== requestedFolder) return 1;
-      return 0;
-    });
-  const fromBrief = ranked[0];
-  if (fromBrief?.file.data) {
-    const hit = parsedFill(fromBrief.file, fromBrief.folderId, "drive", true);
-    if (hit) return hit;
-  }
-  const named = await readQualityVaultNamedFile(leadBriefAdapter("quality"), fileName, companyId, user);
-  if (named.file?.data) {
-    const hit = parsedFill(named.file, requestedFolder, "drive", named.stored);
-    if (hit) return hit;
-  }
-  if (sawUnparseable) return { ok: false as const, status: 400, error: QUALITY_TEMPLATE_FILL_TEMPLATE_ERROR };
-  return { ok: false as const, status: 404, error: QUALITY_TEMPLATE_FILL_MISSING_ERROR };
 }
 
 async function verifyQualityTemplateFillRetrieve(
@@ -538,8 +562,11 @@ async function verifyQualityTemplateFillRetrieve(
     expected: { fields: Record<string, string>; rows: Array<{ cells: Record<string, string> }> };
   },
 ) {
-  const opened = await readQualityTemplateFill(user, input);
+  const opened = await readQualityTemplateFill(user, { ...input, recover: false });
   if (!opened.ok) {
+    if (isQualityFillQuotaError(opened.error) || opened.status === 503) {
+      return { ok: false as const, status: 503, error: opened.error };
+    }
     return { ok: false as const, status: 503, error: QUALITY_TEMPLATE_FILL_RETRIEVE_ERROR };
   }
   if (!qualityTemplateFormHasWork({ fields: opened.form.fields, rows: opened.form.rows })) {
@@ -593,11 +620,8 @@ async function rollbackQualityTemplateFillWrites(input: {
       // Keep rolling back the rest so a partial ripple does not stay listed.
     }
   }
-  try {
-    await trashQualityVaultNamedCopies(leadBriefAdapter("quality"), input.fileName, input.companyId);
-  } catch {
-    // Named-copy sweep is best-effort after a failed second write.
-  }
+  // Do not walk the Quality tree here. Exact-place trash covers job ripple and
+  // Ready kits. A named-copy sweep after a failed Save multiplies query cost.
 }
 
 export async function removeQualityTemplateFill(user: QualityTemplateFillUser, input: QualityTemplateFillSaveInput) {
