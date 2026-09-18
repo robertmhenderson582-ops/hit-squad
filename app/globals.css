@@ -1356,13 +1356,18 @@ textarea:focus {
 }
 
 .control-center-brand {
+  display: inline-flex;
+  align-items: center;
   margin-top: 0.25rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 0.75rem;
+  background: #fbf8f0;
 }
 
 .control-center-brand-logo {
   display: block;
   max-width: min(22rem, 100%);
-  max-height: 4.75rem;
+  max-height: 5.5rem;
   width: auto;
   height: auto;
   object-fit: contain;
