@@ -12,9 +12,12 @@ import {
   jobCardPhaseStarts,
   packHasBillableWork,
 } from "./job-card-face.ts";
+import { HIS_AROMATICS_PACK_ID, HIS_CAT2_PACK_ID } from "./his-wood-river.ts";
+import { JOB_META_PREFIX } from "./job-meta-prefix.ts";
 import { PACK_INDEX_KEY, PACK_STORE_PREFIX } from "./local-estimates.ts";
 import { CREW_STORE_PREFIX, PHASE_STORE_PREFIX } from "./phase-schedule.ts";
 import { RODEO_U110_PACK_ID } from "./rodeo-monroe-wake.ts";
+import { hydrateJobMeta } from "./staffing-plan.ts";
 
 function memoryStore(seed: Record<string, string> = {}) {
   const data = { ...seed };
@@ -159,6 +162,8 @@ describe("job card face", () => {
     assert.match(tree, /findDeskPack/);
     assert.match(tree, /face\.statusLabel/);
     assert.match(tree, /face\.jobNumber/);
+    assert.match(tree, /face\.clientPoNumber/);
+    assert.match(tree, /PO \$\{face\.clientPoNumber\}/);
     assert.match(tree, /job-face-card/);
     assert.match(tree, /job-face-title/);
     assert.match(tree, /job-face-stat-total/);
@@ -192,6 +197,47 @@ describe("job card face", () => {
     assert.equal(thinFace.jobCode, "EST-B1726");
     const lockedHis = jobCardFace({ ...boilerId, status: "Locked" }, boilerStore);
     assert.equal(lockedHis.statusLabel, "In progress");
+    assert.equal(boilerFace.clientPoNumber, "");
+
+    const catId = {
+      packId: HIS_CAT2_PACK_ID,
+      key: `new:${HIS_CAT2_PACK_ID}`,
+      title: "Madison CAT 2 (Pit Stop)",
+      client: "Phillips 66",
+      site: "Wood River — Roxana, IL",
+      siteId: "site-madison",
+      createdAt: 10,
+      updatedAt: 20,
+    };
+    const catFace = jobCardFace(catId, memoryStore());
+    assert.equal(catFace.jobNumber, "108474");
+    assert.equal(catFace.clientPoNumber, "4302363210");
+    const typedPo = jobCardFace(catId, memoryStore({
+      [PACK_INDEX_KEY]: JSON.stringify([catId]),
+      [`${PACK_STORE_PREFIX}${catId.key}`]: JSON.stringify(catId),
+      [`${JOB_META_PREFIX}${catId.key}`]: JSON.stringify({ jobNumber: "108474", clientPoNumber: "999" }),
+    }));
+    assert.equal(typedPo.clientPoNumber, "999");
+    const aromaticsFace = jobCardFace(
+      {
+        packId: HIS_AROMATICS_PACK_ID,
+        title: "2027 Aromatics Turnaround",
+        client: "Phillips 66",
+        site: "Wood River — Roxana, IL",
+      },
+      memoryStore(),
+    );
+    assert.equal(aromaticsFace.jobNumber, "108463");
+    assert.equal(aromaticsFace.clientPoNumber, "");
+
+    assert.equal(hydrateJobMeta({ clientPoNumber: "4302363210", jobNumber: "108474" }).clientPoNumber, "4302363210");
+    assert.equal(hydrateJobMeta({ jobNumber: "108474" }).clientPoNumber, "");
+    assert.equal(hydrateJobMeta(null).clientPoNumber, "");
+
+    const setup = readFileSync(fileURLToPath(new URL("../components/JobSetupCard.tsx", import.meta.url)), "utf8");
+    assert.match(setup, /CLIENT PO #/);
+    assert.match(setup, /clientPoNumber/);
+    assert.match(setup, /disabled=\{estimateWriteLocked\}/);
 
     const css = readFileSync(fileURLToPath(new URL("../app/globals.css", import.meta.url)), "utf8");
     assert.match(css, /\.job-face-title[\s\S]*font-size:\s*1\.85rem/);

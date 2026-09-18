@@ -27,12 +27,15 @@ import {
   HIS_AROMATICS_PACK_ID,
   HIS_BOILER17_FILE_ID,
   HIS_CAT2_PACK_ID,
+  AROMATICS_JOB_NUMBER,
+  CAT2_CLIENT_PO_NUMBER,
+  CAT2_JOB_NUMBER,
   hisFileForPackId,
   persistHisWoodRiverCards,
 } from "./his-wood-river.ts";
 import { jobCodeFromPackId } from "./his-wood-river.ts";
 import { JOB_META_PREFIX } from "./job-meta-prefix.ts";
-import { localPackToJob, readStoreJson, storageKeyForPack, type StorageLike } from "./local-estimates.ts";
+import { localPackToJob, readStoreJson, storageKeyForPack, writeStoreJson, type StorageLike } from "./local-estimates.ts";
 import { isAromaticsIdentity } from "./aromatics-freeze.ts";
 import { hydrateJobMeta } from "./staffing-plan.ts";
 import { BOILER17_B1_GOLDEN, MIKE_CPPR_108451_GOLDEN } from "./wake-golden.ts";
@@ -126,11 +129,36 @@ describe("Wood River Boiler 17 Locked wake", () => {
     const meta = hydrateJobMeta(readStoreJson(store, `${JOB_META_PREFIX}${key}`));
     const book = hydrateCostReport(readStoreJson(store, `${COST_REPORT_STORE_PREFIX}${key}`));
     assert.equal(meta.jobNumber, BOILER17_JOB_NUMBER);
+    assert.equal(meta.clientPoNumber, "");
     assert.equal(checkMikeCppr108451(book).ok, true);
+    const catMeta = hydrateJobMeta(readStoreJson(store, `${JOB_META_PREFIX}${storageKeyForPack(HIS_CAT2_PACK_ID)}`));
+    assert.equal(catMeta.jobNumber, CAT2_JOB_NUMBER);
+    assert.equal(catMeta.clientPoNumber, CAT2_CLIENT_PO_NUMBER);
+    const aromaticsMeta = hydrateJobMeta(
+      readStoreJson(store, `${JOB_META_PREFIX}${storageKeyForPack(HIS_AROMATICS_PACK_ID)}`),
+    );
+    assert.equal(aromaticsMeta.jobNumber, AROMATICS_JOB_NUMBER);
+    assert.equal(aromaticsMeta.clientPoNumber, "");
     assert.equal(HIS_AROMATICS_PACK_ID, "new-mtj7bvtk-akmei");
     assert.equal(HIS_AROMATICS_FILE_ID, "1KLhPczzj-BHMqT8uOI5VxUkSJUagj7rz");
     assert.equal(HIS_AROMATICS_FREEZE_FILE_ID, "1yMOHR4ES9Ba7Y0G5C2wFcpwH34i0sJ7m");
     assert.equal(painted.some((row) => row.packId === HIS_AROMATICS_PACK_ID), true);
     assert.equal(painted.some((row) => row.packId === HIS_CAT2_PACK_ID), true);
+
+    writeStoreJson(store, `${JOB_META_PREFIX}${storageKeyForPack(HIS_AROMATICS_PACK_ID)}`, {
+      ...aromaticsMeta,
+      jobNumber: "KEEP-108463",
+    });
+    writeStoreJson(store, `${JOB_META_PREFIX}${key}`, { ...meta, jobNumber: BOILER17_JOB_NUMBER });
+    persistHisWoodRiverCards(store);
+    assert.equal(
+      hydrateJobMeta(readStoreJson(store, `${JOB_META_PREFIX}${storageKeyForPack(HIS_AROMATICS_PACK_ID)}`)).jobNumber,
+      "KEEP-108463",
+    );
+    assert.equal(hydrateJobMeta(readStoreJson(store, `${JOB_META_PREFIX}${key}`)).jobNumber, BOILER17_JOB_NUMBER);
+    assert.equal(
+      hydrateJobMeta(readStoreJson(store, `${JOB_META_PREFIX}${storageKeyForPack(HIS_CAT2_PACK_ID)}`)).clientPoNumber,
+      CAT2_CLIENT_PO_NUMBER,
+    );
   });
 });

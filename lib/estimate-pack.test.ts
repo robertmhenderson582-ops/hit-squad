@@ -1265,7 +1265,7 @@ describe("estimate pack snapshot", () => {
       updatedAt: 100,
       ownerEmail: "nathanboyte@gmail.com",
       status: "In progress" as const,
-      jobMeta: { jobNumber: "108451", area: "Boiler 17" },
+      jobMeta: { jobNumber: "108451", area: "Boiler 17", clientPoNumber: "PO-KEEP-9" },
       schedule: { projectStart: "2026-08-10", phases: [{ id: "pre", on: true, start: "2026-08-10", stop: "2026-12-06" }] },
       crew: { staff: [{ id: "st-1", ranges: [{ phaseId: "pre", start: "2026-08-10", end: "2026-12-06" }] }] },
       equipment: { largeTools: [{ id: "crane-1" }], thirdParty: [] },
@@ -1281,6 +1281,7 @@ describe("estimate pack snapshot", () => {
     assert.equal(picked?.status, "In progress");
     assert.equal(pickPack(live, hisLocked)?.status, "In progress");
     assert.equal((picked?.jobMeta as { jobNumber?: string })?.jobNumber, "108451");
+    assert.equal((picked?.jobMeta as { clientPoNumber?: string })?.clientPoNumber, "PO-KEEP-9");
 
     const store = memoryStore();
     applyPackToStore(store, live);
@@ -1289,6 +1290,7 @@ describe("estimate pack snapshot", () => {
     const kept = collectPack(store, "new-b1726");
     assert.equal(kept?.status, "In progress");
     assert.equal((kept?.jobMeta as { jobNumber?: string })?.jobNumber, "108451");
+    assert.equal((kept?.jobMeta as { clientPoNumber?: string })?.clientPoNumber, "PO-KEEP-9");
   });
 
   it("Owner Locked and seven-day per diem survive a stale vault hydrate", () => {

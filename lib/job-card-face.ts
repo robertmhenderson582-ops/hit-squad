@@ -14,8 +14,7 @@ import {
   type EstimatePackSnapshot,
 } from "./estimate-pack.ts";
 import { packSnapshotToXlsxInput } from "./estimate-pack-xlsx.ts";
-import { jobNumberForPack } from "./boiler-17.ts";
-import { jobCodeFromPackId } from "./his-wood-river.ts";
+import { awardedJobNumberForPack, clientPoNumberForPack, jobCodeFromPackId } from "./his-wood-river.ts";
 import type { LocalPack, StorageLike } from "./local-estimates.ts";
 import { liveJobSetupPhases, PHASE_NAMES, parseYmd, type PhaseScheduleState } from "./phase-schedule.ts";
 import { isWakeIdentityOnly } from "./rodeo-monroe-wake.ts";
@@ -28,6 +27,7 @@ export type JobCardFace = {
   statusLabel: string;
   jobCode: string;
   jobNumber: string;
+  clientPoNumber: string;
 };
 
 const EMPTY_FACE: JobCardFace = {
@@ -38,6 +38,7 @@ const EMPTY_FACE: JobCardFace = {
   statusLabel: "",
   jobCode: "",
   jobNumber: "",
+  clientPoNumber: "",
 };
 
 export function formatJobCardMoney(amount: number): string {
@@ -108,28 +109,37 @@ function statusForCard(
 }
 
 export function jobCardFace(
-  pack?: (Pick<LocalPack, "packId" | "title" | "client" | "site"> & { status?: string; code?: string; jobNumber?: string }) | null,
+  pack?: (Pick<LocalPack, "packId" | "title" | "client" | "site"> & {
+    status?: string;
+    code?: string;
+    jobNumber?: string;
+    clientPoNumber?: string;
+  }) | null,
   store?: StorageLike | null,
 ): JobCardFace {
   const jobCode = jobCodeForCard(pack);
-  const jobNumber = jobNumberForPack(pack, pack);
+  const jobNumber = awardedJobNumberForPack(pack, pack);
+  const clientPoNumber = clientPoNumberForPack(pack, pack);
   if (!pack?.packId || !store) {
     return {
       ...EMPTY_FACE,
       statusLabel: (pack?.status || "").trim(),
       jobCode,
       jobNumber,
+      clientPoNumber,
     };
   }
   const snapshot = collectPack(store, pack.packId);
-  const meta = snapshot?.jobMeta as { jobNumber?: string } | undefined;
-  const liveJobNumber = jobNumberForPack({ ...pack, jobNumber: pack.jobNumber }, meta);
+  const meta = snapshot?.jobMeta as { jobNumber?: string; clientPoNumber?: string } | undefined;
+  const liveJobNumber = awardedJobNumberForPack({ ...pack, jobNumber: pack.jobNumber }, meta);
+  const liveClientPo = clientPoNumberForPack({ ...pack, clientPoNumber: pack.clientPoNumber }, meta);
   if (!snapshot) {
     return {
       ...EMPTY_FACE,
       statusLabel: (pack.status || "").trim(),
       jobCode,
       jobNumber: liveJobNumber,
+      clientPoNumber: liveClientPo,
     };
   }
   const grandTotal = jobCardGrandTotal(snapshot);
@@ -146,5 +156,6 @@ export function jobCardFace(
     statusLabel: statusForCard(pack, snapshot),
     jobCode,
     jobNumber: liveJobNumber,
+    clientPoNumber: liveClientPo,
   };
 }

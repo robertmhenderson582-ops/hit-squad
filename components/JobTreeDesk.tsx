@@ -200,6 +200,7 @@ export function JobTreeDesk({
                                 <p className="job-face-code">
                                   {jobCode}
                                   {face.jobNumber ? ` · JN ${face.jobNumber}` : ""}
+                                  {face.clientPoNumber ? ` · PO ${face.clientPoNumber}` : ""}
                                 </p>
                                 {stamp ? <StatusStamp value={stamp.toUpperCase()} /> : null}
                               </div>
@@ -238,7 +239,11 @@ export function JobTreeDesk({
                                   <dt>WORKING FIGURE</dt>
                                   <dd>
                                     {job.workingFigure ||
-                                      (face.jobNumber ? `JN ${face.jobNumber}` : "—")}
+                                      (face.jobNumber || face.clientPoNumber
+                                        ? [face.jobNumber ? `JN ${face.jobNumber}` : "", face.clientPoNumber ? `PO ${face.clientPoNumber}` : ""]
+                                            .filter(Boolean)
+                                            .join(" · ")
+                                        : "—")}
                                   </dd>
                                 </div>
                                 <div className="job-face-stat">
