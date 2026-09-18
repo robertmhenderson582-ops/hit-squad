@@ -61,6 +61,21 @@ export function sameDriveFolderName(left: string, right: string) {
   return driveFolderName(left) === driveFolderName(right);
 }
 
+/** Filled-copy names keep their length. Folders slice to 80; files must not. */
+export function sameDriveFileName(left: string, right: string) {
+  const a = (left || "").trim();
+  const b = (right || "").trim();
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const norm = (name: string) =>
+    name
+      .replace(/[\u2012\u2013\u2014\u2015\u2212]/g, "-")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  return norm(a) === norm(b);
+}
+
 /** Real folder id. Follows a shortcut-to-folder. Never treats missing mimeType as a folder. */
 export function writableDriveFolderId(row?: Pick<DriveFile, "id" | "mimeType" | "shortcutDetails"> | null) {
   if (!row?.id) return null;

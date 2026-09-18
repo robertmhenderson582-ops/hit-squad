@@ -27,6 +27,7 @@ import {
   DRIVE_SHORTCUT_MIME,
   SEATS_SA_OPEN_ERROR,
   driveFolderName,
+  sameDriveFileName,
   sameDriveFolderName,
   writableDriveFolderId,
 } from "./drive-estimates.ts";
@@ -1345,6 +1346,13 @@ describe("Drive folder create", () => {
   it("sanitizes job-tree names and refuses to treat a file as a folder parent", () => {
     assert.equal(driveFolderName("Wood River — Roxana, IL"), "Wood River - Roxana, IL");
     assert.equal(sameDriveFolderName("Wood River — Roxana, IL", "Wood River - Roxana, IL"), true);
+    assert.equal(
+      sameDriveFileName(
+        "Packages — Madison CAT 2 (Pit Stop) — 2026-09-17 — Robert Henderson.txt",
+        "Packages - Madison CAT 2 (Pit Stop) - 2026-09-17 - Robert Henderson.txt",
+      ),
+      true,
+    );
     assert.equal(writableDriveFolderId({ id: "file-1", mimeType: "application/pdf" }), null);
     assert.equal(writableDriveFolderId({ id: "folder-1", mimeType: DRIVE_FOLDER_MIME }), "folder-1");
     assert.equal(

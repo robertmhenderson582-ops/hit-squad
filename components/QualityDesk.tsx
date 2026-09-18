@@ -173,6 +173,7 @@ export function QualityDesk() {
               dest: "prepackage",
               destPackageId: packageId,
               destPackageName: packageName,
+              destJobLabel: packageName,
               filledName: fileName,
             })
           }
@@ -227,6 +228,8 @@ export function QualityDesk() {
                   folderId: radio,
                   dest: "job",
                   destJobId: pick.jobId,
+                  destJobLabel: selectedJob?.title || selectedJob?.code,
+                  destSiteLabel: selectedSite?.name,
                   filledName: fileName,
                 })
               }
