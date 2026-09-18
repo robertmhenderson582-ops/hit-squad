@@ -370,6 +370,9 @@ describe("company desk logo on file", () => {
     const api = readFileSync(fileURLToPath(new URL("../app/api/desk/companies/logo/route.ts", import.meta.url)), "utf8");
     const store = readFileSync(fileURLToPath(new URL("./companies-store.ts", import.meta.url)), "utf8");
     assert.match(desk, /type="file"/);
+    assert.match(desk, /type="url"/);
+    assert.match(desk, /Use URL/);
+    assert.match(desk, /Control Center header/);
     assert.match(desk, /Upload/);
     assert.match(desk, /Change/);
     assert.match(desk, /Remove/);

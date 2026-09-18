@@ -12,7 +12,19 @@ export const ONBOARD_LOCALS = [
   { id: "363", label: "Local 363", craft: "Boilermaker", short: "BM363", union: "IBB", phase1: false },
 ] as const;
 
-export type OnboardLocalId = (typeof ONBOARD_LOCALS)[number]["id"];
+export type OnboardLocalId = string;
+
+export type OnboardHall = {
+  id: OnboardLocalId;
+  label: string;
+  craft: string;
+  union: string;
+  short: string;
+  phase1: boolean;
+  contactName: string;
+  contactEmail: string;
+  contactTitle: string;
+};
 
 /**
  * Benny + Robert dictation 2026-09-18. Board columns are completed-step states.
@@ -77,6 +89,62 @@ export const NATHAN_BOYTE_EMAIL = "nathanboyte@gmail.com";
 export const BEN_PEFFLEY_NAME = "Ben Peffley";
 
 export const ONBOARD_PHASE1_LOCAL_IDS = ["553"] as const;
+
+export function seedOnboardHalls(): OnboardHall[] {
+  return ONBOARD_LOCALS.map((row) => {
+    if (row.id === "553") {
+      return {
+        id: row.id,
+        label: row.label,
+        craft: row.craft,
+        union: row.union,
+        short: row.short,
+        phase1: row.phase1,
+        contactName: JOHN_BATTUELLO_NAME,
+        contactEmail: JOHN_BATTUELLO_EMAIL,
+        contactTitle: "Hall Local 553",
+      };
+    }
+    return {
+      id: row.id,
+      label: row.label,
+      craft: row.craft,
+      union: row.union,
+      short: row.short,
+      phase1: row.phase1,
+      contactName: "",
+      contactEmail: "",
+      contactTitle: `Hall Local ${row.id}`,
+    };
+  });
+}
+
+let runtimeHalls: OnboardHall[] | null = null;
+
+export function setRuntimeOnboardHalls(halls: OnboardHall[] | null) {
+  runtimeHalls = halls;
+}
+
+export function hallShort(craft: string, localId: string, union = "") {
+  const fromCraft = craft.replace(/[^a-z]/gi, "").slice(0, 2).toUpperCase();
+  const fromUnion = union.replace(/[^a-z]/gi, "").slice(0, 2).toUpperCase();
+  return `${fromCraft || fromUnion || "HL"}${localId}`;
+}
+
+export function mergeOnboardHalls(...lists: Array<readonly OnboardHall[] | null | undefined>): OnboardHall[] {
+  const seen = new Map<string, OnboardHall>();
+  for (const list of lists) {
+    for (const row of list ?? []) {
+      if (!row?.id) continue;
+      seen.set(row.id, { ...row });
+    }
+  }
+  return [...seen.values()].sort((left, right) => left.id.localeCompare(right.id, undefined, { numeric: true }));
+}
+
+export function mergedOnboardHalls(extra?: readonly OnboardHall[] | null): OnboardHall[] {
+  return mergeOnboardHalls(seedOnboardHalls(), extra ?? runtimeHalls);
+}
 
 export type OnboardSeedSeat = {
   id: string;
@@ -251,12 +319,13 @@ export type OnboardFile = {
   people: OnboardPerson[];
   requests: ManpowerRequest[];
   settings: OnboardSettings;
+  halls: OnboardHall[];
 };
 
 export type OnboardViewer = OnboardActor;
 
-const LOCAL_IDS = new Set<string>(ONBOARD_LOCALS.map((row) => row.id));
 const STAGE_IDS = new Set<string>(ONBOARD_STAGES.map((row) => row.id));
+const LOCAL_ID_RE = /^\d{2,5}$/;
 
 const LEGACY_STAGE_MAP: Record<string, OnboardStageId> = {
   registered: "step-1",
@@ -270,16 +339,18 @@ const LEGACY_STAGE_MAP: Record<string, OnboardStageId> = {
 
 const ADVANCE_ORDER: OnboardStageId[] = ["step-1", "step-2", "step-3", "step-4", "step-5"];
 
-export function isOnboardLocalId(value: unknown): value is OnboardLocalId {
-  return typeof value === "string" && LOCAL_IDS.has(value);
+export function isOnboardLocalId(value: unknown, halls?: readonly OnboardHall[] | null): value is OnboardLocalId {
+  if (typeof value !== "string" || !LOCAL_ID_RE.test(value.trim())) return false;
+  return mergedOnboardHalls(halls).some((row) => row.id === value.trim());
 }
 
-export function isOnboardPhase1Local(value: unknown): value is OnboardLocalId {
-  return value === "553";
+export function isOnboardPhase1Local(value: unknown, halls?: readonly OnboardHall[] | null): value is OnboardLocalId {
+  if (typeof value !== "string") return false;
+  return mergedOnboardHalls(halls).some((row) => row.id === value && row.phase1);
 }
 
-export function selectableOnboardLocals() {
-  return ONBOARD_LOCALS.filter((row) => row.phase1);
+export function selectableOnboardLocals(halls?: readonly OnboardHall[] | null) {
+  return mergedOnboardHalls(halls).filter((row) => row.phase1);
 }
 
 export function onboardSeedByEmail(email?: string | null) {
@@ -301,8 +372,8 @@ export function isOnboardStageId(value: unknown): value is OnboardStageId {
   return normalizeOnboardStageId(value) != null && STAGE_IDS.has(String(value));
 }
 
-export function onboardLocal(id: OnboardLocalId) {
-  return ONBOARD_LOCALS.find((row) => row.id === id) ?? ONBOARD_LOCALS[0];
+export function onboardLocal(id: OnboardLocalId, halls?: readonly OnboardHall[] | null) {
+  return mergedOnboardHalls(halls).find((row) => row.id === id) ?? seedOnboardHalls()[0];
 }
 
 export function onboardStage(id: OnboardStageId) {
@@ -321,26 +392,46 @@ export function defaultCraftForLocal(localId: OnboardLocalId) {
   return onboardLocal(localId).craft;
 }
 
-export function hallContactForLocal(localId: OnboardLocalId) {
+export function hallContactForLocal(localId: OnboardLocalId, halls?: readonly OnboardHall[] | null) {
+  const hall = mergedOnboardHalls(halls).find((row) => row.id === localId);
+  if (hall && (hall.contactEmail || hall.contactName)) {
+    return { name: hall.contactName, email: hall.contactEmail, title: hall.contactTitle || `Hall Local ${hall.id}` };
+  }
   if (localId === "553") {
     return { name: JOHN_BATTUELLO_NAME, email: JOHN_BATTUELLO_EMAIL, title: "Hall Local 553" };
   }
   return null;
 }
 
-export function hallLocalForSeat(user?: OnboardViewer | null): OnboardLocalId | null {
+export function hallLocalForSeat(user?: OnboardViewer | null, halls?: readonly OnboardHall[] | null): OnboardLocalId | null {
   if (!user) return null;
   const email = (user.email || "").trim().toLowerCase();
+  const catalog = mergedOnboardHalls(halls);
+  if (email) {
+    const byEmail = catalog.find((row) => row.contactEmail && row.contactEmail === email);
+    if (byEmail) return byEmail.id;
+  }
   if (email === JOHN_BATTUELLO_EMAIL) return "553";
   if (/johnny\s+battuello|john\s+battuello/i.test(user.name || "")) return "553";
   const hay = `${user.jobTitle || ""} ${user.name || ""} ${email}`;
-  if (/\b553\b|pf553|pipefitter hall|hall local 553/i.test(hay)) return "553";
-  if (/\b363\b|bm363|boilermaker hall|hall local 363/i.test(hay)) return "363";
+  for (const hall of catalog) {
+    const title = (hall.contactTitle || "").trim();
+    if (title && new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(hay)) return hall.id;
+    if (new RegExp(`\\b${hall.id}\\b|hall local ${hall.id}`, "i").test(hay)) return hall.id;
+    if (hall.short && new RegExp(`\\b${hall.short}\\b`, "i").test(hay)) return hall.id;
+    if (hall.contactName && new RegExp(hall.contactName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(user.name || "")) {
+      return hall.id;
+    }
+  }
+  const titled = /\bhall local (\d{2,5})\b/i.exec(hay);
+  if (titled?.[1]) return titled[1];
+  if (/\b553\b|pf553|pipefitter hall/i.test(hay)) return "553";
+  if (/\b363\b|bm363|boilermaker hall/i.test(hay)) return "363";
   return null;
 }
 
-export function isHallSeat(user?: OnboardViewer | null): boolean {
-  return hallLocalForSeat(user) != null;
+export function isHallSeat(user?: OnboardViewer | null, halls?: readonly OnboardHall[] | null): boolean {
+  return hallLocalForSeat(user, halls) != null;
 }
 
 export function isTomFriedSeat(user?: OnboardViewer | null): boolean {
@@ -390,9 +481,28 @@ export function canSeeOnboardDoor(
   return Boolean((viewer.email || "").trim() || (viewer.id || "").trim() || (viewer.name || "").trim() || viewer.role);
 }
 
+/** Company working-desk / PM / HSE / dispatcher seats — not hall-only, not Owner-only. */
+export function isCompanyOnboardWriter(user?: OnboardViewer | null): boolean {
+  if (!user) return false;
+  return (
+    hasBuildDesk(user) ||
+    hasWorkingDesk(user) ||
+    isHseVaultSeat(user) ||
+    isProjectManager(user) ||
+    isBennyCampSeat(user) ||
+    isTomFriedSeat(user)
+  );
+}
+
+export function canManageOnboardHalls(user?: OnboardViewer | null): boolean {
+  if (!user || !canSeeOnboardBoard(user)) return false;
+  if (isHallSeat(user) && !isCompanyOnboardWriter(user)) return false;
+  return isCompanyOnboardWriter(user);
+}
+
 export function canRegisterOnboard(user?: OnboardViewer | null, settings?: OnboardSettings | null): boolean {
   if (!user || !canSeeOnboardBoard(user)) return false;
-  if (hasBuildDesk(user) || isHseVaultSeat(user) || isBennyCampSeat(user) || isTomFriedSeat(user)) return true;
+  if (isCompanyOnboardWriter(user)) return true;
   const submitter = settings?.step1Submitter ?? DEFAULT_ONBOARD_SETTINGS.step1Submitter;
   return submitter === "hall" && isHallSeat(user);
 }
@@ -632,12 +742,87 @@ function parseBool(value: unknown): boolean {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
-export function parseOnboardPerson(raw: unknown): OnboardPerson | null {
+export function parseOnboardHall(raw: unknown): OnboardHall | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Partial<OnboardHall>;
+  const id = String(row.id ?? "").trim();
+  if (!LOCAL_ID_RE.test(id)) return null;
+  const label = typeof row.label === "string" && row.label.trim() ? row.label.trim() : `Local ${id}`;
+  const craft = typeof row.craft === "string" ? row.craft.trim() : "";
+  const union = typeof row.union === "string" ? row.union.trim() : "";
+  const contactEmail = typeof row.contactEmail === "string" ? row.contactEmail.trim().toLowerCase() : "";
+  if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) return null;
+  return {
+    id,
+    label,
+    craft,
+    union,
+    short:
+      typeof row.short === "string" && row.short.trim() ? row.short.trim() : hallShort(craft, id, union),
+    phase1: row.phase1 === true,
+    contactName: typeof row.contactName === "string" ? row.contactName.trim() : "",
+    contactEmail,
+    contactTitle:
+      typeof row.contactTitle === "string" && row.contactTitle.trim()
+        ? row.contactTitle.trim()
+        : `Hall Local ${id}`,
+  };
+}
+
+export function parseOnboardHallList(raw: unknown): OnboardHall[] {
+  if (!Array.isArray(raw)) return [];
+  const out: OnboardHall[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const hall = parseOnboardHall(item);
+    if (!hall || seen.has(hall.id)) continue;
+    seen.add(hall.id);
+    out.push(hall);
+  }
+  return out;
+}
+
+export function parseOnboardHallInput(raw: unknown): OnboardHall | { error: string } {
+  if (!raw || typeof raw !== "object") return { error: "Enter the hall fields." };
+  const row = raw as Partial<OnboardHall> & { localNumber?: unknown; jobTitle?: unknown; phaseOne?: unknown };
+  const id = String(row.id ?? row.localNumber ?? "").replace(/\D/g, "");
+  if (!LOCAL_ID_RE.test(id)) return { error: "Enter a local number (2–5 digits)." };
+  const label = typeof row.label === "string" ? row.label.trim() : "";
+  if (label.length < 2) return { error: "Enter the hall name / label." };
+  const craft = typeof row.craft === "string" ? row.craft.trim() : "";
+  if (!craft) return { error: "Enter the craft / trade." };
+  const union = typeof row.union === "string" ? row.union.trim() : "";
+  if (!union) return { error: "Enter the union." };
+  const contactName = typeof row.contactName === "string" ? row.contactName.trim() : "";
+  const contactEmail = typeof row.contactEmail === "string" ? row.contactEmail.trim().toLowerCase() : "";
+  if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+    return { error: "Enter a valid hall contact email, or leave it blank." };
+  }
+  const contactTitle =
+    typeof row.contactTitle === "string" && row.contactTitle.trim()
+      ? row.contactTitle.trim()
+      : typeof row.jobTitle === "string" && row.jobTitle.trim()
+        ? row.jobTitle.trim()
+        : `Hall Local ${id}`;
+  return {
+    id,
+    label,
+    craft,
+    union,
+    short: hallShort(craft, id, union),
+    phase1: row.phase1 === true || row.phaseOne === true,
+    contactName,
+    contactEmail,
+    contactTitle,
+  };
+}
+
+export function parseOnboardPerson(raw: unknown, halls?: readonly OnboardHall[] | null): OnboardPerson | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Partial<OnboardPerson> & { stage?: unknown };
   if (typeof row.id !== "string" || !row.id.trim()) return null;
   if (typeof row.name !== "string" || !row.name.trim()) return null;
-  if (!isOnboardLocalId(row.localId)) return null;
+  if (!isOnboardLocalId(row.localId, halls)) return null;
   const stage = normalizeOnboardStageId(row.stage) ?? "step-1";
   const events: OnboardEvent[] = [];
   const seen = new Set<string>();
@@ -647,7 +832,7 @@ export function parseOnboardPerson(raw: unknown): OnboardPerson | null {
     seen.add(event.id);
     events.push(event);
   }
-  const local = onboardLocal(row.localId);
+  const local = onboardLocal(row.localId, halls);
   const identity = emptyIdentity();
   return {
     id: row.id.trim(),
@@ -690,10 +875,11 @@ export function parseOnboardPerson(raw: unknown): OnboardPerson | null {
 
 export function parseOnboardFile(raw: unknown): OnboardFile {
   const parsed = raw && typeof raw === "object" ? (raw as Partial<OnboardFile>) : {};
+  const halls = mergeOnboardHalls(seedOnboardHalls(), parseOnboardHallList(parsed.halls));
   const people: OnboardPerson[] = [];
   const seen = new Set<string>();
   for (const item of Array.isArray(parsed.people) ? parsed.people : []) {
-    const person = parseOnboardPerson(item);
+    const person = parseOnboardPerson(item, halls);
     if (!person || seen.has(person.id)) continue;
     seen.add(person.id);
     people.push(person);
@@ -701,12 +887,12 @@ export function parseOnboardFile(raw: unknown): OnboardFile {
   const requests: ManpowerRequest[] = [];
   const seenRequests = new Set<string>();
   for (const item of Array.isArray(parsed.requests) ? parsed.requests : []) {
-    const request = parseManpowerRequest(item);
+    const request = parseManpowerRequest(item, halls);
     if (!request || seenRequests.has(request.id)) continue;
     seenRequests.add(request.id);
     requests.push(request);
   }
-  return { people, requests, settings: parseOnboardSettings(parsed.settings) };
+  return { people, requests, settings: parseOnboardSettings(parsed.settings), halls };
 }
 
 export function createOnboardPerson(input: {
@@ -723,6 +909,7 @@ export function createOnboardPerson(input: {
   requestId?: string;
   actor?: OnboardViewer | null;
   settings?: OnboardSettings | null;
+  halls?: readonly OnboardHall[] | null;
   at?: string;
   id?: string;
 }): OnboardPerson | { error: string } {
@@ -738,14 +925,14 @@ export function createOnboardPerson(input: {
   if (name.length < 2) return { error: "Enter the person's name." };
   const phone = (input.phone || "").trim();
   if (phone.length < 7) return { error: "Enter the phone number submitted to the DISA DER." };
-  if (!isOnboardLocalId(input.localId)) return { error: "Pick Local 553." };
-  if (!isOnboardPhase1Local(input.localId)) return { error: "Phase 1 is Local 553 only." };
-  const hallLocal = hallLocalForSeat(input.actor);
+  if (!isOnboardLocalId(input.localId, input.halls)) return { error: "Pick a hall that is on this desk." };
+  if (!isOnboardPhase1Local(input.localId, input.halls)) return { error: "That local is not phase-one yet." };
+  const hallLocal = hallLocalForSeat(input.actor, input.halls);
   if (hallLocal && hallLocal !== input.localId) {
     return { error: `Hall seats can only register Local ${hallLocal}.` };
   }
-  const hallContact = hallContactForLocal(input.localId);
-  if (hallContact && isHallSeat(input.actor) && !hasBuildDesk(input.actor)) {
+  const hallContact = hallContactForLocal(input.localId, input.halls);
+  if (hallContact && isHallSeat(input.actor, input.halls) && !hasBuildDesk(input.actor)) {
     const email = (input.actor?.email || "").trim().toLowerCase();
     if (email !== hallContact.email) {
       return { error: `Local ${input.localId} register is gated to ${hallContact.email}.` };
@@ -753,7 +940,7 @@ export function createOnboardPerson(input: {
   }
   const at = input.at || new Date().toISOString();
   const stamp = actorStamp(input.actor);
-  const local = onboardLocal(input.localId);
+  const local = onboardLocal(input.localId, input.halls);
   const person: OnboardPerson = {
     id: input.id || newOnboardId("ob"),
     name,
@@ -968,11 +1155,11 @@ function parseManpowerEvent(raw: unknown): ManpowerRequestEvent | null {
   };
 }
 
-export function parseManpowerRequest(raw: unknown): ManpowerRequest | null {
+export function parseManpowerRequest(raw: unknown, halls?: readonly OnboardHall[] | null): ManpowerRequest | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Partial<ManpowerRequest> & { fillCount?: unknown; headcount?: unknown };
   if (typeof row.id !== "string" || !row.id.trim()) return null;
-  if (!isOnboardLocalId(row.localId)) return null;
+  if (!isOnboardLocalId(row.localId, halls)) return null;
   const events: ManpowerRequestEvent[] = [];
   const seen = new Set<string>();
   for (const item of Array.isArray(row.events) ? row.events : []) {
@@ -994,7 +1181,7 @@ export function parseManpowerRequest(raw: unknown): ManpowerRequest | null {
     localId: row.localId,
     dateNeeded: typeof row.dateNeeded === "string" ? row.dateNeeded.trim() : "",
     headcount: Number.isFinite(headcount) && headcount > 0 ? Math.floor(headcount) : 0,
-    trade: typeof row.trade === "string" && row.trade.trim() ? row.trade.trim() : onboardLocal(row.localId).craft,
+    trade: typeof row.trade === "string" && row.trade.trim() ? row.trade.trim() : onboardLocal(row.localId, halls).craft,
     classification: typeof row.classification === "string" ? row.classification.trim() : "",
     site: typeof row.site === "string" && row.site.trim() ? row.site.trim() : DEFAULT_ONBOARD_PLANT.site,
     job: typeof row.job === "string" ? row.job.trim() : "",
@@ -1026,21 +1213,22 @@ export function createManpowerRequest(input: {
   requiredScreenings?: string;
   hiringPackageNotes?: string;
   actor?: OnboardViewer | null;
+  halls?: readonly OnboardHall[] | null;
   at?: string;
   id?: string;
 }): ManpowerRequest | { error: string } {
   if (!canCreateManpowerRequest(input.actor)) {
     return { error: "Manpower requests are created by Tom / Benny / HSE." };
   }
-  if (!isOnboardLocalId(input.localId)) return { error: "Pick Local 553." };
-  if (!isOnboardPhase1Local(input.localId)) return { error: "Phase 1 is Local 553 only." };
+  if (!isOnboardLocalId(input.localId, input.halls)) return { error: "Pick a hall that is on this desk." };
+  if (!isOnboardPhase1Local(input.localId, input.halls)) return { error: "That local is not phase-one yet." };
   const dateNeeded = input.dateNeeded.trim();
   if (!dateNeeded) return { error: "Enter the date needed." };
   const headcount = typeof input.headcount === "number" ? input.headcount : Number(input.headcount);
   if (!Number.isFinite(headcount) || headcount < 1) return { error: "Enter how many people are needed." };
   const at = input.at || new Date().toISOString();
   const stamp = actorStamp(input.actor);
-  const local = onboardLocal(input.localId);
+  const local = onboardLocal(input.localId, input.halls);
   const request: ManpowerRequest = {
     id: input.id || newOnboardId("mr"),
     localId: input.localId,
@@ -1082,18 +1270,19 @@ export function respondManpowerRequest(
     fillCount: number | string;
     fillDate: string;
     actor?: OnboardViewer | null;
+    halls?: readonly OnboardHall[] | null;
     at?: string;
   },
 ): ManpowerRequest | { error: string } {
   if (!canRespondManpowerRequest(input.actor)) {
     return { error: "Hall seats respond to manpower requests." };
   }
-  const hallLocal = hallLocalForSeat(input.actor);
+  const hallLocal = hallLocalForSeat(input.actor, input.halls);
   if (hallLocal && hallLocal !== request.localId) {
     return { error: `Hall seats can only respond to Local ${hallLocal}.` };
   }
-  const hallContact = hallContactForLocal(request.localId);
-  if (hallContact && isHallSeat(input.actor) && !hasBuildDesk(input.actor)) {
+  const hallContact = hallContactForLocal(request.localId, input.halls);
+  if (hallContact && isHallSeat(input.actor, input.halls) && !hasBuildDesk(input.actor)) {
     const email = (input.actor?.email || "").trim().toLowerCase();
     if (email !== hallContact.email) {
       return { error: `Local ${request.localId} response is gated to ${hallContact.email}.` };

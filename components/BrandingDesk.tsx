@@ -66,9 +66,10 @@ export function BrandingDesk() {
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Branding</h2>
         <p className="mt-2 text-sm text-[#5b6f73]">
-          One logo per company, on the live desk catalog. Company Desk and the next Excel export
-          pick it up. No logo on file means the text door and no sheet splash. PNG, JPEG, or WebP
-          under 800 KB.
+          One logo per company, on the live desk catalog. Company Desk, Excel export, and the
+          Control Center header pick it up. Upload a PNG, JPEG, or WebP under 800 KB, or paste a
+          root-relative / https URL. No catalog logo falls back to the company name — Madison
+          ships a default mark at /madison.png for this tenant.
         </p>
         {owner ? null : <p className="mt-3 text-sm text-[#5b6f73]">Only the owner can upload or remove logos.</p>}
         {error ? <p className="mt-3 text-sm text-[#163038]">{error}</p> : null}
@@ -105,6 +106,7 @@ function CompanyLogoCard({
   const inputRef = useRef<HTMLInputElement>(null);
   const logo = companyLogoSrc(company.logo);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState("");
 
   function onPick(file: File | undefined) {
     setLocalError(null);
@@ -160,6 +162,28 @@ function CompanyLogoCard({
               >
                 {busy ? "Saving…" : logo ? "Change" : "Upload"}
               </button>
+              <label className="flex min-w-[12rem] flex-1 items-center gap-2">
+                <span className="sr-only">Logo URL</span>
+                <input
+                  type="url"
+                  value={logoUrl}
+                  onChange={(event) => setLogoUrl(event.target.value)}
+                  placeholder="https:// or /logo.png"
+                  className="paper-field min-w-0 flex-1"
+                />
+                <button
+                  type="button"
+                  disabled={busy || !logoUrl.trim()}
+                  onClick={() => {
+                    setLocalError(null);
+                    onUpload(logoUrl.trim());
+                    setLogoUrl("");
+                  }}
+                  className="rounded-lg border border-steel px-4 py-2 text-sm text-steel disabled:opacity-40"
+                >
+                  Use URL
+                </button>
+              </label>
               {logo ? (
                 <button
                   type="button"

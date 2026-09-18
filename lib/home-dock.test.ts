@@ -188,4 +188,50 @@ describe("Home four doors", () => {
       ["rate-vault"],
     );
   });
+
+  it("shows only Dispatch for hall seats and View as hall, and keeps company docks full", () => {
+    const owner = { role: "owner" as const, email: "robertmhenderson582@gmail.com", name: "Robert Henderson" };
+    const hall = {
+      role: "tester" as const,
+      email: "jbattuello@ualocal553.org",
+      name: "John Battuello Jr.",
+      jobTitle: "Hall Local 553",
+    };
+    const johnny = {
+      role: "tester" as const,
+      email: "jbattuello@ualocal553.org",
+      name: "Johnny Battuello Jr.",
+      jobTitle: "Hall Local 553",
+    };
+    const benny = { role: "tester" as const, email: "bccamp2@gmail.com", name: "Benny Camp" };
+    const tom = { role: "tester" as const, email: "friedt@madisonltd.com", name: "Tom Fried" };
+    const debbie = { role: "tester" as const, name: "Debbie", jobTitle: "Tracker" };
+    const hse = { role: "tester" as const, email: "wlanderno@yahoo.com", name: "Wendell Landerno", jobTitle: "HSE Manager" };
+    const nathan = { role: "tester" as const, email: "nathanboyte@gmail.com", name: "Nathan Boyte", jobTitle: "Project Manager" };
+    const companyDock = ["jobs", "quality", "hse", "accounting", "dispatch"];
+
+    assert.deepEqual(homeDockTilesForViewer(hall).map((tile) => tile.key), ["dispatch"]);
+    assert.deepEqual(homeDockTilesForViewer(hall).map((tile) => tile.label), ["Dispatch"]);
+    assert.deepEqual(homeDockTilesForViewer(johnny).map((tile) => tile.key), ["dispatch"]);
+    assert.deepEqual(homeDockTilesForViewer(owner, hall).map((tile) => tile.key), ["dispatch"]);
+    assert.deepEqual(homeDockTilesForViewer(owner, johnny).map((tile) => tile.key), ["dispatch"]);
+    assert.equal(homeDockTilesForViewer(hall).some((tile) => tile.key === "jobs"), false);
+    assert.equal(homeDockTilesForViewer(hall).some((tile) => tile.key === "quality"), false);
+    assert.equal(homeDockTilesForViewer(hall).some((tile) => tile.key === "hse"), false);
+    assert.equal(homeDockTilesForViewer(hall).some((tile) => tile.key === "accounting"), false);
+    assert.equal(homeDockTilesForViewer(hall).some((tile) => tile.key === "rate-vault"), false);
+
+    assert.deepEqual(homeDockTilesForViewer(owner).map((tile) => tile.key), [...companyDock, "rate-vault"]);
+    assert.deepEqual(homeDockTilesForViewer(benny).map((tile) => tile.key), companyDock);
+    assert.deepEqual(homeDockTilesForViewer(tom).map((tile) => tile.key), companyDock);
+    assert.deepEqual(homeDockTilesForViewer(debbie).map((tile) => tile.key), companyDock);
+    assert.deepEqual(homeDockTilesForViewer(hse).map((tile) => tile.key), companyDock);
+    assert.deepEqual(homeDockTilesForViewer(nathan).map((tile) => tile.key), companyDock);
+    assert.deepEqual(homeDockTilesForViewer(owner, benny).map((tile) => tile.key), companyDock);
+
+    const desk = source("./desk-home.ts");
+    assert.match(desk, /isHallSeat/);
+    assert.match(desk, /canSeeOnboardDoor/);
+    assert.match(desk, /ONBOARD_DOOR/);
+  });
 });

@@ -1,5 +1,6 @@
 import { companyDeskLogoSrc } from "./companies.ts";
 import { canSeeRateVaultDoor } from "./desk-role.ts";
+import { canSeeOnboardDoor, isHallSeat } from "./onboard-pipeline.ts";
 import { isRateVaultOnlyViewer } from "./rate-vault.ts";
 
 export const HOME_WORDMARK = "HIT SQUAD";
@@ -109,17 +110,28 @@ export function homeDockTiles(_canRates = true) {
   return HOME_DOCK_TILES.slice();
 }
 
-type RateVaultViewer = { role?: string; privileges?: readonly string[] | null };
+type DockViewer = {
+  role?: string;
+  privileges?: readonly string[] | null;
+  email?: string;
+  name?: string;
+  jobTitle?: string;
+  id?: string;
+};
 
 /** Public dock tiles, plus Rate Vault when the session and lens both hold the grant.
- *  A Rate Vault–only lens (James, or View as James) hides Jobs / Quality / HSE / Accounting / Dispatch. */
+ *  A Rate Vault–only lens (James, or View as James) hides Jobs / Quality / HSE / Accounting / Dispatch.
+ *  A hall-seat lens (John Battuello / Local 553, or View as hall) shows Dispatch only. */
 export function homeDockTilesForViewer(
-  session?: (RateVaultViewer & { email?: string }) | null,
-  lens?: (RateVaultViewer & { email?: string }) | null,
+  session?: DockViewer | null,
+  lens?: DockViewer | null,
   canRates = true,
 ) {
   if (isRateVaultOnlyViewer(lens ?? session)) {
     return canSeeRateVaultDoor(session, lens) ? [RATE_VAULT_DOOR] : [];
+  }
+  if (isHallSeat(lens ?? session)) {
+    return canSeeOnboardDoor(session, lens) ? [ONBOARD_DOOR] : [];
   }
   const tiles: HomeDockTile[] = homeDockTiles(canRates);
   if (canSeeRateVaultDoor(session, lens)) tiles.push(RATE_VAULT_DOOR);

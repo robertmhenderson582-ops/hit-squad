@@ -6,12 +6,10 @@ import { useSession } from "@/components/SessionProvider";
 import { viewAsInit } from "@/lib/desk-scope";
 import {
   BENNY_CAMP_NAME,
-  CONTROL_CENTER_TITLE,
   DEFAULT_ONBOARD_PLANT,
   DEFAULT_ONBOARD_SETTINGS,
   HIRE_IN_OUTREACH_OWNERS,
   HIRE_IN_VERIFIED_FIELD_LABEL,
-  JOHN_BATTUELLO_EMAIL,
   MANPOWER_CERTS_PLACEHOLDER,
   MANPOWER_PACKAGE_PLACEHOLDER,
   MANPOWER_SCREENING_PLACEHOLDER,
@@ -30,6 +28,7 @@ import {
   onboardStage,
   peopleByStage,
   type ManpowerRequest,
+  type OnboardHall,
   type OnboardLocalId,
   type OnboardPerson,
   type OnboardSettings,
@@ -40,6 +39,7 @@ type BoardPayload = {
   people?: OnboardPerson[];
   requests?: ManpowerRequest[];
   settings?: OnboardSettings;
+  halls?: OnboardHall[];
   canRegister?: boolean;
   canAdvance?: boolean;
   canCreateRequest?: boolean;
@@ -48,10 +48,22 @@ type BoardPayload = {
   canUpdateOutreach?: boolean;
   canSeeRestrictedPii?: boolean;
   canConfigure?: boolean;
+  canManageHalls?: boolean;
   error?: string;
   stored?: boolean;
   store?: string;
   notify?: { queued?: boolean; sent?: boolean; recipients?: number; skipped?: string; error?: string };
+};
+
+const EMPTY_HALL_FORM = {
+  id: "",
+  label: "",
+  craft: "",
+  union: "",
+  contactName: "",
+  contactEmail: "",
+  contactTitle: "",
+  phase1: true,
 };
 
 const TRAINING_OPTIONS: TrainingStatus[] = ["not-started", "scheduled", "complete"];
@@ -67,8 +79,8 @@ function formatWhen(value: string) {
   }).format(date);
 }
 
-function localLabel(id: OnboardLocalId) {
-  const local = onboardLocal(id);
+function localLabel(id: OnboardLocalId, halls?: readonly OnboardHall[] | null) {
+  const local = onboardLocal(id, halls);
   return `${local.label} · ${local.short}`;
 }
 
@@ -85,12 +97,12 @@ export function OnboardDesk() {
   const lens = useLensUser();
   const owner = useOwnerDesk();
   const actor = lens ?? user;
-  const lockedLocal = hallLocalForSeat(actor);
-  const registerLocals = selectableOnboardLocals();
+  const initialLocked = hallLocalForSeat(actor);
 
   const [people, setPeople] = useState<OnboardPerson[]>([]);
   const [requests, setRequests] = useState<ManpowerRequest[]>([]);
   const [settings, setSettings] = useState<OnboardSettings>(DEFAULT_ONBOARD_SETTINGS);
+  const [halls, setHalls] = useState<OnboardHall[]>([]);
   const [canRegister, setCanRegister] = useState(false);
   const [canAdvance, setCanAdvance] = useState(false);
   const [canCreateRequest, setCanCreateRequest] = useState(false);
@@ -99,6 +111,7 @@ export function OnboardDesk() {
   const [canEditOutreach, setCanEditOutreach] = useState(false);
   const [canSeePii, setCanSeePii] = useState(false);
   const [canConfigure, setCanConfigure] = useState(false);
+  const [canManageHalls, setCanManageHalls] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -108,8 +121,8 @@ export function OnboardDesk() {
   const [blockReason, setBlockReason] = useState("");
 
   const [name, setName] = useState("");
-  const [localId, setLocalId] = useState<OnboardLocalId>(lockedLocal || "553");
-  const [craft, setCraft] = useState<string>(defaultCraftForLocal(lockedLocal || "553"));
+  const [localId, setLocalId] = useState<OnboardLocalId>(initialLocked || "553");
+  const [craft, setCraft] = useState<string>(defaultCraftForLocal(initialLocked || "553"));
   const [classification, setClassification] = useState("Journeyman");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -118,7 +131,7 @@ export function OnboardDesk() {
 
   const [neededDate, setNeededDate] = useState("");
   const [headcount, setHeadcount] = useState("1");
-  const [reqTrade, setReqTrade] = useState<string>(defaultCraftForLocal(lockedLocal || "553"));
+  const [reqTrade, setReqTrade] = useState<string>(defaultCraftForLocal(initialLocked || "553"));
   const [reqClass, setReqClass] = useState("Journeyman");
   const [reqSite, setReqSite] = useState<string>(DEFAULT_ONBOARD_PLANT.site);
   const [reqJob, setReqJob] = useState("");
@@ -133,6 +146,12 @@ export function OnboardDesk() {
   const [pmEmails, setPmEmails] = useState("");
   const [step1Submitter, setStep1Submitter] = useState<"site" | "hall">("site");
 
+  const [hallForm, setHallForm] = useState(EMPTY_HALL_FORM);
+  const [editingHallId, setEditingHallId] = useState<string | null>(null);
+
+  const lockedLocal = hallLocalForSeat(actor, halls);
+  const registerLocals = selectableOnboardLocals(halls);
+
   const [legalName, setLegalName] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [ssnLast4, setSsnLast4] = useState("");
@@ -141,8 +160,9 @@ export function OnboardDesk() {
   useEffect(() => {
     if (!lockedLocal) return;
     setLocalId(lockedLocal);
-    setCraft(defaultCraftForLocal(lockedLocal));
-  }, [lockedLocal]);
+    setCraft(onboardLocal(lockedLocal, halls).craft);
+    setReqTrade(onboardLocal(lockedLocal, halls).craft);
+  }, [halls, lockedLocal]);
 
   function applyBoard(data: BoardPayload) {
     if (Array.isArray(data.people)) setPeople(data.people);
@@ -160,7 +180,9 @@ export function OnboardDesk() {
     if (typeof data.canUpdateTracker === "boolean") setCanEditTracker(data.canUpdateTracker);
     if (typeof data.canUpdateOutreach === "boolean") setCanEditOutreach(data.canUpdateOutreach);
     if (typeof data.canSeeRestrictedPii === "boolean") setCanSeePii(data.canSeeRestrictedPii);
+    if (Array.isArray(data.halls)) setHalls(data.halls);
     if (typeof data.canConfigure === "boolean") setCanConfigure(data.canConfigure);
+    if (typeof data.canManageHalls === "boolean") setCanManageHalls(data.canManageHalls);
     if (data.error) {
       setError(data.error);
       return false;
@@ -194,7 +216,28 @@ export function OnboardDesk() {
   function changeLocal(next: OnboardLocalId) {
     if (lockedLocal) return;
     setLocalId(next);
-    setCraft(defaultCraftForLocal(next));
+    const local = onboardLocal(next, halls);
+    setCraft(local.craft);
+    setReqTrade(local.craft);
+  }
+
+  function fillHallForm(hall: OnboardHall) {
+    setEditingHallId(hall.id);
+    setHallForm({
+      id: hall.id,
+      label: hall.label,
+      craft: hall.craft,
+      union: hall.union,
+      contactName: hall.contactName,
+      contactEmail: hall.contactEmail,
+      contactTitle: hall.contactTitle,
+      phase1: hall.phase1,
+    });
+  }
+
+  function resetHallForm() {
+    setEditingHallId(null);
+    setHallForm(EMPTY_HALL_FORM);
   }
 
   function openPerson(person: OnboardPerson) {
@@ -276,7 +319,7 @@ export function OnboardDesk() {
     }
     applyBoard(data);
     if (data.request) setRequestId(data.request.id);
-    setNote(`Manpower request sent to Local 553 hall (${data.request?.id || "saved"}).`);
+    setNote(`Manpower request sent to Local ${localId} hall (${data.request?.id || "saved"}).`);
   }
 
   async function onRespondRequest(event: FormEvent, id: string) {
@@ -339,6 +382,44 @@ export function OnboardDesk() {
     setNote("Owner settings saved. Empty corp / PM lists do not invent addresses.");
   }
 
+  async function onSaveHall(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    setNote(null);
+    const response = await fetch(
+      "/api/desk/onboard",
+      viewAsInit(owner?.viewAs, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save-hall",
+          localNumber: hallForm.id,
+          label: hallForm.label,
+          craft: hallForm.craft,
+          union: hallForm.union,
+          contactName: hallForm.contactName,
+          contactEmail: hallForm.contactEmail,
+          jobTitle: hallForm.contactTitle,
+          phase1: hallForm.phase1,
+        }),
+      }),
+    );
+    const data = (await response.json().catch(() => ({}))) as BoardPayload;
+    setSaving(false);
+    if (!response.ok) {
+      setError(data.error || "Could not save that hall.");
+      return;
+    }
+    applyBoard(data);
+    setNote(
+      hallForm.phase1
+        ? `Hall Local ${hallForm.id.replace(/\D/g, "")} saved. Phase-one on — it is on register and manpower lists.`
+        : `Hall Local ${hallForm.id.replace(/\D/g, "")} saved. Phase-one off — parked until flipped on.`,
+    );
+    resetHallForm();
+  }
+
   async function postStage(action: "advance" | "block" | "reopen", person: OnboardPerson, extra: Record<string, string> = {}) {
     setSaving(true);
     setError(null);
@@ -396,19 +477,18 @@ export function OnboardDesk() {
     <div className="field-desk onboard-desk mt-4 space-y-5">
       <section className="plant-card px-5 py-5">
         <p className="text-sm uppercase tracking-[0.18em] text-[#5b6f73]">Hall ↔ HSE</p>
-        <h2 className="mt-1 text-2xl font-semibold text-[#163038]">{CONTROL_CENTER_TITLE}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b6f73]">
-          Phase 1 is Local 553 only. Tom Fried or Benny Camp create a manpower request first; John Battuello Jr.
-          responds with fill count and date; then site submits name + phone onto that request (Owner can switch Step 1
-          to hall). DISA DER is Tom Fried (friedt@madisonltd.com) — identity, DISA background, and drug. Benny Camp
-          (bccamp2@gmail.com) is temp dispatcher until Donnie. Training is Texolve, Collinsville, Illinois.
-          TechSolve is an alternate spelling pending confirm. Hire-end outreach is Robert Henderson / Ben Peffley /
-          Nathan Boyte. Tracker keepers are Tom Fried and Debbie. Every create, respond, and stage change is
-          timestamped. No email blast on manpower. End-of-step verification emails go to Owner-configured corp + PM
-          lists. Default plant is {DEFAULT_ONBOARD_PLANT.site} / {DEFAULT_ONBOARD_PLANT.client}. Other halls stay
-          parked.
+          Phase-one locals are the ones flipped on in Halls — Local 553 ships on. Tom Fried or Benny Camp create a
+          manpower request first; the hall contact responds with fill count and date; then site submits name + phone
+          onto that request (Owner can switch Step 1 to hall). DISA DER is Tom Fried (friedt@madisonltd.com) —
+          identity, DISA background, and drug. Benny Camp (bccamp2@gmail.com) is temp dispatcher until Donnie.
+          Training is Texolve, Collinsville, Illinois. TechSolve is an alternate spelling pending confirm. Hire-end
+          outreach is Robert Henderson / Ben Peffley / Nathan Boyte. Tracker keepers are Tom Fried and Debbie. Every
+          create, respond, and stage change is timestamped. No email blast on manpower. End-of-step verification
+          emails go to Owner-configured corp + PM lists. Default plant is {DEFAULT_ONBOARD_PLANT.site} /{" "}
+          {DEFAULT_ONBOARD_PLANT.client}. Phase-one off halls stay parked.
         </p>
-        {hallContactForLocal("553") ? (
+        {hallContactForLocal("553", halls) ? (
           <p className="mt-3 text-sm text-[#163038]">
             Local 553 hall contact: John Battuello Jr. · jbattuello@ualocal553.org
           </p>
@@ -423,6 +503,126 @@ export function OnboardDesk() {
           <p className="mt-2 text-sm text-[#163038]">This hall seat sees Local {lockedLocal} only.</p>
         ) : null}
       </section>
+
+      {canManageHalls ? (
+        <section className="plant-card px-5 py-5">
+          <h3 className="text-lg font-semibold text-[#163038]">Halls</h3>
+          <p className="mt-1 text-sm text-[#5b6f73]">
+            Add or edit a hall without a code deploy. Contact email wires the hall seat for Dispatch-only home,
+            manpower routing, and Local-only people. Phase-one off keeps the local out of register and manpower
+            lists. Hall logins are still issued by Owner under Settings → Users.
+          </p>
+          <ul className="mt-4 space-y-2">
+            {halls.map((hall) => {
+              const contact = hallContactForLocal(hall.id, halls);
+              return (
+                <li key={hall.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#d5e0de] bg-white/70 px-3 py-2 text-sm text-[#163038]">
+                  <p>
+                    {hall.label} · {hall.short} · {hall.craft} · {hall.union}
+                    {contact?.email ? ` · ${contact.name || "Hall"} · ${contact.email}` : " · no hall contact yet"}
+                    {hall.phase1 ? " · phase-one on" : " · phase-one off"}
+                  </p>
+                  <button
+                    type="button"
+                    className="rounded-sm border border-steel px-2.5 py-1 text-xs text-steel"
+                    onClick={() => fillHallForm(hall)}
+                  >
+                    Edit hall
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <form className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={(event) => void onSaveHall(event)}>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Local number</span>
+              <input
+                className="paper-field w-full"
+                inputMode="numeric"
+                value={hallForm.id}
+                disabled={Boolean(editingHallId)}
+                onChange={(event) => setHallForm((row) => ({ ...row, id: event.target.value }))}
+                required
+              />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Hall name / label</span>
+              <input
+                className="paper-field w-full"
+                value={hallForm.label}
+                onChange={(event) => setHallForm((row) => ({ ...row, label: event.target.value }))}
+                required
+              />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Craft / trade</span>
+              <input
+                className="paper-field w-full"
+                value={hallForm.craft}
+                onChange={(event) => setHallForm((row) => ({ ...row, craft: event.target.value }))}
+                required
+              />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Union</span>
+              <input
+                className="paper-field w-full"
+                value={hallForm.union}
+                onChange={(event) => setHallForm((row) => ({ ...row, union: event.target.value }))}
+                required
+              />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Contact name</span>
+              <input
+                className="paper-field w-full"
+                value={hallForm.contactName}
+                onChange={(event) => setHallForm((row) => ({ ...row, contactName: event.target.value }))}
+              />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Contact email</span>
+              <input
+                className="paper-field w-full"
+                type="email"
+                value={hallForm.contactEmail}
+                onChange={(event) => setHallForm((row) => ({ ...row, contactEmail: event.target.value }))}
+              />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Job title (hall seat)</span>
+              <input
+                className="paper-field w-full"
+                value={hallForm.contactTitle}
+                placeholder="Hall Local 553"
+                onChange={(event) => setHallForm((row) => ({ ...row, contactTitle: event.target.value }))}
+              />
+            </label>
+            <label className="flex items-end gap-2 text-sm text-[#163038]">
+              <input
+                type="checkbox"
+                checked={hallForm.phase1}
+                onChange={(event) => setHallForm((row) => ({ ...row, phase1: event.target.checked }))}
+              />
+              <span>Phase-one on (selectable for register / manpower)</span>
+            </label>
+            <div className="flex flex-wrap items-end gap-2 md:col-span-2 xl:col-span-3">
+              <button type="submit" className="rounded-sm bg-steel px-3 py-1.5 text-sm text-white" disabled={saving}>
+                {editingHallId ? "Save hall" : "Add hall"}
+              </button>
+              {editingHallId ? (
+                <button
+                  type="button"
+                  className="rounded-sm border border-steel px-3 py-1.5 text-sm text-steel"
+                  onClick={resetHallForm}
+                >
+                  Cancel edit
+                </button>
+              ) : null}
+            </div>
+          </form>
+        </section>
+      ) : null}
 
       {canConfigure ? (
         <section className="plant-card px-5 py-5">
@@ -464,11 +664,26 @@ export function OnboardDesk() {
         <section className="plant-card px-5 py-5">
           <h3 className="text-lg font-semibold text-[#163038]">Manpower request</h3>
           <p className="mt-1 text-sm text-[#5b6f73]">
-            Dispatcher create comes before hall register. Routes to John Battuello Jr.
-            (jbattuello@ualocal553.org). Certs, screenings, and hiring package fields are
-            placeholders — not a final hiring list. No email blast.
+            Dispatcher create comes before hall register. Routes to the hall contact on the selected phase-one
+            local. Certs, screenings, and hiring package fields are placeholders — not a final hiring list. No
+            email blast.
           </p>
           <form className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={(event) => void onCreateRequest(event)}>
+            <label className="text-sm">
+              <span className="mb-1 block text-[#5b6f73]">Local</span>
+              <select
+                className="paper-field w-full"
+                value={localId}
+                disabled={Boolean(lockedLocal) || registerLocals.length <= 1}
+                onChange={(event) => changeLocal(event.target.value as OnboardLocalId)}
+              >
+                {registerLocals.map((local) => (
+                  <option key={local.id} value={local.id}>
+                    {local.label} · {local.short} · {local.craft}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="text-sm">
               <span className="mb-1 block text-[#5b6f73]">Date needed</span>
               <input className="paper-field w-full" type="date" value={neededDate} onChange={(event) => setNeededDate(event.target.value)} required />
@@ -590,9 +805,10 @@ export function OnboardDesk() {
             {settings.step1Submitter === "hall" ? "Hall register" : "Submit name + phone to DISA DER"}
           </h3>
           <p className="mt-1 text-sm text-[#5b6f73]">
-            Step 1 submits name and phone to Tom Fried. Local 553 hall register is gated to John Battuello Jr.
-            ({JOHN_BATTUELLO_EMAIL}) when Step 1 is set to hall. Restricted PII (legal name, DOB, SSN last 4) is
-            captured by Tom on Step 2 — not on this form.
+            Company working-desk, PM, HSE, Benny, and Tom seats can add people here. Step 1 submits name and phone
+            to Tom Fried. A hall seat can register only when Owner sets Step 1 to hall, and only for that hall
+            contact&apos;s local (Local 553 is gated to John Battuello Jr. / jbattuello@ualocal553.org). Restricted PII
+            (legal name, DOB, SSN last 4) is captured by Tom on Step 2 — not on this form.
           </p>
           <form className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={(event) => void onRegister(event)}>
             <label className="text-sm">
@@ -734,7 +950,7 @@ export function OnboardDesk() {
                       >
                         <p className="text-sm font-medium text-[#163038]">{person.name}</p>
                         <p className="mt-0.5 text-xs text-[#5b6f73]">
-                          {localLabel(person.localId)} · {person.craft}
+                          {localLabel(person.localId, halls)} · {person.craft}
                           {person.classification ? ` · ${person.classification}` : ""}
                         </p>
                         {person.requestId ? <p className="mt-0.5 text-xs text-[#5b6f73]">Request {person.requestId}</p> : null}

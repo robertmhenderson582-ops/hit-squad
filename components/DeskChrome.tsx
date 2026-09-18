@@ -19,7 +19,9 @@ import { useLensUser, useOwnerDesk } from "@/components/OwnerDeskContext";
 import { useSession } from "@/components/SessionProvider";
 import { canOpenRates, chromeDeskLabel } from "@/lib/desk-role";
 import { DESK_NAV } from "@/lib/desk-nav";
+import { ControlCenterBrandMark } from "@/components/ControlCenterBrand";
 import { RateVaultOnlyRedirect } from "@/components/RateVaultOnlyRedirect";
+import type { ControlCenterBrand } from "@/lib/onboard-brand";
 
 const NAV = DESK_NAV;
 
@@ -35,12 +37,14 @@ function ChromeInner({
   title,
   kicker = "PROJECT CONTROLS",
   hideTitle = false,
+  titleBrand = null,
   variant = "paper",
 }: {
   children: React.ReactNode;
   title: string;
   kicker?: string;
   hideTitle?: boolean;
+  titleBrand?: ControlCenterBrand | null;
   variant?: "paper" | "hero";
 }) {
   const pathname = usePathname();
@@ -81,7 +85,12 @@ function ChromeInner({
     <>
       <DeskBanners />
       {MODULE_HREFS.includes(pathname) || pathname === "/settings/modules" ? <UnderConstructionBanner /> : null}
-      {hideTitle ? null : (
+      {hideTitle ? null : titleBrand ? (
+        <ControlCenterBrandMark
+          brand={titleBrand}
+          className={paper ? "text-[#163038]" : "text-paper-cream"}
+        />
+      ) : (
         <>
           <p className={`font-mono text-[10px] tracking-[0.32em] ${paper ? "text-steel" : "text-amber-label"}`}>
             {kicker}
@@ -251,17 +260,19 @@ export function DeskChrome({
   title,
   kicker = "PROJECT CONTROLS",
   hideTitle = false,
+  titleBrand = null,
   variant = "paper",
 }: {
   children: React.ReactNode;
   title: string;
   kicker?: string;
   hideTitle?: boolean;
+  titleBrand?: ControlCenterBrand | null;
   variant?: "paper" | "hero";
 }) {
   return (
     <EstimateModalProvider>
-      <ChromeInner title={title} kicker={kicker} hideTitle={hideTitle} variant={variant}>
+      <ChromeInner title={title} kicker={kicker} hideTitle={hideTitle} titleBrand={titleBrand} variant={variant}>
         {children}
       </ChromeInner>
     </EstimateModalProvider>

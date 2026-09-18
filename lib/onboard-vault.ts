@@ -6,10 +6,15 @@ import { driveAdapter, type DriveAdapter } from "./drive-estimates.ts";
 import {
   DEFAULT_ONBOARD_SETTINGS,
   ONBOARD_VAULT_WRITE_ERROR,
+  mergeOnboardHalls,
   parseOnboardFile,
+  parseOnboardHallList,
   parseOnboardSettings,
+  seedOnboardHalls,
+  setRuntimeOnboardHalls,
   type ManpowerRequest,
   type OnboardFile,
+  type OnboardHall,
   type OnboardPerson,
   type OnboardSettings,
 } from "./onboard-pipeline.ts";
@@ -45,7 +50,12 @@ export function onboardStoreStatus() {
 }
 
 function emptyFile(): OnboardFile {
-  return { people: [], requests: [], settings: { ...DEFAULT_ONBOARD_SETTINGS, corporateEmails: [], pmEmails: [] } };
+  return {
+    people: [],
+    requests: [],
+    settings: { ...DEFAULT_ONBOARD_SETTINGS, corporateEmails: [], pmEmails: [] },
+    halls: seedOnboardHalls(),
+  };
 }
 
 function cloneSettings(settings: OnboardSettings): OnboardSettings {
@@ -56,22 +66,42 @@ function cloneSettings(settings: OnboardSettings): OnboardSettings {
   };
 }
 
+function cloneHalls(halls?: OnboardHall[] | null): OnboardHall[] {
+  return mergeOnboardHalls(seedOnboardHalls(), halls).map((row) => ({ ...row }));
+}
+
 function cloneFile(data: OnboardFile): OnboardFile {
   return {
     people: data.people.map((row) => ({ ...row, events: [...row.events] })),
     requests: data.requests.map((row) => ({ ...row, events: [...row.events] })),
     settings: cloneSettings(data.settings ?? DEFAULT_ONBOARD_SETTINGS),
+    halls: cloneHalls(data.halls),
   };
+}
+
+function fileFrom(data: OnboardFile, patch: Partial<OnboardFile> = {}): OnboardFile {
+  return {
+    people: patch.people ?? data.people,
+    requests: patch.requests ?? data.requests,
+    settings: patch.settings ?? data.settings ?? DEFAULT_ONBOARD_SETTINGS,
+    halls: cloneHalls(patch.halls ?? data.halls),
+  };
+}
+
+function attachRuntime(data: OnboardFile): OnboardFile {
+  const next = cloneFile(data);
+  setRuntimeOnboardHalls(next.halls);
+  return next;
 }
 
 function readCache(): OnboardFile {
   if (memoryOverride) {
-    return cloneFile(memoryOverride);
+    return attachRuntime(memoryOverride);
   }
   try {
-    return parseOnboardFile(JSON.parse(readFileSync(onboardStorePath(), "utf8")));
+    return attachRuntime(parseOnboardFile(JSON.parse(readFileSync(onboardStorePath(), "utf8"))));
   } catch {
-    return emptyFile();
+    return attachRuntime(emptyFile());
   }
 }
 
@@ -97,14 +127,15 @@ function resolveAdapter(): DriveAdapter | null {
 }
 
 async function persist(data: OnboardFile) {
-  writeCache(data);
+  const next = attachRuntime(data);
+  writeCache(next);
   const drive = resolveAdapter();
   if (!drive) {
     lastError = null;
     return;
   }
   try {
-    await writeVaultJson(drive, ONBOARD_PEOPLE_VAULT_NAME, ONBOARD_PEOPLE_VAULT_KIND, data);
+    await writeVaultJson(drive, ONBOARD_PEOPLE_VAULT_NAME, ONBOARD_PEOPLE_VAULT_KIND, next);
     lastStore = "drive";
     lastStored = true;
     lastError = null;
@@ -127,12 +158,18 @@ export async function hydrateOnboardStore(): Promise<OnboardFile> {
   if (drive) {
     try {
       const raw = await readVaultJson(drive, ONBOARD_PEOPLE_VAULT_NAME, ONBOARD_PEOPLE_VAULT_KIND);
-      const vault = parseOnboardFile(raw);
-      if (vault.people.length || vault.requests.length) writeCache(vault);
-      else if ((cache.people.length || cache.requests.length) && raw == null) {
-        await persist(cache);
+      const incomingHalls = raw && typeof raw === "object" ? parseOnboardHallList((raw as { halls?: unknown }).halls) : [];
+      const vault = attachRuntime(parseOnboardFile(raw));
+      if (raw == null && (cache.people.length || cache.requests.length || cache.halls.length)) {
+        await persist(fileFrom(cache));
         return readCache();
-      } else if (raw != null) {
+      }
+      if (raw != null && incomingHalls.length === 0) {
+        await persist(fileFrom(vault));
+        return readCache();
+      }
+      if (vault.people.length || vault.requests.length || vault.halls.length) writeCache(vault);
+      else if (raw != null) {
         writeCache(vault);
       }
       lastStore = "drive";
@@ -164,7 +201,7 @@ export async function upsertOnboardPerson(person: OnboardPerson): Promise<Onboar
   const data = readCache();
   const next = data.people.filter((row) => row.id !== person.id);
   next.push(person);
-  await persist({ people: next, requests: data.requests, settings: data.settings });
+  await persist(fileFrom(data, { people: next }));
   return person;
 }
 
@@ -183,7 +220,7 @@ export async function upsertOnboardRequest(request: ManpowerRequest): Promise<Ma
   const data = readCache();
   const next = data.requests.filter((row) => row.id !== request.id);
   next.push(request);
-  await persist({ people: data.people, requests: next, settings: data.settings });
+  await persist(fileFrom(data, { requests: next }));
   return request;
 }
 
@@ -196,8 +233,21 @@ export async function saveOnboardSettings(settings: OnboardSettings): Promise<On
   if (!hydrated && !memoryOverride) await hydrateOnboardStore();
   const data = readCache();
   const next = parseOnboardSettings(settings);
-  await persist({ people: data.people, requests: data.requests, settings: next });
+  await persist(fileFrom(data, { settings: next }));
   return next;
+}
+
+export async function listOnboardHalls(): Promise<OnboardHall[]> {
+  const data = await hydrateOnboardStore();
+  return cloneHalls(data.halls);
+}
+
+export async function saveOnboardHall(hall: OnboardHall): Promise<OnboardHall> {
+  if (!hydrated && !memoryOverride) await hydrateOnboardStore();
+  const data = readCache();
+  const halls = mergeOnboardHalls(seedOnboardHalls(), data.halls, [hall]);
+  await persist(fileFrom(data, { halls }));
+  return hall;
 }
 
 export function resetOnboardForTests() {
@@ -207,6 +257,7 @@ export function resetOnboardForTests() {
   lastStore = "none";
   lastStored = false;
   lastError = null;
+  setRuntimeOnboardHalls(null);
   const path = onboardStorePath();
   if (process.env.ONBOARD_STORE_PATH && existsSync(path)) {
     writeFileSync(path, JSON.stringify(emptyFile(), null, 2) + "\n", "utf8");
@@ -218,7 +269,9 @@ export function useMemoryOnboard(seed: Partial<OnboardFile> = {}) {
     people: seed.people ?? [],
     requests: seed.requests ?? [],
     settings: parseOnboardSettings(seed.settings ?? DEFAULT_ONBOARD_SETTINGS),
+    halls: seed.halls ?? seedOnboardHalls(),
   });
+  setRuntimeOnboardHalls(memoryOverride.halls);
   hydrated = true;
   injectedAdapter = null;
   lastStore = "memory";
