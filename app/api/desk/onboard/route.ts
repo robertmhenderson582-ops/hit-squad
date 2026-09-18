@@ -9,6 +9,7 @@ import {
   canAdvanceOnboard,
   canConfigureOnboard,
   canCreateManpowerRequest,
+  canManageOnboardHalls,
   canRegisterOnboard,
   canRespondManpowerRequest,
   canSeeOnboardBoard,
@@ -23,6 +24,7 @@ import {
   isOnboardStageId,
   isTrainingStatus,
   nextOnboardStage,
+  parseOnboardHallInput,
   parseOnboardSettings,
   redactOnboardPerson,
   respondManpowerRequest,
@@ -37,9 +39,11 @@ import {
   getOnboardPerson,
   getOnboardRequest,
   getOnboardSettings,
+  listOnboardHalls,
   listOnboardPeople,
   listOnboardRequests,
   onboardStoreStatus,
+  saveOnboardHall,
   saveOnboardSettings,
   upsertOnboardPerson,
   upsertOnboardRequest,
@@ -61,11 +65,13 @@ async function controlCenterBrandPayload(user: Parameters<typeof visibleOnboardP
 
 async function boardFor(user: Parameters<typeof visibleOnboardPeople>[1]) {
   const settings = await getOnboardSettings();
+  const halls = await listOnboardHalls();
   return {
     brand: await controlCenterBrandPayload(user),
     people: visibleOnboardPeople(await listOnboardPeople(), user),
     requests: visibleManpowerRequests(await listOnboardRequests(), user),
     settings,
+    halls,
     canRegister: canRegisterOnboard(user, settings),
     canAdvance: canAdvanceOnboard(user),
     canCreateRequest: canCreateManpowerRequest(user),
@@ -74,6 +80,7 @@ async function boardFor(user: Parameters<typeof visibleOnboardPeople>[1]) {
     canUpdateOutreach: canUpdateOutreach(user),
     canSeeRestrictedPii: canSeeRestrictedPii(user),
     canConfigure: canConfigureOnboard(user),
+    canManageHalls: canManageOnboardHalls(user),
   };
 }
 
@@ -139,10 +146,41 @@ export async function POST(request: Request) {
     tomFriedContactConfirmed?: boolean;
     problemCase?: boolean;
     problemCaseNote?: string;
+    label?: string;
+    union?: string;
+    contactName?: string;
+    contactEmail?: string;
+    contactTitle?: string;
+    jobTitle?: string;
+    localNumber?: string;
+    phase1?: boolean;
+    phaseOne?: boolean;
   };
   const action = (body.action || "").trim();
 
   try {
+    if (action === "save-hall") {
+      if (!canManageOnboardHalls(user)) {
+        return NextResponse.json({ error: "Company users add and edit halls on this desk." }, { status: 403 });
+      }
+      const parsed = parseOnboardHallInput({
+        id: body.localId,
+        localNumber: body.localNumber,
+        label: body.label,
+        craft: body.craft,
+        union: body.union,
+        contactName: body.contactName,
+        contactEmail: body.contactEmail,
+        contactTitle: body.contactTitle,
+        jobTitle: body.jobTitle,
+        phase1: body.phase1,
+        phaseOne: body.phaseOne,
+      });
+      if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+      await saveOnboardHall(parsed);
+      return payload(await boardFor(user));
+    }
+
     if (action === "save-settings") {
       if (!canConfigureOnboard(user)) {
         return NextResponse.json({ error: "Owner configures corporate / PM lists and Step 1 submitter." }, { status: 403 });
@@ -159,11 +197,12 @@ export async function POST(request: Request) {
 
     if (action === "register") {
       const settings = await getOnboardSettings();
+      const halls = await listOnboardHalls();
       if (!canRegisterOnboard(user, settings)) {
         return NextResponse.json({ error: "This seat cannot register people." }, { status: 403 });
       }
-      if (!isOnboardLocalId(body.localId) || !isOnboardPhase1Local(body.localId)) {
-        return NextResponse.json({ error: "Phase 1 is Local 553 only." }, { status: 400 });
+      if (!isOnboardLocalId(body.localId, halls) || !isOnboardPhase1Local(body.localId, halls)) {
+        return NextResponse.json({ error: "That local is not phase-one yet." }, { status: 400 });
       }
       const requestId = typeof body.requestId === "string" ? body.requestId.trim() : "";
       if (requestId) {
@@ -186,6 +225,7 @@ export async function POST(request: Request) {
         requestId,
         actor: user,
         settings,
+        halls,
       });
       if ("error" in created) return NextResponse.json({ error: created.error }, { status: 400 });
       await upsertOnboardPerson(created);
@@ -204,11 +244,12 @@ export async function POST(request: Request) {
     }
 
     if (action === "create-request") {
+      const halls = await listOnboardHalls();
       if (!canCreateManpowerRequest(user)) {
         return NextResponse.json({ error: "Manpower requests are created by Tom / Benny / HSE." }, { status: 403 });
       }
-      if (!isOnboardLocalId(body.localId) || !isOnboardPhase1Local(body.localId)) {
-        return NextResponse.json({ error: "Phase 1 is Local 553 only." }, { status: 400 });
+      if (!isOnboardLocalId(body.localId, halls) || !isOnboardPhase1Local(body.localId, halls)) {
+        return NextResponse.json({ error: "That local is not phase-one yet." }, { status: 400 });
       }
       const created = createManpowerRequest({
         localId: body.localId as OnboardLocalId,
@@ -222,6 +263,7 @@ export async function POST(request: Request) {
         requiredScreenings: body.requiredScreenings,
         hiringPackageNotes: body.hiringPackageNotes,
         actor: user,
+        halls,
       });
       if ("error" in created) return NextResponse.json({ error: created.error }, { status: 400 });
       await upsertOnboardRequest(created);
@@ -243,6 +285,7 @@ export async function POST(request: Request) {
         fillCount: body.fillCount ?? "",
         fillDate: typeof body.fillDate === "string" ? body.fillDate : "",
         actor: user,
+        halls: await listOnboardHalls(),
       });
       if ("error" in next) return NextResponse.json({ error: next.error }, { status: 400 });
       await upsertOnboardRequest(next);

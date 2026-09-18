@@ -27,6 +27,7 @@ import {
   TOM_FRIED_TITLE,
   canAdvanceOnboard,
   canCreateManpowerRequest,
+  canManageOnboardHalls,
   canRegisterOnboard,
   canRespondManpowerRequest,
   canSeeOnboardBoard,
@@ -39,6 +40,7 @@ import {
   hallContactForLocal,
   hallLocalForSeat,
   isBennyCampSeat,
+  isCompanyOnboardWriter,
   isHallSeat,
   isOnboardPhase1Local,
   isTomFriedSeat,
@@ -47,8 +49,10 @@ import {
   normalizeOnboardStageId,
   onboardStageOwner,
   parseOnboardFile,
+  parseOnboardHallInput,
   parseOnboardPerson,
   parseOnboardSettings,
+  seedOnboardHalls,
   parseSsnLast4,
   redactOnboardPerson,
   respondManpowerRequest,
@@ -58,7 +62,7 @@ import {
   visibleOnboardPeople,
 } from "./onboard-pipeline.ts";
 import { buildStepCompleteMail } from "./onboard-notify.ts";
-import { listOnboardPeople, resetOnboardForTests, upsertOnboardPerson, useMemoryOnboard } from "./onboard-vault.ts";
+import { listOnboardHalls, listOnboardPeople, resetOnboardForTests, saveOnboardHall, upsertOnboardPerson, useMemoryOnboard } from "./onboard-vault.ts";
 
 function source(rel: string) {
   return readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
@@ -163,6 +167,22 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.equal(canRegisterOnboard(hall553, hallSettings), true);
     assert.equal(canRegisterOnboard(benny), true);
     assert.equal(canRegisterOnboard(tom), true);
+    assert.equal(canRegisterOnboard(owner), true);
+    assert.equal(canRegisterOnboard(nathan), true);
+    assert.equal(canRegisterOnboard(wendell), true);
+    assert.equal(canRegisterOnboard(chance), false);
+    assert.equal(canRegisterOnboard(debbie), false);
+    assert.equal(isCompanyOnboardWriter(nathan), true);
+    assert.equal(isCompanyOnboardWriter(wendell), true);
+    assert.equal(isCompanyOnboardWriter(hall553), false);
+    assert.equal(canManageOnboardHalls(owner), true);
+    assert.equal(canManageOnboardHalls(nathan), true);
+    assert.equal(canManageOnboardHalls(wendell), true);
+    assert.equal(canManageOnboardHalls(benny), true);
+    assert.equal(canManageOnboardHalls(tom), true);
+    assert.equal(canManageOnboardHalls(hall553), false);
+    assert.equal(canManageOnboardHalls(chance), false);
+    assert.equal(canManageOnboardHalls(debbie), false);
     assert.equal(canAdvanceOnboard(owner), true);
     assert.equal(canAdvanceOnboard(novus), true);
     assert.equal(canAdvanceOnboard(wendell), true);
@@ -266,7 +286,7 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
       actor: hall553,
       settings: hallSettings,
     });
-    assert.deepEqual(hallOther, { error: "Phase 1 is Local 553 only." });
+    assert.deepEqual(hallOther, { error: "That local is not phase-one yet." });
 
     const impostor = createOnboardPerson({
       name: "Pat Fitter",
@@ -408,6 +428,12 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.match(api, /respond-request/);
     assert.match(api, /update-tracker/);
     assert.match(api, /save-settings/);
+    assert.match(api, /save-hall/);
+    assert.match(api, /canManageHalls/);
+    assert.match(desk, />Halls</);
+    assert.match(desk, /Add hall/);
+    assert.match(desk, /Phase-one on/);
+    assert.match(desk, /Company working-desk, PM, HSE/);
     assert.match(source("./onboard-notify.ts"), /notifyStepComplete/);
     assert.match(home, /ONBOARD_DOOR/);
     assert.match(home, /\/onboard/);
@@ -435,7 +461,7 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
       headcount: 4,
       actor: benny,
     });
-    assert.deepEqual(blockedLocal, { error: "Phase 1 is Local 553 only." });
+    assert.deepEqual(blockedLocal, { error: "That local is not phase-one yet." });
 
     const hallCreate = createManpowerRequest({
       localId: "553",
@@ -490,5 +516,82 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     if ("error" in person) throw new Error(person.error);
     assert.equal(person.requestId, "mr-cat2");
     assert.match(person.events[0]?.note ?? "", /request mr-cat2/);
+  });
+
+  it("migrates 553 + 363 into the vault and lets company users add a Teamsters hall", async () => {
+    const seeded = seedOnboardHalls();
+    assert.deepEqual(
+      seeded.map((row) => `${row.id}:${row.phase1}:${row.contactEmail}`),
+      ["553:true:jbattuello@ualocal553.org", "363:false:"],
+    );
+    const empty = parseOnboardFile({});
+    assert.deepEqual(
+      empty.halls.map((row) => row.id),
+      ["363", "553"],
+    );
+    assert.equal(empty.halls.find((row) => row.id === "553")?.contactEmail, JOHN_BATTUELLO_EMAIL);
+    assert.equal(empty.halls.find((row) => row.id === "363")?.phase1, false);
+
+    const added = parseOnboardHallInput({
+      localNumber: "682",
+      label: "Teamsters Local 682",
+      craft: "Teamster",
+      union: "IBT",
+      contactName: "Jane Hall",
+      contactEmail: "jane@teamsters682.org",
+      jobTitle: "Hall Local 682",
+      phase1: true,
+    });
+    if ("error" in added) throw new Error(added.error);
+    const file = parseOnboardFile({ halls: [added] });
+    assert.deepEqual(
+      file.halls.map((row) => row.id),
+      ["363", "553", "682"],
+    );
+    assert.deepEqual(
+      selectableOnboardLocals(file.halls).map((row) => row.id),
+      ["553", "682"],
+    );
+    assert.equal(hallLocalForSeat({ email: "jane@teamsters682.org", name: "Jane Hall" }, file.halls), "682");
+    assert.equal(isHallSeat({ email: "jane@teamsters682.org" }, file.halls), true);
+    assert.equal(isHallSeat({ jobTitle: "Hall Local 682", name: "Jane Hall" }, file.halls), true);
+    assert.equal(hallContactForLocal("682", file.halls)?.email, "jane@teamsters682.org");
+    assert.equal(hallLocalForSeat(hall553, file.halls), "553");
+    assert.equal(hallContactForLocal("553", file.halls)?.email, JOHN_BATTUELLO_EMAIL);
+
+    const parked = createOnboardPerson({
+      name: "Boiler Hand",
+      localId: "363",
+      phone: "618-555-0101",
+      actor: nathan,
+      halls: file.halls,
+    });
+    assert.deepEqual(parked, { error: "That local is not phase-one yet." });
+
+    const teamster = createOnboardPerson({
+      name: "Pat Teamster",
+      localId: "682",
+      phone: "618-555-0182",
+      actor: nathan,
+      halls: file.halls,
+      id: "ob-682",
+    });
+    if ("error" in teamster) throw new Error(teamster.error);
+    assert.equal(teamster.craft, "Teamster");
+    assert.equal(teamster.localId, "682");
+
+    resetOnboardForTests();
+    useMemoryOnboard();
+    const listed = await listOnboardHalls();
+    assert.deepEqual(
+      listed.map((row) => `${row.id}:${row.phase1}`),
+      ["363:false", "553:true"],
+    );
+    await saveOnboardHall(added);
+    const next = await listOnboardHalls();
+    assert.equal(next.find((row) => row.id === "682")?.contactEmail, "jane@teamsters682.org");
+    assert.equal(next.find((row) => row.id === "553")?.contactEmail, JOHN_BATTUELLO_EMAIL);
+    assert.equal(next.find((row) => row.id === "363")?.phase1, false);
+    resetOnboardForTests();
   });
 });
