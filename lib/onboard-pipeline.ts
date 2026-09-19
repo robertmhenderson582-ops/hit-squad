@@ -180,6 +180,32 @@ export const DEFAULT_ONBOARD_PLANT = {
 
 export const ONBOARD_CLASSIFICATIONS = ["Journeyman", "Apprentice", "Foreman", "General Foreman"] as const;
 
+export type OnboardClassification = (typeof ONBOARD_CLASSIFICATIONS)[number];
+
+/** Short hall-list codes. Full names stay on the create form and audit notes. */
+export const ONBOARD_CLASSIFICATION_SHORT: Record<OnboardClassification, string> = {
+  Journeyman: "JM",
+  Apprentice: "APP",
+  Foreman: "FM",
+  "General Foreman": "GF",
+};
+
+export type ManpowerRequestLine = {
+  classification: string;
+  quantity: number;
+  fillCount: number | null;
+};
+
+export type ManpowerLineInput = {
+  classification?: string;
+  quantity?: number | string;
+};
+
+export type ManpowerLineFillInput = {
+  classification?: string;
+  fillCount?: number | string;
+};
+
 /** Placeholder only — Robert will supply the hiring package later. Do not treat as final. */
 export const MANPOWER_CERTS_PLACEHOLDER = "Required certs (placeholder — hiring package later)";
 export const MANPOWER_SCREENING_PLACEHOLDER =
@@ -302,9 +328,13 @@ export type ManpowerRequest = {
   id: string;
   localId: OnboardLocalId;
   dateNeeded: string;
+  /** Sum of line quantities. Kept so older labels and vault rows still read. */
   headcount: number;
   trade: string;
+  /** Joined line classifications. Legacy rows keep the singular value. */
   classification: string;
+  /** One request, many hall classifications. Empty only while parsing a broken row. */
+  lines: ManpowerRequestLine[];
   site: string;
   job: string;
   requiredCerts: string;
@@ -314,6 +344,7 @@ export type ManpowerRequest = {
   createdAt: string;
   createdByName: string;
   createdByEmail: string;
+  /** Sum of per-line fills when present; otherwise the legacy single fill. */
   fillCount: number | null;
   fillDate: string;
   respondedAt: string;
@@ -1205,6 +1236,177 @@ export function visibleManpowerRequests(requests: readonly ManpowerRequest[], us
   return requests.filter((row) => row.localId === local);
 }
 
+export function isOnboardClassification(value: unknown): value is OnboardClassification {
+  return typeof value === "string" && (ONBOARD_CLASSIFICATIONS as readonly string[]).includes(value);
+}
+
+export function classificationShortLabel(classification: string) {
+  const key = classification.trim();
+  if (!key) return "";
+  return isOnboardClassification(key) ? ONBOARD_CLASSIFICATION_SHORT[key] : key;
+}
+
+function parseManpowerQuantity(value: unknown): number | null {
+  const quantity = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(quantity) || quantity < 1) return null;
+  return Math.floor(quantity);
+}
+
+function parseManpowerFillCount(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const fillCount = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(fillCount) || fillCount < 0) return null;
+  return Math.floor(fillCount);
+}
+
+export function parseManpowerRequestLine(raw: unknown): ManpowerRequestLine | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Partial<ManpowerRequestLine> & { headcount?: unknown };
+  const classification = typeof row.classification === "string" ? row.classification.trim() : "";
+  if (!classification) return null;
+  const quantity = parseManpowerQuantity(row.quantity ?? row.headcount);
+  if (quantity == null) return null;
+  return {
+    classification,
+    quantity,
+    fillCount: parseManpowerFillCount(row.fillCount),
+  };
+}
+
+export function mergeManpowerLines(lines: readonly ManpowerRequestLine[]): ManpowerRequestLine[] {
+  const merged: ManpowerRequestLine[] = [];
+  for (const line of lines) {
+    const existing = merged.find((row) => row.classification === line.classification);
+    if (!existing) {
+      merged.push({ ...line });
+      continue;
+    }
+    existing.quantity += line.quantity;
+    if (line.fillCount != null) {
+      existing.fillCount = (existing.fillCount ?? 0) + line.fillCount;
+    }
+  }
+  return merged;
+}
+
+export function manpowerRequestLines(request: {
+  lines?: readonly ManpowerRequestLine[] | null;
+  classification?: string;
+  headcount?: number | string;
+  fillCount?: number | null;
+}): ManpowerRequestLine[] {
+  const parsed: ManpowerRequestLine[] = [];
+  for (const item of Array.isArray(request.lines) ? request.lines : []) {
+    const line = parseManpowerRequestLine(item);
+    if (line) parsed.push(line);
+  }
+  if (parsed.length) return mergeManpowerLines(parsed);
+  const classification = typeof request.classification === "string" ? request.classification.trim() : "";
+  const quantity = parseManpowerQuantity(request.headcount);
+  if (quantity == null && !classification) return [];
+  return [
+    {
+      classification,
+      quantity: quantity ?? 1,
+      fillCount: parseManpowerFillCount(request.fillCount),
+    },
+  ];
+}
+
+export function manpowerLinesNeededSummary(lines: readonly ManpowerRequestLine[]) {
+  return lines
+    .map((line) => {
+      const short = classificationShortLabel(line.classification);
+      return short ? `${line.quantity} ${short}` : String(line.quantity);
+    })
+    .join(" · ");
+}
+
+export function manpowerLinesFillSummary(lines: readonly ManpowerRequestLine[]) {
+  const filled = lines.filter((line) => line.fillCount != null);
+  return filled
+    .map((line) => {
+      const short = classificationShortLabel(line.classification);
+      return short ? `${line.fillCount} ${short}` : String(line.fillCount);
+    })
+    .join(" · ");
+}
+
+function manpowerClassificationJoin(lines: readonly ManpowerRequestLine[]) {
+  return lines
+    .map((line) => line.classification)
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function manpowerHeadcountFromLines(lines: readonly ManpowerRequestLine[]) {
+  return lines.reduce((sum, line) => sum + line.quantity, 0);
+}
+
+function manpowerFillFromLines(lines: readonly ManpowerRequestLine[], fallback: number | null) {
+  const fills = lines.map((line) => line.fillCount).filter((value): value is number => value != null);
+  if (!fills.length) return fallback;
+  return fills.reduce((sum, value) => sum + value, 0);
+}
+
+function parseCreateManpowerLines(input: {
+  lines?: readonly ManpowerLineInput[] | null;
+  classification?: string;
+  headcount?: number | string;
+}): ManpowerRequestLine[] | { error: string } {
+  const rawLines = Array.isArray(input.lines) ? input.lines : [];
+  if (rawLines.length) {
+    const lines: ManpowerRequestLine[] = [];
+    for (const item of rawLines) {
+      const classification = typeof item.classification === "string" ? item.classification.trim() : "";
+      if (!isOnboardClassification(classification)) {
+        return { error: "Pick a classification for each line." };
+      }
+      const quantity = parseManpowerQuantity(item.quantity);
+      if (quantity == null) return { error: "Enter how many people are needed on each line." };
+      lines.push({ classification, quantity, fillCount: null });
+    }
+    const merged = mergeManpowerLines(lines);
+    if (!merged.length) return { error: "Add at least one classification line." };
+    return merged;
+  }
+  const headcount = parseManpowerQuantity(input.headcount);
+  if (headcount == null) return { error: "Enter how many people are needed." };
+  const classification = typeof input.classification === "string" ? input.classification.trim() : "";
+  return [{ classification, quantity: headcount, fillCount: null }];
+}
+
+function applyManpowerLineFills(
+  lines: readonly ManpowerRequestLine[],
+  input: {
+    lineFills?: readonly ManpowerLineFillInput[] | null;
+    fillCount?: number | string;
+  },
+): ManpowerRequestLine[] | { error: string } {
+  const fills = Array.isArray(input.lineFills) ? input.lineFills : [];
+  if (fills.length) {
+    const next = lines.map((line, index) => {
+      const match =
+        fills.find((row) => (row.classification || "").trim() === line.classification) ?? fills[index];
+      if (!match || match.fillCount == null || match.fillCount === "") {
+        return { ...line };
+      }
+      const fillCount = parseManpowerFillCount(match.fillCount);
+      if (fillCount == null) return null;
+      return { ...line, fillCount };
+    });
+    if (next.some((line) => line == null)) return { error: "Enter how many the hall can fill on each line." };
+    return next as ManpowerRequestLine[];
+  }
+  const fillCount = parseManpowerFillCount(input.fillCount);
+  if (fillCount == null) return { error: "Enter how many the hall can fill." };
+  if (lines.length > 1) {
+    return { error: "Enter a fill count for each classification." };
+  }
+  if (lines.length === 1) return [{ ...lines[0], fillCount }];
+  return [{ classification: "", quantity: fillCount || 1, fillCount }];
+}
+
 function parseManpowerEvent(raw: unknown): ManpowerRequestEvent | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Partial<ManpowerRequestEvent>;
@@ -1235,6 +1437,7 @@ export function parseManpowerRequest(raw: unknown, halls?: readonly OnboardHall[
     seen.add(event.id);
     events.push(event);
   }
+  const lines = manpowerRequestLines(row);
   const headcount = typeof row.headcount === "number" ? row.headcount : Number(row.headcount);
   const rawFill = row.fillCount as unknown;
   const fillCount =
@@ -1243,13 +1446,15 @@ export function parseManpowerRequest(raw: unknown, halls?: readonly OnboardHall[
       : typeof rawFill === "number"
         ? rawFill
         : Number(rawFill);
+  const parsedFill = fillCount != null && Number.isFinite(fillCount) && fillCount >= 0 ? Math.floor(fillCount) : null;
   return {
     id: row.id.trim(),
     localId: row.localId,
     dateNeeded: typeof row.dateNeeded === "string" ? row.dateNeeded.trim() : "",
-    headcount: Number.isFinite(headcount) && headcount > 0 ? Math.floor(headcount) : 0,
+    headcount: lines.length ? manpowerHeadcountFromLines(lines) : Number.isFinite(headcount) && headcount > 0 ? Math.floor(headcount) : 0,
     trade: typeof row.trade === "string" && row.trade.trim() ? row.trade.trim() : onboardLocal(row.localId, halls).craft,
-    classification: typeof row.classification === "string" ? row.classification.trim() : "",
+    classification: manpowerClassificationJoin(lines) || (typeof row.classification === "string" ? row.classification.trim() : ""),
+    lines,
     site: typeof row.site === "string" && row.site.trim() ? row.site.trim() : DEFAULT_ONBOARD_PLANT.site,
     job: typeof row.job === "string" ? row.job.trim() : "",
     requiredCerts: typeof row.requiredCerts === "string" ? row.requiredCerts.trim() : "",
@@ -1259,7 +1464,7 @@ export function parseManpowerRequest(raw: unknown, halls?: readonly OnboardHall[
     createdAt: typeof row.createdAt === "string" && row.createdAt.trim() ? row.createdAt : new Date().toISOString(),
     createdByName: typeof row.createdByName === "string" ? row.createdByName.trim() : "",
     createdByEmail: typeof row.createdByEmail === "string" ? row.createdByEmail.trim().toLowerCase() : "",
-    fillCount: fillCount != null && Number.isFinite(fillCount) && fillCount >= 0 ? Math.floor(fillCount) : null,
+    fillCount: manpowerFillFromLines(lines, parsedFill),
     fillDate: typeof row.fillDate === "string" ? row.fillDate.trim() : "",
     respondedAt: typeof row.respondedAt === "string" ? row.respondedAt.trim() : "",
     respondedByName: typeof row.respondedByName === "string" ? row.respondedByName.trim() : "",
@@ -1271,7 +1476,8 @@ export function parseManpowerRequest(raw: unknown, halls?: readonly OnboardHall[
 export function createManpowerRequest(input: {
   localId: OnboardLocalId;
   dateNeeded: string;
-  headcount: number | string;
+  headcount?: number | string;
+  lines?: readonly ManpowerLineInput[] | null;
   trade?: string;
   classification?: string;
   site?: string;
@@ -1291,18 +1497,23 @@ export function createManpowerRequest(input: {
   if (!isOnboardPhase1Local(input.localId, input.halls)) return { error: "That local is not phase-one yet." };
   const dateNeeded = input.dateNeeded.trim();
   if (!dateNeeded) return { error: "Enter the date needed." };
-  const headcount = typeof input.headcount === "number" ? input.headcount : Number(input.headcount);
-  if (!Number.isFinite(headcount) || headcount < 1) return { error: "Enter how many people are needed." };
+  const lines = parseCreateManpowerLines(input);
+  if ("error" in lines) return lines;
+  const headcount = manpowerHeadcountFromLines(lines);
   const at = input.at || new Date().toISOString();
   const stamp = actorStamp(input.actor);
   const local = onboardLocal(input.localId, input.halls);
+  const neededNote = lines
+    .map((line) => (line.classification ? `${line.quantity} ${line.classification}` : String(line.quantity)))
+    .join(" + ");
   const request: ManpowerRequest = {
     id: input.id || newOnboardId("mr"),
     localId: input.localId,
     dateNeeded,
-    headcount: Math.floor(headcount),
+    headcount,
     trade: (input.trade || "").trim() || local.craft,
-    classification: (input.classification || "").trim(),
+    classification: manpowerClassificationJoin(lines),
+    lines,
     site: (input.site || "").trim() || DEFAULT_ONBOARD_PLANT.site,
     job: (input.job || "").trim(),
     requiredCerts: (input.requiredCerts || "").trim(),
@@ -1324,7 +1535,7 @@ export function createManpowerRequest(input: {
         actorName: stamp.actorName,
         actorEmail: stamp.actorEmail,
         action: "created",
-        note: `${Math.floor(headcount)} ${local.craft} needed ${dateNeeded}`,
+        note: `${neededNote} ${local.craft} needed ${dateNeeded}`,
       },
     ],
   };
@@ -1334,7 +1545,8 @@ export function createManpowerRequest(input: {
 export function respondManpowerRequest(
   request: ManpowerRequest,
   input: {
-    fillCount: number | string;
+    fillCount?: number | string;
+    lineFills?: readonly ManpowerLineFillInput[] | null;
     fillDate: string;
     actor?: OnboardViewer | null;
     halls?: readonly OnboardHall[] | null;
@@ -1356,16 +1568,22 @@ export function respondManpowerRequest(
     }
   }
   if (request.status === "responded") return { error: "That request already has a hall response." };
-  const fillCount = typeof input.fillCount === "number" ? input.fillCount : Number(input.fillCount);
-  if (!Number.isFinite(fillCount) || fillCount < 0) return { error: "Enter how many the hall can fill." };
+  const lines = applyManpowerLineFills(manpowerRequestLines(request), input);
+  if ("error" in lines) return lines;
+  const fillCount = manpowerFillFromLines(lines, parseManpowerFillCount(input.fillCount));
+  if (fillCount == null) return { error: "Enter how many the hall can fill." };
   const fillDate = input.fillDate.trim();
   if (!fillDate) return { error: "Enter when the hall can fill." };
   const at = input.at || new Date().toISOString();
   const stamp = actorStamp(input.actor);
+  const fillNote = manpowerLinesFillSummary(lines) || String(fillCount);
   return {
     ...request,
+    lines,
+    classification: manpowerClassificationJoin(lines) || request.classification,
+    headcount: manpowerHeadcountFromLines(lines) || request.headcount,
     status: "responded",
-    fillCount: Math.floor(fillCount),
+    fillCount,
     fillDate,
     respondedAt: at,
     respondedByName: stamp.actorName,
@@ -1378,16 +1596,20 @@ export function respondManpowerRequest(
         actorName: stamp.actorName,
         actorEmail: stamp.actorEmail,
         action: "responded",
-        note: `Can fill ${Math.floor(fillCount)} on ${fillDate}`,
+        note: `Can fill ${fillNote} on ${fillDate}`,
       },
     ],
   };
 }
 
 export function manpowerRequestLabel(request: ManpowerRequest) {
+  const lines = manpowerRequestLines(request);
+  const needed = manpowerLinesNeededSummary(lines);
+  const body = needed ? `${needed} · ${request.trade}` : `${request.headcount} ${request.trade}`;
+  const fillParts = manpowerLinesFillSummary(lines);
   const fill =
-    request.status === "responded" && request.fillCount != null
-      ? ` · hall fill ${request.fillCount}${request.fillDate ? ` on ${request.fillDate}` : ""}`
+    request.status === "responded" && (fillParts || request.fillCount != null)
+      ? ` · hall fill ${fillParts || request.fillCount}${request.fillDate ? ` on ${request.fillDate}` : ""}`
       : " · open";
-  return `${request.id} · ${request.headcount} ${request.trade} by ${request.dateNeeded}${fill}`;
+  return `${request.id} · ${body} by ${request.dateNeeded}${fill}`;
 }
