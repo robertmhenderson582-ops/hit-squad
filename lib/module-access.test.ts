@@ -10,16 +10,26 @@ import {
   canAssignSitePeople,
   canEditChangeOrders,
   canEditEstimateWork,
+  canOpenCompanyModule,
   canOpenDispatchModule,
   canOrderStc,
   canSeeCompanyDispatch,
+  canSeeCompanyModule,
   CHANGE_ORDERS_DENIED,
   CHANGE_ORDERS_PRIVILEGE,
   companyDispatchEnabled,
+  companyModuleDenied,
+  companyModuleEnabled,
+  COMPANY_MODULE_DENIED,
   DISPATCH_DENIED,
+  JOBS_DENIED,
+  QUALITY_DENIED,
+  HSE_DENIED,
+  ACCOUNTING_DENIED,
   STC_ORDER_DENIED,
   STC_ORDER_PRIVILEGE,
 } from "./module-access.ts";
+import { COMPANY_MODULE_KEYS } from "./companies.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 
 const owner = {
@@ -260,6 +270,27 @@ describe("Phase 2 module access", () => {
     assert.equal(canOpenDispatchModule(nathan, { modules: { dispatch: false } }), false);
     assert.equal(canOpenDispatchModule(nathan, undefined), true);
     assert.match(DISPATCH_DENIED, /Dispatch/);
+  });
+
+  it("gates Jobs / Quality / HSE / Accounting the same way and keeps Madison on", () => {
+    assert.deepEqual(COMPANY_MODULE_DENIED.dispatch, DISPATCH_DENIED);
+    assert.equal(JOBS_DENIED.includes("Jobs"), true);
+    assert.equal(QUALITY_DENIED.includes("Quality"), true);
+    assert.equal(HSE_DENIED.includes("HSE"), true);
+    assert.equal(ACCOUNTING_DENIED.includes("Accounting"), true);
+    for (const key of COMPANY_MODULE_KEYS) {
+      assert.equal(companyModuleEnabled(undefined, key), true);
+      assert.equal(companyModuleEnabled({}, key), true);
+      assert.equal(canSeeCompanyModule(nathan, undefined, key), true);
+      assert.equal(canSeeCompanyModule(nathan, { modules: { [key]: false } }, key), false);
+      assert.equal(canOpenCompanyModule(owner, { modules: { [key]: false } }, key), true);
+      assert.equal(canOpenCompanyModule(nathan, { modules: { [key]: false } }, key), false);
+      assert.equal(canOpenCompanyModule(nathan, undefined, key), true);
+      assert.equal(canOpenCompanyModule(null, { modules: { [key]: false } }, key), false);
+      assert.match(companyModuleDenied(key), new RegExp(key === "dispatch" ? "Dispatch" : key === "hse" ? "HSE" : key[0].toUpperCase() + key.slice(1)));
+    }
+    assert.equal(canSeeCompanyModule(nathan, { modules: { quality: false } }, "jobs"), true);
+    assert.equal(canSeeCompanyModule(nathan, { modules: { quality: false } }, "hse"), true);
   });
 
   it("wires Privileges assignment copy and estimate / CO / STC write locks", () => {

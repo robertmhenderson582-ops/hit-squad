@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
+import { CompanyModuleGate } from "@/components/CompanyModuleGate";
 import { DeskChrome } from "@/components/DeskChrome";
 import { JobPlantPage } from "@/components/JobPlantPage";
 
@@ -12,7 +13,9 @@ export default function JobSlugPage() {
   return (
     <AuthGate require="authenticated">
       <DeskChrome title="JOB" hideTitle>
-        <JobPlantPage slug={slug} />
+        <CompanyModuleGate module="jobs">
+          <JobPlantPage slug={slug} />
+        </CompanyModuleGate>
       </DeskChrome>
     </AuthGate>
   );

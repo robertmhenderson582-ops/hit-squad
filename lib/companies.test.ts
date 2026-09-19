@@ -15,6 +15,9 @@ import {
   catalogVisibleTo,
   companiesForScope,
   companyHasDispatch,
+  companyHasModule,
+  compactCompanyModules,
+  COMPANY_MODULE_KEYS,
   companyScopeFor,
   companyDeskLogoSrc,
   COMPANY_LOGO_BAD_TYPE,
@@ -22,6 +25,7 @@ import {
   COMPANY_LOGO_TOO_LARGE,
   DEFAULT_COMPANY_MODULES,
   inferCompanyId,
+  parseCompanyModulePatch,
   parseCompanyModules,
   parseCompanyShortName,
   isRetiredPeerCompany,
@@ -56,7 +60,13 @@ import {
 import { memoryDrive } from "./drive-estimates.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
 import { catalogSites } from "./desk-data.ts";
-import { sitesForCompany, toCompanySetupSite } from "./company-setup.ts";
+import {
+  COMPANY_MODULE_CATALOG,
+  companyModuleCatalogCoversHomeDock,
+  companyModuleCatalogKeys,
+  sitesForCompany,
+  toCompanySetupSite,
+} from "./company-setup.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { boardForUser } from "./desk-data.ts";
 import { COMPANIES_VAULT_KIND, COMPANIES_VAULT_NAME, writeVaultJson } from "./drive-data.ts";
@@ -395,8 +405,8 @@ describe("company desk logo on file", () => {
   });
 });
 
-describe("company identity and Dispatch module vault", () => {
-  it("migrates missing shortName / modules to Dispatch-on and keeps Madison usable", () => {
+describe("company identity and module catalog vault", () => {
+  it("migrates missing shortName / modules to all-on and keeps Madison usable", () => {
     const parsed = parseAssignmentFile({
       assignments: { "nathanboyte@gmail.com": "madison" },
       companies: [{ id: "madison", name: "Madison", logo: "/madison.png" }],
@@ -404,47 +414,82 @@ describe("company identity and Dispatch module vault", () => {
     const madison = parsed.companies.find((row) => row.id === "madison");
     assert.equal(madison?.shortName, undefined);
     assert.equal(madison?.modules, undefined);
-    assert.equal(parseCompanyModules(madison?.modules).dispatch, true);
+    const migrated = parseCompanyModules(madison?.modules);
+    assert.deepEqual(migrated, DEFAULT_COMPANY_MODULES);
+    for (const key of COMPANY_MODULE_KEYS) {
+      assert.equal(migrated[key], true);
+      assert.equal(companyHasModule(madison, key), true);
+    }
     assert.equal(companyHasDispatch(madison), true);
     assert.equal(companyHasDispatch(undefined), true);
-    assert.equal(DEFAULT_COMPANY_MODULES.dispatch, true);
+    assert.equal(compactCompanyModules(DEFAULT_COMPANY_MODULES), undefined);
+    assert.deepEqual(compactCompanyModules({ ...DEFAULT_COMPANY_MODULES, quality: false }), { quality: false });
+    assert.deepEqual(parseCompanyModulePatch({ quality: false, extra: true, jobs: "no" }), { quality: false });
+    assert.deepEqual(parseCompanyModulePatch(null), {});
     assert.equal(parseCompanyShortName("  Acme Field  "), "Acme Field");
     assert.equal(parseCompanyShortName(""), undefined);
     const catalog = catalogSites().map(toCompanySetupSite);
     assert.equal(catalog.some((site) => site.companyId === "madison" && /wood river/i.test(site.name)), true);
     assert.equal(sitesForCompany("acme", catalog).length, 0);
     assert.equal(sitesForCompany("madison", catalog).length > 0, true);
+    assert.deepEqual(companyModuleCatalogKeys(), [...COMPANY_MODULE_KEYS]);
+    assert.equal(companyModuleCatalogCoversHomeDock(), true);
+    assert.equal(COMPANY_MODULE_CATALOG.some((row) => row.catalogLabel === "Included"), true);
+    assert.equal(COMPANY_MODULE_CATALOG.some((row) => row.catalogLabel === "Add-on"), true);
+    assert.equal(COMPANY_MODULE_CATALOG.some((row) => row.catalogLabel === "Not open for trial"), true);
 
     const off = parseAssignmentFile({
       assignments: {},
-      companies: [{ id: "acme", name: "Acme Field Services", shortName: "Acme", modules: { dispatch: false } }],
+      companies: [{
+        id: "acme",
+        name: "Acme Field Services",
+        shortName: "Acme",
+        modules: { dispatch: false, quality: false },
+      }],
     });
     assert.equal(off.companies[0]?.shortName, "Acme");
     assert.equal(off.companies[0]?.modules?.dispatch, false);
+    assert.equal(off.companies[0]?.modules?.quality, false);
     assert.equal(companyHasDispatch(off.companies[0]), false);
+    assert.equal(companyHasModule(off.companies[0], "quality"), false);
+    assert.equal(companyHasModule(off.companies[0], "jobs"), true);
+    assert.equal(companyHasModule(off.companies[0], "hse"), true);
+    assert.equal(companyHasModule(off.companies[0], "accounting"), true);
   });
 
-  it("lets the owner set short name and turn Dispatch off without flipping Madison", async () => {
+  it("lets the owner set short name and turn modules off without flipping Madison", async () => {
     useMemoryCompanyAssignments();
     const added = await addCompany("Acme Field Services", { shortName: "Acme" });
     assert.equal("ok" in added, true);
     if (!("ok" in added)) return;
     assert.equal(added.company.shortName, "Acme");
     assert.equal(companyHasDispatch(added.company), true);
+    assert.equal(companyHasModule(added.company, "quality"), true);
+    assert.equal(added.company.modules, undefined);
 
-    const off = await updateCompany(added.company.id, { modules: { dispatch: false } });
+    const off = await updateCompany(added.company.id, { modules: { dispatch: false, quality: false } });
     assert.equal("ok" in off, true);
     if (!("ok" in off)) return;
     assert.equal(off.company.modules?.dispatch, false);
-    assert.equal(companyHasDispatch((await listCompanies()).find((row) => row.id === added.company.id)), false);
+    assert.equal(off.company.modules?.quality, false);
+    assert.equal(off.company.modules?.jobs, undefined);
+    const stored = (await listCompanies()).find((row) => row.id === added.company.id);
+    assert.equal(companyHasDispatch(stored), false);
+    assert.equal(companyHasModule(stored, "quality"), false);
+    assert.equal(companyHasModule(stored, "jobs"), true);
 
     const madison = (await listCompanies()).find((row) => row.id === "madison");
-    assert.equal(companyHasDispatch(madison), true);
+    assert.equal(madison?.modules, undefined);
+    for (const key of COMPANY_MODULE_KEYS) {
+      assert.equal(companyHasModule(madison, key), true);
+    }
     const renamed = await updateCompany("madison", { shortName: "MLI" });
     assert.equal("ok" in renamed, true);
     if (!("ok" in renamed)) return;
     assert.equal(renamed.company.shortName, "MLI");
+    assert.equal(renamed.company.modules, undefined);
     assert.equal(companyHasDispatch(renamed.company), true);
+    assert.equal(companyHasModule(renamed.company, "quality"), true);
   });
 
   it("wires Owner Company Setup onto Settings and reuses seats / site-access / logo", () => {
@@ -460,15 +505,35 @@ describe("company identity and Dispatch module vault", () => {
     assert.match(page, /SettingsGate ownerOnly/);
     assert.match(desk, /Create company/);
     assert.match(desk, /Dispatch \/ Control Center/);
+    assert.match(desk, /COMPANY_MODULE_CATALOG/);
+    assert.match(desk, /Included/);
+    assert.match(desk, /Add-on/);
+    assert.match(desk, /Not open for trial/);
+    assert.match(desk, /onToggleModule/);
     assert.match(desk, /\/api\/desk\/seats/);
     assert.match(desk, /grant-site-access/);
     assert.match(desk, /\/api\/desk\/companies\/logo/);
     assert.match(api, /updateCompany/);
+    assert.match(api, /parseCompanyModulePatch/);
     assert.match(api, /isOwner/);
     assert.match(dock, /homeDockTilesForViewer/);
     assert.match(dock, /\/api\/desk\/companies/);
     assert.match(onboardApi, /DISPATCH_DENIED/);
     assert.match(onboardApi, /canOpenDispatchModule/);
+    const gate = readFileSync(fileURLToPath(new URL("../components/CompanyModuleGate.tsx", import.meta.url)), "utf8");
+    const jobsPage = readFileSync(fileURLToPath(new URL("../app/jobs/page.tsx", import.meta.url)), "utf8");
+    const qualityPage = readFileSync(fileURLToPath(new URL("../app/quality/page.tsx", import.meta.url)), "utf8");
+    const hsePage = readFileSync(fileURLToPath(new URL("../app/hse/page.tsx", import.meta.url)), "utf8");
+    const accountingPage = readFileSync(fileURLToPath(new URL("../app/accounting/page.tsx", import.meta.url)), "utf8");
+    const jobsApi = readFileSync(fileURLToPath(new URL("../app/api/desk/jobs/route.ts", import.meta.url)), "utf8");
+    assert.match(gate, /canOpenCompanyModule/);
+    assert.match(gate, /companyModuleDenied/);
+    assert.match(jobsPage, /CompanyModuleGate module="jobs"/);
+    assert.match(qualityPage, /CompanyModuleGate module="quality"/);
+    assert.match(hsePage, /CompanyModuleGate module="hse"/);
+    assert.match(accountingPage, /CompanyModuleGate module="accounting"/);
+    assert.match(jobsApi, /JOBS_DENIED/);
+    assert.match(jobsApi, /canOpenCompanyModule/);
   });
 });
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { assignmentChoices, isStandaloneId } from "@/lib/companies";
+import { assignmentChoices, isStandaloneId, parseCompanyModulePatch, parseCompanyModules } from "@/lib/companies";
 import {
   addCompany,
   assignedCompanyForUser,
@@ -29,6 +29,7 @@ async function companyPayloadFor(user: { email: string; role?: string }) {
     companies,
     companyId,
     company,
+    modules: parseCompanyModules(company?.modules),
     dispatch: companyDispatchEnabled(company),
   };
 }
@@ -43,6 +44,7 @@ export async function GET(request: Request) {
       companies: base.companies.filter((row) => row.id === base.companyId && !isStandaloneId(row.id)),
       companyId: base.companyId,
       company: base.company,
+      modules: base.modules,
       dispatch: base.dispatch,
     });
   }
@@ -74,6 +76,7 @@ export async function POST(request: Request) {
     shortName?: string | null;
     companyId?: string;
     dispatch?: boolean;
+    modules?: Record<string, unknown>;
   };
 
   if (body.action === "create" || (typeof body.name === "string" && !body.companyId && body.action !== "update")) {
@@ -92,7 +95,10 @@ export async function POST(request: Request) {
   const result = await updateCompany(companyId, {
     name: body.name,
     shortName: body.shortName,
-    modules: typeof body.dispatch === "boolean" ? { dispatch: body.dispatch } : undefined,
+    modules: {
+      ...(typeof body.dispatch === "boolean" ? { dispatch: body.dispatch } : {}),
+      ...parseCompanyModulePatch(body.modules),
+    },
   });
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
   return NextResponse.json({

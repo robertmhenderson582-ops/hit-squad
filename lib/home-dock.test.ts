@@ -260,4 +260,41 @@ describe("Home four doors", () => {
     assert.deepEqual(homeDockTilesForViewer(hall, hall, true, off).map((tile) => tile.key), []);
     assert.deepEqual(homeDockTilesForViewer(hall).map((tile) => tile.key), ["dispatch"]);
   });
+
+  it("hides Jobs / Quality / HSE / Accounting when that company module is off and leaves hall Dispatch-only", () => {
+    const nathan = { role: "tester" as const, email: "nathanboyte@gmail.com", name: "Nathan Boyte", jobTitle: "Project Manager" };
+    const owner = { role: "owner" as const, email: "robertmhenderson582@gmail.com", name: "Robert Henderson" };
+    const hall = {
+      role: "tester" as const,
+      email: "jbattuello@ualocal553.org",
+      name: "John Battuello Jr.",
+      jobTitle: "Hall Local 553",
+    };
+    const qualityOff = { modules: { quality: false } };
+    const jobsOff = { modules: { jobs: false } };
+    const allOff = { modules: { jobs: false, quality: false, hse: false, accounting: false, dispatch: false } };
+    assert.deepEqual(
+      homeDockTilesForViewer(nathan, nathan, true, qualityOff).map((tile) => tile.key),
+      ["jobs", "hse", "accounting", "dispatch"],
+    );
+    assert.deepEqual(
+      homeDockTilesForViewer(nathan, nathan, true, jobsOff).map((tile) => tile.key),
+      ["quality", "hse", "accounting", "dispatch"],
+    );
+    assert.deepEqual(
+      homeDockTilesForViewer(nathan, nathan, true, { modules: { hse: false, accounting: false } }).map((tile) => tile.key),
+      ["jobs", "quality", "dispatch"],
+    );
+    assert.deepEqual(homeDockTilesForViewer(nathan, nathan, true, allOff).map((tile) => tile.key), []);
+    assert.deepEqual(homeDockTilesForViewer(hall, hall, true, qualityOff).map((tile) => tile.key), ["dispatch"]);
+    assert.deepEqual(homeDockTilesForViewer(hall, hall, true, jobsOff).map((tile) => tile.key), ["dispatch"]);
+    assert.deepEqual(
+      homeDockTilesForViewer(owner, owner, true, qualityOff).map((tile) => tile.key),
+      ["jobs", "hse", "accounting", "dispatch", "rate-vault"],
+    );
+    assert.equal(homeDockTilesForViewer(nathan, nathan, true, qualityOff).some((tile) => tile.key === "rate-vault"), false);
+    const desk = source("./desk-home.ts");
+    assert.match(desk, /isCompanyModuleKey/);
+    assert.match(desk, /canSeeCompanyModule/);
+  });
 });

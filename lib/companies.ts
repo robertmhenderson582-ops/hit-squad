@@ -5,13 +5,23 @@ import { testerByEmail, TESTER_SEATS, type CompanyId } from "./tester-seats.ts";
 
 export type { CompanyId } from "./tester-seats.ts";
 
-/** Phase 1 company modules. Dispatch / Control Center is the only paid-later toggle shipped now. */
-export type CompanyModules = {
-  dispatch: boolean;
+/** Home dock modules the Owner can turn on or off per company. Missing vault fields migrate on. */
+export const COMPANY_MODULE_KEYS = ["jobs", "quality", "hse", "accounting", "dispatch"] as const;
+export type CompanyModuleKey = (typeof COMPANY_MODULE_KEYS)[number];
+export type CompanyModules = Record<CompanyModuleKey, boolean>;
+
+/** Missing vault fields migrate on. Madison and Hit Squad stay fully on. */
+export const DEFAULT_COMPANY_MODULES: CompanyModules = {
+  jobs: true,
+  quality: true,
+  hse: true,
+  accounting: true,
+  dispatch: true,
 };
 
-/** Missing vault fields migrate on. Madison and Hit Squad stay Dispatch-on. */
-export const DEFAULT_COMPANY_MODULES: CompanyModules = { dispatch: true };
+export function isCompanyModuleKey(value: string): value is CompanyModuleKey {
+  return (COMPANY_MODULE_KEYS as readonly string[]).includes(value);
+}
 
 export type Company = {
   id: CompanyId;
@@ -20,7 +30,8 @@ export type Company = {
   shortName?: string;
   /** Root-relative, http(s), or data-image URL already on file. Never invented. */
   logo?: string;
-  modules?: CompanyModules;
+  /** Compact vault shape — only explicit `false` flags are stored. Missing = on. */
+  modules?: Partial<CompanyModules>;
 };
 
 export const CBI_ID = "cbi";
@@ -137,14 +148,44 @@ export function parseCompanyShortName(value?: string | null): string | undefined
 }
 
 export function parseCompanyModules(raw: unknown): CompanyModules {
-  const row = raw && typeof raw === "object" ? (raw as { dispatch?: unknown }) : {};
+  const row = raw && typeof raw === "object" ? (raw as Partial<Record<CompanyModuleKey, unknown>>) : {};
   return {
+    jobs: row.jobs === false ? false : DEFAULT_COMPANY_MODULES.jobs,
+    quality: row.quality === false ? false : DEFAULT_COMPANY_MODULES.quality,
+    hse: row.hse === false ? false : DEFAULT_COMPANY_MODULES.hse,
+    accounting: row.accounting === false ? false : DEFAULT_COMPANY_MODULES.accounting,
     dispatch: row.dispatch === false ? false : DEFAULT_COMPANY_MODULES.dispatch,
   };
 }
 
+/** Persist only off flags so Madison / seed rows stay `modules`-less (all on). */
+export function compactCompanyModules(modules: CompanyModules): Partial<CompanyModules> | undefined {
+  const next: Partial<CompanyModules> = {};
+  for (const key of COMPANY_MODULE_KEYS) {
+    if (modules[key] === false) next[key] = false;
+  }
+  return Object.keys(next).length ? next : undefined;
+}
+
+export function parseCompanyModulePatch(raw: unknown): Partial<CompanyModules> {
+  if (!raw || typeof raw !== "object") return {};
+  const row = raw as Record<string, unknown>;
+  const next: Partial<CompanyModules> = {};
+  for (const key of COMPANY_MODULE_KEYS) {
+    if (typeof row[key] === "boolean") next[key] = row[key];
+  }
+  return next;
+}
+
+export function companyHasModule(
+  company: Pick<Company, "modules"> | null | undefined,
+  key: CompanyModuleKey,
+): boolean {
+  return parseCompanyModules(company?.modules)[key];
+}
+
 export function companyHasDispatch(company?: Pick<Company, "modules"> | null): boolean {
-  return parseCompanyModules(company?.modules).dispatch;
+  return companyHasModule(company, "dispatch");
 }
 
 export function withCompanyLogo(row: Company): Company {
@@ -154,11 +195,11 @@ export function withCompanyLogo(row: Company): Company {
 export function withCompanyIdentity(row: Company): Company {
   const logo = companyLogoSrc(row.logo);
   const shortName = parseCompanyShortName(row.shortName);
-  const modules = parseCompanyModules(row.modules);
+  const modules = compactCompanyModules(parseCompanyModules(row.modules));
   const next: Company = { id: row.id, name: row.name.trim() };
   if (shortName) next.shortName = shortName;
   if (logo) next.logo = logo;
-  if (!modules.dispatch) next.modules = { dispatch: false };
+  if (modules) next.modules = modules;
   return next;
 }
 
