@@ -28,10 +28,10 @@ export type OnboardHall = {
 
 /**
  * Benny + Robert dictation 2026-09-18. Board columns are completed-step states.
- * Training vendor spelling lock: Tecsolv, Collinsville, Illinois.
+ * Training vendor spelling lock: TekSolv (official teksolv.com brand). Prior lock used Tecsolv; do not use Texolve / TechSolve.
  */
-export const TECSOLV_NAME = "Tecsolv";
-export const TECSOLV_LOCATION = "Collinsville, Illinois";
+export const TEKSOLV_NAME = "TekSolv";
+export const TEKSOLV_LOCATION = "Collinsville, Illinois";
 
 export const HIRE_IN_VERIFIED_FIELD_LABEL = "Verified Employee Received HireIn Link";
 export const HIRE_IN_OUTREACH_OWNERS = "Robert Henderson / Ben Peffley / Nathan Boyte";
@@ -41,7 +41,7 @@ export const ONBOARD_STAGES = [
   { id: "step-2", label: "DISA identity verified / DISA scheduled", owner: "Tom Fried", hallOwned: false, step: 2 },
   {
     id: "step-3",
-    label: "Payroll verified / Tecsolv scheduled",
+    label: "Payroll verified / TekSolv scheduled",
     owner: "On-site payroll",
     hallOwned: false,
     step: 3,
@@ -53,7 +53,7 @@ export const ONBOARD_STAGES = [
     hallOwned: false,
     step: 4,
   },
-  { id: "step-5", label: "Tecsolv complete / Badged", owner: `${TECSOLV_NAME} / P66`, hallOwned: false, step: 5 },
+  { id: "step-5", label: "TekSolv complete / Badged", owner: `${TEKSOLV_NAME} / P66`, hallOwned: false, step: 5 },
   { id: "blocked", label: "Blocked / failed", owner: null, hallOwned: false, step: 0 },
 ] as const;
 
@@ -338,6 +338,7 @@ const LEGACY_STAGE_MAP: Record<string, OnboardStageId> = {
   registered: "step-1",
   "waiting-drug": "step-2",
   "waiting-background": "step-2",
+  /** Stored stage id from the first pipeline fold-in — not the vendor brand. */
   techsolve: "step-3",
   "notify-badge": "step-4",
   ready: "step-5",
