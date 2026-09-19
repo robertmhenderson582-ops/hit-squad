@@ -13,6 +13,7 @@ import {
   parseControlCenterBrand,
   type ControlCenterBrand,
 } from "@/lib/onboard-brand";
+import { DISPATCH_DENIED } from "@/lib/module-access";
 import { CONTROL_CENTER_CHROME } from "@/lib/onboard-pipeline";
 
 export default function OnboardPage() {
@@ -29,14 +30,20 @@ function OnboardFrame() {
   const lens = useLensUser();
   const desk = useOwnerDesk();
   const [brand, setBrand] = useState<ControlCenterBrand>(() => controlCenterBrandForUser(lens ?? user, []));
+  const [blocked, setBlocked] = useState<string | null>(null);
 
   useEffect(() => {
     setBrand(controlCenterBrandForUser(lens ?? user, []));
+    setBlocked(null);
     let cancelled = false;
     fetch("/api/desk/onboard", viewAsInit(desk?.viewAs))
-      .then((response) => response.json())
-      .then((data) => {
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
         if (cancelled) return;
+        if (!response.ok && data.error === DISPATCH_DENIED) {
+          setBlocked(DISPATCH_DENIED);
+          return;
+        }
         const next = parseControlCenterBrand(data.brand);
         if (next) setBrand(next);
       })
@@ -48,7 +55,11 @@ function OnboardFrame() {
 
   return (
     <DeskChrome title={brand.fallbackLabel || CONTROL_CENTER_CHROME} titleBrand={brand}>
-      <OnboardDesk />
+      {blocked ? (
+        <section className="plant-card px-5 py-5 text-[#5b6f73]">{blocked}</section>
+      ) : (
+        <OnboardDesk />
+      )}
     </DeskChrome>
   );
 }

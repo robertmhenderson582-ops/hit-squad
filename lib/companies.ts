@@ -5,11 +5,22 @@ import { testerByEmail, TESTER_SEATS, type CompanyId } from "./tester-seats.ts";
 
 export type { CompanyId } from "./tester-seats.ts";
 
+/** Phase 1 company modules. Dispatch / Control Center is the only paid-later toggle shipped now. */
+export type CompanyModules = {
+  dispatch: boolean;
+};
+
+/** Missing vault fields migrate on. Madison and Hit Squad stay Dispatch-on. */
+export const DEFAULT_COMPANY_MODULES: CompanyModules = { dispatch: true };
+
 export type Company = {
   id: CompanyId;
   name: string;
+  /** Optional shorter mark for lists / Control Center chrome. */
+  shortName?: string;
   /** Root-relative, http(s), or data-image URL already on file. Never invented. */
   logo?: string;
+  modules?: CompanyModules;
 };
 
 export const CBI_ID = "cbi";
@@ -118,19 +129,53 @@ export function validateCompanyLogoInput(value?: string | null): { logo: string 
   return { logo };
 }
 
+export function parseCompanyShortName(value?: string | null): string | undefined {
+  const trimmed = String(value ?? "").trim().replace(/\s+/g, " ");
+  if (!trimmed) return undefined;
+  if (trimmed.length > 24) return trimmed.slice(0, 24);
+  return trimmed;
+}
+
+export function parseCompanyModules(raw: unknown): CompanyModules {
+  const row = raw && typeof raw === "object" ? (raw as { dispatch?: unknown }) : {};
+  return {
+    dispatch: row.dispatch === false ? false : DEFAULT_COMPANY_MODULES.dispatch,
+  };
+}
+
+export function companyHasDispatch(company?: Pick<Company, "modules"> | null): boolean {
+  return parseCompanyModules(company?.modules).dispatch;
+}
+
 export function withCompanyLogo(row: Company): Company {
+  return withCompanyIdentity(row);
+}
+
+export function withCompanyIdentity(row: Company): Company {
   const logo = companyLogoSrc(row.logo);
-  return logo ? { id: row.id, name: row.name, logo } : { id: row.id, name: row.name };
+  const shortName = parseCompanyShortName(row.shortName);
+  const modules = parseCompanyModules(row.modules);
+  const next: Company = { id: row.id, name: row.name.trim() };
+  if (shortName) next.shortName = shortName;
+  if (logo) next.logo = logo;
+  if (!modules.dispatch) next.modules = { dispatch: false };
+  return next;
 }
 
 export function mergeCompanies(extra: Company[] = []): Company[] {
   const seen = new Map<string, Company>();
   for (const row of [...COMPANIES, ...extra]) {
     if (!row?.id || !row?.name || !isCompanyId(row.id) || isStandaloneId(row.id) || isRetiredPeerCompany(row.id)) continue;
-    const next = withCompanyLogo(row);
+    const next = withCompanyIdentity(row);
     const prev = seen.get(row.id);
     if (prev) {
-      if (next.logo && !prev.logo) seen.set(row.id, { ...prev, logo: next.logo });
+      seen.set(row.id, withCompanyIdentity({
+        id: prev.id,
+        name: next.name || prev.name,
+        shortName: next.shortName || prev.shortName,
+        logo: next.logo || prev.logo,
+        modules: next.modules || prev.modules,
+      }));
       continue;
     }
     seen.set(row.id, next);

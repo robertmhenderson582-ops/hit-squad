@@ -1,3 +1,4 @@
+import { companyHasDispatch, type Company } from "./companies.ts";
 import { isOwner, isProjectManager } from "./desk-role.ts";
 import { hasPrivilege, type PrivilegeViewer } from "./privileges.ts";
 
@@ -7,6 +8,7 @@ export const STC_ORDER_PRIVILEGE = "stc-order" as const;
 export const ESTIMATE_WRITE_DENIED = "Estimate write is limited to Owner and Project Managers.";
 export const CHANGE_ORDERS_DENIED = "Change Orders are limited to Owner and assigned seats.";
 export const STC_ORDER_DENIED = "STC ordering is limited to Owner and assigned seats.";
+export const DISPATCH_DENIED = "Dispatch / Control Center is off for this company.";
 
 export type ModuleAccessUser = PrivilegeViewer & {
   email?: string;
@@ -39,4 +41,31 @@ export function canTouchEstimatePack(user?: ModuleAccessUser | null): boolean {
 /** PM site-access grants and GF → Tool Room windows. Owner always. */
 export function canAssignSitePeople(user?: ModuleAccessUser | null): boolean {
   return canEditEstimateWork(user);
+}
+
+/**
+ * Per-company Dispatch / Control Center flag.
+ * Missing vault fields stay on (Madison continuity). Explicit `dispatch: false` hides
+ * the Home tile and onboard door for that company's seats. Owner session may still
+ * open `/onboard` for support — use `canOpenDispatchModule` for the route.
+ */
+export function companyDispatchEnabled(company?: Pick<Company, "modules"> | null): boolean {
+  return companyHasDispatch(company);
+}
+
+export function canSeeCompanyDispatch(
+  _user?: ModuleAccessUser | null,
+  company?: Pick<Company, "modules"> | null,
+): boolean {
+  return companyDispatchEnabled(company);
+}
+
+/** Owner (real session) can still reach Control Center. Company seats follow the flag. */
+export function canOpenDispatchModule(
+  session?: ModuleAccessUser | null,
+  company?: Pick<Company, "modules"> | null,
+): boolean {
+  if (!session) return false;
+  if (isOwner(session)) return true;
+  return companyDispatchEnabled(company);
 }
