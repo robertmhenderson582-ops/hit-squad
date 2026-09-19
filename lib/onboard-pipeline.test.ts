@@ -17,6 +17,7 @@ import {
   JOHN_BATTUELLO_EMAIL,
   JOHN_BATTUELLO_NAME,
   JOHNNY_BATTUELLO_NAME,
+  ONBOARD_CLASSIFICATIONS,
   ONBOARD_LOCALS,
   ONBOARD_SEED_SEATS,
   ONBOARD_STAGES,
@@ -35,6 +36,7 @@ import {
   canSeeRestrictedPii,
   canUpdateOutreach,
   changeOnboardStage,
+  classificationShortLabel,
   createManpowerRequest,
   createOnboardPerson,
   manpowerRequestLabel,
@@ -475,6 +477,9 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.match(desk, /Manpower request/);
     assert.match(desk, /Classification lines/);
     assert.match(desk, /Add classification line/);
+    assert.deepEqual([...ONBOARD_CLASSIFICATIONS], ["Journeyman", "Apprentice", "Foreman", "General Foreman", "Welder"]);
+    assert.equal(classificationShortLabel("Welder"), "WLD");
+    assert.match(desk, /ONBOARD_CLASSIFICATIONS\.map/);
     assert.match(desk, /Hall manpower inbox/);
     assert.match(api, /lineFills/);
     assert.match(desk, /hiring package/);
@@ -671,6 +676,24 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
       { classification: "Foreman", quantity: 1, fillCount: null },
     ]);
     assert.match(manpowerRequestLabel(answered), /hall fill 3 JM · 2 APP on 2026-09-21/);
+
+    const withWelder = createManpowerRequest({
+      localId: "553",
+      dateNeeded: "2026-09-26",
+      lines: [
+        { classification: "Journeyman", quantity: 2 },
+        { classification: "Welder", quantity: 3 },
+      ],
+      trade: "Pipefitter",
+      actor: tom,
+      id: "mr-weld",
+    });
+    if ("error" in withWelder) throw new Error(withWelder.error);
+    assert.deepEqual(
+      withWelder.lines.map((line) => `${line.quantity} ${line.classification}`),
+      ["2 Journeyman", "3 Welder"],
+    );
+    assert.match(manpowerRequestLabel(withWelder), /2 JM · 3 WLD · Pipefitter/);
 
     const reloaded = parseManpowerRequest({
       ...answered,

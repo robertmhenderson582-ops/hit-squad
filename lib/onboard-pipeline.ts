@@ -178,7 +178,7 @@ export const DEFAULT_ONBOARD_PLANT = {
   plant: "Wood River refining complex",
 } as const;
 
-export const ONBOARD_CLASSIFICATIONS = ["Journeyman", "Apprentice", "Foreman", "General Foreman"] as const;
+export const ONBOARD_CLASSIFICATIONS = ["Journeyman", "Apprentice", "Foreman", "General Foreman", "Welder"] as const;
 
 export type OnboardClassification = (typeof ONBOARD_CLASSIFICATIONS)[number];
 
@@ -188,6 +188,7 @@ export const ONBOARD_CLASSIFICATION_SHORT: Record<OnboardClassification, string>
   Apprentice: "APP",
   Foreman: "FM",
   "General Foreman": "GF",
+  Welder: "WLD",
 };
 
 export type ManpowerRequestLine = {
