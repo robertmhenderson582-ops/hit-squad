@@ -7,11 +7,12 @@ import {
   COMPANY_LOGO_BAD_TYPE,
   COMPANY_LOGO_MAX_ENCODED,
   COMPANY_LOGO_TOO_LARGE,
-  companyHasDispatch,
+  companyHasModule,
   companyLogoSrc,
   type Company,
+  type CompanyModuleKey,
 } from "@/lib/companies";
-import type { CompanySetupSite } from "@/lib/company-setup";
+import { COMPANY_MODULE_CATALOG, type CompanySetupSite } from "@/lib/company-setup";
 import type { PublicSiteAccessGrant } from "@/lib/site-access";
 
 type SeatRow = { id: string; email: string; name: string; role: string; jobTitle?: string; companyId?: string };
@@ -143,12 +144,12 @@ export function CompanySetupDesk() {
     if (saved) await load(saved.id);
   }
 
-  async function onToggleDispatch(dispatch: boolean) {
+  async function onToggleModule(key: CompanyModuleKey, on: boolean) {
     if (!selected) return;
     const saved = await postCompany({
       action: "update",
       companyId: selected.id,
-      dispatch,
+      modules: { [key]: on },
     });
     if (saved) await load(saved.id);
   }
@@ -269,9 +270,9 @@ export function CompanySetupDesk() {
       <section className="plant-card px-5 py-5">
         <h2 className="text-2xl font-semibold text-[#163038]">Company Setup</h2>
         <p className="mt-2 text-sm text-[#5b6f73]">
-          Owner stands up a company, then assigns seats and site access. Dispatch / Control Center
-          is the shared tool — on by default, including Madison. Other modules stay on Future
-          modules. Billing is not in this phase.
+          Owner stands up a company, then assigns seats and site access. Turn Home modules on or
+          off per company — missing flags stay on, including Madison. Catalog labels (Included /
+          Add-on / Not open for trial) are display-only. Billing is not in this phase.
         </p>
         {error ? <p className="mt-3 text-sm text-[#163038]">{error}</p> : null}
         {note ? <p className="mt-3 text-sm text-[#163038]">{note}</p> : null}
@@ -443,19 +444,35 @@ export function CompanySetupDesk() {
           <section className="plant-card px-5 py-5">
             <h3 className="text-xl font-semibold text-[#163038]">Modules</h3>
             <p className="mt-2 text-sm text-[#5b6f73]">
-              Dispatch / Control Center is available to every company. Off hides the Home Dispatch
-              tile and onboard door for that company’s seats. Owner can still open /onboard for
-              support. Future modules stay separate.
+              Off hides that Home tile and matching route for this company’s seats. Owner can still
+              open the module for support. Hall seats stay Dispatch-only when Dispatch is on.
+              Catalog labels do not charge anyone.
             </p>
-            <label className="mt-4 flex items-center gap-3 text-sm text-[#163038]">
-              <input
-                type="checkbox"
-                checked={companyHasDispatch(selected)}
-                disabled={busy}
-                onChange={(event) => void onToggleDispatch(event.target.checked)}
-              />
-              Dispatch / Control Center
-            </label>
+            <ul className="mt-4 space-y-3">
+              {COMPANY_MODULE_CATALOG.map((item) => (
+                <li key={item.key}>
+                  <label className="flex items-start gap-3 rounded-lg border border-[#d5e0de] px-3 py-3 text-sm text-[#163038]">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={companyHasModule(selected, item.key)}
+                      disabled={busy}
+                      aria-label={`${item.label} module`}
+                      onChange={(event) => void onToggleModule(item.key, event.target.checked)}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold">{item.label}</span>
+                        <span className="rounded-full border border-[#d5e0de] px-2 py-0.5 text-xs text-[#5b6f73]">
+                          {item.catalogLabel}
+                        </span>
+                      </span>
+                      <span className="mt-1 block text-[#5b6f73]">{item.note}</span>
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
           </section>
         </>
       ) : null}

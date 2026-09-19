@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { addCompany, isKnownCompany, listCompanies, peekCompanies, setAssignedCompany } from "@/lib/companies-store";
+import { companiesListedForViewer, isPlatformCompanyAdmin } from "@/lib/companies";
+import {
+  addCompany,
+  assignedCompanyForUser,
+  isKnownCompany,
+  listCompanies,
+  peekAssignedCompanyForUser,
+  peekCompanies,
+  setAssignedCompany,
+} from "@/lib/companies-store";
 import { loadPositionDesk } from "@/lib/desk-positions-server";
 import { canAddUsers, canManageUsers, hasWorkingDesk, isOwner } from "@/lib/desk-role";
-import { seatsVisibleTo } from "@/lib/desk-people";
+import { seatsListedForViewer, seatsVisibleTo } from "@/lib/desk-people";
+import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { cookieValue } from "@/lib/http";
 import { canCreateSeatAs } from "@/lib/org-positions";
 import { mergeJobRoleCatalog, parseJobRoleLabel, resolveJobRole } from "@/lib/job-roles";
@@ -24,6 +34,14 @@ import { normalizeSeatDoors } from "@/lib/vault-acl";
 
 export const dynamic = "force-dynamic";
 
+async function companiesForActor(user: { email: string; role?: string }) {
+  return companiesListedForViewer(user, await listCompanies(), await assignedCompanyForUser(user));
+}
+
+function peekCompaniesForActor(user: { email: string; role?: string }) {
+  return companiesListedForViewer(user, peekCompanies(), peekAssignedCompanyForUser(user));
+}
+
 async function actorFor(user: { email: string; role: string; privileges?: string[] }) {
   const desk = await loadPositionDesk(user);
   return desk.actor;
@@ -31,29 +49,41 @@ async function actorFor(user: { email: string; role: string; privileges?: string
 
 async function seatsWithJobTitles(user: { email: string; role?: string; privileges?: string[] }) {
   const settings = await getOwnerSettings();
-  const seats = seatsVisibleTo(user, await listSeatRows({ hydrate: false })).map((row) => ({
+  const companyId = peekAssignedCompanyForUser(user);
+  const seats = seatsListedForViewer(
+    user,
+    await listSeatRows({ hydrate: false }),
+    companyId,
+    undefined,
+    isOwner(user),
+  ).map((row) => ({
     ...row,
     jobTitle: resolveJobRole(row, settings.seatJobTitles),
+    companyId: row.companyId || peekAssignedCompanyForUser(row),
   }));
   return { seats, jobRoles: mergeJobRoleCatalog(settings.jobRoles), settings };
 }
 
 export async function GET(request: Request) {
-  const user = await readSession(cookieValue(request));
-  if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (!hasWorkingDesk(user) && !canManageUsers(user) && !canAddUsers(user)) {
+  const session = await readSession(cookieValue(request));
+  if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!hasWorkingDesk(session) && !canManageUsers(session) && !canAddUsers(session)) {
     return NextResponse.json({ error: "Build desk only." }, { status: 403 });
   }
+  const user = isOwner(session) ? await scopedDeskUser(session, request) : session;
+  const platformAdmin = isPlatformCompanyAdmin(session, user);
   await hydrateSeatStore();
   const settings = await getOwnerSettings();
-  const seats = seatsVisibleTo(user, await listSeatRows()).map((row) => ({
+  const companyId = await assignedCompanyForUser(user);
+  const seats = seatsListedForViewer(user, await listSeatRows(), companyId, undefined, platformAdmin).map((row) => ({
     ...row,
     jobTitle: resolveJobRole(row, settings.seatJobTitles),
+    companyId: row.companyId || peekAssignedCompanyForUser(row),
   }));
   return NextResponse.json({
     seats,
     jobRoles: mergeJobRoleCatalog(settings.jobRoles),
-    companies: await listCompanies(),
+    companies: await companiesForActor(user),
     actor: await actorFor(user),
     note: "Owner-created seats. Users never see this list. No invite is sent.",
   });
@@ -94,7 +124,7 @@ async function postSeats(request: Request) {
       ok: true,
       company: result.company,
       seats: await listSeatRows(),
-      companies: await listCompanies(),
+      companies: await companiesForActor(user),
       actor: await actorFor(user),
       note: "Company added on this desk.",
     });
@@ -139,7 +169,7 @@ async function postSeats(request: Request) {
       user: created.user,
       seats: titled.seats,
       jobRoles: titled.jobRoles,
-      companies: peekCompanies(),
+      companies: peekCompaniesForActor(user),
       actor: desk.actor,
       doors,
       shared,
@@ -174,7 +204,7 @@ async function postSeats(request: Request) {
       ok: true,
       seats: titled.seats,
       jobRoles: titled.jobRoles,
-      companies: peekCompanies(),
+      companies: peekCompaniesForActor(user),
       note: "Role saved on this desk.",
     });
   }
@@ -190,7 +220,7 @@ async function postSeats(request: Request) {
       email: issued.email,
       password: issued.password,
       seats: seatsVisibleTo(user, await listSeatRows({ hydrate: false })),
-      companies: peekCompanies(),
+      companies: peekCompaniesForActor(user),
       note: "One-time recovery issued. Copy it now. It is not emailed and not logged.",
     });
   }
@@ -215,7 +245,7 @@ async function postSeats(request: Request) {
     return NextResponse.json({
       ok: true,
       seats: seatsVisibleTo(user, await listSeatRows({ hydrate: false })),
-      companies: peekCompanies(),
+      companies: peekCompaniesForActor(user),
       note: "Company assignment saved on this desk.",
     });
   }
@@ -228,7 +258,7 @@ async function postSeats(request: Request) {
   return NextResponse.json({
     ok: true,
     seats: seatsVisibleTo(user, await listSeatRows({ hydrate: false })),
-    companies: peekCompanies(),
+    companies: peekCompaniesForActor(user),
     note: "Password issued on this desk. Don’t send. Never logged.",
   });
 }

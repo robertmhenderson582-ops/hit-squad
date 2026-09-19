@@ -3,9 +3,10 @@ import { readSession } from "@/lib/auth";
 import { assignedCompaniesForId, companyDeskLogoSrc, companyScopeFor } from "@/lib/companies";
 import { assignedCompanyForUser, listCompanies, listDivisionsForScope } from "@/lib/companies-store";
 import { cookieValue } from "@/lib/http";
-import { isQualityVaultSeat } from "@/lib/desk-role";
+import { isOwner, isQualityVaultSeat } from "@/lib/desk-role";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { deskForUser, omitCatalogSeedJobs, seedJobsAllowed } from "@/lib/jobs";
+import { canOpenCompanyModule, JOBS_DENIED } from "@/lib/module-access";
 import { listQualityVaultJobs } from "@/lib/quality-vault-jobs-server";
 import { mergeQualityVaultJobs } from "@/lib/quality-vault-jobs";
 
@@ -17,6 +18,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
   const deskUser = await scopedDeskUser(user, request);
+  if (!isOwner(user)) {
+    const assignedId = await assignedCompanyForUser(deskUser);
+    const assignedCompany = (await listCompanies()).find((row) => row.id === assignedId);
+    if (!canOpenCompanyModule(user, assignedCompany, "jobs")) {
+      return NextResponse.json({ error: JOBS_DENIED }, { status: 403 });
+    }
+  }
   const companyId = await assignedCompanyForUser(deskUser);
   const assigned = assignedCompaniesForId(companyId, await listCompanies());
   const scope = companyScopeFor(deskUser, companyId);

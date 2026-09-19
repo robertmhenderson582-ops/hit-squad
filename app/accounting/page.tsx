@@ -2,6 +2,7 @@
 
 import { AuthGate } from "@/components/AuthGate";
 import { ClosedModuleDesk } from "@/components/ClosedModuleDesk";
+import { CompanyModuleGate } from "@/components/CompanyModuleGate";
 import { DeskChrome } from "@/components/DeskChrome";
 import { RateVaultOnlyRedirect } from "@/components/RateVaultOnlyRedirect";
 
@@ -10,7 +11,9 @@ export default function AccountingPage() {
     <AuthGate require="authenticated">
       <RateVaultOnlyRedirect />
       <DeskChrome title="ACCOUNTING">
-        <ClosedModuleDesk title="Accounting" />
+        <CompanyModuleGate module="accounting">
+          <ClosedModuleDesk title="Accounting" />
+        </CompanyModuleGate>
       </DeskChrome>
     </AuthGate>
   );

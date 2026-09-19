@@ -13,6 +13,7 @@ import {
   isRetiredPeerCompanyName,
   isStandaloneId,
   mergeCompanies,
+  compactCompanyModules,
   parseCompanyModules,
   parseCompanyShortName,
   companyIdForUser,
@@ -68,13 +69,13 @@ export function parseAssignmentFile(raw: unknown): AssignmentFile {
       if (isRetiredPeerCompany(row.id) || isRetiredPeerCompanyName(row.name)) continue;
       const logo = companyLogoSrc(typeof row.logo === "string" ? row.logo : null);
       const shortName = parseCompanyShortName("shortName" in row ? (row as Company).shortName : null);
-      const modules = parseCompanyModules((row as Company).modules);
+      const modules = compactCompanyModules(parseCompanyModules((row as Company).modules));
       companies.push(withCompanyIdentity({
         id: row.id,
         name: row.name.trim(),
         ...(shortName ? { shortName } : {}),
         ...(logo ? { logo } : {}),
-        ...(modules.dispatch ? {} : { modules }),
+        ...(modules ? { modules } : {}),
       }));
     }
   }

@@ -1,6 +1,6 @@
-import { companyDeskLogoSrc, type Company } from "./companies.ts";
+import { companyDeskLogoSrc, isCompanyModuleKey, type Company } from "./companies.ts";
 import { canSeeRateVaultDoor } from "./desk-role.ts";
-import { canSeeCompanyDispatch } from "./module-access.ts";
+import { canSeeCompanyModule } from "./module-access.ts";
 import { canSeeOnboardDoor, isHallSeat } from "./onboard-pipeline.ts";
 import { isRateVaultOnlyViewer } from "./rate-vault.ts";
 
@@ -120,32 +120,41 @@ type DockViewer = {
   id?: string;
 };
 
-function dispatchTileVisible(
+function dockModuleVisible(
+  key: string,
   session?: DockViewer | null,
   lens?: DockViewer | null,
   company?: Pick<Company, "modules"> | null,
 ) {
-  return canSeeOnboardDoor(session, lens) && canSeeCompanyDispatch(lens ?? session, company);
+  if (key === ONBOARD_DOOR.key) {
+    return canSeeOnboardDoor(session, lens) && canSeeCompanyModule(lens ?? session, company, "dispatch");
+  }
+  if (isCompanyModuleKey(key)) {
+    return canSeeCompanyModule(lens ?? session, company, key);
+  }
+  return true;
 }
 
 /** Public dock tiles, plus Rate Vault when the session and lens both hold the grant.
  *  A Rate Vault–only lens (James, or View as James) hides Jobs / Quality / HSE / Accounting / Dispatch.
  *  A hall-seat lens (John Battuello / Local 553, or View as hall) shows Dispatch only.
- *  Company Dispatch-off hides the tile for that company's seats (Madison defaults on). */
+ *  Company module-off hides that tile for the company's seats (Madison defaults all on). */
 export function homeDockTilesForViewer(
   session?: DockViewer | null,
   lens?: DockViewer | null,
   canRates = true,
   company?: Pick<Company, "modules"> | null,
 ) {
-  const dispatchOk = dispatchTileVisible(session, lens, company);
+  const dispatchOk = dockModuleVisible(ONBOARD_DOOR.key, session, lens, company);
   if (isRateVaultOnlyViewer(lens ?? session)) {
     return canSeeRateVaultDoor(session, lens) ? [RATE_VAULT_DOOR] : [];
   }
   if (isHallSeat(lens ?? session)) {
     return dispatchOk ? [ONBOARD_DOOR] : [];
   }
-  const tiles: HomeDockTile[] = homeDockTiles(canRates).filter((tile) => tile.key !== ONBOARD_DOOR.key || dispatchOk);
+  const tiles: HomeDockTile[] = homeDockTiles(canRates).filter((tile) =>
+    dockModuleVisible(tile.key, session, lens, company),
+  );
   if (canSeeRateVaultDoor(session, lens)) tiles.push(RATE_VAULT_DOOR);
   return tiles;
 }
