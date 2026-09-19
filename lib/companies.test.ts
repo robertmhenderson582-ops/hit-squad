@@ -496,6 +496,7 @@ describe("company identity and module catalog vault", () => {
     const shell = readFileSync(fileURLToPath(new URL("../components/SettingsShell.tsx", import.meta.url)), "utf8");
     const page = readFileSync(fileURLToPath(new URL("../app/settings/companies/page.tsx", import.meta.url)), "utf8");
     const desk = readFileSync(fileURLToPath(new URL("../components/CompanySetupDesk.tsx", import.meta.url)), "utf8");
+    const catalog = readFileSync(fileURLToPath(new URL("./company-setup.ts", import.meta.url)), "utf8");
     const api = readFileSync(fileURLToPath(new URL("../app/api/desk/companies/route.ts", import.meta.url)), "utf8");
     const dock = readFileSync(fileURLToPath(new URL("../components/HomeDock.tsx", import.meta.url)), "utf8");
     const onboardApi = readFileSync(fileURLToPath(new URL("../app/api/desk/onboard/route.ts", import.meta.url)), "utf8");
@@ -504,12 +505,16 @@ describe("company identity and module catalog vault", () => {
     assert.match(shell, /ownerOnly: true/);
     assert.match(page, /SettingsGate ownerOnly/);
     assert.match(desk, /Create company/);
-    assert.match(desk, /Dispatch \/ Control Center/);
     assert.match(desk, /COMPANY_MODULE_CATALOG/);
     assert.match(desk, /Included/);
     assert.match(desk, /Add-on/);
     assert.match(desk, /Not open for trial/);
     assert.match(desk, /onToggleModule/);
+    assert.match(catalog, /Dispatch \/ Control Center/);
+    assert.match(catalog, /catalogLabel: "Included"/);
+    assert.match(catalog, /catalogLabel: "Add-on"/);
+    assert.match(catalog, /catalogLabel: "Not open for trial"/);
+    assert.equal(COMPANY_MODULE_CATALOG.find((row) => row.key === "dispatch")?.label, "Dispatch / Control Center");
     assert.match(desk, /\/api\/desk\/seats/);
     assert.match(desk, /grant-site-access/);
     assert.match(desk, /\/api\/desk\/companies\/logo/);
