@@ -10,9 +10,13 @@ import {
   canAssignSitePeople,
   canEditChangeOrders,
   canEditEstimateWork,
+  canOpenDispatchModule,
   canOrderStc,
+  canSeeCompanyDispatch,
   CHANGE_ORDERS_DENIED,
   CHANGE_ORDERS_PRIVILEGE,
+  companyDispatchEnabled,
+  DISPATCH_DENIED,
   STC_ORDER_DENIED,
   STC_ORDER_PRIVILEGE,
 } from "./module-access.ts";
@@ -242,6 +246,20 @@ describe("Phase 2 module access", () => {
       assert.equal((ownerAll.pack.fcr as { header?: { pm?: string } } | undefined)?.header?.pm, "Owner CO");
       assert.equal((ownerAll.pack.purchasing as { notes?: string } | undefined)?.notes, "Owner STC");
     }
+  });
+
+  it("gates Dispatch per company and keeps Madison on when the vault field is missing", () => {
+    assert.equal(companyDispatchEnabled(undefined), true);
+    assert.equal(companyDispatchEnabled({}), true);
+    assert.equal(companyDispatchEnabled({ modules: { dispatch: true } }), true);
+    assert.equal(companyDispatchEnabled({ modules: { dispatch: false } }), false);
+    assert.equal(canSeeCompanyDispatch(nathan, { modules: { dispatch: false } }), false);
+    assert.equal(canSeeCompanyDispatch(nathan, { modules: { dispatch: true } }), true);
+    assert.equal(canSeeCompanyDispatch(nathan, undefined), true);
+    assert.equal(canOpenDispatchModule(owner, { modules: { dispatch: false } }), true);
+    assert.equal(canOpenDispatchModule(nathan, { modules: { dispatch: false } }), false);
+    assert.equal(canOpenDispatchModule(nathan, undefined), true);
+    assert.match(DISPATCH_DENIED, /Dispatch/);
   });
 
   it("wires Privileges assignment copy and estimate / CO / STC write locks", () => {

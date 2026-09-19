@@ -234,4 +234,30 @@ describe("Home four doors", () => {
     assert.match(desk, /canSeeOnboardDoor/);
     assert.match(desk, /ONBOARD_DOOR/);
   });
+
+  it("hides Dispatch when the company module is off and keeps Madison seats on by default", () => {
+    const nathan = { role: "tester" as const, email: "nathanboyte@gmail.com", name: "Nathan Boyte", jobTitle: "Project Manager" };
+    const hall = {
+      role: "tester" as const,
+      email: "jbattuello@ualocal553.org",
+      name: "John Battuello Jr.",
+      jobTitle: "Hall Local 553",
+    };
+    const off = { modules: { dispatch: false } };
+    assert.deepEqual(
+      homeDockTilesForViewer(nathan).map((tile) => tile.key),
+      ["jobs", "quality", "hse", "accounting", "dispatch"],
+    );
+    assert.deepEqual(
+      homeDockTilesForViewer(nathan, nathan, true, undefined).map((tile) => tile.key),
+      ["jobs", "quality", "hse", "accounting", "dispatch"],
+    );
+    assert.equal(homeDockTilesForViewer(nathan, nathan, true, off).some((tile) => tile.key === "dispatch"), false);
+    assert.deepEqual(
+      homeDockTilesForViewer(nathan, nathan, true, off).map((tile) => tile.key),
+      ["jobs", "quality", "hse", "accounting"],
+    );
+    assert.deepEqual(homeDockTilesForViewer(hall, hall, true, off).map((tile) => tile.key), []);
+    assert.deepEqual(homeDockTilesForViewer(hall).map((tile) => tile.key), ["dispatch"]);
+  });
 });

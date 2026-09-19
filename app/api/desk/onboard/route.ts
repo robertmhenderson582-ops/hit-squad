@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { listCompanies } from "@/lib/companies-store";
+import { assignedCompanyForUser, listCompanies } from "@/lib/companies-store";
+import { isOwner } from "@/lib/desk-role";
 import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { cookieValue } from "@/lib/http";
+import { canOpenDispatchModule, DISPATCH_DENIED } from "@/lib/module-access";
 import { controlCenterBrandForUser } from "@/lib/onboard-brand";
 import { notifyStepComplete } from "@/lib/onboard-notify";
 import {
@@ -55,6 +57,13 @@ function payload(body: Record<string, unknown>, status = 200) {
   return NextResponse.json({ ...onboardStoreStatus(), ...body }, { status });
 }
 
+async function dispatchOpenFor(session: { email: string; role?: string }, user: { email: string; role?: string }) {
+  if (isOwner(session)) return true;
+  const companyId = await assignedCompanyForUser(user);
+  const company = (await listCompanies()).find((row) => row.id === companyId);
+  return canOpenDispatchModule(session, company);
+}
+
 async function controlCenterBrandPayload(user: Parameters<typeof visibleOnboardPeople>[1]) {
   try {
     return controlCenterBrandForUser(user, await listCompanies());
@@ -91,6 +100,9 @@ export async function GET(request: Request) {
   if (!canSeeOnboardBoard(user)) {
     return NextResponse.json({ error: "Onboarding is not on this desk." }, { status: 403 });
   }
+  if (!(await dispatchOpenFor(session, user))) {
+    return NextResponse.json({ error: DISPATCH_DENIED }, { status: 403 });
+  }
   try {
     return payload(await boardFor(user));
   } catch {
@@ -104,6 +116,9 @@ export async function POST(request: Request) {
   const user = await scopedDeskUser(session, request);
   if (!canSeeOnboardBoard(user)) {
     return NextResponse.json({ error: "Onboarding is not on this desk." }, { status: 403 });
+  }
+  if (!(await dispatchOpenFor(session, user))) {
+    return NextResponse.json({ error: DISPATCH_DENIED }, { status: 403 });
   }
 
   const body = (await request.json().catch(() => ({}))) as {

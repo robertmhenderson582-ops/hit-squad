@@ -13,12 +13,16 @@ import {
   isRetiredPeerCompanyName,
   isStandaloneId,
   mergeCompanies,
+  parseCompanyModules,
+  parseCompanyShortName,
   companyIdForUser,
   seedCompanyForEmail,
   validateCompanyLogoInput,
   canSeeCompany,
+  withCompanyIdentity,
   type Company,
   type CompanyId,
+  type CompanyModules,
   type CompanyScope,
 } from "./companies.ts";
 import {
@@ -63,11 +67,15 @@ export function parseAssignmentFile(raw: unknown): AssignmentFile {
     if (row && isCompanyId(row.id) && typeof row.name === "string" && row.name.trim()) {
       if (isRetiredPeerCompany(row.id) || isRetiredPeerCompanyName(row.name)) continue;
       const logo = companyLogoSrc(typeof row.logo === "string" ? row.logo : null);
-      companies.push({
+      const shortName = parseCompanyShortName("shortName" in row ? (row as Company).shortName : null);
+      const modules = parseCompanyModules((row as Company).modules);
+      companies.push(withCompanyIdentity({
         id: row.id,
         name: row.name.trim(),
+        ...(shortName ? { shortName } : {}),
         ...(logo ? { logo } : {}),
-      });
+        ...(modules.dispatch ? {} : { modules }),
+      }));
     }
   }
   const divisions: Division[] = [];
@@ -224,15 +232,21 @@ export async function setCompanyLogo(
   if (!current) return { error: "Pick a company on this desk." };
   const checked = validateCompanyLogoInput(logoSrc);
   if ("error" in checked) return checked;
-  const overlay: Company = { id: current.id, name: current.name };
-  if (checked.logo) overlay.logo = checked.logo;
+  const overlay = withCompanyIdentity({
+    ...current,
+    logo: checked.logo ?? undefined,
+  });
+  if (!checked.logo) delete overlay.logo;
   const data = await hydrateCompanyStore();
   data.companies = [...(data.companies ?? []).filter((row) => row.id !== id), overlay];
   await persist(data);
   return { ok: true, company: overlay };
 }
 
-export async function addCompany(name: string): Promise<{ ok: true; company: Company } | { error: string }> {
+export async function addCompany(
+  name: string,
+  options?: { shortName?: string | null },
+): Promise<{ ok: true; company: Company } | { error: string }> {
   const trimmed = name.trim().replace(/\s+/g, " ");
   if (trimmed.length < 2) return { error: "Type a company name." };
   if (trimmed.length > 80) return { error: "That name is too long." };
@@ -252,10 +266,53 @@ export async function addCompany(name: string): Promise<{ ok: true; company: Com
     while (existing.some((row) => row.id === `${id}${n}`)) n += 1;
     id = `${id}${n}`;
   }
+  const company = withCompanyIdentity({
+    id,
+    name: trimmed,
+    shortName: parseCompanyShortName(options?.shortName),
+  });
   const data = await hydrateCompanyStore();
-  data.companies = [...(data.companies ?? []), { id, name: trimmed }];
+  data.companies = [...(data.companies ?? []), company];
   await persist(data);
-  return { ok: true, company: { id, name: trimmed } };
+  return { ok: true, company };
+}
+
+export async function updateCompany(
+  companyId: string,
+  patch: { name?: string; shortName?: string | null; modules?: Partial<CompanyModules> },
+): Promise<{ ok: true; company: Company } | { error: string }> {
+  const id = companyId.trim();
+  if (!isCompanyId(id) || isStandaloneId(id) || isRetiredPeerCompany(id)) {
+    return { error: "Pick a company on this desk." };
+  }
+  const current = (await listCompanies()).find((row) => row.id === id);
+  if (!current) return { error: "Pick a company on this desk." };
+  const nextName = typeof patch.name === "string" ? patch.name.trim().replace(/\s+/g, " ") : current.name;
+  if (nextName.length < 2) return { error: "Type a company name." };
+  if (nextName.length > 80) return { error: "That name is too long." };
+  if (nextName.toLowerCase() === STANDALONE_NAME.toLowerCase() || isRetiredPeerCompanyName(nextName)) {
+    return { error: "That company is not on this desk." };
+  }
+  const clash = (await listCompanies()).find(
+    (row) => row.id !== id && row.name.toLowerCase() === nextName.toLowerCase(),
+  );
+  if (clash) return { error: "That name is already on this desk." };
+  const shortName =
+    patch.shortName === undefined ? current.shortName : parseCompanyShortName(patch.shortName);
+  const modules = parseCompanyModules({
+    ...current.modules,
+    ...(patch.modules ?? {}),
+  });
+  const overlay = withCompanyIdentity({
+    ...current,
+    name: nextName,
+    shortName,
+    modules,
+  });
+  const data = await hydrateCompanyStore();
+  data.companies = [...(data.companies ?? []).filter((row) => row.id !== id), overlay];
+  await persist(data);
+  return { ok: true, company: overlay };
 }
 
 export async function listDivisions(): Promise<Division[]> {

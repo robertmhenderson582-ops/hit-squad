@@ -142,6 +142,7 @@ export const VIEW_AS_HIDDEN_SETTINGS = [
   "/settings/vault",
   "/settings/republish",
   "/settings/branding",
+  "/settings/companies",
   "/settings/sites",
   "/settings/checks",
   "/settings/site-access",

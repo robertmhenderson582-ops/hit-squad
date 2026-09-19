@@ -14,12 +14,16 @@ import {
   canSeeCompany,
   catalogVisibleTo,
   companiesForScope,
+  companyHasDispatch,
   companyScopeFor,
   companyDeskLogoSrc,
   COMPANY_LOGO_BAD_TYPE,
   COMPANY_LOGO_MAX_ENCODED,
   COMPANY_LOGO_TOO_LARGE,
+  DEFAULT_COMPANY_MODULES,
   inferCompanyId,
+  parseCompanyModules,
+  parseCompanyShortName,
   isRetiredPeerCompany,
   isRetiredPeerPack,
   assignmentChoices,
@@ -45,11 +49,14 @@ import {
   resetCompanyAssignmentsForTests,
   setAssignedCompany,
   setCompanyLogo,
+  updateCompany,
   useCompanyVaultForTests,
   useMemoryCompanyAssignments,
 } from "./companies-store.ts";
 import { memoryDrive } from "./drive-estimates.ts";
 import { dummyPacksForUser } from "./cbi-dummy.ts";
+import { catalogSites } from "./desk-data.ts";
+import { sitesForCompany, toCompanySetupSite } from "./company-setup.ts";
 import { NOVUS_EMAIL } from "./desk-role.ts";
 import { boardForUser } from "./desk-data.ts";
 import { COMPANIES_VAULT_KIND, COMPANIES_VAULT_NAME, writeVaultJson } from "./drive-data.ts";
@@ -385,6 +392,83 @@ describe("company desk logo on file", () => {
     assert.match(store, /setCompanyLogo/);
     assert.match(store, /validateCompanyLogoInput/);
     assert.match(store, /COMPANIES_VAULT/);
+  });
+});
+
+describe("company identity and Dispatch module vault", () => {
+  it("migrates missing shortName / modules to Dispatch-on and keeps Madison usable", () => {
+    const parsed = parseAssignmentFile({
+      assignments: { "nathanboyte@gmail.com": "madison" },
+      companies: [{ id: "madison", name: "Madison", logo: "/madison.png" }],
+    });
+    const madison = parsed.companies.find((row) => row.id === "madison");
+    assert.equal(madison?.shortName, undefined);
+    assert.equal(madison?.modules, undefined);
+    assert.equal(parseCompanyModules(madison?.modules).dispatch, true);
+    assert.equal(companyHasDispatch(madison), true);
+    assert.equal(companyHasDispatch(undefined), true);
+    assert.equal(DEFAULT_COMPANY_MODULES.dispatch, true);
+    assert.equal(parseCompanyShortName("  Acme Field  "), "Acme Field");
+    assert.equal(parseCompanyShortName(""), undefined);
+    const catalog = catalogSites().map(toCompanySetupSite);
+    assert.equal(catalog.some((site) => site.companyId === "madison" && /wood river/i.test(site.name)), true);
+    assert.equal(sitesForCompany("acme", catalog).length, 0);
+    assert.equal(sitesForCompany("madison", catalog).length > 0, true);
+
+    const off = parseAssignmentFile({
+      assignments: {},
+      companies: [{ id: "acme", name: "Acme Field Services", shortName: "Acme", modules: { dispatch: false } }],
+    });
+    assert.equal(off.companies[0]?.shortName, "Acme");
+    assert.equal(off.companies[0]?.modules?.dispatch, false);
+    assert.equal(companyHasDispatch(off.companies[0]), false);
+  });
+
+  it("lets the owner set short name and turn Dispatch off without flipping Madison", async () => {
+    useMemoryCompanyAssignments();
+    const added = await addCompany("Acme Field Services", { shortName: "Acme" });
+    assert.equal("ok" in added, true);
+    if (!("ok" in added)) return;
+    assert.equal(added.company.shortName, "Acme");
+    assert.equal(companyHasDispatch(added.company), true);
+
+    const off = await updateCompany(added.company.id, { modules: { dispatch: false } });
+    assert.equal("ok" in off, true);
+    if (!("ok" in off)) return;
+    assert.equal(off.company.modules?.dispatch, false);
+    assert.equal(companyHasDispatch((await listCompanies()).find((row) => row.id === added.company.id)), false);
+
+    const madison = (await listCompanies()).find((row) => row.id === "madison");
+    assert.equal(companyHasDispatch(madison), true);
+    const renamed = await updateCompany("madison", { shortName: "MLI" });
+    assert.equal("ok" in renamed, true);
+    if (!("ok" in renamed)) return;
+    assert.equal(renamed.company.shortName, "MLI");
+    assert.equal(companyHasDispatch(renamed.company), true);
+  });
+
+  it("wires Owner Company Setup onto Settings and reuses seats / site-access / logo", () => {
+    const shell = readFileSync(fileURLToPath(new URL("../components/SettingsShell.tsx", import.meta.url)), "utf8");
+    const page = readFileSync(fileURLToPath(new URL("../app/settings/companies/page.tsx", import.meta.url)), "utf8");
+    const desk = readFileSync(fileURLToPath(new URL("../components/CompanySetupDesk.tsx", import.meta.url)), "utf8");
+    const api = readFileSync(fileURLToPath(new URL("../app/api/desk/companies/route.ts", import.meta.url)), "utf8");
+    const dock = readFileSync(fileURLToPath(new URL("../components/HomeDock.tsx", import.meta.url)), "utf8");
+    const onboardApi = readFileSync(fileURLToPath(new URL("../app/api/desk/onboard/route.ts", import.meta.url)), "utf8");
+    assert.match(shell, /href: "\/settings\/companies"/);
+    assert.match(shell, /label: "Company Setup"/);
+    assert.match(shell, /ownerOnly: true/);
+    assert.match(page, /SettingsGate ownerOnly/);
+    assert.match(desk, /Create company/);
+    assert.match(desk, /Dispatch \/ Control Center/);
+    assert.match(desk, /\/api\/desk\/seats/);
+    assert.match(desk, /grant-site-access/);
+    assert.match(desk, /\/api\/desk\/companies\/logo/);
+    assert.match(api, /updateCompany/);
+    assert.match(api, /isOwner/);
+    assert.match(dock, /homeDockTilesForViewer/);
+    assert.match(dock, /\/api\/desk\/companies/);
+    assert.match(onboardApi, /DISPATCH_DENIED/);
+    assert.match(onboardApi, /canOpenDispatchModule/);
   });
 });
 

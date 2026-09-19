@@ -30,6 +30,7 @@ const SECTIONS: {
   { href: "/settings/aliases", label: "Aliases", buildDesk: true, privilege: "alias-config" },
   { href: "/settings/republish", label: "Heads up — republish", buildDesk: true, privilege: "designer-ship" },
   { href: "/settings/vault", label: "Data vault", buildDesk: true, privilege: "vault-wipe" },
+  { href: "/settings/companies", label: "Company Setup", ownerOnly: true },
   { href: "/settings/branding", label: "Branding", workingDesk: true },
   { href: "/settings/sites", label: "Sites", buildDesk: true, privilege: "designer-ship" },
   { href: "/settings/divisions", label: "Divisions", workingDesk: true },
