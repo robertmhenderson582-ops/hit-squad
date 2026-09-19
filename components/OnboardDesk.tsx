@@ -25,7 +25,9 @@ import {
   hallLocalForSeat,
   formatSsnInput,
   maskSsnLast4,
+  manpowerLinesNeededSummary,
   manpowerRequestLabel,
+  manpowerRequestLines,
   nextOnboardStage,
   onboardLocal,
   onboardStage,
@@ -133,16 +135,15 @@ export function OnboardDesk() {
   const [requestId, setRequestId] = useState("");
 
   const [neededDate, setNeededDate] = useState("");
-  const [headcount, setHeadcount] = useState("1");
   const [reqTrade, setReqTrade] = useState<string>(defaultCraftForLocal(initialLocked || "553"));
-  const [reqClass, setReqClass] = useState("Journeyman");
+  const [reqLines, setReqLines] = useState([{ classification: "Journeyman", quantity: "1" }]);
   const [reqSite, setReqSite] = useState<string>(DEFAULT_ONBOARD_PLANT.site);
   const [reqJob, setReqJob] = useState("");
   const [reqCerts, setReqCerts] = useState("");
   const [reqScreenings, setReqScreenings] = useState(MANPOWER_SCREENING_PLACEHOLDER);
   const [reqPackage, setReqPackage] = useState("");
   const [respondId, setRespondId] = useState<string | null>(null);
-  const [fillCount, setFillCount] = useState("");
+  const [lineFills, setLineFills] = useState<Record<string, string>>({});
   const [fillDate, setFillDate] = useState("");
 
   const [corpEmails, setCorpEmails] = useState("");
@@ -225,6 +226,24 @@ export function OnboardDesk() {
     setReqTrade(local.craft);
   }
 
+  const unusedRequestClasses = ONBOARD_CLASSIFICATIONS.filter(
+    (item) => !reqLines.some((line) => line.classification === item),
+  );
+
+  function addRequestLine() {
+    const nextClass = unusedRequestClasses[0];
+    if (!nextClass) return;
+    setReqLines((rows) => [...rows, { classification: nextClass, quantity: "1" }]);
+  }
+
+  function changeRequestLine(index: number, patch: { classification?: string; quantity?: string }) {
+    setReqLines((rows) => rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+  }
+
+  function removeRequestLine(index: number) {
+    setReqLines((rows) => (rows.length <= 1 ? rows : rows.filter((_, rowIndex) => rowIndex !== index)));
+  }
+
   function fillHallForm(hall: OnboardHall) {
     setEditingHallId(hall.id);
     setHallForm({
@@ -305,9 +324,8 @@ export function OnboardDesk() {
           action: "create-request",
           localId,
           dateNeeded: neededDate,
-          headcount,
+          lines: reqLines,
           trade: reqTrade,
-          classification: reqClass,
           site: reqSite,
           job: reqJob,
           requiredCerts: reqCerts,
@@ -324,6 +342,7 @@ export function OnboardDesk() {
     }
     applyBoard(data);
     if (data.request) setRequestId(data.request.id);
+    setReqLines([{ classification: "Journeyman", quantity: "1" }]);
     setNote(`Manpower request sent to Local ${localId} hall (${data.request?.id || "saved"}).`);
   }
 
@@ -340,7 +359,10 @@ export function OnboardDesk() {
         body: JSON.stringify({
           action: "respond-request",
           id,
-          fillCount,
+          lineFills: Object.entries(lineFills).map(([classification, fillCount]) => ({
+            classification,
+            fillCount,
+          })),
           fillDate,
         }),
       }),
@@ -353,7 +375,7 @@ export function OnboardDesk() {
     }
     applyBoard(data);
     setRespondId(null);
-    setFillCount("");
+    setLineFills({});
     setFillDate("");
     if (data.request) setRequestId(data.request.id);
     setNote(`Hall response saved on ${data.request?.id || "request"}.`);
@@ -669,9 +691,9 @@ export function OnboardDesk() {
         <section className="plant-card px-5 py-5">
           <h3 className="text-lg font-semibold text-[#163038]">Manpower request</h3>
           <p className="mt-1 text-sm text-[#5b6f73]">
-            Dispatcher create comes before hall register. Routes to the hall contact on the selected phase-one
-            local. Certs, screenings, and hiring package fields are placeholders — not a final hiring list. No
-            email blast.
+            Dispatcher create comes before hall register. One request can carry more than one classification,
+            each with its own quantity. Routes to the hall contact on the selected phase-one local. Certs,
+            screenings, and hiring package fields are placeholders — not a final hiring list. No email blast.
           </p>
           <form className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={(event) => void onCreateRequest(event)}>
             <label className="text-sm">
@@ -694,21 +716,8 @@ export function OnboardDesk() {
               <input className="paper-field w-full" type="date" value={neededDate} onChange={(event) => setNeededDate(event.target.value)} required />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-[#5b6f73]">Quantity / headcount</span>
-              <input className="paper-field w-full" type="number" min={1} value={headcount} onChange={(event) => setHeadcount(event.target.value)} required />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-[#5b6f73]">Trade / classification</span>
-              <div className="grid grid-cols-2 gap-2">
-                <input className="paper-field w-full" value={reqTrade} onChange={(event) => setReqTrade(event.target.value)} required />
-                <select className="paper-field w-full" value={reqClass} onChange={(event) => setReqClass(event.target.value)}>
-                  {ONBOARD_CLASSIFICATIONS.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <span className="mb-1 block text-[#5b6f73]">Trade</span>
+              <input className="paper-field w-full" value={reqTrade} onChange={(event) => setReqTrade(event.target.value)} required />
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-[#5b6f73]">Site / job</span>
@@ -717,6 +726,66 @@ export function OnboardDesk() {
                 <input className="paper-field w-full" value={reqJob} placeholder="Job / requisition" onChange={(event) => setReqJob(event.target.value)} />
               </div>
             </label>
+            <div className="md:col-span-2 xl:col-span-3">
+              <p className="mb-2 text-sm text-[#5b6f73]">Classification lines</p>
+              <div className="space-y-2">
+                {reqLines.map((line, index) => {
+                  const taken = reqLines
+                    .map((row) => row.classification)
+                    .filter((item, rowIndex) => rowIndex !== index);
+                  return (
+                    <div key={`${line.classification}-${index}`} className="grid gap-2 md:grid-cols-[1fr_8rem_auto]">
+                      <label className="text-sm">
+                        <span className="mb-1 block text-[#5b6f73]">Classification</span>
+                        <select
+                          className="paper-field w-full"
+                          value={line.classification}
+                          onChange={(event) => changeRequestLine(index, { classification: event.target.value })}
+                        >
+                          {ONBOARD_CLASSIFICATIONS.filter((item) => item === line.classification || !taken.includes(item)).map(
+                            (item) => (
+                              <option key={item} value={item}>
+                                {item}
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      </label>
+                      <label className="text-sm">
+                        <span className="mb-1 block text-[#5b6f73]">Quantity</span>
+                        <input
+                          className="paper-field w-full"
+                          type="number"
+                          min={1}
+                          value={line.quantity}
+                          onChange={(event) => changeRequestLine(index, { quantity: event.target.value })}
+                          required
+                        />
+                      </label>
+                      <div className="flex items-end">
+                        <button
+                          type="button"
+                          className="rounded-sm border border-steel px-2.5 py-1.5 text-xs text-steel disabled:opacity-50"
+                          disabled={reqLines.length <= 1}
+                          onClick={() => removeRequestLine(index)}
+                        >
+                          Remove line
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {unusedRequestClasses.length ? (
+                <button
+                  type="button"
+                  className="mt-2 rounded-sm border border-steel px-2.5 py-1 text-xs text-steel"
+                  onClick={addRequestLine}
+                >
+                  Add classification line
+                </button>
+              ) : null}
+            </div>
             <label className="text-sm md:col-span-2 xl:col-span-3">
               <span className="mb-1 block text-[#5b6f73]">{MANPOWER_CERTS_PLACEHOLDER}</span>
               <textarea className="paper-field w-full" rows={2} value={reqCerts} onChange={(event) => setReqCerts(event.target.value)} />
@@ -742,6 +811,9 @@ export function OnboardDesk() {
               <li key={row.id} className="rounded-md border border-[#d5e0de] bg-white/70 px-3 py-2 text-sm text-[#163038]">
                 {manpowerRequestLabel(row)}
                 {row.job ? ` · ${row.job}` : ""} · {row.createdByName} · {formatWhen(row.createdAt)}
+                {manpowerRequestLines(row).length > 1 ? (
+                  <p className="mt-1 text-xs text-[#5b6f73]">{manpowerLinesNeededSummary(manpowerRequestLines(row))}</p>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -752,8 +824,8 @@ export function OnboardDesk() {
         <section className="plant-card px-5 py-5">
           <h3 className="text-lg font-semibold text-[#163038]">Hall manpower inbox</h3>
           <p className="mt-1 text-sm text-[#5b6f73]">
-            Open requests from Tom / Benny / HSE. Respond with how many you can fill and when. Then register
-            people onto that request when Step 1 is set to hall.
+            Open requests from Tom / Benny / HSE. Respond with a fill count on each classification and when.
+            Then register people onto that request when Step 1 is set to hall.
           </p>
           <ul className="mt-4 space-y-3">
             {requests.filter((row) => row.status === "open").length === 0 ? (
@@ -761,20 +833,44 @@ export function OnboardDesk() {
             ) : null}
             {requests
               .filter((row) => row.status === "open")
-              .map((row) => (
+              .map((row) => {
+                const lines = manpowerRequestLines(row);
+                return (
                 <li key={row.id} className="rounded-md border border-[#d5e0de] bg-white/70 px-3 py-3">
                   <p className="text-sm font-medium text-[#163038]">{manpowerRequestLabel(row)}</p>
                   <p className="mt-1 text-xs text-[#5b6f73]">
                     {row.site}
-                    {row.job ? ` · ${row.job}` : ""} · {row.classification || "—"} · created {formatWhen(row.createdAt)}
+                    {row.job ? ` · ${row.job}` : ""} · {manpowerLinesNeededSummary(lines) || row.classification || "—"} · created {formatWhen(row.createdAt)}
                   </p>
+                  {lines.length ? (
+                    <ul className="mt-2 space-y-1">
+                      {lines.map((line) => (
+                        <li key={`${row.id}-${line.classification}`} className="text-xs text-[#163038]">
+                          {line.quantity} {line.classification}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                   {row.requiredScreenings ? <p className="mt-1 text-xs text-[#5b6f73]">{row.requiredScreenings}</p> : null}
                   {respondId === row.id ? (
                     <form className="mt-3 grid gap-2 md:grid-cols-3" onSubmit={(event) => void onRespondRequest(event, row.id)}>
-                      <label className="text-sm">
-                        <span className="mb-1 block text-[#5b6f73]">Fill count</span>
-                        <input className="paper-field w-full" type="number" min={0} value={fillCount} onChange={(event) => setFillCount(event.target.value)} required />
-                      </label>
+                      {lines.map((line) => (
+                        <label key={`${row.id}-fill-${line.classification}`} className="text-sm">
+                          <span className="mb-1 block text-[#5b6f73]">
+                            Fill {line.classification} (need {line.quantity})
+                          </span>
+                          <input
+                            className="paper-field w-full"
+                            type="number"
+                            min={0}
+                            value={lineFills[line.classification] ?? ""}
+                            onChange={(event) =>
+                              setLineFills((current) => ({ ...current, [line.classification]: event.target.value }))
+                            }
+                            required
+                          />
+                        </label>
+                      ))}
                       <label className="text-sm">
                         <span className="mb-1 block text-[#5b6f73]">Fill date</span>
                         <input className="paper-field w-full" type="date" value={fillDate} onChange={(event) => setFillDate(event.target.value)} required />
@@ -791,7 +887,9 @@ export function OnboardDesk() {
                       className="mt-2 rounded-sm border border-steel px-2.5 py-1 text-xs text-steel"
                       onClick={() => {
                         setRespondId(row.id);
-                        setFillCount(String(row.headcount));
+                        setLineFills(
+                          Object.fromEntries(lines.map((line) => [line.classification, String(line.quantity)])),
+                        );
                         setFillDate(row.dateNeeded);
                       }}
                     >
@@ -799,7 +897,8 @@ export function OnboardDesk() {
                     </button>
                   )}
                 </li>
-              ))}
+                );
+              })}
           </ul>
         </section>
       ) : null}

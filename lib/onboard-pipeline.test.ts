@@ -17,6 +17,7 @@ import {
   JOHN_BATTUELLO_EMAIL,
   JOHN_BATTUELLO_NAME,
   JOHNNY_BATTUELLO_NAME,
+  ONBOARD_CLASSIFICATIONS,
   ONBOARD_LOCALS,
   ONBOARD_SEED_SEATS,
   ONBOARD_STAGES,
@@ -35,8 +36,11 @@ import {
   canSeeRestrictedPii,
   canUpdateOutreach,
   changeOnboardStage,
+  classificationShortLabel,
   createManpowerRequest,
   createOnboardPerson,
+  manpowerRequestLabel,
+  parseManpowerRequest,
   hallContactForLocal,
   hallLocalForSeat,
   isBennyCampSeat,
@@ -471,7 +475,13 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     assert.doesNotMatch(source("../components/HseDesk.tsx"), /friedt@madisonltd.com/);
     assert.doesNotMatch(source("../components/ManageUsersDesk.tsx"), /friedt@madisonltd.com/);
     assert.match(desk, /Manpower request/);
+    assert.match(desk, /Classification lines/);
+    assert.match(desk, /Add classification line/);
+    assert.deepEqual([...ONBOARD_CLASSIFICATIONS], ["Journeyman", "Apprentice", "Foreman", "General Foreman", "Welder"]);
+    assert.equal(classificationShortLabel("Welder"), "WLD");
+    assert.match(desk, /ONBOARD_CLASSIFICATIONS\.map/);
     assert.match(desk, /Hall manpower inbox/);
+    assert.match(api, /lineFills/);
     assert.match(desk, /hiring package/);
     assert.match(desk, /No email blast/);
     assert.match(desk, /P66 corporate/);
@@ -550,6 +560,7 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     if ("error" in created) throw new Error(created.error);
     assert.equal(created.status, "open");
     assert.equal(created.headcount, 4);
+    assert.deepEqual(created.lines, [{ classification: "Journeyman", quantity: 4, fillCount: null }]);
     assert.equal(created.events[0]?.action, "created");
     assert.equal(created.events[0]?.actorEmail, TOM_FRIED_EMAIL);
 
@@ -565,6 +576,7 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     if ("error" in answered) throw new Error(answered.error);
     assert.equal(answered.status, "responded");
     assert.equal(answered.fillCount, 3);
+    assert.deepEqual(answered.lines, [{ classification: "Journeyman", quantity: 4, fillCount: 3 }]);
     assert.equal(answered.fillDate, "2026-09-21");
     assert.equal(answered.events.at(-1)?.action, "responded");
     assert.equal(answered.events.at(-1)?.actorEmail, JOHN_BATTUELLO_EMAIL);
@@ -580,6 +592,118 @@ describe("Hall ↔ HSE onboarding pipeline", () => {
     if ("error" in person) throw new Error(person.error);
     assert.equal(person.requestId, "mr-cat2");
     assert.match(person.events[0]?.note ?? "", /request mr-cat2/);
+  });
+
+  it("parses legacy single-line manpower rows and keeps multi-line fills on one request", () => {
+    const legacy = parseManpowerRequest({
+      id: "mr-legacy",
+      localId: "553",
+      dateNeeded: "2026-09-22",
+      headcount: 4,
+      trade: "Pipefitter",
+      classification: "Journeyman",
+      site: "Wood River",
+      job: "Cat 2",
+      status: "open",
+      createdAt: "2026-09-18T14:00:00.000Z",
+      createdByName: "Tom Fried",
+      createdByEmail: TOM_FRIED_EMAIL,
+      fillCount: null,
+    });
+    assert.ok(legacy);
+    assert.equal(legacy.headcount, 4);
+    assert.equal(legacy.classification, "Journeyman");
+    assert.deepEqual(legacy.lines, [{ classification: "Journeyman", quantity: 4, fillCount: null }]);
+    assert.match(manpowerRequestLabel(legacy), /4 JM · Pipefitter/);
+
+    const legacyFilled = parseManpowerRequest({
+      id: "mr-legacy-fill",
+      localId: "553",
+      dateNeeded: "2026-09-22",
+      headcount: 4,
+      classification: "Journeyman",
+      status: "responded",
+      fillCount: 3,
+      fillDate: "2026-09-21",
+    });
+    assert.ok(legacyFilled);
+    assert.deepEqual(legacyFilled.lines, [{ classification: "Journeyman", quantity: 4, fillCount: 3 }]);
+    assert.equal(legacyFilled.fillCount, 3);
+    assert.match(manpowerRequestLabel(legacyFilled), /hall fill 3 JM on 2026-09-21/);
+
+    const created = createManpowerRequest({
+      localId: "553",
+      dateNeeded: "2026-09-22",
+      lines: [
+        { classification: "Journeyman", quantity: 4 },
+        { classification: "Apprentice", quantity: 2 },
+        { classification: "Foreman", quantity: 1 },
+      ],
+      trade: "Pipefitter",
+      site: "Wood River",
+      job: "Turnaround",
+      actor: tom,
+      at: "2026-09-19T12:00:00.000Z",
+      id: "mr-multi",
+    });
+    if ("error" in created) throw new Error(created.error);
+    assert.equal(created.headcount, 7);
+    assert.equal(created.classification, "Journeyman · Apprentice · Foreman");
+    assert.deepEqual(
+      created.lines.map((line) => `${line.quantity} ${line.classification}`),
+      ["4 Journeyman", "2 Apprentice", "1 Foreman"],
+    );
+    assert.match(manpowerRequestLabel(created), /4 JM · 2 APP · 1 FM · Pipefitter/);
+
+    const totalOnly = respondManpowerRequest(created, { fillCount: 5, fillDate: "2026-09-21", actor: hall553 });
+    assert.deepEqual(totalOnly, { error: "Enter a fill count for each classification." });
+
+    const answered = respondManpowerRequest(created, {
+      lineFills: [
+        { classification: "Journeyman", fillCount: 3 },
+        { classification: "Apprentice", fillCount: 2 },
+      ],
+      fillDate: "2026-09-21",
+      actor: hall553,
+      at: "2026-09-19T13:00:00.000Z",
+    });
+    if ("error" in answered) throw new Error(answered.error);
+    assert.equal(answered.status, "responded");
+    assert.equal(answered.fillCount, 5);
+    assert.deepEqual(answered.lines, [
+      { classification: "Journeyman", quantity: 4, fillCount: 3 },
+      { classification: "Apprentice", quantity: 2, fillCount: 2 },
+      { classification: "Foreman", quantity: 1, fillCount: null },
+    ]);
+    assert.match(manpowerRequestLabel(answered), /hall fill 3 JM · 2 APP on 2026-09-21/);
+
+    const withWelder = createManpowerRequest({
+      localId: "553",
+      dateNeeded: "2026-09-26",
+      lines: [
+        { classification: "Journeyman", quantity: 2 },
+        { classification: "Welder", quantity: 3 },
+      ],
+      trade: "Pipefitter",
+      actor: tom,
+      id: "mr-weld",
+    });
+    if ("error" in withWelder) throw new Error(withWelder.error);
+    assert.deepEqual(
+      withWelder.lines.map((line) => `${line.quantity} ${line.classification}`),
+      ["2 Journeyman", "3 Welder"],
+    );
+    assert.match(manpowerRequestLabel(withWelder), /2 JM · 3 WLD · Pipefitter/);
+
+    const reloaded = parseManpowerRequest({
+      ...answered,
+      headcount: 99,
+      classification: "legacy-only",
+    });
+    assert.ok(reloaded);
+    assert.equal(reloaded.headcount, 7);
+    assert.equal(reloaded.classification, "Journeyman · Apprentice · Foreman");
+    assert.deepEqual(reloaded.lines, answered.lines);
   });
 
   it("migrates 553 + 363 into the vault and lets company users add a Teamsters hall", async () => {

@@ -122,6 +122,8 @@ export async function POST(request: Request) {
     requestId?: string;
     dateNeeded?: string;
     headcount?: number | string;
+    lines?: { classification?: string; quantity?: number | string }[];
+    lineFills?: { classification?: string; fillCount?: number | string }[];
     trade?: string;
     requiredCerts?: string;
     requiredScreenings?: string;
@@ -256,6 +258,7 @@ export async function POST(request: Request) {
         localId: body.localId as OnboardLocalId,
         dateNeeded: typeof body.dateNeeded === "string" ? body.dateNeeded : "",
         headcount: body.headcount ?? "",
+        lines: Array.isArray(body.lines) ? body.lines : undefined,
         trade: body.trade,
         classification: body.classification,
         site: body.site,
@@ -284,6 +287,7 @@ export async function POST(request: Request) {
       if (!current) return NextResponse.json({ error: "That manpower request is not on this desk." }, { status: 404 });
       const next = respondManpowerRequest(current, {
         fillCount: body.fillCount ?? "",
+        lineFills: Array.isArray(body.lineFills) ? body.lineFills : undefined,
         fillDate: typeof body.fillDate === "string" ? body.fillDate : "",
         actor: user,
         halls: await listOnboardHalls(),
