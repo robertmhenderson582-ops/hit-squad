@@ -3,14 +3,16 @@ import { readSession } from "@/lib/auth";
 import { companiesListedForViewer, isStandaloneId } from "@/lib/companies";
 import { assignedCompanyForUser, listCompanies, setCompanyLogo } from "@/lib/companies-store";
 import { hasWorkingDesk, isOwner } from "@/lib/desk-role";
+import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { cookieValue } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const user = await readSession(cookieValue(request));
-  if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (!hasWorkingDesk(user)) return NextResponse.json({ error: "Build desk only." }, { status: 403 });
+  const session = await readSession(cookieValue(request));
+  if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!hasWorkingDesk(session)) return NextResponse.json({ error: "Build desk only." }, { status: 403 });
+  const user = isOwner(session) ? await scopedDeskUser(session, request) : session;
   const companyId = await assignedCompanyForUser(user);
   const companies = companiesListedForViewer(user, await listCompanies(), companyId).filter(
     (row) => !isStandaloneId(row.id),

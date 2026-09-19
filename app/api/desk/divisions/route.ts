@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { canSeeCompany, companyScopeFor, isStandaloneId } from "@/lib/companies";
+import { canSeeCompany, companiesListedForViewer, companyScopeFor, isStandaloneId } from "@/lib/companies";
 import {
   addDivision,
-  assignedCompany,
+  assignedCompanyForUser,
   listCompanies,
   listDivisionsForScope,
   removeDivision,
@@ -11,31 +11,41 @@ import {
 } from "@/lib/companies-store";
 import { WOOD_RIVER_MOLD } from "@/lib/divisions";
 import { hasWorkingDesk, isOwner } from "@/lib/desk-role";
+import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { cookieValue } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-async function scopeFor(user: { email: string; role: string }) {
-  return companyScopeFor(user, await assignedCompany(user.email));
+async function scopeFor(user: { email: string; role?: string }) {
+  return companyScopeFor(user, await assignedCompanyForUser(user));
+}
+
+async function viewerFor(request: Request, session: { email: string; role: string }) {
+  return isOwner(session) ? scopedDeskUser(session, request) : session;
 }
 
 export async function GET(request: Request) {
-  const user = await readSession(cookieValue(request));
-  if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (!hasWorkingDesk(user)) return NextResponse.json({ error: "Working desk only." }, { status: 403 });
+  const session = await readSession(cookieValue(request));
+  if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!hasWorkingDesk(session)) return NextResponse.json({ error: "Working desk only." }, { status: 403 });
+  const user = await viewerFor(request, session);
   const scope = await scopeFor(user);
+  const companies = companiesListedForViewer(user, await listCompanies(), scope.companyId).filter(
+    (row) => !isStandaloneId(row.id),
+  );
   return NextResponse.json({
-    companies: (await listCompanies()).filter((row) => canSeeCompany(scope, row.id) && !isStandaloneId(row.id)),
+    companies,
     divisions: await listDivisionsForScope(scope),
     mold: WOOD_RIVER_MOLD,
   });
 }
 
 export async function POST(request: Request) {
-  const user = await readSession(cookieValue(request));
-  if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (!hasWorkingDesk(user)) return NextResponse.json({ error: "Working desk only." }, { status: 403 });
+  const session = await readSession(cookieValue(request));
+  if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!hasWorkingDesk(session)) return NextResponse.json({ error: "Working desk only." }, { status: 403 });
 
+  const user = await viewerFor(request, session);
   const scope = await scopeFor(user);
   const body = (await request.json().catch(() => ({}))) as {
     companyId?: string;
@@ -48,7 +58,7 @@ export async function POST(request: Request) {
   if (!canSeeCompany(scope, companyId) || isStandaloneId(companyId)) {
     return NextResponse.json({ error: "Pick a company on this desk." }, { status: 400 });
   }
-  if (!isOwner(user) && companyId !== scope?.companyId) {
+  if (!isOwner(session) && companyId !== scope?.companyId) {
     return NextResponse.json({ error: "Pick a company on this desk." }, { status: 403 });
   }
 
@@ -58,7 +68,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       divisions: await listDivisionsForScope(scope),
-      companies: (await listCompanies()).filter((row) => canSeeCompany(scope, row.id)),
+      companies: companiesListedForViewer(user, await listCompanies(), scope.companyId),
       note: "Division removed. Live estimates stay on their packs.",
     });
   }
@@ -70,7 +80,7 @@ export async function POST(request: Request) {
       ok: true,
       division: result.division,
       divisions: await listDivisionsForScope(scope),
-      companies: (await listCompanies()).filter((row) => canSeeCompany(scope, row.id)),
+      companies: companiesListedForViewer(user, await listCompanies(), scope.companyId),
       note: "Division renamed.",
     });
   }
@@ -81,8 +91,8 @@ export async function POST(request: Request) {
     ok: true,
     division: result.division,
     divisions: await listDivisionsForScope(scope),
-    companies: (await listCompanies()).filter((row) => canSeeCompany(scope, row.id)),
-    note: "Division created on the Wood River mold.",
+      companies: companiesListedForViewer(user, await listCompanies(), scope.companyId),
+      note: "Division created on the Wood River mold.",
     mold: WOOD_RIVER_MOLD,
   });
 }

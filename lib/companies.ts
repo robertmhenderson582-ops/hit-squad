@@ -1,4 +1,4 @@
-import { NOVUS_EMAIL } from "./desk-role.ts";
+import { isOwner, NOVUS_EMAIL } from "./desk-role.ts";
 import { onboardSeedCompanyForEmail } from "./onboard-pipeline.ts";
 import { OWNER_LOGIN_EMAIL } from "./owner-login.ts";
 import { testerByEmail, TESTER_SEATS, type CompanyId } from "./tester-seats.ts";
@@ -316,6 +316,14 @@ export function seesSiblingCompanyIdentity(
   if (!viewer?.email) return false;
   const own = assignedCompanyId(companyScopeFor(viewer, assigned));
   return companiesListedForViewer(viewer, catalog, assigned).some((row) => row.id !== own);
+}
+
+/** Real Owner session, not View-as a company seat. */
+export function isPlatformCompanyAdmin(
+  session?: { role?: string } | null,
+  lens?: { role?: string } | null,
+): boolean {
+  return Boolean(session && isOwner(session) && isOwner(lens ?? session));
 }
 
 export function canSeeCompany(scope: CompanyScope | null | undefined, companyId: CompanyId): boolean {

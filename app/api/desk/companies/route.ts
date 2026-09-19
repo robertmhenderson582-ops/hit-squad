@@ -3,6 +3,7 @@ import { readSession } from "@/lib/auth";
 import {
   assignmentChoices,
   companyDirectoryPayload,
+  isPlatformCompanyAdmin,
   parseCompanyModulePatch,
   parseCompanyModules,
 } from "@/lib/companies";
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
 
   const user = isOwner(session) ? await scopedDeskUser(session, request) : session;
   const base = await companyPayloadFor(user);
-  const platformAdmin = isOwner(session) && isOwner(user);
+  const platformAdmin = isPlatformCompanyAdmin(session, user);
   if (!platformAdmin) {
     return NextResponse.json(base);
   }

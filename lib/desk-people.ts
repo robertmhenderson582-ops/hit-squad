@@ -105,6 +105,21 @@ export function seatsVisibleTo<T extends { email: string; companyId?: string; ro
   return seats.filter((row) => row.role === "owner" || isMadisonAssigned(row, assignments));
 }
 
+/** Company seats and Owner View-as only see their own tenant. Platform Owner keeps the full roster. */
+export function seatsListedForViewer<T extends { email: string; companyId?: string; role?: string }>(
+  viewer: PrivilegeViewer | null | undefined,
+  seats: T[],
+  companyId?: string | null,
+  assignments?: Record<string, string>,
+  platformAdmin = false,
+): T[] {
+  const visible = seatsVisibleTo(viewer, seats, assignments);
+  if (platformAdmin) return visible;
+  const own = (companyId ?? "").trim();
+  if (!own) return [];
+  return visible.filter((row) => assignedCompanyOf(row, assignments) === own);
+}
+
 export function peopleByLane<T extends { email: string; companyId?: string }>(
   people: T[],
   assignments?: Record<string, string>,

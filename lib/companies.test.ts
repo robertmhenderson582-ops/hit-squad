@@ -16,6 +16,7 @@ import {
   companiesForScope,
   companiesListedForViewer,
   companyDirectoryPayload,
+  isPlatformCompanyAdmin,
   companyHasDispatch,
   companyHasModule,
   compactCompanyModules,
@@ -563,6 +564,15 @@ describe("company identity and module catalog vault", () => {
     assert.equal(JSON.stringify(nathanPayload).includes("Acme"), false);
     assert.equal(seesSiblingCompanyIdentity(nathanViewer, catalog), false);
     assert.equal(seesSiblingCompanyIdentity(ownerViewer, catalog), true);
+    assert.equal(isPlatformCompanyAdmin(ownerViewer, ownerViewer), true);
+    assert.equal(isPlatformCompanyAdmin(ownerViewer, nathanViewer), false);
+    assert.equal(isPlatformCompanyAdmin(nathanViewer, nathanViewer), false);
+    const josephViewer = { email: JOSEPH_EMAIL, role: "tester" };
+    const josephPayload = companyDirectoryPayload(josephViewer, catalog, "hitsquad");
+    assert.deepEqual(josephPayload.companies.map((row) => row.id), ["hitsquad"]);
+    assert.equal(JSON.stringify(josephPayload).includes("madison"), false);
+    assert.equal(JSON.stringify(josephPayload).includes("Acme"), false);
+    assert.equal(seesSiblingCompanyIdentity(josephViewer, catalog), false);
     assert.equal(ownerListed.some((row) => row.id === "madison"), true);
     assert.equal(ownerListed.some((row) => row.id === "hitsquad"), true);
     assert.equal(ownerListed.some((row) => row.id === "acme"), true);
@@ -576,6 +586,12 @@ describe("company identity and module catalog vault", () => {
     const seatsApi = readFileSync(fileURLToPath(new URL("../app/api/desk/seats/route.ts", import.meta.url)), "utf8");
     assert.match(seatsApi, /companiesListedForViewer/);
     assert.match(seatsApi, /companiesForActor/);
+    assert.match(seatsApi, /seatsListedForViewer/);
+    assert.match(seatsApi, /scopedDeskUser/);
+    const divisionsApi = readFileSync(fileURLToPath(new URL("../app/api/desk/divisions/route.ts", import.meta.url)), "utf8");
+    assert.match(divisionsApi, /companiesListedForViewer/);
+    assert.match(divisionsApi, /scopedDeskUser/);
+    assert.match(logoApi, /scopedDeskUser/);
   });
 });
 

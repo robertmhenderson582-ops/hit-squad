@@ -11,6 +11,7 @@ import {
   peopleByLane,
   peopleVisibleTo,
   personFromLensId,
+  seatsListedForViewer,
   seatsVisibleTo,
   seededDeskPeople,
 } from "./desk-people.ts";
@@ -117,6 +118,14 @@ test("President sees Madison operators only; Hit Squad seats stay owner-only", (
   assert.equal(presidentSeats.some((row) => row.email === "nathanboyte@gmail.com"), true);
   assert.equal(presidentSeats.some((row) => row.email === NOVUS_EMAIL), false);
   assert.equal(presidentSeats.some((row) => row.email === SHANE_EMAIL), false);
+  const nathan = { role: "tester", email: "nathanboyte@gmail.com" };
+  const nathanOnly = seatsListedForViewer(nathan, seats, "madison");
+  assert.deepEqual(nathanOnly.map((row) => row.email), ["nathanboyte@gmail.com"]);
+  assert.equal(nathanOnly.some((row) => row.companyId === "hitsquad"), false);
+  assert.equal(nathanOnly.some((row) => row.email === SHANE_EMAIL || row.role === "owner"), false);
+  const ownerRoster = seatsListedForViewer(owner, seats, "hitsquad", undefined, true);
+  assert.equal(ownerRoster.some((row) => row.email === "nathanboyte@gmail.com"), true);
+  assert.equal(ownerRoster.some((row) => row.email === SHANE_EMAIL), true);
 });
 
 test("President vault seats appear in View as / Follow people on the company lane", () => {

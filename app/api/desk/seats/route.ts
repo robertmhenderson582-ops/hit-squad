@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { companiesListedForViewer } from "@/lib/companies";
+import { companiesListedForViewer, isPlatformCompanyAdmin } from "@/lib/companies";
 import {
   addCompany,
   assignedCompanyForUser,
@@ -12,7 +12,8 @@ import {
 } from "@/lib/companies-store";
 import { loadPositionDesk } from "@/lib/desk-positions-server";
 import { canAddUsers, canManageUsers, hasWorkingDesk, isOwner } from "@/lib/desk-role";
-import { seatsVisibleTo } from "@/lib/desk-people";
+import { seatsListedForViewer, seatsVisibleTo } from "@/lib/desk-people";
+import { scopedDeskUser } from "@/lib/desk-scope-server";
 import { cookieValue } from "@/lib/http";
 import { canCreateSeatAs } from "@/lib/org-positions";
 import { mergeJobRoleCatalog, parseJobRoleLabel, resolveJobRole } from "@/lib/job-roles";
@@ -48,24 +49,36 @@ async function actorFor(user: { email: string; role: string; privileges?: string
 
 async function seatsWithJobTitles(user: { email: string; role?: string; privileges?: string[] }) {
   const settings = await getOwnerSettings();
-  const seats = seatsVisibleTo(user, await listSeatRows({ hydrate: false })).map((row) => ({
+  const companyId = peekAssignedCompanyForUser(user);
+  const seats = seatsListedForViewer(
+    user,
+    await listSeatRows({ hydrate: false }),
+    companyId,
+    undefined,
+    isOwner(user),
+  ).map((row) => ({
     ...row,
     jobTitle: resolveJobRole(row, settings.seatJobTitles),
+    companyId: row.companyId || peekAssignedCompanyForUser(row),
   }));
   return { seats, jobRoles: mergeJobRoleCatalog(settings.jobRoles), settings };
 }
 
 export async function GET(request: Request) {
-  const user = await readSession(cookieValue(request));
-  if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (!hasWorkingDesk(user) && !canManageUsers(user) && !canAddUsers(user)) {
+  const session = await readSession(cookieValue(request));
+  if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!hasWorkingDesk(session) && !canManageUsers(session) && !canAddUsers(session)) {
     return NextResponse.json({ error: "Build desk only." }, { status: 403 });
   }
+  const user = isOwner(session) ? await scopedDeskUser(session, request) : session;
+  const platformAdmin = isPlatformCompanyAdmin(session, user);
   await hydrateSeatStore();
   const settings = await getOwnerSettings();
-  const seats = seatsVisibleTo(user, await listSeatRows()).map((row) => ({
+  const companyId = await assignedCompanyForUser(user);
+  const seats = seatsListedForViewer(user, await listSeatRows(), companyId, undefined, platformAdmin).map((row) => ({
     ...row,
     jobTitle: resolveJobRole(row, settings.seatJobTitles),
+    companyId: row.companyId || peekAssignedCompanyForUser(row),
   }));
   return NextResponse.json({
     seats,
