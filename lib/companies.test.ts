@@ -14,6 +14,8 @@ import {
   canSeeCompany,
   catalogVisibleTo,
   companiesForScope,
+  companiesListedForViewer,
+  companyDirectoryPayload,
   companyHasDispatch,
   companyHasModule,
   compactCompanyModules,
@@ -36,6 +38,7 @@ import {
   validateCompanyLogoInput,
   peopleLane,
   samePeopleLane,
+  seesSiblingCompanyIdentity,
   seedCompanyForEmail,
   seedCompanyMap,
   STANDALONE_ID,
@@ -539,6 +542,40 @@ describe("company identity and module catalog vault", () => {
     assert.match(accountingPage, /CompanyModuleGate module="accounting"/);
     assert.match(jobsApi, /JOBS_DENIED/);
     assert.match(jobsApi, /canOpenCompanyModule/);
+    assert.match(api, /companyDirectoryPayload/);
+    assert.match(api, /platformAdmin/);
+  });
+
+  it("never lists sibling company identity to a company seat or View-as lens", () => {
+    const catalog = mergeCompanies([{ id: "acme", name: "Acme Field Services", shortName: "Acme" }]);
+    const nathanViewer = { email: "nathanboyte@gmail.com", role: "tester" };
+    const ownerViewer = { email: OWNER_LOGIN_EMAIL, role: "owner" };
+    const nathanListed = companiesListedForViewer(nathanViewer, catalog);
+    const nathanPayload = companyDirectoryPayload(nathanViewer, catalog, "madison");
+    const ownerListed = companiesListedForViewer(ownerViewer, catalog);
+
+    assert.deepEqual(nathanListed.map((row) => row.id), ["madison"]);
+    assert.equal(nathanListed.some((row) => row.id === "hitsquad" || row.id === "acme"), false);
+    assert.equal(nathanListed.some((row) => /acme|hit squad/i.test(`${row.name} ${row.shortName || ""}`)), false);
+    assert.equal(nathanPayload.companies.length, 1);
+    assert.equal(nathanPayload.company?.id, "madison");
+    assert.equal(JSON.stringify(nathanPayload).includes("hitsquad"), false);
+    assert.equal(JSON.stringify(nathanPayload).includes("Acme"), false);
+    assert.equal(seesSiblingCompanyIdentity(nathanViewer, catalog), false);
+    assert.equal(seesSiblingCompanyIdentity(ownerViewer, catalog), true);
+    assert.equal(ownerListed.some((row) => row.id === "madison"), true);
+    assert.equal(ownerListed.some((row) => row.id === "hitsquad"), true);
+    assert.equal(ownerListed.some((row) => row.id === "acme"), true);
+
+    const gate = readFileSync(fileURLToPath(new URL("../components/SettingsGate.tsx", import.meta.url)), "utf8");
+    const page = readFileSync(fileURLToPath(new URL("../app/settings/companies/page.tsx", import.meta.url)), "utf8");
+    const logoApi = readFileSync(fileURLToPath(new URL("../app/api/desk/companies/logo/route.ts", import.meta.url)), "utf8");
+    assert.match(page, /SettingsGate ownerOnly/);
+    assert.match(gate, /lensOk/);
+    assert.match(logoApi, /companiesListedForViewer/);
+    const seatsApi = readFileSync(fileURLToPath(new URL("../app/api/desk/seats/route.ts", import.meta.url)), "utf8");
+    assert.match(seatsApi, /companiesListedForViewer/);
+    assert.match(seatsApi, /companiesForActor/);
   });
 });
 

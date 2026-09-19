@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { assignmentChoices, isStandaloneId, parseCompanyModulePatch, parseCompanyModules } from "@/lib/companies";
+import {
+  assignmentChoices,
+  companyDirectoryPayload,
+  parseCompanyModulePatch,
+  parseCompanyModules,
+} from "@/lib/companies";
 import {
   addCompany,
   assignedCompanyForUser,
@@ -24,13 +29,11 @@ export const dynamic = "force-dynamic";
 async function companyPayloadFor(user: { email: string; role?: string }) {
   const companies = await listCompanies();
   const companyId = await assignedCompanyForUser(user);
-  const company = companies.find((row) => row.id === companyId) ?? null;
+  const directory = companyDirectoryPayload(user, companies, companyId);
   return {
-    companies,
-    companyId,
-    company,
-    modules: parseCompanyModules(company?.modules),
-    dispatch: companyDispatchEnabled(company),
+    ...directory,
+    modules: parseCompanyModules(directory.company?.modules),
+    dispatch: companyDispatchEnabled(directory.company),
   };
 }
 
@@ -38,19 +41,13 @@ export async function GET(request: Request) {
   const session = await readSession(cookieValue(request));
   if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  if (!isOwner(session)) {
-    const base = await companyPayloadFor(session);
-    return NextResponse.json({
-      companies: base.companies.filter((row) => row.id === base.companyId && !isStandaloneId(row.id)),
-      companyId: base.companyId,
-      company: base.company,
-      modules: base.modules,
-      dispatch: base.dispatch,
-    });
+  const user = isOwner(session) ? await scopedDeskUser(session, request) : session;
+  const base = await companyPayloadFor(user);
+  const platformAdmin = isOwner(session) && isOwner(user);
+  if (!platformAdmin) {
+    return NextResponse.json(base);
   }
 
-  const user = await scopedDeskUser(session, request);
-  const base = await companyPayloadFor(user);
   await hydrateSeatStore();
   const seats = seatsVisibleTo(session, await listSeatRows({ hydrate: false })).map((row) => ({
     ...row,

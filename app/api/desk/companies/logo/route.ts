@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/auth";
-import { isStandaloneId } from "@/lib/companies";
-import { listCompanies, setCompanyLogo } from "@/lib/companies-store";
+import { companiesListedForViewer, isStandaloneId } from "@/lib/companies";
+import { assignedCompanyForUser, listCompanies, setCompanyLogo } from "@/lib/companies-store";
 import { hasWorkingDesk, isOwner } from "@/lib/desk-role";
 import { cookieValue } from "@/lib/http";
 
@@ -11,7 +11,10 @@ export async function GET(request: Request) {
   const user = await readSession(cookieValue(request));
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   if (!hasWorkingDesk(user)) return NextResponse.json({ error: "Build desk only." }, { status: 403 });
-  const companies = (await listCompanies()).filter((row) => !isStandaloneId(row.id));
+  const companyId = await assignedCompanyForUser(user);
+  const companies = companiesListedForViewer(user, await listCompanies(), companyId).filter(
+    (row) => !isStandaloneId(row.id),
+  );
   return NextResponse.json({ companies });
 }
 

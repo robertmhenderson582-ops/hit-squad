@@ -285,6 +285,39 @@ export function companiesForScope(scope?: CompanyScope | null, catalog: Company[
   return rows.filter((row) => row.id === id);
 }
 
+/**
+ * Single-tenant lock: a company seat (and Owner View-as that seat) only ever
+ * sees their own company. Real Owner session, not View-as, may see the catalog.
+ */
+export function companiesListedForViewer(
+  viewer?: { email?: string; role?: string } | null,
+  catalog: Company[] = COMPANIES,
+  assigned?: CompanyId,
+): Company[] {
+  if (!viewer?.email) return [];
+  return companiesForScope(companyScopeFor(viewer, assigned), catalog);
+}
+
+export function companyDirectoryPayload(
+  viewer: { email: string; role?: string },
+  catalog: Company[],
+  assigned: CompanyId,
+) {
+  const companies = companiesListedForViewer(viewer, catalog, assigned);
+  const company = companies.find((row) => row.id === assigned) ?? null;
+  return { companies, companyId: assigned, company };
+}
+
+export function seesSiblingCompanyIdentity(
+  viewer?: { email?: string; role?: string } | null,
+  catalog: Company[] = COMPANIES,
+  assigned?: CompanyId,
+): boolean {
+  if (!viewer?.email) return false;
+  const own = assignedCompanyId(companyScopeFor(viewer, assigned));
+  return companiesListedForViewer(viewer, catalog, assigned).some((row) => row.id !== own);
+}
+
 export function canSeeCompany(scope: CompanyScope | null | undefined, companyId: CompanyId): boolean {
   if (isStandaloneId(companyId)) return false;
   if (!scope || scope.isOwner) return true;
